@@ -1,5 +1,10 @@
 # Changelog
 
+- Run the GC-bracketed allocation regression gates on both supported Node
+  majors. Node 26 no longer reports a green `npm test` while silently skipping
+  the focus and world-overlay allocation budgets; the existing CI matrix now
+  executes those probes on both Node 24 and Node 26 (#39).
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD
