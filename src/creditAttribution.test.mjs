@@ -205,6 +205,7 @@ const RECOGNIZED = new Set([
   // rail
   '#right-context-rail',
   '#right-context-rail.layout-focus',
+  '#right-context-rail[data-rail-measuring]',
   // tray
   '#command-dock .dock-popover-content',
   '#command-dock #location-bar .dock-popover-content',
@@ -400,20 +401,26 @@ test('the model refuses every cascade construct it cannot resolve', () => {
       complaints.push(`nested media queries on "${part}": ${rule.media.join(' && ')}`);
     }
     for (const decl of guarded) {
-      if (decl.important) complaints.push(`!important on ${decl.prop} of "${part}"`);
+      // Measurement is synchronous and restored before returning or painting.
+      // Only these two exact declarations earn the exemption tested below.
+      const railMeasurement = part === '#right-context-rail[data-rail-measuring]'
+        && ((decl.prop === 'height' && decl.value === 'auto')
+          || (decl.prop === 'max-height' && decl.value === 'none'));
+      if (decl.important && !railMeasurement) complaints.push(`!important on ${decl.prop} of "${part}"`);
       if (decl.prop === 'inset' || decl.prop === 'margin' || decl.prop === 'all'
         || decl.prop.startsWith('inset-') || decl.prop.startsWith('margin-block')) {
         complaints.push(`shorthand ${decl.prop} on "${part}" — the model reads longhands only`);
       }
       if (decl.prop === 'height' || decl.prop === 'max-height') {
         // A capped height can override `bottom` and invalidate the measured
-        // dock/credit constants. Two exemptions, each earned by a test below:
+        // dock/credit constants. Exemptions are each earned by a test below:
         // the rail's own max-height (resolved to `none` across the whole
         // modelled band by the rail clearance test) and `.layout-focus`
-        // (proven inapplicable at <=720px by the mobile-mode test).
+        // (proven inapplicable at <=720px by the mobile-mode test), plus
+        // synchronous measurement, which is removed before any paint.
         const railOwn = part === '#right-context-rail' && decl.prop === 'max-height';
         const railFocus = part === '#right-context-rail.layout-focus';
-        if (!railOwn && !railFocus) complaints.push(`${decl.prop}: ${decl.value} on "${part}"`);
+        if (!railOwn && !railFocus && !railMeasurement) complaints.push(`${decl.prop}: ${decl.value} on "${part}"`);
       }
       if (decl.prop === 'transform' && /translateY|translate3d|matrix|scale\(/.test(decl.value)) {
         const identity = decl.value === 'translateY(0) scale(1)';
@@ -488,6 +495,17 @@ test('the full-width rail cannot inherit a height that overrides its floor', () 
   const mobileBranch = rail.slice(gate, rail.indexOf("layoutMode = 'mobile'", gate) + 40);
   assert.match(mobileBranch, /stack\.classList\.remove\('layout-focus'\)/);
   assert.match(mobileBranch, /stack\.style\.removeProperty\('--right-stack-max-height'\)/);
+});
+
+test('right rail measurement cannot persist into a painted attribution layout', () => {
+  const rail = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'rightPanelRail.js'), 'utf8');
+  const start = rail.indexOf("stack.setAttribute('data-rail-measuring', '')");
+  const end = rail.indexOf("stack.removeAttribute('data-rail-measuring')", start);
+  assert.ok(start > rail.indexOf("layoutMode = 'mobile'"));
+  assert.ok(end > start);
+  const measurement = rail.slice(start, end);
+  assert.match(measurement, /try \{[\s\S]*\} finally \{/);
+  assert.doesNotMatch(measurement, /\b(?:await|return|yield)\b|requestAnimationFrame|setTimeout/);
 });
 
 // ── Clearance ───────────────────────────────────────────────────────────────

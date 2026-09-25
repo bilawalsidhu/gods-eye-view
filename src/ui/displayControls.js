@@ -21,6 +21,7 @@ export function bindDisplayControls({ elements, actions }) {
     ['cleanViewExitButton', 'exitCleanView'],
     ['celestialButton', 'toggleCelestial'],
     ['hudButton', 'toggleHud'],
+    ['sonarButton', 'toggleSonar'],
     ['detectionButton', 'cycleDetection'],
     ['modelsButton', 'toggleModels'],
   ])
@@ -33,6 +34,14 @@ export function bindDisplayControls({ elements, actions }) {
     listen(elements[name], 'input', action, integer);
   listen(elements.densitySlider, 'input', 'setDensity', (el) => el.value);
   listen(elements.hudLayout, 'change', 'setHudLayout', (el) => el.value);
+  for (const [name, action] of [
+    ['sonarRingsSlider', 'setSonarRings'],
+    ['sonarRangeSlider', 'setSonarRange'],
+    ['sonarIntensitySlider', 'setSonarIntensity'],
+    ['sonarOpacitySlider', 'setSonarOpacity'],
+    ['sonarSectorSlider', 'setSonarSector'],
+  ])
+    listen(elements[name], 'input', action, integer);
   for (const el of elements.styleButtons || [])
     listen(el, 'click', 'setStyle', (el) => el.dataset.style);
   for (const el of elements.allocationButtons || [])

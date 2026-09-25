@@ -28,6 +28,20 @@ test('side aircraft brackets stay readable without changing zero-opacity intent'
   assert.equal(detectionBracketAlpha('SAT', 0.05), 0.05);
 });
 
+test('strict keyhole fading bypasses the aircraft floor for themed brackets', () => {
+  assert.equal(
+    detectionBracketAlpha(
+      'AIR',
+      0.01,
+      KEYHOLE_OUTSIDE_OPACITY_DEFAULT,
+      true,
+    ),
+    0.01,
+  );
+  assert.equal(detectionBracketAlpha('AIR', 0.42, 1, true), 0.42);
+  assert.equal(detectionBracketAlpha('AIR', 1, 0, true), 1);
+});
+
 test('the bracket floor anchor mirrors the real keyhole default it is calibrated to', () => {
   // detectionPolicy stays Cesium-free, so the anchor is a mirror. If the keyhole
   // default ever moves, this fails rather than silently shifting the shipped
