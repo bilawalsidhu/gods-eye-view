@@ -91,6 +91,18 @@ this checks that every published assignment remains reserved and that new
 assignments consume free digits before the two-character tokens, in order.
 Pull-request CI runs the same check against `main`.
 
+The helper reads the local ledger; it does not run during a rebase or edit files.
+If another PR publishes your provisional token first, keep every published
+registry entry and ledger reservation from the refreshed `main`. Temporarily
+remove only your still-unpublished layer's registry entry and ledger row so the
+local registry is valid again, then rerun `npm run layer-token:next -- <layer-id>`.
+For example, if PR A publishes `0` while PR B still provisionally uses `0`,
+PR B removes only its own provisional entry, reruns the helper, and receives
+`3`. Put `3` on PR B's registry entry and ledger row, update its pinned count
+and token tests, then rerun `npm run layer-token:check -- --base-ref origin/main`.
+An invalid duplicate ledger can fail during module import before the helper
+prints anything; never fix that by renaming or deleting PR A's published token.
+
 ## Good first contributions
 
 The highest-leverage places to jump in:

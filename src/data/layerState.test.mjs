@@ -456,6 +456,25 @@ test('v2 codec distinguishes absent from empty and keeps canonical deterministic
   );
 });
 
+test('all production layers and options round-trip through a v2 share URL', () => {
+  const allEnabled = normalizeLayerState({
+    enabledLayerIds: REGISTERED_LAYER_IDS,
+    options: {
+      cctv: { coverageMode: 'viewshed', showProjection: false, autoHop: true },
+      flights: { models3d: true, models3dMode: 'all' },
+      radio: { filter: 'news', volume: 0.37 },
+    },
+  });
+  const shareUrl = new URL('https://example.invalid/');
+  shareUrl.hash = encode(allEnabled);
+  const params = new URLSearchParams(shareUrl.hash.slice(1));
+  const restored = decodeLayerStateParams(params);
+
+  assert.equal(params.get('l')?.split('.').length, REGISTERED_LAYER_IDS.length);
+  assert.deepEqual(restored?.enabledLayerIds, REGISTERED_LAYER_IDS);
+  assert.deepEqual(restored?.options, allEnabled.options);
+});
+
 test('unknown enabled-layer tokens reject the payload instead of becoming an empty set', () => {
   assert.equal(
     decodeLayerStateParams(new URLSearchParams('v=2&l=unknown')),
