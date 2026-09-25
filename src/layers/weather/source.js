@@ -5,6 +5,8 @@ export const WEATHER_PRODUCTS = Object.freeze([
   'clouds',
   'clouds-regional',
   'lightning',
+  'xweather-radar',
+  'xweather-lightning',
 ]);
 
 /** Only bounded, explicit observations may become imagery requests. */
@@ -50,9 +52,16 @@ export const WEATHER_IMAGE_SIZES = Object.freeze({
   'clouds-regional': Object.freeze({ width: 4096, height: 2048 }),
   clouds: Object.freeze({ width: 2048, height: 1024 }),
   lightning: Object.freeze({ width: 4096, height: 2048 }),
+  'xweather-radar': Object.freeze({ width: 4096, height: 2048 }),
+  'xweather-lightning': Object.freeze({ width: 4096, height: 2048 }),
 });
 /** Largest detail-window image for every product; also the proxy default. */
 export const WEATHER_DETAIL_SIZE = Object.freeze({ width: 4096, height: 2048 });
+
+/** Keyed products live behind their own proxy; the rest are NOAA nowCOAST. */
+export function weatherApiBase(product) {
+  return product.startsWith('xweather-') ? '/api/xweather' : '/api/weather';
+}
 
 /** A whole-extent image, or with `bbox` ({ west, south, east, north } degrees)
  * a detail window of the same product. */
@@ -88,7 +97,7 @@ export function weatherImageUrl(
     // The largest size is the proxy default: one frame has one URL.
     if (width !== largest.width) size = `&size=${width}x${height}`;
   }
-  return `/api/weather/image?product=${product}&time=${encodeURIComponent(time)}${box}${size}`;
+  return `${weatherApiBase(product)}/image?product=${product}&time=${encodeURIComponent(time)}${box}${size}`;
 }
 
 export function weatherTileUrl(product, time, { size } = {}) {
@@ -97,13 +106,14 @@ export function weatherTileUrl(product, time, { size } = {}) {
   if (size !== undefined && ![256, 512, 1024].includes(size))
     throw new Error('Invalid weather tile size');
   // Construct locally; never accept a manifest-provided host or template.
-  return `/api/weather/tile?product=${product}&time=${encodeURIComponent(time)}&z={z}&x={x}&y={y}${size === undefined ? '' : `&size=${size}`}`;
+  return `${weatherApiBase(product)}/tile?product=${product}&time=${encodeURIComponent(time)}&z={z}&x={x}&y={y}${size === undefined ? '' : `&size=${size}`}`;
 }
 
 /** Acquisition is lazy and shares the application's existing source contract. */
 export function createWeatherSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
   timeoutMs = 15_000,
+  statusTimeoutMs = 5_000,
 } = {}) {
   return {
     async getSnapshot({ product = 'radar', signal } = {}) {
@@ -119,7 +129,7 @@ export function createWeatherSource({
       try {
         signal?.throwIfAborted();
         const response = await fetchImpl(
-          `/api/weather/manifest?product=${product}`,
+          `${weatherApiBase(product)}/manifest?product=${product}`,
           { signal: controller.signal, cache: 'no-store', redirect: 'error' },
         );
         if (!response.ok) throw new Error(`Weather HTTP ${response.status}`);
@@ -127,6 +137,40 @@ export function createWeatherSource({
           await readResponseJsonCapped(response, 16_384, controller.signal),
           product,
         );
+      } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', abort);
+      }
+    },
+    /** Whether an Xweather key is configured, and this month's spend against
+     * the free allowance; modelled on the traffic source's `getStatus`. */
+    async getXweatherStatus({ signal } = {}) {
+      const controller = new AbortController();
+      const abort = () => controller.abort(signal.reason);
+      signal?.addEventListener('abort', abort, { once: true });
+      // It runs ahead of each due snapshot, so it must not hold one up.
+      const timer = setTimeout(
+        () => controller.abort(new Error('Xweather status timed out')),
+        statusTimeoutMs,
+      );
+      try {
+        signal?.throwIfAborted();
+        const response = await fetchImpl('/api/xweather/status', {
+          signal: controller.signal,
+          cache: 'no-store',
+          redirect: 'error',
+        });
+        if (!response.ok)
+          throw new Error(`Xweather status HTTP ${response.status}`);
+        const status = await readResponseJsonCapped(
+          response,
+          4096,
+          controller.signal,
+        );
+        controller.signal.throwIfAborted();
+        if (typeof status?.hasKey !== 'boolean')
+          throw new Error('Malformed Xweather status');
+        return status;
       } finally {
         clearTimeout(timer);
         signal?.removeEventListener('abort', abort);
