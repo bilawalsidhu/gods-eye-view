@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DATA_CREDITS } from './dataCredits.js';
+import { DATA_CREDITS, XWEATHER_CREDIT } from './dataCredits.js';
 
 test('every credit carries a unique key and some markup to render', () => {
   const keys = DATA_CREDITS.map((entry) => entry.key);
@@ -36,4 +36,14 @@ test('adsbdb is credited and carries its published route-data restriction', () =
   assert.match(credit.html, /PlaneBase/);
   assert.match(credit.html, /Guillaume Michel/);
   assert.match(credit.html, /href="https:\/\/www\.adsbdb\.com"/);
+});
+
+test('Xweather is credited with the linked text its attribution guide gives', () => {
+  // https://www.xweather.com/docs/weather-api/resources/attribution asks for
+  // "Powered by Vaisala Xweather" linked to https://www.xweather.com/.
+  assert.equal(XWEATHER_CREDIT.key, 'xweather');
+  assert.match(
+    XWEATHER_CREDIT.html,
+    /^<a href="https:\/\/www\.xweather\.com\/" [^>]*>Powered by Vaisala Xweather<\/a>$/,
+  );
 });

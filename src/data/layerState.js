@@ -296,11 +296,19 @@ const OPTION_GROUPS = Object.freeze({
       light: 'l',
       strong: 's',
     }),
+    enumOption('source', 's', 'nowcoast', ['nowcoast', 'xweather'], {
+      nowcoast: 'n',
+      xweather: 'x',
+    }),
   ]),
   'weather-radar': Object.freeze([
     enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
       light: 'l',
       strong: 's',
+    }),
+    enumOption('source', 's', 'nowcoast', ['nowcoast', 'xweather'], {
+      nowcoast: 'n',
+      xweather: 'x',
     }),
   ]),
   'weather-satellite': Object.freeze([
