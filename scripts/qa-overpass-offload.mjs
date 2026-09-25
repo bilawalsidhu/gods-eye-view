@@ -29,7 +29,7 @@ import { trafficDetailBounds } from '../src/layers/traffic/source.js';
 const args = process.argv.slice(2);
 if (args.includes('--help') || args.includes('-h')) {
   console.log(
-    'Usage: node scripts/qa-overpass-offload.mjs [--url] <dev-server-url> [--headful] [--software-gl] [--tour]\nChecks street-level mesh alignment for OpenFreeMap roads with/without TomTom flow, ALPR, Camp Mabry, Fort Cavazos, source labels and zero external Overpass/Nominatim requests. With --tour, measures a six-city session plus Austin revisit. Both modes record per-view provider requests/bytes and cache hits in qa-shots/overpass-offload-result.json (also a mode-specific result). Writes qa-shots/. Uses platform ANGLE by default; --software-gl opts into slower SwiftShader.',
+    'Usage: node scripts/qa-overpass-offload.mjs [--url] <dev-server-url> [--headful] [--software-gl] [--tour | --pan | --profile | --coverage]\nChecks street-level mesh alignment for OpenFreeMap roads with/without TomTom flow, ALPR, Camp Mabry, Fort Cavazos, source labels and zero external Overpass/Nominatim requests. With --tour, measures a six-city session plus Austin revisit. The --pan mode checks twenty moves and the --profile mode measures cold/warm phases; --coverage checks the London ALPR row. All modes record per-view provider requests/bytes and cache hits in qa-shots/overpass-offload-result.json (also a mode-specific result). Writes qa-shots/. Uses platform ANGLE by default; --software-gl opts into slower SwiftShader.',
   );
   process.exit(0);
 }
@@ -41,6 +41,7 @@ if (!url || !['http:', 'https:'].includes(new URL(url).protocol))
 const tour = args.includes('--tour');
 const pan = args.includes('--pan');
 const profile = args.includes('--profile');
+const coverage = args.includes('--coverage');
 const shots = path.resolve('qa-shots');
 await fs.mkdir(shots, { recursive: true });
 const browser = await puppeteer.launch({
@@ -63,7 +64,15 @@ const browser = await puppeteer.launch({
 });
 const result = {
   url,
-  mode: tour ? 'tour' : pan ? 'pan' : profile ? 'profile' : 'acceptance',
+  mode: tour
+    ? 'tour'
+    : pan
+      ? 'pan'
+      : profile
+        ? 'profile'
+        : coverage
+          ? 'coverage'
+          : 'acceptance',
   forbiddenRequests: [],
   errors: [],
   consoleErrors: [],
@@ -584,7 +593,9 @@ try {
     );
     await waitForSources();
   }
-  if (profile) {
+  if (coverage) {
+    // The shared London presentation gate below is also independently runnable.
+  } else if (profile) {
     await fly(30.2672, -97.7431, 450, 0, -35);
     await settleTiles();
     for (const name of ['cold', 'warm']) {
@@ -1112,6 +1123,25 @@ try {
     assert.equal(
       result.alprLondon.loadingLabel,
       'No ALPR data for this area — US and Canada only',
+    );
+    await page.evaluate(() => {
+      if (document.querySelector('#data-panel.collapsed'))
+        document.querySelector('[data-collapse-target="data-panel"]').click();
+      document
+        .querySelector('[data-layer-id="alpr-cameras"]')
+        .scrollIntoView({ block: 'center' });
+    });
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('[data-layer-id="alpr-cameras"] .data-toggle-meta')
+          ?.textContent.includes('US and Canada only'),
+      { timeout: 10000 },
+    );
+    const row = await page.$('[data-layer-id="alpr-cameras"]');
+    assert.doesNotMatch(
+      await row.evaluate((node) => node.innerText),
+      /0 nearby/,
     );
     await shot('alpr-london');
   }
