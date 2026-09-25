@@ -3535,6 +3535,8 @@ Retry-After; absent delays back off from 30 seconds to five minutes. Empty
 `elements` is a valid answer. Existing byte, query, concurrency and cache caps
 remain. Consumer capability misses never schedule automatic retries.
 
+Operator-configured Overpass area and focus-footprint queries use body-level
+`out geom` (with `center` for focus), preserving relation member outlines.
 Street Traffic and ALPR never use Overpass. Installations switch once to vector
 tiles after a capability miss. Annotation and location-feature sources retain
 a distinct unavailable result and stop querying for that source lifetime.

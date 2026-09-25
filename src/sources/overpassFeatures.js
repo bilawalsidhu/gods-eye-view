@@ -84,7 +84,7 @@ export function createOverpassFeatureSource({
       way(around:180,${lat},${lon})["tourism"="attraction"];
       relation(around:180,${lat},${lon})["tourism"="attraction"];
     );
-    out tags center geom;
+    out center geom;
   `,
         6000,
         { ...options, focus: true },
@@ -107,6 +107,9 @@ export function createOverpassFeatureSource({
         { ...options, relationsOnly: true },
       );
     },
+    // Polygon lookups print with `out geom`, not `out tags geom`: at `tags`
+    // verbosity a relation carries no members, so it arrives with bounds and
+    // no outline and is dropped. The changed text is also a new proxy cache key.
     getNeighborhoodAreas({ lat, lon }, options = {}) {
       validPoint(lat, lon);
       return query(
@@ -114,7 +117,7 @@ export function createOverpassFeatureSource({
           `way(around:1500,${lat},${lon})["place"~"neighbourhood|suburb|quarter|borough"]["name"];` +
           `relation(around:1500,${lat},${lon})["place"~"neighbourhood|suburb|quarter|borough"]["name"];` +
           `relation(around:1500,${lat},${lon})["boundary"="place"]["name"];` +
-          `);out tags geom;`,
+          `);out geom;`,
         14000,
         options,
       );
@@ -127,7 +130,7 @@ export function createOverpassFeatureSource({
           `relation(around:450,${lat},${lon})["place"~"quarter|neighbourhood|suburb"];` +
           `way(around:450,${lat},${lon})["landuse"~"commercial|retail"]["name"];` +
           `relation(around:450,${lat},${lon})["landuse"~"commercial|retail"]["name"]["type"="multipolygon"];` +
-          `);out tags geom;`,
+          `);out geom;`,
         14000,
         options,
       );
