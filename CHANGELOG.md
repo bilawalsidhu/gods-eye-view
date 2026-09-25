@@ -290,6 +290,13 @@ Analyst records for loaded satellites, datacenters and dams, with explicit bound
   "~50k/day" free-tier figure in the proxy, `.env.example` and
   `DATA_SOURCES.md`. Still an application-side ceiling, not a billing cap.
 
+- Add Catalonia (Servei Català de Trànsit) as a keyless CCTV source pack: ~135
+  cameras from a WFS/GML feed that aggregates SCT's own highway cameras with
+  hotlinked Barcelona and Terrassa municipal cameras, each partner named as a
+  credit beside the shared provider. Ambient-card refresh paced to 3 minutes,
+  matching the empirically observed upstream cadence. `CCTV_CATALONIA_MAX_SOURCES`
+  sets the cap and `CCTV_CATALONIA_ENABLED=0` turns the pack off.
+
 - Distinguish PARTIAL vessel snapshots from STALE data in the layer panel, with
   accepted-record counts and unchanged retention, freshness and outage safeguards.
 
