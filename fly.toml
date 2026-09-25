@@ -1,0 +1,43 @@
+# Fly.io deployment for God's Eye View.
+#
+# `fly launch --no-deploy` will rewrite `app` to a globally unique name and may
+# change `primary_region`; everything below is what this app actually needs.
+# Credentials are NOT here — they go in `fly secrets set` (see docs/DEPLOY.md).
+
+app = "gods-eye-view"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "8080"
+  # Per-IP, process-local throttles on the endpoints that cost money. Not
+  # billing caps — set provider-side budgets as well (docs/DEPLOY.md).
+  GEV_RATELIMIT_OPENAI_PER_MIN = "30"
+  GEV_RATELIMIT_GOOGLE_PER_MIN = "60"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # A private deployment is idle most of the time. Waking costs a few seconds
+  # and starts the AISStream vessel cache from empty.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    # Answered ahead of the access gate, so no credentials are needed.
+    path = "/healthz"
+
+[[vm]]
+  # Cesium tiles plus the provider caches (Overpass, installations, AIS) want
+  # headroom; 512 MB is tight for the Node process once caches warm.
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1

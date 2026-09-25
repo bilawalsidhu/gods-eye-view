@@ -1,0 +1,12 @@
+.git
+.github
+node_modules
+dist
+.env
+.env.*
+!.env.example
+.gev-logs
+docs/media
+github-profile
+pinokio
+*.log

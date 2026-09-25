@@ -1,0 +1,52 @@
+# Render Blueprint for God's Eye View.
+#
+# Dashboard -> New -> Blueprint -> pick this repo. Values marked `sync: false`
+# are prompted for at deploy time and never stored in the repo.
+#
+# Note on plans: `free` needs no card, but it is a real constraint — 512 MB RAM
+# for a Node process that caches tiles and feeds, a sleep after 15 minutes of
+# inactivity, and a cold wake that empties the AISStream vessel cache. If the
+# build runs out of memory or the service restarts under load, `starter` is the
+# smallest plan this app is comfortable on.
+
+services:
+  - type: web
+    name: gods-eye-view
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    # Answered ahead of the access gate, so no credentials are needed.
+    healthCheckPath: /healthz
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 8080
+      # Per-IP, process-local throttles on the endpoints that cost money.
+      # Not billing caps — set provider-side budgets as well.
+      - key: GEV_RATELIMIT_OPENAI_PER_MIN
+        value: 30
+      - key: GEV_RATELIMIT_GOOGLE_PER_MIN
+        value: 60
+      # The access gate. Both are required; setting only one refuses to boot.
+      - key: GEV_BASIC_AUTH_USER
+        sync: false
+      - key: GEV_BASIC_AUTH_PASS
+        sync: false
+      # Optional provider credentials — add only the ones you have.
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: CESIUM_ION_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AISSTREAM_API_KEY
+        sync: false
+      - key: OPENSKY_CLIENT_ID
+        sync: false
+      - key: OPENSKY_CLIENT_SECRET
+        sync: false
+      - key: TOMTOM_API_KEY
+        sync: false
+      - key: FIRMS_MAP_KEY
+        sync: false

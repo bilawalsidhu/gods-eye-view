@@ -1,3 +1,28 @@
+---
+title: God's Eye View
+emoji: 🌐
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 8080
+pinned: false
+license: mit
+short_description: Live open-source spatial intelligence on a 3D globe.
+---
+
+<!--
+Hugging Face Spaces requires this front-matter in the root README.md, which is
+why this branch exists: it is deploy/hosted plus these lines, so the README on
+the Render/Fly branch stays as upstream wrote it. Spaces strips the block when
+it renders the page.
+
+app_port matches the Dockerfile's PORT, so no image change is needed. The image
+already runs as uid 1000, which is the uid Spaces expects.
+
+Keep this branch as a rebase of deploy/hosted rather than a place to make
+changes: git rebase deploy/hosted, then push to both remotes.
+-->
+
 <div align="center">
 
 # 🌐 God's Eye View
