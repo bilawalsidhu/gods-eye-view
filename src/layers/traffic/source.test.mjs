@@ -542,13 +542,14 @@ test('superseded flow cannot apply matches after a camera move or disable', asyn
   assert.equal(state._flowPending, 0);
 });
 
-test('keyed loads run z12 then z14 and reuse road snapshots while refreshing flow', async () => {
+test('OSM keyed loads run z12 then z14 and reuse road snapshots while refreshing flow', async () => {
   const { createIngestion } = await import('./ingestion.js');
   const state = {
     _loadGeneration: 0,
     _tileCache: new Map(),
     _enabled: true,
     _liveMode: true,
+    _roadMode: 'osm',
     _parseRoads: (data) => data.roads,
   };
   const passes = [],

@@ -102,7 +102,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
     layerState._flowRoads = roads;
     // Geometry survives in the session cache; congestion does not. Never paint
     // an old match as current while a refresh is pending or has failed.
-    for (const road of roads) road.flow = null;
+    for (const road of roads) if (!road.directFlow) road.flow = null;
     try {
       if (!layerState._flowStatusPromise) return; // status check not started — sim mode
       await layerState._flowStatusPromise;
@@ -117,10 +117,12 @@ export function createFlow({ state: layerState, services, parts, source }) {
         const segments = await warmFlow(clamped, generation);
         if (generation !== layerState._loadGeneration || !layerState._enabled)
           return;
-        const { matches } = matchFlowToRoads(roads, segments);
-        for (let i = 0; i < roads.length; i++) {
-          roads[i].flow = matches[i];
-        }
+        const matchable = roads.filter(
+          (road) => !road.directFlow && !road.simulatedOnly,
+        );
+        const { matches } = matchFlowToRoads(matchable, segments);
+        for (let i = 0; i < matchable.length; i++)
+          matchable[i].flow = matches[i];
         if (layerState._flowRoads === roads) layerState._flowError = null;
       } catch (e) {
         if (e?.name === 'AbortError') return;
@@ -172,6 +174,14 @@ export function createFlow({ state: layerState, services, parts, source }) {
     const current = () =>
       generation === layerState._loadGeneration && !signal?.aborted;
     if (!current()) return false;
+    if (!roads.length) {
+      // A streamed tile with no roads changes nothing on screen. A completed
+      // pass with none (TomTom roads only, where TomTom has no flow) is valid
+      // empty coverage: clear the old view and do not retry.
+      if (label === 'Loaded tile') return false;
+      parts.rendering.renderRoadsForAltitude([], altitude, label, trace);
+      return true;
+    }
     const scene = layerState._viewer.scene;
     const selected = parts.rendering
       .visibleRoadsForAltitude(roads, altitude)

@@ -848,5 +848,6 @@
   "src/sources/openFreeMap.test.mjs",
   "src/sources/vectorTiles.test.mjs",
   "src/sources/militaryTileGeometry.test.mjs",
-  "src/layers/traffic/surface.test.mjs"
+  "src/layers/traffic/surface.test.mjs",
+  "src/layers/traffic/roadModes.test.mjs"
 ]

@@ -77,7 +77,7 @@ export function createLifecycle({
      */
     enable(viewer) {
       layerState._enabled = true;
-      source.prefetch?.();
+      if (layerState._roadMode !== 'tomtom') source.prefetch?.();
       holdContinuousRender('traffic'); // per-frame animator (perf wave 2)
       layerState._lastAnimTime = 0;
       layerState._pointCollection.show = true;

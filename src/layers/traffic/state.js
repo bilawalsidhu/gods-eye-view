@@ -1,8 +1,17 @@
+import { normalizeRoadMode } from './roadModes.js';
 import * as Cesium from 'cesium';
 import { FLOW_BUCKET_COLORS, TRAFFIC_TIMING_ENABLED } from './policy.js';
 
 export function createState({ services }) {
   const layerState = {};
+  layerState._roadMode =
+    typeof location === 'undefined'
+      ? null
+      : normalizeRoadMode(
+          new URLSearchParams(location.search).get('trafficRoads'),
+        );
+  // The query override is consumed at construction and shields passive restoration.
+  layerState._roadModeUrlOverride = layerState._roadMode;
 
   // ─── Module State ──────────────────────────────────────────
   /** @type {Cesium.Viewer|null} */

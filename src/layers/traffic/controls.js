@@ -1,10 +1,42 @@
 import {
+  normalizeRoadMode,
+  resolveRoadMode,
+  TRAFFIC_ROAD_MODES,
+} from './roadModes.js';
+import {
   trafficBucketTier,
   trafficStyleProfile,
 } from '../../data/trafficPresetStyle.js';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
+  /** One status line: feed, drawn road source, then degraded-coverage notes. */
+  function roadStatusLabel(feed) {
+    const source = layerState._roadSource;
+    if (layerState._roadError)
+      return `UNAVAILABLE · ${source} · Roads unavailable`;
+    const notes = [feed.loadingLabel];
+    if (!layerState._liveMode || feed.error) notes.push(`Roads: ${source}`);
+    // An explicit TomTom or Hybrid choice without a key draws OpenStreetMap.
+    if (
+      !layerState._liveMode &&
+      ['tomtom', 'hybrid'].includes(layerState._roadMode)
+    )
+      notes.push(
+        layerState._flowStatusUnavailable
+          ? `${layerState._roadMode === 'tomtom' ? 'TomTom roads' : 'Hybrid'} unavailable while the traffic service is unreachable`
+          : layerState._roadMode === 'tomtom'
+            ? 'TomTom roads need a TomTom key'
+            : 'Hybrid needs a TomTom key',
+      );
+    if (layerState._surfacePending) notes.push('Local surface still loading');
+    if (layerState._roadWarning) notes.push(layerState._roadWarning);
+    else if (layerState._roadPartial) notes.push('Partial coverage');
+    if (layerState._detailError) notes.push('Detailed roads unavailable');
+    else if (layerState._detailLimited) notes.push('Reduced detail coverage');
+    return notes.join(' · ');
+  }
+
   const { getFlowSessionStats } = source;
 
   const methods = {
@@ -20,13 +52,40 @@ export function createControls({ state: layerState, services, parts, source }) {
     updateInterval: 0,
 
     /**
-     * Update user-adjustable parameters (density and speed scaling).
+     * Update user-adjustable parameters (road source, density and speed scaling).
      *
      * @param {Object}  [params]
+     * @param {'tomtom'|'osm'|'hybrid'|null} [params.roadMode] - Road source; null = default.
      * @param {number}  [params.densityScale] - Dot density multiplier (clamped 0.2–2.5).
      * @param {number}  [params.speedScale]   - Dot speed multiplier (clamped 0.3–3.0).
+     * @param {{origin?:string}} [options] - Intent origin; restores never beat `?trafficRoads=`.
      */
-    setParams(params = {}) {
+    setParams(params = {}, { origin } = {}) {
+      if (
+        Object.hasOwn(params, 'roadMode') &&
+        (params.roadMode === null || normalizeRoadMode(params.roadMode))
+      ) {
+        const explicit = ['user', 'voice', 'tool'].includes(origin);
+        const mode =
+          !explicit && layerState._roadModeUrlOverride
+            ? layerState._roadModeUrlOverride
+            : params.roadMode;
+        if (explicit) layerState._roadModeUrlOverride = null;
+        if (mode !== layerState._roadMode) {
+          layerState._roadMode = mode;
+          // Redraw from scratch: a different source means different roads.
+          parts.ingestion.cancelActiveFetch();
+          clearTimeout(layerState._retryTimer);
+          layerState._retryTimer = null;
+          layerState._loadGeneration++;
+          layerState._fetching = false;
+          layerState._lastBounds = null;
+          layerState._lastViewCenter = null;
+          parts.animation.clearDots();
+          if (layerState._enabled)
+            parts.viewport.onCameraChanged({ immediate: true });
+        }
+      }
       if (typeof params.densityScale === 'number') {
         layerState._densityScale = Math.max(
           0.2,
@@ -70,11 +129,34 @@ export function createControls({ state: layerState, services, parts, source }) {
      */
     getParams() {
       return {
+        roadMode: layerState._roadMode,
         densityScale: layerState._densityScale,
         speedScale: layerState._speedScale,
         uncoveredRoads: layerState._uncoveredMode,
         jamViz: layerState._jamViz,
         presetDots: layerState._presetDots,
+      };
+    },
+
+    /** Road-source chips on the Street Traffic row (TomTom / OSM / Hybrid). */
+    getRowControls() {
+      const selected =
+        layerState._roadMode || resolveRoadMode(null, layerState._liveMode);
+      const needsKey = layerState._liveMode ? '' : ' (needs a TomTom key)';
+      const titles = {
+        tomtom: `TomTom roads only, each with its live flow${needsKey}`,
+        osm: 'OpenStreetMap roads, with TomTom flow matched when available',
+        hybrid: `TomTom roads first; OpenStreetMap fills the rest, simulated${needsKey}`,
+      };
+      const labels = { tomtom: 'TomTom', osm: 'OSM', hybrid: 'Hybrid' };
+      return {
+        chips: TRAFFIC_ROAD_MODES.map((mode) => ({
+          id: `roads-${mode}`,
+          label: labels[mode],
+          title: titles[mode],
+          active: mode === selected,
+          params: { roadMode: mode },
+        })),
       };
     },
 
@@ -155,15 +237,21 @@ export function createControls({ state: layerState, services, parts, source }) {
         flowError: layerState._flowError,
         coveragePct: flowCoveragePct,
         statusUnavailable: layerState._flowStatusUnavailable,
+        roadSource: layerState._roadSource,
       });
       return {
         count: layerState._count,
         lastUpdate: layerState._lastUpdate,
         loading,
         mode: feed.mode,
-        error: layerState._roadError || layerState._detailError || feed.error,
+        error:
+          layerState._roadError ||
+          layerState._roadWarning ||
+          layerState._detailError ||
+          feed.error,
         roadBounds: layerState._lastBounds,
         surfacePending: layerState._surfacePending || 0,
+        roadWarning: layerState._roadWarning || null,
         detailError: layerState._detailError || null,
         detailLimited: Boolean(layerState._detailLimited),
         flowCoveragePct,
@@ -191,11 +279,11 @@ export function createControls({ state: layerState, services, parts, source }) {
         // in one had better be the honest one. This is also where LIVE vs
         // SIMULATED mode is surfaced, and it must never imply a live feed the
         // layer does not have.
+        roadMode: resolveRoadMode(layerState._roadMode, layerState._liveMode),
+        roadModeRequested: layerState._roadMode,
         roadSource: layerState._roadSource,
         source: layerState._roadSource,
-        loadingLabel: layerState._roadError
-          ? `UNAVAILABLE · ${layerState._roadSource} · Roads unavailable`
-          : `${feed.loadingLabel}${layerState._liveMode && !feed.error ? '' : ` · Roads: ${layerState._roadSource}`}${layerState._surfacePending ? ' · Local surface still loading' : ''}${layerState._roadPartial ? ' · Partial coverage' : ''}${layerState._detailError ? ' · Detailed roads unavailable' : layerState._detailLimited ? ' · Reduced detail coverage' : ''}`,
+        loadingLabel: roadStatusLabel(feed),
       };
     },
   };

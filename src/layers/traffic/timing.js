@@ -264,7 +264,9 @@ export function createTiming({ state: layerState, services, parts, source }) {
 
         for (const direction of oneway ? [oneway] : [1, -1])
           roads.push({
-            densityWeight: oneway ? 1 : 0.5,
+            densityWeight: road.densityWeight ?? (oneway ? 1 : 0.5),
+            directFlow: road.directFlow,
+            simulatedOnly: road.simulatedOnly,
             coords,
             type,
             oneway: direction,

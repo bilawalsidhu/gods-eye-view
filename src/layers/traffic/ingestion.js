@@ -1,3 +1,4 @@
+import { resolveRoadMode, ROAD_SOURCE_LABELS } from './roadModes.js';
 import { phaseTiming } from '../../sources/phaseTiming.js';
 import { RoadRequestError, roadRequestError } from './source.js';
 import {
@@ -95,7 +96,14 @@ export function createIngestion({
     }
     const response = await source.requestRoads(
       { south, west, north, east },
-      { majorOnly, timeoutSec, signal, onTile },
+      {
+        majorOnly,
+        timeoutSec,
+        signal,
+        onTile,
+        roadMode: layerState._roadMode,
+        flowSnapshot: layerState._roadFlowSnapshot,
+      },
     );
 
     if (!response.ok) {
@@ -115,6 +123,7 @@ export function createIngestion({
       if (!Array.isArray(data?.roads))
         throw new Error('Malformed road snapshot');
       layerState._roadSource = data.roadSource || 'OpenStreetMap';
+      layerState._roadWarning = data.roadWarning || null;
       layerState._roadPartial = Boolean(data.partial);
       return data;
     }
@@ -161,6 +170,7 @@ export function createIngestion({
       );
     }
     layerState._roadSource = data.roadSource || 'OpenStreetMap';
+    layerState._roadWarning = data.roadWarning || null;
     layerState._roadPartial = Boolean(data.partial);
     return data;
   }
@@ -210,8 +220,18 @@ export function createIngestion({
     const requestSignal = layerState._activeFetchAbort.signal;
     const clamped = parts.viewport.clampBounds(bounds);
 
+    // Only OpenStreetMap snapshots are cached here: TomTom and Hybrid roads
+    // carry flow, which expires, and recompose from the tile caches instead.
+    const cacheMode = resolveRoadMode(
+      layerState._roadMode,
+      layerState._liveMode,
+    );
     // Cache key: fixed-precision bounding-box string for deterministic lookups
-    const cacheKey = `${clamped.south.toFixed(4)},${clamped.west.toFixed(4)},${clamped.north.toFixed(4)},${clamped.east.toFixed(4)}`;
+    const cacheKey = `${cacheMode}:${clamped.south.toFixed(4)},${clamped.west.toFixed(4)},${clamped.north.toFixed(4)},${clamped.east.toFixed(4)}`;
+    const retainSnapshot = () =>
+      cacheMode === 'osm' &&
+      !layerState._roadPartial &&
+      layerState._roadSource === ROAD_SOURCE_LABELS.osm;
 
     if (cacheKey !== layerState._retryBoundsKey) {
       layerState._retryBoundsKey = cacheKey;
@@ -220,6 +240,7 @@ export function createIngestion({
       layerState._roadRetryStopped = false;
     }
     layerState._roadError = null;
+    layerState._roadWarning = null;
 
     layerState._fetching = true;
     // Only COMMIT these on success. Committing up-front means a failed road
@@ -237,15 +258,23 @@ export function createIngestion({
     let retryable = true;
     let tilePaint = Promise.resolve();
     let streamed = [];
+    let paintRevision = 0;
     const onTile = (data) => {
       if (generation !== layerState._loadGeneration) return;
       const start = performance.now();
       const parsed = layerState._parseRoads(data, trace);
       phaseTiming('parse', start, { roads: parsed.length, incremental: true });
-      streamed.push(...parsed);
+      if (data.replace) streamed = parsed;
+      else streamed.push(...parsed);
+      const revision = ++paintRevision;
+      layerState._roadSource = data.roadSource || 'OpenStreetMap';
       const snapshot = streamed.slice();
       tilePaint = tilePaint.then(async () => {
-        if (generation !== layerState._loadGeneration) return;
+        if (
+          generation !== layerState._loadGeneration ||
+          revision !== paintRevision
+        )
+          return;
         renderedSomething =
           (await parts.flow.applyFlowThenRender(
             snapshot,
@@ -259,22 +288,45 @@ export function createIngestion({
       tilePaint.catch(() => {});
     };
     try {
-      parts.flow.warmFlow(clamped, generation);
+      layerState._roadFlowSnapshot = parts.flow
+        .warmFlow(clamped, generation)
+        .then(
+          (segments) => ({
+            segments,
+            hasKey: layerState._liveMode,
+            partial: source.getFlowSessionStats?.().partial,
+          }),
+          (error) => {
+            if (error?.name === 'AbortError') throw error;
+            const reason = parts.flow.deriveTrafficFlowError(error);
+            if (generation === layerState._loadGeneration)
+              layerState._flowError = reason;
+            return {
+              segments: [],
+              hasKey: layerState._liveMode,
+              error: reason,
+            };
+          },
+        );
+      layerState._roadFlowSnapshot.catch(() => {});
       requestSignal.throwIfAborted();
-      layerState._roadSource = 'OpenStreetMap';
-      let cache = layerState._tileCache.get(cacheKey);
+      layerState._roadSource = ROAD_SOURCE_LABELS[cacheMode];
+      let cache =
+        cacheMode === 'osm' ? layerState._tileCache.get(cacheKey) : null;
       if (cache) {
         layerState._tileCache.delete(cacheKey);
         layerState._tileCache.set(cacheKey, cache);
       }
       if (!cache) {
-        // LRU eviction: drop the oldest entry when cache exceeds the cap
-        if (layerState._tileCache.size >= TILE_CACHE_MAX_ENTRIES) {
-          const oldest = layerState._tileCache.keys().next().value;
-          layerState._tileCache.delete(oldest);
-        }
         cache = { major: null, full: null };
-        layerState._tileCache.set(cacheKey, cache);
+        if (cacheMode === 'osm') {
+          // LRU eviction: drop the oldest entry when cache exceeds the cap
+          if (layerState._tileCache.size >= TILE_CACHE_MAX_ENTRIES) {
+            const oldest = layerState._tileCache.keys().next().value;
+            layerState._tileCache.delete(oldest);
+          }
+          layerState._tileCache.set(cacheKey, cache);
+        }
       }
 
       // Fast path: full road set already cached — render and return.
@@ -335,7 +387,7 @@ export function createIngestion({
           : layerState._parseRoads(majorData, trace);
         phaseTiming('parse', parseStart, { roads: cache.major.length });
         cacheRoadSnapshot(layerState._tileCache, cacheKey, cache, {
-          retain: !layerState._roadPartial,
+          retain: retainSnapshot(),
         });
         if (
           !(await parts.flow.applyFlowThenRender(
@@ -351,6 +403,8 @@ export function createIngestion({
         renderedSomething = true;
       }
 
+      // TomTom roads come only from the z12 flow tiles already drawn.
+      if (layerState._roadSource === ROAD_SOURCE_LABELS.tomtom) return;
       // At higher altitude, major roads provide sufficient motion density
       if (altitude > FAST_FETCH_ALTITUDE) return;
 
@@ -381,7 +435,7 @@ export function createIngestion({
         : layerState._parseRoads(fullData, trace);
       phaseTiming('parse', parseStart, { roads: cache.full.length });
       cacheRoadSnapshot(layerState._tileCache, cacheKey, cache, {
-        retain: !layerState._roadPartial,
+        retain: retainSnapshot(),
       });
       if (
         !(await parts.flow.applyFlowThenRender(
@@ -397,6 +451,11 @@ export function createIngestion({
       renderedSomething = true;
     } catch (e) {
       if (e?.name === 'AbortError') return;
+      if (generation === layerState._loadGeneration && !renderedSomething)
+        layerState._roadSource =
+          ROAD_SOURCE_LABELS[
+            resolveRoadMode(layerState._roadMode, layerState._liveMode)
+          ];
       retryable = !isUnavailableCapability(e);
       layerState._roadRetryStopped = !retryable;
       if (generation === layerState._loadGeneration && !renderedSomething)

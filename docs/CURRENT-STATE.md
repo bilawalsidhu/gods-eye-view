@@ -2788,7 +2788,7 @@ its criteria cannot be silently ignored.
 | Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
-| Traffic | OpenFreeMap OpenStreetMap roads with optional TomTom congestion (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
+| Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
 | CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
@@ -3546,17 +3546,24 @@ and zero browser requests to external Overpass/Nominatim hosts. It waits for
 visible photoreal tilesets, dismisses first launch and measures at least 150
 street-view dots within -3/+25 m of sampled mesh height, for both keyed and
 keyless OpenFreeMap roads (an isolated page overrides only TomTom key availability).
-Keyed Austin must report `roadSource: OpenStreetMap` and positive flow coverage.
+Keyed Austin defaults to Hybrid (`roadSource: TomTom + OpenStreetMap`) with positive flow coverage.
 It records milliseconds from enabling Street Traffic to first rendered dots at
 2 km on a fresh page for each mode, plus warmed street-view timings and orbit screenshots;
 `src/overpassOffload.test.mjs` separately proves server-handler zero egress.
-Both QA modes record per-view request counts, decoded response-body bytes,
+All QA modes record per-view request counts, decoded response-body bytes,
 transferred bytes and browser cache hits for OpenFreeMap TileJSON/tiles, ALPR
 extract metadata/tiles and local `/api/tomtom/*` responses. `--tour` measures
 Austin, London, Dubai, San Diego, Tokyo and São Paulo with all three layers on,
 at 450 m and -35° pitch (São Paulo: 1250 m), then revisits Austin to measure
 cache reuse. The tour disables camera collision adjustment and asserts the actual
 latitude, longitude, altitude and pitch so remote terrain cannot shift a revisit.
+`--compare` captures TomTom, OpenStreetMap and Hybrid at identical close tilted
+photoreal views: Twin Peaks, Lombard Street, Loop 360, Dubai and Shibuya. The
+mode order rotates per view so each mode meets cold caches somewhere. It records
+first-dot latency (null where TomTom has no roads), projected dots,
+surface-aligned dots (-3/+25 m), floaters, sinkers and missing samples, saving
+`qa-shots/compare-<view>-<mode>.png` and `overpass-offload-compare-result.json`.
+The comparison also clicks a real row chip and verifies its stored preference.
 `--pan` runs 20 settled Austin moves: ten 150–300 m steps, five 1–2 km steps,
 and five exact returns. It records OFM requests/bytes, flow tile requests, all
 local API calls and dots per move, rejects repeat XYZ downloads and any new
@@ -4187,8 +4194,29 @@ easier to meet (detection is now on more often), but does not create it.
   TomTom flow vector tiles via the budget-governed `/api/tomtom` proxy
   (`.gev-cache/tomtom/`, 120 s TTL, `TOMTOM_DAILY_TILE_BUDGET` default 6k/day,
   sized so a 31-day month stays inside TomTom's 200K/month free allowance),
-  decoded client-side and matched onto OpenFreeMap road segments for
-  green/amber/red dot color and speed/density scaling (`trafficFlowStyle.js`).
+  decoded client-side for green/amber/red dot color and speed/density scaling
+  (`trafficFlowStyle.js`).
+- Road source (`src/layers/traffic/roadModes.js`): the Street Traffic row has
+  TomTom / OSM / Hybrid chips (`roadMode` param, stored in the existing layer
+  state `lo` field, no new share token); `?trafficRoads=tomtom|osm|hybrid`
+  overrides restored state until the user picks a chip. With no stored choice
+  the default is Hybrid with a TomTom key and OSM without one. Without a key
+  every choice draws OSM roads and the status says the choice needs a key.
+  TomTom draws only flow-tile lines with their own flow; roads without flow
+  are not drawn and the status says so. A `full`-coverage flow line carries
+  both travel directions, a `one_side` line the direction it is drawn in.
+  OSM draws OpenFreeMap roads with flow matched onto them (below). Hybrid
+  draws every TomTom line and adds OpenFreeMap roads only where no TomTom line
+  runs within 35 m in the same travel direction (30 degrees), tested every
+  10 m; only uncovered stretches of at least 40 m are kept, and they are
+  simulated. Flow values are ignored for this test, so an uncertain overlap
+  drops the OpenFreeMap copy, never the TomTom line; opposite carriageways
+  stay. OpenFreeMap tiles stream first and are drawn plain until flow
+  arrives, then one replacing snapshot applies the TomTom lines and dedupe.
+  Status examples: `LIVE · Roads: TomTom · Roads without flow hidden`,
+  `LIVE · Roads: TomTom + OpenStreetMap · Flow 81%`; Hybrid with no TomTom
+  line in view names OpenStreetMap alone. TomTom mode skips the z14 detail
+  pass and never requests OpenFreeMap unless it falls back without a key.
   Matching reuses `flowMatch.js`: seven road samples, a 35 m nearest-segment
   radius, 30 degree travel-bearing tolerance, and a bounded
   3x3 probe in a 100 m spatial grid. At least half the samples must match;
@@ -4198,17 +4226,17 @@ easier to meet (detection is now on more often), but does not create it.
   contradictory flow/closure are left simulated. Matching runs only on load/refresh, never per frame.
   Flow stays at z12 with the same 16-tile cap, 120-second cache and server
   daily budget. Lines are clipped to tile cores before caching and to the
-  look-at viewport fetch box before matching. Road geometry is always OFM;
-  there is no TomTom geometry fallback. Unmatched roads retain white simulated
-  dots at free-flow speeds (unless the explicit uncovered-roads hide option is
-  enabled). Cached road snapshots are rematched on every load; failed flow
+  look-at viewport fetch box before road conversion or matching. Unmatched
+  roads retain white simulated dots at free-flow speeds (unless the explicit
+  uncovered-roads hide option is enabled). Cached OSM road snapshots are
+  rematched on every load; TomTom and Hybrid views are recomposed from the
+  bounded tile caches each load because their roads carry flow. Failed flow
   refreshes clear old matches and report simulation. `flowCoveragePct` is the
-  percentage of shown dots on matched roads, including all unmatched dots in
-  the denominator and excluding dots hidden by closures. The keyed status
-  names `LIVE · Roads: OpenStreetMap · Flow: TomTom`, with coverage and an
-  unmatched/simulated note; zero matches reads SIMULATED. Road fetch bounds
-  center on the camera look-at point (`trafficBounds.js`).
-- Road geometry in both keyed and keyless mode comes from OpenFreeMap's immutable versioned tiles:
+  percentage of shown dots on roads with flow, including all unmatched dots in
+  the denominator and excluding dots hidden by closures. The OSM keyed status
+  reads `LIVE · Roads: OpenStreetMap · Flow: TomTom · N% cov`. Road fetch
+  bounds center on the camera look-at point (`trafficBounds.js`).
+- OSM geometry (OSM mode and Hybrid fill) comes from OpenFreeMap's immutable versioned tiles:
   successful TileJSON metadata prefetched at enable and cached for the source lifetime, z12 wide pass and
   z14 detail below 4.5 km. The detail box shrinks around the look-at point
   until it fits 16 tiles, including at high latitudes; status reports reduced
@@ -4238,7 +4266,7 @@ easier to meet (detection is now on more often), but does not create it.
   Samples acquired during refinement are revalidated when the visible mesh settles.
   Shared floor cells are read only; raw mesh samples never enter their cache.
   Positions and segment distances are precomputed, with no new animation-loop
-  allocation. Visible-globe roads use cached terrain without offscreen mesh picks. The road-source label names OpenStreetMap, with partial/unavailable states shown plainly.
+  allocation. Visible-globe roads use cached terrain without offscreen mesh picks. The road-source label names the geometry being drawn, with partial/unavailable states shown plainly.
 - TileJSON caches successful metadata. Transient failures retry after a
   five-second cooldown; invalid metadata/origins stay unavailable until the
   source is cleared. Clear resets metadata and cancels pending requests.

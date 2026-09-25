@@ -291,6 +291,13 @@ function imageryPinOption(key, token) {
 }
 
 const OPTION_GROUPS = Object.freeze({
+  traffic: Object.freeze([
+    enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
+      tomtom: 't',
+      osm: 'o',
+      hybrid: 'h',
+    }),
+  ]),
   'weather-lightning': Object.freeze([
     enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
       light: 'l',
@@ -542,7 +549,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'u',
     disposition: 'enabled-only',
   }),
-  Object.freeze({ id: 'traffic', token: 't', disposition: 'enabled-only' }),
+  Object.freeze({
+    id: 'traffic',
+    token: 't',
+    disposition: 'enabled+options',
+    optionOwner: 'traffic',
+  }),
   Object.freeze({ id: 'transit', token: 'j', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'weather-cyclones',

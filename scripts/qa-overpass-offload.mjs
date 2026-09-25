@@ -16,6 +16,10 @@
  * response-body bytes and transferred bytes (including headers), split by provider.
  * Uses real tile responses. A second isolated page overrides only TomTom key
  * availability to check OpenFreeMap roads on the Google mesh.
+ * --compare captures the TomTom, OpenStreetMap and Hybrid road sources at five
+ * fixed tilted photoreal views (Twin Peaks, Lombard Street, Loop 360, Dubai,
+ * Shibuya): first-dot ms, dots in view, dots within -3/+25 m of the rendered
+ * surface, floaters and sinkers, with qa-shots/compare-<view>-<mode>.png.
  * Screenshots and a JSON result go to qa-shots/ (gitignored). Exits nonzero on
  * a failed assertion. Works against keyed or keyless dev servers.
  */
@@ -29,7 +33,7 @@ import { trafficDetailBounds } from '../src/layers/traffic/source.js';
 const args = process.argv.slice(2);
 if (args.includes('--help') || args.includes('-h')) {
   console.log(
-    'Usage: node scripts/qa-overpass-offload.mjs [--url] <dev-server-url> [--headful] [--software-gl] [--tour | --pan | --profile | --coverage]\nChecks street-level mesh alignment for OpenFreeMap roads with/without TomTom flow, ALPR, Camp Mabry, Fort Cavazos, source labels and zero external Overpass/Nominatim requests. With --tour, measures a six-city session plus Austin revisit. The --pan mode checks twenty moves and the --profile mode measures cold/warm phases; --coverage checks the London ALPR row. All modes record per-view provider requests/bytes and cache hits in qa-shots/overpass-offload-result.json (also a mode-specific result). Writes qa-shots/. Uses platform ANGLE by default; --software-gl opts into slower SwiftShader.',
+    'Usage: node scripts/qa-overpass-offload.mjs [--url] <dev-server-url> [--headful] [--software-gl] [--tour | --pan | --compare | --profile | --coverage]\nChecks street-level mesh alignment for OpenFreeMap roads with/without TomTom flow, ALPR, Camp Mabry, Fort Cavazos, source labels and zero external Overpass/Nominatim requests. With --tour, measures a six-city session plus Austin revisit. The --pan mode checks twenty moves and the --profile mode measures cold/warm phases; --coverage checks the London ALPR row. The --compare mode captures three road sources at five identical tilted photoreal views. All modes record per-view provider requests/bytes and cache hits in qa-shots/overpass-offload-result.json (also a mode-specific result). Writes qa-shots/. Uses platform ANGLE by default; --software-gl opts into slower SwiftShader.',
   );
   process.exit(0);
 }
@@ -38,6 +42,7 @@ const url = args.includes('--url')
   : args.find((arg) => !arg.startsWith('--'));
 if (!url || !['http:', 'https:'].includes(new URL(url).protocol))
   throw new Error('Supply a running dev server URL; see --help');
+const compare = args.includes('--compare');
 const tour = args.includes('--tour');
 const pan = args.includes('--pan');
 const profile = args.includes('--profile');
@@ -64,15 +69,17 @@ const browser = await puppeteer.launch({
 });
 const result = {
   url,
-  mode: tour
-    ? 'tour'
-    : pan
-      ? 'pan'
-      : profile
-        ? 'profile'
-        : coverage
-          ? 'coverage'
-          : 'acceptance',
+  mode: compare
+    ? 'compare'
+    : tour
+      ? 'tour'
+      : pan
+        ? 'pan'
+        : profile
+          ? 'profile'
+          : coverage
+            ? 'coverage'
+            : 'acceptance',
   forbiddenRequests: [],
   errors: [],
   consoleErrors: [],
@@ -396,9 +403,9 @@ try {
     await page.screenshot({ path: path.join(shots, filename) });
     result.screenshots.push(filename);
   }
-  async function enableTrafficTimed(name) {
+  async function enableTrafficTimed(name, allowEmpty = false) {
     const milliseconds = await page.evaluate(
-      () =>
+      (allowEmpty) =>
         new Promise((resolve, reject) => {
           const { viewer, dataManager } = window.__godsEyeView;
           const start = performance.now();
@@ -407,8 +414,19 @@ try {
             clearTimeout(timer);
           };
           const remove = viewer.scene.postRender.addEventListener(() => {
-            if (dataManager.layers.get('traffic').module.getStats().count <= 0)
+            const stats = dataManager.layers.get('traffic').module.getStats();
+            if (stats.count <= 0) {
+              if (
+                allowEmpty &&
+                !stats.loading &&
+                stats.lastUpdate &&
+                performance.now() - start > 500
+              ) {
+                cleanup();
+                resolve(null);
+              }
               return;
+            }
             const elapsed = performance.now() - start;
             cleanup();
             resolve(elapsed);
@@ -424,8 +442,10 @@ try {
             },
           );
         }),
+      allowEmpty,
     );
-    result.loadTimes[name] = Math.round(milliseconds);
+    result.loadTimes[name] =
+      milliseconds === null ? null : Math.round(milliseconds);
     console.log(
       `${name}: ${result.loadTimes[name]} ms from enable to first rendered dots`,
     );
@@ -460,7 +480,7 @@ try {
       const collections = [];
       for (let i = 0; i < scene.primitives.length; i++) {
         const p = scene.primitives.get(i);
-        if (Array.isArray(p._pointPrimitives) && p.show && p.length > 100)
+        if (Array.isArray(p._pointPrimitives) && p.show && p.length > 0)
           collections.push(p);
       }
       let inView = 0,
@@ -505,6 +525,9 @@ try {
         inView,
         onMesh,
         sampled,
+        floaters: deltas.filter((delta) => delta > 25).length,
+        sinkers: deltas.filter((delta) => delta < -3).length,
+        unsampled: inView - sampled,
         medianDeltaM: deltas[Math.floor(deltas.length / 2)],
         stats: dataManager.layers.get('traffic').module.getStats(),
         photoreal: !scene.globe.show,
@@ -533,7 +556,15 @@ try {
     }
     const traffic = view.layers.find((layer) => layer.id === 'traffic');
     assert.ok(traffic.count > 0, `${name}: road dots rendered`);
-    assert.equal(traffic.roadSource, 'OpenStreetMap');
+    // Hybrid names OpenStreetMap alone where TomTom has no roads (Tokyo).
+    assert.ok(
+      (traffic.mode === 'live'
+        ? ['TomTom + OpenStreetMap', 'OpenStreetMap']
+        : ['OpenStreetMap']
+      ).includes(traffic.roadSource),
+      `${name}: road source ${traffic.roadSource}`,
+    );
+    view.roadSource = traffic.roadSource;
     await shot(`tour-${name}`);
     view.surface = await measureSurface();
     view.phases = await page.evaluate(() =>
@@ -593,7 +624,166 @@ try {
     );
     await waitForSources();
   }
-  if (coverage) {
+  if (compare) {
+    // Same photoreal surface, camera and settle rules for every mode.
+    await page.evaluate(async () => {
+      const { viewer, dataManager } = window.__godsEyeView;
+      for (const [id, layer] of dataManager.layers)
+        if (layer.enabled) await dataManager.setEnabled(id, false);
+      viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
+      if (document.querySelector('#data-panel.collapsed'))
+        document.querySelector('[data-collapse-target="data-panel"]').click();
+    });
+    result.compare = [];
+    const locations = [
+      ['twin-peaks', 37.7544, -122.4477, 350, -20],
+      ['lombard', 37.8021, -122.4187, 250, -25],
+      ['loop-360', 30.347, -97.799, 400, -20],
+      ['dubai', 25.1972, 55.2744, 450, -35],
+      ['shibuya', 35.6595, 139.7005, 450, -35],
+    ];
+    const modes = ['hybrid', 'osm', 'tomtom'];
+    for (const [
+      index,
+      [name, lat, lon, height, pitch],
+    ] of locations.entries()) {
+      // Rotate the order so every mode meets cold caches at some views;
+      // `order` records it (0 = first at that view).
+      const order = modes.map((_, i) => modes[(i + index) % modes.length]);
+      for (const mode of order) {
+        beginView(`${name}-${mode}`, { lat, lon, height, pitch, heading: 0 });
+        await page.evaluate(() =>
+          window.__godsEyeView.dataManager.setEnabled('traffic', false),
+        );
+        await fly(lat, lon, height, 0, pitch);
+        await settleTiles();
+        await page.evaluate(
+          (roadMode) =>
+            window.__godsEyeView.dataManager.setLayerParams(
+              'traffic',
+              { roadMode },
+              { origin: 'user' },
+            ),
+          mode,
+        );
+        await enableTrafficTimed(`${name}-${mode}`, true);
+        await waitForSources();
+        await settleTiles();
+        // Tile settling can start a height refinement pass; measure after it.
+        await waitForSources();
+        const surface = await measureSurface();
+        assert.equal(surface.stats.loading, false, `${name}/${mode}: settled`);
+        assert.equal(surface.photoreal, true, 'comparison runs on photoreal');
+        assert.equal(
+          surface.stats.roadMode,
+          surface.stats.mode === 'live' ? mode : 'osm',
+        );
+        const actualCamera = await page.evaluate(() => {
+          const camera = window.__godsEyeView.viewer.camera;
+          const p = camera.positionCartographic;
+          return {
+            lat: (p.latitude * 180) / Math.PI,
+            lon: (p.longitude * 180) / Math.PI,
+            height: p.height,
+            pitch: (camera.pitch * 180) / Math.PI,
+            heading: (camera.heading * 180) / Math.PI,
+          };
+        });
+        for (const [key, expected, tolerance] of [
+          ['lat', lat, 1e-6],
+          ['lon', lon, 1e-6],
+          ['height', height, 1],
+          ['pitch', pitch, 0.01],
+        ])
+          assert.ok(
+            Math.abs(actualCamera[key] - expected) < tolerance,
+            `${name}/${mode}: fixed ${key}`,
+          );
+        const filename = `compare-${name}-${mode}.png`;
+        await settleTiles();
+        assert.equal(
+          await page.evaluate(
+            () => !document.querySelector('#first-run-launcher:not([hidden])'),
+          ),
+          true,
+          'first-launch modal dismissed',
+        );
+        await page.evaluate(async () => {
+          window.__godsEyeView.requestRender('qa-overpass-offload');
+          await new Promise((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(resolve)),
+          );
+        });
+        await page.screenshot({ path: path.join(shots, filename) });
+        result.screenshots.push(filename);
+        const entry = {
+          view: name,
+          mode,
+          order: order.indexOf(mode),
+          firstDotMs: result.loadTimes[`${name}-${mode}`],
+          dotsInView: surface.inView,
+          onSurface: surface.onMesh,
+          floaters: surface.floaters,
+          sinkers: surface.sinkers,
+          unsampled: surface.unsampled,
+          flowCoveragePct: surface.stats.flowCoveragePct,
+          source: surface.stats.roadSource,
+          status: surface.stats.loadingLabel,
+          camera: actualCamera,
+          screenshot: filename,
+        };
+        result.compare.push(entry);
+        console.log(JSON.stringify(entry));
+        assert.ok(
+          !surface.stats.error,
+          `${name}/${mode}: ${surface.stats.error}`,
+        );
+      }
+    }
+    // Drive the real row control and read durable state after the user action.
+    await page.waitForSelector(
+      '[data-layer-id="traffic"] [data-chip-id="roads-osm"]',
+    );
+    await page.click('[data-layer-id="traffic"] [data-chip-id="roads-osm"]');
+    await page.waitForFunction(
+      () =>
+        window.__godsEyeView.dataManager.layers
+          .get('traffic')
+          .module.getParams().roadMode === 'osm',
+    );
+    await page.waitForFunction(
+      () =>
+        JSON.parse(localStorage.getItem('gev:layer-state:v2'))?.o?.traffic
+          ?.roadMode === 'osm',
+    );
+    result.rowControl = { clicked: 'osm', persisted: true };
+    await waitForSources();
+    console.table(
+      result.compare.map(
+        ({
+          view,
+          mode,
+          order,
+          firstDotMs,
+          dotsInView,
+          onSurface,
+          floaters,
+          sinkers,
+          unsampled,
+        }) => ({
+          view,
+          mode,
+          order,
+          firstDotMs,
+          dotsInView,
+          onSurface,
+          floaters,
+          sinkers,
+          unsampled,
+        }),
+      ),
+    );
+  } else if (coverage) {
     // The shared London presentation gate below is also independently runnable.
   } else if (profile) {
     await fly(30.2672, -97.7431, 450, 0, -35);
@@ -830,8 +1020,13 @@ try {
     );
     assert.ok(austin.traffic.count > 0, 'road dots rendered');
     assert.ok(austin.cameraEntities > 0, 'ALPR camera entities rendered');
-    assert.equal(austin.traffic.roadSource, 'OpenStreetMap');
-    assert.match(austin.sourceLabel, /Roads: OpenStreetMap/);
+    assert.equal(
+      austin.traffic.roadSource,
+      austin.traffic.mode === 'live'
+        ? 'TomTom + OpenStreetMap'
+        : 'OpenStreetMap',
+    );
+    assert.match(austin.sourceLabel, /Roads: (TomTom \+ )?OpenStreetMap/);
     await shot('austin');
     async function checkStreetSurface(name) {
       await waitForSources();
@@ -860,7 +1055,12 @@ try {
       await settleTiles();
       const measured = await measureSurface();
       result[name] = measured;
-      assert.equal(measured.stats.roadSource, 'OpenStreetMap');
+      assert.equal(
+        measured.stats.roadSource,
+        measured.stats.mode === 'live'
+          ? 'TomTom + OpenStreetMap'
+          : 'OpenStreetMap',
+      );
       if (measured.stats.mode === 'live') {
         assert.ok(
           measured.stats.flowCoveragePct > 0,
@@ -868,7 +1068,7 @@ try {
         );
         assert.match(
           measured.stats.loadingLabel,
-          /LIVE · Roads: OpenStreetMap · Flow: TomTom/,
+          /LIVE · Roads: TomTom \+ OpenStreetMap · Flow/,
         );
       } else {
         assert.equal(measured.stats.flowCoveragePct, 0);
@@ -957,7 +1157,9 @@ try {
       });
       page.on('pageerror', (error) => result.errors.push(error.message));
       await observeNetwork(page);
-      await page.goto(navigationUrl.href, {
+      const fallbackUrl = new URL(navigationUrl);
+      fallbackUrl.searchParams.set('trafficRoads', 'tomtom');
+      await page.goto(fallbackUrl.href, {
         waitUntil: 'domcontentloaded',
         timeout: 60_000,
       });
@@ -989,6 +1191,10 @@ try {
       assert.equal(
         result['traffic-street-ofm'].stats.roadSource,
         'OpenStreetMap',
+      );
+      assert.match(
+        result['traffic-street-ofm'].stats.loadingLabel,
+        /TomTom roads need a TomTom key/,
       );
       await waitForSources();
       await page.close();
@@ -1129,7 +1335,7 @@ try {
     await shot('austin-revisit');
     await waitForSources();
   }
-  if (!pan && !profile) {
+  if (!pan && !profile && !compare) {
     beginView('alpr-london');
     await page.evaluate(() =>
       window.__godsEyeView.dataManager.setEnabled('traffic', false),

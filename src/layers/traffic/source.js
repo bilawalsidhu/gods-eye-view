@@ -1,3 +1,9 @@
+import {
+  createHybridFill,
+  flowSegmentsToRoads,
+  resolveRoadMode,
+  ROAD_SOURCE_LABELS,
+} from './roadModes.js';
 import { phaseTiming } from '../../sources/phaseTiming.js';
 import { createFlowTileSource } from './flowSource.js';
 import { tilesForBounds } from '../../data/tomtomTiles.js';
@@ -56,14 +62,14 @@ export function createTrafficSource({
   mapTiles = createOpenFreeMapSource({ fetchImpl }),
 } = {}) {
   const flow = createFlowTileSource({ fetchImpl });
-  return {
+  const api = {
     ...flow,
     prefetch: () => mapTiles.getMetadata().catch(() => {}),
     resetFlowTileCache() {
       flow.resetFlowTileCache();
       mapTiles.clear();
     },
-    async requestRoads(box, { majorOnly = false, signal, onTile } = {}) {
+    async requestOsmRoads(box, { majorOnly = false, signal, onTile } = {}) {
       if (
         !validTileBounds(box) ||
         box.north - box.south > 10 ||
@@ -127,4 +133,118 @@ export function createTrafficSource({
       return status;
     },
   };
+  /**
+   * Request roads for the selected road source.
+   *
+   * `osm` streams OpenFreeMap tiles exactly as before. `tomtom` and `hybrid`
+   * wait for the flow snapshot the layer started alongside road acquisition;
+   * OpenFreeMap tiles stream meanwhile (Hybrid) and are drawn unfiltered until
+   * flow arrives, then one replacing snapshot swaps in TomTom lines and drops
+   * the duplicated OpenFreeMap stretches. Later tiles publish only their own
+   * fill, so parsing stays incremental. TomTom never requests OpenFreeMap
+   * unless the missing key forces the OpenStreetMap fallback.
+   *
+   * @param {{south:number, west:number, north:number, east:number}} box
+   * @param {Object} [options]
+   * @param {'tomtom'|'osm'|'hybrid'|null} [options.roadMode] - Requested mode (null = default).
+   * @param {Promise<{segments:Array, hasKey:boolean, error?:string, partial?:boolean}>} [options.flowSnapshot]
+   * @param {(data:Object) => void} [options.onTile] - Incremental snapshots; `replace` resets.
+   */
+  api.requestRoads = async (
+    box,
+    { roadMode = null, flowSnapshot, onTile, ...options } = {},
+  ) => {
+    if (
+      !validTileBounds(box) ||
+      box.north - box.south > 10 ||
+      box.east - box.west > 10
+    )
+      throw new TypeError('A bounded road viewport is required');
+    if (roadMode === 'osm' || !flowSnapshot)
+      return api.requestOsmRoads(box, { ...options, onTile });
+    const signal = options.signal;
+    const osm = [];
+    let live = null,
+      mode = null,
+      metadata = {},
+      osmError = null,
+      tomtom = [],
+      fillFor = null;
+    const fillMemo = new Map();
+    const fill = (roads) =>
+      mode === 'hybrid'
+        ? roads.flatMap((road) => {
+            if (!fillMemo.has(road)) fillMemo.set(road, fillFor(road));
+            return fillMemo.get(road);
+          })
+        : roads;
+    // Hybrid without any TomTom line (flow failed, or none here) draws only
+    // OpenStreetMap roads, and says so.
+    const source = () =>
+      !mode || (mode === 'hybrid' && !tomtom.length)
+        ? ROAD_SOURCE_LABELS.osm
+        : ROAD_SOURCE_LABELS[mode];
+    const snapshot = (roads, replace) => ({
+      ...metadata,
+      roads,
+      roadSource: source(),
+      roadMode: mode,
+      replace,
+      partial: Boolean(metadata.partial || osmError || live?.partial),
+      roadWarning: osmError && mode !== 'osm' ? osmError.message : null,
+    });
+    const publish = (roads, replace = false) => {
+      if (!signal?.aborted) onTile?.(snapshot(roads, replace));
+    };
+    const composed = () =>
+      mode === 'tomtom' ? tomtom : [...tomtom, ...fill(osm)];
+    const loadOsm = async () => {
+      try {
+        const response = await api.requestOsmRoads(box, {
+          ...options,
+          onTile: (data) => {
+            osm.push(...data.roads);
+            metadata = { ...data, roads: undefined };
+            // Before flow settles the tile is drawn as plain OpenStreetMap.
+            publish(fill(data.roads));
+          },
+        });
+        const data = await response.json();
+        metadata = { ...data, roads: undefined };
+        // Every tile streams through onTile; adopt the final list if not.
+        if (osm.length !== data.roads.length)
+          osm.splice(0, osm.length, ...data.roads);
+      } catch (error) {
+        if (error?.name === 'AbortError' || signal?.aborted) throw error;
+        osmError = error;
+      }
+    };
+    const osmJob = roadMode === 'tomtom' ? null : loadOsm();
+    osmJob?.catch(() => {});
+    live = await flowSnapshot;
+    signal?.throwIfAborted();
+    if (!live)
+      throw new TypeError(
+        'Road selection requires a flow availability snapshot',
+      );
+    mode = resolveRoadMode(roadMode, live.hasKey);
+    if (mode === 'tomtom' && live.error) throw new RoadRequestError(live.error);
+    if (mode !== 'osm') {
+      tomtom = flowSegmentsToRoads(live.segments);
+      fillFor = createHybridFill(live.segments);
+      publish(composed(), true);
+    }
+    if (osmJob) await osmJob;
+    else if (mode === 'osm') await loadOsm();
+    signal?.throwIfAborted();
+    if (osmError && (mode === 'osm' || !tomtom.length)) throw osmError;
+    const data = snapshot(composed(), true);
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      json: async () => data,
+    };
+  };
+  return api;
 }

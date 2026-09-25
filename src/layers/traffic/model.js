@@ -45,7 +45,9 @@ export function createModel({ state: layerState, services, parts, source }) {
 
         for (const direction of oneway ? [oneway] : [1, -1])
           roads.push({
-            densityWeight: oneway ? 1 : 0.5,
+            densityWeight: road.densityWeight ?? (oneway ? 1 : 0.5),
+            directFlow: road.directFlow,
+            simulatedOnly: road.simulatedOnly,
             coords,
             type,
             oneway: direction,
@@ -221,6 +223,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * @param {string|null} [input.flowError] - `deriveTrafficFlowError` result, if any.
    * @param {number} [input.coveragePct] - Share of shown dots on matched roads, 0–100.
    * @param {boolean} [input.statusUnavailable] - The status probe itself failed.
+   * @param {string} [input.roadSource] - Name of the geometry being drawn.
    * @returns {{mode:'live'|'sim', error:string|null, loadingLabel:string}}
    */
 
@@ -230,6 +233,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     flowError = null,
     coveragePct = 0,
     statusUnavailable = false,
+    roadSource = 'OpenStreetMap',
   } = {}) {
     // `mode` is the CONFIGURED source (live key present vs keyless), not this
     // instant's health — health rides on `error`. The qa-traffic harness pins
@@ -242,6 +246,27 @@ export function createModel({ state: layerState, services, parts, source }) {
       // "TomTom daily budget reached" that never says what is on screen.
       const degraded = `SIMULATED — ${flowError}`;
       return { mode, error: degraded, loadingLabel: degraded };
+    }
+    // TomTom and Hybrid name their geometry; OpenStreetMap keeps its match copy.
+    if (liveMode && roadSource === 'TomTom') {
+      return {
+        mode,
+        error: null,
+        loadingLabel: fetching
+          ? 'Syncing flow · Roads: TomTom'
+          : coveragePct > 0
+            ? 'LIVE · Roads: TomTom · Roads without flow hidden'
+            : 'LIVE · Roads: TomTom · No flow roads in view',
+      };
+    }
+    if (liveMode && roadSource === 'TomTom + OpenStreetMap') {
+      return {
+        mode,
+        error: null,
+        loadingLabel: fetching
+          ? `Syncing flow · Roads: ${roadSource}`
+          : `${coveragePct > 0 ? 'LIVE' : 'SIMULATED'} · Roads: ${roadSource} · Flow ${coveragePct}%`,
+      };
     }
     if (liveMode) {
       return {

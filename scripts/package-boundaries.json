@@ -1048,7 +1048,8 @@
       "src/sources/openFreeMap.js",
       "src/sources/militaryTileGeometry.js",
       "src/sources/vectorTiles.js",
-      "src/sources/phaseTiming.js"
+      "src/sources/phaseTiming.js",
+      "src/layers/traffic/roadModes.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
@@ -1989,7 +1990,8 @@
       "src/sources/openFreeMap.js",
       "src/sources/militaryTileGeometry.js",
       "src/sources/vectorTiles.js",
-      "src/sources/phaseTiming.js"
+      "src/sources/phaseTiming.js",
+      "src/layers/traffic/roadModes.js"
     ],
     "external": [
       "hls.js",
@@ -2456,7 +2458,8 @@
       "src/sources/openFreeMap.js",
       "src/sources/militaryTileGeometry.js",
       "src/sources/vectorTiles.js",
-      "src/sources/phaseTiming.js"
+      "src/sources/phaseTiming.js",
+      "src/layers/traffic/roadModes.js"
     ],
     "external": [
       "hls.js",
@@ -2769,7 +2772,9 @@
       "src/sources/openFreeMap.js",
       "src/sources/militaryTileGeometry.js",
       "src/sources/vectorTiles.js",
-      "src/sources/phaseTiming.js"
+      "src/sources/phaseTiming.js",
+      "src/layers/traffic/roadModes.js",
+      "src/data/flowMatch.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },
