@@ -1317,6 +1317,7 @@
       "src/app/atmosphereCompat.js",
       "src/bloom.js",
       "src/camera.js",
+      "src/cameraGroundGuard.js",
       "src/cameraVerbs.js",
       "src/cctvFocusPolicy.js",
       "src/cctvFocusRequest.js",
