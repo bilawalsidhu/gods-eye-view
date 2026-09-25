@@ -172,7 +172,8 @@ export function createWeatherPanel({
     const models = active.map(({ id, icon, summary, legend = [], list }) => {
       let detail = summary.detail;
       const product = state.products.find((item) => item.id === id);
-      if (OBSERVED.has(id)) {
+      // A card waiting for its key keeps its own detail: the requirement.
+      if (OBSERVED.has(id) && !summary.keyRequired) {
         const shown = product?.shown ?? summary.shownTime;
         if (state.mode === 'history' && product?.selected === null) {
           const gap = summary.maxGapMinutes || 30;

@@ -120,13 +120,16 @@ from national agencies, coloured by Xweather alert type, and sits last in the
 observed-history group, after Lightning. It reads `Warnings · Xweather` with
 coverage `US · Canada · Europe · Australia · Japan · Korea` and the muted
 caveat "Official warnings where issued · no global coverage"; nothing is drawn
-where no agency issues through Xweather. There is no SOURCE row and no colour
-ramp: Settings offers only OPACITY, and the info text links Xweather's
+where no agency issues through Xweather. There is no SOURCE row, no colour
+ramp and no View coverage action (coverage is per country, not the global
+bounds): Settings offers only OPACITY, and the info text links Xweather's
 alert-type reference. The card declares `requiresKeyId: 'xweather'`. Without a
-key it polls `/status` (at most once a minute) and nothing else, reports
-`keyRequired`, and its status line and toggle name the missing
-`XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET` through the shared key-guidance
-text; a key removed at runtime clears its frame. With a key it follows the
+key it polls `/status` (at most once a minute) and nothing else and reports
+`keyRequired`. Its one-line status reads `Needs an Xweather key · see Provider
+Settings`, and the detail line above it and the toggle give the full shared
+key guidance, `Needs XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET — add it in
+Provider Settings`, in history mode too; a key removed at runtime clears its
+frame. With a key it follows the
 shared history clock and shows the budget line, the refusal status and the
 Xweather credit like the radar card. The proxy lists its frames every 3 minutes
 (Xweather documents 2–3 minute updates; not yet measured) and fetches tiles to

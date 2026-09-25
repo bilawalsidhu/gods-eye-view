@@ -204,16 +204,26 @@ test('a weather card whose key is missing shows the key requirement as its statu
     subscribeRowControls() {},
     getRowControls: () => ({
       readout: true,
-      summary: { label: 'Warnings · Xweather', status: null },
+      summary: {
+        label: 'Warnings · Xweather',
+        status: 'Needs an Xweather key · see Provider Settings',
+        detail: 'Xweather key required',
+        keyRequired: true,
+      },
     }),
   });
   const status = () =>
     f.find((n) => n.dataset.lineId === 'status', body)?.textContent;
+  const detail = () =>
+    f.find((n) => n.dataset.lineId === 'time', body)?.textContent;
   try {
     panel.mount(f.container);
     panel._refreshWeatherPanel();
+    // The status line is one line high: it keeps the short text, and the
+    // full requirement goes on the wrapping line above it.
+    assert.equal(status(), 'Needs an Xweather key · see Provider Settings');
     assert.equal(
-      status(),
+      detail(),
       'Needs XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET — add it in Provider Settings',
     );
     const toggle = f
@@ -222,10 +232,7 @@ test('a weather card whose key is missing shows the key requirement as its statu
     assert.match(toggle.title, /^Needs XWEATHER_CLIENT_ID/);
     layer.stats = { keyRequired: false };
     panel._refreshWeatherPanel();
-    assert.notEqual(
-      status(),
-      'Needs XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET — add it in Provider Settings',
-    );
+    assert.equal(detail(), 'Xweather key required');
   } finally {
     panel.destroy();
     globalThis.document = previousDocument;

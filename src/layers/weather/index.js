@@ -599,7 +599,9 @@ export function createWeatherLayer({
     getRowControls() {
       const shared = clock?.getState();
       const followLatest = isLatest();
+      // A card waiting for its key has no frame to miss.
       const missing =
+        !keyRequired &&
         noFrame &&
         shared?.mode === 'history' &&
         shared.products.find((entry) => entry.id === id)?.selected === null
@@ -692,7 +694,13 @@ export function createWeatherLayer({
               : keyRequired
                 ? 'Xweather key required'
                 : 'Waiting for observation',
+          keyRequired,
+          // The status line is one line high: the short form here, and the
+          // panel puts the full key requirement on the detail line.
           status:
+            (keyRequired
+              ? 'Needs an Xweather key · see Provider Settings'
+              : null) ||
             missing ||
             hostStatus ||
             // A refusal also fails the frame, so it must outrank that error.
@@ -799,18 +807,24 @@ export function createWeatherLayer({
             params: { opacity: value },
             title: 'Image opacity; does not alter the observed values',
           })),
-          {
-            id: 'coverage',
-            label: xweather()
-              ? 'View coverage'
-              : radar
-                ? 'View US radar'
-                : lightning
-                  ? 'View Americas & Pacific'
-                  : 'View coverage',
-            disabled: !manifest || !runNavigation,
-            params: { focus: true },
-          },
+          // Warnings cover a set of countries, not the global manifest bounds,
+          // so flying there would imply global coverage.
+          ...(alerts
+            ? []
+            : [
+                {
+                  id: 'coverage',
+                  label: xweather()
+                    ? 'View coverage'
+                    : radar
+                      ? 'View US radar'
+                      : lightning
+                        ? 'View Americas & Pacific'
+                        : 'View coverage',
+                  disabled: !manifest || !runNavigation,
+                  params: { focus: true },
+                },
+              ]),
         ],
         // Xweather publishes no colour scale for radar-global or
         // lightning-flash (https://www.xweather.com/docs/maps/reference/legends);

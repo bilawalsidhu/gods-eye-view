@@ -453,6 +453,39 @@ test('the panel order is cyclones, wind, radar, satellite, lightning, warnings',
   view.destroy();
 });
 
+test('a card that needs a key keeps its detail in history instead of a missing frame', () => {
+  const f = fixture();
+  const view = createWeatherPanel(f);
+  f.state({
+    mode: 'history',
+    target: ticks[0],
+    products: [
+      { id: radar.id, shown: ticks[0], selected: ticks[0] },
+      { id: 'weather-alerts', shown: null, selected: null },
+    ],
+  });
+  view.update([
+    radar,
+    {
+      id: 'weather-alerts',
+      icon: '⚠',
+      summary: {
+        label: 'Warnings · Xweather',
+        detail:
+          'Needs XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET — add it in Provider Settings',
+        status: 'Needs an Xweather key · see Provider Settings',
+        keyRequired: true,
+      },
+    },
+  ]);
+  assert.equal(
+    line(f, 'weather-alerts', 'time').textContent,
+    'Needs XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET — add it in Provider Settings',
+  );
+  assert.match(line(f, radar.id, 'time').textContent, /synced/);
+  view.destroy();
+});
+
 test('the observed-history scope names each card as its source labels it', () => {
   const f = fixture();
   const view = createWeatherPanel(f);

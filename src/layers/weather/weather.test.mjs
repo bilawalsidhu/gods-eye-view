@@ -2672,6 +2672,11 @@ test('the warnings card without a key names the key it needs and asks Xweather f
     layerKeyRequirementTooltip(row),
     'Needs XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET — add it in Provider Settings',
   );
+  // The one-line status stays short; the panel puts the full text below it.
+  const { summary } = h.layer.getRowControls();
+  assert.equal(summary.status, 'Needs an Xweather key · see Provider Settings');
+  assert.equal(summary.keyRequired, true);
+  assert.equal(summary.detail, 'Xweather key required');
   // Later updates keep asking only for status, at most once a minute.
   void h.layer.update();
   await settle(h);
@@ -2749,7 +2754,38 @@ test('with a key the warnings card joins the observed timeline on the alerts pro
   );
 });
 
-test('the warnings descriptor offers only opacity and a coverage action, and no ramp', async (t) => {
+test('a keyless warnings card in history names the key, not a missing frame', async (t) => {
+  const clock = createWeatherClock();
+  const radar = layerHarness({
+    clock,
+    feed: { getSnapshot: async () => snapshot },
+  });
+  const alerts = layerHarness({
+    clock,
+    id: 'weather-alerts',
+    feed: xweatherFeed(xweatherStatus({ hasKey: false })).feed,
+  });
+  t.after(() => {
+    radar.layer.destroy();
+    alerts.layer.destroy();
+    clock.destroy();
+  });
+  void radar.layer.update();
+  void alerts.layer.update();
+  await settle(radar);
+  await settle(alerts);
+  const moved = clock.setTarget(times[0]);
+  await settle(radar);
+  await settle(alerts);
+  await moved;
+  assert.equal(clock.getState().mode, 'history');
+  const { summary } = alerts.layer.getRowControls();
+  assert.equal(summary.status, 'Needs an Xweather key · see Provider Settings');
+  assert.equal(summary.detail, 'Xweather key required');
+  assert.equal(summary.keyRequired, true);
+});
+
+test('the warnings descriptor offers only opacity, no coverage action and no ramp', async (t) => {
   const { feed } = xweatherFeed(xweatherStatus());
   const h = layerHarness({ id: 'weather-alerts', feed });
   t.after(() => h.layer.destroy());
@@ -2760,9 +2796,11 @@ test('the warnings descriptor offers only opacity and a coverage action, and no 
     controls.summary.settings.map(({ label }) => label),
     ['OPACITY'],
   );
-  assert.deepEqual(
-    controls.summary.actions.map(({ id, label }) => [id, label]),
-    [['coverage', 'View coverage']],
+  // Coverage is per country, so flying to the global bounds would mislead.
+  assert.deepEqual(controls.summary.actions, []);
+  assert.equal(
+    controls.chips.some(({ id }) => id === 'coverage'),
+    false,
   );
   assert.equal(
     controls.chips.some(({ params }) => params.source),

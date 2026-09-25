@@ -373,15 +373,23 @@ export class LayerPanel {
         )
         .map((layer) => {
           const controls = this._rowControlsFor(layer.id);
-          // A card held back by a missing key names that key as its status,
-          // as the toggle row does.
+          // A card held back by a missing key names that key, as the toggle
+          // row does: on the detail line, which wraps, since the status line
+          // is one line high. The card's own short status stays.
           const keyGuidance = layerKeyRequirementTooltip(layer);
           return {
             id: layer.id,
             icon: layer.icon,
             ...controls,
             ...(keyGuidance && controls?.summary
-              ? { summary: { ...controls.summary, status: keyGuidance } }
+              ? {
+                  summary: {
+                    ...controls.summary,
+                    detail: keyGuidance,
+                    status: controls.summary.status || keyGuidance,
+                    keyRequired: true,
+                  },
+                }
               : {}),
           };
         }),
