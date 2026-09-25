@@ -10,7 +10,7 @@
   ALPR cameras from an hourly OpenStreetMap extract (US and Canada). Features
   without a replacement say they are unavailable. `OVERPASS_UPSTREAMS` sets an
   Overpass instance you run or pay for. The cockpit regional brief resolves
-  regions from bundled Natural Earth data instead of Nominatim. Traffic paints
+  regions from bundled Natural Earth data instead of Nominatim. Traffic starts on enable and paints
   locally grounded roads incrementally, shares concurrent tile requests and
   reuses validated heights across pans. Congestion and closures respect travel
   direction. ALPR distinguishes unsupported coverage from empty results and

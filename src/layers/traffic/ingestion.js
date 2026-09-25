@@ -279,8 +279,8 @@ export function createIngestion({
 
       // Fast path: full road set already cached — render and return.
       // Flow is (re)applied even on cache hits: roads cache for the session,
-      // but congestion data has a 120s shelf life. The race renders within
-      // FLOW_RENDER_RACE_MS either way; late flow recolors in place.
+      // but congestion data has a 120s shelf life. Locally grounded roads
+      // paint independently; late flow recolors in place.
       if (cache.full) {
         layerState._roadPartial = false;
         layerState._detailLimited = Boolean(cache.detailLimited);

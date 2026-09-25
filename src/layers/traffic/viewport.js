@@ -179,7 +179,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
    *  4. Otherwise, debounce and schedule `loadRoadsForBounds`.
    */
 
-  function onCameraChanged() {
+  function onCameraChanged(options) {
     if (!layerState._enabled) return;
 
     const alt = getCameraAltitude();
@@ -233,7 +233,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
     clearTimeout(layerState._fetchTimeout);
     layerState._fetchTimeout = setTimeout(
       () => layerState._loadRoadsForBounds(clamped, alt, interactionAnchor),
-      FETCH_DEBOUNCE,
+      options?.immediate === true ? 0 : FETCH_DEBOUNCE,
     );
   }
   return {

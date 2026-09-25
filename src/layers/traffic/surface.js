@@ -2,7 +2,7 @@ import { phaseTiming } from '../../sources/phaseTiming.js';
 import * as Cesium from 'cesium';
 import { DOT_HEIGHT_OFFSET, MAX_WAYPOINTS_PER_ROAD } from './policy.js';
 
-/** Only sample a resolved visible surface; the hidden globe says nothing about Google tiles. */
+/** Detect a settled surface for background revalidation, never as a first-paint barrier. */
 export function trafficSurfaceReady(scene) {
   if (scene.globe?.show) return scene.globe.tilesLoaded !== false;
   let found = false;

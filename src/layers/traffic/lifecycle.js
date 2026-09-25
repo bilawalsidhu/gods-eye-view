@@ -104,8 +104,8 @@ export function createLifecycle({
       );
       claimCameraSensitivity(viewer.camera, 'traffic', 0.05);
 
-      // Kick off initial viewport check
-      parts.viewport.onCameraChanged();
+      // Enabling is explicit intent, not a camera gesture that needs settling.
+      parts.viewport.onCameraChanged({ immediate: true });
 
       // Boot-order guard (field-test round 1: layer sat empty until the user
       // moved): when the persisted layer state re-enables traffic during the

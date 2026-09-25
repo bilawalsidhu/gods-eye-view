@@ -283,3 +283,14 @@ test('a stalled TomTom status never blocks road acquisition or first simulated d
   assert.ok(calls > 0);
   assert.ok(layer.getStats().count > 0);
 });
+
+test('explicit enable starts roads without the camera debounce', async (t) => {
+  let calls = 0;
+  const { layer, viewer, tick } = setup(t, async (box) => {
+    calls++;
+    return roads(box);
+  });
+  layer.enable(viewer);
+  await tick(0);
+  assert.ok(calls > 0, 'the first load starts before 320 ms');
+});

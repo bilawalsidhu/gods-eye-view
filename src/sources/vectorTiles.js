@@ -280,7 +280,7 @@ export function createVectorTileSource({
           const value = decode(bytes, tile.z, tile.x, tile.y);
           phaseTiming('decode', decodeStart, { source: allowedOrigin, key });
           ownedSignal.throwIfAborted();
-          // Conservative decoded-storage estimate; never stringify geometry on the load path.
+          // Body-based decoded-storage estimate; never stringify geometry on the load path.
           const size = bytes.byteLength * 4;
           if (epoch === generation && size <= maxCacheBytes) {
             if (cache.has(key)) cacheBytes -= cache.get(key).size;

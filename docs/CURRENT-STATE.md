@@ -4204,7 +4204,9 @@ easier to meet (detection is now on more often), but does not create it.
   views are not retained as complete snapshots. Buffer geometry is clipped and sub-12 m line slivers dropped; tile
   road fragments are not stitched. Roads preserve bends and insert
   waypoints at most 150 m apart, splitting paths at 80 vertices. A cancellable
-  preparation pass paints decoded tiles independently. Status/flow and roads start
+  preparation pass paints decoded tiles independently. Explicit enable starts
+  acquisition immediately; camera gestures retain the 320 ms settle debounce.
+  Status/flow and roads start
   concurrently; neither TileJSON repeat reads nor flow impose a paint barrier.
   Only dot-budget-admitted roads crossing the canvas (100 px margin), within
   max(1.2 km, twice camera altitude), receive surface work, closest first.
