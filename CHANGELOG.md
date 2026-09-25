@@ -27,16 +27,13 @@
   with shared playback/seek interpolation, easing and holds. Navigation and
   manual input cancel authored motion; older scene files retain existing flights.
 
-
 - Director validates bounded version-3 scene files before replacing a project,
   preserves unreadable browser saves, migrates legacy bloom once and preserves
   zero-pitch/low-altitude camera and scope/detection edits. Project normalization has a separate owner.
 
-
 - Separate Director timing, seek calculations, playback clocks and registered
   scene-pack presentation rules. Preserve authored content and controls; Stop
   releases pending hold timers and stale ticks cannot affect replacement playback.
-
 
 - Keep parked transit vehicles aligned to their world course during camera orbits, fall back to reported bearing, and keep vehicles with no course consistently screen-up.
 
@@ -131,6 +128,13 @@
 
 - Split application scene, controls, catalog, tools and HTML into reusable components; configure application request services and sources without changing global fetch. Preserve standalone markup and voice behavior. Explicit annotation navigation may resolve a distant named target.
 
+## Satellite pass prediction
+
+- Bisect pass rise/set to ~0.2 s and fit peak elevation with a parabola.
+- Mark passes visible from Earth-shadow and civil-twilight checks.
+- Add `getNextSatellitePass(noradId, options)` for any loaded catalog satellite.
+- `next_iss_pass` retains the next geometric pass and adds visibility metadata. `next_satellite_pass` adds bounded loaded-catalog name/NORAD lookup and optional visible-only filtering (Rehaan Delmotra, #451; maintainer adaptation).
+
 ## Voice component boundaries
 
 - Separate voice controls, Realtime connection requests and the action runner.
@@ -222,8 +226,9 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
-- Add bounded Director feature actions with accessible controls, explicit camera/layer admission and cancellation; restore pack geometry on same-shot seek. Preserve existing scenes and content attribution.
+- Add ECMWF IFS model selection to Wind (#464, thanks @beneduzi), with model-scoped forecast-step caches, cancellation of replaced requests, and separate issue/valid timestamps.
 
+- Add bounded Director feature actions with accessible controls, explicit camera/layer admission and cancellation; restore pack geometry on same-shot seek. Preserve existing scenes and content attribution.
 
 - Give application request services, terrain/floor caches and annotation lookup state explicit owners and cancellation; share them across controls, layers and voice.
 
@@ -318,6 +323,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
+- Add MODIS NRT (Terra+Aqua, ~1 km) active fires to the FIRMS layer, sharing the
+  existing `FIRMS_MAP_KEY` and 30-minute cache.
 - Two map-orientation controls sit beside Share in the top-center globe
   actions. Tilt Map swings between a straight-down map and a 35-degree oblique
   around the point under the centre of the view, keeping that point and the
@@ -352,6 +359,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   Visible animation, detection membership, history storage and proxy requests
   are bounded. Share links carry Transit as token `j`.
 
+- Add a keyless **Wind** layer from NOAA GFS 10 m wind (#459, thanks @beneduzi). The `/api/wind` proxy
+  byte-range fetches only the UGRD/VGRD GRIB2 messages from the public AWS bucket,
+  decodes them with ecCodes (WASM), and serves a compact Float32 U/V grid; the
+  client renders nullschool-style animated particles in a canvas overlay that
+  follows the Cesium camera and skips globe-occluded points. Forecast, not
+  observations. Requires Node ≥24 for the WASM decoder.
 - Add Ontario 511 as a keyless CCTV source pack, including Kitchener-area
   highway cameras, with server-registered still URLs and attribution.
 - CCTV Mesh adds Finland: Fintraffic road weather cameras, keyless, nationwide, 300 by default. Each camera view of a station is placed separately; ambient stills refresh on the source's 10-minute cadence (the active camera keeps the usual 10-second refresh).
@@ -1014,3 +1027,10 @@ represent previously published GitHub Releases.
 ## [0.1.0] — 2026-02-09
 
 - Initial project version.
+
+### Live CCTV integration candidate
+
+- Live HLS video shares one decoder between the camera panel and projection,
+  with a DelDOT HTTPS source pack. Credit: Daniel Slay (@Danielslay86), PR #489.
+- Maintainer adjustments bound sessions and downloads, remove disk/subprocess
+  remuxing, reject redirects, and clean up playback on switching or disabling.

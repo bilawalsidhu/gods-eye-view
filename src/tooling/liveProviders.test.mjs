@@ -426,3 +426,31 @@ test('military cooldown bounds untrusted Retry-After and defaults server errors'
     assert.equal(Number(result.headers['retry-after']), seconds);
   }
 });
+
+test('track backfill proxy returns 502 on an oversized upstream body and caches it as an error', async (t) => {
+  const tracks = install(providers.trackBackfillProxies(), true);
+  let callCount = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    callCount++;
+    return {
+      ok: true,
+      status: 200,
+      headers: new Map(),
+      body: (async function* () {
+        yield Buffer.alloc(6 * 1024 * 1024, 'x');
+      })(),
+    };
+  });
+
+  const res1 = await tracks('/api/opensky-track', '?icao24=def456');
+  assert.equal(res1.statusCode, 502);
+  assert.deepEqual(JSON.parse(res1.body), {
+    error: 'Upstream track response too large',
+  });
+
+  // Cached as a 502 (never a 200): a retry inside the window neither
+  // reads as an empty track nor spends OpenSky credits on another download.
+  const res2 = await tracks('/api/opensky-track', '?icao24=def456');
+  assert.equal(res2.statusCode, 502);
+  assert.equal(callCount, 1);
+});

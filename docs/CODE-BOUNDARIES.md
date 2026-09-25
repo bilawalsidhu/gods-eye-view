@@ -277,6 +277,90 @@ share restoration and movement of controls between containers remain caller-owne
 Existing helper imports from `cockpitMath.js` and `rightRailPolicy.js` remain
 compatible through re-exports.
 
+### Adding a right-rail readout panel
+
+Add the shell in `src/ui/templates/context.html` inside `#right-context-rail`:
+a `.panel-collapsible` with a stable `id` and matching `data-panel-id`, the
+existing `.panel-header`, collapse button and a dedicated body. Register it
+with the existing panel chrome/layout owners; do not allocate rail space in
+the body renderer. Set `hidden` while empty so the allocator ignores it, and
+expand through the existing collapse button only on first appearance per page
+session, and only when the chrome marked the restored state as a default
+(`data-collapsed-preference`), never over a stored or shared choice. Preserve
+the user's later collapse choice, including body remounts. Mark the body
+`data-rail-scroller` when it scrolls: the rail's measuring pass lifts its
+`max-height` and puts the scroll offset back afterwards. Panel bodies only
+scroll on an open-card change, with one write, never on a refresh.
+
+Compose `createRailCards({ container, document, onParams, onOpen })` and
+`createRailTimeline({ container, document, onCommit, onPreview, onStep,
+onLatest, onPlay })`. Cards reconcile `{ id, title, badge, open, compact,
+compactStatus, blocks }` in place. Their full-width native button headers expose
+`aria-expanded` and `aria-controls`; articles expose `data-open`. The feature
+adapter owns accordion state. Generic cards do not select data or enable layers.
+
+`blocks` is an ordered array of loose, optional `{ id, type, ... }` descriptors,
+rendered by `railCardBlocks.js`. There are no per-section disclosures:
+
+- `summary`: `text`, a single summary line.
+- `list`: `list: { ariaLabel, items }`, reconciled by `syncRowList` in `rowList.js`.
+- `lines`: keyed `lines: [{ id, text, muted? }]` for details and status.
+- `settings`: `settings: [{ id, label, chips }]`; each labelled row has a 56 px
+  label column and a wrapping `syncChipGroup` from `chipGroup.js`.
+- `legend`: `legend: { colors, labels, units?, zeroIndex?, categorical? }` for a
+  ramp/scale (including a physical freezing anchor) or separate keyed swatches.
+- `actions`: keyed `actions: [{ id, label, params?, href?, onClick?, disabled?,
+hint? }]` in a footer, using buttons or safe new-tab links.
+- `result`: `label`, keyed `lines`, and optional `clear: { params | onClick }`;
+  its accessible × button sits beside the title.
+
+Every block and control has a stable id. Lists, settings, actions and results
+can appear in any requested order, including a scene panel's rectangle action,
+results list, then selected-scene details. Chip/list/action `params` dispatch
+through `onParams(cardId, params)`; the feature adapter supplies
+`setLayerParams(id, params, { origin: 'user' })`. Current descriptors and disabled
+state are read at dispatch. Identical updates do not move nodes or write DOM;
+focused controls survive feed refreshes.
+
+Weather descriptors retain top-level `chips`, `list` and `legend` for non-DOM
+consumers. They expose `summary.settings`, `summary.actions` and optional
+`summary.result`; wind also retains its raw captured `summary.reading`.
+`readout: true` layer rows render only the toggle and source/meta line; their
+subscriptions still refresh the cards. Cards own configuration and readings.
+
+Weather orders cyclones, wind, then a bordered Observed history group containing
+the timeline and active radar, satellite and lightning cards. The group heading
+and scope name its active products. The timeline stays visible whenever any
+observed product is enabled; fewer than two ticks disables transport. Pass
+`heading: false` to the timeline when the containing group owns the heading.
+Exactly one active card is open. Header clicks and newly enabled ids choose it
+(the last new entry wins a batch); refreshes and clock ticks retain it. First
+appearance uses cyclones with storms, otherwise the first card. Disabling the
+open layer falls back to the first remaining card. A WeakMap per document keeps
+explicit choices through body remounts without adding share state. Card opening,
+storm selection and layer enabling remain independent.
+
+Optional card/badge/slider class names provide feature styling. Card titles use
+`.data-name` typography; meta/time/badges use `.data-toggle-meta` typography;
+setting/result labels use `.panel-title`; chips retain `.data-toggle-chip`.
+Reserve one status line, even without a legend. Use app tokens. Wind's footer
+reads the map center into a result after the action. The captured location stays
+fixed until another read; model changes resample that location, units reformat
+it, and × clears both reading and map marker.
+
+The timeline shows endpoint times and receives ticks, index, mode, playing,
+readout and disabled state. Its preview callback receives the tick and index and
+may return readout text; commits receive the same values after a 150 ms coalesced
+drag or final change. Feature adapters own data mapping and service subscriptions;
+generic modules own DOM/listeners/timers and release them in `destroy()`.
+
+Keep persistence with panel chrome: collapse uses
+`godsEyeView.v6.panelCollapsed.<panelId>`, position uses
+`godsEyeView.v8.panelPos.<panelId>`, and share state uses the registered panel id.
+Do not rename existing
+ids or reset persistence versions when adding a body. The WEATHER adapter is
+`src/ui/weatherPanel.js`; its observed-history selection remains transient.
+
 ## Visual input
 
 `gods-eye-view/ui/input` exports `bindApplicationShortcuts` and
