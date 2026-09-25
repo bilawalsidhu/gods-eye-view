@@ -1,6 +1,6 @@
 # God's Eye View Current State
 
-Updated: August 24, 2026
+Updated: September 24, 2026
 
 > **2026-08-23 — first-run mission launcher** (`src/firstRunExperience.js`,
 > `#first-run-launcher`, styles at the tail of `style.css`). After startup
@@ -493,23 +493,25 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   eye level before detection sees it, so ground-backed labels only reappear
 >   once the camera clears the ellipsoid. Rendered proof:
 >   `scripts/qa-cockpit-plates.mjs`.
-> - **Required attribution has two named keep-out rules (2026-08-20):** the
->   Google/Cesium credit line must stay visible in every state, and below 900px
->   two surfaces used to paint over it — the command dock's popover tray (any
->   width ≤900px) and the right context rail, which goes edge-to-edge below
->   720px and covered the credit with every dock panel closed. Both now yield;
->   the credit itself never moves, shrinks, or hides. **The clearance is not a
->   single constant:** `#command-dock` is anchored at `2vh` down to 721px and
->   re-anchors to a flat `8px` at 720px while `#cesium-credits` keeps its `2vh`
->   base, so anything reasoning "the 2vh terms cancel" is only true in the
->   721–900px band. `src/creditAttribution.test.mjs` is a **fail-closed** cascade
->   model: it flattens `style.css`, resolves each anchor by importance →
->   specificity → source order, evaluates a 14×11 viewport grid, and fails
->   loudly on any construct it cannot resolve (`!important`, `inset`/`margin`
->   shorthands, unvetted custom properties, unparsable or nested media queries,
->   or an unrecognized selector positioning one of these elements). Extend the
->   model rather than working around it — a silent skip here ships a ToS
->   violation.
+> - **Required attribution is a docked overlay (2026-09-24):** the
+>   Google/Cesium credit container is docked bottom-right by
+>   `src/creditsDock.js` — `#cesium-credits` inside a fixed
+>   `.gev-credit-dock` (`right/bottom: 8px`, `z-index: 200`, above the
+>   175 panel tier and the same tier as its own lightbox overlay), 72%
+>   opacity, brightening on hover/focus. This supersedes both earlier
+>   regimes: the in-flow credit line with its viewport keep-out rules
+>   (2026-08-20, command-dock tray and context-rail clearance) and the
+>   2026-08-29 detach that kept credits only in the data-attribution
+>   lightbox. The fail-closed CSS-cascade model
+>   (`src/creditAttribution.test.mjs`) that guarded the old in-flow
+>   clearances was deleted with the 2026-08-29 detach; the dock's static
+>   surfaces are now pinned by `src/reasonableDefaults.test.mjs`
+>   (docked, `position: fixed`, never `display: none`), and its real
+>   clean-view visibility is asserted every matrix run by C13 in
+>   `scripts/qa-l9-matrix.mjs`. The Google Maps Platform ToS
+>   "visible attribution" duty is why the dock exists — do not hide it,
+>   re-detach it, or drop it below the panel tier without re-opening
+>   that decision.
 > - **Dock tray stacking is decided by ID count (2026-08-20):** the pinned-tray
 >   selectors `#command-dock.dock-has-two-pinned-trays …` carry one ID against
 >   five classes, so any narrow-width override written with two IDs outranks
