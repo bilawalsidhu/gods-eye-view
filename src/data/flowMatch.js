@@ -1,7 +1,7 @@
 /**
  * @file Flow→road matching: assign TomTom congestion levels to OpenStreetMap roads.
  *
- * The traffic layer renders dots along OpenStreetMap road polylines (OpenFreeMap), while
+ * In OpenStreetMap road mode the layer renders OpenFreeMap polylines, while
  * TomTom flow tiles carry their own (differently segmented) polylines with
  * `traffic_level`. This module snaps flow onto roads geometrically:
  *
@@ -12,7 +12,9 @@
  *  2. Each road is sampled at up to 7 evenly-spaced points along its length;
  *     each sample looks for the nearest flow segment within 35 m whose
  *     bearing agrees with the road travel direction within 30°. Two-way
- *     roads are represented as separate travel directions by the layer.
+ *     roads are represented as separate travel directions by the layer. A
+ *     flow line whose `coverage` is `full` describes both directions of its
+ *     road, so either travel bearing may match it.
  *  3. A road matches when at least half its samples (minimum 2) matched; its
  *     level is the MEDIAN of the matched samples' trafficLevels, and closure
  *     is true if ANY matched segment is closed.
@@ -79,61 +81,44 @@ function pointSegDist2(px, py, ax, ay, bx, by) {
 }
 
 /**
- * Match flow segments onto roads.
+ * Index flow polylines for nearest-segment queries in local meters.
  *
- * @param {Array<{coords:number[][], type:string}>} roads
- *   Parsed OpenStreetMap road objects ([[lon,lat],…] polylines).
- * @param {Array<{coords:number[][], trafficLevel:number, roadType:string, closure:boolean}>} flowSegments
- *   Decoded flow polylines from `flowTiles.js`.
- * @returns {{
- *   matches: Array<{level:number, closure:boolean}|null>,
- *   matchedCount: number,
- *   candidateCount: number,
- * }}
- *   `matches` is PARALLEL to `roads` (index i describes roads[i]; null = no
- *   flow data for that road, render it exactly as today). `candidateCount` is
- *   the number of roads with at least one flow segment inside the 35 m search
- *   radius regardless of bearing before bearing rejection.
+ * Shared by congestion matching and the Hybrid road-source dedupe, so both
+ * use one distance, bearing and direction rule.
+ *
+ * @param {Array<{coords:number[][], trafficLevel:number, closure:boolean, coverage?:string}>} flowSegments
+ * @returns {null|{
+ *   project: (lon:number, lat:number) => [number, number],
+ *   nearest: (x:number, y:number, bearing:number) => {best:object|null, ambiguous:boolean, candidate:boolean},
+ * }} Null when no usable segment exists.
  */
-export function matchFlowToRoads(roads, flowSegments) {
-  const roadCount = Array.isArray(roads) ? roads.length : 0;
-  const matches = new Array(roadCount).fill(null);
-  const empty = { matches, matchedCount: 0, candidateCount: 0 };
-  if (
-    roadCount === 0 ||
-    !Array.isArray(flowSegments) ||
-    flowSegments.length === 0
-  ) {
-    return empty;
-  }
-
+export function createFlowSegmentIndex(flowSegments) {
+  if (!Array.isArray(flowSegments)) return null;
   // Local equirectangular projection anchored at the first flow coordinate —
   // over a ≤0.05° fetch box the distortion is negligible.
   const anchor = flowSegments.find(
     (f) => Array.isArray(f?.coords) && f.coords.length >= 2,
   );
-  if (!anchor) return empty;
+  if (!anchor) return null;
   const [refLon, refLat] = anchor.coords[0];
   const mPerDegLon = M_PER_DEG_LAT * Math.cos((refLat * Math.PI) / 180);
-  const projX = (lon) => (lon - refLon) * mPerDegLon;
-  const projY = (lat) => (lat - refLat) * M_PER_DEG_LAT;
+  const project = (lon, lat) => [
+    (lon - refLon) * mPerDegLon,
+    (lat - refLat) * M_PER_DEG_LAT,
+  ];
 
-  // ── 1. Spatial hash of flow segments (midpoint-keyed 100 m cells) ──
-  /** @type {Map<string, Array<{ax:number,ay:number,bx:number,by:number,bearing:number,level:number,closure:boolean}>>} */
+  // Spatial hash of flow segments (midpoint-keyed 100 m cells).
   const grid = new Map();
-  const cellOf = (x, y) =>
-    `${Math.floor(x / CELL_SIZE_M)},${Math.floor(y / CELL_SIZE_M)}`;
-
+  const cellKey = (cx, cy) => (cx + 0x8000) * 0x10000 + (cy + 0x8000);
   for (const flow of flowSegments) {
     const coords = flow?.coords;
     if (!Array.isArray(coords) || coords.length < 2) continue;
     const level = flow.trafficLevel;
     const closure = flow.closure === true;
+    const bothDirections = flow.coverage === 'full';
     for (let i = 0; i < coords.length - 1; i++) {
-      const ax = projX(coords[i][0]);
-      const ay = projY(coords[i][1]);
-      const bx = projX(coords[i + 1][0]);
-      const by = projY(coords[i + 1][1]);
+      const [ax, ay] = project(coords[i][0], coords[i][1]);
+      const [bx, by] = project(coords[i + 1][0], coords[i + 1][1]);
       const segLen = Math.hypot(bx - ax, by - ay);
       if (!(segLen > 0)) continue;
       const bearing = bearingDeg(bx - ax, by - ay);
@@ -149,10 +134,14 @@ export function matchFlowToRoads(roads, flowSegments) {
           bx: ax + (bx - ax) * t1,
           by: ay + (by - ay) * t1,
           bearing,
+          bothDirections,
           level,
           closure,
         };
-        const key = cellOf((seg.ax + seg.bx) / 2, (seg.ay + seg.by) / 2);
+        const key = cellKey(
+          Math.floor((seg.ax + seg.bx) / 2 / CELL_SIZE_M),
+          Math.floor((seg.ay + seg.by) / 2 / CELL_SIZE_M),
+        );
         let bucket = grid.get(key);
         if (!bucket) {
           bucket = [];
@@ -162,13 +151,80 @@ export function matchFlowToRoads(roads, flowSegments) {
       }
     }
   }
-  if (grid.size === 0) return empty;
+  if (grid.size === 0) return null;
 
   const radius2 = MATCH_RADIUS_M * MATCH_RADIUS_M;
+  /** Nearest direction-compatible segment within 35 m of a projected point. */
+  function nearest(px, py, bearing) {
+    const cx = Math.floor(px / CELL_SIZE_M);
+    const cy = Math.floor(py / CELL_SIZE_M);
+    let best = null;
+    let bestDist2 = radius2;
+    let ambiguous = false;
+    let candidate = false;
+    for (let gy = cy - 1; gy <= cy + 1; gy++) {
+      for (let gx = cx - 1; gx <= cx + 1; gx++) {
+        const bucket = grid.get(cellKey(gx, gy));
+        if (!bucket) continue;
+        for (const seg of bucket) {
+          const d2 = pointSegDist2(px, py, seg.ax, seg.ay, seg.bx, seg.by);
+          if (d2 > radius2) continue;
+          candidate = true; // within radius, bearing not yet checked
+          const diff = bearingDiffDeg(seg.bearing, bearing);
+          if (
+            diff >= BEARING_TOLERANCE_DEG &&
+            !(seg.bothDirections && 180 - diff < BEARING_TOLERANCE_DEG)
+          )
+            continue;
+          if (d2 < bestDist2 - 1) {
+            bestDist2 = d2;
+            best = seg;
+            ambiguous = false;
+          } else if (Math.abs(d2 - bestDist2) <= 1) {
+            if (
+              best &&
+              (best.level !== seg.level || best.closure !== seg.closure)
+            )
+              ambiguous = true;
+            else if (!best) best = seg;
+          }
+        }
+      }
+    }
+    return { best, ambiguous, candidate };
+  }
+  return { project, nearest };
+}
+
+/**
+ * Match flow segments onto roads.
+ *
+ * @param {Array<{coords:number[][], type:string, oneway?:number}>} roads
+ *   Parsed OpenStreetMap road objects ([[lon,lat],…] polylines).
+ * @param {Array<{coords:number[][], trafficLevel:number, roadType:string, closure:boolean, coverage?:string}>} flowSegments
+ *   Decoded flow polylines from `flowDecode.js`.
+ * @returns {{
+ *   matches: Array<{level:number, closure:boolean}|null>,
+ *   matchedCount: number,
+ *   candidateCount: number,
+ * }}
+ *   `matches` is PARALLEL to `roads` (index i describes roads[i]; null = no
+ *   flow data for that road, render it exactly as today). `candidateCount` is
+ *   the number of roads with at least one flow segment inside the 35 m search
+ *   radius regardless of bearing before bearing rejection.
+ */
+export function matchFlowToRoads(roads, flowSegments) {
+  const roadCount = Array.isArray(roads) ? roads.length : 0;
+  const matches = new Array(roadCount).fill(null);
+  const empty = { matches, matchedCount: 0, candidateCount: 0 };
+  if (roadCount === 0) return empty;
+  const index = createFlowSegmentIndex(flowSegments);
+  if (!index) return empty;
+
   let matchedCount = 0;
   let candidateCount = 0;
 
-  // ── 2+3. Sample each road and vote ──
+  // Sample each road and vote.
   for (let r = 0; r < roadCount; r++) {
     const coords = roads[r]?.coords;
     if (!Array.isArray(coords) || coords.length < 2) continue;
@@ -179,8 +235,7 @@ export function matchFlowToRoads(roads, flowSegments) {
     const cum = new Array(coords.length);
     cum[0] = 0;
     for (let i = 0; i < coords.length; i++) {
-      xs[i] = projX(coords[i][0]);
-      ys[i] = projY(coords[i][1]);
+      [xs[i], ys[i]] = index.project(coords[i][0], coords[i][1]);
       if (i > 0)
         cum[i] = cum[i - 1] + Math.hypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1]);
     }
@@ -205,40 +260,12 @@ export function matchFlowToRoads(roads, flowSegments) {
         (roads[r].oneway === -1 ? 180 : 0) +
         bearingDeg(xs[cursor] - xs[cursor - 1], ys[cursor] - ys[cursor - 1]);
 
-      // 3×3 cell probe around the sample.
-      const cx = Math.floor(px / CELL_SIZE_M);
-      const cy = Math.floor(py / CELL_SIZE_M);
-      let best = null;
-      let bestDist2 = radius2;
-      let ambiguous = false;
-      for (let gy = cy - 1; gy <= cy + 1; gy++) {
-        for (let gx = cx - 1; gx <= cx + 1; gx++) {
-          const bucket = grid.get(`${gx},${gy}`);
-          if (!bucket) continue;
-          for (const seg of bucket) {
-            const d2 = pointSegDist2(px, py, seg.ax, seg.ay, seg.bx, seg.by);
-            if (d2 > radius2) continue;
-            hadCandidate = true; // within radius, bearing not yet checked
-            if (
-              bearingDiffDeg(seg.bearing, sampleBearing) >=
-              BEARING_TOLERANCE_DEG
-            )
-              continue;
-            if (d2 < bestDist2 - 1) {
-              bestDist2 = d2;
-              best = seg;
-              ambiguous = false;
-            } else if (Math.abs(d2 - bestDist2) <= 1) {
-              if (
-                best &&
-                (best.level !== seg.level || best.closure !== seg.closure)
-              )
-                ambiguous = true;
-              else if (!best) best = seg;
-            }
-          }
-        }
-      }
+      const { best, ambiguous, candidate } = index.nearest(
+        px,
+        py,
+        sampleBearing,
+      );
+      if (candidate) hadCandidate = true;
       if (best && !ambiguous) {
         matchedLevels.push(best.level);
         if (best.closure) matchedClosure = true;

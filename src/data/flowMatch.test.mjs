@@ -173,3 +173,14 @@ test('one-way rejects opposite closure and two travel directions retain separate
   }
   assert.equal(matchFlowToRoads([forward],[east,{...east,trafficLevel:0,closure:true}]).matches[0], null);
 });
+
+test('a full-coverage flow line matches both travel directions; one-side does not', () => {
+  const coords = [[0,0],[0.002,0]];
+  const directions = [{coords, oneway:1}, {coords, oneway:-1}];
+  const full = {coords, trafficLevel:0.4, closure:false, coverage:'full'};
+  assert.deepEqual(matchFlowToRoads(directions, [full]).matches,
+    [{level:0.4,closure:false},{level:0.4,closure:false}]);
+  const oneSide = {...full, coverage:'one_side'};
+  assert.deepEqual(matchFlowToRoads(directions, [oneSide]).matches,
+    [{level:0.4,closure:false}, null]);
+});
