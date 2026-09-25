@@ -77,6 +77,33 @@
   Native point, billboard and label highlighting uses GPU draw commands; there
   is no scene-dimming effect selector. Unsupported shaders retain native contact
   rendering, and leaving Cyber restores the standard shell and contact treatment.
+- Add the ATC decision layer behind #715: `flightPhase.js` classifies a tracked aircraft's
+  phase from height above the **field** and its vertical rate — and returns `airborne` with the
+  missing input named rather than a phase it invented when either is absent; `atcTuning.js`
+  turns that phase into a preference order, resolves it against what the airport actually
+  publishes, and reports an uncontrolled field as uncontrolled instead of captioning a CTAF as
+  a controller; `atcStreamPreference.js` keeps the viewer's own https stream URL in their
+  browser and nowhere else; `atcAudio.js` plays it through the shared audio claim, so starting
+  ATC stops whatever else was sounding and vice versa. No stream URLs ship with the app.
+- Add a single audio claim (`src/data/audioOwnership.js`): `claimAudio(owner, { onRevoked })`
+  / `releaseAudio(lease)`, mirroring `inputOwnership.js` but preempting instead of refusing —
+  for sound, the thing the user just asked for is the thing that should be audible, and the
+  incumbent is told to stop rather than the newcomer being silenced. Eight parts of the app
+  produce audio today with nothing arbitrating between them; this is the seam that lets them
+  agree on one at a time. No producer is wired to it yet.
+- Bundle a curated **OurAirports ATC frequency pack** (`src/data/local_data/ourairports_atc/`,
+  9,562 airports · 16,509 frequencies, 0.71 MB, public domain, no key) with an offline
+  lookup in `src/data/ourAirportsAtc.js` — nearest airports to a position, their published
+  frequency classes, and whether anyone is actually controlling them. The frequency class is
+  carried through verbatim rather than remapped onto a flight phase: only 443 airports publish
+  all four of TWR/GND/APP/ATIS and 5,902 publish none of them, so "uncontrolled field — CTAF"
+  is the majority answer and the data has to be able to say it. Rebuild with
+  `node scripts/build-atc-frequencies.mjs`.
+- The tracked-aircraft descriptor now publishes `verticalRateMps`, on both the
+  civil and military layers, so a consumer reading `getTrackedInfo()` no longer
+  has to reach past it into the raw poll record for climb/descent. Reported,
+  never derived: an aircraft that has not transmitted a rate reads as `null`
+  rather than a level-flight `0`.
 
 - Add a **Recent Imagery** data layer (NASA GIBS · HLS + VIIRS, keyless).
   Select a box (drag, the current view, or around a pin; up to 1,000 km a
