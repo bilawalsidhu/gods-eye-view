@@ -67,6 +67,8 @@
       "server/providers/common/http.js",
       "scripts/google-server-key.mjs",
       "src/data/placeProviderPayloads.js",
+      "server/providers/common/same-site.js",
+      "src/localRequestGate.mjs",
       "src/data/routeSteps.js",
       "src/sources/httpBody.js",
       "src/sources/rateLimit.js"
@@ -275,6 +277,8 @@
       "src/loadingFeedback.js",
       "src/data/installationFeedback.js",
       "src/voice/voiceCost.js",
+      "server/providers/common/same-site.js",
+      "src/localRequestGate.mjs",
       "src/voice/actionSchemas.js",
       "server/providers/openai/toolDescriptions.js",
       "src/sources/rateLimit.js"

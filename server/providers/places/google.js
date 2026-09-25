@@ -3,6 +3,7 @@ import {
   keylessGooglePlacesResponse,
 } from './google-key.js';
 import { makeOptInRateLimiter, clientKey } from '../common/rate-limit.js';
+import { admitSameSite } from '../common/same-site.js';
 import {
   projectNearbyPlaces,
   projectTextSearchPlaces,
@@ -50,6 +51,9 @@ export function googlePlacesContextProxy({
 } = {}) {
   function install(middlewares) {
     middlewares.use('/api/google/nearby-places', async (req, res) => {
+      // Gate first, like the OpenAI routes: a cross-site caller learns nothing
+      // about this endpoint's method surface.
+      if (admitSameSite(req, res)) return;
       if (req.method !== 'GET') {
         res.statusCode = 405;
         res.setHeader('Content-Type', 'application/json');
