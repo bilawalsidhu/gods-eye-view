@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import { xweatherProxy } from '../../server/providers/xweather.js';
 import { encodePng } from '../../server/providers/xweather/png.js';
 import { xweatherStamp } from '../../server/providers/xweather/frames.js';
+import { validateWeatherSnapshot } from '../layers/weather/source.js';
 
 const NOW = Date.UTC(2026, 8, 24, 16, 31, 10);
 const ID = 'cid-7f3a91';
@@ -12,9 +13,14 @@ const ORIGIN = 'https://maps.api.xweather.com';
 const MIB = 1024 * 1024;
 
 // Frames fall at :34 s on each layer's measured cadence (radar-global 2 min,
-// lightning-flash 5 min). Like Xweather, 'current' is the newest frame and
-// an absolute time resolves to the first frame at or after it.
-const CADENCE = { 'radar-global': 120_000, 'lightning-flash': 300_000 };
+// lightning-flash 5 min; alerts' 3 min is Xweather's documented update rate,
+// not measured). Like Xweather, 'current' is the newest frame and an
+// absolute time resolves to the first frame at or after it.
+const CADENCE = {
+  'radar-global': 120_000,
+  'lightning-flash': 300_000,
+  alerts: 180_000,
+};
 const frameAt = (ms, cadence) =>
   ms - ((((ms - 34_000) % cadence) + cadence) % cadence);
 const frameFrom = (ms, cadence) => frameAt(ms + cadence - 1, cadence);
@@ -293,6 +299,50 @@ test('an image stitches at most 192 source tiles and records their cost', async 
   assert.ok(
     wholeTiles.every((url) => url.pathname.includes('/radar-global/3/')),
   );
+});
+
+test('the alerts product lists frames and stitches like radar', async () => {
+  const calls = [];
+  const { request } = install({ fetchImpl: fakeXweather({ calls }) });
+  const res = await request('/manifest?product=xweather-alerts');
+  assert.equal(res.statusCode, 200);
+  const manifest = validateWeatherSnapshot(body(res), 'xweather-alerts');
+  assert.equal(manifest.source, 'Vaisala Xweather');
+  assert.equal(manifest.times.length, 13);
+  assert.equal(
+    Date.parse(manifest.times.at(-1)) - Date.parse(manifest.times[0]),
+    12 * 180_000,
+  );
+  assert.deepEqual(manifest.imageSize, { width: 4096, height: 2048 });
+  assert.ok(
+    calls.every(({ url }) =>
+      url.pathname.startsWith(`/${ID}_${SECRET}/alerts/0/0/0/`),
+    ),
+  );
+  const stamp = xweatherStamp(Date.parse(manifest.latest));
+  const image = await request(
+    `/image?product=xweather-alerts&time=${encodeURIComponent(manifest.latest)}`,
+  );
+  assert.equal(image.statusCode, 200);
+  assert.equal(image.headers['Content-Type'], 'image/png');
+  const tiles = tileUrls(calls);
+  assert.equal(tiles.length, 64);
+  for (const url of tiles)
+    assert.match(
+      url.pathname,
+      new RegExp(
+        `^/${ID}_${SECRET}/alerts/3/\\d+/\\d+/${stamp}_${stamp}\\.png$`,
+      ),
+    );
+  // A detail window keeps the 192-tile cap.
+  const before = tiles.length;
+  const detail = await request(
+    `/image?product=xweather-alerts&time=${encodeURIComponent(manifest.latest)}&bbox=-120,10,-84,28`,
+  );
+  assert.equal(detail.statusCode, 200);
+  const window = tileUrls(calls).slice(before);
+  assert.ok(window.length > 1 && window.length <= 192, String(window.length));
+  assert.ok(window.every((url) => url.pathname.includes('/alerts/')));
 });
 
 test('a repeated image is served from cache without upstream fetches', async () => {

@@ -30,8 +30,9 @@ import { decodePng, encodePng, encodePngAsync } from './xweather/png.js';
  * weather renderer already reads from `/api/weather` (`describe()` there).
  *
  * - Products: `radar-global` and `lightning-flash`, both billed at one unit
- *   per tile. `lightning-strikes` and `lightning-all` cost ten and are left
- *   out.
+ *   per tile, and `alerts` (counted from `x-cost-tokens` like the others; not
+ *   yet measured). `lightning-strikes` and `lightning-all` cost ten and are
+ *   left out.
  * - Projection: Xweather serves Web Mercator only, so source tiles are
  *   reprojected to the geographic grid the weather shells draw, and coverage
  *   stops at ±85.0511°.
@@ -77,6 +78,20 @@ const PRODUCTS = Object.freeze({
     coverage: 'Global to 85°N/S (the Web Mercator limit).',
     description:
       'Recent lightning flashes from the Vaisala global network, drawn by Xweather as symbols; frames about every 5 minutes. Individual flashes, not a density grid.',
+  }),
+  'xweather-alerts': Object.freeze({
+    layer: 'alerts',
+    // Xweather documents alert updates every 2–3 minutes; unlike the radar
+    // and lightning cadences this one is not yet measured with a live key.
+    cadenceMs: 180_000,
+    // Warning areas need less zoom than radar; the 192-tile cap still holds.
+    maxZoom: 8,
+    metadataTtlMs: 180_000,
+    title: 'Official weather warnings',
+    coverage:
+      'US, Canada, Europe, Australia, Japan and Korea, where national agencies issue warnings through Xweather; nothing elsewhere.',
+    description:
+      'Official warning, watch and advisory areas from national weather agencies, drawn by Xweather in its alert-type colours; updated about every 2–3 minutes.',
   }),
 });
 // One image never fetches more source tiles than this, so one detail window
