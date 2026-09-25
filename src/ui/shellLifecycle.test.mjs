@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { UiLifetime } from './uiLifetime.js';
+import { PanelChrome } from './panelChrome.js';
 import { PanelLayoutController } from './panelLayoutController.js';
 import { PanelPositionControls } from './panelPositionControls.js';
 import { ShellFeedback } from './shellFeedback.js';
@@ -263,6 +264,104 @@ test('recording restores the original HUD after repeated entry and revokes retai
       f.nodes.get('safe-frame-overlay').classList.contains('active'),
       false,
     );
+  } finally {
+    f.restore();
+  }
+});
+
+test('weather rail orders between CCTV and Context, resets positions, observes and syncs chrome', (t) => {
+  const f = fixture();
+  const observed = new Set();
+  const previousResizeObserver = globalThis.ResizeObserver;
+  globalThis.ResizeObserver = class {
+    observe(node) {
+      observed.add(node);
+    }
+    disconnect() {
+      observed.clear();
+    }
+  };
+  t.after(() => {
+    if (previousResizeObserver === undefined) delete globalThis.ResizeObserver;
+    else globalThis.ResizeObserver = previousResizeObserver;
+  });
+  try {
+    const stack = f.nodes.get('right-context-rail');
+    stack.children = [];
+    stack.insertBefore = (panel, before) => {
+      stack.children = stack.children.filter((child) => child !== panel);
+      const index = before
+        ? stack.children.indexOf(before)
+        : stack.children.length;
+      stack.children.splice(index, 0, panel);
+    };
+    stack.prepend = (panel) => stack.insertBefore(panel, stack.children[0]);
+    for (const id of [
+      'pp-toggles',
+      'cctv-panel',
+      'weather-panel',
+      'global-context-panel',
+    ]) {
+      const panel = f.nodes.get(id) || f.element();
+      panel.id = id;
+      const positions = new Map(
+        ['top', 'right', 'bottom', 'left', 'z-index'].map((key) => [
+          key,
+          '20px',
+        ]),
+      );
+      panel.style = {
+        removeProperty: (key) => positions.delete(key),
+        positions,
+      };
+      panel.classList.add('panel-draggable', 'panel-dragging', 'collapsed');
+      const button = f.element();
+      button.closest = () => panel;
+      const attributes = new Map();
+      button.setAttribute = (name, value) => attributes.set(name, value);
+      button.getAttribute = (name) => attributes.get(name);
+      panel.button = button;
+      panel.querySelectorAll = () => [button];
+      panel.querySelector = (selector) =>
+        selector.startsWith('.panel-title')
+          ? { textContent: id === 'weather-panel' ? 'WEATHER' : id }
+          : null;
+      f.nodes.set(id, panel);
+    }
+    const weather = f.nodes.get('weather-panel');
+    stack.children = [weather, f.nodes.get('global-context-panel')];
+    const synced = [];
+    const chrome = { _syncContextRadioLauncherState() {} };
+    const owner = new PanelLayoutController({
+      readHud: () => ({}),
+      scheduleCockpitLayout() {},
+      readDisplayScrollTop: () => 0,
+      syncPanelCollapseButton(panel) {
+        synced.push(panel.id);
+        PanelChrome.prototype._syncPanelCollapseButton.call(chrome, panel);
+      },
+    });
+    owner._initRightPanelAdaptiveLayout();
+    assert.deepEqual(
+      stack.children.map((panel) => panel.id),
+      ['pp-toggles', 'cctv-panel', 'weather-panel', 'global-context-panel'],
+    );
+    assert.ok(synced.includes('weather-panel'));
+    assert.ok(observed.has(weather));
+    assert.equal(weather.style.positions.size, 0);
+    assert.equal(weather.classList.contains('panel-draggable'), false);
+    assert.equal(weather.classList.contains('panel-dragging'), false);
+    assert.equal(weather.button.textContent, '◀');
+    assert.equal(weather.button.getAttribute('aria-expanded'), 'false');
+    assert.equal(weather.button.title, 'Expand WEATHER');
+    weather.classList.remove('collapsed');
+    PanelChrome.prototype._syncPanelCollapseButton.call(chrome, weather);
+    assert.equal(weather.button.textContent, '▶');
+    assert.equal(weather.button.getAttribute('aria-expanded'), 'true');
+    assert.equal(weather.button.getAttribute('aria-label'), 'Collapse WEATHER');
+    owner.destroy();
+    assert.equal(observed.size, 0);
+    assert.equal(f.frames.size, 0);
   } finally {
     f.restore();
   }

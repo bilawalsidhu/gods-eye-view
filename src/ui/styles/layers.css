@@ -162,6 +162,8 @@
 }
 #right-context-rail > #pp-toggles,
 #right-context-rail > #cctv-panel,
+#right-context-rail > #weather-panel,
+#right-context-rail > #recent-imagery-panel,
 #right-context-rail > #global-context-panel {
   position: relative;
   inset: auto;
@@ -173,12 +175,24 @@
   max-height: 100%;
   pointer-events: auto;
 }
-#right-context-rail #cctv-panel {
+#right-context-rail #cctv-panel,
+#right-context-rail #weather-panel,
+#right-context-rail #recent-imagery-panel {
   width: 100%;
   max-height: 100%;
   pointer-events: auto;
 }
-#right-context-rail #cctv-panel.collapsed {
+#right-context-rail > #weather-panel,
+/* Collapsed, it must stay hideable by the rail's exclusive layout. */
+#right-context-rail > #recent-imagery-panel:not(.collapsed) {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 1;
+  min-height: 0;
+}
+#right-context-rail #cctv-panel.collapsed,
+#right-context-rail #weather-panel.collapsed,
+#right-context-rail #recent-imagery-panel.collapsed {
   width: var(--right-display-collapsed-width);
   margin-left: auto;
 }
@@ -191,6 +205,8 @@
 }
 #right-context-rail > #pp-toggles.collapsed .pp-header-row,
 #right-context-rail #cctv-panel.collapsed .cctv-panel-inner,
+#right-context-rail #weather-panel.collapsed .weather-panel-inner,
+#right-context-rail #recent-imagery-panel.collapsed .recent-imagery-panel-inner,
 #right-context-rail
   #global-context-panel.collapsed
   .global-context-panel-inner {
@@ -246,6 +262,8 @@
 }
 #right-context-rail.layout-focus > #pp-toggles:not(.collapsed),
 #right-context-rail.layout-focus > #cctv-panel:not(.collapsed),
+#right-context-rail.layout-focus > #weather-panel:not(.collapsed),
+#right-context-rail.layout-focus > #recent-imagery-panel:not(.collapsed),
 #right-context-rail.layout-focus > #global-context-panel:not(.collapsed) {
   flex: 0 1 var(--right-panel-allocated-height);
   height: var(--right-panel-allocated-height);
@@ -259,8 +277,14 @@
   scrollbar-color: rgba(0, 212, 255, 0.4) transparent;
 }
 #right-context-rail.layout-focus
+  > #weather-panel:not(.collapsed)
+  .weather-panel-inner,
+#right-context-rail.layout-focus
   > #cctv-panel:not(.collapsed)
   .cctv-panel-inner,
+#right-context-rail.layout-focus
+  > #recent-imagery-panel:not(.collapsed)
+  .recent-imagery-panel-inner,
 #right-context-rail.layout-focus
   > #global-context-panel:not(.collapsed)
   .global-context-panel-inner {
@@ -282,6 +306,43 @@
 #right-context-rail.layout-focus .space-mission-roster-list {
   flex: 1 1 auto;
   max-height: none;
+}
+/* Synchronous intrinsic measurement, independent of focus and allocation.
+   This attribute is not observed by the rail's layout scheduler. */
+#right-context-rail[data-rail-measuring] {
+  height: auto !important;
+  max-height: none !important;
+  transition: none !important;
+}
+#right-context-rail[data-rail-measuring] > [data-panel-id]:not([hidden]) {
+  --right-panel-allocated-height: initial !important;
+  flex: 0 0 auto !important;
+  height: auto !important;
+  max-height: none !important;
+  transition: none !important;
+}
+#right-context-rail[data-rail-measuring]
+  > [data-panel-id].collapsed:not([hidden]) {
+  display: block !important;
+}
+#right-context-rail[data-rail-measuring]
+  > [data-panel-id]:not(.collapsed)
+  > .cctv-panel-inner,
+#right-context-rail[data-rail-measuring]
+  > [data-panel-id]:not(.collapsed)
+  > .weather-panel-inner,
+#right-context-rail[data-rail-measuring]
+  > [data-panel-id]:not(.collapsed)
+  > .recent-imagery-panel-inner,
+#right-context-rail[data-rail-measuring]
+  > [data-panel-id]:not(.collapsed)
+  > .global-context-panel-inner {
+  height: auto !important;
+  max-height: none !important;
+}
+#right-context-rail[data-rail-measuring] [data-rail-scroller],
+#right-context-rail[data-rail-measuring] .space-mission-roster-list {
+  max-height: none !important;
 }
 #space-mission-panel {
   width: 100%;
@@ -1305,4 +1366,19 @@
   )
   .data-count {
   display: none;
+}
+
+body.ui-clean-view #right-context-rail,
+body.recording-mode #right-context-rail,
+body.ui-clean-view #right-context-rail > [data-panel-id],
+body.recording-mode #right-context-rail > [data-panel-id] {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+@media (max-width: 720px) {
+  #right-context-rail #weather-panel.collapsed,
+  #right-context-rail #recent-imagery-panel.collapsed {
+    width: 100%;
+  }
 }

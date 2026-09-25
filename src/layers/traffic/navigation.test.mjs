@@ -216,3 +216,39 @@ test('parked failures back off and disabling cancels the scheduled retry', async
   assert.equal(calls, 2);
   assert.equal(layer.getStats().error, null);
 });
+
+test('a declined road request reaches the row as the reason, not as a shrug', async (t) => {
+  // Issue #661: with every public Overpass mirror refusing a network, the row
+  // read "Road data temporarily unavailable" while the console already held
+  // "Overpass API returned 406". The reporter went looking for a bad TomTom
+  // key — the other half of this layer, and never the problem. The status the
+  // code already has must survive the trip to the panel.
+  let status = 406;
+  const { layer, viewer, tick } = setup(t, async () => ({ ok: false, status }));
+  layer.enable(viewer);
+  await tick(400);
+  assert.equal(
+    layer.getStats().error,
+    'Overpass refused the road query (HTTP 406)',
+  );
+
+  status = 429;
+  for (let i = 0; i < 20; i++) await tick(1500);
+  assert.equal(
+    layer.getStats().error,
+    'Overpass rate-limited',
+    'a rate limit is a different instruction to the reader than a refusal',
+  );
+});
+
+test('an unclassified road failure keeps the general line', async (t) => {
+  // The complement of the test above, and the reason this is not just
+  // `e.message`: a dropped socket throws whatever the platform felt like
+  // saying, and "Failed to fetch" on a panel row helps nobody.
+  const { layer, viewer, tick } = setup(t, async () => {
+    throw new Error('socket hang up');
+  });
+  layer.enable(viewer);
+  await tick(400);
+  assert.equal(layer.getStats().error, 'Road data temporarily unavailable');
+});

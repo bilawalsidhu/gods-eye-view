@@ -36,7 +36,8 @@ const layers = createInfrastructureLayers({
 | `governorRequestRender` | `(reason)`; request a frame through the existing render scheduler |
 
 Each returned layer supports `init(viewer)`, `enable(viewer)`, `disable(viewer)`,
-`update(viewer)`, `destroy(viewer)`, `getStats()` and `getLodDiagnostics()`.
+`update(viewer)`, `destroy(viewer)`, `getStats()`, `getLodDiagnostics()` and
+`getAnalystRecords()`.
 Use the same viewer for the instance's entire lifetime. Each viewer/context/overlay
 host permits one live instance per layer ID; destroy an old instance before
 replacing it. Separate applications may use identical IDs with separate hosts.
