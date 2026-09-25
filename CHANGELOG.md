@@ -1,5 +1,10 @@
 # Changelog
 
+- The dev server no longer watches `.gev-cache` or `.gev-logs`. Providers
+  write to both while the app runs, and the watcher's stat calls were
+  starving upstream fetches of DNS threads: cold tiles took seconds instead
+  of milliseconds. Development only; preview and builds have no watcher.
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD
