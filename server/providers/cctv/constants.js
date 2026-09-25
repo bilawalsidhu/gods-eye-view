@@ -207,6 +207,23 @@ export const NSW_CAMERAS_URL =
 export const NSW_IMAGE_ORIGIN = 'https://webcams.transport.nsw.gov.au/';
 export const DEFAULT_NSW_MAX_SOURCES = 250;
 export const SYDNEY_CENTER = { lat: -33.8688, lon: 151.2093 };
+/** QLDtraffic API: registered key via QLDTRAFFIC_API_KEY, key passed as `apikey`. */
+export const QLDTRAFFIC_API_ORIGIN = 'https://api.qldtraffic.qld.gov.au';
+export const QLDTRAFFIC_WEBCAMS_URL = `${QLDTRAFFIC_API_ORIGIN}/v1/webcams`;
+export const QLDTRAFFIC_FLOODCAMS_URL = `${QLDTRAFFIC_API_ORIGIN}/v1/floodcams`;
+export const QLDTRAFFIC_IMAGE_ORIGINS = Object.freeze([
+  'https://cameras.qldtraffic.qld.gov.au',
+  'https://qldtraffic.qld.gov.au',
+]);
+export const DEFAULT_QLDTRAFFIC_MAX_SOURCES = 350;
+export const QLDTRAFFIC_ANCHORS = [
+  { lat: -27.4705, lon: 153.026 }, // Brisbane
+  { lat: -28.0167, lon: 153.4 }, // Gold Coast
+  { lat: -16.9203, lon: 145.771 }, // Cairns
+  { lat: -19.2589, lon: 146.8169 }, // Townsville
+  { lat: -23.3791, lon: 150.5103 }, // Rockhampton
+  { lat: -27.5598, lon: 151.9507 }, // Toowoomba
+];
 /**
  * The NSW webcam host answers non-browser clients with HTTP 200 and a short
  * HTML body instead of the frame (verified 2026-09-13), so the proxy
