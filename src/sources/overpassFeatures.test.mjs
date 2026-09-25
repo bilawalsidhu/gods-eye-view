@@ -303,18 +303,25 @@ test('annotations outline a neighborhood or street area mapped as a relation', a
   assert.deepEqual(street.ring, ring);
 });
 
-
 test('focus footprints keep relation members and centers', async () => {
   let query;
   const element = relationFixture('Fixture Building', { building: 'yes' });
   const source = createOverpassFeatureSource({
-    boundarySource: { query: async (text) => {
-      query = text;
-      return overpassPrinting(element).query(text);
-    } },
+    boundarySource: {
+      query: async (text) => {
+        query = text;
+        return overpassPrinting(element).query(text);
+      },
+    },
   });
-  const [record] = await source.getFocusFootprints({ lat: 30.002, lon: -96.997 });
-  assert.deepEqual(record.coordinates, element.members.flatMap((member) => member.geometry || []));
+  const [record] = await source.getFocusFootprints({
+    lat: 30.002,
+    lon: -96.997,
+  });
+  assert.deepEqual(
+    record.coordinates,
+    element.members.flatMap((member) => member.geometry || []),
+  );
   assert.match(query, /out center geom;/);
   assert.doesNotMatch(query, /out tags/);
 });
