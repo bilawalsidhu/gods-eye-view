@@ -847,5 +847,6 @@
   "src/data/xweatherFrames.test.mjs",
   "src/data/xweatherBudget.test.mjs",
   "src/data/xweatherGate.test.mjs",
+  "src/data/xweatherProxy.test.mjs",
   "src/data/xweatherLimit.test.mjs"
 ]
