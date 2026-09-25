@@ -885,6 +885,28 @@ try {
       );
       await shot(name);
       await waitForSources();
+      // Preserve the earlier 350 m acceptance fixture as well as the R5 450 m target.
+      beginView(`${name}-350m`, {
+        lat: 30.2685,
+        lon: -97.7425,
+        height: 350,
+        heading: 10,
+        pitch: -30,
+      });
+      await page.evaluate(() =>
+        window.__godsEyeView.dataManager.setEnabled('traffic', false),
+      );
+      await fly(30.2685, -97.7425, 350, 10, -30);
+      await settleTiles();
+      await enableTrafficTimed(`${name}-350m`);
+      await waitForSources();
+      const closeSurface = await measureSurface();
+      result[`${name}-350m`] = closeSurface;
+      assert.ok(
+        closeSurface.onMesh >= 150,
+        `${name}: preserved 350 m on-mesh gate (${closeSurface.onMesh})`,
+      );
+      await shot(`${name}-350m`);
       beginView(`${name}-orbit`, {
         lat: 30.2685,
         lon: -97.7425,
