@@ -23,6 +23,32 @@ export function trafficDetailBounds(box) {
   return detail;
 }
 
+/** A classified road failure with a display-safe reason and machine-readable status. */
+export class RoadRequestError extends Error {
+  constructor(message, { status = null, cause } = {}) {
+    super(message, { cause });
+    this.name = 'RoadRequestError';
+    this.status = status;
+  }
+}
+
+/** Name the road upstream without exposing raw transport errors or missing codes. */
+export function roadRequestError(status, cause) {
+  const code = Number.isFinite(status) ? status : null;
+  const message =
+    code === 429
+      ? 'OpenFreeMap tiles rate-limited'
+      : code === 504 || cause?.name === 'TimeoutError'
+        ? 'OpenFreeMap tiles timed out'
+        : code === null
+          ? 'OpenFreeMap tiles unavailable'
+          : `OpenFreeMap tiles unavailable (HTTP ${code})`;
+  return Object.assign(new RoadRequestError(message, { status: code, cause }), {
+    retryable: cause?.retryable !== false,
+    code: cause?.code,
+  });
+}
+
 /** Supply tile-derived road geometry and flow availability without Overpass queries. */
 export function createTrafficSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
@@ -43,10 +69,17 @@ export function createTrafficSource({
       )
         throw new TypeError('A bounded road viewport is required');
       const area = majorOnly ? box : trafficDetailBounds(box);
-      const result = await mapTiles.fetchBounds(area, {
-        zoom: majorOnly ? 12 : 14,
-        signal,
-      });
+      let result;
+      try {
+        result = await mapTiles.fetchBounds(area, {
+          zoom: majorOnly ? 12 : 14,
+          signal,
+        });
+      } catch (error) {
+        signal?.throwIfAborted();
+        if (error?.name === 'AbortError') throw error;
+        throw roadRequestError(error?.status, error);
+      }
       const data = {
         roads: result.tiles
           .flatMap((tile) => tile.roads)
@@ -77,7 +110,10 @@ export function createTrafficSource({
       const response = await fetchImpl('/api/tomtom/status', {
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
-      if (!response.ok) throw new Error('HTTP ' + response.status);
+      if (!response.ok)
+        throw Object.assign(new Error('TomTom status unavailable'), {
+          status: Number.isFinite(response.status) ? response.status : null,
+        });
       const status = await response.json();
       signal?.throwIfAborted();
       if (typeof status?.hasKey !== 'boolean')

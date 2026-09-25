@@ -4,7 +4,12 @@ import { readFileSync } from 'node:fs';
 import { tilesForBounds, tileToBBox } from '../../data/tomtomTiles.js';
 import { decodeFlowTile } from './flowDecode.js';
 import { decodeOpenFreeMapTile } from '../../sources/openFreeMap.js';
-import { trafficDetailBounds, createTrafficSource } from './source.js';
+import {
+  RoadRequestError,
+  roadRequestError,
+  trafficDetailBounds,
+  createTrafficSource,
+} from './source.js';
 import { clampBoundsAroundCenter } from '../../data/trafficBounds.js';
 const bounds = { south: 30.267, west: -97.744, north: 30.268, east: -97.743 };
 const fixture = readFileSync(
@@ -376,7 +381,10 @@ test('a failed detail pass keeps major roads and exposes separate degraded statu
   await ingestion.loadRoadsForBounds(bounds, 350);
   assert.equal(paints, 1);
   assert.equal(state._roadError, null);
-  assert.equal(state._detailError, 'Detailed roads unavailable');
+  assert.equal(
+    state._detailError,
+    'Detailed roads unavailable — OpenFreeMap tiles unavailable',
+  );
   assert.equal(state._roadPartial, true);
   assert.equal(state._fetching, false);
 });
@@ -582,4 +590,90 @@ test('keyed loads run z12 then z14 and reuse road snapshots while refreshing flo
     3,
     'cached roads still pass through flow refresh',
   );
+});
+
+test('an OpenFreeMap refusal is named by status, and keeps the status beside the words', () => {
+  assert.equal(roadRequestError(429).message, 'OpenFreeMap tiles rate-limited');
+  assert.equal(roadRequestError(504).message, 'OpenFreeMap tiles timed out');
+  assert.equal(
+    roadRequestError(406).message,
+    'OpenFreeMap tiles unavailable (HTTP 406)',
+  );
+  assert.equal(
+    roadRequestError(500).message,
+    'OpenFreeMap tiles unavailable (HTTP 500)',
+  );
+
+  assert.equal(
+    roadRequestError(502).message,
+    'OpenFreeMap tiles unavailable (HTTP 502)',
+  );
+  assert.equal(
+    roadRequestError(503).message,
+    'OpenFreeMap tiles unavailable (HTTP 503)',
+  );
+  assert.equal(roadRequestError(503).status, 503);
+
+  for (const missing of [undefined, null, NaN, 'four-oh-six']) {
+    const vague = roadRequestError(missing);
+    assert.equal(vague.message, 'OpenFreeMap tiles unavailable');
+    assert.equal(vague.status, null, 'an unreadable code is absent, not zero');
+  }
+
+  const refused = roadRequestError(406);
+  assert.ok(refused instanceof RoadRequestError);
+  assert.ok(refused instanceof Error);
+  assert.equal(refused.name, 'RoadRequestError');
+  assert.equal(
+    refused.status,
+    406,
+    'a caller must be able to branch on the code without parsing English',
+  );
+});
+
+for (const phase of ['metadata', 'tile']) {
+  for (const failure of [406, 429, 503, 504, 'network', 'timeout']) {
+    test(`OpenFreeMap ${phase} ${failure} retains its reason through the road source`, async () => {
+      const source = createTrafficSource({
+        fetchImpl: async (url) => {
+          if (phase === 'tile' && url.endsWith('/planet'))
+            return Response.json({
+              tiles: ['https://tiles.openfreemap.org/test/{z}/{x}/{y}.pbf'],
+            });
+          if (failure === 'network') throw new TypeError('Failed to fetch');
+          if (failure === 'timeout')
+            throw new DOMException('deadline', 'TimeoutError');
+          return new Response('', { status: failure });
+        },
+      });
+      await assert.rejects(source.requestRoads(bounds), (error) => {
+        assert.ok(error instanceof RoadRequestError);
+        assert.equal(
+          error.status,
+          typeof failure === 'number' ? failure : null,
+        );
+        assert.equal(
+          error.message,
+          roadRequestError(
+            error.status,
+            failure === 'timeout' ? { name: 'TimeoutError' } : undefined,
+          ).message,
+        );
+        assert.equal(error.retryable, true);
+        return true;
+      });
+    });
+  }
+}
+
+test('permanent metadata failures remain non-retryable through the road error wrapper', async () => {
+  const source = createTrafficSource({
+    fetchImpl: async () => Response.json({}),
+  });
+  await assert.rejects(source.requestRoads(bounds), (error) => {
+    assert.ok(error instanceof RoadRequestError);
+    assert.equal(error.retryable, false);
+    assert.equal(error.status, null);
+    return true;
+  });
 });

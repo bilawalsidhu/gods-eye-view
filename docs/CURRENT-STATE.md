@@ -706,6 +706,25 @@ snapshots, lifecycle actions and row descriptors. Remount and teardown remove
 listeners and row subscriptions; obsolete completions do not repaint old rows.
 The clear control presents busy state while its existing action owns the transaction.
 
+## Model atmosphere on Apple Metal
+
+Cesium's per-vertex model atmosphere is kept out of the pipeline on devices
+whose driver cannot link it. `AtmosphereStageVS` binds shader `out` parameters
+directly to varyings, which ANGLE's Metal backend rejects at link time, tearing
+down the render loop on iPadOS and iOS. `ModelSceneGraph.configurePipeline`
+attaches that stage only when `fog.enabled && fog.renderable`, so the viewer
+clears `scene.fog.renderable` and leaves `fog.enabled` — and the fog density
+that drives 3D Tiles screen-space-error scaling — intact. Sky atmosphere and the
+ground-atmosphere fragment path route through locals and are unaffected.
+Affected devices lose distance fog on 3D tiles and on globe basemaps (Esri,
+Bing, keyless), since the globe fog shader uses the same `renderable` flag.
+The probe releases its throwaway WebGL2 context immediately.
+
+Detection is a WebGL2 link probe of the same out-parameter/varying pattern, so a
+future driver fix restores the effect with no code change; iOS/iPadOS platform
+detection is the backstop for when no probe context can be created. Applied
+during viewer construction, before any tile builds a draw command.
+
 ## Map Source control ownership
 
 Map Source controls own chip listeners, source-state subscriptions and selection
@@ -799,10 +818,12 @@ their `configured: false` response.
 
 CCTV media waits at most 15 seconds for upstream response headers and returns
 504 on timeout. Its timer stops when headers arrive, so live bodies can continue
-streaming; body idle deadlines are separate from this header deadline. Error
-responses are cancelled. Buffered snapshots have a 16 MiB streaming cap; an
-oversized image remains an upstream miss and uses the normal fallback chain.
-The existing declared media size ceiling remains 64 MiB.
+streaming; a separate 30-second idle deadline then bounds the gap between
+upstream chunks and releases a body that has gone silent. A response that is
+still waiting to drain reschedules that deadline, so a slow client does not read
+as a stalled upstream. Error responses are cancelled. Buffered snapshots have a
+16 MiB streaming cap; an oversized image remains an upstream miss and uses the
+normal fallback chain. The existing declared media size ceiling remains 64 MiB.
 
 ## GBFS upstream bounds
 
@@ -862,6 +883,22 @@ and stale/error responses remain unchanged. Each has a Node-only package entry
 under `gods-eye-view/server/providers/`. Portable terrain mechanics, traffic tile
 math and GBFS source rules are available under `gods-eye-view/sources/`.
 The browser layers and their rendering remain in their existing modules.
+
+## Terrain height cache bound
+
+The client terrain-height resolver's in-memory cache is bounded at 20 000
+entries (`DEFAULT_MAX_CACHE_ENTRIES`, overridable per instance through
+`createTerrainHeights({ maxCacheEntries })`). Coordinate rounding makes repeated
+visits to one place share a key but does not bound how many distinct places a
+session visits, and the cache previously had no eviction, so a long session
+retained every coordinate it ever resolved. Eviction is least-recently-used:
+a consumer read promotes its entry, so the cell being watched is not dropped for
+having been resolved early. The bound sits far above a city-scale session, so
+normal use never evicts and issues no additional proxy requests. A batch's
+results are assembled from what that call resolved, so eviction during a large
+batch cannot report a just-resolved point as unresolved. Re:Earth and
+geoid-fallback entry semantics, the fallback cooldown and the abort-time flush
+are unchanged.
 
 ## Landmark annotation identity
 
@@ -3363,6 +3400,12 @@ silently demoting every later lookup for the session.
 - **The DENSE chip reports the dense LOAD, not the catalog param.** The param flips synchronously while the Starlink shell takes seconds to arrive over a chunked load, and CelesTrak 502s that feed regularly. So the chip reads `DENSE ···` (busy, disabled) while loading, ACTIVE only once dense points are actually on screen, and `DENSE ✕` with the reason on hover when the load fails — a failure also reverts `catalog` to `core`, drops any partial chunk, and leaves the chip clickable to retry. A load is judged by points added, not by HTTP status: a 200 carrying an empty body, a passed-through HTML error page, or only TLEs the core catalog already owns fails with the same revert semantics as a 502. Any explicit request for `core` clears a latched error even when the mode does not change, so a Space Missions restore of an already-core snapshot never leaves the user with a failure they did not cause. Because the load settles asynchronously, the layer pushes a re-render through the optional `setRowControlsListener()` hook; nothing else would repaint that row before the 5-minute catalog refresh, so the count and legend would otherwise sit stale.
 - **A dependency owner takes the row with it.** Space Missions borrows this layer for TLE lookup with `showPoints:false`; while points are hidden the layer returns empty row controls, so the legend never describes an empty sky and the chip cannot accept a write that the owner's restore would silently revert.
 - The detection-overlay record cache (`_detectionObjects`) is cleared with the catalog on every rebuild: it stamps id/class at creation only, and a rebuild can re-tag a satellite when a partial CelesTrak outage changes which group wins dedupe.
+- **CCTV estimated bearings:** a camera whose pack marks `headingConfidence: 'low'` (the id-hash
+  `fallbackHeadingFromId` bearing) shows `HDG n° (ESTIMATED)` in the HUD and draws its coverage
+  wireframe dashed; colours, widths and active/idle emphasis are unchanged. A manual calibration
+  (`calSource: 'manual'`) or curated pose (`poseSource: 'curated'`) is never presented as
+  estimated, matching the CAL badge. Public camera state carries `headingConfidence` and
+  `headingEstimated` (`src/layers/cctv/headingConfidence.js`, #639).
 - **FIRMS**: no ground clamping (zero 3D-tiles height sampling), ≤18 screen-decluttered ambient labels, click-to-inspect detail card, 2.5k/3k sprite budgets viewport-clipped by FRP.
 - **CCTV v2 foundation:** a pitched
   frustum wireframe (4 corner rays + far-cap rectangle) with a monitor plane at the frustum's
@@ -3487,6 +3530,21 @@ Keyed Austin must report `roadSource: OpenStreetMap` and positive flow coverage.
 It records milliseconds from enabling Street Traffic to first rendered dots at
 2 km on a fresh page for each mode, plus warmed street-view timings and orbit screenshots;
 `src/overpassOffload.test.mjs` separately proves server-handler zero egress.
+
+Configured Overpass responses still use `overpassPayloadIsData()` for cache
+admission and stale fallback: refusals and body-level errors are never data.
+Identical requests share a configured endpoint sequence and last-good fallback;
+all configured endpoints retain the stable application User-Agent. HTTP refusals
+rotate only among those configured endpoints, honoring their cooldowns.
+
+Street Traffic reports OpenFreeMap road failures separately from TomTom flow:
+`OpenFreeMap tiles rate-limited`, `OpenFreeMap tiles timed out`, or
+`OpenFreeMap tiles unavailable (HTTP 406)`. `RoadRequestError` retains a numeric
+`status` (null when absent); malformed snapshots and network failures read
+`OpenFreeMap tiles unavailable`, never `HTTP undefined`. Detailed-pass failures
+retain the major roads and display the same upstream reason with reduced coverage.
+The TomTom /api proxy still reports key unavailability (503), daily budget (429),
+and unreachable upstream (502/504) separately from road geometry.
 
 ### Share-link v2 layer state (August 2026)
 

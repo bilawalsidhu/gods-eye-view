@@ -205,7 +205,7 @@ test('parked failures back off and disabling cancels the scheduled retry', async
   await tick(400);
   assert.equal(calls, 1);
   assert.equal(layer.getStats().loading, false);
-  assert.equal(layer.getStats().error, 'Road data temporarily unavailable');
+  assert.equal(layer.getStats().error, 'OpenFreeMap tiles unavailable');
   await tick(1500);
   await tick(400);
   assert.equal(calls, 2);
@@ -235,4 +235,32 @@ test('not-configured roads stop both parked retries and the enable-time kick', a
   assert.equal(requests, 1);
   assert.equal(h.layer.getStats().loading, false);
   assert.match(h.layer.getStats().loadingLabel, /UNAVAILABLE/);
+});
+
+test('a declined road request reaches the row as the reason, not as a shrug', async (t) => {
+  let status = 406;
+  const { layer, viewer, tick } = setup(t, async () => ({ ok: false, status }));
+  layer.enable(viewer);
+  await tick(400);
+  assert.equal(
+    layer.getStats().error,
+    'OpenFreeMap tiles unavailable (HTTP 406)',
+  );
+
+  status = 429;
+  for (let i = 0; i < 20; i++) await tick(1500);
+  assert.equal(
+    layer.getStats().error,
+    'OpenFreeMap tiles rate-limited',
+    'a rate limit is a different instruction to the reader than a refusal',
+  );
+});
+
+test('an unclassified road failure keeps the general line', async (t) => {
+  const { layer, viewer, tick } = setup(t, async () => {
+    throw new Error('socket hang up');
+  });
+  layer.enable(viewer);
+  await tick(400);
+  assert.equal(layer.getStats().error, 'OpenFreeMap tiles unavailable');
 });

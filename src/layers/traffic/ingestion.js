@@ -1,3 +1,4 @@
+import { RoadRequestError, roadRequestError } from './source.js';
 import {
   isUnavailableCapability,
   sourceResponseError,
@@ -90,10 +91,13 @@ export function createIngestion({
     );
 
     if (!response.ok) {
-      throw sourceResponseError(
-        await response.json().catch(() => ({})),
-        response,
-        'Road data temporarily unavailable',
+      throw Object.assign(
+        roadRequestError(response.status),
+        sourceResponseError(
+          (await response.json?.().catch(() => ({}))) ?? {},
+          response,
+          roadRequestError(response.status).message,
+        ),
       );
     }
 
@@ -349,9 +353,12 @@ export function createIngestion({
       retryable = !isUnavailableCapability(e);
       layerState._roadRetryStopped = !retryable;
       if (generation === layerState._loadGeneration && !renderedSomething)
-        layerState._roadError = 'Road data temporarily unavailable';
+        layerState._roadError =
+          e instanceof RoadRequestError
+            ? e.message
+            : roadRequestError(null).message;
       if (generation === layerState._loadGeneration && renderedSomething) {
-        layerState._detailError = 'Detailed roads unavailable';
+        layerState._detailError = `Detailed roads unavailable — ${e instanceof RoadRequestError ? e.message : roadRequestError(null).message}`;
         layerState._roadPartial = true;
       }
       console.warn('[Data:Traffic] Fetch error:', e);

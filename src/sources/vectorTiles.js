@@ -63,7 +63,17 @@ export function createVectorTileSource({
         redirect: 'error',
       });
       if (!response.ok) {
-        throw new Error(`Vector tiles unavailable (HTTP ${response.status})`);
+        const status = Number.isFinite(response.status)
+          ? response.status
+          : null;
+        throw Object.assign(
+          new Error(
+            status === null
+              ? 'Vector tiles unavailable'
+              : `Vector tiles unavailable (HTTP ${status})`,
+          ),
+          { status },
+        );
       }
       const value = await read(response, controller.signal);
       controller.signal.throwIfAborted();
@@ -139,8 +149,10 @@ export function createVectorTileSource({
           if (flight.controller.signal.aborted || error.name === 'AbortError')
             throw error;
           metadataError = Object.assign(
-            new Error('Vector tile metadata unavailable'),
+            new Error('Vector tile metadata unavailable', { cause: error }),
             {
+              status: error.status ?? null,
+              name: error.name === 'TimeoutError' ? 'TimeoutError' : 'Error',
               retryable:
                 error.retryable !== false && !(error instanceof SyntaxError),
             },

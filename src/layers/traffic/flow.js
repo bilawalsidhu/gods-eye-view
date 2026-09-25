@@ -23,7 +23,9 @@ export function createFlow({ state: layerState, services, parts, source }) {
   function deriveTrafficFlowError(error) {
     if (!error || error.name === 'AbortError') return null;
     const message = String(error.message || error);
-    const status = Number(message.match(/HTTP (\d{3})/)?.[1]);
+    const status = Number.isFinite(error.status)
+      ? error.status
+      : Number(message.match(/HTTP (\d{3})/)?.[1]);
     if (status === 503) return 'TomTom key unavailable';
     if (status === 429) return 'TomTom daily budget reached';
     if (status === 502 || status === 504) return 'TomTom upstream unreachable';

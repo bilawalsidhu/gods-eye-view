@@ -26,6 +26,9 @@ import {
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 
+/** Ms the analyst region lookup waits on geocode + admin boundary. */
+export const REGION_FALLBACK_BUDGET_MS = 3_000;
+
 /** Own annotation lookup caches and ranking of supplied feature candidates. */
 export function createAnnotationResolver({
   boundarySource,
@@ -1910,14 +1913,22 @@ export function createAnnotationResolver({
    * resolve to a region-like boundary — the analyst engine reports that
    * honestly rather than silently scoping to nothing.
    *
+   * The geocode + admin-boundary rung is capped at `budgetMs`. Past it the
+   * call returns `{name, ring: null, error: 'region-timeout'}` so a voice
+   * answer is not held for tens of seconds; the lookup keeps running and
+   * fills the boundary cache, so asking again shortly is fast.
+   *
    * @param {string} name  e.g. "Texas", "the Alps", "France", "Gulf of Mexico"
    * @param {AbortSignal} [signal]
-   * @returns {Promise<{name:string, ring:Array<[number,number]>}|null>}
+   * @param {object} [placeSearch]
+   * @param {{budgetMs?: number}} [options]  `Infinity` waits for the lookup.
+   * @returns {Promise<{name:string, ring:Array<[number,number]>}|{name:string, ring:null, error:'region-timeout'}|null>}
    */
   async function resolveRegionRingForQuery(
     name,
     signal,
     placeSearch = unavailablePlaceSearch,
+    { budgetMs = REGION_FALLBACK_BUDGET_MS } = {},
   ) {
     signal = lifetime
       ? signal
@@ -1934,6 +1945,23 @@ export function createAnnotationResolver({
       const ring = [...ne.polygons].sort((a, b) => b.length - a.length)[0];
       if (ring?.length >= 3) return { name: ne.name, ring };
     }
+    const lookup = resolveAdminRegionRing(q, signal, placeSearch);
+    if (!Number.isFinite(budgetMs)) return lookup;
+    let timer;
+    const timeout = new Promise((resolve) => {
+      timer = setTimeout(
+        () => resolve({ name: q, ring: null, error: 'region-timeout' }),
+        budgetMs,
+      );
+    });
+    try {
+      return await Promise.race([lookup, timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function resolveAdminRegionRing(q, signal, placeSearch) {
     const geo = await geocodePlace(q, null, signal, placeSearch).catch(
       () => null,
     );

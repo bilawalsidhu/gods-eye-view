@@ -187,6 +187,19 @@ test('analyst: unresolved region is an honest failure, not empty success', async
   assert.match(r.error, /Atlantis/);
 });
 
+test('analyst: a region lookup timeout is reported as region-timeout', async () => {
+  const eng = createAnalystEngine({
+    getRecords: () => FLIGHTS,
+    resolveRegionRing: async (name) => ({ name, ring: null, error: 'region-timeout' }),
+    getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
+  });
+  const r = await eng.query({ layers: ['flights'], scope: { kind: 'region', name: 'Texas' } });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'region-timeout');
+  assert.match(r.error, /Texas/);
+  assert.equal(r.coverage.scope, 'region:Texas:timeout');
+});
+
 test('analyst: route fields queryable from cached enrichment only', async () => {
   const r = await makeEngine().query({
     layers: ['flights'], scope: { kind: 'anywhere' },
