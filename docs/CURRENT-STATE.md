@@ -2712,6 +2712,125 @@ test:track` 43 tracking invariants · headless QA harnesses under
 > attribution 18/18). New modules: `src/data/{motionModel,aircraftMeta,aircraftClass,aircraftIcons,issPass,routePlausible,dataCredits}.js`.
 > The live runtime now declares 29 voice tools; the 17→20 count above is retained only as milestone history.
 
+### Internationalization / catalog locales (September 2026)
+
+The application-owned UI is fully extracted into message catalogs; **en**
+is the only shipped locale in this foundation state — additional locales
+land as stacked follow-up PRs, one per locale (Spanish first), each
+following the locale-addition recipe in
+[`docs/TRANSLATORS.md`](./TRANSLATORS.md). English is the default, the
+source catalog, and the fallback. The subsystem lives in `src/i18n/`:
+
+- **File map.** `src/i18n/locale.js` owns locale resolution, guarded storage
+  (`gev:locale:v1`), the one-shot `?lang=` override, and `<html lang>`/`<html
+  dir>` metadata. `src/i18n/index.js` owns the catalog registry, `t()`
+  (interpolation + `Intl.PluralRules` plural selection), `formatNumber` /
+  `formatDate`, `applyDocumentTranslations()`, and
+  `persistLocaleAndReload()`. The shipped catalog is four flat message maps
+  — `src/i18n/locales/en/{shell,cockpit,layers,setup}.js`, 912 keys (shell
+  34, cockpit 369, layers 388, setup 121). Plural entries are the en
+  `{ one, other }` shape; a future locale may add only cardinal categories
+  `Intl.PluralRules` reports valid for it, and an entry lacking the selected
+  category degrades to `other` at runtime. Locale-code normalization
+  (`es-MX`/`es_419` → `es`, plus fr/ru/uk and variants) ships ahead of the
+  locales on purpose: knowing a code is hygiene, shipping is catalog-driven
+  through `CATALOG_LOCALES`.
+- **Selector.** The command dock carries a compact locale switch: a static
+  `.dock-locale-switch` group container in `index.html` whose buttons
+  (`.dock-locale-btn`) are rendered at runtime by `src/ui/applicationShell.js`
+  `_initLocaleSelector()` — one per locale in the configured pair; while
+  only English ships that is a single EN button. A click persists the
+  choice and reloads the page with the hash preserved, so no live re-apply
+  of already-rendered dynamic panels is needed.
+- **Locale pair config.** `GEV_DEFAULT_LOCALE` and `GEV_SECONDARY_LOCALE` in
+  `.env`, injected as `import.meta.env` defines by `vite.config.js`; both
+  values are validated against the shipped catalogs (`CATALOG_LOCALES`),
+  and the offered set is `dedup([default, secondary, 'en'])`. While English
+  is the only shipped catalog the built-in pair is en-only, so every
+  configuration degenerates to a single offered locale; an invalid,
+  unshipped, or degenerate configured pair falls back to that built-in
+  en-only shape (dev-only warn). The first secondary-locale PR restores the
+  built-in en+es pair.
+- **Resolution order.** `?lang=<locale>` (search string only; never
+  persisted, never written into share links; stripped by
+  `persistLocaleAndReload`; accepted only for offered locales) → stored
+  `gev:locale:v1` (re-checked against the pair) →
+  `navigator.languages` (regional variants normalize to the primary tag:
+  `es-MX`/`es_419` → `es`) → the CONFIGURED default locale. Unsupported
+  values defer to the next
+  step rather than forcing English.
+- **Gates** (all under `node --test src/i18n/`, 40 tests):
+  `catalog.test.mjs` enforces per-locale key, placeholder-name, and
+  plural-shape parity with the strict exact-parity flip ON
+  (`REQUIRE_FULL_PARITY`; `GEV_I18N_REQUIRE_FULL_LOCALE_PARITY=0` opts out
+  for staged work; the loops are vacuous while only en ships — each locale
+  PR meets them from day one);
+  `markupCoverage.test.mjs` requires every `data-i18n*` attribute in
+  `index.html` to resolve in every shipped catalog and rejects unknown attribute
+  spellings; `i18n.test.mjs` pins precedence, guards, fallback,
+  interpolation, the plural-selection contract (synthetic missing-category
+  degradation; real-catalog plural pins arrive with each locale PR), and
+  DOM application; `repairPass.test.mjs` anchors en byte-identity for
+  extracted literals and rejects a locale-scoped CCTV wrap rule shipping
+  ahead of its locale (per-locale value anchors arrive with each locale
+  PR).
+- **Accepted deferrals (do not "fix" silently):**
+  - The military-awareness subject header literal `FLIGHT / VESSEL WINDOW`
+    (`src/data/militaryAwareness.js`) stays English; the literal is
+    test-pinned in `src/data/militaryAwareness.test.mjs`.
+  - The visible cockpit-brief tab tokens `SIG` / `NEWS` / `LOCAL`
+    (`index.html`) stay untranslated to match the runtime keys; their
+    `aria-label`s ARE localized (`cockpit.brief.tab*AriaLabel`).
+  - `src/voice/gevActions.js` tool-result confirmation strings stay English
+    by contract (voice tool schemas and spoken confirmations are
+    keep-English; see the Keep-English boundary in `docs/TRANSLATORS.md`).
+  - Number formatting is still the pre-i18n `toLocaleString` policy at:
+    `src/ui.js:1442`, `src/data/satellites.js:829`,
+    `src/data/flights.js:436` (`'en-US'` pinned), and
+    `src/data/rocketLaunches.js:2281/2299/2364/2371/2374`
+    (default-locale). A locale-aware number-format policy is deferred; the
+    `formatNumber` helper exists in `src/i18n/index.js` when that lands.
+
+### Overpass proxy mirror rotation (September 2026)
+
+- `/api/overpass` fans out across four public mirrors. `overpassPayloadIsData()` governs cache reads, writes, and stale fallback: only a 2xx that is neither rate-limited nor a body-level runtime error qualifies. Previously stored refusals are ignored on both fresh and stale reads, so upgrading does not require manually clearing the disk cache.
+- HTTP refusals such as 406 now rotate alongside the existing network, rate-limit, and runtime-error cases. A refusal from one mirror no longer prevents reaching healthy alternatives or persists under the seven-day road/month-long boundary cache TTLs. Concurrent identical queries share one mirror sequence; if it fails, both the initiating and joined callers can use the same last-good data.
+- A refusal every mirror agrees on is still reported with the first mirror's status and body, so a genuinely malformed query says what upstream said — but only after every mirror has had the chance to answer it. `fetchOverpassPayload` takes injectable endpoints and fetch so the rotation is tested without a live mirror (`src/overpassProxy.test.mjs`).
+
+### Share-link v2 layer state (August 2026)
+
+- Generated share links use a deterministic v2 hash. Existing camera, visual,
+  HUD, detection, post-processing, celestial, scope, and map-stack fields remain,
+  with compact fields for enabled layers, allowlisted layer options, panel state,
+  and the active preset's allowlisted shader controls. An absent layer field uses
+  deterministic defaults; an explicit empty field means no enabled layers.
+- The registry seals only after all 16 production layers register, and every
+  layer has an explicit serialization disposition. Unknown enabled-layer tokens
+  reject the layer payload; unknown option tokens are ignored. Restoration
+  settles independently per layer so one failed or unavailable source cannot
+  block its siblings.
+- Stable visible options are limited to aircraft 3D mode, selected civilian and
+  military flight IDs, Satellite catalog and selection, CCTV coverage/projection/
+  auto-hop, and Radio filter/volume. Playback and tuning, live-data health,
+  calibration, caches, lifecycle state, temporary Context ownership, and derived
+  effects are deliberately excluded. Radio restore never selects or plays a
+  station.
+- Normal loads restore the last successful explicit UI, voice, or tool choice
+  from versioned local storage. Any valid camera share wins for the current load
+  without overwriting recipient preferences. Restore ownership is split by
+  visibility, option/selection, camera, visual, map, and individual panel lane:
+  a newer explicit action supersedes only the field it owns. In particular,
+  navigation cannot turn unrelated layers off, and an option change cannot
+
+#### Keep-English adjudications (post-merge catch-ups)
+
+- `src/ui/visualPresets.js` `'ELASTIC'` — detection-allocation STRATEGY IDENTIFIER (persisted
+  under `gev:detection-allocation`, compared via `dataset.allocation ===`), not display copy.
+- `src/ui/layerPanel.js` guidance meta — the `{source} · {statusMessage}` composition uses a
+  locale-neutral interpunct; the statusMessage itself IS localized via `installationFeedback`.
+- `src/ui/mapSourceControls.js` `'...'` switching label and the orbit `'↻'` glyph —
+  punctuation/glyphs, identical across locales.
+
 ## Canonical Docs Order
 
 Use docs in this order when details conflict:

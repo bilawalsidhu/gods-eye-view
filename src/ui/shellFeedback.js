@@ -9,6 +9,51 @@ import {
   reduceTrafficSyncFeedback,
 } from '../loadingFeedback.js';
 import { setSplitFlapText, disposeSplitFlap } from '../splitFlap.js';
+import { t } from '../i18n/index.js';
+
+// loadingFeedback.js composes the shared status copy inside the portable
+// node/browser graph (the server-side HUD summary reads the same modules), so
+// its labels stay English there. This chip is the presentation boundary: map
+// the closed label vocabulary to the catalog, and pass anything unrecognized
+// (a live provider error) through verbatim (docs/TRANSLATORS.md).
+const STATUS_LABEL_KEYS = Object.freeze({
+  'LOADING LIVE DATA': 'shell.status.loadingLiveData',
+  'LOAD COMPLETE': 'shell.status.loadComplete',
+  'LOAD CANCELLED': 'shell.status.loadCancelled',
+  'LOAD FAILED': 'shell.status.loadFailed',
+  'LIVE DATA OFF': 'shell.status.liveDataOff',
+  'MAPPED SITES LOADED': 'shell.status.mappedSitesLoaded',
+  'RETRYING MAPPED SITES': 'shell.status.retryingMappedSites',
+  'FETCHING MAPPED SITES': 'shell.status.fetchingMappedSites',
+  'TURNING OFF LIVE DATA': 'shell.status.turningOffLiveData',
+  'REFRESHING LIVE DATA': 'shell.status.refreshingLiveData',
+  'syncing road network': 'shell.status.trafficSyncing',
+});
+
+function localizeStatusLabel(label) {
+  if (typeof label !== 'string' || !label) return label;
+  const key = STATUS_LABEL_KEYS[label.trim()];
+  return key ? t(key) : label;
+}
+
+const RETRY_DETAIL_RE = /^(?:ALPR cameras · )?retrying in (\d+)s$/;
+
+function localizeStatusDetail(detail) {
+  if (typeof detail !== 'string' || !detail) return detail;
+  const match = detail.match(RETRY_DETAIL_RE);
+  if (match) return t('shell.status.retryingIn', { seconds: match[1] });
+  if (detail.trim() === 'retry pending') return t('shell.status.retryPending');
+  return detail;
+}
+
+function localizeLoadingPresentation(presentation) {
+  if (!presentation) return presentation;
+  return {
+    ...presentation,
+    label: localizeStatusLabel(presentation.label),
+    detail: localizeStatusDetail(presentation.detail),
+  };
+}
 export class ShellFeedback {
   constructor({ readLayers }) {
     this.readLayers = readLayers;
@@ -74,7 +119,10 @@ export class ShellFeedback {
     // the flap keeps textContent equal to the settled label throughout, so
     // this stays a no-op on the repeat ticks exactly as it did before.
     if (presentation.label)
-      setSplitFlapText(this._trafficSyncLabel, presentation.label);
+      setSplitFlapText(
+        this._trafficSyncLabel,
+        localizeStatusLabel(presentation.label),
+      );
     // Written on every change INCLUDING the empty settled value — the reducer
     // clears the progress number once the sync lands, and a truthiness guard
     // here would strand the last "..." beside the settled label.
@@ -115,6 +163,7 @@ export class ShellFeedback {
     if (this._loadingFeedbackState?.phase !== 'idle' || noticeNeedsTicker) {
       this._armLoadingFeedbackTicker();
     }
+    const localized = localizeLoadingPresentation(presentation);
     this._globalLoadingStatus.hidden = !presentation;
     if (!presentation) {
       delete this._globalLoadingStatus.dataset.state;
@@ -126,8 +175,8 @@ export class ShellFeedback {
     // here: this runs on every 60 ms and 500 ms tick. The detail line is the
     // live layer roster inside an ellipsised, width-capped span — flapping a
     // list that churns as layers join would be noise, not delight.
-    setSplitFlapText(this._globalLoadingLabel, presentation.label);
-    this._globalLoadingDetail.textContent = presentation.detail;
+    setSplitFlapText(this._globalLoadingLabel, localized.label);
+    this._globalLoadingDetail.textContent = localized.detail;
   }
 
   _showGlobalStatusNotice(message, options = {}) {

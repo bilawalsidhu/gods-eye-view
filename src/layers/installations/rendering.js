@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import { LAYER_ID, MAX_RENDERED, COLOR_BY_CLASS } from './policy.js';
 
 export function createRendering({
@@ -112,7 +113,7 @@ export function createRendering({
       entity.gevTrackedId = `installations:${record.id}`;
       entity.gevDisplayPosition = () => displayPosition;
       entity.gevLabelModel = {
-        title: record.name || 'MAPPED INSTALLATION',
+        title: record.name || t('layers.installations.fallbackTitle'),
         details: [
           String(record.class || 'installation')
             .replaceAll('_', ' ')

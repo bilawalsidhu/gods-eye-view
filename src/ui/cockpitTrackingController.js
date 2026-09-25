@@ -1,4 +1,5 @@
 /** Tracking identity, entry, exit and contact navigation for the Cockpit controller. */
+import { t } from '../i18n/index.js';
 import {
   normalizeHeading,
   resolveTrackedAircraftInfo,
@@ -58,8 +59,8 @@ export function syncTr3bToggle(info) {
   this.tr3bToggle.hidden = !icao24;
   this.tr3bToggle.setAttribute('aria-pressed', converted ? 'true' : 'false');
   this.tr3bToggle.title = converted
-    ? 'Restore real aircraft'
-    : 'Reclassify as TR-3B';
+    ? t('cockpit.context.tr3bRestoreTitle')
+    : t('cockpit.context.tr3bTitle');
 }
 
 export function syncEntry() {
@@ -183,15 +184,21 @@ export function enter() {
   this.showBriefPage(0);
   this.startBriefRotation();
   const trackLabel =
-    info.callsign || info.registration || info.icao24 || 'AIRCRAFT';
+    info.callsign ||
+    info.registration ||
+    info.icao24 ||
+    t('cockpit.hud.fallbackCallsign');
   const trackHeading = String(
     Math.round(normalizeHeading(info.track ?? 0)),
   ).padStart(3, '0');
   this.pushCockpitSignal(
     'track',
     'track',
-    'TRACK ACQUIRED',
-    `${trackLabel} · COURSE ${trackHeading}°`,
+    t('cockpit.signal.trackAcquired'),
+    t('cockpit.signal.trackDetail', {
+      label: trackLabel,
+      heading: `${trackHeading}°`,
+    }),
   );
   this.updateHud(info, performance.now(), true);
   this.setVisionMode(this.visionMode);
