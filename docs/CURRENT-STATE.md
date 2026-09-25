@@ -111,8 +111,28 @@ showing NOAA` for about a minute after the first NOAA frame; stale and delayed
 warnings take precedence. The saved and shared state keeps the Xweather choice,
 so a link copied after a fallback still asks for Xweather. Share links carry
 the source as option `s` on the existing radar (`v`) and lightning (`l`)
-tokens: `n` for NOAA (the default, omitted) or `x` for Xweather. There is no
-new layer token.
+tokens: `n` for NOAA (the default, omitted) or `x` for Xweather. The radar
+and lightning source adds no layer token.
+
+A Warnings card (`weather-alerts`, product `xweather-alerts`, Xweather layer
+`alerts`) is Xweather only. It shows official warning, watch and advisory areas
+from national agencies, coloured by Xweather alert type, and sits last in the
+observed-history group, after Lightning. It reads `Warnings · Xweather` with
+coverage `US · Canada · Europe · Australia · Japan · Korea` and the muted
+caveat "Official warnings where issued · no global coverage"; nothing is drawn
+where no agency issues through Xweather. There is no SOURCE row and no colour
+ramp: Settings offers only OPACITY, and the info text links Xweather's
+alert-type reference. The card declares `requiresKeyId: 'xweather'`. Without a
+key it polls `/status` (at most once a minute) and nothing else, reports
+`keyRequired`, and its status line and toggle name the missing
+`XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET` through the shared key-guidance
+text; a key removed at runtime clears its frame. With a key it follows the
+shared history clock and shows the budget line, the refusal status and the
+Xweather credit like the radar card. The proxy lists its frames every 3 minutes
+(Xweather documents 2–3 minute updates; not yet measured) and fetches tiles to
+zoom 8, within the same 192-tile cap. It draws above lightning: priority 4 on
+the globe, a 6.9 km shell on 3D Tiles. Its share-link token is the placeholder
+`9`, with opacity as option `o`, until the maintainers assign one.
 
 The credentials, `XWEATHER_CLIENT_ID` and `XWEATHER_CLIENT_SECRET`, are
 server-side only and read on each request, so Provider Settings (XWEATHER) can

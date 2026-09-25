@@ -1,5 +1,17 @@
 # Changelog
 
+- A Warnings card joins the WEATHER panel's observed history, after
+  Lightning: official warning, watch and advisory areas from national agencies
+  through Xweather's `alerts` layer (`xweather-alerts` on `/api/xweather`),
+  coloured by Xweather alert type. Coverage is the US, Canada, Europe,
+  Australia, Japan and Korea, where those agencies issue through Xweather; the
+  card says `Official warnings where issued · no global coverage`. It needs the
+  Xweather key: without one it shows the Provider Settings requirement and asks
+  only `/api/xweather/status`. With one it follows the shared history clock and
+  shows the same budget line, refusal status and credit as Xweather radar, with
+  only an OPACITY setting. It draws above lightning. Its share-link token, `9`,
+  is a placeholder until the maintainers assign one (#658 / #744).
+
 - Rain radar and Lightning can show Vaisala Xweather's global radar and
   lightning flashes with your own key. Set `XWEATHER_CLIENT_ID` and
   `XWEATHER_CLIENT_SECRET` (Provider Settings → XWEATHER) and each card's

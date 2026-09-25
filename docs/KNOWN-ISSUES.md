@@ -144,6 +144,15 @@ Status: Open (source limits, by design)
   first frame at or after it, so the proxy steps back 1.5 × the product's
   cadence per frame. A single missing frame makes the walk skip the frame
   beyond it, and a gap of more than two steps ends the list early.
+- **Warnings cover only where agencies issue through Xweather**: the US,
+  Canada, Europe, Australia, Japan and Korea. Elsewhere the card draws nothing,
+  which does not mean no hazard; its caveat line says so.
+- **Warning colours follow Xweather's alert types**, not each agency's own
+  colours; the card links Xweather's alert-type reference instead of a legend.
+- **Warnings not yet verified with a live key.** The 3-minute frame cadence is
+  taken from Xweather's documented 2–3 minute updates, and the polygons on the
+  globe and on Google 3D Tiles have not yet been checked against the live
+  service.
 - **3D Tiles seam:** one seam can show where the detail window meets the
   coarser whole-extent image. Below the detail window's resolution, lightning
   symbols magnify gradually.
