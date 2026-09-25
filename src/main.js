@@ -35,6 +35,7 @@ import militaryAwarenessLayer from './data/militaryAwareness.js';
 import localDataLayers from './data/localLayers.js';
 import { LAYER_STATE_REGISTRY } from './data/layerState.js';
 import { registerDataCredits } from './data/dataCredits.js';
+import { attachCreditDock } from './creditsDock.js';
 import { SceneDirector } from './scenes/director.js';
 import { initGevVoiceCommands } from './voice/gevRealtime.js';
 import { MapStackController } from './mapStackController.js';
@@ -151,13 +152,21 @@ async function init() {
       selectionIndicator: false,
       infoBox: false,
       baseLayer: false,
-      // Detached credit container — the operator removed the visible
-      // attribution strip (2026-08-29), so this element is never appended to
-      // the document and no credit line renders, in normal or recording
-      // modes. NOTE: Google Maps Platform ToS requires visible attribution
-      // for Photorealistic 3D Tiles; this is an operator decision recorded
-      // here deliberately. Cesium still receives a valid container — it just
-      // stays out of the layout.
+      // Credit container — created detached here, then docked onto the
+      // document by attachCreditDock() right after viewer construction.
+      // Google Maps Platform ToS requires visible attribution for
+      // Photorealistic 3D Tiles — that requirement is why the dock exists.
+      // HISTORY: the operator removed the visible attribution strip on
+      // 2026-08-29 and this container was deliberately never appended, which
+      // made the L9 matrix surface the missing Google ToS attribution as
+      // C13 SKIPPED[OWNER-RUN] on every run. 2026-09-24 the plan's accepted
+      // resolution ("ship an equivalent attribution surface") landed: the
+      // container is docked bottom-right as a compact on-screen line
+      // (src/creditsDock.js, style.css .gev-credit-dock), restoring the
+      // visible Google/Cesium attribution AND the "Data attribution" lightbox
+      // (registerDataCredits below feeds it) without re-introducing the
+      // mobile viewport problem that drove the original detach — the lightbox
+      // has been viewport-capped since 2026-09-12.
       creditContainer: (() => {
         const el = document.createElement('div');
         el.id = 'cesium-credits';
@@ -182,6 +191,11 @@ async function init() {
     // Batch P, widened by the 2026-09-23 idle-GPU audit) — and restores 60 on
     // any camera-driven holder or camera motion.
     viewer.targetFrameRate = 60;
+
+    // Dock the credit container onto the document (see the creditContainer
+    // comment above): the on-screen Google/Cesium line is the ToS compliance
+    // surface, and C13 asserts its clean-view visibility in every matrix run.
+    attachCreditDock(viewer);
 
     // Render-resolution scale policy (Phase 9 Batch R — docs/PLAN.md, sceneRenderScale.js).
     // On HiDPI displays the scene otherwise renders at CSS × DPR backing-store

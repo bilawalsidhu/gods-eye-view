@@ -1418,14 +1418,17 @@ ordered by value-per-risk; each is self-contained and committable.
       tests read through `src/testSupport/readSource.js`, which folds
       CRLF/CR to LF so archives and editor save-hooks cannot flip
       anchors.
-- [ ] **Google ToS attribution (owner decision owed, surfaced by matrix
-      C13 every run)**: the operator detached the Cesium credit container on
-      2026-08-29 (src/main.js — decision + caveat recorded there), but
-      Google Maps Platform ToS requires visible attribution for
-      Photorealistic 3D Tiles. Either restore a visible credit line or ship
-      an equivalent attribution surface; until then the L9 matrix reports
-      C13 as SKIPPED[OWNER-RUN] rather than silently dropping the
-      compliance signal.
+- [x] **Google ToS attribution (owner decision owed, surfaced by matrix
+      C13 every run)** — RESOLVED 2026-09-24 via the plan's second accepted
+      option ("ship an equivalent attribution surface"): the detached
+      container is docked bottom-right as a compact on-screen line
+      (`src/creditsDock.js` + `style.css` `.gev-credit-dock`), restoring the
+      visible Google/Cesium attribution AND the "Data attribution" lightbox
+      (viewport-capped since 2026-09-12, so the mobile problem that drove the
+      original detach does not return). History: the operator detached the
+      container 2026-08-29 and C13 reported SKIPPED[OWNER-RUN] every run;
+      C13 now asserts the real visibility contract, with the skip branch kept
+      as the regression path.
 
 ### Process debt
 

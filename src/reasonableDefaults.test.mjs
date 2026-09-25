@@ -171,27 +171,43 @@ test('first run opens in CRT, at every surface that decides it', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2e. Attribution strip — removed at the operator's direction (2026-08-29).
-// The visible credit line is gone; the pin flips from keep-out to keep-removed
-// so it cannot silently reappear, and the old clearance pin that enforced
-// visibility was retired with it (src/creditAttribution.test.mjs, git history).
+// 2e. Attribution strip — docked on-screen (2026-09-24), superseding the
+// 2026-08-29 removal. The 2026-08-29 ruling detached the credit container and
+// a keep-removed pin guarded that state; PLAN.md's accepted resolution
+// ("restore a visible credit line or ship an equivalent attribution surface")
+// has now landed as src/creditsDock.js, so the pin flips AGAIN — from
+// keep-removed to keep-docked-and-visible: Google Maps Platform ToS requires
+// visible attribution for Photorealistic 3D Tiles, and matrix check C13
+// asserts the clean-view visibility contract at runtime. This pin holds the
+// static surfaces: the dock exists, main.js calls it, and nothing may hide
+// the dock or re-detach the container silently.
 
-test('the attribution strip stays removed, at every surface that rendered it', () => {
+test('the attribution strip stays docked and visible, at every surface that renders it', () => {
   const mainSource = readSource('./main.js', import.meta.url);
-  const containerStart = mainSource.indexOf('// Detached credit container');
+  const containerStart = mainSource.indexOf('// Credit container —');
   const creditContainer = mainSource.slice(
     containerStart,
     mainSource.indexOf('})(),', containerStart),
   );
   assert.ok(creditContainer.length > 0, 'main.js: the creditContainer IIFE is still present');
-  assert.doesNotMatch(creditContainer, /document\.body\.appendChild/,
-    'main.js: the credit container must never be appended to the document');
-  assert.match(creditContainer, /operator removed the visible/,
-    'main.js: the removal carries its ToS caveat so the choice stays discoverable');
+  assert.match(creditContainer, /Google Maps Platform ToS requires visible attribution/,
+    'main.js: the ToS caveat stays discoverable next to the container');
+  assert.match(mainSource, /attachCreditDock\(viewer\);/,
+    'main.js: the viewer construction docks the credit container');
+
+  const dockSource = readSource('./creditsDock.js', import.meta.url);
+  assert.match(dockSource, /isConnected/,
+    'creditsDock.js: docking is idempotent — a live container is never re-wrapped');
+  assert.match(dockSource, /appendChild\(creditContainer\)/,
+    'creditsDock.js: the viewer’s OWN container is docked (Cesium’s credit display lives inside)');
 
   const css = readSource('../style.css', import.meta.url);
-  assert.doesNotMatch(css, /#cesium-credits \{/,
-    'style.css: no positioning rule may bring the detached strip back');
+  assert.match(css, /\.gev-credit-dock \{[^}]*position: fixed;/,
+    'style.css: the dock is a positioned on-screen surface');
+  assert.doesNotMatch(css, /\.gev-credit-dock \{[^}]*display: *none/,
+    'style.css: nothing hides the dock — visibility is the compliance contract');
+  assert.doesNotMatch(css, /#cesium-credits \{[^}]*display: *none/,
+    'style.css: the credit container itself is never hidden either');
 });
 
 // ---------------------------------------------------------------------------

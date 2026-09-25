@@ -264,10 +264,54 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   display: none !important;
 }
 
-/* The visible data-source attribution strip was removed at the operator's
-   direction (2026-08-29); main.js keeps the Cesium credit container detached
-   so no credit line renders. The stock lightbox rule below stays only because
-   Cesium may still create its overlay element internally. */
+/* On-screen attribution dock (2026-09-24) — Google Maps Platform ToS requires
+   visible attribution for Photorealistic 3D Tiles, so main.js re-attaches the
+   credit container through src/creditsDock.js instead of leaving it detached
+   (the 2026-08-29 detach that C13 tracked as an owner decision). The dock is
+   a compact bottom-right line: quiet by default, legible on hover, never a
+   participant in clean-view. The lightbox it expands keeps its capped,
+   scrollable panel styles below. */
+.gev-credit-dock {
+  position: fixed;
+  right: 8px;
+  bottom: 8px;
+  z-index: 200; /* panel tier tops out at 175; the lightbox overlay matches this */
+  max-width: min(40vw, 340px);
+  font-size: 10px;
+  line-height: 1.35;
+  color: #e8e8e8;
+  background: rgba(8, 10, 12, 0.55);
+  border-radius: 4px;
+  padding: 2px 8px;
+  opacity: 0.72;
+  transition: opacity 0.15s ease;
+}
+
+.gev-credit-dock:hover,
+.gev-credit-dock:focus-within {
+  opacity: 1;
+}
+
+/* Cesium's stock .cesium-widget-credits is position:absolute bottom-left
+   (CesiumWidget.css) — inside the fixed dock that takes it out of flow and
+   collapses the dock to padding while the credit line overflows past the
+   viewport edge. Put it back in flow; the dock then shrink-wraps the line. */
+.gev-credit-dock .cesium-widget-credits {
+  position: static;
+  display: block;
+  text-align: right;
+}
+
+/* Cesium renders the credit display's own chrome inside the container; keep
+   its links readable against the dock's dark background. */
+.gev-credit-dock a {
+  color: #cfe3ff;
+}
+
+.gev-credit-dock .cesium-credit-expand-link {
+  color: #e8e8e8;
+  cursor: pointer;
+}
 
 /* Cesium's stock attribution lightbox grows with every registered data source.
    Keep the title and close affordance fixed while the complete, unabridged

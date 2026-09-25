@@ -119,6 +119,21 @@ no new production API surface).
 
 ### Added
 
+- **On-screen attribution dock (Google Maps Platform ToS).** The credit
+  container — detached from the document on 2026-08-29 at operator
+  direction, with credits moved into the data-attribution lightbox — is
+  docked bottom-right again as a compact 55%-opacity overlay that
+  brightens on hover, via the new `src/creditsDock.js` (idempotent;
+  resolves `viewer.cesiumWidget.creditContainer`, since Cesium's Viewer
+  forwards the option into the widget without keeping the property).
+  PLAN.md's accepted resolution ("ship an equivalent attribution
+  surface") for the ToS requirement that attribution be visible for
+  Photorealistic 3D Tiles; matrix check C13 now asserts real clean-view
+  visibility in every run instead of skipping. `style.css` also resets
+  the stock `position:absolute` on `.cesium-widget-credits`, which
+  otherwise escaped the dock's flow; the dock's fixed positioning sits
+  above the panel tier (z 200).
+
 - **PWA install surface hardened.** Stable manifest `id` +
   `launch_handler` (focus-existing), a dedicated maskable icon, a 180px
   apple-touch-icon, and the iOS standalone meta Safari ignores from the

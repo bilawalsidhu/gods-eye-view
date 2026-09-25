@@ -2043,22 +2043,20 @@ async function runBrowserGroup(record) {
   });
 
   await step('C13', async () => {
-    // The operator deliberately detached the Cesium credit container on
-    // 2026-08-29 (src/main.js: the decision AND the Google Maps Platform ToS
-    // caveat — visible attribution is required for Photorealistic 3D Tiles —
-    // are recorded in the comment there). Failing the fleet forever on a
-    // recorded owner decision is noise, but skipping it silently would hide
-    // a live compliance question — so probe the container: if it is ever
-    // re-attached this reverts to the real visibility contract; until then
-    // every run surfaces the open item as an owner decision.
+    // LIVE STATE (2026-09-24): the credit container is docked bottom-right by
+    // src/creditsDock.js — the plan's accepted resolution of the 2026-08-29
+    // operator detach — so this step asserts the real visibility contract.
+    // The skip branch below is now the REGRESSION path: if the dock ever
+    // disappears again (a refactor re-detaching the container), surface it as
+    // the compliance question it is rather than failing the whole fleet on
+    // one dimension.
     const attR = await mustEval(() => Boolean(document.getElementById('cesium-credits')), null, 10000);
     if (!attR.ok) return crash(`could not probe the credit container: ${attR.reason}`);
     if (!attR.value) {
       return skip(
-        'visible Google/Cesium attribution is absent by OPERATOR DECISION (2026-08-29): '
-        + 'main.js deliberately detaches #cesium-credits and records that Google Maps Platform ToS '
-        + 'requires visible attribution for Photorealistic 3D Tiles — restore the strip or ship an '
-        + 'equivalent attribution surface (tracked in PLAN.md Batch 6)',
+        'visible Google/Cesium attribution is absent — #cesium-credits is not in the document '
+        + '(docked by src/creditsDock.js since 2026-09-24; if this regressed, Google Maps Platform '
+        + 'ToS requires visible attribution for Photorealistic 3D Tiles)',
         'OWNER-RUN',
       );
     }
