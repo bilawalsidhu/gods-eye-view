@@ -539,6 +539,17 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   together. While you are drawing, the draw tool owns the pointer and no layer
   selects what you click through (#235 — thanks @cora-fresh-labs).
 
+- **Docker install path.** `docker compose up` builds the pinned Node image and
+  serves the app on `http://localhost:4173` with no local Node install. The repo
+  is bind-mounted and the container runs as the host user, so `.env`,
+  `.gev-cache`, and `.gev-logs` persist on the host exactly as they do under
+  `npm run dev` — Provider Settings included. The launcher
+  (`scripts/docker-start.mjs`) trusts the container's gateway address for that
+  panel, since that is where Docker delivers the host's own browser from; the
+  opt-in behind it, `GEV_KEY_SETUP_TRUSTED_PEERS`, takes exact addresses only
+  and is unset (so loopback-only, unchanged) under every other launcher
+  (reported by @jklaze).
+
 ### Fixed
 
 - Keep traffic-road bounds crossing the antimeridian monotonic and inside the

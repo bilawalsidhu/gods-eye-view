@@ -141,6 +141,55 @@ See [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 **macOS shortcut:** `./scripts/dev-fresh.sh` clears the Vite cache and pulls any
 configured keys straight from the Keychain. It starts keyless too.
 
+### Path 3 — Docker
+
+No Node install needed; the container publishes the same dev server.
+
+```bash
+git clone https://github.com/bilawalsidhu/gods-eye-view.git
+cd gods-eye-view
+docker compose up
+```
+
+Open **`http://localhost:4173`** as above. The repo is bind-mounted, so `.env`,
+`.gev-cache` and `.gev-logs` live on the host, edits still hot-reload, and keys
+you save from Provider Settings survive `docker compose down`. The port is
+published to `127.0.0.1` only, so the default matches the native one.
+
+Publishing it wider is the [Sharing an instance](#-sharing-an-instance) opt-in,
+and it hands out **Provider Settings** too: the launcher trusts the container
+gateway as this machine, and a wider publish delivers everyone else from that
+same address. For an instance you mean to share, put the keys in `.env` by hand
+instead. [SECURITY.md](SECURITY.md) has the detail.
+
+<details>
+<summary>File ownership on Linux and NAS hosts</summary>
+
+On Linux, export your ids first so the files the container writes stay yours:
+`export UID GID` before `docker compose up`. On a NAS or anywhere the share has
+its own owner, set them explicitly instead (`UID=1026 GID=100 docker compose
+up`) — Docker Desktop on macOS and Windows maps ownership for you.
+
+</details>
+
+<details>
+<summary>IPv6-only networks, rebuilding, and the test suites</summary>
+
+The launcher reads the IPv4 default gateway, so an IPv6-only Docker network
+finds none: it logs `No default gateway; Provider Settings stays loopback-only`
+and the panel refuses every save. Put your keys in `.env` by hand there, or name
+the gateway yourself with `GEV_KEY_SETUP_TRUSTED_PEERS` after reading
+[SECURITY.md](SECURITY.md).
+
+`node_modules` deliberately stays inside the image, so it survives in an
+anonymous volume across restarts: after a `git pull` that changes dependencies,
+recreate it with `docker compose down -v && docker compose up --build`. The
+image also skips Puppeteer's Chromium download, which keeps it small but leaves
+`npm run test:track` to the host — `npm run build` and `npm test` run fine in
+the container.
+
+</details>
+
 ### Then power it up — in the app, not in a file
 
 Keys are upgrades, not prerequisites. When you want one, click the **POWER UP**

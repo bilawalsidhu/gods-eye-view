@@ -79,6 +79,17 @@ The dev server is a **key broker**: every server-side key above is spendable by 
 - **Local-only by default.** `./scripts/dev-fresh.sh` (and the Vite config itself) bind to `localhost`, so only your machine can reach the server — and only local names are accepted (`allowedHosts` stays restricted, which also blunts DNS-rebinding tricks).
 - **LAN exposure is an explicit opt-in**: `HOST=0.0.0.0 ./scripts/dev-fresh.sh`. The launcher prints a prominent warning plus your LAN URL. Understand what opting in means: **every device on that network can drive the proxies and spend your OpenAI / Google / OpenSky / AISStream / TomTom / FIRMS quota** for as long as the server runs. Do this only on networks you trust.
 - **App-level throttles (opt-in):** `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` cap the cost-bearing endpoints per client IP per minute (over-limit requests receive a sanitized `429`). They are **per-IP, process-local, in-memory guards** — they reset on restart and are **not billing caps**.
+- **Docker trusts one address, and only because the port is on loopback.**
+  Docker delivers the host's own browser to the container from the container
+  network's gateway, never from `127.0.0.1`, so a loopback-only Provider
+  Settings refuses the machine running it. `scripts/docker-start.mjs` therefore
+  sets `GEV_KEY_SETUP_TRUSTED_PEERS` to exactly that gateway address. The list
+  takes exact addresses only (no wildcards, prefixes or hostnames), is unset
+  under every other launcher, and relaxes none of the sharing, Host, Origin,
+  Content-Type or proxy-header checks. It is safe precisely because
+  `compose.yaml` publishes on `127.0.0.1`: **widen that mapping and every LAN
+  client arrives from the same gateway address, which hands them Provider
+  Settings too.** Treat publishing beyond loopback as the LAN opt-in above.
 - **Provider-side budgets are the real backstop.** For hard spend protection, configure limits where the money is: OpenAI platform usage limits, Google Cloud budget alerts + per-API quotas, and equivalent controls for any other keyed provider.
 - **Pinokio LAN and Cloudflare sharing are refused.** The current supported
   Pinokio release re-reads sharing state when an app registers its Open URL and
