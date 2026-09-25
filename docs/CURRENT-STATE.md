@@ -3530,6 +3530,10 @@ expired entries, marked stale with the original cache/retrieval date) without
 refresh. An annotation miss returns HTTP 503, `OVERPASS_NOT_CONFIGURED`,
 `retryable:false`; installations return that capability as HTTP 200 and select
 the working vector-tile source without a failed-network console entry.
+`GET /api/overpass/status` answers `{configured}`; the browser asks once per
+page and, when nothing is configured, returns the unavailable result for
+annotation and location-feature queries without sending them (so no 503 is
+logged). An older server without the probe is queried as before.
 Configured endpoints have per-instance cooldowns for 406/429, honoring
 Retry-After; absent delays back off from 30 seconds to five minutes. Empty
 `elements` is a valid answer. Existing byte, query, concurrency and cache caps
@@ -3542,7 +3546,8 @@ tiles after a capability miss. Annotation and location-feature sources retain
 a distinct unavailable result and stop querying for that source lifetime.
 `scripts/qa-overpass-offload.mjs <dev-url>` checks Austin road dots, ALPR,
 Camp Mabry markers/outlines, at most 12 Fort Cavazos installation markers,
-and zero browser requests to external Overpass/Nominatim hosts. It waits for
+an area annotation with zero console errors (and zero `/api/overpass` queries
+when unconfigured), and zero browser requests to external Overpass/Nominatim hosts. It waits for
 visible photoreal tilesets, dismisses first launch and measures at least 150
 street-view dots within -3/+25 m of sampled mesh height, for both keyed and
 keyless OpenFreeMap roads (an isolated page overrides only TomTom key availability).

@@ -75,6 +75,19 @@ function overpassProxy({ routing = {} } = {}) {
       // (a body-read failure would otherwise hit an out-of-scope reference).
       let cacheKey = null;
       try {
+        // Capability probe: lets clients skip queries when nothing is configured.
+        if (req.method === 'GET' && req.url?.split('?')[0] === '/status') {
+          res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+          });
+          res.end(
+            JSON.stringify({
+              configured: resolveOverpassUpstreams().length > 0,
+            }),
+          );
+          return;
+        }
         if (req.method !== 'POST') {
           res.writeHead(405, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Method Not Allowed' }));

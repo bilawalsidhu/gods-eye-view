@@ -104,6 +104,7 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         ['/api/fire-perimeters/inciweb/publication/invalid', 400],
         ['/api/terrain/heights?points=invalid', 400],
         ['/api/overpass', 405],
+        ['/api/overpass/status', 200],
         ['/api/cctv/sources', 200],
         ['/api/gbfs/', 400],
         ['/api/tomtom/status', 200],

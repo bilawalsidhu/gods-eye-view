@@ -43,15 +43,22 @@ function routes(...plugins) {
 }
 async function call(handlers, url, init = {}) {
   const parsed = new URL(url, 'http://localhost');
+  // Connect-style mounting: the handler sees the path below its mount point.
+  const mount = [...handlers.keys()]
+    .filter(
+      (path) =>
+        parsed.pathname === path || parsed.pathname.startsWith(`${path}/`),
+    )
+    .sort((a, b) => b.length - a.length)[0];
   const req = Readable.from(init.body ? [Buffer.from(init.body)] : []);
   Object.assign(req, {
     method: init.method || 'GET',
-    url: parsed.search || '/',
+    url: parsed.pathname.slice(mount.length) + parsed.search || '/',
     headers: {},
     socket: { remoteAddress: '127.0.0.1' },
   });
   let status, headers, body;
-  await handlers.get(parsed.pathname)(req, {
+  await handlers.get(mount)(req, {
     writeHead(s, h) {
       status = s;
       headers = h;
@@ -159,6 +166,59 @@ test('zero egress: every Overpass consumer reaches real default handlers, and re
   );
 });
 
+test('an unconfigured server is probed once and never sent a feature query', async (t) => {
+  env(t);
+  t.mock.method(globalThis, 'fetch', () =>
+    assert.fail('unconfigured Overpass made a network request'),
+  );
+  const handlers = routes(overpassProxy());
+  const seen = [];
+  const services = createApplicationRequestServices({
+    fetchImpl: (url, options = {}) => {
+      seen.push(`${options.method || 'GET'} ${url}`);
+      return call(handlers, url, options);
+    },
+  });
+  for (const operation of [
+    'getNeighborhoodAreas',
+    'getFocusFootprints',
+    'getEnclosingAreas',
+  ]) {
+    const result = await services.features[operation]({
+      lat: 37.7989,
+      lon: -122.4662,
+    });
+    assert.equal(result.code, 'OVERPASS_NOT_CONFIGURED', operation);
+    assert.equal(result.retryable, false, operation);
+  }
+  assert.deepEqual(seen, ['GET /api/overpass/status']);
+
+  env(t, 'http://localhost:9/api/interpreter');
+  const status = await call(handlers, '/api/overpass/status');
+  assert.equal(status.status, 200);
+  assert.equal(status.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(await status.json(), { configured: true });
+});
+
+test('a server without the status probe still answers through the query itself', async () => {
+  const seen = [];
+  const services = createApplicationRequestServices({
+    fetchImpl: async (url, options = {}) => {
+      seen.push(`${options.method || 'GET'} ${url}`);
+      return String(url).endsWith('/status')
+        ? Response.json({ error: 'Method Not Allowed' }, { status: 405 })
+        : Response.json({ elements: [] });
+    },
+  });
+  assert.deepEqual(await services.boundaries.query('fixture'), []);
+  assert.deepEqual(await services.boundaries.query('fixture'), []);
+  assert.deepEqual(seen, [
+    'GET /api/overpass/status',
+    'POST /api/overpass',
+    'POST /api/overpass',
+  ]);
+});
+
 test('default handlers serve expired caches with original dates and no upstream header or refresh', async (t) => {
   env(t);
   t.mock.method(globalThis, 'fetch', () =>
@@ -233,8 +293,8 @@ test('feature capability misses stop source calls and deferred outline retry wai
   let requests = 0,
     waits = 0;
   const services = createApplicationRequestServices({
-    fetchImpl: async () => {
-      requests++;
+    fetchImpl: async (url, options = {}) => {
+      if (options.method === 'POST') requests++;
       return Response.json(
         { code: 'OVERPASS_NOT_CONFIGURED', retryable: false },
         { status: 503 },

@@ -12,7 +12,9 @@
   Flow coverage counts
   rendered dots on roads with flow; mapped military areas come from OpenFreeMap and
   ALPR cameras from an hourly OpenStreetMap extract (US and Canada). Features
-  without a replacement say they are unavailable. `OVERPASS_UPSTREAMS` sets an
+  without a replacement say they are unavailable; area and footprint
+  annotations check once whether an Overpass instance is configured and skip
+  the query when none is. `OVERPASS_UPSTREAMS` sets an
   Overpass instance you run or pay for. The cockpit regional brief resolves
   regions from bundled Natural Earth data instead of Nominatim. Traffic starts on enable and paints
   locally grounded roads incrementally, shares concurrent tile requests and

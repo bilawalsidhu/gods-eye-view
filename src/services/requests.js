@@ -65,9 +65,34 @@ export function createApplicationRequestServices({
       throw new Error(`${label} unavailable (${response.status})`);
     return response.data;
   }
+  // Learn once per page whether the server has an Overpass instance, so an
+  // unconfigured server is never asked (and never answers with an error).
+  let boundaryCapability = null;
+  function boundariesConfigured() {
+    boundaryCapability ??= request(`${urls.boundaries}/status`).then(
+      (response) =>
+        response.ok && typeof response.data?.configured === 'boolean'
+          ? response.data.configured
+          : null, // an older server: fall back to asking per query
+      (error) => {
+        boundaryCapability = null; // transient: ask again next time
+        if (error?.name === 'AbortError') throw error;
+        return null;
+      },
+    );
+    return boundaryCapability;
+  }
   const services = {
     boundaries: {
       async query(query, { signal } = {}) {
+        if ((await boundariesConfigured()) === false) {
+          signal?.throwIfAborted();
+          return {
+            unavailable: true,
+            code: 'OVERPASS_NOT_CONFIGURED',
+            retryable: false,
+          };
+        }
         const response = await request(urls.boundaries, {
           method: 'POST',
           signal,

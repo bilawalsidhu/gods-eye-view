@@ -15,7 +15,9 @@
  * revisits Austin, with all three layers enabled. CDP records requests, decoded
  * response-body bytes and transferred bytes (including headers), split by provider.
  * Uses real tile responses. A second isolated page overrides only TomTom key
- * availability to check OpenFreeMap roads on the Google mesh.
+ * availability to check OpenFreeMap roads on the Google mesh. The default run
+ * also draws an area annotation and requires zero console errors and, when no
+ * Overpass instance is configured, zero /api/overpass queries.
  * --compare captures the TomTom, OpenStreetMap and Hybrid road sources at five
  * fixed tilted photoreal views (Twin Peaks, Lombard Street, Loop 360, Dubai,
  * Shibuya): first-dot ms, dots in view, dots within -3/+25 m of the rendered
@@ -81,6 +83,7 @@ const result = {
             ? 'coverage'
             : 'acceptance',
   forbiddenRequests: [],
+  overpassRequests: [],
   errors: [],
   consoleErrors: [],
   failedRequests: [],
@@ -135,6 +138,13 @@ async function observeNetwork(targetPage) {
   await client.send('Network.enable');
   client.on('Network.requestWillBeSent', (event) => {
     const target = new URL(event.request.url);
+    if (
+      target.origin === new URL(url).origin &&
+      target.pathname.startsWith('/api/overpass')
+    )
+      result.overpassRequests.push(
+        `${event.request.method} ${target.pathname}`,
+      );
     if (
       target.hostname.includes('overpass') ||
       target.hostname === 'nominatim.openstreetmap.org'
@@ -1334,6 +1344,52 @@ try {
     await waitForSources();
     await shot('austin-revisit');
     await waitForSources();
+  }
+  if (!pan && !profile && !compare && !tour && !coverage) {
+    // Area annotation outlines: without a configured Overpass instance the
+    // app learns that once and never sends the query (so no 503 is logged);
+    // the pin stays and bundled outlines still resolve.
+    beginView('annotation-area');
+    await page.evaluate(() =>
+      ['traffic', 'military-installations', 'alpr-cameras'].forEach((id) =>
+        window.__godsEyeView.dataManager.setEnabled(id, false),
+      ),
+    );
+    await fly(37.7989, -122.4662, 4000, 0, -45);
+    const errorsBefore = result.consoleErrors.length;
+    const postsBefore = result.overpassRequests.filter((r) =>
+      r.startsWith('POST'),
+    ).length;
+    result.annotation = await page.evaluate(async () => {
+      const configured = await fetch('/api/overpass/status')
+        .then((response) => response.json())
+        .then((body) => body.configured);
+      const annotation = await window.__godsEyeView.annotations.annotate([
+        { type: 'area', target: 'Presidio of San Francisco', footprint: true },
+      ]);
+      return { configured, drawn: annotation.drawn };
+    });
+    // Let any deferred outline upgrade settle before counting.
+    await new Promise((resolve) => setTimeout(resolve, 8000));
+    result.annotation.consoleErrors = result.consoleErrors.slice(errorsBefore);
+    result.annotation.overpassPosts =
+      result.overpassRequests.filter((r) => r.startsWith('POST')).length -
+      postsBefore;
+    console.log('Area annotation:', result.annotation);
+    assert.ok(result.annotation.drawn >= 1, 'area annotation drawn');
+    assert.deepEqual(
+      result.annotation.consoleErrors,
+      [],
+      'area annotation logs no console errors',
+    );
+    if (result.annotation.configured === false)
+      assert.equal(
+        result.annotation.overpassPosts,
+        0,
+        'unconfigured Overpass is never queried',
+      );
+    await shot('annotation-area');
+    await page.evaluate(() => window.__godsEyeView.annotations.clear?.());
   }
   if (!pan && !profile && !compare) {
     beginView('alpr-london');
