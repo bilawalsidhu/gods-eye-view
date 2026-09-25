@@ -125,6 +125,33 @@ npm ci
 npm run doctor
 npm run dev
 ```
+OR
+
+### 🐳 Run with Docker
+
+A pre-built image which can be run from GitHub Container Registry.
+
+run:
+
+```bash
+docker run -d \
+  --name gods-eye-view \
+  -p 4173:4173 \
+  --env-file .env \
+  ghcr.io/bilawalsidhu/gods-eye-view:latest
+```
+### Build locally
+
+To test the container locally from the repository:
+
+```bash
+docker build -t gods-eye-view:local .
+docker run --rm -d \
+  --name gods-eye-view \
+  -p 4173:4173 \
+  --env-file .env \
+  gods-eye-view:local
+```
 
 Open **`http://localhost:4173`**. Choose **Live Contacts**, **Space Missions**,
 **Environmental**, or **Explore Manually** from the first-run panel.
@@ -179,6 +206,11 @@ requests only from your machine. Browser-side keys (Google Maps, Cesium ion)
 must be restricted at their providers — [SECURITY.md](SECURITY.md) shows how,
 and it carries the LAN-sharing rules alongside [Keys & Costs](#-api-keys).
 
+**Security:** never bake `.env` or private API keys into the Docker image.
+`OPENAI_API_KEY`, `AISSTREAM_API_KEY`, OpenSky credentials, and similar
+server-side credentials remain runtime environment variables. The Google Maps
+key and Cesium ion token are intentionally client-exposed by the application
+and should be restricted according to [SECURITY.md](SECURITY.md).
 ---
 
 ## 🕐 The First Five Minutes
