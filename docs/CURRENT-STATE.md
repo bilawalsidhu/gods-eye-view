@@ -3447,6 +3447,11 @@ silently demoting every later lookup for the session.
 - A refusal every mirror agrees on is still reported with the first mirror's status and body, so a genuinely malformed query says what upstream said — but only after every mirror has had the chance to answer it. `fetchOverpassPayload` takes injectable endpoints and fetch so the rotation is tested without a live mirror (`src/overpassProxy.test.mjs`).
 - Every mirror is asked with a User-Agent that names the application, its version and the project address (`OVERPASS_USER_AGENT` in `server/providers/overpass/constants.js`), which is what the OSM API usage policy asks for. Mirrors may refuse a client they cannot identify; such a refusal is never treated as data and costs the fan-out that mirror, so the header is what keeps the list at full strength.
 
+### Traffic road terrain elevation clamping (September 2026)
+
+- Road elevation sampling in `parseRoads` / `parseRoadsTimed` is clamped to physical sanity bounds (`MIN_ROAD_TERRAIN_HEIGHT_M = -500` to `MAX_ROAD_TERRAIN_HEIGHT_M = 9000`).
+- If an unstreamed tile returns an out-of-bounds artifact (e.g. -16.8 km at oblique city views, #656), the parser falls back to `scene.globe.getHeight(carto)` before defaulting to 0 m ellipsoid height, ensuring dots remain on the road surface.
+
 ### Share-link v2 layer state (August 2026)
 
 - Generated share links use a deterministic v2 hash. Existing camera, visual,
