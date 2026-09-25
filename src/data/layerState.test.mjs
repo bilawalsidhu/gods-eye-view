@@ -194,8 +194,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 28);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 28);
+  assert.equal(REGISTERED_LAYER_IDS.length, 29);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 29);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.throws(
@@ -2215,6 +2215,70 @@ test('observed weather round trips product and opacity without persisting histor
   assert.deepEqual(decoded, state);
   assert.equal(state.options['weather-satellite'].product, 'clouds');
   assert.equal(Object.hasOwn(state.options['weather-radar'], 'play'), false);
+});
+
+test('radar and lightning source round trips under their own layer token and omits NOAA', () => {
+  const state = normalizeLayerState({
+    enabledLayerIds: ['weather-radar', 'weather-lightning'],
+    options: {
+      'weather-radar': { source: 'xweather', opacity: 'strong' },
+      'weather-lightning': { source: 'nowcoast', opacity: 'light' },
+    },
+  });
+  const params = new URLSearchParams(encode(state));
+  assert.deepEqual(
+    params
+      .get('lo')
+      .split('_')
+      .filter((code) => /^[lv]\./.test(code)),
+    ['l.o.l', 'v.s.x'],
+  );
+  assert.deepEqual(decodeLayerStateParams(params), state);
+  assert.equal(
+    createDefaultLayerState().options['weather-radar'].source,
+    'nowcoast',
+  );
+  assert.equal(
+    normalizeLayerState({
+      options: { 'weather-lightning': { source: 'other' } },
+    }).options['weather-lightning'].source,
+    'nowcoast',
+  );
+});
+
+test('weather warnings round trip opacity under the placeholder token 9', () => {
+  const entry = LAYER_STATE_REGISTRY.find(({ id }) => id === 'weather-alerts');
+  assert.deepEqual(
+    [entry.token, entry.disposition, entry.optionOwner],
+    ['9', 'enabled+options', 'weather-alerts'],
+  );
+  assert.deepEqual(createDefaultLayerState().options['weather-alerts'], {
+    opacity: 'strong',
+  });
+  const state = normalizeLayerState({
+    enabledLayerIds: ['weather-alerts', 'weather-radar'],
+    options: {
+      'weather-alerts': { opacity: 'light', source: 'nowcoast', play: true },
+    },
+  });
+  assert.deepEqual(state.options['weather-alerts'], { opacity: 'light' });
+  const params = new URLSearchParams(encode(state));
+  assert.ok(params.get('l').includes('9'), params.get('l'));
+  assert.deepEqual(
+    params
+      .get('lo')
+      .split('_')
+      .filter((code) => code.startsWith('9.')),
+    ['9.o.l'],
+  );
+  assert.deepEqual(decodeLayerStateParams(params), state);
+  const plain = normalizeLayerState({ enabledLayerIds: ['weather-alerts'] });
+  const bare = new URLSearchParams(encode(plain));
+  assert.equal(
+    (bare.get('lo') || '').split('_').some((code) => code.startsWith('9.')),
+    false,
+  );
+  assert.deepEqual(decodeLayerStateParams(bare), plain);
 });
 
 test('satellite infrared display mode round trips and invalid or absent values use filtered', () => {

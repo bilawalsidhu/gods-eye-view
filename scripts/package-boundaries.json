@@ -113,12 +113,16 @@
   "traffic-provider": {
     "runtime": "node",
     "exports": ["./server/providers/traffic"],
-    "modules": ["server/providers/traffic.js", "src/data/tomtomTiles.js"],
+    "modules": [
+      "server/providers/traffic.js",
+      "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js"
+    ],
     "external": []
   },
   "traffic-source": {
     "exports": ["./sources/traffic"],
-    "modules": ["src/data/tomtomTiles.js"],
+    "modules": ["src/data/tomtomTiles.js", "src/data/tileBudget.js"],
     "external": []
   },
   "firms-csv": {
@@ -1009,6 +1013,7 @@
       "src/data/cameraSensitivity.js",
       "src/data/flowMatch.js",
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "src/data/trafficBounds.js",
       "src/data/trafficFlowStyle.js",
       "src/data/trafficPresetStyle.js",
@@ -1424,6 +1429,7 @@
       "src/data/telegeographySubmarineCables.js",
       "src/data/terrainHeights.js",
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "src/data/tr3bRegistry.js",
       "src/data/trackedCamera.js",
       "src/data/trackedModelRegime.js",
@@ -2071,6 +2077,7 @@
       "src/data/scenePick.js",
       "src/data/spriteOrder.js",
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "src/data/tr3bRegistry.js",
       "src/data/trackedCamera.js",
       "src/data/trackedModelRegime.js",
@@ -2707,6 +2714,7 @@
     "exports": ["./layers/traffic/source"],
     "modules": [
       "src/data/tomtomTiles.js",
+      "src/data/tileBudget.js",
       "src/layers/traffic/flowDecode.js",
       "src/layers/traffic/flowSource.js",
       "src/layers/traffic/source.js",

@@ -291,16 +291,31 @@ function imageryPinOption(key, token) {
 }
 
 const OPTION_GROUPS = Object.freeze({
+  // Xweather only: no source option.
+  'weather-alerts': Object.freeze([
+    enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
+      light: 'l',
+      strong: 's',
+    }),
+  ]),
   'weather-lightning': Object.freeze([
     enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
       light: 'l',
       strong: 's',
+    }),
+    enumOption('source', 's', 'nowcoast', ['nowcoast', 'xweather'], {
+      nowcoast: 'n',
+      xweather: 'x',
     }),
   ]),
   'weather-radar': Object.freeze([
     enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
       light: 'l',
       strong: 's',
+    }),
+    enumOption('source', 's', 'nowcoast', ['nowcoast', 'xweather'], {
+      nowcoast: 'n',
+      xweather: 'x',
     }),
   ]),
   'weather-satellite': Object.freeze([
@@ -544,6 +559,13 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   }),
   Object.freeze({ id: 'traffic', token: 't', disposition: 'enabled-only' }),
   Object.freeze({ id: 'transit', token: 'j', disposition: 'enabled-only' }),
+  Object.freeze({
+    id: 'weather-alerts',
+    // Placeholder token: maintainers assign the final one (#658 / #744).
+    token: '9',
+    disposition: 'enabled+options',
+    optionOwner: 'weather-alerts',
+  }),
   Object.freeze({
     id: 'weather-cyclones',
     token: 'y',

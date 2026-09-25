@@ -79,6 +79,8 @@
   "src/data/terrainHeightsProxy.test.mjs",
   "src/data/tomtomTiles.js",
   "src/data/tomtomTiles.test.mjs",
+  "src/data/tileBudget.js",
+  "src/data/tileBudget.test.mjs",
   "src/data/firmsCsv.js",
   "src/data/firmsCsv.test.mjs",
   "src/tooling/environmentProviders.test.mjs",
@@ -839,5 +841,12 @@
   "src/ui/imageryBoxTool.test.mjs",
   "src/ui/recentImagery.test.mjs",
   "src/layers/recentImagery/testDoubles.mjs",
-  "scripts/qa-recent-imagery.mjs"
+  "scripts/qa-recent-imagery.mjs",
+  "src/data/xweatherPng.test.mjs",
+  "src/data/xweatherMercator.test.mjs",
+  "src/data/xweatherFrames.test.mjs",
+  "src/data/xweatherBudget.test.mjs",
+  "src/data/xweatherGate.test.mjs",
+  "src/data/xweatherProxy.test.mjs",
+  "src/data/xweatherLimit.test.mjs"
 ]
