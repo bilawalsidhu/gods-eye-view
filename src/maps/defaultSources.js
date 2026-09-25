@@ -1,6 +1,7 @@
 import { MAP_STACKS } from './catalog.js';
 import { photorealUnavailableReason } from './availability.js';
-import { keySetupRequirement } from '../keySetupCore.mjs';
+import { keySetupRequirementEnvVars } from '../keySetupCore.mjs';
+import { t } from '../i18n/index.js';
 import {
   createOsmImagery,
   createEsriImagery,
@@ -34,7 +35,9 @@ export function createDefaultMapSources({
         descriptor,
         available: !descriptor.requiresIon || hasIon,
         unavailableReason: descriptor.requiresIon
-          ? keySetupRequirement('cesium-ion')
+          ? t('setup.keySetup.requirement', {
+              envVars: keySetupRequirementEnvVars('cesium-ion'),
+            })
           : null,
       };
       if (descriptor.kind === 'photoreal')

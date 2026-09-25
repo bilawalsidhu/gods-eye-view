@@ -1,5 +1,39 @@
 # Changelog
 
+## Spanish locale
+
+- Ship the Spanish catalog as the first follow-up locale on the i18n
+  foundation: four namespace catalogs key-for-key with en (913 keys), the
+  built-in locale pair returns to en+es, and the dock language switch
+  renders EN + ES (aria-labels for shipped codes only).
+- Spanish plural agreement is pinned through the real catalog values, and
+  the reviewed es strings (the eleven one-string fixes) are anchored
+  against regression. A measured es-only CCTV control-row wrap rule lands
+  (`html[lang='es']`); English pixels are unchanged.
+
+## Internationalization foundation
+
+- Add the locale core (`src/i18n/`): configurable locale pair
+  (`GEV_DEFAULT_LOCALE` / `GEV_SECONDARY_LOCALE`, validated against the
+  shipped catalogs), guarded preference storage, a one-shot `?lang=`
+  override, and `<html lang>`/`<html dir>` metadata. English is the only
+  shipped locale — the built-in pair degenerates to en-only and the dock
+  language switch renders a single EN button — and English behavior is
+  byte-identical to before.
+- Extract all application-owned presentation text into four English
+  catalogs (`shell`/`cockpit`/`layers`/`setup`) consumed through `t()` call
+  sites, `data-i18n*` template attributes, and the runtime locale selector;
+  complete the duplicate `data-i18n` split on the first-run EXPLORE
+  MANUALLY tile (the subcopy was wiped in every locale).
+- Enforce the parity gates every additional locale must pass (key /
+  placeholder / plural-shape parity, markup coverage, repair-pass anchors).
+  Additional locales ship as stacked follow-up PRs, one per locale, via the
+  locale-addition recipe in `docs/TRANSLATORS.md` (Spanish is first).
+
+- Let CLI tools, development launchers and the setup doctor use an explicit project directory while retaining their existing default paths.
+
+- Split application scene, controls, catalog, tools and HTML into reusable components; configure application request services and sources without changing global fetch. Preserve standalone markup and voice behavior. Explicit annotation navigation may resolve a distant named target.
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD
@@ -408,11 +442,6 @@ Analyst records for loaded satellites, datacenters and dams, with explicit bound
 - Separate navigation, share restoration, visual settings and panel state into focused UI owners with explicit dependencies and terminal cleanup.
 
 - Separate layer lifecycle transactions from panel construction and render/detection reactions; retain existing transition and refresh behavior.
-
-- Let CLI tools, development launchers and the setup doctor use an explicit project directory while retaining their existing default paths.
-
-- Split application scene, controls, catalog, tools and HTML into reusable components; configure application request services and sources without changing global fetch. Preserve standalone markup and voice behavior. Explicit annotation navigation may resolve a distant named target.
-
 ## Satellite pass prediction
 
 - Bisect pass rise/set to ~0.2 s and fit peak elevation with a parabola.

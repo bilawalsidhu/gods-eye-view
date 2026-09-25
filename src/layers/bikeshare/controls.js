@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { STATUS_POLL_MS } from './policy.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
@@ -34,8 +35,10 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (layerState._loading) {
         stats.loadingLabel =
           layerState._activeCityIds.size > 0
-            ? `syncing ${layerState._activeCityIds.size} city feeds...`
-            : 'scanning nearby systems...';
+            ? t('layers.bike.loadingSyncing', {
+                count: layerState._activeCityIds.size,
+              })
+            : t('layers.bike.loadingScanning');
       }
       if (layerState._error) stats.error = layerState._error;
       return stats;

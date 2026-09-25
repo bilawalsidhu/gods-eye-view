@@ -1,4 +1,5 @@
 import { UiLifetime } from './uiLifetime.js';
+import { t } from '../i18n/index.js';
 import { displayPanelScroller } from './displayPanelScroll.js';
 import { PanelPositionControls } from './panelPositionControls.js';
 import { PanelLayoutController } from './panelLayoutController.js';
@@ -305,14 +306,28 @@ export class PanelChrome {
         const panelName =
           panelEl
             .querySelector('.panel-title, .pp-header-label')
-            ?.textContent?.trim() || 'panel';
-        const action = collapsed ? 'Expand' : 'Collapse';
-        btn.title = `${action} ${panelName}`;
-        btn.setAttribute('aria-label', `${action} ${panelName}`);
+            ?.textContent?.trim() || t('cockpit.panel.fallbackName');
+        const titleKey = collapsed
+          ? 'cockpit.panel.expandTitle'
+          : 'cockpit.panel.collapseTitle';
+        btn.title = t(titleKey, { name: panelName });
+        btn.setAttribute('aria-label', t(titleKey, { name: panelName }));
         if (panelEl.id === 'radio-panel') {
-          const action = collapsed ? 'Expand' : 'Collapse';
-          btn.title = `${action} Radio`;
-          btn.setAttribute('aria-label', `${action} Radio section`);
+          // Expand state reuses the layers.* keys seeded on the static button;
+          // the collapse state is runtime-only, so it owns cockpit.* keys.
+          btn.title = t(
+            collapsed
+              ? 'layers.radio.expandTitle'
+              : 'cockpit.panel.radioCollapseTitle',
+          );
+          btn.setAttribute(
+            'aria-label',
+            t(
+              collapsed
+                ? 'layers.radio.expandAriaLabel'
+                : 'cockpit.panel.radioCollapseAria',
+            ),
+          );
         }
       });
     const dockToggle = panelEl.querySelector(
@@ -322,11 +337,13 @@ export class PanelChrome {
       const panelName =
         panelEl
           .querySelector('.panel-title, .location-toolbar-label')
-          ?.textContent?.trim() || 'panel';
-      const action = collapsed ? 'Expand' : 'Collapse';
+          ?.textContent?.trim() || t('cockpit.panel.fallbackName');
+      const titleKey = collapsed
+        ? 'cockpit.panel.expandTitle'
+        : 'cockpit.panel.collapseTitle';
       dockToggle.setAttribute('aria-expanded', String(!collapsed));
-      dockToggle.setAttribute('aria-label', `${action} ${panelName}`);
-      dockToggle.title = `${action} ${panelName}`;
+      dockToggle.setAttribute('aria-label', t(titleKey, { name: panelName }));
+      dockToggle.title = t(titleKey, { name: panelName });
     }
     if (panelEl.id === 'radio-panel' && this._contextRadioDetailsBtn) {
       this._contextRadioDetailsBtn.setAttribute(

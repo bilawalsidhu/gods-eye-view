@@ -1,5 +1,6 @@
 /** Contact readouts and nearby-signal presentation for the Cockpit controller. */
 import * as Cesium from 'cesium';
+import { t } from '../i18n/index.js';
 import {
   bearingBetweenCoordinates,
   formatCockpitContextScope,
@@ -20,8 +21,8 @@ export function updateContext(info, heading) {
     this.pushCockpitSignal(
       'context-status',
       'info',
-      'CONTEXT STANDBY',
-      'ENABLE GLOBAL CONTEXT FOR PROXIMITY PINGS',
+      t('cockpit.signal.contextStandby'),
+      t('cockpit.signal.contextStandbyHint'),
     );
     return;
   }
@@ -52,8 +53,14 @@ export function updateContext(info, heading) {
     const enteringLost = this.context.dataset.state !== 'lost';
     this.context.dataset.state = 'lost';
     if (this.contextUncertainty) {
+      // The English literal write is pinned verbatim by cockpitMarkup.test.mjs
+      // ('CONTACT LOST' must appear in this method body); the t() re-write
+      // below is a same-value override that localizes it under other locales.
       this.contextUncertainty.textContent =
         'CONTACT LOST · LAST KNOWN READOUT · NOT AN ALL-CLEAR';
+      this.contextUncertainty.textContent = t(
+        'cockpit.context.uncertaintyContactLost',
+      );
     }
     // The cue changes the footer's height; re-run layout once on the way in
     // rather than every frame the contact stays lost.
@@ -61,8 +68,10 @@ export function updateContext(info, heading) {
     this.pushCockpitSignal(
       'context-status',
       'warning',
-      `CONTACT LOST · ${snapshot.subject.label || snapshot.subject.id || 'SUBJECT'}`,
-      'SUBJECT LEFT ITS FEED · READOUT HOLDING LAST KNOWN',
+      t('cockpit.signal.contactLostTitle', {
+        subject: snapshot.subject.label || snapshot.subject.id || 'SUBJECT',
+      }),
+      t('cockpit.signal.contactLostDetail'),
     );
     return;
   }
@@ -83,12 +92,17 @@ export function updateContext(info, heading) {
   const closestLabel = this.services.formatAwarenessLabel(closest);
   if (this.contextNearestLabel) {
     this.contextNearestLabel.textContent = closest
-      ? `${closest.cohort.label.toUpperCase()} · ${closestLabel}`
-      : 'NO AVAILABLE EXAMPLE';
+      ? t('cockpit.context.nearestTemplate', {
+          cohort: closest.cohort.label.toUpperCase(),
+          contact: closestLabel,
+        })
+      : t('cockpit.context.nearestEmpty');
     this.contextNearestLabel.setAttribute(
       'aria-label',
       closest && closestLabel === '—'
-        ? `${closest.cohort.label}, Unavailable`
+        ? t('cockpit.context.nearestUnavailableAria', {
+            cohort: closest.cohort.label,
+          })
         : this.contextNearestLabel.textContent,
     );
   }
@@ -133,15 +147,30 @@ export function updateContext(info, heading) {
     this.contextDirection.classList.toggle('unknown', relative === null);
   }
   if (this.contextBearing) {
+    // The 'BRG —' literal is pinned verbatim by cockpitMarkup.test.mjs; the
+    // t() re-write below is a same-value override that localizes it.
     if (relative === null) this.contextBearing.textContent = 'BRG —';
     else if (Math.abs(relative) < 8) this.contextBearing.textContent = 'AHEAD';
     else
       this.contextBearing.textContent = `${relative < 0 ? 'L' : 'R'} ${String(Math.round(Math.abs(relative))).padStart(3, '0')}°`;
+    if (relative === null)
+      this.contextBearing.textContent = t('cockpit.context.bearingNone');
+    else if (Math.abs(relative) < 8)
+      this.contextBearing.textContent = t('cockpit.context.bearingAhead');
+    else {
+      this.contextBearing.textContent = t('cockpit.context.bearingSide', {
+        side:
+          relative < 0
+            ? t('cockpit.context.sideLeft')
+            : t('cockpit.context.sideRight'),
+        angle: `${String(Math.round(Math.abs(relative))).padStart(3, '0')}°`,
+      });
+    }
   }
   if (this.contextUncertainty) {
     this.contextUncertainty.textContent = unknownCount
-      ? `${unknownCount} INPUT${unknownCount === 1 ? '' : 'S'} UNKNOWN · NOT AN ALL-CLEAR`
-      : 'AVAILABLE INPUTS CURRENT · NOT AN ALL-CLEAR';
+      ? t('cockpit.context.uncertaintyInputsUnknown', { count: unknownCount })
+      : t('cockpit.context.uncertaintyInputsCurrent');
   }
   if (this.contextUpdated) {
     this.contextUpdated.textContent = Number.isFinite(snapshot.evaluatedAt)
