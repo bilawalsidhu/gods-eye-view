@@ -26,8 +26,12 @@
   "vite-build": {
     "runtime": "node",
     "exports": ["./build/vite", "./build/html"],
-    "modules": ["build/vite.js", "build/application-html.js"],
-    "external": ["vite-plugin-cesium"]
+    "modules": [
+      "build/vite.js",
+      "build/cesium.js",
+      "build/application-html.js"
+    ],
+    "external": ["rollup-plugin-external-globals"]
   },
   "live-providers": {
     "runtime": "node",
