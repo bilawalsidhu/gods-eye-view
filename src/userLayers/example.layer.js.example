@@ -1,0 +1,26 @@
+/**
+ * Example user layer. Copy to `example.layer.js` (or any `*.layer.js` name)
+ * and edit — the copy is gitignored. See README.md for the full contract.
+ */
+export default {
+  id: 'example-points',
+  label: 'Example Points',
+  createLayer: () => {
+    let enabled = false;
+    return {
+      id: 'example-points',
+      name: 'Example Points',
+      icon: '*',
+      enable() {
+        enabled = true;
+      },
+      disable() {
+        enabled = false;
+      },
+      async update() {
+        if (!enabled) return;
+        // Fetch and draw here.
+      },
+    };
+  },
+};
