@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createTrafficLayer } from './index.js';
+import { createModel } from './model.js';
+import { createTiming } from './timing.js';
+import { DOT_HEIGHT_OFFSET } from './policy.js';
 
 function deferred() {
   let resolve;
@@ -215,4 +218,120 @@ test('parked failures back off and disabling cancels the scheduled retry', async
   await tick(60000);
   assert.equal(calls, 2);
   assert.equal(layer.getStats().error, null);
+});
+
+test('parseRoads clamps out-of-bounds terrain samples and falls back to globe surface (#656)', () => {
+  const roadData = {
+    roads: [
+      {
+        type: 'primary',
+        oneway: false,
+        coordinates: [
+          [-97.74, 30.27],
+          [-97.75, 30.28],
+        ],
+      },
+    ],
+  };
+
+  // Case 1: scene.sampleHeight returns an invalid -16800m reading from unstreamed tiles.
+  // Globe is available and returns 120m.
+  const viewerWithGlobeFallback = {
+    scene: {
+      sampleHeightSupported: true,
+      sampleHeight: () => -16800,
+      globe: {
+        show: true,
+        getHeight: () => 120,
+      },
+    },
+  };
+  const modelFallback = createModel({
+    state: { _viewer: viewerWithGlobeFallback },
+    services: {},
+    parts: {},
+    source: {},
+  });
+  const parsedFallback = modelFallback.parseRoads(roadData);
+  assert.equal(parsedFallback.length, 1);
+  const cartoFallback = Cesium.Cartographic.fromCartesian(
+    parsedFallback[0].waypoints[0],
+  );
+  // Expected height is globe terrain (120m) + DOT_HEIGHT_OFFSET (3m) = 123m
+  assert.ok(
+    Math.abs(cartoFallback.height - (120 + DOT_HEIGHT_OFFSET)) < 0.1,
+    `unstreamed -16800m sample must fall back to globe height (got ${cartoFallback.height})`,
+  );
+
+  // Case 2: scene.sampleHeight returns valid 45m.
+  const viewerWithValidSample = {
+    scene: {
+      sampleHeightSupported: true,
+      sampleHeight: () => 45,
+      globe: {
+        show: true,
+        getHeight: () => 120,
+      },
+    },
+  };
+  const modelValid = createModel({
+    state: { _viewer: viewerWithValidSample },
+    services: {},
+    parts: {},
+    source: {},
+  });
+  const parsedValid = modelValid.parseRoads(roadData);
+  const cartoValid = Cesium.Cartographic.fromCartesian(
+    parsedValid[0].waypoints[0],
+  );
+  assert.ok(
+    Math.abs(cartoValid.height - (45 + DOT_HEIGHT_OFFSET)) < 0.1,
+    `valid 45m sample must be retained (got ${cartoValid.height})`,
+  );
+
+  // Case 3: scene.sampleHeight returns -16800m and globe is unavailable; falls back to 0m (ellipsoid).
+  const viewerNoGlobe = {
+    scene: {
+      sampleHeightSupported: true,
+      sampleHeight: () => -16800,
+      globe: { show: false },
+    },
+  };
+  const modelNoGlobe = createModel({
+    state: { _viewer: viewerNoGlobe },
+    services: {},
+    parts: {},
+    source: {},
+  });
+  const parsedNoGlobe = modelNoGlobe.parseRoads(roadData);
+  const cartoNoGlobe = Cesium.Cartographic.fromCartesian(
+    parsedNoGlobe[0].waypoints[0],
+  );
+  assert.ok(
+    Math.abs(cartoNoGlobe.height - (0 + DOT_HEIGHT_OFFSET)) < 0.1,
+    `unstreamed sample without globe must fall back to 0m baseline (got ${cartoNoGlobe.height})`,
+  );
+
+  // Case 4: timed parser retains identical fallback behavior
+  const timingModel = createTiming({
+    state: {
+      _viewer: viewerWithGlobeFallback,
+      _trafficTimingSampledCells: new Set(),
+      _trafficTimingSampleHeightCalls: 0,
+      _trafficTimingSampleHeightMs: 0,
+      _trafficTimingWaypointMaterializationMs: 0,
+    },
+    services: {},
+    parts: {},
+    source: {},
+  });
+  const trace = { cameraChangeMark: null, passes: new Map() };
+  const parsedTimed = timingModel.parseRoadsTimed(roadData, trace);
+  const cartoTimed = Cesium.Cartographic.fromCartesian(
+    parsedTimed[0].waypoints[0],
+  );
+  assert.ok(
+    Math.abs(cartoTimed.height - (120 + DOT_HEIGHT_OFFSET)) < 0.1,
+    `timed parser must also fall back to globe height (got ${cartoTimed.height})`,
+  );
 });

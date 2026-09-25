@@ -52,18 +52,34 @@ export function createModel({ state: layerState, services, parts, source }) {
       // Sample terrain height once at the road start to avoid per-vertex cost
       let baseHeight = 0;
       const firstCoord = coords[0];
-      if (layerState._viewer?.scene?.sampleHeightSupported && firstCoord) {
+      if (layerState._viewer?.scene && firstCoord) {
         const carto = Cesium.Cartographic.fromDegrees(
           firstCoord[0],
           firstCoord[1],
         );
-        const sampled = layerState._viewer.scene.sampleHeight(carto);
+        let sampled;
+        if (layerState._viewer.scene.sampleHeightSupported) {
+          try {
+            sampled = layerState._viewer.scene.sampleHeight(carto);
+          } catch {
+            /* streaming tiles */
+          }
+        }
         if (
           Number.isFinite(sampled) &&
           sampled >= MIN_ROAD_TERRAIN_HEIGHT_M &&
           sampled <= MAX_ROAD_TERRAIN_HEIGHT_M
         ) {
           baseHeight = sampled;
+        } else if (layerState._viewer.scene.globe?.show) {
+          const globeHeight = layerState._viewer.scene.globe.getHeight?.(carto);
+          if (
+            Number.isFinite(globeHeight) &&
+            globeHeight >= MIN_ROAD_TERRAIN_HEIGHT_M &&
+            globeHeight <= MAX_ROAD_TERRAIN_HEIGHT_M
+          ) {
+            baseHeight = globeHeight;
+          }
         }
       }
 
