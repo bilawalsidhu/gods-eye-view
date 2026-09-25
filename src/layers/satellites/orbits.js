@@ -8,6 +8,7 @@ import {
   twoline2satrec,
 } from 'satellite.js';
 import { findNextSatellitePass } from '../../data/satellitePass.js';
+import { noradIdFromSatnum } from './noradId.js';
 import { ORBIT_PATH_STEPS, ISS_NORAD } from './policy.js';
 
 export function createOrbits({ state: layerState, services, parts, source }) {
@@ -300,7 +301,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     const current = propagatePosition(satrec, referenceDate);
     if (!current) return null;
     return {
-      noradId: Number(satrec.satnum),
+      noradId: noradIdFromSatnum(satrec.satnum),
       name: String(name || '').trim(),
       current,
       periodSec: orbitalPeriodSeconds(satrec),
