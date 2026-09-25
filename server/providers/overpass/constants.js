@@ -19,11 +19,6 @@ const OVERPASS_USER_AGENT =
 /** Ordered list of Overpass API mirrors; tried sequentially on failure/rate-limit. */
 const OVERPASS_UPSTREAMS = [
   'https://overpass-api.de/api/interpreter',
-  // French full-planet instance (OpenStreetMap France) — added 2026-09-20:
-  // verified HTTP 200 on live test, CORS *, stable latency ~3-8 s.
-  // Placed second so it catches rate-limit bans on the primary German mirror
-  // without adding latency when the primary is healthy.
-  'https://overpass.openstreetmap.fr/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
   'https://lz4.overpass-api.de/api/interpreter',
   // Community full-planet instance (privateforge nonprofit) — added 2026-07-30

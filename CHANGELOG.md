@@ -1,7 +1,6 @@
 # Changelog
 
 - Traffic: clamp road elevation sampling to physical sanity bounds (-500 m to 9000 m) with globe-surface fallback when terrain samples return unstreamed tile artifacts, preventing roads rendering thousands of meters underground at oblique city views (#656).
-- Overpass: add OpenStreetMap France mirror to default upstreams fan-out list to improve fallback reliability during peak-hour rate limits (#661).
 
 - Region scopes in voice analyst queries ("in the Gulf of Mexico", "over
   the Alps") work again in the dev server: the bundled Natural Earth and
