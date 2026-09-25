@@ -167,6 +167,28 @@ transaction quota. Requires a free `FIRMS_MAP_KEY`
 (https://firms.modaps.eosdis.nasa.gov/api/map_key/); the layer is empty without it.
 The former bundled 2026-05-25 snapshot was removed 2026-07-16.
 
+### NOAA GOES ABI fire/hot spot (keyless)
+
+Without a `FIRMS_MAP_KEY` the layer is **not empty**: it falls back to the keyless
+NOAA GOES-R ABI Level 2 Fire Detection product (`ABI-L2-FDCF`), which the
+`/api/goes-fires` proxy reads **directly from the public `noaa-goes18`/`noaa-goes19`
+S3 buckets** (`us-east-1`, anonymous access, not requester-pays — see
+https://registry.opendata.aws/noaa-goes/). No API key, token or account is involved.
+NOAA data are in the U.S. public domain.
+
+GOES is geostationary: it images the full disk every ~10 minutes (vs. the
+twice-daily overpass of a polar orbiter), so it catches fires sooner but at
+coarser resolution (~2 km at the sub-satellite point, growing toward the limb)
+and only over the Americas and adjacent oceans. The two providers are
+complementary; FIRMS wins whenever its key is configured.
+
+The proxy downloads one ~2 MB HDF5 granule per active satellite (GOES-19 East,
+GOES-18 West; GOES-16/17 are decommissioned), decodes `Power` (FRP, MW),
+`Temp`, `Area`, `Mask` and `DQF`, projects the ABI fixed grid to lat/lon, and
+caches the result for the 10-minute scan cadence. Detection is `Power > 0`;
+`DQF` is mapped to the same low/nominal/high confidence vocabulary the FIRMS
+rows use. Attribution is registered in `src/data/dataCredits.js` (`goes-fires`).
+
 ### Natural Earth physical regions (`natural_earth/`)
 
 Curated from the **Natural Earth 10m physical vectors** (https://www.naturalearthdata.com/ —

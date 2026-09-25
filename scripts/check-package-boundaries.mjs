@@ -57,11 +57,18 @@ export async function checkPackageBoundaries(root) {
       allowed.add(normalizePath(resolved));
     }
     for (const external of group.external) {
-      if (
-        !Object.hasOwn(pkg.dependencies || {}, external) &&
-        !Object.hasOwn(pkg.peerDependencies || {}, external) &&
-        !(node && Object.hasOwn(pkg.devDependencies || {}, external))
-      ) {
+      // A declared subpath export (`h5wasm/node`) is still that dependency.
+      // The exact specifier must be listed so the bundler externalizes it, and
+      // the dependency it belongs to must be declared for this runtime.
+      const segments = external.split('/');
+      const dependency = external.startsWith('@')
+        ? segments.slice(0, 2).join('/')
+        : segments[0];
+      const declared =
+        Object.hasOwn(pkg.dependencies || {}, dependency) ||
+        Object.hasOwn(pkg.peerDependencies || {}, dependency) ||
+        (node && Object.hasOwn(pkg.devDependencies || {}, dependency));
+      if (!declared) {
         throw new Error(
           `Boundary external must be a declared dependency for its runtime: ${external}`,
         );
