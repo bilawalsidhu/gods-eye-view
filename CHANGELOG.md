@@ -57,6 +57,27 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   on the closed tree (run `08299058` @ the close head, 6/6 jobs exit 0:
   lint+audit, Aegis, allocation-gated units on default Node and on
   Node 26, coverage, wasm+build+budgets).
+- **qa-perf's flights-on throughput check re-derived from evidence, and
+  its settles made frame-based.** The check began failing in genuinely
+  quiet windows (active window 1-3 renders per 5 s against an absolute
+  floor of 4). Forensics before any recalibration: a worktree A/B
+  against the run3h-era tree (`062dad0`, same server, same browser) and
+  CDP probes on both trees showed BOTH rendering at the historical 1-2
+  fps cadence from a parked boot — the tree is innocent — with 35 long
+  tasks per 20 s whose self-time is dominated by native SwiftShader
+  raster (`(program)`, `readPixels`, `texImage2D`) rather than app JS,
+  and the scene rendering 100% of the frames Chrome delivers. The
+  recorded 5 s-window distribution splits by date, not by tree (4-9 on
+  Sep 20-21; 1, 3, 3, 1 on Sep 23-24), so the absolute bar the
+  environment itself straddles is a coin flip, not a floor. The suite
+  now settles by FRAMES (a wall-clock "3 s settle" was 5+ settle frames
+  in the calibration era and one frame today), asserts the two new
+  settle contracts explicitly, and the throughput floor became ≥1
+  render and ≥5× the idle baseline — a dead scene still renders 0 and
+  fails — while governor-mode and 100%-cadence checks carry the real
+  contract. Verified 26/26 in a load-5.6 quiet window; heading-b3 and
+  labels also hold same-day quiet-window PASSes (loads 2.0 and 4.5),
+  retiring the timing-budget-suite caveat from the close above.
 
 ## [0.10.1] — 2026-09-23
 

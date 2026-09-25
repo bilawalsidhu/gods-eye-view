@@ -2624,6 +2624,16 @@ per 11.3's entry rule: baseline re-measured with the same metrics as
     for — the local ETIMEDOUT probes (2/13 at load 163-253) were
     fork-starvation, and the same gate passes in CI on the same
     commit.
+  - **Timing-budget caveat RETIRED (2026-09-24 evening).** The three
+    suites whose budgets are calibrated for quiet boxes all hold
+    same-day quiet-window PASSes: heading-b3 at load 2.0 (7.4 min,
+    surviving a mid-run burst to 31), labels at load 4.5 (2.5 min),
+    perf at load 5.6 (3.4 min) — the last after the forensic
+    recalibration recorded in CHANGELOG (worktree A/B ruling the tree
+    innocent, CDP probes attributing the blocking to native
+    SwiftShader raster, frame-based settles replacing wall-clock
+    ones, and the flights-on floor re-derived to ≥1 render and ≥5×
+    idle from the recorded window distribution).
 - [x] **Batch W (release)** — DONE 2026-09-23: v0.10.1 shipped via the
   RUNBOOK pinned order. Gate battery green on the release tree (lint
   zero-warnings, unit 3,988 + 14 allocation-gated, build 1m23s, bundle
