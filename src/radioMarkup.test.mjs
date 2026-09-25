@@ -229,7 +229,7 @@ test('Radio volume and mission speed share the Sharpen slider visual language', 
 test('Radio is nested inside Context with separate disclosure and power controls', () => {
   const contextStart = html.indexOf('id="global-context-panel"');
   const radioStart = html.indexOf('id="radio-panel"');
-  const contextEnd = html.indexOf('\n  </aside>', contextStart);
+  const contextEnd = html.indexOf('</aside>', radioStart);
   assert.ok(contextStart >= 0 && radioStart > contextStart && radioStart < contextEnd);
   assert.match(html, /id="radio-panel"[^>]*data-panel-id="radio-panel"/);
   assert.match(html, /aria-label="Radio playback"/);
@@ -238,7 +238,7 @@ test('Radio is nested inside Context with separate disclosure and power controls
   assert.match(html, /id="context-radio-mini"[^>]*aria-label="Compact Radio controls"[^>]*hidden/);
   assert.match(html, /id="context-radio-mini-enable-btn"[^>]*aria-pressed="false"/);
   assert.match(html, /id="context-radio-details-btn"[^>]*aria-expanded="false"[^>]*aria-controls="radio-panel"/);
-  assert.match(html, /id="context-radio-details-btn"[\s\S]*?<span class="material-symbols-outlined" aria-hidden="true">open_in_full<\/span>/);
+  assert.match(html, /id="context-radio-details-btn"[\s\S]*?<span class="material-symbols-outlined" aria-hidden="true"\s*>open_in_full\s*<\/span\s*>/);
   assert.match(html, /id="context-radio-mini-close-btn"[^>]*aria-label="Close compact Radio controls"/);
   assert.match(html, /id="context-radio-mini-(?:prev|play|next)-btn"/);
   assert.match(html, /id="context-radio-mini-volume"/);

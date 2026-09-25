@@ -706,11 +706,11 @@ export class CyberIntelPanel {
         'aria-label',
         selection.type === 'ioda-country'
           ? 'Close IODA outage details'
-            : selection.type === 'location'
-              ? 'Close Radar location details'
-              : selection.type === 'flow'
-                ? 'Close Radar flow details'
-                : 'Close Shodan device details',
+          : selection.type === 'location'
+            ? 'Close Radar location details'
+            : selection.type === 'flow'
+              ? 'Close Radar flow details'
+              : 'Close Shodan device details',
       );
       close.dataset.closeCyberPopup = 'true';
       section.append(close);
@@ -809,7 +809,10 @@ export class CyberIntelPanel {
                         [
                           'Displayed flows',
                           selection.flowRoles
-                            .map((row) => `${row.role}: ${row.flowName || row.flowId}`)
+                            .map(
+                              (row) =>
+                                `${row.role}: ${row.flowName || row.flowId}`,
+                            )
                             .join('; '),
                         ],
                       ]
@@ -824,53 +827,53 @@ export class CyberIntelPanel {
                   ],
                 ]
               : selection.roles?.length > 1
-              ? [
-                  [
-                    'Roles',
-                    selection.roles.map((row) => row.role).join(' and '),
-                  ],
-                  [
-                    'Country',
-                    `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
-                  ],
-                  ...selection.roles.map((row) => [
-                    `${row.role === 'origin' ? 'Origin' : 'Target'} share / rank`,
-                    `${Number.isFinite(row.share) ? row.share : 'Unavailable'}% / ${row.rank ?? '—'}`,
-                  ]),
-                  [
-                    'Window',
-                    `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
-                  ],
-                  [
-                    'Location',
-                    'Country reference coordinates; not a device location',
-                  ],
-                ]
-              : [
-                  [
-                    'Role',
-                    selection.category?.endsWith('-origin')
-                      ? 'Origin country aggregate'
-                      : 'Target country aggregate',
-                  ],
-                  [
-                    'Country',
-                    `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
-                  ],
-                  [
-                    'Share',
-                    `${Number.isFinite(selection.share) ? selection.share : 'Unavailable'}% of reported mitigated requests`,
-                  ],
-                  ['Rank', selection.rank],
-                  [
-                    'Window',
-                    `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
-                  ],
-                  [
-                    'Location',
-                    'Country reference coordinates; not a device location',
-                  ],
-                ];
+                ? [
+                    [
+                      'Roles',
+                      selection.roles.map((row) => row.role).join(' and '),
+                    ],
+                    [
+                      'Country',
+                      `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
+                    ],
+                    ...selection.roles.map((row) => [
+                      `${row.role === 'origin' ? 'Origin' : 'Target'} share / rank`,
+                      `${Number.isFinite(row.share) ? row.share : 'Unavailable'}% / ${row.rank ?? '—'}`,
+                    ]),
+                    [
+                      'Window',
+                      `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
+                    ],
+                    [
+                      'Location',
+                      'Country reference coordinates; not a device location',
+                    ],
+                  ]
+                : [
+                    [
+                      'Role',
+                      selection.category?.endsWith('-origin')
+                        ? 'Origin country aggregate'
+                        : 'Target country aggregate',
+                    ],
+                    [
+                      'Country',
+                      `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
+                    ],
+                    [
+                      'Share',
+                      `${Number.isFinite(selection.share) ? selection.share : 'Unavailable'}% of reported mitigated requests`,
+                    ],
+                    ['Rank', selection.rank],
+                    [
+                      'Window',
+                      `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
+                    ],
+                    [
+                      'Location',
+                      'Country reference coordinates; not a device location',
+                    ],
+                  ];
     for (const [label, value] of rows) {
       const row = element(this.document, 'p', 'cyber-intel-detail-row');
       row.append(element(this.document, 'strong', '', `${label}: `));
@@ -1383,7 +1386,12 @@ export class CyberIntelPanel {
         '#00bfff',
         'Crosshair · reported target',
       ],
-      ['cyber-legend-both', 'both', '#9370db', 'Sword and shield · origin and target'],
+      [
+        'cyber-legend-both',
+        'both',
+        '#9370db',
+        'Sword and shield · origin and target',
+      ],
     ];
     for (const [swatchClass, kind, color, label] of entries) {
       const row = element(this.document, 'p', 'cyber-intel-legend-row');
@@ -1514,7 +1522,7 @@ export class CyberIntelPanel {
       this.devicePopup.replaceChildren(
         this._renderSelection(
           isIodaSelection
-          ? { ...state.selectedIoda, type: 'ioda-country' }
+            ? { ...state.selectedIoda, type: 'ioda-country' }
             : isRadarSelection
               ? { ...state.selectedRadar }
               : {
@@ -1545,11 +1553,7 @@ export class CyberIntelPanel {
     this.body.append(this._renderOtxLookup(state));
     this.legendContent?.append(this._renderLegend());
 
-    if (
-      !state.selectedShodan &&
-      !state.selectedIoda &&
-      !isRadarSelection
-    ) {
+    if (!state.selectedShodan && !state.selectedIoda && !isRadarSelection) {
       this.legendContent?.append(
         element(
           this.document,

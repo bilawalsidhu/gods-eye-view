@@ -204,14 +204,21 @@ test('renders Radar aggregates only and keeps DShield in the non-geographic row 
   layer.enable();
   assert.equal(await layer.update(), true);
   const rows = layer.getRowControls();
-  assert.equal(layer.getStats().count, 2);
-  const flowEntity = dataSource.entities.values.find((entity) =>
+  assert.equal(layer.getStats().count, 3);
+  const flowSegments = dataSource.entities.values.filter((entity) =>
     String(entity.id).startsWith('cyber-flow:'),
   );
-  assert.equal(flowEntity.polyline.positions[0].height, 0);
-  assert.ok(flowEntity.polyline.width >= 7);
-  assert.equal(flowEntity.polyline.positions.at(-1).height, 0);
-  assert.ok(flowEntity.polyline.positions[16].height > 1_000_000);
+  assert.ok(flowSegments.length > 1);
+  assert.equal(flowSegments[0].polyline.positions[0].height, 0);
+  assert.ok(flowSegments.every((entity) => entity.polyline.width === 4));
+  assert.equal(flowSegments.at(-1).polyline.positions.at(-1).height, 0);
+  assert.ok(
+    Math.max(
+      ...flowSegments.flatMap((entity) =>
+        entity.polyline.positions.map((position) => position.height),
+      ),
+    ) > 1_000_000,
+  );
   assert.equal(rows.list.items.length, 4);
   assert.ok(
     rows.list.items.some((row) => row.text.includes('no geographic data')),
@@ -221,8 +228,9 @@ test('renders Radar aggregates only and keeps DShield in the non-geographic row 
       .latitude,
     undefined,
   );
-  const rendered = layer.getStats().count;
-  assert.equal(rendered, 2);
+  const rendered = layer.getStats();
+  assert.equal(rendered.count, 3);
+  assert.match(rendered.countLabel, /2 Radar countries · 1 flows/);
   const flow = layer.getThreatIntelState().selectedRadar;
   assert.equal(flow, null);
   layer.destroy();

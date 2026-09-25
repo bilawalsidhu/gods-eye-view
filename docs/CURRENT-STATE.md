@@ -115,6 +115,12 @@ the layer controls; its credential can be tested, changed, or removed in the
 existing Provider Settings panel. IODA can be enabled or disabled independently
 in the same Cyber layer controls and requires no credential.
 
+The focused browser acceptance gate is `npm run qa:cyber`. Start the app first,
+then set `QA_BASE_URL` if it is not at `http://localhost:4173`. The gate uses
+local fixtures for provider responses and verifies the initial disabled state,
+Cyber panels and provider rendering, default-collapsed KEV results, and clean
+disable behavior without requiring provider credentials.
+
 Wind appears in the Weather group before Utilities. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.
 It defaults to 10 m wind trails over the existing basemap. Speed shading is an explicit choice; earlier v2 links retain their original speed-shading meaning.

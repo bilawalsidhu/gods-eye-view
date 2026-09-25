@@ -143,6 +143,9 @@
 
 ## Unreleased — Cyber Phase 1
 
+- Add a focused browser QA gate for Cyber Activity, and correct Cyber marker
+  accounting so rendered gradient segments do not inflate semantic flow counts.
+
 - Clarify Radar overlap and pair coverage: countries in both role aggregates
   render as a single purple marker with separate origin/target details; only
   Cloudflare-reported country pairs receive red, wider directional arrows.

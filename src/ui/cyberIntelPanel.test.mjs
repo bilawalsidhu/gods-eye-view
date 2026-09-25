@@ -233,10 +233,7 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   assert.equal(kevResults.open, false);
   assert.match(f.legendContent.textContent, /CloudFlare Radar/);
   assert.match(f.legendContent.textContent, /Shodan/);
-  assert.match(
-    f.legendContent.textContent,
-    /Server · searched Shodan device/,
-  );
+  assert.match(f.legendContent.textContent, /Server · searched Shodan device/);
   const explainers = f.legendContent.children[0].children.filter(
     (node) => node.tagName === 'details',
   );
@@ -383,6 +380,7 @@ test('IODA selection details label its country point as a reference location', (
         datasources: ['bgp'],
         attribution: 'IODA',
         fetchedAt: '2026-09-23T13:00:00Z',
+        popupPosition: { x: 100, y: 120 },
       },
       nonGeographicProviders: [],
     },
@@ -395,8 +393,11 @@ test('IODA selection details label its country point as a reference location', (
   };
   const panel = new CyberIntelPanel({ documentRef: f.documentRef });
   panel.mount(layer);
-  assert.match(f.body.textContent, /Natural Earth country reference point/);
-  assert.match(f.body.textContent, /cause is not established/);
+  assert.match(
+    panel.devicePopup.textContent,
+    /Natural Earth country reference point/,
+  );
+  assert.match(panel.devicePopup.textContent, /cause is not established/);
   panel.destroy();
 });
 
@@ -521,6 +522,7 @@ test('Radar selection details expand the panel and identify the country pair', (
         windowStart: '2026-09-19T00:00:00Z',
         windowEnd: '2026-09-20T00:00:00Z',
         geographicProvenance: 'Cloudflare Radar country-level pair',
+        popupPosition: { x: 100, y: 120 },
       },
       nonGeographicProviders: [],
     },
@@ -533,12 +535,12 @@ test('Radar selection details expand the panel and identify the country pair', (
   };
   const panel = new CyberIntelPanel({ documentRef: f.documentRef });
   panel.mount(layer);
-  assert.equal(f.panel.hidden, false);
-  assert.equal(f.panel.classList.contains('collapsed'), false);
-  assert.match(f.body.textContent, /United States/);
-  assert.match(f.body.textContent, /Belgium/);
-  assert.match(f.body.textContent, /3\.6%/);
-  assert.match(f.body.textContent, /country-level pair/);
+  assert.equal(panel.devicePopup.hidden, false);
+  assert.match(panel.devicePopup.textContent, /SELECTED RADAR FLOW/);
+  assert.match(panel.devicePopup.textContent, /United States/);
+  assert.match(panel.devicePopup.textContent, /Belgium/);
+  assert.match(panel.devicePopup.textContent, /3\.6%/);
+  assert.match(panel.devicePopup.textContent, /country-level pair/);
   panel.destroy();
 });
 

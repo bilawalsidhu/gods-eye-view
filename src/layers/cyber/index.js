@@ -232,9 +232,10 @@ export function createCyberLayer({
       };
       for (let index = 0; index < segmentCount; index++) {
         const startIndex = Math.floor((index * intervalCount) / segmentCount);
-        const endIndex = Math.floor(((index + 1) * intervalCount) / segmentCount);
-        const segmentId =
-          index === 0 ? id : `${id}:gradient:${index}`;
+        const endIndex = Math.floor(
+          ((index + 1) * intervalCount) / segmentCount,
+        );
+        const segmentId = index === 0 ? id : `${id}:gradient:${index}`;
         current.add(segmentId);
         let entity = dataSource.entities.getById(segmentId);
         if (!entity) entity = dataSource.entities.add({ id: segmentId });
@@ -328,11 +329,7 @@ export function createCyberLayer({
         observation.latitude,
       );
       const markerKind = dualRole ? 'both' : origin ? 'origin' : 'target';
-      const markerColor = dualRole
-        ? '#9370db'
-        : origin
-          ? '#ff4500'
-          : '#00bfff';
+      const markerColor = dualRole ? '#9370db' : origin ? '#ff4500' : '#00bfff';
       const markerSize = Math.max(
         24,
         Math.min(
@@ -1090,18 +1087,14 @@ export function createCyberLayer({
               ? `cyber-flow:${selectedRadar.id}`
               : selectedRadar.entityId,
           );
-          selectedRadar = refreshed
-            ? { ...refreshed, popupPosition }
-            : null;
+          selectedRadar = refreshed ? { ...refreshed, popupPosition } : null;
         }
         if (selectedIoda) {
           const popupPosition = selectedIoda.popupPosition;
           const refreshed = findIodaSelection(
             `cyber-ioda:${selectedIoda.countryCode}`,
           );
-          selectedIoda = refreshed
-            ? { ...refreshed, popupPosition }
-            : null;
+          selectedIoda = refreshed ? { ...refreshed, popupPosition } : null;
         }
         notifyThreatIntel();
         return succeeded;
@@ -1321,8 +1314,10 @@ export function createCyberLayer({
       const countryCount = mapEntities.filter((entity) =>
         String(entity.id).startsWith('cyber:location:'),
       ).length;
-      const flowCount = mapEntities.filter((entity) =>
-        String(entity.id).startsWith('cyber-flow:'),
+      const flowCount = mapEntities.filter(
+        (entity) =>
+          String(entity.id).startsWith('cyber-flow:') &&
+          !String(entity.id).includes(':gradient:'),
       ).length;
       const shodanCount = mapEntities.filter((entity) =>
         String(entity.id).startsWith('cyber-shodan:'),
@@ -1335,7 +1330,7 @@ export function createCyberLayer({
       const radarNeedsKey =
         radarEnabled && radarError?.includes('needs a token') === true;
       return {
-        count: mapEntities.length + iodaEntities.length,
+        count: countryCount + flowCount + shodanCount + iodaEntities.length,
         countLabel:
           mapEntities.length || iodaEntities.length
             ? `${countryCount} Radar countries · ${flowCount} flows · ${shodanCount} Shodan · ${iodaEntities.length} IODA countries`
