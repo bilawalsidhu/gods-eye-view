@@ -8,6 +8,7 @@ import * as Cesium from 'cesium';
 import { Color, ImageryLayerCollection, GeographicTilingScheme } from 'cesium';
 import { NO_IMAGERY_HOST } from './imageryHost.js';
 import { orderWeatherImagery } from './imageryOrder.js';
+import { layerKeyRequirementTooltip } from '../../ui/layerPanel.js';
 import {
   createShellCesium,
   createShellScene,
@@ -2638,3 +2639,177 @@ for (const product of ['radar', 'clouds-regional', 'lightning']) {
     assert.equal(h.viewer.camera.moveEnd.size, 0);
   });
 }
+
+test('the warnings card without a key names the key it needs and asks Xweather for nothing but status', async (t) => {
+  const { feed, products } = xweatherFeed(xweatherStatus({ hasKey: false }));
+  const h = layerHarness({ id: 'weather-alerts', feed, managed: true });
+  const lifecycle = new LayerLifecycle(h.viewer);
+  lifecycle.register(h.layer);
+  lifecycle.finalizeRegistrations([
+    { id: 'weather-alerts', disposition: 'enabled+options' },
+  ]);
+  t.after(() => lifecycle.destroyAll());
+  let done = false;
+  const restored = lifecycle
+    .restoreLayerState(
+      'weather-alerts',
+      { enabled: true, params: { opacity: 'light' } },
+      { origin: 'restore' },
+    )
+    .finally(() => {
+      done = true;
+    });
+  for (let i = 0; i < 20 && !done; i++) await settle(h);
+  assert.equal((await restored).settledEnabled, true);
+  assert.equal(lifecycle.isEnabled('weather-alerts'), true);
+  assert.equal(feed.statusCalls, 1);
+  assert.deepEqual(products, []);
+  assert.equal(h.stages.length, 0);
+  assert.equal(h.layer.requiresKeyId, 'xweather');
+  assert.equal(h.layer.getStats().keyRequired, true);
+  const row = lifecycle.getAll().find(({ id }) => id === 'weather-alerts');
+  assert.equal(
+    layerKeyRequirementTooltip(row),
+    'Needs XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET — add it in Provider Settings',
+  );
+  // Later updates keep asking only for status, at most once a minute.
+  void h.layer.update();
+  await settle(h);
+  assert.deepEqual(products, []);
+  later(t, 61_000);
+  void h.layer.update();
+  await settle(h);
+  assert.equal(feed.statusCalls, 2);
+  assert.deepEqual(products, []);
+});
+
+test('with a key the warnings card joins the observed timeline on the alerts product', async (t) => {
+  const clock = createWeatherClock();
+  const credited = [];
+  const { feed, products } = xweatherFeed(
+    xweatherStatus({ used: 4210 }),
+    () => times,
+  );
+  const h = layerHarness({
+    clock,
+    id: 'weather-alerts',
+    feed,
+    credits: {
+      registerDynamicCredit: (_viewer, credit) => credited.push(credit.key),
+      XWEATHER_CREDIT: { key: 'xweather', html: 'Vaisala Xweather' },
+    },
+  });
+  t.after(() => {
+    h.layer.destroy();
+    clock.destroy();
+  });
+  void h.layer.update();
+  await settle(h);
+  assert.deepEqual(products, ['xweather-alerts']);
+  assert.equal(h.layer.getDiagnostics().time, times[2]);
+  assert.deepEqual(
+    clock.getState().products.map(({ id }) => id),
+    ['weather-alerts'],
+  );
+  assert.deepEqual(clock.getState().timeline, times);
+  const moved = clock.setTarget(times[1]);
+  await settle(h);
+  await moved;
+  assert.equal(h.layer.getDiagnostics().time, times[1]);
+  const { summary } = h.layer.getRowControls();
+  assert.equal(summary.label, 'Warnings · Xweather');
+  assert.equal(
+    summary.coverage,
+    'US · Canada · Europe · Australia · Japan · Korea',
+  );
+  assert.deepEqual(summary.lines, [
+    {
+      id: 'caveat',
+      text: 'Official warnings where issued · no global coverage',
+      muted: true,
+    },
+    {
+      id: 'xweather-budget',
+      text: 'Xweather · 4,210 / 15,000 free this month',
+      muted: true,
+    },
+  ]);
+  assert.equal(h.layer.getStats().keyRequired, false);
+  assert.equal(h.layer.getStats().source, 'Vaisala Xweather');
+  assert.equal(h.layer.source, 'Vaisala Xweather · OBSERVED');
+  assert.deepEqual(credited, ['xweather', 'xweather']);
+  // An upstream refusal shows on the card like the radar card's.
+  feed.status = xweatherStatus({ upstreamError: 'HTTP 403' });
+  later(t, 61_000);
+  void h.layer.update();
+  await settle(h);
+  assert.equal(
+    h.layer.getRowControls().summary.status,
+    'Xweather refused the request · see Provider Settings',
+  );
+});
+
+test('the warnings descriptor offers only opacity and a coverage action, and no ramp', async (t) => {
+  const { feed } = xweatherFeed(xweatherStatus());
+  const h = layerHarness({ id: 'weather-alerts', feed });
+  t.after(() => h.layer.destroy());
+  void h.layer.update();
+  await settle(h);
+  const controls = h.layer.getRowControls();
+  assert.deepEqual(
+    controls.summary.settings.map(({ label }) => label),
+    ['OPACITY'],
+  );
+  assert.deepEqual(
+    controls.summary.actions.map(({ id, label }) => [id, label]),
+    [['coverage', 'View coverage']],
+  );
+  assert.equal(
+    controls.chips.some(({ params }) => params.source),
+    false,
+  );
+  assert.deepEqual(controls.legend, []);
+  assert.equal(controls.summary.units, '');
+  assert.match(
+    controls.info,
+    /https:\/\/www\.xweather\.com\/docs\/maps\/reference\/alert-types/,
+  );
+  assert.deepEqual(h.layer.getParams(), { opacity: 'strong' });
+  h.layer.setParams({ source: 'nowcoast', opacity: 'light' });
+  assert.deepEqual(h.layer.getParams(), { opacity: 'light' });
+});
+
+test('removing the key clears the warnings frame and stops asking for manifests', async (t) => {
+  const { feed, products } = xweatherFeed(xweatherStatus());
+  const h = layerHarness({ id: 'weather-alerts', feed });
+  t.after(() => h.layer.destroy());
+  void h.layer.update();
+  await settle(h);
+  assert.ok(h.layer.getDiagnostics().time);
+  feed.status = xweatherStatus({ hasKey: false });
+  later(t, 61_000);
+  void h.layer.update();
+  await settle(h);
+  assert.deepEqual(products, ['xweather-alerts']);
+  assert.equal(h.layer.getDiagnostics().time, null);
+  assert.equal(h.layer.getStats().keyRequired, true);
+  assert.equal(h.layer.getRowControls().summary.lines.length, 1);
+});
+
+test('warnings draw above lightning on the globe and credit Xweather', async () => {
+  let host;
+  const h = renderingHarness({ getHost: () => host });
+  host = { collection: h.viewer.imageryLayers, kind: 'globe' };
+  const lightning = h.viewer.imageryLayers.add({ name: 'lightning' });
+  orderWeatherImagery(h.viewer.imageryLayers, lightning, 3);
+  const stage = h.rendering.setFrame(
+    { ...snapshot, product: 'xweather-alerts' },
+    times[0],
+  );
+  h.settle();
+  assert.equal(await stage, true);
+  assert.equal(h.layers[0], lightning);
+  assert.equal(h.layers.length, 2);
+  assert.equal(h.providers.at(-1).options.credit.html, 'Vaisala Xweather');
+  h.rendering.clear();
+});

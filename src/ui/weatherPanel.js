@@ -10,6 +10,7 @@ const ORDER = [
   'weather-radar',
   'weather-satellite',
   'weather-lightning',
+  'weather-alerts',
 ];
 const OBSERVED = new Set(ORDER.slice(2));
 const utc = (time) =>
@@ -135,6 +136,7 @@ export function createWeatherPanel({
       'weather-radar': 'Rain radar',
       'weather-satellite': 'Satellite clouds',
       'weather-lightning': 'Lightning density',
+      'weather-alerts': 'Warnings',
     };
     // The card label's head names the product its source draws
     // ('Lightning · 5 min flashes' on Xweather, 'Lightning density · 15 min'

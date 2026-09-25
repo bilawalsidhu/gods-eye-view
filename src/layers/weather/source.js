@@ -7,6 +7,7 @@ export const WEATHER_PRODUCTS = Object.freeze([
   'lightning',
   'xweather-radar',
   'xweather-lightning',
+  'xweather-alerts',
 ]);
 
 /** Only bounded, explicit observations may become imagery requests. */
@@ -54,6 +55,7 @@ export const WEATHER_IMAGE_SIZES = Object.freeze({
   lightning: Object.freeze({ width: 4096, height: 2048 }),
   'xweather-radar': Object.freeze({ width: 4096, height: 2048 }),
   'xweather-lightning': Object.freeze({ width: 4096, height: 2048 }),
+  'xweather-alerts': Object.freeze({ width: 4096, height: 2048 }),
 });
 /** Largest detail-window image for every product; also the proxy default. */
 export const WEATHER_DETAIL_SIZE = Object.freeze({ width: 4096, height: 2048 });

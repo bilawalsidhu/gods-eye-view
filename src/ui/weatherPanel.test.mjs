@@ -419,6 +419,40 @@ test('cyclones lead, and observed history owns one bordered group with only acti
   view.destroy();
 });
 
+test('the panel order is cyclones, wind, radar, satellite, lightning, warnings', () => {
+  const f = fixture();
+  const view = createWeatherPanel(f);
+  const warnings = {
+    id: 'weather-alerts',
+    icon: '⚠',
+    summary: { label: 'Warnings · Xweather', coverage: 'US · Canada' },
+  };
+  view.update([warnings, lightning, radar, wind, cyclone, satellite]);
+  const root = f.container.children[0];
+  assert.deepEqual(
+    root.children[0].children.map((n) => n.dataset.cardId),
+    ['weather-cyclones', 'wind'],
+  );
+  const group = f.find((n) => n.className === 'weather-observed-group');
+  assert.deepEqual(
+    group.children[3].children.map((n) => n.dataset.cardId),
+    [
+      'weather-radar',
+      'weather-satellite',
+      'weather-lightning',
+      'weather-alerts',
+    ],
+  );
+  assert.equal(
+    group.children[1].textContent,
+    'Rain radar · Satellite clouds · Lightning density · Warnings',
+  );
+  view.update([{ ...warnings, summary: { coverage: 'US' } }]);
+  assert.equal(group.hidden, false);
+  assert.equal(group.children[1].textContent, 'Warnings');
+  view.destroy();
+});
+
 test('the observed-history scope names each card as its source labels it', () => {
   const f = fixture();
   const view = createWeatherPanel(f);

@@ -85,7 +85,7 @@ export const KEY_SETUP_KEYS = Object.freeze([
     id: 'xweather',
     title: 'XWEATHER',
     unlocks:
-      'Global rain radar and lightning in Weather (NOAA sources work without)',
+      'Global rain radar, lightning and warnings in Weather (NOAA radar and lightning work without)',
     getUrl: 'https://www.xweather.com/account',
     envVars: Object.freeze(['XWEATHER_CLIENT_ID', 'XWEATHER_CLIENT_SECRET']),
     tier: 'free',

@@ -55,6 +55,7 @@ const PANEL_GROUPS = [
       'weather-radar',
       'weather-satellite',
       'weather-lightning',
+      'weather-alerts',
       'weather-cyclones',
     ],
   },
@@ -366,14 +367,24 @@ export class LayerPanel {
               'weather-radar',
               'weather-satellite',
               'weather-lightning',
+              'weather-alerts',
               'weather-cyclones',
             ].includes(layer.id),
         )
-        .map((layer) => ({
-          id: layer.id,
-          icon: layer.icon,
-          ...this._rowControlsFor(layer.id),
-        })),
+        .map((layer) => {
+          const controls = this._rowControlsFor(layer.id);
+          // A card held back by a missing key names that key as its status,
+          // as the toggle row does.
+          const keyGuidance = layerKeyRequirementTooltip(layer);
+          return {
+            id: layer.id,
+            icon: layer.icon,
+            ...controls,
+            ...(keyGuidance && controls?.summary
+              ? { summary: { ...controls.summary, status: keyGuidance } }
+              : {}),
+          };
+        }),
     );
   }
 

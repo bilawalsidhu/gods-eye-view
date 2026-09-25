@@ -176,6 +176,62 @@ test('readout rows contain only toggles and metadata; ordinary rows retain contr
   }
 });
 
+test('a weather card whose key is missing shows the key requirement as its status', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const { railFixture } = await import('./railTestFixture.mjs');
+  const f = railFixture();
+  const body = f.document.createElement('div');
+  f.document.getElementById = (id) =>
+    id === 'weather-panel-body' ? body : null;
+  const previousDocument = globalThis.document;
+  globalThis.document = f.document;
+  const layer = {
+    id: 'weather-alerts',
+    name: 'Warnings',
+    icon: '⚠',
+    source: 'Vaisala Xweather · OBSERVED',
+    enabled: true,
+    showInTogglePanel: true,
+    requiresKeyId: 'xweather',
+    stats: { keyRequired: true },
+  };
+  const panel = new LayerPanel({
+    getLayers: () => [layer],
+    isEnabled: () => true,
+    setEnabled() {},
+    setLayerParams() {},
+    hasRowControls: () => true,
+    subscribeRowControls() {},
+    getRowControls: () => ({
+      readout: true,
+      summary: { label: 'Warnings · Xweather', status: null },
+    }),
+  });
+  const status = () =>
+    f.find((n) => n.dataset.lineId === 'status', body)?.textContent;
+  try {
+    panel.mount(f.container);
+    panel._refreshWeatherPanel();
+    assert.equal(
+      status(),
+      'Needs XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET — add it in Provider Settings',
+    );
+    const toggle = f
+      .find((n) => n.dataset.layerId === 'weather-alerts')
+      .querySelector('.data-toggle-btn');
+    assert.match(toggle.title, /^Needs XWEATHER_CLIENT_ID/);
+    layer.stats = { keyRequired: false };
+    panel._refreshWeatherPanel();
+    assert.notEqual(
+      status(),
+      'Needs XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET — add it in Provider Settings',
+    );
+  } finally {
+    panel.destroy();
+    globalThis.document = previousDocument;
+  }
+});
+
 test('the Recent Imagery readout mounts in its rail body like the weather readout and is rebuilt or released with the panel', async () => {
   const { LayerPanel } = await import('./layerPanel.js');
   const { railFixture } = await import('./railTestFixture.mjs');

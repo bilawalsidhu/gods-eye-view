@@ -184,6 +184,12 @@ export function createApplicationCatalog({
           clock: weatherClock,
           credits,
         }),
+        createWeatherLayer({
+          feed: sources.weather,
+          id: 'weather-alerts',
+          clock: weatherClock,
+          credits,
+        }),
         createCyclonesLayer({ feed: sources.cyclones }),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),
