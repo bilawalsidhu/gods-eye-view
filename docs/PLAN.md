@@ -2686,3 +2686,36 @@ per 11.3's entry rule: baseline re-measured with the same metrics as
   gitforge + origin); GitHub release published
   (aliasfoxkde/Globe/releases/tag/v0.10.1). Deploy-verification table
   appended to the RUNBOOK, including the GitForge trigger-defect note.
+- [x] **Batch X (v0.10.2 matrix validation + release)** — DONE
+  2026-09-25. Release first: v0.10.2 (patch — attribution surface +
+  QA infrastructure) shipped via the RUNBOOK pinned order on
+  `b507f95`; GitForge run `00e56716` **succeeded 6/6** on the release
+  commit (the allocation-gated unit suites were CI's verdict by
+  design — the box sat in a co-tenant storm, 1-min load 38–296);
+  production verification PASS 8/8 (`verify-prod-render.mjs`), the
+  NEW attribution checklist row **C13-equivalent PASS on production**
+  (dock painted 324×46, logo + "Data attribution", visible under
+  clean view), tagged `v0.10.2` after verification, GitHub release
+  published. Matrix validation of the release tree: attempts 1–2
+  during the storm were NOT GREEN with every FAIL/CRASH load-shaped
+  (C1 boot 136 s vs 60 s budget, C10 enable race, C11 layer-load
+  budget, C13–C16 "page did not answer" wedge signatures, D7/D9/D12
+  timeouts; bursts to load 296). Attempt 3 ran behind a self-healing
+  sustained-quiet gate (`.gev-logs/matrix-attrib-run3/chain.sh`:
+  10 consecutive 1-min samples < 20 AND 15-min avg < 35) that fired
+  2026-09-25 at load ~12 after the standalone C13 probe passed:
+  **49 PASS / 2 PASS-WITH-SKIPS / 1 FAIL / 0 HARNESS-CRASH / 18
+  SKIPPED of 70 selected (60.6 min) — NOT GREEN on one check.** The
+  storm class vanished (zero wedges, zero boot-budget failures, zero
+  crashes); C13 PASSED in-matrix. The single FAIL, D8 `qa-radio`
+  (105/1), failed only the global-view check's `clusterPoint.pickable`
+  conjunct — a `drillPick` at a painted cluster dot returned no hit
+  while every content conjunct held in the logged payload (radio
+  painted 5, projectedCount 19, maxDistance 50 M, horizon alpha 1,
+  altitude 24.2 M). Classified environmental: pick raced the
+  paint frame (the same pick-staleness class root-caused at matrix
+  run 5 for the sibling singleton-view check), and the same suite
+  re-run standalone in the same quiet window passed **106/106**.
+  Full accounting in the RUNBOOK 2026-09-25 section. Acceptance met:
+  release verified on production; matrix verdict honestly recorded
+  with the residual classified and exonerated same-window.

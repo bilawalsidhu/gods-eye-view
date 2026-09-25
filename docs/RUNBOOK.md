@@ -261,14 +261,32 @@ attribution probe.
 | **Attribution dock on production (new)** | **C13-EQUIVALENT PASS** — `#cesium-credits` inside `.gev-credit-dock`, 324×46 painted, logo + "Data attribution" labelled, visible with `ui-clean-view` engaged |
 
 **Matrix evidence note (honest accounting):** the full L9 matrix did not
-go green on this tree this cycle — two attempts during the load storm
+go green on this tree this cycle. Two attempts during the load storm
 ended with every FAIL/CRASH load-shaped (boot budgets, layer-load
-budgets, "page did not answer" wedge signatures; a third run behind a
-sustained-quiet gate was still armed at release time). The runtime
-itself was fully matrix-validated in Batch V's 2026-09-23/24 runs; the
-only runtime delta shipped here is the attribution surface, which holds
-its own targeted evidence: `qa-attribution-b12` **PASS 24/0** on this
-tree (matrix run 2, D6), the live dev-server dock probe, the
+budgets, "page did not answer" wedge signatures). The third run,
+launched by a self-healing sustained-quiet gate (10 consecutive 1-min
+samples < 20 AND 15-min avg < 35) that fired 2026-09-25 at load ~12,
+completed in 60.6 min: **TOTAL 49 PASS / 2 PASS-WITH-SKIPS / 1 FAIL /
+0 HARNESS-CRASH / 18 SKIPPED of 70 selected → NOT GREEN on one check.**
+The storm crash class vanished entirely (no wedge signature, no
+boot-budget failure, no harness crash), every C-probe passed including
+**C13 (attribution visibility) PASS in-matrix**, and the single FAIL is
+D8 `qa-radio` (105 passed, 1 failed): the "All-filter cluster labels
+remain visible at a 24,200 km global view" check failed only its
+`clusterPoint.pickable` conjunct — a `drillPick` at a painted cluster
+dot returned no hit while every content conjunct in the logged payload
+held (radio painted 5 labels, projectedCount 19, maxDistance 50 M,
+horizon alpha 1). Classified environmental, not a product defect: the
+pick raced the frame that painted the dots (the same pick-staleness
+class root-caused at matrix run 5 for the sibling singleton-view
+check), and the same suite re-run standalone in the same quiet window
+passed **106/106** (exit 0). Verdict by tally is NOT GREEN on one
+timing-sensitive pick check with a same-window standalone exoneration;
+the runtime itself was fully matrix-validated in Batch V's
+2026-09-23/24 runs, and the only runtime delta shipped in v0.10.2 —
+the attribution dock — holds its own targeted evidence: `qa-attribution-b12`
+**PASS 24/0** on this tree (matrix run 2, D6), C13 PASS in the quiet
+matrix run above, the live dev-server dock probe, the
 reasonableDefaults + creditsDock unit pins, CI's two allocation-gated
 unit suites, and the production C13-equivalent PASS above.
 
