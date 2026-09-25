@@ -1228,6 +1228,7 @@
       "src/maps/imagery.js",
       "src/maps/registry.js",
       "src/maps/terrain.js",
+      "src/maps/terrainRetry.js",
       "src/keySetupCore.mjs",
       "src/maps/imageryHost.js"
     ],
@@ -1695,6 +1696,7 @@
       "src/maps/imagery.js",
       "src/maps/registry.js",
       "src/maps/terrain.js",
+      "src/maps/terrainRetry.js",
       "src/navigationPolicy.js",
       "src/orbit.js",
       "src/overlays/worldOverlay.js",

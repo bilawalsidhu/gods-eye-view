@@ -15,7 +15,9 @@
   reuses validated heights across pans. Congestion and closures respect travel
   direction. ALPR distinguishes unsupported coverage from empty results and
   asks for zoom-in before exceeding its tile budget. Installation footprints
-  retain visible fragments without joining separate parcels across zooms.
+  retain visible fragments without joining separate parcels across zooms. Keyless
+  terrain tiles retry HTTP 429 and transient gateway failures with bounded,
+  shared backoff.
 
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the

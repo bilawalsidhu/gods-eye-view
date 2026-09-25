@@ -24,9 +24,15 @@ test('Esri uses Re:Earth without keys and preserves ion terrain when configured'
     assert.equal(esri.terrain.id, 'keyless');
     assert.equal(esri.terrain.create, createKeylessTerrain);
     await esri.terrain.create();
-    assert.deepEqual(calls, [
+    // A Resource, not a bare URL: the retry policy rides on it (terrainRetry.js).
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0] instanceof Cesium.Resource);
+    assert.equal(
+      calls[0].url,
       'https://terrain.reearth.land/cesium-mesh/ellipsoid',
-    ]);
+    );
+    assert.equal(calls[0].retryAttempts, 3);
+    assert.equal(typeof calls[0].retryCallback, 'function');
     assert.equal(
       keyless.sources.find(({ descriptor }) => descriptor.id === 'photoreal')
         .available,

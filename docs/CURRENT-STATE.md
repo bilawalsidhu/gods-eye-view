@@ -224,6 +224,22 @@ Voice and HUD snapshots reuse the existing feedState classifier. Analyst follow-
 
 Satellite and local infrastructure layers expose on-demand analyst records through their current factory owners. Analyst counts and ranks explicitly cover only bounded examined loaded records (default 2,000 per new layer, core satellite rows before dense extras); omitted records can change nearest/count and satellite distance is ground distance. Existing tools and result fields remain available.
 
+Keyless terrain tiles retry when Re:Earth throttles them. The browser fetches
+`terrain.reearth.land/cesium-mesh/ellipsoid/{z}/{x}/{y}.terrain` directly; no
+proxy in this repository sees those requests (`/api/terrain/heights` is the
+separate point-height endpoint), and the upstream edge answers zoom-out bursts
+with HTTP 429 under load. `src/maps/terrain.js` hands Cesium a `Resource`
+whose retry policy (`src/maps/terrainRetry.js`) every derived tile fetch
+inherits: 429, 502, 503 and 504 replies retry up to three times, 750 ms
+doubling to a 15 s cap, with every retry waiting behind one shared cooldown
+plus up to 1.5 s of jitter, and `Retry-After` extending the cooldown when the
+upstream exposes it. One console warning is logged per cooldown window. Other
+failures keep Cesium's handling and the flat `EllipsoidTerrainProvider`
+fallback. `scripts/qa-terrain-429.mjs` reproduces the burst against a keyless
+dev server, counts real throttles with their headers as evidence, synthesises
+throttles with `--inject N` when the upstream is not throttling, and fails if
+a throttled tile never loads.
+
 AIS encodes speed over ground in 0.1-knot units and course over ground in
 0.1-degree units, reserving the top code of each field for "not available", so
 those reports arrive as 102.3 knots and 360 degrees. Both are stored as unknown,
