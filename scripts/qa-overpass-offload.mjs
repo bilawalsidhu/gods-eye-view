@@ -627,6 +627,10 @@ try {
     beginView('pan-start');
     await fly(30.2672, -97.7431, 450, 0, -35);
     await enableTrafficTimed('pan-start');
+    assert.ok(
+      result.loadTimes['pan-start'] <= 4000,
+      `Austin cold first dots <= 4 s (${result.loadTimes['pan-start']} ms)`,
+    );
     await waitForSources();
     const positions = [[0, 0]];
     // Metres east/north: 10 small steps, 5 larger steps, then 5 exact returns.
