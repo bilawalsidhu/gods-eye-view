@@ -511,6 +511,19 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- **Air quality layer** in the Weather group (keyless), with Environment and
+  Climate Change Canada's AQHI as the first registered provider. Readings are
+  carried as `{ provider, scale, value, band }` so another network can be added
+  without inventing a shared numeric meaning across indices that do not share
+  one, and the row and readout both state that coverage is Canada only. The
+  WEATHER panel card shows the band legend and the highest readings currently in
+  view. AQHI is reported as an integer from 1 with an open-ended "10+", so
+  readings are rounded to that published form rather than shown at the decimal
+  precision the API returns; readings older than six hours are dropped instead
+  of being presented as current.
+
 - Add ECMWF IFS model selection to Wind (#464, thanks @beneduzi), with model-scoped forecast-step caches, cancellation of replaced requests, and separate issue/valid timestamps.
 
 - Add bounded Director feature actions with accessible controls, explicit camera/layer admission and cancellation; restore pack geometry on same-shot seek. Preserve existing scenes and content attribution.
