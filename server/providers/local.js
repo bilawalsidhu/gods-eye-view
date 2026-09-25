@@ -25,6 +25,7 @@ import { weatherProxy } from './weather.js';
 import { firePerimetersProxy } from './firePerimeters.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { capProxy } from './cap.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -55,6 +56,7 @@ function localProviderPlugins() {
     weatherProxy(),
     cycloneProxy(),
     firePerimetersProxy(),
+    capProxy(),
     keySetupEndpoint(),
   ];
 }
