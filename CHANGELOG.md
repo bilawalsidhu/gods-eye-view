@@ -115,6 +115,8 @@
 
 ## Unreleased — weather review
 
+- Add keyless RainViewer global precipitation radar (`radar-global`) to Weather with region toggle chips and shared timeline integration.
+
 - On 3D Tiles, draw a 4096×2048 detail window around the view on each
   observed-weather shell except global infrared, sampled by the shell's own
   surface. It follows the view on camera move end, keeps its place while the

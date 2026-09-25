@@ -1889,7 +1889,11 @@ test('observed descriptors keep configuration only and label satellite clouds by
     assert.equal(controls.summary.sections, undefined);
     assert.deepEqual(
       controls.summary.settings.map(({ label }) => label),
-      id === 'weather-satellite' ? ['REGION', 'IMAGE', 'OPACITY'] : ['OPACITY'],
+      id === 'weather-satellite'
+        ? ['REGION', 'IMAGE', 'OPACITY']
+        : id === 'weather-radar'
+          ? ['REGION', 'OPACITY']
+          : ['OPACITY'],
     );
     assert.deepEqual(
       controls.summary.settings.flatMap(({ chips }) => chips),

@@ -4345,10 +4345,12 @@ Wind supports selectable GFS/IFS models with persisted model choice. Each fetch 
 
 ### Local Weather review candidate
 
+### Local Weather review candidate
+
 Weather combines the GFS/ECMWF surface forecast with three observation layers:
-NOAA Rain radar (CONUS), Satellite clouds (regional GOES or slower global infrared),
+Rain radar (US NOAA MRMS or Global RainViewer composite), Satellite clouds (regional GOES or slower global infrared),
 and 15-minute lightning density (Americas and Pacific). One transient observed
-clock drives all enabled observation rows. Earlier/Later use the sorted union of
+clock drives all enabled observation rows. Rain radar provides selectable region chips to switch between high-resolution US reflectivity (NOAA) and worldwide composite radar (RainViewer) across the shared timeline and memory-tiled host. Earlier/Later use the sorted union of
 non-suspended products' advertised times; each product selects its nearest frame
 at or before the requested UTC time, never a future frame or an interpolation.
 The maximum gap is 30 minutes for radar, regional infrared and lightning, and
