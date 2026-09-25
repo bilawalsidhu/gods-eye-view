@@ -1,8 +1,10 @@
 # Changelog
 
 - Public Overpass instances are no longer used by default. Street Traffic draws
-  roads from TomTom flow tiles when a TomTom key is set, otherwise from
-  OpenFreeMap vector tiles; mapped military areas come from OpenFreeMap and
+  roads from OpenFreeMap vector tiles in both keyed and keyless mode. Optional
+  TomTom flow is matched onto those roads for congestion colors, speeds and
+  closures; unmatched roads remain explicitly simulated. Flow coverage counts
+  rendered dots on matched roads; mapped military areas come from OpenFreeMap and
   ALPR cameras from an hourly OpenStreetMap extract (US and Canada). Features
   without a replacement say they are unavailable. `OVERPASS_UPSTREAMS` sets an
   Overpass instance you run or pay for. The cockpit regional brief resolves

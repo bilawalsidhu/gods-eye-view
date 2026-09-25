@@ -86,7 +86,7 @@ export function createIngestion({
     }
     const response = await source.requestRoads(
       { south, west, north, east },
-      { majorOnly, timeoutSec, signal, live: layerState._liveMode },
+      { majorOnly, timeoutSec, signal },
     );
 
     if (!response.ok) {
@@ -102,9 +102,7 @@ export function createIngestion({
       signal?.throwIfAborted();
       if (!Array.isArray(data?.roads))
         throw new Error('Malformed road snapshot');
-      layerState._roadSource =
-        data.roadSource ||
-        (layerState._liveMode ? 'TomTom' : 'OpenStreetMap tiles');
+      layerState._roadSource = data.roadSource || 'OpenStreetMap';
       layerState._roadPartial = Boolean(data.partial);
       return data;
     }
@@ -150,9 +148,7 @@ export function createIngestion({
         },
       );
     }
-    layerState._roadSource =
-      data.roadSource ||
-      (layerState._liveMode ? 'TomTom' : 'OpenStreetMap tiles');
+    layerState._roadSource = data.roadSource || 'OpenStreetMap';
     layerState._roadPartial = Boolean(data.partial);
     return data;
   }
@@ -227,9 +223,7 @@ export function createIngestion({
     try {
       await parts.flow.ensureFlowStatus(requestSignal);
       requestSignal.throwIfAborted();
-      layerState._roadSource = layerState._liveMode
-        ? 'TomTom'
-        : 'OpenStreetMap tiles';
+      layerState._roadSource = 'OpenStreetMap';
       let cache = layerState._tileCache.get(cacheKey);
       if (cache) {
         layerState._tileCache.delete(cacheKey);
@@ -249,7 +243,7 @@ export function createIngestion({
       // Flow is (re)applied even on cache hits: roads cache for the session,
       // but congestion data has a 120s shelf life. The race renders within
       // FLOW_RENDER_RACE_MS either way; late flow recolors in place.
-      if (cache.full && !layerState._liveMode) {
+      if (cache.full) {
         layerState._roadPartial = false;
         layerState._detailLimited = Boolean(cache.detailLimited);
         renderedSomething = await parts.flow.applyFlowThenRender(
@@ -264,7 +258,7 @@ export function createIngestion({
       }
 
       // Intermediate path: render cached major roads while fetching the rest
-      if (cache.major && !layerState._liveMode) {
+      if (cache.major) {
         layerState._roadPartial = false;
         if (
           !(await parts.flow.applyFlowThenRender(
@@ -297,7 +291,7 @@ export function createIngestion({
         if (generation !== layerState._loadGeneration) return;
         cache.major = layerState._parseRoads(majorData, trace);
         cacheRoadSnapshot(layerState._tileCache, cacheKey, cache, {
-          retain: !layerState._roadPartial && !layerState._liveMode,
+          retain: !layerState._roadPartial,
         });
         if (
           !(await parts.flow.applyFlowThenRender(
@@ -314,7 +308,7 @@ export function createIngestion({
       }
 
       // At higher altitude, major roads provide sufficient motion density
-      if (layerState._liveMode || altitude > FAST_FETCH_ALTITUDE) return;
+      if (altitude > FAST_FETCH_ALTITUDE) return;
 
       // Detailed pass: fetch the full road graph (tertiary, residential, etc.)
       console.log(`[Data:Traffic] Full fetch local roads [${cacheKey}]`);

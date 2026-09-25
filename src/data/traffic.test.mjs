@@ -76,11 +76,11 @@ test('a healthy keyed layer reports live flow with its real coverage', () => {
   assert.deepEqual(idle, {
     mode: 'live',
     error: null,
-    loadingLabel: 'LIVE · TomTom flow · 87% cov',
+    loadingLabel: 'LIVE · Roads: OpenStreetMap · Flow: TomTom · 87% cov · Unmatched: simulated',
   });
   assert.equal(
     trafficFeedPresentation({ liveMode: true, fetching: true }).loadingLabel,
-    'syncing LIVE traffic flow',
+    'Syncing flow · Roads: OpenStreetMap · Flow: TomTom · Unmatched: simulated',
   );
 });
 
@@ -158,4 +158,12 @@ test('traffic can be destroyed before its first enable and destroyed repeatedly'
   assert.doesNotThrow(() => traffic.destroy(viewer));
   assert.doesNotThrow(() => traffic.destroy(viewer));
   assert.equal(traffic.getStats().count, 0);
+});
+
+test('zero matched dots never claims live coverage', () => {
+  const feed = trafficFeedPresentation({ liveMode: true, coveragePct: 0 });
+  assert.equal(feed.mode, 'live');
+  assert.match(feed.loadingLabel, /^SIMULATED/);
+  assert.match(feed.loadingLabel, /TomTom \(no matches\)/);
+  assert.ok(!LIVE_CLAIM.test(feed.loadingLabel));
 });

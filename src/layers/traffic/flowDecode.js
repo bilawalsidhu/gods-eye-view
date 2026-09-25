@@ -8,7 +8,7 @@ import { VectorTile } from '@mapbox/vector-tile';
  * (the TomTom key never reaches the browser) and decodes the Mapbox Vector
  * Tile layer "Traffic flow" into plain lon/lat polylines with congestion
  * attributes. Consumed by the traffic layer's live mode
- * as directional animated roads.
+ * for matching congestion onto OpenStreetMap roads.
  *
  * Segment shape: `{coords: [[lon,lat],…], trafficLevel: 0..1, roadType: string,
  * closure: boolean}` — `trafficLevel` is TomTom's current/free-flow speed
@@ -78,32 +78,4 @@ export function decodeFlowTile(data, z, x, y, { strict = false } = {}) {
     }
   }
   return segments;
-}
-
-const FLOW_ROAD_TYPES = {
-  Motorway: 'motorway',
-  'International road': 'trunk',
-  'Major road': 'primary',
-  'Secondary road': 'secondary',
-  'Connecting road': 'tertiary',
-  'Major local road': 'tertiary',
-  'Local road': 'residential',
-  'Minor local road': 'unclassified',
-  'Non public road': 'unclassified',
-  'Parking road': 'unclassified',
-};
-
-/** Convert directional TomTom flow segments directly into animated road records. */
-export function flowSegmentsToRoads(segments) {
-  return segments
-    .filter((segment) => segment.coords?.length >= 2)
-    .map((segment) => ({
-      coordinates: segment.coords,
-      type: FLOW_ROAD_TYPES[segment.roadType] || 'unclassified',
-      oneway: 1,
-      flow: { level: segment.trafficLevel, closure: segment.closure },
-      directFlow: true,
-      trafficRoadCoverage: segment.coverage,
-      leftHandTraffic: segment.leftHandTraffic,
-    }));
 }

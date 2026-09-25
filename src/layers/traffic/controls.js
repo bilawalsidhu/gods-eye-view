@@ -14,7 +14,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     icon: '🚗',
 
-    source: 'OpenStreetMap tiles / TomTom',
+    source: 'OpenStreetMap / TomTom',
 
     /** @type {number} Zero — layer is self-managed via camera listener + preRender */
     updateInterval: 0,
@@ -130,8 +130,8 @@ export function createControls({ state: layerState, services, parts, source }) {
      * 'sim' (keyless simulation, which the manager renders as a FALLBACK chip);
      * `error` carries this instant's health, so a live-configured layer whose
      * flow feed went down reads DEGRADED with the reason instead of a stale
-     * LIVE coverage number. `flowCoveragePct` is matched roads / roads with any
-     * flow candidates (0–100 int); `tilesFetched` counts flow-tile requests
+     * LIVE coverage number. `flowCoveragePct` is shown dots on matched roads /
+     * all shown dots (0–100 int), excluding closures; `tilesFetched` counts flow-tile requests
      * issued to the proxy this session (decode-cache hits excluded).
      * @returns {{count:number, lastUpdate:number|null, loading:boolean,
      *   mode:'live'|'sim', error:string|null, flowCoveragePct:number,
@@ -142,11 +142,15 @@ export function createControls({ state: layerState, services, parts, source }) {
       // TomTom request in flight after the roads have settled, and the shared
       // loading batch has to stay open long enough to announce its failure.
       const loading = layerState._fetching || layerState._flowPending > 0;
+      const { free, slow, jam, sim } = layerState._bucketCounts;
+      const matched = free + slow + jam;
+      const flowCoveragePct =
+        matched + sim > 0 ? Math.round((100 * matched) / (matched + sim)) : 0;
       const feed = parts.model.trafficFeedPresentation({
         liveMode: layerState._liveMode,
         fetching: loading,
         flowError: layerState._flowError,
-        coveragePct: layerState._flowCoveragePct,
+        coveragePct: flowCoveragePct,
         statusUnavailable: layerState._flowStatusUnavailable,
       });
       return {
@@ -157,7 +161,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         error: layerState._roadError || layerState._detailError || feed.error,
         detailError: layerState._detailError || null,
         detailLimited: Boolean(layerState._detailLimited),
-        flowCoveragePct: layerState._flowCoveragePct,
+        flowCoveragePct,
         tilesFetched: getFlowSessionStats().tilesFetched,
         ...(TRAFFIC_TIMING_ENABLED
           ? { trafficTiming: parts.timing.getTrafficTimingDiagnostics() }
@@ -186,7 +190,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         source: layerState._roadSource,
         loadingLabel: layerState._roadError
           ? `UNAVAILABLE · ${layerState._roadSource} · Roads unavailable`
-          : `${layerState._roadSource === 'TomTom' && !loading && !feed.error ? 'LIVE' : feed.loadingLabel} · Roads: ${layerState._roadSource}${layerState._roadPartial ? ' · Partial coverage' : ''}${layerState._detailError ? ' · Detailed roads unavailable' : layerState._detailLimited ? ' · Reduced detail coverage' : ''}`,
+          : `${feed.loadingLabel}${layerState._liveMode && !feed.error ? '' : ` · Roads: ${layerState._roadSource}`}${layerState._roadPartial ? ' · Partial coverage' : ''}${layerState._detailError ? ' · Detailed roads unavailable' : layerState._detailLimited ? ' · Reduced detail coverage' : ''}`,
       };
     },
   };

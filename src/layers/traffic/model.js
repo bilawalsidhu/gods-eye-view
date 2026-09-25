@@ -50,9 +50,6 @@ export function createModel({ state: layerState, services, parts, source }) {
           waypoints,
           segmentDist,
           flow: road.flow || null,
-          directFlow: road.directFlow === true,
-          trafficRoadCoverage: road.trafficRoadCoverage ?? null,
-          leftHandTraffic: road.leftHandTraffic === true,
         });
       }
     }
@@ -217,7 +214,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * @param {boolean} [input.liveMode] - `/api/tomtom/status` reported a key.
    * @param {boolean} [input.fetching] - A viewport load is in flight.
    * @param {string|null} [input.flowError] - `deriveTrafficFlowError` result, if any.
-   * @param {number} [input.coveragePct] - Matched-road coverage, 0–100.
+   * @param {number} [input.coveragePct] - Share of shown dots on matched roads, 0–100.
    * @param {boolean} [input.statusUnavailable] - The status probe itself failed.
    * @returns {{mode:'live'|'sim', error:string|null, loadingLabel:string}}
    */
@@ -246,8 +243,10 @@ export function createModel({ state: layerState, services, parts, source }) {
         mode,
         error: null,
         loadingLabel: fetching
-          ? 'syncing LIVE traffic flow'
-          : `LIVE · TomTom flow · ${coveragePct}% cov`,
+          ? 'Syncing flow · Roads: OpenStreetMap · Flow: TomTom · Unmatched: simulated'
+          : coveragePct > 0
+            ? `LIVE · Roads: OpenStreetMap · Flow: TomTom · ${coveragePct}% cov${coveragePct < 100 ? ' · Unmatched: simulated' : ''}`
+            : 'SIMULATED · Roads: OpenStreetMap · Flow: TomTom (no matches)',
       };
     }
     // Keyless simulation — one terse line that names the mode and the remedy
@@ -277,11 +276,13 @@ export function createModel({ state: layerState, services, parts, source }) {
     const now = Date.now();
     for (const dot of layerState._dots) {
       const flow = dot.road ? dot.road.flow : null;
-      if (flow?.closure) {
+      if (flow?.closure || (!flow && layerState._uncoveredMode === 'hide')) {
         dot.point.show = false;
+        dot.mps = 0;
         closedDots += 1;
         continue;
       }
+      dot.point.show = true;
       const bucket = flow ? flowBucket(flow.level) : null;
       dot.bucket = bucket;
       dot.point.color = bucket
@@ -325,6 +326,7 @@ export function createModel({ state: layerState, services, parts, source }) {
       }
       layerState._bucketCounts[bucket || 'sim'] += 1;
     }
+    layerState._count = layerState._dots.length - closedDots;
     layerState._closedRoads = layerState._roads.reduce(
       (n, r) => n + (r.flow?.closure ? 1 : 0),
       0,

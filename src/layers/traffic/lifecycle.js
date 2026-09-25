@@ -40,7 +40,7 @@ export function createLifecycle({
       layerState._densityScale = 1.0;
       layerState._speedScale = 1.0;
       layerState._lastViewCenter = null;
-      layerState._flowCoveragePct = 0;
+      layerState._flowRoads = null;
       layerState._flowError = null;
       if (TRAFFIC_TIMING_ENABLED) {
         layerState._trafficTimingCurrentAnchor = null;

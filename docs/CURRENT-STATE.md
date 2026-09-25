@@ -303,7 +303,7 @@ are protected from fallback writes. Version 6 is the export format, with
 zero pitch, low camera heights, scope and detection edits preserved. See [the document contract](SCENE-DOCUMENT.md);
 see [Director](DIRECTOR.md) for camera, pack, action and sharing support.
 
-Search framing and annotations request semantic map features from an explicit source. The Overpass adapter owns bounded queries, member/tag decoding and request deadlines; callers retain candidate ranking, outline caching, deferred retries and scene placement. Empty, unavailable, transient and throttled outcomes remain distinct. Traffic sources return road records and installation sources return mapped records with freshness/saturation metadata, so their layers no longer decode upstream elements. ALPR already normalizes its records in the source. Traffic uses TomTom flow geometry or OpenFreeMap roads; ALPR uses an hourly OpenStreetMap extract. Keyless installations use military-area tiles. Detailed feature queries require operator-configured Overpass.
+Search framing and annotations request semantic map features from an explicit source. The Overpass adapter owns bounded queries, member/tag decoding and request deadlines; callers retain candidate ranking, outline caching, deferred retries and scene placement. Empty, unavailable, transient and throttled outcomes remain distinct. Traffic sources return road records and installation sources return mapped records with freshness/saturation metadata, so their layers no longer decode upstream elements. ALPR already normalizes its records in the source. Traffic uses OpenFreeMap roads with optional matched TomTom congestion; ALPR uses an hourly OpenStreetMap extract. Keyless installations use military-area tiles. Detailed feature queries require operator-configured Overpass.
 
 Nepal media preloads survive repeated camera-flight updates, but Stop, event disable and replacement remove abandoned frames and revoke pending Facebook sessions. Fallback evidence-card clicks respect the shared drawing-tool pointer lease.
 
@@ -2735,7 +2735,7 @@ its criteria cannot be silently ignored.
 | Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
-| Traffic | TomTom flow geometry (BYOK) or OpenFreeMap OpenStreetMap road tiles | `src/data/traffic.js` | `/api/tomtom` or browser-direct OpenFreeMap tiles | viewport-driven; capped tile cache |
+| Traffic | OpenFreeMap OpenStreetMap roads with optional TomTom congestion (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
 | CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
@@ -3481,8 +3481,11 @@ a distinct unavailable result and stop querying for that source lifetime.
 Camp Mabry markers/outlines, at most 12 Fort Cavazos installation markers,
 and zero browser requests to external Overpass/Nominatim hosts. It waits for
 visible photoreal tilesets, dismisses first launch and measures at least 150
-street-view dots within -3/+25 m of sampled mesh height, for both TomTom and
-Google 3D with OpenFreeMap roads (an isolated page overrides only key availability);
+street-view dots within -3/+25 m of sampled mesh height, for both keyed and
+keyless OpenFreeMap roads (an isolated page overrides only TomTom key availability).
+Keyed Austin must report `roadSource: OpenStreetMap` and positive flow coverage.
+It records milliseconds from enabling Street Traffic to first rendered dots at
+2 km on a fresh page for each mode, plus warmed street-view timings and orbit screenshots;
 `src/overpassOffload.test.mjs` separately proves server-handler zero egress.
 
 ### Share-link v2 layer state (August 2026)
@@ -4083,15 +4086,26 @@ easier to meet (detection is now on more often), but does not create it.
   TomTom flow vector tiles via the budget-governed `/api/tomtom` proxy
   (`.gev-cache/tomtom/`, 120 s TTL, `TOMTOM_DAILY_TILE_BUDGET` default 6k/day,
   sized so a 31-day month stays inside TomTom's 200K/month free allowance),
-  decoded client-side and animated directly from the flow segments with
-  green/amber/red dot color and speed/density scaling (`trafficFlowStyle.js`);
-  closures spawn no dots. Flow stays at z12 with the same 16-tile cap,
-  120-second cache and server daily budget; no higher-zoom flow requests are
-  added. Lines are clipped first to tile cores before caching, then to the
-  existing look-at viewport box before allocating dots. No Overpass road matching is required. Gaps in TomTom
-  flow coverage have no road dots; the flow percentage applies to loaded segments,
-  not all roads in the viewport. Road fetch bounds center on the camera look-at point (`trafficBounds.js`).
-- Keyless road geometry comes from OpenFreeMap's immutable versioned tiles:
+  decoded client-side and matched onto OpenFreeMap road segments for
+  green/amber/red dot color and speed/density scaling (`trafficFlowStyle.js`).
+  Matching reuses `flowMatch.js`: seven road samples, a 35 m nearest-segment
+  radius, 30 degree bearing tolerance (folded for two-way roads), and a bounded
+  3x3 probe in a 100 m spatial grid. At least half the samples must match;
+  the median flow level supplies speed/color and any matched closure stops
+  dots. Matching runs only on load/refresh, never per frame.
+  Flow stays at z12 with the same 16-tile cap, 120-second cache and server
+  daily budget. Lines are clipped to tile cores before caching and to the
+  look-at viewport fetch box before matching. Road geometry is always OFM;
+  there is no TomTom geometry fallback. Unmatched roads retain white simulated
+  dots at free-flow speeds (unless the explicit uncovered-roads hide option is
+  enabled). Cached road snapshots are rematched on every load; failed flow
+  refreshes clear old matches and report simulation. `flowCoveragePct` is the
+  percentage of shown dots on matched roads, including all unmatched dots in
+  the denominator and excluding dots hidden by closures. The keyed status
+  names `LIVE · Roads: OpenStreetMap · Flow: TomTom`, with coverage and an
+  unmatched/simulated note; zero matches reads SIMULATED. Road fetch bounds
+  center on the camera look-at point (`trafficBounds.js`).
+- Road geometry in both keyed and keyless mode comes from OpenFreeMap's immutable versioned tiles:
   one TileJSON resolution per application source lifetime, z12 wide pass and
   z14 detail below 4.5 km. The detail box shrinks around the look-at point
   until it fits 16 tiles, including at high latitudes; status reports reduced
@@ -4101,15 +4115,14 @@ easier to meet (detection is now on more often), but does not create it.
   16 tiles, four concurrent requests, 4 MiB per response and 64 decoded tiles/
   24 MiB. Parsed road views have a separate 24 MiB/64-entry cap; incomplete
   views are not retained as complete snapshots. Buffer geometry is clipped and sub-12 m line slivers dropped; tile
-  road fragments are not stitched. Both road sources preserve bends and insert
+  road fragments are not stitched. Roads preserve bends and insert
   waypoints at most 150 m apart, splitting paths at 80 vertices. A cancellable
   preparation pass waits up to 30 seconds for the visible surface, reads
   per-vertex terrain/mesh heights in batches of 32, rejects non-finite or
   out-of-band (+/-9000 m) heights, and floors on cached ground/visible terrain.
   Shared floor cells are read only; raw mesh samples never enter their cache.
   Positions and segment distances are precomputed, with no new animation-loop
-  allocation. Visible-globe roads use cached terrain without offscreen mesh picks. The road-source label names TomTom or
-  OpenStreetMap tiles, with partial/unavailable states shown plainly.
+  allocation. Visible-globe roads use cached terrain without offscreen mesh picks. The road-source label names OpenStreetMap, with partial/unavailable states shown plainly.
 - TileJSON caches successful metadata. Transient failures retry after a
   five-second cooldown; invalid metadata/origins stay unavailable until the
   source is cleared. Clear resets metadata and cancels pending requests.

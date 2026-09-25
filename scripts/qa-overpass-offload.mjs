@@ -24,7 +24,7 @@ import puppeteer from 'puppeteer';
 const args = process.argv.slice(2);
 if (args.includes('--help') || args.includes('-h')) {
   console.log(
-    'Usage: node scripts/qa-overpass-offload.mjs [--url] <dev-server-url> [--headful] [--software-gl]\nChecks street-level mesh alignment for TomTom/OpenFreeMap, ALPR, Camp Mabry, Fort Cavazos, source labels and zero external Overpass/Nominatim requests. Writes qa-shots/. Uses platform ANGLE by default; --software-gl opts into slower SwiftShader.',
+    'Usage: node scripts/qa-overpass-offload.mjs [--url] <dev-server-url> [--headful] [--software-gl]\nChecks street-level mesh alignment for OpenFreeMap roads with/without TomTom flow, ALPR, Camp Mabry, Fort Cavazos, source labels and zero external Overpass/Nominatim requests. Writes qa-shots/. Uses platform ANGLE by default; --software-gl opts into slower SwiftShader.',
   );
   process.exit(0);
 }
@@ -63,6 +63,7 @@ const result = {
   alpr: null,
   military: null,
   screenshots: [],
+  loadTimes: {},
 };
 let page;
 try {
@@ -111,7 +112,7 @@ try {
     () => window.__godsEyeView.styleManager.initialRestorePromise,
   );
   await page.evaluate(() =>
-    window.__godsEyeView.ui?.setDetection({ enabled: false }),
+    window.__godsEyeView.styleManager.setDetection({ enabled: false }),
   );
   result.renderer = await page.evaluate(() => {
     const gl = window.__godsEyeView.viewer.scene.context._gl;
@@ -188,9 +189,44 @@ try {
     await page.screenshot({ path: path.join(shots, filename) });
     result.screenshots.push(filename);
   }
+  async function enableTrafficTimed(name) {
+    const milliseconds = await page.evaluate(
+      () =>
+        new Promise((resolve, reject) => {
+          const { viewer, dataManager } = window.__godsEyeView;
+          const start = performance.now();
+          const cleanup = () => {
+            remove();
+            clearTimeout(timer);
+          };
+          const remove = viewer.scene.postRender.addEventListener(() => {
+            if (dataManager.layers.get('traffic').module.getStats().count <= 0)
+              return;
+            const elapsed = performance.now() - start;
+            cleanup();
+            resolve(elapsed);
+          });
+          const timer = setTimeout(() => {
+            cleanup();
+            reject(new Error('No traffic dots within 180 seconds'));
+          }, 180_000);
+          Promise.resolve(dataManager.setEnabled('traffic', true)).catch(
+            (error) => {
+              cleanup();
+              reject(error);
+            },
+          );
+        }),
+    );
+    result.loadTimes[name] = Math.round(milliseconds);
+    console.log(
+      `${name}: ${result.loadTimes[name]} ms from enable to first rendered dots`,
+    );
+  }
   console.log('Checking Austin traffic and ALPR...');
   await fly(30.2672, -97.7431);
-  for (const id of ['traffic', 'military-installations', 'alpr-cameras']) {
+  await enableTrafficTimed('initialFirstDotsMs');
+  for (const id of ['military-installations', 'alpr-cameras']) {
     console.log(`Enabling ${id}...`);
     await page.evaluate(
       (layerId) =>
@@ -239,6 +275,9 @@ try {
     };
   });
   result.traffic = austin.traffic;
+  result.loadTimes[
+    `${austin.traffic.mode === 'live' ? 'keyed' : 'keyless'}FirstDotsMs`
+  ] = result.loadTimes.initialFirstDotsMs;
   result.alpr = austin.alpr;
   result.sourceLabel = austin.sourceLabel;
   result.cameraHeight = austin.cameraHeight;
@@ -248,7 +287,8 @@ try {
   );
   assert.ok(austin.traffic.count > 0, 'road dots rendered');
   assert.ok(austin.cameraEntities > 0, 'ALPR camera entities rendered');
-  assert.match(austin.sourceLabel, /Roads: (TomTom|OpenStreetMap tiles)/);
+  assert.equal(austin.traffic.roadSource, 'OpenStreetMap');
+  assert.match(austin.sourceLabel, /Roads: OpenStreetMap/);
   await shot('austin');
   async function checkStreetSurface(name) {
     await page.evaluate(async () =>
@@ -256,9 +296,7 @@ try {
     );
     await fly(30.2685, -97.7425, 350, 10, -30);
     await settleTiles();
-    await page.evaluate(async () =>
-      window.__godsEyeView.dataManager.setEnabled('traffic', true),
-    );
+    await enableTrafficTimed(`${name}WarmFirstDotsMs`);
     await page.waitForFunction(
       () => {
         const s = window.__godsEyeView.dataManager.layers
@@ -327,10 +365,42 @@ try {
       };
     });
     result[name] = measured;
+    assert.equal(measured.stats.roadSource, 'OpenStreetMap');
+    if (measured.stats.mode === 'live') {
+      assert.ok(
+        measured.stats.flowCoveragePct > 0,
+        'Austin has matched TomTom flow',
+      );
+      assert.match(
+        measured.stats.loadingLabel,
+        /LIVE · Roads: OpenStreetMap · Flow: TomTom/,
+      );
+    } else {
+      assert.equal(measured.stats.flowCoveragePct, 0);
+      assert.match(measured.stats.loadingLabel, /SIMULATED/);
+    }
+    const { free, slow, jam, sim } = measured.stats.flowBuckets;
+    assert.equal(
+      measured.stats.flowCoveragePct,
+      Math.round((100 * (free + slow + jam)) / (free + slow + jam + sim)),
+    );
+
     console.log(
-      `${name}: ${measured.onMesh}/${measured.inView} projected dots on the surface`,
+      `${name}: ${measured.onMesh}/${measured.inView} projected dots on the surface; ${measured.stats.flowCoveragePct}% flow coverage`,
     );
     await shot(name);
+    await fly(30.2685, -97.7425, 350, 65, -40);
+    await settleTiles();
+    await page.waitForFunction(
+      () => {
+        const s = window.__godsEyeView.dataManager.layers
+          .get('traffic')
+          .module.getStats();
+        return s.count > 0 && !s.loading && !s.error;
+      },
+      { timeout: 180_000, polling: 500 },
+    );
+    await shot(`${name}-orbit`);
     assert.ok(
       measured.onMesh >= 150,
       `${name}: at least 150 projected dots within -3/+25 m of the surface (got ${measured.onMesh})`,
@@ -338,10 +408,7 @@ try {
   }
   console.log('Checking street-level traffic against the rendered surface...');
   await checkStreetSurface('traffic-street');
-  if (
-    result['traffic-street'].photoreal &&
-    result.traffic.roadSource === 'TomTom'
-  ) {
+  if (result.traffic.mode === 'live') {
     // A second isolated page models Google configured / TomTom absent. Geometry and mesh are real responses.
     const keyedPage = page;
     page = await browser.newPage();
@@ -379,13 +446,15 @@ try {
       () => window.__godsEyeView.styleManager.initialRestorePromise,
     );
     await page.evaluate(() =>
-      window.__godsEyeView.ui?.setDetection({ enabled: false }),
+      window.__godsEyeView.styleManager.setDetection({ enabled: false }),
     );
-    console.log('Checking Google 3D with OpenFreeMap roads...');
+    console.log('Checking OpenFreeMap roads without TomTom flow...');
+    await fly(30.2672, -97.7431);
+    await enableTrafficTimed('keylessFirstDotsMs');
     await checkStreetSurface('traffic-street-ofm');
     assert.equal(
       result['traffic-street-ofm'].stats.roadSource,
-      'OpenStreetMap tiles',
+      'OpenStreetMap',
     );
     await page.close();
     page = keyedPage;

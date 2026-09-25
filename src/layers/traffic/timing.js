@@ -283,9 +283,6 @@ export function createTiming({ state: layerState, services, parts, source }) {
           waypoints,
           segmentDist,
           flow: road.flow || null,
-          directFlow: road.directFlow === true,
-          trafficRoadCoverage: road.trafficRoadCoverage ?? null,
-          leftHandTraffic: road.leftHandTraffic === true,
         });
       }
     }

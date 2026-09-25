@@ -96,17 +96,16 @@ export function createFlow({ state: layerState, services, parts, source }) {
     // covers this request from the same tick the caller started it — the
     // loading batch must not be able to close underneath an in-flight fetch.
     layerState._flowPending += 1;
+    layerState._flowRoads = roads;
+    // Geometry survives in the session cache; congestion does not. Never paint
+    // an old match as current while a refresh is pending or has failed.
+    for (const road of roads) road.flow = null;
     try {
       if (!layerState._flowStatusPromise) return; // status check not started — sim mode
       await layerState._flowStatusPromise;
       if (!layerState._liveMode || !layerState._enabled) return;
       if (generation !== layerState._loadGeneration) return;
       if (!Array.isArray(roads) || roads.length === 0) return;
-      if (roads.every((road) => road.directFlow)) {
-        layerState._flowCoveragePct = 100;
-        layerState._flowError = null;
-        return;
-      }
       try {
         // Cached paths reach here without a live controller; the fetch paths
         // reuse theirs so one cancel covers both roads and flow.
@@ -115,19 +114,13 @@ export function createFlow({ state: layerState, services, parts, source }) {
         const segments = await fetchFlowForBounds(clamped, {
           signal: layerState._activeFetchAbort.signal,
         });
-        if (generation !== layerState._loadGeneration) return;
-        const { matches, matchedCount, candidateCount } = matchFlowToRoads(
-          roads,
-          segments,
-        );
+        if (generation !== layerState._loadGeneration || !layerState._enabled)
+          return;
+        const { matches } = matchFlowToRoads(roads, segments);
         for (let i = 0; i < roads.length; i++) {
           roads[i].flow = matches[i];
         }
-        layerState._flowCoveragePct =
-          candidateCount > 0
-            ? Math.round((matchedCount / candidateCount) * 100)
-            : 0;
-        layerState._flowError = null;
+        if (layerState._flowRoads === roads) layerState._flowError = null;
       } catch (e) {
         if (e?.name === 'AbortError') return;
         // Same guard the success path gets: a superseded request rejecting late
@@ -137,8 +130,8 @@ export function createFlow({ state: layerState, services, parts, source }) {
           return;
         // Every covering tile failed: there is no live flow on screen. Drop the
         // now-false coverage number and surface the reason through getStats().
-        layerState._flowError = deriveTrafficFlowError(e);
-        layerState._flowCoveragePct = 0;
+        if (layerState._flowRoads === roads)
+          layerState._flowError = deriveTrafficFlowError(e);
         console.warn(
           '[Data:Traffic] Flow fetch failed (sim colors remain):',
           e?.message || e,
@@ -219,7 +212,11 @@ export function createFlow({ state: layerState, services, parts, source }) {
     if (outcome === 'timeout') {
       flowJob
         .then(() => {
-          if (generation !== layerState._loadGeneration) return;
+          if (
+            generation !== layerState._loadGeneration ||
+            layerState._roads !== roads
+          )
+            return;
           parts.model.recolorDotsInPlace(label);
         })
         .catch(() => {

@@ -1,5 +1,4 @@
 import { createFlowTileSource } from './flowSource.js';
-import { flowSegmentsToRoads } from './flowDecode.js';
 import { tilesForBounds } from '../../data/tomtomTiles.js';
 import { clipTileLine } from '../../sources/openFreeMap.js';
 import { createOpenFreeMapSource } from '../../sources/openFreeMap.js';
@@ -36,43 +35,33 @@ export function createTrafficSource({
       flow.resetFlowTileCache();
       mapTiles.clear();
     },
-    async requestRoads(box, { majorOnly = false, signal, live = false } = {}) {
+    async requestRoads(box, { majorOnly = false, signal } = {}) {
       if (
         !validTileBounds(box) ||
         box.north - box.south > 10 ||
         box.east - box.west > 10
       )
         throw new TypeError('A bounded road viewport is required');
-      let data;
-      if (live) {
-        const segments = await flow.fetchFlowForBounds(box, { signal });
-        data = {
-          roads: flowSegmentsToRoads(segments),
-          roadSource: 'TomTom',
-          partial: flow.getFlowSessionStats().partial,
-        };
-      } else {
-        const area = majorOnly ? box : trafficDetailBounds(box);
-        const result = await mapTiles.fetchBounds(area, {
-          zoom: majorOnly ? 12 : 14,
-          signal,
-        });
-        data = {
-          roads: result.tiles
-            .flatMap((tile) => tile.roads)
-            .flatMap((road) =>
-              clipTileLine(road.coordinates, area).map((coordinates) => ({
-                ...road,
-                coordinates,
-              })),
-            ),
-          roadSource: 'OpenStreetMap tiles',
-          partial: result.partial,
-          detailLimited:
-            !majorOnly && (area.north !== box.north || area.east !== box.east),
-          detailBounds: majorOnly ? null : area,
-        };
-      }
+      const area = majorOnly ? box : trafficDetailBounds(box);
+      const result = await mapTiles.fetchBounds(area, {
+        zoom: majorOnly ? 12 : 14,
+        signal,
+      });
+      const data = {
+        roads: result.tiles
+          .flatMap((tile) => tile.roads)
+          .flatMap((road) =>
+            clipTileLine(road.coordinates, area).map((coordinates) => ({
+              ...road,
+              coordinates,
+            })),
+          ),
+        roadSource: 'OpenStreetMap',
+        partial: result.partial,
+        detailLimited:
+          !majorOnly && (area.north !== box.north || area.east !== box.east),
+        detailBounds: majorOnly ? null : area,
+      };
       signal?.throwIfAborted();
       return {
         ok: true,
