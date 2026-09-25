@@ -3530,6 +3530,17 @@ Keyed Austin must report `roadSource: OpenStreetMap` and positive flow coverage.
 It records milliseconds from enabling Street Traffic to first rendered dots at
 2 km on a fresh page for each mode, plus warmed street-view timings and orbit screenshots;
 `src/overpassOffload.test.mjs` separately proves server-handler zero egress.
+Both QA modes record per-view request counts, decoded response-body bytes,
+transferred bytes and browser cache hits for OpenFreeMap TileJSON/tiles, ALPR
+extract metadata/tiles and local `/api/tomtom/*` responses. `--tour` measures
+Austin, London, Dubai, San Diego, Tokyo and São Paulo with all three layers on,
+at 450 m and -35° pitch (São Paulo: 1250 m), then revisits Austin to measure
+cache reuse. The tour disables camera collision adjustment and asserts the actual
+latitude, longitude, altitude and pitch so remote terrain cannot shift a revisit.
+Reports go to `qa-shots/overpass-offload-result.json` and separate
+acceptance/tour result files, with a console summary table. These are browser
+session measurements; TomTom upstream usage still depends on the server cache
+and budget. MB uses decimal bytes; transfer totals include response headers.
 
 Configured Overpass responses still use `overpassPayloadIsData()` for cache
 admission and stale fallback: refusals and body-level errors are never data.

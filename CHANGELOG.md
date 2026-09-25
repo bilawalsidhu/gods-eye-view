@@ -3,7 +3,9 @@
 - Public Overpass instances are no longer used by default. Street Traffic draws
   roads from OpenFreeMap vector tiles in both keyed and keyless mode. Optional
   TomTom flow is matched onto those roads for congestion colors, speeds and
-  closures; unmatched roads remain explicitly simulated. Flow coverage counts
+  closures; unmatched roads remain explicitly simulated. Road failures name
+  OpenFreeMap and retain HTTP status or timeout reasons separately from TomTom.
+  Flow coverage counts
   rendered dots on matched roads; mapped military areas come from OpenFreeMap and
   ALPR cameras from an hourly OpenStreetMap extract (US and Canada). Features
   without a replacement say they are unavailable. `OVERPASS_UPSTREAMS` sets an
