@@ -76,6 +76,58 @@ export function admitRecords(rows, normalize, label) {
   };
 }
 
+/**
+ * Compose a primary source with an optional track-history fallback (issue
+ * #446). The primary's methods are used unchanged; a fallback provides only
+ * `getTrackByQuery(reference, { signal })` and is consulted when the primary's
+ * `getTrack` throws or yields no records. The reference handed to the fallback
+ * is the layer's shared-contract record (id/callsign/registration), so a
+ * keyed historical provider can resolve an aircraft the primary keys by hex.
+ * Falls back transparently; a failing fallback propagates only when the
+ * primary also failed.
+ * @param {object} primary - Source satisfying the live-source contract.
+ * @param {{ getTrackByQuery: Function, label?: string }|null} fallback
+ * @returns {object} A source delegating everything to `primary` except track.
+ */
+export function composeSource(primary, fallback) {
+  if (!fallback) return primary;
+  return {
+    ...primary,
+    label: primary.label,
+    async getTrack(reference, options = {}) {
+      let primaryError = null;
+      try {
+        const track = await primary.getTrack(reference, options);
+        if (track?.records?.length)
+          return { ...track, historySource: undefined };
+      } catch (error) {
+        primaryError = error;
+      }
+      try {
+        const track = await fallback.getTrackByQuery(
+          {
+            id: typeof reference === 'string' ? reference : reference?.id,
+            callsign: reference?.callsign,
+            registration: reference?.registration,
+            lastContactEpochMs: reference?.lastContactEpochMs,
+          },
+          options,
+        );
+        if (track?.records?.length)
+          return {
+            ...track,
+            historySource: fallback.label,
+            credit: fallback.credit,
+          };
+      } catch {
+        /* fallback is best-effort */
+      }
+      if (primaryError) throw primaryError;
+      return { records: [], complete: false };
+    },
+  };
+}
+
 /** Cancellation is checked after body parsing even when a transport ignores it. */
 export async function readResponse(
   fetchImpl,

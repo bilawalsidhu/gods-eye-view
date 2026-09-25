@@ -130,7 +130,14 @@ export function readsbSnapshot(
   };
 }
 
-/** Track altitude remains barometric; renderers choose a visual ground fallback. */
+/**
+ * Track altitude remains barometric; renderers choose a visual ground fallback.
+ *
+ * The AeroAPI variant (below) maps onto the same contract: timestamp →
+ * observedAtMs, altitude (hundreds of feet) → baroAltitudeM. `delta` rows are
+ * dropped (waypoint summaries, not observed fixes); surface/ground rows carry
+ * altitude 0, matching the backfill renderer's on-ground handling.
+ */
 export function normalizeAircraftTrack(
   rows,
   { baseTimeMs = 0, readsb = false } = {},
@@ -164,6 +171,62 @@ export function normalizeAircraftTrack(
       },
     ];
   });
+}
+
+/**
+ * Normalize one AeroAPI track position into the shared track contract. Rows
+ * arrive in ascending timestamp order from FlightAware; a 90 s window absorbs
+ * position duplicates from multiple receiving stations. `delta: true` rows are
+ * waypoint summaries (no observation) and are rejected by the missing
+ * timestamp. `update_type: 'X'` marks surface positions (altitude 0).
+ * @param {object} row - AeroAPI FlightPosition.
+ * @param {number} windowMs - Deduplication window in milliseconds.
+ * @returns {object|null} A shared-contract track record, or null.
+ */
+export function normalizeAeroApiTrackPosition(row, windowMs = 90000) {
+  if (row?.delta === true) return null;
+  const latitude = finite(row?.latitude),
+    longitude = finite(row?.longitude);
+  const timestamp = cleanText(row?.timestamp);
+  const observedAtMs = timestamp ? Date.parse(timestamp) : NaN;
+  if (
+    !coordinates(latitude, longitude) ||
+    !Number.isFinite(observedAtMs) ||
+    observedAtMs <= 0
+  )
+    return null;
+  const altitude = finite(row?.altitude);
+  return {
+    latitude,
+    longitude,
+    observedAtMs,
+    baroAltitudeM:
+      altitude == null ? null : Math.max(0, altitude) * 100 * 0.3048,
+    ellipsoidAltitudeM: null,
+    onGround: cleanText(row?.update_type) === 'X',
+    _dedupeKey: `${Math.round(observedAtMs / (windowMs > 0 ? windowMs : 1))}:${latitude.toFixed(3)},${longitude.toFixed(3)}`,
+  };
+}
+
+/**
+ * Normalize an AeroAPI `/flights/{id}/track` response. Returns records in
+ * ascending time order with near-duplicate receiver observations collapsed.
+ * @param {object} payload - AeroAPI track response body.
+ * @returns {{records: object[]}} Shared-contract track records.
+ */
+export function normalizeAeroApiTrack(payload) {
+  if (!Array.isArray(payload?.positions)) return [];
+  const seen = new Set();
+  const records = [];
+  for (const row of payload.positions) {
+    const record = normalizeAeroApiTrackPosition(row);
+    if (!record) continue;
+    if (seen.has(record._dedupeKey)) continue;
+    seen.add(record._dedupeKey);
+    records.push(record);
+  }
+  for (const record of records) delete record._dedupeKey;
+  return records;
 }
 
 /** Known source identities are useful for classification even without positions. */
