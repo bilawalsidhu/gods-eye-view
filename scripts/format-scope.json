@@ -844,5 +844,6 @@
   "scripts/qa-recent-imagery.mjs",
   "src/data/xweatherPng.test.mjs",
   "src/data/xweatherMercator.test.mjs",
-  "src/data/xweatherFrames.test.mjs"
+  "src/data/xweatherFrames.test.mjs",
+  "src/data/xweatherBudget.test.mjs"
 ]

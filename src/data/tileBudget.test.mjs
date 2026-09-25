@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isOverBudget, normalizeBudget, utcDayKey } from './tileBudget.js';
+import {
+  isOverBudget,
+  normalizeBudget,
+  utcDayKey,
+  utcMonthKey,
+} from './tileBudget.js';
 import * as tomtom from './tomtomTiles.js';
 
 test('tile budget helpers live in one module and TomTom re-exports them', () => {
@@ -23,4 +28,9 @@ test('normalizeBudget keeps a valid state and resets another period', () => {
       count: 0,
     },
   );
+});
+
+test('utcMonthKey buckets by UTC calendar month', () => {
+  assert.equal(utcMonthKey(Date.UTC(2026, 8, 30, 23, 59)), '2026-09');
+  assert.equal(utcMonthKey(Date.UTC(2026, 9, 1, 0, 0)), '2026-10');
 });
