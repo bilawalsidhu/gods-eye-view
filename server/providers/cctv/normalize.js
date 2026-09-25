@@ -367,6 +367,17 @@ export function isLikelyCalgaryCoordinate(lat, lon) {
   );
 }
 
+/** Florida statewide, Key West to Georgia state line, with slack at each edge */
+export function isLikelyFloridaCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 24.3 &&
+    lat <= 31.1 &&
+    lon >= -87.7 &&
+    lon <= -79.8
+  );
+}
+
 export function isLikelyFinlandCoordinate(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
   return lat >= 59.5 && lat <= 70.5 && lon >= 19 && lon <= 32;

@@ -634,6 +634,14 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   address grid — so headings use the shared id-hash fallback at low confidence
   and are corrected with the calibration gizmo. `CCTV_CALGARY_MAX_SOURCES` sets
   the cap and `CCTV_CALGARY_ENABLED=0` turns the pack off.
+- Add FL511 (Florida DOT) traffic cameras as a keyless CCTV source pack
+  (#605): the statewide ArcGIS catalog, read a page at a time under a byte cap
+  with redirects refused, and frames pinned to FL511's two image hosts over
+  HTTPS. FL511's terms limit its content to individual, non-commercial use.
+  Headings come from the catalog's direction codes. Camera ids come from the
+  image channel, since the catalog's ID column repeats across regions.
+  `CCTV_FLORIDA_MAX_SOURCES` sets the cap and `CCTV_FLORIDA_ENABLED=0` turns
+  the pack off.
 - **Transit layer** — keyless buses, trams, subways, trains and ferries in
   Boston, Austin, Minneapolis–St Paul, Helsinki, the Netherlands, Norway and
   South East Queensland. Vehicles use delayed timestamp playback and explicit

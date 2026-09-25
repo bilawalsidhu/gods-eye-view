@@ -55,6 +55,11 @@ import {
   DEFAULT_CALGARY_MAX_SOURCES,
   CALGARY_DOWNTOWN,
   CALGARY_MAX_CATALOG_BYTES,
+  FLORIDA_CCTV_URL,
+  FLORIDA_IMAGE_HOSTS,
+  DEFAULT_FLORIDA_MAX_SOURCES,
+  FLORIDA_ANCHORS,
+  FLORIDA_MAX_CATALOG_BYTES,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
   DELDOT_CCTV_URL,
   DEFAULT_DELDOT_MAX_SOURCES,
@@ -76,6 +81,7 @@ import {
   isLikelyTexasCoordinate,
   isLikelyNswCoordinate,
   isLikelyCalgaryCoordinate,
+  isLikelyFloridaCoordinate,
   cameraDisplayCode,
   rowArrayToObject,
   prioritizeSources,
@@ -1696,6 +1702,193 @@ export async function loadDelDOTSourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] DelDOT source download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/** FL511 DIRECTION codes as headings; "NOT DIRECTIONAL" has none. */
+const FLORIDA_DIRECTION_HEADINGS = Object.freeze({
+  N: 0,
+  E: 90,
+  S: 180,
+  W: 270,
+});
+
+/**
+ * Stable camera id from a frame URL. FL511's ID column repeats across regions
+ * (ID 1220 is both an I-75 and an I-95 camera), so the image channel is the
+ * key, as Calgary keys on its frame filename. Falls back to a path slug.
+ *
+ * @param {string} imageUrl - A host-pinned FL511 frame URL.
+ * @returns {?string} Provider-stable id, or null when underivable.
+ */
+export function floridaCameraId(imageUrl) {
+  let path;
+  try {
+    path = new URL(String(imageUrl ?? '')).pathname;
+  } catch {
+    return null;
+  }
+  const channel = /\/chan-(\d+)_[a-z]+\.jpg$/i.exec(path);
+  if (channel) return `fl-${channel[1]}`;
+  const slug = path
+    .replace(/^\/+|\.[a-z0-9]+$/gi, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .toLowerCase();
+  return slug ? `fl-${slug}` : null;
+}
+
+/**
+ * One FL511 ArcGIS feature -> one catalog source, or null. DIRECTION is a
+ * one-letter code the free-text parser won't read, so a table maps it.
+ *
+ * @param {object} feature - ArcGIS feature from the FL511 camera layer.
+ * @returns {?object}
+ */
+export function floridaCameraToSource(feature) {
+  const a = feature?.attributes;
+  if (!a || typeof a !== 'object') return null;
+  const lat = toFiniteNumber(a.LATITUDE);
+  const lon = toFiniteNumber(a.LONGITUDE);
+  if (!isLikelyFloridaCoordinate(lat, lon)) return null;
+
+  const imageUrl = String(a.IMAGE || '');
+  let image;
+  try {
+    image = new URL(imageUrl);
+  } catch {
+    return null;
+  }
+  // Official image hosts only, HTTPS, no embedded credentials.
+  if (
+    image.protocol !== 'https:' ||
+    !FLORIDA_IMAGE_HOSTS.includes(image.host) ||
+    image.username ||
+    image.password
+  )
+    return null;
+
+  const cameraId = floridaCameraId(imageUrl);
+  if (!cameraId) return null;
+
+  const heading =
+    FLORIDA_DIRECTION_HEADINGS[
+      String(a.DIRECTION || '')
+        .trim()
+        .toUpperCase()
+    ];
+  const hasHeading = Number.isFinite(heading);
+
+  return {
+    id: cameraId,
+    name: String(a.DESCRIPT || '').trim() || `FL511 ${cameraId.slice(3)}`,
+    city: String(a.COUNTY ? `${a.COUNTY} County` : 'Florida'),
+    cityId: 'florida',
+    provider: 'FL511',
+    lat,
+    lon,
+    headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+    headingConfidence: hasHeading ? 'high' : 'low',
+    pitchDeg: hasHeading ? -24 : -18,
+    fovDeg: hasHeading ? 56 : 44,
+    rangeM: hasHeading ? 210 : 145,
+    mountHeightM: hasHeading ? 10 : 8,
+    groundElevationM: 5, // Coastal prior; the client's ground snap corrects.
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'fl511-open-data',
+    license: 'FL511 (FDOT), individual non-commercial use only',
+  };
+}
+
+/**
+ * Fetch FL511 (Florida DOT) cameras, keyless: an ArcGIS FeatureServer paged
+ * 2,000 rows at a time. Frames are stills on the Divas Cloud hosts. A redirect
+ * on any page drops the pack; any other failed page keeps the rows already read.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadFloridaSourcesFromOpenData() {
+  try {
+    const cameras = [];
+    const seen = new Set();
+    const pageSize = 2000;
+    // Page ceiling, in case the service ignores resultOffset.
+    for (let offset = 0, page = 0; page < 10; offset += pageSize, page += 1) {
+      const url = `${FLORIDA_CCTV_URL}?where=1%3D1&outFields=*&f=json&resultRecordCount=${pageSize}&resultOffset=${offset}`;
+      let resp;
+      try {
+        resp = await fetch(url, {
+          headers: { Accept: 'application/json' },
+          redirect: 'manual',
+          signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+        });
+      } catch (error) {
+        console.warn(
+          '[CCTV] Florida catalog page failed:',
+          error?.message || error,
+        );
+        break;
+      }
+      // Release the body on every path that will not read it.
+      const discard = async () => {
+        try {
+          await resp.body?.cancel();
+        } catch {
+          /* no-op */
+        }
+      };
+      if (resp.status >= 300 && resp.status < 400) {
+        console.warn(
+          '[CCTV] Florida catalog redirected; redirects are not followed',
+        );
+        await discard();
+        return [];
+      }
+      if (!resp.ok) {
+        console.warn('[CCTV] Florida camera download failed:', resp.status);
+        await discard();
+        break;
+      }
+      let body;
+      try {
+        body = await readResponseJsonCapped(resp, FLORIDA_MAX_CATALOG_BYTES);
+      } catch (error) {
+        console.warn(
+          '[CCTV] Florida catalog page unreadable:',
+          error?.message || error,
+        );
+        break;
+      }
+      const feats = Array.isArray(body?.features) ? body.features : [];
+      for (const feature of feats) {
+        const camera = floridaCameraToSource(feature);
+        if (!camera || seen.has(camera.id)) continue;
+        seen.add(camera.id);
+        cameras.push(camera);
+      }
+      // ArcGIS sets exceededTransferLimit while more rows remain.
+      if (feats.length < pageSize || body?.exceededTransferLimit !== true)
+        break;
+    }
+
+    const maxRaw = Number(
+      process.env.CCTV_FLORIDA_MAX_SOURCES || DEFAULT_FLORIDA_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(4200, Math.floor(maxRaw)))
+      : DEFAULT_FLORIDA_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, FLORIDA_ANCHORS);
+    console.log(
+      `[CCTV] Loaded Florida camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Florida camera download error:',
       error?.message || error,
     );
     return [];
