@@ -8,6 +8,8 @@ import {
   WEATHER_DETAIL_SIZE,
   WEATHER_IMAGE_SIZES,
 } from './source.js';
+import { xweatherProxy } from '../../../server/providers/xweather.js';
+import { xweatherStamp } from '../../../server/providers/xweather/frames.js';
 const time = '2026-09-16T02:00:00.000Z';
 const snapshot = () => ({
   schemaVersion: 1,
@@ -160,5 +162,119 @@ test('detail-window image URLs carry the bbox and omit the default detail size',
   assert.throws(
     () => weatherImageUrl('radar', time, { width: 8192, height: 4096 }, box),
     /size/,
+  );
+});
+
+test('xweather products build URLs under their own provider and nowhere else', () => {
+  assert.equal(
+    weatherImageUrl('xweather-radar', '2026-09-24T16:30:34.000Z'),
+    '/api/xweather/image?product=xweather-radar&time=2026-09-24T16%3A30%3A34.000Z',
+  );
+  assert.match(
+    weatherTileUrl('xweather-lightning', '2026-09-24T16:30:34.000Z'),
+    /^\/api\/xweather\/tile\?product=xweather-lightning&/,
+  );
+  assert.match(
+    weatherTileUrl('radar', '2026-09-24T16:30:34.000Z'),
+    /^\/api\/weather\/tile\?/,
+  );
+});
+
+test('xweather status must say whether a key is present', async () => {
+  const source = createWeatherSource({
+    fetchImpl: async () => new Response('{"used":3}'),
+  });
+  await assert.rejects(source.getXweatherStatus(), /Malformed Xweather status/);
+});
+
+test('a hung Xweather status request times out without holding up the NOAA snapshot', async () => {
+  const source = createWeatherSource({
+    statusTimeoutMs: 20,
+    fetchImpl: async (url, { signal }) =>
+      url === '/api/xweather/status'
+        ? new Promise((_resolve, reject) =>
+            signal.addEventListener('abort', () => reject(signal.reason), {
+              once: true,
+            }),
+          )
+        : new Response(JSON.stringify(snapshot())),
+  });
+  await assert.rejects(source.getXweatherStatus(), /Xweather status timed out/);
+  assert.equal((await source.getSnapshot({ product: 'radar' })).latest, time);
+});
+
+test('a real Xweather manifest passes the client validator', async () => {
+  // Pins the server↔client contract: the proxy's own manifest body must
+  // validate through the same gate used for NOAA products.
+  const NOW = Date.UTC(2026, 8, 24, 16, 31, 10);
+  // Frames fall every two minutes at :34 s, matching the measured cadence.
+  const frameAt = (ms) =>
+    ms - ((((ms - 34_000) % 120_000) + 120_000) % 120_000);
+  const stampMs = (stamp) =>
+    Date.UTC(
+      +stamp.slice(0, 4),
+      +stamp.slice(4, 6) - 1,
+      +stamp.slice(6, 8),
+      +stamp.slice(8, 10),
+      +stamp.slice(10, 12),
+      +stamp.slice(12, 14),
+    );
+  const fetchImpl = async (raw) => {
+    const url = new URL(raw);
+    const lookup = url.pathname.match(
+      /^\/([^/]+)\/([^/]+)\/0\/0\/0\/(current|\d{14})\.png$/,
+    );
+    if (!lookup) throw new Error('unexpected upstream request');
+    const asked = lookup[3] === 'current' ? NOW : stampMs(lookup[3]);
+    const stamp = xweatherStamp(frameAt(asked));
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: `/${lookup[1]}/${lookup[2]}/0/0/0/${stamp}_${stamp}.png`,
+        'x-cost-tokens': '0',
+      },
+    });
+  };
+  const files = new Map();
+  const budgetFs = {
+    async readFile(file) {
+      if (!files.has(file))
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+      return files.get(file);
+    },
+    async writeFile(file, text) {
+      files.set(file, text);
+    },
+    async mkdir() {},
+  };
+  let handler;
+  const plugin = xweatherProxy({
+    now: () => NOW,
+    env: {
+      XWEATHER_CLIENT_ID: 'cid-7f3a91',
+      XWEATHER_CLIENT_SECRET: 'sec-5b2e04',
+    },
+    budgetFs,
+    fetchImpl,
+  });
+  plugin.configureServer({
+    middlewares: { use: (_path, callback) => (handler = callback) },
+  });
+  const req = { url: '/manifest?product=xweather-radar', method: 'GET' };
+  const res = new (await import('node:events')).EventEmitter();
+  res.headers = {};
+  res.writeHead = (status, headers) => {
+    res.statusCode = status;
+    res.headers = headers;
+  };
+  res.end = (text) => {
+    res.body = text;
+  };
+  await handler(req, res);
+  assert.equal(res.statusCode, 200);
+  const manifest = JSON.parse(res.body);
+  assert.equal(
+    validateWeatherSnapshot(manifest, 'xweather-radar').product,
+    'xweather-radar',
   );
 });

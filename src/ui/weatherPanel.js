@@ -136,7 +136,16 @@ export function createWeatherPanel({
       'weather-satellite': 'Satellite clouds',
       'weather-lightning': 'Lightning density',
     };
-    set(scope, 'textContent', observed.map(({ id }) => names[id]).join(' · '));
+    // The card label's head names the product its source draws
+    // ('Lightning · 5 min flashes' on Xweather, 'Lightning density · 15 min'
+    // on NOAA); the fixed names cover a card without a label.
+    set(
+      scope,
+      'textContent',
+      observed
+        .map(({ id, summary }) => summary.label?.split(' · ')[0] || names[id])
+        .join(' · '),
+    );
     set(timelineHost, 'hidden', !showTimeline);
     const index =
       state.mode === 'latest'

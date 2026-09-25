@@ -2217,6 +2217,35 @@ test('observed weather round trips product and opacity without persisting histor
   assert.equal(Object.hasOwn(state.options['weather-radar'], 'play'), false);
 });
 
+test('radar and lightning source round trips under their own layer token and omits NOAA', () => {
+  const state = normalizeLayerState({
+    enabledLayerIds: ['weather-radar', 'weather-lightning'],
+    options: {
+      'weather-radar': { source: 'xweather', opacity: 'strong' },
+      'weather-lightning': { source: 'nowcoast', opacity: 'light' },
+    },
+  });
+  const params = new URLSearchParams(encode(state));
+  assert.deepEqual(
+    params
+      .get('lo')
+      .split('_')
+      .filter((code) => /^[lv]\./.test(code)),
+    ['l.o.l', 'v.s.x'],
+  );
+  assert.deepEqual(decodeLayerStateParams(params), state);
+  assert.equal(
+    createDefaultLayerState().options['weather-radar'].source,
+    'nowcoast',
+  );
+  assert.equal(
+    normalizeLayerState({
+      options: { 'weather-lightning': { source: 'other' } },
+    }).options['weather-lightning'].source,
+    'nowcoast',
+  );
+});
+
 test('satellite infrared display mode round trips and invalid or absent values use filtered', () => {
   for (const infrared of ['full', 'filtered', undefined, 'invalid']) {
     const state = normalizeLayerState({

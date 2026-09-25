@@ -1,6 +1,6 @@
 # KNOWN ISSUES
 
-Updated: September 22, 2026
+Updated: September 25, 2026
 
 This file tracks active runtime issues only.
 
@@ -81,7 +81,7 @@ Status: Open (owner-accepted 2026-07-08, documented)
 ### Weather layers: coverage and meaning
 Status: Open (source limits, by design)
 
-- **Rain radar covers the contiguous United States only.** It shows MRMS
+- **NOAA rain radar covers the contiguous United States only.** It shows MRMS
   reflectivity in dBZ, not rainfall rate or a forecast; a gap in coverage does not
   mean no precipitation.
 - **Lightning density is a ground-network grid, not GLM flashes.** It is NOAA's
@@ -103,6 +103,56 @@ Status: Open (source limits, by design)
   until it does.
 - Native hardware GPU behavior of the wind and weather renderers is not yet
   verified.
+
+---
+
+### Xweather weather source: cost, coverage and meaning
+Status: Open (source limits, by design)
+
+- **Each new view and frame is billed.** A whole-extent frame is 64 map units
+  and a detail window is capped at 192. Before that cap, one descent from
+  3,000 km to 25 km used about 1,000 units per product. The free 15,000 a
+  month are shared across every Xweather service on the account, and the card
+  counts only this app's units. Past the allowance the card warns but doesn't
+  block, so a paid Xweather plan keeps working — `XWEATHER_MONTHLY_FREE_UNITS`
+  only moves where the warning fires. Spend is bounded instead by a
+  cap of 600 source tiles (units) a minute per client and 3,000 overall. The
+  cost of one history playthrough has not yet been measured against the live
+  service.
+- **A free-plan account that exhausts its billing-period allowance gets
+  refused, not just warned.** On 2026-09-25 a test account got 403 `Maximum
+  number of daily accesses reached` from Xweather after this app had counted
+  about 1,370 units that day; from then every request was refused until the
+  allowance reset. That wording is Xweather's 403 body, not a separate daily
+  limit — Xweather documents only per-minute and per-billing-period limits
+  (see its [rate-limiting docs](https://www.xweather.com/docs/weather-api/getting-started/rate-limiting)),
+  and its pricing page gives no number; the card's counter cannot predict it.
+  The card shows `Xweather refused the request · see Provider Settings` while
+  it lasts. Frame lookups cost no map units, but whether they count toward
+  the allowance is unknown; after the first walk, each refresh makes one or
+  two.
+- **Coverage stops at 85° N/S.** Xweather serves Web Mercator only; the proxy
+  reprojects it to the globe's grid and leaves the poles empty.
+- **Global radar is satellite-filled where there is no radar.** It is not
+  rainfall rate and not a forecast.
+- **Lightning is flashes over the last 5 minutes**, not the NOAA density grid;
+  the two sources are not comparable colour for colour.
+- **No colour legend.** Xweather publishes no machine-readable scale for these
+  layers; the card links its layer documentation instead.
+- History is the last 13 frames per product (about 26 min of radar and 65 min
+  of lightning); older targets draw nothing. Xweather answers a time with the
+  first frame at or after it, so the proxy steps back 1.5 × the product's
+  cadence per frame. A single missing frame makes the walk skip the frame
+  beyond it, and a gap of more than two steps ends the list early.
+- **3D Tiles seam:** one seam can show where the detail window meets the
+  coarser whole-extent image. Below the detail window's resolution, lightning
+  symbols magnify gradually.
+- **Globe imagery seams not yet ruled out when zoomed in.** On globe map
+  sources the radar drapes as geographic tiles up to level 6. Checked once, at
+  8,000, 800 and 250 km: colours match Xweather's own tiles. At 250 km, where
+  level-6 tiles are magnified, faint one-pixel lines showed along tile edges. A
+  NOAA comparison at the same zoom, and a lightning check on the globe, have
+  not been done.
 
 ---
 

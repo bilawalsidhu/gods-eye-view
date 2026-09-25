@@ -342,6 +342,13 @@ export const TOMTOM_CREDIT = {
     '<a href="https://www.tomtom.com" target="_blank" rel="noopener">TomTom</a>',
 };
 
+/** Registered the first time a keyed Xweather radar or lightning frame is
+ * shown; keyless installs, which stay on NOAA, never show it. */
+export const XWEATHER_CREDIT = {
+  key: 'xweather',
+  html: '<a href="https://www.xweather.com/" target="_blank" rel="noopener">Powered by Vaisala Xweather</a>',
+};
+
 /** Registered when the first Natural Earth region outline resolves (public
  * domain — no attribution required; credited as a courtesy). */
 export const NATURAL_EARTH_CREDIT = {
