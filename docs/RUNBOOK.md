@@ -220,8 +220,8 @@ partial for an infra reason — see the trigger note below.
 | `/api/celestrak/stations` | 502 — the documented CF-egress block, honest error body |
 | `scripts/verify-prod-render.mjs` | **PASS, 8/8** — boots, canvas fills 1600×900 (no 300×150 regression), camera 2500 m over target, tiles loaded, photoreal stream 146/148 → 200, CCTV 200, debug-log 204, regional-brief 200, no console errors |
 
-**GitForge trigger defect (2026-09-23, unfixed — owned by the GitForge
-session):** pushes to `mkinney/gods-eye-view` after 18:15 UTC write
+**GitForge trigger defect (2026-09-23 — RESOLVED upstream 2026-09-24;
+history retained):** pushes to `mkinney/gods-eye-view` after 18:15 UTC write
 `ci.trigger.delivered` events (verified in the `events` table for
 `3e8eb82` and `7020b22`) but create NO pipeline row and NO run row; other
 repositories' triggers kept creating runs in the same window, so the
@@ -231,6 +231,46 @@ lint + unit jobs DID succeed in-run on `d8b51755` before its build job
 hit the 1800 s timeout under fleet load, and the release commit's full
 battery ran green locally; re-verify on GitForge once the trigger path
 is repaired (any push re-tests it).
+
+### 2026-09-25 verification run (v0.10.2 deploy, production alias)
+
+Deployed from `main` at `b507f95` (the release commit) with
+`npx wrangler pages deploy dist --project-name globe --branch main`.
+GitForge run `00e56716` on the release commit **succeeded 6/6** (lint+audit,
+Aegis, allocation-gated units on default Node AND Node 26, coverage,
+wasm+build+budgets) — the allocation-gated unit suites were CI's verdict
+by design this release: the shared box sat in a co-tenant storm (1-min
+load 38–296 across the night; the prior record was 163–253), where local
+unit forks starve. Local deterministic gates ran green before the deploy
+(lint 0 warnings, BUILD-GATE PASS, BUNDLE-BUDGETS PASS, AUDIT-GATE PASS).
+Tagged `v0.10.2` on `b507f95` AFTER production verification (names
+immutable); GitHub release published. Attribution verification is NEW
+this release: the dock shipped as the plan's accepted resolution of the
+C13 owner-decision, so the production checklist gained the clean-view
+attribution probe.
+
+| Check | Result |
+| --- | --- |
+| `/api/openzenith/elevation` | 200 — **99 m**, expected value; `x-gev-openzenith-cache: MISS` header present |
+| `/api/openzenith/reverse-geocode` | 200 (real Austin `place.display_name`) |
+| `/api/cctv/sources` | 200 |
+| `POST /api/realtime/debug-log` | 204 |
+| `POST /api/openai/hud-summary` | 200 (keyless honest degrade — no 405) |
+| `/api/celestrak/stations` | **200** — the documented CF-egress 502 did NOT reproduce this window (upstream accepted the egress IP); environmental variance, not a code change |
+| `scripts/verify-prod-render.mjs` | **PASS, 8/8** — boots, canvas fills 1600×900, camera 2500 m over target, tiles loaded, photoreal stream 217/219 → 200, CCTV 200, debug-log 204, regional-brief 200, no console errors |
+| **Attribution dock on production (new)** | **C13-EQUIVALENT PASS** — `#cesium-credits` inside `.gev-credit-dock`, 324×46 painted, logo + "Data attribution" labelled, visible with `ui-clean-view` engaged |
+
+**Matrix evidence note (honest accounting):** the full L9 matrix did not
+go green on this tree this cycle — two attempts during the load storm
+ended with every FAIL/CRASH load-shaped (boot budgets, layer-load
+budgets, "page did not answer" wedge signatures; a third run behind a
+sustained-quiet gate was still armed at release time). The runtime
+itself was fully matrix-validated in Batch V's 2026-09-23/24 runs; the
+only runtime delta shipped here is the attribution surface, which holds
+its own targeted evidence: `qa-attribution-b12` **PASS 24/0** on this
+tree (matrix run 2, D6), the live dev-server dock probe, the
+reasonableDefaults + creditsDock unit pins, CI's two allocation-gated
+unit suites, and the production C13-equivalent PASS above.
 
 ## Credentials & environment
 
