@@ -218,18 +218,7 @@ export function createTiming({ state: layerState, services, parts, source }) {
         _trafficTimingParseEnd,
         { roadCount: 0 },
       );
-      trafficTimingAggregate(
-        'sample-height-total',
-        _trafficTimingState,
-        _trafficTimingParseStartTime,
-        0,
-        {
-          sampleHeightCalls: 0,
-          sampleHeightMeanMs: 0,
-          distinctCells: 0,
-          roadCount: 0,
-        },
-      );
+
       trafficTimingAggregate(
         'waypoint-materialization',
         _trafficTimingState,
@@ -243,9 +232,6 @@ export function createTiming({ state: layerState, services, parts, source }) {
 
     const roads = [];
     /* TRACE_ONLY_BEGIN */
-    const _trafficTimingSampledCells = new Set();
-    let _trafficTimingSampleHeightCalls = 0;
-    let _trafficTimingSampleHeightMs = 0;
     let _trafficTimingWaypointMaterializationMs = 0;
     /* TRACE_ONLY_END */
     for (const road of roadData.roads) {
@@ -276,32 +262,23 @@ export function createTiming({ state: layerState, services, parts, source }) {
           performance.now() - _trafficTimingMaterializeStart;
         /* TRACE_ONLY_END */
 
-        roads.push({
-          coords,
-          type,
-          oneway,
-          waypoints,
-          segmentDist,
-          flow: road.flow || null,
-        });
+        for (const direction of oneway ? [oneway] : [1, -1])
+          roads.push({
+            densityWeight: oneway ? 1 : 0.5,
+            coords,
+            type,
+            oneway: direction,
+            waypoints,
+            segmentDist,
+            flow: road.flow || null,
+          });
       }
     }
     /* TRACE_ONLY_BEGIN */
     const _trafficTimingMetrics = {
       roadCount: roads.length,
-      sampleHeightCalls: _trafficTimingSampleHeightCalls,
-      sampleHeightMeanMs: _trafficTimingSampleHeightCalls
-        ? _trafficTimingSampleHeightMs / _trafficTimingSampleHeightCalls
-        : 0,
-      distinctCells: _trafficTimingSampledCells.size,
     };
-    trafficTimingAggregate(
-      'sample-height-total',
-      _trafficTimingState,
-      _trafficTimingParseStartTime,
-      _trafficTimingSampleHeightMs,
-      _trafficTimingMetrics,
-    );
+
     trafficTimingAggregate(
       'waypoint-materialization',
       _trafficTimingState,

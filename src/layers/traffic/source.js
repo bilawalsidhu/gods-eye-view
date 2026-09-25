@@ -1,3 +1,4 @@
+import { phaseTiming } from '../../sources/phaseTiming.js';
 import { createFlowTileSource } from './flowSource.js';
 import { tilesForBounds } from '../../data/tomtomTiles.js';
 import { clipTileLine } from '../../sources/openFreeMap.js';
@@ -57,11 +58,12 @@ export function createTrafficSource({
   const flow = createFlowTileSource({ fetchImpl });
   return {
     ...flow,
+    prefetch: () => mapTiles.getMetadata().catch(() => {}),
     resetFlowTileCache() {
       flow.resetFlowTileCache();
       mapTiles.clear();
     },
-    async requestRoads(box, { majorOnly = false, signal } = {}) {
+    async requestRoads(box, { majorOnly = false, signal, onTile } = {}) {
       if (
         !validTileBounds(box) ||
         box.north - box.south > 10 ||
@@ -69,19 +71,8 @@ export function createTrafficSource({
       )
         throw new TypeError('A bounded road viewport is required');
       const area = majorOnly ? box : trafficDetailBounds(box);
-      let result;
-      try {
-        result = await mapTiles.fetchBounds(area, {
-          zoom: majorOnly ? 12 : 14,
-          signal,
-        });
-      } catch (error) {
-        signal?.throwIfAborted();
-        if (error?.name === 'AbortError') throw error;
-        throw roadRequestError(error?.status, error);
-      }
-      const data = {
-        roads: result.tiles
+      const snapshot = (tiles, partial = false) => ({
+        roads: tiles
           .flatMap((tile) => tile.roads)
           .flatMap((road) =>
             clipTileLine(road.coordinates, area).map((coordinates) => ({
@@ -90,11 +81,24 @@ export function createTrafficSource({
             })),
           ),
         roadSource: 'OpenStreetMap',
-        partial: result.partial,
+        partial,
         detailLimited:
           !majorOnly && (area.north !== box.north || area.east !== box.east),
         detailBounds: majorOnly ? null : area,
-      };
+      });
+      let result;
+      try {
+        result = await mapTiles.fetchBounds(area, {
+          zoom: majorOnly ? 12 : 14,
+          signal,
+          onTile: onTile ? (tile) => onTile(snapshot([tile])) : undefined,
+        });
+      } catch (error) {
+        signal?.throwIfAborted();
+        if (error?.name === 'AbortError') throw error;
+        throw roadRequestError(error?.status, error);
+      }
+      const data = snapshot(result.tiles, result.partial);
       signal?.throwIfAborted();
       return {
         ok: true,
@@ -106,6 +110,7 @@ export function createTrafficSource({
       };
     },
     async getStatus({ signal } = {}) {
+      const start = performance.now();
       const timeout = AbortSignal.timeout(8000);
       const response = await fetchImpl('/api/tomtom/status', {
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
@@ -118,6 +123,7 @@ export function createTrafficSource({
       signal?.throwIfAborted();
       if (typeof status?.hasKey !== 'boolean')
         throw new Error('Malformed traffic status');
+      phaseTiming('status', start);
       return status;
     },
   };

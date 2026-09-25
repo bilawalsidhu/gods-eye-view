@@ -1,3 +1,4 @@
+import { phaseTiming } from '../../sources/phaseTiming.js';
 import * as Cesium from 'cesium';
 import { DOT_HEIGHT_OFFSET, MAX_WAYPOINTS_PER_ROAD } from './policy.js';
 
@@ -49,57 +50,90 @@ export function roadSurfaceChunks(coordinates) {
 const validHeight = (height) =>
   Number.isFinite(height) && Math.abs(height) <= 9000;
 
-/** Prepare local ellipsoidal waypoint heights, without writing unvalidated shared floor cells. */
+// Per-scene, coordinate-keyed LRU. Never writes raw samples into shared ground floors.
+const sceneCaches = new WeakMap();
+const nextFrame = () =>
+  new Promise((resolve) =>
+    typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame(resolve)
+      : setTimeout(resolve, 0),
+  );
+
+/** Prepare only admitted roads in bounded slices; locally missing surfaces defer that road. */
 export async function prepareRoadSurfaces(
   roads,
   scene,
   ground,
   excluded,
   signal,
+  { onReady, onMetrics, frameBudgetMs = 6 } = {},
 ) {
-  const deadline = Date.now() + 30_000;
-  while (!trafficSurfaceReady(scene)) {
-    signal?.throwIfAborted();
-    if (Date.now() >= deadline) throw new Error('Road surface still loading');
-    await new Promise((resolve) => setTimeout(resolve, 100));
+  let cache = sceneCaches.get(scene);
+  if (!cache || cache.globe !== scene.globe?.show) {
+    cache = { globe: scene.globe?.show, heights: new Map() };
+    sceneCaches.set(scene, cache);
   }
-  const samples = new Map();
-  let work = 0;
+  const start = performance.now();
+  const metrics = {
+    sampleCount: 0,
+    sampleMs: 0,
+    cacheHits: 0,
+    roads: roads.length,
+    pending: 0,
+    maxSliceMs: 0,
+  };
+  let sliceStart = performance.now();
   const carto = new Cesium.Cartographic();
+  const ready = [],
+    pending = [];
   for (const road of roads) {
+    let resolved = true;
     for (let i = 0; i < road.coords.length; i++) {
       signal?.throwIfAborted();
       const [lon, lat] = road.coords[i];
       const key = `${lon.toFixed(6)},${lat.toFixed(6)}`;
-      let height = samples.get(key);
-      if (height === undefined) {
+      const cached = cache.heights.get(key);
+      const settled = trafficSurfaceReady(scene);
+      let height =
+        cached && (cached.settled || !settled) ? cached.height : undefined;
+      if (height !== undefined) {
+        metrics.cacheHits++;
+        cache.heights.delete(key);
+        cache.heights.set(key, cached);
+      } else {
         carto.longitude = Cesium.Math.toRadians(lon);
         carto.latitude = Cesium.Math.toRadians(lat);
         carto.height = 0;
         const floor = ground?.cachedGroundFloor?.(lat, lon);
-        const terrain = scene.globe?.show
-          ? scene.globe.getHeight?.(carto)
-          : undefined;
         let sampled;
-        if (
-          !scene.globe?.show &&
-          scene.sampleHeightSupported &&
-          trafficSurfaceReady(scene)
-        ) {
+        // sampleHeight reads the locally rendered mesh, not unresolved/offscreen
+        // tiles. Global tilesLoaded can stay false while this street is usable.
+        if (scene.globe?.show) sampled = scene.globe.getHeight?.(carto);
+        else if (scene.sampleHeightSupported) {
+          const sampleStart = performance.now();
+          metrics.sampleCount++;
+          const shown = (excluded || []).filter((p) => p?.show);
+          for (const primitive of shown) primitive.show = false;
           try {
             sampled = scene.sampleHeight(carto, excluded);
           } catch {
-            /* unresolved mesh */
+            /* local mesh missing */
+          } finally {
+            for (const primitive of shown) primitive.show = true;
           }
+          metrics.sampleMs += performance.now() - sampleStart;
         }
-        height = validHeight(sampled)
-          ? sampled
-          : validHeight(floor)
-            ? floor
-            : 0;
-        if (validHeight(floor)) height = Math.max(height, floor);
-        if (validHeight(terrain)) height = Math.max(height, terrain);
-        samples.set(key, height);
+        // A shared floor is a safe provisional waypoint, but not permission to
+        // display a photoreal road: only local measured mesh heights admit it.
+        if (!validHeight(sampled)) {
+          resolved = false;
+          height = validHeight(floor) ? floor : 0;
+        } else {
+          height = validHeight(floor) ? Math.max(sampled, floor) : sampled;
+          cache.heights.set(key, { height, settled });
+          while (cache.heights.size > 40000)
+            cache.heights.delete(cache.heights.keys().next().value);
+        }
       }
       Cesium.Cartesian3.fromDegrees(
         lon,
@@ -108,14 +142,31 @@ export async function prepareRoadSurfaces(
         undefined,
         road.waypoints[i],
       );
-      if (++work % 32 === 0)
-        await new Promise((resolve) => setTimeout(resolve, 0));
+      const elapsed = performance.now() - sliceStart;
+      if (elapsed >= frameBudgetMs) {
+        metrics.maxSliceMs = Math.max(metrics.maxSliceMs, elapsed);
+        await nextFrame();
+        sliceStart = performance.now();
+      }
     }
     for (let i = 0; i < road.segmentDist.length; i++)
       road.segmentDist[i] = Cesium.Cartesian3.distance(
         road.waypoints[i],
         road.waypoints[i + 1],
       );
+    road.surfaceReady = resolved;
+    if (resolved) {
+      ready.push(road);
+      onReady?.(road);
+    } else pending.push(road);
   }
+  metrics.pending = pending.length;
+  metrics.maxSliceMs = Math.max(
+    metrics.maxSliceMs,
+    performance.now() - sliceStart,
+  );
+  phaseTiming('surface', start, metrics);
+  onMetrics?.(metrics);
   signal?.throwIfAborted();
+  return { ready, pending, metrics };
 }

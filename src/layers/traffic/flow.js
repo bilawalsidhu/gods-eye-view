@@ -1,6 +1,7 @@
-import { prepareRoadSurfaces } from './surface.js';
+import * as Cesium from 'cesium';
+import { prepareRoadSurfaces, trafficSurfaceReady } from './surface.js';
 import { matchFlowToRoads } from '../../data/flowMatch.js';
-import { TRAFFIC_TIMING_ENABLED, FLOW_RENDER_RACE_MS } from './policy.js';
+import { MAX_DOTS } from './policy.js';
 
 export function createFlow({ state: layerState, services, parts, source }) {
   const { registerDynamicCredit, TOMTOM_CREDIT } = services.credits;
@@ -113,9 +114,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
         // reuse theirs so one cancel covers both roads and flow.
         if (!layerState._activeFetchAbort)
           layerState._activeFetchAbort = new AbortController();
-        const segments = await fetchFlowForBounds(clamped, {
-          signal: layerState._activeFetchAbort.signal,
-        });
+        const segments = await warmFlow(clamped, generation);
         if (generation !== layerState._loadGeneration || !layerState._enabled)
           return;
         const { matches } = matchFlowToRoads(roads, segments);
@@ -145,18 +144,22 @@ export function createFlow({ state: layerState, services, parts, source }) {
     }
   }
 
-  /**
-   * Race flow application against the paint deadline, render, and schedule an
-   * in-place recolor if flow lost the race.
-   * @param {Array} roads - Parsed road objects.
-   * @param {{south:number,west:number,north:number,east:number}} clamped - Fetch bounds.
-   * @param {number} generation - `_loadGeneration` at call time.
-   * @param {number} altitude - Camera altitude in meters.
-   * @param {string} label - Render log label.
-   * @param {Object|null} [trace=null] - Development-only correlated load trace.
-   * @returns {Promise<boolean>} True if this generation rendered.
-   */
+  // One flow acquisition per generation, started alongside road acquisition.
+  function warmFlow(clamped, generation) {
+    if (layerState._warmFlowGeneration === generation)
+      return layerState._warmFlow;
+    layerState._warmFlowGeneration = generation;
+    const signal = layerState._activeFetchAbort?.signal;
+    layerState._warmFlow = ensureFlowStatus(signal).then(() => {
+      if (!layerState._liveMode || generation !== layerState._loadGeneration)
+        return [];
+      return fetchFlowForBounds(clamped, { signal });
+    });
+    layerState._warmFlow.catch(() => {});
+    return layerState._warmFlow;
+  }
 
+  /** Paint locally resolved roads incrementally; flow never delays surface work. */
   async function applyFlowThenRender(
     roads,
     clamped,
@@ -165,72 +168,164 @@ export function createFlow({ state: layerState, services, parts, source }) {
     label,
     trace = null,
   ) {
-    const state =
-      TRAFFIC_TIMING_ENABLED && trace
-        ? parts.timing.trafficTimingRenderState(trace, label)
-        : null;
-    const flowRaceStart = state
-      ? parts.timing.trafficTimingMark(state, 'flow-render-race-start', {
-          deadlineMs: FLOW_RENDER_RACE_MS,
-        })
-      : null;
+    const signal = layerState._activeFetchAbort?.signal;
+    const current = () =>
+      generation === layerState._loadGeneration && !signal?.aborted;
+    if (!current()) return false;
+    const scene = layerState._viewer.scene;
+    const selected = parts.rendering
+      .visibleRoadsForAltitude(roads, altitude)
+      .filter((road) => {
+        const camera = layerState._viewer.camera?.positionWC;
+        const radius = Math.max(1200, altitude * 2);
+        if (
+          camera &&
+          road.waypoints.every(
+            (point) =>
+              Cesium.Cartesian3.distanceSquared(camera, point) >
+              radius * radius,
+          )
+        )
+          return false;
+        // Spend surface work on roads crossing the canvas, with a small pan margin.
+        if (!scene.canvas?.clientWidth) return true;
+        let minX = Infinity,
+          minY = Infinity,
+          maxX = -Infinity,
+          maxY = -Infinity;
+        for (const point of road.waypoints) {
+          const screen = Cesium.SceneTransforms.worldToWindowCoordinates(
+            scene,
+            point,
+          );
+          if (!screen) continue;
+          minX = Math.min(minX, screen.x);
+          maxX = Math.max(maxX, screen.x);
+          minY = Math.min(minY, screen.y);
+          maxY = Math.max(maxY, screen.y);
+        }
+        return (
+          maxX >= -100 &&
+          minX <= scene.canvas.clientWidth + 100 &&
+          maxY >= -100 &&
+          minY <= scene.canvas.clientHeight + 100
+        );
+      });
+    const budgets = parts.model.allocateRoadDotBudgets(
+      selected,
+      altitude,
+      MAX_DOTS,
+    );
+    const admitted = selected.filter((r, i) => budgets[i] > 0);
+    const camera = layerState._viewer.camera?.positionWC;
+    if (camera)
+      admitted.sort(
+        (a, b) =>
+          Cesium.Cartesian3.distanceSquared(camera, a.waypoints[0]) -
+          Cesium.Cartesian3.distanceSquared(camera, b.waypoints[0]),
+      );
+    const ready = [];
+    let lastPaint = 0;
+    const paint = () => {
+      if (!current() || !ready.length) return;
+      parts.rendering.renderRoadsForAltitude(
+        ready.slice(),
+        altitude,
+        label,
+        trace,
+      );
+      lastPaint = performance.now();
+    };
     const flowJob = applyFlowToRoads(roads, clamped, generation);
-    const outcome = await Promise.race([
-      flowJob.then(() => 'flow'),
-      new Promise((resolve) =>
-        setTimeout(() => resolve('timeout'), FLOW_RENDER_RACE_MS),
-      ),
-    ]);
-    if (state) {
-      const flowRaceEnd = parts.timing.trafficTimingMark(
-        state,
-        'flow-render-race-end',
-        {
-          deadlineMs: FLOW_RENDER_RACE_MS,
-          outcome,
-        },
-      );
-      parts.timing.trafficTimingMeasure(
-        'flow-render-race',
-        state,
-        flowRaceStart,
-        flowRaceEnd,
-        {
-          deadlineMs: FLOW_RENDER_RACE_MS,
-          outcome,
-        },
-      );
-    }
-    if (generation !== layerState._loadGeneration) return false;
-    await prepareRoadSurfaces(
-      roads,
+    flowJob
+      .then(() => {
+        if (current()) parts.model.recolorDotsInPlace(label);
+      })
+      .catch(() => {});
+    const options = {
+      onReady: (road) => {
+        ready.push(road);
+        if (!lastPaint || performance.now() - lastPaint >= 120) paint();
+      },
+    };
+    let prepared = await prepareRoadSurfaces(
+      admitted,
       layerState._viewer.scene,
       services.ground,
       [layerState._pointCollection],
-      layerState._activeFetchAbort?.signal,
+      signal,
+      options,
     );
-    if (generation !== layerState._loadGeneration) return false;
-    parts.rendering.renderRoadsForAltitude(roads, altitude, label, trace);
-    if (outcome === 'timeout') {
-      flowJob
-        .then(() => {
-          if (
-            generation !== layerState._loadGeneration ||
-            layerState._roads !== roads
-          )
-            return;
-          parts.model.recolorDotsInPlace(label);
-        })
-        .catch(() => {
-          /* applyFlowToRoads settles its own failures */
-        });
+    paint();
+    // Missing mesh is a surface state, never an OpenFreeMap provider failure.
+    // Retry locally for a bounded interval while usable roads remain visible.
+    const deadline = performance.now() + 1500;
+    while (
+      !ready.length &&
+      prepared.pending.length &&
+      current() &&
+      performance.now() < deadline
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      prepared = await prepareRoadSurfaces(
+        prepared.pending,
+        layerState._viewer.scene,
+        services.ground,
+        [layerState._pointCollection],
+        signal,
+        options,
+      );
+      paint();
     }
-    return true;
+    if (current()) layerState._surfacePending = prepared.pending.length;
+    if (
+      current() &&
+      !label.includes('tile') &&
+      !label.includes('refined') &&
+      scene.postRender &&
+      (!trafficSurfaceReady(scene) || prepared.pending.length)
+    ) {
+      layerState._surfaceRefineRemove?.();
+      const stop = () => {
+        remove();
+        clearTimeout(timer);
+        if (layerState._surfaceRefineRemove === stop)
+          layerState._surfaceRefineRemove = null;
+      };
+      const remove = scene.postRender.addEventListener(() => {
+        if (!current()) {
+          stop();
+          return;
+        }
+        if (!trafficSurfaceReady(scene)) return;
+        stop();
+        // Revalidate only local samples taken at a coarser rendered LOD. This
+        // background upgrade never holds road acquisition or first paint.
+        layerState._surfaceRefining = true;
+        applyFlowThenRender(
+          roads,
+          clamped,
+          generation,
+          altitude,
+          `${label} refined`,
+          trace,
+        )
+          .catch(() => {})
+          .finally(() => {
+            if (current()) layerState._surfaceRefining = false;
+          });
+      });
+      const timer = setTimeout(stop, 10000);
+      layerState._surfaceRefineRemove = stop;
+    }
+    return current() && ready.length > 0;
   }
+
   return {
     deriveTrafficFlowError,
     ensureFlowStatus,
     applyFlowToRoads,
+    warmFlow,
     applyFlowThenRender,
   };
 }

@@ -11,8 +11,8 @@
  *     projected to local meters (degree cell size cos(lat)-adjusted).
  *  2. Each road is sampled at up to 7 evenly-spaced points along its length;
  *     each sample looks for the nearest flow segment within 35 m whose
- *     bearing agrees within 30° (folded mod 180° so two-way roads match
- *     opposite-direction flow lines).
+ *     bearing agrees with the road travel direction within 30°. Two-way
+ *     roads are represented as separate travel directions by the layer.
  *  3. A road matches when at least half its samples (minimum 2) matched; its
  *     level is the MEDIAN of the matched samples' trafficLevels, and closure
  *     is true if ANY matched segment is closed.
@@ -29,7 +29,7 @@ const M_PER_DEG_LAT = 111320;
 const CELL_SIZE_M = 100;
 /** @const {number} Max snap distance from a road sample to a flow segment. */
 const MATCH_RADIUS_M = 35;
-/** @const {number} Max bearing disagreement (degrees, folded mod 180). */
+/** @const {number} Max travel-bearing disagreement (degrees). */
 const BEARING_TOLERANCE_DEG = 30;
 /** @const {number} Evenly-spaced samples per road. */
 const ROAD_SAMPLES = 7;
@@ -56,15 +56,14 @@ function bearingDeg(dx, dy) {
 }
 
 /**
- * Bearing disagreement folded mod 180° — a flow line drawn in the opposite
- * direction of travel still describes the same two-way road.
+ * Travel-bearing disagreement; opposing flow never matches.
  * @param {number} a - Bearing (degrees). @param {number} b - Bearing (degrees).
- * @returns {number} min(|Δ|, 180 − |Δ|) in [0, 90].
+ * @returns {number} Angular difference in [0, 180].
  */
 function bearingDiffDeg(a, b) {
   let d = Math.abs(a - b) % 360;
   if (d > 180) d = 360 - d;
-  return Math.min(d, 180 - d);
+  return d;
 }
 
 /** Squared distance from point (px,py) to segment (ax,ay)-(bx,by), meters². */
@@ -202,16 +201,16 @@ export function matchFlowToRoads(roads, flowSegments) {
         (target - cum[cursor - 1]) / (cum[cursor] - cum[cursor - 1] || 1);
       const px = xs[cursor - 1] + (xs[cursor] - xs[cursor - 1]) * segT;
       const py = ys[cursor - 1] + (ys[cursor] - ys[cursor - 1]) * segT;
-      const sampleBearing = bearingDeg(
-        xs[cursor] - xs[cursor - 1],
-        ys[cursor] - ys[cursor - 1],
-      );
+      const sampleBearing =
+        (roads[r].oneway === -1 ? 180 : 0) +
+        bearingDeg(xs[cursor] - xs[cursor - 1], ys[cursor] - ys[cursor - 1]);
 
       // 3×3 cell probe around the sample.
       const cx = Math.floor(px / CELL_SIZE_M);
       const cy = Math.floor(py / CELL_SIZE_M);
       let best = null;
       let bestDist2 = radius2;
+      let ambiguous = false;
       for (let gy = cy - 1; gy <= cy + 1; gy++) {
         for (let gx = cx - 1; gx <= cx + 1; gx++) {
           const bucket = grid.get(`${gx},${gy}`);
@@ -225,14 +224,22 @@ export function matchFlowToRoads(roads, flowSegments) {
               BEARING_TOLERANCE_DEG
             )
               continue;
-            if (d2 <= bestDist2) {
+            if (d2 < bestDist2 - 1) {
               bestDist2 = d2;
               best = seg;
+              ambiguous = false;
+            } else if (Math.abs(d2 - bestDist2) <= 1) {
+              if (
+                best &&
+                (best.level !== seg.level || best.closure !== seg.closure)
+              )
+                ambiguous = true;
+              else if (!best) best = seg;
             }
           }
         }
       }
-      if (best) {
+      if (best && !ambiguous) {
         matchedLevels.push(best.level);
         if (best.closure) matchedClosure = true;
       }

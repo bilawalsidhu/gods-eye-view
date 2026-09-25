@@ -11,7 +11,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function setup(t, requestRoads) {
+function setup(t, requestRoads, getStatus = async () => ({ hasKey: false })) {
   t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
   const camera = {
     positionCartographic: Cesium.Cartographic.fromDegrees(
@@ -56,7 +56,7 @@ function setup(t, requestRoads) {
     },
     source: {
       requestRoads,
-      getStatus: async () => ({ hasKey: false }),
+      getStatus,
       fetchFlowForBounds: async () => [],
       getFlowSessionStats: () => ({ tilesFetched: 0 }),
       resetFlowTileCache() {},
@@ -263,4 +263,23 @@ test('an unclassified road failure keeps the general line', async (t) => {
   layer.enable(viewer);
   await tick(400);
   assert.equal(layer.getStats().error, 'OpenFreeMap tiles unavailable');
+});
+
+test('a stalled TomTom status never blocks road acquisition or first simulated dots', async (t) => {
+  let calls = 0;
+  const { layer, viewer, tick } = setup(
+    t,
+    async (box) => {
+      calls++;
+      return roads(box);
+    },
+    () => new Promise(() => {}),
+  );
+  // The source contract is exercised independently of status by the production
+  // load path; the real source status cancellation case is in source.test.
+  layer.enable(viewer);
+  await tick(400);
+  await tick(2000);
+  assert.ok(calls > 0);
+  assert.ok(layer.getStats().count > 0);
 });

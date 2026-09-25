@@ -141,7 +141,10 @@ export function createControls({ state: layerState, services, parts, source }) {
       // Outstanding flow work counts as loading: the paint race can leave a
       // TomTom request in flight after the roads have settled, and the shared
       // loading batch has to stay open long enough to announce its failure.
-      const loading = layerState._fetching || layerState._flowPending > 0;
+      const loading =
+        layerState._fetching ||
+        layerState._flowPending > 0 ||
+        Boolean(layerState._surfaceRefining);
       const { free, slow, jam, sim } = layerState._bucketCounts;
       const matched = free + slow + jam;
       const flowCoveragePct =
@@ -159,6 +162,8 @@ export function createControls({ state: layerState, services, parts, source }) {
         loading,
         mode: feed.mode,
         error: layerState._roadError || layerState._detailError || feed.error,
+        roadBounds: layerState._lastBounds,
+        surfacePending: layerState._surfacePending || 0,
         detailError: layerState._detailError || null,
         detailLimited: Boolean(layerState._detailLimited),
         flowCoveragePct,
@@ -190,7 +195,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         source: layerState._roadSource,
         loadingLabel: layerState._roadError
           ? `UNAVAILABLE · ${layerState._roadSource} · Roads unavailable`
-          : `${feed.loadingLabel}${layerState._liveMode && !feed.error ? '' : ` · Roads: ${layerState._roadSource}`}${layerState._roadPartial ? ' · Partial coverage' : ''}${layerState._detailError ? ' · Detailed roads unavailable' : layerState._detailLimited ? ' · Reduced detail coverage' : ''}`,
+          : `${feed.loadingLabel}${layerState._liveMode && !feed.error ? '' : ` · Roads: ${layerState._roadSource}`}${layerState._surfacePending ? ' · Local surface still loading' : ''}${layerState._roadPartial ? ' · Partial coverage' : ''}${layerState._detailError ? ' · Detailed roads unavailable' : layerState._detailLimited ? ' · Reduced detail coverage' : ''}`,
       };
     },
   };

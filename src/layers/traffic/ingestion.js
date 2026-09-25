@@ -1,3 +1,4 @@
+import { phaseTiming } from '../../sources/phaseTiming.js';
 import { RoadRequestError, roadRequestError } from './source.js';
 import {
   isUnavailableCapability,
@@ -18,9 +19,16 @@ export function cacheRoadSnapshot(
 ) {
   entries.delete(key);
   if (!retain) return;
-  entry.cacheBytes = new TextEncoder().encode(
-    JSON.stringify([entry.major, entry.full]),
-  ).byteLength;
+  entry.cacheBytes = [entry.major, entry.full].reduce(
+    (sum, roads) =>
+      sum +
+      (roads || []).reduce(
+        (n, road) =>
+          n + 192 + (road.coords || road.coordinates || []).length * 96,
+        0,
+      ),
+    0,
+  );
   if (entry.cacheBytes > maxBytes) return;
   entries.set(key, entry);
   let bytes = 0;
@@ -62,7 +70,7 @@ export function createIngestion({
     west,
     north,
     east,
-    { majorOnly = false, timeoutSec = 25, signal } = {},
+    { majorOnly = false, timeoutSec = 25, signal, onTile } = {},
     trace = null,
   ) {
     const state =
@@ -87,7 +95,7 @@ export function createIngestion({
     }
     const response = await source.requestRoads(
       { south, west, north, east },
-      { majorOnly, timeoutSec, signal },
+      { majorOnly, timeoutSec, signal, onTile },
     );
 
     if (!response.ok) {
@@ -160,6 +168,9 @@ export function createIngestion({
   /** Abort any in-flight road fetch and clear the controller reference. */
 
   function cancelActiveFetch() {
+    layerState._surfaceRefineRemove?.();
+    layerState._surfaceRefineRemove = null;
+    layerState._surfaceRefining = false;
     if (layerState._activeFetchAbort) {
       layerState._activeFetchAbort.abort();
       layerState._activeFetchAbort = null;
@@ -224,8 +235,31 @@ export function createIngestion({
     layerState._detailLimited = false;
 
     let retryable = true;
+    let tilePaint = Promise.resolve();
+    let streamed = [];
+    const onTile = (data) => {
+      if (generation !== layerState._loadGeneration) return;
+      const start = performance.now();
+      const parsed = layerState._parseRoads(data, trace);
+      phaseTiming('parse', start, { roads: parsed.length, incremental: true });
+      streamed.push(...parsed);
+      const snapshot = streamed.slice();
+      tilePaint = tilePaint.then(async () => {
+        if (generation !== layerState._loadGeneration) return;
+        renderedSomething =
+          (await parts.flow.applyFlowThenRender(
+            snapshot,
+            clamped,
+            generation,
+            altitude,
+            'Loaded tile',
+            trace,
+          )) || renderedSomething;
+      });
+      tilePaint.catch(() => {});
+    };
     try {
-      await parts.flow.ensureFlowStatus(requestSignal);
+      parts.flow.warmFlow(clamped, generation);
       requestSignal.throwIfAborted();
       layerState._roadSource = 'OpenStreetMap';
       let cache = layerState._tileCache.get(cacheKey);
@@ -286,6 +320,7 @@ export function createIngestion({
           clamped.east,
           {
             majorOnly: true,
+            onTile,
             timeoutSec: 12,
             signal: requestSignal,
           },
@@ -293,7 +328,12 @@ export function createIngestion({
         );
         // Discard stale response if a newer load was triggered while waiting
         if (generation !== layerState._loadGeneration) return;
-        cache.major = layerState._parseRoads(majorData, trace);
+        await tilePaint;
+        const parseStart = performance.now();
+        cache.major = streamed.length
+          ? streamed
+          : layerState._parseRoads(majorData, trace);
+        phaseTiming('parse', parseStart, { roads: cache.major.length });
         cacheRoadSnapshot(layerState._tileCache, cacheKey, cache, {
           retain: !layerState._roadPartial,
         });
@@ -314,6 +354,7 @@ export function createIngestion({
       // At higher altitude, major roads provide sufficient motion density
       if (altitude > FAST_FETCH_ALTITUDE) return;
 
+      streamed = [];
       // Detailed pass: fetch the full road graph (tertiary, residential, etc.)
       console.log(`[Data:Traffic] Full fetch local roads [${cacheKey}]`);
       const fullData = await fetchRoads(
@@ -323,6 +364,7 @@ export function createIngestion({
         clamped.east,
         {
           majorOnly: false,
+          onTile,
           timeoutSec: 20,
           signal: requestSignal,
         },
@@ -332,7 +374,12 @@ export function createIngestion({
 
       layerState._detailLimited = Boolean(fullData.detailLimited);
       cache.detailLimited = layerState._detailLimited;
-      cache.full = layerState._parseRoads(fullData, trace);
+      await tilePaint;
+      const parseStart = performance.now();
+      cache.full = streamed.length
+        ? streamed
+        : layerState._parseRoads(fullData, trace);
+      phaseTiming('parse', parseStart, { roads: cache.full.length });
       cacheRoadSnapshot(layerState._tileCache, cacheKey, cache, {
         retain: !layerState._roadPartial,
       });

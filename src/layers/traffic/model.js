@@ -43,14 +43,16 @@ export function createModel({ state: layerState, services, parts, source }) {
           );
         }
 
-        roads.push({
-          coords,
-          type,
-          oneway,
-          waypoints,
-          segmentDist,
-          flow: road.flow || null,
-        });
+        for (const direction of oneway ? [oneway] : [1, -1])
+          roads.push({
+            densityWeight: oneway ? 1 : 0.5,
+            coords,
+            type,
+            oneway: direction,
+            waypoints,
+            segmentDist,
+            flow: road.flow || null,
+          });
       }
     }
 
@@ -120,7 +122,10 @@ export function createModel({ state: layerState, services, parts, source }) {
       (flow
         ? flowDensityMult(flow.level, { jamBoost: parts.style.jamDensityOn() })
         : 1);
-    return Math.max(1, Math.floor((lengthM / spacing) * mult));
+    return Math.max(
+      1,
+      Math.floor((lengthM / spacing) * mult * (road.densityWeight || 1)),
+    );
   }
 
   /**

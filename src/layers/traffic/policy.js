@@ -1,8 +1,8 @@
 import * as Cesium from 'cesium';
 
 /**
- * @file Street Traffic uses OpenMapTiles road geometry for keyless simulation
- * and directional TomTom flow segments in live mode. Tile acquisition is
+ * @file Street Traffic always uses OpenMapTiles road geometry, with optional
+ * directional TomTom congestion matched in live mode. Tile acquisition is
  * bounded and camera-driven; animation lerps precomputed Cartesian waypoints.
  */
 

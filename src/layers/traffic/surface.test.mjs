@@ -47,7 +47,12 @@ test('per-vertex mesh heights follow terrain, reject invalid samples, and leave 
     cachedGroundFloor: () => 50,
     reportMeshFloorCell: () => assert.fail('raw sample poisoned shared floor'),
   };
-  await prepareRoadSurfaces([r], scene, ground, []);
+  let metrics;
+  const prepared = await prepareRoadSurfaces([r], scene, ground, [], null, {
+    onMetrics: (value) => (metrics = value),
+  });
+  assert.equal(metrics.sampleCount, 5);
+  assert.equal(prepared.pending.length, 1);
   assert.equal(samples, 5);
   const actual = r.waypoints.map((p) =>
     Math.round(C.Cartographic.fromCartesian(p).height),
@@ -55,13 +60,26 @@ test('per-vertex mesh heights follow terrain, reject invalid samples, and leave 
   assert.deepEqual(actual, [103, 203, 53, 53, 53]);
   scene.primitives.get = () => ({ show: true, tilesLoaded: false });
   assert.equal(trafficSurfaceReady(scene), false);
+  scene.sampleHeight = () => 75;
+  const resumed = await prepareRoadSurfaces([r], scene, ground, []);
+  assert.equal(
+    resumed.ready.length,
+    1,
+    'other loading tiles do not block a local mesh',
+  );
+  let picks = 0;
+  scene.sampleHeight = () => {
+    picks++;
+    return 75;
+  };
+  await prepareRoadSurfaces([r], scene, ground, []);
+  assert.equal(picks, 0, 'validated coordinate heights survive cache hits');
   const abort = new AbortController();
-  setTimeout(() => abort.abort(), 10);
+  abort.abort();
   await assert.rejects(
     prepareRoadSurfaces([r], scene, ground, [], abort.signal),
     { name: 'AbortError' },
   );
-  assert.equal(samples, 5);
 });
 test('visible-globe roads floor each vertex without mesh picks', async () => {
   const r = road([

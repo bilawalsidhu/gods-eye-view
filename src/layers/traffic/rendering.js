@@ -268,7 +268,7 @@ export function createRendering({
           renderMetrics,
         )
       : null;
-    rebuildHeatLines(filteredRoads);
+    if (!label.includes('tile')) rebuildHeatLines(filteredRoads);
     if (state) {
       const heatEnd = parts.timing.trafficTimingMark(
         state,

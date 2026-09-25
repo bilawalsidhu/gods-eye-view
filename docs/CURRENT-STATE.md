@@ -3511,7 +3511,9 @@ or upstream errors, including old cached endpoint metadata.
 The shared transport guards `/api/overpass` and `/api/military-installations`.
 With no configured upstream, each route serves existing cache data (including
 expired entries, marked stale with the original cache/retrieval date) without
-refresh; a miss returns HTTP 503, `OVERPASS_NOT_CONFIGURED`, `retryable:false`.
+refresh. An annotation miss returns HTTP 503, `OVERPASS_NOT_CONFIGURED`,
+`retryable:false`; installations return that capability as HTTP 200 and select
+the working vector-tile source without a failed-network console entry.
 Configured endpoints have per-instance cooldowns for 406/429, honoring
 Retry-After; absent delays back off from 30 seconds to five minutes. Empty
 `elements` is a valid answer. Existing byte, query, concurrency and cache caps
@@ -3537,8 +3539,20 @@ Austin, London, Dubai, San Diego, Tokyo and São Paulo with all three layers on,
 at 450 m and -35° pitch (São Paulo: 1250 m), then revisits Austin to measure
 cache reuse. The tour disables camera collision adjustment and asserts the actual
 latitude, longitude, altitude and pitch so remote terrain cannot shift a revisit.
+`--pan` runs 20 settled Austin moves: ten 150–300 m steps, five 1–2 km steps,
+and five exact returns. It records OFM requests/bytes, flow tile requests, all
+local API calls and dots per move, rejects repeat XYZ downloads and any new
+OFM request on a return, and checks small-pan tiles against admitted bounds.
+Its TomTom session ceiling is 32 browser flow requests (0.53% of the default
+6,000/day upstream budget); cached server responses also count toward this
+conservative session bound. `--profile` captures cold/warm Austin at 450 m,
+-35 degrees with settled mesh. Development `roads:*` phase measures include
+status, TileJSON, per-tile fetch/decode, parsing and surface sample counts/CPU
+time, slice maxima and cache hits; no obsolete zero-valued parse-time sampling
+aggregate is emitted. The six-city tour records first-dot and on-mesh counts
+and asserts the 4 s cold / 2.5 s cached-return deadlines.
 Reports go to `qa-shots/overpass-offload-result.json` and separate
-acceptance/tour result files, with a console summary table. These are browser
+acceptance/tour/pan/profile result files, with a console summary table. These are browser
 session measurements; TomTom upstream usage still depends on the server cache
 and budget. MB uses decimal bytes; transfer totals include response headers.
 
@@ -4147,7 +4161,7 @@ easier to meet (detection is now on more often), but does not create it.
   `SIMULATED — traffic service unreachable`; a total flow-fetch failure in live
   mode sets `error` (DEGRADED · `SIMULATED — <reason>`) and zeroes the stale
   coverage number. `stats.loading` covers outstanding flow work as well as the
-  road fetch, so a failure landing after the 250 ms paint race still ends the
+  road fetch, so a flow failure landing after the first paint still ends the
   shared loading batch as LOAD FAILED. Harnesses must gate on `!stats.error`,
   never on `mode === 'live'` alone.
 - Traffic runs in `sim` mode (white dots, hardcoded speeds) unless `TOMTOM_API_KEY`
@@ -4158,10 +4172,12 @@ easier to meet (detection is now on more often), but does not create it.
   decoded client-side and matched onto OpenFreeMap road segments for
   green/amber/red dot color and speed/density scaling (`trafficFlowStyle.js`).
   Matching reuses `flowMatch.js`: seven road samples, a 35 m nearest-segment
-  radius, 30 degree bearing tolerance (folded for two-way roads), and a bounded
+  radius, 30 degree travel-bearing tolerance, and a bounded
   3x3 probe in a 100 m spatial grid. At least half the samples must match;
   the median flow level supplies speed/color and any matched closure stops
-  dots. Matching runs only on load/refresh, never per frame.
+  dots in that travel direction. Two-way roads have independent forward/reverse
+  records; one-way direction is enforced. Equal-distance candidates with
+  contradictory flow/closure are left simulated. Matching runs only on load/refresh, never per frame.
   Flow stays at z12 with the same 16-tile cap, 120-second cache and server
   daily budget. Lines are clipped to tile cores before caching and to the
   look-at viewport fetch box before matching. Road geometry is always OFM;
@@ -4175,20 +4191,31 @@ easier to meet (detection is now on more often), but does not create it.
   unmatched/simulated note; zero matches reads SIMULATED. Road fetch bounds
   center on the camera look-at point (`trafficBounds.js`).
 - Road geometry in both keyed and keyless mode comes from OpenFreeMap's immutable versioned tiles:
-  one TileJSON resolution per application source lifetime, z12 wide pass and
+  successful TileJSON metadata prefetched at enable and cached for the source lifetime, z12 wide pass and
   z14 detail below 4.5 km. The detail box shrinks around the look-at point
   until it fits 16 tiles, including at high latitudes; status reports reduced
   detail coverage. A failed detail pass retains major roads and separately
   reports "Detailed roads unavailable". Only drivable OpenMapTiles classes are admitted;
   reverse one-way lines are reversed. The shared tile source caps each view at
-  16 tiles, four concurrent requests, 4 MiB per response and 64 decoded tiles/
-  24 MiB. Parsed road views have a separate 24 MiB/64-entry cap; incomplete
+  16 tiles, four concurrent requests and 4 MiB per response. OpenFreeMap retains
+  up to 192 decoded tiles/64 MiB (four times body bytes as a storage estimate);
+  other tile sources retain the 64-tile/24 MiB defaults. Identical source-version/XYZ
+  requests share one download/decode, with independent caller cancellation. Parsed road views have a separate 24 MiB/64-entry cap; incomplete
   views are not retained as complete snapshots. Buffer geometry is clipped and sub-12 m line slivers dropped; tile
   road fragments are not stitched. Roads preserve bends and insert
   waypoints at most 150 m apart, splitting paths at 80 vertices. A cancellable
-  preparation pass waits up to 30 seconds for the visible surface, reads
-  per-vertex terrain/mesh heights in batches of 32, rejects non-finite or
-  out-of-band (+/-9000 m) heights, and floors on cached ground/visible terrain.
+  preparation pass paints decoded tiles independently. Status/flow and roads start
+  concurrently; neither TileJSON repeat reads nor flow impose a paint barrier.
+  Only dot-budget-admitted roads crossing the canvas (100 px margin), within
+  max(1.2 km, twice camera altitude), receive surface work, closest first.
+  Preparation yields after a 6 ms slice (an individual synchronous Cesium pick
+  cannot be preempted). Validated coordinate heights use a per-scene 40,000-point
+  LRU across loads. Provisional shared-floor estimates remain hidden until a
+  local rendered-mesh/terrain sample resolves; a globally loading tileset does
+  not block streets whose mesh is already present. Non-finite/out-of-band
+  (+/-9000 m) samples defer their road and show a local-surface status, never
+  an OpenFreeMap failure. Samples floor on cached ground/visible terrain.
+  Samples acquired during refinement are revalidated when the visible mesh settles.
   Shared floor cells are read only; raw mesh samples never enter their cache.
   Positions and segment distances are precomputed, with no new animation-loop
   allocation. Visible-globe roads use cached terrain without offscreen mesh picks. The road-source label names OpenStreetMap, with partial/unavailable states shown plainly.
@@ -4200,7 +4227,7 @@ easier to meet (detection is now on more often), but does not create it.
 - Development captures opened with `?trafficDebug=1` mint an interaction anchor
   from the exact `camera.changed` event that arms each debounced load, then emit
   scheduling-correlated User Timing entries for production `response.json`, road
-  parse, flow-race, dot construction, heat-line rebuild, and next-post-render
+  parse, dot construction, heat-line rebuild, and next-post-render
   boundaries. Every trace is paired with the exact camera-change that scheduled
   its load; mismatches are counted drops. Cesium's `moveEnd` remains a diagnostic
   mark only: it arrives about 500 ms after stillness, typically after fetch has
@@ -4508,3 +4535,13 @@ Desktop wind now allows 7,200 baked native GPU paths (narrow viewports remain at
 Temperature uses stronger fixed −40..50°C colors; the underlying 1° forecast and
 numeric inspection values are unchanged. No volumetric cloud height or local rain
 arrival prediction is claimed. NOAA source limits are documented in DATA_SOURCES.
+
+
+Traffic source refinements: ALPR admits z11 detail only when the view fits 16 tiles,
+returning explicit zoom guidance before I/O and allowing the next smaller view to
+load normally. Outside the US/Canada extracts the row reads “No ALPR data for this
+area — US and Canada only” and suppresses the nearby count. Military viewport
+membership checks every merged footprint. Quantization tolerance applies only
+along a shared tile seam; same-tile parcels require topological contact, and
+identity aliases are zoom-scoped so coarse associations cannot join separated
+detailed parcels.
