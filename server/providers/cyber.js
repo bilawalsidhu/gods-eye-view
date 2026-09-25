@@ -4,6 +4,7 @@ import { readResponseTextCapped } from './common/http.js';
 import { admitKeySetupRequest } from '../../src/keySetupCore.mjs';
 import { createCyberEnrichmentProviders } from './cyber/enrichment.js';
 import { createOtxProvider } from './cyber/otx.js';
+import { createIodaProvider } from './cyber/ioda.js';
 
 const RADAR_BASE = 'https://api.cloudflare.com/client/v4/radar';
 const DSHIELD_URLS = Object.freeze({
@@ -422,6 +423,7 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
   const radarCache = makeProxyCache();
   const dshieldCache = makeProxyCache();
   const kevCache = makeProxyCache();
+  const ioda = createIodaProvider({ fetchImpl, now });
   const enrichment = createCyberEnrichmentProviders({ fetchImpl, now });
   const otx = createOtxProvider({ fetchImpl, now });
 
@@ -677,7 +679,9 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
           ? await requestRadarSnapshot({ signal: controller.signal })
           : provider === 'dshield'
             ? await requestDshieldSnapshot({ signal: controller.signal })
-            : await requestKevSnapshot({ signal: controller.signal });
+            : provider === 'cisa-kev'
+              ? await requestKevSnapshot({ signal: controller.signal })
+              : await ioda.requestSnapshot({ signal: controller.signal });
       serveJson(res, 200, entry.value);
     } catch (error) {
       if (controller.signal.aborted) return;
@@ -688,18 +692,22 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
         'invalid_radar_data',
         'invalid_dshield_data',
         'invalid_kev_data',
+        'invalid_provider_data',
+        'RESPONSE_TOO_LARGE',
       ].includes(error?.code)
         ? error.code
         : 'upstream_unavailable';
+      const publicCode =
+        code === 'RESPONSE_TOO_LARGE' ? 'provider_response_too_large' : code;
       const status =
         code === 'rate_limited'
           ? 429
           : code.includes('credentials')
             ? 401
-            : code.startsWith('invalid_')
+            : code.startsWith('invalid_') || code === 'RESPONSE_TOO_LARGE'
               ? 502
               : 503;
-      serveJson(res, status, { error: code });
+      serveJson(res, status, { error: publicCode });
     } finally {
       res.removeListener?.('close', close);
     }
@@ -825,6 +833,9 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
       middlewares.use('/api/cyber/kev', (req, res) =>
         handler('cisa-kev', req, res),
       );
+      middlewares.use('/api/cyber/ioda', (req, res) =>
+        handler('ioda', req, res),
+      );
       middlewares.use(
         '/api/cyber/enrich/shodan/host',
         enrichmentHandler(({ ip }, options) =>
@@ -869,6 +880,9 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
       middlewares.use('/api/cyber/kev', (req, res) =>
         handler('cisa-kev', req, res),
       );
+      middlewares.use('/api/cyber/ioda', (req, res) =>
+        handler('ioda', req, res),
+      );
       middlewares.use(
         '/api/cyber/enrich/shodan/host',
         enrichmentHandler(({ ip }, options) =>
@@ -906,6 +920,7 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
     requestRadarSnapshot,
     requestDshieldSnapshot,
     requestKevSnapshot,
+    requestIodaSnapshot: ioda.requestSnapshot,
     testRadarConnection,
     testShodanConnection: enrichment.testShodanConnection,
     testGreyNoiseConnection: enrichment.testGreyNoiseConnection,

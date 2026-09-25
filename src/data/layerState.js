@@ -323,6 +323,7 @@ const OPTION_GROUPS = Object.freeze({
   cyber: Object.freeze([
     booleanOption('radarEnabled', 'r', true),
     booleanOption('dshieldEnabled', 'd', true),
+    booleanOption('iodaEnabled', 'i', true),
   ]),
   wind: Object.freeze([
     enumOption('model', 'm', 'gfs', ['gfs', 'ifs'], { gfs: 'g', ifs: 'i' }),

@@ -6,11 +6,13 @@ import {
   normalizeCyberSnapshot,
   normalizeShodanSearchResult,
 } from './records.js';
+import { normalizeIodaSnapshot } from './ioda.js';
 
 const URLS = Object.freeze({
   'cloudflare-radar': '/api/cyber/radar',
   dshield: '/api/cyber/dshield',
   'cisa-kev': '/api/cyber/kev',
+  ioda: '/api/cyber/ioda',
 });
 const ENRICHMENT_URLS = Object.freeze({
   shodanHost: '/api/cyber/enrich/shodan/host',
@@ -19,6 +21,7 @@ const ENRICHMENT_URLS = Object.freeze({
   greynoise: '/api/cyber/enrich/greynoise/ip',
   otxLookup: '/api/cyber/otx/lookup',
 });
+const SHODAN_SEARCH_RESULT_LIMIT_BYTES = 512 * 1024;
 
 /** Client for the same-origin, normalized Cyber provider endpoints. */
 export function createCyberSource({
@@ -54,6 +57,10 @@ export function createCyberSource({
           throw new Error(
             `${provider} is rate limited; cached data may be shown.`,
           );
+        if (code === 'provider_response_too_large')
+          throw new Error(
+            `${provider} returned more data than the app can safely process.`,
+          );
         if (provider === 'cisa-kev')
           throw new Error(`CISA KEV catalog unavailable (${response.status}).`);
         throw new Error(`${provider} data unavailable (${response.status}).`);
@@ -66,7 +73,9 @@ export function createCyberSource({
       signal?.throwIfAborted();
       return provider === 'cisa-kev'
         ? normalizeCyberKevSnapshot(payload)
-        : normalizeCyberSnapshot(payload, provider);
+        : provider === 'ioda'
+          ? normalizeIodaSnapshot(payload)
+          : normalizeCyberSnapshot(payload, provider);
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
@@ -89,7 +98,10 @@ export function createCyberSource({
       });
       const payload = await readResponseJsonCapped(
         response,
-        128 * 1024,
+        url === ENRICHMENT_URLS.shodanSearch ||
+          url === ENRICHMENT_URLS.shodanArea
+          ? SHODAN_SEARCH_RESULT_LIMIT_BYTES
+          : 128 * 1024,
         controller.signal,
       ).catch(() => ({}));
       if (!response.ok) {
@@ -156,7 +168,7 @@ export function createCyberSource({
             );
           if (payload?.failureKind === 'provider_response_too_large')
             throw new Error(
-              'Shodan returned more data than the app can safely process. The search has been narrowed; try again.',
+              'Shodan returned more data than the app can safely process. Try a more specific query.',
             );
         }
         throw new Error(
@@ -175,6 +187,7 @@ export function createCyberSource({
     getRadarSnapshot: (options) => get('cloudflare-radar', options),
     getDshieldSnapshot: (options) => get('dshield', options),
     getKevSnapshot: (options) => get('cisa-kev', options),
+    getIodaSnapshot: (options) => get('ioda', options),
     lookupShodanHost: async (ip, options) =>
       normalizeCyberEnrichment(
         await post(ENRICHMENT_URLS.shodanHost, { ip }, options),

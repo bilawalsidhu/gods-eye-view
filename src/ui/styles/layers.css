@@ -315,7 +315,7 @@
 .cyber-intel-map-legend-panel {
   position: fixed;
   z-index: 109;
-  left: calc(50% + clamp(220px, 18vw, 340px));
+  left: calc(50% + clamp(180px, 13vw, 250px));
   right: auto;
   bottom: 2vh;
   width: min(280px, calc(100vw - 32px));
@@ -343,6 +343,56 @@
 #cyber-intel-legend-panel.cyber-legend-collapsed
   #cyber-intel-map-legend-content {
   display: none;
+}
+#cyber-threat-summary-panel {
+  position: fixed;
+  z-index: 109;
+  left: clamp(340px, 18.3vw, 352px);
+  right: auto;
+  bottom: 2vh;
+  width: min(356px, calc(100vw - 380px));
+  max-height: min(42vh, 360px);
+  overflow-y: auto;
+  pointer-events: auto;
+}
+.cyber-threat-summary-inner {
+  padding: 12px;
+  color: var(--text-primary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+}
+#cyber-threat-summary-panel[hidden] {
+  display: none !important;
+}
+#cyber-threat-summary-panel.cyber-threat-summary-collapsed {
+  max-height: none;
+  overflow: visible;
+}
+#cyber-threat-summary-panel.cyber-threat-summary-collapsed
+  #cyber-threat-summary-content {
+  display: none;
+}
+.cyber-threat-summary-collapse-btn {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.cyber-threat-summary-collapse-btn:hover,
+.cyber-threat-summary-collapse-btn:focus-visible {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
 }
 .cyber-legend-collapse-btn {
   flex: 0 0 auto;
@@ -455,6 +505,18 @@
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
+.cyber-device-popup.cyber-device-popup-ioda {
+  border-color: rgba(0, 217, 232, 0.78);
+  box-shadow:
+    0 10px 35px rgba(0, 0, 0, 0.68),
+    0 0 18px rgba(0, 217, 232, 0.16);
+}
+.cyber-device-popup.cyber-device-popup-radar {
+  border-color: rgba(143, 234, 255, 0.78);
+  box-shadow:
+    0 10px 35px rgba(0, 0, 0, 0.68),
+    0 0 18px rgba(143, 234, 255, 0.16);
+}
 .cyber-device-popup[hidden] {
   display: none;
 }
@@ -487,11 +549,14 @@
 }
 .cyber-intel-legend-row > span {
   display: inline-block;
-  flex: 0 0 12px;
-  width: 12px;
-  height: 12px;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.8);
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
 }
 .cyber-intel-legend-row > .cyber-legend-origin {
   background: orangered;
@@ -506,14 +571,17 @@
   background: #ffd34e;
   box-shadow: 0 0 8px rgba(255, 211, 78, 0.6);
 }
+.cyber-intel-legend-row > .cyber-legend-ioda {
+  background: #00d9e8;
+  box-shadow: 0 0 8px rgba(0, 217, 232, 0.55);
+}
 .cyber-intel-legend-row > .cyber-legend-flow {
   width: 22px;
   height: 2px;
   flex-basis: 22px;
   border: 0;
   border-radius: 0;
-  background: orangered;
-  box-shadow: 8px 0 0 -0.5px orangered;
+  background: linear-gradient(90deg, orangered 0%, #00bfff 100%);
   position: relative;
 }
 .cyber-intel-legend-row > .cyber-legend-flow::after {
@@ -523,7 +591,7 @@
   top: -3px;
   border-top: 4px solid transparent;
   border-bottom: 4px solid transparent;
-  border-left: 7px solid orangered;
+  border-left: 7px solid #00bfff;
 }
 .cyber-intel-selection h3,
 .cyber-intel-provider h3,
@@ -658,7 +726,7 @@
   margin: 8px 0 0;
 }
 .cyber-intel-map-hint {
-  margin: 0;
+  margin: 8px 0 0;
 }
 .cyber-intel-actions,
 .cyber-intel-search-result {

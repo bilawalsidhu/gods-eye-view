@@ -50,6 +50,7 @@ test('catalogs construct distinct layers and classification from their supplied 
   assert.deepEqual(first.get('cyber').getParams(), {
     radarEnabled: true,
     dshieldEnabled: true,
+    iodaEnabled: true,
   });
   assert.notEqual(first.weatherClock, second.weatherClock);
   await first.weatherClock.setTarget('2026-09-21T12:00:00.000Z');

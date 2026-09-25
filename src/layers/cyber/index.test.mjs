@@ -61,6 +61,7 @@ const cesium = {
     MEDIUMPURPLE: color,
     WHITE: color,
     GOLD: color,
+    CYAN: color,
   },
   HeightReference: { CLAMP_TO_GROUND: 0 },
   Rectangle: { center: (rectangle) => rectangle.center },
@@ -169,6 +170,15 @@ const kev = {
     },
   ],
 };
+const ioda = {
+  provider: 'ioda',
+  fetchedAt: '2026-09-23T13:00:00.000Z',
+  stale: false,
+  attribution: 'IODA · Georgia Tech Internet Intelligence Lab',
+  windowHours: 24,
+  events: [],
+  countries: [],
+};
 
 test('renders Radar aggregates only and keeps DShield in the non-geographic row list', async () => {
   const layer = createCyberLayer({
@@ -176,6 +186,7 @@ test('renders Radar aggregates only and keeps DShield in the non-geographic row 
       getRadarSnapshot: async () => radar,
       getDshieldSnapshot: async () => dshield,
       getKevSnapshot: async () => kev,
+      getIodaSnapshot: async () => ioda,
     },
     cesium,
   });
@@ -225,6 +236,7 @@ test('Radar map selection reports marker and paired-flow context and clears on d
       getRadarSnapshot: async () => radar,
       getDshieldSnapshot: async () => dshield,
       getKevSnapshot: async () => kev,
+      getIodaSnapshot: async () => ioda,
     },
     cesium,
   });
@@ -252,6 +264,80 @@ test('Radar map selection reports marker and paired-flow context and clears on d
   layer.disable();
   assert.equal(states.at(-1).enabled, false);
   assert.equal(states.at(-1).selectedRadar, null);
+  layer.destroy();
+});
+
+test('IODA country events map to explicit country reference points and show details on click', async () => {
+  const iodaFixture = {
+    ...ioda,
+    events: [
+      {
+        id: 'ioda:event:US:bgp:bgp:1790000000',
+        countryCode: 'US',
+        countryName: 'United States',
+        datasource: 'bgp',
+        method: 'bgp',
+        startedAt: '2026-09-22T00:00:00.000Z',
+        durationSeconds: 3600,
+        overlapsWindow: true,
+      },
+    ],
+    countries: [
+      {
+        id: 'ioda:country:US',
+        countryCode: 'US',
+        countryName: 'United States',
+        eventCount: 1,
+        latestEventAt: '2026-09-22T00:00:00.000Z',
+        datasources: ['bgp'],
+        latitude: 39.8,
+        longitude: -98.6,
+        geographicPrecision: 'country-reference',
+        geographicMethod: 'Natural Earth country label point',
+        geographicProvenance:
+          'United States country reference; outage scope supplied at country level by IODA.',
+      },
+    ],
+  };
+  let pickedId = null;
+  let iodaDataSource;
+  let state;
+  const layer = createCyberLayer({
+    source: {
+      getRadarSnapshot: async () => radar,
+      getDshieldSnapshot: async () => dshield,
+      getKevSnapshot: async () => kev,
+      getIodaSnapshot: async () => iodaFixture,
+    },
+    cesium,
+  });
+  layer.init({
+    scene: { canvas: {}, pick: () => ({ id: pickedId }) },
+    dataSources: {
+      add: (value) => {
+        if (value.name === 'ioda-connectivity-events') iodaDataSource = value;
+      },
+      remove: () => {},
+    },
+  });
+  layer.setThreatIntelListener((value) => {
+    state = value;
+  });
+  layer.enable();
+  await layer.update();
+  const marker = iodaDataSource.entities.getById('cyber-ioda:US');
+  assert.equal(marker.position.latitude, 39.8);
+  assert.equal(marker.properties.geographicPrecision, 'country-reference');
+  assert.match(marker.description, /not the outage location/i);
+  pickedId = marker.id;
+  latestSelectionHandler.actions.get('left-click')({
+    position: { x: 1, y: 1 },
+  });
+  assert.equal(state.selectedIoda.type, 'ioda-country');
+  assert.equal(state.selectedIoda.events[0].datasource, 'bgp');
+  layer.setParams({ iodaEnabled: false });
+  assert.equal(iodaDataSource.entities.values.length, 0);
+  assert.equal(layer.getParams().iodaEnabled, false);
   layer.destroy();
 });
 
@@ -286,6 +372,7 @@ test('Shodan area search uses the visible map radius, renders devices, and expos
       getRadarSnapshot: async () => radar,
       getDshieldSnapshot: async () => dshield,
       getKevSnapshot: async () => kev,
+      getIodaSnapshot: async () => ioda,
       searchShodanArea: async (area) => {
         receivedArea = area;
         return {
@@ -373,6 +460,7 @@ test('provider errors remain isolated and provider toggles remove their records'
       },
       getDshieldSnapshot: async () => dshield,
       getKevSnapshot: async () => kev,
+      getIodaSnapshot: async () => ioda,
     },
     cesium,
   });

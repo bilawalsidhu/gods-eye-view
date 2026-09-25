@@ -52,7 +52,12 @@ const SOURCE_METHODS = Object.freeze({
   firms: ['getSnapshot'],
   wind: ['getSnapshot'],
   weather: ['getSnapshot'],
-  cyber: ['getRadarSnapshot', 'getDshieldSnapshot', 'getKevSnapshot'],
+  cyber: [
+    'getRadarSnapshot',
+    'getDshieldSnapshot',
+    'getKevSnapshot',
+    'getIodaSnapshot',
+  ],
   cyclones: ['getSnapshot'],
   earthquakes: ['getSnapshot'],
   'fire-perimeters': ['getSnapshot'],

@@ -36,7 +36,7 @@ themes or enabling omitted settings. State readback distinguishes configured
 settings from active map/contact effects. Sonar settings are session-only and
 return to their defaults on reload. Sliders accept integer values matching the
 action's ranges.
-## Cyber Activity (Phases 1–4)
+## Cyber Activity (Phases 1–5)
 
 Cyber is one first-class, provider-neutral data layer. Cloudflare Radar supplies
 bounded 24-hour Layer 7 attack origin/target country aggregates when its
@@ -54,7 +54,7 @@ geographic provenance. Radar API data is licensed CC BY-NC 4.0, documented in
 IPs and scanning source ports without credentials; those records have no
 geographic coordinates and may include false positives. They appear in a
 separate Cyber Threat Intel panel outside Data Layers while Cyber Activity is
-enabled. The panel also reserves space for future non-geographic Cyber sources.
+enabled. The panel contains non-geographic Cyber sources and country-level connectivity context.
 Its DShield source list labels IP Address and Domain Name separately and shows
 the top ten source and targeted-port records.
 Each provider fails independently, and cached data may be shown during temporary
@@ -96,13 +96,24 @@ OTX API key is configured, tested, updated and removed through Provider
 Settings; it stays in the existing local server credential store. OTX lookups
 are optional and do not block the other Cyber providers. See `DATA_SOURCES.md`.
 
+Phase 5 adds the public, keyless IODA outage-events API. The server requests up
+to 250 country-scoped events for the most recent 24 hours, caches the response
+for five minutes, and may serve a last-good snapshot for up to six hours during
+an upstream outage. A separate IODA Connectivity toggle controls cyan country
+markers. Each marker is placed at a pinned Natural Earth country label point;
+it represents the country scope only, not the location or cause of an outage.
+The panel shows event start, duration, source and detection method. Region- and
+ASN-scoped events are not mapped because this integration has no verified
+geographic geometry for them. IODA is independent of Radar, DShield, Shodan,
+KEV and OTX. See `DATA_SOURCES.md`.
+
 The Cyber layer uses the shared data-layer panel and state codec. Its local
 server proxy bounds upstream responses, keeps Radar tokens server-side, and
 normalizes provider records before rendering. Radar and DShield can be
 enabled/disabled in
 the layer controls; its credential can be tested, changed, or removed in the
-existing Provider Settings panel. Broader cross-provider correlation remains
-for Phase 5.
+existing Provider Settings panel. IODA can be enabled or disabled independently
+in the same Cyber layer controls and requires no credential.
 
 Wind appears in the Weather group before Utilities. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.

@@ -1,5 +1,10 @@
 # Natural Earth physical regions pack
 
+The IODA country reference anchors in `src/layers/cyber/countryAnchors.json`
+are also derived from Natural Earth 10m Admin 0 country label points at the
+same pinned commit below. These points identify a country for display only;
+they do not locate an outage.
+
 Offline named-region polygons for the voice-annotation resolver
 (`src/data/naturalEarthRegions.js`) — "outline the Alps" resolves to the real
 range geometry with no network dependency.

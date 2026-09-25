@@ -300,9 +300,12 @@
       "server/providers/cyber.js",
       "server/providers/cyber/enrichment.js",
       "server/providers/cyber/otx.js",
+      "server/providers/cyber/ioda.js",
       "server/providers/common/http.js",
       "src/sources/httpBody.js",
-      "src/keySetupCore.mjs"
+      "src/keySetupCore.mjs",
+      "src/layers/cyber/ioda.js",
+      "src/layers/cyber/countryAnchors.json"
     ],
     "external": []
   },
@@ -1958,6 +1961,11 @@
       "src/sdr/usbDevices.js",
       "src/ui/localSdrControls.js",
       "src/ui/localSdrPresentation.js",
+      "src/layers/cyber/index.js",
+      "src/layers/cyber/records.js",
+      "src/layers/cyber/ioda.js",
+      "src/layers/cyber/countryAnchors.json",
+      "src/layers/cyber/source.js",
       "src/app/layers/recentImagery.js",
       "src/layers/recentImagery/index.js",
       "src/layers/recentImagery/model.js",
@@ -1966,10 +1974,7 @@
       "src/layers/recentImagery/thumbnails.js",
       "src/maps/imageryHost.js",
       "src/ui/recentImagery.js",
-      "src/ui/imageryBoxTool.js",
-      "src/layers/cyber/index.js",
-      "src/layers/cyber/records.js",
-      "src/layers/cyber/source.js"
+      "src/ui/imageryBoxTool.js"
     ],
     "external": [
       "hls.js",

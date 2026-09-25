@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { cyberProxy } from '../../../server/providers/cyber.js';
 import { createCyberEnrichmentProviders } from '../../../server/providers/cyber/enrichment.js';
 import { createOtxProvider } from '../../../server/providers/cyber/otx.js';
+import { createIodaProvider } from '../../../server/providers/cyber/ioda.js';
 import { createCyberSource } from './source.js';
 
 const jsonResponse = (value, status = 200) =>
@@ -12,6 +13,84 @@ const windowMeta = {
     { startTime: '2026-09-19T00:00:00Z', endTime: '2026-09-20T00:00:00Z' },
   ],
 };
+
+test('IODA country events use a public bounded feed, cache snapshots, and keep reference geography explicit', async () => {
+  const requests = [];
+  let now = Date.parse('2026-09-23T13:00:00.000Z');
+  const provider = createIodaProvider({
+    now: () => now,
+    fetchImpl: async (url, options) => {
+      requests.push({ url: new URL(url), options });
+      return jsonResponse({
+        data: [
+          {
+            location: 'country/US',
+            location_name: 'United States',
+            start: Math.floor(Date.parse('2026-09-23T12:00:00Z') / 1000),
+            duration: 3600,
+            datasource: 'bgp',
+            method: 'bgp',
+            overlaps_window: true,
+          },
+        ],
+      });
+    },
+  });
+  const first = await provider.requestSnapshot();
+  const cached = await provider.requestSnapshot();
+  assert.equal(first, cached);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url.hostname, 'api.ioda.inetintel.cc.gatech.edu');
+  assert.equal(requests[0].url.pathname, '/v2/outages/events');
+  assert.equal(requests[0].url.searchParams.get('entityType'), 'country');
+  assert.equal(requests[0].url.searchParams.get('extendWindow'), '0');
+  assert.equal(requests[0].options.headers.Authorization, undefined);
+  assert.equal(first.value.events.length, 1);
+  assert.equal(
+    first.value.countries[0].geographicPrecision,
+    'country-reference',
+  );
+  assert.equal(first.value.countries[0].latitude, 39.538479);
+  assert.doesNotMatch(
+    JSON.stringify(first.value),
+    /score|api[_ -]?key|secret/i,
+  );
+  now += 6 * 60_000;
+});
+
+test('IODA serves a clearly stale last-good snapshot during an upstream outage', async () => {
+  let currentTime = Date.parse('2026-09-23T13:00:00.000Z');
+  let unavailable = false;
+  const provider = createIodaProvider({
+    now: () => currentTime,
+    fetchImpl: async () => {
+      if (unavailable)
+        return jsonResponse({ error: 'temporarily unavailable' }, 503);
+      return jsonResponse({
+        data: [
+          {
+            location: 'country/CA',
+            location_name: 'Canada',
+            start: Math.floor(currentTime / 1000) - 120,
+            duration: 90,
+            datasource: 'active-probing',
+            method: 'ping',
+          },
+        ],
+      });
+    },
+  });
+  await provider.requestSnapshot();
+  currentTime += 6 * 60_000;
+  unavailable = true;
+  const stale = await provider.requestSnapshot();
+  assert.equal(stale.value.stale, true);
+  assert.equal(stale.value.events[0].countryCode, 'CA');
+  currentTime += 6 * 60 * 60_000;
+  await assert.rejects(provider.requestSnapshot(), {
+    code: 'upstream_unavailable',
+  });
+});
 
 test('Radar uses a fixed same-purpose upstream request and returns country aggregates only', async () => {
   const urls = [];
@@ -230,6 +309,36 @@ test('Cyber source fetches and normalizes the public CISA KEV snapshot', async (
   assert.equal(requested[0].options.method || 'GET', 'GET');
   assert.equal(snapshot.vulnerabilities[0].cveId, 'CVE-2024-12345');
   assert.equal(snapshot.vulnerabilities[0].forensicTriage, true);
+});
+
+test('Cyber source validates the same-origin IODA event snapshot', async () => {
+  const requested = [];
+  const source = createCyberSource({
+    fetchImpl: async (url, options) => {
+      requested.push({ url, options });
+      return jsonResponse({
+        provider: 'ioda',
+        fetchedAt: '2026-09-23T13:00:00.000Z',
+        stale: false,
+        events: [
+          {
+            countryCode: 'US',
+            countryName: 'United States',
+            datasource: 'bgp',
+            method: 'bgp',
+            startedAt: '2026-09-23T12:00:00Z',
+            durationSeconds: 3600,
+          },
+        ],
+      });
+    },
+  });
+  const snapshot = await source.getIodaSnapshot();
+  assert.equal(requested[0].url, '/api/cyber/ioda');
+  assert.equal(requested[0].options.method || 'GET', 'GET');
+  assert.equal(snapshot.events.length, 1);
+  assert.equal(snapshot.countries[0].countryCode, 'US');
+  assert.equal(snapshot.countries[0].geographicPrecision, 'country-reference');
 });
 
 test('Radar missing/invalid credentials produce safe machine errors and test never echoes key', async () => {

@@ -1,3 +1,5 @@
+import { createCyberMarkerImage } from '../layers/cyber/markers.js';
+
 const element = (documentRef, tag, className, text) => {
   const node = documentRef.createElement(tag);
   if (className) node.className = className;
@@ -27,6 +29,10 @@ export class CyberIntelPanel {
       documentRef?.getElementById?.('cyber-intel-legend-panel') || null;
     this.legendContent =
       documentRef?.getElementById?.('cyber-intel-map-legend-content') || null;
+    this.threatSummaryPanel =
+      documentRef?.getElementById?.('cyber-threat-summary-panel') || null;
+    this.threatSummaryContent =
+      documentRef?.getElementById?.('cyber-threat-summary-content') || null;
     this.devicePopup =
       typeof documentRef?.createElement === 'function'
         ? element(documentRef, 'div', 'cyber-device-popup')
@@ -34,7 +40,7 @@ export class CyberIntelPanel {
     if (this.devicePopup) {
       this.devicePopup.hidden = true;
       this.devicePopup.setAttribute('role', 'dialog');
-      this.devicePopup.setAttribute('aria-label', 'Shodan device details');
+      this.devicePopup.setAttribute('aria-label', 'Cyber map details');
     }
     if (this.devicePopup) documentRef?.body?.append?.(this.devicePopup);
     this._wasEnabled = false;
@@ -42,6 +48,7 @@ export class CyberIntelPanel {
     this._kevVisibleCount = 25;
     this._kevResultsOpen = false;
     this._shodanResultsOpen = true;
+    this._otxResultsOpen = false;
     this._lastState = null;
   }
 
@@ -116,6 +123,26 @@ export class CyberIntelPanel {
       button.title = `${collapsed ? 'Expand' : 'Collapse'} Cyber Intel Map Legend`;
       button.textContent = collapsed ? '⌃' : '⌄';
     };
+    this._onThreatSummaryClick = (event) => {
+      const button = event.target?.closest?.(
+        '[data-cyber-threat-summary-collapse]',
+      );
+      if (!button) return;
+      const collapsed = !this.threatSummaryPanel.classList.contains(
+        'cyber-threat-summary-collapsed',
+      );
+      this.threatSummaryPanel.classList.toggle(
+        'cyber-threat-summary-collapsed',
+        collapsed,
+      );
+      button.setAttribute('aria-expanded', String(!collapsed));
+      button.setAttribute(
+        'aria-label',
+        `${collapsed ? 'Expand' : 'Collapse'} Top Attackers & Target Ports`,
+      );
+      button.title = `${collapsed ? 'Expand' : 'Collapse'} Top Attackers & Target Ports`;
+      button.textContent = collapsed ? '⌃' : '⌄';
+    };
     this._onBodySubmit = (event) => {
       const kevForm = event.target?.closest?.('[data-kev-search]');
       if (kevForm) {
@@ -150,14 +177,19 @@ export class CyberIntelPanel {
           .onOtxLookup?.(otxButton.dataset.indicator, 'auto');
         return;
       }
-      if (!event.target?.closest?.('[data-close-shodan-popup]')) return;
-      layer.getThreatIntelState().onClearShodanSelection?.();
+      if (!event.target?.closest?.('[data-close-cyber-popup]')) return;
+      layer.getThreatIntelState().onClearMapSelection?.();
     };
     this.devicePopup?.addEventListener('click', this._onDevicePopupClick);
     this.body.addEventListener('click', this._onBodyClick);
+    this.threatSummaryPanel?.addEventListener('click', this._onBodyClick);
     this.body.addEventListener('submit', this._onBodySubmit);
     this.panel.addEventListener('click', this._onPanelClick);
     this.legendPanel?.addEventListener('click', this._onLegendClick);
+    this.threatSummaryPanel?.addEventListener(
+      'click',
+      this._onThreatSummaryClick,
+    );
     this.render(layer.getThreatIntelState());
   }
 
@@ -579,7 +611,13 @@ export class CyberIntelPanel {
       'aria-label',
       selection.type === 'shodan-asset'
         ? 'Selected Shodan device'
-        : 'Selected Cloudflare Radar observation',
+        : selection.type === 'ioda-country'
+          ? 'Selected IODA connectivity events'
+          : selection.type === 'location'
+            ? 'Selected Radar location'
+            : selection.type === 'flow'
+              ? 'Selected Radar flow'
+              : 'Selected Cloudflare Radar observation',
     );
     section.append(
       element(
@@ -588,9 +626,11 @@ export class CyberIntelPanel {
         '',
         selection.type === 'shodan-asset'
           ? 'SELECTED SHODAN DEVICE'
-          : selection.type === 'flow'
-            ? 'SELECTED RADAR FLOW'
-            : 'SELECTED RADAR LOCATION',
+          : selection.type === 'ioda-country'
+            ? 'SELECTED IODA CONNECTIVITY EVENTS'
+            : selection.type === 'flow'
+              ? 'SELECTED RADAR FLOW'
+              : 'SELECTED RADAR LOCATION',
       ),
     );
     if (selection.type === 'shodan-asset') {
@@ -648,6 +688,13 @@ export class CyberIntelPanel {
             ),
           );
       }
+    }
+    if (
+      selection.type === 'shodan-asset' ||
+      selection.type === 'ioda-country' ||
+      selection.type === 'location' ||
+      selection.type === 'flow'
+    ) {
       const close = element(
         this.document,
         'button',
@@ -655,92 +702,81 @@ export class CyberIntelPanel {
         '×',
       );
       close.type = 'button';
-      close.setAttribute('aria-label', 'Close Shodan device details');
-      close.dataset.closeShodanPopup = 'true';
+      close.setAttribute(
+        'aria-label',
+        selection.type === 'ioda-country'
+          ? 'Close IODA outage details'
+            : selection.type === 'location'
+              ? 'Close Radar location details'
+              : selection.type === 'flow'
+                ? 'Close Radar flow details'
+                : 'Close Shodan device details',
+      );
+      close.dataset.closeCyberPopup = 'true';
       section.append(close);
     }
     const rows =
-      selection.type === 'shodan-asset'
+      selection.type === 'ioda-country'
         ? [
-            ['IP', selection.ip],
-            ['Organization', selection.organization],
+            ['Country', `${selection.countryName} (${selection.countryCode})`],
+            ['Events', selection.eventCount],
+            ['Latest event', selection.latestEventAt],
+            ['Scope', 'Country-level outage event; cause is not established'],
             [
-              'Services',
-              (selection.services || [])
-                .map(
-                  (service) =>
-                    `${service.port ?? '?'}${service.transport ? `/${service.transport}` : ''}${service.product ? ` · ${service.product}` : ''}`,
-                )
-                .join('; ') || 'None reported',
+              'Map point',
+              'Natural Earth country reference point, not the outage location',
             ],
             [
-              'Hostnames',
-              [
-                ...(selection.hostnames || []),
-                ...(selection.domains || []),
-              ].join(', ') || 'None reported',
+              'Data sources',
+              (selection.datasources || []).join(', ') || 'Not reported',
             ],
-            [
-              'Location',
-              [selection.city, selection.region, selection.country]
-                .filter(Boolean)
-                .join(', ') || 'Unavailable',
-            ],
-            ['Geography', selection.geographicProvenance || 'Unavailable'],
-            ['Location method', selection.geographicMethod || 'Unavailable'],
             [
               'Source',
               `${selection.attribution} · fetched ${selection.fetchedAt}`,
             ],
           ]
-        : selection.type === 'flow'
+        : selection.type === 'shodan-asset'
           ? [
-              ['Origin', `${selection.origin.name} (${selection.origin.code})`],
-              ['Target', `${selection.target.name} (${selection.target.code})`],
+              ['IP', selection.ip],
+              ['Organization', selection.organization],
               [
-                'Share',
-                `${Number.isFinite(selection.share) ? selection.share : 'Unavailable'}% of reported mitigated requests`,
+                'Services',
+                (selection.services || [])
+                  .map(
+                    (service) =>
+                      `${service.port ?? '?'}${service.transport ? `/${service.transport}` : ''}${service.product ? ` · ${service.product}` : ''}`,
+                  )
+                  .join('; ') || 'None reported',
               ],
-              ['Rank', selection.rank],
               [
-                'Window',
-                `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
+                'Hostnames',
+                [
+                  ...(selection.hostnames || []),
+                  ...(selection.domains || []),
+                ].join(', ') || 'None reported',
               ],
               [
                 'Location',
-                'Country reference coordinates; not a device or network path',
+                [selection.city, selection.region, selection.country]
+                  .filter(Boolean)
+                  .join(', ') || 'Unavailable',
+              ],
+              ['Geography', selection.geographicProvenance || 'Unavailable'],
+              ['Location method', selection.geographicMethod || 'Unavailable'],
+              [
+                'Source',
+                `${selection.attribution} · fetched ${selection.fetchedAt}`,
               ],
             ]
-          : selection.roles?.length > 1
+          : selection.type === 'flow'
             ? [
-                ['Roles', selection.roles.map((row) => row.role).join(' and ')],
                 [
-                  'Country',
-                  `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
-                ],
-                ...selection.roles.map((row) => [
-                  `${row.role === 'origin' ? 'Origin' : 'Target'} share / rank`,
-                  `${Number.isFinite(row.share) ? row.share : 'Unavailable'}% / ${row.rank ?? '—'}`,
-                ]),
-                [
-                  'Window',
-                  `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
+                  'Origin',
+                  `${selection.origin.name} (${selection.origin.code})`,
                 ],
                 [
-                  'Location',
-                  'Country reference coordinates; not a device location',
-                ],
-              ]
-            : [
-                [
-                  'Role',
-                  selection.category?.endsWith('-origin')
-                    ? 'Origin country aggregate'
-                    : 'Target country aggregate',
-                ],
-                [
-                  'Country',
-                  `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
+                  'Target',
+                  `${selection.target.name} (${selection.target.code})`,
                 ],
                 [
                   'Share',
@@ -753,9 +789,88 @@ export class CyberIntelPanel {
                 ],
                 [
                   'Location',
-                  'Country reference coordinates; not a device location',
+                  'Country reference coordinates; not a device or network path',
                 ],
-              ];
+              ]
+            : selection.type === 'location'
+              ? [
+                  [
+                    'Country',
+                    `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
+                  ],
+                  ...(selection.roles || []).map((row) => [
+                    `${row.role === 'origin' ? 'Origin' : 'Target'} role`,
+                    row.source === 'country aggregate'
+                      ? `${Number.isFinite(row.share) ? `${row.share}%` : 'Share unavailable'} · rank ${row.rank ?? '—'} in country list${row.flowCount ? `; also in ${row.flowCount} displayed pair(s)` : ''}`
+                      : `${row.flowCount} displayed pair(s); no separate country aggregate share`,
+                  ]),
+                  ...(selection.flowRoles?.length
+                    ? [
+                        [
+                          'Displayed flows',
+                          selection.flowRoles
+                            .map((row) => `${row.role}: ${row.flowName || row.flowId}`)
+                            .join('; '),
+                        ],
+                      ]
+                    : []),
+                  [
+                    'Window',
+                    `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
+                  ],
+                  [
+                    'Location',
+                    'Country reference coordinates; not a device location',
+                  ],
+                ]
+              : selection.roles?.length > 1
+              ? [
+                  [
+                    'Roles',
+                    selection.roles.map((row) => row.role).join(' and '),
+                  ],
+                  [
+                    'Country',
+                    `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
+                  ],
+                  ...selection.roles.map((row) => [
+                    `${row.role === 'origin' ? 'Origin' : 'Target'} share / rank`,
+                    `${Number.isFinite(row.share) ? row.share : 'Unavailable'}% / ${row.rank ?? '—'}`,
+                  ]),
+                  [
+                    'Window',
+                    `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
+                  ],
+                  [
+                    'Location',
+                    'Country reference coordinates; not a device location',
+                  ],
+                ]
+              : [
+                  [
+                    'Role',
+                    selection.category?.endsWith('-origin')
+                      ? 'Origin country aggregate'
+                      : 'Target country aggregate',
+                  ],
+                  [
+                    'Country',
+                    `${selection.locationName || 'Unknown'}${selection.locationCode ? ` (${selection.locationCode})` : ''}`,
+                  ],
+                  [
+                    'Share',
+                    `${Number.isFinite(selection.share) ? selection.share : 'Unavailable'}% of reported mitigated requests`,
+                  ],
+                  ['Rank', selection.rank],
+                  [
+                    'Window',
+                    `${selection.windowStart || '—'} to ${selection.windowEnd || '—'} UTC`,
+                  ],
+                  [
+                    'Location',
+                    'Country reference coordinates; not a device location',
+                  ],
+                ];
     for (const [label, value] of rows) {
       const row = element(this.document, 'p', 'cyber-intel-detail-row');
       row.append(element(this.document, 'strong', '', `${label}: `));
@@ -843,10 +958,6 @@ export class CyberIntelPanel {
 
   _renderProvider(provider) {
     const section = element(this.document, 'section', 'cyber-intel-provider');
-    if (provider.id === 'dshield')
-      section.append(
-        element(this.document, 'h3', '', 'Top Attackers & Target Ports'),
-      );
     const heading = element(
       this.document,
       'div',
@@ -862,6 +973,94 @@ export class CyberIntelPanel {
       ),
     );
     section.append(heading);
+    if (provider.id === 'ioda') {
+      if (provider.error) {
+        section.append(
+          element(this.document, 'p', 'cyber-intel-empty', provider.error),
+        );
+      } else if (!provider.events?.length) {
+        section.append(
+          element(
+            this.document,
+            'p',
+            'cyber-intel-empty',
+            provider.fetchedAt
+              ? 'No country-level outage events were reported in the last 24 hours.'
+              : 'Waiting for the IODA feed update.',
+          ),
+        );
+      }
+      section.append(
+        element(
+          this.document,
+          'p',
+          'cyber-intel-provenance',
+          'IODA detects Internet connectivity disruptions. Events do not establish cause. Globe markers use country reference points, not precise outage locations.',
+        ),
+      );
+      if (provider.events?.length) {
+        const groups = new Map();
+        for (const event of provider.events) {
+          const list = groups.get(event.countryCode) || [];
+          list.push(event);
+          groups.set(event.countryCode, list);
+        }
+        const results = element(
+          this.document,
+          'details',
+          'cyber-search-results',
+        );
+        results.dataset.iodaResults = 'true';
+        results.open = false;
+        results.append(
+          element(
+            this.document,
+            'summary',
+            '',
+            `IODA events · ${provider.events.length} in the last 24 hours`,
+          ),
+        );
+        for (const events of groups.values()) {
+          const country = events[0];
+          const card = element(this.document, 'article', 'cyber-kev-entry');
+          card.append(
+            element(
+              this.document,
+              'h4',
+              '',
+              `${country.country_name || country.countryName} · ${events.length} event${events.length === 1 ? '' : 's'}`,
+            ),
+          );
+          for (const event of events.slice(0, 10)) {
+            const duration =
+              event.durationSeconds <= 0
+                ? 'duration not reported'
+                : event.durationSeconds >= 3600
+                  ? `${(event.durationSeconds / 3600).toFixed(1)} hours`
+                  : `${Math.max(1, Math.ceil(event.durationSeconds / 60))} minutes`;
+            card.append(
+              element(
+                this.document,
+                'p',
+                'cyber-kev-meta',
+                `${event.datasource} · ${event.method} · started ${event.startedAt} · ${duration}`,
+              ),
+            );
+          }
+          results.append(card);
+        }
+        section.append(results);
+      }
+      section.append(
+        element(
+          this.document,
+          'p',
+          'cyber-intel-attribution',
+          `${provider.attribution}${provider.fetchedAt ? ` · fetched ${provider.fetchedAt}` : ''}`,
+        ),
+      );
+      return section;
+    }
     if (provider.id === 'dshield')
       section.append(
         element(
@@ -1045,98 +1244,122 @@ export class CyberIntelPanel {
       : null;
     const pending =
       state.selectedOtxKey && state.otxPending?.includes(state.selectedOtxKey);
-    if (pending)
-      section.append(
+    if (pending || result) {
+      const results = element(this.document, 'details', 'cyber-search-results');
+      results.dataset.otxResults = 'true';
+      results.open = this._otxResultsOpen;
+      results.addEventListener('toggle', () => {
+        this._otxResultsOpen = results.open;
+      });
+      const resultLabel = pending
+        ? 'lookup in progress'
+        : result?.error
+          ? 'lookup failed'
+          : `${result.pulseCount} associated pulse${result.pulseCount === 1 ? '' : 's'}`;
+      results.append(
         element(
           this.document,
-          'p',
-          'cyber-intel-empty',
-          'Querying AlienVault OTX…',
+          'summary',
+          '',
+          `OTX results · ${result?.indicator || state.selectedOtxKey.replace(/^.*:/, '')} · ${resultLabel}`,
         ),
       );
-    else if (result?.error)
-      section.append(
-        element(this.document, 'p', 'cyber-intel-empty', result.error),
-      );
-    else if (result) {
-      section.append(
-        element(
-          this.document,
-          'p',
-          'cyber-intel-provenance',
-          `${result.indicatorTypeLabel} · ${result.indicator} · ${result.pulseCount} associated pulse${result.pulseCount === 1 ? '' : 's'}${result.fetchedAt ? ` · ${result.fetchedAt}` : ''}`,
-        ),
-      );
-      if (!result.pulses?.length)
-        section.append(
+      section.append(results);
+      if (pending)
+        results.append(
           element(
             this.document,
             'p',
             'cyber-intel-empty',
-            'No subscribed OTX pulse associations were returned.',
+            'Querying AlienVault OTX…',
           ),
         );
-      for (const pulse of result.pulses || []) {
-        const card = element(this.document, 'article', 'cyber-kev-entry');
-        card.append(element(this.document, 'h4', '', pulse.name));
-        const metadata = [
-          pulse.author,
-          pulse.modified,
-          pulse.indicatorCount ? `${pulse.indicatorCount} indicators` : null,
-          pulse.tlp,
-        ]
-          .filter(Boolean)
-          .join(' · ');
-        if (metadata)
-          card.append(element(this.document, 'p', 'cyber-kev-meta', metadata));
-        if (pulse.description)
-          card.append(
+      else if (result?.error)
+        results.append(
+          element(this.document, 'p', 'cyber-intel-empty', result.error),
+        );
+      else if (result) {
+        results.append(
+          element(
+            this.document,
+            'p',
+            'cyber-intel-provenance',
+            `${result.indicatorTypeLabel} · ${result.indicator} · ${result.pulseCount} associated pulse${result.pulseCount === 1 ? '' : 's'}${result.fetchedAt ? ` · ${result.fetchedAt}` : ''}`,
+          ),
+        );
+        if (!result.pulses?.length)
+          results.append(
             element(
               this.document,
               'p',
-              'cyber-kev-description',
-              pulse.description,
+              'cyber-intel-empty',
+              'No subscribed OTX pulse associations were returned.',
             ),
           );
-        if (pulse.tags?.length)
-          card.append(
-            element(
-              this.document,
-              'p',
-              'cyber-kev-meta',
-              `Tags: ${pulse.tags.join(', ')}`,
-            ),
+        for (const pulse of result.pulses || []) {
+          const card = element(this.document, 'article', 'cyber-kev-entry');
+          card.append(element(this.document, 'h4', '', pulse.name));
+          const metadata = [
+            pulse.author,
+            pulse.modified,
+            pulse.indicatorCount ? `${pulse.indicatorCount} indicators` : null,
+            pulse.tlp,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          if (metadata)
+            card.append(
+              element(this.document, 'p', 'cyber-kev-meta', metadata),
+            );
+          if (pulse.description)
+            card.append(
+              element(
+                this.document,
+                'p',
+                'cyber-kev-description',
+                pulse.description,
+              ),
+            );
+          if (pulse.tags?.length)
+            card.append(
+              element(
+                this.document,
+                'p',
+                'cyber-kev-meta',
+                `Tags: ${pulse.tags.join(', ')}`,
+              ),
+            );
+          const link = element(
+            this.document,
+            'a',
+            'cyber-kev-source-link',
+            'Open OTX pulse ↗',
           );
-        const link = element(
+          link.href = `https://otx.alienvault.com/pulse/${encodeURIComponent(pulse.id)}`;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          card.append(link);
+          results.append(card);
+        }
+        const sourceLink = element(
           this.document,
           'a',
           'cyber-kev-source-link',
-          'Open OTX pulse ↗',
+          'Open OTX indicator ↗',
         );
-        link.href = `https://otx.alienvault.com/pulse/${encodeURIComponent(pulse.id)}`;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        card.append(link);
-        section.append(card);
+        sourceLink.href = result.link;
+        sourceLink.target = '_blank';
+        sourceLink.rel = 'noopener noreferrer';
+        results.append(sourceLink);
+        results.append(
+          element(
+            this.document,
+            'p',
+            'cyber-intel-attribution',
+            result.attribution,
+          ),
+        );
       }
-      const sourceLink = element(
-        this.document,
-        'a',
-        'cyber-kev-source-link',
-        'Open OTX indicator ↗',
-      );
-      sourceLink.href = result.link;
-      sourceLink.target = '_blank';
-      sourceLink.rel = 'noopener noreferrer';
-      section.append(sourceLink);
-      section.append(
-        element(
-          this.document,
-          'p',
-          'cyber-intel-attribution',
-          result.attribution,
-        ),
-      );
     }
     return section;
   }
@@ -1145,21 +1368,39 @@ export class CyberIntelPanel {
     const legend = element(this.document, 'section', 'cyber-intel-legend');
     legend.setAttribute('aria-label', 'Cyber map legend');
     legend.append(element(this.document, 'h3', '', 'CloudFlare Radar'));
+    const setMarker = (node, kind, color) => {
+      node.style.backgroundImage = `url("${createCyberMarkerImage(kind, color)}")`;
+      node.style.backgroundSize = 'contain';
+      node.style.backgroundRepeat = 'no-repeat';
+      node.style.border = '0';
+      node.style.borderRadius = '0';
+    };
     const entries = [
-      ['cyber-legend-origin', 'Origin aggregate · client IP country'],
+      ['cyber-legend-origin', 'origin', '#ff4500', 'Person · reported origin'],
       [
         'cyber-legend-target',
-        'Target aggregate · zone billing country when available',
+        'target',
+        '#00bfff',
+        'Crosshair · reported target',
       ],
-      ['cyber-legend-both', 'Origin and target country'],
-      ['cyber-legend-flow', 'Red arrow · reported origin → target pair'],
+      ['cyber-legend-both', 'both', '#9370db', 'Sword and shield · origin and target'],
     ];
-    for (const [swatchClass, label] of entries) {
+    for (const [swatchClass, kind, color, label] of entries) {
       const row = element(this.document, 'p', 'cyber-intel-legend-row');
-      row.append(element(this.document, 'span', swatchClass));
+      const marker = element(this.document, 'span', swatchClass);
+      setMarker(marker, kind, color);
+      row.append(marker);
       row.append(this.document.createTextNode(label));
       legend.append(row);
     }
+    const flowRow = element(this.document, 'p', 'cyber-intel-legend-row');
+    flowRow.append(element(this.document, 'span', 'cyber-legend-flow'));
+    flowRow.append(
+      this.document.createTextNode(
+        'Red-to-blue arrow · reported origin → target pair',
+      ),
+    );
+    legend.append(flowRow);
     legend.append(
       this._renderLegendExplainer(
         'About CloudFlare Radar',
@@ -1168,15 +1409,34 @@ export class CyberIntelPanel {
     );
     legend.append(element(this.document, 'h3', '', 'Shodan'));
     const shodanRow = element(this.document, 'p', 'cyber-intel-legend-row');
-    shodanRow.append(element(this.document, 'span', 'cyber-legend-shodan'));
+    const shodanMarker = element(this.document, 'span', 'cyber-legend-shodan');
+    setMarker(shodanMarker, 'shodan', '#ffd34e');
+    shodanRow.append(shodanMarker);
     shodanRow.append(
-      this.document.createTextNode('Gold dot · searched Shodan device'),
+      this.document.createTextNode('Server · searched Shodan device'),
     );
     legend.append(shodanRow);
     legend.append(
       this._renderLegendExplainer(
         'About Shodan',
         'Shodan devices appear after an area search; IP-based positions are approximate network locations.',
+      ),
+    );
+    legend.append(element(this.document, 'h3', '', 'IODA Connectivity'));
+    const iodaRow = element(this.document, 'p', 'cyber-intel-legend-row');
+    const iodaMarker = element(this.document, 'span', 'cyber-legend-ioda');
+    setMarker(iodaMarker, 'ioda', '#00d9e8');
+    iodaRow.append(
+      iodaMarker,
+      this.document.createTextNode(
+        'Internet disruption symbol · country reference point',
+      ),
+    );
+    legend.append(iodaRow);
+    legend.append(
+      this._renderLegendExplainer(
+        'About IODA',
+        'IODA reports country-level Internet connectivity events. The marker is a Natural Earth country label point, not the outage site; region-level events are not mapped.',
       ),
     );
     return legend;
@@ -1195,8 +1455,11 @@ export class CyberIntelPanel {
     if (!this.panel || !this.body) return;
     const shodanResults = this.body.querySelector?.('[data-shodan-results]');
     const kevResults = this.body.querySelector?.('[data-kev-results]');
+    const otxResults = this.body.querySelector?.('[data-otx-results]');
     if (shodanResults) this._shodanResultsOpen = shodanResults.open;
     if (kevResults) this._kevResultsOpen = kevResults.open;
+    if (otxResults) this._otxResultsOpen = otxResults.open;
+    this.threatSummaryContent?.replaceChildren();
     this._lastState = state;
     const isEnabled = state?.enabled === true;
     const becameEnabled = isEnabled && !this._wasEnabled;
@@ -1208,6 +1471,10 @@ export class CyberIntelPanel {
       this.legendPanel.hidden = !isEnabled;
       this.legendPanel.inert = !isEnabled;
     }
+    if (this.threatSummaryPanel) {
+      this.threatSummaryPanel.hidden = !isEnabled;
+      this.threatSummaryPanel.inert = !isEnabled;
+    }
     this.legendContent?.replaceChildren();
     this.body.replaceChildren();
     if (!isEnabled) {
@@ -1215,17 +1482,50 @@ export class CyberIntelPanel {
       return;
     }
 
-    if (state.selectedShodan && this.devicePopup) {
+    const isRadarSelection = Boolean(state.selectedRadar);
+    const isRadarLocation = state.selectedRadar?.type === 'location';
+    const isRadarFlow = state.selectedRadar?.type === 'flow';
+    if (
+      (state.selectedShodan || state.selectedIoda || isRadarSelection) &&
+      this.devicePopup
+    ) {
+      const isIodaSelection = Boolean(state.selectedIoda);
+      const mapSelection =
+        state.selectedShodan || state.selectedIoda || state.selectedRadar;
       this.devicePopup.hidden = false;
-      this.devicePopup.replaceChildren(
-        this._renderSelection({
-          ...state.selectedShodan,
-          type: 'shodan-asset',
-          otxResults: state.otxResults,
-          otxPending: state.otxPending,
-        }),
+      this.devicePopup.classList.toggle(
+        'cyber-device-popup-ioda',
+        isIodaSelection,
       );
-      const point = state.selectedShodan.popupPosition;
+      this.devicePopup.classList.toggle(
+        'cyber-device-popup-radar',
+        isRadarSelection,
+      );
+      this.devicePopup.setAttribute(
+        'aria-label',
+        isIodaSelection
+          ? 'IODA outage details'
+          : isRadarLocation
+            ? 'Radar location details'
+            : isRadarFlow
+              ? 'Radar flow details'
+              : 'Shodan device details',
+      );
+      this.devicePopup.replaceChildren(
+        this._renderSelection(
+          isIodaSelection
+          ? { ...state.selectedIoda, type: 'ioda-country' }
+            : isRadarSelection
+              ? { ...state.selectedRadar }
+              : {
+                  ...state.selectedShodan,
+                  type: 'shodan-asset',
+                  otxResults: state.otxResults,
+                  otxPending: state.otxPending,
+                },
+        ),
+      );
+      const point = mapSelection.popupPosition;
       const viewportWidth = globalThis.innerWidth || 1280;
       const viewportHeight = globalThis.innerHeight || 800;
       const left = Math.min(
@@ -1242,28 +1542,36 @@ export class CyberIntelPanel {
 
     this.body.append(this._renderShodanSearch(state));
     this.body.append(this._renderKevCatalog(state));
+    this.body.append(this._renderOtxLookup(state));
     this.legendContent?.append(this._renderLegend());
 
-    const selected = state.selectedRadar;
-    if (selected) {
-      this.body.append(this._renderSelection(selected));
-      const disclosure = this.panel.querySelector(
-        '[data-collapse-target="cyber-intel-panel"]',
-      );
-      if (this.panel.classList.contains('collapsed')) disclosure?.click();
-    } else if (!state.selectedShodan || !this.devicePopup) {
-      this.body.append(
+    if (
+      !state.selectedShodan &&
+      !state.selectedIoda &&
+      !isRadarSelection
+    ) {
+      this.legendContent?.append(
         element(
           this.document,
           'p',
           'cyber-intel-map-hint',
-          'Select a Radar marker, flow arrow, or Shodan device on the globe to inspect its details.',
+          'Select a Radar marker, flow arrow, Shodan device, or IODA marker on the globe to inspect its details.',
         ),
       );
     }
-    for (const provider of state.nonGeographicProviders || [])
-      this.body.append(this._renderProvider(provider));
-    this.body.append(this._renderOtxLookup(state));
+    for (const provider of state.nonGeographicProviders || []) {
+      const rendered = this._renderProvider(provider);
+      if (provider.id === 'dshield')
+        this.threatSummaryContent?.append(rendered);
+      else this.body.append(rendered);
+    }
+    const hasThreatSummary = (state.nonGeographicProviders || []).some(
+      (provider) => provider.id === 'dshield',
+    );
+    if (this.threatSummaryPanel) {
+      this.threatSummaryPanel.hidden = !isEnabled || !hasThreatSummary;
+      this.threatSummaryPanel.inert = !isEnabled || !hasThreatSummary;
+    }
     if (state.enrichmentMessage)
       this.body.append(
         element(
@@ -1282,25 +1590,38 @@ export class CyberIntelPanel {
   destroy() {
     if (this._onBodyClick)
       this.body?.removeEventListener('click', this._onBodyClick);
+    if (this._onBodyClick)
+      this.threatSummaryPanel?.removeEventListener('click', this._onBodyClick);
     if (this._onBodySubmit)
       this.body?.removeEventListener('submit', this._onBodySubmit);
     if (this._onPanelClick)
       this.panel?.removeEventListener('click', this._onPanelClick);
     if (this._onLegendClick)
       this.legendPanel?.removeEventListener('click', this._onLegendClick);
+    if (this._onThreatSummaryClick)
+      this.threatSummaryPanel?.removeEventListener(
+        'click',
+        this._onThreatSummaryClick,
+      );
     if (this._onDevicePopupClick)
       this.devicePopup?.removeEventListener('click', this._onDevicePopupClick);
     this._onBodyClick = null;
     this._onBodySubmit = null;
     this._onPanelClick = null;
     this._onLegendClick = null;
+    this._onThreatSummaryClick = null;
     this._onDevicePopupClick = null;
     this.layer?.setThreatIntelListener?.(null);
     this.layer = null;
     this.body?.replaceChildren();
+    this.threatSummaryContent?.replaceChildren();
     if (this.panel) {
       this.panel.hidden = true;
       this.panel.inert = true;
+    }
+    if (this.threatSummaryPanel) {
+      this.threatSummaryPanel.hidden = true;
+      this.threatSummaryPanel.inert = true;
     }
     this.devicePopup?.remove?.();
     this.devicePopup && (this.devicePopup.hidden = true);

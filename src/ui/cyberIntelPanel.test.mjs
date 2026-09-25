@@ -72,6 +72,9 @@ function fixture() {
   const legendPanel = new FakeNode('section');
   const legendContent = new FakeNode('div');
   const legendToggle = new FakeNode('button');
+  const threatSummaryPanel = new FakeNode('section');
+  const threatSummaryContent = new FakeNode('div');
+  const threatSummaryToggle = new FakeNode('button');
   legendPanel.hidden = true;
   legendPanel.inert = true;
   const documentBody = new FakeNode('body');
@@ -88,6 +91,8 @@ function fixture() {
         'cyber-intel-body': body,
         'cyber-intel-legend-panel': legendPanel,
         'cyber-intel-map-legend-content': legendContent,
+        'cyber-threat-summary-panel': threatSummaryPanel,
+        'cyber-threat-summary-content': threatSummaryContent,
       })[id] || null,
   };
   return {
@@ -96,6 +101,9 @@ function fixture() {
     legendPanel,
     legendContent,
     legendToggle,
+    threatSummaryPanel,
+    threatSummaryContent,
+    threatSummaryToggle,
     documentRef,
     disclosure,
   };
@@ -202,14 +210,21 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   layer.listener(layer.state);
   assert.equal(f.panel.hidden, false);
   assert.equal(f.legendPanel.hidden, false);
+  assert.equal(f.threatSummaryPanel.hidden, false);
   assert.equal(f.panel.classList.contains('collapsed'), false);
-  assert.match(f.body.textContent, /192\.0\.2\.1/);
-  assert.match(f.body.textContent, /Current Top 10 malicious sources/);
-  assert.match(f.body.textContent, /IP Address/);
-  assert.match(f.body.textContent, /Domain Name/);
-  assert.match(f.body.textContent, /Unavailable/);
-  assert.match(f.body.textContent, /Current Top 10 Targeted Ports/);
-  assert.match(f.body.textContent, /23\/tcp/);
+  assert.match(f.threatSummaryContent.textContent, /192\.0\.2\.1/);
+  assert.match(
+    f.threatSummaryContent.textContent,
+    /Current Top 10 malicious sources/,
+  );
+  assert.match(f.threatSummaryContent.textContent, /IP Address/);
+  assert.match(f.threatSummaryContent.textContent, /Domain Name/);
+  assert.match(f.threatSummaryContent.textContent, /Unavailable/);
+  assert.match(
+    f.threatSummaryContent.textContent,
+    /Current Top 10 Targeted Ports/,
+  );
+  assert.match(f.threatSummaryContent.textContent, /23\/tcp/);
   assert.match(f.body.textContent, /Shodan Exposed Device Search/);
   assert.match(f.body.textContent, /CISA Known Exploited Vulnerabilities/);
   assert.match(f.body.textContent, /CVE-2024-12345/);
@@ -220,12 +235,13 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   assert.match(f.legendContent.textContent, /Shodan/);
   assert.match(
     f.legendContent.textContent,
-    /Gold dot · searched Shodan device/,
+    /Server · searched Shodan device/,
   );
   const explainers = f.legendContent.children[0].children.filter(
     (node) => node.tagName === 'details',
   );
-  assert.equal(explainers.length, 2);
+  assert.equal(explainers.length, 3);
+  assert.match(f.legendContent.textContent, /IODA Connectivity/);
   assert.ok(explainers.every((node) => !node.open));
   assert.ok(
     f.legendContent.textContent.indexOf('CloudFlare Radar') <
@@ -250,7 +266,32 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
     f.legendPanel.classList.contains('cyber-legend-collapsed'),
     false,
   );
-  assert.match(f.body.textContent, /Top Attackers & Target Ports/);
+  assert.doesNotMatch(f.body.textContent, /Top Attackers & Target Ports/);
+  assert.equal(f.threatSummaryPanel.hidden, false);
+  assert.match(
+    f.threatSummaryContent.textContent,
+    /Current Top 10 malicious sources/,
+  );
+  const clickThreatSummaryToggle = () =>
+    f.threatSummaryPanel.listeners.get('click')({
+      target: {
+        closest: (selector) =>
+          selector === '[data-cyber-threat-summary-collapse]'
+            ? f.threatSummaryToggle
+            : null,
+      },
+    });
+  clickThreatSummaryToggle();
+  assert.equal(
+    f.threatSummaryPanel.classList.contains('cyber-threat-summary-collapsed'),
+    true,
+  );
+  assert.equal(f.threatSummaryToggle.attributes.get('aria-expanded'), 'false');
+  clickThreatSummaryToggle();
+  assert.equal(
+    f.threatSummaryPanel.classList.contains('cyber-threat-summary-collapsed'),
+    false,
+  );
   assert.ok(
     f.body.textContent.indexOf('Shodan Exposed Device Search') <
       f.body.textContent.indexOf('CISA Known Exploited Vulnerabilities'),
@@ -273,6 +314,89 @@ test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () =>
   assert.equal(f.panel.inert, true);
   assert.equal(f.legendPanel.hidden, true);
   assert.equal(f.legendPanel.inert, true);
+  assert.equal(f.threatSummaryPanel.hidden, true);
+  assert.equal(f.threatSummaryPanel.inert, true);
+  panel.destroy();
+});
+
+test('IODA panel shows collapsible country event details and cause caveat', () => {
+  const f = fixture();
+  const layer = {
+    state: {
+      enabled: true,
+      selectedRadar: null,
+      selectedIoda: null,
+      nonGeographicProviders: [
+        {
+          id: 'ioda',
+          label: 'IODA Internet Disruptions',
+          status: 'updated 2026-09-23T13:00:00Z',
+          fetchedAt: '2026-09-23T13:00:00Z',
+          attribution: 'IODA · Georgia Tech Internet Intelligence Lab',
+          events: [
+            {
+              countryCode: 'US',
+              countryName: 'United States',
+              datasource: 'bgp',
+              method: 'bgp',
+              startedAt: '2026-09-23T12:00:00Z',
+              durationSeconds: 3600,
+            },
+          ],
+          countries: [],
+        },
+      ],
+    },
+    setThreatIntelListener(listener) {
+      this.listener = listener;
+    },
+    getThreatIntelState() {
+      return this.state;
+    },
+  };
+  const panel = new CyberIntelPanel({ documentRef: f.documentRef });
+  panel.mount(layer);
+  const results = findNode(
+    f.body,
+    (node) => node.dataset?.iodaResults === 'true',
+  );
+  assert.ok(results);
+  assert.equal(results.open, false);
+  assert.match(results.textContent, /United States/);
+  assert.match(results.textContent, /bgp/);
+  assert.match(f.body.textContent, /do not establish cause/);
+  panel.destroy();
+});
+
+test('IODA selection details label its country point as a reference location', () => {
+  const f = fixture();
+  const layer = {
+    state: {
+      enabled: true,
+      selectedRadar: null,
+      selectedIoda: {
+        type: 'ioda-country',
+        countryCode: 'US',
+        countryName: 'United States',
+        eventCount: 2,
+        latestEventAt: '2026-09-23T12:00:00Z',
+        datasources: ['bgp'],
+        attribution: 'IODA',
+        fetchedAt: '2026-09-23T13:00:00Z',
+      },
+      nonGeographicProviders: [],
+    },
+    setThreatIntelListener(listener) {
+      this.listener = listener;
+    },
+    getThreatIntelState() {
+      return this.state;
+    },
+  };
+  const panel = new CyberIntelPanel({ documentRef: f.documentRef });
+  panel.mount(layer);
+  assert.match(f.body.textContent, /Natural Earth country reference point/);
+  assert.match(f.body.textContent, /cause is not established/);
   panel.destroy();
 });
 
@@ -455,8 +579,23 @@ test('OTX lookup UI displays attributed pulse context without map geography', ()
   const panel = new CyberIntelPanel({ documentRef: f.documentRef });
   panel.mount(layer);
   assert.match(f.body.textContent, /AlienVault OTX/);
+  assert.ok(
+    f.body.textContent.indexOf('CISA Known Exploited Vulnerabilities') <
+      f.body.textContent.indexOf('AlienVault OTX'),
+  );
   assert.match(f.body.textContent, /Example threat pulse/);
   assert.match(f.body.textContent, /not proof of compromise/);
+  let otxResults = findNode(
+    f.body,
+    (node) => node.dataset?.otxResults === 'true',
+  );
+  assert.ok(otxResults);
+  assert.equal(otxResults.open, false);
+  otxResults.open = true;
+  otxResults.listeners.get('toggle')();
+  layer.listener(layer.state);
+  otxResults = findNode(f.body, (node) => node.dataset?.otxResults === 'true');
+  assert.equal(otxResults.open, true);
   assert.equal(
     findNode(f.body, (node) => node.tagName === 'a')?.href,
     'https://otx.alienvault.com/pulse/aaaaaaaaaaaaaaaaaaaaaaaa',

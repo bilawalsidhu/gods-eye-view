@@ -1,5 +1,12 @@
 /* ── Responsive ───────────────────────────────── */
 @media (max-width: 720px) {
+  #cyber-threat-summary-panel:not([hidden]) {
+    left: 16px;
+    bottom: 2vh;
+    width: min(320px, calc(100vw - 32px));
+    max-height: min(36vh, 300px);
+  }
+
   #cyber-intel-legend-panel:not([hidden]) {
     left: auto;
     top: auto;

@@ -93,6 +93,14 @@
   dump1090/readsb `aircraft.json` documents.
 - Add `@jtarrio/webrtlsdr` and `@jtarrio/signals` (Apache-2.0); see
   `THIRD_PARTY_NOTICES.md`.
+# Unreleased — Cyber Phase 5 (IODA)
+
+- Add keyless, read-only IODA country-scoped connectivity outage events with a
+  bounded server cache and stale fallback. Show explicit country reference
+  markers, selection details and a collapsible event list. Events do not
+  establish outage cause; region and ASN records without trusted geography are
+  not mapped. See `DATA_SOURCES.md` for attribution and handling.
+
 # Unreleased — Cyber Phase 4
 
 - Add optional AlienVault OTX indicator lookups for IP addresses, domains,

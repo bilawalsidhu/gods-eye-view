@@ -7,6 +7,10 @@ const GREYNOISE_API = 'https://api.greynoise.io/v3/community';
 const IP_GEO_API = 'https://ipwho.is';
 const REQUEST_TIMEOUT_MS = 10_000;
 const RESPONSE_LIMIT = 512 * 1024;
+// Search returns up to 100 compact host records. CVE data can make those
+// records larger than the normal single-host response budget, so allow a
+// bounded larger payload specifically for searches.
+const SHODAN_SEARCH_RESPONSE_LIMIT = 2 * 1024 * 1024;
 const HOST_TTL_MS = 6 * 60 * 60_000;
 const SEARCH_TTL_MS = 15 * 60_000;
 const GREYNOISE_TTL_MS = 24 * 60 * 60_000;
@@ -20,14 +24,10 @@ const SHODAN_SEARCH_FIELDS = [
   'transport',
   'product',
   'version',
-  'timestamp',
   'org',
-  'isp',
-  'asn',
   'hostnames',
   'vulns',
   'location',
-  'os',
 ].join(',');
 const GEOLOCATION_TTL_MS = 30 * 24 * 60 * 60_000;
 const MAX_GEO_REQUESTS_PER_DAY = 500;
@@ -233,7 +233,12 @@ function normalizeGreyNoise(ip, payload, fetchedAt) {
 async function requestJson(
   fetchImpl,
   url,
-  { signal, headers = {}, allowNotFound = false } = {},
+  {
+    signal,
+    headers = {},
+    allowNotFound = false,
+    maxResponseBytes = RESPONSE_LIMIT,
+  } = {},
 ) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -261,7 +266,7 @@ async function requestJson(
     }
     const text = await readResponseTextCapped(
       response,
-      RESPONSE_LIMIT,
+      maxResponseBytes,
       controller.signal,
     );
     signal?.throwIfAborted();
@@ -427,7 +432,10 @@ export function createCyberEnrichmentProviders({
         // Request only the compact device fields our normalized popup/map use.
         url.searchParams.set('minify', 'false');
         url.searchParams.set('fields', SHODAN_SEARCH_FIELDS);
-        const { payload } = await requestJson(fetchImpl, url.href, { signal });
+        const { payload } = await requestJson(fetchImpl, url.href, {
+          signal,
+          maxResponseBytes: SHODAN_SEARCH_RESPONSE_LIMIT,
+        });
         if (!Array.isArray(payload?.matches) || payload.matches.length > 100)
           throw failure('invalid_provider_data');
         const fetchedAt = new Date(now()).toISOString();

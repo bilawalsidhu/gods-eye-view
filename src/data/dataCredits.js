@@ -109,6 +109,22 @@ export const DATA_CREDITS = [
       'may include false positives; not a blocklist',
   },
   {
+    key: 'ioda',
+    html:
+      'Cyber connectivity events: ' +
+      '<a href="https://ioda.inetintel.cc.gatech.edu/docs/" target="_blank" rel="noopener">IODA · Georgia Tech Internet Intelligence Lab</a> · ' +
+      'country reference points from public-domain Natural Earth data; markers are not outage locations',
+  },
+  {
+    key: 'nasa-gibs',
+    html:
+      'Recent imagery: We acknowledge the use of imagery provided by services from ' +
+      "NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science " +
+      'Data and Information System (ESDIS). ' +
+      '<a href="https://gibs.earthdata.nasa.gov" target="_blank" rel="noopener">gibs.earthdata.nasa.gov</a> · ' +
+      '<a href="https://lpdaac.usgs.gov/products/hlss30v002/" target="_blank" rel="noopener">HLS product page</a>',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +
