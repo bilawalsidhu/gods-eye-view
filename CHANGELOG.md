@@ -1,5 +1,254 @@
 # Changelog
 
+- CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
+  from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
+  flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD
+  now reads `HDG n° (ESTIMATED)` and the coverage wireframe draws dashed; manual
+  calibrations and curated poses are never marked estimated (bassem chagra, #643).
+
+- Report which upstream declined a Street Traffic road load. The layer row now
+  reads `Overpass rate-limited`, `Overpass timed out`, or
+  `Overpass refused the road query (HTTP 406)` instead of a general
+  "Road data temporarily unavailable", so a reader is not sent to check a
+  TomTom key when the public OpenStreetMap mirrors are the side that failed.
+  The proxy's own 502 (every mirror unreachable) and 503 (local limiter busy)
+  read `Overpass mirrors unreachable` and `Overpass temporarily unavailable`.
+  Failures the layer cannot classify keep the general line (daikaginza, #665).
+
+- Bound the client terrain-height cache at 20 000 entries with least-recently-used eviction, so a long session no longer retains every coordinate it ever resolved. Consumer reads promote their entry and a batch still reports every point it resolved (Pedro Lobato, #594).
+
+- Release CCTV media streams whose upstream falls silent after answering. The
+  15-second media deadline covered only the wait for response headers, so a
+  camera that replied and then stopped sending held both the proxy connection
+  and its upstream socket open for as long as the camera host allowed; the
+  declared `Content-Length` ceiling was the only body bound, and a chunked or
+  length-less body had none. A 30-second idle deadline now bounds the gap
+  between upstream chunks and releases a body that has gone silent. It is
+  rescheduled while the response is still waiting to drain, so a viewer on a
+  slow link is not mistaken for a dead camera; live feeds are unaffected
+  (Ethan Stoner, #688).
+
+- Aircraft track backfill (`/api/opensky-track`, `/api/adsblol/trace`) now
+  answers 502 when the upstream body exceeds the 5 MB cap, instead of a 200
+  whose error body the client read as an empty track. The failure is cached
+  like other upstream errors, so retries inside the 60 s window do not spend
+  OpenSky credits (Raushankumar0720, #720, #722).
+
+- Saving a key from Provider Settings works again on Macs where Nix or
+  Homebrew coreutils sit ahead of `/bin` on `PATH`. The credential hardener
+  now spawns Apple's `/bin/chmod -N` by absolute path; GNU `chmod` has no `-N`,
+  so the ACL strip failed closed and every save was refused (Arthur Bogaart, #694).
+
+- Render on iPad and iPhone instead of stopping with "An error occurred while
+  rendering." Cesium's per-vertex model atmosphere binds shader `out`
+  parameters directly to varyings, which Apple's Metal/ANGLE backend cannot
+  link, so the program failed and the render loop was torn down. The stage is
+  now kept out of the pipeline on affected devices by clearing
+  `scene.fog.renderable`, which leaves `fog.enabled` — and the fog density that
+  drives 3D Tiles refinement — untouched. Detection is a WebGL2 link probe of
+  the same pattern, so a future driver fix restores the effect with no code
+  change, with iOS/iPadOS detection as a backstop. Sky atmosphere and the
+  ground-atmosphere fragment path route through locals and are unaffected;
+  affected devices lose distance fog on 3D tiles and on the globe basemaps.
+  `src/app/atmosphereCompat.test.mjs` pins the probe, the platform matrix and
+  the `renderable`-not-`enabled` choice (KnottyDyes, #705).
+
+- Region scopes in voice analyst queries ("in the Gulf of Mexico", "over
+  the Alps") work again in the dev server: the bundled Natural Earth and
+  neighborhood packs are fetched as JSON in the browser
+  (`src/data/bundledJson.js`). When a region is not in the bundled packs, the
+  geocode and admin-boundary fallback answers `region-timeout` after 3 s
+  instead of holding the reply.
+
+- Transit and Directions rows repaint as soon as their data lands again:
+  `refreshLayerStats()` now lives on the layer lifecycle, not only on the
+  compatibility facade. `scripts/qa-radio.mjs` uses it instead of a private
+  panel method.
+- On phones the title bar sits 16 px from the top so both Radio broadcast
+  waves stay on-screen.
+- Keep Cyber right-rail panels mutually exclusive and Display, CCTV and Context
+  headers and frames fixed during content scrolling. Restore Radio's nested Context placement and compact
+  player. Add Cyber Sonar voice controls with settings and effect-state readback.
+  Keep keyboard-focus outlines visible inside Cyber's clipped map and cockpit
+  expand/collapse buttons, with a matching red hover border.
+
+- Add the opt-in Cyber HUD layout with coordinated map and cockpit panel
+  styling. Display exposes Sonar on/off, rings, range, power, opacity and sector.
+  Native point, billboard and label highlighting uses GPU draw commands; there
+  is no scene-dimming effect selector. Unsupported shaders retain native contact
+  rendering, and leaving Cyber restores the standard shell and contact treatment.
+
+- Add a **Recent Imagery** data layer (NASA GIBS · HLS + VIIRS, keyless).
+  Select a box (drag, the current view, or around a pin; up to 1,000 km a
+  side) and the right-rail panel lists the last 30 days of Sentinel-2 /
+  Landsat (30 m) and, when switched on, VIIRS daily overview imagery over it,
+  with thumbnails and scene cloud. Three modes: IMAGE shows one day, VS
+  BASEMAP swipes it against the map, A / B swipes two days; a SHOW or A / B
+  chip on each day card pins it, arrow keys preview the focused day while a
+  slot is empty, and no control moves when anything changes. While imagery is
+  shown on Google 3D the map switches to Esri and comes back when it is
+  cleared. Either image exports as a PNG; box, pins, mode and split travel in
+  share links; the NASA acknowledgement is in the credits and
+  `DATA_SOURCES.md`. The swipe is now shared with the Nepal scene
+  (`src/ui/imagerySplit.js`, `src/maps/imageryComparison.js`), and
+  `MapSourceController.subscribe()` reports every settled map switch.
+
+## Unreleased — local receiver feeds
+
+- The Local ADS-B layer also reads local 1090 MHz and 978 MHz UAT decoder
+  feeds: the `aircraft.json` that dump1090-fa, readsb, tar1090 or skyaware978
+  serves. Configure them server-side with `LOCAL_RECEIVER_FEEDS`
+  (`band=url`, comma-separated); there is no feed editing in the browser.
+  Hosts must be loopback, RFC1918, `localhost` or `*.local`, the scheme http or
+  https and the path must end in `aircraft.json`; any other entry is logged at
+  startup, reported `invalid` and never fetched.
+- Add `GET /api/local-receivers/aircraft`. It reads every configured feed in
+  parallel (2 s timeout, redirects refused, 2 MB body cap, about 1 s of shared
+  cache) and reports each feed `live`, `stale` (its own `now` is over 10 s old),
+  `unreachable` or `invalid`. Unconfigured, it answers
+  `{ configured: false }` and fetches nothing. Upstream error text is never
+  returned.
+- The layer merges browser-SDR and feed aircraft by ICAO, keeping the newest
+  position, polls the route every second only while it is enabled, and remembers
+  which bands and sources heard each aircraft in the last 60 s. The click card
+  names them (for example "Heard by your receiver · 978 MHz UAT · decoder
+  feed"); aircraft heard only on 978 MHz carry a thin ring. The row status
+  covers both inputs ("2 feeds live · 14 heard", "feed 978 unreachable"), and
+  the Local RTL-SDR card shows a read-only decoder-feed line.
+- While any input is producing aircraft (the browser receiver streaming, or a
+  feed live), the Local ADS-B row stays ON and lists feeds that are not live as
+  a trailing note ("3 heard · USB 5.8 msg/s · feed 1090 stale") instead of
+  showing DEGRADED.
+- Records carry `band` (`1090`/`978`) and `source` (`webusb`/`feed`).
+- See `docs/LOCAL-RECEIVERS.md`.
+
+## Unreleased — local RTL-SDR and Local ADS-B
+
+- Add a Local RTL-SDR card to the Radio panel. It connects a USB RTL-SDR in
+  desktop Chrome or Edge through WebUSB and receives broadcast FM (tune, seek,
+  volume) or 1090 MHz ADS-B. Local FM and internet-radio playback never play
+  together: starting one stops the other.
+- Add a gain control: AUTO or a manual R820T step, remembered per mode. ADS-B
+  defaults to 28.0 dB (the earlier 20.7 dB gave about 1 msg/s against about 9
+  at 28.0 dB on the same antenna; a stored choice still wins), FM to AUTO;
+  changes apply without reconnecting. In
+  ADS-B mode the card shows CRC-valid messages per second, aircraft heard,
+  aircraft positioned and the IQ level.
+- Prefer the ADS-B/1090 MHz channel of a dual-channel receiver, remember an
+  explicitly chosen device per mode, and add CHANGE DEVICE to reopen the
+  WebUSB picker.
+- Add the Local ADS-B layer (`local-adsb`, off by default, not part of share
+  links). Aircraft heard by the receiver draw in magenta beside public Flights;
+  a marker drops when its position is 60 s old and the aircraft is forgotten
+  after 60 s without a message. Clicking one opens a card; markers are not
+  camera-followed. Voice `set_layer_visibility` accepts `local-adsb`.
+- Normalize local ADS-B into one record shape, with a pure adapter for
+  dump1090/readsb `aircraft.json` documents.
+- Add `@jtarrio/webrtlsdr` and `@jtarrio/signals` (Apache-2.0); see
+  `THIRD_PARTY_NOTICES.md`.
+
+## Unreleased — weather review
+
+- On 3D Tiles, draw a 4096×2048 detail window around the view on each
+  observed-weather shell except global infrared, sampled by the shell's own
+  surface. It follows the view on camera move end, keeps its place while the
+  view stays near its centre, and hides until its image is ready after a move;
+  an older frame's detail stays over at most one newer frame. The image proxy
+  accepts a 2:1 `bbox` inside the product bounds, rounded to 0.25°.
+  Lightning's whole-extent image is now 4096×2048; each shell caches up to
+  128 MiB of decoded images.
+
+- On 3D Tiles, show observed weather and the wind color field as raised,
+  translucent shells (5.0–6.6 km, lightning highest) with one full-extent image
+  per frame instead of draping onto tiles; they show at any camera height.
+  Globe hosts are unchanged. The weather image proxy serves every product
+  (radar and regional infrared up to 4096×2048, lightning and global infrared
+  up to 2048×1024) with a size parameter and a 16 MiB cap. Accept bounded tile
+  sizes in the proxy with separate immutable cache entries.
+
+- Cache exact-time weather images and tiles for 24 hours. Retain up to 6 decoded
+  global mosaics per renderer and warm the next observation during playback;
+  tile prefetch is bounded to eight requests and cancels when suspended.
+
+- Move weather times, coverage, legends and cyclone advisory details into keyed
+  right-rail cards; left rows keep status and configuration. Use one native
+  observed-history timeline with local preview and coalesced drag commits.
+- Add reusable rail card and timeline components. Keep panel collapse, count,
+  hidden-empty behavior and first-appearance expansion.
+- Show wind unit controls beside speed legends and inside inspection readings;
+  changing units preserves the sampled location and open reading.
+- Name satellite imagery Satellite clouds, with Clouds only / Full image modes
+  and explicit regional coverage. Existing share parameters are unchanged.
+
+- Share one observed history clock across radar, infrared and lightning. Step
+  through their union timeline with bounded nearest-at-or-before selection;
+  hide products without an eligible frame. Latest uses each product's newest
+  observation; playback waits for all frame loads to settle before advancing.
+- Label wind as a forecast that does not follow observed history. Keep history
+  transient and product readouts synchronized.
+
+- Keep Google 3D Tiles drawing while draped weather imagery loads and retain the
+  old observation until the replacement has rendered.
+- Decode one bounded global infrared mosaic per frame on both map hosts, then
+  crop local tiles to avoid request-dependent brightness seams.
+- Add Clouds only / Full image controls and share-link state. Filtered mode uses
+  a soft linear-brightness alpha ramp from 0.40 to 0.70 around the old 0.55 cut.
+
+- Dock the weather summary in the right rail with standard panel collapse and drag chrome.
+
+- Filter infrared brightness so cold cloud tops stand out; this is a display
+  filter, not a cloud mask.
+- Retry throttled weather tiles up to three times per tile.
+
+- Cull regional wind batches per frame, fade curves below 60 km, and stop idle
+  rendering when no curve is visible.
+- Fade the wind color field below ~1,200 km camera height and hide it at 200 km.
+  On 3D Tiles, update alpha in 0.1 steps only at camera move end or installation;
+  globe imagery keeps its smooth per-frame fade.
+
+- Hide cyclone markers, labels, tracks and cones beyond the horizon on every map source.
+- Reserve stable weather status space and coalesce panel refreshes per frame.
+
+- Add keyless NOAA/NHC cyclone advisory positions, coherent forecast tracks and
+  uncertainty cones, plus NOAA's observed 15-minute lightning density imagery.
+  Preserve source clocks, basin coverage and explicit pending/stale states.
+- Make wind default to trails, preserve earlier share-link appearance, retain
+  geometry across scalar changes, and show a compact weather summary with a
+  location marker and selected-field emphasis for forecast inspection.
+
+- Add keyless NOAA observed rain radar and infrared satellite layers to Weather,
+  with explicit coverage/freshness, recent observation playback and native Cesium tiles.
+- Increase desktop wind density to 7,200 paths and improve temperature contrast
+  while retaining the 1,200-path narrow-screen budget and unchanged forecast values.
+
+- Expand Wind into a surface-weather prototype: globe-draped speed shading,
+  optional same-run 2 m temperature and mean sea-level pressure, GFS/ECMWF model
+  selection, a numeric legend, wind units, Pause, and a dismissible map-center
+  reading. Keep wind visible when an optional field is unavailable; respect
+  reduced motion and stop animation while hidden or disabled. Bake bounded
+  forecast-following curves once per field and animate their phase on the GPU,
+  with a canvas fallback and globe view lighting owned only while Wind is enabled.
+  Display lift does not
+  change the 10 m forecast level; this adds no cloud volume, radar or forecast-time
+  playback. Native hardware GPU behavior remains unverified.
+
+Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
+
+Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+- New Fire Perimeters layer (Events group): live NIFC WFIGS interagency
+  wildfire incident perimeters as ground-clamped polygons with a
+  containment-colored fire line, refreshed every 5 minutes from the public
+  keyless feature service with truncation paging. Clicking a perimeter shows
+  an incident card (acreage, containment, cause, behavior, personnel, county,
+  cost, complex membership) and, when the incident has a state- and
+  recency-verified InciWeb page, a click-through link to it. Recency uses
+  incident page origin and update times because the publication API was retired.
+  The layer is reachable from the panel, voice control, share links (token `2`), and the
+  analyst query engine. WFIGS and InciWeb requests use a capped, cached
+  same-origin proxy with timeouts and a per-client limit. Unchanged refreshes
+  retain geometry; incident-link checks abort on disable or selection change,
+  and the row includes a containment legend.
+
 - Remove the spurious scrollbars that appeared on both panel stacks at narrow
   widths (720px and below) as soon as a panel was expanded. The stacks scroll
   vertically there, and each panel's decorative glow, absolutely positioned
@@ -63,16 +312,13 @@
   with shared playback/seek interpolation, easing and holds. Navigation and
   manual input cancel authored motion; older scene files retain existing flights.
 
-
 - Director validates bounded version-3 scene files before replacing a project,
   preserves unreadable browser saves, migrates legacy bloom once and preserves
   zero-pitch/low-altitude camera and scope/detection edits. Project normalization has a separate owner.
 
-
 - Separate Director timing, seek calculations, playback clocks and registered
   scene-pack presentation rules. Preserve authored content and controls; Stop
   releases pending hold timers and stale ticks cannot affect replacement playback.
-
 
 - Keep parked transit vehicles aligned to their world course during camera orbits, fall back to reported bearing, and keep vehicles with no course consistently screen-up.
 
@@ -167,6 +413,13 @@
 
 - Split application scene, controls, catalog, tools and HTML into reusable components; configure application request services and sources without changing global fetch. Preserve standalone markup and voice behavior. Explicit annotation navigation may resolve a distant named target.
 
+## Satellite pass prediction
+
+- Bisect pass rise/set to ~0.2 s and fit peak elevation with a parabola.
+- Mark passes visible from Earth-shadow and civil-twilight checks.
+- Add `getNextSatellitePass(noradId, options)` for any loaded catalog satellite.
+- `next_iss_pass` retains the next geometric pass and adds visibility metadata. `next_satellite_pass` adds bounded loaded-catalog name/NORAD lookup and optional visible-only filtering (Rehaan Delmotra, #451; maintainer adaptation).
+
 ## Voice component boundaries
 
 - Separate voice controls, Realtime connection requests and the action runner.
@@ -258,8 +511,9 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
-- Add bounded Director feature actions with accessible controls, explicit camera/layer admission and cancellation; restore pack geometry on same-shot seek. Preserve existing scenes and content attribution.
+- Add ECMWF IFS model selection to Wind (#464, thanks @beneduzi), with model-scoped forecast-step caches, cancellation of replaced requests, and separate issue/valid timestamps.
 
+- Add bounded Director feature actions with accessible controls, explicit camera/layer admission and cancellation; restore pack geometry on same-shot seek. Preserve existing scenes and content attribution.
 
 - Give application request services, terrain/floor caches and annotation lookup state explicit owners and cancellation; share them across controls, layers and voice.
 
@@ -354,6 +608,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Added
 
+- Add MODIS NRT (Terra+Aqua, ~1 km) active fires to the FIRMS layer, sharing the
+  existing `FIRMS_MAP_KEY` and 30-minute cache.
 - Two map-orientation controls sit beside Share in the top-center globe
   actions. Tilt Map swings between a straight-down map and a 35-degree oblique
   around the point under the centre of the view, keeping that point and the
@@ -388,6 +644,12 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   Visible animation, detection membership, history storage and proxy requests
   are bounded. Share links carry Transit as token `j`.
 
+- Add a keyless **Wind** layer from NOAA GFS 10 m wind (#459, thanks @beneduzi). The `/api/wind` proxy
+  byte-range fetches only the UGRD/VGRD GRIB2 messages from the public AWS bucket,
+  decodes them with ecCodes (WASM), and serves a compact Float32 U/V grid; the
+  client renders nullschool-style animated particles in a canvas overlay that
+  follows the Cesium camera and skips globe-occluded points. Forecast, not
+  observations. Requires Node ≥24 for the WASM decoder.
 - Add Ontario 511 as a keyless CCTV source pack, including Kitchener-area
   highway cameras, with server-registered still URLs and attribution.
 - CCTV Mesh adds Finland: Fintraffic road weather cameras, keyless, nationwide, 300 by default. Each camera view of a station is placed separately; ambient stills refresh on the source's 10-minute cadence (the active camera keeps the usual 10-second refresh).
@@ -1050,3 +1312,10 @@ represent previously published GitHub Releases.
 ## [0.1.0] — 2026-02-09
 
 - Initial project version.
+
+### Live CCTV integration candidate
+
+- Live HLS video shares one decoder between the camera panel and projection,
+  with a DelDOT HTTPS source pack. Credit: Daniel Slay (@Danielslay86), PR #489.
+- Maintainer adjustments bound sessions and downloads, remove disk/subprocess
+  remuxing, reject redirects, and clean up playback on switching or disabling.

@@ -1,5 +1,49 @@
   <!-- Aircraft first-person view. It can be entered from the visible view switcher. -->
   <section id="cockpit-hud" aria-label="Aircraft cockpit view" hidden>
+    <!-- One optical coordinate system: every targeting mark shares this center.
+         Decorative only; telemetry and interactive panels remain separate. -->
+    <svg class="cockpit-frame-lines" viewBox="0 0 1200 720" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+      <g fill="none" stroke="currentColor">
+        <path d="M42 106H234L266 126H334 M866 126H934L966 106H1158 M42 114H226L258 136H318 M882 136H942L974 114H1158"/>
+        <path d="M42 616H226L254 598H320 M880 598H946L974 616H1158 M42 624H238L266 606H330 M870 606H934L962 624H1158"/>
+        <path d="M322 650H878L858 622H728L708 634H492L472 622H342Z M348 659H852"/>
+        <path d="M72 160H144L158 174V186 M1056 160H1128L1142 174V186 M72 562H144L158 548V536 M1056 562H1128L1142 548V536"/>
+      </g>
+      <path class="cockpit-frame-warning" d="M338 645H476L490 654H710L724 645H862" fill="none"/>
+      <path class="cockpit-frame-meter" d="M372 642H418 M782 642H828"/>
+    </svg>
+    <div class="cockpit-scan-array" aria-hidden="true">
+      <svg class="cockpit-target-geometry" viewBox="0 0 600 600" fill="none" focusable="false">
+        <g class="cockpit-target-hairline">
+          <circle cx="300" cy="300" r="276"/>
+          <circle class="cockpit-target-drift" cx="300" cy="300" r="250" stroke-dasharray="1 13"/>
+          <circle cx="300" cy="300" r="164"/>
+          <path d="M190 237V363 M410 237V363 M99 227H139 M461 227H501 M99 373H139 M461 373H501"/>
+          <path d="M86 113H118L134 129 M514 113H482L466 129 M86 487H118L134 471 M514 487H482L466 471"/>
+        </g>
+        <g class="cockpit-target-side-arcs">
+          <path d="M70 167A266 266 0 0 0 70 433 M530 167A266 266 0 0 1 530 433"/>
+        </g>
+        <g class="cockpit-target-ticks">
+          <path d="M166 125A220 220 0 0 1 434 125 M166 475A220 220 0 0 0 434 475"/>
+        </g>
+        <g class="cockpit-target-dots">
+          <path d="M180 130A208 208 0 0 1 420 130 M180 470A208 208 0 0 0 420 470"/>
+        </g>
+        <g class="cockpit-target-warning-dots">
+          <path d="M172 112A227 227 0 0 1 428 112 M172 488A227 227 0 0 0 428 488"/>
+        </g>
+        <g class="cockpit-target-core">
+          <!-- One outer ring and a spaced rotor leave the aiming center open. -->
+          <circle class="cockpit-target-orbit" cx="300" cy="300" r="132" stroke-dasharray="186 21"/>
+          <circle class="cockpit-target-rotor" cx="300" cy="300" r="104" stroke-dasharray="128 35" transform="rotate(9 300 300)"/>
+          <path class="cockpit-target-spokes" d="M206 206L250 250 M350 350L394 394 M394 206L350 250 M250 350L206 394"/>
+          <path d="M168 291H180V309H168 M432 291H420V309H432"/>
+          <circle cx="206" cy="206" r="3"/><circle cx="394" cy="206" r="3"/>
+          <circle cx="206" cy="394" r="3"/><circle cx="394" cy="394" r="3"/>
+        </g>
+      </svg>
+    </div>
     <div class="cockpit-visor-shell" aria-hidden="true">
       <div class="cockpit-roll-arc">
         <span style="--slot:-3;--depth:3">−30</span>
