@@ -59,6 +59,10 @@ import {
   DELDOT_CCTV_URL,
   DEFAULT_DELDOT_MAX_SOURCES,
   DELDOT_ANCHORS,
+  KING_COUNTY_CAMERAS_URL,
+  KING_COUNTY_IMAGE_ORIGIN,
+  DEFAULT_KING_COUNTY_MAX_SOURCES,
+  KING_COUNTY_ANCHORS,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -1696,6 +1700,128 @@ export async function loadDelDOTSourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] DelDOT source download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/** Rough King County, WA bounding box. */
+function isLikelyKingCountyCoordinate(lat, lon) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    lat >= 47.0 &&
+    lat <= 48.0 &&
+    lon >= -123.1 &&
+    lon <= -121.0
+  );
+}
+
+/**
+ * Fetch King County road cameras (Washington State). Keyless: one public
+ * ArcGIS FeatureServer GeoJSON query (King County DOT Road Services), with an
+ * explicit `outFields` list so the layer's asset-administration columns are
+ * never fetched. Only cameras that are live and active (`Live`,
+ * `CurrentStatus`) with a positive integer id, finite in-county coordinates,
+ * and a frame on the county's own image handler are kept. WSDOT-owned rows in
+ * the layer are skipped — the statewide WSDOT pack is their home — while the
+ * handful of city-owned cameras the county hosts (Redmond, Sammamish,
+ * Newcastle, Snoqualmie) keep their owner as the per-camera credit,
+ * DriveBC-style. The layer publishes no facing, so every heading is the id
+ * hash at low confidence.
+ *
+ * Uniquely among the packs, the county publishes each camera's hardware
+ * `Manufacturer`/`Model`; the model string (whitespace-collapsed — the feed
+ * carries stray newlines) rides along as the source's `model` for
+ * identified-hardware consumers.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadKingCountySourcesFromOpenData() {
+  try {
+    const resp = await fetch(KING_COUNTY_CAMERAS_URL, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] King County camera download failed:', resp.status);
+      return [];
+    }
+    const payload = await resp.json();
+    const rows = Array.isArray(payload?.features) ? payload.features : [];
+
+    const cameras = [];
+    for (const row of rows) {
+      const attrs = row?.properties;
+      const rawId = attrs?.AssetID;
+      if (!Number.isSafeInteger(rawId) || rawId <= 0) continue;
+      if (attrs.Live !== 1) continue;
+      if (String(attrs.CurrentStatus || '').trim() !== 'Active') continue;
+      const owner = String(attrs.Owner || '').trim();
+      // WSDOT-owned rows belong to the statewide WSDOT pack; skipping them
+      // here keeps one camera from appearing twice on the globe.
+      if (owner === 'WSDOT') continue;
+      // The handler is served over HTTPS; the feed still writes http://.
+      const imageUrl = String(attrs.ImageURL || '')
+        .trim()
+        .replace(/^http:\/\/info\.kingcounty\.gov\//, KING_COUNTY_IMAGE_ORIGIN);
+      if (!imageUrl.startsWith(KING_COUNTY_IMAGE_ORIGIN)) continue;
+      const [lon, lat] = Array.isArray(row?.geometry?.coordinates)
+        ? row.geometry.coordinates
+        : [];
+      if (!isLikelyKingCountyCoordinate(lat, lon)) continue;
+
+      const cameraId = `kingcounty-${rawId}`;
+      const model = String(attrs.Model || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const camera = {
+        id: cameraId,
+        name:
+          String(attrs.Location || '').trim() || `King County camera ${rawId}`,
+        city: 'King County',
+        cityId: 'king-county',
+        provider: 'King County Road Services',
+        lat,
+        lon,
+        headingDeg: fallbackHeadingFromId(cameraId),
+        headingConfidence: 'low',
+        // The low-confidence pose personality shared by the other packs.
+        pitchDeg: -18,
+        fovDeg: 44,
+        rangeM: 145,
+        mountHeightM: 8,
+        feedType: 'image',
+        url: imageUrl,
+        snapshotUrl: imageUrl,
+        sourceKind: 'kingcounty-open-data',
+        license: 'King County GIS open data (KCGIS Center terms of use)',
+        credit: owner && owner !== 'King County' ? owner : '',
+      };
+      if (model) camera.model = model;
+      cameras.push(camera);
+    }
+
+    const maxRaw = Number(
+      process.env.CCTV_KINGCOUNTY_MAX_SOURCES ||
+        DEFAULT_KING_COUNTY_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(1200, Math.floor(maxRaw)))
+      : DEFAULT_KING_COUNTY_MAX_SOURCES;
+    const prioritized = prioritizeSources(
+      cameras,
+      maxCount,
+      KING_COUNTY_ANCHORS,
+    );
+    console.log(
+      `[CCTV] Loaded King County camera sources: ${cameras.length} published (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] King County camera download error:',
       error?.message || error,
     );
     return [];

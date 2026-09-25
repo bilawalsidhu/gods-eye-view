@@ -244,6 +244,25 @@ export const DELDOT_ANCHORS = [
   { lat: 39.1582, lon: -75.5244 }, // Dover (Kent)
   { lat: 38.6906, lon: -75.3877 }, // Georgetown (Sussex)
 ];
+
+/** King County, WA road cameras: keyless public ArcGIS FeatureServer layer
+ * ("King County and WSDOT Traffic Cameras", King County DOT Road Services).
+ * GeoJSON with WGS84 point geometry. `outFields` is an explicit list on
+ * purpose: the layer also carries asset-administration columns (including
+ * staff names in `ModifiedBy`) that must never be fetched. Uniquely among the
+ * packs, the county publishes each camera's hardware `Manufacturer`/`Model`
+ * (Cohu 3950/3965, Bosch AUTODOME, Axis Q6135-LE, …), carried through as the
+ * source's `model`. */
+export const KING_COUNTY_CAMERAS_URL =
+  'https://services.arcgis.com/Ej0PsM5Aw677QF1W/arcgis/rest/services/TRAFFICCAMERA_POINT_2029/FeatureServer/0/query?where=1%3D1&outFields=AssetID,Location,Description,ImageURL,CamRegion,Live,Model,Manufacturer,Owner,CurrentStatus&f=geojson';
+/** Frames come only from the county's own image handler host. */
+export const KING_COUNTY_IMAGE_ORIGIN = 'https://info.kingcounty.gov/';
+/** The whole catalog is ~125 rows (~59 live county cameras); no thinning by
+ * default. */
+export const DEFAULT_KING_COUNTY_MAX_SOURCES = 125;
+/** Prioritization anchor: Renton, roughly central to the county road network. */
+export const KING_COUNTY_ANCHORS = [{ lat: 47.4829, lon: -122.2171 }];
+
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
