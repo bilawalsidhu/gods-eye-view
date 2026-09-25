@@ -296,6 +296,8 @@ function cameraHarness(layer = alprCamerasLayer) {
           ],
           stale: response.headers.get('x-overpass-cache') === 'STALE',
           saturated: body.elements.length >= QUERY_LIMIT,
+          noCoverage: body.noCoverage,
+          zoomIn: body.zoomIn,
         };
       },
     });
@@ -1177,6 +1179,26 @@ test('a non-retryable capability error does not arm the ALPR retry timer', async
     t.mock.timers.tick(300_000);
     await Promise.resolve();
     assert.equal(h.requests.length, requests);
+  } finally {
+    h.restore();
+  }
+});
+
+test('unsupported ALPR coverage suppresses the nearby count and names the extract region', async () => {
+  const h = cameraHarness();
+  try {
+    h.setFetch(async () => ({
+      ...cameraResponse([]),
+      json: async () => ({ elements: [], noCoverage: true }),
+    }));
+    await alprCamerasLayer.update();
+    const stats = alprCamerasLayer.getStats();
+    assert.equal(stats.noCoverage, true);
+    assert.equal(stats.countLabel, '');
+    assert.equal(
+      stats.loadingLabel,
+      'No ALPR data for this area — US and Canada only',
+    );
   } finally {
     h.restore();
   }

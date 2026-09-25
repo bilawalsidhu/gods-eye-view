@@ -138,6 +138,42 @@ function touches(a, b, epsilon) {
     }
   return false;
 }
+function sharedSeam(a, b) {
+  const x = a.tileBounds,
+    y = b.tileBounds;
+  if (!x || !y || a.tileZoom !== b.tileZoom) return false;
+  const eps = Math.max(a.tileEpsilon || 0, b.tileEpsilon || 0);
+  const seams = [];
+  if (Math.abs(x.east - y.west) < 1e-10) seams.push([0, x.east]);
+  if (Math.abs(y.east - x.west) < 1e-10) seams.push([0, x.west]);
+  if (Math.abs(x.north - y.south) < 1e-10) seams.push([1, x.north]);
+  if (Math.abs(y.north - x.south) < 1e-10) seams.push([1, x.south]);
+  for (const [axis, edge] of seams) {
+    const intervals = (f) =>
+      f.rings.flatMap((r) =>
+        r
+          .slice(1)
+          .flatMap((p, i) =>
+            Math.abs(p[axis] - edge) < 1e-10 &&
+            Math.abs(r[i][axis] - edge) < 1e-10
+              ? [
+                  [
+                    Math.min(p[1 - axis], r[i][1 - axis]),
+                    Math.max(p[1 - axis], r[i][1 - axis]),
+                  ],
+                ]
+              : [],
+          ),
+      );
+    if (
+      intervals(a).some((u) =>
+        intervals(b).some((v) => u[0] <= v[1] + eps && v[0] <= u[1] + eps),
+      )
+    )
+      return true;
+  }
+  return false;
+}
 function ringMoment(ring) {
   const [ox, oy] = ring[0];
   let sum = 0,
@@ -177,19 +213,19 @@ export function mergeMilitaryFragments(records, aliases = new Map()) {
   for (let i = 0; i < fragments.length; i++)
     for (let j = 0; j < i; j++) {
       if (root(i) === root(j)) continue;
-      // One quantization cell accommodates the slightly different edge coordinates of adjacent tiles.
-      const eps = Math.max(
-        fragments[i].tileEpsilon || 1e-8,
-        fragments[j].tileEpsilon || 1e-8,
-      );
-      const knownId = aliases.get(fragments[i].featureKey || fragments[i].id);
+      const a = fragments[i],
+        b = fragments[j];
+      // Tolerance is allowed only for clipped edges on a common tile seam.
+      const shared = sharedSeam(a, b);
+      const scope = a.tileZoom ?? 'unknown';
+      const known = aliases.get(`${scope}:${a.featureKey || a.id}`);
       if (
-        (knownId &&
-          knownId ===
-            aliases.get(fragments[j].featureKey || fragments[j].id)) ||
-        (fragments[i].featureKey &&
-          fragments[i].featureKey === fragments[j].featureKey) ||
-        touches(fragments[i], fragments[j], eps)
+        (scope === (b.tileZoom ?? 'unknown') &&
+          known &&
+          known === aliases.get(`${scope}:${b.featureKey || b.id}`)) ||
+        (a.featureKey && a.featureKey === b.featureKey) ||
+        touches(a, b, 1e-10) ||
+        shared
       )
         parents[root(i)] = root(j);
     }
@@ -199,22 +235,24 @@ export function mergeMilitaryFragments(records, aliases = new Map()) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(f);
   });
+  const usedIds = new Set();
   const merged = [...groups.values()].map((group) => {
     const keys = [...new Set(group.map((r) => r.featureKey || r.id))].sort();
-    const priorIds = new Set(
-      keys.map((key) => aliases.get(key)).filter(Boolean),
-    );
-    const id = [...priorIds].sort()[0] || `ofm:installation:${keys[0]}`;
-    // A bridge can join groups while some of their parcels are offscreen.
-    // Keep those retained aliases canonical too, so a later pan cannot split the identity.
-    if (priorIds.size > 1)
-      for (const [key, prior] of aliases) {
-        if (priorIds.has(prior)) aliases.set(key, id);
-      }
-    for (const key of keys) {
-      aliases.delete(key);
-      aliases.set(key, id);
-    }
+    // Aliases are scoped to zoom. Old coarse associations are never union evidence.
+    const zoom = group[0].tileZoom ?? 'unknown';
+    const scoped = keys.map((key) => `${zoom}:${key}`);
+    const prior = scoped
+      .map((key) => aliases.get(key))
+      .filter(Boolean)
+      .sort();
+    let id = prior[0] || `ofm:installation:${keys[0]}`;
+    if (usedIds.has(id)) id = `ofm:installation:${keys[0]}`;
+    usedIds.add(id);
+    const priorIds = new Set(prior);
+    for (const [key, previous] of aliases)
+      if (key.startsWith(`${zoom}:`) && priorIds.has(previous))
+        aliases.set(key, id);
+    for (const key of scoped) aliases.set(key, id);
     let area = 0,
       x = 0,
       y = 0;

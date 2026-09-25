@@ -138,3 +138,28 @@ test('provider attribution escapes markup and rejects executable links', () => {
   assert.ok(html.includes('?a=1&amp;b=2'));
   assert.ok(!html.includes('<img'));
 });
+
+test('wide detail view returns zoom guidance before any fetch and can retry a smaller view', async () => {
+  let calls = 0;
+  const source = createOverpassAlprSource({
+    fetchImpl: async () => {
+      calls++;
+      return Response.json({
+        tiles: ['https://tiles.dontgetflocked.com/{z}/{x}/{y}.pbf'],
+        bounds: [-180, 17, -50, 84],
+      });
+    },
+  });
+  const wide = await source.fetch({
+    south: 30,
+    north: 31,
+    west: -98,
+    east: -97,
+  });
+  assert.equal(wide.zoomIn, true);
+  assert.equal(calls, 0);
+  await source
+    .fetch({ south: 30.267, north: 30.268, west: -97.744, east: -97.743 })
+    .catch(() => {});
+  assert.ok(calls > 0);
+});

@@ -118,7 +118,7 @@ function militaryInstallationsProxy() {
         const stale =
           cached || (await readMilitaryInstallationDisk(key, Infinity));
         const disabled = overpassNotConfigured();
-        res.writeHead(stale ? 200 : disabled.status, {
+        res.writeHead(200, {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store',
           'X-Military-Installations': stale ? 'STALE' : 'DISABLED',

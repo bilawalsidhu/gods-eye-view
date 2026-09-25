@@ -98,8 +98,35 @@ test('joining known groups also updates aliases for their currently offscreen pa
     [a, record('bridge', ring(1, 0, 2, 1)), b],
     aliases,
   );
-  assert.equal(aliases.get('c'), joined.id);
+  assert.equal(aliases.get('unknown:c'), joined.id);
   const pan = mergeMilitaryFragments([a, c], aliases);
   assert.equal(pan.length, 1);
   assert.equal(pan[0].id, joined.id);
+});
+
+test('quantization gaps within a tile stay separate; coarse identities do not fuse detailed sites', () => {
+  const aliases = new Map();
+  const a = record('a', ring(0, 0, 1, 1), { tileZoom: 10, tileEpsilon: 0.1 });
+  const b = record('b', ring(1.05, 0, 2, 1), {
+    tileZoom: 10,
+    tileEpsilon: 0.1,
+  });
+  assert.equal(mergeMilitaryFragments([a, b], aliases).length, 2);
+  mergeMilitaryFragments([a, { ...b, footprint: ring(1, 0, 2, 1) }], aliases);
+  const detail = mergeMilitaryFragments(
+    [
+      { ...a, tileZoom: 14 },
+      { ...b, tileZoom: 14 },
+    ],
+    aliases,
+  );
+  assert.equal(detail.length, 2);
+  assert.notEqual(detail[0].id, detail[1].id);
+  const left = { ...a, tileBounds: { west: 0, east: 1, south: 0, north: 1 } };
+  const right = {
+    ...b,
+    footprint: ring(1, 0.05, 2, 1),
+    tileBounds: { west: 1, east: 2, south: 0, north: 1 },
+  };
+  assert.equal(mergeMilitaryFragments([left, right]).length, 1);
 });

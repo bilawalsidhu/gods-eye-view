@@ -145,7 +145,7 @@ test('zero egress: every Overpass consumer reaches real default handlers, and re
     handlers,
     '/api/military-installations?south=30.2&west=-97.8&north=30.3&east=-97.7',
   );
-  assert.equal(installations.status, 503);
+  assert.equal(installations.status, 200);
   assert.equal((await installations.json()).code, 'OVERPASS_NOT_CONFIGURED');
   const regional = await call(
     handlers,

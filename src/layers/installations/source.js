@@ -79,7 +79,7 @@ export function createInstallationSource({
       });
       const body = await response.json();
       signal?.throwIfAborted();
-      if (!response.ok && isUnavailableCapability(body)) {
+      if (isUnavailableCapability(body)) {
         overpassUnavailable = true;
         return getTileSites(box, signal);
       }

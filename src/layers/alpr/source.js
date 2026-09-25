@@ -1,3 +1,4 @@
+import { tilesForBounds } from '../../data/tomtomTiles.js';
 import {
   MAX_VIEWPORT_DEGREES,
   QUERY_SNAP_DEGREES,
@@ -42,6 +43,8 @@ export function createAlprTileSource({
           saturated: false,
           noCoverage: true,
         };
+      if (tilesForBounds(box, 11, { maxTiles: 17 }).length > 16)
+        return { records: [], stale: false, saturated: false, zoomIn: true };
       const records = new Map();
       let covered = false,
         partial = false;
