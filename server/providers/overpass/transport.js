@@ -1,8 +1,9 @@
 import {
   OVERPASS_MAX_RESPONSE_BYTES,
-  OVERPASS_UPSTREAMS,
   OVERPASS_USER_AGENT,
   OVERPASS_TIMEOUT_MS,
+  resolveOverpassUpstreams,
+  isExtraOverpassUpstream,
 } from './constants.js';
 import { readResponseTextCapped } from '../common/http.js';
 import { simplifyOverpassPayloadBody } from './geometry.js';
@@ -61,6 +62,27 @@ function overpassPayloadIsData(payload) {
 }
 
 /**
+ * Whether a 200 body carries no elements at all.
+ *
+ * Substring-first so a multi-megabyte payload is never parsed just to learn it
+ * is non-empty; the JSON parse only runs for bodies that already look empty.
+ * A body this proxy cannot parse is NOT called empty — an unknown shape is the
+ * caller's problem, not a reason to rotate off an otherwise healthy endpoint.
+ * @param {string} bodyText Upstream response body.
+ * @returns {boolean}
+ */
+function overpassPayloadIsEmpty(bodyText) {
+  const text = String(bodyText || '');
+  if (text.includes('"type"')) return false;
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed?.elements) && parsed.elements.length === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Try each mirror once, retaining response-size and per-mirror timeout caps.
  * Refusals and body-level failures rotate; total failure returns the last
  * rate-limit payload, otherwise the first refusal, or throws a network error.
@@ -73,7 +95,7 @@ async function fetchOverpassPayload(
   body,
   maxResponseBytes = OVERPASS_MAX_RESPONSE_BYTES,
   {
-    endpoints = OVERPASS_UPSTREAMS,
+    endpoints = resolveOverpassUpstreams(),
     fetchImpl = fetch,
     readBody = readResponseTextCapped,
     simplify = simplifyOverpassPayloadBody,
@@ -135,6 +157,22 @@ async function fetchOverpassPayload(
         if (!lastRefusalPayload) lastRefusalPayload = payload;
         lastError = new Error(
           `Overpass upstream returned ${status} (${endpoint})`,
+        );
+        continue;
+      }
+
+      // A self-hosted endpoint built from a REGIONAL extract answers 200 with
+      // an empty element list for every query outside its extract. Returning
+      // that caches "no data here" for 7 days over regions that do have data,
+      // so an empty answer from an operator endpoint rotates like a refusal —
+      // the planet mirrors below can still answer it, and if none can, the
+      // layer reports a failure instead of rendering a silent blank.
+      if (
+        overpassPayloadIsEmpty(responseBody) &&
+        isExtraOverpassUpstream(endpoint)
+      ) {
+        lastError = new Error(
+          `Overpass endpoint returned no elements — outside its extract? (${endpoint})`,
         );
         continue;
       }
