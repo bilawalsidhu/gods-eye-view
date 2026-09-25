@@ -202,6 +202,13 @@ export const DATA_CREDITS = [
       '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
   },
   {
+    key: 'qldtraffic-cctv',
+    html:
+      'Traffic and flood cameras (Queensland): ' +
+      '<a href="https://qldtraffic.qld.gov.au/" target="_blank" rel="noopener">State of Queensland (Department of Transport and Main Roads)</a>, ' +
+      'CC BY 4.0',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },
