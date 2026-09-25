@@ -1,6 +1,12 @@
 import * as Cesium from 'cesium';
 import { createStateChannel } from '../app/stateChannel.js';
 import { LocationControls } from './location.js';
+import {
+  createPressGesture,
+  getCurrentBrowserPosition,
+  isGeolocationAvailable,
+  watchBrowserPosition,
+} from '../browserGeolocation.js';
 
 /** Own destination selection, lookup, orbit and world-jump lifetime. */
 export class LocationNavigation {
@@ -30,6 +36,11 @@ export class LocationNavigation {
     this._globeResetPromise = null;
     this._cancelGlobeReset = null;
     this._worldJumpActive = false;
+    this._myLocationFollow = false;
+    this._myLocationWatch = null;
+    this._myLocationEntity = null;
+    this._myLocationDetachGesture = null;
+    this._myLocationUserInterruptHandler = null;
     this.orbitController = new services.OrbitController(viewer);
     this._orbitIndicator = null;
     this._locationState = createStateChannel(
@@ -127,8 +138,9 @@ export class LocationNavigation {
         pills: this._locationPills,
         poiRow: this._poiRow,
         divider: this._locationBarDivider,
-        search: this._locationSearch,
-        searchToggle: this._searchToggle,
+         search: this._locationSearch,
+         searchToggle: this._searchToggle,
+         myLocationBtn: this._myLocationBtn,
         resetButtons: [this._resetGlobeBtn, this._cockpitResetGlobeBtn],
         statusCity: this._locationMiniCity,
         statusPoi: this._locationMiniPoi,
@@ -140,6 +152,154 @@ export class LocationNavigation {
       onSearch: (query) => this._locationLookup.run(query),
       onReset: () => this.resetToGlobeView(),
     });
+    this._initMyLocationControl();
+  }
+
+  _initMyLocationControl() {
+    if (!this._myLocationBtn) return;
+    if (!isGeolocationAvailable()) {
+      this._myLocationBtn.disabled = true;
+      this._myLocationBtn.title = 'Location not supported in this browser';
+      return;
+    }
+    this._myLocationDetachGesture = createPressGesture({
+      holdMs: 550,
+      onClick: () => void this._goToMyLocation({ follow: false }),
+      onHold: () => {
+        if (this._myLocationFollow)
+          this._stopMyLocationFollow({ toast: 'Stopped following location' });
+        else void this._goToMyLocation({ follow: true });
+      },
+    }).attach(this._myLocationBtn);
+  }
+
+  async _goToMyLocation({ follow = false } = {}) {
+    if (this._disposed || !isGeolocationAvailable()) {
+      if (!this._disposed) this._showToast('Location not supported in this browser');
+      return;
+    }
+    const generation = this._beginDeferredNavigation('location');
+    if (generation === false) return;
+    this._myLocationBtn?.classList.add('searching');
+    try {
+      const fix = await getCurrentBrowserPosition();
+      if (this._disposed || generation !== this._navigationGeneration) return;
+      if (!this._reassertNavigationHandoff(generation)) return;
+      this._applyMyLocationFix(fix, { follow, generation });
+    } catch (error) {
+      if (this._disposed || generation !== this._navigationGeneration) return;
+      this._showToast(error?.message || 'Could not get your location');
+      if (follow) this._stopMyLocationFollow();
+    } finally {
+      this._myLocationBtn?.classList.remove('searching');
+    }
+  }
+
+  _applyMyLocationFix(fix, { follow = false, generation = null, animate = true } = {}) {
+    if (this._disposed || !fix || (generation != null && generation !== this._navigationGeneration)) return;
+    const range = Math.min(Math.max(Number(fix.accuracy) > 0 ? Number(fix.accuracy) * 4 : 900, 400), 2500);
+    this._ensureMyLocationEntity(fix);
+    this._searchedLocationLabel = 'My location';
+    this._setActiveLocation(null);
+    this._currentPoi = null;
+    this._collapsePOIRow();
+    this._updateLocationMiniStatus();
+    if (animate) {
+      const flight = this.services.flyToLandmark(this.viewer, fix.lat, fix.lon, {
+        range,
+        pitch: -45,
+        buildingHeight: 0,
+        duration: 2.2,
+        onStart: () => this._beginWorldJumpTransition(),
+        onComplete: () => this._endWorldJumpTransition(),
+        onCancel: () => this._endWorldJumpTransition(),
+      });
+      this._currentTarget = flight?.targetPosition || null;
+    } else if (this._myLocationFollow && this.viewer?.camera) {
+      const target = Cesium.Cartesian3.fromDegrees(fix.lon, fix.lat, 0);
+      this._currentTarget = target;
+      this.viewer.camera.lookAt(
+        target,
+        new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-45), range),
+      );
+      this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    }
+    if (follow) this._startMyLocationFollow(fix);
+  }
+
+  _ensureMyLocationEntity(fix) {
+    if (!this.viewer?.entities) return;
+    const position = Cesium.Cartesian3.fromDegrees(fix.lon, fix.lat, 0);
+    if (!this._myLocationEntity) {
+      this._myLocationEntity = this.viewer.entities.add({
+        id: 'gev-my-location',
+        position,
+        point: {
+          pixelSize: 12,
+          color: Cesium.Color.fromCssColorString('#40b4ff'),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 2,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: 'You',
+          font: '12px sans-serif',
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, -18),
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      });
+    } else this._myLocationEntity.position = position;
+  }
+
+  _startMyLocationFollow(initialFix) {
+    this._stopMyLocationFollow({ toast: null, keepEntity: true });
+    this._myLocationFollow = true;
+    this._myLocationBtn?.classList.add('following');
+    this._myLocationBtn?.setAttribute('aria-pressed', 'true');
+    if (this._myLocationBtn) this._myLocationBtn.title = 'Following you - hold to stop';
+    this._showToast('Following your location');
+    this._ensureMyLocationEntity(initialFix);
+    this._myLocationUserInterruptHandler = () => {
+      if (this._myLocationFollow) this._stopMyLocationFollow({ toast: 'Stopped following location' });
+    };
+    this.viewer?.canvas?.addEventListener('pointerdown', this._myLocationUserInterruptHandler);
+    this.viewer?.canvas?.addEventListener('wheel', this._myLocationUserInterruptHandler, { passive: true });
+    this._myLocationWatch = watchBrowserPosition({
+      onUpdate: (fix) => {
+        if (!this._disposed && this._myLocationFollow) this._applyMyLocationFix(fix, { animate: false });
+      },
+      onError: (error) => {
+        if (!this._disposed) {
+          this._showToast(error?.message || 'Could not get your location');
+          this._stopMyLocationFollow();
+        }
+      },
+    });
+  }
+
+  _stopMyLocationFollow({ toast = null, keepEntity = false } = {}) {
+    this._myLocationWatch?.stop?.();
+    this._myLocationWatch = null;
+    this._myLocationFollow = false;
+    this._myLocationBtn?.classList.remove('following');
+    this._myLocationBtn?.setAttribute('aria-pressed', 'false');
+    if (this._myLocationBtn) this._myLocationBtn.title = 'My location (click: go there; hold: follow)';
+    if (this._myLocationUserInterruptHandler) {
+      this.viewer?.canvas?.removeEventListener('pointerdown', this._myLocationUserInterruptHandler);
+      this.viewer?.canvas?.removeEventListener('wheel', this._myLocationUserInterruptHandler);
+      this._myLocationUserInterruptHandler = null;
+    }
+    if (!keepEntity && this._myLocationEntity && this.viewer?.entities) {
+      this.viewer.entities.remove(this._myLocationEntity);
+      this._myLocationEntity = null;
+    }
+    if (toast) this._showToast(toast);
   }
 
   _beginWorldJumpTransition() {
@@ -417,6 +577,9 @@ export class LocationNavigation {
     this._locationLookupUnsubscribe?.();
     this._locationLookupUnsubscribe = null;
     this._locationLookup?.destroy();
+    this._myLocationDetachGesture?.();
+    this._myLocationDetachGesture = null;
+    this._stopMyLocationFollow();
     this._locationControls?.destroy();
     this._cancelGlobeReset?.();
     this._cancelGlobeReset = null;
