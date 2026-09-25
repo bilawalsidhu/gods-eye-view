@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { statSync, readFileSync } from 'node:fs';
-import { findNaturalRegion, listRegions, lookupNaturalRegionOutline, pointInRing } from './naturalEarthRegions.js';
+import { findNaturalRegion, listRegions, lookupNaturalRegionOutline, pointInRing, haversineKm } from './naturalEarthRegions.js';
 
 const PACK_DIR = new URL('./local_data/natural_earth/', import.meta.url);
 
@@ -144,4 +144,12 @@ test('pointInRing: basic square', () => {
   assert.equal(pointInRing(sq, 5, 5), true);
   assert.equal(pointInRing(sq, 15, 5), false);
   assert.equal(pointInRing([[0, 0], [1, 1]], 0.5, 0.5), false, 'degenerate ring');
+});
+
+
+test('haversineKm: calculates distance with standard (lat, lon) argument order', () => {
+  // Austin (30.2672, -97.7431) to Houston (29.7604, -95.3698) is ~235 km
+  const km = haversineKm(30.2672, -97.7431, 29.7604, -95.3698);
+  assert.ok(km > 200 && km < 280, 'Austin-Houston distance must be between 200 and 280 km');
+  assert.equal(haversineKm(0, 0, 0, 0), 0);
 });
