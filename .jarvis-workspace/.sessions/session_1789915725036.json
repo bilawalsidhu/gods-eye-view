@@ -1,0 +1,24 @@
+{
+  "title": "hii",
+  "mode": "general",
+  "messages": [
+    {
+      "role": "user",
+      "content": "hii"
+    },
+    {
+      "role": "assistant",
+      "content": "Hello. Online and fully operational. \n\nSystems, geospatial intelligence, and host automation protocols are ready at your command. How may I assist you today?"
+    },
+    {
+      "role": "user",
+      "content": "hi"
+    },
+    {
+      "role": "assistant",
+      "content": "Greetings. I’m JARVIS, your on‑demand AI companion. How can I assist you today?"
+    }
+  ],
+  "createdAt": "2026-09-20T14:49:24.363Z",
+  "updatedAt": "2026-09-20T14:49:24.363Z"
+}

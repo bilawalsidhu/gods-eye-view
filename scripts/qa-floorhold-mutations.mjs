@@ -32,11 +32,12 @@ const ALT = 'src/data/renderAltitude.js';
 /** @type {Array<{defect: string, edits: Array<{file: string, from: string, to: string}>}>} */
 const MUTATIONS = [
   {
-    defect: 'the display hold is gone — a cold cell clamps nothing (the original bug)',
+    defect:
+      'the display hold is gone — a cold cell clamps nothing (the original bug)',
     edits: [
       {
         file: FLIGHTS,
-        from: '  if (state.heldTier === \'own\' && !state.seeded) return state.heldM;',
+        from: "  if (state.heldTier === 'own' && !state.seeded) return state.heldM;",
         to: '  if (true) return null;',
       },
     ],
@@ -52,11 +53,12 @@ const MUTATIONS = [
     ],
   },
   {
-    defect: 'a borrowed floor is owned forever — no upgrade when a better one warms',
+    defect:
+      'a borrowed floor is owned forever — no upgrade when a better one warms',
     edits: [
       {
         file: FLIGHTS,
-        from: '  if (state.heldTier === \'own\' && !state.seeded) return state.heldM;',
+        from: "  if (state.heldTier === 'own' && !state.seeded) return state.heldM;",
         to: '  if (state.heldTier && !state.seeded) return state.heldM;',
       },
     ],
@@ -65,14 +67,16 @@ const MUTATIONS = [
     // The round-1 shape verbatim: memo on the RAW cell floor, checked BEFORE
     // the hold chain runs. A parked contact whose cell never warms then
     // returns its own unresolved answer forever.
-    defect: 'a stationary unresolved contact memo-returns before the chain can retry',
+    defect:
+      'a stationary unresolved contact memo-returns before the chain can retry',
     edits: [
       {
         file: FLIGHTS,
         from: '  const floor = cachedGroundFloor(cell.lat, cell.lon);',
-        to: '  const floor = cachedGroundFloor(cell.lat, cell.lon);\n'
-          + '  if (state && state.rawFloorM === floor\n'
-          + '    && Cesium.Cartesian3.equals(pos, state.in)) return state.out || pos;',
+        to:
+          '  const floor = cachedGroundFloor(cell.lat, cell.lon);\n' +
+          '  if (state && state.rawFloorM === floor\n' +
+          '    && Cesium.Cartesian3.equals(pos, state.in)) return state.out || pos;',
       },
       {
         file: FLIGHTS,
@@ -129,7 +133,8 @@ const MUTATIONS = [
   },
   {
     // The owner-playtest regression: a roof neighbour taken as ground.
-    defect: 'the neighbour lean takes the HIGHEST cell and floats a contact onto a roof',
+    defect:
+      'the neighbour lean takes the HIGHEST cell and floats a contact onto a roof',
     edits: [
       {
         file: FLOOR,
@@ -149,9 +154,14 @@ const MUTATIONS = [
     ],
   },
   {
-    defect: 'the geoid guess outranks a held render height again (the poll-step bug)',
+    defect:
+      'the geoid guess outranks a held render height again (the poll-step bug)',
     edits: [
-      { file: ALT, from: '  if (Number.isFinite(priorRenderM)) return null;', to: '  // guard removed' },
+      {
+        file: ALT,
+        from: '  if (Number.isFinite(priorRenderM)) return null;',
+        to: '  // guard removed',
+      },
     ],
   },
   {
@@ -168,21 +178,32 @@ const MUTATIONS = [
     // The from/duration shape this replaced: a FIXED anchor interpolated by
     // CUMULATIVE elapsed time. Re-evaluated against a target that moved
     // mid-approach it jumps by the eased fraction of the change.
-    defect: 'the approach interpolates a fixed anchor, so a mid-approach retarget is a seam',
+    defect:
+      'the approach interpolates a fixed anchor, so a mid-approach retarget is a seam',
     edits: [
-      { file: FLIGHTS, from: '      next.easeMs = nowMs;\n      const closed', to: '      const closed' },
-      { file: FLIGHTS, from: '        next.easedM = value;', to: '        /* anchor stays fixed */' },
+      {
+        file: FLIGHTS,
+        from: '      next.easeMs = nowMs;\n      const closed',
+        to: '      const closed',
+      },
+      {
+        file: FLIGHTS,
+        from: '        next.easedM = value;',
+        to: '        /* anchor stays fixed */',
+      },
     ],
   },
   {
-    defect: 'a global per-tick probe budget is reintroduced over the per-contact throttle',
+    defect:
+      'a global per-tick probe budget is reintroduced over the per-contact throttle',
     edits: [
       {
         file: FLIGHTS,
         from: '  state.probeMs = nowMs;\n  const near = neighborFloorM(cell);',
-        to: '  globalThis.__mutGlobalProbeBudget = (globalThis.__mutGlobalProbeBudget || 0) + 1;\n'
-          + '  if (globalThis.__mutGlobalProbeBudget > 12) return state.heldM;\n'
-          + '  state.probeMs = nowMs;\n  const near = neighborFloorM(cell);',
+        to:
+          '  globalThis.__mutGlobalProbeBudget = (globalThis.__mutGlobalProbeBudget || 0) + 1;\n' +
+          '  if (globalThis.__mutGlobalProbeBudget > 12) return state.heldM;\n' +
+          '  state.probeMs = nowMs;\n  const near = neighborFloorM(cell);',
       },
     ],
   },
@@ -209,7 +230,8 @@ const MUTATIONS = [
     ],
   },
   {
-    defect: 'the rehydration seed never expires — an hour-old floor still answers',
+    defect:
+      'the rehydration seed never expires — an hour-old floor still answers',
     edits: [
       {
         file: FLIGHTS,
@@ -222,7 +244,8 @@ const MUTATIONS = [
     // Expiry checked ONLY on the retire path: a contact that is parked and then
     // makes no calls at all never reaches it, and rehydration cleared
     // `retiredMs` before anything looked at it. Measured: parked 198 s, reused.
-    defect: 'seed age is never validated at rehydration, only while still retired',
+    defect:
+      'seed age is never validated at rehydration, only while still retired',
     edits: [
       {
         file: FLIGHTS,
@@ -238,13 +261,14 @@ const MUTATIONS = [
     edits: [
       {
         file: FLIGHTS,
-        from: '  if (state.heldTier === \'own\' && !state.seeded) return state.heldM;',
-        to: '  if (state.heldTier === \'own\') return state.heldM;',
+        from: "  if (state.heldTier === 'own' && !state.seeded) return state.heldM;",
+        to: "  if (state.heldTier === 'own') return state.heldM;",
       },
     ],
   },
   {
-    defect: 'a parked floor is not marked as a memory, so nothing can demote it',
+    defect:
+      'a parked floor is not marked as a memory, so nothing can demote it',
     edits: [
       {
         file: FLIGHTS,
@@ -254,9 +278,14 @@ const MUTATIONS = [
     ],
   },
   {
-    defect: 'the seed flag survives a live reading, so a measured floor stays demoted',
+    defect:
+      'the seed flag survives a live reading, so a measured floor stays demoted',
     edits: [
-      { file: FLIGHTS, from: '  state.seeded = false;\n  return floorM;', to: '  return floorM;' },
+      {
+        file: FLIGHTS,
+        from: '  state.seeded = false;\n  return floorM;',
+        to: '  return floorM;',
+      },
     ],
   },
 ];
@@ -266,11 +295,17 @@ const write = (f, s) => fs.writeFileSync(path.join(ROOT, f), s);
 
 function runTests() {
   try {
-    execFileSync('node', ['--test', ...TESTS], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    execFileSync('node', ['--test', ...TESTS], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     return { failed: 0, names: [] };
   } catch (e) {
     const raw = `${e.stdout || ''}${e.stderr || ''}`;
-    const names = [...new Set([...raw.matchAll(/^✖ (.+?) \(/gm)].map((m) => m[1]))];
+    const names = [
+      ...new Set([...raw.matchAll(/^✖ (.+?) \(/gm)].map((m) => m[1])),
+    ];
     const m = raw.match(/^ℹ fail (\d+)/m);
     return { failed: m ? Number(m[1]) : -1, names, raw };
   }
@@ -291,13 +326,22 @@ for (const mut of MUTATIONS) {
   for (const e of mut.edits) {
     if (!backups.has(e.file)) backups.set(e.file, read(e.file));
     const cur = read(e.file);
-    const anchor = new RegExp(e.from.trim().split(/\s+/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s*'));
+    const anchor = new RegExp(
+      e.from
+        .trim()
+        .split(/\s+/)
+        .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('\\s*'),
+    );
     if (!anchor.test(cur)) {
       console.log(`  [STALE] ${mut.defect} — anchor not found in ${e.file}`);
       applied = false;
       break;
     }
-    write(e.file, cur.replace(anchor, () => e.to.trim()));
+    write(
+      e.file,
+      cur.replace(anchor, () => e.to.trim()),
+    );
   }
   if (applied) {
     const r = runTests();
@@ -316,7 +360,9 @@ for (const mut of MUTATIONS) {
 
 const after = runTests();
 console.log(`\nrestored: ${after.failed} failing (must be 0)`);
-console.log(allRed && after.failed === 0
-  ? `RESULT: ${MUTATIONS.length}/${MUTATIONS.length} defects pinned`
-  : 'RESULT: FAIL');
+console.log(
+  allRed && after.failed === 0
+    ? `RESULT: ${MUTATIONS.length}/${MUTATIONS.length} defects pinned`
+    : 'RESULT: FAIL',
+);
 process.exit(allRed && after.failed === 0 ? 0 : 1);

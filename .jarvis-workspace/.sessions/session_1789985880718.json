@@ -1,0 +1,56 @@
+{
+  "title": "hey you",
+  "mode": "computer",
+  "messages": [
+    {
+      "role": "user",
+      "content": "hey you"
+    },
+    {
+      "role": "assistant",
+      "content": "**Greetings, User.**  \nI’m JARVIS, your on‑demand AI companion. How may I assist you today?"
+    },
+    {
+      "role": "user",
+      "content": "Fly to Tokyo Tower"
+    },
+    {
+      "role": "assistant",
+      "content": "I'm sorry, but I don't have the capability to perform that action. Is there something else I can help you with?"
+    },
+    {
+      "role": "user",
+      "content": "Show live satellites"
+    },
+    {
+      "role": "assistant",
+      "content": "I'm sorry, but I don't have the capability to show live satellites. Is there something else I can help you with?"
+    },
+    {
+      "role": "user",
+      "content": "Enable CCTV cameras"
+    },
+    {
+      "role": "assistant",
+      "content": "I'm sorry, but I don't have the capability to enable CCTV cameras. Is there something else I can help you with?"
+    },
+    {
+      "role": "user",
+      "content": "Traffic in Paris"
+    },
+    {
+      "role": "assistant",
+      "content": "I'm sorry, but I don't have the capability to provide real-time traffic information for Paris. Is there something else I can help you with?"
+    },
+    {
+      "role": "user",
+      "content": "Inspect system hardware, CPU & RAM"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n⚠️ [object Object]"
+    }
+  ],
+  "createdAt": "2026-09-21T10:20:51.144Z",
+  "updatedAt": "2026-09-21T10:20:51.144Z"
+}

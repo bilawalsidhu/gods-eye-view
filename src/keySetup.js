@@ -1,4 +1,5 @@
 import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
+import { FREE_LLM_PROVIDERS } from './ai/freeLlmCatalog.js';
 
 /**
  * The POWER UP surface — paste a key, get a power.
@@ -59,16 +60,34 @@ export function stripKeylessBasemapFromHash(hash) {
   }
 }
 
+export const NVIDIA_MODEL_PRESETS = Object.freeze([
+  { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', label: '⚡ Nemotron 3.5' },
+  { id: 'nvidia/nemotron-3-ultra-550b-a55b', label: '🧠 Nemotron 550B' },
+  { id: 'moonshotai/kimi-k3', label: '👁️ Kimi K3' },
+  { id: 'meta/llama-3.3-70b-instruct', label: '🦙 Llama 3.3 70B' },
+  { id: 'deepseek-ai/deepseek-r1', label: '🔬 DeepSeek R1' },
+  { id: 'mistralai/mistral-large-2-instruct', label: '🌊 Mistral Large 2' },
+]);
+
 const TIER_DOTS = Object.freeze({ metered: '🔴', free: '🟡' });
 
 /** Build one key row. All content is our own registry text, set via textContent. */
-function buildRow(documentRef, key) {
+/** Build one key row. All content is our own registry text, set via textContent. */
+function buildRow(documentRef, key, status = null) {
+  const isAiRow = key.id === 'nvidia';
+  const providerSummary = status?.providerSummary;
+  const activeId = providerSummary?.activeId || 'nvidia';
+  const providerMap = providerSummary?.providers || {};
+  const activeProvider =
+    FREE_LLM_PROVIDERS.find((p) => p.id === activeId) || FREE_LLM_PROVIDERS[0];
+  const isAnyAiKeySaved = Object.values(providerMap).some((p) => p.set);
+
   const row = documentRef.createElement('section');
-  row.className = 'key-setup-row';
+  row.className = 'key-setup-row' + (isAiRow ? ' key-setup-row-ai' : '');
   row.dataset.keyId = key.id;
-  row.dataset.set = String(Boolean(key.set));
+  row.dataset.set = String(Boolean(isAiRow ? isAnyAiKeySaved : key.set));
   if (key.managed) row.dataset.managed = key.managed;
-  const external = key.managed === 'external';
+  const external = key.managed === 'external' && !isAiRow;
 
   const head = documentRef.createElement('div');
   head.className = 'key-setup-row-head';
@@ -76,7 +95,27 @@ function buildRow(documentRef, key) {
   led.className = 'key-setup-led';
   led.setAttribute('aria-hidden', 'true');
   const title = documentRef.createElement('strong');
-  title.textContent = key.title;
+  title.textContent = isAiRow
+    ? `FREE AI ENGINES (${FREE_LLM_PROVIDERS.length} PROVIDERS)`
+    : key.title;
+
+  const statusBadge = documentRef.createElement('span');
+  if (isAiRow) {
+    statusBadge.className = `key-setup-status-pill ${isAnyAiKeySaved ? 'saved' : 'missing'}`;
+    statusBadge.innerHTML = isAnyAiKeySaved
+      ? `🟢 ACTIVE: ${activeProvider.name}`
+      : '⚠️ NOT PASTED';
+    statusBadge.title = isAnyAiKeySaved
+      ? `Currently using ${activeProvider.name} as your primary inference engine`
+      : 'No free AI engine key has been saved in .env yet';
+  } else {
+    statusBadge.className = `key-setup-status-pill ${key.set ? 'saved' : 'missing'}`;
+    statusBadge.innerHTML = key.set ? '🟢 KEY SAVED & ACTIVE' : '⚠️ NOT PASTED';
+    statusBadge.title = key.set
+      ? `${key.title} is installed in your local .env and active`
+      : `No key saved yet for ${key.title}`;
+  }
+
   const tier = documentRef.createElement('span');
   tier.className = 'key-setup-tier';
   tier.textContent = TIER_DOTS[key.tier] || '';
@@ -84,7 +123,8 @@ function buildRow(documentRef, key) {
     key.tier === 'metered'
       ? 'Metered — a billing-enabled account'
       : 'Free key — register, paste, done';
-  head.append(led, title, tier);
+  head.append(led, title, statusBadge, tier);
+
   if (key.clientExposed) {
     const exposed = documentRef.createElement('span');
     exposed.className = 'key-setup-exposed';
@@ -94,8 +134,6 @@ function buildRow(documentRef, key) {
     head.append(exposed);
   }
   if (external) {
-    // Externally supplied credentials (shell env, Keychain, a launcher) are
-    // facts this panel reports, never values it rewrites or deletes.
     const badge = documentRef.createElement('span');
     badge.className = 'key-setup-external';
     badge.textContent = 'configured externally';
@@ -103,45 +141,308 @@ function buildRow(documentRef, key) {
       'Supplied by your environment, Keychain, or launcher — change it where it was set';
     head.append(badge);
   }
+
   const get = documentRef.createElement('a');
   get.className = 'key-setup-get';
-  get.href = key.getUrl;
+  get.href = isAiRow ? activeProvider.keyUrl : key.getUrl;
   get.target = '_blank';
   get.rel = 'noopener noreferrer';
-  get.textContent = key.set ? 'MANAGE ↗' : 'GET KEY ↗';
+  get.textContent = isAiRow
+    ? providerMap[activeId]?.set
+      ? `MANAGE ${activeProvider.name.toUpperCase()} ↗`
+      : `GET FREE ${activeProvider.name.toUpperCase()} KEY ↗`
+    : key.set
+      ? 'MANAGE ↗'
+      : 'GET KEY ↗';
   head.append(get);
 
   const unlocks = documentRef.createElement('p');
   unlocks.className = 'key-setup-unlocks';
-  unlocks.textContent = key.unlocks;
+  unlocks.textContent = isAiRow
+    ? `Active engine: ${activeProvider.icon} ${activeProvider.name} (${activeProvider.badge}). Access 82+ frontier open-weights, fast LPU speed, or 1M context. Select any provider below to see its status or paste its key.`
+    : key.unlocks;
 
   row.append(head, unlocks);
-  if (!external) {
+
+  if (!external || isAiRow) {
     const fields = documentRef.createElement('div');
     fields.className = 'key-setup-fields';
-    for (const envVar of key.envVars) {
-      const input = documentRef.createElement('input');
-      // Passwords-style so a pasted key never shows on a shared or recorded
-      // screen — this app gets screen-recorded a lot.
-      input.type = 'password';
-      input.autocomplete = 'off';
-      input.spellcheck = false;
-      input.dataset.envVar = envVar;
-      input.setAttribute('aria-label', envVar);
-      input.placeholder = key.set
-        ? `${envVar} saved — paste to replace`
-        : `paste ${envVar}`;
-      fields.append(input);
+
+    if (!isAiRow) {
+      if (key.set) {
+        const savedBanner = documentRef.createElement('div');
+        savedBanner.className = 'key-setup-saved-key-banner';
+        savedBanner.innerHTML = `
+          <span class="key-setup-saved-check">✓</span>
+          <div>
+            <strong>KEY IS ALREADY PASTED & SAVED IN .ENV</strong>
+            <small>Active and ready to use. Type in the box below only if you want to replace it.</small>
+          </div>
+        `;
+        fields.append(savedBanner);
+      }
+
+      for (const envVar of key.envVars) {
+        const input = documentRef.createElement('input');
+        input.type = envVar.includes('MODEL') ? 'text' : 'password';
+        input.autocomplete = 'off';
+        input.spellcheck = false;
+        input.dataset.envVar = envVar;
+        input.setAttribute('aria-label', envVar);
+        input.placeholder = key.set
+          ? `•••••••••••••••••••• (${envVar} saved — paste only to replace)`
+          : `paste ${envVar}`;
+        input.addEventListener('input', () => {
+          if (input.value.trim().length > 0) input.classList.add('has-new-key');
+          else input.classList.remove('has-new-key');
+        });
+        fields.append(input);
+      }
+
+      if (key.managed === 'file') {
+        const remove = documentRef.createElement('button');
+        remove.type = 'button';
+        remove.className = 'key-setup-remove';
+        remove.dataset.keySetupRemove = JSON.stringify(key.envVars);
+        remove.textContent = 'REMOVE';
+        remove.title = `Remove ${key.title} from this app's saved keys`;
+        fields.append(remove);
+      }
+    } else {
+      // DEDICATED AI MULTI-PROVIDER INTERFACE
+      // 1. Current Active Engine Card
+      const activeCard = documentRef.createElement('div');
+      activeCard.className = 'key-setup-active-engine-card';
+      const activeSaved = Boolean(providerMap[activeId]?.set);
+      activeCard.innerHTML = `
+        <div class="active-engine-badge-line">
+          <span class="active-engine-tag">⚡ CURRENT ACTIVE INFERENCE ENGINE</span>
+          <span class="active-engine-status-pill ${activeSaved ? 'saved' : 'missing'}">
+            ${activeSaved ? '🟢 KEY SAVED & ACTIVE IN .ENV' : '⚠️ NO KEY SAVED (FALLBACK)'}
+          </span>
+        </div>
+        <div class="active-engine-title">
+          ${activeProvider.icon} <strong>${activeProvider.name}</strong> <span class="active-engine-badge">${activeProvider.badge}</span>
+        </div>
+        <div class="active-engine-desc">${activeProvider.description}</div>
+      `;
+      fields.append(activeCard);
+
+      // 2. Clear Instruction
+      const hint = documentRef.createElement('div');
+      hint.className = 'key-setup-provider-hint';
+      hint.innerHTML = `👇 <b>${FREE_LLM_PROVIDERS.length} Dedicated Provider Slots</b> — Every provider has its own separate input field. Paste keys for any or all providers below without overwriting other keys:`;
+      fields.append(hint);
+
+      // Hidden inputs that carry active engine configuration updates if changed
+      const baseUrlInput = documentRef.createElement('input');
+      baseUrlInput.type = 'hidden';
+      baseUrlInput.dataset.envVar = 'NVIDIA_BASE_URL';
+      baseUrlInput.value = '';
+      fields.append(baseUrlInput);
+
+      const modelInput = documentRef.createElement('input');
+      modelInput.type = 'hidden';
+      modelInput.dataset.envVar = 'NVIDIA_MODEL';
+      modelInput.value = '';
+      fields.append(modelInput);
+
+      // 3. Quick-jump Provider Chips Container
+      const presetsContainer = documentRef.createElement('div');
+      presetsContainer.className = 'key-setup-model-presets';
+
+      const chipEls = [];
+
+      for (const provider of FREE_LLM_PROVIDERS) {
+        const chip = documentRef.createElement('button');
+        chip.type = 'button';
+        const pSaved = Boolean(providerMap[provider.id]?.set);
+        const pActive = provider.id === activeId;
+
+        chip.className = `key-setup-preset-chip ${pActive ? 'is-active' : ''} ${pSaved ? 'has-key' : 'no-key'}`;
+
+        const statusTagClass = pSaved
+          ? pActive
+            ? 'tag-active'
+            : 'tag-saved'
+          : 'tag-missing';
+        const statusTagText = pSaved
+          ? pActive
+            ? '⚡ ACTIVE'
+            : '🟢 SAVED'
+          : '⚪ NO KEY';
+
+        chip.innerHTML = `
+          <span class="chip-provider-label">${provider.icon} ${provider.name}</span>
+          <span class="chip-status-tag ${statusTagClass}">${statusTagText}</span>
+        `;
+        chip.title = `${provider.name} (${provider.badge}) — ${pSaved ? 'Key Saved' : 'No Key Pasted'}. Click to scroll to input.`;
+
+        chip.addEventListener('click', () => {
+          chipEls.forEach((c) => c.classList.remove('selected'));
+          chip.classList.add('selected');
+          const targetCard = fields.querySelector(
+            `[data-provider-id="${provider.id}"]`,
+          );
+          if (targetCard) {
+            targetCard.scrollIntoView?.({
+              behavior: 'smooth',
+              block: 'nearest',
+            });
+            targetCard.querySelector('input[data-env-var]')?.focus?.();
+          }
+        });
+
+        chipEls.push(chip);
+        presetsContainer.append(chip);
+      }
+      fields.append(presetsContainer);
+
+      // 4. Segregated list of ALL providers with Multi-Provider Concurrency banner!
+      const swarmBanner = documentRef.createElement('div');
+      swarmBanner.className = 'key-setup-swarm-banner';
+      swarmBanner.innerHTML =
+        '⚡ <strong>Multi-Provider Concurrency Enabled:</strong> All providers with saved keys operate simultaneously in parallel in Omni-Swarm consensus & Auto-MoE routing, or independently by choosing specific models in the console.';
+      fields.append(swarmBanner);
+
+      const providersList = documentRef.createElement('div');
+      providersList.className = 'key-setup-providers-list';
+
+      for (const provider of FREE_LLM_PROVIDERS) {
+        const pSaved = Boolean(providerMap[provider.id]?.set);
+        const pActive = provider.id === activeId;
+
+        const card = documentRef.createElement('div');
+        card.className = `key-setup-provider-card ${pActive ? 'is-active' : ''} ${pSaved ? 'has-key' : 'no-key'}`;
+        card.dataset.providerId = provider.id;
+
+        // Card Header
+        const cardHead = documentRef.createElement('div');
+        cardHead.className = 'provider-card-head';
+
+        const titleGroup = documentRef.createElement('div');
+        titleGroup.className = 'provider-card-title-group';
+
+        const radioLabel = documentRef.createElement('label');
+        radioLabel.className = 'provider-card-checkbox-label';
+
+        const radio = documentRef.createElement('input');
+        radio.type = 'checkbox';
+        radio.name = 'key_setup_active_provider';
+        radio.value = provider.id;
+        radio.checked = pActive;
+        radio.title = `${pActive ? 'Disable' : 'Enable'} ${provider.name}`;
+        radio.addEventListener('change', () => {
+          if (radio.checked) {
+            // When enabling a provider, add it to active providers
+            // We'll handle the actual activation in the submit handler
+          } else {
+            // When disabling a provider, remove it from active providers
+            // We'll handle the actual deactivation in the submit handler
+          }
+          // Update the baseUrl and model inputs to reflect the first active provider
+          // or keep current values if no change needed
+          const checkboxes = fields.querySelectorAll(
+            'input[name="key_setup_active_provider"]:checked',
+          );
+          if (checkboxes.length > 0) {
+            const firstChecked = checkboxes[0];
+            const providerId = firstChecked.value;
+            const provider = FREE_LLM_PROVIDERS.find(
+              (p) => p.id === providerId,
+            );
+            if (provider) {
+              baseUrlInput.value = provider.baseUrl;
+              modelInput.value = provider.defaultModel;
+            }
+          }
+        });
+
+        const iconSpan = documentRef.createElement('span');
+        iconSpan.textContent = provider.icon;
+        const nameStrong = documentRef.createElement('strong');
+        nameStrong.textContent = provider.name;
+
+        radioLabel.append(radio, iconSpan, nameStrong);
+
+        const badge = documentRef.createElement('span');
+        badge.className = 'provider-card-badge';
+        badge.textContent = provider.badge;
+
+        const statusTag = documentRef.createElement('span');
+        statusTag.className = `chip-status-tag ${
+          pSaved ? (pActive ? 'tag-active' : 'tag-saved') : 'tag-missing'
+        }`;
+        statusTag.textContent = pSaved
+          ? pActive
+            ? '⚡ ACTIVE'
+            : '🟢 READY'
+          : '⚪ NO KEY';
+
+        titleGroup.append(radioLabel, badge, statusTag);
+
+        const cardLinks = documentRef.createElement('div');
+        cardLinks.className = 'provider-card-links';
+        const getLink = documentRef.createElement('a');
+        getLink.className = 'key-setup-get';
+        getLink.href = provider.keyUrl;
+        getLink.target = '_blank';
+        getLink.rel = 'noopener noreferrer';
+        getLink.textContent = pSaved ? 'MANAGE ↗' : 'GET FREE KEY ↗';
+        cardLinks.append(getLink);
+
+        cardHead.append(titleGroup, cardLinks);
+
+        // Card Description
+        const desc = documentRef.createElement('div');
+        desc.className = 'provider-card-desc';
+        desc.textContent = provider.description;
+
+        // Card Input Row: dedicated input + activate/remove buttons
+        const inputRow = documentRef.createElement('div');
+        inputRow.className = 'provider-card-input-row';
+
+        const providerInput = documentRef.createElement('input');
+        providerInput.type = 'password';
+        providerInput.autocomplete = 'off';
+        providerInput.spellcheck = false;
+        providerInput.dataset.envVar = provider.envVar;
+        providerInput.setAttribute(
+          'aria-label',
+          `${provider.name} API Key (${provider.envVar})`,
+        );
+        providerInput.placeholder = pSaved
+          ? `•••••••••••••••••••• (${provider.envVar} saved — paste only to replace)`
+          : `paste ${provider.envVar} (${provider.keyPlaceholder})`;
+
+        providerInput.addEventListener('input', () => {
+          const val = String(providerInput.value || '').trim();
+          if (val.length > 0) {
+            providerInput.classList.add('has-new-key');
+          } else {
+            providerInput.classList.remove('has-new-key');
+          }
+        });
+
+        inputRow.append(providerInput);
+
+        if (pSaved) {
+          const removeBtn = documentRef.createElement('button');
+          removeBtn.type = 'button';
+          removeBtn.className = 'key-setup-remove';
+          removeBtn.dataset.keySetupRemove = JSON.stringify([provider.envVar]);
+          removeBtn.textContent = 'REMOVE';
+          removeBtn.title = `Remove ${provider.name} key (${provider.envVar}) from your saved .env`;
+          inputRow.append(removeBtn);
+        }
+
+        card.append(cardHead, desc, inputRow);
+        providersList.append(card);
+      }
+
+      fields.append(providersList);
     }
-    if (key.managed === 'file') {
-      const remove = documentRef.createElement('button');
-      remove.type = 'button';
-      remove.className = 'key-setup-remove';
-      remove.dataset.keySetupRemove = JSON.stringify(key.envVars);
-      remove.textContent = 'REMOVE';
-      remove.title = `Remove ${key.title} from this app's saved keys`;
-      fields.append(remove);
-    }
+
     row.append(fields);
   }
   return row;
@@ -238,7 +539,7 @@ export async function initKeySetup({
     if (!rowsHost) return;
     rowsHost.textContent = '';
     for (const key of status.keys || [])
-      rowsHost.append(buildRow(documentRef, key));
+      rowsHost.append(buildRow(documentRef, key, status));
   };
 
   const visible = () =>
@@ -361,8 +662,23 @@ export async function initKeySetup({
   chip.addEventListener('click', openDialog);
   closeButton?.addEventListener('click', close);
   applyButton?.addEventListener('click', onApply);
-  // Remove buttons are rendered per row; delegate so re-renders stay wired.
+  // Remove and activate buttons are rendered per row; delegate so re-renders stay wired.
   rowsHost?.addEventListener('click', (event) => {
+    const activateBtn = event.target?.closest?.('[data-key-setup-activate]');
+    if (activateBtn && !disposed && !busy) {
+      let updates = {};
+      try {
+        updates = JSON.parse(activateBtn.dataset.keySetupActivate || '{}');
+      } catch {
+        return;
+      }
+      if (Object.keys(updates).length > 0) {
+        say('Switching active engine…');
+        void submitUpdates(updates, 'Activated in');
+      }
+      return;
+    }
+
     const button = event.target?.closest?.('[data-key-setup-remove]');
     if (disposed || !button || busy) return;
     let envVars = [];

@@ -428,7 +428,10 @@ test('compact URL omits absent-meaning option state and still resolves to it', (
     showOrbits: true,
     selectedSatTrackingId: null,
   };
+<<<<<<< HEAD
+=======
   state.options.wind.overlay = 'speed'; // Frozen v2 omitted-token meaning; new boots use trails.
+>>>>>>> 4c1dbe653b2589e5068a1c10e052d5d24249be77
   const params = encodeLayerStateParams(new URLSearchParams('v=2'), state);
   assert.equal(params.has('lo'), false);
   const roundTrip = decodeLayerStateParams(params);

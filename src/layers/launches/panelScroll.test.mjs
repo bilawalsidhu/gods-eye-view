@@ -11,12 +11,17 @@ test('rendering a selected mission resets the nearest theme-appropriate Context 
       _missionPanel: {
         querySelector: () => output,
         closest(selector) {
-          assert.equal(selector, ":root[data-ui-theme='cyber'] .cyber-panel-body, .global-context-panel-inner");
+          assert.equal(
+            selector,
+            ":root[data-ui-theme='cyber'] .cyber-panel-body, .global-context-panel-inner",
+          );
           return cyber ? body : inner;
         },
       },
       _selectedLaunchId: 'mission-1',
-      _launches: [{ id: 'mission-1', name: 'Example', payloads: [], recoveryStages: [] }],
+      _launches: [
+        { id: 'mission-1', name: 'Example', payloads: [], recoveryStages: [] },
+      ],
       _replayTracks: new Map(),
     };
     const panel = createPanel({

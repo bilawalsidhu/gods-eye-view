@@ -176,5 +176,6 @@ export function createApplicationTools({
       delete window.__gevVoiceCommands;
   });
   debug.voiceCommands = voiceCommands;
+  debug.runner = voiceCommands?.runner;
   return { sceneDirector, annotations, voiceCommands };
 }

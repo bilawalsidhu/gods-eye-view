@@ -47,7 +47,10 @@ test('cameraHue: first 20 indices pairwise separated by >= 12 degrees', () => {
   for (let i = 0; i < hues.length; i++) {
     for (let j = i + 1; j < hues.length; j++) {
       const delta = circularDeltaDeg(hues[i], hues[j]);
-      assert.ok(delta >= 12, `hue(${i})=${hues[i].toFixed(1)} vs hue(${j})=${hues[j].toFixed(1)} only ${delta.toFixed(1)}° apart`);
+      assert.ok(
+        delta >= 12,
+        `hue(${i})=${hues[i].toFixed(1)} vs hue(${j})=${hues[j].toFixed(1)} only ${delta.toFixed(1)}° apart`,
+      );
     }
   }
 });
@@ -55,21 +58,30 @@ test('cameraHue: first 20 indices pairwise separated by >= 12 degrees', () => {
 test('cameraHue: consecutive indices separated by >= 80 degrees', () => {
   for (let i = 0; i < 40; i++) {
     const delta = circularDeltaDeg(cameraHue(i), cameraHue(i + 1));
-    assert.ok(delta >= 80, `consecutive hues ${i}/${i + 1} only ${delta.toFixed(1)}° apart`);
+    assert.ok(
+      delta >= 80,
+      `consecutive hues ${i}/${i + 1} only ${delta.toFixed(1)}° apart`,
+    );
   }
 });
 
 test('viewshedColors: fill/line pairs with the designed alphas', () => {
   const colors = viewshedColors(210);
   for (const key of ['fill', 'fillActive', 'line', 'lineActive']) {
-    assert.ok(colors[key] instanceof Cesium.Color, `${key} must be a Cesium.Color`);
+    assert.ok(
+      colors[key] instanceof Cesium.Color,
+      `${key} must be a Cesium.Color`,
+    );
   }
   assert.ok(Math.abs(colors.fill.alpha - 0.12) < 1e-6);
   assert.ok(Math.abs(colors.fillActive.alpha - 0.22) < 1e-6);
   assert.ok(Math.abs(colors.line.alpha - 0.85) < 1e-6);
   assert.ok(Math.abs(colors.lineActive.alpha - 1.0) < 1e-6);
   // Same hue family: fill and line of the same hue must not be gray.
-  assert.ok(colors.line.red !== colors.line.green || colors.line.green !== colors.line.blue);
+  assert.ok(
+    colors.line.red !== colors.line.green ||
+      colors.line.green !== colors.line.blue,
+  );
 });
 
 /** Minimal frustumCartesians-shaped fixture. */
@@ -88,7 +100,13 @@ test('frustumVolumeGeometryData: 5 vertices are exactly the input Cartesians', (
   const { positions: flat, indices } = frustumVolumeGeometryData(positions);
   assert.equal(flat.length, 15);
   assert.equal(indices.length, 18);
-  const order = [positions.mount, positions.tl, positions.tr, positions.br, positions.bl];
+  const order = [
+    positions.mount,
+    positions.tl,
+    positions.tr,
+    positions.br,
+    positions.bl,
+  ];
   order.forEach((p, i) => {
     assert.equal(flat[i * 3], p.x);
     assert.equal(flat[i * 3 + 1], p.y);
@@ -104,7 +122,11 @@ test('frustumVolumeGeometryData: indices form 4 side faces + 2 cap triangles ove
     counts.set(idx, (counts.get(idx) || 0) + 1);
   }
   // Apex (0) appears in exactly the 4 side triangles; every corner in >= 2.
-  assert.equal(counts.get(0), 4, 'apex must appear in exactly 4 side triangles');
+  assert.equal(
+    counts.get(0),
+    4,
+    'apex must appear in exactly 4 side triangles',
+  );
   for (const corner of [1, 2, 3, 4]) {
     assert.ok(counts.get(corner) >= 2, `corner ${corner} underused`);
   }

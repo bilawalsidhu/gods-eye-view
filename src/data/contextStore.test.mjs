@@ -57,7 +57,9 @@ test('selecting a tracking subject stays off the overlay-click event lane', () =
   withWindow((host) => {
     const seen = [];
     host.addEventListener('gev:entity-selected', () => seen.push('selected'));
-    host.addEventListener('gev:entity-selection-cleared', () => seen.push('cleared'));
+    host.addEventListener('gev:entity-selection-cleared', () =>
+      seen.push('cleared'),
+    );
     selectTrackedSubjectContext(flightSubject('aaa001'));
     clearTrackedSubjectContext('flights');
     assert.deepEqual(
@@ -71,7 +73,9 @@ test('selecting a tracking subject stays off the overlay-click event lane', () =
 test('switching contacts moves the subject and leaves no stale record behind', () => {
   withWindow(() => {
     selectTrackedSubjectContext(flightSubject('aaa001'));
-    selectTrackedSubjectContext(flightSubject('aaa002', { latitude: 31.1, longitude: -96.9 }));
+    selectTrackedSubjectContext(
+      flightSubject('aaa002', { latitude: 31.1, longitude: -96.9 }),
+    );
     const store = getContextStore();
     const flightIds = [...store.entities.values()]
       .filter((record) => record.layerId === 'flights')
@@ -85,20 +89,32 @@ test('a sibling tracking layer keeps its own subject slot', () => {
   withWindow(() => {
     selectTrackedSubjectContext(flightSubject('aaa001'));
     selectTrackedSubjectContext({
-      id: 'bbb101', layerId: 'military', label: 'MIL101', latitude: 30.27, longitude: -97.75,
+      id: 'bbb101',
+      layerId: 'military',
+      label: 'MIL101',
+      latitude: 30.27,
+      longitude: -97.75,
     });
     const store = getContextStore();
     assert.equal(getSelectedEntityContext()?.id, 'bbb101');
-    assert.ok(store.entities.has('aaa001'), 'the flights record survives; only the SELECTION moved');
+    assert.ok(
+      store.entities.has('aaa001'),
+      'the flights record survives; only the SELECTION moved',
+    );
   });
 });
 
 test('the per-poll refresh updates values without stealing the selection', () => {
   withWindow(() => {
     selectTrackedSubjectContext(flightSubject('aaa001'));
-    const other = registerEntityContext({ __gevContextId: 'dc-7' }, {
-      id: 'dc-7', layerId: 'local-datacenters', label: 'Datacenter 7',
-    });
+    const other = registerEntityContext(
+      { __gevContextId: 'dc-7' },
+      {
+        id: 'dc-7',
+        layerId: 'local-datacenters',
+        label: 'Datacenter 7',
+      },
+    );
     selectEntityContext(other.entity);
     assert.equal(getSelectedEntityContext()?.id, 'dc-7');
 
@@ -130,9 +146,14 @@ test('deselecting a contact releases the shared slot', () => {
 
 test('clearing one tracking layer leaves another layer selection alone', () => {
   withWindow(() => {
-    const other = registerEntityContext({ __gevContextId: 'dam-3' }, {
-      id: 'dam-3', layerId: 'local-dams', label: 'Dam 3',
-    });
+    const other = registerEntityContext(
+      { __gevContextId: 'dam-3' },
+      {
+        id: 'dam-3',
+        layerId: 'local-dams',
+        label: 'Dam 3',
+      },
+    );
     selectEntityContext(other.entity);
     clearTrackedSubjectContext('flights');
     assert.equal(getSelectedEntityContext()?.id, 'dam-3');
@@ -178,7 +199,11 @@ test('a satellite subject uses the same shared slot as aircraft', () => {
 test('switching satellites leaves no stale orbit record behind', () => {
   withWindow(() => {
     const sat = (id, label) => ({
-      id, layerId: 'satellites', label, latitude: 1, longitude: 2,
+      id,
+      layerId: 'satellites',
+      label,
+      latitude: 1,
+      longitude: 2,
     });
     selectTrackedSubjectContext(sat('25544', 'ISS (ZARYA)'));
     selectTrackedSubjectContext(sat('20580', 'HST'));
@@ -193,9 +218,22 @@ test('switching satellites leaves no stale orbit record behind', () => {
 test('deselecting a satellite releases the slot without touching aircraft', () => {
   withWindow(() => {
     selectTrackedSubjectContext(flightSubject('aaa001'));
-    selectTrackedSubjectContext({ id: '25544', layerId: 'satellites', label: 'ISS', latitude: 1, longitude: 2 });
+    selectTrackedSubjectContext({
+      id: '25544',
+      layerId: 'satellites',
+      label: 'ISS',
+      latitude: 1,
+      longitude: 2,
+    });
     clearTrackedSubjectContext('satellites');
-    assert.equal(getSelectedEntityContext(), null, 'the satellite gave the slot back');
-    assert.ok(getContextStore().entities.has('aaa001'), 'and the aircraft record is untouched');
+    assert.equal(
+      getSelectedEntityContext(),
+      null,
+      'the satellite gave the slot back',
+    );
+    assert.ok(
+      getContextStore().entities.has('aaa001'),
+      'and the aircraft record is untouched',
+    );
   });
 });

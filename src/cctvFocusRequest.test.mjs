@@ -33,8 +33,26 @@ test('UI CCTV request route uses the explicit focus policy with the clicked id',
 
 test('UI CCTV request route rejects malformed events without entering focus policy', () => {
   let calls = 0;
-  assert.equal(routeCctvFocusRequest({}, () => { calls += 1; }, () => {}), false);
-  assert.equal(routeCctvFocusRequest({ detail: { cameraId: '' } }, () => { calls += 1; }, () => {}), false);
+  assert.equal(
+    routeCctvFocusRequest(
+      {},
+      () => {
+        calls += 1;
+      },
+      () => {},
+    ),
+    false,
+  );
+  assert.equal(
+    routeCctvFocusRequest(
+      { detail: { cameraId: '' } },
+      () => {
+        calls += 1;
+      },
+      () => {},
+    ),
+    false,
+  );
   assert.equal(calls, 0);
 });
 
@@ -42,8 +60,12 @@ test('UI CCTV focus listener registration disposes the exact added callback once
   const added = [];
   const removed = [];
   const target = {
-    addEventListener(type, callback) { added.push({ type, callback }); },
-    removeEventListener(type, callback) { removed.push({ type, callback }); },
+    addEventListener(type, callback) {
+      added.push({ type, callback });
+    },
+    removeEventListener(type, callback) {
+      removed.push({ type, callback });
+    },
   };
   const listener = () => {};
 

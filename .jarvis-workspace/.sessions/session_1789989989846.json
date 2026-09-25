@@ -1,0 +1,24 @@
+{
+  "title": "Fly to Tokyo Tower",
+  "mode": "globe",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Fly to Tokyo Tower"
+    },
+    {
+      "role": "assistant",
+      "content": "Activating fly_to_location function with the following parameters:\n```\nquery: Tokyo Tower\n```"
+    },
+    {
+      "role": "user",
+      "content": "Show live satellites"
+    },
+    {
+      "role": "assistant",
+      "content": "### 🛰️ Tactical Globe Directive Executed\n- ⚡ **Action Executed**: `set_layer_visibility`\n\n*Camera guidance and geospatial layers updated in real time.*"
+    }
+  ],
+  "createdAt": "2026-09-21T11:27:12.677Z",
+  "updatedAt": "2026-09-21T11:27:12.677Z"
+}

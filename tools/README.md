@@ -32,12 +32,12 @@ node tools/sat-ortho.mjs --lat 30.266476 --lon -97.73719 --zoom 20 --size 2048
 node tools/sat-ortho.mjs --lat 30.266476 --lon -97.73719 --zoom 22 --size 2048
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--lat` | — | Center latitude (required) |
-| `--lon` | — | Center longitude (required) |
-| `--zoom` | 21 | Tile zoom level (max typically 22) |
-| `--size` | 2048 | Output square size in pixels |
+| Option   | Default | Description                        |
+| -------- | ------- | ---------------------------------- |
+| `--lat`  | —       | Center latitude (required)         |
+| `--lon`  | —       | Center longitude (required)        |
+| `--zoom` | 21      | Tile zoom level (max typically 22) |
+| `--size` | 2048    | Output square size in pixels       |
 
 Reports GSD, ground coverage, and NW/SE corner coordinates for georeferencing.
 
@@ -58,15 +58,15 @@ node tools/streetview-headings.mjs --lat 30.266476 --lon -97.73719 --neighbors
 node tools/streetview-headings.mjs --lat 30.266476 --lon -97.73719 --fov 120 --pitch -10
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--lat` | — | Latitude (required) |
-| `--lon` | — | Longitude (required) |
-| `--fov` | 90 | Field of view in degrees (10-120) |
-| `--pitch` | 0 | Camera pitch (-90 to 90) |
-| `--size` | 640x640 | Image size (max 640 per axis) |
-| `--step` | 45 | Heading step in degrees |
-| `--neighbors` | off | Also fetch images from nearby Street View locations |
+| Option        | Default | Description                                         |
+| ------------- | ------- | --------------------------------------------------- |
+| `--lat`       | —       | Latitude (required)                                 |
+| `--lon`       | —       | Longitude (required)                                |
+| `--fov`       | 90      | Field of view in degrees (10-120)                   |
+| `--pitch`     | 0       | Camera pitch (-90 to 90)                            |
+| `--size`      | 640x640 | Image size (max 640 per axis)                       |
+| `--step`      | 45      | Heading step in degrees                             |
+| `--neighbors` | off     | Also fetch images from nearby Street View locations |
 
 The `--neighbors` flag queries Google's panorama metadata for linked locations, deduplicates them by pano ID via the metadata API, and fetches 8 heading images from each unique neighbor within 15m.
 
@@ -84,12 +84,12 @@ node tools/streetview-panorama.mjs --lat 30.266476 --lon -97.73719
 node tools/streetview-panorama.mjs --lat 30.266476 --lon -97.73719 --zoom 5
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--lat` | — | Latitude (required) |
-| `--lon` | — | Longitude (required) |
-| `--zoom` | 3 | Tile zoom 0-5 (higher = larger pano) |
-| `--radius` | 50 | Search radius in meters for nearest panorama |
+| Option     | Default | Description                                  |
+| ---------- | ------- | -------------------------------------------- |
+| `--lat`    | —       | Latitude (required)                          |
+| `--lon`    | —       | Longitude (required)                         |
+| `--zoom`   | 3       | Tile zoom 0-5 (higher = larger pano)         |
+| `--radius` | 50      | Search radius in meters for nearest panorama |
 
 Output is a standard equirectangular JPEG suitable as input for `pano-pinhole.mjs`.
 
@@ -116,18 +116,18 @@ node tools/pano-pinhole.mjs --input output/panorama_30.266476_-97.73719.jpg --he
 node tools/pano-pinhole.mjs --input output/panorama_30.266476_-97.73719.jpg --all --step 30 --hfov 90
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--input` | — | Equirectangular panorama JPEG (required) |
-| `--heading` | 0 | Compass heading (0=N, 90=E, 180=S, 270=W) |
-| `--pitch` | 0 | Pitch in degrees (positive=up) |
-| `--roll` | 0 | Roll in degrees (positive=clockwise) |
-| `--hfov` | 90 | Horizontal field of view in degrees |
-| `--focal` | — | Focal length in pixels (overrides `--hfov`) |
-| `--width` | 1920 | Output width |
-| `--height` | 1080 | Output height |
-| `--all` | off | Render all compass headings (ignores `--heading`) |
-| `--step` | 45 | Heading step for `--all` mode |
+| Option      | Default | Description                                       |
+| ----------- | ------- | ------------------------------------------------- |
+| `--input`   | —       | Equirectangular panorama JPEG (required)          |
+| `--heading` | 0       | Compass heading (0=N, 90=E, 180=S, 270=W)         |
+| `--pitch`   | 0       | Pitch in degrees (positive=up)                    |
+| `--roll`    | 0       | Roll in degrees (positive=clockwise)              |
+| `--hfov`    | 90      | Horizontal field of view in degrees               |
+| `--focal`   | —       | Focal length in pixels (overrides `--hfov`)       |
+| `--width`   | 1920    | Output width                                      |
+| `--height`  | 1080    | Output height                                     |
+| `--all`     | off     | Render all compass headings (ignores `--heading`) |
+| `--step`    | 45      | Heading step for `--all` mode                     |
 
 Reports horizontal, vertical, and diagonal FOV plus equivalent focal length.
 
@@ -151,18 +151,18 @@ node tools/cesium-render.mjs --lookat-lat 30.266476 --lookat-lon -97.73719 --hea
 node tools/cesium-render.mjs --lat 30.266476 --lon -97.73719 --heading 270 --pitch -15 --height 8
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--lat/--lon` | — | Camera position (direct mode) |
-| `--lookat-lat/--lookat-lon` | — | Target to look at (lookat mode) |
-| `--heading` | 0 | Compass heading |
-| `--pitch` | -10 | Camera pitch (must be negative in lookat mode) |
-| `--height` | 8 | Meters above ground |
-| `--fov` | 60 | Vertical field of view |
-| `--width` | 1280 | Image width |
-| `--height-px` | 720 | Image height |
-| `--sse` | 2 | Screen-space error (lower = sharper, slower) |
-| `--timeout` | 30 | Max wait in seconds |
+| Option                      | Default | Description                                    |
+| --------------------------- | ------- | ---------------------------------------------- |
+| `--lat/--lon`               | —       | Camera position (direct mode)                  |
+| `--lookat-lat/--lookat-lon` | —       | Target to look at (lookat mode)                |
+| `--heading`                 | 0       | Compass heading                                |
+| `--pitch`                   | -10     | Camera pitch (must be negative in lookat mode) |
+| `--height`                  | 8       | Meters above ground                            |
+| `--fov`                     | 60      | Vertical field of view                         |
+| `--width`                   | 1280    | Image width                                    |
+| `--height-px`               | 720     | Image height                                   |
+| `--sse`                     | 2       | Screen-space error (lower = sharper, slower)   |
+| `--timeout`                 | 30      | Max wait in seconds                            |
 
 Uses progressive SSE refinement and automatic ground-height sampling. Street-level views are limited by Google's photogrammetry tile resolution.
 

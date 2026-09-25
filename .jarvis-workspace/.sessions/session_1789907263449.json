@@ -1,0 +1,24 @@
+{
+  "title": "HI",
+  "mode": "tasks",
+  "messages": [
+    {
+      "role": "user",
+      "content": "HI"
+    },
+    {
+      "role": "assistant",
+      "content": "Council deliberation concluded."
+    },
+    {
+      "role": "user",
+      "content": "HI"
+    },
+    {
+      "role": "assistant",
+      "content": "\n\n⚠️ NVIDIA API error (403): {\"status\":403,\"title\":\"Forbidden\",\"detail\":\"Authorization failed\"}"
+    }
+  ],
+  "createdAt": "2026-09-20T12:29:37.828Z",
+  "updatedAt": "2026-09-20T12:29:37.828Z"
+}

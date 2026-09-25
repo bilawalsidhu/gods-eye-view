@@ -4,7 +4,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DataLayerManager } from '../data/manager.js';
-import { controlRadio as runControlRadio, createGevActionRunner as createActionRunner } from './gevActions.js';
+import {
+  controlRadio as runControlRadio,
+  createGevActionRunner as createActionRunner,
+} from './gevActions.js';
 import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 import {
   computeDownscale,
@@ -43,29 +46,54 @@ test('push-to-talk recognizes Space by code or key', () => {
 
 test('push-to-talk protects text entry but arbitrates non-editing controls', () => {
   const plainTarget = { isContentEditable: false, closest: () => null };
-  assert.equal(shouldHandlePushToTalkKeyDown({ code: 'Space', target: plainTarget }), true);
-  assert.equal(shouldHandlePushToTalkKeyDown({ code: 'Space', target: plainTarget, metaKey: true }), false);
-  assert.equal(shouldHandlePushToTalkKeyDown({
-    code: 'Space',
-    target: pushToTalkTarget({ tagName: 'INPUT', type: 'text' }),
-  }), false);
-  assert.equal(shouldHandlePushToTalkKeyDown({
-    code: 'Space',
-    target: { isContentEditable: true, closest: () => null },
-  }), false);
-  assert.equal(shouldHandlePushToTalkKeyDown({
-    code: 'Space',
-    target: pushToTalkTarget({ tagName: 'BUTTON' }),
-  }), true);
-  assert.equal(isEditingSpaceTarget(pushToTalkTarget({ tagName: 'INPUT', type: 'range' })), false);
+  assert.equal(
+    shouldHandlePushToTalkKeyDown({ code: 'Space', target: plainTarget }),
+    true,
+  );
+  assert.equal(
+    shouldHandlePushToTalkKeyDown({
+      code: 'Space',
+      target: plainTarget,
+      metaKey: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldHandlePushToTalkKeyDown({
+      code: 'Space',
+      target: pushToTalkTarget({ tagName: 'INPUT', type: 'text' }),
+    }),
+    false,
+  );
+  assert.equal(
+    shouldHandlePushToTalkKeyDown({
+      code: 'Space',
+      target: { isContentEditable: true, closest: () => null },
+    }),
+    false,
+  );
+  assert.equal(
+    shouldHandlePushToTalkKeyDown({
+      code: 'Space',
+      target: pushToTalkTarget({ tagName: 'BUTTON' }),
+    }),
+    true,
+  );
+  assert.equal(
+    isEditingSpaceTarget(pushToTalkTarget({ tagName: 'INPUT', type: 'range' })),
+    false,
+  );
 });
 
 // Dispatch through the installed document/window listeners, keeping WebRTC at
 // the start boundary. Native button activation itself belongs to browser QA.
 function createPushToTalkFixture(t) {
-  const savedGlobals = new Map(['document', 'window', 'setTimeout', 'clearTimeout'].map((name) => (
-    [name, Object.getOwnPropertyDescriptor(globalThis, name)]
-  )));
+  const savedGlobals = new Map(
+    ['document', 'window', 'setTimeout', 'clearTimeout'].map((name) => [
+      name,
+      Object.getOwnPropertyDescriptor(globalThis, name),
+    ]),
+  );
   const eventHub = () => {
     const listeners = new Map();
     return {
@@ -73,12 +101,16 @@ function createPushToTalkFixture(t) {
         if (!listeners.has(type)) listeners.set(type, new Set());
         listeners.get(type).add(listener);
       },
-      removeEventListener(type, listener) { listeners.get(type)?.delete(listener); },
+      removeEventListener(type, listener) {
+        listeners.get(type)?.delete(listener);
+      },
       dispatch(type, event = {}) {
         for (const listener of listeners.get(type) || []) listener(event);
         return event;
       },
-      count(type) { return listeners.get(type)?.size || 0; },
+      count(type) {
+        return listeners.get(type)?.size || 0;
+      },
     };
   };
   let clock = 0;
@@ -104,18 +136,29 @@ function createPushToTalkFixture(t) {
     }
     clock = end;
   };
-  const document = { ...eventHub(), visibilityState: 'visible', activeElement: null };
+  const document = {
+    ...eventHub(),
+    visibilityState: 'visible',
+    activeElement: null,
+  };
   const window = eventHub();
   Object.assign(globalThis, { document, window, setTimeout, clearTimeout });
   const starts = [];
   const radio = [];
   const controllers = [];
   const makeController = () => {
-    const microphone = { enabled: false, stopped: false, stop() { this.stopped = true; } };
+    const microphone = {
+      enabled: false,
+      stopped: false,
+      stop() {
+        this.stopped = true;
+      },
+    };
     const controller = new GevRealtimeController({
       ui: {
         root: { dataset: {}, querySelectorAll: () => [], remove() {} },
-        status: {}, detail: {},
+        status: {},
+        detail: {},
       },
       runner: async () => ({}),
       radioLayer: {
@@ -146,14 +189,30 @@ function createPushToTalkFixture(t) {
     }
   });
   const key = (type, target, options = {}) => {
-    document.activeElement = options.activeElement === undefined ? target : options.activeElement;
+    document.activeElement =
+      options.activeElement === undefined ? target : options.activeElement;
     return document.dispatch(type, {
-    code: 'Space', key: ' ', target, defaultPrevented: false,
-    preventDefault() { this.defaultPrevented = true; },
-    ...options,
+      code: 'Space',
+      key: ' ',
+      target,
+      defaultPrevented: false,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+      ...options,
     });
   };
-  return { advance, document, window, starts, radio, key, makeController, timers, ...makeController() };
+  return {
+    advance,
+    document,
+    window,
+    starts,
+    radio,
+    key,
+    makeController,
+    timers,
+    ...makeController(),
+  };
 }
 
 function pushToTalkTarget({
@@ -181,19 +240,36 @@ function pushToTalkTarget({
     controls,
     type,
     blurred: 0,
-    blur() { this.blurred += 1; },
+    blur() {
+      this.blurred += 1;
+    },
     isContentEditable: contentEditable,
     closest(selector) {
       for (let node = this; node; node = node.parentElement) {
-        if (selector === '#cesiumContainer' && (node.id === 'cesiumContainer' || node.mapSurface)) {
+        if (
+          selector === '#cesiumContainer' &&
+          (node.id === 'cesiumContainer' || node.mapSurface)
+        ) {
           return node;
         }
         for (const part of selector.split(/,\s*/)) {
           if (part.toUpperCase() === node.tagName) return node;
-          if (part === 'a[href]' && node.tagName === 'A' && node.href !== null) return node;
-          if (part === 'audio[controls]' && node.tagName === 'AUDIO' && node.controls) return node;
-          if (part === 'video[controls]' && node.tagName === 'VIDEO' && node.controls) return node;
-          if (part === '[contenteditable]' && node.isContentEditable) return node;
+          if (part === 'a[href]' && node.tagName === 'A' && node.href !== null)
+            return node;
+          if (
+            part === 'audio[controls]' &&
+            node.tagName === 'AUDIO' &&
+            node.controls
+          )
+            return node;
+          if (
+            part === 'video[controls]' &&
+            node.tagName === 'VIDEO' &&
+            node.controls
+          )
+            return node;
+          if (part === '[contenteditable]' && node.isContentEditable)
+            return node;
           if (part === '[tabindex]' && node.tabIndex !== null) return node;
           const roleMatch = part.match(/^\[role="([^"]+)"\]$/);
           if (roleMatch && node.role === roleMatch[1]) return node;
@@ -207,7 +283,10 @@ function pushToTalkTarget({
 
 test('push-to-talk starts from Cesium canvases and the document background', (t) => {
   const f = createPushToTalkFixture(t);
-  const cesiumContainer = pushToTalkTarget({ tagName: 'DIV', id: 'cesiumContainer' });
+  const cesiumContainer = pushToTalkTarget({
+    tagName: 'DIV',
+    id: 'cesiumContainer',
+  });
   const cesiumCanvas = pushToTalkTarget({
     tagName: 'CANVAS',
     tabIndex: 0,
@@ -224,11 +303,23 @@ test('push-to-talk starts from Cesium canvases and the document background', (t)
     assert.equal(isInteractiveSpaceTarget(canvas), false);
     assert.equal(f.key('keydown', canvas).defaultPrevented, true);
     f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
-    assert.equal(f.starts.length, 1, 'the first map hold opens one reusable voice session');
+    assert.equal(
+      f.starts.length,
+      1,
+      'the first map hold opens one reusable voice session',
+    );
     assert.equal(f.controller.pushToTalkKeyHeld, true);
-    assert.equal(f.microphone.enabled, true, `map hold ${index + 1} enables the microphone`);
+    assert.equal(
+      f.microphone.enabled,
+      true,
+      `map hold ${index + 1} enables the microphone`,
+    );
     assert.equal(f.key('keyup', canvas).defaultPrevented, true);
-    assert.equal(f.microphone.enabled, false, `map release ${index + 1} mutes the microphone`);
+    assert.equal(
+      f.microphone.enabled,
+      false,
+      `map release ${index + 1} mutes the microphone`,
+    );
   }
   const background = pushToTalkTarget();
   assert.equal(f.key('keydown', background).defaultPrevented, true);
@@ -262,12 +353,19 @@ test('long Space blurs a focused control before voice and consumes release', (t)
   };
   f.controller.pauseRadioForVoice = () => order.push('voice');
   assert.equal(f.key('keydown', button).defaultPrevented, false);
-  assert.equal(f.key('keydown', button, { repeat: true }).defaultPrevented, false);
+  assert.equal(
+    f.key('keydown', button, { repeat: true }).defaultPrevented,
+    false,
+  );
   f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
   assert.deepEqual(order, ['blur', 'voice']);
   assert.equal(button.blurred, 1);
   assert.equal(f.controller.pushToTalkKeyHeld, true);
-  assert.equal(f.key('keydown', button, { repeat: true, activeElement: null }).defaultPrevented, true);
+  assert.equal(
+    f.key('keydown', button, { repeat: true, activeElement: null })
+      .defaultPrevented,
+    true,
+  );
   let activations = 0;
   const release = f.key('keyup', button, { activeElement: null });
   if (!release.defaultPrevented) activations += 1;
@@ -280,11 +378,15 @@ test('push-to-talk still ignores modified, already-handled and typing keydowns',
   const f = createPushToTalkFixture(t);
   const target = pushToTalkTarget();
   for (const modifier of ['altKey', 'ctrlKey', 'metaKey', 'shiftKey']) {
-    assert.equal(f.key('keydown', target, { [modifier]: true }).defaultPrevented, false);
+    assert.equal(
+      f.key('keydown', target, { [modifier]: true }).defaultPrevented,
+      false,
+    );
   }
   f.key('keydown', target, { defaultPrevented: true });
   f.key('keydown', target, { code: 'Enter', key: 'Enter' });
-  for (const tagName of ['INPUT', 'TEXTAREA']) f.key('keydown', pushToTalkTarget({ tagName }));
+  for (const tagName of ['INPUT', 'TEXTAREA'])
+    f.key('keydown', pushToTalkTarget({ tagName }));
   f.key('keydown', pushToTalkTarget({ role: 'textbox' }));
   f.key('keydown', { isContentEditable: true });
   assert.deepEqual(f.starts, []);
@@ -299,13 +401,19 @@ test('push-to-talk starts once at 500ms and repeat does not reset the threshold'
   f.advance(PUSH_TO_TALK_HOLD_DELAY_MS - 1);
   assert.deepEqual(f.starts, []);
   assert.deepEqual(f.radio, []);
-  assert.equal(f.key('keydown', background, { repeat: true }).defaultPrevented, true);
+  assert.equal(
+    f.key('keydown', background, { repeat: true }).defaultPrevented,
+    true,
+  );
   f.advance(1);
   assert.deepEqual(f.starts, [{ pushToTalk: true }]);
   assert.equal(f.controller.pushToTalkKeyHeld, true);
   assert.equal(f.microphone.enabled, true);
   const radioAfterStart = f.radio.slice();
-  assert.equal(f.key('keydown', background, { repeat: true }).defaultPrevented, true);
+  assert.equal(
+    f.key('keydown', background, { repeat: true }).defaultPrevented,
+    true,
+  );
   f.advance(PUSH_TO_TALK_HOLD_DELAY_MS * 2);
   assert.deepEqual(f.radio, radioAfterStart);
   assert.equal(f.starts.length, 1);
@@ -344,7 +452,11 @@ test('push-to-talk rechecks focus before the hold threshold claims voice', (t) =
   f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
   assert.deepEqual(f.starts, []);
   assert.deepEqual(f.radio, []);
-  assert.equal(f.key('keyup', control).defaultPrevented, true, 'release follows the background gesture owner');
+  assert.equal(
+    f.key('keyup', control).defaultPrevented,
+    true,
+    'release follows the background gesture owner',
+  );
   assert.equal(f.controller.spaceKeyHeld, false);
 });
 
@@ -353,7 +465,10 @@ test('push-to-talk never claims a control-started hold after focus moves outside
   const control = pushToTalkTarget({ tagName: 'BUTTON' });
   const background = pushToTalkTarget();
   assert.equal(f.key('keydown', control).defaultPrevented, false);
-  assert.equal(f.key('keydown', background, { repeat: true }).defaultPrevented, false);
+  assert.equal(
+    f.key('keydown', background, { repeat: true }).defaultPrevented,
+    false,
+  );
   f.advance(PUSH_TO_TALK_HOLD_DELAY_MS + 1);
   assert.equal(f.key('keyup', background).defaultPrevented, false);
   assert.deepEqual(f.starts, []);
@@ -431,7 +546,11 @@ test('focused controls and background Space preserve a click-started open mic', 
   f.advance(PUSH_TO_TALK_HOLD_DELAY_MS + 1);
   assert.equal(f.key('keyup', style).defaultPrevented, true);
   assert.equal(f.controller.spaceKeyHeld, false);
-  assert.equal(f.microphone.enabled, true, 'an outside Space gesture must not claim or mute an open-mic session');
+  assert.equal(
+    f.microphone.enabled,
+    true,
+    'an outside Space gesture must not claim or mute an open-mic session',
+  );
   assert.deepEqual(f.starts, []);
 });
 
@@ -495,7 +614,10 @@ test('voice visualizer reads assistant output while the assistant is speaking', 
   const output = { analyser: { id: 'speaker' }, data: new Uint8Array([2]) };
   assert.equal(selectVoiceVisualizerSignal('user', input, output), input);
   assert.equal(selectVoiceVisualizerSignal('ai', input, output), output);
-  assert.equal(selectVoiceVisualizerSignal('ai', input, { analyser: null, data: null }), null);
+  assert.equal(
+    selectVoiceVisualizerSignal('ai', input, { analyser: null, data: null }),
+    null,
+  );
 });
 
 test('voice visualizer keeps assistant audio selected after response.done', () => {
@@ -515,9 +637,18 @@ test('voice visualizer noise gate holds room tone at the baseline', () => {
 test('voice activation, speech, and push-to-talk pause Radio without an idle auto-resume', () => {
   assert.equal(shouldPauseRadioForVoice({ status: 'connecting' }), true);
   assert.equal(shouldPauseRadioForVoice({ status: 'executing' }), true);
-  assert.equal(shouldPauseRadioForVoice({ status: 'listening', speaker: 'user' }), true);
-  assert.equal(shouldPauseRadioForVoice({ status: 'listening', speaker: 'ai' }), true);
-  assert.equal(shouldPauseRadioForVoice({ status: 'listening', pushToTalkKeyHeld: true }), true);
+  assert.equal(
+    shouldPauseRadioForVoice({ status: 'listening', speaker: 'user' }),
+    true,
+  );
+  assert.equal(
+    shouldPauseRadioForVoice({ status: 'listening', speaker: 'ai' }),
+    true,
+  );
+  assert.equal(
+    shouldPauseRadioForVoice({ status: 'listening', pushToTalkKeyHeld: true }),
+    true,
+  );
   assert.equal(shouldPauseRadioForVoice({ status: 'listening' }), false);
   assert.equal(shouldPauseRadioForVoice({ status: 'idle' }), false);
   assert.equal(shouldPauseRadioForVoice({ status: 'error' }), false);
@@ -525,28 +656,66 @@ test('voice activation, speech, and push-to-talk pause Radio without an idle aut
 
 test('successful Radio activation tools close voice after handing control to Radio', () => {
   for (const radioAction of ['play', 'resume', 'select', 'next', 'previous']) {
-    assert.equal(shouldStopVoiceAfterRadioTool({ ok: true, action: 'control_radio', radioAction }), true);
+    assert.equal(
+      shouldStopVoiceAfterRadioTool({
+        ok: true,
+        action: 'control_radio',
+        radioAction,
+      }),
+      true,
+    );
   }
-  assert.equal(shouldStopVoiceAfterRadioTool({ ok: true, action: 'control_radio', radioAction: 'enable' }), false);
-  assert.equal(shouldStopVoiceAfterRadioTool({ ok: true, action: 'control_radio', radioAction: 'volume' }), false);
-  assert.equal(shouldStopVoiceAfterRadioTool({ ok: false, action: 'control_radio', radioAction: 'play' }), false);
-  assert.equal(shouldStopVoiceAfterRadioTool({ ok: true, action: 'control_cctv', radioAction: 'play' }), false);
+  assert.equal(
+    shouldStopVoiceAfterRadioTool({
+      ok: true,
+      action: 'control_radio',
+      radioAction: 'enable',
+    }),
+    false,
+  );
+  assert.equal(
+    shouldStopVoiceAfterRadioTool({
+      ok: true,
+      action: 'control_radio',
+      radioAction: 'volume',
+    }),
+    false,
+  );
+  assert.equal(
+    shouldStopVoiceAfterRadioTool({
+      ok: false,
+      action: 'control_radio',
+      radioAction: 'play',
+    }),
+    false,
+  );
+  assert.equal(
+    shouldStopVoiceAfterRadioTool({
+      ok: true,
+      action: 'control_cctv',
+      radioAction: 'play',
+    }),
+    false,
+  );
 });
 
 test('prepared Radio playback is verified under mute before voice closes', async () => {
   const order = [];
-  const handoff = await startPreparedRadioAfterPlaybackReady({
-    ok: true,
-    action: 'control_radio',
-    radioAction: 'select',
-    radioPlaybackRequested: true,
-  }, {
-    prepareRadio: async () => {
-      order.push('radio-play-muted');
-      return true;
+  const handoff = await startPreparedRadioAfterPlaybackReady(
+    {
+      ok: true,
+      action: 'control_radio',
+      radioAction: 'select',
+      radioPlaybackRequested: true,
     },
-    stopVoice: () => order.push('voice-stop'),
-  });
+    {
+      prepareRadio: async () => {
+        order.push('radio-play-muted');
+        return true;
+      },
+      stopVoice: () => order.push('voice-stop'),
+    },
+  );
   assert.deepEqual(order, ['radio-play-muted', 'voice-stop']);
   assert.equal(handoff.handled, true);
   assert.equal(handoff.result.ok, true);
@@ -559,16 +728,19 @@ test('failed or superseded Radio preflight keeps voice open and cancels audio', 
     { started: true, current: false, cancelled: true },
   ]) {
     const order = [];
-    const handoff = await startPreparedRadioAfterPlaybackReady({
-      ok: true,
-      action: 'control_radio',
-      radioPlaybackRequested: true,
-    }, {
-      prepareRadio: async () => scenario.started,
-      isCurrent: () => scenario.current,
-      cancelRadio: () => order.push('radio-cancel'),
-      stopVoice: () => order.push('voice-stop'),
-    });
+    const handoff = await startPreparedRadioAfterPlaybackReady(
+      {
+        ok: true,
+        action: 'control_radio',
+        radioPlaybackRequested: true,
+      },
+      {
+        prepareRadio: async () => scenario.started,
+        isCurrent: () => scenario.current,
+        cancelRadio: () => order.push('radio-cancel'),
+        stopVoice: () => order.push('voice-stop'),
+      },
+    );
     assert.deepEqual(order, ['radio-cancel']);
     assert.equal(handoff.result.ok, false);
     assert.equal(Boolean(handoff.cancelled), scenario.cancelled);
@@ -596,7 +768,11 @@ test('direct Radio pause or stop cancels a pending voice handoff', async () => {
   const order = [];
   let playbackControl = null;
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -607,7 +783,9 @@ test('direct Radio pause or stop cancels a pending voice handoff', async () => {
     radioLayer: {
       subscribePlaybackControls(listener) {
         playbackControl = listener;
-        return () => { playbackControl = null; };
+        return () => {
+          playbackControl = null;
+        };
       },
       playForVoice: async () => {
         order.push('radio-play');
@@ -620,13 +798,21 @@ test('direct Radio pause or stop cancels a pending voice handoff', async () => {
   controller.dc = {
     readyState: 'open',
     send() {},
-    close() { order.push('voice-stop'); },
+    close() {
+      order.push('voice-stop');
+    },
   };
-  controller.pendingRadioPlaybackResult = { ok: true, radioPlaybackRequested: true };
+  controller.pendingRadioPlaybackResult = {
+    ok: true,
+    radioPlaybackRequested: true,
+  };
 
   playbackControl('stop');
   await controller.handleRealtimeEvent({
-    data: JSON.stringify({ type: 'response.done', response: { status: 'completed' } }),
+    data: JSON.stringify({
+      type: 'response.done',
+      response: { status: 'completed' },
+    }),
   });
 
   assert.equal(controller.pendingRadioPlaybackResult, null);
@@ -637,7 +823,11 @@ test('confirmed manual Radio playback closes active voice without stopping Radio
   const order = [];
   let playbackControl = null;
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -648,10 +838,16 @@ test('confirmed manual Radio playback closes active voice without stopping Radio
     radioLayer: {
       subscribePlaybackControls(listener) {
         playbackControl = listener;
-        return () => { playbackControl = null; };
+        return () => {
+          playbackControl = null;
+        };
       },
-      setVoiceDucked(ducked) { order.push(ducked ? 'radio-muted' : 'radio-fade-in'); },
-      stopPlayback() { order.push('radio-stop'); },
+      setVoiceDucked(ducked) {
+        order.push(ducked ? 'radio-muted' : 'radio-fade-in');
+      },
+      stopPlayback() {
+        order.push('radio-stop');
+      },
     },
   });
   controller.debugLog = () => {};
@@ -659,7 +855,9 @@ test('confirmed manual Radio playback closes active voice without stopping Radio
   controller.radioVoiceDucked = true;
   controller.dc = {
     readyState: 'open',
-    close() { order.push('voice-stop'); },
+    close() {
+      order.push('voice-stop');
+    },
   };
 
   playbackControl('play');
@@ -675,7 +873,11 @@ test('manual playback takeover survives stale voice preflight cleanup', async ()
   let activeAttemptId = null;
   const stopRequests = [];
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -683,12 +885,16 @@ test('manual playback takeover survives stale voice preflight cleanup', async ()
   const radioLayer = {
     subscribePlaybackControls(listener) {
       playbackControl = listener;
-      return () => { playbackControl = null; };
+      return () => {
+        playbackControl = null;
+      };
     },
     setVoiceDucked() {},
     async playForVoice({ attemptId }) {
       activeAttemptId = attemptId;
-      return new Promise((resolve) => { resolvePreflight = resolve; });
+      return new Promise((resolve) => {
+        resolvePreflight = resolve;
+      });
     },
     stopPlayback({ attemptId, origin }) {
       const owned = activeAttemptId === attemptId;
@@ -705,26 +911,38 @@ test('manual playback takeover survives stale voice preflight cleanup', async ()
   controller.debugLog = () => {};
   controller.status = 'listening';
   controller.dc = { readyState: 'open', send() {}, close() {} };
-  controller.pendingRadioPlaybackResult = { ok: true, radioPlaybackRequested: true };
+  controller.pendingRadioPlaybackResult = {
+    ok: true,
+    radioPlaybackRequested: true,
+  };
 
   const pending = controller.handleRealtimeEvent({
-    data: JSON.stringify({ type: 'response.done', response: { status: 'completed' } }),
+    data: JSON.stringify({
+      type: 'response.done',
+      response: { status: 'completed' },
+    }),
   });
   await new Promise((resolve) => setTimeout(resolve, 0));
   const voiceAttemptId = activeAttemptId;
   assert.match(voiceAttemptId, /^voice-radio-/);
 
   activeAttemptId = 'manual-attempt';
-  playbackControl({ action: 'play', origin: 'user', attemptId: activeAttemptId });
+  playbackControl({
+    action: 'play',
+    origin: 'user',
+    attemptId: activeAttemptId,
+  });
   resolvePreflight(true);
   await pending;
 
   assert.equal(activeAttemptId, 'manual-attempt');
-  assert.deepEqual(stopRequests, [{
-    attemptId: voiceAttemptId,
-    origin: 'voice-cleanup',
-    owned: false,
-  }]);
+  assert.deepEqual(stopRequests, [
+    {
+      attemptId: voiceAttemptId,
+      origin: 'voice-cleanup',
+      owned: false,
+    },
+  ]);
   assert.equal(controller.status, 'idle');
 });
 
@@ -745,7 +963,11 @@ test('internal Radio cleanup controls do not masquerade as newer user input', ()
   controller.radioHandoffInFlight = true;
   controller.radioHandoffAttemptId = 'voice-attempt';
 
-  playbackControl({ action: 'stop', origin: 'voice-cleanup', attemptId: 'voice-attempt' });
+  playbackControl({
+    action: 'stop',
+    origin: 'voice-cleanup',
+    attemptId: 'voice-attempt',
+  });
 
   assert.ok(controller.pendingRadioPlaybackResult);
   assert.equal(controller.radioHandoffInFlight, true);
@@ -761,11 +983,18 @@ test('manual Radio playback does not close voice when voice is already idle', ()
     radioLayer: {
       subscribePlaybackControls(listener) {
         playbackControl = listener;
-        return () => { playbackControl = null; };
+        return () => {
+          playbackControl = null;
+        };
       },
     },
   });
-  controller.dc = { readyState: 'open', close() { voiceStops += 1; } };
+  controller.dc = {
+    readyState: 'open',
+    close() {
+      voiceStops += 1;
+    },
+  };
 
   playbackControl('play');
 
@@ -777,7 +1006,11 @@ test('active-response Realtime errors invalidate pending and in-flight Radio han
   const order = [];
   let playbackControl = null;
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -788,7 +1021,9 @@ test('active-response Realtime errors invalidate pending and in-flight Radio han
     radioLayer: {
       subscribePlaybackControls(listener) {
         playbackControl = listener;
-        return () => { playbackControl = null; };
+        return () => {
+          playbackControl = null;
+        };
       },
       stopPlayback() {
         order.push('radio-stop');
@@ -797,14 +1032,26 @@ test('active-response Realtime errors invalidate pending and in-flight Radio han
     },
   });
   controller.debugLog = () => {};
-  controller.dc = { readyState: 'open', send() {}, close() { order.push('voice-stop'); } };
-  controller.pendingRadioPlaybackResult = { ok: true, radioPlaybackRequested: true };
+  controller.dc = {
+    readyState: 'open',
+    send() {},
+    close() {
+      order.push('voice-stop');
+    },
+  };
+  controller.pendingRadioPlaybackResult = {
+    ok: true,
+    radioPlaybackRequested: true,
+  };
   controller.radioHandoffInFlight = true;
 
   await controller.handleRealtimeEvent({
     data: JSON.stringify({
       type: 'error',
-      error: { code: 'conversation_already_has_active_response', message: 'response active' },
+      error: {
+        code: 'conversation_already_has_active_response',
+        message: 'response active',
+      },
     }),
   });
 
@@ -823,7 +1070,11 @@ test('voice ownership ducks tuner static before pausing broadcaster audio', () =
     },
   });
   assert.deepEqual(order, ['duck-static', 'pause-stream']);
-  assert.equal(paused, false, 'a stopped stream can remain stopped while static is still silenced');
+  assert.equal(
+    paused,
+    false,
+    'a stopped stream can remain stopped while static is still silenced',
+  );
 });
 
 test('Radio handoff waits for response.done so later multi-intent tools execute before voice closes', async () => {
@@ -858,7 +1109,9 @@ test('Radio handoff waits for response.done so later multi-intent tools execute 
       order.push('radio-play');
       return true;
     },
-    stopPlayback() { order.push('radio-stop'); },
+    stopPlayback() {
+      order.push('radio-stop');
+    },
   };
   const controller = new GevRealtimeController({ runner, ui, radioLayer });
   controller.debugLog = () => {};
@@ -872,33 +1125,47 @@ test('Radio handoff waits for response.done so later multi-intent tools execute 
         confirmationInstructions.push(payload.response?.instructions || '');
       }
     },
-    close() { order.push('voice-stop'); },
+    close() {
+      order.push('voice-stop');
+    },
   };
   const event = (payload) => ({ data: JSON.stringify(payload) });
 
-  await controller.handleRealtimeEvent(event({ type: 'response.created', response: { id: 'response-1' } }));
-  await controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'response-1',
-    call_id: 'radio-call',
-    name: 'control_radio',
-    arguments: '{"action":"select"}',
-  }));
-  assert.deepEqual(order, ['tool:control_radio'], 'prepared playback keeps the response channel open');
+  await controller.handleRealtimeEvent(
+    event({ type: 'response.created', response: { id: 'response-1' } }),
+  );
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'response-1',
+      call_id: 'radio-call',
+      name: 'control_radio',
+      arguments: '{"action":"select"}',
+    }),
+  );
+  assert.deepEqual(
+    order,
+    ['tool:control_radio'],
+    'prepared playback keeps the response channel open',
+  );
 
-  await controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'response-1',
-    call_id: 'style-call',
-    name: 'set_visual_style',
-    arguments: '{"style":"night-vision"}',
-  }));
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'response-1',
+      call_id: 'style-call',
+      name: 'set_visual_style',
+      arguments: '{"style":"night-vision"}',
+    }),
+  );
   assert.deepEqual(order, ['tool:control_radio', 'tool:set_visual_style']);
 
-  await controller.handleRealtimeEvent(event({
-    type: 'response.done',
-    response: { id: 'response-1', status: 'completed' },
-  }));
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.done',
+      response: { id: 'response-1', status: 'completed' },
+    }),
+  );
   assert.deepEqual(order, [
     'tool:control_radio',
     'tool:set_visual_style',
@@ -906,11 +1173,15 @@ test('Radio handoff waits for response.done so later multi-intent tools execute 
   ]);
   assert.match(confirmationInstructions[0], /Turning on the radio/);
 
-  await controller.handleRealtimeEvent(event({ type: 'response.created', response: { id: 'response-confirm' } }));
-  await controller.handleRealtimeEvent(event({
-    type: 'response.done',
-    response: { id: 'response-confirm', status: 'completed' },
-  }));
+  await controller.handleRealtimeEvent(
+    event({ type: 'response.created', response: { id: 'response-confirm' } }),
+  );
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.done',
+      response: { id: 'response-confirm', status: 'completed' },
+    }),
+  );
   assert.deepEqual(order, [
     'tool:control_radio',
     'tool:set_visual_style',
@@ -924,7 +1195,11 @@ test('Radio playback failure leaves voice connected and speaks a correction', as
   const sent = [];
   const order = [];
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -948,35 +1223,55 @@ test('Radio playback failure leaves voice connected and speaks a correction', as
   controller.sendVisualContextIfUseful = async () => false;
   controller.dc = {
     readyState: 'open',
-    send(message) { sent.push(JSON.parse(message)); },
-    close() { order.push('voice-stop'); },
+    send(message) {
+      sent.push(JSON.parse(message));
+    },
+    close() {
+      order.push('voice-stop');
+    },
   };
   const event = (payload) => ({ data: JSON.stringify(payload) });
 
-  await controller.handleRealtimeEvent(event({ type: 'response.created', response: { id: 'response-fail' } }));
-  await controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'response-fail',
-    call_id: 'radio-fail',
-    name: 'control_radio',
-    arguments: '{"action":"play"}',
-  }));
-  await controller.handleRealtimeEvent(event({
-    type: 'response.done',
-    response: { id: 'response-fail', status: 'completed' },
-  }));
-  await controller.handleRealtimeEvent(event({ type: 'response.created', response: { id: 'response-fail-confirm' } }));
-  await controller.handleRealtimeEvent(event({
-    type: 'response.done',
-    response: { id: 'response-fail-confirm', status: 'completed' },
-  }));
+  await controller.handleRealtimeEvent(
+    event({ type: 'response.created', response: { id: 'response-fail' } }),
+  );
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'response-fail',
+      call_id: 'radio-fail',
+      name: 'control_radio',
+      arguments: '{"action":"play"}',
+    }),
+  );
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.done',
+      response: { id: 'response-fail', status: 'completed' },
+    }),
+  );
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.created',
+      response: { id: 'response-fail-confirm' },
+    }),
+  );
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.done',
+      response: { id: 'response-fail-confirm', status: 'completed' },
+    }),
+  );
 
   assert.deepEqual(order, ['radio-stop']);
   assert.equal(controller.dc?.readyState, 'open');
-  assert.ok(sent.some((message) => (
-    message.type === 'response.create'
-    && message.response?.instructions?.includes('Voice is still on')
-  )));
+  assert.ok(
+    sent.some(
+      (message) =>
+        message.type === 'response.create' &&
+        message.response?.instructions?.includes('Voice is still on'),
+    ),
+  );
 });
 
 test('detected speech cancels a prepared Radio handoff before a cancelled response completes', async () => {
@@ -1014,43 +1309,67 @@ test('detected speech cancels a prepared Radio handoff before a cancelled respon
   controller.dc = {
     readyState: 'open',
     send() {},
-    close() { order.push('voice-stop'); },
+    close() {
+      order.push('voice-stop');
+    },
   };
   const event = (payload) => ({ data: JSON.stringify(payload) });
 
-  await controller.handleRealtimeEvent(event({ type: 'response.created', response: { id: 'response-2' } }));
-  await controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'response-2',
-    call_id: 'radio-call-2',
-    name: 'control_radio',
-    arguments: '{"action":"select"}',
-  }));
+  await controller.handleRealtimeEvent(
+    event({ type: 'response.created', response: { id: 'response-2' } }),
+  );
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'response-2',
+      call_id: 'radio-call-2',
+      name: 'control_radio',
+      arguments: '{"action":"select"}',
+    }),
+  );
   assert.ok(controller.pendingRadioPlaybackResult);
 
-  await controller.handleRealtimeEvent(event({
-    type: 'response.done',
-    response: { id: 'response-2', status: 'completed' },
-  }));
-  await controller.handleRealtimeEvent(event({ type: 'response.created', response: { id: 'response-2-confirm' } }));
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.done',
+      response: { id: 'response-2', status: 'completed' },
+    }),
+  );
+  await controller.handleRealtimeEvent(
+    event({ type: 'response.created', response: { id: 'response-2-confirm' } }),
+  );
 
-  await controller.handleRealtimeEvent(event({ type: 'input_audio_buffer.speech_started' }));
+  await controller.handleRealtimeEvent(
+    event({ type: 'input_audio_buffer.speech_started' }),
+  );
   assert.equal(controller.pendingRadioPlaybackResult, null);
-  await controller.handleRealtimeEvent(event({
-    type: 'response.done',
-    response: { id: 'response-2-confirm', status: 'cancelled' },
-  }));
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.done',
+      response: { id: 'response-2-confirm', status: 'cancelled' },
+    }),
+  );
 
-  assert.deepEqual(order, [], 'the new user turn keeps voice open and Radio silent');
+  assert.deepEqual(
+    order,
+    [],
+    'the new user turn keeps voice open and Radio silent',
+  );
   assert.equal(controller.dc?.readyState, 'open');
 });
 
 test('a Radio tool result that resolves after speech interruption cannot re-arm playback', async () => {
   let resolveRunner;
-  const runnerResult = new Promise((resolve) => { resolveRunner = resolve; });
+  const runnerResult = new Promise((resolve) => {
+    resolveRunner = resolve;
+  });
   let receivedSignal = null;
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -1072,22 +1391,32 @@ test('a Radio tool result that resolves after speech interruption cannot re-arm 
   const sent = [];
   controller.dc = {
     readyState: 'open',
-    send(message) { sent.push(JSON.parse(message)); },
+    send(message) {
+      sent.push(JSON.parse(message));
+    },
     close() {},
   };
   const event = (payload) => ({ data: JSON.stringify(payload) });
 
-  const pendingTool = controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'response-stale-radio',
-    call_id: 'radio-stale-call',
-    name: 'control_radio',
-    arguments: '{"action":"select"}',
-  }));
+  const pendingTool = controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'response-stale-radio',
+      call_id: 'radio-stale-call',
+      name: 'control_radio',
+      arguments: '{"action":"select"}',
+    }),
+  );
   await Promise.resolve();
   assert.equal(receivedSignal?.aborted, false);
-  await controller.handleRealtimeEvent(event({ type: 'input_audio_buffer.speech_started' }));
-  assert.equal(receivedSignal.aborted, true, 'barge-in aborts the underlying tool work');
+  await controller.handleRealtimeEvent(
+    event({ type: 'input_audio_buffer.speech_started' }),
+  );
+  assert.equal(
+    receivedSignal.aborted,
+    true,
+    'barge-in aborts the underlying tool work',
+  );
   resolveRunner({
     ok: true,
     action: 'control_radio',
@@ -1097,20 +1426,31 @@ test('a Radio tool result that resolves after speech interruption cannot re-arm 
   await pendingTool;
 
   assert.equal(controller.pendingRadioPlaybackResult, null);
-  const output = sent.find((message) => message.type === 'conversation.item.create');
+  const output = sent.find(
+    (message) => message.type === 'conversation.item.create',
+  );
   const result = JSON.parse(output.item.output);
   assert.equal(result.ok, false);
   assert.equal(result.cancelled, true);
   assert.equal(result.radioPlaybackRequested, false);
-  assert.equal(sent.some((message) => message.type === 'response.create'), false);
+  assert.equal(
+    sent.some((message) => message.type === 'response.create'),
+    false,
+  );
 });
 
 test('sibling tool calls in one response do not abort an in-flight Radio action', async () => {
   let resolveRadio;
   let radioSignal = null;
-  const radioResult = new Promise((resolve) => { resolveRadio = resolve; });
+  const radioResult = new Promise((resolve) => {
+    resolveRadio = resolve;
+  });
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -1130,21 +1470,25 @@ test('sibling tool calls in one response do not abort an in-flight Radio action'
   controller.dc = { readyState: 'open', send() {}, close() {} };
   const event = (payload) => ({ data: JSON.stringify(payload) });
 
-  const pendingRadio = controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'response-multi-tool',
-    call_id: 'radio-sibling',
-    name: 'control_radio',
-    arguments: '{"action":"select","locationId":"austin"}',
-  }));
+  const pendingRadio = controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'response-multi-tool',
+      call_id: 'radio-sibling',
+      name: 'control_radio',
+      arguments: '{"action":"select","locationId":"austin"}',
+    }),
+  );
   await Promise.resolve();
-  await controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'response-multi-tool',
-    call_id: 'style-sibling',
-    name: 'set_visual_style',
-    arguments: '{"style":"normal"}',
-  }));
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'response-multi-tool',
+      call_id: 'style-sibling',
+      name: 'set_visual_style',
+      arguments: '{"style":"normal"}',
+    }),
+  );
   assert.equal(radioSignal?.aborted, false);
   resolveRadio({ ok: true, action: 'control_radio', radioAction: 'status' });
   await pendingRadio;
@@ -1154,9 +1498,15 @@ test('sibling tool calls in one response do not abort an in-flight Radio action'
 test('Radio stop does not abort an unrelated sibling tool from the same response', async () => {
   let releaseStyle;
   let styleSignal = null;
-  const styleResult = new Promise((resolve) => { releaseStyle = resolve; });
+  const styleResult = new Promise((resolve) => {
+    releaseStyle = resolve;
+  });
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -1176,21 +1526,25 @@ test('Radio stop does not abort an unrelated sibling tool from the same response
   controller.dc = { readyState: 'open', send() {}, close() {} };
   const event = (payload) => ({ data: JSON.stringify(payload) });
 
-  const pendingStyle = controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'response-multi-tool-stop',
-    call_id: 'style-sibling-stop',
-    name: 'set_visual_style',
-    arguments: '{"style":"normal"}',
-  }));
+  const pendingStyle = controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'response-multi-tool-stop',
+      call_id: 'style-sibling-stop',
+      name: 'set_visual_style',
+      arguments: '{"style":"normal"}',
+    }),
+  );
   await Promise.resolve();
-  await controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'response-multi-tool-stop',
-    call_id: 'radio-stop-sibling',
-    name: 'control_radio',
-    arguments: '{"action":"stop"}',
-  }));
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'response-multi-tool-stop',
+      call_id: 'radio-stop-sibling',
+      name: 'control_radio',
+      arguments: '{"action":"stop"}',
+    }),
+  );
   assert.equal(styleSignal?.aborted, false);
   releaseStyle({ ok: true, action: 'set_visual_style' });
   await pendingStyle;
@@ -1202,8 +1556,12 @@ test('real Radio Select cannot enable or play after a same-response Disable comp
   const originalFetch = globalThis.fetch;
   let releaseLookup;
   let announceLookupStarted;
-  const lookupGate = new Promise((resolve) => { releaseLookup = resolve; });
-  const lookupStarted = new Promise((resolve) => { announceLookupStarted = resolve; });
+  const lookupGate = new Promise((resolve) => {
+    releaseLookup = resolve;
+  });
+  const lookupStarted = new Promise((resolve) => {
+    announceLookupStarted = resolve;
+  });
   const sent = [];
   const managerCalls = [];
   const selectionCalls = [];
@@ -1235,7 +1593,11 @@ test('real Radio Select cannot enable or play after a same-response Disable comp
     },
   };
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -1247,10 +1609,12 @@ test('real Radio Select cannot enable or play after a same-response Disable comp
     return {
       json: async () => ({
         status: 'OK',
-        results: [{
-          formatted_address: 'Austin, TX',
-          geometry: { location: { lat: 30.2672, lng: -97.7431 } },
-        }],
+        results: [
+          {
+            formatted_address: 'Austin, TX',
+            geometry: { location: { lat: 30.2672, lng: -97.7431 } },
+          },
+        ],
       }),
     };
   };
@@ -1258,33 +1622,42 @@ test('real Radio Select cannot enable or play after a same-response Disable comp
     ui,
     dataManager,
     radioLayer,
-    runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
+    runner: (_name, args, options) =>
+      controlRadio({}, dataManager, args, options),
   });
   controller.debugLog = () => {};
   controller.sendVisualContextIfUseful = async () => false;
   controller.dc = {
     readyState: 'open',
-    send(message) { sent.push(JSON.parse(message)); },
-    close() { voiceClosed = true; },
+    send(message) {
+      sent.push(JSON.parse(message));
+    },
+    close() {
+      voiceClosed = true;
+    },
   };
   const event = (payload) => ({ data: JSON.stringify(payload) });
 
   try {
-    const pendingSelect = controller.handleRealtimeEvent(event({
-      type: 'response.function_call_arguments.done',
-      response_id: 'same-radio-response',
-      call_id: 'radio-select-sibling',
-      name: 'control_radio',
-      arguments: '{"action":"select","locationQuery":"Delayed place"}',
-    }));
+    const pendingSelect = controller.handleRealtimeEvent(
+      event({
+        type: 'response.function_call_arguments.done',
+        response_id: 'same-radio-response',
+        call_id: 'radio-select-sibling',
+        name: 'control_radio',
+        arguments: '{"action":"select","locationQuery":"Delayed place"}',
+      }),
+    );
     await lookupStarted;
-    await controller.handleRealtimeEvent(event({
-      type: 'response.function_call_arguments.done',
-      response_id: 'same-radio-response',
-      call_id: 'radio-disable-sibling',
-      name: 'control_radio',
-      arguments: '{"action":"disable"}',
-    }));
+    await controller.handleRealtimeEvent(
+      event({
+        type: 'response.function_call_arguments.done',
+        response_id: 'same-radio-response',
+        call_id: 'radio-disable-sibling',
+        name: 'control_radio',
+        arguments: '{"action":"disable"}',
+      }),
+    );
 
     assert.equal(enabled, false);
     releaseLookup();
@@ -1294,7 +1667,11 @@ test('real Radio Select cannot enable or play after a same-response Disable comp
       .filter(Boolean)
       .map(JSON.parse)
       .find((result) => result.radioAction === 'select');
-    assert.equal(selectOutput?.ok, false, JSON.stringify({ selectOutput, epoch: controller.radioHandoffEpoch }));
+    assert.equal(
+      selectOutput?.ok,
+      false,
+      JSON.stringify({ selectOutput, epoch: controller.radioHandoffEpoch }),
+    );
     assert.equal(selectOutput?.cancelled, true);
     assert.equal(selectOutput?.enabled, false);
     assert.equal(selectOutput?.audioState, 'stopped');
@@ -1303,10 +1680,14 @@ test('real Radio Select cannot enable or play after a same-response Disable comp
     assert.deepEqual(selectionCalls, []);
     assert.equal(controller.pendingRadioPlaybackResult, null);
     assert.equal(voiceClosed, false);
-    assert.equal(sent.some((message) => (
-      message.type === 'response.create'
-      && message.response?.instructions?.includes('Turning on the radio')
-    )), false);
+    assert.equal(
+      sent.some(
+        (message) =>
+          message.type === 'response.create' &&
+          message.response?.instructions?.includes('Turning on the radio'),
+      ),
+      false,
+    );
   } finally {
     globalThis.window = originalWindow;
     globalThis.fetch = originalFetch;
@@ -1318,8 +1699,12 @@ test('generic same-response Radio visibility disable supersedes delayed Select',
   const originalFetch = globalThis.fetch;
   let releaseLookup;
   let announceLookupStarted;
-  const lookupGate = new Promise((resolve) => { releaseLookup = resolve; });
-  const lookupStarted = new Promise((resolve) => { announceLookupStarted = resolve; });
+  const lookupGate = new Promise((resolve) => {
+    releaseLookup = resolve;
+  });
+  const lookupStarted = new Promise((resolve) => {
+    announceLookupStarted = resolve;
+  });
   const sent = [];
   const visibilityEvents = [];
   const selectionCalls = [];
@@ -1344,7 +1729,10 @@ test('generic same-response Radio visibility disable supersedes delayed Select',
     update: async () => true,
     destroy: async () => true,
     getStats: () => ({}),
-    getUIState: () => ({ ...state, enabled: dataManager?.isEnabled('radio') || false }),
+    getUIState: () => ({
+      ...state,
+      enabled: dataManager?.isEnabled('radio') || false,
+    }),
     selectRequestedStation(criteria) {
       selectionCalls.push(criteria);
       state.selected = { id: 'late-generic', name: 'Late generic station' };
@@ -1364,9 +1752,17 @@ test('generic same-response Radio visibility disable supersedes delayed Select',
     scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
     camera: { moveEnd: { addEventListener() {} } },
   };
-  const genericRunner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  const genericRunner = createGevActionRunner({
+    viewer,
+    styleManager: {},
+    dataManager,
+  });
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -1378,47 +1774,54 @@ test('generic same-response Radio visibility disable supersedes delayed Select',
     return {
       json: async () => ({
         status: 'OK',
-        results: [{
-          formatted_address: 'Austin, TX',
-          geometry: { location: { lat: 30.2672, lng: -97.7431 } },
-        }],
+        results: [
+          {
+            formatted_address: 'Austin, TX',
+            geometry: { location: { lat: 30.2672, lng: -97.7431 } },
+          },
+        ],
       }),
     };
   };
   const controller = new GevRealtimeController({
     ui,
     radioLayer,
-    runner: (name, args, options) => (
+    runner: (name, args, options) =>
       name === 'control_radio'
         ? controlRadio({}, dataManager, args, options)
-        : genericRunner(name, args, options)
-    ),
+        : genericRunner(name, args, options),
   });
   controller.debugLog = () => {};
   controller.sendVisualContextIfUseful = async () => false;
   controller.dc = {
     readyState: 'open',
-    send(message) { sent.push(JSON.parse(message)); },
+    send(message) {
+      sent.push(JSON.parse(message));
+    },
     close() {},
   };
   const event = (payload) => ({ data: JSON.stringify(payload) });
 
   try {
-    const pendingSelect = controller.handleRealtimeEvent(event({
-      type: 'response.function_call_arguments.done',
-      response_id: 'same-radio-generic-response',
-      call_id: 'radio-select-before-generic-disable',
-      name: 'control_radio',
-      arguments: '{"action":"select","locationQuery":"Delayed place"}',
-    }));
+    const pendingSelect = controller.handleRealtimeEvent(
+      event({
+        type: 'response.function_call_arguments.done',
+        response_id: 'same-radio-generic-response',
+        call_id: 'radio-select-before-generic-disable',
+        name: 'control_radio',
+        arguments: '{"action":"select","locationQuery":"Delayed place"}',
+      }),
+    );
     await lookupStarted;
-    await controller.handleRealtimeEvent(event({
-      type: 'response.function_call_arguments.done',
-      response_id: 'same-radio-generic-response',
-      call_id: 'generic-radio-disable',
-      name: 'set_layer_visibility',
-      arguments: '{"layerId":"radio","enabled":false}',
-    }));
+    await controller.handleRealtimeEvent(
+      event({
+        type: 'response.function_call_arguments.done',
+        response_id: 'same-radio-generic-response',
+        call_id: 'generic-radio-disable',
+        name: 'set_layer_visibility',
+        arguments: '{"layerId":"radio","enabled":false}',
+      }),
+    );
     assert.equal(dataManager.isEnabled('radio'), false);
     releaseLookup();
     await pendingSelect;
@@ -1427,8 +1830,12 @@ test('generic same-response Radio visibility disable supersedes delayed Select',
       .map((message) => message.item?.output)
       .filter(Boolean)
       .map(JSON.parse);
-    const visibilityOutput = outputs.find((result) => result.action === 'set_layer_visibility');
-    const selectOutput = outputs.find((result) => result.radioAction === 'select');
+    const visibilityOutput = outputs.find(
+      (result) => result.action === 'set_layer_visibility',
+    );
+    const selectOutput = outputs.find(
+      (result) => result.radioAction === 'select',
+    );
     assert.equal(visibilityOutput?.ok, true);
     assert.equal(visibilityOutput?.enabled, false);
     assert.equal(visibilityOutput?.lifecycleState, 'disabled');
@@ -1450,8 +1857,12 @@ test('generic same-response Radio visibility disable supersedes delayed Select',
 test('same-response Pause aborts a real manager enable already in flight', async () => {
   let releaseEnable;
   let announceEnableStarted;
-  const enableGate = new Promise((resolve) => { releaseEnable = resolve; });
-  const enableStarted = new Promise((resolve) => { announceEnableStarted = resolve; });
+  const enableGate = new Promise((resolve) => {
+    releaseEnable = resolve;
+  });
+  const enableStarted = new Promise((resolve) => {
+    announceEnableStarted = resolve;
+  });
   const trace = [];
   const sent = [];
   const state = {
@@ -1498,10 +1909,15 @@ test('same-response Pause aborts a real manager enable already in flight', async
   const dataManager = new DataLayerManager({});
   dataManager.register(radioLayer);
   dataManager.subscribe((change) => {
-    if (change.type === 'visibility') trace.push(`visibility:${change.enabled}`);
+    if (change.type === 'visibility')
+      trace.push(`visibility:${change.enabled}`);
   });
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -1510,33 +1926,40 @@ test('same-response Pause aborts a real manager enable already in flight', async
     ui,
     dataManager,
     radioLayer,
-    runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
+    runner: (_name, args, options) =>
+      controlRadio({}, dataManager, args, options),
   });
   controller.debugLog = () => {};
   controller.sendVisualContextIfUseful = async () => false;
   controller.dc = {
     readyState: 'open',
-    send(message) { sent.push(JSON.parse(message)); },
+    send(message) {
+      sent.push(JSON.parse(message));
+    },
     close() {},
   };
   const event = (payload) => ({ data: JSON.stringify(payload) });
   const responseId = 'same-response-real-manager-pause';
 
-  const pendingSelect = controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: responseId,
-    call_id: 'select-enabling',
-    name: 'control_radio',
-    arguments: '{"action":"select"}',
-  }));
+  const pendingSelect = controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: responseId,
+      call_id: 'select-enabling',
+      name: 'control_radio',
+      arguments: '{"action":"select"}',
+    }),
+  );
   await enableStarted;
-  const pendingPause = controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: responseId,
-    call_id: 'pause-owner',
-    name: 'control_radio',
-    arguments: '{"action":"pause"}',
-  }));
+  const pendingPause = controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: responseId,
+      call_id: 'pause-owner',
+      name: 'control_radio',
+      arguments: '{"action":"pause"}',
+    }),
+  );
   await pendingPause;
   trace.push('pause:return');
   releaseEnable();
@@ -1546,7 +1969,9 @@ test('same-response Pause aborts a real manager enable already in flight', async
     .map((message) => message.item?.output)
     .filter(Boolean)
     .map(JSON.parse);
-  const selectOutput = outputs.find((result) => result.radioAction === 'select');
+  const selectOutput = outputs.find(
+    (result) => result.radioAction === 'select',
+  );
   const pauseOutput = outputs.find((result) => result.radioAction === 'pause');
   assert.equal(dataManager.isEnabled('radio'), false);
   assert.equal(selectOutput?.cancelled, true);
@@ -1562,7 +1987,10 @@ test('same-response Pause aborts a real manager enable already in flight', async
   assert.equal(trace.includes('select'), false, trace.join(' → '));
   assert.equal(trace.includes('update'), false, trace.join(' → '));
   assert.equal(trace.includes('visibility:true'), false, trace.join(' → '));
-  assert.ok(trace.indexOf('disable') < trace.indexOf('enable:finish'), trace.join(' → '));
+  assert.ok(
+    trace.indexOf('disable') < trace.indexOf('enable:finish'),
+    trace.join(' → '),
+  );
 });
 
 test('Pause and Stop preserve independent dedicated and generic Radio ON across manager phases', async (t) => {
@@ -1575,8 +2003,12 @@ test('Pause and Stop preserve independent dedicated and generic Radio ON across 
             async () => {
               let releasePhase;
               let markPhaseStarted;
-              const phaseGate = new Promise((resolve) => { releasePhase = resolve; });
-              const phaseStarted = new Promise((resolve) => { markPhaseStarted = resolve; });
+              const phaseGate = new Promise((resolve) => {
+                releasePhase = resolve;
+              });
+              const phaseStarted = new Promise((resolve) => {
+                markPhaseStarted = resolve;
+              });
               const sent = [];
               const visibility = [];
               const trace = [];
@@ -1619,11 +2051,14 @@ test('Pause and Stop preserve independent dedicated and generic Radio ON across 
               dataManager = new DataLayerManager({});
               dataManager.register(radioLayer);
               dataManager.subscribe((change) => {
-                if (change.type === 'visibility') visibility.push(change.enabled);
+                if (change.type === 'visibility')
+                  visibility.push(change.enabled);
               });
               const viewer = {
                 clock: { onTick: { addEventListener: () => () => {} } },
-                scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+                scene: {
+                  canvas: { addEventListener() {}, removeEventListener() {} },
+                },
                 camera: { moveEnd: { addEventListener() {} } },
               };
               const genericRunner = createGevActionRunner({
@@ -1632,7 +2067,11 @@ test('Pause and Stop preserve independent dedicated and generic Radio ON across 
                 dataManager,
               });
               const ui = {
-                root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+                root: {
+                  dataset: {},
+                  classList: { remove() {} },
+                  querySelectorAll: () => [],
+                },
                 status: { textContent: '' },
                 detail: { textContent: '', title: '' },
                 errorDetail: { textContent: '' },
@@ -1641,39 +2080,48 @@ test('Pause and Stop preserve independent dedicated and generic Radio ON across 
                 ui,
                 dataManager,
                 radioLayer,
-                runner: (name, args, options) => (
+                runner: (name, args, options) =>
                   name === 'control_radio'
                     ? controlRadio({}, dataManager, args, options)
-                    : genericRunner(name, args, options)
-                ),
+                    : genericRunner(name, args, options),
               });
               controller.debugLog = () => {};
               controller.sendVisualContextIfUseful = async () => false;
               controller.dc = {
                 readyState: 'open',
-                send(message) { sent.push(JSON.parse(message)); },
+                send(message) {
+                  sent.push(JSON.parse(message));
+                },
                 close() {},
               };
               const event = (payload) => ({ data: JSON.stringify(payload) });
               const responseId = `${onRoute}-${controlAction}-${heldPhase}-${controlSucceeds}`;
 
-              const pendingOn = controller.handleRealtimeEvent(event({
-                type: 'response.function_call_arguments.done',
-                response_id: responseId,
-                call_id: `${responseId}-on`,
-                name: onRoute === 'dedicated' ? 'control_radio' : 'set_layer_visibility',
-                arguments: onRoute === 'dedicated'
-                  ? '{"action":"enable"}'
-                  : '{"layerId":"radio","enabled":true}',
-              }));
+              const pendingOn = controller.handleRealtimeEvent(
+                event({
+                  type: 'response.function_call_arguments.done',
+                  response_id: responseId,
+                  call_id: `${responseId}-on`,
+                  name:
+                    onRoute === 'dedicated'
+                      ? 'control_radio'
+                      : 'set_layer_visibility',
+                  arguments:
+                    onRoute === 'dedicated'
+                      ? '{"action":"enable"}'
+                      : '{"layerId":"radio","enabled":true}',
+                }),
+              );
               await phaseStarted;
-              await controller.handleRealtimeEvent(event({
-                type: 'response.function_call_arguments.done',
-                response_id: responseId,
-                call_id: `${responseId}-${controlAction}`,
-                name: 'control_radio',
-                arguments: JSON.stringify({ action: controlAction }),
-              }));
+              await controller.handleRealtimeEvent(
+                event({
+                  type: 'response.function_call_arguments.done',
+                  response_id: responseId,
+                  call_id: `${responseId}-${controlAction}`,
+                  name: 'control_radio',
+                  arguments: JSON.stringify({ action: controlAction }),
+                }),
+              );
               releasePhase();
               await pendingOn;
 
@@ -1681,19 +2129,39 @@ test('Pause and Stop preserve independent dedicated and generic Radio ON across 
                 .map((message) => message.item?.output)
                 .filter(Boolean)
                 .map(JSON.parse);
-              const onOutput = outputs.find((result) => onRoute === 'dedicated'
-                ? result.radioAction === 'enable'
-                : result.action === 'set_layer_visibility');
-              const controlOutput = outputs.find((result) => result.radioAction === controlAction);
+              const onOutput = outputs.find((result) =>
+                onRoute === 'dedicated'
+                  ? result.radioAction === 'enable'
+                  : result.action === 'set_layer_visibility',
+              );
+              const controlOutput = outputs.find(
+                (result) => result.radioAction === controlAction,
+              );
               assert.equal(onOutput?.ok, true, trace.join(' → '));
               assert.notEqual(onOutput?.cancelled, true, trace.join(' → '));
-              assert.equal(controlOutput?.ok, controlSucceeds, trace.join(' → '));
-              assert.equal(dataManager.isEnabled('radio'), true, trace.join(' → '));
+              assert.equal(
+                controlOutput?.ok,
+                controlSucceeds,
+                trace.join(' → '),
+              );
+              assert.equal(
+                dataManager.isEnabled('radio'),
+                true,
+                trace.join(' → '),
+              );
               assert.deepEqual(visibility, [true], trace.join(' → '));
-              assert.equal(visibility.includes(false), false, trace.join(' → '));
+              assert.equal(
+                visibility.includes(false),
+                false,
+                trace.join(' → '),
+              );
               assert.equal(
                 state.audioState,
-                controlSucceeds ? (controlAction === 'pause' ? 'paused' : 'stopped') : 'playing',
+                controlSucceeds
+                  ? controlAction === 'pause'
+                    ? 'paused'
+                    : 'stopped'
+                  : 'playing',
               );
               await dataManager.destroyAll();
             },
@@ -1708,136 +2176,173 @@ test('successful same- or newer-response Stop aborts Select across real manager 
   for (const responseMode of ['same-response', 'newer-response']) {
     for (const heldPhase of ['init', 'enable', 'update']) {
       await t.test(`${responseMode} ${heldPhase}`, async () => {
-      let releasePhase;
-      let announcePhaseStarted;
-      const phaseGate = new Promise((resolve) => { releasePhase = resolve; });
-      const phaseStarted = new Promise((resolve) => { announcePhaseStarted = resolve; });
-      const trace = [];
-      const sent = [];
-      const persistenceWrites = [];
-      const state = {
-        stationCount: 1,
-        selected: null,
-        audioState: 'stopped',
-        volume: 0.8,
-      };
-      let dataManager = null;
-      const runPhase = async (phase) => {
-        trace.push(`${phase}:start`);
-        if (heldPhase === phase) {
-          announcePhaseStarted();
-          await phaseGate;
-        }
-        trace.push(`${phase}:finish`);
-        return true;
-      };
-      const radioLayer = {
-        id: 'radio',
-        name: 'Radio',
-        updateInterval: -1,
-        init: () => runPhase('init'),
-        enable: () => runPhase('enable'),
-        update: () => runPhase('update'),
-        disable: async () => {
-          trace.push('disable');
-          state.audioState = 'stopped';
+        let releasePhase;
+        let announcePhaseStarted;
+        const phaseGate = new Promise((resolve) => {
+          releasePhase = resolve;
+        });
+        const phaseStarted = new Promise((resolve) => {
+          announcePhaseStarted = resolve;
+        });
+        const trace = [];
+        const sent = [];
+        const persistenceWrites = [];
+        const state = {
+          stationCount: 1,
+          selected: null,
+          audioState: 'stopped',
+          volume: 0.8,
+        };
+        let dataManager = null;
+        const runPhase = async (phase) => {
+          trace.push(`${phase}:start`);
+          if (heldPhase === phase) {
+            announcePhaseStarted();
+            await phaseGate;
+          }
+          trace.push(`${phase}:finish`);
           return true;
-        },
-        destroy: async () => true,
-        getStats: () => ({}),
-        getUIState: () => ({ ...state, enabled: dataManager?.isEnabled('radio') || false }),
-        stopPlayback: ({ origin } = {}) => {
-          trace.push(`stop:${origin || 'unknown'}`);
-          state.audioState = 'stopped';
-          return true;
-        },
-        selectRequestedStation: () => {
-          trace.push('select');
-          state.selected = { id: 'late-stop', name: 'Late stop station' };
-          return state.selected;
-        },
-      };
-      dataManager = new DataLayerManager({});
-      dataManager.register(radioLayer);
-      dataManager.subscribe((change) => {
-        if (change.type === 'visibility') {
-          trace.push(`visibility:${change.enabled}`);
-          if (change.origin === 'voice') persistenceWrites.push(change.enabled);
-        }
-      });
-      const ui = {
-        root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
-        status: { textContent: '' },
-        detail: { textContent: '', title: '' },
-        errorDetail: { textContent: '' },
-      };
-      const controller = new GevRealtimeController({
-        ui,
-        radioLayer,
-        runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
-      });
-      controller.debugLog = () => {};
-      controller.sendVisualContextIfUseful = async () => false;
-      controller.dc = {
-        readyState: 'open',
-        send(message) { sent.push(JSON.parse(message)); },
-        close() {},
-      };
-      const event = (payload) => ({ data: JSON.stringify(payload) });
-      const selectResponseId = `${responseMode}-real-manager-select-${heldPhase}`;
-      const stopResponseId = responseMode === 'same-response'
-        ? selectResponseId
-        : `${responseMode}-real-manager-stop-${heldPhase}`;
+        };
+        const radioLayer = {
+          id: 'radio',
+          name: 'Radio',
+          updateInterval: -1,
+          init: () => runPhase('init'),
+          enable: () => runPhase('enable'),
+          update: () => runPhase('update'),
+          disable: async () => {
+            trace.push('disable');
+            state.audioState = 'stopped';
+            return true;
+          },
+          destroy: async () => true,
+          getStats: () => ({}),
+          getUIState: () => ({
+            ...state,
+            enabled: dataManager?.isEnabled('radio') || false,
+          }),
+          stopPlayback: ({ origin } = {}) => {
+            trace.push(`stop:${origin || 'unknown'}`);
+            state.audioState = 'stopped';
+            return true;
+          },
+          selectRequestedStation: () => {
+            trace.push('select');
+            state.selected = { id: 'late-stop', name: 'Late stop station' };
+            return state.selected;
+          },
+        };
+        dataManager = new DataLayerManager({});
+        dataManager.register(radioLayer);
+        dataManager.subscribe((change) => {
+          if (change.type === 'visibility') {
+            trace.push(`visibility:${change.enabled}`);
+            if (change.origin === 'voice')
+              persistenceWrites.push(change.enabled);
+          }
+        });
+        const ui = {
+          root: {
+            dataset: {},
+            classList: { remove() {} },
+            querySelectorAll: () => [],
+          },
+          status: { textContent: '' },
+          detail: { textContent: '', title: '' },
+          errorDetail: { textContent: '' },
+        };
+        const controller = new GevRealtimeController({
+          ui,
+          radioLayer,
+          runner: (_name, args, options) =>
+            controlRadio({}, dataManager, args, options),
+        });
+        controller.debugLog = () => {};
+        controller.sendVisualContextIfUseful = async () => false;
+        controller.dc = {
+          readyState: 'open',
+          send(message) {
+            sent.push(JSON.parse(message));
+          },
+          close() {},
+        };
+        const event = (payload) => ({ data: JSON.stringify(payload) });
+        const selectResponseId = `${responseMode}-real-manager-select-${heldPhase}`;
+        const stopResponseId =
+          responseMode === 'same-response'
+            ? selectResponseId
+            : `${responseMode}-real-manager-stop-${heldPhase}`;
 
-      const pendingSelect = controller.handleRealtimeEvent(event({
-        type: 'response.function_call_arguments.done',
-        response_id: selectResponseId,
-        call_id: `select-${heldPhase}`,
-        name: 'control_radio',
-        arguments: '{"action":"select"}',
-      }));
-      await phaseStarted;
-      await controller.handleRealtimeEvent(event({
-        type: 'response.function_call_arguments.done',
-        response_id: stopResponseId,
-        call_id: `stop-${heldPhase}`,
-        name: 'control_radio',
-        arguments: '{"action":"stop"}',
-      }));
-      trace.push('stop:return');
-      assert.equal(dataManager.isEnabled('radio'), false, trace.join(' → '));
-      releasePhase();
-      await pendingSelect;
+        const pendingSelect = controller.handleRealtimeEvent(
+          event({
+            type: 'response.function_call_arguments.done',
+            response_id: selectResponseId,
+            call_id: `select-${heldPhase}`,
+            name: 'control_radio',
+            arguments: '{"action":"select"}',
+          }),
+        );
+        await phaseStarted;
+        await controller.handleRealtimeEvent(
+          event({
+            type: 'response.function_call_arguments.done',
+            response_id: stopResponseId,
+            call_id: `stop-${heldPhase}`,
+            name: 'control_radio',
+            arguments: '{"action":"stop"}',
+          }),
+        );
+        trace.push('stop:return');
+        assert.equal(dataManager.isEnabled('radio'), false, trace.join(' → '));
+        releasePhase();
+        await pendingSelect;
 
-      const outputs = sent
-        .map((message) => message.item?.output)
-        .filter(Boolean)
-        .map(JSON.parse);
-      const selectOutput = outputs.find((result) => result.radioAction === 'select');
-      const stopOutput = outputs.find((result) => result.radioAction === 'stop');
-      assert.equal(stopOutput?.ok, true);
-      assert.equal(stopOutput?.audioState, 'stopped');
-      assert.equal(selectOutput?.cancelled, true);
-      assert.equal(selectOutput?.enabled, false);
-      assert.equal(dataManager.isEnabled('radio'), false);
-      assert.deepEqual(persistenceWrites, []);
-      assert.equal(trace.includes('select'), false, trace.join(' → '));
-      assert.equal(trace.includes('visibility:true'), false, trace.join(' → '));
-      assert.equal(controller.pendingRadioPlaybackResult, null);
+        const outputs = sent
+          .map((message) => message.item?.output)
+          .filter(Boolean)
+          .map(JSON.parse);
+        const selectOutput = outputs.find(
+          (result) => result.radioAction === 'select',
+        );
+        const stopOutput = outputs.find(
+          (result) => result.radioAction === 'stop',
+        );
+        assert.equal(stopOutput?.ok, true);
+        assert.equal(stopOutput?.audioState, 'stopped');
+        assert.equal(selectOutput?.cancelled, true);
+        assert.equal(selectOutput?.enabled, false);
+        assert.equal(dataManager.isEnabled('radio'), false);
+        assert.deepEqual(persistenceWrites, []);
+        assert.equal(trace.includes('select'), false, trace.join(' → '));
+        assert.equal(
+          trace.includes('visibility:true'),
+          false,
+          trace.join(' → '),
+        );
+        assert.equal(controller.pendingRadioPlaybackResult, null);
       });
     }
   }
 });
 
 test('same-response pause and disable suppress play/select handoffs without cancelling results', async (t) => {
-  for (const [playbackAction, stopAction] of [['play', 'pause'], ['select', 'disable']]) {
+  for (const [playbackAction, stopAction] of [
+    ['play', 'pause'],
+    ['select', 'disable'],
+  ]) {
     await t.test(`${playbackAction} + ${stopAction}`, async () => {
       let releasePlayback;
-      const playbackGate = new Promise((resolve) => { releasePlayback = resolve; });
+      const playbackGate = new Promise((resolve) => {
+        releasePlayback = resolve;
+      });
       const sent = [];
       const radioState = { enabled: true, audioState: 'playing' };
       const ui = {
-        root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+        root: {
+          dataset: {},
+          classList: { remove() {} },
+          querySelectorAll: () => [],
+        },
         status: { textContent: '' },
         detail: { textContent: '', title: '' },
         errorDetail: { textContent: '' },
@@ -1867,27 +2372,33 @@ test('same-response pause and disable suppress play/select handoffs without canc
       controller.sendVisualContextIfUseful = async () => false;
       controller.dc = {
         readyState: 'open',
-        send(message) { sent.push(JSON.parse(message)); },
+        send(message) {
+          sent.push(JSON.parse(message));
+        },
         close() {},
       };
       const event = (payload) => ({ data: JSON.stringify(payload) });
       const responseId = `same-response-${playbackAction}-${stopAction}`;
 
-      const pendingPlayback = controller.handleRealtimeEvent(event({
-        type: 'response.function_call_arguments.done',
-        response_id: responseId,
-        call_id: `${playbackAction}-call`,
-        name: 'control_radio',
-        arguments: JSON.stringify({ action: playbackAction }),
-      }));
+      const pendingPlayback = controller.handleRealtimeEvent(
+        event({
+          type: 'response.function_call_arguments.done',
+          response_id: responseId,
+          call_id: `${playbackAction}-call`,
+          name: 'control_radio',
+          arguments: JSON.stringify({ action: playbackAction }),
+        }),
+      );
       await Promise.resolve();
-      await controller.handleRealtimeEvent(event({
-        type: 'response.function_call_arguments.done',
-        response_id: responseId,
-        call_id: `${stopAction}-call`,
-        name: 'control_radio',
-        arguments: JSON.stringify({ action: stopAction }),
-      }));
+      await controller.handleRealtimeEvent(
+        event({
+          type: 'response.function_call_arguments.done',
+          response_id: responseId,
+          call_id: `${stopAction}-call`,
+          name: 'control_radio',
+          arguments: JSON.stringify({ action: stopAction }),
+        }),
+      );
       releasePlayback();
       await pendingPlayback;
 
@@ -1900,9 +2411,15 @@ test('same-response pause and disable suppress play/select handoffs without canc
       assert.equal(playbackOutput?.cancelled, undefined);
       assert.equal(playbackOutput?.radioPlaybackRequested, false);
       assert.equal(playbackOutput?.radioPlaybackSuppressed, true);
-      assert.equal(playbackOutput?.audioState, stopAction === 'pause' ? 'paused' : 'stopped');
+      assert.equal(
+        playbackOutput?.audioState,
+        stopAction === 'pause' ? 'paused' : 'stopped',
+      );
       assert.equal(playbackOutput?.enabled, stopAction !== 'disable');
-      assert.equal(playbackOutput?.lifecycleState, stopAction === 'disable' ? 'disabled' : 'enabled');
+      assert.equal(
+        playbackOutput?.lifecycleState,
+        stopAction === 'disable' ? 'disabled' : 'enabled',
+      );
       assert.equal(playbackOutput?.lifecycleUncertain, false);
       assert.match(
         controller.pendingResponseInstructions,
@@ -1916,9 +2433,17 @@ test('same-response pause and disable suppress play/select handoffs without canc
 test('Realtime Radio route exceptions preserve the authoritative lifecycle summary', async () => {
   for (const route of ['dedicated', 'generic']) {
     const sent = [];
-    const lifecycle = { enabled: true, lifecycleState: 'disabling', uncertain: true };
+    const lifecycle = {
+      enabled: true,
+      lifecycleState: 'disabling',
+      uncertain: true,
+    };
     const ui = {
-      root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+      root: {
+        dataset: {},
+        classList: { remove() {} },
+        querySelectorAll: () => [],
+      },
       status: { textContent: '' },
       detail: { textContent: '', title: '' },
       errorDetail: { textContent: '' },
@@ -1929,14 +2454,20 @@ test('Realtime Radio route exceptions preserve the authoritative lifecycle summa
         getLayerLifecycleState: () => ({ ...lifecycle }),
         isEnabled: () => false,
       },
-      radioLayer: { getUIState: () => ({ enabled: false, audioState: 'stopped' }) },
-      runner: async () => { throw new Error('route failed'); },
+      radioLayer: {
+        getUIState: () => ({ enabled: false, audioState: 'stopped' }),
+      },
+      runner: async () => {
+        throw new Error('route failed');
+      },
     });
     controller.debugLog = () => {};
     controller.sendVisualContextIfUseful = async () => false;
     controller.dc = {
       readyState: 'open',
-      send(message) { sent.push(JSON.parse(message)); },
+      send(message) {
+        sent.push(JSON.parse(message));
+      },
       close() {},
     };
 
@@ -1946,9 +2477,10 @@ test('Realtime Radio route exceptions preserve the authoritative lifecycle summa
         response_id: `exception-${route}`,
         call_id: `exception-${route}-call`,
         name: route === 'dedicated' ? 'control_radio' : 'set_layer_visibility',
-        arguments: route === 'dedicated'
-          ? '{"action":"disable"}'
-          : '{"layerId":"radio","enabled":false}',
+        arguments:
+          route === 'dedicated'
+            ? '{"action":"disable"}'
+            : '{"layerId":"radio","enabled":false}',
       }),
     });
 
@@ -1967,10 +2499,16 @@ test('Realtime Radio route exceptions preserve the authoritative lifecycle summa
 
 test('different-response Radio stop remains a cancellation authority for an older playback tool', async () => {
   let releaseSelect;
-  const selectGate = new Promise((resolve) => { releaseSelect = resolve; });
+  const selectGate = new Promise((resolve) => {
+    releaseSelect = resolve;
+  });
   const sent = [];
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -1994,26 +2532,32 @@ test('different-response Radio stop remains a cancellation authority for an olde
   controller.sendVisualContextIfUseful = async () => false;
   controller.dc = {
     readyState: 'open',
-    send(message) { sent.push(JSON.parse(message)); },
+    send(message) {
+      sent.push(JSON.parse(message));
+    },
     close() {},
   };
   const event = (payload) => ({ data: JSON.stringify(payload) });
 
-  const pendingSelect = controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'older-response',
-    call_id: 'older-select',
-    name: 'control_radio',
-    arguments: '{"action":"select"}',
-  }));
+  const pendingSelect = controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'older-response',
+      call_id: 'older-select',
+      name: 'control_radio',
+      arguments: '{"action":"select"}',
+    }),
+  );
   await Promise.resolve();
-  await controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'newer-response',
-    call_id: 'newer-stop',
-    name: 'control_radio',
-    arguments: '{"action":"stop"}',
-  }));
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'newer-response',
+      call_id: 'newer-stop',
+      name: 'control_radio',
+      arguments: '{"action":"stop"}',
+    }),
+  );
   releaseSelect();
   await pendingSelect;
 
@@ -2030,7 +2574,9 @@ test('different-response Radio stop remains a cancellation authority for an olde
 
 test('failed same-response stop does not suppress a successful playback request', async () => {
   let releasePlay;
-  const playGate = new Promise((resolve) => { releasePlay = resolve; });
+  const playGate = new Promise((resolve) => {
+    releasePlay = resolve;
+  });
   const sent = [];
   const state = {
     stationCount: 1,
@@ -2039,16 +2585,25 @@ test('failed same-response stop does not suppress a successful playback request'
     volume: 0.8,
   };
   const dataManager = {
-    layers: new Map([['radio', {
-      module: {
-        getUIState: () => ({ ...state }),
-        stopPlayback: () => false,
-      },
-    }]]),
+    layers: new Map([
+      [
+        'radio',
+        {
+          module: {
+            getUIState: () => ({ ...state }),
+            stopPlayback: () => false,
+          },
+        },
+      ],
+    ]),
     isEnabled: () => true,
   };
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -2065,26 +2620,32 @@ test('failed same-response stop does not suppress a successful playback request'
   controller.sendVisualContextIfUseful = async () => false;
   controller.dc = {
     readyState: 'open',
-    send(message) { sent.push(JSON.parse(message)); },
+    send(message) {
+      sent.push(JSON.parse(message));
+    },
     close() {},
   };
   const event = (payload) => ({ data: JSON.stringify(payload) });
 
-  const pendingPlay = controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'failed-stop-response',
-    call_id: 'play-before-failed-stop',
-    name: 'control_radio',
-    arguments: '{"action":"play"}',
-  }));
+  const pendingPlay = controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'failed-stop-response',
+      call_id: 'play-before-failed-stop',
+      name: 'control_radio',
+      arguments: '{"action":"play"}',
+    }),
+  );
   await Promise.resolve();
-  await controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'failed-stop-response',
-    call_id: 'failed-stop',
-    name: 'control_radio',
-    arguments: '{"action":"stop"}',
-  }));
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'failed-stop-response',
+      call_id: 'failed-stop',
+      name: 'control_radio',
+      arguments: '{"action":"stop"}',
+    }),
+  );
   releasePlay();
   await pendingPlay;
 
@@ -2109,8 +2670,12 @@ test('failed same-response stop does not suppress a successful playback request'
 test('failed same-response Stop preserves Select auto-enable held inside real manager init', async () => {
   let releaseInit;
   let markInitStarted;
-  const initGate = new Promise((resolve) => { releaseInit = resolve; });
-  const initStarted = new Promise((resolve) => { markInitStarted = resolve; });
+  const initGate = new Promise((resolve) => {
+    releaseInit = resolve;
+  });
+  const initStarted = new Promise((resolve) => {
+    markInitStarted = resolve;
+  });
   const sent = [];
   const trace = [];
   const state = {
@@ -2156,7 +2721,11 @@ test('failed same-response Stop preserves Select auto-enable held inside real ma
   dataManager = new DataLayerManager({});
   dataManager.register(radioLayer);
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -2165,33 +2734,40 @@ test('failed same-response Stop preserves Select auto-enable held inside real ma
     ui,
     dataManager,
     radioLayer,
-    runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
+    runner: (_name, args, options) =>
+      controlRadio({}, dataManager, args, options),
   });
   controller.debugLog = () => {};
   controller.sendVisualContextIfUseful = async () => false;
   controller.dc = {
     readyState: 'open',
-    send(message) { sent.push(JSON.parse(message)); },
+    send(message) {
+      sent.push(JSON.parse(message));
+    },
     close() {},
   };
   const event = (payload) => ({ data: JSON.stringify(payload) });
   const responseId = 'failed-stop-during-select-init';
 
-  const pendingSelect = controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: responseId,
-    call_id: 'select-held-in-init',
-    name: 'control_radio',
-    arguments: '{"action":"select","category":"all"}',
-  }));
+  const pendingSelect = controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: responseId,
+      call_id: 'select-held-in-init',
+      name: 'control_radio',
+      arguments: '{"action":"select","category":"all"}',
+    }),
+  );
   await initStarted;
-  await controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: responseId,
-    call_id: 'failed-stop-during-init',
-    name: 'control_radio',
-    arguments: '{"action":"stop"}',
-  }));
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: responseId,
+      call_id: 'failed-stop-during-init',
+      name: 'control_radio',
+      arguments: '{"action":"stop"}',
+    }),
+  );
   releaseInit();
   await pendingSelect;
 
@@ -2199,7 +2775,9 @@ test('failed same-response Stop preserves Select auto-enable held inside real ma
     .map((message) => message.item?.output)
     .filter(Boolean)
     .map(JSON.parse);
-  const selectOutput = outputs.find((result) => result.radioAction === 'select');
+  const selectOutput = outputs.find(
+    (result) => result.radioAction === 'select',
+  );
   const stopOutput = outputs.find((result) => result.radioAction === 'stop');
   assert.equal(stopOutput?.ok, false, trace.join(' → '));
   assert.equal(selectOutput?.ok, true, trace.join(' → '));
@@ -2215,7 +2793,9 @@ test('failed same-response Pause and Disable do not suppress valid older playbac
   for (const action of ['pause', 'disable']) {
     await t.test(action, async () => {
       let releasePlay;
-      const playGate = new Promise((resolve) => { releasePlay = resolve; });
+      const playGate = new Promise((resolve) => {
+        releasePlay = resolve;
+      });
       const sent = [];
       const state = {
         stationCount: 1,
@@ -2226,12 +2806,17 @@ test('failed same-response Pause and Disable do not suppress valid older playbac
       const requestListeners = new Set();
       const visibilityListeners = new Set();
       const dataManager = {
-        layers: new Map([['radio', {
-          module: {
-            getUIState: () => ({ ...state }),
-            pause: () => false,
-          },
-        }]]),
+        layers: new Map([
+          [
+            'radio',
+            {
+              module: {
+                getUIState: () => ({ ...state }),
+                pause: () => false,
+              },
+            },
+          ],
+        ]),
         isEnabled: () => true,
         setEnabled: async () => false,
         subscribeVisibilityRequests(listener) {
@@ -2244,7 +2829,11 @@ test('failed same-response Pause and Disable do not suppress valid older playbac
         },
       };
       const ui = {
-        root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+        root: {
+          dataset: {},
+          classList: { remove() {} },
+          querySelectorAll: () => [],
+        },
         status: { textContent: '' },
         detail: { textContent: '', title: '' },
         errorDetail: { textContent: '' },
@@ -2263,27 +2852,33 @@ test('failed same-response Pause and Disable do not suppress valid older playbac
       controller.sendVisualContextIfUseful = async () => false;
       controller.dc = {
         readyState: 'open',
-        send(message) { sent.push(JSON.parse(message)); },
+        send(message) {
+          sent.push(JSON.parse(message));
+        },
         close() {},
       };
       const event = (payload) => ({ data: JSON.stringify(payload) });
       const responseId = `failed-${action}-response`;
 
-      const pendingPlay = controller.handleRealtimeEvent(event({
-        type: 'response.function_call_arguments.done',
-        response_id: responseId,
-        call_id: `play-before-${action}`,
-        name: 'control_radio',
-        arguments: '{"action":"play"}',
-      }));
+      const pendingPlay = controller.handleRealtimeEvent(
+        event({
+          type: 'response.function_call_arguments.done',
+          response_id: responseId,
+          call_id: `play-before-${action}`,
+          name: 'control_radio',
+          arguments: '{"action":"play"}',
+        }),
+      );
       await Promise.resolve();
-      await controller.handleRealtimeEvent(event({
-        type: 'response.function_call_arguments.done',
-        response_id: responseId,
-        call_id: `failed-${action}`,
-        name: 'control_radio',
-        arguments: JSON.stringify({ action }),
-      }));
+      await controller.handleRealtimeEvent(
+        event({
+          type: 'response.function_call_arguments.done',
+          response_id: responseId,
+          call_id: `failed-${action}`,
+          name: 'control_radio',
+          arguments: JSON.stringify({ action }),
+        }),
+      );
       releasePlay();
       await pendingPlay;
 
@@ -2291,8 +2886,12 @@ test('failed same-response Pause and Disable do not suppress valid older playbac
         .map((message) => message.item?.output)
         .filter(Boolean)
         .map(JSON.parse);
-      const strongerOutput = outputs.find((result) => result.radioAction === action);
-      const playOutput = outputs.find((result) => result.radioAction === 'play');
+      const strongerOutput = outputs.find(
+        (result) => result.radioAction === action,
+      );
+      const playOutput = outputs.find(
+        (result) => result.radioAction === 'play',
+      );
       assert.equal(strongerOutput?.ok, false);
       assert.equal(playOutput?.ok, true);
       assert.equal(playOutput?.radioPlaybackRequested, true);
@@ -2304,10 +2903,16 @@ test('failed same-response Pause and Disable do not suppress valid older playbac
 
 test('failed generic same-response Radio OFF does not suppress valid older playback', async () => {
   let releaseSelect;
-  const selectGate = new Promise((resolve) => { releaseSelect = resolve; });
+  const selectGate = new Promise((resolve) => {
+    releaseSelect = resolve;
+  });
   const sent = [];
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -2316,7 +2921,12 @@ test('failed generic same-response Radio OFF does not suppress valid older playb
     ui,
     runner: async (name, args) => {
       if (name === 'set_layer_visibility') {
-        return { ok: false, action: 'set_layer_visibility', layerId: 'radio', enabled: true };
+        return {
+          ok: false,
+          action: 'set_layer_visibility',
+          layerId: 'radio',
+          enabled: true,
+        };
       }
       await selectGate;
       return {
@@ -2331,26 +2941,32 @@ test('failed generic same-response Radio OFF does not suppress valid older playb
   controller.sendVisualContextIfUseful = async () => false;
   controller.dc = {
     readyState: 'open',
-    send(message) { sent.push(JSON.parse(message)); },
+    send(message) {
+      sent.push(JSON.parse(message));
+    },
     close() {},
   };
   const event = (payload) => ({ data: JSON.stringify(payload) });
 
-  const pendingSelect = controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'failed-generic-off',
-    call_id: 'select-before-generic-off',
-    name: 'control_radio',
-    arguments: '{"action":"select"}',
-  }));
+  const pendingSelect = controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'failed-generic-off',
+      call_id: 'select-before-generic-off',
+      name: 'control_radio',
+      arguments: '{"action":"select"}',
+    }),
+  );
   await Promise.resolve();
-  await controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'failed-generic-off',
-    call_id: 'generic-off-fails',
-    name: 'set_layer_visibility',
-    arguments: '{"layerId":"radio","enabled":false}',
-  }));
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'failed-generic-off',
+      call_id: 'generic-off-fails',
+      name: 'set_layer_visibility',
+      arguments: '{"layerId":"radio","enabled":false}',
+    }),
+  );
   releaseSelect();
   await pendingSelect;
 
@@ -2367,8 +2983,12 @@ test('failed generic same-response Radio OFF does not suppress valid older playb
 test('direct user Radio OFF aborts an in-flight voice enable before settled publication', async () => {
   let releaseInit;
   let markInitStarted;
-  const initGate = new Promise((resolve) => { releaseInit = resolve; });
-  const initStarted = new Promise((resolve) => { markInitStarted = resolve; });
+  const initGate = new Promise((resolve) => {
+    releaseInit = resolve;
+  });
+  const initStarted = new Promise((resolve) => {
+    markInitStarted = resolve;
+  });
   const sent = [];
   const visibility = [];
   let dataManager;
@@ -2389,7 +3009,10 @@ test('direct user Radio OFF aborts an in-flight voice enable before settled publ
     disable: async () => true,
     destroy: async () => true,
     getStats: () => ({}),
-    getUIState: () => ({ ...state, enabled: dataManager?.isEnabled('radio') || false }),
+    getUIState: () => ({
+      ...state,
+      enabled: dataManager?.isEnabled('radio') || false,
+    }),
     selectRequestedStation: () => {
       state.selected = { id: 'late', name: 'Late station' };
       return state.selected;
@@ -2398,10 +3021,15 @@ test('direct user Radio OFF aborts an in-flight voice enable before settled publ
   dataManager = new DataLayerManager({});
   dataManager.register(radioLayer);
   dataManager.subscribe((change) => {
-    if (change.type === 'visibility') visibility.push(`${change.origin}:${change.enabled}`);
+    if (change.type === 'visibility')
+      visibility.push(`${change.origin}:${change.enabled}`);
   });
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -2410,24 +3038,29 @@ test('direct user Radio OFF aborts an in-flight voice enable before settled publ
     ui,
     dataManager,
     radioLayer,
-    runner: (_name, args, options) => controlRadio({}, dataManager, args, options),
+    runner: (_name, args, options) =>
+      controlRadio({}, dataManager, args, options),
   });
   controller.debugLog = () => {};
   controller.sendVisualContextIfUseful = async () => false;
   controller.dc = {
     readyState: 'open',
-    send(message) { sent.push(JSON.parse(message)); },
+    send(message) {
+      sent.push(JSON.parse(message));
+    },
     close() {},
   };
   const event = (payload) => ({ data: JSON.stringify(payload) });
 
-  const pendingSelect = controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'voice-select-before-ui-off',
-    call_id: 'voice-select',
-    name: 'control_radio',
-    arguments: '{"action":"select"}',
-  }));
+  const pendingSelect = controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'voice-select-before-ui-off',
+      call_id: 'voice-select',
+      name: 'control_radio',
+      arguments: '{"action":"select"}',
+    }),
+  );
   await initStarted;
   const userOff = dataManager.setEnabled('radio', false, { origin: 'user' });
   releaseInit();
@@ -2451,161 +3084,71 @@ test('direct user Radio OFF aborts an in-flight voice enable before settled publ
 
 test('direct user Radio OFF freezes a prepared handoff until disable success or failure settles', async (t) => {
   for (const disableSucceeds of [true, false]) {
-    await t.test(disableSucceeds ? 'success commits cancellation' : 'failure resumes prepared playback', async () => {
-      let releaseDisable;
-      let markDisableStarted;
-      const disableGate = new Promise((resolve) => { releaseDisable = resolve; });
-      const disableStarted = new Promise((resolve) => { markDisableStarted = resolve; });
-      const trace = [];
-      let dataManager;
-      const radioLayer = {
-        id: 'radio',
-        name: 'Radio',
-        updateInterval: -1,
-        init: async () => true,
-        enable: async () => true,
-        update: async () => true,
-        disable: async () => {
-          trace.push('disable:start');
-          markDisableStarted();
-          await disableGate;
-          trace.push(`disable:${disableSucceeds}`);
-          return disableSucceeds;
-        },
-        destroy: async () => true,
-        getStats: () => ({}),
-        getUIState: () => ({
-          enabled: dataManager?.isEnabled('radio') || false,
-          audioState: 'stopped',
-        }),
-        setVoiceDucked: () => trace.push('duck'),
-        playForVoice: async () => {
-          trace.push('playForVoice');
-          return true;
-        },
-        stopPlayback: () => {
-          trace.push('stopPlayback');
-          return true;
-        },
-      };
-      dataManager = new DataLayerManager({});
-      dataManager.register(radioLayer);
-      await dataManager.setEnabled('radio', true);
-      const ui = {
-        root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
-        status: { textContent: '' },
-        detail: { textContent: '', title: '' },
-        errorDetail: { textContent: '' },
-      };
-      const controller = new GevRealtimeController({
-        ui,
-        dataManager,
-        radioLayer,
-        runner: async () => ({ ok: true }),
-      });
-      controller.debugLog = () => {};
-      controller.pendingRadioPlaybackResult = {
-        ok: true,
-        action: 'control_radio',
-        radioAction: 'select',
-        radioPlaybackRequested: true,
-      };
-      controller.dc = {
-        readyState: 'open',
-        send() {},
-        close() { trace.push('voice:close'); },
-      };
-      const event = (payload) => ({ data: JSON.stringify(payload) });
-
-      const userOff = dataManager.setEnabled('radio', false, { origin: 'user' });
-      await disableStarted;
-      await controller.handleRealtimeEvent(event({
-        type: 'response.done',
-        response: { id: `prepared-off-${disableSucceeds}`, status: 'completed' },
-      }));
-      assert.equal(trace.includes('playForVoice'), false, trace.join(' → '));
-      assert.equal(trace.includes('voice:close'), false, trace.join(' → '));
-      assert.equal(controller.pendingRadioPlaybackResult?.radioAction, 'select');
-
-      releaseDisable();
-      const disabled = await userOff;
-      await new Promise((resolve) => setImmediate(resolve));
-      assert.equal(disabled, disableSucceeds ? true : false);
-      assert.equal(trace.includes('playForVoice'), !disableSucceeds, trace.join(' → '));
-      assert.equal(trace.includes('voice:close'), !disableSucceeds, trace.join(' → '));
-      assert.equal(controller.pendingRadioPlaybackResult, null);
-    });
-  }
-});
-
-test('dedicated and generic Radio OFF reservations freeze an in-flight playback handoff', async (t) => {
-  for (const route of ['dedicated-disable', 'dedicated-stop', 'generic-off']) {
-    for (const controlSucceeds of [true, false]) {
-      await t.test(`${route} ${controlSucceeds ? 'success commits' : 'failure resumes'}`, async () => {
-        let releaseFirstPlay;
-        let markFirstPlayStarted;
-        let releaseControl;
-        let markControlStarted;
-        const firstPlayGate = new Promise((resolve) => { releaseFirstPlay = resolve; });
-        const firstPlayStarted = new Promise((resolve) => { markFirstPlayStarted = resolve; });
-        const controlGate = new Promise((resolve) => { releaseControl = resolve; });
-        const controlStarted = new Promise((resolve) => { markControlStarted = resolve; });
+    await t.test(
+      disableSucceeds
+        ? 'success commits cancellation'
+        : 'failure resumes prepared playback',
+      async () => {
+        let releaseDisable;
+        let markDisableStarted;
+        const disableGate = new Promise((resolve) => {
+          releaseDisable = resolve;
+        });
+        const disableStarted = new Promise((resolve) => {
+          markDisableStarted = resolve;
+        });
         const trace = [];
-        let playCalls = 0;
+        let dataManager;
         const radioLayer = {
+          id: 'radio',
+          name: 'Radio',
+          updateInterval: -1,
+          init: async () => true,
+          enable: async () => true,
+          update: async () => true,
+          disable: async () => {
+            trace.push('disable:start');
+            markDisableStarted();
+            await disableGate;
+            trace.push(`disable:${disableSucceeds}`);
+            return disableSucceeds;
+          },
+          destroy: async () => true,
+          getStats: () => ({}),
+          getUIState: () => ({
+            enabled: dataManager?.isEnabled('radio') || false,
+            audioState: 'stopped',
+          }),
           setVoiceDucked: () => trace.push('duck'),
           playForVoice: async () => {
-            playCalls++;
-            trace.push(`play:${playCalls}:start`);
-            if (playCalls === 1) {
-              markFirstPlayStarted();
-              await firstPlayGate;
-            }
-            trace.push(`play:${playCalls}:finish`);
+            trace.push('playForVoice');
             return true;
           },
           stopPlayback: () => {
             trace.push('stopPlayback');
             return true;
           },
-          getUIState: () => ({ enabled: true, audioState: 'stopped' }),
         };
+        dataManager = new DataLayerManager({});
+        dataManager.register(radioLayer);
+        await dataManager.setEnabled('radio', true);
         const ui = {
-          root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+          root: {
+            dataset: {},
+            classList: { remove() {} },
+            querySelectorAll: () => [],
+          },
           status: { textContent: '' },
           detail: { textContent: '', title: '' },
           errorDetail: { textContent: '' },
         };
         const controller = new GevRealtimeController({
           ui,
+          dataManager,
           radioLayer,
-          dataManager: { isEnabled: () => true },
-          runner: async (name, args) => {
-            const isDedicatedControl = route.startsWith('dedicated-');
-            const radioAction = route.replace('dedicated-', '');
-            const isStrongerControl = isDedicatedControl
-              ? name === 'control_radio' && args.action === radioAction
-              : name === 'set_layer_visibility' && args.enabled === false;
-            if (!isStrongerControl) return { ok: false, error: 'unexpected route' };
-            trace.push('control:start');
-            markControlStarted();
-            await controlGate;
-            trace.push(`control:${controlSucceeds}`);
-            return isDedicatedControl
-              ? {
-                ok: controlSucceeds,
-                action: 'control_radio',
-                radioAction,
-              }
-              : {
-                ok: controlSucceeds,
-                action: 'set_layer_visibility',
-                enabled: !controlSucceeds,
-              };
-          },
+          runner: async () => ({ ok: true }),
         });
         controller.debugLog = () => {};
-        controller.sendVisualContextIfUseful = async () => false;
         controller.pendingRadioPlaybackResult = {
           ok: true,
           action: 'control_radio',
@@ -2615,39 +3158,193 @@ test('dedicated and generic Radio OFF reservations freeze an in-flight playback 
         controller.dc = {
           readyState: 'open',
           send() {},
-          close() { trace.push('voice:close'); },
+          close() {
+            trace.push('voice:close');
+          },
         };
         const event = (payload) => ({ data: JSON.stringify(payload) });
 
-        const pendingHandoff = controller.handleRealtimeEvent(event({
-          type: 'response.done',
-          response: { id: `${route}-handoff`, status: 'completed' },
-        }));
-        await firstPlayStarted;
-        const pendingControl = controller.handleRealtimeEvent(event({
-          type: 'response.function_call_arguments.done',
-          response_id: `${route}-control`,
-          call_id: `${route}-call`,
-          name: route.startsWith('dedicated-') ? 'control_radio' : 'set_layer_visibility',
-          arguments: route.startsWith('dedicated-')
-            ? JSON.stringify({ action: route.replace('dedicated-', '') })
-            : '{"layerId":"radio","enabled":false}',
-        }));
-        await controlStarted;
-        assert.equal(trace.includes('stopPlayback'), true, trace.join(' → '));
-
-        releaseFirstPlay();
-        await pendingHandoff;
+        const userOff = dataManager.setEnabled('radio', false, {
+          origin: 'user',
+        });
+        await disableStarted;
+        await controller.handleRealtimeEvent(
+          event({
+            type: 'response.done',
+            response: {
+              id: `prepared-off-${disableSucceeds}`,
+              status: 'completed',
+            },
+          }),
+        );
+        assert.equal(trace.includes('playForVoice'), false, trace.join(' → '));
         assert.equal(trace.includes('voice:close'), false, trace.join(' → '));
-        assert.equal(controller.pendingRadioPlaybackResult?.radioAction, 'select');
+        assert.equal(
+          controller.pendingRadioPlaybackResult?.radioAction,
+          'select',
+        );
 
-        releaseControl();
-        await pendingControl;
+        releaseDisable();
+        const disabled = await userOff;
         await new Promise((resolve) => setImmediate(resolve));
-        assert.equal(playCalls, controlSucceeds ? 1 : 2, trace.join(' → '));
-        assert.equal(trace.includes('voice:close'), !controlSucceeds, trace.join(' → '));
+        assert.equal(disabled, disableSucceeds ? true : false);
+        assert.equal(
+          trace.includes('playForVoice'),
+          !disableSucceeds,
+          trace.join(' → '),
+        );
+        assert.equal(
+          trace.includes('voice:close'),
+          !disableSucceeds,
+          trace.join(' → '),
+        );
         assert.equal(controller.pendingRadioPlaybackResult, null);
-      });
+      },
+    );
+  }
+});
+
+test('dedicated and generic Radio OFF reservations freeze an in-flight playback handoff', async (t) => {
+  for (const route of ['dedicated-disable', 'dedicated-stop', 'generic-off']) {
+    for (const controlSucceeds of [true, false]) {
+      await t.test(
+        `${route} ${controlSucceeds ? 'success commits' : 'failure resumes'}`,
+        async () => {
+          let releaseFirstPlay;
+          let markFirstPlayStarted;
+          let releaseControl;
+          let markControlStarted;
+          const firstPlayGate = new Promise((resolve) => {
+            releaseFirstPlay = resolve;
+          });
+          const firstPlayStarted = new Promise((resolve) => {
+            markFirstPlayStarted = resolve;
+          });
+          const controlGate = new Promise((resolve) => {
+            releaseControl = resolve;
+          });
+          const controlStarted = new Promise((resolve) => {
+            markControlStarted = resolve;
+          });
+          const trace = [];
+          let playCalls = 0;
+          const radioLayer = {
+            setVoiceDucked: () => trace.push('duck'),
+            playForVoice: async () => {
+              playCalls++;
+              trace.push(`play:${playCalls}:start`);
+              if (playCalls === 1) {
+                markFirstPlayStarted();
+                await firstPlayGate;
+              }
+              trace.push(`play:${playCalls}:finish`);
+              return true;
+            },
+            stopPlayback: () => {
+              trace.push('stopPlayback');
+              return true;
+            },
+            getUIState: () => ({ enabled: true, audioState: 'stopped' }),
+          };
+          const ui = {
+            root: {
+              dataset: {},
+              classList: { remove() {} },
+              querySelectorAll: () => [],
+            },
+            status: { textContent: '' },
+            detail: { textContent: '', title: '' },
+            errorDetail: { textContent: '' },
+          };
+          const controller = new GevRealtimeController({
+            ui,
+            radioLayer,
+            dataManager: { isEnabled: () => true },
+            runner: async (name, args) => {
+              const isDedicatedControl = route.startsWith('dedicated-');
+              const radioAction = route.replace('dedicated-', '');
+              const isStrongerControl = isDedicatedControl
+                ? name === 'control_radio' && args.action === radioAction
+                : name === 'set_layer_visibility' && args.enabled === false;
+              if (!isStrongerControl)
+                return { ok: false, error: 'unexpected route' };
+              trace.push('control:start');
+              markControlStarted();
+              await controlGate;
+              trace.push(`control:${controlSucceeds}`);
+              return isDedicatedControl
+                ? {
+                    ok: controlSucceeds,
+                    action: 'control_radio',
+                    radioAction,
+                  }
+                : {
+                    ok: controlSucceeds,
+                    action: 'set_layer_visibility',
+                    enabled: !controlSucceeds,
+                  };
+            },
+          });
+          controller.debugLog = () => {};
+          controller.sendVisualContextIfUseful = async () => false;
+          controller.pendingRadioPlaybackResult = {
+            ok: true,
+            action: 'control_radio',
+            radioAction: 'select',
+            radioPlaybackRequested: true,
+          };
+          controller.dc = {
+            readyState: 'open',
+            send() {},
+            close() {
+              trace.push('voice:close');
+            },
+          };
+          const event = (payload) => ({ data: JSON.stringify(payload) });
+
+          const pendingHandoff = controller.handleRealtimeEvent(
+            event({
+              type: 'response.done',
+              response: { id: `${route}-handoff`, status: 'completed' },
+            }),
+          );
+          await firstPlayStarted;
+          const pendingControl = controller.handleRealtimeEvent(
+            event({
+              type: 'response.function_call_arguments.done',
+              response_id: `${route}-control`,
+              call_id: `${route}-call`,
+              name: route.startsWith('dedicated-')
+                ? 'control_radio'
+                : 'set_layer_visibility',
+              arguments: route.startsWith('dedicated-')
+                ? JSON.stringify({ action: route.replace('dedicated-', '') })
+                : '{"layerId":"radio","enabled":false}',
+            }),
+          );
+          await controlStarted;
+          assert.equal(trace.includes('stopPlayback'), true, trace.join(' → '));
+
+          releaseFirstPlay();
+          await pendingHandoff;
+          assert.equal(trace.includes('voice:close'), false, trace.join(' → '));
+          assert.equal(
+            controller.pendingRadioPlaybackResult?.radioAction,
+            'select',
+          );
+
+          releaseControl();
+          await pendingControl;
+          await new Promise((resolve) => setImmediate(resolve));
+          assert.equal(playCalls, controlSucceeds ? 1 : 2, trace.join(' → '));
+          assert.equal(
+            trace.includes('voice:close'),
+            !controlSucceeds,
+            trace.join(' → '),
+          );
+          assert.equal(controller.pendingRadioPlaybackResult, null);
+        },
+      );
     }
   }
 });
@@ -2657,8 +3354,12 @@ test('delayed Stop reports its result before committing or resuming a prepared h
     await t.test(outcome, async () => {
       let releaseStop;
       let markStopStarted;
-      const stopGate = new Promise((resolve) => { releaseStop = resolve; });
-      const stopStarted = new Promise((resolve) => { markStopStarted = resolve; });
+      const stopGate = new Promise((resolve) => {
+        releaseStop = resolve;
+      });
+      const stopStarted = new Promise((resolve) => {
+        markStopStarted = resolve;
+      });
       const trace = [];
       const radioLayer = {
         setVoiceDucked: () => trace.push('duck'),
@@ -2673,7 +3374,11 @@ test('delayed Stop reports its result before committing or resuming a prepared h
         getUIState: () => ({ enabled: true, audioState: 'stopped' }),
       };
       const ui = {
-        root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+        root: {
+          dataset: {},
+          classList: { remove() {} },
+          querySelectorAll: () => [],
+        },
         status: { textContent: '' },
         detail: { textContent: '', title: '' },
         errorDetail: { textContent: '' },
@@ -2706,31 +3411,45 @@ test('delayed Stop reports its result before committing or resuming a prepared h
         readyState: 'open',
         send(message) {
           const payload = JSON.parse(message);
-          if (payload.item?.call_id === `delayed-stop-${outcome}`) trace.push('output:stop');
+          if (payload.item?.call_id === `delayed-stop-${outcome}`)
+            trace.push('output:stop');
         },
-        close() { trace.push('voice:close'); },
+        close() {
+          trace.push('voice:close');
+        },
       };
       const event = (payload) => ({ data: JSON.stringify(payload) });
 
-      const pendingStop = controller.handleRealtimeEvent(event({
-        type: 'response.function_call_arguments.done',
-        response_id: `delayed-stop-response-${outcome}`,
-        call_id: `delayed-stop-${outcome}`,
-        name: 'control_radio',
-        arguments: '{"action":"stop"}',
-      }));
+      const pendingStop = controller.handleRealtimeEvent(
+        event({
+          type: 'response.function_call_arguments.done',
+          response_id: `delayed-stop-response-${outcome}`,
+          call_id: `delayed-stop-${outcome}`,
+          name: 'control_radio',
+          arguments: '{"action":"stop"}',
+        }),
+      );
       await stopStarted;
-      await controller.handleRealtimeEvent(event({
-        type: 'response.done',
-        response: { id: `delayed-stop-response-${outcome}`, status: 'completed' },
-      }));
+      await controller.handleRealtimeEvent(
+        event({
+          type: 'response.done',
+          response: {
+            id: `delayed-stop-response-${outcome}`,
+            status: 'completed',
+          },
+        }),
+      );
       assert.equal(trace.includes('play:start'), false, trace.join(' → '));
 
       releaseStop();
       await pendingStop;
       await new Promise((resolve) => setImmediate(resolve));
       assert.equal(trace.includes('output:stop'), true, trace.join(' → '));
-      assert.equal(trace.includes('play:start'), outcome !== 'success', trace.join(' → '));
+      assert.equal(
+        trace.includes('play:start'),
+        outcome !== 'success',
+        trace.join(' → '),
+      );
       if (outcome !== 'success') {
         assert.ok(
           trace.indexOf('output:stop') < trace.indexOf('play:start'),
@@ -2746,17 +3465,22 @@ test('stale handoff cleanup cannot erase a resumed successor across repeated fai
   const trace = [];
   const radioLayer = {
     setVoiceDucked: () => trace.push('duck'),
-    playForVoice: ({ attemptId }) => new Promise((resolve) => {
-      playbackAttempts.push({ attemptId, resolve });
-      trace.push(`play:${attemptId}`);
-    }),
+    playForVoice: ({ attemptId }) =>
+      new Promise((resolve) => {
+        playbackAttempts.push({ attemptId, resolve });
+        trace.push(`play:${attemptId}`);
+      }),
     stopPlayback: ({ attemptId }) => {
       trace.push(`stop:${attemptId}`);
       return true;
     },
   };
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -2808,53 +3532,68 @@ test('stale handoff cleanup cannot erase a resumed successor across repeated fai
 
 test('a later same-response stop clears an already prepared playback result', async () => {
   const ui = {
-    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
   };
   const controller = new GevRealtimeController({
     ui,
-    runner: async (_name, args) => args.action === 'select'
-      ? {
-        ok: true,
-        action: 'control_radio',
-        radioAction: 'select',
-        radioPlaybackRequested: true,
-      }
-      : { ok: true, action: 'control_radio', radioAction: 'stop' },
+    runner: async (_name, args) =>
+      args.action === 'select'
+        ? {
+            ok: true,
+            action: 'control_radio',
+            radioAction: 'select',
+            radioPlaybackRequested: true,
+          }
+        : { ok: true, action: 'control_radio', radioAction: 'stop' },
   });
   controller.debugLog = () => {};
   controller.sendVisualContextIfUseful = async () => false;
   controller.dc = { readyState: 'open', send() {}, close() {} };
   const event = (payload) => ({ data: JSON.stringify(payload) });
 
-  await controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'prepared-then-stop',
-    call_id: 'prepared-select',
-    name: 'control_radio',
-    arguments: '{"action":"select"}',
-  }));
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'prepared-then-stop',
+      call_id: 'prepared-select',
+      name: 'control_radio',
+      arguments: '{"action":"select"}',
+    }),
+  );
   assert.equal(controller.pendingRadioPlaybackResult?.radioAction, 'select');
-  await controller.handleRealtimeEvent(event({
-    type: 'response.function_call_arguments.done',
-    response_id: 'prepared-then-stop',
-    call_id: 'stop-prepared',
-    name: 'control_radio',
-    arguments: '{"action":"stop"}',
-  }));
+  await controller.handleRealtimeEvent(
+    event({
+      type: 'response.function_call_arguments.done',
+      response_id: 'prepared-then-stop',
+      call_id: 'stop-prepared',
+      name: 'control_radio',
+      arguments: '{"action":"stop"}',
+    }),
+  );
   assert.equal(controller.pendingRadioPlaybackResult, null);
 });
 
 test('computeDownscale leaves an already-small frame untouched', () => {
-  assert.deepEqual(computeDownscale(800, 600, 1200 * 900), { width: 800, height: 600 });
+  assert.deepEqual(computeDownscale(800, 600, 1200 * 900), {
+    width: 800,
+    height: 600,
+  });
 });
 
 test('computeDownscale clamps a huge landscape frame under the pixel budget', () => {
   const maxPx = 1200 * 900; // 1,080,000
   const out = computeDownscale(3840, 2160, maxPx); // 4K, 8.29 MP
-  assert.ok(out.width * out.height <= maxPx, `pixels ${out.width * out.height} <= ${maxPx}`);
+  assert.ok(
+    out.width * out.height <= maxPx,
+    `pixels ${out.width * out.height} <= ${maxPx}`,
+  );
   // aspect ratio preserved (16:9) within rounding
   assert.ok(Math.abs(out.width / out.height - 3840 / 2160) < 0.01);
 });
@@ -2865,14 +3604,23 @@ test('computeDownscale clamps a TALL PORTRAIT frame too (the width-only bug)', (
   // passed the old 1200px width clamp untouched, but its 1080*3000 = 3.24 MP
   // total blows the budget and must be scaled down.
   const out = computeDownscale(1080, 3000, maxPx);
-  assert.ok(out.width * out.height <= maxPx, `portrait pixels ${out.width * out.height} <= ${maxPx}`);
+  assert.ok(
+    out.width * out.height <= maxPx,
+    `portrait pixels ${out.width * out.height} <= ${maxPx}`,
+  );
   assert.ok(out.height < 3000, 'height was reduced');
   assert.ok(out.width < 1080, 'width was reduced');
-  assert.ok(Math.abs(out.width / out.height - 1080 / 3000) < 0.01, 'aspect preserved');
+  assert.ok(
+    Math.abs(out.width / out.height - 1080 / 3000) < 0.01,
+    'aspect preserved',
+  );
 });
 
 test('computeDownscale never upscales and never returns a zero dimension', () => {
-  assert.deepEqual(computeDownscale(10, 10, 1_000_000), { width: 10, height: 10 });
+  assert.deepEqual(computeDownscale(10, 10, 1_000_000), {
+    width: 10,
+    height: 10,
+  });
   const tiny = computeDownscale(1, 1, 1);
   assert.ok(tiny.width >= 1 && tiny.height >= 1);
 });
@@ -2921,31 +3669,50 @@ test('isBenignViewportDeleteError matches an item_not_found by code', () => {
 
 test('isBenignViewportDeleteError matches an echoed delete event_id even without the code', () => {
   const pending = new Set(['evt_del_abc']);
-  const payload = { type: 'error', event_id: 'evt_del_abc', error: { code: 'server_error' } };
+  const payload = {
+    type: 'error',
+    event_id: 'evt_del_abc',
+    error: { code: 'server_error' },
+  };
   assert.equal(isBenignViewportDeleteError(payload, pending), true);
 });
 
 test('isBenignViewportDeleteError does NOT swallow unrelated errors', () => {
   const pending = new Set(['evt_del_abc']);
   // Different code, event_id we never issued → must stay fatal.
-  const payload = { type: 'error', event_id: 'evt_other', error: { code: 'invalid_request_error' } };
+  const payload = {
+    type: 'error',
+    event_id: 'evt_other',
+    error: { code: 'invalid_request_error' },
+  };
   assert.equal(isBenignViewportDeleteError(payload, pending), false);
 });
 
 test('isBenignViewportDeleteError is false for non-error payloads and junk', () => {
-  assert.equal(isBenignViewportDeleteError({ type: 'response.done' }, new Set()), false);
+  assert.equal(
+    isBenignViewportDeleteError({ type: 'response.done' }, new Set()),
+    false,
+  );
   assert.equal(isBenignViewportDeleteError(null, new Set()), false);
   assert.equal(isBenignViewportDeleteError(undefined), false);
-  assert.equal(isBenignViewportDeleteError({ type: 'error' }, new Set()), false);
+  assert.equal(
+    isBenignViewportDeleteError({ type: 'error' }, new Set()),
+    false,
+  );
 });
-
 
 test('hidden document yields no fresh frame — capture must not label a stale canvas Current', async () => {
   const originalDocument = globalThis.document;
   let requested = 0;
   const scene = {
-    postRender: { addEventListener() { return () => {}; } },
-    requestRender() { requested += 1; },
+    postRender: {
+      addEventListener() {
+        return () => {};
+      },
+    },
+    requestRender() {
+      requested += 1;
+    },
   };
   try {
     globalThis.document = { hidden: true };
@@ -2963,8 +3730,17 @@ test('visible document with a rendering scene reports a fresh frame', async () =
     globalThis.document = { hidden: false };
     let fire = null;
     const scene = {
-      postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } },
-      requestRender() { queueMicrotask(() => fire?.()); },
+      postRender: {
+        addEventListener(listener) {
+          fire = listener;
+          return () => {
+            fire = null;
+          };
+        },
+      },
+      requestRender() {
+        queueMicrotask(() => fire?.());
+      },
     };
     const fresh = await renderFreshCesiumFrame({ scene });
     assert.equal(fresh, true);
@@ -2980,8 +3756,18 @@ test('a tab switch during the bounded render wait invalidates freshness', async 
     globalThis.document = doc;
     let fire = null;
     const scene = {
-      postRender: { addEventListener(listener) { fire = listener; return () => { fire = null; }; } },
-      requestRender() { doc.hidden = true; queueMicrotask(() => fire?.()); },
+      postRender: {
+        addEventListener(listener) {
+          fire = listener;
+          return () => {
+            fire = null;
+          };
+        },
+      },
+      requestRender() {
+        doc.hidden = true;
+        queueMicrotask(() => fire?.());
+      },
     };
     const fresh = await renderFreshCesiumFrame({ scene });
     assert.equal(fresh, false, 'freshness rechecked after the await');
@@ -3018,12 +3804,16 @@ test('voice tier round-trips through storage', () => {
 test('an unset or hand-edited tier reads back as standard', () => {
   assert.equal(readStoredVoiceTier(fakeVoiceStorage()), 'standard');
   assert.equal(
-    readStoredVoiceTier(fakeVoiceStorage({ 'godsEyeView.voiceCost.tier': 'gpt-4o' })),
-    'standard'
+    readStoredVoiceTier(
+      fakeVoiceStorage({ 'godsEyeView.voiceCost.tier': 'gpt-4o' }),
+    ),
+    'standard',
   );
   assert.equal(
-    readStoredVoiceTier(fakeVoiceStorage({ 'godsEyeView.voiceCost.tier': '__proto__' })),
-    'standard'
+    readStoredVoiceTier(
+      fakeVoiceStorage({ 'godsEyeView.voiceCost.tier': '__proto__' }),
+    ),
+    'standard',
   );
 });
 
@@ -3057,14 +3847,14 @@ test('corrupt stored limits fall back to defaults rather than disarming the cap'
   // A disarmed cap is the dangerous failure — assert we land on the default,
   // not on Infinity.
   const limits = readStoredVoiceLimits(
-    fakeVoiceStorage({ 'godsEyeView.voiceCost.limits': '{oops' })
+    fakeVoiceStorage({ 'godsEyeView.voiceCost.limits': '{oops' }),
   );
   assert.deepEqual(limits, { warnUsd: 2, capUsd: 5 });
 });
 
 test('partially stored limits keep the default for the missing threshold', () => {
   const limits = readStoredVoiceLimits(
-    fakeVoiceStorage({ 'godsEyeView.voiceCost.limits': '{"warnUsd":0.5}' })
+    fakeVoiceStorage({ 'godsEyeView.voiceCost.limits': '{"warnUsd":0.5}' }),
   );
   assert.deepEqual(limits, { warnUsd: 0.5, capUsd: 5 });
 });
@@ -3107,7 +3897,11 @@ const usdUsage = (usd) => ({
 function costControllerHarness({ runner } = {}) {
   const toolCalls = [];
   const ui = {
-    root: { dataset: {}, classList: { remove() {}, add() {} }, querySelectorAll: () => [] },
+    root: {
+      dataset: {},
+      classList: { remove() {}, add() {} },
+      querySelectorAll: () => [],
+    },
     status: { textContent: '' },
     detail: { textContent: '', title: '' },
     errorDetail: { textContent: '' },
@@ -3117,14 +3911,23 @@ function costControllerHarness({ runner } = {}) {
       textContent: '',
       title: '',
       attrs: {},
-      setAttribute(key, value) { this.attrs[key] = value; },
-      getAttribute(key) { return this.attrs[key] ?? null; },
+      setAttribute(key, value) {
+        this.attrs[key] = value;
+      },
+      getAttribute(key) {
+        return this.attrs[key] ?? null;
+      },
     },
     costValue: { textContent: '', title: '', dataset: {} },
   };
   const controller = new GevRealtimeController({
     ui,
-    runner: runner || (async (name) => { toolCalls.push(name); return { ok: true }; }),
+    runner:
+      runner ||
+      (async (name) => {
+        toolCalls.push(name);
+        return { ok: true };
+      }),
   });
   controller.debugLog = () => {};
   controller.updateVoiceButtonLabel = () => {};
@@ -3161,8 +3964,15 @@ test('F1: toggling tier mid-session does not erase accrued spend', () => {
   controller.setVoiceTier('mini');
 
   const after = controller.costTracker.state();
-  assert.ok(Math.abs(after.totalUsd - 3) < 1e-9, `accrued spend survived: ${after.totalUsd}`);
-  assert.equal(after.modelId, 'gpt-realtime-2', 'session keeps its original model binding');
+  assert.ok(
+    Math.abs(after.totalUsd - 3) < 1e-9,
+    `accrued spend survived: ${after.totalUsd}`,
+  );
+  assert.equal(
+    after.modelId,
+    'gpt-realtime-2',
+    'session keeps its original model binding',
+  );
 });
 
 test('F1: the cap still fires after a mid-session toggle, at the original rates', () => {
@@ -3178,7 +3988,11 @@ test('F1: the cap still fires after a mid-session toggle, at the original rates'
     controller.recordUsage(usdUsage(1));
     controller.setVoiceTier(i % 2 === 0 ? 'mini' : 'standard'); // toggle spam
   }
-  assert.equal(controller.costTracker.state().capReached, false, '$4 is under the cap');
+  assert.equal(
+    controller.costTracker.state().capReached,
+    false,
+    '$4 is under the cap',
+  );
   controller.recordUsage(usdUsage(1)); // $5 — crosses
   assert.equal(controller.costTracker.state().capReached, true);
   assert.equal(controller.isSessionEnding(), true);
@@ -3225,7 +4039,10 @@ test('F4: a cap between tool events stops every later tool', async () => {
   // single pre-loop gate covers it, and there is no per-iteration check.
   const executed = [];
   const { controller } = costControllerHarness({
-    runner: async (name) => { executed.push(name); return { ok: true }; },
+    runner: async (name) => {
+      executed.push(name);
+      return { ok: true };
+    },
   });
   controller.status = 'listening';
   controller.dc = { readyState: 'open', send() {}, close() {} };
@@ -3240,8 +4057,14 @@ test('F4: a cap between tool events stops every later tool', async () => {
   await controller.handleRealtimeEvent(doneEvent(usdUsage(9))); // trips the cap
   assert.equal(controller.isSessionEnding(), true);
 
-  await controller.handleRealtimeEvent(fnCallEvent('fly_to_location', 'i2', 'c2'));
-  assert.deepEqual(executed, ['set_hud'], 'no map mutation dispatched after the cap');
+  await controller.handleRealtimeEvent(
+    fnCallEvent('fly_to_location', 'i2', 'c2'),
+  );
+  assert.deepEqual(
+    executed,
+    ['set_hud'],
+    'no map mutation dispatched after the cap',
+  );
 });
 
 test('F4: tools DO execute normally while the session is healthy', async () => {
@@ -3291,8 +4114,18 @@ test('F5: teardown always closes the channel, in one step', () => {
   let closed = false;
   let pcClosed = false;
   controller.responseActive = true;
-  controller.dc = { readyState: 'open', send() {}, close() { closed = true; } };
-  controller.pc = { close() { pcClosed = true; } };
+  controller.dc = {
+    readyState: 'open',
+    send() {},
+    close() {
+      closed = true;
+    },
+  };
+  controller.pc = {
+    close() {
+      pcClosed = true;
+    },
+  };
   controller.stop();
   assert.equal(closed, true, 'data channel closed');
   assert.equal(pcClosed, true, 'peer connection closed');
@@ -3316,22 +4149,36 @@ test('F5: a response in flight at teardown marks the accounting INCOMPLETE', () 
   controller.stop();
   const state = controller.costTracker.state();
   assert.equal(state.incomplete, true);
-  assert.equal(state.display, '~$1.00*', 'see-note mark, not a direction claim');
+  assert.equal(
+    state.display,
+    '~$1.00*',
+    'see-note mark, not a direction claim',
+  );
   assert.match(state.note, /incomplete/i, 'the tooltip explains why');
-  assert.doesNotMatch(state.note, /at least|lower bound|floor/i, 'no floor claim');
+  assert.doesNotMatch(
+    state.note,
+    /at least|lower bound|floor/i,
+    'no floor claim',
+  );
 });
 
 test('F5: a clean teardown does not mark the total incomplete', () => {
   const { controller } = costControllerHarness();
   controller.status = 'listening';
-  controller.costTracker = createVoiceCostTracker({ modelId: 'gpt-realtime-2' });
+  controller.costTracker = createVoiceCostTracker({
+    modelId: 'gpt-realtime-2',
+  });
   controller.recordUsage(usdUsage(1));
   controller.responseActive = false;
   controller.dc = { readyState: 'open', send() {}, close() {} };
   controller.stop();
   assert.equal(controller.costTracker.state().incomplete, false);
   assert.equal(controller.costTracker.state().display, '~$1.00');
-  assert.equal(controller.costTracker.state().note, null, 'no note when complete');
+  assert.equal(
+    controller.costTracker.state().note,
+    null,
+    'no note when complete',
+  );
 });
 
 test('F2/F5: no stray message listener survives teardown to double-meter', () => {
@@ -3345,7 +4192,9 @@ test('F2/F5: no stray message listener survives teardown to double-meter', () =>
     readyState: 'open',
     send() {},
     close() {},
-    addEventListener(type) { added.push(type); },
+    addEventListener(type) {
+      added.push(type);
+    },
     removeEventListener() {},
   };
   controller.stop();
@@ -3368,7 +4217,10 @@ test('F3: setVoiceTier does NOT rebuild the tracker while transport is live', ()
   controller.setVoiceTier('mini');
 
   const state = controller.costTracker.state();
-  assert.ok(Math.abs(state.totalUsd - 3) < 1e-9, `spend survived: ${state.totalUsd}`);
+  assert.ok(
+    Math.abs(state.totalUsd - 3) < 1e-9,
+    `spend survived: ${state.totalUsd}`,
+  );
   assert.equal(state.modelId, 'gpt-realtime-2');
 });
 
@@ -3387,7 +4239,9 @@ test('F4: two clicks during a live session return to the original preference', (
   // TRACKER, so every click during a standard session selected 'mini' again.
   const { controller, ui } = costControllerHarness();
   controller.status = 'listening';
-  controller.costTracker = createVoiceCostTracker({ modelId: 'gpt-realtime-2' });
+  controller.costTracker = createVoiceCostTracker({
+    modelId: 'gpt-realtime-2',
+  });
   controller.voiceTier = 'standard';
 
   controller.toggleVoiceTier();
@@ -3401,7 +4255,9 @@ test('F4: two clicks during a live session return to the original preference', (
 test('F4: the toggle alternates across many clicks mid-session', () => {
   const { controller } = costControllerHarness();
   controller.status = 'listening';
-  controller.costTracker = createVoiceCostTracker({ modelId: 'gpt-realtime-2' });
+  controller.costTracker = createVoiceCostTracker({
+    modelId: 'gpt-realtime-2',
+  });
   controller.voiceTier = 'standard';
   const seen = [];
   for (let i = 0; i < 4; i += 1) seen.push(controller.toggleVoiceTier());
@@ -3419,7 +4275,10 @@ test('F3: an unrecognised session model bills at the most expensive known rates'
   const standard = createVoiceCostTracker({ modelId: 'gpt-realtime-2' });
   const unknownCost = tracker.record(usdUsage(1)).totalUsd;
   const standardCost = standard.record(usdUsage(1)).totalUsd;
-  assert.ok(unknownCost >= standardCost, 'never cheaper than the priciest known model');
+  assert.ok(
+    unknownCost >= standardCost,
+    'never cheaper than the priciest known model',
+  );
 });
 
 /**
@@ -3449,7 +4308,11 @@ test('a typed command mid-response defers its turn instead of colliding', () => 
   const { controller, sent } = textCommandController();
   controller.responseActive = true;
   controller.sendTextCommand('zoom to the globe');
-  assert.deepEqual(sent, ['client.user_text'], 'no second response.create while one is active');
+  assert.deepEqual(
+    sent,
+    ['client.user_text'],
+    'no second response.create while one is active',
+  );
   assert.equal(controller.pendingUserTextResponse, true);
 });
 
@@ -3459,18 +4322,33 @@ test('the deferred typed turn is answered once when the active response finishes
   controller.sendTextCommand('zoom to the globe');
   controller.setVoiceSpeaker = () => {};
   controller.recordUsage = () => {};
-  controller.updateResponseState({ type: 'response.done', response: { status: 'completed' } });
-  assert.deepEqual(sent, ['client.user_text', 'client.response_create.user_text']);
+  controller.updateResponseState({
+    type: 'response.done',
+    response: { status: 'completed' },
+  });
+  assert.deepEqual(sent, [
+    'client.user_text',
+    'client.response_create.user_text',
+  ]);
   assert.equal(controller.pendingUserTextResponse, false);
   // A second completion must not produce a second answer to the same command.
-  controller.updateResponseState({ type: 'response.done', response: { status: 'completed' } });
-  assert.deepEqual(sent, ['client.user_text', 'client.response_create.user_text']);
+  controller.updateResponseState({
+    type: 'response.done',
+    response: { status: 'completed' },
+  });
+  assert.deepEqual(sent, [
+    'client.user_text',
+    'client.response_create.user_text',
+  ]);
 });
 
 test('a typed command with nothing in flight is answered immediately', () => {
   const { controller, sent } = textCommandController();
   controller.sendTextCommand('zoom to the globe');
-  assert.deepEqual(sent, ['client.user_text', 'client.response_create.user_text']);
+  assert.deepEqual(sent, [
+    'client.user_text',
+    'client.response_create.user_text',
+  ]);
   assert.equal(controller.responseCreatePending, true);
 });
 
@@ -3482,14 +4360,28 @@ test('an overlapping-response rejection is dropped, never replayed', () => {
   controller.handleRealtimeEvent({
     data: JSON.stringify({
       type: 'error',
-      error: { type: 'invalid_request_error', code: 'conversation_already_has_active_response' },
+      error: {
+        type: 'invalid_request_error',
+        code: 'conversation_already_has_active_response',
+      },
     }),
   });
-  assert.equal(controller.pendingUserTextResponse, false, 'a rejected turn must not re-arm itself');
+  assert.equal(
+    controller.pendingUserTextResponse,
+    false,
+    'a rejected turn must not re-arm itself',
+  );
   controller.setVoiceSpeaker = () => {};
   controller.recordUsage = () => {};
-  controller.updateResponseState({ type: 'response.done', response: { status: 'completed' } });
-  assert.deepEqual(sent, ['client.user_text'], 'and must not speak the same turn again');
+  controller.updateResponseState({
+    type: 'response.done',
+    response: { status: 'completed' },
+  });
+  assert.deepEqual(
+    sent,
+    ['client.user_text'],
+    'and must not speak the same turn again',
+  );
 });
 
 /** A late function call from response `responseId`, as the server sends it. */
@@ -3509,7 +4401,10 @@ function lateToolEvent(responseId, callId) {
 function toolDispatchController() {
   const { controller, sent } = textCommandController();
   const dispatched = [];
-  controller.runner = async (name) => { dispatched.push(name); return { ok: true }; };
+  controller.runner = async (name) => {
+    dispatched.push(name);
+    return { ok: true };
+  };
   controller.setStatus = () => {};
   controller.setVoiceSpeaker = () => {};
   controller.recordUsage = () => {};
@@ -3519,14 +4414,24 @@ function toolDispatchController() {
 
 test('CONTROL: a live response’s function call is dispatched normally', async () => {
   const { controller, dispatched } = toolDispatchController();
-  controller.updateResponseState({ type: 'response.created', response: { id: 'resp_live' } });
+  controller.updateResponseState({
+    type: 'response.created',
+    response: { id: 'resp_live' },
+  });
   await controller.handleRealtimeEvent(lateToolEvent('resp_live', 'call_live'));
-  assert.deepEqual(dispatched, ['fly_to_location'], 'the guard must not block ordinary tool calls');
+  assert.deepEqual(
+    dispatched,
+    ['fly_to_location'],
+    'the guard must not block ordinary tool calls',
+  );
 });
 
 test('a typed command supersedes the old response, so its late tools never fire', async () => {
   const { controller, sent, dispatched } = toolDispatchController();
-  controller.updateResponseState({ type: 'response.created', response: { id: 'resp_old' } });
+  controller.updateResponseState({
+    type: 'response.created',
+    response: { id: 'resp_old' },
+  });
   assert.equal(controller.activeResponseId, 'resp_old');
 
   controller.sendTextCommand('stop');
@@ -3535,7 +4440,11 @@ test('a typed command supersedes the old response, so its late tools never fire'
   // The same event the control case dispatched, now belonging to a turn the
   // operator has replaced.
   await controller.handleRealtimeEvent(lateToolEvent('resp_old', 'call_stale'));
-  assert.deepEqual(dispatched, [], 'a stale turn must not mutate the map after a newer command');
+  assert.deepEqual(
+    dispatched,
+    [],
+    'a stale turn must not mutate the map after a newer command',
+  );
   // The call is REFUSED, not ignored: it is still answered (see the terminal
   // output pin below), but nothing about it creates a response.
   assert.deepEqual(sent, ['client.user_text', 'client.function_call_output']);
@@ -3550,9 +4459,17 @@ test('a typed command drops the old response’s queued follow-up confirmation',
   const { controller, sent } = textCommandController();
   controller.setVoiceSpeaker = () => {};
   controller.recordUsage = () => {};
-  controller.updateResponseState({ type: 'response.created', response: { id: 'resp_old' } });
-  controller.queueResponseCreate('Briefly confirm the completed GEV action once.');
-  assert.ok(controller.pendingResponseInstructions, 'a follow-up is queued behind the active response');
+  controller.updateResponseState({
+    type: 'response.created',
+    response: { id: 'resp_old' },
+  });
+  controller.queueResponseCreate(
+    'Briefly confirm the completed GEV action once.',
+  );
+  assert.ok(
+    controller.pendingResponseInstructions,
+    'a follow-up is queued behind the active response',
+  );
 
   controller.sendTextCommand('stop');
   assert.equal(
@@ -3561,7 +4478,10 @@ test('a typed command drops the old response’s queued follow-up confirmation',
     'the stale confirmation is dropped — the typed turn is the single answer now',
   );
 
-  controller.updateResponseState({ type: 'response.done', response: { status: 'completed' } });
+  controller.updateResponseState({
+    type: 'response.done',
+    response: { status: 'completed' },
+  });
   assert.deepEqual(
     sent,
     ['client.user_text', 'client.response_create.user_text'],
@@ -3579,30 +4499,51 @@ test('a burst of typed commands coalesces into one answer, keeping both items', 
   controller.responseActive = true;
   controller.sendTextCommand('zoom to the globe');
   controller.sendTextCommand('actually, show me Texas');
-  assert.deepEqual(sent, ['client.user_text', 'client.user_text'], 'both items are kept');
+  assert.deepEqual(
+    sent,
+    ['client.user_text', 'client.user_text'],
+    'both items are kept',
+  );
 
-  controller.updateResponseState({ type: 'response.done', response: { status: 'completed' } });
-  assert.deepEqual(sent, [
-    'client.user_text',
-    'client.user_text',
-    'client.response_create.user_text',
-  ], 'and exactly one response covers the burst');
+  controller.updateResponseState({
+    type: 'response.done',
+    response: { status: 'completed' },
+  });
+  assert.deepEqual(
+    sent,
+    [
+      'client.user_text',
+      'client.user_text',
+      'client.response_create.user_text',
+    ],
+    'and exactly one response covers the burst',
+  );
 });
 
 test('a live response is untouched when no typed command superseded it', () => {
   const { controller } = textCommandController();
   controller.setVoiceSpeaker = () => {};
   controller.recordUsage = () => {};
-  controller.updateResponseState({ type: 'response.created', response: { id: 'resp_live' } });
+  controller.updateResponseState({
+    type: 'response.created',
+    response: { id: 'resp_live' },
+  });
   assert.equal(controller.isSupersededResponse('resp_live'), false);
-  assert.equal(controller.isSupersededResponse(null), false, 'an unattributed call is not stale');
+  assert.equal(
+    controller.isSupersededResponse(null),
+    false,
+    'an unattributed call is not stale',
+  );
 });
 
 /** Observe the actual protocol output rather than replacing its implementation. */
 function observeToolOutputs(controller, record) {
   const send = controller.sendRealtimeEvent;
   controller.sendRealtimeEvent = (message, label) => {
-    if (message.type === 'conversation.item.create' && message.item?.type === 'function_call_output') {
+    if (
+      message.type === 'conversation.item.create' &&
+      message.item?.type === 'function_call_output'
+    ) {
       record(message.item.call_id, JSON.parse(message.item.output));
     }
     return send.call(controller, message, label);
@@ -3615,20 +4556,33 @@ test('a refused superseded call is still answered with a terminal output', async
   // callDedupeKeys is written to avoid. Refusing is not ignoring.
   const { controller, sent, dispatched } = toolDispatchController();
   const outputs = [];
-  observeToolOutputs(controller, (callId, result) => outputs.push({ callId, result }));
-  controller.updateResponseState({ type: 'response.created', response: { id: 'resp_old' } });
+  observeToolOutputs(controller, (callId, result) =>
+    outputs.push({ callId, result }),
+  );
+  controller.updateResponseState({
+    type: 'response.created',
+    response: { id: 'resp_old' },
+  });
   controller.sendTextCommand('stop');
   await controller.handleRealtimeEvent(lateToolEvent('resp_old', 'call_stale'));
 
   assert.deepEqual(dispatched, [], 'the stale tool still must not run');
-  assert.equal(outputs.length, 1, 'exactly one terminal output for the refused call');
+  assert.equal(
+    outputs.length,
+    1,
+    'exactly one terminal output for the refused call',
+  );
   assert.equal(outputs[0].callId, 'call_stale');
   assert.equal(outputs[0].result.ok, false);
   assert.equal(outputs[0].result.superseded, true);
   assert.equal(outputs[0].result.action, 'fly_to_location');
-  assert.ok(/superseded/i.test(outputs[0].result.error), 'and it says plainly why');
+  assert.ok(
+    /superseded/i.test(outputs[0].result.error),
+    'and it says plainly why',
+  );
   assert.equal(
-    sent.filter((label) => label === 'client.response_create.tool_followup').length,
+    sent.filter((label) => label === 'client.response_create.tool_followup')
+      .length,
     0,
     'a refused call must not create a response of its own',
   );
@@ -3659,11 +4613,20 @@ test('the two server surfaces of one refused call collapse to a single output', 
   const { controller } = toolDispatchController();
   const outputs = [];
   observeToolOutputs(controller, (callId) => outputs.push(callId));
-  controller.updateResponseState({ type: 'response.created', response: { id: 'resp_old' } });
+  controller.updateResponseState({
+    type: 'response.created',
+    response: { id: 'resp_old' },
+  });
   controller.sendTextCommand('stop');
   await controller.handleRealtimeEvent(lateToolEvent('resp_old', 'call_stale'));
-  await controller.handleRealtimeEvent(lateToolItemEvent('resp_old', 'call_stale'));
-  assert.deepEqual(outputs, ['call_stale'], 'exactly one output across both surfaces');
+  await controller.handleRealtimeEvent(
+    lateToolItemEvent('resp_old', 'call_stale'),
+  );
+  assert.deepEqual(
+    outputs,
+    ['call_stale'],
+    'exactly one output across both surfaces',
+  );
 });
 
 test('a genuinely different refused call still gets its own output', async () => {
@@ -3671,13 +4634,32 @@ test('a genuinely different refused call still gets its own output', async () =>
   const { controller } = toolDispatchController();
   const outputs = [];
   observeToolOutputs(controller, (callId) => outputs.push(callId));
-  controller.updateResponseState({ type: 'response.created', response: { id: 'resp_old' } });
+  controller.updateResponseState({
+    type: 'response.created',
+    response: { id: 'resp_old' },
+  });
   controller.sendTextCommand('stop');
   await controller.handleRealtimeEvent(lateToolEvent('resp_old', 'call_one'));
-  await controller.handleRealtimeEvent(lateToolItemEvent('resp_old', 'call_two', 'item_two'));
-  assert.deepEqual(outputs, ['call_one', 'call_two'], 'each distinct call is answered');
+  await controller.handleRealtimeEvent(
+    lateToolItemEvent('resp_old', 'call_two', 'item_two'),
+  );
+  assert.deepEqual(
+    outputs,
+    ['call_one', 'call_two'],
+    'each distinct call is answered',
+  );
 });
 
-const testPlaceSearch = () => createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ });
-function createGevActionRunner(options) { return createActionRunner({ placeSearch: testPlaceSearch(), ...options }); }
-function controlRadio(viewer, manager, args, options) { return runControlRadio(viewer, manager, args, { placeSearch: testPlaceSearch(), ...options }); }
+const testPlaceSearch = () =>
+  createStandalonePlaceSearch({
+    resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__,
+  });
+function createGevActionRunner(options) {
+  return createActionRunner({ placeSearch: testPlaceSearch(), ...options });
+}
+function controlRadio(viewer, manager, args, options) {
+  return runControlRadio(viewer, manager, args, {
+    placeSearch: testPlaceSearch(),
+    ...options,
+  });
+}

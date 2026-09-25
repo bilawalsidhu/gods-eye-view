@@ -29,7 +29,10 @@ test('FIRMS host registration constants pin the shipped source budget', () => {
 });
 
 test('FIRMS helper module cannot resurrect a dedicated canvas renderer', () => {
-  const source = readFileSync(new URL('./firmsLabels.js', import.meta.url), 'utf8');
+  const source = readFileSync(
+    new URL('./firmsLabels.js', import.meta.url),
+    'utf8',
+  );
   assert.doesNotMatch(source, /createElement\(['"]canvas['"]\)/);
   assert.doesNotMatch(source, /postRender/);
   assert.doesNotMatch(source, /worldToWindowCoordinates/);

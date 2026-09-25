@@ -23,7 +23,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+);
 const shotsDir = path.join(repoRoot, 'qa-shots', 'prewarm');
 const appUrl = process.env.QA_BASE_URL || 'http://localhost:4173';
 const label = process.env.QA_LABEL || 'after';
@@ -35,7 +38,9 @@ const chromeCandidates = [
   await puppeteer.executablePath().catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 ].filter(Boolean);
-const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
+const executablePath = chromeCandidates.find((candidate) =>
+  fs.existsSync(candidate),
+);
 const browser = await puppeteer.launch({
   headless: headful ? false : 'new',
   ...(executablePath ? { executablePath } : {}),
@@ -54,9 +59,11 @@ const consoleErrors = [];
 // Keep the message AND the stack: an ownerless promise rejection is reported
 // here with an "Uncaught (in promise)" message but a stack that does not say
 // so, while a Cesium DeveloperError puts the useful frames only in the stack.
-page.on('pageerror', (error) => pageErrors.push(
-  `${String(error?.message || error)}\n${String(error?.stack || '')}`.trim(),
-));
+page.on('pageerror', (error) =>
+  pageErrors.push(
+    `${String(error?.message || error)}\n${String(error?.stack || '')}`.trim(),
+  ),
+);
 page.on('console', (message) => {
   if (message.type() !== 'error') return;
   const text = message.text();
@@ -70,19 +77,35 @@ await page.evaluateOnNewDocument(() => {
   window.__qaPrewarmRejections = [];
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason;
-    window.__qaPrewarmRejections.push(String(reason?.stack || reason?.message || reason));
+    window.__qaPrewarmRejections.push(
+      String(reason?.stack || reason?.message || reason),
+    );
   });
 });
 
 const check = (name, passed, detail) => {
-  console.log(`  [${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` — ${detail}` : ''}`);
+  console.log(
+    `  [${passed ? 'PASS' : 'FAIL'}] ${name}${detail ? ` — ${detail}` : ''}`,
+  );
   if (!passed) failures.push(name);
 };
 
 /** High, straight-down, and horizon-grazing views all miss the rendered mesh. */
 const FLIGHT_LEGS = [
-  { name: 'austin-high', lon: -97.7431, lat: 30.2672, height: 900_000, pitch: -90 },
-  { name: 'ocean-horizon', lon: -140.0, lat: 5.0, height: 2_500_000, pitch: -12 },
+  {
+    name: 'austin-high',
+    lon: -97.7431,
+    lat: 30.2672,
+    height: 900_000,
+    pitch: -90,
+  },
+  {
+    name: 'ocean-horizon',
+    lon: -140.0,
+    lat: 5.0,
+    height: 2_500_000,
+    pitch: -12,
+  },
   { name: 'polar-limb', lon: 10.0, lat: 82.0, height: 6_000_000, pitch: -20 },
   { name: 'globe-out', lon: -30.0, lat: 12.0, height: 14_000_000, pitch: -90 },
 ];
@@ -91,16 +114,21 @@ let rejections = [];
 try {
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
   await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 });
-  await page.waitForFunction(() => window.__godsEyeView?.viewer, { timeout: 90_000 });
+  await page.waitForFunction(() => window.__godsEyeView?.viewer, {
+    timeout: 90_000,
+  });
   await page.waitForFunction(
-    () => document.getElementById('loading-screen')?.classList.contains('hidden'),
+    () =>
+      document.getElementById('loading-screen')?.classList.contains('hidden'),
     { timeout: 90_000 },
   );
   // Boot noise (tile / network warm-up) is not what this harness is about.
   await new Promise((resolve) => setTimeout(resolve, 4_000));
   pageErrors.length = 0;
   consoleErrors.length = 0;
-  await page.evaluate(() => { window.__qaPrewarmRejections.length = 0; });
+  await page.evaluate(() => {
+    window.__qaPrewarmRejections.length = 0;
+  });
 
   const legReports = [];
   for (const leg of FLIGHT_LEGS) {
@@ -112,7 +140,11 @@ try {
       await new Promise((resolve) => {
         viewer.camera.flyTo({
           destination: Cartesian3.fromDegrees(spec.lon, spec.lat, spec.height),
-          orientation: { heading: 0, pitch: (spec.pitch * Math.PI) / 180, roll: 0 },
+          orientation: {
+            heading: 0,
+            pitch: (spec.pitch * Math.PI) / 180,
+            roll: 0,
+          },
           duration: 1.2,
           complete: resolve,
           cancel: resolve,
@@ -139,10 +171,14 @@ try {
       return { leg: spec.name, picked };
     }, leg);
     legReports.push(report);
-    console.log(`  · ${report.leg}: center pick = ${JSON.stringify(report.picked)}`);
+    console.log(
+      `  · ${report.leg}: center pick = ${JSON.stringify(report.picked)}`,
+    );
   }
 
-  await page.screenshot({ path: path.join(shotsDir, `${label}-final-view.png`) });
+  await page.screenshot({
+    path: path.join(shotsDir, `${label}-final-view.png`),
+  });
 
   // ── Phase 2: the degenerate depth pick, injected ──────────────────────────
   // A depth pick over empty sky can hand back a Cartesian that is not a place.
@@ -156,9 +192,15 @@ try {
     const Cartesian3 = viewer.camera.position.constructor;
     const shapes = [
       // Throws inside Cesium's normalize.
-      { name: 'nan', value: new Cartesian3(Number.NaN, Number.NaN, Number.NaN) },
+      {
+        name: 'nan',
+        value: new Cartesian3(Number.NaN, Number.NaN, Number.NaN),
+      },
       { name: 'origin', value: new Cartesian3(0, 0, 0) },
-      { name: 'infinite', value: new Cartesian3(Number.POSITIVE_INFINITY, 0, 0) },
+      {
+        name: 'infinite',
+        value: new Cartesian3(Number.POSITIVE_INFINITY, 0, 0),
+      },
       // Converts SILENTLY to a point 6,378 km underground — the quiet failure a
       // bare non-zero check lets through, which then reverse-geocodes 0°, 0°.
       { name: 'core-interior', value: new Cartesian3(500, 0, 0) },
@@ -171,7 +213,10 @@ try {
     // The counter proves the prewarm re-picked under injection, so a clean
     // result cannot be clean merely because nothing ran.
     let pickCalls = 0;
-    scene.pickPosition = () => { pickCalls += 1; return current; };
+    scene.pickPosition = () => {
+      pickCalls += 1;
+      return current;
+    };
 
     const hudErrors = [];
     const nudge = (step) => {
@@ -182,7 +227,11 @@ try {
           carto.latitude,
           carto.height,
         ),
-        orientation: { heading: viewer.camera.heading, pitch: viewer.camera.pitch, roll: 0 },
+        orientation: {
+          heading: viewer.camera.heading,
+          pitch: viewer.camera.pitch,
+          roll: 0,
+        },
       });
       viewer.camera.moveEnd.raiseEvent();
     };
@@ -208,16 +257,21 @@ try {
         try {
           await styleManager.hud._summaryContext();
         } catch (error) {
-          hudErrors.push(`${shapes[step].name}: ${String(error?.message || error)}`);
+          hudErrors.push(
+            `${shapes[step].name}: ${String(error?.message || error)}`,
+          );
         }
       }
     } finally {
-      if (originalPick) Object.defineProperty(scene, 'pickPosition', originalPick);
+      if (originalPick)
+        Object.defineProperty(scene, 'pickPosition', originalPick);
       else delete scene.pickPosition;
     }
     return { hudErrors, shapes: shapes.length, pickCalls };
   });
-  console.log(`  · injected ${injection.shapes} degenerate pick shapes; ${injection.pickCalls} pick(s) served; HUD context threw ${injection.hudErrors.length}×`);
+  console.log(
+    `  · injected ${injection.shapes} degenerate pick shapes; ${injection.pickCalls} pick(s) served; HUD context threw ${injection.hudErrors.length}×`,
+  );
   await new Promise((resolve) => setTimeout(resolve, 1_500));
 
   check(
@@ -228,7 +282,9 @@ try {
   check(
     'a degenerate depth pick does not break the HUD view-target context',
     injection.hudErrors.length === 0,
-    injection.hudErrors.length ? injection.hudErrors.slice(0, 5).join(' | ').slice(0, 500) : 'clean',
+    injection.hudErrors.length
+      ? injection.hudErrors.slice(0, 5).join(' | ').slice(0, 500)
+      : 'clean',
   );
 
   // ── Phase 3: the HUD summary's own async boundary ─────────────────────────
@@ -241,7 +297,9 @@ try {
   // channel reports it.
   const boundaryMarker = 'QA: scene context unavailable';
   const pageErrorsBeforeBoundary = pageErrors.length;
-  const rejectionsBeforeBoundary = await page.evaluate(() => window.__qaPrewarmRejections.length);
+  const rejectionsBeforeBoundary = await page.evaluate(
+    () => window.__qaPrewarmRejections.length,
+  );
   const boundary = await page.evaluate((marker) => {
     const hud = window.__godsEyeView.styleManager.hud;
     window.__qaPriorSummaryContext = hud._summaryContext;
@@ -270,9 +328,14 @@ try {
   });
   const boundaryRejections = [
     ...pageErrors.slice(pageErrorsBeforeBoundary),
-    ...(await page.evaluate((n) => window.__qaPrewarmRejections.slice(n), rejectionsBeforeBoundary)),
+    ...(await page.evaluate(
+      (n) => window.__qaPrewarmRejections.slice(n),
+      rejectionsBeforeBoundary,
+    )),
   ].filter((text) => text.includes(boundaryMarker));
-  console.log(`  · void _updateSummary() reached the context ${boundaryStubCalls}× (sync ${boundary}) → ${boundaryRejections.length} escaped rejection(s)`);
+  console.log(
+    `  · void _updateSummary() reached the context ${boundaryStubCalls}× (sync ${boundary}) → ${boundaryRejections.length} escaped rejection(s)`,
+  );
 
   check(
     'the void _updateSummary() call actually reached its context await',
@@ -282,13 +345,17 @@ try {
   check(
     'a rejecting summary context does not escape the void _updateSummary() call',
     boundaryRejections.length === 0,
-    boundaryRejections.length ? boundaryRejections.join(' | ').slice(0, 400) : 'clean',
+    boundaryRejections.length
+      ? boundaryRejections.join(' | ').slice(0, 400)
+      : 'clean',
   );
 
   // An ownerless rejection reaches the driver as a page error prefixed
   // "Uncaught (in promise)"; the in-page listener is a second, less reliable
   // channel. Union both so neither can hide one.
-  const inPageRejections = await page.evaluate(() => window.__qaPrewarmRejections.slice());
+  const inPageRejections = await page.evaluate(() =>
+    window.__qaPrewarmRejections.slice(),
+  );
   rejections = [
     ...pageErrors.filter((text) => /Uncaught \(in promise\)/i.test(text)),
     ...inPageRejections,
@@ -297,9 +364,15 @@ try {
   // Cesium's DeveloperError stringifies as "DeveloperError: DeveloperError",
   // so the diagnostic text only survives on the caught HUD errors — scan those
   // too or this check reads clean while the page is throwing.
-  const allText = [...pageErrors, ...consoleErrors, ...rejections, ...injection.hudErrors];
-  const normalizeErrors = allText
-    .filter((text) => /normalized result is not a number/i.test(text));
+  const allText = [
+    ...pageErrors,
+    ...consoleErrors,
+    ...rejections,
+    ...injection.hudErrors,
+  ];
+  const normalizeErrors = allText.filter((text) =>
+    /normalized result is not a number/i.test(text),
+  );
 
   check(
     'no uncaught page errors across the flight and the degenerate picks',
@@ -318,7 +391,9 @@ try {
   check(
     'no "normalized result is not a number" DeveloperError on the flight',
     normalizeErrors.length === 0,
-    normalizeErrors.length ? `${normalizeErrors.length} occurrence(s)` : 'clean',
+    normalizeErrors.length
+      ? `${normalizeErrors.length} occurrence(s)`
+      : 'clean',
   );
   check(
     'no console errors on the flight',
@@ -330,20 +405,24 @@ try {
 
   fs.writeFileSync(
     path.join(shotsDir, `${label}-console.json`),
-    `${JSON.stringify({
-      appUrl,
-      label,
-      capturedAt: new Date().toISOString(),
-      legs: legReports,
-      injectedShapes: injection.shapes,
-      injectedPickCalls: injection.pickCalls,
-      hudContextErrors: injection.hudErrors,
-      voidBoundaryRejections: boundaryRejections,
-      pageErrors,
-      consoleErrors,
-      unhandledRejections: rejections,
-      normalizeErrors,
-    }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        appUrl,
+        label,
+        capturedAt: new Date().toISOString(),
+        legs: legReports,
+        injectedShapes: injection.shapes,
+        injectedPickCalls: injection.pickCalls,
+        hudContextErrors: injection.hudErrors,
+        voidBoundaryRejections: boundaryRejections,
+        pageErrors,
+        consoleErrors,
+        unhandledRejections: rejections,
+        normalizeErrors,
+      },
+      null,
+      2,
+    )}\n`,
   );
 } catch (error) {
   check('harness ran to completion', false, String(error?.message || error));
@@ -351,5 +430,7 @@ try {
   await browser.close();
 }
 
-console.log(`\n${failures.length ? `FAIL (${failures.length})` : 'PASS'} — evidence in ${path.relative(repoRoot, shotsDir)}/`);
+console.log(
+  `\n${failures.length ? `FAIL (${failures.length})` : 'PASS'} — evidence in ${path.relative(repoRoot, shotsDir)}/`,
+);
 process.exit(failures.length ? 1 : 0);

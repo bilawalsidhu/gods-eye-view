@@ -218,22 +218,31 @@
 
 .cctv-frame-wrap {
   position: relative;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--glass-border);
   background:
     radial-gradient(
       circle at 20% 20%,
-      rgba(0, 244, 255, 0.09),
+      rgba(0, 240, 255, 0.12),
       transparent 44%
     ),
-    linear-gradient(180deg, rgba(8, 14, 19, 0.88), rgba(4, 7, 11, 0.96));
+    linear-gradient(180deg, rgba(5, 20, 35, 0.95), rgba(2, 15, 30, 0.98));
   min-height: 150px;
   /* .cctv-panel-inner is a scrolling column flex container, so the default
      flex-shrink:1 squeezed this wrap down to its 150px floor while the 16:9
      image inside is taller — and the wrap is overflow:hidden, which clipped
      the bottom of the frame right back off. Never shrink the preview. */
   flex-shrink: 0;
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.1);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.cctv-frame-wrap:hover {
+  border-color: var(--glass-border-hover);
+  box-shadow: 0 0 22px rgba(0, 240, 255, 0.22);
 }
 
 /* Lightweight loading shimmer while the active frame is fetching */

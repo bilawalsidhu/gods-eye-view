@@ -29,6 +29,9 @@ export function createBrowserViteConfig({
       ],
     },
     server: {
+      // egm96-universal's ~2.7MB ESM module causes Vite dep optimizer timeout.
+      // Exclude it from pre-bundling so the browser loads the raw ESM file directly.
+      optimizeDeps: { exclude: ['egm96-universal'] },
       host: host || 'localhost',
       port: parseInt(port, 10) || 4173,
       allowedHosts:

@@ -14,25 +14,39 @@ cannot supply request headers, keys, cookies, endpoints or executable handlers.
 ```json
 {
   "version": 5,
-  "scenes": [{
-    "id": "example",
-    "title": "My geographic notes",
-    "dataPacks": [{
-      "id": "notes",
-      "version": 1,
-      "format": "geojson",
-      "source": { "adapter": "assets", "path": "my-scene/notes.geojson" },
-      "attribution": { "text": "Your name", "license": "Your asset's actual license" },
-      "placement": { "altitudeReference": "ellipsoid" }
-    }],
-    "shots": [{
-      "id": "overview",
-      "camera": { "lat": 30.2672, "lon": -97.742, "alt": 2600, "pitch": -70 },
-      "durationSec": 4,
-      "holdSec": 2,
-      "dataPackIds": ["notes"]
-    }]
-  }]
+  "scenes": [
+    {
+      "id": "example",
+      "title": "My geographic notes",
+      "dataPacks": [
+        {
+          "id": "notes",
+          "version": 1,
+          "format": "geojson",
+          "source": { "adapter": "assets", "path": "my-scene/notes.geojson" },
+          "attribution": {
+            "text": "Your name",
+            "license": "Your asset's actual license"
+          },
+          "placement": { "altitudeReference": "ellipsoid" }
+        }
+      ],
+      "shots": [
+        {
+          "id": "overview",
+          "camera": {
+            "lat": 30.2672,
+            "lon": -97.742,
+            "alt": 2600,
+            "pitch": -70
+          },
+          "durationSec": 4,
+          "holdSec": 2,
+          "dataPackIds": ["notes"]
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -55,7 +69,7 @@ this is not a new arbitrary-URL proxy.
   Placement is `{ "altitudeReference": "ellipsoid" }`.
 - **`image`:** PNG served as `image/png`, at most 4096×4096 pixels, checked before
   decoding. Placement is `{ "bounds": [west, south, east, north], "height": 300,
-  "altitudeReference": "ellipsoid" }`. Bounds must increase and cannot cross
+"altitudeReference": "ellipsoid" }`. Bounds must increase and cannot cross
   the dateline. The image is a horizontal geographic rectangle at that height.
 - **`media`:** MP4/WebM video or MPEG/Ogg/WAV/WebM audio, with the matching standard
   MIME type. Placement is `{ "anchorId": "media-location" }`, referring to a

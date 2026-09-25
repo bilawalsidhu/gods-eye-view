@@ -11,6 +11,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'control-panel', pinnable: true },
   { id: 'location-bar', pinnable: true },
   { id: 'data-panel' },
+  { id: 'ai-command-panel' },
   { id: 'cctv-panel' },
   { id: 'weather-panel' },
   { id: 'recent-imagery-panel' },
@@ -23,6 +24,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
 /** Standard map-view panels cleared out of the way on a fresh Cockpit entry. */
 const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'data-panel',
+  'ai-command-panel',
   'cctv-panel',
   'weather-panel',
   'recent-imagery-panel',

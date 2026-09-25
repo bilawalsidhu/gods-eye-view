@@ -41,14 +41,28 @@ function parseArgs() {
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case '--lat':    opts.lat = parseFloat(args[++i]); break;
-      case '--lon':    opts.lon = parseFloat(args[++i]); break;
-      case '--zoom':   opts.zoom = parseInt(args[++i], 10); break;
-      case '--radius': opts.radius = parseInt(args[++i], 10); break;
-      case '--outdir': opts.outdir = args[++i]; break;
-      case '--key':    opts.key = args[++i]; break;
+      case '--lat':
+        opts.lat = parseFloat(args[++i]);
+        break;
+      case '--lon':
+        opts.lon = parseFloat(args[++i]);
+        break;
+      case '--zoom':
+        opts.zoom = parseInt(args[++i], 10);
+        break;
+      case '--radius':
+        opts.radius = parseInt(args[++i], 10);
+        break;
+      case '--outdir':
+        opts.outdir = args[++i];
+        break;
+      case '--key':
+        opts.key = args[++i];
+        break;
       case '--help':
-        console.log(`Usage: node tools/streetview-panorama.mjs --lat <lat> --lon <lon> [--zoom 0-5] [--radius m] [--outdir dir] [--key apikey]`);
+        console.log(
+          `Usage: node tools/streetview-panorama.mjs --lat <lat> --lon <lon> [--zoom 0-5] [--radius m] [--outdir dir] [--key apikey]`,
+        );
         process.exit(0);
     }
   }
@@ -86,9 +100,13 @@ function loadApiKey(overrideKey) {
       const val = trimmed.slice(eqIdx + 1).trim();
       if (key === 'GOOGLE_MAPS_API_KEY' && val) return val;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
-  console.error('Error: No API key found. Set GOOGLE_MAPS_API_KEY in .env or pass --key.');
+  console.error(
+    'Error: No API key found. Set GOOGLE_MAPS_API_KEY in .env or pass --key.',
+  );
   process.exit(1);
 }
 
@@ -97,14 +115,18 @@ function loadApiKey(overrideKey) {
 // ---------------------------------------------------------------------------
 
 const TILE_API = 'https://tile.googleapis.com/v1';
-const COMMON_HEADERS = { 'Referer': 'http://localhost:4173/' };
+const COMMON_HEADERS = { Referer: 'http://localhost:4173/' };
 
 async function createSession(apiKey) {
   const url = `${TILE_API}/createSession?key=${apiKey}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { ...COMMON_HEADERS, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mapType: 'streetview', language: 'en-US', region: 'US' }),
+    body: JSON.stringify({
+      mapType: 'streetview',
+      language: 'en-US',
+      region: 'US',
+    }),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -127,7 +149,9 @@ async function findPanoId(apiKey, session, lat, lng, radius) {
   const data = await res.json();
   const panoId = data.panoIds?.[0];
   if (!panoId) {
-    throw new Error(`No Street View panorama found within ${radius}m of ${lat}, ${lng}`);
+    throw new Error(
+      `No Street View panorama found within ${radius}m of ${lat}, ${lng}`,
+    );
   }
   return panoId;
 }
@@ -177,8 +201,8 @@ async function stitchPanorama(apiKey, session, panoId, metadata, zoom) {
   // We use the fixed grid, then let fetchTile silently return null for
   // any tiles that 404 (edge padding). The stitched canvas size is
   // grid × tileSize, and real image content fills the upper-left portion.
-  const tilesX = Math.pow(2, zoom);                       // cols: 1,2,4,8,16,32
-  const tilesY = Math.max(1, Math.pow(2, zoom - 1));      // rows: 1,1,2,4, 8,16
+  const tilesX = Math.pow(2, zoom); // cols: 1,2,4,8,16,32
+  const tilesY = Math.max(1, Math.pow(2, zoom - 1)); // rows: 1,1,2,4, 8,16
 
   // The panorama image is an equirectangular projection: width = 360°,
   // height = 180°. The tile grid is always 2:1 aspect (except zoom 0
@@ -192,7 +216,9 @@ async function stitchPanorama(apiKey, session, panoId, metadata, zoom) {
   const panoWidth = canvasWidth;
   const panoHeight = canvasHeight;
 
-  console.log(`Panorama at zoom ${zoom}: grid ${tilesX}x${tilesY} = ${tilesX * tilesY} tiles (${panoWidth}x${panoHeight}px)`);
+  console.log(
+    `Panorama at zoom ${zoom}: grid ${tilesX}x${tilesY} = ${tilesX * tilesY} tiles (${panoWidth}x${panoHeight}px)`,
+  );
 
   // Fetch all tiles with concurrency limit
   const CONCURRENCY = 6;
@@ -220,7 +246,9 @@ async function stitchPanorama(apiKey, session, panoId, metadata, zoom) {
     }
   }
 
-  const workers = Array.from({ length: Math.min(CONCURRENCY, total) }, () => worker());
+  const workers = Array.from({ length: Math.min(CONCURRENCY, total) }, () =>
+    worker(),
+  );
   await Promise.all(workers);
   console.log(`  Fetched ${total}/${total} tiles`);
 
@@ -267,7 +295,9 @@ async function main() {
   console.log('Creating session...');
   const sessionData = await createSession(apiKey);
   const session = sessionData.session;
-  console.log(`  Session created (tile size: ${sessionData.tileWidth}x${sessionData.tileHeight})\n`);
+  console.log(
+    `  Session created (tile size: ${sessionData.tileWidth}x${sessionData.tileHeight})\n`,
+  );
 
   // Step 2: Find nearest Google panorama (skip contributor panos)
   // Strategy: probe the requested point + N/S/E/W offsets, collect all
@@ -277,7 +307,8 @@ async function main() {
   const offsetM = 0.00027; // ~30m in degrees
   const distTo = (m) => {
     const dy = (m.lat - opts.lat) * 111320;
-    const dx = (m.lng - opts.lon) * 111320 * Math.cos(opts.lat * Math.PI / 180);
+    const dx =
+      (m.lng - opts.lon) * 111320 * Math.cos((opts.lat * Math.PI) / 180);
     return Math.sqrt(dy * dy + dx * dx);
   };
 
@@ -301,20 +332,26 @@ async function main() {
     let pId;
     try {
       pId = await findPanoId(apiKey, session, pt.lat, pt.lng, opts.radius);
-    } catch { continue; }
+    } catch {
+      continue;
+    }
     if (seen.has(pId)) continue;
     const candidate = await getMetadata(apiKey, session, pId);
     seen.set(pId, candidate);
-    console.log(`  Probe ${pt.lat.toFixed(5)},${pt.lng.toFixed(5)} → ${pId.slice(0, 20)}… ${distTo(candidate).toFixed(0)}m (${candidate.copyright})`);
+    console.log(
+      `  Probe ${pt.lat.toFixed(5)},${pt.lng.toFixed(5)} → ${pId.slice(0, 20)}… ${distTo(candidate).toFixed(0)}m (${candidate.copyright})`,
+    );
     if (isGoogle(candidate)) {
       googlePanos.push(candidate);
       // Also check immediate links for closer Google panos
-      for (const link of (candidate.links || [])) {
+      for (const link of candidate.links || []) {
         if (seen.has(link.panoId)) continue;
         const linked = await getMetadata(apiKey, session, link.panoId);
         seen.set(link.panoId, linked);
         if (isGoogle(linked)) {
-          console.log(`    Link ${link.panoId.slice(0, 20)}… ${distTo(linked).toFixed(0)}m (${linked.copyright})`);
+          console.log(
+            `    Link ${link.panoId.slice(0, 20)}… ${distTo(linked).toFixed(0)}m (${linked.copyright})`,
+          );
           googlePanos.push(linked);
         }
       }
@@ -328,7 +365,9 @@ async function main() {
   if (googlePanos.length > 0) {
     googlePanos.sort((a, b) => distTo(a) - distTo(b));
     meta = googlePanos[0];
-    console.log(`  Selected: ${meta.panoId.slice(0, 20)}… (${distTo(meta).toFixed(0)}m away)`);
+    console.log(
+      `  Selected: ${meta.panoId.slice(0, 20)}… (${distTo(meta).toFixed(0)}m away)`,
+    );
   } else {
     meta = fallback;
     console.log(`  No Google pano found, using best available.`);
@@ -345,21 +384,26 @@ async function main() {
   if (meta.links?.length) {
     console.log(`  Links to ${meta.links.length} adjacent panorama(s):`);
     for (const link of meta.links) {
-      console.log(`    - ${link.text || 'unnamed'} heading=${link.heading.toFixed(1)} panoId=${link.panoId}`);
+      console.log(
+        `    - ${link.text || 'unnamed'} heading=${link.heading.toFixed(1)} panoId=${link.panoId}`,
+      );
     }
   }
   console.log();
 
   // Distance from requested location to actual panorama
   const dlat = (meta.lat - opts.lat) * 111320;
-  const dlng = (meta.lng - opts.lon) * 111320 * Math.cos(opts.lat * Math.PI / 180);
+  const dlng =
+    (meta.lng - opts.lon) * 111320 * Math.cos((opts.lat * Math.PI) / 180);
   const distM = Math.sqrt(dlat * dlat + dlng * dlng);
   console.log(`  Distance from requested point: ${distM.toFixed(1)}m\n`);
 
   // Step 4: Fetch and stitch panorama
-  const { buffer: panoBuffer, width: panoWidth, height: panoHeight } = await stitchPanorama(
-    apiKey, session, meta.panoId, meta, opts.zoom
-  );
+  const {
+    buffer: panoBuffer,
+    width: panoWidth,
+    height: panoHeight,
+  } = await stitchPanorama(apiKey, session, meta.panoId, meta, opts.zoom);
 
   // Step 5: Save outputs
   const outdir = resolve(PROJECT_ROOT, opts.outdir);
@@ -368,8 +412,12 @@ async function main() {
   const panoPath = join(outdir, `panorama_${opts.lat}_${opts.lon}.jpg`);
   writeFileSync(panoPath, panoBuffer);
 
-  console.log(`\nSaved: ${panoPath} (${(panoBuffer.length / 1024 / 1024).toFixed(2)} MB)`);
-  console.log(`  Panorama: ${panoWidth}x${panoHeight}, heading=${meta.heading.toFixed(1)}, tilt=${meta.tilt.toFixed(1)}`);
+  console.log(
+    `\nSaved: ${panoPath} (${(panoBuffer.length / 1024 / 1024).toFixed(2)} MB)`,
+  );
+  console.log(
+    `  Panorama: ${panoWidth}x${panoHeight}, heading=${meta.heading.toFixed(1)}, tilt=${meta.tilt.toFixed(1)}`,
+  );
 }
 
 main().catch((err) => {

@@ -8,20 +8,30 @@ a field path before the current project, selection or saved bytes change.
 ```json
 {
   "version": 5,
-  "scenes": [{
-    "id": "my-scene",
-    "title": "My scene",
-    "shots": [{
-      "id": "my-shot",
-      "title": "Arrival",
-      "durationSec": 4,
-      "holdSec": 1,
-      "camera": { "lat": 51.5, "lon": -0.12, "alt": 800,
-        "heading": 0, "pitch": -35, "roll": 0 },
-      "visual": { "style": "normal" },
-      "layers": { "traffic": { "enabled": true } }
-    }]
-  }]
+  "scenes": [
+    {
+      "id": "my-scene",
+      "title": "My scene",
+      "shots": [
+        {
+          "id": "my-shot",
+          "title": "Arrival",
+          "durationSec": 4,
+          "holdSec": 1,
+          "camera": {
+            "lat": 51.5,
+            "lon": -0.12,
+            "alt": 800,
+            "heading": 0,
+            "pitch": -35,
+            "roll": 0
+          },
+          "visual": { "style": "normal" },
+          "layers": { "traffic": { "enabled": true } }
+        }
+      ]
+    }
+  ]
 }
 ```
 

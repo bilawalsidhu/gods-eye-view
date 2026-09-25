@@ -1,11 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import {
-  advanceSpriteFocus,
-} from '../src/data/focusDeemphasis.js';
-import {
-  applyAircraftBillboardTreatment,
-} from '../src/data/aircraftRecession.js';
+import { advanceSpriteFocus } from '../src/data/focusDeemphasis.js';
+import { applyAircraftBillboardTreatment } from '../src/data/aircraftRecession.js';
 
 if (typeof global.gc !== 'function') {
   throw new Error('focus-allocation-check.mjs requires node --expose-gc');
@@ -125,15 +121,17 @@ assert.ok(
   `production sprite tick allocated ${productionSpriteTick.rawMedian.toFixed(3)} B/call median`,
 );
 
-console.log(JSON.stringify({
-  callsPerTrial: CALLS,
-  trials: TRIALS,
-  budgets: {
-    pureCall: PURE_CALL_BUDGET,
-    productionSpriteTick: PRODUCTION_SPRITE_TICK_BUDGET,
-  },
-  loopBaseline: baseline,
-  advanceSpriteFocus: focus,
-  applyAircraftBillboardTreatment: aircraft,
-  productionSpriteTick,
-}));
+console.log(
+  JSON.stringify({
+    callsPerTrial: CALLS,
+    trials: TRIALS,
+    budgets: {
+      pureCall: PURE_CALL_BUDGET,
+      productionSpriteTick: PRODUCTION_SPRITE_TICK_BUDGET,
+    },
+    loopBaseline: baseline,
+    advanceSpriteFocus: focus,
+    applyAircraftBillboardTreatment: aircraft,
+    productionSpriteTick,
+  }),
+);

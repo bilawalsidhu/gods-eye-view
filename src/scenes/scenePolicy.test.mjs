@@ -33,7 +33,9 @@ function sweepLayerParamKeys() {
     // A key always follows `{` or `,` — which matches both the multi-line
     // returns and the single-line `return { passive: … }` form, while a
     // ternary's `? x : y` (no brace or comma before the identifier) does not.
-    const keys = [...body[0].matchAll(/[{,]\s*([A-Za-z_$][\w$]*)\s*:/g)].map((match) => match[1]);
+    const keys = [...body[0].matchAll(/[{,]\s*([A-Za-z_$][\w$]*)\s*:/g)].map(
+      (match) => match[1],
+    );
     if (keys.length) byFile.set(entry, keys);
   }
   return byFile;
@@ -41,11 +43,24 @@ function sweepLayerParamKeys() {
 
 /** The layer registry as main.js builds it (src/main.js dataManager.register calls). */
 const REGISTERED = new Set([
-  'bhote-koshi-2026', 'bhote-koshi-locator',
-  'flights', 'military', 'earthquakes', 'satellites', 'rocket-launches', 'traffic',
-  'cctv', 'radio', 'bikeshare', 'ais-live-vessels', 'military-installations',
-  'military-awareness', 'local-datacenters', 'local-dams',
-  'telegeography-submarine-cables', 'local-firms',
+  'bhote-koshi-2026',
+  'bhote-koshi-locator',
+  'flights',
+  'military',
+  'earthquakes',
+  'satellites',
+  'rocket-launches',
+  'traffic',
+  'cctv',
+  'radio',
+  'bikeshare',
+  'ais-live-vessels',
+  'military-installations',
+  'military-awareness',
+  'local-datacenters',
+  'local-dams',
+  'telegeography-submarine-cables',
+  'local-firms',
 ]);
 
 test('a shot only reconciles the layers it declares', () => {
@@ -63,14 +78,24 @@ test('undeclared layers are never torn down by a four-layer recipe', () => {
   );
   const touched = plan.map((entry) => entry.id);
   assert.deepEqual(touched, ['flights', 'satellites']);
-  for (const untouched of ['cctv', 'radio', 'local-dams', 'local-datacenters', 'local-firms']) {
+  for (const untouched of [
+    'cctv',
+    'radio',
+    'local-dams',
+    'local-datacenters',
+    'local-firms',
+  ]) {
     assert.ok(!touched.includes(untouched), `${untouched} must be left alone`);
   }
 });
 
 test('an explicit false in a recipe still disables that layer', () => {
   const plan = sceneLayerPlan(
-    { earthquakes: { enabled: true }, flights: { enabled: false }, traffic: { enabled: false } },
+    {
+      earthquakes: { enabled: true },
+      flights: { enabled: false },
+      traffic: { enabled: false },
+    },
     REGISTERED,
   );
   assert.deepEqual(
@@ -86,7 +111,10 @@ test('an operator-captured shot declaring every layer still reconciles in full',
   );
   const plan = sceneLayerPlan(captured, REGISTERED);
   assert.equal(plan.length, REGISTERED.size);
-  assert.deepEqual(plan.filter((entry) => entry.enabled).map((entry) => entry.id), ['cctv']);
+  assert.deepEqual(
+    plan.filter((entry) => entry.enabled).map((entry) => entry.id),
+    ['cctv'],
+  );
 });
 
 test('layers no longer registered are skipped, not pushed at the data manager', () => {
@@ -94,15 +122,25 @@ test('layers no longer registered are skipped, not pushed at the data manager', 
     { flights: { enabled: true }, 'retired-layer': { enabled: true } },
     REGISTERED,
   );
-  assert.deepEqual(plan.map((entry) => entry.id), ['flights']);
+  assert.deepEqual(
+    plan.map((entry) => entry.id),
+    ['flights'],
+  );
 });
 
 test('per-layer params ride along only when the shot carries them', () => {
   const plan = sceneLayerPlan(
-    { satellites: { enabled: true, params: { catalog: 'dense' } }, flights: { enabled: true } },
+    {
+      satellites: { enabled: true, params: { catalog: 'dense' } },
+      flights: { enabled: true },
+    },
     REGISTERED,
   );
-  assert.deepEqual(plan[0], { id: 'satellites', enabled: true, params: { catalog: 'dense' } });
+  assert.deepEqual(plan[0], {
+    id: 'satellites',
+    enabled: true,
+    params: { catalog: 'dense' },
+  });
   assert.equal(plan[1].params, undefined);
 });
 
@@ -117,16 +155,28 @@ test('missing or malformed target maps produce an empty plan', () => {
 test('every shipped recipe declares only registered layer ids', () => {
   for (const recipe of SCENE_RECIPES) {
     for (const layerId of Object.keys(recipe.layers || {})) {
-      assert.ok(REGISTERED.has(layerId), `${recipe.id} declares unknown layer ${layerId}`);
+      assert.ok(
+        REGISTERED.has(layerId),
+        `${recipe.id} declares unknown layer ${layerId}`,
+      );
     }
   }
 });
 
 test('camera-tracking params never survive into the plan', () => {
-  const plan = sceneLayerPlan({
-    flights: { enabled: true, params: { models3d: true, selectedFlightsTrackingId: 'a835af' } },
-    military: { enabled: true, params: { selectedMilitaryTrackingId: 'ae1460' } },
-  }, REGISTERED);
+  const plan = sceneLayerPlan(
+    {
+      flights: {
+        enabled: true,
+        params: { models3d: true, selectedFlightsTrackingId: 'a835af' },
+      },
+      military: {
+        enabled: true,
+        params: { selectedMilitaryTrackingId: 'ae1460' },
+      },
+    },
+    REGISTERED,
+  );
   assert.deepEqual(plan[0].params, { models3d: true });
   // A params bag that was tracking and nothing else leaves nothing to push.
   assert.equal(plan[1].params, undefined);
@@ -146,9 +196,15 @@ test('every selection-shaped layer param is classified, whatever its spelling', 
   // taken while following that contact would recreate the two-camera-writer
   // bug. The family pattern is deliberately wider than today's three names:
   // any match must be explicitly stripped or explicitly kept.
-  const classified = new Set([...SCENE_TRACKING_PARAM_KEYS, ...SCENE_KEPT_SELECTION_PARAM_KEYS]);
+  const classified = new Set([
+    ...SCENE_TRACKING_PARAM_KEYS,
+    ...SCENE_KEPT_SELECTION_PARAM_KEYS,
+  ]);
   const swept = sweepLayerParamKeys();
-  assert.ok(swept.size >= 6, `expected the known layer param surfaces, saw ${swept.size}`);
+  assert.ok(
+    swept.size >= 6,
+    `expected the known layer param surfaces, saw ${swept.size}`,
+  );
 
   const seen = new Set();
   for (const [file, keys] of swept) {
@@ -157,23 +213,45 @@ test('every selection-shaped layer param is classified, whatever its spelling', 
       seen.add(key);
       assert.ok(
         classified.has(key),
-        `${file} publishes selection param "${key}" — strip it (SCENE_TRACKING_PARAM_KEYS) `
-        + 'or record why it is safe (SCENE_KEPT_SELECTION_PARAM_KEYS)',
+        `${file} publishes selection param "${key}" — strip it (SCENE_TRACKING_PARAM_KEYS) ` +
+          'or record why it is safe (SCENE_KEPT_SELECTION_PARAM_KEYS)',
       );
     }
   }
   // The documented lists must describe reality, not outlive it.
   for (const key of classified) {
-    assert.ok(seen.has(key), `"${key}" is classified but no layer publishes it any more`);
+    assert.ok(
+      seen.has(key),
+      `"${key}" is classified but no layer publishes it any more`,
+    );
   }
 });
 
 test('the family pattern catches selection names the old sweep would have missed', () => {
-  for (const evader of ['trackedVesselMmsi', 'selectedVesselId', 'trackedNorad', 'primaryTargetIcao']) {
-    assert.ok(SCENE_SELECTION_PARAM_PATTERN.test(evader), `${evader} must be caught`);
+  for (const evader of [
+    'trackedVesselMmsi',
+    'selectedVesselId',
+    'trackedNorad',
+    'primaryTargetIcao',
+  ]) {
+    assert.ok(
+      SCENE_SELECTION_PARAM_PATTERN.test(evader),
+      `${evader} must be caught`,
+    );
   }
-  for (const ordinary of ['models3d', 'catalog', 'showOrbits', 'densityScale', 'coverageMode', 'calibration']) {
-    assert.equal(SCENE_SELECTION_PARAM_PATTERN.test(ordinary), false, `${ordinary} is not a selection param`);
+  for (const ordinary of [
+    'models3d',
+    'catalog',
+    'showOrbits',
+    'densityScale',
+    'coverageMode',
+    'calibration',
+  ]) {
+    assert.equal(
+      SCENE_SELECTION_PARAM_PATTERN.test(ordinary),
+      false,
+      `${ordinary} is not a selection param`,
+    );
   }
 });
 
@@ -188,7 +266,11 @@ test('the exclusivity probe id is reserved — no real layer may claim it', () =
   assert.equal(REGISTERED.has(SCENE_EXCLUSIVITY_PROBE_LAYER_ID), false);
   // Every real id is kebab-case; the sentinel deliberately is not.
   for (const entry of LAYER_STATE_REGISTRY) {
-    assert.match(entry.id, /^[a-z][a-z0-9-]*$/, `${entry.id} breaks the layer-id convention`);
+    assert.match(
+      entry.id,
+      /^[a-z][a-z0-9-]*$/,
+      `${entry.id} breaks the layer-id convention`,
+    );
   }
   assert.doesNotMatch(SCENE_EXCLUSIVITY_PROBE_LAYER_ID, /^[a-z][a-z0-9-]*$/);
 });
@@ -205,10 +287,18 @@ test('an isolating context mode must be exited before a shot applies', () => {
 
 test('shipped recipes touch only their four declared layers', () => {
   for (const recipe of SCENE_RECIPES) {
-    const declared = Object.entries(recipe.layers || {})
-      .map(([id, enabled]) => [id, { enabled }]);
+    const declared = Object.entries(recipe.layers || {}).map(
+      ([id, enabled]) => [id, { enabled }],
+    );
     const plan = sceneLayerPlan(Object.fromEntries(declared), REGISTERED);
-    assert.equal(plan.length, Object.keys(recipe.layers || {}).length, recipe.id);
-    assert.ok(plan.length <= 4, `${recipe.id} should not reach beyond its declared layers`);
+    assert.equal(
+      plan.length,
+      Object.keys(recipe.layers || {}).length,
+      recipe.id,
+    );
+    assert.ok(
+      plan.length <= 4,
+      `${recipe.id} should not reach beyond its declared layers`,
+    );
   }
 });

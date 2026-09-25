@@ -27,10 +27,18 @@ test('no browser-built module imports a Node core module', () => {
   for (const file of browserModules()) {
     const source = readFileSync(file, 'utf8');
     // Static `from 'node:fs'` and dynamic `import('node:fs')`, quoted either way.
-    if (/\bfrom\s*['"]node:|\bimport\s*\(\s*(?:\/\*[^*]*\*\/\s*)?['"]node:/.test(source)) {
+    if (
+      /\bfrom\s*['"]node:|\bimport\s*\(\s*(?:\/\*[^*]*\*\/\s*)?['"]node:/.test(
+        source,
+      )
+    ) {
       offenders.push(path.relative(SRC_ROOT, file).split(path.sep).join('/'));
     }
   }
 
-  assert.deepEqual(offenders, [], `Node core imports reached the browser build: ${offenders.join(', ')}`);
+  assert.deepEqual(
+    offenders,
+    [],
+    `Node core imports reached the browser build: ${offenders.join(', ')}`,
+  );
 });

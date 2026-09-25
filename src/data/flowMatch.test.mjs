@@ -10,7 +10,15 @@ const M_PER_DEG_LAT = 111320;
 const M_PER_DEG_LON = M_PER_DEG_LAT * Math.cos((LAT0 * Math.PI) / 180);
 
 /** Build a straight polyline from a start point, heading, length, and vertex spacing (meters). */
-function line({ lat = LAT0, lon = LON0, northM = 0, eastM = 0, lengthM, stepM = 25, bearingDeg = 0 }) {
+function line({
+  lat = LAT0,
+  lon = LON0,
+  northM = 0,
+  eastM = 0,
+  lengthM,
+  stepM = 25,
+  bearingDeg = 0,
+}) {
   const startLat = lat + northM / M_PER_DEG_LAT;
   const startLon = lon + eastM / M_PER_DEG_LON;
   const steps = Math.max(1, Math.round(lengthM / stepM));
@@ -26,9 +34,16 @@ function line({ lat = LAT0, lon = LON0, northM = 0, eastM = 0, lengthM, stepM = 
   return coords;
 }
 
-const ROAD_NS = { coords: line({ lengthM: 500, bearingDeg: 0 }), type: 'primary' };
+const ROAD_NS = {
+  coords: line({ lengthM: 500, bearingDeg: 0 }),
+  type: 'primary',
+};
 
-function flow(coords, trafficLevel, { closure = false, roadType = 'Major road' } = {}) {
+function flow(
+  coords,
+  trafficLevel,
+  { closure = false, roadType = 'Major road' } = {},
+) {
   return { coords, trafficLevel, roadType, closure };
 }
 
@@ -36,7 +51,10 @@ function flow(coords, trafficLevel, { closure = false, roadType = 'Major road' }
 
 test('coincident parallel road matches with the flow level', () => {
   const flows = [flow(line({ lengthM: 500, bearingDeg: 0, eastM: 4 }), 0.42)];
-  const { matches, matchedCount, candidateCount } = matchFlowToRoads([ROAD_NS], flows);
+  const { matches, matchedCount, candidateCount } = matchFlowToRoads(
+    [ROAD_NS],
+    flows,
+  );
   assert.equal(matchedCount, 1);
   assert.equal(candidateCount, 1);
   assert.ok(matches[0], 'road should match');
@@ -54,8 +72,14 @@ test('opposite-direction flow still matches (two-way bearing fold)', () => {
 
 test('perpendicular decoy at the same location does NOT match', () => {
   // East-west flow crossing the road's midpoint.
-  const decoy = flow(line({ northM: 250, eastM: -250, lengthM: 500, bearingDeg: 90 }), 0.1);
-  const { matches, matchedCount, candidateCount } = matchFlowToRoads([ROAD_NS], [decoy]);
+  const decoy = flow(
+    line({ northM: 250, eastM: -250, lengthM: 500, bearingDeg: 90 }),
+    0.1,
+  );
+  const { matches, matchedCount, candidateCount } = matchFlowToRoads(
+    [ROAD_NS],
+    [decoy],
+  );
   assert.equal(matches[0], null);
   assert.equal(matchedCount, 0);
   // The decoy IS within 35 m of at least one sample — it's a candidate, just
@@ -65,14 +89,19 @@ test('perpendicular decoy at the same location does NOT match', () => {
 
 test('parallel flow offset by more than 35 m does not match', () => {
   const farFlow = flow(line({ lengthM: 500, bearingDeg: 0, eastM: 50 }), 0.2);
-  const { matches, matchedCount, candidateCount } = matchFlowToRoads([ROAD_NS], [farFlow]);
+  const { matches, matchedCount, candidateCount } = matchFlowToRoads(
+    [ROAD_NS],
+    [farFlow],
+  );
   assert.equal(matches[0], null);
   assert.equal(matchedCount, 0);
   assert.equal(candidateCount, 0);
 });
 
 test('closure propagates to the matched road', () => {
-  const closed = flow(line({ lengthM: 500, bearingDeg: 0, eastM: 2 }), 0, { closure: true });
+  const closed = flow(line({ lengthM: 500, bearingDeg: 0, eastM: 2 }), 0, {
+    closure: true,
+  });
   const { matches } = matchFlowToRoads([ROAD_NS], [closed]);
   assert.ok(matches[0], 'closed road should still match');
   assert.equal(matches[0].closure, true);
@@ -80,7 +109,11 @@ test('closure propagates to the matched road', () => {
 
 test('closure propagates when only PART of the road is closed', () => {
   const openHalf = flow(line({ lengthM: 250, bearingDeg: 0, eastM: 2 }), 0.9);
-  const closedHalf = flow(line({ northM: 250, lengthM: 250, bearingDeg: 0, eastM: 2 }), 0, { closure: true });
+  const closedHalf = flow(
+    line({ northM: 250, lengthM: 250, bearingDeg: 0, eastM: 2 }),
+    0,
+    { closure: true },
+  );
   const { matches } = matchFlowToRoads([ROAD_NS], [openHalf, closedHalf]);
   assert.ok(matches[0]);
   assert.equal(matches[0].closure, true);
@@ -94,20 +127,29 @@ test('level is the median across matched samples (thirds at 0.2/0.4/0.9 -> 0.4)'
   ];
   const { matches } = matchFlowToRoads([ROAD_NS], thirds);
   assert.ok(matches[0]);
-  assert.ok(Math.abs(matches[0].level - 0.4) < 1e-9, `median was ${matches[0].level}`);
+  assert.ok(
+    Math.abs(matches[0].level - 0.4) < 1e-9,
+    `median was ${matches[0].level}`,
+  );
 });
 
 test('a road with flow on only a short stretch (< half its samples) stays null', () => {
   // Flow covers only the first ~15% of the road — 1 of 7 samples at best.
   const stub = flow(line({ lengthM: 75, bearingDeg: 0, eastM: 2 }), 0.5);
-  const { matches, matchedCount, candidateCount } = matchFlowToRoads([ROAD_NS], [stub]);
+  const { matches, matchedCount, candidateCount } = matchFlowToRoads(
+    [ROAD_NS],
+    [stub],
+  );
   assert.equal(matches[0], null);
   assert.equal(matchedCount, 0);
   assert.equal(candidateCount, 1); // it had candidates, they were just too few
 });
 
 test('multiple roads: results stay parallel to the input array', () => {
-  const roadFar = { coords: line({ eastM: 5000, lengthM: 500, bearingDeg: 0 }), type: 'residential' };
+  const roadFar = {
+    coords: line({ eastM: 5000, lengthM: 500, bearingDeg: 0 }),
+    type: 'residential',
+  };
   const flows = [flow(line({ lengthM: 500, bearingDeg: 0, eastM: 3 }), 0.6)];
   const { matches, matchedCount } = matchFlowToRoads([roadFar, ROAD_NS], flows);
   assert.equal(matches.length, 2);
@@ -119,10 +161,10 @@ test('multiple roads: results stay parallel to the input array', () => {
 test('sparse-vertex flow polylines (long coord pairs) still match everywhere', () => {
   // One 500 m segment as a single coord pair — midpoint hashing alone would
   // miss samples near the ends; subdivision must cover them.
-  const sparse = flow([
-    ROAD_NS.coords[0],
-    ROAD_NS.coords[ROAD_NS.coords.length - 1],
-  ], 0.5);
+  const sparse = flow(
+    [ROAD_NS.coords[0], ROAD_NS.coords[ROAD_NS.coords.length - 1]],
+    0.5,
+  );
   const { matches } = matchFlowToRoads([ROAD_NS], [sparse]);
   assert.ok(matches[0], 'sparse flow polyline should match the full road');
 });
@@ -130,16 +172,29 @@ test('sparse-vertex flow polylines (long coord pairs) still match everywhere', (
 // ── degenerate inputs ───────────────────────────────────────
 
 test('empty inputs are safe', () => {
-  assert.deepEqual(matchFlowToRoads([], []), { matches: [], matchedCount: 0, candidateCount: 0 });
+  assert.deepEqual(matchFlowToRoads([], []), {
+    matches: [],
+    matchedCount: 0,
+    candidateCount: 0,
+  });
   const noFlow = matchFlowToRoads([ROAD_NS], []);
   assert.deepEqual(noFlow.matches, [null]);
   assert.equal(noFlow.candidateCount, 0);
-  assert.deepEqual(matchFlowToRoads([], [flow(line({ lengthM: 100 }), 0.5)]).matches, []);
+  assert.deepEqual(
+    matchFlowToRoads([], [flow(line({ lengthM: 100 }), 0.5)]).matches,
+    [],
+  );
 });
 
 test('degenerate road (single/zero-length coords) stays null without throwing', () => {
   const dot = { coords: [[LON0, LAT0]], type: 'residential' };
-  const zero = { coords: [[LON0, LAT0], [LON0, LAT0]], type: 'residential' };
+  const zero = {
+    coords: [
+      [LON0, LAT0],
+      [LON0, LAT0],
+    ],
+    type: 'residential',
+  };
   const flows = [flow(line({ lengthM: 100 }), 0.5)];
   const { matches } = matchFlowToRoads([dot, zero], flows);
   assert.deepEqual(matches, [null, null]);

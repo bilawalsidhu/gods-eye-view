@@ -24,16 +24,16 @@ const layers = createInfrastructureLayers({
 // Register these layers with the existing data-layer manager and viewer.
 ```
 
-| Function | Arguments / responsibility |
-| --- | --- |
-| `overlayHost.setEntries` | `(sourceId, entries, options)`; publish the existing infrastructure overlay records and paint budget |
-| `overlayHost.setVisible` | `(sourceId, visible)`; toggle a source |
-| `overlayHost.clearSource` | `(sourceId)`; remove that source's overlay entries |
-| `registerEntityContext` | `(entity, metadata)`; register selectable feature metadata, including the owning layer and data source |
-| `selectEntityContext` | `(entity)`; select that registered feature |
-| `clearSelectedEntityContextForLayer` | `(layerId)`; clear selection only if owned by this layer |
-| `removeEntityContextsForLayer` | `(layerId)`; remove records owned by the layer on destruction or failed setup |
-| `governorRequestRender` | `(reason)`; request a frame through the existing render scheduler |
+| Function                             | Arguments / responsibility                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `overlayHost.setEntries`             | `(sourceId, entries, options)`; publish the existing infrastructure overlay records and paint budget   |
+| `overlayHost.setVisible`             | `(sourceId, visible)`; toggle a source                                                                 |
+| `overlayHost.clearSource`            | `(sourceId)`; remove that source's overlay entries                                                     |
+| `registerEntityContext`              | `(entity, metadata)`; register selectable feature metadata, including the owning layer and data source |
+| `selectEntityContext`                | `(entity)`; select that registered feature                                                             |
+| `clearSelectedEntityContextForLayer` | `(layerId)`; clear selection only if owned by this layer                                               |
+| `removeEntityContextsForLayer`       | `(layerId)`; remove records owned by the layer on destruction or failed setup                          |
+| `governorRequestRender`              | `(reason)`; request a frame through the existing render scheduler                                      |
 
 Each returned layer supports `init(viewer)`, `enable(viewer)`, `disable(viewer)`,
 `update(viewer)`, `destroy(viewer)`, `getStats()`, `getLodDiagnostics()` and

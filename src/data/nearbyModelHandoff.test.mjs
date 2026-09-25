@@ -10,8 +10,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import flightsLayer, { _setTrackedFlightRefreshStateForTest } from './flights.js';
-import militaryFlightsLayer, { _setTrackedMilitaryRefreshStateForTest } from './militaryFlights.js';
+import flightsLayer, {
+  _setTrackedFlightRefreshStateForTest,
+} from './flights.js';
+import militaryFlightsLayer, {
+  _setTrackedMilitaryRefreshStateForTest,
+} from './militaryFlights.js';
 
 const ICAO = 'abc123';
 const OTHER = 'def456';
@@ -88,8 +92,11 @@ function nearbyIcaos(layer) {
 
 /** Detection position for the shared fixture contact. */
 function detectionPosition(layer) {
-  return layer.getDetectableObjects({ maxCount: 50 })
-    .find((contact) => contact.sourceId === ICAO)?.position || null;
+  return (
+    layer
+      .getDetectableObjects({ maxCount: 50 })
+      .find((contact) => contact.sourceId === ICAO)?.position || null
+  );
 }
 
 for (const fixture of LAYERS) {
@@ -116,7 +123,10 @@ for (const fixture of LAYERS) {
     // Positive control: the same contact IS reachable when its sprite shows,
     // so the exclusions below cannot pass for an unrelated reason.
     fixture.seed({ billboardShow: true });
-    assert.ok(nearbyIcaos(fixture.layer).includes(ICAO), 'a shown sprite is nearby');
+    assert.ok(
+      nearbyIcaos(fixture.layer).includes(ICAO),
+      'a shown sprite is nearby',
+    );
 
     fixture.seed({ billboardShow: false });
     assert.ok(
@@ -132,12 +142,17 @@ for (const fixture of LAYERS) {
 
     fixture.seed({
       billboardShow: false,
-      models: [[ICAO, {
-        ready: false,
-        show: true,
-        scale: 0,
-        _gevPlacementReady: false,
-      }]],
+      models: [
+        [
+          ICAO,
+          {
+            ready: false,
+            show: true,
+            scale: 0,
+            _gevPlacementReady: false,
+          },
+        ],
+      ],
     });
     assert.ok(
       !nearbyIcaos(fixture.layer).includes(ICAO),
@@ -150,23 +165,39 @@ for (const fixture of LAYERS) {
     const spritePosition = detectionPosition(fixture.layer);
     assert.ok(spritePosition, 'the 2D sprite publishes a detection candidate');
     assert.ok(
-      Cesium.Cartesian3.equalsEpsilon(spritePosition, contactBillboard(true).position, 0, 1e-6),
+      Cesium.Cartesian3.equalsEpsilon(
+        spritePosition,
+        contactBillboard(true).position,
+        0,
+        1e-6,
+      ),
       'the 2D bracket stays welded to the billboard position',
     );
 
-    const modelMatrix = Cesium.Matrix4.fromRotationTranslation(MODEL_ROTATION, MODEL_POSITION);
+    const modelMatrix = Cesium.Matrix4.fromRotationTranslation(
+      MODEL_ROTATION,
+      MODEL_POSITION,
+    );
     fixture.seed({
       billboardShow: false,
-      models: [[ICAO, {
-        ready: true,
-        show: true,
-        _gevPlacementReady: true,
-        modelMatrix,
-        computedScale: COMPUTED_SCALE,
-      }]],
+      models: [
+        [
+          ICAO,
+          {
+            ready: true,
+            show: true,
+            _gevPlacementReady: true,
+            modelMatrix,
+            computedScale: COMPUTED_SCALE,
+          },
+        ],
+      ],
     });
     const modelPosition = detectionPosition(fixture.layer);
-    assert.ok(modelPosition, 'the 3D model publishes the same detection candidate');
+    assert.ok(
+      modelPosition,
+      'the 3D model publishes the same detection candidate',
+    );
     const expectedVisualCenter = Cesium.Matrix4.multiplyByPoint(
       modelMatrix,
       Cesium.Cartesian3.multiplyByScalar(
@@ -177,7 +208,12 @@ for (const fixture of LAYERS) {
       new Cesium.Cartesian3(),
     );
     assert.ok(
-      Cesium.Cartesian3.equalsEpsilon(modelPosition, expectedVisualCenter, 0, 1e-6),
+      Cesium.Cartesian3.equalsEpsilon(
+        modelPosition,
+        expectedVisualCenter,
+        0,
+        1e-6,
+      ),
       'the 3D bracket stays on the normalized model origin at any rendered scale',
     );
     assert.ok(
@@ -187,18 +223,31 @@ for (const fixture of LAYERS) {
 
     fixture.seed({
       billboardShow: true,
-      models: [[ICAO, {
-        ready: false,
-        show: true,
-        scale: 0,
-        _gevPlacementReady: false,
-        modelMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
-      }]],
+      models: [
+        [
+          ICAO,
+          {
+            ready: false,
+            show: true,
+            scale: 0,
+            _gevPlacementReady: false,
+            modelMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
+          },
+        ],
+      ],
     });
     const loadingPosition = detectionPosition(fixture.layer);
-    assert.ok(loadingPosition, 'the billboard remains detectable while its model loads');
     assert.ok(
-      Cesium.Cartesian3.equalsEpsilon(loadingPosition, contactBillboard(true).position, 0, 1e-6),
+      loadingPosition,
+      'the billboard remains detectable while its model loads',
+    );
+    assert.ok(
+      Cesium.Cartesian3.equalsEpsilon(
+        loadingPosition,
+        contactBillboard(true).position,
+        0,
+        1e-6,
+      ),
       'a shown-but-unready zero-scale model cannot steal the detection anchor',
     );
   });

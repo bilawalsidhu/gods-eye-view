@@ -1,111 +1,1832 @@
-  <div id="left-panel-stack">
+<div id="left-panel-stack">
   <!-- Data Layer Toggle Panel -->
-  <div id="data-panel" class="panel-collapsible collapsed active" data-panel-id="data-panel">
+  <div
+    id="data-panel"
+    class="panel-collapsible collapsed active"
+    data-panel-id="data-panel"
+  >
     <div class="panel-glow"></div>
     <div class="data-panel-inner">
       <div class="panel-header">
         <span class="panel-title">DATA LAYERS</span>
         <span class="panel-divider"></span>
-        <button class="panel-collapse-btn" data-collapse-target="data-panel" title="Collapse panel">+</button>
+        <button
+          class="panel-collapse-btn"
+          data-collapse-target="data-panel"
+          title="Collapse panel"
+        >
+          +
+        </button>
       </div>
       <div id="data-toggles" class="data-toggle-list"></div>
     </div>
   </div>
 
+  <!-- JARVIS AI Command Center Panel -->
+  <div
+    id="ai-command-panel"
+    class="panel-collapsible"
+    data-panel-id="ai-command-panel"
+  >
+    <div class="panel-glow"></div>
+    <div class="ai-command-inner">
+      <div
+        class="panel-header ai-panel-header"
+        title="Toggle JARVIS AI Panel (Ctrl+K)"
+      >
+        <div class="ai-panel-title-wrap">
+          <span class="ai-status-pulse" aria-hidden="true"></span>
+          <span class="panel-title ai-panel-title">JARVIS</span>
+          <button
+            type="button"
+            class="ai-nav-breadcrumb"
+            title="Current view (click to return to chat)"
+          >
+            › Chat
+          </button>
+        </div>
+        <div
+          class="ai-collapsed-hint"
+          role="status"
+          aria-label="JARVIS Standby"
+          title="JARVIS Standby · Click or press Ctrl+K to expand"
+        >
+          <span class="ai-hint-status">
+            <span class="ai-hint-dot" aria-hidden="true"></span>
+            <span class="ai-hint-status-text">STANDBY</span>
+          </span>
+          <span class="ai-hint-sep" aria-hidden="true">|</span>
+          <span class="ai-hint-action">
+            <span class="ai-hint-action-idle">READY</span>
+            <span class="ai-hint-action-hover">EXPAND ›</span>
+          </span>
+          <kbd class="ai-hint-kbd">Ctrl+K</kbd>
+        </div>
+        <span class="ai-active-model-badge" title="Active Model"
+          >🎯 Auto-MoE</span
+        >
+        <button
+          type="button"
+          class="ai-system-telemetry-chip"
+          title="System Hardware Telemetry (Click to inspect)"
+        >
+          🖥️ <span class="ai-telemetry-text">SYS: ON</span>
+        </button>
+        <div class="ai-header-actions">
+          <button
+            type="button"
+            class="ai-header-btn ai-wakeword-toggle-btn"
+            title="Toggle Hands-Free 'Hey JARVIS' Wake-Word Intercom"
+          >
+            🎙️ <span class="ai-btn-text">Wake</span>
+          </button>
+          <button
+            type="button"
+            class="ai-header-btn ai-search-toggle-btn"
+            title="Find in Chat (Ctrl+F)"
+          >
+            🔍
+          </button>
+          <button
+            type="button"
+            class="ai-header-btn ai-voice-settings-btn"
+            title="Voice & Multilingual Audio Settings"
+          >
+            ⚙️
+          </button>
+          <button
+            type="button"
+            class="ai-header-btn ai-voice-toggle-btn"
+            title="Toggle Auto-Speak Voice (TTS)"
+          >
+            🔇
+          </button>
+          <button
+            type="button"
+            class="ai-header-btn ai-export-btn"
+            title="Export Conversation (Markdown)"
+          >
+            📥
+          </button>
+          <button
+            type="button"
+            class="ai-header-btn ai-phone-btn"
+            title="Connect Phone / Android"
+          >
+            📱
+          </button>
+          <button
+            type="button"
+            class="ai-header-btn ai-history-btn"
+            title="Toggle Saved Conversations"
+          >
+            📋 <span class="ai-btn-text">History</span>
+          </button>
+          <button
+            type="button"
+            class="ai-header-btn ai-fullscreen-btn"
+            title="Full Screen (F11)"
+          >
+            ⛶
+          </button>
+          <button
+            type="button"
+            class="ai-header-btn ai-clear-btn"
+            title="Clear Chat (Ctrl+L)"
+          >
+            🗑
+          </button>
+        </div>
+        <span class="panel-divider"></span>
+        <div class="ai-collapse-actions">
+          <button
+            type="button"
+            class="panel-collapse-btn ai-collapse-btn"
+            data-collapse-target="ai-command-panel"
+            title="Collapse panel"
+            aria-expanded="true"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            class="ai-header-btn ai-close-btn"
+            title="Close JARVIS (Esc / Ctrl+K)"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <!-- Primary View Navigation Bar -->
+      <nav class="ai-view-nav" aria-label="JARVIS Views">
+        <button
+          type="button"
+          class="ai-view-tab active"
+          data-view="chat"
+          title="Chat conversation view (Alt+1)"
+        >
+          <span class="ai-view-icon">💬</span>
+          <span class="ai-view-label">Chat</span>
+        </button>
+        <button
+          type="button"
+          class="ai-view-tab"
+          data-view="history"
+          title="Saved conversations & history (Alt+2)"
+        >
+          <span class="ai-view-icon">📋</span>
+          <span class="ai-view-label">History</span>
+        </button>
+        <button
+          type="button"
+          class="ai-view-tab"
+          data-view="models"
+          title="AI models & engines (Alt+3)"
+        >
+          <span class="ai-view-icon">⚡</span>
+          <span class="ai-view-label">Models</span>
+        </button>
+        <button
+          type="button"
+          class="ai-view-tab"
+          data-view="voice"
+          title="Voice & multilingual audio settings (Alt+4)"
+        >
+          <span class="ai-view-icon">🎙️</span>
+          <span class="ai-view-label">Voice</span>
+        </button>
+        <button
+          type="button"
+          class="ai-view-tab"
+          data-view="device"
+          title="Connect Android phone / mobile (Alt+5)"
+        >
+          <span class="ai-view-icon">📱</span>
+          <span class="ai-view-label">Mobile</span>
+        </button>
+        <button
+          type="button"
+          class="ai-view-tab"
+          data-view="genai"
+          title="AI Image Generation Studio (Alt+7)"
+        >
+          <span class="ai-view-icon">🎨</span>
+          <span class="ai-view-label">GenAI</span>
+        </button>
+        <button
+          type="button"
+          class="ai-view-tab"
+          data-view="system"
+          title="Host Computer Control & Diagnostics (Alt+6)"
+        >
+          <span class="ai-view-icon">🖥️</span>
+          <span class="ai-view-label">System</span>
+        </button>
+      </nav>
+
+      <!-- Model Selector Drawer -->
+      <div class="ai-model-drawer" hidden>
+        <div class="ai-model-drawer-header">
+          <button
+            type="button"
+            class="ai-drawer-back-btn ai-model-back-btn"
+            title="Back to Chat"
+          >
+            ← Chat
+          </button>
+          <span class="ai-model-drawer-title"
+            >⚡ Select AI Model (NVIDIA NIM & Free Providers)</span
+          >
+          <button type="button" class="ai-model-close-btn" title="Close">
+            ✕
+          </button>
+        </div>
+        <div class="ai-model-list">
+          <div class="ai-model-group-title">
+            🎯 OMNI-PROVIDER SWARM & AUTO-ROUTER
+          </div>
+          <button type="button" class="ai-model-opt active" data-model="auto">
+            <span class="model-opt-name"
+              >🎯 Auto-Route (Intelligent Task MoE)</span
+            >
+            <span class="model-opt-tag"
+              >AUTOMATIC · DETECTS TASK DOMAIN & USES BEST SPECIALIZED
+              PROVIDER</span
+            >
+          </button>
+          <button type="button" class="ai-model-opt" data-model="ensemble">
+            <span class="model-opt-name"
+              >👥 JARVIS Omni-Swarm (All Providers Simultaneous)</span
+            >
+            <span class="model-opt-tag"
+              >SYNERGY · GEMINI + GROQ + COHERE + CEREBRAS + SAMBANOVA + MISTRAL
+              SIMULTANEOUS</span
+            >
+          </button>
+
+          <div class="ai-model-group-title">
+            🟢 GOOGLE GEMINI (HIGH SPEED & 1M+ CONTEXT)
+          </div>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="gemini-2.5-flash"
+          >
+            <span class="model-opt-name">🟢 Gemini 2.5 Flash</span>
+            <span class="model-opt-tag"
+              >RECOMMENDED · NEXT-GEN ULTRA FAST MULTIMODAL & 1M CONTEXT</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="gemini-2.5-pro"
+          >
+            <span class="model-opt-name">🟢 Gemini 2.5 Pro</span>
+            <span class="model-opt-tag"
+              >DEEP REASONING · MASSIVE 2M MULTIMODAL HORIZON</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="gemini-2.0-flash-thinking-exp"
+          >
+            <span class="model-opt-name">🟢 Gemini 2.0 Flash Thinking</span>
+            <span class="model-opt-tag"
+              >THINKING TRACE · BUILT-IN EXTENDED REASONING</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="gemini-3.6-flash"
+          >
+            <span class="model-opt-name">🟢 Gemini 3.6 Flash</span>
+            <span class="model-opt-tag"
+              >HIGH QUOTA · 1,500 REQ/DAY PERMANENT FREE TIER</span
+            >
+          </button>
+
+          <div class="ai-model-group-title">
+            🚀 GROQ CLOUD LPU (SUB-SECOND INFERENCE)
+          </div>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="openai/gpt-oss-20b"
+          >
+            <span class="model-opt-name"
+              >🚀 GPT-OSS 20B (Groq LPU 750 t/s)</span
+            >
+            <span class="model-opt-tag"
+              >ULTRA LOW LATENCY · HIGH PRECISION LOGIC & CODE</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="openai/gpt-oss-120b"
+          >
+            <span class="model-opt-name">🚀 GPT-OSS 120B (Groq LPU)</span>
+            <span class="model-opt-tag"
+              >DEEP REASONING · MASSIVE 120B PARAMETER LPU ACCELERATION</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="llama-3.3-70b-versatile"
+          >
+            <span class="model-opt-name">🚀 Llama 3.3 70B (Groq 500+ t/s)</span>
+            <span class="model-opt-tag"
+              >FRONTIER SPEED · 70B PARAMETERS AT 500 TOKENS/SEC</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="qwen/qwen3.8-27b"
+          >
+            <span class="model-opt-name">🚀 Qwen 3.8 27B (Groq LPU)</span>
+            <span class="model-opt-tag"
+              >HIGH DENSITY · FAST CHINESE/ENGLISH GENERALIST</span
+            >
+          </button>
+
+          <div class="ai-model-group-title">
+            ⚡ CEREBRAS CLOUD (WAFER-SCALE RECORD SPEED)
+          </div>
+          <button type="button" class="ai-model-opt" data-model="gpt-oss-120b">
+            <span class="model-opt-name"
+              >⚡ GPT-OSS 120B (Cerebras Wafer-Scale)</span
+            >
+            <span class="model-opt-tag"
+              >BLISTERING 1,800 TOKENS/SEC · RECORD INFERENCE SPEED</span
+            >
+          </button>
+          <button type="button" class="ai-model-opt" data-model="llama3.3-70b">
+            <span class="model-opt-name"
+              >⚡ Llama 3.3 70B (Cerebras 1,800 t/s)</span
+            >
+            <span class="model-opt-tag"
+              >WAFER-SCALE CS-3 · MAXIMUM SPEED 70B INFERENCE</span
+            >
+          </button>
+          <button type="button" class="ai-model-opt" data-model="llama3.1-8b">
+            <span class="model-opt-name"
+              >⚡ Llama 3.1 8B (Cerebras 2,200 t/s)</span
+            >
+            <span class="model-opt-tag"
+              >INSTANT FEEDBACK · RECORD 2,200 TOKENS/SEC</span
+            >
+          </button>
+
+          <div class="ai-model-group-title">
+            🌪️ MISTRAL AI (SOVEREIGN EUROPEAN REASONING)
+          </div>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="codestral-latest"
+          >
+            <span class="model-opt-name">💻 Codestral (Code Intelligence)</span>
+            <span class="model-opt-tag"
+              >CODE SPECIALIST · ADVANCED CODEGEN & DEBUG LOOPS</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="mistral-small-latest"
+          >
+            <span class="model-opt-name">🌪️ Mistral Small (Latest)</span>
+            <span class="model-opt-tag"
+              >SOVEREIGN AI · ADVANCED REASONING & MULTILINGUAL SPECIALIST</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="mistral-large-latest"
+          >
+            <span class="model-opt-name">🌪️ Mistral Large (Flagship)</span>
+            <span class="model-opt-tag"
+              >FLAGSHIP MODEL · ENTERPRISE COMPLEX REASONING</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="pixtral-12b-2409"
+          >
+            <span class="model-opt-name">👁️ Pixtral 12B (Vision)</span>
+            <span class="model-opt-tag"
+              >MULTIMODAL · HIGH-RESOLUTION VISUAL REASONING</span
+            >
+          </button>
+
+          <div class="ai-model-group-title">
+            🧠 COHERE (PRECISION CITATIONS & RAG)
+          </div>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="command-r-plus-08-2024"
+          >
+            <span class="model-opt-name">🧠 Cohere Command R+</span>
+            <span class="model-opt-tag"
+              >ENTERPRISE PRECISION · MULTI-STEP RAG & ADVANCED CITATIONS</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="command-r-08-2024"
+          >
+            <span class="model-opt-name">🧠 Cohere Command R (Fast)</span>
+            <span class="model-opt-tag"
+              >STRUCTURED OUTPUTS · LOW LATENCY RAG SPECIALIST</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="c4ai-aya-expanse-32b"
+          >
+            <span class="model-opt-name">🌐 Aya Expanse 32B (Cohere)</span>
+            <span class="model-opt-tag"
+              >MULTILINGUAL · NATIVE COMPREHENSION IN 23 LANGUAGES</span
+            >
+          </button>
+
+          <div class="ai-model-group-title">
+            ⚡ SAMBANOVA (DATAFLOW ACCELERATION)
+          </div>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="Meta-Llama-3.3-70B-Instruct"
+          >
+            <span class="model-opt-name">⚡ Llama 3.3 70B (SambaNova)</span>
+            <span class="model-opt-tag"
+              >SN40L ACCELERATOR · HIGH-THROUGHPUT FRONTIER REASONING</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="DeepSeek-R1-Distill-Llama-70B"
+          >
+            <span class="model-opt-name"
+              >🔬 DeepSeek R1 Distill 70B (SambaNova)</span
+            >
+            <span class="model-opt-tag"
+              >REASONING TRACE · HIGH-SPEED DATAFLOW INFERENCE</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="Qwen2.5-Coder-32B-Instruct"
+          >
+            <span class="model-opt-name"
+              >💻 Qwen 2.5 Coder 32B (SambaNova)</span
+            >
+            <span class="model-opt-tag"
+              >DEVELOPER CORE · ULTRA FAST RECONFIGURABLE COMPILER</span
+            >
+          </button>
+
+          <div class="ai-model-group-title">
+            ⚡ NVIDIA NIM (TACTICAL ACCELERATION)
+          </div>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="nvidia/nemotron-3.5-lightning-30b-a3b"
+          >
+            <span class="model-opt-name">⚡ Nemotron 3.5 Lightning 30B</span>
+            <span class="model-opt-tag"
+              >TACTICAL REASONING · FAST MAMBA-TRANSFORMER GLOBE CONTROL</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="nvidia/nemotron-3-ultra-550b-a55b"
+          >
+            <span class="model-opt-name">🧠 Nemotron 550B Ultra</span>
+            <span class="model-opt-tag"
+              >FRONTIER DEEP REASONING · COMPLEX HYPOTHESES & DEDUCTIONS</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="deepseek-ai/deepseek-r1"
+          >
+            <span class="model-opt-name">🔬 DeepSeek R1 (Thinking Trace)</span>
+            <span class="model-opt-tag"
+              >CHAIN OF THOUGHT · MATHEMATICAL & ALGORITHMIC PROOFS</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="deepseek-ai/deepseek-v3"
+          >
+            <span class="model-opt-name">⚡ DeepSeek V3 (671B MoE)</span>
+            <span class="model-opt-tag"
+              >FRONTIER MOE · STATE OF THE ART GENERAL INTELLIGENCE</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="meta/llama-3.3-70b-instruct"
+          >
+            <span class="model-opt-name"
+              >⚡ Llama 3.3 70B Instruct (NVIDIA)</span
+            >
+            <span class="model-opt-tag"
+              >DGX HOSTED · FRONTIER OPEN WEIGHT REASONING</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="meta/llama-3.2-11b-vision-instruct"
+          >
+            <span class="model-opt-name">👁️ Llama 3.2 11B Vision</span>
+            <span class="model-opt-tag"
+              >MULTI-MODAL · SATELLITE & CAMERA IMAGE COMPREHENSION</span
+            >
+          </button>
+
+          <div class="ai-model-group-title">
+            🌐 OPENROUTER (COMMUNITY DECENTRALIZED)
+          </div>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="meta-llama/llama-3.3-70b-instruct:free"
+          >
+            <span class="model-opt-name"
+              >🌐 Llama 3.3 70B (OpenRouter Free)</span
+            >
+            <span class="model-opt-tag"
+              >COMMUNITY TIER · PERMANENT ACCESSIBILITY</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="deepseek/deepseek-r1:free"
+          >
+            <span class="model-opt-name">🔬 DeepSeek R1 (OpenRouter Free)</span>
+            <span class="model-opt-tag"
+              >THINKING CO-T · UNRESTRICTED COMMUNITY ACCESS</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="qwen/qwen-2.5-coder-32b-instruct:free"
+          >
+            <span class="model-opt-name"
+              >💻 Qwen 2.5 Coder 32B (OpenRouter Free)</span
+            >
+            <span class="model-opt-tag"
+              >CODE SYNTHESIS · COMMUNITY ACCELERATED TIER</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="sophosympatheia/rogue-rose-103b-v0.2:free"
+          >
+            <span class="model-opt-name">🌹 Rogue Rose 103B (Uncensored)</span>
+            <span class="model-opt-tag"
+              >OPEN CREATIVE · UNCENSORED TACTICAL STORYTELLING</span
+            >
+          </button>
+
+          <div class="ai-model-group-title">
+            🔮 AIONLABS & ZHIPU (GLOBAL REASONING)
+          </div>
+          <button type="button" class="ai-model-opt" data-model="aion-3.0">
+            <span class="model-opt-name">🔮 Aion 3.0 (128K Reasoning)</span>
+            <span class="model-opt-tag"
+              >128K CONTEXT · HYPOTHESIS & SCIENTIFIC REASONING</span
+            >
+          </button>
+          <button type="button" class="ai-model-opt" data-model="glm-4-flash">
+            <span class="model-opt-name">🇨🇳 GLM-4 Flash (Zhipu 200K)</span>
+            <span class="model-opt-tag"
+              >PERMANENT FREE · 200K HIGH SPEED BILINGUAL</span
+            >
+          </button>
+          <div class="ai-model-group-title">
+            🎨 IMAGE GENERATION (STABLE DIFFUSION 3 / FLUX)
+          </div>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="stabilityai/stable-diffusion-3-medium"
+          >
+            <span class="model-opt-name">🎨 Stable Diffusion 3 Medium</span>
+            <span class="model-opt-tag"
+              >PHOTOREALISTIC · 2B PARAMS · HIGH FIDELITY</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="black-forest-labs/flux-1-schnell"
+          >
+            <span class="model-opt-name">⚡ Flux.1 Schnell</span>
+            <span class="model-opt-tag"
+              >ULTRA-FAST · 12B PARAMS · STEP DISTILLATION</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="stabilityai/stable-diffusion-3.5-large"
+          >
+            <span class="model-opt-name">🎨 Stable Diffusion 3.5 Large</span>
+            <span class="model-opt-tag"
+              >LARGE · 5B PARAMS · HAND & TEXT ACCURACY</span
+            >
+          </button>
+          <button
+            type="button"
+            class="ai-model-opt"
+            data-model="black-forest-labs/flux-1-pro"
+          >
+            <span class="model-opt-name">🌟 Flux.1 Pro</span>
+            <span class="model-opt-tag"
+              >PRO · BEST QUALITY · COMPOSITIONAL CONTROL</span
+            >
+          </button>
+        </div>
+      </div>
+
+      <!-- Mode Selector Tabs Navigation -->
+      <div class="ai-mode-nav-wrap">
+        <button
+          type="button"
+          class="ai-mode-scroll-btn ai-mode-scroll-left"
+          title="Scroll modes left"
+        >
+          ‹
+        </button>
+        <div class="ai-mode-tabs" role="tablist">
+          <button
+            type="button"
+            class="ai-mode-tab active"
+            data-mode="general"
+            title="Universal AI assistant"
+          >
+            💬 Chat
+          </button>
+          <button
+            type="button"
+            class="ai-mode-tab"
+            data-mode="computer"
+            title="Full Computer Control & Host OS Automation"
+          >
+            🖥️ Computer
+          </button>
+          <button
+            type="button"
+            class="ai-mode-tab"
+            data-mode="globe"
+            title="Interactive 3D Globe camera & layer execution"
+          >
+            🌍 Globe
+          </button>
+          <button
+            type="button"
+            class="ai-mode-tab"
+            data-mode="code"
+            title="Code generation, execution & autonomous debug loop"
+          >
+            💻 Code
+          </button>
+          <button
+            type="button"
+            class="ai-mode-tab"
+            data-mode="auto"
+            title="Workflow automation"
+          >
+            ⚡ Auto
+          </button>
+          <button
+            type="button"
+            class="ai-mode-tab"
+            data-mode="study"
+            title="Study, quizzes, flashcards"
+          >
+            📚 Study
+          </button>
+          <button
+            type="button"
+            class="ai-mode-tab"
+            data-mode="tasks"
+            title="Mission and task planning"
+          >
+            ✅ Tasks
+          </button>
+          <button
+            type="button"
+            class="ai-mode-tab"
+            data-mode="research"
+            title="Web search & intelligence"
+          >
+            🔍 Research
+          </button>
+          <button
+            type="button"
+            class="ai-mode-tab"
+            data-mode="memory"
+            title="Persistent memory & knowledge"
+          >
+            🧠 Memory
+          </button>
+        </div>
+        <button
+          type="button"
+          class="ai-mode-scroll-btn ai-mode-scroll-right"
+          title="Scroll modes right"
+        >
+          ›
+        </button>
+      </div>
+
+      <!-- Quick Model Switcher Bar -->
+      <div class="ai-model-quick-bar">
+        <span class="ai-model-quick-label">⚡ MODEL:</span>
+        <button
+          type="button"
+          class="ai-quick-scroll-btn ai-model-scroll-left"
+          title="Scroll models left"
+        >
+          ‹
+        </button>
+        <div class="ai-model-quick-scroll">
+          <button
+            type="button"
+            class="ai-quick-model-btn active"
+            data-model="auto"
+            title="Auto-Route: Automatically uses the best model for the task across providers"
+          >
+            🎯 Auto-MoE
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="ensemble"
+            title="JARVIS Council: Multi-Model Swarm consensus across all providers"
+          >
+            👥 Council
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="gemini-2.5-flash"
+            title="Google Gemini 2.5 Flash (Next-gen fast multimodal intelligence)"
+          >
+            🟢 Gemini 2.5
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="openai/gpt-oss-20b"
+            title="Groq LPU GPT-OSS 20B (Sub-second reasoning & code 750 t/s)"
+          >
+            🚀 Groq 20B
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="llama3.3-70b"
+            title="Cerebras Llama 3.3 70B (Wafer-Scale 1,800 t/s)"
+          >
+            ⚡ Cerebras 1.8k
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="codestral-latest"
+            title="Mistral Codestral (Code intelligence & autonomous debugging)"
+          >
+            💻 Codestral
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="deepseek-ai/deepseek-r1"
+            title="DeepSeek R1 (Thinking trace chain-of-thought proofs)"
+          >
+            🔬 DeepSeek R1
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="command-r-plus-08-2024"
+            title="Cohere Command R+ (High-precision enterprise reasoning & citations)"
+          >
+            🧠 Cohere R+
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="Meta-Llama-3.3-70B-Instruct"
+            title="SambaNova Llama 3.3 70B (SN40L Dataflow Acceleration)"
+          >
+            ⚡ SambaNova
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="nvidia/nemotron-3.5-lightning-30b-a3b"
+            title="Nemotron 3.5 Lightning (Default · Fast tactical globe control)"
+          >
+            ⚡ Nemotron
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="stabilityai/stable-diffusion-3-medium"
+            title="Stable Diffusion 3 Medium — generate AI imagery from a prompt"
+          >
+            🎨 SD3
+          </button>
+          <button
+            type="button"
+            class="ai-quick-model-btn"
+            data-model="black-forest-labs/flux-1-schnell"
+            title="Flux.1 Schnell — ultra-fast AI image generation"
+          >
+            ⚡ Flux
+          </button>
+        </div>
+        <button
+          type="button"
+          class="ai-quick-scroll-btn ai-model-scroll-right"
+          title="Scroll models right"
+        >
+          ›
+        </button>
+      </div>
+
+      <!-- AI Options Bar (Persona & Temperature) -->
+      <div class="ai-options-bar">
+        <div class="ai-persona-picker">
+          <label class="ai-opt-label" for="ai-persona-select">Persona:</label>
+          <select id="ai-persona-select" class="ai-persona-select">
+            <option value="jarvis">🛡️ Tactical JARVIS</option>
+            <option value="coder">💻 Principal Engineer</option>
+            <option value="tutor">🎓 Professor & Tutor</option>
+            <option value="osint">🕵️ OSINT Analyst</option>
+            <option value="concise">⚡ Rapid & Concise</option>
+          </select>
+        </div>
+        <div class="ai-temp-picker">
+          <label class="ai-opt-label" title="Creativity vs Determinism"
+            >Temp: <span class="ai-temp-val">0.6</span></label
+          >
+          <input
+            type="range"
+            class="ai-temp-slider"
+            min="0.1"
+            max="1.0"
+            step="0.05"
+            value="0.6"
+            title="Temperature (0.1 Precise - 1.0 Creative)"
+          />
+        </div>
+      </div>
+
+      <!-- Voice & Multilingual Settings Modal -->
+      <div class="ai-voice-modal" hidden>
+        <div class="ai-voice-modal-inner">
+          <div class="ai-voice-modal-header">
+            <button
+              type="button"
+              class="ai-drawer-back-btn ai-voice-back-btn"
+              title="Back to Chat"
+            >
+              ← Chat
+            </button>
+            <span class="ai-voice-modal-title"
+              >🎙️ Voice & Multilingual Engine</span
+            >
+            <button
+              type="button"
+              class="ai-voice-modal-close-btn"
+              title="Close"
+            >
+              ✕
+            </button>
+          </div>
+          <div class="ai-voice-modal-body">
+            <div class="ai-setting-group">
+              <label class="ai-setting-label" for="ai-voice-lang-select"
+                >Speech Output Language (TTS)</label
+              >
+              <select id="ai-voice-lang-select" class="ai-setting-select">
+                <option value="auto">
+                  🌐 Auto-Detect Script (Hindi, Spanish, French, etc.)
+                </option>
+                <option value="en-US">🇺🇸 English (United States)</option>
+                <option value="en-GB">
+                  🇬🇧 English (United Kingdom / JARVIS)
+                </option>
+                <option value="hi-IN">🇮🇳 Hindi (हिन्दी / India)</option>
+                <option value="es-ES">🇪🇸 Spanish (Español)</option>
+                <option value="fr-FR">🇫🇷 French (Français)</option>
+                <option value="de-DE">🇩🇪 German (Deutsch)</option>
+                <option value="ja-JP">🇯🇵 Japanese (日本語)</option>
+                <option value="zh-CN">🇨🇳 Chinese (中文)</option>
+                <option value="ar-SA">🇸🇦 Arabic (العربية)</option>
+                <option value="ru-RU">🇷🇺 Russian (Русский)</option>
+                <option value="it-IT">🇮🇹 Italian (Italiano)</option>
+                <option value="pt-BR">🇧🇷 Portuguese (Português)</option>
+              </select>
+            </div>
+            <div class="ai-setting-group">
+              <label class="ai-setting-label" for="ai-voice-model-select"
+                >🎙️ AI Voice Model / Persona</label
+              >
+              <select id="ai-voice-model-select" class="ai-setting-select">
+                <option value="jarvis">
+                  🛡️ JARVIS Classic (British Tactical Commander · Deep RP Male)
+                </option>
+                <option value="friday">
+                  ⚡ FRIDAY Tactical (Crisp Combat OS · Irish/British Female)
+                </option>
+                <option value="edith">
+                  🤖 EDITH Cybernetic (Calm High-Precision Tactical Synthetic)
+                </option>
+                <option value="sophia">
+                  🌟 SOPHIA Neural (Warm Conversational Natural Human)
+                </option>
+                <option value="titan">
+                  🏛️ TITAN Strategic (Resonant Deep Bass Command Core)
+                </option>
+              </select>
+              <div class="ai-persona-cards">
+                <button
+                  type="button"
+                  class="ai-persona-card"
+                  data-persona="jarvis"
+                >
+                  <span class="ai-persona-icon">🛡️</span>
+                  <span class="ai-persona-name">JARVIS</span>
+                  <span class="ai-persona-desc">British Tactical</span>
+                </button>
+                <button
+                  type="button"
+                  class="ai-persona-card"
+                  data-persona="friday"
+                >
+                  <span class="ai-persona-icon">⚡</span>
+                  <span class="ai-persona-name">FRIDAY</span>
+                  <span class="ai-persona-desc">Combat OS</span>
+                </button>
+                <button
+                  type="button"
+                  class="ai-persona-card"
+                  data-persona="edith"
+                >
+                  <span class="ai-persona-icon">🤖</span>
+                  <span class="ai-persona-name">EDITH</span>
+                  <span class="ai-persona-desc">Cybernetic</span>
+                </button>
+                <button
+                  type="button"
+                  class="ai-persona-card"
+                  data-persona="sophia"
+                >
+                  <span class="ai-persona-icon">🌟</span>
+                  <span class="ai-persona-name">SOPHIA</span>
+                  <span class="ai-persona-desc">Neural</span>
+                </button>
+                <button
+                  type="button"
+                  class="ai-persona-card"
+                  data-persona="titan"
+                >
+                  <span class="ai-persona-icon">🏛️</span>
+                  <span class="ai-persona-name">TITAN</span>
+                  <span class="ai-persona-desc">Strategic</span>
+                </button>
+              </div>
+            </div>
+            <div class="ai-setting-group">
+              <label class="ai-setting-label" for="ai-voice-picker-select"
+                >Voice Synthesis Engine</label
+              >
+              <select id="ai-voice-picker-select" class="ai-setting-select">
+                <option value="">Auto-Select Best Natural Voice</option>
+              </select>
+            </div>
+            <div class="ai-setting-row">
+              <div class="ai-setting-col">
+                <label class="ai-setting-label"
+                  >Speed: <span id="ai-voice-rate-val">1.0x</span></label
+                >
+                <input
+                  type="range"
+                  id="ai-voice-rate"
+                  min="0.5"
+                  max="2.0"
+                  step="0.05"
+                  value="1.0"
+                  class="ai-setting-slider"
+                />
+              </div>
+              <div class="ai-setting-col">
+                <label class="ai-setting-label"
+                  >Pitch: <span id="ai-voice-pitch-val">1.0</span></label
+                >
+                <input
+                  type="range"
+                  id="ai-voice-pitch"
+                  min="0.5"
+                  max="1.5"
+                  step="0.05"
+                  value="1.0"
+                  class="ai-setting-slider"
+                />
+              </div>
+            </div>
+            <div class="ai-setting-group">
+              <label class="ai-setting-label" for="ai-mic-lang-select"
+                >Microphone Input Language (STT)</label
+              >
+              <select id="ai-mic-lang-select" class="ai-setting-select">
+                <option value="en-US">English (US)</option>
+                <option value="en-IN">English (India)</option>
+                <option value="hi-IN">Hindi (हिन्दी)</option>
+                <option value="es-ES">Spanish (Español)</option>
+                <option value="fr-FR">French (Français)</option>
+                <option value="de-DE">German (Deutsch)</option>
+                <option value="ja-JP">Japanese (日本語)</option>
+                <option value="zh-CN">Chinese (中文)</option>
+                <option value="ar-SA">Arabic (العربية)</option>
+                <option value="ru-RU">Russian (Русский)</option>
+              </select>
+            </div>
+            <div class="ai-setting-group ai-wakeword-group">
+              <label class="ai-setting-label" for="ai-wakeword-modal-toggle"
+                >🎙️ Hands-Free Intercom ("Hey JARVIS")</label
+              >
+              <div class="ai-wakeword-toggle-row">
+                <button
+                  type="button"
+                  id="ai-wakeword-modal-toggle"
+                  class="ai-wakeword-modal-btn"
+                >
+                  Enable "Hey JARVIS" Wake-Word
+                </button>
+                <span id="ai-wakeword-status" class="ai-wakeword-status-badge"
+                  >STANDBY</span
+                >
+              </div>
+              <p class="ai-setting-hint">
+                When active, say <em>"Hey JARVIS"</em> followed by your mission
+                command without touching your mouse or keyboard.
+              </p>
+            </div>
+            <div class="ai-voice-test-row">
+              <button
+                type="button"
+                id="ai-voice-test-btn"
+                class="ai-voice-test-btn"
+              >
+                ▶ Audition Voice
+              </button>
+              <button
+                type="button"
+                id="ai-voice-stop-btn"
+                class="ai-voice-stop-btn"
+              >
+                ⏹ Stop
+              </button>
+            </div>
+            <div class="ai-voice-guide-card">
+              <div class="ai-guide-title">
+                💡 Pro Tip for Studio-Quality Natural Voices:
+              </div>
+              <p>
+                For crystal-clear, realistic pronunciation in Hindi, Spanish,
+                English, etc., use <strong>Microsoft Edge</strong> or
+                <strong>Google Chrome</strong>. They include free
+                Microsoft/Google Neural Natural voices built directly into the
+                browser with zero API cost!
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Android / Phone Connect Modal -->
+      <div class="ai-device-modal" hidden>
+        <div class="ai-device-modal-inner">
+          <div class="ai-device-header">
+            <button
+              type="button"
+              class="ai-drawer-back-btn ai-device-back-btn"
+              title="Back to Chat"
+            >
+              ← Chat
+            </button>
+            <span class="ai-device-title">📱 Connect Android Phone</span>
+            <button type="button" class="ai-device-close-btn" title="Close">
+              ✕
+            </button>
+          </div>
+          <div class="ai-device-body">
+            <p class="ai-device-desc">
+              Access JARVIS & God's Eye View directly on your Android phone on
+              this Wi-Fi network.
+            </p>
+            <div class="ai-device-qr-container">
+              <div class="ai-device-qr-box" id="ai-device-qr"></div>
+            </div>
+            <div class="ai-device-url-bar">
+              <input type="text" class="ai-device-url-input" readonly />
+              <button type="button" class="ai-device-copy-btn" title="Copy URL">
+                Copy
+              </button>
+            </div>
+            <div class="ai-device-steps">
+              <div class="ai-step">
+                <span class="step-num">1</span> Scan the QR code or enter the
+                URL into Chrome on your Android phone.
+              </div>
+              <div class="ai-step">
+                <span class="step-num">2</span> Tap Chrome menu (⋮) → "Add to
+                Home screen" / "Install" to install as a native Android app!
+              </div>
+              <div class="ai-step">
+                <span class="step-num">3</span> Full voice, camera analysis, and
+                code execution wherever you go.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Host System Automation & Diagnostics Drawer -->
+      <div class="ai-system-drawer" hidden>
+        <div class="ai-system-drawer-inner">
+          <div class="ai-system-drawer-header">
+            <button
+              type="button"
+              class="ai-drawer-back-btn ai-system-back-btn"
+              title="Back to Chat"
+            >
+              ← Chat
+            </button>
+            <span class="ai-system-title"
+              >🖥️ Host Automation & Diagnostics</span
+            >
+            <button type="button" class="ai-system-close-btn" title="Close">
+              ✕
+            </button>
+          </div>
+          <div class="ai-system-drawer-body">
+            <!-- Quick Actions Toolbar -->
+            <div class="ai-sys-quick-actions">
+              <button
+                type="button"
+                class="ai-sys-action-btn"
+                data-sys-action="screenshot"
+                title="Take Desktop Screenshot"
+              >
+                📸 Screenshot
+              </button>
+              <button
+                type="button"
+                class="ai-sys-action-btn"
+                data-sys-action="diagnose"
+                title="Audit System Health"
+              >
+                🩺 Diagnose
+              </button>
+              <button
+                type="button"
+                class="ai-sys-action-btn"
+                data-sys-action="clean"
+                title="Clean Temporary Files"
+              >
+                🧹 Clean Temp
+              </button>
+              <button
+                type="button"
+                class="ai-sys-action-btn"
+                data-sys-action="mute"
+                title="Toggle Mute Audio"
+              >
+                🔇 Mute
+              </button>
+              <button
+                type="button"
+                class="ai-sys-action-btn"
+                data-sys-action="refresh"
+                title="Refresh Telemetry"
+              >
+                🔄 Refresh
+              </button>
+            </div>
+
+            <!-- Health Summary Card -->
+            <div class="ai-sys-card ai-sys-health-card">
+              <div class="ai-sys-card-header">
+                <span class="ai-sys-card-title">🩺 System Health Status</span>
+                <span class="ai-sys-health-badge" id="ai-sys-health-badge"
+                  >CHECKING...</span
+                >
+              </div>
+              <div class="ai-sys-metrics-grid">
+                <div class="ai-sys-metric">
+                  <span class="ai-metric-label">CPU Cores</span>
+                  <span class="ai-metric-val" id="ai-sys-cpu-val">--</span>
+                </div>
+                <div class="ai-sys-metric">
+                  <span class="ai-metric-label">Memory Used</span>
+                  <span class="ai-metric-val" id="ai-sys-ram-val">--</span>
+                </div>
+                <div class="ai-sys-metric">
+                  <span class="ai-metric-label">OS Uptime</span>
+                  <span class="ai-metric-val" id="ai-sys-uptime-val">--</span>
+                </div>
+                <div class="ai-sys-metric">
+                  <span class="ai-metric-label">Network Ping</span>
+                  <span class="ai-metric-val" id="ai-sys-ping-val">--</span>
+                </div>
+              </div>
+              <div class="ai-sys-storage-list" id="ai-sys-storage-list"></div>
+            </div>
+
+            <!-- Active Windows Tray -->
+            <div class="ai-sys-card">
+              <div class="ai-sys-card-header">
+                <span class="ai-sys-card-title">🪟 Active Desktop Windows</span>
+                <button
+                  type="button"
+                  class="ai-sys-card-action-btn"
+                  id="ai-refresh-windows-btn"
+                >
+                  Refresh
+                </button>
+              </div>
+              <div class="ai-sys-windows-list" id="ai-sys-windows-list">
+                <div class="ai-sys-empty">Scanning open windows...</div>
+              </div>
+            </div>
+
+            <!-- Scheduled Tasks & Timers -->
+            <div class="ai-sys-card">
+              <div class="ai-sys-card-header">
+                <span class="ai-sys-card-title"
+                  >⏱️ Autonomous Tasks & Alarms</span
+                >
+                <button
+                  type="button"
+                  class="ai-sys-card-action-btn"
+                  id="ai-add-task-btn"
+                >
+                  + New Timer
+                </button>
+              </div>
+              <div class="ai-sys-tasks-list" id="ai-sys-tasks-list">
+                <div class="ai-sys-empty">No active schedules</div>
+              </div>
+              <div
+                class="ai-sys-add-task-form"
+                id="ai-sys-add-task-form"
+                hidden
+              >
+                <input
+                  type="text"
+                  id="ai-task-name-input"
+                  placeholder="Task Name (e.g. Break Reminder)"
+                  class="ai-sys-input"
+                />
+                <div class="ai-sys-form-row">
+                  <input
+                    type="number"
+                    id="ai-task-delay-input"
+                    placeholder="Delay (sec)"
+                    min="1"
+                    value="60"
+                    class="ai-sys-input"
+                  />
+                  <input
+                    type="text"
+                    id="ai-task-msg-input"
+                    placeholder="Alarm Message"
+                    class="ai-sys-input"
+                  />
+                </div>
+                <div class="ai-sys-form-actions">
+                  <button
+                    type="button"
+                    class="ai-btn-primary"
+                    id="ai-submit-task-btn"
+                  >
+                    Schedule
+                  </button>
+                  <button
+                    type="button"
+                    class="ai-btn-secondary"
+                    id="ai-cancel-task-form-btn"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Image Generation Studio Drawer -->
+      <div class="ai-genai-drawer" hidden>
+        <div class="ai-genai-drawer-inner">
+          <div class="ai-genai-drawer-header">
+            <button
+              type="button"
+              class="ai-drawer-back-btn ai-genai-back-btn"
+              title="Back to Chat"
+            >
+              ← Chat
+            </button>
+            <span class="ai-genai-title">🎨 AI Image Generation Studio</span>
+            <button type="button" class="ai-genai-close-btn" title="Close">
+              ✕
+            </button>
+          </div>
+          <div class="ai-genai-drawer-body">
+            <div class="ai-genai-toolbar">
+              <div class="ai-genai-model-picker">
+                <label for="ai-genai-model-select">Model:</label>
+                <select
+                  id="ai-genai-model-select"
+                  class="ai-genai-model-select"
+                >
+                  <option value="stabilityai/stable-diffusion-3-medium">
+                    🎨 Stable Diffusion 3 Medium
+                  </option>
+                  <option value="black-forest-labs/flux-1-schnell">
+                    ⚡ Flux.1 Schnell
+                  </option>
+                  <option value="stabilityai/stable-diffusion-3.5-large">
+                    🎨 Stable Diffusion 3.5 Large
+                  </option>
+                  <option value="black-forest-labs/flux-1-pro">
+                    🌟 Flux.1 Pro
+                  </option>
+                </select>
+              </div>
+              <div class="ai-genai-aspect-picker">
+                <label for="ai-genai-aspect-select">Aspect:</label>
+                <select
+                  id="ai-genai-aspect-select"
+                  class="ai-genai-aspect-select"
+                >
+                  <option value="1:1">1:1 Square</option>
+                  <option value="16:9">16:9 Landscape</option>
+                  <option value="9:16">9:16 Portrait</option>
+                  <option value="4:3">4:3 Standard</option>
+                  <option value="3:2">3:2 Photo</option>
+                </select>
+              </div>
+              <button
+                type="button"
+                class="ai-genai-generate-btn"
+                id="ai-genai-generate-btn"
+                title="Generate"
+              >
+                🎨 Generate
+              </button>
+            </div>
+            <div class="ai-genai-prompt-bar">
+              <textarea
+                id="ai-genai-prompt"
+                class="ai-genai-prompt-input"
+                placeholder="Describe the image you want to generate... (e.g. 'A futuristic orbital station above Earth, photorealistic, 8K, dramatic lighting')"
+                rows="3"
+              ></textarea>
+              <textarea
+                id="ai-genai-negative-prompt"
+                class="ai-genai-negative-prompt-input"
+                placeholder="Negative prompt (optional) — what to exclude from the image"
+                rows="2"
+              ></textarea>
+            </div>
+            <div
+              class="ai-genai-gallery"
+              id="ai-genai-gallery"
+              role="list"
+              aria-label="Generated images"
+            >
+              <div class="ai-genai-empty">
+                <span class="ai-genai-empty-icon">🎨</span>
+                <p>Your generated images will appear here</p>
+                <small>Prompt → Generate → Download</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Conversation History Sidebar (hidden by default) -->
+      <div class="ai-history-drawer" hidden>
+        <div class="ai-history-header">
+          <span class="ai-history-title">📋 Saved Conversations</span>
+          <button
+            type="button"
+            class="ai-history-close-btn"
+            title="Back to Chat"
+          >
+            ✕ Back to Chat
+          </button>
+        </div>
+        <div class="ai-history-search-bar">
+          <input
+            type="text"
+            class="ai-history-search-input"
+            placeholder="Search conversations..."
+          />
+        </div>
+        <div class="ai-history-list"></div>
+        <div class="ai-history-footer">
+          <button type="button" class="ai-history-new-btn">
+            + New Conversation
+          </button>
+          <button type="button" class="ai-history-back-btn">
+            ← Back to Chat
+          </button>
+        </div>
+      </div>
+
+      <!-- In-Chat Search Bar -->
+      <div class="ai-search-bar" hidden>
+        <span class="ai-search-icon">🔍</span>
+        <input
+          type="text"
+          class="ai-search-input"
+          placeholder="Search in conversation... (Press Enter / Esc)"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <span class="ai-search-count">0/0</span>
+        <button
+          type="button"
+          class="ai-search-nav-btn ai-search-prev-btn"
+          title="Previous match (Shift+Enter)"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          class="ai-search-nav-btn ai-search-next-btn"
+          title="Next match (Enter)"
+        >
+          ▼
+        </button>
+        <button
+          type="button"
+          class="ai-search-close-btn"
+          title="Close search (Esc)"
+        >
+          ✕
+        </button>
+      </div>
+
+      <!-- Messages Stream -->
+      <div class="ai-chat-messages" role="log" aria-live="polite"></div>
+
+      <!-- In-Chat Floating Scroll Navigator -->
+      <div class="ai-scroll-navigator" hidden>
+        <button
+          type="button"
+          class="ai-scroll-nav-btn ai-scroll-top-btn"
+          title="Scroll to top of chat"
+        >
+          ↑ Top
+        </button>
+        <button
+          type="button"
+          class="ai-scroll-nav-btn ai-scroll-bottom-btn"
+          title="Jump to latest message"
+        >
+          <span class="ai-scroll-unread-badge" hidden>● New</span>
+          <span>↓ Latest</span>
+        </button>
+      </div>
+
+      <!-- Tool Execution Status Display -->
+      <div class="ai-tool-status" hidden>
+        <div class="ai-tool-status-header">
+          <span class="ai-tool-spinner"></span>
+          <span class="ai-tool-status-text">Executing tools...</span>
+        </div>
+        <div class="ai-tool-log"></div>
+      </div>
+
+      <!-- Image previews if attached -->
+      <div class="ai-image-preview-bar" hidden></div>
+
+      <!-- Quick Action Prompts -->
+      <div class="ai-quick-prompts"></div>
+
+      <!-- Chat Input Controls -->
+      <div class="ai-chat-input-bar">
+        <button
+          type="button"
+          class="ai-chat-btn ai-img-attach-btn"
+          title="Attach file (images, code, text)"
+        >
+          📎
+        </button>
+        <input
+          type="file"
+          class="ai-file-input"
+          accept="image/*,.txt,.js,.py,.ts,.json,.md,.csv,.html,.css"
+          hidden
+          multiple
+        />
+        <button
+          type="button"
+          class="ai-chat-btn ai-camera-btn"
+          title="Camera / Take Photo (Android)"
+        >
+          📷
+        </button>
+        <input
+          type="file"
+          class="ai-camera-input"
+          accept="image/*"
+          capture="environment"
+          hidden
+        />
+        <button
+          type="button"
+          class="ai-chat-btn ai-genai-btn"
+          title="Generate AI Image (Stable Diffusion 3 / Flux)"
+          id="ai-genai-btn"
+        >
+          🎨
+        </button>
+        <input
+          type="text"
+          class="ai-chat-input"
+          placeholder="Ask JARVIS anything... (Ctrl+K)"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button
+          type="button"
+          class="ai-chat-btn ai-mic-btn"
+          title="Voice input (dictate)"
+        >
+          🎤
+        </button>
+        <button
+          type="button"
+          class="ai-chat-btn ai-stream-toggle"
+          title="Toggle streaming"
+          data-streaming="true"
+        >
+          ⚡
+        </button>
+        <button
+          type="button"
+          class="ai-chat-btn primary ai-send-btn"
+          title="Send message"
+        >
+          SEND
+        </button>
+      </div>
+
+      <!-- JARVIS Live Diagnostics & HUD Bar -->
+      <div class="ai-status-bar">
+        <span class="ai-status-pill"
+          ><span class="ai-status-pulse-dot"></span> NVIDIA NIM LIVE</span
+        >
+        <span class="ai-status-pill ai-latency-display">⚡ ready</span>
+        <span class="ai-status-pill ai-memory-count-display"
+          >🧠 0 memories</span
+        >
+        <button
+          type="button"
+          class="ai-unlock-btn"
+          title="Reset & unlock chat input if ever stuck"
+        >
+          🔄 Unlock Chat
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- CCTV Coverage Panel -->
-  <div id="cctv-panel" class="panel-collapsible collapsed" data-panel-id="cctv-panel">
+  <div
+    id="cctv-panel"
+    class="panel-collapsible collapsed"
+    data-panel-id="cctv-panel"
+  >
     <div class="panel-glow"></div>
     <div class="cctv-panel-inner" data-rail-scroller>
       <div class="panel-header">
         <span class="panel-title">CCTV</span>
         <span class="panel-divider"></span>
-        <button class="panel-collapse-btn" data-collapse-target="cctv-panel" title="Collapse panel">+</button>
+        <button
+          class="panel-collapse-btn"
+          data-collapse-target="cctv-panel"
+          title="Collapse panel"
+        >
+          +
+        </button>
       </div>
       <div class="cyber-panel-body" data-rail-scroller>
-      <div id="cctv-frame-wrap" class="cctv-frame-wrap">
-        <img id="cctv-frame" alt="CCTV feed frame" />
-        <canvas id="cctv-video" class="cctv-frame" hidden></canvas>
-      </div>
-      <div id="cctv-source-badge" role="status" aria-live="polite">SOURCE · UNKNOWN</div>
-      <div id="cctv-meta">Enable CCTV to load camera intersections</div>
-      <div class="cctv-controls">
-        <button id="cctv-enable-btn" class="scene-btn">CCTV OFF</button>
-        <button id="cctv-nearest-btn" class="scene-btn">NEAREST</button>
-      </div>
-      <div class="cctv-controls">
-        <button id="cctv-prev-btn" class="scene-btn">PREV</button>
-        <select id="cctv-camera-select" aria-label="CCTV camera"></select>
-        <button id="cctv-next-btn" class="scene-btn">NEXT</button>
-      </div>
-      <div class="cctv-controls">
-        <button id="cctv-focus-btn" class="scene-btn">FOCUS</button>
-        <button id="cctv-coverage-btn" class="scene-btn">COVERAGE OFF</button>
-        <button id="cctv-auto-hop-btn" class="scene-btn">AUTO HOP OFF</button>
-      </div>
-      <div class="cctv-controls">
-        <button id="cctv-projection-btn" class="scene-btn">PROJECTION ON</button>
-        <span id="cctv-quality-chip">CAL · --</span>
-      </div>
-      <div class="cctv-calibration-block">
-        <div class="cctv-calibration-header">
-          <div class="cctv-summary-label">CALIBRATION</div>
-          <button id="cctv-adjust-btn" class="scene-btn" title="Drag the camera in the world: rings rotate, arrows move, handles set range/FOV">ADJUST</button>
+        <div id="cctv-frame-wrap" class="cctv-frame-wrap">
+          <img id="cctv-frame" alt="CCTV feed frame" />
+          <canvas id="cctv-video" class="cctv-frame" hidden></canvas>
         </div>
-        <div id="cctv-cal-readout" class="cctv-cal-readout" aria-label="Camera pose — click a value to type">
-          <button class="cctv-cal-value" data-cal-field="heading" title="Heading (compass °) — click to type">HDG --</button>
-          <button class="cctv-cal-value" data-cal-field="pitch" title="Pitch (° up/down) — click to type">PITCH --</button>
-          <button class="cctv-cal-value" data-cal-field="fov" title="Horizontal FOV (°) — click to type">FOV --</button>
-          <button class="cctv-cal-value" data-cal-field="range" title="Range / monitor-plane distance (m) — click to type">RANGE --</button>
-          <button class="cctv-cal-value" data-cal-field="height" title="Mount height above ground (m) — click to type">HGT --</button>
-          <button class="cctv-cal-value" data-cal-field="north" title="North offset from catalog position (m) — click to type">ΔN --</button>
-          <button class="cctv-cal-value" data-cal-field="east" title="East offset from catalog position (m) — click to type">ΔE --</button>
+        <div id="cctv-source-badge" role="status" aria-live="polite">
+          SOURCE · UNKNOWN
         </div>
-        <div class="cctv-controls cctv-calibration-actions">
-          <button id="cctv-calib-save-btn" class="scene-btn">SAVE CAL</button>
-          <button id="cctv-calib-reset-btn" class="scene-btn">RESET CAL</button>
+        <div id="cctv-meta">Enable CCTV to load camera intersections</div>
+        <div class="cctv-controls">
+          <button id="cctv-enable-btn" class="scene-btn">CCTV OFF</button>
+          <button id="cctv-nearest-btn" class="scene-btn">NEAREST</button>
+        </div>
+        <div class="cctv-controls">
+          <button id="cctv-prev-btn" class="scene-btn">PREV</button>
+          <select id="cctv-camera-select" aria-label="CCTV camera"></select>
+          <button id="cctv-next-btn" class="scene-btn">NEXT</button>
+        </div>
+        <div class="cctv-controls">
+          <button id="cctv-focus-btn" class="scene-btn">FOCUS</button>
+          <button id="cctv-coverage-btn" class="scene-btn">COVERAGE OFF</button>
+          <button id="cctv-auto-hop-btn" class="scene-btn">AUTO HOP OFF</button>
+        </div>
+        <div class="cctv-controls">
+          <button id="cctv-projection-btn" class="scene-btn">
+            PROJECTION ON
+          </button>
+          <span id="cctv-quality-chip">CAL · --</span>
+        </div>
+        <div class="cctv-calibration-block">
+          <div class="cctv-calibration-header">
+            <div class="cctv-summary-label">CALIBRATION</div>
+            <button
+              id="cctv-adjust-btn"
+              class="scene-btn"
+              title="Drag the camera in the world: rings rotate, arrows move, handles set range/FOV"
+            >
+              ADJUST
+            </button>
+          </div>
+          <div
+            id="cctv-cal-readout"
+            class="cctv-cal-readout"
+            aria-label="Camera pose — click a value to type"
+          >
+            <button
+              class="cctv-cal-value"
+              data-cal-field="heading"
+              title="Heading (compass °) — click to type"
+            >
+              HDG --
+            </button>
+            <button
+              class="cctv-cal-value"
+              data-cal-field="pitch"
+              title="Pitch (° up/down) — click to type"
+            >
+              PITCH --
+            </button>
+            <button
+              class="cctv-cal-value"
+              data-cal-field="fov"
+              title="Horizontal FOV (°) — click to type"
+            >
+              FOV --
+            </button>
+            <button
+              class="cctv-cal-value"
+              data-cal-field="range"
+              title="Range / monitor-plane distance (m) — click to type"
+            >
+              RANGE --
+            </button>
+            <button
+              class="cctv-cal-value"
+              data-cal-field="height"
+              title="Mount height above ground (m) — click to type"
+            >
+              HGT --
+            </button>
+            <button
+              class="cctv-cal-value"
+              data-cal-field="north"
+              title="North offset from catalog position (m) — click to type"
+            >
+              ΔN --
+            </button>
+            <button
+              class="cctv-cal-value"
+              data-cal-field="east"
+              title="East offset from catalog position (m) — click to type"
+            >
+              ΔE --
+            </button>
+          </div>
+          <div class="cctv-controls cctv-calibration-actions">
+            <button id="cctv-calib-save-btn" class="scene-btn">SAVE CAL</button>
+            <button id="cctv-calib-reset-btn" class="scene-btn">
+              RESET CAL
+            </button>
+          </div>
+        </div>
+        <div class="cctv-summary-label">SCENE SUMMARY</div>
+        <div id="cctv-summary">
+          Enable CCTV to start camera-linked intelligence summaries.
+          <div id="cctv-summary">
+            Enable CCTV to start camera-linked intelligence summaries.
+          </div>
         </div>
       </div>
-      <div class="cctv-summary-label">SCENE SUMMARY</div>
-      <div id="cctv-summary">Enable CCTV to start camera-linked intelligence summaries.</div>
+    </div>
+
+    <!-- Scene Director Panel -->
+    <div
+      id="scene-panel"
+      class="panel-collapsible collapsed"
+      data-panel-id="scene-panel"
+    >
+      <div class="panel-glow"></div>
+      <div class="scene-panel-inner">
+        <div class="panel-header">
+          <span class="panel-title">SCENES</span>
+          <span class="panel-divider"></span>
+          <button
+            class="panel-collapse-btn"
+            data-collapse-target="scene-panel"
+            title="Collapse panel"
+          >
+            +
+          </button>
+        </div>
+        <div class="scene-controls">
+          <select id="scene-select" aria-label="Scene recipe"></select>
+          <button id="scene-new-btn" class="scene-btn">NEW</button>
+          <button id="scene-delete-btn" class="scene-btn scene-btn-danger">
+            DEL
+          </button>
+        </div>
+        <div class="scene-controls">
+          <button id="scene-capture-btn" class="scene-btn">CAPTURE SHOT</button>
+          <button id="scene-update-shot-btn" class="scene-btn">
+            UPDATE SHOT
+          </button>
+        </div>
+        <div id="scene-shot-list" class="scene-shot-list"></div>
+        <div class="scene-controls">
+          <button id="scene-start-btn" class="scene-btn">START</button>
+          <button id="scene-stop-btn" class="scene-btn scene-btn-danger">
+            STOP
+          </button>
+          <button id="scene-next-btn" class="scene-btn">NEXT</button>
+        </div>
+        <div class="scene-controls">
+          <button id="scene-export-btn" class="scene-btn">
+            EXPORT PRESETS
+          </button>
+          <button id="scene-import-btn" class="scene-btn">IMPORT</button>
+          <button id="scene-download-btn" class="scene-btn">RUN LOG</button>
+          <input
+            type="file"
+            id="scene-import-file"
+            accept="application/json,.json"
+            hidden
+          />
+        </div>
+        <div class="scene-progress">
+          <div id="scene-progress-fill">0%</div>
+        </div>
+        <div id="scene-status">Ready</div>
       </div>
     </div>
   </div>
-
-  <!-- Scene Director Panel -->
-  <div id="scene-panel" class="panel-collapsible collapsed" data-panel-id="scene-panel">
-    <div class="panel-glow"></div>
-    <div class="scene-panel-inner">
-      <div class="panel-header">
-        <span class="panel-title">SCENES</span>
-        <span class="panel-divider"></span>
-        <button class="panel-collapse-btn" data-collapse-target="scene-panel" title="Collapse panel">+</button>
-      </div>
-      <div class="scene-controls">
-        <select id="scene-select" aria-label="Scene recipe"></select>
-        <button id="scene-new-btn" class="scene-btn">NEW</button>
-        <button id="scene-delete-btn" class="scene-btn scene-btn-danger">DEL</button>
-      </div>
-      <div class="scene-controls">
-        <button id="scene-capture-btn" class="scene-btn">CAPTURE SHOT</button>
-        <button id="scene-update-shot-btn" class="scene-btn">UPDATE SHOT</button>
-      </div>
-      <div id="scene-shot-list" class="scene-shot-list"></div>
-      <div class="scene-controls">
-        <button id="scene-start-btn" class="scene-btn">START</button>
-        <button id="scene-stop-btn" class="scene-btn scene-btn-danger">STOP</button>
-        <button id="scene-next-btn" class="scene-btn">NEXT</button>
-      </div>
-      <div class="scene-controls">
-        <button id="scene-export-btn" class="scene-btn">EXPORT PRESETS</button>
-        <button id="scene-import-btn" class="scene-btn">IMPORT</button>
-        <button id="scene-download-btn" class="scene-btn">RUN LOG</button>
-        <input type="file" id="scene-import-file" accept="application/json,.json" hidden />
-      </div>
-      <div class="scene-progress">
-        <div id="scene-progress-fill">0%</div>
-      </div>
-      <div id="scene-status">Ready</div>
-    </div>
-  </div>
-
-  </div>
+</div>

@@ -23,6 +23,8 @@ export function deriveWeatherEffectProfile(weather) {
       haze: 0,
       droplets: 0,
       storm: 0,
+      lightning: 0,
+      turbulence: 0,
       wind: 0,
       windDirectionDeg: 0,
     };
@@ -69,6 +71,8 @@ export function deriveWeatherEffectProfile(weather) {
     haze: clamp01(Math.max(fog * 0.78, cloud * 0.14 + (rain + snow) * 0.2)),
     droplets: clamp01(rain * (0.58 + storm * 0.42)),
     storm: clamp01(storm),
+    lightning: clamp01(stormCode ? Math.max(0.6, storm) : 0),
+    turbulence: clamp01(wind * 0.4 + storm * 0.6),
     wind,
     windDirectionDeg: Number.isFinite(Number(weather.windDirectionDeg))
       ? ((Number(weather.windDirectionDeg) % 360) + 360) % 360

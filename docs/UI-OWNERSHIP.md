@@ -4,18 +4,18 @@
 and coordinates shutdown. `shellFacade.js` preserves the methods used by layers,
 scene playback and voice. It delegates; new behavior belongs with its owner.
 
-| Owner | Responsibility |
-| --- | --- |
-| `navigationController.js` | Navigation generation, tracking release and camera authority |
-| `locationNavigation.js` | Destination lookup/selection, orbit, world jumps and globe-reset completion |
-| `cockpitCoordinator.js` | Cockpit entry/rollback, readouts and the single Display portal |
-| `visualSettings.js` | Effects, detection overrides, visual restoration and render-loop lifetime |
-| `panelChrome.js` | Disclosure, docking, layout and Cockpit panel restoration |
-| `aircraftDisplay.js` | Shared commercial/military 3D display preferences and controls |
-| `layerBindings.js` | Data-manager attachment, selected-tracker adoption and camera-entry listeners |
-| `displayBindings.js` | Keyboard/display subscriptions and frame-rate monitor lifetime |
-| `shareRestoration.js` | Initial share/layer restoration and cancellation |
-| `shellFeedback.js` | Loading feedback, notices and toast lifetime |
+| Owner                     | Responsibility                                                                |
+| ------------------------- | ----------------------------------------------------------------------------- |
+| `navigationController.js` | Navigation generation, tracking release and camera authority                  |
+| `locationNavigation.js`   | Destination lookup/selection, orbit, world jumps and globe-reset completion   |
+| `cockpitCoordinator.js`   | Cockpit entry/rollback, readouts and the single Display portal                |
+| `visualSettings.js`       | Effects, detection overrides, visual restoration and render-loop lifetime     |
+| `panelChrome.js`          | Disclosure, docking, layout and Cockpit panel restoration                     |
+| `aircraftDisplay.js`      | Shared commercial/military 3D display preferences and controls                |
+| `layerBindings.js`        | Data-manager attachment, selected-tracker adoption and camera-entry listeners |
+| `displayBindings.js`      | Keyboard/display subscriptions and frame-rate monitor lifetime                |
+| `shareRestoration.js`     | Initial share/layer restoration and cancellation                              |
+| `shellFeedback.js`        | Loading feedback, notices and toast lifetime                                  |
 
 Owners receive named services, elements, operations and readers. They do not
 receive the application shell itself. Readers resolve a replaceable collaborator

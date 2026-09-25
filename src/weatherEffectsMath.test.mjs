@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveWeatherEffectProfile, weatherAltitudeFactors } from './weatherEffectsMath.js';
+import {
+  deriveWeatherEffectProfile,
+  weatherAltitudeFactors,
+} from './weatherEffectsMath.js';
 
 test('missing weather fails clear instead of inventing effects', () => {
   const profile = deriveWeatherEffectProfile(null);
@@ -57,7 +60,11 @@ test('snow codes never render rain droplets', () => {
 });
 
 test('weather effects attenuate above the ground-weather layer', () => {
-  assert.deepEqual(weatherAltitudeFactors(0), { precipitation: 1, cloud: 1, haze: 1 });
+  assert.deepEqual(weatherAltitudeFactors(0), {
+    precipitation: 1,
+    cloud: 1,
+    haze: 1,
+  });
   assert.equal(weatherAltitudeFactors(14000).precipitation, 0);
   assert.equal(weatherAltitudeFactors(24000).cloud, 0);
   assert.equal(weatherAltitudeFactors(20000).haze, 0);

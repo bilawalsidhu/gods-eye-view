@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "manifest": {
+      "url": "https://app.manifest.build/api/v1/mcp",
+      "serverUrl": "https://app.manifest.build/api/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer mnfst_QnP_d2Wbj0ROev1u41DRUrv8ABtGAjxmc9l2oTLeAwc"
+      }
+    }
+  }
+}

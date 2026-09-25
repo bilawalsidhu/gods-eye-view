@@ -27,7 +27,10 @@ test('a settled cell keeps its glyph and never animates', () => {
   // a real split-flap cell that already shows the right letter does not move.
   const plan = planSplitFlap('LOADING LIVE DATA', 'LOAD COMPLETE');
   const held = plan.cells.slice(0, 4);
-  assert.deepEqual(held.map((cell) => cell.to), ['L', 'O', 'A', 'D']);
+  assert.deepEqual(
+    held.map((cell) => cell.to),
+    ['L', 'O', 'A', 'D'],
+  );
   assert.ok(held.every((cell) => cell.changed === false));
   assert.ok(held.every((cell) => cell.delayMs === 0));
   // "LOADING" still has its I where "LOAD COMPLETE" has a space, so column 4
@@ -51,12 +54,10 @@ test('the concatenated cells are exactly the target string — DOM text stays th
 
 test('the cascade sweeps left to right, rebased on the first changed column', () => {
   const plan = planSplitFlap('AAAA', 'BBBB');
-  assert.deepEqual(plan.cells.map((cell) => cell.delayMs), [
-    0,
-    FLAP_STAGGER_MS,
-    FLAP_STAGGER_MS * 2,
-    FLAP_STAGGER_MS * 3,
-  ]);
+  assert.deepEqual(
+    plan.cells.map((cell) => cell.delayMs),
+    [0, FLAP_STAGGER_MS, FLAP_STAGGER_MS * 2, FLAP_STAGGER_MS * 3],
+  );
   // Rebasing matters: a stable head must not idle through untouched columns.
   const rebased = planSplitFlap('LOAD XX', 'LOAD YY');
   assert.equal(rebased.firstChanged, 5);
@@ -109,7 +110,10 @@ test('a single changed character has no stagger and takes exactly one char time'
 test('a shrinking label marks its surplus columns vacating', () => {
   const plan = planSplitFlap('TURNING OFF LIVE DATA', 'LIVE DATA OFF');
   const vacating = plan.cells.filter((cell) => cell.vacating);
-  assert.equal(vacating.length, 'TURNING OFF LIVE DATA'.length - 'LIVE DATA OFF'.length);
+  assert.equal(
+    vacating.length,
+    'TURNING OFF LIVE DATA'.length - 'LIVE DATA OFF'.length,
+  );
   // Vacating cells carry an outgoing glyph but contribute nothing to the text;
   // their width is zero, and the container width transition covers the shrink.
   assert.ok(vacating.every((cell) => cell.to === '' && cell.from !== ''));
@@ -146,11 +150,22 @@ test('null and undefined are treated as empty, never stringified into the chip',
 });
 
 test('option overrides drive both the stagger and the budget', () => {
-  const plan = planSplitFlap('AAAA', 'BBBB', { charMs: 100, staggerMs: 10, maxTotalMs: 1000 });
-  assert.deepEqual(plan.cells.map((cell) => cell.delayMs), [0, 10, 20, 30]);
+  const plan = planSplitFlap('AAAA', 'BBBB', {
+    charMs: 100,
+    staggerMs: 10,
+    maxTotalMs: 1000,
+  });
+  assert.deepEqual(
+    plan.cells.map((cell) => cell.delayMs),
+    [0, 10, 20, 30],
+  );
   assert.equal(plan.durationMs, 130);
   // Invalid overrides fall back to the defaults rather than producing NaN.
-  const guarded = planSplitFlap('AB', 'CD', { charMs: 0, staggerMs: -5, maxTotalMs: NaN });
+  const guarded = planSplitFlap('AB', 'CD', {
+    charMs: 0,
+    staggerMs: -5,
+    maxTotalMs: NaN,
+  });
   assert.equal(guarded.durationMs, FLAP_STAGGER_MS + FLAP_CHAR_MS);
 });
 
@@ -161,7 +176,10 @@ test('delays are whole milliseconds so the CSS custom property stays clean', () 
 });
 
 test('no cell is ever scheduled to start after the cascade has ended', () => {
-  const plan = planSplitFlap('syncing road network', 'LIVE · TomTom flow · 100% cov');
+  const plan = planSplitFlap(
+    'syncing road network',
+    'LIVE · TomTom flow · 100% cov',
+  );
   for (const cell of flapping(plan)) {
     assert.ok(
       cell.delayMs + FLAP_CHAR_MS <= plan.durationMs + 1,
@@ -219,8 +237,8 @@ test('an interrupted cascade never flaps away a glyph that was never on screen',
     const candidates = [aChars[index] || ' ', bChars[index] || ' '];
     assert.ok(
       candidates.includes(glyph),
-      `column ${index} shows ${JSON.stringify(glyph)}, which is neither `
-        + `${JSON.stringify(candidates[0])} nor ${JSON.stringify(candidates[1])}`,
+      `column ${index} shows ${JSON.stringify(glyph)}, which is neither ` +
+        `${JSON.stringify(candidates[0])} nor ${JSON.stringify(candidates[1])}`,
     );
   });
 
@@ -248,7 +266,10 @@ test('interrupting before anything turned flaps away the ORIGINAL label', () => 
   // Nothing has reached its turn point yet.
   const displayed = visibleGlyphs(first, 0);
   const second = planSplitFlap(displayed, 'LOAD FAILED');
-  assert.equal(second.cells.map((cell) => cell.from).join(''), 'LOADING LIVE DATA');
+  assert.equal(
+    second.cells.map((cell) => cell.from).join(''),
+    'LOADING LIVE DATA',
+  );
 });
 
 test('interrupting after the cascade landed flaps away the settled label', () => {
@@ -264,7 +285,10 @@ test('a shrinking cascade shows its surplus glyphs until each column turns', () 
   assert.equal(visibleGlyphs(plan, 0), 'TURNING OFF LIVE DATA');
   // Mid-cascade the tail columns still carry the old glyphs.
   assert.ok(visibleGlyphs(plan, 120).trimEnd().length > 'LIVE DATA OFF'.length);
-  assert.equal(visibleGlyphs(plan, plan.durationMs + 100).trimEnd(), 'LIVE DATA OFF');
+  assert.equal(
+    visibleGlyphs(plan, plan.durationMs + 100).trimEnd(),
+    'LIVE DATA OFF',
+  );
 });
 
 // ── Positional truth: columns never renumber mid-cascade ──────────────────
@@ -274,7 +298,8 @@ test('a cleared column holds its place instead of letting later glyphs slide lef
   // sampling would catch "ABCD" -> "ABD" and D sitting in column 2.
   const plan = planSplitFlap('ABCD', 'AB');
   const samples = [];
-  for (let t = 0; t <= plan.durationMs + 50; t += 5) samples.push(visibleGlyphs(plan, t));
+  for (let t = 0; t <= plan.durationMs + 50; t += 5)
+    samples.push(visibleGlyphs(plan, t));
 
   for (const sample of samples) {
     const columns = Array.from(sample);
@@ -283,12 +308,24 @@ test('a cleared column holds its place instead of letting later glyphs slide lef
       plan.cells.length,
       `board width changed mid-cascade: ${JSON.stringify(sample)}`,
     );
-    assert.notEqual(columns[2], 'D', `D slid into column 2: ${JSON.stringify(sample)}`);
+    assert.notEqual(
+      columns[2],
+      'D',
+      `D slid into column 2: ${JSON.stringify(sample)}`,
+    );
     if (columns.includes('D')) {
-      assert.equal(columns[3], 'D', `D left column 3: ${JSON.stringify(sample)}`);
+      assert.equal(
+        columns[3],
+        'D',
+        `D left column 3: ${JSON.stringify(sample)}`,
+      );
     }
     if (columns.includes('C')) {
-      assert.equal(columns[2], 'C', `C left column 2: ${JSON.stringify(sample)}`);
+      assert.equal(
+        columns[2],
+        'C',
+        `C left column 2: ${JSON.stringify(sample)}`,
+      );
     }
   }
 
@@ -321,7 +358,10 @@ test('an interrupt mid-shrink flaps away the blanks and glyphs actually on scree
   const turn = FLAP_CHAR_MS * FLAP_TURN_RATIO;
   // Sample after column 2 turns to a blank but before column 3 turns.
   const at = first.cells[2].delayMs + turn + 1;
-  assert.ok(at < first.cells[3].delayMs + turn, 'sample must sit between the two turns');
+  assert.ok(
+    at < first.cells[3].delayMs + turn,
+    'sample must sit between the two turns',
+  );
   const displayed = visibleGlyphs(first, at);
   assert.equal(displayed, 'AB D');
   const second = planSplitFlap(displayed, 'ABXY');

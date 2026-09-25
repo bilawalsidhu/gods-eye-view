@@ -60,7 +60,7 @@ const MUTATIONS = [
   },
   {
     defect: 'no mesh probe, so a permanently cold DEM is flown blind',
-    from: '  if (cold.length && !state.meshProbeSpent && typeof state.probeFn === \'function\') {',
+    from: "  if (cold.length && !state.meshProbeSpent && typeof state.probeFn === 'function') {",
     to: '  if (false) {',
   },
   {
@@ -90,8 +90,8 @@ const MUTATIONS = [
   },
   {
     defect: 'the mesh probe fires every arming frame instead of once per route',
-    from: '  if (cold.length && !state.meshProbeSpent && typeof state.probeFn === \'function\') {\n    state.meshProbeSpent = true;',
-    to: '  if (cold.length && typeof state.probeFn === \'function\') {\n    state.meshProbeSpent = true;',
+    from: "  if (cold.length && !state.meshProbeSpent && typeof state.probeFn === 'function') {\n    state.meshProbeSpent = true;",
+    to: "  if (cold.length && typeof state.probeFn === 'function') {\n    state.meshProbeSpent = true;",
   },
   {
     defect: 'one warm cell resolves a corridor whose other cells are unknown',
@@ -104,12 +104,14 @@ const MUTATIONS = [
     to: '      const probe = state.probeFn(cells) || {};',
   },
   {
-    defect: 'the hard clearance clamp reads the SMOOTHED floor, not the raw sample',
+    defect:
+      'the hard clearance clamp reads the SMOOTHED floor, not the raw sample',
     from: '    (Number.isFinite(sampledFloor) ? sampledFloor : state.floorM) + ROUTE_MIN_CLEARANCE_M,',
     to: '    state.floorM + ROUTE_MIN_CLEARANCE_M,',
   },
   {
-    defect: 'levelling also RE-FRAMES the camera (destination passed with the HPR)',
+    defect:
+      'levelling also RE-FRAMES the camera (destination passed with the HPR)',
     from: '    cam.setView({ orientation: { heading: cam.heading, pitch: cam.pitch, roll: 0 } });',
     to: '    cam.setView({ destination: Cesium.Cartesian3.fromDegrees(0, 0, 5000), orientation: { heading: cam.heading, pitch: cam.pitch, roll: 0 } });',
   },
@@ -126,7 +128,9 @@ const missed = [];
 
 process.on('exit', () => fs.writeFileSync(SOURCE, original));
 
-console.log(`\nfly_route pin strength — ${MUTATIONS.length} individual reverts\n`);
+console.log(
+  `\nfly_route pin strength — ${MUTATIONS.length} individual reverts\n`,
+);
 for (const { defect, from, to } of MUTATIONS) {
   if (!original.includes(from)) {
     missed.push(`${defect} (ANCHOR MISSING — the mutation no longer applies)`);
@@ -137,10 +141,15 @@ for (const { defect, from, to } of MUTATIONS) {
   let red = false;
   let by = '';
   try {
-    execFileSync('node', ['--test', TESTS], { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' });
+    execFileSync('node', ['--test', TESTS], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
   } catch (error) {
     red = true;
-    const failed = String(error.stdout || '').split('\n')
+    const failed = String(error.stdout || '')
+      .split('\n')
       .filter((line) => line.trim().startsWith('✖') && line.includes('('))
       .map((line) => line.trim().slice(2).split(' (')[0]);
     by = [...new Set(failed)].slice(0, 2).join('; ');

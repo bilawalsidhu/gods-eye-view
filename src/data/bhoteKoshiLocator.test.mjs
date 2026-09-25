@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { INCIDENT_OVERVIEW_HOLD_SEC, INCIDENT_OVERVIEW_PLACES } from './bhoteKoshiIncidentPlaces.js';
+import {
+  INCIDENT_OVERVIEW_HOLD_SEC,
+  INCIDENT_OVERVIEW_PLACES,
+} from './bhoteKoshiIncidentPlaces.js';
 import { BHOTE_KOSHI_FLOOD_PATH } from './bhoteKoshiFloodPath.js';
 import * as Cesium from 'cesium';
 import { SceneDirector } from '../scenes/director.js';
@@ -29,8 +32,12 @@ function viewerFixture() {
   return {
     creditDisplay: { addStaticCredit() {} },
     dataSources: {
-      add(source) { added.push(source); },
-      remove(source) { removed.push(source); },
+      add(source) {
+        added.push(source);
+      },
+      remove(source) {
+        removed.push(source);
+      },
     },
     _test: { added, removed },
   };
@@ -38,7 +45,9 @@ function viewerFixture() {
 
 function nonRunningAnimation() {
   return {
-    scheduleFrame() { return 1; },
+    scheduleFrame() {
+      return 1;
+    },
     cancelFrame() {},
   };
 }
@@ -58,24 +67,68 @@ function overlayHostFixture() {
 }
 
 test('Bhote Koshi locator closes valid region rings once', () => {
-  assert.deepEqual(closeRegionRing([[80, 26], [88, 26], [88, 30]]), [
-    [80, 26], [88, 26], [88, 30], [80, 26],
-  ]);
-  assert.deepEqual(closeRegionRing([[80, 26], [88, 26], [80, 26]]), [
-    [80, 26], [88, 26], [80, 26],
-  ]);
-  assert.deepEqual(closeRegionRing([[80, 26], ['bad', 27]]), []);
+  assert.deepEqual(
+    closeRegionRing([
+      [80, 26],
+      [88, 26],
+      [88, 30],
+    ]),
+    [
+      [80, 26],
+      [88, 26],
+      [88, 30],
+      [80, 26],
+    ],
+  );
+  assert.deepEqual(
+    closeRegionRing([
+      [80, 26],
+      [88, 26],
+      [80, 26],
+    ]),
+    [
+      [80, 26],
+      [88, 26],
+      [80, 26],
+    ],
+  );
+  assert.deepEqual(
+    closeRegionRing([
+      [80, 26],
+      ['bad', 27],
+    ]),
+    [],
+  );
 });
 
 test('Bhote Koshi locator selects the largest GeoJSON country exterior', () => {
-  const main = [[80, 26], [88, 26], [88, 30], [80, 30], [80, 26]];
-  const island = [[82, 25], [83, 25], [82, 25]];
-  assert.equal(largestGeoJsonRing({ type: 'Polygon', coordinates: [main] }), main);
-  assert.equal(largestGeoJsonRing({
-    type: 'MultiPolygon',
-    coordinates: [[island], [main]],
-  }), main);
-  assert.deepEqual(largestGeoJsonRing({ type: 'Point', coordinates: [84, 28] }), []);
+  const main = [
+    [80, 26],
+    [88, 26],
+    [88, 30],
+    [80, 30],
+    [80, 26],
+  ];
+  const island = [
+    [82, 25],
+    [83, 25],
+    [82, 25],
+  ];
+  assert.equal(
+    largestGeoJsonRing({ type: 'Polygon', coordinates: [main] }),
+    main,
+  );
+  assert.equal(
+    largestGeoJsonRing({
+      type: 'MultiPolygon',
+      coordinates: [[island], [main]],
+    }),
+    main,
+  );
+  assert.deepEqual(
+    largestGeoJsonRing({ type: 'Point', coordinates: [84, 28] }),
+    [],
+  );
 });
 
 test('Bhote Koshi locator reveals a border progressively', () => {
@@ -84,7 +137,10 @@ test('Bhote Koshi locator reveals a border progressively', () => {
     new Cesium.Cartesian3(10, 0, 0),
     new Cesium.Cartesian3(20, 0, 0),
   ];
-  assert.deepEqual(revealPolylinePositions(positions, 0), [positions[0], positions[0]]);
+  assert.deepEqual(revealPolylinePositions(positions, 0), [
+    positions[0],
+    positions[0],
+  ]);
   assert.deepEqual(revealPolylinePositions(positions, 0.25), [
     positions[0],
     new Cesium.Cartesian3(5, 0, 0),
@@ -115,7 +171,12 @@ test('Bhote Koshi regional locator sequences Nepal, border, then the incident', 
   const layer = createBhoteKoshiLocatorLayer({
     boundaryResolver: async () => ({
       name: 'Nepal',
-      ring: [[80, 26], [88, 26], [88, 30], [80, 30]],
+      ring: [
+        [80, 26],
+        [88, 26],
+        [88, 30],
+        [80, 30],
+      ],
     }),
     requestRender: (reason) => renders.push(reason),
     overlayHost,
@@ -141,8 +202,12 @@ test('Bhote Koshi regional locator sequences Nepal, border, then the incident', 
   const publication = overlayHost._test.publications.at(-1);
   assert.equal(publication.sourceId, BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID);
   assert.equal(publication.entries.length, 2);
-  const nepal = publication.entries.find(({ id }) => id === 'nepal-context-callout');
-  const incident = publication.entries.find(({ id }) => id === 'bhote-koshi-incident-callout');
+  const nepal = publication.entries.find(
+    ({ id }) => id === 'nepal-context-callout',
+  );
+  const incident = publication.entries.find(
+    ({ id }) => id === 'bhote-koshi-incident-callout',
+  );
   assert.equal(nepal.variant, 'label');
   assert.equal(nepal.title, 'NEPAL');
   assert.equal(nepal.anchorDot, true);
@@ -175,12 +240,17 @@ test('Bhote Koshi regional locator sequences Nepal, border, then the incident', 
   assert.equal(incident.contentAlpha(), 1);
   assert.equal(incident.presentationScale(), 1);
   assert.equal(layer.getStats().status, 'nominal');
-  assert.deepEqual(layer.getParams(), { presentation: BHOTE_KOSHI_REGIONAL_PRESENTATION });
+  assert.deepEqual(layer.getParams(), {
+    presentation: BHOTE_KOSHI_REGIONAL_PRESENTATION,
+  });
   assert.ok(renders.includes('bhote-koshi-locator-boundary'));
 
   assert.equal(await layer.disable(), true);
   assert.equal(viewer._test.removed.length, 1);
-  assert.equal(overlayHost._test.clears.at(-1), BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID);
+  assert.equal(
+    overlayHost._test.clears.at(-1),
+    BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID,
+  );
   assert.equal(layer.getStats().status, 'idle');
 });
 
@@ -190,7 +260,12 @@ test('Bhote Koshi locator switches between Nepal context and the regional incide
   const layer = createBhoteKoshiLocatorLayer({
     boundaryResolver: async () => ({
       name: 'Nepal',
-      ring: [[80, 26], [88, 26], [88, 30], [80, 30]],
+      ring: [
+        [80, 26],
+        [88, 26],
+        [88, 30],
+        [80, 30],
+      ],
     }),
     requestRender() {},
     overlayHost,
@@ -199,37 +274,46 @@ test('Bhote Koshi locator switches between Nepal context and the regional incide
 
   layer.setParams({ presentation: NEPAL_CONTEXT_PRESENTATION });
   await layer.enable(viewer);
-  assert.deepEqual(viewer._test.added[0].entities.values.map((entity) => entity.id), [
-    'nepal-context-halo',
-  ]);
+  assert.deepEqual(
+    viewer._test.added[0].entities.values.map((entity) => entity.id),
+    ['nepal-context-halo'],
+  );
   const nepalLabel = overlayHost._test.publications.at(-1).entries[0];
   assert.equal(nepalLabel.variant, 'label');
   assert.equal(nepalLabel.placement, 'right');
   assert.equal(nepalLabel.anchorDot, true);
   assert.equal(layer.getStats().coverage, 'Nepal context');
-  assert.deepEqual(layer.getRowControls().chips.map(({ id, active }) => ({ id, active })), [
-    { id: 'nepal-context', active: true },
-    { id: 'bhote-koshi-regional', active: false },
-    { id: 'bhote-koshi-city-context', active: false },
-    { id: 'bhote-koshi-incident-places', active: false },
-    { id: 'bhote-koshi-flood-path', active: false },
-    { id: 'bhote-koshi-path-overview', active: false },
-    { id: 'bhote-koshi-trigger-record', active: false },
-  ]);
+  assert.deepEqual(
+    layer.getRowControls().chips.map(({ id, active }) => ({ id, active })),
+    [
+      { id: 'nepal-context', active: true },
+      { id: 'bhote-koshi-regional', active: false },
+      { id: 'bhote-koshi-city-context', active: false },
+      { id: 'bhote-koshi-incident-places', active: false },
+      { id: 'bhote-koshi-flood-path', active: false },
+      { id: 'bhote-koshi-path-overview', active: false },
+      { id: 'bhote-koshi-trigger-record', active: false },
+    ],
+  );
 
   layer.setParams({ presentation: BHOTE_KOSHI_REGIONAL_PRESENTATION });
   assert.ok(viewer._test.added[0].entities.getById('nepal-border-highlight'));
-  assert.equal(viewer._test.added[0].entities.getById('bhote-koshi-city-kathmandu'), undefined);
   assert.equal(
-    overlayHost._test.publications.at(-1).entries
-      .find(({ id }) => id === 'bhote-koshi-incident-callout').variant,
+    viewer._test.added[0].entities.getById('bhote-koshi-city-kathmandu'),
+    undefined,
+  );
+  assert.equal(
+    overlayHost._test.publications
+      .at(-1)
+      .entries.find(({ id }) => id === 'bhote-koshi-incident-callout').variant,
     'card',
   );
 
   layer.setParams({ presentation: NEPAL_CONTEXT_PRESENTATION });
-  assert.deepEqual(viewer._test.added[0].entities.values.map((entity) => entity.id), [
-    'nepal-context-halo',
-  ]);
+  assert.deepEqual(
+    viewer._test.added[0].entities.values.map((entity) => entity.id),
+    ['nepal-context-halo'],
+  );
   await layer.destroy();
 });
 
@@ -239,16 +323,28 @@ test('Incident Corridor reveals all fifteen overview pins and keeps layout activ
   let nowMs = 0;
   let pulseFrame = null;
   const layer = createBhoteKoshiLocatorLayer({
-    boundaryResolver: async () => null, requestRender() {},
+    boundaryResolver: async () => null,
+    requestRender() {},
     overlayHost,
     now: () => nowMs,
-    scheduleFrame(callback) { pulseFrame = callback; return 1; },
+    scheduleFrame(callback) {
+      pulseFrame = callback;
+      return 1;
+    },
     cancelFrame() {},
   });
   layer.setParams({ presentation: BHOTE_KOSHI_INCIDENT_PLACES_PRESENTATION });
   await layer.enable(viewer);
   const source = viewer._test.added[0];
-  const event = JSON.parse(await readFile(new URL('../../public/events/bhote-koshi-2026/event.json', import.meta.url), 'utf8'));
+  const event = JSON.parse(
+    await readFile(
+      new URL(
+        '../../public/events/bhote-koshi-2026/event.json',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+  );
   assert.equal(event.evidenceSpine.length, 16);
   assert.equal(event.evidenceSpine.at(-1).id, 'charaudi');
   assert.equal(source.entities.values.length, 15);
@@ -259,30 +355,60 @@ test('Incident Corridor reveals all fifteen overview pins and keeps layout activ
     const id = `bhote-koshi-place-${point.id}`;
     const pin = labels.find((entry) => entry.id === id);
     assert.ok(pin, point.id);
-    assert.equal(pin.title, `${String(index + 1).padStart(2, '0')} · ${point.title}`);
+    assert.equal(
+      pin.title,
+      `${String(index + 1).padStart(2, '0')} · ${point.title}`,
+    );
     assert.equal(pin.variant, 'label');
     const location = Cesium.Cartographic.fromCartesian(pin.position);
-    assert.ok(Math.abs(Cesium.Math.toDegrees(location.latitude) - point.lat) < 1e-6);
-    assert.ok(Math.abs(Cesium.Math.toDegrees(location.longitude) - point.lon) < 1e-6);
+    assert.ok(
+      Math.abs(Cesium.Math.toDegrees(location.latitude) - point.lat) < 1e-6,
+    );
+    assert.ok(
+      Math.abs(Cesium.Math.toDegrees(location.longitude) - point.lon) < 1e-6,
+    );
     nowMs = 349 + index * 650;
     assert.equal(pin.sourceAlpha(), 0);
     nowMs += 1;
     assert.equal(pin.sourceAlpha(), 0);
-    assert.equal(source.entities.values.filter(entity => entity.id.endsWith('-halo') && entity.show.getValue()).length, 1);
+    assert.equal(
+      source.entities.values.filter(
+        (entity) => entity.id.endsWith('-halo') && entity.show.getValue(),
+      ).length,
+      1,
+    );
     nowMs += 520;
     assert.equal(pin.sourceAlpha(), 1);
   }
   assert.ok(nowMs < INCIDENT_OVERVIEW_HOLD_SEC * 1000);
   // A repeat halo cycle must not erase already revealed labels.
   nowMs = 350 + 15 * 650;
-  assert.equal(source.entities.getById('bhote-koshi-place-immediate-collapse-viewpoint-halo').show.getValue(), true);
-  assert.equal(labels.find(({ id }) => id === 'bhote-koshi-place-devighat-taadi-khola-bridge').sourceAlpha(), 1);
-  assert.equal(labels.some(({ id }) => id === 'bhote-koshi-place-charaudi'), false);
+  assert.equal(
+    source.entities
+      .getById('bhote-koshi-place-immediate-collapse-viewpoint-halo')
+      .show.getValue(),
+    true,
+  );
+  assert.equal(
+    labels
+      .find(({ id }) => id === 'bhote-koshi-place-devighat-taadi-khola-bridge')
+      .sourceAlpha(),
+    1,
+  );
+  assert.equal(
+    labels.some(({ id }) => id === 'bhote-koshi-place-charaudi'),
+    false,
+  );
   assert.equal(typeof pulseFrame, 'function');
   pulseFrame();
   assert.equal(overlayHost._test.publications.at(-1).options.moving, false);
   layer.setParams({ presentation: BHOTE_KOSHI_REGIONAL_PRESENTATION });
-  assert.equal(source.entities.values.some(entity => entity.id.startsWith('bhote-koshi-place-')), false);
+  assert.equal(
+    source.entities.values.some((entity) =>
+      entity.id.startsWith('bhote-koshi-place-'),
+    ),
+    false,
+  );
   await layer.destroy();
 });
 
@@ -303,8 +429,12 @@ test('Bhote Koshi flood path draws a solid cyan sourced route after the place sh
   const source = viewer._test.added[0];
   const path = source.entities.getById('bhote-koshi-flood-path');
   const labels = overlayHost._test.publications.at(-1).entries;
-  const trigger = labels.find(({ id }) => id === 'bhote-koshi-place-immediate-collapse-viewpoint');
-  const bidur = labels.find(({ id }) => id === 'bhote-koshi-place-bidur-trishuli-bridge');
+  const trigger = labels.find(
+    ({ id }) => id === 'bhote-koshi-place-immediate-collapse-viewpoint',
+  );
+  const bidur = labels.find(
+    ({ id }) => id === 'bhote-koshi-place-bidur-trishuli-bridge',
+  );
 
   assert.equal(source.entities.values.length, 1);
   assert.equal(labels.length, 15);
@@ -315,10 +445,14 @@ test('Bhote Koshi flood path draws a solid cyan sourced route after the place sh
   }
   assert.equal(path.polyline.clampToGround.getValue(), true);
   assert.ok(path.polyline.material instanceof Cesium.ColorMaterialProperty);
-  assert.ok(path.polyline.material.color.getValue().equalsEpsilon(
-    Cesium.Color.fromCssColorString('#20e7f2').withAlpha(0.96),
-    Cesium.Math.EPSILON7,
-  ));
+  assert.ok(
+    path.polyline.material.color
+      .getValue()
+      .equalsEpsilon(
+        Cesium.Color.fromCssColorString('#20e7f2').withAlpha(0.96),
+        Cesium.Math.EPSILON7,
+      ),
+  );
   assert.equal(path.show.getValue(), false);
   assert.equal(trigger.sourceAlpha(), 1);
   assert.equal(bidur.sourceAlpha(), 1);
@@ -330,15 +464,23 @@ test('Bhote Koshi flood path draws a solid cyan sourced route after the place sh
   const halfwayCount = path.polyline.positions.getValue().length;
   assert.ok(Math.abs(halfwayCount - BHOTE_KOSHI_FLOOD_PATH.length / 2) <= 2);
   nowMs = 4250;
-  assert.equal(path.polyline.positions.getValue().length, BHOTE_KOSHI_FLOOD_PATH.length);
+  assert.equal(
+    path.polyline.positions.getValue().length,
+    BHOTE_KOSHI_FLOOD_PATH.length,
+  );
   assert.deepEqual(BHOTE_KOSHI_FLOOD_PATH[0], [85.48476, 28.33255]);
   // More observation pins must not extend or straighten the sourced route.
-  assert.deepEqual(path.polyline.positions.getValue(), BHOTE_KOSHI_FLOOD_PATH.map(([lon, lat]) => (
-    Cesium.Cartesian3.fromDegrees(lon, lat)
-  )));
+  assert.deepEqual(
+    path.polyline.positions.getValue(),
+    BHOTE_KOSHI_FLOOD_PATH.map(([lon, lat]) =>
+      Cesium.Cartesian3.fromDegrees(lon, lat),
+    ),
+  );
   assert.deepEqual(BHOTE_KOSHI_FLOOD_PATH.at(-1), [85.14943, 27.92177]);
   assert.equal(layer.getStats().coverage, 'Bhote Koshi · Flood path');
-  assert.deepEqual(layer.getParams(), { presentation: BHOTE_KOSHI_FLOOD_PATH_PRESENTATION });
+  assert.deepEqual(layer.getParams(), {
+    presentation: BHOTE_KOSHI_FLOOD_PATH_PRESENTATION,
+  });
   await layer.destroy();
 });
 
@@ -349,7 +491,12 @@ test('Bhote Koshi path-overview presentation keeps the route settled without Nep
   const layer = createBhoteKoshiLocatorLayer({
     boundaryResolver: async () => ({
       name: 'Nepal',
-      ring: [[80, 26], [88, 26], [88, 30], [80, 30]],
+      ring: [
+        [80, 26],
+        [88, 26],
+        [88, 30],
+        [80, 30],
+      ],
     }),
     requestRender() {},
     overlayHost,
@@ -367,21 +514,35 @@ test('Bhote Koshi path-overview presentation keeps the route settled without Nep
   assert.equal(labels.length, 15);
   for (const [index, place] of INCIDENT_OVERVIEW_PLACES.entries()) {
     const pin = labels.find(({ id }) => id === `bhote-koshi-place-${place.id}`);
-    assert.equal(pin.title, `${String(index + 1).padStart(2, '0')} · ${place.title}`);
+    assert.equal(
+      pin.title,
+      `${String(index + 1).padStart(2, '0')} · ${place.title}`,
+    );
     assert.equal(pin.sourceAlpha(), 1);
   }
   assert.equal(path.show.getValue(), true);
-  assert.equal(path.polyline.positions.getValue().length, BHOTE_KOSHI_FLOOD_PATH.length);
-  assert.ok(Cesium.Cartesian3.equals(path.polyline.positions.getValue()[0],
-    Cesium.Cartesian3.fromDegrees(85.48476, 28.33255)));
+  assert.equal(
+    path.polyline.positions.getValue().length,
+    BHOTE_KOSHI_FLOOD_PATH.length,
+  );
+  assert.ok(
+    Cesium.Cartesian3.equals(
+      path.polyline.positions.getValue()[0],
+      Cesium.Cartesian3.fromDegrees(85.48476, 28.33255),
+    ),
+  );
   assert.equal(source.entities.getById('nepal-border-fill'), undefined);
   assert.equal(source.entities.getById('nepal-border-highlight'), undefined);
   assert.equal(
-    source.entities.getById('bhote-koshi-place-immediate-collapse-viewpoint-halo'),
+    source.entities.getById(
+      'bhote-koshi-place-immediate-collapse-viewpoint-halo',
+    ),
     undefined,
   );
   assert.equal(layer.getStats().coverage, 'Bhote Koshi · Path overview');
-  assert.deepEqual(layer.getParams(), { presentation: BHOTE_KOSHI_PATH_OVERVIEW_PRESENTATION });
+  assert.deepEqual(layer.getParams(), {
+    presentation: BHOTE_KOSHI_PATH_OVERVIEW_PRESENTATION,
+  });
   await layer.destroy();
 });
 
@@ -406,10 +567,10 @@ test('Bhote Koshi trigger-record presentation reveals sourced incident details',
   const publication = overlayHost._test.publications.at(-1);
   const record = publication.entries[0];
 
-  assert.deepEqual(source.entities.values.map(({ id }) => id), [
-    'bhote-koshi-flood-path',
-    'bhote-koshi-trigger-record-halo',
-  ]);
+  assert.deepEqual(
+    source.entities.values.map(({ id }) => id),
+    ['bhote-koshi-flood-path', 'bhote-koshi-trigger-record-halo'],
+  );
   assert.equal(record.title, 'USGS INITIAL REPORT');
   assert.deepEqual(record.details, [
     '26 AUG 2026 · 08:37 NPT',
@@ -440,7 +601,9 @@ test('Bhote Koshi trigger-record waits for the scene camera, zooms, then orbits'
   viewer.camera = {
     moveStart,
     moveEnd,
-    flyTo(options) { flights.push(options); },
+    flyTo(options) {
+      flights.push(options);
+    },
     cancelFlight() {},
   };
   const layer = createBhoteKoshiLocatorLayer({
@@ -465,8 +628,12 @@ test('Bhote Koshi trigger-record waits for the scene camera, zooms, then orbits'
   assert.equal(flights.length, 1);
   assert.equal(flights[0].duration, 4.6);
   const destination = Cesium.Cartographic.fromCartesian(flights[0].destination);
-  assert.ok(Math.abs(Cesium.Math.toDegrees(destination.latitude) - 28.368) < 1e-6);
-  assert.ok(Math.abs(Cesium.Math.toDegrees(destination.longitude) - 85.473) < 1e-6);
+  assert.ok(
+    Math.abs(Cesium.Math.toDegrees(destination.latitude) - 28.368) < 1e-6,
+  );
+  assert.ok(
+    Math.abs(Cesium.Math.toDegrees(destination.longitude) - 85.473) < 1e-6,
+  );
   assert.ok(Math.abs(destination.height - 10526) < 1e-4);
   flights[0].complete();
   assert.equal(flights.length, 2);
@@ -488,8 +655,11 @@ for (const phase of ['timer', 'move-end', 'approach', 'orbit']) {
     const moveStart = new Cesium.Event();
     const moveEnd = new Cesium.Event();
     viewer.camera = {
-      moveStart, moveEnd,
-      flyTo(options) { flights.push(options); },
+      moveStart,
+      moveEnd,
+      flyTo(options) {
+        flights.push(options);
+      },
       cancelFlight() {},
     };
     const layer = createBhoteKoshiLocatorLayer({
@@ -501,21 +671,30 @@ for (const phase of ['timer', 'move-end', 'approach', 'orbit']) {
         timers.set(++nextTimer, callback);
         return nextTimer;
       },
-      cancelDelay(id) { timers.delete(id); },
+      cancelDelay(id) {
+        timers.delete(id);
+      },
       ...nonRunningAnimation(),
     });
     const director = {
-      _clock: createPlaybackClock({ isRunning: () => false, timingForShot: () => null, onProgress() {} }),
+      _clock: createPlaybackClock({
+        isRunning: () => false,
+        timingForShot: () => null,
+        onProgress() {},
+      }),
       _scenePacks: createDefaultScenePacks(),
       dataManager: { layers: new Map([[layer.id, { module: layer }]]) },
       viewer,
       _sceneSeekGeneration: 0,
       _loadGeneration: 0,
-      _cancelActiveSceneTravel: SceneDirector.prototype._cancelActiveSceneTravel,
+      _cancelActiveSceneTravel:
+        SceneDirector.prototype._cancelActiveSceneTravel,
       _setSceneMediaPlayback: SceneDirector.prototype._setSceneMediaPlayback,
     };
     try {
-      layer.setParams({ presentation: BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION });
+      layer.setParams({
+        presentation: BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION,
+      });
       await layer.enable(viewer);
       if (phase === 'move-end') moveStart.raiseEvent();
       if (phase === 'approach' || phase === 'orbit') callbacks[0]();
@@ -528,19 +707,38 @@ for (const phase of ['timer', 'move-end', 'approach', 'orbit']) {
       callbacks[0]();
       moveEnd.raiseEvent();
       for (const flight of oldFlights) flight.complete();
-      assert.equal(flights.length, oldFlights.length, 'no post-Stop approach or orbit');
-      assert.equal(layer.getStats().count, 1, 'Stop preserves the visible locator');
+      assert.equal(
+        flights.length,
+        oldFlights.length,
+        'no post-Stop approach or orbit',
+      );
+      assert.equal(
+        layer.getStats().count,
+        1,
+        'Stop preserves the visible locator',
+      );
 
-      layer.setParams({ presentation: BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION });
+      layer.setParams({
+        presentation: BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION,
+      });
       callbacks.at(-1)();
       const successor = flights.at(-1);
       const count = flights.length;
       callbacks[0]();
-      for (const flight of oldFlights) { flight.cancel(); flight.complete(); }
+      for (const flight of oldFlights) {
+        flight.cancel();
+        flight.complete();
+      }
       assert.equal(flights.length, count, 'old callbacks cannot add a flight');
       successor.complete();
-      assert.equal(flights.length, count + 1, 'successor retains its own orbit');
-    } finally { await layer.destroy(); }
+      assert.equal(
+        flights.length,
+        count + 1,
+        'successor retains its own orbit',
+      );
+    } finally {
+      await layer.destroy();
+    }
   });
 }
 
@@ -551,7 +749,12 @@ test('Bhote Koshi locator keeps the regional context settled while nearby cities
   const layer = createBhoteKoshiLocatorLayer({
     boundaryResolver: async () => ({
       name: 'Nepal',
-      ring: [[80, 26], [88, 26], [88, 30], [80, 30]],
+      ring: [
+        [80, 26],
+        [88, 26],
+        [88, 30],
+        [80, 30],
+      ],
     }),
     requestRender() {},
     overlayHost,
@@ -564,19 +767,29 @@ test('Bhote Koshi locator keeps the regional context settled while nearby cities
   const source = viewer._test.added[0];
   const borderFill = source.entities.getById('nepal-border-fill');
   const entries = overlayHost._test.publications.at(-1).entries;
-  const incident = entries.find(({ id }) => id === 'bhote-koshi-incident-callout');
-  const kathmandu = entries.find(({ id }) => id === 'bhote-koshi-city-kathmandu');
-  const bhaktapur = entries.find(({ id }) => id === 'bhote-koshi-city-bhaktapur');
-  const dhulikhel = entries.find(({ id }) => id === 'bhote-koshi-city-dhulikhel');
+  const incident = entries.find(
+    ({ id }) => id === 'bhote-koshi-incident-callout',
+  );
+  const kathmandu = entries.find(
+    ({ id }) => id === 'bhote-koshi-city-kathmandu',
+  );
+  const bhaktapur = entries.find(
+    ({ id }) => id === 'bhote-koshi-city-bhaktapur',
+  );
+  const dhulikhel = entries.find(
+    ({ id }) => id === 'bhote-koshi-city-dhulikhel',
+  );
 
   assert.equal(borderFill.show.getValue(), true);
   assert.equal(incident.contentAlpha(), 1);
   assert.equal(kathmandu.title, 'KATHMANDU');
   assert.equal(bhaktapur.title, 'BHAKTAPUR');
   assert.equal(dhulikhel.title, 'DHULIKHEL');
-  assert.ok([kathmandu, bhaktapur, dhulikhel].every(({ variant, anchorDot }) => (
-    variant === 'label' && anchorDot === true
-  )));
+  assert.ok(
+    [kathmandu, bhaktapur, dhulikhel].every(
+      ({ variant, anchorDot }) => variant === 'label' && anchorDot === true,
+    ),
+  );
   assert.equal(kathmandu.sourceAlpha(), 0);
   assert.equal(bhaktapur.sourceAlpha(), 0);
   assert.equal(dhulikhel.sourceAlpha(), 0);
@@ -591,7 +804,9 @@ test('Bhote Koshi locator keeps the regional context settled while nearby cities
   nowMs = 1300;
   assert.equal(dhulikhel.sourceAlpha(), 1);
   assert.equal(layer.getStats().coverage, 'Bhote Koshi · Nearby cities');
-  assert.deepEqual(layer.getParams(), { presentation: BHOTE_KOSHI_CITY_CONTEXT_PRESENTATION });
+  assert.deepEqual(layer.getParams(), {
+    presentation: BHOTE_KOSHI_CITY_CONTEXT_PRESENTATION,
+  });
   await layer.destroy();
 });
 
@@ -608,15 +823,17 @@ test('Bhote Koshi locator degrades to labels when the regional boundary is unava
   });
   try {
     await layer.enable(viewer);
-    const ids = viewer._test.added[0].entities.values.map((entity) => entity.id);
+    const ids = viewer._test.added[0].entities.values.map(
+      (entity) => entity.id,
+    );
     assert.ok(ids.includes('nepal-context-halo'));
     assert.ok(ids.includes('bhote-koshi-incident-halo'));
     assert.equal(ids.includes('bhote-koshi-city-kathmandu'), false);
     assert.equal(ids.includes('nepal-border-highlight'), false);
-    assert.deepEqual(overlayHost._test.publications.at(-1).entries.map(({ id }) => id), [
-      'nepal-context-callout',
-      'bhote-koshi-incident-callout',
-    ]);
+    assert.deepEqual(
+      overlayHost._test.publications.at(-1).entries.map(({ id }) => id),
+      ['nepal-context-callout', 'bhote-koshi-incident-callout'],
+    );
     assert.equal(layer.getStats().status, 'degraded');
   } finally {
     console.warn = originalWarn;
@@ -628,7 +845,9 @@ test('Bhote Koshi regional locator waits for its boundary before starting the fu
   const viewer = viewerFixture();
   const overlayHost = overlayHostFixture();
   let releaseBoundary;
-  const boundary = new Promise((resolve) => { releaseBoundary = resolve; });
+  const boundary = new Promise((resolve) => {
+    releaseBoundary = resolve;
+  });
   const layer = createBhoteKoshiLocatorLayer({
     boundaryResolver: async () => boundary,
     requestRender() {},
@@ -638,23 +857,42 @@ test('Bhote Koshi regional locator waits for its boundary before starting the fu
 
   const enabling = layer.enable(viewer);
   assert.ok(viewer._test.added[0].entities.getById('nepal-context-halo'));
-  assert.equal(viewer._test.added[0].entities.getById('nepal-border-highlight'), undefined);
-  assert.equal(viewer._test.added[0].entities.getById('bhote-koshi-incident-halo'), undefined);
+  assert.equal(
+    viewer._test.added[0].entities.getById('nepal-border-highlight'),
+    undefined,
+  );
+  assert.equal(
+    viewer._test.added[0].entities.getById('bhote-koshi-incident-halo'),
+    undefined,
+  );
   assert.equal(overlayHost._test.publications.length, 1);
-  assert.deepEqual(overlayHost._test.publications[0].entries.map(({ id }) => id), [
-    'nepal-context-callout',
-  ]);
+  assert.deepEqual(
+    overlayHost._test.publications[0].entries.map(({ id }) => id),
+    ['nepal-context-callout'],
+  );
 
-  releaseBoundary({ ring: [[80, 26], [88, 26], [88, 30], [80, 30]] });
+  releaseBoundary({
+    ring: [
+      [80, 26],
+      [88, 26],
+      [88, 30],
+      [80, 30],
+    ],
+  });
   await enabling;
-  assert.ok(viewer._test.added[0].entities.getById('bhote-koshi-incident-halo'));
+  assert.ok(
+    viewer._test.added[0].entities.getById('bhote-koshi-incident-halo'),
+  );
   assert.ok(viewer._test.added[0].entities.getById('nepal-border-highlight'));
-  assert.equal(viewer._test.added[0].entities.getById('bhote-koshi-city-kathmandu'), undefined);
+  assert.equal(
+    viewer._test.added[0].entities.getById('bhote-koshi-city-kathmandu'),
+    undefined,
+  );
   assert.equal(overlayHost._test.publications.length, 2);
-  assert.deepEqual(overlayHost._test.publications.at(-1).entries.map(({ id }) => id), [
-    'nepal-context-callout',
-    'bhote-koshi-incident-callout',
-  ]);
+  assert.deepEqual(
+    overlayHost._test.publications.at(-1).entries.map(({ id }) => id),
+    ['nepal-context-callout', 'bhote-koshi-incident-callout'],
+  );
   await layer.destroy();
 });
 
@@ -662,7 +900,9 @@ test('Bhote Koshi locator cancels a stale boundary resolution and removes its su
   const viewer = viewerFixture();
   const controller = new AbortController();
   let releaseBoundary;
-  const boundary = new Promise((resolve) => { releaseBoundary = resolve; });
+  const boundary = new Promise((resolve) => {
+    releaseBoundary = resolve;
+  });
   const layer = createBhoteKoshiLocatorLayer({
     boundaryResolver: async () => boundary,
     requestRender() {},
@@ -670,7 +910,13 @@ test('Bhote Koshi locator cancels a stale boundary resolution and removes its su
   });
   const enabling = layer.enable(viewer, { signal: controller.signal });
   controller.abort();
-  releaseBoundary({ ring: [[80, 26], [88, 26], [88, 30]] });
+  releaseBoundary({
+    ring: [
+      [80, 26],
+      [88, 26],
+      [88, 30],
+    ],
+  });
   await assert.rejects(enabling, (error) => error?.name === 'AbortError');
   assert.equal(viewer._test.removed.length, 1);
 });

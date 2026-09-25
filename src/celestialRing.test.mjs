@@ -30,13 +30,25 @@ function geometry(clearance, offset = 0) {
 }
 
 test('full globe enters only with the larger clearance', () => {
-  assert.equal(isFullGlobeInsideKeyhole(geometry(GLOBE_ENTER_CLEARANCE_PX), false), true);
-  assert.equal(isFullGlobeInsideKeyhole(geometry(GLOBE_ENTER_CLEARANCE_PX - 0.1), false), false);
+  assert.equal(
+    isFullGlobeInsideKeyhole(geometry(GLOBE_ENTER_CLEARANCE_PX), false),
+    true,
+  );
+  assert.equal(
+    isFullGlobeInsideKeyhole(geometry(GLOBE_ENTER_CLEARANCE_PX - 0.1), false),
+    false,
+  );
 });
 
 test('visible globe uses the smaller exit clearance for hysteresis', () => {
-  assert.equal(isFullGlobeInsideKeyhole(geometry(GLOBE_EXIT_CLEARANCE_PX), true), true);
-  assert.equal(isFullGlobeInsideKeyhole(geometry(GLOBE_EXIT_CLEARANCE_PX - 0.1), true), false);
+  assert.equal(
+    isFullGlobeInsideKeyhole(geometry(GLOBE_EXIT_CLEARANCE_PX), true),
+    true,
+  );
+  assert.equal(
+    isFullGlobeInsideKeyhole(geometry(GLOBE_EXIT_CLEARANCE_PX - 0.1), true),
+    false,
+  );
 });
 
 test('off-center globe containment includes center offset', () => {
@@ -48,7 +60,10 @@ test('off-center globe containment includes center offset', () => {
 
 test('invalid or clipped Earth discs are rejected', () => {
   assert.equal(isFullGlobeInsideKeyhole(null, false), false);
-  assert.equal(isFullGlobeInsideKeyhole({ ...geometry(30), earthRadius: -1 }, false), false);
+  assert.equal(
+    isFullGlobeInsideKeyhole({ ...geometry(30), earthRadius: -1 }, false),
+    false,
+  );
   assert.equal(isFullGlobeInsideKeyhole(geometry(-2), true), false);
 });
 
@@ -69,7 +84,11 @@ test('camera-plane projection maps right, up, left, and down to canvas angles', 
 
 test('unstable camera-axis projection retains the last bearing and fades', () => {
   const last = 1.25;
-  const projected = celestialScreenAngle(CELESTIAL_PLANE_EPSILON * 0.2, 0, last);
+  const projected = celestialScreenAngle(
+    CELESTIAL_PLANE_EPSILON * 0.2,
+    0,
+    last,
+  );
   assert.equal(projected.stable, false);
   assert.equal(projected.angle, last);
   assert.ok(projected.opacity > 0 && projected.opacity < 1);
@@ -81,13 +100,22 @@ test('angle normalization wraps both directions', () => {
 });
 
 test('circular angle distance remains small across the wrap point', () => {
-  assert.ok(Math.abs(circularAngleDistance(0.04, Math.PI * 2 - 0.03) - 0.07) < 1e-9);
+  assert.ok(
+    Math.abs(circularAngleDistance(0.04, Math.PI * 2 - 0.03) - 0.07) < 1e-9,
+  );
   assert.ok(Math.abs(circularAngleDistance(0, Math.PI) - Math.PI) < 1e-9);
 });
 
 test('celestial ring is available only in Normal style', () => {
   assert.equal(isCelestialRingStyleSupported('normal'), true);
-  for (const style of ['retro', 'surveillance', 'thermal', 'anime', 'noir', 'snow']) {
+  for (const style of [
+    'retro',
+    'surveillance',
+    'thermal',
+    'anime',
+    'noir',
+    'snow',
+  ]) {
     assert.equal(isCelestialRingStyleSupported(style), false);
   }
 });
@@ -114,23 +142,41 @@ test('label alpha stays opaque inside and fades monotonically outside', () => {
   const geometry = getKeyholeGeometry(1200, 800);
   const y = geometry.centerY;
   assert.equal(keyholeLabelAlpha(geometry.centerX, y, 1200, 800), 1);
-  assert.equal(keyholeLabelAlpha(geometry.centerX + geometry.radius, y, 1200, 800), 1);
+  assert.equal(
+    keyholeLabelAlpha(geometry.centerX + geometry.radius, y, 1200, 800),
+    1,
+  );
   const quarter = keyholeLabelAlpha(
-    geometry.centerX + geometry.radius + geometry.featherPx * 0.25, y, 1200, 800,
+    geometry.centerX + geometry.radius + geometry.featherPx * 0.25,
+    y,
+    1200,
+    800,
   );
   const middle = keyholeLabelAlpha(
-    geometry.centerX + geometry.radius + geometry.featherPx * 0.5, y, 1200, 800,
+    geometry.centerX + geometry.radius + geometry.featherPx * 0.5,
+    y,
+    1200,
+    800,
   );
   const threeQuarter = keyholeLabelAlpha(
-    geometry.centerX + geometry.radius + geometry.featherPx * 0.75, y, 1200, 800,
+    geometry.centerX + geometry.radius + geometry.featherPx * 0.75,
+    y,
+    1200,
+    800,
   );
   assert.ok(quarter > middle && middle > threeQuarter);
   assert.ok(Math.abs(quarter - 0.75) < 1e-12);
   assert.ok(Math.abs(middle - 0.5) < 1e-12);
   assert.ok(Math.abs(threeQuarter - 0.25) < 1e-12);
-  assert.equal(keyholeLabelAlpha(
-    geometry.centerX + geometry.radius + geometry.featherPx, y, 1200, 800,
-  ), 0);
+  assert.equal(
+    keyholeLabelAlpha(
+      geometry.centerX + geometry.radius + geometry.featherPx,
+      y,
+      1200,
+      800,
+    ),
+    0,
+  );
 });
 
 test('fade tuning scales with keyhole radius and supports outside opacity', () => {
@@ -138,12 +184,18 @@ test('fade tuning scales with keyhole radius and supports outside opacity', () =
   const small = getKeyholeGeometry(800, 600);
   const large = getKeyholeGeometry(1600, 1200);
   assert.equal(large.featherPx, small.featherPx * 2);
-  assert.deepEqual(getKeyholeFadeTuning(), { fadeRatio: 0.2, outsideOpacity: 0.3 });
-  assert.equal(keyholeLabelAlpha(
-    small.centerX + small.radius + small.featherPx,
-    small.centerY,
-    800,
-    600,
-  ), 0.3);
+  assert.deepEqual(getKeyholeFadeTuning(), {
+    fadeRatio: 0.2,
+    outsideOpacity: 0.3,
+  });
+  assert.equal(
+    keyholeLabelAlpha(
+      small.centerX + small.radius + small.featherPx,
+      small.centerY,
+      800,
+      600,
+    ),
+    0.3,
+  );
   setKeyholeFadeTuning({ fadeRatio: 0.16, outsideOpacity: 0.05 });
 });

@@ -10,24 +10,43 @@ import {
 test('setup placement moves the same button only in Cyber and disconnects on teardown', () => {
   const home = {};
   const chip = { parentNode: home, hidden: true };
-  const root = { parentNode: home, before: (node) => { node.parentNode = home; } };
+  const root = {
+    parentNode: home,
+    before: (node) => {
+      node.parentNode = home;
+    },
+  };
   let moves = 0;
-  const toolbar = { append: (node) => { moves++; node.parentNode = toolbar; } };
+  const toolbar = {
+    append: (node) => {
+      moves++;
+      node.parentNode = toolbar;
+    },
+  };
   const theme = { dataset: { uiTheme: 'tactical' } };
-  let notify, disconnected = false;
+  let notify,
+    disconnected = false;
   class Observer {
-    constructor(callback) { notify = callback; }
+    constructor(callback) {
+      notify = callback;
+    }
     observe(target, options) {
       assert.equal(target, theme);
       assert.deepEqual(options.attributeFilter, ['data-ui-theme']);
     }
-    disconnect() { disconnected = true; }
+    disconnect() {
+      disconnected = true;
+    }
   }
-  const dispose = bindKeySetupPlacement({
-    documentElement: theme,
-    getElementById: () => toolbar,
-    defaultView: { MutationObserver: Observer },
-  }, chip, root);
+  const dispose = bindKeySetupPlacement(
+    {
+      documentElement: theme,
+      getElementById: () => toolbar,
+      defaultView: { MutationObserver: Observer },
+    },
+    chip,
+    root,
+  );
   assert.equal(chip.parentNode, home);
   for (const variant of ['cyber', 'operator', 'cyber', 'minimal']) {
     theme.dataset.uiTheme = variant;
@@ -42,10 +61,20 @@ test('setup placement moves the same button only in Cyber and disconnects on tea
 });
 
 test('the chip counts what is missing, and retires the count at zero', () => {
-  assert.equal(keySetupChipLabel({ setCount: 0, total: 8 }), 'POWER UP · 8 KEYS WAITING');
-  assert.equal(keySetupChipLabel({ setCount: 7, total: 8 }), 'POWER UP · 1 KEY WAITING');
+  assert.equal(
+    keySetupChipLabel({ setCount: 0, total: 8 }),
+    'POWER UP · 8 KEYS WAITING',
+  );
+  assert.equal(
+    keySetupChipLabel({ setCount: 7, total: 8 }),
+    'POWER UP · 1 KEY WAITING',
+  );
   assert.equal(keySetupChipLabel({ setCount: 8, total: 8 }), 'POWERED UP');
-  assert.equal(keySetupChipLabel(null), 'POWERED UP', 'no status is not a broken label');
+  assert.equal(
+    keySetupChipLabel(null),
+    'POWERED UP',
+    'no status is not a broken label',
+  );
 });
 
 test('collectKeyUpdates keeps only non-empty trimmed values', () => {
@@ -62,7 +91,9 @@ test('collectKeyUpdates keeps only non-empty trimmed values', () => {
 });
 
 test('the first Google key strips ONLY the keyless OSM basemap from the share hash', () => {
-  const stripped = stripKeylessBasemapFromHash('lat=30.2&lon=-97.7&map=osm&style=normal');
+  const stripped = stripKeylessBasemapFromHash(
+    'lat=30.2&lon=-97.7&map=osm&style=normal',
+  );
   assert.ok(stripped !== null);
   const params = new URLSearchParams(stripped);
   assert.equal(params.get('map'), null, 'osm basemap removed');
@@ -70,7 +101,11 @@ test('the first Google key strips ONLY the keyless OSM basemap from the share ha
   assert.equal(params.get('style'), 'normal', 'style survives');
   // A stack under any other name was chosen or shared on purpose.
   assert.equal(stripKeylessBasemapFromHash('map=bing-aerial&lat=1'), null);
-  assert.equal(stripKeylessBasemapFromHash('lat=1&lon=2'), null, 'no stack, nothing to do');
+  assert.equal(
+    stripKeylessBasemapFromHash('lat=1&lon=2'),
+    null,
+    'no stack, nothing to do',
+  );
   assert.equal(stripKeylessBasemapFromHash(''), null);
   assert.equal(stripKeylessBasemapFromHash(undefined), null);
 });
@@ -84,11 +119,15 @@ test('aborting pending setup removes its surface and ignores a late response', a
   let requestSignal;
   const controller = new AbortController();
   const pending = initKeySetup({
-    documentRef: { getElementById: (id) => id === 'key-setup-chip' ? chip : root },
+    documentRef: {
+      getElementById: (id) => (id === 'key-setup-chip' ? chip : root),
+    },
     signal: controller.signal,
     fetchImpl: (_url, { signal }) => {
       requestSignal = signal;
-      return new Promise((resolve) => { resolveResponse = resolve; });
+      return new Promise((resolve) => {
+        resolveResponse = resolve;
+      });
     },
   });
   controller.abort();
@@ -96,4 +135,162 @@ test('aborting pending setup removes its surface and ignores a late response', a
   assert.deepEqual(removed, ['chip', 'root']);
   resolveResponse({ ok: true, json: async () => ({ keys: [] }) });
   assert.equal(await pending, null);
+});
+
+test('render displays active provider pill and differentiates chips with NO KEY vs ACTIVE', async () => {
+  // Test that buildRow differentiates providers cleanly
+  const mockStatus = {
+    keys: [
+      {
+        id: 'nvidia',
+        title: 'FREE AI ENGINES (13 PROVIDERS)',
+        unlocks: 'Access 82+ models',
+        getUrl: 'https://build.nvidia.com',
+        envVars: ['NVIDIA_API_KEY'],
+        tier: 'free',
+        set: true,
+      },
+    ],
+    providerSummary: {
+      activeId: 'requesty',
+      providers: {
+        nvidia: { set: false, envVar: 'NVIDIA_API_KEY' },
+        requesty: { set: true, envVar: 'REQUESTY_API_KEY' },
+        groq: { set: false, envVar: 'GROQ_API_KEY' },
+      },
+    },
+    setCount: 1,
+    total: 1,
+  };
+
+  const elements = [];
+  const createMockElement = (tag) => {
+    const el = {
+      tagName: tag.toUpperCase(),
+      className: '',
+      children: [],
+      dataset: {},
+      style: {},
+      textContent: '',
+      innerHTML: '',
+      append: (...children) => el.children.push(...children),
+      setAttribute: (k, v) => {
+        el[k] = v;
+      },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      classList: {
+        add: (cls) => {
+          el.className = `${el.className} ${cls}`.trim();
+        },
+        remove: (cls) => {
+          el.className = el.className
+            .split(' ')
+            .filter((c) => c !== cls)
+            .join(' ');
+        },
+        contains: (cls) => el.className.includes(cls),
+      },
+    };
+    elements.push(el);
+    return el;
+  };
+
+  const mockDoc = {
+    createElement: createMockElement,
+    getElementById: () => null,
+  };
+
+  const { initKeySetup } = await import('./keySetup.js');
+  // Initialize with our mock DOM
+  const chipEl = createMockElement('button');
+  chipEl.id = 'key-setup-chip';
+  const rootEl = createMockElement('div');
+  rootEl.id = 'key-setup';
+  const rowsHostEl = createMockElement('div');
+  rowsHostEl.setAttribute('data-key-setup-rows', 'true');
+  rootEl.append(rowsHostEl);
+  rootEl.querySelector = (sel) => {
+    if (sel === '[data-key-setup-rows]') return rowsHostEl;
+    return createMockElement('div');
+  };
+
+  const instance = await initKeySetup({
+    documentRef: {
+      getElementById: (id) => (id === 'key-setup-chip' ? chipEl : rootEl),
+      createElement: createMockElement,
+    },
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => mockStatus,
+    }),
+  });
+
+  assert.ok(instance !== null);
+  // Verify rowsHost received the row
+  assert.ok(rowsHostEl.children.length > 0);
+  const row = rowsHostEl.children[0];
+  assert.equal(row.dataset.keyId, 'nvidia');
+  assert.equal(row.dataset.set, 'true');
+
+  // Verify that an element inside the row contains '🟢 ACTIVE: Requesty'
+  const hasActivePill = elements.some(
+    (el) =>
+      typeof el.innerHTML === 'string' &&
+      el.innerHTML.includes('🟢 ACTIVE: Requesty'),
+  );
+  assert.equal(hasActivePill, true, 'Active pill must name Requesty');
+
+  // Verify that Requesty chip shows ⚡ ACTIVE
+  const hasActiveTag = elements.some(
+    (el) =>
+      typeof el.innerHTML === 'string' &&
+      el.innerHTML.includes('⚡ ACTIVE') &&
+      el.innerHTML.includes('Requesty'),
+  );
+  assert.equal(hasActiveTag, true, 'Requesty chip must display ⚡ ACTIVE');
+
+  // Verify that other chips show ⚪ NO KEY
+  const hasNoKeyTag = elements.some(
+    (el) =>
+      typeof el.innerHTML === 'string' && el.innerHTML.includes('⚪ NO KEY'),
+  );
+  assert.equal(hasNoKeyTag, true, 'Unconfigured chips must display ⚪ NO KEY');
+
+  // Verify that all providers have dedicated input fields with their respective envVars
+  const providerInputs = elements.filter(
+    (el) =>
+      el.tagName === 'INPUT' && el.dataset?.envVar && el.type === 'password',
+  );
+  assert.equal(
+    providerInputs.length,
+    14,
+    'Must render exactly 14 segregated password inputs',
+  );
+
+  const expectedVars = [
+    'NVIDIA_API_KEY',
+    'MANIFEST_API_KEY',
+    'REQUESTY_API_KEY',
+    'GROQ_API_KEY',
+    'GEMINI_API_KEY',
+    'CEREBRAS_API_KEY',
+    'MISTRAL_API_KEY',
+    'COHERE_API_KEY',
+    'AION_API_KEY',
+    'ZHIPU_API_KEY',
+    'SAMBANOVA_API_KEY',
+    'TOGETHER_API_KEY',
+    'CLOUDFLARE_API_KEY',
+    'OPENROUTER_API_KEY',
+  ];
+  const renderedVars = providerInputs.map((i) => i.dataset.envVar);
+  for (const expectedVar of expectedVars) {
+    assert.ok(
+      renderedVars.includes(expectedVar),
+      `Input field for ${expectedVar} must be present and segregated`,
+    );
+  }
 });

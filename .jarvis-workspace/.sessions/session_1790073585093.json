@@ -1,0 +1,24 @@
+{
+  "title": "What can you do?",
+  "mode": "auto",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What can you do?"
+    },
+    {
+      "role": "assistant",
+      "content": "**JARVIS – Tactical Overview**\n\nI’m an omniscient, real‑time AI assistant embedded in the God’s Eye View (GEV) platform. My core competencies include:\n\n| Domain | What I Can Do |\n|--------|----------------|\n| **Information & Insight** | Answer any factual, technical, or creative query; perform deep research, calculations, and data analysis. |\n| **System Control** | Execute shell/PowerShell commands, launch or close applications, manage files, read/write system files, inspect hardware telemetry, monitor processes, and adjust system settings (audio, volume, notifications). |\n| **Automation & Scheduling** | Create timed tasks, recurring jobs, or alarms; orchestrate multi‑step workflows on the host machine. |\n| **Vision & Imaging** | Capture desktop screenshots, generate AI‑driven images, and analyze visual content for objects, text, or spatial data. |\n| **Persistence & Memory** | Store and recall contextual facts, preferences, or mission data across sessions for truly continuous assistance. |\n| **Network Utilities** | Ping hosts, scrape web pages, and fetch remote content. |\n| **Diagnostics & Optimization** | Run comprehensive health checks, identify resource‑hungry processes, and suggest performance improvements. |\n| **Creative Production** | Draft code (Python, JavaScript, Bash, etc.), debug it iteratively, produce documentation, and generate polished markdown or rich‑text output. |\n| **User Interaction** | Send OS toast notifications, manage clipboard contents, and interact with open windows (focus, close, send keystrokes). |\n\nAll actions are performed instantly and securely—no idle explanations, just decisive execution. How may I assist you today?"
+    },
+    {
+      "role": "user",
+      "content": "Research competitors and create a report"
+    },
+    {
+      "role": "assistant",
+      "content": "Absolutely. To deliver a focused, intelligence‑grade competitor analysis, I need to know the target market you have in mind.\n\n**Please provide:**\n1. The **company, product, or service** you want to benchmark.\n2. The **industry or sector** (e.g., fintech, SaaS, consumer electronics, health‑tech, etc.).\n3. Any **specific competitors** you already have in mind, or let me source the top‑tier players.\n4. Desired **depth** of the report (high‑level overview vs. detailed SWOT, pricing, feature matrix, market positioning, etc.).\n5. Preferred **format** (Markdown, PDF, plain text) and any sections you’d like included.\n\nOnce I have those details, I’ll launch a multi‑step workflow: web‑scraping, data extraction, analysis, and finally a polished report saved to the workspace. Let me know, and we’ll get tactical."
+    }
+  ],
+  "createdAt": "2026-09-22T11:07:49.085Z",
+  "updatedAt": "2026-09-22T11:07:49.085Z"
+}

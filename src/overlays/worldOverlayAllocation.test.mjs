@@ -146,10 +146,16 @@ const WORKLOADS = [
   {
     name: 'with infrastructure, FIRMS, and vessels live',
     profile: 'phase3-vessels',
-    entries: LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-      + vesselOverlayCohortLimit(1600, 900) + 1,
-    candidates: LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-      + vesselOverlayCohortLimit(1600, 900) + 1,
+    entries:
+      LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+      FIRMS_AMBIENT_COHORT_LIMIT +
+      vesselOverlayCohortLimit(1600, 900) +
+      1,
+    candidates:
+      LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+      FIRMS_AMBIENT_COHORT_LIMIT +
+      vesselOverlayCohortLimit(1600, 900) +
+      1,
     maxBytesPerFrame: 87_500,
     saturated: true,
     ambientCardCapacity: AMBIENT_CARD_COLLISION_CAPACITY,
@@ -157,10 +163,16 @@ const WORKLOADS = [
   {
     name: 'with infrastructure, FIRMS, ambient vessels, and tracked readout live',
     profile: 'phase3-tracked',
-    entries: LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-      + vesselOverlayCohortLimit(1600, 900) + 1,
-    candidates: LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-      + vesselOverlayCohortLimit(1600, 900) + 1,
+    entries:
+      LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+      FIRMS_AMBIENT_COHORT_LIMIT +
+      vesselOverlayCohortLimit(1600, 900) +
+      1,
+    candidates:
+      LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+      FIRMS_AMBIENT_COHORT_LIMIT +
+      vesselOverlayCohortLimit(1600, 900) +
+      1,
     maxBytesPerFrame: 86_700,
     saturated: true,
     ambientCardCapacity: AMBIENT_CARD_COLLISION_CAPACITY,
@@ -168,10 +180,20 @@ const WORKLOADS = [
   {
     name: 'with all Phase 3 sources and CCTV thumbnails live',
     profile: 'phase4-cctv',
-    entries: LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-      + vesselOverlayCohortLimit(1600, 900) + 1 + CCTV_AMBIENT_CARD_MAX + 1,
-    candidates: LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-      + vesselOverlayCohortLimit(1600, 900) + 1 + CCTV_AMBIENT_CARD_MAX + 1,
+    entries:
+      LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+      FIRMS_AMBIENT_COHORT_LIMIT +
+      vesselOverlayCohortLimit(1600, 900) +
+      1 +
+      CCTV_AMBIENT_CARD_MAX +
+      1,
+    candidates:
+      LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+      FIRMS_AMBIENT_COHORT_LIMIT +
+      vesselOverlayCohortLimit(1600, 900) +
+      1 +
+      CCTV_AMBIENT_CARD_MAX +
+      1,
     maxBytesPerFrame: 102_400,
     maxBytesPerCandidatePerFrame: 210,
     saturated: true,
@@ -188,12 +210,24 @@ const WORKLOADS = [
   {
     name: 'with final Phase 5 host sources live (pre-cable-migration surface)',
     profile: 'phase5-military',
-    entries: LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-      + vesselOverlayCohortLimit(1600, 900) + 1 + CCTV_AMBIENT_CARD_MAX + 1
-      + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 3,
-    candidates: LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-      + vesselOverlayCohortLimit(1600, 900) + 1 + CCTV_AMBIENT_CARD_MAX + 1
-      + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 3,
+    entries:
+      LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+      FIRMS_AMBIENT_COHORT_LIMIT +
+      vesselOverlayCohortLimit(1600, 900) +
+      1 +
+      CCTV_AMBIENT_CARD_MAX +
+      1 +
+      EARTHQUAKE_OVERLAY_COHORT_LIMIT +
+      3,
+    candidates:
+      LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+      FIRMS_AMBIENT_COHORT_LIMIT +
+      vesselOverlayCohortLimit(1600, 900) +
+      1 +
+      CCTV_AMBIENT_CARD_MAX +
+      1 +
+      EARTHQUAKE_OVERLAY_COHORT_LIMIT +
+      3,
     maxBytesPerFrame: 132_000,
     maxBytesPerCandidatePerFrame: 225,
     saturated: true,
@@ -202,14 +236,26 @@ const WORKLOADS = [
   {
     name: 'with final Phase 5 sources and bounded rocket-mission markers live',
     profile: 'phase5-rockets',
-    entries: LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-      + vesselOverlayCohortLimit(1600, 900) + 1 + CCTV_AMBIENT_CARD_MAX + 1
-      + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 3
-      + ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
-    candidates: LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-      + vesselOverlayCohortLimit(1600, 900) + 1 + CCTV_AMBIENT_CARD_MAX + 1
-      + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 3
-      + ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
+    entries:
+      LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+      FIRMS_AMBIENT_COHORT_LIMIT +
+      vesselOverlayCohortLimit(1600, 900) +
+      1 +
+      CCTV_AMBIENT_CARD_MAX +
+      1 +
+      EARTHQUAKE_OVERLAY_COHORT_LIMIT +
+      3 +
+      ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
+    candidates:
+      LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+      FIRMS_AMBIENT_COHORT_LIMIT +
+      vesselOverlayCohortLimit(1600, 900) +
+      1 +
+      CCTV_AMBIENT_CARD_MAX +
+      1 +
+      EARTHQUAKE_OVERLAY_COHORT_LIMIT +
+      3 +
+      ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
     // 142,000 deliberately carries ~6% headroom (vs the ~3.3% the previous
     // aggregate row ran at): a chosen margin correction, not drift.
     maxBytesPerFrame: 142_000,
@@ -228,16 +274,32 @@ const WORKLOADS = [
     // image-inclusive 225 ceiling stands with ~15% headroom.
     name: 'with every shared-host source and bounded Radio text live',
     profile: 'all-live-radio',
-    entries: LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-      + vesselOverlayCohortLimit(1600, 900) + 1 + CCTV_AMBIENT_CARD_MAX + 1
-      + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 3
-      + ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT + RADIO_OVERLAY_COHORT_LIMIT + 1
-      + CABLE_REFERENCE_LABEL_WINNER_CAP,
-    candidates: LOCAL_OVERLAY_COHORT_LIMIT * 2 + FIRMS_AMBIENT_COHORT_LIMIT
-      + vesselOverlayCohortLimit(1600, 900) + 1 + CCTV_AMBIENT_CARD_MAX + 1
-      + EARTHQUAKE_OVERLAY_COHORT_LIMIT + 3
-      + ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT + RADIO_OVERLAY_COHORT_LIMIT + 1
-      + CABLE_REFERENCE_LABEL_WINNER_CAP,
+    entries:
+      LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+      FIRMS_AMBIENT_COHORT_LIMIT +
+      vesselOverlayCohortLimit(1600, 900) +
+      1 +
+      CCTV_AMBIENT_CARD_MAX +
+      1 +
+      EARTHQUAKE_OVERLAY_COHORT_LIMIT +
+      3 +
+      ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT +
+      RADIO_OVERLAY_COHORT_LIMIT +
+      1 +
+      CABLE_REFERENCE_LABEL_WINNER_CAP,
+    candidates:
+      LOCAL_OVERLAY_COHORT_LIMIT * 2 +
+      FIRMS_AMBIENT_COHORT_LIMIT +
+      vesselOverlayCohortLimit(1600, 900) +
+      1 +
+      CCTV_AMBIENT_CARD_MAX +
+      1 +
+      EARTHQUAKE_OVERLAY_COHORT_LIMIT +
+      3 +
+      ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT +
+      RADIO_OVERLAY_COHORT_LIMIT +
+      1 +
+      CABLE_REFERENCE_LABEL_WINNER_CAP,
     maxBytesPerFrame: 182_000,
     maxBytesPerCandidatePerFrame: 225,
     saturated: true,
@@ -273,7 +335,9 @@ const WORKLOADS = [
 /** Scale-invariant ceiling shared by every production-shape workload. */
 const MAX_BYTES_PER_CANDIDATE_PER_FRAME = 154;
 
-const WORKER_PATH = fileURLToPath(new URL('./worldOverlayAllocation.worker.mjs', import.meta.url));
+const WORKER_PATH = fileURLToPath(
+  new URL('./worldOverlayAllocation.worker.mjs', import.meta.url),
+);
 
 const CALIBRATED_ALLOCATION_RUNTIME = isCalibratedAllocationRuntime();
 
@@ -286,18 +350,21 @@ function runAllocationProbe(entryCount, profile = 'generic') {
     process.execPath,
     ['--expose-gc', '--no-concurrent-recompilation', WORKER_PATH],
     {
-    encoding: 'utf8',
-    timeout: 180_000,
-    env: {
-      ...process.env,
-      GEV_ALLOC_ENTRIES: String(entryCount),
-      GEV_ALLOC_PROFILE: profile,
-    },
+      encoding: 'utf8',
+      timeout: 180_000,
+      env: {
+        ...process.env,
+        GEV_ALLOC_ENTRIES: String(entryCount),
+        GEV_ALLOC_PROFILE: profile,
+      },
     },
   );
-  if (result.error) throw new Error(`probe failed to spawn: ${result.error.message}`);
+  if (result.error)
+    throw new Error(`probe failed to spawn: ${result.error.message}`);
   if (result.status !== 0) {
-    throw new Error(`probe exited with ${result.status}: ${String(result.stderr).slice(0, 400)}`);
+    throw new Error(
+      `probe exited with ${result.status}: ${String(result.stderr).slice(0, 400)}`,
+    );
   }
   const line = String(result.stdout).trim().split('\n').filter(Boolean).at(-1);
   if (!line) throw new Error('probe produced no output');
@@ -307,14 +374,17 @@ function runAllocationProbe(entryCount, profile = 'generic') {
   } catch (error) {
     throw new Error(`probe output was not JSON: ${error.message}`);
   }
-  if (payload.ok !== true) throw new Error(`probe unavailable: ${payload.reason}`);
+  if (payload.ok !== true)
+    throw new Error(`probe unavailable: ${payload.reason}`);
   return payload;
 }
 
 for (const workload of WORKLOADS) {
   test(`steady moving-source frames stay in budget ${workload.name}`, (t) => {
     if (!CALIBRATED_ALLOCATION_RUNTIME) {
-      return t.skip(`allocation budgets are calibrated for Node 24; running ${process.versions.node}`);
+      return t.skip(
+        `allocation budgets are calibrated for Node 24; running ${process.versions.node}`,
+      );
     }
     const payload = runAllocationProbe(workload.entries, workload.profile);
 
@@ -322,14 +392,24 @@ for (const workload of WORKLOADS) {
     // quietly shrank its cohort would report a flattering number for the wrong
     // reason. Painted count is deliberately NOT pinned to the entry count.
     assert.equal(payload.entryCount, workload.entries);
-    assert.equal(payload.candidateCount, workload.candidates, 'bounded cohorts changed unexpectedly');
+    assert.equal(
+      payload.candidateCount,
+      workload.candidates,
+      'bounded cohorts changed unexpectedly',
+    );
     assert.equal(payload.profile, workload.profile || 'generic');
     if (workload.ambientCardCapacity != null) {
       assert.equal(payload.ambientCardCapacity, workload.ambientCardCapacity);
     }
     if (workload.detectionLabelBudget != null) {
-      assert.equal(payload.detectionCollectiveLabelBudget, workload.detectionLabelBudget);
-      assert.equal(payload.detectionSelectedCount, workload.detectionLabelBudget);
+      assert.equal(
+        payload.detectionCollectiveLabelBudget,
+        workload.detectionLabelBudget,
+      );
+      assert.equal(
+        payload.detectionSelectedCount,
+        workload.detectionLabelBudget,
+      );
     }
     assert.ok(payload.paintedCount > 0, 'probe painted nothing');
     assert.ok(payload.solveCount > 0, 'probe never exercised an arbiter solve');
@@ -341,22 +421,26 @@ for (const workload of WORKLOADS) {
       );
     }
 
-    const report = `${payload.candidateCount} candidates / ${payload.paintedCount} painted`
-      + `, median ${payload.medianBytesPerFrame.toFixed(0)} B/frame`
-      + ` (max ${payload.maxBytesPerFrame.toFixed(0)})`
-      + `, median ${payload.medianBytesPerCandidatePerFrame.toFixed(1)} B/candidate/frame`
-      + ` over ${payload.measuredFrames} frames and ${payload.solveCount} solves`
-      + `; chunks: ${payload.chunkBytesPerFrame.map((value) => value.toFixed(0)).join(', ')}`;
+    const report =
+      `${payload.candidateCount} candidates / ${payload.paintedCount} painted` +
+      `, median ${payload.medianBytesPerFrame.toFixed(0)} B/frame` +
+      ` (max ${payload.maxBytesPerFrame.toFixed(0)})` +
+      `, median ${payload.medianBytesPerCandidatePerFrame.toFixed(1)} B/candidate/frame` +
+      ` over ${payload.measuredFrames} frames and ${payload.solveCount} solves` +
+      `; chunks: ${payload.chunkBytesPerFrame.map((value) => value.toFixed(0)).join(', ')}`;
 
     assert.ok(
       payload.medianBytesPerFrame <= workload.maxBytesPerFrame,
       `world-overlay steady frame exceeded ${workload.maxBytesPerFrame} B/frame: ${report}`,
     );
     assert.ok(
-      payload.medianBytesPerCandidatePerFrame
-        <= (workload.maxBytesPerCandidatePerFrame ?? MAX_BYTES_PER_CANDIDATE_PER_FRAME),
-      `world-overlay steady frame exceeded ${workload.maxBytesPerCandidatePerFrame
-        ?? MAX_BYTES_PER_CANDIDATE_PER_FRAME} B/candidate: ${report}`,
+      payload.medianBytesPerCandidatePerFrame <=
+        (workload.maxBytesPerCandidatePerFrame ??
+          MAX_BYTES_PER_CANDIDATE_PER_FRAME),
+      `world-overlay steady frame exceeded ${
+        workload.maxBytesPerCandidatePerFrame ??
+        MAX_BYTES_PER_CANDIDATE_PER_FRAME
+      } B/candidate: ${report}`,
     );
   });
 }

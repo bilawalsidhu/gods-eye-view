@@ -41,9 +41,15 @@ const CHROME_EXECUTABLE_CANDIDATES = [
 ].filter(Boolean);
 
 function findChromeExecutable() {
-  return CHROME_EXECUTABLE_CANDIDATES.find((candidate) => {
-    try { return existsSync(candidate); } catch { return false; }
-  }) || null;
+  return (
+    CHROME_EXECUTABLE_CANDIDATES.find((candidate) => {
+      try {
+        return existsSync(candidate);
+      } catch {
+        return false;
+      }
+    }) || null
+  );
 }
 
 let passed = 0;
@@ -58,15 +64,15 @@ function check(name, ok, detail) {
 // Substrings that MUST be present across the registered per-layer credits.
 const REQUIRED_CREDIT_SUBSTRINGS = [
   'OpenStreetMap contributors', // ODbL — datacenters/dams/roads
-  'adsb.lol',                    // ODbL — military traces
-  'TeleGeography',               // CC BY-NC-SA — cables
-  'NASA FIRMS',                  // fires
-  'CelesTrak',                   // satellites
-  'U.S. Geological Survey',      // earthquakes
-  'OpenSky Network',             // flights
-  'AISStream',                   // vessels
-  'City of Austin',              // CCTV
-  'Radio Browser',               // internet-radio directory
+  'adsb.lol', // ODbL — military traces
+  'TeleGeography', // CC BY-NC-SA — cables
+  'NASA FIRMS', // fires
+  'CelesTrak', // satellites
+  'U.S. Geological Survey', // earthquakes
+  'OpenSky Network', // flights
+  'AISStream', // vessels
+  'City of Austin', // CCTV
+  'Radio Browser', // internet-radio directory
 ];
 
 async function main() {
@@ -81,7 +87,10 @@ async function main() {
   await page.setRequestInterception(true);
   page.on('request', (request) => {
     const url = new URL(request.url());
-    if (url.origin === APP_ORIGIN && url.pathname === '/api/openai/hud-summary') {
+    if (
+      url.origin === APP_ORIGIN &&
+      url.pathname === '/api/openai/hud-summary'
+    ) {
       request.respond({
         status: 200,
         contentType: 'application/json',
@@ -89,7 +98,10 @@ async function main() {
       });
       return;
     }
-    if (url.origin === APP_ORIGIN && url.pathname === '/api/google/nearby-places') {
+    if (
+      url.origin === APP_ORIGIN &&
+      url.pathname === '/api/google/nearby-places'
+    ) {
       request.respond({
         status: 200,
         contentType: 'application/json',
@@ -105,7 +117,9 @@ async function main() {
   page.on('console', (msg) => {
     if (msg.type() === 'error') {
       const sourceUrl = msg.location()?.url || '';
-      consoleErrors.push(sourceUrl ? `${msg.text()} [${sourceUrl}]` : msg.text());
+      consoleErrors.push(
+        sourceUrl ? `${msg.text()} [${sourceUrl}]` : msg.text(),
+      );
     }
   });
   page.on('response', (response) => {
@@ -119,7 +133,10 @@ async function main() {
 
   // Wait for the app + viewer.creditDisplay to be live.
   await page.waitForFunction(
-    () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.viewer.creditDisplay,
+    () =>
+      window.__godsEyeView &&
+      window.__godsEyeView.viewer &&
+      window.__godsEyeView.viewer.creditDisplay,
     { timeout: 60000 },
   );
   // Give Cesium a few frames to render the on-screen credit line (logo + link).
@@ -148,11 +165,15 @@ async function main() {
   const lightboxState = await page.evaluate(async () => {
     const viewer = window.__godsEyeView.viewer;
     viewer.scene.requestRender();
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await new Promise((r) =>
+      requestAnimationFrame(() => requestAnimationFrame(r)),
+    );
     const cd = viewer.creditDisplay;
     cd.showLightbox();
     viewer.scene.requestRender();
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await new Promise((r) =>
+      requestAnimationFrame(() => requestAnimationFrame(r)),
+    );
     const box = document.querySelector('.cesium-credit-lightbox');
     const list = box?.querySelector(':scope > ul');
     const title = box?.querySelector('.cesium-credit-lightbox-title');
@@ -187,8 +208,9 @@ async function main() {
       html: box?.innerHTML || '',
       itemCount: list?.children.length || 0,
       linkCount: list?.querySelectorAll('a[href]').length || 0,
-      everyLinkHasDestination: [...(list?.querySelectorAll('a') || [])]
-        .every((link) => Boolean(link.getAttribute('href'))),
+      everyLinkHasDestination: [...(list?.querySelectorAll('a') || [])].every(
+        (link) => Boolean(link.getAttribute('href')),
+      ),
       boxHeight: boxRect?.height || 0,
       viewportHeight: window.innerHeight,
       listClientHeight: list?.clientHeight || 0,
@@ -200,19 +222,28 @@ async function main() {
       closeVisible: Boolean(close?.getBoundingClientRect().height),
       overlayZIndex: Number(getComputedStyle(overlay).zIndex),
       worldOverlayZIndex: Number(getComputedStyle(worldOverlay).zIndex),
-      stackProbeIntersectsModal: Boolean(boxRect
-        && stackProbeRect.left < boxRect.left
-        && stackProbeRect.right > boxRect.left
-        && stackProbeRect.top < boxRect.bottom
-        && stackProbeRect.bottom > boxRect.top),
-      stackProbeExtendsOutsideModal: Boolean(boxRect && stackProbeRect.left < boxRect.left),
-      lastItemReachable: Boolean(lastRect && listRect
-        && lastRect.bottom <= listRect.bottom + 1
-        && lastRect.top >= listRect.top - 1),
+      stackProbeIntersectsModal: Boolean(
+        boxRect &&
+        stackProbeRect.left < boxRect.left &&
+        stackProbeRect.right > boxRect.left &&
+        stackProbeRect.top < boxRect.bottom &&
+        stackProbeRect.bottom > boxRect.top,
+      ),
+      stackProbeExtendsOutsideModal: Boolean(
+        boxRect && stackProbeRect.left < boxRect.left,
+      ),
+      lastItemReachable: Boolean(
+        lastRect &&
+        listRect &&
+        lastRect.bottom <= listRect.bottom + 1 &&
+        lastRect.top >= listRect.top - 1,
+      ),
     };
   });
   const lightboxHtml = lightboxState.html;
-  const lightboxHits = REQUIRED_CREDIT_SUBSTRINGS.filter((s) => lightboxHtml.includes(s));
+  const lightboxHits = REQUIRED_CREDIT_SUBSTRINGS.filter((s) =>
+    lightboxHtml.includes(s),
+  );
   check(
     'lightbox renders the per-layer credits',
     lightboxHits.length >= REQUIRED_CREDIT_SUBSTRINGS.length - 1,
@@ -220,40 +251,46 @@ async function main() {
   );
   check(
     'desktop lightbox stays compact with a fixed title and close control',
-    lightboxState.boxHeight > 0
-      && lightboxState.boxHeight <= lightboxState.viewportHeight * 0.71
-      && lightboxState.titleVisible
-      && lightboxState.closeVisible,
+    lightboxState.boxHeight > 0 &&
+      lightboxState.boxHeight <= lightboxState.viewportHeight * 0.71 &&
+      lightboxState.titleVisible &&
+      lightboxState.closeVisible,
     `box=${Math.round(lightboxState.boxHeight)}px viewport=${lightboxState.viewportHeight}px`,
   );
   check(
     'complete credit list scrolls vertically without horizontal overflow',
-    lightboxState.itemCount >= registeredHtml.length
-      && lightboxState.linkCount > 0
-      && lightboxState.everyLinkHasDestination
-      && lightboxState.listScrollHeight > lightboxState.listClientHeight
-      && /auto|scroll/.test(lightboxState.listOverflowY)
-      && lightboxState.listScrollWidth <= lightboxState.listClientWidth + 1
-      && lightboxState.lastItemReachable,
+    lightboxState.itemCount >= registeredHtml.length &&
+      lightboxState.linkCount > 0 &&
+      lightboxState.everyLinkHasDestination &&
+      lightboxState.listScrollHeight > lightboxState.listClientHeight &&
+      /auto|scroll/.test(lightboxState.listOverflowY) &&
+      lightboxState.listScrollWidth <= lightboxState.listClientWidth + 1 &&
+      lightboxState.lastItemReachable,
     `${lightboxState.itemCount} items, ${lightboxState.linkCount} links, list=${lightboxState.listClientHeight}/${lightboxState.listScrollHeight}px`,
   );
   check(
     'attribution modal stacks above shared world labels',
-    Number.isFinite(lightboxState.overlayZIndex)
-      && Number.isFinite(lightboxState.worldOverlayZIndex)
-      && lightboxState.overlayZIndex > lightboxState.worldOverlayZIndex
-      && lightboxState.stackProbeIntersectsModal
-      && lightboxState.stackProbeExtendsOutsideModal,
+    Number.isFinite(lightboxState.overlayZIndex) &&
+      Number.isFinite(lightboxState.worldOverlayZIndex) &&
+      lightboxState.overlayZIndex > lightboxState.worldOverlayZIndex &&
+      lightboxState.stackProbeIntersectsModal &&
+      lightboxState.stackProbeExtendsOutsideModal,
     `modal z=${lightboxState.overlayZIndex}, world labels z=${lightboxState.worldOverlayZIndex}, overlap=${lightboxState.stackProbeIntersectsModal}`,
   );
-  await page.evaluate(() => window.__godsEyeView.viewer.creditDisplay.hideLightbox());
-  await page.screenshot({ path: resolve(SHOT_DIR, 'attribution-stacking-before-desktop.png') });
+  await page.evaluate(() =>
+    window.__godsEyeView.viewer.creditDisplay.hideLightbox(),
+  );
+  await page.screenshot({
+    path: resolve(SHOT_DIR, 'attribution-stacking-before-desktop.png'),
+  });
   await page.evaluate(() => {
     window.__godsEyeView.viewer.creditDisplay.showLightbox();
     const list = document.querySelector('.cesium-credit-lightbox > ul');
     if (list) list.scrollTop = 0;
   });
-  await page.screenshot({ path: resolve(SHOT_DIR, 'attribution-lightbox-desktop.png') });
+  await page.screenshot({
+    path: resolve(SHOT_DIR, 'attribution-lightbox-desktop.png'),
+  });
   await page.evaluate(() => {
     window.__godsEyeView.viewer.creditDisplay.hideLightbox();
     document.querySelector('[data-qa-attribution-stack-probe]')?.remove();
@@ -264,7 +301,9 @@ async function main() {
     const viewer = window.__godsEyeView.viewer;
     viewer.resize();
     viewer.scene.requestRender();
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
   });
   const mobileLightbox = await page.evaluate(() => {
     const viewer = window.__godsEyeView.viewer;
@@ -282,21 +321,26 @@ async function main() {
       bottom: rect?.bottom || 0,
       viewportWidth: innerWidth,
       viewportHeight: innerHeight,
-      lastItemReachable: Boolean(lastRect && listRect
-        && lastRect.bottom <= listRect.bottom + 1),
+      lastItemReachable: Boolean(
+        lastRect && listRect && lastRect.bottom <= listRect.bottom + 1,
+      ),
     };
   });
   check(
     'mobile lightbox remains full-screen edge-to-edge and reaches the final credit',
-    Math.abs(mobileLightbox.left) <= 1
-      && Math.abs(mobileLightbox.right - mobileLightbox.viewportWidth) <= 1
-      && Math.abs(mobileLightbox.top) <= 1
-      && Math.abs(mobileLightbox.bottom - mobileLightbox.viewportHeight) <= 1
-      && mobileLightbox.lastItemReachable,
+    Math.abs(mobileLightbox.left) <= 1 &&
+      Math.abs(mobileLightbox.right - mobileLightbox.viewportWidth) <= 1 &&
+      Math.abs(mobileLightbox.top) <= 1 &&
+      Math.abs(mobileLightbox.bottom - mobileLightbox.viewportHeight) <= 1 &&
+      mobileLightbox.lastItemReachable,
     `box=${Math.round(mobileLightbox.left)},${Math.round(mobileLightbox.top)}–${Math.round(mobileLightbox.right)},${Math.round(mobileLightbox.bottom)}`,
   );
-  await page.screenshot({ path: resolve(SHOT_DIR, 'attribution-lightbox-mobile.png') });
-  await page.evaluate(() => window.__godsEyeView.viewer.creditDisplay.hideLightbox());
+  await page.screenshot({
+    path: resolve(SHOT_DIR, 'attribution-lightbox-mobile.png'),
+  });
+  await page.evaluate(() =>
+    window.__godsEyeView.viewer.creditDisplay.hideLightbox(),
+  );
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
 
   // ── (ii) enable datacenters + cables; credits still present ────────
@@ -308,12 +352,26 @@ async function main() {
   // Find the datacenter + cable layer ids by fuzzy match on the id string.
   const dcId = layerIds.find((id) => /datacenter/i.test(id));
   const cableId = layerIds.find((id) => /cable|submarine|telegeo/i.test(id));
-  check('found datacenter + cable layer ids', !!dcId && !!cableId, `dc=${dcId} cable=${cableId}`);
-  if (dcId) await page.evaluate((id) => window.__godsEyeView.dataManager.setEnabled(id, true), dcId);
-  if (cableId) await page.evaluate((id) => window.__godsEyeView.dataManager.setEnabled(id, true), cableId);
+  check(
+    'found datacenter + cable layer ids',
+    !!dcId && !!cableId,
+    `dc=${dcId} cable=${cableId}`,
+  );
+  if (dcId)
+    await page.evaluate(
+      (id) => window.__godsEyeView.dataManager.setEnabled(id, true),
+      dcId,
+    );
+  if (cableId)
+    await page.evaluate(
+      (id) => window.__godsEyeView.dataManager.setEnabled(id, true),
+      cableId,
+    );
   await new Promise((r) => setTimeout(r, 800));
   const afterEnableHtml = await page.evaluate(() =>
-    (window.__godsEyeView.viewer.creditDisplay._staticCredits || []).map((c) => c.html),
+    (window.__godsEyeView.viewer.creditDisplay._staticCredits || []).map(
+      (c) => c.html,
+    ),
   );
   check(
     'datacenter credit (OSM/ODbL) still present after enable',
@@ -353,7 +411,9 @@ async function main() {
   await page.screenshot({ path: resolve(SHOT_DIR, 'clean-view.png') });
   check(
     'clean-view: #cesium-credits not display:none',
-    cleanVis.present && cleanVis.display !== 'none' && cleanVis.visibility !== 'hidden',
+    cleanVis.present &&
+      cleanVis.display !== 'none' &&
+      cleanVis.visibility !== 'hidden',
     `display=${cleanVis.display} visibility=${cleanVis.visibility} w=${Math.round(cleanVis.width)} h=${Math.round(cleanVis.height)}`,
   );
   check(
@@ -371,7 +431,9 @@ async function main() {
   await page.screenshot({ path: resolve(SHOT_DIR, 'recording-mode.png') });
   check(
     'recording-mode: #cesium-credits not display:none',
-    recVis.present && recVis.display !== 'none' && recVis.visibility !== 'hidden',
+    recVis.present &&
+      recVis.display !== 'none' &&
+      recVis.visibility !== 'hidden',
     `display=${recVis.display} visibility=${recVis.visibility} w=${Math.round(recVis.width)} h=${Math.round(recVis.height)}`,
   );
   await page.evaluate(() => document.body.classList.remove('recording-mode'));

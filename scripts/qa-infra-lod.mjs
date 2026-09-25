@@ -53,7 +53,9 @@ const results = [];
 function check(name, pass, detail) {
   results.push({ name, pass });
   const tag = pass ? 'PASS' : 'FAIL';
-  console.log(`  [${tag}] ${name}${detail !== undefined ? ` — ${JSON.stringify(detail)}` : ''}`);
+  console.log(
+    `  [${tag}] ${name}${detail !== undefined ? ` — ${JSON.stringify(detail)}` : ''}`,
+  );
 }
 function report(name, detail) {
   console.log(`  [MEAS] ${name} — ${JSON.stringify(detail)}`);
@@ -76,21 +78,35 @@ const browser = await puppeteer.launch({
 try {
   const page = await browser.newPage();
   const pageErrors = [];
-  page.on('pageerror', (error) => pageErrors.push(String(error.message).replace(/https?:\/\/\S+/g, '[URL]')));
+  page.on('pageerror', (error) =>
+    pageErrors.push(String(error.message).replace(/https?:\/\/\S+/g, '[URL]')),
+  );
   await page.setViewport({ width: 1440, height: 860 });
   const testUrl = new URL(APP_URL);
   testUrl.searchParams.set('welcome', '0');
   await page.goto(testUrl.href, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => window.__godsEyeView?.styleManager
-    && document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 90_000 });
-  check('first-run chooser does not cover the test surface', await page.evaluate(() => (
-    !document.querySelector('#first-run-launcher:not([hidden])')
-  )));
-  report('renderer', await page.evaluate(() => {
-    const gl = window.__godsEyeView.viewer.scene.context._gl;
-    const debug = gl.getExtension('WEBGL_debug_renderer_info');
-    return debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
-  }));
+  await page.waitForFunction(
+    () =>
+      window.__godsEyeView?.styleManager &&
+      document.getElementById('loading-screen')?.classList.contains('hidden'),
+    { timeout: 90_000 },
+  );
+  check(
+    'first-run chooser does not cover the test surface',
+    await page.evaluate(
+      () => !document.querySelector('#first-run-launcher:not([hidden])'),
+    ),
+  );
+  report(
+    'renderer',
+    await page.evaluate(() => {
+      const gl = window.__godsEyeView.viewer.scene.context._gl;
+      const debug = gl.getExtension('WEBGL_debug_renderer_info');
+      return debug
+        ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)
+        : gl.getParameter(gl.RENDERER);
+    }),
+  );
 
   // Park at a full-earth view and disable every layer so infra is measured
   // in isolation.
@@ -101,13 +117,19 @@ try {
     const ell = v.scene.globe.ellipsoid;
     v.camera.setView({
       destination: ell.cartographicToCartesian({
-        longitude: 0, latitude: 15 * Math.PI / 180, height: 24_000_000,
+        longitude: 0,
+        latitude: (15 * Math.PI) / 180,
+        height: 24_000_000,
       }),
       orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
     });
     for (const [id, entry] of gev.dataManager.layers) {
       if (entry.enabled) {
-        try { await gev.dataManager.setEnabled(id, false, { origin: 'user' }); } catch { /* measured via counts */ }
+        try {
+          await gev.dataManager.setEnabled(id, false, { origin: 'user' });
+        } catch {
+          /* measured via counts */
+        }
       }
     }
   });
@@ -116,59 +138,89 @@ try {
   // Enable the infrastructure layers (skipped in --control so the orbit cost
   // measures the empty scene for attribution).
   if (!CONTROL) {
-    const loaded = await page.evaluate(async (infraIds, cableId) => {
-      const gev = window.__godsEyeView;
-      const ids = [...infraIds, cableId];
-      for (const id of ids) {
-        try { await gev.dataManager.setEnabled(id, true, { origin: 'user' }); } catch { /* reported below */ }
-      }
-      const deadline = performance.now() + 60_000;
-      const stat = (id) => gev.dataManager.layers.get(id)?.module?.getStats?.() || {};
-      while (performance.now() < deadline) {
-        // Every id, cables included. The cable layer's enable() only starts
-        // `void load()`, and the manager's immediate update() returns early
-        // because `_loading` is already true — so waiting on datacenters and
-        // dams alone releases the measurement before ~2,600 cable references
-        // exist, and the advertised three-layer frame cost underreports.
-        const done = ids.every((id) => {
-          const s = stat(id);
-          return (s.count || 0) > 0 || s.error;
-        });
-        if (done) break;
-        gev.viewer.scene.requestRender?.();
-        await new Promise((r) => setTimeout(r, 200));
-      }
-      const out = {};
-      for (const id of ids) out[id] = stat(id);
-      return out;
-    }, INFRA_LAYER_IDS, CABLE_LAYER_ID);
+    const loaded = await page.evaluate(
+      async (infraIds, cableId) => {
+        const gev = window.__godsEyeView;
+        const ids = [...infraIds, cableId];
+        for (const id of ids) {
+          try {
+            await gev.dataManager.setEnabled(id, true, { origin: 'user' });
+          } catch {
+            /* reported below */
+          }
+        }
+        const deadline = performance.now() + 60_000;
+        const stat = (id) =>
+          gev.dataManager.layers.get(id)?.module?.getStats?.() || {};
+        while (performance.now() < deadline) {
+          // Every id, cables included. The cable layer's enable() only starts
+          // `void load()`, and the manager's immediate update() returns early
+          // because `_loading` is already true — so waiting on datacenters and
+          // dams alone releases the measurement before ~2,600 cable references
+          // exist, and the advertised three-layer frame cost underreports.
+          const done = ids.every((id) => {
+            const s = stat(id);
+            return (s.count || 0) > 0 || s.error;
+          });
+          if (done) break;
+          gev.viewer.scene.requestRender?.();
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        const out = {};
+        for (const id of ids) out[id] = stat(id);
+        return out;
+      },
+      INFRA_LAYER_IDS,
+      CABLE_LAYER_ID,
+    );
     report('layer load stats', loaded);
     for (const id of [...INFRA_LAYER_IDS, CABLE_LAYER_ID]) {
-      check(`${id} loaded its bundled dataset`, (loaded[id]?.count || 0) > 0, loaded[id]);
+      check(
+        `${id} loaded its bundled dataset`,
+        (loaded[id]?.count || 0) > 0,
+        loaded[id],
+      );
     }
     // Nudge a render pass so the first post-enable LOD walk runs.
-    await page.evaluate(() => window.__godsEyeView?.viewer?.scene?.requestRender?.());
+    await page.evaluate(() =>
+      window.__godsEyeView?.viewer?.scene?.requestRender?.(),
+    );
     await new Promise((r) => setTimeout(r, 2_000));
   }
 
   // ── GATE a: full-earth budget engaged ─────────────────────────────────
-  const readLod = (label) => page.evaluate((infraIds) => {
-    const gev = window.__godsEyeView;
-    const out = {};
-    for (const id of infraIds) {
-      out[id] = gev.dataManager.layers.get(id)?.module?.getLodDiagnostics?.() || null;
-    }
-    return out;
-  }, INFRA_LAYER_IDS).then((lod) => { report(label, lod); return lod; });
+  const readLod = (label) =>
+    page
+      .evaluate((infraIds) => {
+        const gev = window.__godsEyeView;
+        const out = {};
+        for (const id of infraIds) {
+          out[id] =
+            gev.dataManager.layers.get(id)?.module?.getLodDiagnostics?.() ||
+            null;
+        }
+        return out;
+      }, INFRA_LAYER_IDS)
+      .then((lod) => {
+        report(label, lod);
+        return lod;
+      });
 
   if (!CONTROL) {
     const globalLod = await readLod('getLodDiagnostics @ full-earth');
     for (const id of INFRA_LAYER_IDS) {
       const d = globalLod[id];
       check(`${id}: LOD selection has run`, !!d && d.computed === true, d);
-      check(`${id}: active stems within the band budget`, !!d && d.active <= d.budgetLimit, d);
-      check(`${id}: full-earth band budget is INFRA_LOD_ACTIVE_MIN`,
-        !!d && d.budgetLimit === INFRA_LOD_ACTIVE_MIN, { got: d?.budgetLimit, want: INFRA_LOD_ACTIVE_MIN });
+      check(
+        `${id}: active stems within the band budget`,
+        !!d && d.active <= d.budgetLimit,
+        d,
+      );
+      check(
+        `${id}: full-earth band budget is INFRA_LOD_ACTIVE_MIN`,
+        !!d && d.budgetLimit === INFRA_LOD_ACTIVE_MIN,
+        { got: d?.budgetLimit, want: INFRA_LOD_ACTIVE_MIN },
+      );
       // Every bound above is satisfied by an EMPTY active set: `computed` is
       // true, `0 <= budgetLimit`, and `0 < total`. A regressed candidate build
       // or occlusion test would therefore pass the gate while both layers
@@ -179,9 +231,16 @@ try {
       // a full-earth view of a global dataset an order of magnitude past the
       // global band, so the only correct outcome is a cap-filled set.
       if (d && d.total > d.budgetLimit) {
-        check(`${id}: declutter is engaged (active < total)`, d.active < d.total, d);
-        check(`${id}: full-earth active set fills the band budget`,
-          d.active === d.budgetLimit, { active: d.active, budgetLimit: d.budgetLimit });
+        check(
+          `${id}: declutter is engaged (active < total)`,
+          d.active < d.total,
+          d,
+        );
+        check(
+          `${id}: full-earth active set fills the band budget`,
+          d.active === d.budgetLimit,
+          { active: d.active, budgetLimit: d.budgetLimit },
+        );
       }
     }
 
@@ -192,7 +251,9 @@ try {
       v.camera.cancelFlight();
       v.camera.setView({
         destination: ell.cartographicToCartesian({
-          longitude: -97.74 * Math.PI / 180, latitude: 30.27 * Math.PI / 180, height: 55_000,
+          longitude: (-97.74 * Math.PI) / 180,
+          latitude: (30.27 * Math.PI) / 180,
+          height: 55_000,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 3, roll: 0 },
       });
@@ -205,26 +266,34 @@ try {
     for (const id of INFRA_LAYER_IDS) {
       const g = globalLod[id];
       const r = regionalLod[id];
-      check(`${id}: city band lifts the budget to INFRA_LOD_ACTIVE_MAX`,
-        !!r && r.budgetLimit === INFRA_LOD_ACTIVE_MAX, { got: r?.budgetLimit, want: INFRA_LOD_ACTIVE_MAX });
+      check(
+        `${id}: city band lifts the budget to INFRA_LOD_ACTIVE_MAX`,
+        !!r && r.budgetLimit === INFRA_LOD_ACTIVE_MAX,
+        { got: r?.budgetLimit, want: INFRA_LOD_ACTIVE_MAX },
+      );
       // `>=` alone accepts 0 >= 0, so the non-shrink check needs a floor too.
-      check(`${id}: active set did not shrink when zooming in`,
+      check(
+        `${id}: active set did not shrink when zooming in`,
         !!r && !!g && r.active > 0 && r.active >= Math.min(g.active, r.total),
-        { global: g?.active, regional: r?.active });
+        { global: g?.active, regional: r?.active },
+      );
     }
 
     // ── GATE c: no churn between camera moves ───────────────────────────
     const churn = await page.evaluate(async (infraIds) => {
       const gev = window.__godsEyeView;
-      const snap = () => infraIds.map((id) => {
-        const visibleIds = [];
-        for (let i = 0; i < gev.viewer.dataSources.length; i++) {
-          for (const entity of gev.viewer.dataSources.get(i).entities.values) {
-            if (entity.__localLayerId === id && entity.show) visibleIds.push(String(entity.id));
+      const snap = () =>
+        infraIds.map((id) => {
+          const visibleIds = [];
+          for (let i = 0; i < gev.viewer.dataSources.length; i++) {
+            for (const entity of gev.viewer.dataSources.get(i).entities
+              .values) {
+              if (entity.__localLayerId === id && entity.show)
+                visibleIds.push(String(entity.id));
+            }
           }
-        }
-        return visibleIds.sort();
-      });
+          return visibleIds.sort();
+        });
       const before = snap();
       for (let i = 0; i < 5; i++) {
         gev.viewer.scene.requestRender?.();
@@ -232,10 +301,15 @@ try {
       }
       return { before, after: snap() };
     }, INFRA_LAYER_IDS);
-    check('the same visible IDs remain stable without a camera move',
-      churn.before.every((ids) => ids.length > 0)
-        && JSON.stringify(churn.before) === JSON.stringify(churn.after),
-      { beforeCounts: churn.before.map((ids) => ids.length), afterCounts: churn.after.map((ids) => ids.length) });
+    check(
+      'the same visible IDs remain stable without a camera move',
+      churn.before.every((ids) => ids.length > 0) &&
+        JSON.stringify(churn.before) === JSON.stringify(churn.after),
+      {
+        beforeCounts: churn.before.map((ids) => ids.length),
+        afterCounts: churn.after.map((ids) => ids.length),
+      },
+    );
 
     // Back to full-earth for the frame-cost measurement.
     await page.evaluate(() => {
@@ -243,7 +317,9 @@ try {
       const ell = v.scene.globe.ellipsoid;
       v.camera.setView({
         destination: ell.cartographicToCartesian({
-          longitude: 0, latitude: 15 * Math.PI / 180, height: 24_000_000,
+          longitude: 0,
+          latitude: (15 * Math.PI) / 180,
+          height: 24_000_000,
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
@@ -254,50 +330,57 @@ try {
   }
 
   // Count actual rendered frames: scene.render() can return without drawing.
-  const frameCost = await page.evaluate(() => new Promise((resolve) => {
-    const v = window.__godsEyeView.viewer;
-    const scene = v.scene;
-    const durations = [];
-    let frames = 0;
-    let previous;
-    const remove = scene.postRender.addEventListener(() => {
-      const now = performance.now();
-      if (previous !== undefined) durations.push(now - previous);
-      previous = now;
-      frames++;
-    });
-    const t0 = performance.now();
-    const tick = () => {
-      v.camera.rotateRight(0.0004);
-      scene.requestRender();
-      if (performance.now() - t0 < 10_000) requestAnimationFrame(tick);
-      else {
-        remove();
-        const elapsedMs = performance.now() - t0;
-        durations.sort((a, b) => a - b);
-        const n = durations.length;
-        const sum = durations.reduce((s, d) => s + d, 0);
-        resolve({
-          frames,
-          elapsedMs: +elapsedMs.toFixed(1),
-          meanMs: +(sum / Math.max(1, n)).toFixed(2),
-          p50Ms: +(durations[Math.floor(n * 0.5)] || 0).toFixed(2),
-          p95Ms: +(durations[Math.floor(n * 0.95)] || 0).toFixed(2),
-          maxMs: +(durations[n - 1] || 0).toFixed(2),
-          effectiveFps: +(frames * 1000 / elapsedMs).toFixed(1),
+  const frameCost = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const v = window.__godsEyeView.viewer;
+        const scene = v.scene;
+        const durations = [];
+        let frames = 0;
+        let previous;
+        const remove = scene.postRender.addEventListener(() => {
+          const now = performance.now();
+          if (previous !== undefined) durations.push(now - previous);
+          previous = now;
+          frames++;
         });
-      }
-    };
-    requestAnimationFrame(tick);
-  }));
-  report(CONTROL
-    ? 'rendered-frame intervals, control (infra OFF), 10s orbit'
-    : 'rendered-frame intervals, infra ON, 10s orbit', frameCost);
+        const t0 = performance.now();
+        const tick = () => {
+          v.camera.rotateRight(0.0004);
+          scene.requestRender();
+          if (performance.now() - t0 < 10_000) requestAnimationFrame(tick);
+          else {
+            remove();
+            const elapsedMs = performance.now() - t0;
+            durations.sort((a, b) => a - b);
+            const n = durations.length;
+            const sum = durations.reduce((s, d) => s + d, 0);
+            resolve({
+              frames,
+              elapsedMs: +elapsedMs.toFixed(1),
+              meanMs: +(sum / Math.max(1, n)).toFixed(2),
+              p50Ms: +(durations[Math.floor(n * 0.5)] || 0).toFixed(2),
+              p95Ms: +(durations[Math.floor(n * 0.95)] || 0).toFixed(2),
+              maxMs: +(durations[n - 1] || 0).toFixed(2),
+              effectiveFps: +((frames * 1000) / elapsedMs).toFixed(1),
+            });
+          }
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+  report(
+    CONTROL
+      ? 'rendered-frame intervals, control (infra OFF), 10s orbit'
+      : 'rendered-frame intervals, infra ON, 10s orbit',
+    frameCost,
+  );
 
   // ── parked-idle honesty: the LOD walk must not force continuous render ─
   await new Promise((r) => setTimeout(r, 4_000));
   const idle = await page.evaluate(async () => {
-    const { getRenderGovernorDiagnostics } = await import('/src/renderGovernor.js');
+    const { getRenderGovernorDiagnostics } =
+      await import('/src/renderGovernor.js');
     return new Promise((resolve) => {
       const scene = window.__godsEyeView.viewer.scene;
       const startedAt = Date.now();
@@ -311,15 +394,26 @@ try {
       setTimeout(() => {
         remove();
         const governor = getRenderGovernorDiagnostics();
-        resolve({ renders, tilesLoadedBefore, tilesLoadedAfter: scene.globe.tilesLoaded,
-          framesWithPendingTiles, mode: governor.mode, holds: governor.holds,
-          requests: governor.recentRequests.filter(request => request.at >= startedAt) });
+        resolve({
+          renders,
+          tilesLoadedBefore,
+          tilesLoadedAfter: scene.globe.tilesLoaded,
+          framesWithPendingTiles,
+          mode: governor.mode,
+          holds: governor.holds,
+          requests: governor.recentRequests.filter(
+            (request) => request.at >= startedAt,
+          ),
+        });
       }, 5_000);
     });
   });
-  report(CONTROL
-    ? 'parked idle, control (postRender fires / 5s)'
-    : 'parked idle with infra ON (postRender fires / 5s)', idle);
+  report(
+    CONTROL
+      ? 'parked idle, control (postRender fires / 5s)'
+      : 'parked idle with infra ON (postRender fires / 5s)',
+    idle,
+  );
   if (!CONTROL) {
     check('parked idle stays near zero (≤6 / 5s)', idle.renders <= 6, idle);
   }
@@ -327,7 +421,10 @@ try {
 
   try {
     fs.mkdirSync(SHOTS_DIR, { recursive: true });
-    const shot = path.join(SHOTS_DIR, CONTROL ? 'infra-lod-control.png' : 'infra-lod.png');
+    const shot = path.join(
+      SHOTS_DIR,
+      CONTROL ? 'infra-lod-control.png' : 'infra-lod.png',
+    );
     await page.screenshot({ path: shot });
     console.log(`  [SHOT] ${shot}`);
   } catch (e) {
@@ -338,6 +435,10 @@ try {
 }
 
 const passed = results.filter((r) => r.pass).length;
-console.log(`\nqa-infra-lod: ${passed}/${results.length} passed${CONTROL ? ' (control mode — gates skipped)' : ''}`);
-console.log(`RESULT: ${passed} passed, ${results.length - passed} failed, 0 skipped`);
+console.log(
+  `\nqa-infra-lod: ${passed}/${results.length} passed${CONTROL ? ' (control mode — gates skipped)' : ''}`,
+);
+console.log(
+  `RESULT: ${passed} passed, ${results.length - passed} failed, 0 skipped`,
+);
 process.exit(passed === results.length ? 0 : 1);

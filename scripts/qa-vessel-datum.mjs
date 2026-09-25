@@ -29,7 +29,10 @@ const getOpt = (name, dflt) => {
 };
 
 const APP_URL = getOpt('--url', 'http://localhost:4173');
-const PORT_KEYS = getOpt('--ports', 'rotterdam,houston').split(',').map((s) => s.trim()).filter(Boolean);
+const PORT_KEYS = getOpt('--ports', 'rotterdam,houston')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 const OUT_DIR = getOpt('--out', 'qa-shots');
 
 /**
@@ -39,11 +42,19 @@ const OUT_DIR = getOpt('--out', 'qa-shots');
  */
 const PORTS = {
   rotterdam: {
-    lon: 4.05, lat: 51.93, height: 18000, heading: 0.3, pitch: -1.25,
+    lon: 4.05,
+    lat: 51.93,
+    height: 18000,
+    heading: 0.3,
+    pitch: -1.25,
     heightBand: [40, 54],
   },
   houston: {
-    lon: -95.08, lat: 29.72, height: 16000, heading: 5.9, pitch: -1.3,
+    lon: -95.08,
+    lat: 29.72,
+    height: 16000,
+    heading: 5.9,
+    pitch: -1.3,
     heightBand: [-33, -18],
   },
 };
@@ -71,7 +82,9 @@ function findChromeExecutable() {
   for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
     try {
       if (fs.existsSync(candidate)) return candidate;
-    } catch { /* fall through to Puppeteer's cache */ }
+    } catch {
+      /* fall through to Puppeteer's cache */
+    }
   }
   return null;
 }
@@ -92,10 +105,21 @@ function probeVessels({ portLat, portLon, nearDeg, sampleCap }) {
   let collection = null;
   for (let i = 0; i < prims.length; i += 1) {
     const p = prims.get(i);
-    if (!p || typeof p.get !== 'function' || typeof p.length !== 'number' || p.length === 0) continue;
+    if (
+      !p ||
+      typeof p.get !== 'function' ||
+      typeof p.length !== 'number' ||
+      p.length === 0
+    )
+      continue;
     const first = p.get(0);
-    if (first && first.id && typeof first.id === 'object' && 'mmsi' in first.id
-        && first.disableDepthTestDistance !== undefined) {
+    if (
+      first &&
+      first.id &&
+      typeof first.id === 'object' &&
+      'mmsi' in first.id &&
+      first.disableDepthTestDistance !== undefined
+    ) {
       collection = p;
       break;
     }
@@ -109,17 +133,24 @@ function probeVessels({ portLat, portLon, nearDeg, sampleCap }) {
   for (let i = 0; i < collection.length; i += step) {
     const b = collection.get(i);
     if (!b) continue;
-    if (b.disableDepthTestDistance === Number.POSITIVE_INFINITY) depthFreeCount += 1;
+    if (b.disableDepthTestDistance === Number.POSITIVE_INFINITY)
+      depthFreeCount += 1;
     else depthTestedCount += 1;
     const rec = b.id;
-    if (Number.isFinite(rec?.lat) && Number.isFinite(rec?.lon)
-        && Math.abs(rec.lat - portLat) <= nearDeg && Math.abs(rec.lon - portLon) <= nearDeg) {
+    if (
+      Number.isFinite(rec?.lat) &&
+      Number.isFinite(rec?.lon) &&
+      Math.abs(rec.lat - portLat) <= nearDeg &&
+      Math.abs(rec.lon - portLon) <= nearDeg
+    ) {
       const carto = ellipsoid.cartesianToCartographic(b.position);
       if (carto) nearHeights.push(carto.height);
     }
   }
   nearHeights.sort((a, b) => a - b);
-  const median = nearHeights.length ? nearHeights[Math.floor(nearHeights.length / 2)] : null;
+  const median = nearHeights.length
+    ? nearHeights[Math.floor(nearHeights.length / 2)]
+    : null;
   return {
     total: collection.length,
     sampled: depthFreeCount + depthTestedCount,
@@ -141,7 +172,9 @@ async function main() {
     const res = await fetch(APP_URL, { method: 'GET' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   } catch (e) {
-    console.error(`\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`);
+    console.error(
+      `\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`,
+    );
     console.error(`Start it first:  ./scripts/dev-fresh.sh`);
     process.exit(2);
   }
@@ -169,7 +202,9 @@ async function main() {
     for (const key of PORT_KEYS) {
       const port = PORTS[key];
       if (!port) {
-        console.error(`  [\x1b[31mFAIL\x1b[0m] unknown port '${key}' (have: ${Object.keys(PORTS).join(', ')})`);
+        console.error(
+          `  [\x1b[31mFAIL\x1b[0m] unknown port '${key}' (have: ${Object.keys(PORTS).join(', ')})`,
+        );
         failures += 1;
         continue;
       }
@@ -177,10 +212,17 @@ async function main() {
 
       const page = await browser.newPage();
       await page.setViewport({ width: 1600, height: 900 });
-      page.on('pageerror', (err) => console.error(`    [page-error] ${err.message}`));
+      page.on('pageerror', (err) =>
+        console.error(`    [page-error] ${err.message}`),
+      );
 
-      await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 60000 });
+      await page.goto(APP_URL, {
+        waitUntil: 'domcontentloaded',
+        timeout: 60000,
+      });
+      await page.waitForFunction(() => !!window.__godsEyeView?.viewer, {
+        timeout: 60000,
+      });
 
       // Frame the port (kill the intro flight first) and enable the layer.
       await page.evaluate(async (p) => {
@@ -203,41 +245,58 @@ async function main() {
       // Wait for rows + the geoid re-floor: poll until near-port anchors sit
       // inside the expected band (both ports' bands exclude the pre-fix 0–3 m
       // ellipsoid datum, so this only settles once the lift is applied).
-      const probeArgs = { portLat: port.lat, portLon: port.lon, nearDeg: NEAR_DEG, sampleCap: SAMPLE_CAP };
+      const probeArgs = {
+        portLat: port.lat,
+        portLon: port.lon,
+        nearDeg: NEAR_DEG,
+        sampleCap: SAMPLE_CAP,
+      };
       const deadline = Date.now() + 120000;
       let probe = null;
       let settled = false;
       while (Date.now() < deadline) {
         probe = await page.evaluate(probeVessels, probeArgs);
-        if (probe && !probe.error && probe.nearCount >= 3
-            && probe.medianHeight !== null
-            && probe.medianHeight >= port.heightBand[0]
-            && probe.medianHeight <= port.heightBand[1]) {
+        if (
+          probe &&
+          !probe.error &&
+          probe.nearCount >= 3 &&
+          probe.medianHeight !== null &&
+          probe.medianHeight >= port.heightBand[0] &&
+          probe.medianHeight <= port.heightBand[1]
+        ) {
           settled = true;
           break;
         }
         await new Promise((r) => setTimeout(r, 2000));
       }
 
-      const fmt = (v) => (v === null || v === undefined ? '—' : v.toFixed ? v.toFixed(1) : String(v));
+      const fmt = (v) =>
+        v === null || v === undefined
+          ? '—'
+          : v.toFixed
+            ? v.toFixed(1)
+            : String(v);
       if (!probe || probe.error) {
-        console.error(`    [\x1b[31mFAIL\x1b[0m] probe error: ${probe?.error || 'no probe result'}`);
+        console.error(
+          `    [\x1b[31mFAIL\x1b[0m] probe error: ${probe?.error || 'no probe result'}`,
+        );
         failures += 1;
       } else {
         const heightOk = settled;
-        const depthOk = probe.depthTestedCount === 0 && probe.depthFreeCount > 0;
+        const depthOk =
+          probe.depthTestedCount === 0 && probe.depthFreeCount > 0;
         console.log(
           `    vessels=${probe.total} sampled=${probe.sampled} nearPort=${probe.nearCount} ` +
-          `medianH=${fmt(probe.medianHeight)}m (band ${port.heightBand[0]}..${port.heightBand[1]}) ` +
-          `range=${fmt(probe.minHeight)}..${fmt(probe.maxHeight)}m`
+            `medianH=${fmt(probe.medianHeight)}m (band ${port.heightBand[0]}..${port.heightBand[1]}) ` +
+            `range=${fmt(probe.minHeight)}..${fmt(probe.maxHeight)}m`,
         );
         console.log(
           `    [${depthOk ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m'}] ` +
-          `depth-test-free sprites: ${probe.depthFreeCount}/${probe.sampled} (locked principle #2)`
+            `depth-test-free sprites: ${probe.depthFreeCount}/${probe.sampled} (locked principle #2)`,
         );
         console.log(
           `    [${heightOk ? '\x1b[32mPASS\x1b[0m' : '\x1b[31mFAIL\x1b[0m'}] ` +
-          `sea-surface anchor datum (N + lift, locked principle #1)`
+            `sea-surface anchor datum (N + lift, locked principle #1)`,
         );
         if (!depthOk) failures += 1;
         if (!heightOk) failures += 1;
@@ -260,8 +319,13 @@ async function main() {
         });
       }, port);
       await page
-        .waitForFunction(() => window.__godsEyeView?.tileset?.tilesLoaded, { timeout: 60000, polling: 500 })
-        .catch(() => console.log('    (tileset settle timeout — screenshotting anyway)'));
+        .waitForFunction(() => window.__godsEyeView?.tileset?.tilesLoaded, {
+          timeout: 60000,
+          polling: 500,
+        })
+        .catch(() =>
+          console.log('    (tileset settle timeout — screenshotting anyway)'),
+        );
       await new Promise((r) => setTimeout(r, 2500));
       const outPath = path.join(OUT_DIR, `vessel-datum-${key}.png`);
       await page.screenshot({ path: outPath });
@@ -272,7 +336,11 @@ async function main() {
     await browser.close();
   }
 
-  console.log(failures ? `\n\x1b[31m${failures} failure(s)\x1b[0m` : '\n\x1b[32mAll datum checks passed\x1b[0m');
+  console.log(
+    failures
+      ? `\n\x1b[31m${failures} failure(s)\x1b[0m`
+      : '\n\x1b[32mAll datum checks passed\x1b[0m',
+  );
   process.exit(failures ? 1 : 0);
 }
 

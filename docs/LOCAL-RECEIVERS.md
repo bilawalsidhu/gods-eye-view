@@ -3,9 +3,9 @@
 The Local ADS-B layer draws aircraft heard by your own receivers. It has two
 inputs, and it can use both at once.
 
-| Input        | What it is                                                                                                                          | Bands                |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Browser SDR  | A USB RTL-SDR opened by the browser through WebUSB (Radio panel, Local RTL-SDR card). Decoding runs in the page.                   | 1090 MHz             |
+| Input        | What it is                                                                                                                         | Bands                 |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| Browser SDR  | A USB RTL-SDR opened by the browser through WebUSB (Radio panel, Local RTL-SDR card). Decoding runs in the page.                   | 1090 MHz              |
 | Decoder feed | The `aircraft.json` served by a decoder you run: dump1090-fa, readsb or tar1090 (1090 MHz), or dump978-fa + skyaware978 (978 MHz). | 1090 MHz, 978 MHz UAT |
 
 Aircraft from both inputs are merged by ICAO address. The newest position

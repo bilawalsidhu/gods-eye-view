@@ -15,7 +15,13 @@ const createStages = () => ({
 });
 
 test('Cockpit vision order exposes inherited, CRT, NVG, FLIR, and NOIR modes', () => {
-  assert.deepEqual(COCKPIT_VISION_MODES, ['optical', 'crt', 'nvg', 'thermal', 'noir']);
+  assert.deepEqual(COCKPIT_VISION_MODES, [
+    'optical',
+    'crt',
+    'nvg',
+    'thermal',
+    'noir',
+  ]);
   assert.equal(normalizeCockpitVisionMode('none'), 'optical');
   assert.equal(normalizeCockpitVisionMode('unknown'), 'optical');
 });
@@ -39,12 +45,20 @@ test('Cockpit settles pending map crossfades before a temporary preset takes own
 test('returning from a temporary preset restores the exact inherited intensities', () => {
   const stages = createStages();
   const restore = Object.fromEntries(
-    Object.entries(stages).map(([name, stage]) => [name, stage.uniforms.intensity]),
+    Object.entries(stages).map(([name, stage]) => [
+      name,
+      stage.uniforms.intensity,
+    ]),
   );
   applyCockpitVisionStageIntensities(stages, 'thermal', restore);
   applyCockpitVisionStageIntensities(stages, 'optical', restore);
   assert.deepEqual(
-    Object.fromEntries(Object.entries(stages).map(([name, stage]) => [name, stage.uniforms.intensity])),
+    Object.fromEntries(
+      Object.entries(stages).map(([name, stage]) => [
+        name,
+        stage.uniforms.intensity,
+      ]),
+    ),
     restore,
   );
 });
@@ -52,10 +66,16 @@ test('returning from a temporary preset restores the exact inherited intensities
 test('temporary styles replace each other without changing the inherited restore snapshot', () => {
   const stages = createStages();
   const restore = Object.fromEntries(
-    Object.entries(stages).map(([name, stage]) => [name, stage.uniforms.intensity]),
+    Object.entries(stages).map(([name, stage]) => [
+      name,
+      stage.uniforms.intensity,
+    ]),
   );
   applyCockpitVisionStageIntensities(stages, 'thermal', restore);
-  assert.equal(applyCockpitVisionStageIntensities(stages, 'crt', restore), 'retro');
+  assert.equal(
+    applyCockpitVisionStageIntensities(stages, 'crt', restore),
+    'retro',
+  );
   assert.equal(stages.retro.uniforms.intensity, 1);
   assert.equal(stages.noir.uniforms.intensity, 0);
   applyCockpitVisionStageIntensities(stages, 'optical', restore);
@@ -66,9 +86,15 @@ test('temporary styles replace each other without changing the inherited restore
 test('NOIR is a temporary Cockpit override and inherited restores the captured map style', () => {
   const stages = createStages();
   const restore = Object.fromEntries(
-    Object.entries(stages).map(([name, stage]) => [name, stage.uniforms.intensity]),
+    Object.entries(stages).map(([name, stage]) => [
+      name,
+      stage.uniforms.intensity,
+    ]),
   );
-  assert.equal(applyCockpitVisionStageIntensities(stages, 'noir', restore), 'noir');
+  assert.equal(
+    applyCockpitVisionStageIntensities(stages, 'noir', restore),
+    'noir',
+  );
   assert.equal(stages.noir.uniforms.intensity, 1);
   assert.equal(stages.retro.uniforms.intensity, 0);
   applyCockpitVisionStageIntensities(stages, 'optical', restore);

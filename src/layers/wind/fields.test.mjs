@@ -87,28 +87,56 @@ test('hot-loop sampling fills the supplied output without allocating a replaceme
   assert.deepEqual(result, { u: 3, v: 4 });
 });
 
-
 test('temperature uses a fixed Celsius scale with visible everyday gradients', () => {
   const spec = WIND_FIELDS.temperature;
   assert.equal(spec.units, '°C');
   assert.deepEqual(
-    spec.stops.map((_, index) => spec.min + index * (spec.max - spec.min) / (spec.stops.length - 1)),
+    spec.stops.map(
+      (_, index) =>
+        spec.min + (index * (spec.max - spec.min)) / (spec.stops.length - 1),
+    ),
     [-40, -30, -20, -10, 0, 10, 20, 30, 40, 50],
   );
   const colorAt = (temperature) => {
-    const field = { ...snapshot, scalar: { ...snapshot.scalar, values: new Float32Array(8).fill(temperature) } };
-    assert.equal(sampleScalar(field, 0, 0, 'temperature'), temperature, 'display mapping does not change measurements');
+    const field = {
+      ...snapshot,
+      scalar: {
+        ...snapshot.scalar,
+        values: new Float32Array(8).fill(temperature),
+      },
+    };
+    assert.equal(
+      sampleScalar(field, 0, 0, 'temperature'),
+      temperature,
+      'display mapping does not change measurements',
+    );
     const raster = createFieldRaster(field, 'temperature', 2, 2);
-    assert.ok(raster.rgba[3] >= 225, 'temperature color dominates the basemap rather than washing out');
+    assert.ok(
+      raster.rgba[3] >= 225,
+      'temperature color dominates the basemap rather than washing out',
+    );
     return [...raster.rgba.slice(0, 3)];
   };
   let previous = colorAt(0);
   for (const temperature of [5, 10, 15, 20, 25, 30, 35]) {
     const color = colorAt(temperature);
-    const distance = Math.hypot(...color.map((value, index) => value - previous[index]));
-    assert.ok(distance >= 30, `five-degree difference near ${temperature}°C remains visually distinct`);
+    const distance = Math.hypot(
+      ...color.map((value, index) => value - previous[index]),
+    );
+    assert.ok(
+      distance >= 30,
+      `five-degree difference near ${temperature}°C remains visually distinct`,
+    );
     previous = color;
   }
-  assert.deepEqual(colorAt(-60), colorAt(-40), 'only color saturates below the fixed scale');
-  assert.deepEqual(colorAt(60), colorAt(50), 'only color saturates above the fixed scale');
+  assert.deepEqual(
+    colorAt(-60),
+    colorAt(-40),
+    'only color saturates below the fixed scale',
+  );
+  assert.deepEqual(
+    colorAt(60),
+    colorAt(50),
+    'only color saturates above the fixed scale',
+  );
 });

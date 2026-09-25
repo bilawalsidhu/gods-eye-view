@@ -24,11 +24,24 @@ import {
   installRenderGovernor,
 } from '../renderGovernor.js';
 import * as Cesium from 'cesium';
-import { registerEntityContext, selectEntityContext, getSelectedEntityContext } from './contextStore.js';
+import {
+  registerEntityContext,
+  selectEntityContext,
+  getSelectedEntityContext,
+} from './contextStore.js';
 
 test('clicking a selected installation again or empty map clears it through refresh', async () => {
-  const run = await runInstallationLoad({ elements: [{ type: 'node', id: 42,
-    lat: 30.2, lon: -97.7, tags: { military: 'base', name: 'Site' } }] });
+  const run = await runInstallationLoad({
+    elements: [
+      {
+        type: 'node',
+        id: 42,
+        lat: 30.2,
+        lon: -97.7,
+        tags: { military: 'base', name: 'Site' },
+      },
+    ],
+  });
   try {
     for (const nextPick of ['osm:node:42', null]) {
       run.click('osm:node:42');
@@ -36,49 +49,99 @@ test('clicking a selected installation again or empty map clears it through refr
       run.click(nextPick);
       assert.equal(getSelectedEntityContext(), null);
       await militaryInstallationsLayer.update();
-      assert.equal(getSelectedEntityContext(), null, 'refresh must not resurrect selection');
+      assert.equal(
+        getSelectedEntityContext(),
+        null,
+        'refresh must not resurrect selection',
+      );
       assert.equal(run.entities()[0].point.pixelSize.getValue(), 9);
     }
-  } finally { run.restore(); }
+  } finally {
+    run.restore();
+  }
 });
 
 test('clearing a stale installation highlight does not clear or reclaim another layer selection', async () => {
-  const run = await runInstallationLoad({ elements: [{ type: 'node', id: 42,
-    lat: 30.2, lon: -97.7, tags: { military: 'base', name: 'Site' } }] });
+  const run = await runInstallationLoad({
+    elements: [
+      {
+        type: 'node',
+        id: 42,
+        lat: 30.2,
+        lon: -97.7,
+        tags: { military: 'base', name: 'Site' },
+      },
+    ],
+  });
   try {
     run.click('osm:node:42');
     const aircraft = { id: 'aircraft:test' };
-    registerEntityContext(aircraft, { id: aircraft.id, layerId: 'military', label: 'Aircraft' });
+    registerEntityContext(aircraft, {
+      id: aircraft.id,
+      layerId: 'military',
+      label: 'Aircraft',
+    });
     selectEntityContext(aircraft);
     await militaryInstallationsLayer.update();
-    assert.equal(getSelectedEntityContext()?.id, aircraft.id, 'non-canvas selection survives a repaint');
+    assert.equal(
+      getSelectedEntityContext()?.id,
+      aircraft.id,
+      'non-canvas selection survives a repaint',
+    );
     run.click('osm:node:42');
     selectEntityContext(aircraft);
     run.click(aircraft);
     assert.equal(getSelectedEntityContext()?.id, aircraft.id);
     await militaryInstallationsLayer.update();
     assert.equal(getSelectedEntityContext()?.id, aircraft.id);
-  } finally { run.restore(); }
+  } finally {
+    run.restore();
+  }
 });
 
 test('switching sites keeps the new selection through refresh and disable clears it', async () => {
-  const run = await runInstallationLoad({ elements: [42, 43].map(id => ({ type: 'node', id,
-    lat: 30.2, lon: -97.7, tags: { military: 'base', name: `Site ${id}` } })) });
+  const run = await runInstallationLoad({
+    elements: [42, 43].map((id) => ({
+      type: 'node',
+      id,
+      lat: 30.2,
+      lon: -97.7,
+      tags: { military: 'base', name: `Site ${id}` },
+    })),
+  });
   try {
     run.click('osm:node:42');
     run.click('osm:node:43');
     assert.equal(getSelectedEntityContext()?.id, 'osm:node:43');
     await militaryInstallationsLayer.update();
     assert.equal(getSelectedEntityContext()?.id, 'osm:node:43');
-    assert.equal(run.entities().find(e => e.id === 'osm:node:42').point.pixelSize.getValue(), 9);
-    assert.equal(run.entities().find(e => e.id === 'osm:node:43').point.pixelSize.getValue(), 13);
+    assert.equal(
+      run
+        .entities()
+        .find((e) => e.id === 'osm:node:42')
+        .point.pixelSize.getValue(),
+      9,
+    );
+    assert.equal(
+      run
+        .entities()
+        .find((e) => e.id === 'osm:node:43')
+        .point.pixelSize.getValue(),
+      13,
+    );
     militaryInstallationsLayer.disable();
     run.click('osm:node:42');
-    assert.equal(getSelectedEntityContext(), null, 'disabled layer ignores clicks');
+    assert.equal(
+      getSelectedEntityContext(),
+      null,
+      'disabled layer ignores clicks',
+    );
     militaryInstallationsLayer.enable();
     await militaryInstallationsLayer.update();
     assert.equal(getSelectedEntityContext(), null);
-  } finally { run.restore(); }
+  } finally {
+    run.restore();
+  }
 });
 
 test('cheap installation distance prefilter is local and antimeridian-safe', () => {
@@ -94,22 +157,50 @@ test('cheap installation distance prefilter is local and antimeridian-safe', () 
 });
 
 test('keeps generic Places hits distinct from explicitly typed military facilities', () => {
-  assert.equal(classifyGoogleMilitaryPlace({ primaryType: 'military_base' }), 'military_land');
-  assert.equal(classifyGoogleMilitaryPlace({ types: ['point_of_interest', 'military_base'] }), 'military_land');
-  assert.equal(classifyGoogleMilitaryPlace({ name: 'Army Recruiting Office', types: ['government_office'] }), 'places_candidate');
-  assert.equal(classifyGoogleMilitaryPlace({ name: 'Military Museum', types: ['museum'] }), 'places_candidate');
+  assert.equal(
+    classifyGoogleMilitaryPlace({ primaryType: 'military_base' }),
+    'military_land',
+  );
+  assert.equal(
+    classifyGoogleMilitaryPlace({
+      types: ['point_of_interest', 'military_base'],
+    }),
+    'military_land',
+  );
+  assert.equal(
+    classifyGoogleMilitaryPlace({
+      name: 'Army Recruiting Office',
+      types: ['government_office'],
+    }),
+    'places_candidate',
+  );
+  assert.equal(
+    classifyGoogleMilitaryPlace({ name: 'Military Museum', types: ['museum'] }),
+    'places_candidate',
+  );
 });
 
 test('reports the record source instead of attributing Places records to OpenStreetMap', () => {
-  assert.equal(installationSourceLabel({ sources: [{ name: 'Google Maps Places' }] }), 'Google Maps Places');
-  assert.equal(installationSourceLabel({ sources: [{ name: 'OpenStreetMap' }, { name: 'OpenStreetMap' }] }), 'OpenStreetMap');
+  assert.equal(
+    installationSourceLabel({ sources: [{ name: 'Google Maps Places' }] }),
+    'Google Maps Places',
+  );
+  assert.equal(
+    installationSourceLabel({
+      sources: [{ name: 'OpenStreetMap' }, { name: 'OpenStreetMap' }],
+    }),
+    'OpenStreetMap',
+  );
 });
 
 test('places installation anchors on the shared cached rendered floor', () => {
   setMeshFloorPreferred(true);
   _clearMeshFloorCellsForTest();
   reportMeshFloorCell(30.2, -97.7, 182.25);
-  assert.equal(installationSurfaceHeightM({ latitude: 30.2, longitude: -97.7 }), 183.75);
+  assert.equal(
+    installationSurfaceHeightM({ latitude: 30.2, longitude: -97.7 }),
+    183.75,
+  );
   _clearMeshFloorCellsForTest();
 });
 
@@ -128,7 +219,11 @@ test('real enabled installation entities carry no native label graphics', async 
   globalThis.window = { dispatchEvent() {} };
   globalThis.fetch = async (url) => {
     if (String(url).includes('/api/terrain/heights')) {
-      return { ok: true, status: 200, json: async () => ({ results: [{ ellipsoid: 100 }] }) };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ results: [{ ellipsoid: 100 }] }),
+      };
     }
     return {
       ok: true,
@@ -136,13 +231,15 @@ test('real enabled installation entities carry no native label graphics', async 
       json: async () => ({
         status: 'fresh',
         retrievedAt: '2026-08-02T00:00:00.000Z',
-        elements: [{
-          type: 'node',
-          id: 42,
-          lat: 30.2,
-          lon: -97.7,
-          tags: { military: 'base', name: 'Runtime Installation' },
-        }],
+        elements: [
+          {
+            type: 'node',
+            id: 42,
+            lat: 30.2,
+            lon: -97.7,
+            tags: { military: 'base', name: 'Runtime Installation' },
+          },
+        ],
       }),
     };
   };
@@ -168,10 +265,15 @@ test('real enabled installation entities carry no native label graphics', async 
     scene: {
       canvas,
       globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      pick() { return null; },
+      pick() {
+        return null;
+      },
     },
     dataSources: {
-      add(dataSource) { dataSources.push(dataSource); return dataSource; },
+      add(dataSource) {
+        dataSources.push(dataSource);
+        return dataSource;
+      },
       remove(dataSource) {
         const index = dataSources.indexOf(dataSource);
         if (index >= 0) dataSources.splice(index, 1);
@@ -185,7 +287,10 @@ test('real enabled installation entities carry no native label graphics', async 
     militaryInstallationsLayer.enable();
     await militaryInstallationsLayer.update();
     const entities = dataSources[0].entities.values;
-    assert.ok(entities.length > 0, 'runtime guard requires rendered installation records');
+    assert.ok(
+      entities.length > 0,
+      'runtime guard requires rendered installation records',
+    );
     assert.ok(entities.every((entity) => entity.label === undefined));
   } finally {
     militaryInstallationsLayer.destroy(viewer);
@@ -230,7 +335,9 @@ test('Context focus past the render cap selects for real instead of flying blind
     assert.equal(focused, true, 'focus succeeds');
     // The proof: a real entity now backs the selection, so the Context subject
     // actually changes rather than the camera moving over a stale subject.
-    const nowRendered = run.entities().find((entity) => entity.id === beyondCap.id);
+    const nowRendered = run
+      .entities()
+      .find((entity) => entity.id === beyondCap.id);
     assert.ok(nowRendered, 'the focused record was rendered on demand');
     assert.equal(
       run.contextLabels().at(-1),
@@ -266,7 +373,12 @@ async function runInstallationLoad({
     dispatchEvent(event) {
       if (event?.detail?.label) contextEvents.push(event.detail.label);
     },
-    CustomEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
+    CustomEvent: class {
+      constructor(type, init) {
+        this.type = type;
+        Object.assign(this, init);
+      }
+    },
   };
   globalThis.fetch = async (url) => {
     const href = String(url);
@@ -275,7 +387,11 @@ async function runInstallationLoad({
     }
     requests.push(href);
     if (failWith) {
-      return { ok: false, status: 503, json: async () => ({ error: failWith }) };
+      return {
+        ok: false,
+        status: 503,
+        json: async () => ({ error: failWith }),
+      };
     }
     const exact = href.includes('exact=1');
     const payload = {
@@ -294,8 +410,14 @@ async function runInstallationLoad({
   let clickAction;
   const viewer = {
     camera: {
-      moveEnd: { addEventListener() { return () => {}; } },
-      flyToBoundingSphere(sphere, options) { cameraFlights.push({ sphere, options }); },
+      moveEnd: {
+        addEventListener() {
+          return () => {};
+        },
+      },
+      flyToBoundingSphere(sphere, options) {
+        cameraFlights.push({ sphere, options });
+      },
       computeViewRectangle() {
         return {
           south: Cesium.Math.toRadians(VIEWPORT.south),
@@ -308,7 +430,9 @@ async function runInstallationLoad({
     scene: {
       canvas: { addEventListener() {}, removeEventListener() {} },
       globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      pick() { return picked; },
+      pick() {
+        return picked;
+      },
       // Enough surface for the real render governor to drive this viewer, so
       // one-shot render requests are observable.
       requestRenderMode: false,
@@ -316,7 +440,10 @@ async function runInstallationLoad({
       requestRender() {},
     },
     dataSources: {
-      add(dataSource) { dataSources.push(dataSource); return dataSource; },
+      add(dataSource) {
+        dataSources.push(dataSource);
+        return dataSource;
+      },
       remove(dataSource) {
         const index = dataSources.indexOf(dataSource);
         if (index >= 0) dataSources.splice(index, 1);
@@ -325,13 +452,22 @@ async function runInstallationLoad({
     },
   };
 
-  const originalSetInputAction = Cesium.ScreenSpaceEventHandler.prototype.setInputAction;
-  Cesium.ScreenSpaceEventHandler.prototype.setInputAction = function (action, type, modifier) {
+  const originalSetInputAction =
+    Cesium.ScreenSpaceEventHandler.prototype.setInputAction;
+  Cesium.ScreenSpaceEventHandler.prototype.setInputAction = function (
+    action,
+    type,
+    modifier,
+  ) {
     if (type === Cesium.ScreenSpaceEventType.LEFT_CLICK) clickAction = action;
     return originalSetInputAction.call(this, action, type, modifier);
   };
-  try { militaryInstallationsLayer.init(viewer); }
-  finally { Cesium.ScreenSpaceEventHandler.prototype.setInputAction = originalSetInputAction; }
+  try {
+    militaryInstallationsLayer.init(viewer);
+  } finally {
+    Cesium.ScreenSpaceEventHandler.prototype.setInputAction =
+      originalSetInputAction;
+  }
   installRenderGovernor(viewer);
   militaryInstallationsLayer.enable();
   await militaryInstallationsLayer.update();
@@ -343,11 +479,15 @@ async function runInstallationLoad({
     contextLabels: () => contextEvents,
     stats: () => militaryInstallationsLayer.getStats(),
     click(target) {
-      const entity = typeof target === 'string' ? dataSources[0].entities.getById(target) : target;
+      const entity =
+        typeof target === 'string'
+          ? dataSources[0].entities.getById(target)
+          : target;
       picked = entity ? { id: entity } : undefined;
       clickAction({ position: { x: 0, y: 0 } });
     },
-    renderRequests: () => getRenderGovernorDiagnostics().recentRequests.map((item) => item.reason),
+    renderRequests: () =>
+      getRenderGovernorDiagnostics().recentRequests.map((item) => item.reason),
     restore() {
       militaryInstallationsLayer.destroy(viewer);
       _resetRenderGovernorForTest();
@@ -361,8 +501,18 @@ async function runInstallationLoad({
 }
 
 test('viewport membership keeps intersecting footprints and drops the snap ring', () => {
-  const inside = { osmType: 'node', latitude: 30.5, longitude: -97.5, footprint: null };
-  const outside = { osmType: 'node', latitude: 30.5, longitude: -96.5, footprint: null };
+  const inside = {
+    osmType: 'node',
+    latitude: 30.5,
+    longitude: -97.5,
+    footprint: null,
+  };
+  const outside = {
+    osmType: 'node',
+    latitude: 30.5,
+    longitude: -96.5,
+    footprint: null,
+  };
   assert.equal(installationWithinViewport(inside, VIEWPORT), true);
   assert.equal(installationWithinViewport(outside, VIEWPORT), false);
 
@@ -372,7 +522,12 @@ test('viewport membership keeps intersecting footprints and drops the snap ring'
     osmType: 'way',
     latitude: 30.5,
     longitude: -96.95,
-    footprint: [[-97.05, 30.4], [-96.9, 30.4], [-96.9, 30.6], [-97.05, 30.6]],
+    footprint: [
+      [-97.05, 30.4],
+      [-96.9, 30.4],
+      [-96.9, 30.6],
+      [-97.05, 30.6],
+    ],
   };
   assert.equal(installationWithinViewport(straddling, VIEWPORT), true);
 
@@ -380,7 +535,12 @@ test('viewport membership keeps intersecting footprints and drops the snap ring'
     osmType: 'way',
     latitude: 30.5,
     longitude: -96.5,
-    footprint: [[-96.6, 30.4], [-96.4, 30.4], [-96.4, 30.6], [-96.6, 30.6]],
+    footprint: [
+      [-96.6, 30.4],
+      [-96.4, 30.4],
+      [-96.4, 30.6],
+      [-96.6, 30.6],
+    ],
   };
   assert.equal(installationWithinViewport(farWithFootprint, VIEWPORT), false);
   assert.equal(installationWithinViewport(null, VIEWPORT), false);
@@ -392,17 +552,36 @@ test('extended features with unknown extent are kept, not centre-tested', () => 
   // are normalized without one, so their true extent is unknown here. Overpass
   // already proved they intersect the queried bbox; centre-testing them would
   // erase exactly the biggest installations.
-  const relation = { osmType: 'relation', latitude: 30.5, longitude: -96.99, footprint: null };
-  const hugeWay = { osmType: 'way', latitude: 29.5, longitude: -97.5, footprint: null };
+  const relation = {
+    osmType: 'relation',
+    latitude: 30.5,
+    longitude: -96.99,
+    footprint: null,
+  };
+  const hugeWay = {
+    osmType: 'way',
+    latitude: 29.5,
+    longitude: -97.5,
+    footprint: null,
+  };
   assert.equal(installationWithinViewport(relation, VIEWPORT), true);
   assert.equal(installationWithinViewport(hugeWay, VIEWPORT), true);
   // A node IS its geometry, so excluding it on centre loses nothing.
   assert.equal(
-    installationWithinViewport({ osmType: 'node', latitude: 30.5, longitude: -96.99, footprint: null }, VIEWPORT),
+    installationWithinViewport(
+      { osmType: 'node', latitude: 30.5, longitude: -96.99, footprint: null },
+      VIEWPORT,
+    ),
     false,
   );
   // Unknown provenance is treated inclusively, same as an extended feature.
-  assert.equal(installationWithinViewport({ latitude: 30.5, longitude: -96.99, footprint: null }, VIEWPORT), true);
+  assert.equal(
+    installationWithinViewport(
+      { latitude: 30.5, longitude: -96.99, footprint: null },
+      VIEWPORT,
+    ),
+    true,
+  );
 });
 
 test('a footprint-less relation just outside the viewport still renders', async () => {
@@ -411,9 +590,20 @@ test('a footprint-less relation just outside the viewport still renders', async 
       // A relation whose CENTER sits outside the viewport and whose geometry
       // lives on members Overpass did not inline. It was returned because it
       // intersects the queried bbox, so it must survive the viewport filter.
-      { type: 'relation', id: 91, center: { lat: 30.5, lon: -96.995 }, tags: { military: 'range', name: 'Straddling Range' } },
+      {
+        type: 'relation',
+        id: 91,
+        center: { lat: 30.5, lon: -96.995 },
+        tags: { military: 'range', name: 'Straddling Range' },
+      },
       // A NODE at the same off-view spot has no extent and must still be cut.
-      { type: 'node', id: 92, lat: 30.5, lon: -96.995, tags: { military: 'range', name: 'Off View Node' } },
+      {
+        type: 'node',
+        id: 92,
+        lat: 30.5,
+        lon: -96.995,
+        tags: { military: 'range', name: 'Off View Node' },
+      },
     ],
   });
   try {
@@ -427,35 +617,70 @@ test('a footprint-less relation just outside the viewport still renders', async 
 });
 
 test('a legacy cached response with no saturation flag still triggers the exact retry', () => {
-  const atCap = { elements: new Array(700).fill({ type: 'node' }), elementCap: 700 };
-  assert.equal(installationResponseSaturated(atCap), true, 'derived from the reported cap');
+  const atCap = {
+    elements: new Array(700).fill({ type: 'node' }),
+    elementCap: 700,
+  };
   assert.equal(
-    installationResponseSaturated({ elements: new Array(699).fill({ type: 'node' }), elementCap: 700 }),
+    installationResponseSaturated(atCap),
+    true,
+    'derived from the reported cap',
+  );
+  assert.equal(
+    installationResponseSaturated({
+      elements: new Array(699).fill({ type: 'node' }),
+      elementCap: 700,
+    }),
     false,
   );
   // An explicit flag always wins over the derivation.
-  assert.equal(installationResponseSaturated({ ...atCap, saturated: false }), false);
-  assert.equal(installationResponseSaturated({ elements: [], saturated: true }), true);
+  assert.equal(
+    installationResponseSaturated({ ...atCap, saturated: false }),
+    false,
+  );
+  assert.equal(
+    installationResponseSaturated({ elements: [], saturated: true }),
+    true,
+  );
   // Nothing to derive from: do not invent saturation.
-  assert.equal(installationResponseSaturated({ elements: new Array(700).fill({}) }), false);
+  assert.equal(
+    installationResponseSaturated({ elements: new Array(700).fill({}) }),
+    false,
+  );
   assert.equal(installationResponseSaturated(null), false);
 });
 
 test('a legacy-shaped payload at the cap fires the exact-viewport retry end to end', async () => {
   const elements = [];
   for (let index = 0; index < 700; index += 1) {
-    elements.push({ type: 'node', id: 3000 + index, lat: 30.5, lon: -96.2, tags: { military: 'range' } });
+    elements.push({
+      type: 'node',
+      id: 3000 + index,
+      lat: 30.5,
+      lon: -96.2,
+      tags: { military: 'range' },
+    });
   }
   const harness = await runInstallationLoad({
     elements,
     // Pre-fix cache shape: no `saturated` field at all, but at the cap.
     legacyPayload: true,
     exactElements: [
-      { type: 'node', id: 8, lat: 30.5, lon: -97.5, tags: { military: 'range', name: 'Rescued From Legacy' } },
+      {
+        type: 'node',
+        id: 8,
+        lat: 30.5,
+        lon: -97.5,
+        tags: { military: 'range', name: 'Rescued From Legacy' },
+      },
     ],
   });
   try {
-    assert.equal(harness.requests.length, 2, 'a legacy entry must not skip the retry');
+    assert.equal(
+      harness.requests.length,
+      2,
+      'a legacy entry must not skip the retry',
+    );
     assert.equal(harness.requests[1].includes('exact=1'), true);
     assert.deepEqual(
       harness.entities().map((entity) => entity.gevLabelModel?.title),
@@ -467,11 +692,15 @@ test('a legacy-shaped payload at the cap fires the exact-viewport retry end to e
 });
 
 test('a failed load buys the frame its status change needs', async () => {
-  const harness = await runInstallationLoad({ failWith: 'Installation feed HTTP 503' });
+  const harness = await runInstallationLoad({
+    failWith: 'Installation feed HTTP 503',
+  });
   try {
     assert.equal(harness.stats().status, 'unavailable');
     assert.ok(
-      harness.renderRequests().some((reason) => reason === 'installations-status'),
+      harness
+        .renderRequests()
+        .some((reason) => reason === 'installations-status'),
       'an idle governor would otherwise leave the last healthy readout on screen',
     );
   } finally {
@@ -484,14 +713,32 @@ test('off-viewport records from the snapped superset never render or enter conte
     // The snapped bbox reaches ~5.5 km beyond the viewport; this node sits a
     // full degree outside it.
     elements: [
-      { type: 'node', id: 1, lat: 30.5, lon: -97.5, tags: { military: 'range', name: 'In View' } },
-      { type: 'node', id: 2, lat: 30.5, lon: -96.2, tags: { military: 'range', name: 'Off View' } },
+      {
+        type: 'node',
+        id: 1,
+        lat: 30.5,
+        lon: -97.5,
+        tags: { military: 'range', name: 'In View' },
+      },
+      {
+        type: 'node',
+        id: 2,
+        lat: 30.5,
+        lon: -96.2,
+        tags: { military: 'range', name: 'Off View' },
+      },
     ],
   });
   try {
-    const titles = harness.entities().map((entity) => entity.gevLabelModel?.title);
+    const titles = harness
+      .entities()
+      .map((entity) => entity.gevLabelModel?.title);
     assert.deepEqual(titles, ['In View'], 'only the in-viewport site renders');
-    assert.equal(harness.contextLabels().includes('Off View'), false, 'and none enters context');
+    assert.equal(
+      harness.contextLabels().includes('Off View'),
+      false,
+      'and none enters context',
+    );
     assert.equal(harness.stats().count, 1);
   } finally {
     harness.restore();
@@ -503,19 +750,43 @@ test('a saturated snapped tile refetches the exact viewport before rendering', a
   for (let index = 0; index < 700; index += 1) {
     // A saturated snapped response full of OFF-viewport sites: the in-view ones
     // were crowded out upstream.
-    elements.push({ type: 'node', id: 1000 + index, lat: 30.5, lon: -96.2, tags: { military: 'range' } });
+    elements.push({
+      type: 'node',
+      id: 1000 + index,
+      lat: 30.5,
+      lon: -96.2,
+      tags: { military: 'range' },
+    });
   }
   const harness = await runInstallationLoad({
     elements,
     saturated: true,
     exactElements: [
-      { type: 'node', id: 7, lat: 30.5, lon: -97.5, tags: { military: 'range', name: 'Rescued' } },
+      {
+        type: 'node',
+        id: 7,
+        lat: 30.5,
+        lon: -97.5,
+        tags: { military: 'range', name: 'Rescued' },
+      },
     ],
   });
   try {
-    assert.equal(harness.requests.length, 2, 'saturation triggers exactly one retry');
-    assert.equal(harness.requests[0].includes('exact=1'), false, 'first ask uses the shared snapped tile');
-    assert.equal(harness.requests[1].includes('exact=1'), true, 'retry opts out of the snap');
+    assert.equal(
+      harness.requests.length,
+      2,
+      'saturation triggers exactly one retry',
+    );
+    assert.equal(
+      harness.requests[0].includes('exact=1'),
+      false,
+      'first ask uses the shared snapped tile',
+    );
+    assert.equal(
+      harness.requests[1].includes('exact=1'),
+      true,
+      'retry opts out of the snap',
+    );
     assert.deepEqual(
       harness.entities().map((entity) => entity.gevLabelModel?.title),
       ['Rescued'],
@@ -528,7 +799,15 @@ test('a saturated snapped tile refetches the exact viewport before rendering', a
 
 test('an unsaturated response never pays for a second upstream ask', async () => {
   const harness = await runInstallationLoad({
-    elements: [{ type: 'node', id: 3, lat: 30.5, lon: -97.5, tags: { military: 'range' } }],
+    elements: [
+      {
+        type: 'node',
+        id: 3,
+        lat: 30.5,
+        lon: -97.5,
+        tags: { military: 'range' },
+      },
+    ],
   });
   try {
     assert.equal(harness.requests.length, 1);
@@ -541,9 +820,19 @@ test('an unsaturated response never pays for a second upstream ask', async () =>
 test('a still-saturated exact viewport is reported honestly instead of implied complete', async () => {
   const elements = [];
   for (let index = 0; index < 700; index += 1) {
-    elements.push({ type: 'node', id: 2000 + index, lat: 30.5, lon: -97.5, tags: { military: 'range' } });
+    elements.push({
+      type: 'node',
+      id: 2000 + index,
+      lat: 30.5,
+      lon: -97.5,
+      tags: { military: 'range' },
+    });
   }
-  const harness = await runInstallationLoad({ elements, saturated: true, exactSaturated: true });
+  const harness = await runInstallationLoad({
+    elements,
+    saturated: true,
+    exactSaturated: true,
+  });
   try {
     assert.equal(harness.stats().saturated, true);
     assert.match(harness.stats().error, /Too many mapped sites/);
@@ -572,9 +861,15 @@ test('a floor that lands after the render deadline lifts the dots off the ellips
       // The production failure: the bounded pre-render resolve gives up before
       // Re:Earth answers, so the first paint has no floor to stand on.
       if (terrainCalls === 1) {
-        await new Promise((resolve) => setTimeout(resolve, FLOOR_RESOLVE_DEADLINE_MS + 200));
+        await new Promise((resolve) =>
+          setTimeout(resolve, FLOOR_RESOLVE_DEADLINE_MS + 200),
+        );
       }
-      return { ok: true, status: 200, json: async () => ({ results: [{ ellipsoid: 2400 }] }) };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ results: [{ ellipsoid: 2400 }] }),
+      };
     }
     return {
       ok: true,
@@ -582,14 +877,20 @@ test('a floor that lands after the render deadline lifts the dots off the ellips
       json: async () => ({
         status: 'fresh',
         retrievedAt: '2026-08-18T00:00:00.000Z',
-        elements: [{ type: 'node', id: 77, lat, lon, tags: { military: 'range' } }],
+        elements: [
+          { type: 'node', id: 77, lat, lon, tags: { military: 'range' } },
+        ],
       }),
     };
   };
   const dataSources = [];
   const viewer = {
     camera: {
-      moveEnd: { addEventListener() { return () => {}; } },
+      moveEnd: {
+        addEventListener() {
+          return () => {};
+        },
+      },
       computeViewRectangle() {
         return {
           south: Cesium.Math.toRadians(44),
@@ -602,10 +903,15 @@ test('a floor that lands after the render deadline lifts the dots off the ellips
     scene: {
       canvas: { addEventListener() {}, removeEventListener() {} },
       globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      pick() { return null; },
+      pick() {
+        return null;
+      },
     },
     dataSources: {
-      add(dataSource) { dataSources.push(dataSource); return dataSource; },
+      add(dataSource) {
+        dataSources.push(dataSource);
+        return dataSource;
+      },
       remove(dataSource) {
         const index = dataSources.indexOf(dataSource);
         if (index >= 0) dataSources.splice(index, 1);
@@ -614,9 +920,10 @@ test('a floor that lands after the render deadline lifts the dots off the ellips
     },
   };
 
-  const heightOf = (entity) => Cesium.Cartographic.fromCartesian(
-    entity.position.getValue(Cesium.JulianDate.now()),
-  ).height;
+  const heightOf = (entity) =>
+    Cesium.Cartographic.fromCartesian(
+      entity.position.getValue(Cesium.JulianDate.now()),
+    ).height;
 
   try {
     militaryInstallationsLayer.init(viewer);
@@ -625,13 +932,24 @@ test('a floor that lands after the render deadline lifts the dots off the ellips
 
     const buried = dataSources[0].entities.values[0];
     assert.ok(buried, 'the cold-floor pass still renders the record');
-    assert.ok(Math.abs(heightOf(buried)) < 1, 'a cold floor anchors at the ellipsoid, as before');
+    assert.ok(
+      Math.abs(heightOf(buried)) < 1,
+      'a cold floor anchors at the ellipsoid, as before',
+    );
 
     // The warm chain resolves out of band; wait for the floor to land.
-    for (let attempt = 0; attempt < 50 && cachedGroundFloor(lat, lon) == null; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt < 50 && cachedGroundFloor(lat, lon) == null;
+      attempt += 1
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    assert.equal(cachedGroundFloor(lat, lon), 2400, 'the late floor landed in the shared cache');
+    assert.equal(
+      cachedGroundFloor(lat, lon),
+      2400,
+      'the late floor landed in the shared cache',
+    );
 
     const lifted = dataSources[0].entities.values[0];
     assert.ok(
@@ -655,7 +973,9 @@ test('reports bounded installation requests as loading and clears on settlement'
   const originalWindow = globalThis.window;
   const originalFetch = globalThis.fetch;
   let resolveInstallations;
-  const installationsResponse = new Promise((resolve) => { resolveInstallations = resolve; });
+  const installationsResponse = new Promise((resolve) => {
+    resolveInstallations = resolve;
+  });
   globalThis.document = { addEventListener() {}, removeEventListener() {} };
   globalThis.window = { dispatchEvent() {} };
   globalThis.fetch = async (url) => {
@@ -666,7 +986,11 @@ test('reports bounded installation requests as loading and clears on settlement'
   };
   const viewer = {
     camera: {
-      moveEnd: { addEventListener() { return () => {}; } },
+      moveEnd: {
+        addEventListener() {
+          return () => {};
+        },
+      },
       computeViewRectangle() {
         return {
           south: Cesium.Math.toRadians(30),
@@ -679,9 +1003,18 @@ test('reports bounded installation requests as loading and clears on settlement'
     scene: {
       canvas: { addEventListener() {}, removeEventListener() {} },
       globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      pick() { return null; },
+      pick() {
+        return null;
+      },
     },
-    dataSources: { add(value) { return value; }, remove() { return true; } },
+    dataSources: {
+      add(value) {
+        return value;
+      },
+      remove() {
+        return true;
+      },
+    },
   };
 
   try {
@@ -721,31 +1054,50 @@ test('zoom-out aborts an active installation request and returns non-loading gui
   globalThis.fetch = async (_url, options = {}) => {
     observedSignal = options.signal;
     return new Promise((_resolve, reject) => {
-      options.signal?.addEventListener('abort', () => {
-        const error = new Error('aborted');
-        error.name = 'AbortError';
-        reject(error);
-      }, { once: true });
+      options.signal?.addEventListener(
+        'abort',
+        () => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        },
+        { once: true },
+      );
     });
   };
   const viewer = {
     camera: {
-      moveEnd: { addEventListener() { return () => {}; } },
+      moveEnd: {
+        addEventListener() {
+          return () => {};
+        },
+      },
       computeViewRectangle() {
-        return globalView ? null : {
-          south: Cesium.Math.toRadians(30),
-          west: Cesium.Math.toRadians(-98),
-          north: Cesium.Math.toRadians(31),
-          east: Cesium.Math.toRadians(-97),
-        };
+        return globalView
+          ? null
+          : {
+              south: Cesium.Math.toRadians(30),
+              west: Cesium.Math.toRadians(-98),
+              north: Cesium.Math.toRadians(31),
+              east: Cesium.Math.toRadians(-97),
+            };
       },
     },
     scene: {
       canvas: { addEventListener() {}, removeEventListener() {} },
       globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      pick() { return null; },
+      pick() {
+        return null;
+      },
     },
-    dataSources: { add(value) { return value; }, remove() { return true; } },
+    dataSources: {
+      add(value) {
+        return value;
+      },
+      remove() {
+        return true;
+      },
+    },
   };
 
   try {
@@ -759,8 +1111,15 @@ test('zoom-out aborts an active installation request and returns non-loading gui
     assert.equal(observedSignal.aborted, true);
     assert.equal(militaryInstallationsLayer.getStats().loading, false);
     assert.equal(militaryInstallationsLayer.getStats().status, 'zoom-in');
-    assert.equal(militaryInstallationsLayer.getStats().error, null, 'guidance is not a fault');
-    assert.match(militaryInstallationsLayer.getStats().statusMessage, /zoom in/i);
+    assert.equal(
+      militaryInstallationsLayer.getStats().error,
+      null,
+      'guidance is not a fault',
+    );
+    assert.match(
+      militaryInstallationsLayer.getStats().statusMessage,
+      /zoom in/i,
+    );
   } finally {
     militaryInstallationsLayer.destroy(viewer);
     globalThis.fetch = originalFetch;
@@ -784,34 +1143,65 @@ import { installationRetryDelayMs } from './militaryInstallations.js';
 import fs from 'node:fs';
 
 const installationsSource = readLayerSource(
-  new URL('./militaryInstallations.js', import.meta.url), 'utf8');
+  new URL('./militaryInstallations.js', import.meta.url),
+  'utf8',
+);
 
 test('the unavailable retry backs off 30s to a 240s ceiling and restarts clean', () => {
-  assert.equal(installationRetryDelayMs(0), 30000, 'first failure retries in 30s');
-  assert.equal(installationRetryDelayMs(undefined), 30000, 'no prior delay means the minimum');
+  assert.equal(
+    installationRetryDelayMs(0),
+    30000,
+    'first failure retries in 30s',
+  );
+  assert.equal(
+    installationRetryDelayMs(undefined),
+    30000,
+    'no prior delay means the minimum',
+  );
   assert.equal(installationRetryDelayMs(30000), 60000, 'each failure doubles');
   assert.equal(installationRetryDelayMs(60000), 120000);
-  assert.equal(installationRetryDelayMs(120000), 240000, 'the ceiling is four minutes');
+  assert.equal(
+    installationRetryDelayMs(120000),
+    240000,
+    'the ceiling is four minutes',
+  );
   assert.equal(installationRetryDelayMs(240000), 240000, 'and it stays there');
-  assert.equal(installationRetryDelayMs(-5), 30000, 'garbage restarts at the minimum');
+  assert.equal(
+    installationRetryDelayMs(-5),
+    30000,
+    'garbage restarts at the minimum',
+  );
 });
 
 test('the retry is wired to every lifecycle edge, not just declared', () => {
-  assert.match(installationsSource,
+  assert.match(
+    installationsSource,
     /setInstallationStatus\(\s*'unavailable',[^]*?\);\n\s*parts\.viewport\.scheduleUnavailableRetry\(\);/,
-    'a failed load schedules the retry immediately after reporting unavailable');
-  assert.match(installationsSource,
+    'a failed load schedules the retry immediately after reporting unavailable',
+  );
+  assert.match(
+    installationsSource,
     /clearUnavailableRetry\(\);\n\s*setInstallationStatus\(\n?\s*layerState\.records\.length/,
-    'a successful load clears the pending retry and resets the backoff');
-  assert.match(installationsSource,
+    'a successful load clears the pending retry and resets the backoff',
+  );
+  assert.match(
+    installationsSource,
     /clearUnavailableRetry\(\);\n\s*setInstallationStatus\('zoom-in'/,
-    'zooming out of range cancels the retry — moveEnd owns re-entry there');
-  assert.match(installationsSource, /disable\(\) \{[^]*?clearUnavailableRetry\(\);/,
-    'disabling the layer cancels the retry');
-  assert.match(installationsSource,
+    'zooming out of range cancels the retry — moveEnd owns re-entry there',
+  );
+  assert.match(
+    installationsSource,
+    /disable\(\) \{[^]*?clearUnavailableRetry\(\);/,
+    'disabling the layer cancels the retry',
+  );
+  assert.match(
+    installationsSource,
     /function scheduleLoad\(\) \{[^]*?clearUnavailableRetry\(\{ resetBackoff: false \}\)/,
-    'a user-driven load supersedes the retry without resetting the backoff step');
-  assert.match(installationsSource,
+    'a user-driven load supersedes the retry without resetting the backoff step',
+  );
+  assert.match(
+    installationsSource,
     /layerState\.enabled && !layerState\.loading\)\s*parts\.ingestion\.loadInstallations\(\)/,
-    'the fired retry re-checks enablement and never races an in-flight load');
+    'the fired retry re-checks enablement and never races an in-flight load',
+  );
 });

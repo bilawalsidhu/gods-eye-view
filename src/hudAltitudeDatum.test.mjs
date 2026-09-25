@@ -33,7 +33,8 @@ registerHooks({
       return {
         format: 'module',
         shortCircuit: true,
-        source: 'export function forward() { return "10SEG55776339"; }\nexport default { forward };\n',
+        source:
+          'export function forward() { return "10SEG55776339"; }\nexport default { forward };\n',
       };
     }
     return next(url, context);
@@ -59,8 +60,17 @@ const SFO_ELLIPSOIDAL_M = -15;
  */
 function installHudEnvironment() {
   const elements = new Map(
-    ['hud-alt', 'hud-summary', 'hud-mgrs', 'hud-latlon', 'hud-bottom-line', 'hud-gsd', 'hud-coll', 'hud-ona', 'hud-mode']
-      .map((id) => [id, { textContent: '' }]),
+    [
+      'hud-alt',
+      'hud-summary',
+      'hud-mgrs',
+      'hud-latlon',
+      'hud-bottom-line',
+      'hud-gsd',
+      'hud-coll',
+      'hud-ona',
+      'hud-mode',
+    ].map((id) => [id, { textContent: '' }]),
   );
   const previousDocument = globalThis.document;
   globalThis.document = {
@@ -93,7 +103,9 @@ function installHudEnvironment() {
 
 test('hud.js corrects the camera height to MSL through the geoid module', () => {
   assert.equal(
-    has(/import \{[^}]*\bellipsoidalToMslDisplayM\b[^}]*\} from '\.\/data\/geoid\.js';/s),
+    has(
+      /import \{[^}]*\bellipsoidalToMslDisplayM\b[^}]*\} from '\.\/data\/geoid\.js';/s,
+    ),
     true,
     'hud.js must take the datum correction from ./data/geoid.js, not re-derive one',
   );
@@ -108,7 +120,9 @@ test('hud.js corrects the camera height to MSL through the geoid module', () => 
     'the ~2.7 MB grid must be requested once, on demand — not at HUD construction',
   );
   assert.equal(
-    has(/\.catch\(\(\) => \{\s*\/\* readout falls back to the uncorrected height \*\/\s*\}\)/),
+    has(
+      /\.catch\(\(\) => \{\s*\/\* readout falls back to the uncorrected height \*\/\s*\}\)/,
+    ),
     true,
     'a failed geoid load must leave the readout uncorrected, not unhandled',
   );
@@ -141,7 +155,9 @@ test('the summary ALT tag agrees with the corner readout', () => {
   // Both are on screen together; a viewer reading "ALT -15M" in one corner and
   // "ALT: 17m" in the other has found a bug, not a distinction.
   assert.equal(
-    has(/const altDisplayM = Number\.isFinite\(m\.altMslM\) \? m\.altMslM : m\.altM;/),
+    has(
+      /const altDisplayM = Number\.isFinite\(m\.altMslM\) \? m\.altMslM : m\.altM;/,
+    ),
     true,
     'the summary altitude tag must prefer the MSL datum and fall back to the raw height',
   );
@@ -188,7 +204,11 @@ test('a cold tick paints both readouts uncorrected, and resolving flips both in 
     // Tick 1 — cold. This is also the tick that requests the grid.
     hud._updateCameraData();
     assert.match(alt(), /^ALT: -15m/, `cold corner readout, got ${alt()}`);
-    assert.match(summary(), /\| ALT -15M \|/, `cold summary tag, got ${summary()}`);
+    assert.match(
+      summary(),
+      /\| ALT -15M \|/,
+      `cold summary tag, got ${summary()}`,
+    );
 
     // The HUD registered its own continuation on this same shared promise
     // during tick 1, and it registered first, so awaiting here means its

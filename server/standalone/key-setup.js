@@ -149,6 +149,14 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
   // provenance closes the equal-value ambiguity: an exported X remains
   // external even when the editable store independently contains X.
   const isExternallyManaged = (name, inStore) => {
+    // Free LLM AI keys are always editable in the in-app POWER UP station so users can paste/update them freely
+    if (
+      name.startsWith('NVIDIA_') ||
+      name.endsWith('_API_KEY') ||
+      name === 'CLOUDFLARE_API_KEY'
+    ) {
+      return false;
+    }
     const wasExternalAtBoot = pinokioManaged()
       ? false
       : LAUNCHER_AT_BOOT === 'dev-fresh'

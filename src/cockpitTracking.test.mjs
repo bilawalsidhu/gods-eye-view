@@ -26,7 +26,9 @@ function stampingWorld({ entryAllowed = true } = {}) {
       stamp('trackedEntityChanged'); // the ui.js listener
       return true;
     },
-    stopTracking() { world.trackedEntity = null; },
+    stopTracking() {
+      world.trackedEntity = null;
+    },
   });
   world.makeLayer = makeLayer;
   world.cockpitView = {
@@ -38,7 +40,10 @@ function stampingWorld({ entryAllowed = true } = {}) {
       this.active = true;
       return true;
     },
-    exit() { this.active = false; return true; },
+    exit() {
+      this.active = false;
+      return true;
+    },
   };
   return world;
 }
@@ -78,7 +83,10 @@ test('a refused Cockpit entry still stamps for the tracker it already moved', ()
   assert.equal(entry.entered, false);
   assert.ok(entry.error, 'a refused entry reports an honest failure');
   // Adoption stamped, and the rollback re-track stamped again.
-  assert.deepEqual(world.stamps, ['trackedEntityChanged', 'trackedEntityChanged']);
+  assert.deepEqual(world.stamps, [
+    'trackedEntityChanged',
+    'trackedEntityChanged',
+  ]);
   assert.equal(world.generation, 2);
   assert.equal(world.trackedEntity.gevTrackedId, 'military:ae01ce');
 });
@@ -97,21 +105,36 @@ test('a Cockpit entry that mutates nothing takes no camera authority', () => {
 test('failed Cockpit entry forces the prior retained layer to reacquire viewer ownership', () => {
   const calls = [];
   const layer = {
-    stopTracking() { calls.push('stop'); },
-    trackById(id, options) { calls.push(['track', id, options]); return true; },
+    stopTracking() {
+      calls.push('stop');
+    },
+    trackById(id, options) {
+      calls.push(['track', id, options]);
+      return true;
+    },
   };
-  assert.equal(restoreAircraftTrackingOwner(layer, 'prior-b', { origin: 'voice' }), true);
+  assert.equal(
+    restoreAircraftTrackingOwner(layer, 'prior-b', { origin: 'voice' }),
+    true,
+  );
   assert.deepEqual(calls, ['stop', ['track', 'prior-b', { origin: 'voice' }]]);
 });
 
 test('Cockpit entry rollback restores the tracker captured before Contacts activation', () => {
   const calls = [];
   const currentLayer = {
-    stopTracking(options) { calls.push(['current:stop', options]); },
+    stopTracking(options) {
+      calls.push(['current:stop', options]);
+    },
   };
   const rollbackLayer = {
-    stopTracking() { calls.push('prior:stop'); },
-    trackById(id, options) { calls.push(['prior:track', id, options]); return true; },
+    stopTracking() {
+      calls.push('prior:stop');
+    },
+    trackById(id, options) {
+      calls.push(['prior:track', id, options]);
+      return true;
+    },
   };
   const result = enterCockpitWithTracking({
     cockpitView: {
@@ -124,7 +147,10 @@ test('Cockpit entry rollback restores the tracker captured before Contacts activ
     selectionOrigin: 'voice',
   });
 
-  assert.deepEqual(result, { entered: false, error: 'Cockpit entry was unavailable' });
+  assert.deepEqual(result, {
+    entered: false,
+    error: 'Cockpit entry was unavailable',
+  });
   assert.deepEqual(calls, [
     ['current:stop', { origin: 'voice' }],
     'prior:stop',
@@ -137,27 +163,35 @@ test('same-target Cockpit entry forwards explicit origin without replacing ident
   const result = enterCockpitWithTracking({
     cockpitView: {
       readAircraftInfo: () => ({ layerId: 'flights', icao24: 'same' }),
-      enter: () => { calls.push('enter'); return true; },
+      enter: () => {
+        calls.push('enter');
+        return true;
+      },
     },
     selectedLayer: {
-      trackById(id, options) { calls.push(['track', id, options]); return true; },
+      trackById(id, options) {
+        calls.push(['track', id, options]);
+        return true;
+      },
     },
     selectedTarget: { layerId: 'flights', id: 'same' },
     selectionOrigin: 'voice',
   });
 
   assert.deepEqual(result, { entered: true, error: null });
-  assert.deepEqual(calls, [
-    ['track', 'same', { origin: 'voice' }],
-    'enter',
-  ]);
+  assert.deepEqual(calls, [['track', 'same', { origin: 'voice' }], 'enter']);
 });
 
 test('failed Cockpit entry clears an attempted durable target when no prior target exists', () => {
   const calls = [];
   const selectedLayer = {
-    trackById(id, options) { calls.push(['track', id, options]); return true; },
-    stopTracking(options) { calls.push(['stop', options]); },
+    trackById(id, options) {
+      calls.push(['track', id, options]);
+      return true;
+    },
+    stopTracking(options) {
+      calls.push(['stop', options]);
+    },
   };
   const result = enterCockpitWithTracking({
     cockpitView: {
@@ -170,7 +204,10 @@ test('failed Cockpit entry clears an attempted durable target when no prior targ
     selectionOrigin: 'voice',
   });
 
-  assert.deepEqual(result, { entered: false, error: 'Cockpit entry was unavailable' });
+  assert.deepEqual(result, {
+    entered: false,
+    error: 'Cockpit entry was unavailable',
+  });
   assert.deepEqual(calls, [
     ['track', 'attempted', { origin: 'voice' }],
     ['stop', { origin: 'voice' }],
@@ -182,13 +219,27 @@ test('Cockpit entry exceptions are contained and restore prior tracking ownershi
   const result = enterCockpitWithTracking({
     cockpitView: {
       readAircraftInfo: () => ({ layerId: 'flights', icao24: 'current' }),
-      enter() { calls.push('enter'); throw new Error('entry exploded'); },
-      exit(options) { calls.push(['exit', options]); },
+      enter() {
+        calls.push('enter');
+        throw new Error('entry exploded');
+      },
+      exit(options) {
+        calls.push(['exit', options]);
+      },
     },
-    currentLayer: { stopTracking() { calls.push('current:stop'); } },
+    currentLayer: {
+      stopTracking() {
+        calls.push('current:stop');
+      },
+    },
     rollbackLayer: {
-      stopTracking() { calls.push('prior:stop'); },
-      trackById(id) { calls.push(`prior:track:${id}`); return true; },
+      stopTracking() {
+        calls.push('prior:stop');
+      },
+      trackById(id) {
+        calls.push(`prior:track:${id}`);
+        return true;
+      },
     },
     rollbackTarget: { layerId: 'military', id: 'prior' },
   });
@@ -210,15 +261,29 @@ test('a partially mutating selected tracker is stopped when acquisition throws',
       readAircraftInfo: () => ({ layerId: 'flights', icao24: 'current' }),
       enter: () => assert.fail('Cockpit entry must not follow failed tracking'),
     },
-    currentLayer: { stopTracking() { calls.push('current:stop'); } },
+    currentLayer: {
+      stopTracking() {
+        calls.push('current:stop');
+      },
+    },
     selectedLayer: {
-      trackById(id) { calls.push(`selected:track:${id}`); throw new Error('tracking exploded'); },
-      stopTracking() { calls.push('selected:stop'); },
+      trackById(id) {
+        calls.push(`selected:track:${id}`);
+        throw new Error('tracking exploded');
+      },
+      stopTracking() {
+        calls.push('selected:stop');
+      },
     },
     selectedTarget: { layerId: 'military', id: 'selected' },
     rollbackLayer: {
-      stopTracking() { calls.push('prior:stop'); },
-      trackById(id) { calls.push(`prior:track:${id}`); return true; },
+      stopTracking() {
+        calls.push('prior:stop');
+      },
+      trackById(id) {
+        calls.push(`prior:track:${id}`);
+        return true;
+      },
     },
     rollbackTarget: { layerId: 'flights', id: 'current' },
   });
@@ -237,9 +302,9 @@ test('aircraft tracking targets normalize either supported aircraft identifier',
     aircraftTrackingTarget({ layerId: 'flights', icao24: 'abc123' }),
     { layerId: 'flights', id: 'abc123' },
   );
-  assert.deepEqual(
-    aircraftTrackingTarget({ layerId: 'military', id: 42 }),
-    { layerId: 'military', id: '42' },
-  );
+  assert.deepEqual(aircraftTrackingTarget({ layerId: 'military', id: 42 }), {
+    layerId: 'military',
+    id: '42',
+  });
   assert.equal(aircraftTrackingTarget({ layerId: 'flights' }), null);
 });

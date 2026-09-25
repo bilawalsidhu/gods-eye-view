@@ -9,8 +9,12 @@ function fakeElement() {
     dataset: {},
     focused: false,
     id: '',
-    setAttribute(name, value) { attributes.set(name, String(value)); },
-    getAttribute(name) { return attributes.get(name) ?? null; },
+    setAttribute(name, value) {
+      attributes.set(name, String(value));
+    },
+    getAttribute(name) {
+      return attributes.get(name) ?? null;
+    },
     addEventListener(type, listener) {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(listener);
@@ -21,8 +25,12 @@ function fakeElement() {
         target: this,
         defaultPrevented: false,
         propagationStopped: false,
-        preventDefault() { this.defaultPrevented = true; },
-        stopPropagation() { this.propagationStopped = true; },
+        preventDefault() {
+          this.defaultPrevented = true;
+        },
+        stopPropagation() {
+          this.propagationStopped = true;
+        },
         ...event,
       };
       for (const listener of listeners.get(type) || []) listener(dispatched);
@@ -32,8 +40,12 @@ function fakeElement() {
       this.onclick?.();
       this.dispatch('click');
     },
-    focus() { this.focused = true; },
-    listenerCount(type) { return listeners.get(type)?.length || 0; },
+    focus() {
+      this.focused = true;
+    },
+    listenerCount(type) {
+      return listeners.get(type)?.length || 0;
+    },
   };
 }
 
@@ -47,7 +59,8 @@ function fixture() {
   lightbox.parentElement = overlay;
   const root = {
     querySelector(selector) {
-      if (selector === '#cesium-credits .cesium-credit-expand-link') return expand;
+      if (selector === '#cesium-credits .cesium-credit-expand-link')
+        return expand;
       if (selector === '.cesium-credit-lightbox') return lightbox;
       return null;
     },
@@ -71,8 +84,12 @@ test('Enter opens and closes attribution on initial keydown', () => {
   const f = fixture();
   let opened = 0;
   let closed = 0;
-  f.expand.onclick = () => { opened++; };
-  f.close.onclick = () => { closed++; };
+  f.expand.onclick = () => {
+    opened++;
+  };
+  f.close.onclick = () => {
+    closed++;
+  };
   configureCreditKeyboardAccess(f.root);
   const openEvent = f.expand.dispatch('keydown', { key: 'Enter' });
   assert.equal(openEvent.defaultPrevented, true);
@@ -90,8 +107,12 @@ test('Space opens and closes attribution only on key release', () => {
   const f = fixture();
   let opened = 0;
   let closed = 0;
-  f.expand.onclick = () => { opened++; };
-  f.close.onclick = () => { closed++; };
+  f.expand.onclick = () => {
+    opened++;
+  };
+  f.close.onclick = () => {
+    closed++;
+  };
   configureCreditKeyboardAccess(f.root);
 
   const openDown = f.expand.dispatch('keydown', { key: ' ' });
@@ -117,7 +138,9 @@ test('Space opens and closes attribution only on key release', () => {
 test('held activation keys do not repeat open or close actions', () => {
   const f = fixture();
   let opened = 0;
-  f.expand.onclick = () => { opened++; };
+  f.expand.onclick = () => {
+    opened++;
+  };
   configureCreditKeyboardAccess(f.root);
 
   f.expand.dispatch('keydown', { key: ' ' });
@@ -131,7 +154,9 @@ test('held activation keys do not repeat open or close actions', () => {
 
   const g = fixture();
   let enterOpened = 0;
-  g.expand.onclick = () => { enterOpened++; };
+  g.expand.onclick = () => {
+    enterOpened++;
+  };
   configureCreditKeyboardAccess(g.root);
   g.expand.dispatch('keydown', { key: 'Enter' });
   g.expand.dispatch('keydown', { key: 'Enter', repeat: true });
@@ -141,7 +166,9 @@ test('held activation keys do not repeat open or close actions', () => {
 test('losing focus during a Space hold cancels release activation', () => {
   const f = fixture();
   let opened = 0;
-  f.expand.onclick = () => { opened++; };
+  f.expand.onclick = () => {
+    opened++;
+  };
   configureCreditKeyboardAccess(f.root);
 
   f.expand.dispatch('keydown', { key: ' ' });
@@ -155,10 +182,15 @@ test('losing focus during a Space hold cancels release activation', () => {
 test('Escape and backdrop dismissal close attribution and restore its disclosure', () => {
   const f = fixture();
   let closed = 0;
-  f.close.onclick = () => { closed++; };
+  f.close.onclick = () => {
+    closed++;
+  };
   configureCreditKeyboardAccess(f.root);
   f.expand.click();
-  const escape = f.lightbox.dispatch('keydown', { key: 'Escape', target: f.close });
+  const escape = f.lightbox.dispatch('keydown', {
+    key: 'Escape',
+    target: f.close,
+  });
   assert.equal(escape.defaultPrevented, true);
   assert.equal(escape.propagationStopped, true);
   assert.equal(closed, 1);
@@ -184,5 +216,8 @@ test('credit keyboard setup is idempotent and safely declines incomplete markup'
   assert.equal(f.close.listenerCount('blur'), 1);
   assert.equal(f.lightbox.listenerCount('keydown'), 1);
   assert.equal(f.overlay.listenerCount('click'), 1);
-  assert.equal(configureCreditKeyboardAccess({ querySelector: () => null }), false);
+  assert.equal(
+    configureCreditKeyboardAccess({ querySelector: () => null }),
+    false,
+  );
 });

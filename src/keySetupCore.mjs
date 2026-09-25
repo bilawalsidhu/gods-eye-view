@@ -11,11 +11,11 @@
  * behavior below unit-testable.
  */
 
-/** Longest accepted key/token value. Real provider keys are all far shorter. */
-export const KEY_SETUP_VALUE_LIMIT = 512;
+/** Longest accepted key/token value (increased to 4096 to support multi-key pools). */
+export const KEY_SETUP_VALUE_LIMIT = 4096;
 
-/** Most env vars accepted in one save. The registry defines ten. */
-export const KEY_SETUP_UPDATE_LIMIT = 16;
+/** Most env vars accepted in one save. The registry defines eleven. */
+export const KEY_SETUP_UPDATE_LIMIT = 32;
 
 /** Header line written above keys the panel appends to a .env file. */
 export const KEY_SETUP_APPEND_HEADER =
@@ -56,6 +56,152 @@ export const KEY_SETUP_KEYS = Object.freeze([
     getUrl: 'https://platform.openai.com/api-keys',
     envVars: Object.freeze(['OPENAI_API_KEY']),
     tier: 'metered',
+  }),
+  Object.freeze({
+    id: 'nvidia',
+    title: 'FREE AI ENGINES (14 PROVIDERS)',
+    unlocks:
+      'Access 82+ frontier open-weight models (NVIDIA NIM, Requesty, Groq, Gemini, Mistral, Cerebras, etc.)',
+    getUrl: 'https://build.nvidia.com',
+    envVars: Object.freeze(['NVIDIA_API_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'nvidia-model',
+    title: 'NVIDIA NIM MODEL',
+    unlocks:
+      'Active NIM model (Nemotron 3.5, Ultra 550B, Kimi K3, Llama 3.3, DeepSeek R1)',
+    getUrl: 'https://build.nvidia.com/explore/discover',
+    envVars: Object.freeze(['NVIDIA_MODEL']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'nvidia-base-url',
+    title: 'FREE LLM BASE URL',
+    unlocks:
+      'OpenAI-compatible Base URL (NVIDIA NIM, Groq, Gemini, Mistral, Cerebras, OpenRouter)',
+    getUrl: 'https://github.com/mnfst/awesome-free-llm-apis',
+    envVars: Object.freeze(['NVIDIA_BASE_URL']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'requesty-key',
+    title: 'REQUESTY API KEY',
+    unlocks: 'Smart AI router for free LLM endpoints',
+    getUrl: 'https://requesty.ai',
+    envVars: Object.freeze(['REQUESTY_API_KEY']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'groq-key',
+    title: 'GROQ API KEY',
+    unlocks: 'Ultra-fast 500+ tokens/sec inference',
+    getUrl: 'https://console.groq.com/keys',
+    envVars: Object.freeze(['GROQ_API_KEY']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'gemini-key',
+    title: 'GOOGLE GEMINI API KEY',
+    unlocks: '1,500 free requests/day with 1M context',
+    getUrl: 'https://aistudio.google.com/app/apikey',
+    envVars: Object.freeze(['GEMINI_API_KEY']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'cerebras-key',
+    title: 'CEREBRAS API KEY',
+    unlocks: 'Wafer-scale 1,800 tokens/sec Llama 3.3',
+    getUrl: 'https://cloud.cerebras.ai/',
+    envVars: Object.freeze(['CEREBRAS_API_KEY']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'mistral-key',
+    title: 'MISTRAL API KEY',
+    unlocks: 'Sovereign European AI models',
+    getUrl: 'https://console.mistral.ai/api-keys',
+    envVars: Object.freeze(['MISTRAL_API_KEY']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'cohere-key',
+    title: 'COHERE API KEY',
+    unlocks: 'Command R+ & Aya models',
+    getUrl: 'https://dashboard.cohere.com/api-keys',
+    envVars: Object.freeze(['COHERE_API_KEY']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'aion-key',
+    title: 'AION LABS API KEY',
+    unlocks: '128K context reasoning',
+    getUrl: 'https://aionlabs.ai',
+    envVars: Object.freeze(['AION_API_KEY']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'zhipu-key',
+    title: 'ZHIPU API KEY',
+    unlocks: 'GLM-4 Flash permanent free tier',
+    getUrl: 'https://open.bigmodel.cn/',
+    envVars: Object.freeze(['ZHIPU_API_KEY']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'sambanova-key',
+    title: 'SAMBANOVA API KEY',
+    unlocks: 'SN40L accelerated Llama 3.3',
+    getUrl: 'https://cloud.sambanova.ai/',
+    envVars: Object.freeze(['SAMBANOVA_API_KEY']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'together-key',
+    title: 'TOGETHER API KEY',
+    unlocks: 'Llama 3.3 Turbo inference',
+    getUrl: 'https://api.together.ai',
+    envVars: Object.freeze(['TOGETHER_API_KEY']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'cloudflare-key',
+    title: 'CLOUDFLARE AI KEY',
+    unlocks: '10,000 neurons/day edge inference',
+    getUrl: 'https://dash.cloudflare.com',
+    envVars: Object.freeze(['CLOUDFLARE_API_KEY']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'openrouter-key',
+    title: 'OPENROUTER API KEY',
+    unlocks: '20+ free community models unified',
+    getUrl: 'https://openrouter.ai/keys',
+    envVars: Object.freeze(['OPENROUTER_API_KEY']),
+    tier: 'free',
+    hidden: true,
+  }),
+  Object.freeze({
+    id: 'manifest-key',
+    title: 'MANIFEST API KEY',
+    unlocks: 'Unified LLM gateway with smart multi-model routing & fallbacks',
+    getUrl: 'https://app.manifest.build',
+    envVars: Object.freeze(['MANIFEST_API_KEY']),
+    tier: 'free',
+    hidden: true,
   }),
   Object.freeze({
     id: 'aisstream',
@@ -359,15 +505,161 @@ export function isKeySetupExternallyManaged({
 }
 
 /**
+ * Resolves each free LLM provider's status individually so the UI can clearly
+ * differentiate which providers have keys saved, which do not, and which is active.
+ * Never leaks any credential values, suffixes, or secret material.
+ * @param {Record<string, string|undefined>} env e.g. process.env
+ */
+export function resolveProviderKeyStatuses(env = {}) {
+  const nvidiaKey = String(env.NVIDIA_API_KEY ?? '').trim();
+  const baseUrl = String(env.NVIDIA_BASE_URL ?? '')
+    .trim()
+    .toLowerCase();
+
+  const isReqKey = nvidiaKey.startsWith('rqsty-');
+  const isGroqKey = nvidiaKey.startsWith('gsk_');
+  const isCerebrasKey = nvidiaKey.startsWith('csk-');
+  const isGeminiKey = nvidiaKey.startsWith('AIzaSy');
+  const isOpenRouterKey = nvidiaKey.startsWith('sk-or-');
+  const isAionKey = nvidiaKey.startsWith('aion-');
+  const isManifestKey = nvidiaKey.startsWith('mnfst_');
+
+  const hasKey = (name) => String(env[name] ?? '').trim().length > 0;
+
+  const manifestSet =
+    hasKey('MANIFEST_API_KEY') ||
+    isManifestKey ||
+    (hasKey('NVIDIA_API_KEY') && baseUrl.includes('manifest.build'));
+  const requestySet =
+    hasKey('REQUESTY_API_KEY') ||
+    isReqKey ||
+    (hasKey('NVIDIA_API_KEY') && baseUrl.includes('requesty.ai'));
+  const groqSet =
+    hasKey('GROQ_API_KEY') ||
+    isGroqKey ||
+    (hasKey('NVIDIA_API_KEY') && baseUrl.includes('groq.com'));
+  const cerebrasSet =
+    hasKey('CEREBRAS_API_KEY') ||
+    isCerebrasKey ||
+    (hasKey('NVIDIA_API_KEY') && baseUrl.includes('cerebras.ai'));
+  const geminiSet =
+    hasKey('GEMINI_API_KEY') ||
+    isGeminiKey ||
+    (hasKey('NVIDIA_API_KEY') && baseUrl.includes('generativelanguage'));
+  const openrouterSet =
+    hasKey('OPENROUTER_API_KEY') ||
+    isOpenRouterKey ||
+    (hasKey('NVIDIA_API_KEY') && baseUrl.includes('openrouter.ai'));
+  const aionSet =
+    hasKey('AION_API_KEY') ||
+    isAionKey ||
+    (hasKey('NVIDIA_API_KEY') && baseUrl.includes('aionlabs.ai'));
+  const mistralSet =
+    hasKey('MISTRAL_API_KEY') ||
+    (hasKey('NVIDIA_API_KEY') && baseUrl.includes('mistral.ai'));
+  const cohereSet =
+    hasKey('COHERE_API_KEY') ||
+    (hasKey('NVIDIA_API_KEY') && baseUrl.includes('cohere.com'));
+  const zhipuSet =
+    hasKey('ZHIPU_API_KEY') ||
+    (hasKey('NVIDIA_API_KEY') && baseUrl.includes('bigmodel.cn'));
+  const sambanovaSet =
+    hasKey('SAMBANOVA_API_KEY') ||
+    (hasKey('NVIDIA_API_KEY') && baseUrl.includes('sambanova.ai'));
+  const togetherSet =
+    hasKey('TOGETHER_API_KEY') ||
+    (hasKey('NVIDIA_API_KEY') &&
+      (baseUrl.includes('together.xyz') || baseUrl.includes('together.ai')));
+  const cloudflareSet =
+    hasKey('CLOUDFLARE_API_KEY') ||
+    (hasKey('NVIDIA_API_KEY') && baseUrl.includes('cloudflare.com'));
+
+  const isThirdPartyKey =
+    isReqKey ||
+    isGroqKey ||
+    isCerebrasKey ||
+    isGeminiKey ||
+    isOpenRouterKey ||
+    isAionKey ||
+    isManifestKey;
+  const isThirdPartyUrl =
+    baseUrl.includes('requesty.ai') ||
+    baseUrl.includes('groq.com') ||
+    baseUrl.includes('cerebras.ai') ||
+    baseUrl.includes('generativelanguage') ||
+    baseUrl.includes('openrouter.ai') ||
+    baseUrl.includes('aionlabs.ai') ||
+    baseUrl.includes('mistral.ai') ||
+    baseUrl.includes('cohere.com') ||
+    baseUrl.includes('bigmodel.cn') ||
+    baseUrl.includes('sambanova.ai') ||
+    baseUrl.includes('together') ||
+    baseUrl.includes('cloudflare') ||
+    baseUrl.includes('manifest.build');
+
+  const isNvapi = nvidiaKey.startsWith('nvapi-');
+  const nvidiaSet =
+    hasKey('NVIDIA_API_KEY') &&
+    (isNvapi || (!isThirdPartyKey && !isThirdPartyUrl));
+
+  let activeId = 'nvidia';
+  if (baseUrl.includes('manifest.build') || isManifestKey)
+    activeId = 'manifest';
+  else if (baseUrl.includes('requesty.ai') || isReqKey) activeId = 'requesty';
+  else if (baseUrl.includes('groq.com') || isGroqKey) activeId = 'groq';
+  else if (baseUrl.includes('cerebras.ai') || isCerebrasKey)
+    activeId = 'cerebras';
+  else if (baseUrl.includes('generativelanguage') || isGeminiKey)
+    activeId = 'gemini';
+  else if (baseUrl.includes('openrouter.ai') || isOpenRouterKey)
+    activeId = 'openrouter';
+  else if (baseUrl.includes('aionlabs.ai') || isAionKey) activeId = 'aion';
+  else if (baseUrl.includes('mistral.ai')) activeId = 'mistral';
+  else if (baseUrl.includes('cohere.com')) activeId = 'cohere';
+  else if (baseUrl.includes('bigmodel.cn')) activeId = 'zhipu';
+  else if (baseUrl.includes('sambanova.ai')) activeId = 'sambanova';
+  else if (baseUrl.includes('together')) activeId = 'together';
+  else if (baseUrl.includes('cloudflare')) activeId = 'cloudflare';
+
+  return {
+    activeId,
+    providers: {
+      nvidia: { set: Boolean(nvidiaSet), envVar: 'NVIDIA_API_KEY' },
+      manifest: { set: Boolean(manifestSet), envVar: 'MANIFEST_API_KEY' },
+      requesty: { set: Boolean(requestySet), envVar: 'REQUESTY_API_KEY' },
+      groq: { set: Boolean(groqSet), envVar: 'GROQ_API_KEY' },
+      cerebras: { set: Boolean(cerebrasSet), envVar: 'CEREBRAS_API_KEY' },
+      gemini: { set: Boolean(geminiSet), envVar: 'GEMINI_API_KEY' },
+      mistral: { set: Boolean(mistralSet), envVar: 'MISTRAL_API_KEY' },
+      cohere: { set: Boolean(cohereSet), envVar: 'COHERE_API_KEY' },
+      aion: { set: Boolean(aionSet), envVar: 'AION_API_KEY' },
+      zhipu: { set: Boolean(zhipuSet), envVar: 'ZHIPU_API_KEY' },
+      sambanova: { set: Boolean(sambanovaSet), envVar: 'SAMBANOVA_API_KEY' },
+      together: { set: Boolean(togetherSet), envVar: 'TOGETHER_API_KEY' },
+      cloudflare: { set: Boolean(cloudflareSet), envVar: 'CLOUDFLARE_API_KEY' },
+      openrouter: { set: Boolean(openrouterSet), envVar: 'OPENROUTER_API_KEY' },
+    },
+  };
+}
+
+/**
  * Build the status payload the panel renders from: the registry, plus
  * per-entry `set` resolved against the given environment. It never includes
  * a value, suffix, or other credential material.
  * @param {Record<string, string|undefined>} env e.g. process.env
  */
 export function keySetupStatus(env = {}) {
+  const providerSummary = resolveProviderKeyStatuses(env);
   const keys = KEY_SETUP_KEYS.filter((entry) => !entry.hidden).map((entry) => {
-    const values = entry.envVars.map((name) => String(env[name] ?? '').trim());
-    const set = values.every((value) => value.length > 0);
+    let set;
+    if (entry.id === 'nvidia') {
+      set = Object.values(providerSummary.providers).some((p) => p.set);
+    } else {
+      const values = entry.envVars.map((name) =>
+        String(env[name] ?? '').trim(),
+      );
+      set = values.every((value) => value.length > 0);
+    }
     return {
       id: entry.id,
       title: entry.title,
@@ -381,6 +673,7 @@ export function keySetupStatus(env = {}) {
   });
   return {
     keys,
+    providerSummary,
     setCount: keys.filter((key) => key.set).length,
     total: keys.length,
   };

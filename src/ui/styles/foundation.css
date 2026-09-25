@@ -4,22 +4,44 @@
    ═══════════════════════════════════════════════ */
 
 :root {
-  --bg-dark: #0a0a0f;
-  --glass-bg: rgba(12, 12, 20, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-border-hover: rgba(255, 255, 255, 0.15);
-  --accent: #00d4ff;
-  --accent-dim: rgba(0, 212, 255, 0.15);
-  --accent-glow: rgba(0, 212, 255, 0.4);
-  --text-primary: #e8eaed;
-  --text-secondary: rgba(232, 234, 237, 0.5);
-  --text-dim: rgba(232, 234, 237, 0.3);
+  /* Stitch Orbital Aegis Telemetry — Deep Space Tactical Void */
+  --bg-dark: #040e16;
+  --surface: #051423;
+  --surface-container-lowest: #020f1e;
+  --surface-container-low: #0e1d2c;
+  --surface-container: #122130;
+  --surface-container-high: #1d2b3b;
+  --surface-container-highest: #283646;
+  --surface-bright: #2c3a4b;
+
+  --glass-bg: rgba(6, 21, 36, 0.82);
+  --glass-border: rgba(0, 240, 255, 0.18);
+  --glass-border-hover: rgba(0, 240, 255, 0.45);
+  --accent: #00f0ff;
+  --accent-dim: rgba(0, 240, 255, 0.15);
+  --accent-glow: rgba(0, 240, 255, 0.5);
+
+  --secondary: #ffb703;
+  --secondary-glow: rgba(255, 183, 3, 0.4);
+  --secondary-dim: rgba(255, 183, 3, 0.15);
+  --tertiary: #10b981;
+  --tertiary-dim: rgba(16, 185, 129, 0.2);
+  --alert-critical: #ef4444;
+
+  --outline: #849495;
+  --outline-variant: #3b494b;
+
+  --text-primary: #e8f4fc;
+  --text-secondary: #d5e4f9;
+  --text-dim: #849495;
+
   /* Opaque surface for browser-painted menus, which cannot use --glass-bg. */
   --menu-bg: #12121c;
+
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --panel-radius: 16px;
-  --btn-radius: 10px;
+  --panel-radius: 14px;
+  --btn-radius: 8px;
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
   --left-stack-x: 52px;
@@ -30,6 +52,96 @@
   --display-panel-expanded-width: 272px;
   --cockpit-radio-collapsed-width: 148px;
   --cockpit-radio-expanded-width: 232px;
+}
+
+/* ── Stitch Tactical HUD Reticles & Brackets ───── */
+.hud-corner {
+  position: relative;
+}
+.hud-corner::before,
+.hud-corner::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-color: var(--accent);
+  pointer-events: none;
+  z-index: 2;
+  transition: border-color var(--transition-fast);
+}
+.hud-corner::before {
+  top: 0;
+  left: 0;
+  border-top: 1.5px solid;
+  border-left: 1.5px solid;
+}
+.hud-corner::after {
+  bottom: 0;
+  right: 0;
+  border-bottom: 1.5px solid;
+  border-right: 1.5px solid;
+}
+
+/* CRT Scanlines and Tactical Grid */
+.crt-grid {
+  background-size: 32px 32px;
+  background-image:
+    linear-gradient(to right, rgba(0, 240, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 240, 255, 0.04) 1px, transparent 1px);
+}
+.crt-scanlines {
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 240, 255, 0.015) 3px
+  );
+}
+
+/* Tactical Pulse Beacon */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+}
+.pulse-beacon {
+  position: relative;
+}
+.pulse-beacon::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  border: 1px solid var(--accent);
+  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  pointer-events: none;
+}
+
+/* Radar Sweep Animation */
+@keyframes radar-sweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-radar-sweep {
+  animation: radar-sweep 4s linear infinite;
+}
+
+/* Monospace Tabular Telemetry */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 * {
@@ -671,4 +783,31 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   margin-top: 4px;
   text-shadow: 0 0 20px var(--accent-glow);
   transition: var(--transition-smooth);
+}
+
+.hud-telemetry-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  margin-bottom: 8px;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--btn-radius);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.hud-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  animation: pulse-ring 2s infinite;
 }
