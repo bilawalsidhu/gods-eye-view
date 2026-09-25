@@ -146,6 +146,7 @@ export async function requestSearchNews({
     response = await fetchImpl(url, {
       headers: { 'x-api-key': key, accept: 'application/json' },
       signal: AbortSignal.timeout(timeoutMs),
+      redirect: 'error',
     });
   } catch (error) {
     throw new WorldNewsUpstreamError(
