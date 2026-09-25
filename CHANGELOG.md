@@ -523,7 +523,7 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   caching limit), spends against a daily point governor
   (`WORLD_NEWS_DAILY_POINT_BUDGET`, default 40 of the free plan's 50) and
   answers `503 {error:'no_key'}` keyless. Adds the `WORLD_NEWS_API_KEY` POWER UP
-  entry, share-link token `y`, voice aliases and the required attribution
+  entry, share-link token `3`, voice aliases and the required attribution
   backlink. Keyless installs read KEY REQUIRED and make no upstream request.
 
 - DISPLAY ▸ Draw: draw on the world by hand. Pick Area, Line or Pin, click the

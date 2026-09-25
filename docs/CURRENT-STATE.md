@@ -1133,7 +1133,7 @@ outside the circle the operator asked about. The global feed stays title-only.
 
 The browser layer (`src/layers/worldNews/`, factory
 `src/app/layers/worldNews.js`, id `world-news`, panel group Events, share token
-`y`) aggregates headlines per place (coordinates rounded to three decimals),
+`3`) aggregates headlines per place (coordinates rounded to three decimals),
 sizes each pin by story count, colors it by tone band (rose ≤ −0.3, indigo,
 seafoam ≥ 0.3) and publishes the shared readout card on click. Fetches ADD to
 the map: NEWS IN VIEW appends the circle the camera frames (centre snapped to a
