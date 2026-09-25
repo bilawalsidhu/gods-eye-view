@@ -78,6 +78,23 @@ test('unknown-only v2 layer tokens are invalid, while historical l fields stay i
   }
 });
 
+test('malformed v2 layer lists mark the whole incoming share payload invalid', () => {
+  for (const layers of ['.f', 'f.', 'f..c', 'f.f']) {
+    const parsed = makeManager(
+      `#v=2&lat=10&lon=20&l=${layers}`,
+    ).parseInitialHash();
+    assert.equal(parsed.layerState, null, `l=${layers}`);
+    assert.equal(parsed.layerStateInvalid, true, `l=${layers}`);
+  }
+  for (const layers of ['l=f&l=f', 'l=f&l=unknown', 'l=&l=f']) {
+    const parsed = makeManager(
+      `#v=2&lat=10&lon=20&${layers}`,
+    ).parseInitialHash();
+    assert.equal(parsed.layerState, null, layers);
+    assert.equal(parsed.layerStateInvalid, true, layers);
+  }
+});
+
 test('Nepal locator token is valid in v2 share links', () => {
   const parsed = makeManager('#v=2&lat=10&lon=20&l=z').parseInitialHash();
   assert.deepEqual(parsed.layerState.enabledLayerIds, ['bhote-koshi-locator']);
