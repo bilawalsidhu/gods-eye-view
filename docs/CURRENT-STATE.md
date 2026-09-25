@@ -2280,9 +2280,9 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   style-switch persistence state. Browser/GPU performance comparison remains
 >   operator-side; the final accounting records only comparable population
 >   reductions and deterministic Node allocation/solve measurements. Those
->   allocation gates are calibrated on Node.js 24.14.x; `package.json` permits
->   supported product runtimes on Node 24 or 26, while the allocation runner
->   separately enforces Node 24 for these two calibrated probes. Each probe
+>   allocation gates are calibrated on both supported Node majors (24 and 26);
+>   `package.json` permits those same product runtimes, and the existing CI matrix
+>   executes the two calibrated probes on both entries. Each probe
 >   compiles synchronously and discards explicit-GC
 >   transition chunks before applying the unchanged byte ceilings. The unit
 >   runner executes ordinary test files with Node's default parallelism, then
@@ -3613,12 +3613,11 @@ silently demoting every later lookup for the session.
 
 > **Reading `npm test` totals:** the count depends on the Node major. The two
 > GC-bracketed allocation microbenchmarks (`src/data/focusAllocations.test.mjs`
-> = 1 test, `src/overlays/worldOverlayAllocation.test.mjs` = 13) only RUN on the
-> calibrated Node 24 runtime; on any other major the runner skips both files and
-> their 14 tests are absent from the total. A branch total quoted without its
-> Node version is therefore not reproducible. As of the fly_route cinematic
-> branch: **2,281 on Node 25.6.1** (allocation suites skipped) = 2,255 on
-> `main` + 26 route pins; the same tree on Node 24 reports 2,295.
+> = 1 test, `src/overlays/worldOverlayAllocation.test.mjs` = 13) RUN on both
+> supported Node 24 and Node 26. Unsupported majors may still skip those files
+> unless `GEV_REQUIRE_ALLOCATION_GATE=1` is set; every current supported CI
+> matrix entry is calibrated and therefore executes them. Historical totals recorded from unsupported Node 25
+> runs can therefore remain lower because their 14 allocation tests were skipped.
 
 - **Camera verbs** (`src/cameraVerbs.js`) — one motion slot, driven per clock tick. `move_camera` orbits/pans/tilts/rotates; `fly_route` is a cinematic dolly along an existing route annotation.
   - **The route dolly is shaped, not linear** (2026-08-20). A trapezoid speed profile (smoothstep up, cruise, smoothstep down, distance taken as the closed-form integral) eases both ends without changing the pace — duration is still `totalM / ROUTE_M_S[speed]`, with one exception: a 0.5 s minimum keeps a degenerate route from being an instant teleport, so routes under 10 m (slow) / 20 m (normal) / 45 m (fast) fly SLOWER than the speed word, never faster. Turns bank up to **10°** (a 90° street corner settles near 7.5°), measured as a triangular pulse over a 4 s window centred on the camera so the roll leads in and unwinds after. Altitude breathes ±20 m around the 260 m mean and lifts up to 26 m into turns. Pitch is LOCKED at −32°; heading comes from a gaze that leads the path by 6.5 s of travel. `prefers-reduced-motion` zeroes the roll and the altitude shaping and keeps the easing.
