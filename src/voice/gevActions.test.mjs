@@ -4367,22 +4367,46 @@ test('ALPR common names toggle only the registered camera layer through the norm
 });
 
 test('Local ADS-B common names toggle only the receiver layer through the normal voice action', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
-  const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const viewer = {
+    clock: { onTick: { addEventListener: () => () => {} } },
     scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } } };
+    camera: { moveEnd: { addEventListener() {} } },
+  };
   const calls = [];
   let enabled = false;
   const dataManager = {
     layers: new Map([['local-adsb', { module: {} }]]),
     getAll: () => [{ id: 'local-adsb', name: 'Local ADS-B' }],
     isEnabled: () => enabled,
-    setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
+    setEnabled: async (id, value) => {
+      calls.push([id, value]);
+      enabled = value;
+      return true;
+    },
   };
-  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
-  for (const alias of ['local-adsb', 'local ADS-B', 'Local ADSB', 'my receiver', 'my antenna', 'my SDR']) {
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager: {},
+    dataManager,
+  });
+  for (const alias of [
+    'local-adsb',
+    'local ADS-B',
+    'Local ADSB',
+    'my receiver',
+    'my antenna',
+    'my SDR',
+  ]) {
     for (const value of [true, false]) {
-      const result = await runner('set_layer_visibility', { layerId: alias, enabled: value });
+      const result = await runner('set_layer_visibility', {
+        layerId: alias,
+        enabled: value,
+      });
       assert.equal(result.ok, true);
       assert.equal(result.layerId, 'local-adsb');
       assert.deepEqual(calls.at(-1), ['local-adsb', value]);
@@ -4426,7 +4450,11 @@ test('ISS voice lookup uses the registered satellite instance', async () => {
 });
 
 test('analyst_query and get_current_view_state carry stale feed provenance', async () => {
-  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
   const now = Date.now();
   const flights = {
     id: 'flights',
@@ -4437,9 +4465,16 @@ test('analyst_query and get_current_view_state carry stale feed provenance', asy
       count: 12,
       lastUpdate: now - 240_000,
     }),
-    getAnalystRecords: () => ([
-      { id: 'SWA1', icao24: 'aaa001', lat: 30.27, lon: -97.74, altitudeM: 11000, onGround: false },
-    ]),
+    getAnalystRecords: () => [
+      {
+        id: 'SWA1',
+        icao24: 'aaa001',
+        lat: 30.27,
+        lon: -97.74,
+        altitudeM: 11000,
+        onGround: false,
+      },
+    ],
   };
   const viewer = {
     clock: { onTick: { addEventListener: () => () => {} } },
@@ -4447,19 +4482,25 @@ test('analyst_query and get_current_view_state carry stale feed provenance', asy
     camera: {
       moveEnd: { addEventListener() {} },
       positionWC: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 1000),
-      positionCartographic: { height: 300_000, latitude: 0.52, longitude: -1.71 },
+      positionCartographic: {
+        height: 300_000,
+        latitude: 0.52,
+        longitude: -1.71,
+      },
     },
   };
   const dataManager = {
     layers: new Map([['flights', { module: flights }]]),
     isEnabled: (id) => id === 'flights',
-    getAll: () => [{
-      id: 'flights',
-      name: 'Live Flights',
-      enabled: true,
-      source: 'OpenSky Network',
-      stats: flights.getStats(),
-    }],
+    getAll: () => [
+      {
+        id: 'flights',
+        name: 'Live Flights',
+        enabled: true,
+        source: 'OpenSky Network',
+        stats: flights.getStats(),
+      },
+    ],
   };
   const runner = createGevActionRunner({
     viewer,
@@ -4488,27 +4529,69 @@ test('analyst_query and get_current_view_state carry stale feed provenance', asy
   assert.match(query.feedProvenance.note, /do not describe this as live/i);
 });
 
-
 test('general satellite pass resolves once, refuses ambiguity, and preserves ISS call semantics', async () => {
   const calls = [];
-  const pass = { riseMs: Date.now() + 60000, setMs: Date.now() + 360000, maxElevMs: Date.now() + 180000, maxElevDeg: 30, riseAzDeg: 90, visible: false };
-  const layer = {
-    resolveSatelliteForPass(target) { return target === 'starlink' ? { status: 'ambiguous', candidates: [{ noradId: 1 }, { noradId: 2 }] } : { status: 'ok', noradId: 25544, name: 'ISS' }; },
-    getNextSatellitePass(id, options) { calls.push({ id, ...options }); return { status: 'ok', pass }; },
-    getNextIssPass(options) { calls.push(options); return { status: 'ok', pass }; },
+  const pass = {
+    riseMs: Date.now() + 60000,
+    setMs: Date.now() + 360000,
+    maxElevMs: Date.now() + 180000,
+    maxElevDeg: 30,
+    riseAzDeg: 90,
+    visible: false,
   };
-  const viewer = { clock: { onTick: { addEventListener: () => () => {} } }, scene: { canvas: { addEventListener() {}, removeEventListener() {} } }, camera: { moveEnd: { addEventListener() {} } } };
-  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager: { layers: new Map([['satellites', { module: layer }]]) } });
+  const layer = {
+    resolveSatelliteForPass(target) {
+      return target === 'starlink'
+        ? { status: 'ambiguous', candidates: [{ noradId: 1 }, { noradId: 2 }] }
+        : { status: 'ok', noradId: 25544, name: 'ISS' };
+    },
+    getNextSatellitePass(id, options) {
+      calls.push({ id, ...options });
+      return { status: 'ok', pass };
+    },
+    getNextIssPass(options) {
+      calls.push(options);
+      return { status: 'ok', pass };
+    },
+  };
+  const viewer = {
+    clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } },
+  };
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager: {},
+    dataManager: { layers: new Map([['satellites', { module: layer }]]) },
+  });
   const ambiguous = await runner('next_satellite_pass', { target: 'starlink' });
   assert.equal(ambiguous.status, 'ambiguous');
   assert.equal(calls.length, 0);
   const args = { latitude: 30, longitude: -97, minElevationDeg: 15 };
-  const general = await runner('next_satellite_pass', { target: '25544', visibleOnly: true, ...args });
+  const general = await runner('next_satellite_pass', {
+    target: '25544',
+    visibleOnly: true,
+    ...args,
+  });
   assert.equal(general.action, 'next_satellite_pass');
-  assert.deepEqual(calls[0], { id: 25544, latDeg: 30, lonDeg: -97, minElevDeg: 15, requireVisible: true });
+  assert.deepEqual(calls[0], {
+    id: 25544,
+    latDeg: 30,
+    lonDeg: -97,
+    minElevDeg: 15,
+    requireVisible: true,
+  });
   const iss = await runner('next_iss_pass', args);
   assert.deepEqual(calls[1], { latDeg: 30, lonDeg: -97, minElevDeg: 15 });
-  for (const key of ['observer', 'riseIso', 'minutesFromNow', 'durationMin', 'peakElevationDeg', 'riseDirection']) assert.deepEqual(iss[key], general[key]);
+  for (const key of [
+    'observer',
+    'riseIso',
+    'minutesFromNow',
+    'durationMin',
+    'peakElevationDeg',
+    'riseDirection',
+  ])
+    assert.deepEqual(iss[key], general[key]);
   assert.equal(iss.visible, false);
   assert.equal(iss.action, 'next_iss_pass');
 });

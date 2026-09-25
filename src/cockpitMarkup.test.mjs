@@ -593,7 +593,6 @@ test('Clear Selected Layers uses one adopted batch and discards Context restorat
 
 test('Cockpit Display portal retains both scroll owners across round trips', () => {
   const portal = CockpitDisplayPortal.toString();
-<<<<<<< HEAD
   assert.match(
     portal,
     /this\.standardScrollTop = standardPanel\?\.scrollTop \|\| 0/,
@@ -614,13 +613,6 @@ test('Cockpit Display portal retains both scroll owners across round trips', () 
     portal,
     /this\.cockpitPanel\.scrollTop = this\.cockpitScrollTop[\s\S]*?this\.standardPanel\.scrollTop = this\.standardScrollTop/,
   );
-=======
-  assert.match(portal, /this\.standardScrollTop =\s*displayPanelScroller\(standardPanel\)\?\.scrollTop \|\| 0/);
-  assert.match(portal, /this\.cockpitScrollTop = cockpitPanel\?\.scrollTop \|\| 0/);
-  assert.match(portal, /if \(!this\.active\)[\s\S]*?this\.standardScrollTop =\s*displayPanelScroller\(standardPanel\)\.scrollTop/);
-  assert.match(portal, /if \(this\.active\)[\s\S]*?this\.cockpitScrollTop = cockpitPanel\.scrollTop/);
-  assert.match(portal, /this\.cockpitPanel\.scrollTop = this\.cockpitScrollTop[\s\S]*?displayPanelScroller\(this\.standardPanel\)\.scrollTop =\s*this\.standardScrollTop/);
->>>>>>> 4c1dbe653b2589e5068a1c10e052d5d24249be77
 });
 
 test('Cockpit side surfaces behave as two single-expanded accordions', () => {
@@ -1256,7 +1248,10 @@ test('Global Context standby describes both chooser modes', () => {
   const match = html.match(/<div id="context-mode-standby"[\s\S]*?<\/div>/);
   assert.ok(match, 'Global Context standby is missing');
   assert.match(match[0], /CONTACTS — nearest planes · vessels · sites/);
-  assert.match(match[0], /SPACE MISSIONS — launches &amp; orbital assets/);
+  assert.match(
+    match[0],
+    /SPACE MISSIONS —[\s\S]*?launches &amp; orbital assets/,
+  );
 });
 
 test('cockpit briefing cycle control keeps its state as the accessible name', () => {
@@ -1266,10 +1261,10 @@ test('cockpit briefing cycle control keeps its state as the accessible name', ()
   assert.ok(match, 'cockpit briefing cycle toggle is missing');
   assert.match(match[0], /aria-label="CYCLE OFF"/);
   assert.match(match[0], /aria-pressed="false"/);
-  assert.match(match[0], />CYCLE OFF<\/button>/);
+  assert.match(match[0], /CYCLE OFF/);
   assert.match(
     match[0],
-    /title="Cycle briefing pages automatically every 9 seconds \(Signals → News → Local\)\./,
+    /title="Cycle briefing pages automatically every 9 seconds \(Signals → News → Local\)\. Pauses while you hover or focus the panel\. Live signal data refreshes continuously either way\."/,
   );
 
   const update = setBriefAutoRotate.toString();

@@ -34,7 +34,7 @@ test('Contacts and Space Missions both participate in the ordinary Tab sequence'
     'global-context-missions-btn',
   ]) {
     const button = html.match(
-      new RegExp(`<button id="${id}"[\\s\\S]*?</button>`),
+      new RegExp(`<button[^>]*\\bid="${id}"[\\s\\S]*?</button>`),
     );
     assert.ok(button, `${id} is missing`);
     assert.match(button[0], /role="tab"/);

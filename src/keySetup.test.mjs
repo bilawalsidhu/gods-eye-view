@@ -10,24 +10,43 @@ import {
 test('setup placement moves the same button only in Cyber and disconnects on teardown', () => {
   const home = {};
   const chip = { parentNode: home, hidden: true };
-  const root = { parentNode: home, before: (node) => { node.parentNode = home; } };
+  const root = {
+    parentNode: home,
+    before: (node) => {
+      node.parentNode = home;
+    },
+  };
   let moves = 0;
-  const toolbar = { append: (node) => { moves++; node.parentNode = toolbar; } };
+  const toolbar = {
+    append: (node) => {
+      moves++;
+      node.parentNode = toolbar;
+    },
+  };
   const theme = { dataset: { uiTheme: 'tactical' } };
-  let notify, disconnected = false;
+  let notify,
+    disconnected = false;
   class Observer {
-    constructor(callback) { notify = callback; }
+    constructor(callback) {
+      notify = callback;
+    }
     observe(target, options) {
       assert.equal(target, theme);
       assert.deepEqual(options.attributeFilter, ['data-ui-theme']);
     }
-    disconnect() { disconnected = true; }
+    disconnect() {
+      disconnected = true;
+    }
   }
-  const dispose = bindKeySetupPlacement({
-    documentElement: theme,
-    getElementById: () => toolbar,
-    defaultView: { MutationObserver: Observer },
-  }, chip, root);
+  const dispose = bindKeySetupPlacement(
+    {
+      documentElement: theme,
+      getElementById: () => toolbar,
+      defaultView: { MutationObserver: Observer },
+    },
+    chip,
+    root,
+  );
   assert.equal(chip.parentNode, home);
   for (const variant of ['cyber', 'operator', 'cyber', 'minimal']) {
     theme.dataset.uiTheme = variant;

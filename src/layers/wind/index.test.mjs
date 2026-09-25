@@ -278,12 +278,18 @@ test('renderer readiness pushes fresh loading stats and controls to the displaye
   await update;
   assert.equal(displayed.loading, true);
   assert.match(displayed.info, /Valid: [^\n]+ · preparing/);
-  assert.equal(displayed.info.split('\n').length, loadingInfo.split('\n').length);
+  assert.equal(
+    displayed.info.split('\n').length,
+    loadingInfo.split('\n').length,
+  );
   ready = true;
   statusChanged();
   assert.equal(displayed.loading, false);
   assert.doesNotMatch(displayed.info, / · preparing| · loading/);
-  assert.equal(displayed.info.split('\n').length, loadingInfo.split('\n').length);
+  assert.equal(
+    displayed.info.split('\n').length,
+    loadingInfo.split('\n').length,
+  );
   layer.destroy();
 });
 
@@ -297,7 +303,11 @@ test('weather summary describes the selected forecast and count remains numeric'
   assert.equal(summary.units, 'km/h');
   assert.match(summary.detail, /GFS forecast.*UTC/);
   assert.equal((summary.detail.match(/UTC/g) || []).length, 1);
-  assert.equal(layer.getRowControls().chips.find(c => c.id === 'overlay-temperature').label, 'Temperature');
+  assert.equal(
+    layer.getRowControls().chips.find((c) => c.id === 'overlay-temperature')
+      .label,
+    'Temperature',
+  );
   layer.destroy();
 });
 
@@ -306,31 +316,69 @@ test('sample stays fixed across model, field and unit changes; dismissal and dis
   let listener;
   let samples = 0;
   const container = {
-    ownerDocument: { createElement: () => ({ style: {}, setAttribute() {}, remove() { nodes.splice(nodes.indexOf(this), 1); } }) },
-    appendChild(node) { nodes.push(node); },
+    ownerDocument: {
+      createElement: () => ({
+        style: {},
+        setAttribute() {},
+        remove() {
+          nodes.splice(nodes.indexOf(this), 1);
+        },
+      }),
+    },
+    appendChild(node) {
+      nodes.push(node);
+    },
     getBoundingClientRect: () => ({ left: 0, top: 0 }),
   };
   const viewer = {
     container,
-    camera: { positionWC: {}, pickEllipsoid: () => { samples++; return { longitude: 0, latitude: 0 }; } },
+    camera: {
+      positionWC: {},
+      pickEllipsoid: () => {
+        samples++;
+        return { longitude: 0, latitude: 0 };
+      },
+    },
     scene: {
       mode: 3,
-      canvas: { clientWidth: 800, clientHeight: 600, getBoundingClientRect: () => ({ left: 0, top: 0 }) },
+      canvas: {
+        clientWidth: 800,
+        clientHeight: 600,
+        getBoundingClientRect: () => ({ left: 0, top: 0 }),
+      },
       cartesianToCanvasCoordinates: () => ({ x: 400, y: 300 }),
-      postRender: { addEventListener(fn) { listener = fn; return () => { listener = null; }; } },
+      postRender: {
+        addEventListener(fn) {
+          listener = fn;
+          return () => {
+            listener = null;
+          };
+        },
+      },
       requestRender() {},
     },
   };
-  const rendering = Object.fromEntries(['attach', 'start', 'stop', 'clear', 'destroy', 'setField'].map(name => [name, () => {}]));
+  const rendering = Object.fromEntries(
+    ['attach', 'start', 'stop', 'clear', 'destroy', 'setField'].map((name) => [
+      name,
+      () => {},
+    ]),
+  );
   const layer = createWindLayer({
     feed: { getSnapshot: async ({ model }) => complete(model) },
     cesium: {
-      Cartesian2: class {}, Ellipsoid: { WGS84: {} }, SceneMode: { SCENE3D: 3 },
-      Cartographic: { fromCartesian: point => point }, Math: { toDegrees: value => value },
-      EllipsoidalOccluder: class { isPointVisible() { return true; } },
+      Cartesian2: class {},
+      Ellipsoid: { WGS84: {} },
+      SceneMode: { SCENE3D: 3 },
+      Cartographic: { fromCartesian: (point) => point },
+      Math: { toDegrees: (value) => value },
+      EllipsoidalOccluder: class {
+        isPointVisible() {
+          return true;
+        }
+      },
     },
     createRendering: () => rendering,
-
   });
   layer.init(viewer);
   layer.enable();
@@ -347,26 +395,52 @@ test('sample stays fixed across model, field and unit changes; dismissal and dis
   assert.match(changed.wind, /mph/);
   assert.equal(samples, 1, 'units do not resample');
   assert.equal(layer.getRowControls().summary.result.id, 'reading');
-  assert.deepEqual(layer.getRowControls().summary.settings.map(({ label }) => label), ['MODEL', 'FIELD', 'UNITS', 'MOTION']);
+  assert.deepEqual(
+    layer.getRowControls().summary.settings.map(({ label }) => label),
+    ['MODEL', 'FIELD', 'UNITS', 'MOTION'],
+  );
   assert.equal(nodes.length, 1);
   assert.equal(typeof listener, 'function');
-  viewer.camera.pickEllipsoid = () => { samples++; return { longitude: 70, latitude: 20 }; };
+  viewer.camera.pickEllipsoid = () => {
+    samples++;
+    return { longitude: 70, latitude: 20 };
+  };
   layer.setParams({ overlay: 'speed' });
-  assert.equal(layer.getRowControls().summary.reading.coordinates, captured.coordinates);
+  assert.equal(
+    layer.getRowControls().summary.reading.coordinates,
+    captured.coordinates,
+  );
   layer.setParams({ model: 'ifs' });
-  await new Promise(resolve => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
   const resampled = layer.getRowControls().summary.reading;
   assert.equal(resampled.coordinates, captured.coordinates);
   assert.equal(resampled.model, 'ECMWF');
   assert.equal(resampled.position, captured.position);
-  assert.equal(samples, 1, 'model and field changes never sample the moved camera');
-  assert.match(layer.getRowControls().summary.result.lines.find(({ id }) => id === 'meta').text, /ECMWF · valid/);
+  assert.equal(
+    samples,
+    1,
+    'model and field changes never sample the moved camera',
+  );
+  assert.match(
+    layer.getRowControls().summary.result.lines.find(({ id }) => id === 'meta')
+      .text,
+    /ECMWF · valid/,
+  );
   await layer.update();
-  assert.equal(layer.getRowControls().summary.reading.coordinates, captured.coordinates);
+  assert.equal(
+    layer.getRowControls().summary.reading.coordinates,
+    captured.coordinates,
+  );
   layer.setParams({ inspect: true });
-  assert.equal(layer.getRowControls().summary.reading.coordinates, '20.00°N · 70.00°E');
+  assert.equal(
+    layer.getRowControls().summary.reading.coordinates,
+    '20.00°N · 70.00°E',
+  );
   assert.equal(samples, 2, 'the next explicit read samples the new center');
-  for (const change of [() => layer.setParams({ inspect: false }), () => layer.disable()]) {
+  for (const change of [
+    () => layer.setParams({ inspect: false }),
+    () => layer.disable(),
+  ]) {
     layer.setParams({ inspect: true });
     assert.equal(nodes.length, 1);
     change();
@@ -381,14 +455,24 @@ test('sample stays fixed across model, field and unit changes; dismissal and dis
 test('observed history labels wind as a forecast without changing its data or parameters', async () => {
   const { createWeatherClock } = await import('../weather/clock.js');
   const clock = createWeatherClock();
-  const layer = createWindLayer({ feed: { getSnapshot: async () => snapshot('gfs') }, clock });
+  const layer = createWindLayer({
+    feed: { getSnapshot: async () => snapshot('gfs') },
+    clock,
+  });
   let changes = 0;
   layer.setRowControlsListener(() => changes++);
   const params = layer.getParams();
   await clock.setTarget('2026-09-14T12:00:00.000Z');
-  assert.equal(layer.getRowControls().summary.status, null, 'history does not mask source status');
+  assert.equal(
+    layer.getRowControls().summary.status,
+    null,
+    'history does not mask source status',
+  );
   assert.ok(changes > 0);
-  assert.match(layer.getRowControls().info, /Forecast · does not follow history/);
+  assert.match(
+    layer.getRowControls().info,
+    /Forecast · does not follow history/,
+  );
   assert.deepEqual(layer.getParams(), params);
   await clock.latest();
   assert.equal(layer.getRowControls().summary.status, null);
@@ -400,15 +484,42 @@ test('observed history labels wind as a forecast without changing its data or pa
 });
 
 test('wind unit chips appear only alongside a speed legend, including canvas trails', async () => {
-  let renderMode = 'gpu-streamlines'; let imageryError = null;
-  const layer = createWindLayer({ feed: { getSnapshot: async () => complete('gfs') }, createRendering: () => ({ attach() {}, start() {}, clear() {}, setField() {}, setOptions() {}, getDiagnostics: () => ({ renderMode, imageryError }), stop() {}, destroy() {} }) });
-  layer.init({ container: {} }); layer.enable(); await layer.update();
-  const unitChips = () => layer.getRowControls().chips.filter(({ id }) => id.startsWith('units-'));
-  assert.equal(layer.getRowControls().readout, true); assert.equal(layer.getRowControls().summary.coverage, 'Global · 1° grid');
-  assert.deepEqual(unitChips(), []); assert.deepEqual(layer.getRowControls().legend, []);
-  renderMode = 'canvas-fallback'; assert.equal(unitChips().length, 3); assert.ok(layer.getRowControls().legend.length);
-  renderMode = 'gpu-streamlines'; layer.setParams({ overlay: 'speed' }); assert.equal(unitChips().length, 3);
-  imageryError = 'Unavailable'; assert.deepEqual(unitChips(), []); imageryError = null;
-  for (const overlay of ['pressure', 'temperature', 'none']) { layer.setParams({ overlay }); assert.deepEqual(unitChips(), []); }
+  let renderMode = 'gpu-streamlines';
+  let imageryError = null;
+  const layer = createWindLayer({
+    feed: { getSnapshot: async () => complete('gfs') },
+    createRendering: () => ({
+      attach() {},
+      start() {},
+      clear() {},
+      setField() {},
+      setOptions() {},
+      getDiagnostics: () => ({ renderMode, imageryError }),
+      stop() {},
+      destroy() {},
+    }),
+  });
+  layer.init({ container: {} });
+  layer.enable();
+  await layer.update();
+  const unitChips = () =>
+    layer.getRowControls().chips.filter(({ id }) => id.startsWith('units-'));
+  assert.equal(layer.getRowControls().readout, true);
+  assert.equal(layer.getRowControls().summary.coverage, 'Global · 1° grid');
+  assert.deepEqual(unitChips(), []);
+  assert.deepEqual(layer.getRowControls().legend, []);
+  renderMode = 'canvas-fallback';
+  assert.equal(unitChips().length, 3);
+  assert.ok(layer.getRowControls().legend.length);
+  renderMode = 'gpu-streamlines';
+  layer.setParams({ overlay: 'speed' });
+  assert.equal(unitChips().length, 3);
+  imageryError = 'Unavailable';
+  assert.deepEqual(unitChips(), []);
+  imageryError = null;
+  for (const overlay of ['pressure', 'temperature', 'none']) {
+    layer.setParams({ overlay });
+    assert.deepEqual(unitChips(), []);
+  }
   layer.destroy();
 });

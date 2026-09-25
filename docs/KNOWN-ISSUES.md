@@ -88,6 +88,7 @@ Status: Open (owner-accepted 2026-07-08, documented)
 ---
 
 ### Weather layers: coverage and meaning
+
 Status: Open (source limits, by design)
 
 - **Rain radar covers the contiguous United States only.** It shows MRMS
@@ -116,6 +117,7 @@ Status: Open (source limits, by design)
 ---
 
 ### Satellite passes and analyst answers
+
 Status: Open (by design)
 
 - Pass predictions search the next 24 hours for satellites in the loaded catalog.
@@ -128,6 +130,7 @@ Status: Open (by design)
 ---
 
 ### Live camera video (HLS)
+
 Status: Open (limits)
 
 - At most two live-video sessions run at once. RTMP-only sources and encrypted,
@@ -190,9 +193,11 @@ Context:
 ---
 
 ### Weather radar held out of the open-source release
+
 Status: Closed — observed rain radar shipped (September 2026)
 
 Context:
+
 - Rain radar, Satellite clouds, Lightning density, Wind and Cyclone advisories
   are in the Weather group of Data Layers. Their current limits are listed under
   "Weather layers: coverage and meaning" above.

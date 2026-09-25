@@ -15,10 +15,20 @@ test('Cyber shared panel slot reserves both footer lanes above the decorative fr
     for (const signalHeight of [44, 76]) {
       for (const contactHeight of [44, 84, 120]) {
         const top = Math.max(164, Math.min(204, viewportHeight * 0.19));
-        const lane = resolveCyberCockpitPanelLane({ viewportHeight, top, signalHeight, contactHeight });
+        const lane = resolveCyberCockpitPanelLane({
+          viewportHeight,
+          top,
+          signalHeight,
+          contactHeight,
+        });
         assert.ok(lane.panelHeight >= 120);
-        assert.ok(top + lane.panelHeight + 8 + contactHeight <= viewportHeight * 0.82 + .01);
-        assert.ok(lane.signalTop + signalHeight <= viewportHeight * 0.82 + .01);
+        assert.ok(
+          top + lane.panelHeight + 8 + contactHeight <=
+            viewportHeight * 0.82 + 0.01,
+        );
+        assert.ok(
+          lane.signalTop + signalHeight <= viewportHeight * 0.82 + 0.01,
+        );
         assert.equal(lane.signalTop, top + lane.utilityHeight + 8);
       }
     }
@@ -29,18 +39,34 @@ test('Cyber keeps the Data Layers top while reserving briefing clearance', () =>
   for (const viewportHeight of [673, 713, 986, 1376]) {
     const leftTop = Math.max(164, Math.min(204, viewportHeight * 0.19));
     const collapsed = resolveCockpitUtilityAnchor({
-      viewportHeight, stripHeight: 128, collapsedHeight: 60, recBottom: 0,
-      signalTop: leftTop + 128 + 28, minTopFloor: leftTop, minTopRatio: 0,
+      viewportHeight,
+      stripHeight: 128,
+      collapsedHeight: 60,
+      recBottom: 0,
+      signalTop: leftTop + 128 + 28,
+      minTopFloor: leftTop,
+      minTopRatio: 0,
     });
     assert.equal(collapsed.top, leftTop);
     assert.ok(collapsed.maxHeight >= 128);
     const expanded = resolveCockpitUtilityAnchor({
-      viewportHeight, stripHeight: 700, collapsedHeight: 60, recBottom: 0,
-      signalTop: 255, minTopFloor: leftTop, minTopRatio: 0,
-      signalCollapsed: true, utilityExpanded: true, reserveViewportLane: true, signalHeight: 44,
+      viewportHeight,
+      stripHeight: 700,
+      collapsedHeight: 60,
+      recBottom: 0,
+      signalTop: 255,
+      minTopFloor: leftTop,
+      minTopRatio: 0,
+      signalCollapsed: true,
+      utilityExpanded: true,
+      reserveViewportLane: true,
+      signalHeight: 44,
     });
     assert.equal(expanded.top, leftTop);
-    assert.equal(expanded.top + expanded.maxHeight + 8 + 44 + 80, viewportHeight);
+    assert.equal(
+      expanded.top + expanded.maxHeight + 8 + 44 + 80,
+      viewportHeight,
+    );
   }
 });
 
@@ -48,8 +74,14 @@ test('expanded utilities reserve the visible collapsed briefing header at every 
   for (const viewportHeight of [640, 720, 987, 1376]) {
     for (const signalHeight of [48, 76, 100]) {
       const { top, maxHeight } = resolveCockpitUtilityAnchor({
-        ...desktop, viewportHeight, recBottom: 0, signalTop: 255,
-        signalCollapsed: true, utilityExpanded: true, signalHeight, reserveViewportLane: true,
+        ...desktop,
+        viewportHeight,
+        recBottom: 0,
+        signalTop: 255,
+        signalCollapsed: true,
+        utilityExpanded: true,
+        signalHeight,
+        reserveViewportLane: true,
       });
       assert.equal(top + maxHeight + 8, viewportHeight - 80 - signalHeight);
     }
@@ -124,8 +156,11 @@ test('an expanded utility claims the vertical lane released by a collapsed brief
 
 test('non-relocating themes preserve the visible briefing boundary even when collapsed', () => {
   const { top, maxHeight } = resolveCockpitUtilityAnchor({
-    ...desktop, recBottom: 148.1, signalTop: 265.4,
-    signalCollapsed: true, utilityExpanded: true,
+    ...desktop,
+    recBottom: 148.1,
+    signalTop: 265.4,
+    signalCollapsed: true,
+    utilityExpanded: true,
   });
   assert.equal(Number((top + maxHeight).toFixed(1)), 257.4);
 });

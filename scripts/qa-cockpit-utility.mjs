@@ -2420,11 +2420,11 @@ try {
   });
   check(
     'Cyber expanding Radio preserves the authored Display-then-Radio order',
-    !cyberRadioOrder.displayExpanded
-      && cyberRadioOrder.radioExpanded
-      && cyberRadioOrder.display.height > 0
-      && cyberRadioOrder.radio.height > 0
-      && cyberRadioOrder.gap >= 7,
+    !cyberRadioOrder.displayExpanded &&
+      cyberRadioOrder.radioExpanded &&
+      cyberRadioOrder.display.height > 0 &&
+      cyberRadioOrder.radio.height > 0 &&
+      cyberRadioOrder.gap >= 7,
     JSON.stringify(cyberRadioOrder),
   );
   await page.screenshot({ path: path.join(shotsDir, 'cyber-radio-order.png') });
@@ -2449,38 +2449,64 @@ try {
     }
     return states;
   });
-  check('Cockpit visual-style controls retain Cyber HUD, selector, shell and saved layout',
-    cyberStyleStates.every(state => state.activeStyle === state.requestedStyle
-      && state.hud === 'cyber' && state.theme === 'cyber'
-      && state.selector === 'cyber' && state.savedHud === 'cyber'),
-    JSON.stringify(cyberStyleStates));
+  check(
+    'Cockpit visual-style controls retain Cyber HUD, selector, shell and saved layout',
+    cyberStyleStates.every(
+      (state) =>
+        state.activeStyle === state.requestedStyle &&
+        state.hud === 'cyber' &&
+        state.theme === 'cyber' &&
+        state.selector === 'cyber' &&
+        state.savedHud === 'cyber',
+    ),
+    JSON.stringify(cyberStyleStates),
+  );
   for (const height of [987, 720, 640, 900]) {
     await page.setViewport({ width: 1440, height, deviceScaleFactor: 1 });
     await new Promise((resolve) => setTimeout(resolve, 400));
     const geometry = await page.evaluate(() => {
       const signal = document.getElementById('cockpit-signal-stream');
       const utility = document.getElementById('cockpit-utility-controls');
-      const expanded = utility.querySelector('.cockpit-utility-control.is-expanded');
+      const expanded = utility.querySelector(
+        '.cockpit-utility-control.is-expanded',
+      );
       const s = signal.getBoundingClientRect();
       const u = expanded.getBoundingClientRect();
       const toggle = document.getElementById('cockpit-signal-toggle');
       const t = toggle.getBoundingClientRect();
-      const hit = document.elementFromPoint(t.x + t.width / 2, t.y + t.height / 2);
-      return { height: innerHeight, theme: document.documentElement.dataset.uiTheme,
-        collapsed: signal.dataset.collapsed, signal: s.toJSON(), utility: u.toJSON(),
+      const hit = document.elementFromPoint(
+        t.x + t.width / 2,
+        t.y + t.height / 2,
+      );
+      return {
+        height: innerHeight,
+        theme: document.documentElement.dataset.uiTheme,
+        collapsed: signal.dataset.collapsed,
+        signal: s.toJSON(),
+        utility: u.toJSON(),
         reachable: Boolean(hit && toggle.contains(hit)),
         contained: u.bottom <= s.top - 7 && s.bottom < innerHeight,
       };
     });
-    check(`Cyber collapsed Live Signals remains visible and reachable after resize to ${height}px`,
-      geometry.theme === 'cyber' && geometry.collapsed === 'true'
-        && geometry.signal.width > 0 && geometry.signal.height > 0
-        && geometry.reachable && geometry.contained, JSON.stringify(geometry));
+    check(
+      `Cyber collapsed Live Signals remains visible and reachable after resize to ${height}px`,
+      geometry.theme === 'cyber' &&
+        geometry.collapsed === 'true' &&
+        geometry.signal.width > 0 &&
+        geometry.signal.height > 0 &&
+        geometry.reachable &&
+        geometry.contained,
+      JSON.stringify(geometry),
+    );
     if (height === 640 || height === 900) {
-      await page.screenshot({ path: path.join(shotsDir, `cyber-resize-${height}.png`) });
+      await page.screenshot({
+        path: path.join(shotsDir, `cyber-resize-${height}.png`),
+      });
     }
   }
-  await page.evaluate(() => window.__godsEyeView.styleManager._setHudVariant('operator'));
+  await page.evaluate(() =>
+    window.__godsEyeView.styleManager._setHudVariant('operator'),
+  );
 
   const signalTransition = await page.evaluate(() => {
     const manager = window.__godsEyeView.styleManager;

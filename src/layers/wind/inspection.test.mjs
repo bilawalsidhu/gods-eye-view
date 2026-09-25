@@ -66,23 +66,53 @@ test('inspection marker follows only its captured point, hides beyond limb, and 
   const projected = [];
   const nodes = [];
   const container = {
-    ownerDocument: { createElement: () => ({ style: {}, setAttribute() {}, remove() { nodes.splice(nodes.indexOf(this), 1); } }) },
-    appendChild(node) { nodes.push(node); },
+    ownerDocument: {
+      createElement: () => ({
+        style: {},
+        setAttribute() {},
+        remove() {
+          nodes.splice(nodes.indexOf(this), 1);
+        },
+      }),
+    },
+    appendChild(node) {
+      nodes.push(node);
+    },
     getBoundingClientRect: () => ({ left: 5, top: 10 }),
   };
   const viewer = {
     camera: { positionWC: {} },
     scene: {
       mode: 3,
-      canvas: { clientWidth: 800, clientHeight: 600, getBoundingClientRect: () => ({ left: 15, top: 30 }) },
-      postRender: { addEventListener(fn) { assert.equal(listener, null); listener = fn; return () => { listener = null; }; } },
-      cartesianToCanvasCoordinates(point) { projected.push(point); return { x: 100, y: 200 }; },
+      canvas: {
+        clientWidth: 800,
+        clientHeight: 600,
+        getBoundingClientRect: () => ({ left: 15, top: 30 }),
+      },
+      postRender: {
+        addEventListener(fn) {
+          assert.equal(listener, null);
+          listener = fn;
+          return () => {
+            listener = null;
+          };
+        },
+      },
+      cartesianToCanvasCoordinates(point) {
+        projected.push(point);
+        return { x: 100, y: 200 };
+      },
       requestRender() {},
     },
   };
   const cesium = {
-    SceneMode: { SCENE3D: 3 }, Ellipsoid: { WGS84: {} },
-    EllipsoidalOccluder: class { isPointVisible() { return visible; } },
+    SceneMode: { SCENE3D: 3 },
+    Ellipsoid: { WGS84: {} },
+    EllipsoidalOccluder: class {
+      isPointVisible() {
+        return visible;
+      }
+    },
   };
   const owner = createWindInspectionMarker({ container, viewer, cesium });
   const point = { x: 1, y: 2, z: 3 };

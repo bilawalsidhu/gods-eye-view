@@ -35,12 +35,7 @@ test('side aircraft brackets stay readable without changing zero-opacity intent'
 
 test('strict keyhole fading bypasses the aircraft floor for themed brackets', () => {
   assert.equal(
-    detectionBracketAlpha(
-      'AIR',
-      0.01,
-      KEYHOLE_OUTSIDE_OPACITY_DEFAULT,
-      true,
-    ),
+    detectionBracketAlpha('AIR', 0.01, KEYHOLE_OUTSIDE_OPACITY_DEFAULT, true),
     0.01,
   );
   assert.equal(detectionBracketAlpha('AIR', 0.42, 1, true), 0.42);
