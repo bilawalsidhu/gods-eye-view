@@ -1,5 +1,24 @@
 # God's Eye View Current State
 
+## Built-in layer share tokens — September 25, 2026
+
+Built-in layer share tokens accept one or two lowercase alphanumeric characters.
+The registry currently contains 28 layers, uses every letter, and has only digits
+left in the old one-character namespace. The namespace therefore expands from 36
+to 1332 token slots. This widens capacity without changing the share-state version:
+the `l` codec already splits on `.` and looks up each
+complete token in a map, so token width is not part of decoding. Every published
+one-character link therefore retains its existing meaning.
+
+`MAX_ENABLED_LAYERS_CHARS` moves from 64 to 256 with the token grammar. These
+changes belong together because `N` two-character tokens encode as `3N-1`
+characters; widening validation alone could make an otherwise valid every-layer
+link exceed the old cap. The decoder returns `null` over the cap, and restoration
+then silently drops the whole layer payload rather than keeping a prefix. The new
+bound clears about 85 two-character tokens while remaining bounded well below
+practical URL limits. This fixes token capacity, not contention over registry
+edits; that remains open.
+
 ## Cyber HUD — September 23, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice

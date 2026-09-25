@@ -22,7 +22,13 @@ const TRACKING_ID_GRAMMAR = /^[0-9a-z~_-]{1,16}$/;
  * value past them is malformed or hostile. Reject the WHOLE payload, matching
  * the unknown-token rule — never salvage a prefix.
  */
-const MAX_ENABLED_LAYERS_CHARS = 64;
+// Sized for two-character tokens: N layers encode as 3N-1 characters, so this
+// clears ~85 enabled layers. The cap exists to fail closed on an oversized
+// payload rather than decode a truncated one, so it stays bounded and well
+// under any practical URL limit. It must be raised alongside token width: at
+// 28 layers a single-character all-on link is already 55 characters, and
+// two-character tokens would have exceeded the previous 64 immediately.
+const MAX_ENABLED_LAYERS_CHARS = 256;
 const MAX_LAYER_OPTIONS_CHARS = 512;
 export const LAYER_STATE_STORAGE_KEY = 'gev:layer-state:v2';
 export const LAYER_RESTORE_ORIGINS = Object.freeze({
@@ -633,7 +639,11 @@ export function validateLayerStateRegistry(registry = LAYER_STATE_REGISTRY) {
     if (ids.has(entry.id))
       throw new Error(`Duplicate layer-state id: ${entry.id}`);
     ids.add(entry.id);
-    if (!/^[a-z0-9]$/.test(entry.token || ''))
+    // One OR two characters. The codec splits `l` on `.` and looks each piece up
+    // in a map, so token width was never load-bearing — only this check was. Every
+    // single-character token stays valid and every published link keeps decoding,
+    // so this needs no `v` bump. 36 slots become 1332.
+    if (!/^[a-z0-9]{1,2}$/.test(entry.token || ''))
       throw new Error(`Invalid layer-state token: ${entry.id}`);
     if (tokens.has(entry.token))
       throw new Error(`Duplicate layer-state token: ${entry.token}`);

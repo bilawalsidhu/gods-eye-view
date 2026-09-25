@@ -1,5 +1,15 @@
 # Changelog
 
+- Widen built-in layer share tokens from one to two lowercase alphanumeric
+  characters, expanding the bounded namespace now that all 26 letters are in use
+  across 28 registered layers. Existing one-character links keep decoding under
+  the same share-state version; the codec already splits `l` on `.` and resolves
+  complete tokens by map lookup, so only registry validation changes. Raise the
+  enabled-layer payload cap from 64 to 256 characters with the grammar so an
+  every-layer link cannot cross the limit and silently drop its whole layer
+  payload. `src/data/layerTokenWidth.test.mjs` pins the mixed-width grammar,
+  existing-link compatibility and the matching bound.
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD
