@@ -23,6 +23,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { tilesForBounds } from '../src/data/tomtomTiles.js';
+import { trafficDetailBounds } from '../src/layers/traffic/source.js';
 
 const args = process.argv.slice(2);
 if (args.includes('--help') || args.includes('-h')) {
@@ -37,6 +39,8 @@ const url = args.includes('--url')
 if (!url || !['http:', 'https:'].includes(new URL(url).protocol))
   throw new Error('Supply a running dev server URL; see --help');
 const tour = args.includes('--tour');
+const pan = args.includes('--pan');
+const profile = args.includes('--profile');
 const shots = path.resolve('qa-shots');
 await fs.mkdir(shots, { recursive: true });
 const browser = await puppeteer.launch({
@@ -59,7 +63,7 @@ const browser = await puppeteer.launch({
 });
 const result = {
   url,
-  mode: tour ? 'tour' : 'acceptance',
+  mode: tour ? 'tour' : pan ? 'pan' : profile ? 'profile' : 'acceptance',
   forbiddenRequests: [],
   errors: [],
   consoleErrors: [],
@@ -78,6 +82,7 @@ const categories = [
   'alprTileJSON',
   'alprTiles',
   'tomtom',
+  'api',
 ];
 const requests = [];
 const views = [];
@@ -101,6 +106,11 @@ function categoryFor(target) {
     target.pathname.startsWith('/api/tomtom/')
   )
     return 'tomtom';
+  if (
+    target.origin === new URL(url).origin &&
+    target.pathname.startsWith('/api/')
+  )
+    return 'api';
   return null;
 }
 async function observeNetwork(targetPage) {
@@ -120,6 +130,7 @@ async function observeNetwork(targetPage) {
       view: currentView.name,
       category,
       target: target.origin + target.pathname,
+      flowTile: target.pathname.startsWith('/api/tomtom/flow/'),
       responseBytes: 0,
       transferBytes: 0,
       cached: false,
@@ -211,6 +222,17 @@ function footprintSummary() {
     scope:
       'Browser requests only; TomTom counts local /api responses, not upstream calls behind the server cache/budget. Fresh browser session; existing server caches retained.',
     views: measured,
+    tourTable: measured
+      .filter((v) => v.surface)
+      .map((v) => ({
+        city: v.name,
+        firstDotSeconds: v.firstDotsMs / 1000,
+        warmFirstDotSeconds: v.warmFirstDotsMs / 1000,
+        dotsInView: v.surface.inView,
+        onMesh: v.surface.onMesh,
+        ofmRequests: v.ofmTiles.requests,
+        ofmMB: v.ofmTiles.responseBytes / 1e6,
+      })),
     total,
     revisitDelta: revisit
       ? {
@@ -240,6 +262,7 @@ function footprintSummary() {
   }));
   console.table(summary.table);
   console.log('Austin revisit delta:', summary.revisitDelta);
+  if (summary.tourTable.length) console.table(summary.tourTable);
   return summary;
 }
 let page;
@@ -268,6 +291,7 @@ try {
   console.log('Loading viewer...');
   const navigationUrl = new URL(url);
   navigationUrl.searchParams.set('welcome', '0');
+  navigationUrl.searchParams.set('trafficDebug', '1');
   await page.goto(navigationUrl.href, {
     waitUntil: 'domcontentloaded',
     timeout: 60_000,
@@ -419,11 +443,76 @@ try {
     }
     throw new Error(`Sources did not settle for ${currentView.name}`);
   }
+  async function measureSurface() {
+    return page.evaluate(async () => {
+      const C = await import('/node_modules/cesium/Build/Cesium/index.js');
+      const { viewer, dataManager } = window.__godsEyeView;
+      const { scene } = viewer;
+      const collections = [];
+      for (let i = 0; i < scene.primitives.length; i++) {
+        const p = scene.primitives.get(i);
+        if (Array.isArray(p._pointPrimitives) && p.show && p.length > 100)
+          collections.push(p);
+      }
+      let inView = 0,
+        onMesh = 0,
+        sampled = 0;
+      const deltas = [];
+      // Freeze the sampled positions: the animator continues while the bounded batches yield.
+      const positions = collections.flatMap((p) =>
+        Array.from({ length: p.length }, (_, i) => p.get(i))
+          .filter((p) => p.show)
+          .map((p) => C.Cartesian3.clone(p.position)),
+      );
+      for (const position of positions) {
+        const screen = C.SceneTransforms.worldToWindowCoordinates(
+          scene,
+          position,
+        );
+        if (
+          !screen ||
+          screen.x < 0 ||
+          screen.x >= scene.canvas.clientWidth ||
+          screen.y < 0 ||
+          screen.y >= scene.canvas.clientHeight
+        )
+          continue;
+        inView++;
+        const carto = C.Cartographic.fromCartesian(position);
+        const height = scene.globe.show
+          ? scene.globe.getHeight(carto)
+          : scene.sampleHeight(carto, collections);
+        if (Number.isFinite(height) && Math.abs(height) <= 9000) {
+          sampled++;
+          const delta = carto.height - height;
+          deltas.push(delta);
+          if (delta >= -3 && delta <= 25) onMesh++;
+        }
+        if (inView % 24 === 0)
+          await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      deltas.sort((a, b) => a - b);
+      return {
+        inView,
+        onMesh,
+        sampled,
+        medianDeltaM: deltas[Math.floor(deltas.length / 2)],
+        stats: dataManager.layers.get('traffic').module.getStats(),
+        photoreal: !scene.globe.show,
+      };
+    });
+  }
   async function tourCity(name, lat, lon, height = 450) {
     const view = beginView(name, { lat, lon, height, heading: 0, pitch: -35 });
     console.log(`Measuring ${name} at ${height} m...`);
+    await page.evaluate(() =>
+      window.__godsEyeView.dataManager.setEnabled('traffic', false),
+    );
     await fly(lat, lon, height, 0, -35);
-    for (const id of ['traffic', 'military-installations', 'alpr-cameras'])
+    await page.evaluate(() => performance.clearMeasures());
+    await enableTrafficTimed(name);
+    view.firstDotsMs = result.loadTimes[name];
+    for (const id of ['military-installations', 'alpr-cameras'])
       await page.evaluate(
         (layerId) => window.__godsEyeView.dataManager.setEnabled(layerId, true),
         id,
@@ -437,6 +526,26 @@ try {
     assert.ok(traffic.count > 0, `${name}: road dots rendered`);
     assert.equal(traffic.roadSource, 'OpenStreetMap');
     await shot(`tour-${name}`);
+    view.surface = await measureSurface();
+    view.phases = await page.evaluate(() =>
+      performance
+        .getEntriesByType('measure')
+        .filter((e) => e.name.startsWith('roads:'))
+        .map((e) => ({
+          name: e.name,
+          ms: e.duration,
+          at: e.startTime,
+          detail: e.detail,
+        })),
+    );
+    assert.ok(
+      view.surface.onMesh >= 150,
+      `${name}: >=150 on-mesh dots (got ${view.surface.onMesh})`,
+    );
+    assert.ok(
+      view.firstDotsMs <= (name.includes('revisit') ? 2500 : 4000),
+      `${name}: first-dot deadline (${view.firstDotsMs} ms)`,
+    );
     view.layers = await waitForSources();
     view.actualCamera = await page.evaluate(() => {
       const camera = window.__godsEyeView.viewer.camera;
@@ -464,8 +573,160 @@ try {
       Math.abs(view.actualCamera.pitch + 35) < 0.01,
       `${name}: fixed pitch`,
     );
+    await page.evaluate(() =>
+      window.__godsEyeView.dataManager.setEnabled('traffic', false),
+    );
+    await enableTrafficTimed(`${name}-warm`);
+    view.warmFirstDotsMs = result.loadTimes[`${name}-warm`];
+    assert.ok(
+      view.warmFirstDotsMs <= 2500,
+      `${name}: warm first-dot deadline (${view.warmFirstDotsMs} ms)`,
+    );
+    await waitForSources();
   }
-  if (tour) {
+  if (profile) {
+    await fly(30.2672, -97.7431, 450, 0, -35);
+    await settleTiles();
+    for (const name of ['cold', 'warm']) {
+      beginView(name);
+      await page.evaluate(() => {
+        performance.clearMeasures();
+        window.__godsEyeView.dataManager.setEnabled('traffic', false);
+      });
+      await enableTrafficTimed(name);
+      await waitForSources();
+      result[name] = await page.evaluate(() =>
+        performance
+          .getEntriesByType('measure')
+          .filter((e) => e.name.startsWith('roads:'))
+          .map((e) => ({
+            name: e.name,
+            ms: e.duration,
+            at: e.startTime,
+            detail: e.detail,
+          })),
+      );
+      console.log(name, JSON.stringify(result[name]));
+    }
+  } else if (pan) {
+    const sessionBudget = 32; // <= 0.54% of the default 6,000/day upstream budget.
+    await page.evaluate(() => {
+      window.__godsEyeView.viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
+    });
+    beginView('pan-start');
+    await fly(30.2672, -97.7431, 450, 0, -35);
+    await enableTrafficTimed('pan-start');
+    await waitForSources();
+    const positions = [[0, 0]];
+    // Metres east/north: 10 small steps, 5 larger steps, then 5 exact returns.
+    const offsets = [
+      [200, 0],
+      [400, 0],
+      [400, 200],
+      [200, 200],
+      [0, 200],
+      [-200, 200],
+      [-200, 0],
+      [-200, -200],
+      [0, -200],
+      [200, -200],
+      [1700, -200],
+      [1700, 1300],
+      [200, 1300],
+      [-1300, 1300],
+      [-1300, -200],
+    ];
+    const moves = offsets.map((p, i) => ({
+      p,
+      kind: i < 10 ? 'small' : 'large',
+    }));
+    for (const index of [0, 3, 8, 11, 15])
+      moves.push({
+        p: index === 0 ? [0, 0] : offsets[index - 1],
+        kind: 'return',
+      });
+    for (const [i, move] of moves.entries()) {
+      const [east, north] = move.p;
+      const lat = 30.2672 + north / 111320;
+      const lon =
+        -97.7431 + east / (111320 * Math.cos((30.2672 * Math.PI) / 180));
+      const view = beginView(`pan-${i + 1}-${move.kind}`, {
+        lat,
+        lon,
+        height: 450,
+        pitch: -35,
+      });
+      const before = new Set(
+        requests.filter((r) => r.category === 'ofmTiles').map((r) => r.target),
+      );
+      await fly(lat, lon, 450, 0, -35);
+      await settleTiles();
+      view.layers = await waitForSources();
+      const state = view.layers.find((r) => r.id === 'traffic');
+      const batch = requests.filter((r) => r.view === view.name);
+      const roadRequests = batch.filter((r) => r.category === 'ofmTiles');
+      if (move.kind === 'return')
+        assert.equal(
+          roadRequests.length,
+          0,
+          `${view.name}: cached return makes no OFM requests`,
+        );
+      for (const request of roadRequests)
+        assert.ok(
+          !before.has(request.target),
+          `${view.name}: no duplicate XYZ`,
+        );
+      if (move.kind === 'small' && roadRequests.length) {
+        const bounds = state.roadBounds;
+        assert.ok(bounds, 'admitted road bounds exposed');
+        const allowed = new Set(
+          [
+            ...tilesForBounds(bounds, 12),
+            ...tilesForBounds(trafficDetailBounds(bounds), 14),
+          ].map((t) => `${t.z}/${t.x}/${t.y}.pbf`),
+        );
+        for (const request of roadRequests)
+          assert.ok(
+            [...allowed].some((x) => request.target.endsWith('/' + x)),
+            `${view.name}: newly exposed tile belongs to admitted viewport`,
+          );
+      }
+      assert.ok(
+        state.count > 0 && !state.error,
+        `${view.name}: healthy traffic`,
+      );
+      view.pan = {
+        move: i + 1,
+        kind: move.kind,
+        ofmRequests: roadRequests.length,
+        ofmBytes: roadRequests.reduce((n, r) => n + r.responseBytes, 0),
+        flowRequests: batch.filter((r) => r.flowTile).length,
+        apiCalls: batch.filter((r) => ['api', 'tomtom'].includes(r.category))
+          .length,
+        dots: state.count,
+      };
+      positions.push(move.p);
+      console.log(JSON.stringify(view.pan));
+    }
+    const ofm = requests.filter((r) => r.category === 'ofmTiles');
+    assert.equal(
+      new Set(ofm.map((r) => r.target)).size,
+      ofm.length,
+      'no identical OpenFreeMap XYZ requested twice in session',
+    );
+    const flow = requests.filter((r) => r.flowTile).length;
+    assert.ok(
+      flow <= sessionBudget,
+      `TomTom ${flow} requests <= ${sessionBudget} session budget`,
+    );
+    result.pan = {
+      sessionBudget,
+      defaultDailyBudget: 6000,
+      flowRequests: flow,
+      table: views.filter((v) => v.pan).map((v) => v.pan),
+    };
+    console.table(result.pan.table);
+  } else if (tour) {
     // A continent jump can temporarily use the previous city's terrain height
     // for collision avoidance (São Paulo -> Austin raises a 450 m target).
     // Pin the prescribed camera fixtures so the revisit covers identical tiles.
@@ -560,16 +821,16 @@ try {
     async function checkStreetSurface(name) {
       await waitForSources();
       beginView(name, {
-        lat: 30.2685,
-        lon: -97.7425,
-        height: 350,
-        heading: 10,
-        pitch: -30,
+        lat: 30.2672,
+        lon: -97.7431,
+        height: 450,
+        heading: 0,
+        pitch: -35,
       });
       await page.evaluate(async () =>
         window.__godsEyeView.dataManager.setEnabled('traffic', false),
       );
-      await fly(30.2685, -97.7425, 350, 10, -30);
+      await fly(30.2672, -97.7431, 450, 0, -35);
       await settleTiles();
       await enableTrafficTimed(`${name}WarmFirstDotsMs`);
       await page.waitForFunction(
@@ -582,63 +843,7 @@ try {
         { timeout: 180_000, polling: 500 },
       );
       await settleTiles();
-      const measured = await page.evaluate(async () => {
-        const C = await import('/node_modules/cesium/Build/Cesium/index.js');
-        const { viewer, dataManager } = window.__godsEyeView;
-        const { scene } = viewer;
-        const collections = [];
-        for (let i = 0; i < scene.primitives.length; i++) {
-          const p = scene.primitives.get(i);
-          if (Array.isArray(p._pointPrimitives) && p.show && p.length > 100)
-            collections.push(p);
-        }
-        let inView = 0,
-          onMesh = 0,
-          sampled = 0;
-        const deltas = [];
-        // Freeze the sampled positions: the animator continues while the bounded batches yield.
-        const positions = collections.flatMap((p) =>
-          Array.from({ length: p.length }, (_, i) => p.get(i))
-            .filter((p) => p.show)
-            .map((p) => C.Cartesian3.clone(p.position)),
-        );
-        for (const position of positions) {
-          const screen = C.SceneTransforms.worldToWindowCoordinates(
-            scene,
-            position,
-          );
-          if (
-            !screen ||
-            screen.x < 0 ||
-            screen.x >= scene.canvas.clientWidth ||
-            screen.y < 0 ||
-            screen.y >= scene.canvas.clientHeight
-          )
-            continue;
-          inView++;
-          const carto = C.Cartographic.fromCartesian(position);
-          const height = scene.globe.show
-            ? scene.globe.getHeight(carto)
-            : scene.sampleHeight(carto, collections);
-          if (Number.isFinite(height) && Math.abs(height) <= 9000) {
-            sampled++;
-            const delta = carto.height - height;
-            deltas.push(delta);
-            if (delta >= -3 && delta <= 25) onMesh++;
-          }
-          if (inView % 24 === 0)
-            await new Promise((resolve) => setTimeout(resolve, 0));
-        }
-        deltas.sort((a, b) => a - b);
-        return {
-          inView,
-          onMesh,
-          sampled,
-          medianDeltaM: deltas[Math.floor(deltas.length / 2)],
-          stats: dataManager.layers.get('traffic').module.getStats(),
-          photoreal: !scene.globe.show,
-        };
-      });
+      const measured = await measureSurface();
       result[name] = measured;
       assert.equal(measured.stats.roadSource, 'OpenStreetMap');
       if (measured.stats.mode === 'live') {
@@ -887,6 +1092,30 @@ try {
     await shot('austin-revisit');
     await waitForSources();
   }
+  if (!pan && !profile) {
+    beginView('alpr-london');
+    await page.evaluate(() =>
+      window.__godsEyeView.dataManager.setEnabled('traffic', false),
+    );
+    await fly(51.5074, -0.1278, 450, 0, -35);
+    await page.evaluate(() =>
+      window.__godsEyeView.dataManager.setEnabled('alpr-cameras', true),
+    );
+    await waitForSources();
+    result.alprLondon = await page.evaluate(() =>
+      window.__godsEyeView.dataManager.layers
+        .get('alpr-cameras')
+        .module.getStats(),
+    );
+    assert.equal(result.alprLondon.noCoverage, true);
+    assert.equal(result.alprLondon.countLabel, '');
+    assert.equal(
+      result.alprLondon.loadingLabel,
+      'No ALPR data for this area — US and Canada only',
+    );
+    await shot('alpr-london');
+  }
+  assert.deepEqual(result.consoleErrors, [], 'zero unexpected console errors');
   assert.deepEqual(
     result.forbiddenRequests,
     [],
