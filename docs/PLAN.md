@@ -80,7 +80,15 @@ Findings that drove the phases below:
       rewrite attempt — the guardrails work).
 - [x] Lint job added to CI alongside test and build.
 
-## Phase 3 — Test coverage toward 99% (OPEN)
+## Phase 3 — Test coverage (CLOSED at the documented boundary 2026-09-24)
+
+*Closed, not abandoned: the "toward 99%" ambition was replaced by the
+ratchet + documented-boundary doctrine — ADR 0008, waves 1–6 done, floors
+91/91/91/82 (lines/statements/functions/branches) enforced by
+`npm run test:coverage` in CI, the scene-coupled remainder inventoried in
+the 2026-09-20 entry below, and the honest next rock (layer-lifecycle
+integration suites under the QA harness) owned by Phase 5's harness work.
+Header reconciled with reality 2026-09-24; zero unchecked items remain.*
 
 The suite is the safety net for everything above: 2891 co-located tests
 (`npm test`, headless, plus two serialized allocation probes). Gaps to close:
@@ -291,7 +299,14 @@ visual identities) and fixes AAA-level items where they are free.
       shadow/glow regression anchors). Reduced-motion was already respected
       (7 CSS blocks + JS callers).
 
-## Phase 5 — Performance profile & WASM (IN PROGRESS)
+## Phase 5 — Performance profile & WASM (DONE 2026-09-24)
+
+*Closed on evidence: the operator-reported GPU peg audit shipped
+(`applySceneRenderScale` HiDPI fix + the low-demand 30 fps idle governor —
+CHANGELOG Fixed/Performance), the profiler + harness work above is live,
+all three WASM candidates were MEASURED and disqualified (Batch T, plus
+the earlier splat/SGP4 verdicts in PERFORMANCE.md), and no WASM candidate
+is open. Header reconciled with reality 2026-09-24; zero unchecked items.*
 
 Performance, reliability, and controlled system requirements are the priority.
 Order of work, cheapest-first:
@@ -490,7 +505,13 @@ Order of work, cheapest-first:
       Label solve is main-thread O(n) by design, cadence already pinned at
       125 ms in `src/data/detectionHost.test.mjs`.
 
-## Phase 6 — CI/CD, release, deploy (PARTIALLY DONE)
+## Phase 6 — CI/CD, release, deploy (DONE 2026-09-23)
+
+*Every item below is checked and verified: GitHub Actions + the GitForge
+mirror both green, audit/build/coverage gates live, and the RUNBOOK
+release path exercised for real from v0.8.0 through v0.10.1 (deploy →
+verify → tag → publish, tags immutable). Header reconciled 2026-09-24;
+future releases ride the RUNBOOK checklist rather than this phase.*
 
 - [x] GitHub Actions (`.github/workflows/ci.yml`): lint (`--max-warnings 0`),
       test (Node 24, allocation gate on), coverage (publishes the measured
@@ -550,7 +571,11 @@ Order of work, cheapest-first:
       patch release); the RUNBOOK now pins the order **deploy → verify →
       then tag/publish**.
 
-## Phase 7 — Community audit integration (IN PROGRESS)
+## Phase 7 — Community audit integration (DONE 2026-09-24)
+
+*Every verified backlog item below has landed with its own verification
+(no unchecked boxes remain); the upstream PR/issue sweep entries are the
+record. Header reconciled with reality 2026-09-24.*
 
 A 2026-09-10 sweep of upstream PRs and issues (bilawalsidhu/gods-eye-view —
 the fork has none) produced a verified backlog. Items below were cross-checked
@@ -1450,7 +1475,11 @@ ordered by value-per-risk; each is self-contained and committable.
 - [x] GitHub repo was renamed `gods-eye-view` → `Globe` — origin URL
       verified pointing at `github.com/aliasfoxkde/Globe.git` (2026-09-13).
 
-## Phase 9 — Quality campaign 2026-09-15 (OPEN)
+## Phase 9 — Quality campaign 2026-09-15 (CLOSED — batches A–J landed)
+
+*All batches checked and verified 2026-09-15…17; the campaign's open
+production questions were resolved as ADRs 0013/0014/0015 (Phase 8 tail).
+Header reconciled 2026-09-24.*
 
 Re-audit driven campaign: pattern scan, coverage re-baseline, sibling
 best-practices review, GPU/VRAM audit (operator-reported high 3D/GPU/
@@ -1907,7 +1936,10 @@ These are known gaps with reasons, not oversights:
 - **One dev-only dependabot alert** (`extract-zip` via puppeteer): accepted
   with rationale rather than a semver-incompatible override; it never ships.
 
-## Phase 10 — Quality campaign cycle 2 (2026-09-17, OPEN)
+## Phase 10 — Quality campaign cycle 2 (2026-09-17, CLOSED)
+
+*Batches J/K/L done; Batch L's close gates rolled into cycle 3's v0.10.0
+by design (see the Batch L entry below). Header reconciled 2026-09-24.*
 
 Second audit-driven cycle on the v0.9.1 tree (`5c6b080`). Baseline
 re-measured 2026-09-17: lint clean at `--max-warnings 0`, full unit suite
@@ -2008,7 +2040,7 @@ operator decision required).
   release; the close gates rolled into cycle 3's v0.10.0, which
   shipped 2026-09-22 (see Batch P's record).*
 
-## Phase 11 — Quality campaign cycle 3 (2026-09-18 → 2026-09-21, v0.10.0)
+## Phase 11 — Quality campaign cycle 3 (2026-09-18 → 2026-09-21, v0.10.0 — CLOSED)
 
 Third audit-driven cycle, on the v0.9.2 tree. Entry baseline (all
 measured, not asserted): 3,790 unit tests green; c8 91.58 lines /
@@ -2393,7 +2425,13 @@ demoted under a dated banner, never deleted), tag-name immutability
 push order with the hold-while-suites-run rule from 11.1, and
 deploy → verify → tag → publish as the only sanctioned sequence.
 
-## Phase 12 — Quality campaign cycle 4 (2026-09-22, OPEN)
+## Phase 12 — Quality campaign cycle 4 (2026-09-22, CLOSED 2026-09-24)
+
+*Batches Q–W all done: coverage waves 5–6 (floors 91/91/91/82), the
+module map, the three measured WASM verdicts, the three decision docs,
+the four-residual-suite validation close (Batch V, GitForge run 08299058
+green + the timing-budget caveat retired), and the v0.10.1 release
+(Batch W). Header reconciled 2026-09-24.*
 
 Fourth audit-driven cycle, opening on the v0.10.0 tree (`3564409`)
 per 11.3's entry rule: baseline re-measured with the same metrics as
