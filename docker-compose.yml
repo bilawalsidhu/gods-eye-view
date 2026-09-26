@@ -1,0 +1,19 @@
+services:
+  gods-eye-view:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: gods-eye-view
+
+    restart: unless-stopped
+
+    ports:
+      - "4173:4173"
+
+    env_file:
+      - .env
+
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4173
