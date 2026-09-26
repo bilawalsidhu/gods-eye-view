@@ -614,7 +614,9 @@
       "src/ui/shellFacade.js",
       "src/ui/localSdrControls.js",
       "src/layers/localAdsb/feedNames.js",
-      "src/ui/localSdrPresentation.js"
+      "src/ui/localSdrPresentation.js",
+      "src/ui/streetView.js",
+      "src/data/inputOwnership.js"
     ],
     "external": ["cesium"]
   },
@@ -1955,7 +1957,8 @@
       "src/layers/recentImagery/thumbnails.js",
       "src/maps/imageryHost.js",
       "src/ui/recentImagery.js",
-      "src/ui/imageryBoxTool.js"
+      "src/ui/imageryBoxTool.js",
+      "src/ui/streetView.js"
     ],
     "external": [
       "hls.js",

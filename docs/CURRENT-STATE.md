@@ -751,6 +751,14 @@ shader-parameter rows. Number/style keys, H/O/V/F/D/C actions, native form-contr
 typing and Escape behavior retain their existing mappings. Capture-phase
 surfaces continue to arbitrate their own keyboard events first.
 
+A bare `S` (no Cmd/Ctrl/Alt) toggles Street View (`src/ui/streetView.js`):
+it claims the globe pointer as `street-view`, and the next globe click opens a
+Google Street View panel at the nearest outdoor panorama within 50 m, then
+250 m. A yellow globe marker follows the panorama as it moves. `S` or Escape
+cancels arming or closes the panel. It needs the browser `GOOGLE_MAPS_API_KEY`
+with the Maps JavaScript API enabled; without a key, arming is refused with a
+toast.
+
 The UI facade retains shader values, share-restore authority, render requests,
 search dismissal, visibility and Cockpit portal policy. Parameter rows preserve
 labels, bounds, steps and precision. Rebuilding rows removes their previous
