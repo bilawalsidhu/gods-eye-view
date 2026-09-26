@@ -221,3 +221,57 @@ test('the default resource carries the policy without any injected clock', () =>
   assert.equal(resource.retryAttempts, TERRAIN_RETRY_ATTEMPTS);
   assert.equal(typeof resource.retryCallback, 'function');
 });
+
+/** A sleeper the test resolves by hand, so later replies can land mid-wait. */
+const manualClock = () => {
+  const clock = { now: START, sleeps: [] };
+  clock.wait = (ms) =>
+    new Promise((resolve) => clock.sleeps.push({ ms, resolve }));
+  return clock;
+};
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+test('one attempt never waits past the maximum backoff plus spread', async () => {
+  const clock = manualClock();
+  const policy = createTerrainRetryPolicy({
+    now: () => clock.now,
+    wait: clock.wait,
+    random: () => 0,
+  });
+  let verdict;
+  policy.retryCallback({}, throttled()).then((value) => (verdict = value));
+  let waited = 0;
+  for (let i = 0; i < 10 && verdict === undefined; i += 1) {
+    const sleep = clock.sleeps.at(-1);
+    clock.now += sleep.ms;
+    waited += sleep.ms;
+    // A fresh 15 s throttle lands while this tile sleeps and pushes the
+    // shared window out again; its own sleep is never resolved here.
+    policy.retryCallback({}, throttled({ 'Retry-After': '15' }));
+    sleep.resolve();
+    await flush();
+  }
+  assert.equal(verdict, true);
+  assert.equal(waited, TERRAIN_RETRY_MAX_MS + TERRAIN_RETRY_SPREAD_MS);
+  assert.ok(policy.cooldownUntil() - START > waited, 'window moved further');
+});
+
+test('a tile cancelled before or during its wait is not re-requested', async () => {
+  assert.equal(Cesium.RequestState.CANCELLED, 4);
+  const clock = manualClock();
+  const policy = createTerrainRetryPolicy({
+    now: () => clock.now,
+    wait: clock.wait,
+    random: () => 0,
+  });
+  const gone = { request: { state: Cesium.RequestState.CANCELLED } };
+  assert.equal(await policy.retryCallback(gone, throttled()), false);
+  assert.equal(clock.sleeps.length, 0, 'no wait for a cancelled tile');
+
+  const request = new Cesium.Request({ url: KEYLESS_TERRAIN_URL });
+  const pending = policy.retryCallback({ request }, throttled());
+  request.cancel();
+  clock.now += clock.sleeps.at(-1).ms;
+  clock.sleeps.at(-1).resolve();
+  assert.equal(await pending, false);
+});

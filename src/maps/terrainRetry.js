@@ -18,7 +18,9 @@
  * trickle after the window instead of as a second burst that gets throttled
  * again. `Retry-After` extends the cooldown when the upstream exposes it.
  * Anything else (404 outside coverage, network errors, aborts) is left to
- * Cesium's own handling so the flat-terrain fallback stays prompt.
+ * Cesium's own handling so the flat-terrain fallback stays prompt. A tile
+ * whose request was cancelled while it waited is not re-requested, and one
+ * attempt waits at most the maximum backoff plus the jitter spread.
  */
 
 export const TERRAIN_RETRY_ATTEMPTS = 3;
@@ -28,6 +30,14 @@ export const TERRAIN_RETRY_MAX_MS = 15_000;
 export const TERRAIN_RETRY_SPREAD_MS = 1_500;
 
 const defaultWait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Cesium `RequestState.CANCELLED`, kept local so this policy stays Cesium-free. */
+const REQUEST_CANCELLED = 4;
+
+/** A tile the quadtree no longer wants must not be re-requested. */
+function requestCancelled(resource) {
+  const request = resource?.request;
+  return request?.cancelled === true || request?.state === REQUEST_CANCELLED;
+}
 
 /**
  * Parses a `Retry-After` header (delay-seconds or HTTP-date) into a wait in
@@ -94,7 +104,7 @@ export function createTerrainRetryPolicy({
    * re-requested, `false` to let the failure stand.
    */
   async function retryCallback(resource, error) {
-    if (!shouldRetry(error)) return false;
+    if (!shouldRetry(error) || requestCancelled(resource)) return false;
     const attempt = attemptsByResource.get(resource) ?? 0;
     attemptsByResource.set(resource, attempt + 1);
     const started = now();
@@ -121,14 +131,18 @@ export function createTerrainRetryPolicy({
     });
     const jitter = random() * TERRAIN_RETRY_SPREAD_MS;
     // Re-check after each sleep: replies that arrive while this tile waits can
-    // push the shared window out, and the retry must stay behind it. The
-    // iteration cap only guards against a sleeper that cannot advance time.
+    // push the shared window out, and the retry must stay behind it. One
+    // attempt never waits longer than the maximum backoff plus the spread,
+    // however far later replies push the window. The iteration cap only
+    // guards against a sleeper that cannot advance time.
+    const deadline = started + TERRAIN_RETRY_MAX_MS + TERRAIN_RETRY_SPREAD_MS;
     for (let i = 0; i < 32; i += 1) {
-      const remaining = cooldownUntil + jitter - now();
+      const remaining = Math.min(cooldownUntil + jitter, deadline) - now();
       if (remaining <= 0) break;
       await wait(remaining);
+      if (requestCancelled(resource)) return false;
     }
-    return true;
+    return !requestCancelled(resource);
   }
 
   return {
