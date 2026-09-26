@@ -176,62 +176,7 @@ docker compose down
 The Docker setup runs the Vite application server directly so the server-side
 provider middleware and live data routes remain available.
 
-**Dockerfile:**
 
-```dockerfile
-FROM node:24-bookworm-slim
-
-WORKDIR /app
-
-COPY package*.json ./
-
-RUN npm ci
-
-COPY . .
-
-ENV HOST=0.0.0.0
-ENV PORT=4173
-
-EXPOSE 4173
-
-CMD ["npm", "run", "dev"]
-```
-
-**`docker-compose.yml`:**
-
-```yaml
-services:
-  gods-eye-view:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: gods-eye-view
-    restart: unless-stopped
-
-    env_file:
-      - .env
-
-    environment:
-      HOST: 0.0.0.0
-      PORT: 4173
-
-    ports:
-      - "4173:4173"
-```
-
-**`.dockerignore`:**
-
-```text
-node_modules
-.git
-.env
-.env.*
-!.env.example
-dist
-npm-debug.log*
-```
-
-Keep `.env` local and never commit it.
 
 ### Then power it up — in the app, not in a file
 
