@@ -24,7 +24,7 @@ Photorealistic 3D globe. Live aircraft, ships, satellites, earthquakes, traffic,
 
 *“pretty cool”* — [Brendan Eich](https://x.com/BrendanEich/status/2094592096401490266), creator of JavaScript and co-founder of Mozilla and Brave · Featured on **[Pinokio](https://pinokio.co/posts/01m1m4p9xxm3qw7dnnpj2wr93g)**
 
-⚡ **Start without API keys.** Install with [Pinokio](https://pinokio.co/apps/github-com-bilawalsidhu-gods-eye-view), Docker, or run locally from the terminal. Add optional keys inside the app. **[→ Quick Start](#-quick-start)**
+⚡ **Start without API keys.** Install with [Pinokio](https://pinokio.co/apps/github-com-bilawalsidhu-gods-eye-view) or run locally from the terminal. Add optional keys inside the app. **[→ Quick Start](#-quick-start)**
 
 </div>
 
@@ -89,10 +89,10 @@ Start with the included data sources, then add your own. Each layer is a separat
 
 ## ⚡ Quick Start
 
-**Start without an account or API keys.** All supported installation paths open the
-same application with Esri satellite imagery and keyless terrain. OSM is the
-fallback if Esri is unreachable. Flights, military traffic, satellites,
-earthquakes, public cameras, radio, and launches are available without keys.
+**Start without an account or API keys.** All three paths open the same app with
+Esri satellite imagery and keyless terrain. OSM is the fallback if Esri is
+unreachable. Flights, military traffic, satellites, earthquakes, public
+cameras, radio, and launches are available without keys.
 
 For photorealistic 3D, add a **Cesium ion token** for eligible personal,
 non-commercial use, or a **Google Maps key** for the direct, metered route and
@@ -113,145 +113,7 @@ locked dependencies, finds a free local port, and opens the app.
 Version 8.2 fixes the launcher installation issue;
 [details from the Pinokio maintainer](https://pinokio.co/posts/01m1m4p9xxm3qw7dnnpj2wr93g).
 
-### Path 2 — Docker
-
-Docker provides a reproducible way to run God's Eye View without installing
-Node.js or the project's dependencies directly on the host.
-
-**Requirements:**
-
-* [Docker Desktop](https://www.docker.com/products/docker-desktop/) on Windows or macOS
-* Docker Engine + Docker Compose on Linux
-* A machine with enough memory and disk space for the application dependencies
-
-Clone the repository:
-
-```bash
-git clone https://github.com/bilawalsidhu/gods-eye-view.git
-cd gods-eye-view
-```
-
-Create your local environment file:
-
-```bash
-cp .env.example .env
-```
-
-On Windows PowerShell, use:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Add any optional provider keys to `.env`. Keys are not required for the
-keyless layers. See [API Keys](#-api-keys) for the providers and capabilities
-they enable.
-
-Build and start the application:
-
-```bash
-docker compose up -d --build
-```
-
-Check the container:
-
-```bash
-docker compose ps
-```
-
-View startup logs:
-
-```bash
-docker compose logs -f
-```
-
-Then open:
-
-**http://localhost:4173**
-
-To stop the application:
-
-```bash
-docker compose down
-```
-
-To rebuild after changing the source:
-
-```bash
-docker compose up -d --build
-```
-
-#### Docker configuration
-
-The default Compose configuration exposes port `4173` on the host:
-
-```text
-Host:4173 → Container:4173
-```
-
-The application itself listens on `0.0.0.0:4173` inside the container so that
-Docker can forward requests to it.
-
-The container runs the complete application server rather than serving only
-the generated `dist/` directory. This is important because God's Eye View
-uses server-side provider middleware for live data sources and credential
-brokerage.
-
-For reverse-proxy deployments, such as Nginx Proxy Manager, Caddy, or Traefik,
-forward the proxy to the container's port `4173`. The application does not
-require a reverse proxy for local use.
-
-> [!WARNING]
-> Do not commit your `.env` file. It may contain provider credentials and API
-> keys. The repository's `.gitignore` and Docker configuration exclude local
-> environment files from the image/build context where appropriate.
-
-#### Docker and API keys
-
-Environment variables are supplied to the container through `.env` by
-Docker Compose. This keeps provider credentials out of the Dockerfile and
-Compose configuration.
-
-For example:
-
-```env
-OPENAI_API_KEY=...
-AISSTREAM_API_KEY=...
-```
-
-Do not place real credentials directly in:
-
-* `Dockerfile`
-* `docker-compose.yml`
-* source files
-* Git commits
-* public container images
-
-Browser-visible credentials such as Google Maps and Cesium ion tokens still
-need to be restricted at their respective providers.
-
-#### Sharing a Docker instance
-
-The default Docker configuration is intended for local access.
-
-If you intentionally expose the application to a LAN or the internet, put
-an appropriately configured reverse proxy and access controls in front of
-it. The application can broker configured server-side provider credentials
-to users who can reach it.
-
-Before exposing an instance publicly:
-
-* restrict provider API keys where supported;
-* configure provider quotas and billing alerts;
-* use HTTPS;
-* consider authentication at the reverse proxy;
-* configure the application's per-IP throttles;
-* review [SECURITY.md](SECURITY.md).
-
-Docker itself is **not** an authentication or security boundary for a
-publicly exposed application.
-
-### Path 3 — Terminal / coding agent
+### Path 2 — Terminal / coding agent
 
 Use **Node.js 24.x (24.14.0 or later) or 26.x**. The setup doctor warns about
 Node 25, which is end-of-life.
@@ -279,6 +141,98 @@ See [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 **macOS shortcut:** `./scripts/dev-fresh.sh` clears the Vite cache and pulls any
 configured keys straight from the Keychain. It starts keyless too.
 
+### Path 3 — Docker
+
+Use Docker to run the full application without installing Node.js locally.
+
+```bash
+git clone https://github.com/bilawalsidhu/gods-eye-view.git
+cd gods-eye-view
+cp .env.example .env
+docker compose up -d --build
+```
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+docker compose up -d --build
+```
+
+Open **`http://localhost:4173`**.
+
+Check the logs with:
+
+```bash
+docker compose logs -f gods-eye-view
+```
+
+Stop the application with:
+
+```bash
+docker compose down
+```
+
+The Docker setup runs the Vite application server directly so the server-side
+provider middleware and live data routes remain available.
+
+**Dockerfile:**
+
+```dockerfile
+FROM node:24-bookworm-slim
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm ci
+
+COPY . .
+
+ENV HOST=0.0.0.0
+ENV PORT=4173
+
+EXPOSE 4173
+
+CMD ["npm", "run", "dev"]
+```
+
+**`docker-compose.yml`:**
+
+```yaml
+services:
+  gods-eye-view:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gods-eye-view
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4173
+
+    ports:
+      - "4173:4173"
+```
+
+**`.dockerignore`:**
+
+```text
+node_modules
+.git
+.env
+.env.*
+!.env.example
+dist
+npm-debug.log*
+```
+
+Keep `.env` local and never commit it.
+
 ### Then power it up — in the app, not in a file
 
 Keys are upgrades, not prerequisites. When you want one, click the **POWER UP**
@@ -288,11 +242,14 @@ restarts itself with the new capability on. Once everything is configured the
 chip reads **POWERED UP** — and if a compact layout hides it, `?setup=1`
 reopens the same panel.
 
+For Docker, provider credentials are loaded from the repo-root `.env` file by
+Docker Compose.
+
 * **Where keys land:** Pinokio → the app's ignored `pinokio/ENVIRONMENT`; a
-  terminal clone → the repo-root `.env`; Docker → the host `.env`, supplied to
-  the container by Compose. Each file is made owner-only *before* a secret is
-  written into it. These are local plaintext files, excluded from Git; the app
-  uses your keys to contact the providers.
+  terminal clone → the repo-root `.env`; Docker → the repo-root `.env`, injected
+  into the container by Compose. Either file is made owner-only
+  *before* a secret is written into it. These are local plaintext files,
+  excluded from Git; the app uses your keys to contact the providers.
 * **Keys you already have stay yours:** values from your shell or the macOS
   Keychain show as *configured externally* and are read-only to the panel.
 * **What to get first:** the free [Cesium ion](https://cesium.com/ion) token
@@ -313,10 +270,9 @@ Configure issue is resolved. On macOS, the Keychain via
 
 </details>
 
-The server binds to **localhost** on the Pinokio and terminal paths. Docker
-binds the application to `0.0.0.0` **inside the container** so Docker can
-forward requests to it. Provider Settings answers requests only from the
-appropriate local/server context. Browser-side keys (Google Maps, Cesium ion)
+The terminal and Pinokio paths bind to **localhost** by default. Docker binds to
+**0.0.0.0 inside the container** so it can be reached through the published
+Docker port or a reverse proxy. Browser-side keys (Google Maps, Cesium ion)
 must be restricted at their providers — [SECURITY.md](SECURITY.md) shows how,
 and it carries the LAN-sharing rules alongside [Keys & Costs](#-api-keys).
 
@@ -408,7 +364,7 @@ Twenty-nine tools, four jobs — the commands below come straight from the produ
 
 **And the rapid-fire tier** — one sentence each:
 
-> 🗣️ *"Show me global infrastructure."* (stages the layers and pulls back to the globe) · *"Play Orbital Watch."* (a full cinematic scene) · *"Set detection density to fifty percent."* · *"Next contact — helicopters only."* (mid-cockpit) · *"Show me space missions."* · *"Switch to OSM."* · *"Sharpen the image a touch."* · *"Switch to the tactical layout."* · _*"What's turned on right now?"*
+> 🗣️ *"Show me global infrastructure."* (stages the layers and pulls back to the globe) · *"Play Orbital Watch."* (a full cinematic scene) · *"Set detection density to fifty percent."* · *"Next contact — helicopters only."* (mid-cockpit) · *"Show me space missions."* · *"Switch to OSM."* · *"Sharpen the image a touch."* · *"Switch to the tactical layout."* · *"What's turned on right now?"*
 
 ![The globe populating with the world's radio stations as another live layer](docs/media/15-global-radio-layer.gif)
 
@@ -462,8 +418,6 @@ In the app, **Data Layers** groups them as Movement, Cameras, Infrastructure, Ev
 
 ![Diving into the Bahamas and revealing labeled submarine cable routes beneath the globe](docs/media/09-undersea-cables.gif)
 
-*The **Dams** layer and other bundled infrastructure are static datasets shipped with the repository.*
-
 **Missing a layer you want?** Open an issue — or add it and send the PR.
 
 ---
@@ -514,7 +468,7 @@ How the globe handles live data:
 * **Server-side credentials.** Every API that touches a private key (OpenAI, AISStream, OpenSky OAuth, camera frames) is brokered through a hardened server-side proxy with SSRF protection, response caps, and sanitized errors. The only keys the browser sees are Google Maps and Cesium ion (restrict both at the provider).
 * **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet and the **OpenAI Realtime API** for voice. Fast to read, fast to hack on.
 
-```text
+```
 src/
 ├── main.js                 # Bootstrap: Google 3D tiles, layer registration
 ├── ui.js                   # Runtime UI — panels, HUD, styles, control facade
@@ -586,14 +540,11 @@ advanced `dev-fresh.sh` configuration.
 <details>
 <summary>Advanced setup: environment variables and macOS Keychain</summary>
 
-For headless machines, coding agents, Docker, or scripted setups:
+For headless machines, coding agents, or scripted setups:
 
 ```bash
 # Put keys in .env (see .env.example), or pass them as env vars:
 OPENAI_API_KEY="…" AISSTREAM_API_KEY="…" npm run dev -- --host localhost --port 4173
-
-# Docker Compose reads the same .env file:
-docker compose up -d --build
 
 # On macOS, store any of them in the Keychain and dev-fresh.sh pulls them in:
 security add-generic-password -U -s "google-maps-api" -a "api-key" -w
@@ -652,18 +603,17 @@ Everything above is the deliberately cheap baseline — enough to get a real tas
 
 ### 🔒 Sharing an instance
 
-By default the terminal and Pinokio paths bind to localhost. Docker listens on
-`0.0.0.0` **inside its container** because the application must accept Docker
-forwarded traffic.
+By default nobody else can reach your server — the terminal and Pinokio paths
+bind to localhost. Docker binds to **0.0.0.0 inside the container** so it can
+be reached through the published Docker port or a reverse proxy.
 
-To share an instance beyond the local machine, use an appropriately configured
-reverse proxy and access controls. A LAN- or internet-visible server brokers
-configured server-side API keys to users who can reach it.
-
-Set the per-IP throttles
+If you share a server on your LAN, opt in explicitly (`npm run dev -- --host
+0.0.0.0 --port 4173`, or `HOST=0.0.0.0 ./scripts/dev-fresh.sh` on macOS/Linux) —
+but know that ⚠️ **a LAN-visible server brokers your configured API keys to
+anyone who can reach it.** Set the per-IP throttles
 (`GEV_RATELIMIT_OPENAI_PER_MIN`, `GEV_RATELIMIT_GOOGLE_PER_MIN` — see
-`.env.example`) and, before anything else, configure provider quotas, usage
-limits, and billing alerts: app-level throttles are not billing caps, and a
+`.env.example`) and, before anything else, **configure provider quotas, usage
+limits, and billing alerts**: app-level throttles are not billing caps, and a
 budget alert alone does not stop spending. Full threat model in
 [SECURITY.md](SECURITY.md).
 
