@@ -10,6 +10,51 @@ const MAPS_CALLBACK = '__gevStreetViewMapsReady';
 /** Search radii, metres: snap to the nearest road first, then look further out. */
 const SEARCH_RADII_M = Object.freeze([50, 250]);
 const MARKER_ID = 'street-view:marker';
+/**
+ * Google bills each panorama instantiation (Dynamic Street View: 5,000 free a
+ * month) and offers no quota row to cap it, so the app caps itself. 150 × 31
+ * stays under the free tier. Panning and walking inside a panorama are free.
+ */
+export const STREET_VIEW_DAILY_LIMIT = 150;
+const DAILY_LOADS_KEY = 'godsEyeView.streetView.dailyLoads';
+
+/** Google's quota day runs on Pacific time. */
+function quotaDay(now) {
+  return now.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+}
+
+/**
+ * Today's panorama-load count. Storage can be missing or throw (private
+ * windows, blocked site data); the count then starts from zero.
+ */
+function readDailyLoads(storage, memory, now) {
+  const day = quotaDay(now);
+  let count = memory.day === day ? memory.count : 0;
+  try {
+    const saved = JSON.parse(storage?.getItem(DAILY_LOADS_KEY) || 'null');
+    if (saved?.day === day && Number.isInteger(saved.count))
+      count = Math.max(count, saved.count);
+  } catch {
+    // Unreadable storage falls back to this page's own count.
+  }
+  return count;
+}
+
+/** `memory` keeps the count when storage is unavailable. */
+function recordDailyLoad(storage, memory, now) {
+  const count = readDailyLoads(storage, memory, now) + 1;
+  memory.day = quotaDay(now);
+  memory.count = count;
+  try {
+    storage?.setItem(
+      DAILY_LOADS_KEY,
+      JSON.stringify({ day: quotaDay(now), count }),
+    );
+  } catch {
+    // Without storage the limit holds for this page session only.
+  }
+  return count;
+}
 
 /**
  * Load the Maps JavaScript API once and resolve its Street View library.
@@ -43,6 +88,14 @@ function loadStreetViewLibrary(documentRef, apiKey) {
   return mapsLibraryPromise;
 }
 
+function safeLocalStorage() {
+  try {
+    return globalThis.localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Street View: press the shortcut, click the globe, and walk the street in a
  * Google Street View panel. A globe marker follows the panorama as it moves.
@@ -55,6 +108,9 @@ function loadStreetViewLibrary(documentRef, apiKey) {
  * @param {Document} options.documentRef
  * @param {() => string|undefined} options.getApiKey Browser Google Maps key.
  * @param {(message: string) => void} options.showToast
+ * @param {Storage} [options.storage] Holds the daily load count.
+ * @param {number} [options.dailyLimit] Panorama loads allowed per Pacific day.
+ * @param {() => Date} [options.now]
  * @returns {{toggle: Function, openAt: Function, close: Function, isOpen: Function, destroy: Function}}
  */
 export function createStreetView({
@@ -63,7 +119,11 @@ export function createStreetView({
   documentRef,
   getApiKey,
   showToast,
+  storage = safeLocalStorage(),
+  dailyLimit = STREET_VIEW_DAILY_LIMIT,
+  now = () => new Date(),
 }) {
+  const sessionLoads = { day: null, count: 0 };
   let lease = null;
   let releaseTimer = null;
   let pendingRelease = null;
@@ -116,11 +176,20 @@ export function createStreetView({
     };
   }
 
+  function limitReached() {
+    if (readDailyLoads(storage, sessionLoads, now()) < dailyLimit) return false;
+    showToast(
+      `Daily Street View limit reached (${dailyLimit}) — resets at midnight Pacific`,
+    );
+    return true;
+  }
+
   function arm() {
     if (!String(getApiKey() || '').trim()) {
       showToast('Street View needs a Google Maps key');
       return false;
     }
+    if (limitReached()) return false;
     lease = claimPointer(STREET_VIEW_POINTER_OWNER);
     if (!lease) {
       showToast(`Finish ${pointerOwner() || 'the active tool'} first`);
@@ -243,6 +312,8 @@ export function createStreetView({
   async function openAt(point) {
     if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lon))
       return false;
+    // Reusing an open panorama (setPano) is not a new load; creating one is.
+    if (!panorama && limitReached()) return false;
     const seq = ++openSeq;
     const win = documentRef.defaultView;
     // Google reports a rejected key through this global, not the promise.
@@ -272,6 +343,8 @@ export function createStreetView({
       pitch: 0,
     };
     if (!panorama) {
+      if (limitReached()) return false;
+      recordDailyLoad(storage, sessionLoads, now());
       panorama = new lib.StreetViewPanorama(
         panel.querySelector('.street-view-pano'),
         {
