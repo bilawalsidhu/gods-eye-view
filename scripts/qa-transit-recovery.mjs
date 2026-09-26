@@ -1,15 +1,32 @@
 /** Camera-jump regression against an existing server; never starts a server. */
 import puppeteer from 'puppeteer';
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { reduceTrailPixels } from '../src/layers/transit/qaMetrics.js';
 
 const base = process.env.QA_BASE_URL || 'http://localhost:4305';
 const shots = process.env.QA_SHOTS || 'qa-shots/transit-recovery';
+const executablePath = [
+  process.env.PUPPETEER_EXECUTABLE_PATH,
+  // Pinned Chrome-for-Testing ahead of the system browser, for the reasons
+  // spelled out in qa-firms.mjs; the macOS paths stay as the last resort.
+  await Promise.resolve()
+    .then(() => puppeteer.executablePath())
+    .catch(() => null),
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+]
+  .filter(Boolean)
+  .find((candidate) => existsSync(candidate));
+if (!executablePath) {
+  throw new Error(
+    'No Chrome executable found. Install the pinned browser with ' +
+      '`npx puppeteer browsers install chrome`, or set PUPPETEER_EXECUTABLE_PATH.',
+  );
+}
 await mkdir(shots, { recursive: true });
 const browser = await puppeteer.launch({
   headless: false,
-  executablePath:
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath,
   args: [
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',

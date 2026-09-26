@@ -34,6 +34,7 @@ import {
  * otherwise. Needs a running server; the feeds are keyless, so a keyless boot
  * exercises the same paths.
  */
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
 import { createTransitHistory } from '../server/providers/transitHistory.js';
@@ -259,11 +260,28 @@ check(
 historyProbe.clear();
 await mkdir(SHOTS, { recursive: true });
 
+const executablePath = [
+  process.env.PUPPETEER_EXECUTABLE_PATH,
+  // Pinned Chrome-for-Testing ahead of the system browser, for the reasons
+  // spelled out in qa-firms.mjs; the macOS paths stay as the last resort.
+  await Promise.resolve()
+    .then(() => puppeteer.executablePath())
+    .catch(() => null),
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+]
+  .filter(Boolean)
+  .find((candidate) => existsSync(candidate));
+if (!executablePath) {
+  throw new Error(
+    'No Chrome executable found. Install the pinned browser with ' +
+      '`npx puppeteer browsers install chrome`, or set PUPPETEER_EXECUTABLE_PATH.',
+  );
+}
+
 const browser = await puppeteer.launch({
   headless: false,
   protocolTimeout: 150000,
-  executablePath:
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath,
   args: [
     '--no-sandbox',
     '--disable-background-timer-throttling',
