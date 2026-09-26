@@ -149,11 +149,19 @@ export function createTrafficSource({
    * @param {Object} [options]
    * @param {'tomtom'|'osm'|'hybrid'|null} [options.roadMode] - Requested mode (null = default).
    * @param {Promise<{segments:Array, hasKey:boolean, error?:string, partial?:boolean}>} [options.flowSnapshot]
+   * @param {() => boolean} [options.liveModeHint] - Key state if the snapshot misses the pass deadline.
+   * @param {number} [options.timeoutSec=20] - Pass deadline, also bounding the snapshot wait.
    * @param {(data:Object) => void} [options.onTile] - Incremental snapshots; `replace` resets.
    */
   api.requestRoads = async (
     box,
-    { roadMode = null, flowSnapshot, onTile, ...options } = {},
+    {
+      roadMode = null,
+      flowSnapshot,
+      liveModeHint = () => false,
+      onTile,
+      ...options
+    } = {},
   ) => {
     if (
       !validTileBounds(box) ||
@@ -222,7 +230,24 @@ export function createTrafficSource({
     };
     const osmJob = roadMode === 'tomtom' ? null : loadOsm();
     osmJob?.catch(() => {});
-    live = await flowSnapshot;
+    // The snapshot waits on the status probe and flow tiles; never let it
+    // hold the road pass past its own deadline. A late snapshot counts as a
+    // flow failure: TomTom mode reports it, Hybrid falls back to OSM roads.
+    let deadline;
+    live = await Promise.race([
+      flowSnapshot,
+      new Promise((resolve) => {
+        deadline = setTimeout(
+          () =>
+            resolve({
+              segments: [],
+              hasKey: Boolean(liveModeHint()),
+              error: 'TomTom flow timed out',
+            }),
+          (options.timeoutSec ?? 20) * 1000,
+        );
+      }),
+    ]).finally(() => clearTimeout(deadline));
     signal?.throwIfAborted();
     if (!live)
       throw new TypeError(

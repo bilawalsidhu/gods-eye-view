@@ -454,3 +454,22 @@ test('a first keyed load whose flow fails never caches simulated fill as OSM roa
   await ingestion.loadRoadsForBounds(box, 350);
   assert.equal(requests.length, 4);
 });
+
+test('a flow snapshot that misses the pass deadline cannot hold roads', async () => {
+  const never = new Promise(() => {});
+  const request = (roadMode, hasKey) =>
+    sourceFixture().source.requestRoads(box, {
+      roadMode,
+      flowSnapshot: never,
+      liveModeHint: () => hasKey,
+      timeoutSec: 0.02,
+    });
+  const keyless = await (await request(null, false)).json();
+  assert.equal(keyless.roadMode, 'osm');
+  assert.equal(keyless.roads.length, 2);
+  const hybrid = await (await request(null, true)).json();
+  assert.equal(hybrid.roadMode, 'hybrid');
+  assert.equal(hybrid.roadSource, 'OpenStreetMap');
+  assert.ok(hybrid.roads.every((road) => road.simulatedOnly));
+  await assert.rejects(request('tomtom', true), /TomTom flow timed out/);
+});

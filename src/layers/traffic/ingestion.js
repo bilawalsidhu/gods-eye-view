@@ -103,6 +103,7 @@ export function createIngestion({
         onTile,
         roadMode: layerState._roadMode,
         flowSnapshot: layerState._roadFlowSnapshot,
+        liveModeHint: () => layerState._liveMode,
       },
     );
 
