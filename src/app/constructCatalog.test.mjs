@@ -39,13 +39,19 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 29);
+  assert.equal(first.layers.length, 30);
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
   assert.deepEqual(
     first.metadata.find(({ id }) => id === 'local-adsb'),
     { id: 'local-adsb', disposition: 'local-only' },
     'the hardware-local layer is never serialized into links',
   );
+  assert.ok(first.get('cyber'));
+  assert.deepEqual(first.get('cyber').getParams(), {
+    radarEnabled: true,
+    dshieldEnabled: true,
+    iodaEnabled: true,
+  });
   assert.notEqual(first.weatherClock, second.weatherClock);
   await first.weatherClock.setTarget('2026-09-21T12:00:00.000Z');
   assert.match(

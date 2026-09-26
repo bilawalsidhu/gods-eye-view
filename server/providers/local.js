@@ -24,10 +24,12 @@ import { keySetupEndpoint } from '../standalone/key-setup.js';
 import { weatherProxy } from './weather.js';
 import { firePerimetersProxy } from './firePerimeters.js';
 import { cycloneProxy } from './cyclones.js';
+import { cyberProxy } from './cyber.js';
 import { windProxy } from './wind.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
+  const cyber = cyberProxy();
   return [
     openSkyProxy(),
     celestrakProxy(),
@@ -56,6 +58,19 @@ function localProviderPlugins() {
     cycloneProxy(),
     firePerimetersProxy(),
     keySetupEndpoint(),
+    cyber,
+    keySetupEndpoint({
+      testProvider: (id) =>
+        id === 'cloudflare-radar'
+          ? cyber.testRadarConnection()
+          : id === 'shodan'
+            ? cyber.testShodanConnection()
+            : id === 'greynoise'
+              ? cyber.testGreyNoiseConnection()
+              : id === 'alienvault-otx'
+                ? cyber.testOtxConnection()
+                : Promise.reject(new Error('unknown_test_provider')),
+    }),
   ];
 }
 

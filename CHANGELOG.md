@@ -146,6 +146,77 @@
   dump1090/readsb `aircraft.json` documents.
 - Add `@jtarrio/webrtlsdr` and `@jtarrio/signals` (Apache-2.0); see
   `THIRD_PARTY_NOTICES.md`.
+# Unreleased — Cyber Phase 5 (IODA)
+
+- Add keyless, read-only IODA country-scoped connectivity outage events with a
+  bounded server cache and stale fallback. Show explicit country reference
+  markers, selection details and a collapsible event list. Events do not
+  establish outage cause; region and ASN records without trusted geography are
+  not mapped. See `DATA_SOURCES.md` for attribution and handling.
+
+# Unreleased — Cyber Phase 4
+
+- Add optional AlienVault OTX indicator lookups for IP addresses, domains,
+  HTTP(S) URLs, file hashes and CVEs. Operators can submit indicators directly
+  or look up DShield source IPs and Shodan devices; each request is deliberate,
+  bounded, cached server-side and attributed to OTX. Pulse context is limited
+  to five entries per result and does not create geographic map objects.
+- Add AlienVault OTX API-key setup and connection testing through the existing
+  Provider Settings flow. Keep the key server-side and explain that indicators
+  submitted for lookup are sent to OTX. A pulse match is context, not proof of
+  compromise. See `DATA_SOURCES.md` for source handling and terms.
+
+## Unreleased — Cyber Phase 3
+
+- Add the CISA Known Exploited Vulnerabilities catalog as a public, keyless
+  Cyber provider. Cache normalized catalog records server-side, retain a
+  bounded stale fallback, and provide searchable vulnerability details in
+  Cyber Threat Intel without assigning geography to CVE records.
+- Correlate Shodan results with KEV entries only when Shodan reports the exact
+  CVE identifier in a banner. Product/CPE similarity alone is not reported as
+  a confirmed match; show match provenance and clarify that it does not prove
+  an asset remains vulnerable.
+
+## Unreleased — Cyber Phase 2
+
+- Add optional Shodan host enrichment and explicit current-map-area search
+  with an optional query, plus optional GreyNoise Community IP context. Area
+  searches use one Shodan query credit, are limited to a 1,000 km radius and
+  the first result page, show up to 100 devices, and never run while the
+  camera moves. Devices without
+  Shodan coordinates use cached IPwho.is approximate network geolocation when
+  available; unresolved results are not mapped. Enrichment controls now use
+  readable full-width rows in the DShield table. Calls run only after an
+  explicit operator action; results are attributed, normalized, cached, and
+  kept out of the camera/update loop. GreyNoise connection testing confirms
+  before using one Community lookup. Credentials use existing Provider Settings.
+- Keep Shodan and GreyNoise optional: DShield and Cloudflare Radar retain their
+  Phase 1 behavior when either enrichment provider is unconfigured or down.
+  See `DATA_SOURCES.md` for terms, attribution and quota handling.
+
+## Unreleased — Cyber Phase 1
+
+- Add a focused browser QA gate for Cyber Activity, and correct Cyber marker
+  accounting so rendered gradient segments do not inflate semantic flow counts.
+
+- Clarify Radar overlap and pair coverage: countries in both role aggregates
+  render as a single purple marker with separate origin/target details; only
+  Cloudflare-reported country pairs receive red, wider directional arrows.
+  Explain that unconnected country aggregates have no pair in the displayed
+  top-pair results. Rename DShield top-ten sections and show IP/domain values in
+  labeled columns.
+
+- Add the provider-neutral Cyber Activity layer with optional Cloudflare Radar
+  country aggregates and keyless DShield reported-IP/source-port observations.
+  Include Cloudflare-reported origin/target pair arcs, selected-marker/arc
+  details, and a collapsible Cyber Threat Intel panel outside Data Layers that
+  is visible only while Cyber Activity is enabled.
+  Radar credentials use the existing local Provider Settings flow; DShield
+  remains non-geographic, and Radar country points are explicitly aggregate
+  reference anchors rather than individual attack locations.
+- Add Cyber source attribution, hourly/15-minute caching, bounded upstream
+  requests, stale-data behavior, provider controls, and normalized analyst
+  records. See `DATA_SOURCES.md` for source semantics and terms.
 
 ## Unreleased — weather review
 

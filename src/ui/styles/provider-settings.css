@@ -387,6 +387,31 @@ body.scene-playback-mode #key-setup {
     border-color var(--transition-fast);
 }
 
+.key-setup-test {
+  justify-self: start;
+  padding: 0.28rem 0.55rem;
+  color: rgba(125, 225, 245, 0.9);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.08rem;
+  background: rgba(54, 220, 255, 0.06);
+  border: 1px solid rgba(54, 220, 255, 0.3);
+  border-radius: 0.32rem;
+  cursor: pointer;
+}
+
+.key-setup-test:hover,
+.key-setup-test:focus-visible {
+  color: rgba(180, 245, 255, 1);
+  border-color: rgba(54, 220, 255, 0.65);
+  outline: none;
+}
+
+.key-setup-test:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .key-setup-remove:hover,
 .key-setup-remove:focus-visible {
   color: rgba(255, 190, 170, 1);

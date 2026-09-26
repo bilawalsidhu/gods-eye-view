@@ -5,7 +5,8 @@ export async function runTransitHeadingRegression(base, check) {
   const browser = await puppeteer.launch({
     headless: true,
     executablePath:
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      process.env.PUPPETEER_EXECUTABLE_PATH ||
+      (await puppeteer.executablePath().catch(() => null)),
     args: ['--no-sandbox', '--disable-background-timer-throttling'],
   });
   try {

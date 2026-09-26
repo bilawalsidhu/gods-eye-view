@@ -60,12 +60,28 @@ test('the status payload reports presence without any credential material', () =
   const env = {
     GOOGLE_MAPS_API_KEY: 'AIzaSyFakeFakeFakeFake1234',
     OPENSKY_CLIENT_ID: 'client-id-abcdef',
+    SHODAN_API_KEY: 'shodan-fixture-secret',
+    GREYNOISE_API_KEY: 'greynoise-fixture-secret',
+    ALIENVAULT_OTX_API_KEY: 'otx-fixture-secret',
     // Secret missing: the OpenSky pair must read as NOT set.
   };
   const status = keySetupStatus(env);
   assert.equal(status.total, KEY_SETUP_KEYS.filter((key) => !key.hidden).length);
   const google = status.keys.find((key) => key.id === 'google-maps');
   assert.equal(google.set, true);
+  const radar = status.keys.find((key) => key.id === 'cloudflare-radar');
+  assert.equal(radar.set, false);
+  assert.equal(radar.testId, 'cloudflare-radar');
+  for (const [id, testId, envVar] of [
+    ['shodan', 'shodan', 'SHODAN_API_KEY'],
+    ['greynoise', 'greynoise', 'GREYNOISE_API_KEY'],
+    ['alienvault-otx', 'alienvault-otx', 'ALIENVAULT_OTX_API_KEY'],
+  ]) {
+    const key = status.keys.find((row) => row.id === id);
+    assert.equal(key.set, true);
+    assert.equal(key.testId, testId);
+    assert.deepEqual(key.envVars, [envVar]);
+  }
   const opensky = status.keys.find((key) => key.id === 'opensky');
   assert.equal(opensky.set, false, 'half a credential pair is not configured');
   const serialized = JSON.stringify(status);
@@ -74,7 +90,10 @@ test('the status payload reports presence without any credential material', () =
   assert.ok(!serialized.includes('1234'), 'a credential suffix leaked into status');
   assert.ok(!serialized.includes('abcdef'), 'a credential suffix leaked into status');
   assert.ok(!serialized.includes('tails'), 'status must not expose a credential-tail field');
-  assert.equal(status.setCount, 1);
+  assert.ok(!serialized.includes('shodan-fixture-secret'));
+  assert.ok(!serialized.includes('greynoise-fixture-secret'));
+  assert.ok(!serialized.includes('otx-fixture-secret'));
+  assert.equal(status.setCount, 4);
 });
 
 test('whitespace-only env values do not count as configured', () => {

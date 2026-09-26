@@ -43,6 +43,7 @@
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
+    "qa:cyber": "node scripts/qa-cyber.mjs",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
     "qa:transit": "node scripts/qa-transit.mjs"
   },
@@ -89,6 +90,9 @@
     "./sources/space": "./src/data/spaceProviderRequests.js",
     "./server/providers/terrain": {
       "node": "./server/providers/terrain.js"
+    },
+    "./server/providers/cyber": {
+      "node": "./server/providers/cyber.js"
     },
     "./sources/terrain": "./src/data/terrainHeightsProxy.js",
     "./server/providers/traffic": {

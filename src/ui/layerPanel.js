@@ -59,6 +59,10 @@ const PANEL_GROUPS = [
     ],
   },
   {
+    label: 'Cyber',
+    ids: ['cyber'],
+  },
+  {
     label: 'Utilities',
     ids: ['directions', 'radio'],
   },

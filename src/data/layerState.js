@@ -320,6 +320,11 @@ const OPTION_GROUPS = Object.freeze({
       { clouds: 'g', 'clouds-regional': 'r' },
     ),
   ]),
+  cyber: Object.freeze([
+    booleanOption('radarEnabled', 'r', true),
+    booleanOption('dshieldEnabled', 'd', true),
+    booleanOption('iodaEnabled', 'i', true),
+  ]),
   wind: Object.freeze([
     enumOption('model', 'm', 'gfs', ['gfs', 'ifs'], { gfs: 'g', ifs: 'i' }),
     enumOption(
@@ -477,6 +482,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'c',
     disposition: 'enabled+options',
     optionOwner: 'cctv',
+  }),
+  Object.freeze({
+    id: 'cyber',
+    token: '0',
+    disposition: 'enabled+options',
+    optionOwner: 'cyber',
   }),
   Object.freeze({ id: 'directions', token: 'n', disposition: 'enabled-only' }),
   Object.freeze({ id: 'earthquakes', token: 'e', disposition: 'enabled-only' }),

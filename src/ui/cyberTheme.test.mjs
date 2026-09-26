@@ -18,10 +18,14 @@ test('CCTV and Context keep their headers outside Cyber-only scroll bodies', () 
       new URL(`./templates/${file}`, import.meta.url),
       'utf8',
     );
-    assert.match(markup, /class="cyber-panel-body" data-rail-scroller/);
+    const scrollBody =
+      file === 'context.html'
+        ? /class="cyber-intel-body"/
+        : /class="cyber-panel-body" data-rail-scroller/;
+    assert.match(markup, scrollBody);
     assert.ok(
       markup.indexOf('class="panel-header"') <
-        markup.indexOf('class="cyber-panel-body"'),
+        markup.indexOf(file === 'context.html' ? 'class="cyber-intel-body"' : 'class="cyber-panel-body"'),
     );
   }
   const shared = readFileSync(

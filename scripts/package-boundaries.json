@@ -293,6 +293,22 @@
     ],
     "external": []
   },
+  "cyber-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/cyber"],
+    "modules": [
+      "server/providers/cyber.js",
+      "server/providers/cyber/enrichment.js",
+      "server/providers/cyber/otx.js",
+      "server/providers/cyber/ioda.js",
+      "server/providers/common/http.js",
+      "src/sources/httpBody.js",
+      "src/keySetupCore.mjs",
+      "src/layers/cyber/ioda.js",
+      "src/layers/cyber/countryAnchors.json"
+    ],
+    "external": []
+  },
   "place-search": {
     "exports": ["./search"],
     "modules": [
@@ -1722,6 +1738,8 @@
       "src/ui/cctvVideo.js",
       "src/ui/cctvPresentation.js",
       "src/ui/clearLayersControl.js",
+      "src/ui/cyberIntelPanel.js",
+      "src/layers/cyber/markers.js",
       "src/ui/cockpit.js",
       "src/ui/cockpitBriefing.js",
       "src/ui/cockpitCamera.js",
@@ -1947,6 +1965,11 @@
       "src/sdr/usbDevices.js",
       "src/ui/localSdrControls.js",
       "src/ui/localSdrPresentation.js",
+      "src/layers/cyber/index.js",
+      "src/layers/cyber/records.js",
+      "src/layers/cyber/ioda.js",
+      "src/layers/cyber/countryAnchors.json",
+      "src/layers/cyber/source.js",
       "src/app/layers/recentImagery.js",
       "src/layers/recentImagery/index.js",
       "src/layers/recentImagery/model.js",
@@ -1989,6 +2012,7 @@
       "src/annotations/resolver.js",
       "src/app/catalog.js",
       "src/app/constructCatalog.js",
+      "src/layers/cyber/markers.js",
       "src/layers/wind/index.js",
       "src/layers/wind/model.js",
       "src/layers/wind/fields.js",
@@ -2415,7 +2439,8 @@
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/rendering.js",
       "src/layers/recentImagery/thumbnails.js",
-      "src/maps/imageryHost.js"
+      "src/maps/imageryHost.js",
+      "src/layers/cyber/index.js"
     ],
     "external": [
       "hls.js",

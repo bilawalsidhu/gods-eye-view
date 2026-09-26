@@ -57,7 +57,7 @@ test('Cockpit has one reset action beside its bottom exit path', () => {
     /id="cockpit-reset-globe"[^>]*type="button"[^>]*aria-label="Reset cockpit to full globe view"[^>]*hidden[\s\S]*?public[\s\S]*?RESET[\s\S]*?id="map-view-switch"/,
   );
 
-  const actions = html.match(/<div class="global-context-actions"[\s\S]*?<\/div>/);
+  const actions = html.match(/<div\s+class="global-context-actions"[\s\S]*?<\/div>/);
   assert.ok(actions, 'Contact Context actions are missing');
   assert.ok(
     actions[0].indexOf('id="cockpit-entry"') < actions[0].indexOf('id="installations-search-btn"'),
@@ -108,9 +108,9 @@ test('Cockpit vision cycle exposes exactly five real visual styles without NONE'
 });
 
 test('Contacts uses the approved radar icon', () => {
-  const button = html.match(/<button id="global-context-flights-btn"[\s\S]*?<\/button>/);
+  const button = html.match(/<button\s+id="global-context-flights-btn"[\s\S]*?<\/button>/);
   assert.ok(button, 'Contacts button is missing');
-  assert.match(button[0], /material-symbols-outlined" aria-hidden="true">radar<\/span>/);
+  assert.match(button[0], /material-symbols-outlined" aria-hidden="true"\s*>radar\s*<\/span\s*>/);
 });
 
 test('Cockpit Escape handling precedes form-control shortcut suppression and focus is restored', () => {
@@ -766,7 +766,7 @@ test('Cockpit Contact navigation omits the redundant Focus camera action', () =>
 
 test('Global Context names its mixed contact cycle without changing the stable mode id', () => {
   const match = html.match(
-    /<button id="global-context-flights-btn"[\s\S]*?<\/button>/,
+    /<button\s+id="global-context-flights-btn"[\s\S]*?<\/button>/,
   );
   assert.ok(match, 'Global Context contacts button is missing');
   assert.match(match[0], />CONTACTS</);
@@ -791,7 +791,7 @@ test('Global Context standby describes both chooser modes', () => {
   );
   assert.ok(match, 'Global Context standby is missing');
   assert.match(match[0], /CONTACTS — nearest planes · vessels · sites/);
-  assert.match(match[0], /SPACE MISSIONS — launches &amp; orbital assets/);
+  assert.match(match[0], /SPACE MISSIONS —\s*launches &amp; orbital assets/);
 });
 
 test('cockpit briefing cycle control keeps its state as the accessible name', () => {

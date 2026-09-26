@@ -1,5 +1,21 @@
 /* ── Responsive ───────────────────────────────── */
 @media (max-width: 720px) {
+  #cyber-threat-summary-panel:not([hidden]) {
+    left: 16px;
+    bottom: 2vh;
+    width: min(320px, calc(100vw - 32px));
+    max-height: min(36vh, 300px);
+  }
+
+  #cyber-intel-legend-panel:not([hidden]) {
+    left: auto;
+    top: auto;
+    right: 16px;
+    bottom: calc(2vh + 92px);
+    width: min(260px, calc(100vw - 32px));
+    max-height: min(32vh, 280px);
+  }
+
   #pp-toggles {
     --pp-expanded-width: 176px;
     position: relative;
@@ -223,7 +239,9 @@
   #right-context-rail #radio-panel,
   #right-context-rail #radio-panel.collapsed,
   #right-context-rail #global-context-panel,
-  #right-context-rail #global-context-panel.collapsed {
+  #right-context-rail #global-context-panel.collapsed,
+  #right-context-rail #cyber-intel-panel,
+  #right-context-rail #cyber-intel-panel.collapsed {
     width: 100%;
   }
   .context-radio-mini {

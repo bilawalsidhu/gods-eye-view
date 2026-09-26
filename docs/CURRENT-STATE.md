@@ -36,6 +36,90 @@ themes or enabling omitted settings. State readback distinguishes configured
 settings from active map/contact effects. Sonar settings are session-only and
 return to their defaults on reload. Sliders accept integer values matching the
 action's ranges.
+## Cyber Activity (Phases 1–5)
+
+Cyber is one first-class, provider-neutral data layer. Cloudflare Radar supplies
+bounded 24-hour Layer 7 attack origin/target country aggregates when its
+optional token is configured in Provider Settings. Its map points use published
+country reference coordinates only; they are not device locations. Country pair
+arcs use Cloudflare's reported top origin-target pairs and do not represent
+physical network routes. Countries present in both aggregate lists use one
+purple marker with both roles and their separate shares/ranks in the detail
+panel; origin-only and target-only markers remain red and blue. A country marker
+may have no connecting arc when it is absent from Cloudflare's bounded top-pair
+results. Arcs are red, wider, and use a larger arrow cue. Selecting a Radar
+marker or arc shows its role, country pair, share, rank, reporting window, and
+geographic provenance. Radar API data is licensed CC BY-NC 4.0, documented in
+`DATA_SOURCES.md`. SANS ISC / DShield supplies hourly-cached top reported source
+IPs and scanning source ports without credentials; those records have no
+geographic coordinates and may include false positives. They appear in a
+separate Cyber Threat Intel panel outside Data Layers while Cyber Activity is
+enabled. The panel contains non-geographic Cyber sources and country-level connectivity context.
+Its DShield source list labels IP Address and Domain Name separately and shows
+the top ten source and targeted-port records.
+Each provider fails independently, and cached data may be shown during temporary
+upstream outages.
+
+Phase 2 adds optional Shodan host intelligence and deliberate searches for a
+circle around the current map view (up to a 1,000 km radius), plus on-demand
+  GreyNoise Community lookups. Neither source polls or runs while the camera
+moves; all lookups require an explicit click.
+Area searches use one Shodan query credit, fetch only the first result page,
+and display up to 100 unique devices from the first result page. The optional
+Shodan query is combined with the current map-area filter in a single search.
+Shodan and IPwho.is coordinates are shown as approximate IP network locations,
+not precise device locations. When Shodan has no usable coordinates, the server
+may ask IPwho.is to geolocate the public IP; those fallback results are cached,
+their external disclosure is explained in the panel, and unresolved records are
+not mapped. Filtered searches and later pages may consume Shodan query credits.
+GreyNoise connection testing confirms before spending one Community lookup.
+All Cyber credentials use the existing Provider Settings credential store. See
+`DATA_SOURCES.md` for provider limits, terms and attribution.
+
+Phase 3 adds the public CISA Known Exploited Vulnerabilities (KEV) catalog to
+Cyber Threat Intel. The catalog is cached server-side for one hour, with a
+seven-day stale fallback. Users can search its full catalog by CVE, vendor,
+product, name, or description and expand remediation guidance. KEV entries are
+not geographic objects. Shodan asset correlation is limited to explicit CVE
+identifiers returned in Shodan banners; product/CPE similarity alone is not
+treated as a confirmed match, and a reported match does not prove the asset
+remains vulnerable.
+
+Phase 4 adds optional AlienVault OTX indicator lookups for IP addresses,
+domains, HTTP(S) URLs, file hashes and CVEs. Operators may enter an indicator
+in Cyber Threat Intel or start a lookup from a DShield source IP or selected
+Shodan device. Each lookup is explicit and sends the submitted indicator to
+OTX. Results show up to five related pulse summaries, tags and source links;
+they are cached server-side for 30 minutes and remain non-geographic. A match
+provides threat-intelligence context and does not establish compromise. The
+OTX API key is configured, tested, updated and removed through Provider
+Settings; it stays in the existing local server credential store. OTX lookups
+are optional and do not block the other Cyber providers. See `DATA_SOURCES.md`.
+
+Phase 5 adds the public, keyless IODA outage-events API. The server requests up
+to 250 country-scoped events for the most recent 24 hours, caches the response
+for five minutes, and may serve a last-good snapshot for up to six hours during
+an upstream outage. A separate IODA Connectivity toggle controls cyan country
+markers. Each marker is placed at a pinned Natural Earth country label point;
+it represents the country scope only, not the location or cause of an outage.
+The panel shows event start, duration, source and detection method. Region- and
+ASN-scoped events are not mapped because this integration has no verified
+geographic geometry for them. IODA is independent of Radar, DShield, Shodan,
+KEV and OTX. See `DATA_SOURCES.md`.
+
+The Cyber layer uses the shared data-layer panel and state codec. Its local
+server proxy bounds upstream responses, keeps Radar tokens server-side, and
+normalizes provider records before rendering. Radar and DShield can be
+enabled/disabled in
+the layer controls; its credential can be tested, changed, or removed in the
+existing Provider Settings panel. IODA can be enabled or disabled independently
+in the same Cyber layer controls and requires no credential.
+
+The focused browser acceptance gate is `npm run qa:cyber`. Start the app first,
+then set `QA_BASE_URL` if it is not at `http://localhost:4173`. The gate uses
+local fixtures for provider responses and verifies the initial disabled state,
+Cyber panels and provider rendering, default-collapsed KEV results, and clean
+disable behavior without requiring provider credentials.
 
 Wind appears in the Weather group before Utilities. The surface-weather prototype
 uses keyless NOAA GFS or ECMWF IFS forecasts on an approximately 1° display grid.

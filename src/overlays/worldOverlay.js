@@ -104,6 +104,8 @@ export const WORLD_OVERLAY_OCCLUDER_SELECTORS = Object.freeze([
   '#cctv-sync-chip',
   '#left-panel-stack',
   '#right-context-rail',
+  '#cyber-intel-legend-panel',
+  '#cyber-threat-summary-panel',
   '.weather-summary',
   '#pp-toggles',
   '#command-dock',

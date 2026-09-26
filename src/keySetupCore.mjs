@@ -14,7 +14,7 @@
 /** Longest accepted key/token value. Real provider keys are all far shorter. */
 export const KEY_SETUP_VALUE_LIMIT = 512;
 
-/** Most env vars accepted in one save. The registry defines ten. */
+/** Most env vars accepted in one save. */
 export const KEY_SETUP_UPDATE_LIMIT = 16;
 
 /** Header line written above keys the panel appends to a .env file. */
@@ -105,6 +105,44 @@ export const KEY_SETUP_KEYS = Object.freeze([
     getUrl: 'https://thespacedevs.com',
     envVars: Object.freeze(['LL2_API_TOKEN']),
     tier: 'free',
+  }),
+  Object.freeze({
+    id: 'cloudflare-radar',
+    title: 'CLOUDFLARE RADAR',
+    unlocks: 'Country-level mitigated HTTP attack trends in Cyber Activity',
+    getUrl: 'https://dash.cloudflare.com/profile/api-tokens',
+    envVars: Object.freeze(['CLOUDFLARE_RADAR_API_TOKEN']),
+    tier: 'free',
+    testId: 'cloudflare-radar',
+  }),
+  Object.freeze({
+    id: 'shodan',
+    title: 'SHODAN',
+    unlocks:
+      'On-demand Internet host and service enrichment; searches may use query credits',
+    getUrl: 'https://account.shodan.io/',
+    envVars: Object.freeze(['SHODAN_API_KEY']),
+    tier: 'free',
+    testId: 'shodan',
+  }),
+  Object.freeze({
+    id: 'greynoise',
+    title: 'GREYNOISE',
+    unlocks:
+      'On-demand IP noise, RIOT and classification context; connection test uses one Community lookup',
+    getUrl: 'https://viz.greynoise.io/account',
+    envVars: Object.freeze(['GREYNOISE_API_KEY']),
+    tier: 'free',
+    testId: 'greynoise',
+  }),
+  Object.freeze({
+    id: 'alienvault-otx',
+    title: 'ALIENVAULT OTX',
+    unlocks: 'On-demand IOC and threat-pulse context in Cyber Activity',
+    getUrl: 'https://otx.alienvault.com/api/',
+    envVars: Object.freeze(['ALIENVAULT_OTX_API_KEY']),
+    tier: 'free',
+    testId: 'alienvault-otx',
   }),
 ]);
 
@@ -376,6 +414,7 @@ export function keySetupStatus(env = {}) {
       envVars: [...entry.envVars],
       tier: entry.tier,
       clientExposed: Boolean(entry.clientExposed),
+      testId: entry.testId || null,
       set,
     };
   });

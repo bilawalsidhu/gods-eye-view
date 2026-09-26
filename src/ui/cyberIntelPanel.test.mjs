@@ -1,0 +1,606 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { CyberIntelPanel } from './cyberIntelPanel.js';
+
+class FakeNode {
+  constructor(tag = 'div', className = '') {
+    this.tagName = tag;
+    this.className = className;
+    this.children = [];
+    this.attributes = new Map();
+    this.dataset = {};
+    this.style = {};
+    this.hidden = false;
+    this.inert = false;
+    this.listeners = new Map();
+    this.classList = {
+      contains: (value) => this.className.split(/\s+/).includes(value),
+      add: (value) => {
+        if (!this.classList.contains(value)) this.className += ` ${value}`;
+      },
+      remove: (value) => {
+        this.className = this.className
+          .split(/\s+/)
+          .filter((item) => item !== value)
+          .join(' ');
+      },
+      toggle: (value, force) => {
+        const next = force ?? !this.classList.contains(value);
+        if (next) this.classList.add(value);
+        else this.classList.remove(value);
+        return next;
+      },
+    };
+  }
+  append(...nodes) {
+    this.children.push(...nodes);
+  }
+  addEventListener(type, listener) {
+    this.listeners.set(type, listener);
+  }
+  removeEventListener(type) {
+    this.listeners.delete(type);
+  }
+  replaceChildren(...nodes) {
+    this.children = nodes;
+  }
+  setAttribute(name, value) {
+    this.attributes.set(name, String(value));
+  }
+  remove() {
+    this.removed = true;
+  }
+  querySelector(selector) {
+    return selector === '[data-collapse-target="cyber-intel-panel"]'
+      ? this.disclosure
+      : null;
+  }
+  get textContent() {
+    return [
+      this._text || '',
+      ...this.children.map((node) => node?.textContent || ''),
+    ].join('');
+  }
+  set textContent(value) {
+    this._text = String(value);
+  }
+}
+
+function fixture() {
+  const panel = new FakeNode('section', 'panel-collapsible collapsed');
+  const body = new FakeNode('div');
+  const legendPanel = new FakeNode('section');
+  const legendContent = new FakeNode('div');
+  const legendToggle = new FakeNode('button');
+  const threatSummaryPanel = new FakeNode('section');
+  const threatSummaryContent = new FakeNode('div');
+  const threatSummaryToggle = new FakeNode('button');
+  legendPanel.hidden = true;
+  legendPanel.inert = true;
+  const documentBody = new FakeNode('body');
+  const disclosure = new FakeNode('button');
+  disclosure.click = () => panel.classList.remove('collapsed');
+  panel.disclosure = disclosure;
+  const documentRef = {
+    body: documentBody,
+    createElement: (tag) => new FakeNode(tag),
+    createTextNode: (text) => ({ textContent: String(text) }),
+    getElementById: (id) =>
+      ({
+        'cyber-intel-panel': panel,
+        'cyber-intel-body': body,
+        'cyber-intel-legend-panel': legendPanel,
+        'cyber-intel-map-legend-content': legendContent,
+        'cyber-threat-summary-panel': threatSummaryPanel,
+        'cyber-threat-summary-content': threatSummaryContent,
+      })[id] || null,
+  };
+  return {
+    panel,
+    body,
+    legendPanel,
+    legendContent,
+    legendToggle,
+    threatSummaryPanel,
+    threatSummaryContent,
+    threatSummaryToggle,
+    documentRef,
+    disclosure,
+  };
+}
+
+function findNode(root, predicate) {
+  if (predicate(root)) return root;
+  for (const child of root.children || []) {
+    const match = findNode(child, predicate);
+    if (match) return match;
+  }
+  return null;
+}
+
+test('Cyber Threat Intel remains hidden unless Cyber Activity is enabled', () => {
+  const f = fixture();
+  const layer = {
+    state: { enabled: false, selectedRadar: null, nonGeographicProviders: [] },
+    setThreatIntelListener(listener) {
+      this.listener = listener;
+    },
+    getThreatIntelState() {
+      return this.state;
+    },
+  };
+  const panel = new CyberIntelPanel({ documentRef: f.documentRef });
+  panel.mount(layer);
+  assert.equal(f.panel.hidden, true);
+  layer.state = {
+    enabled: true,
+    selectedRadar: null,
+    kevSnapshot: {
+      provider: 'cisa-kev',
+      attribution: 'CISA Known Exploited Vulnerabilities Catalog',
+      catalogVersion: '2026.09.23',
+      dateReleased: '2026-09-23T12:51:35.821Z',
+      fetchedAt: '2026-09-23T13:00:00.000Z',
+      stale: false,
+      count: 1,
+      vulnerabilities: [
+        {
+          cveId: 'CVE-2024-12345',
+          vendor: 'Example Vendor',
+          product: 'Example Product',
+          name: 'Example vulnerability',
+          dateAdded: '2026-09-22',
+          shortDescription: 'A test vulnerability.',
+          requiredAction: 'Apply the vendor update.',
+          dueDate: '2026-10-01',
+          ransomware: 'Known',
+          forensicTriage: true,
+          notes: null,
+          cwes: ['CWE-20'],
+        },
+      ],
+    },
+    shodanAreaSearch: {
+      matches: [
+        {
+          ip: '8.8.4.4',
+          city: 'Example City',
+          country: 'Example Country',
+          organization: 'Example Org',
+          latitude: 37.7,
+          longitude: -97.8,
+          geographicPrecision: 'network-approximate',
+        },
+      ],
+    },
+    nonGeographicProviders: [
+      {
+        id: 'dshield',
+        label: 'SANS ISC / DShield',
+        status: 'updated 2026-09-20T01:00:00Z',
+        fetchedAt: '2026-09-20T01:00:00Z',
+        attribution: 'SANS ISC / DShield',
+        notice: 'Reports may include false positives.',
+        observations: [
+          {
+            rank: 1,
+            indicator: { type: 'ipv4', value: '192.0.2.1' },
+            hostname: null,
+          },
+        ],
+        ports: [{ port: 23, protocol: 'tcp', label: 'Telnet' }],
+        enrichmentResults: {},
+        enrichmentPending: [],
+        shodanAreaSearch: {
+          matches: [
+            {
+              ip: '8.8.4.4',
+              city: 'Example City',
+              country: 'Example Country',
+              organization: 'Example Org',
+              latitude: 37.7,
+              longitude: -97.8,
+              geographicPrecision: 'network-approximate',
+            },
+          ],
+        },
+      },
+    ],
+  };
+  layer.listener(layer.state);
+  assert.equal(f.panel.hidden, false);
+  assert.equal(f.legendPanel.hidden, false);
+  assert.equal(f.threatSummaryPanel.hidden, false);
+  assert.equal(f.panel.classList.contains('collapsed'), false);
+  assert.match(f.threatSummaryContent.textContent, /192\.0\.2\.1/);
+  assert.match(
+    f.threatSummaryContent.textContent,
+    /Current Top 10 malicious sources/,
+  );
+  assert.match(f.threatSummaryContent.textContent, /IP Address/);
+  assert.match(f.threatSummaryContent.textContent, /Domain Name/);
+  assert.match(f.threatSummaryContent.textContent, /Unavailable/);
+  assert.match(
+    f.threatSummaryContent.textContent,
+    /Current Top 10 Targeted Ports/,
+  );
+  assert.match(f.threatSummaryContent.textContent, /23\/tcp/);
+  assert.match(f.body.textContent, /Shodan Exposed Device Search/);
+  assert.match(f.body.textContent, /CISA Known Exploited Vulnerabilities/);
+  assert.match(f.body.textContent, /CVE-2024-12345/);
+  const kevResults = findNode(f.body, (node) => node.dataset?.kevResults);
+  assert.ok(kevResults);
+  assert.equal(kevResults.open, false);
+  assert.match(f.legendContent.textContent, /CloudFlare Radar/);
+  assert.match(f.legendContent.textContent, /Shodan/);
+  assert.match(f.legendContent.textContent, /Server · searched Shodan device/);
+  const explainers = f.legendContent.children[0].children.filter(
+    (node) => node.tagName === 'details',
+  );
+  assert.equal(explainers.length, 3);
+  assert.match(f.legendContent.textContent, /IODA Connectivity/);
+  assert.ok(explainers.every((node) => !node.open));
+  assert.ok(
+    f.legendContent.textContent.indexOf('CloudFlare Radar') <
+      f.legendContent.textContent.indexOf('Shodan'),
+  );
+  const clickLegendToggle = () =>
+    f.legendPanel.listeners.get('click')({
+      target: {
+        closest: (selector) =>
+          selector === '[data-cyber-legend-collapse]' ? f.legendToggle : null,
+      },
+    });
+  clickLegendToggle();
+  assert.equal(
+    f.legendPanel.classList.contains('cyber-legend-collapsed'),
+    true,
+  );
+  assert.equal(f.legendToggle.attributes.get('aria-expanded'), 'false');
+  assert.equal(f.legendToggle.textContent, '⌃');
+  clickLegendToggle();
+  assert.equal(
+    f.legendPanel.classList.contains('cyber-legend-collapsed'),
+    false,
+  );
+  assert.doesNotMatch(f.body.textContent, /Top Attackers & Target Ports/);
+  assert.equal(f.threatSummaryPanel.hidden, false);
+  assert.match(
+    f.threatSummaryContent.textContent,
+    /Current Top 10 malicious sources/,
+  );
+  const clickThreatSummaryToggle = () =>
+    f.threatSummaryPanel.listeners.get('click')({
+      target: {
+        closest: (selector) =>
+          selector === '[data-cyber-threat-summary-collapse]'
+            ? f.threatSummaryToggle
+            : null,
+      },
+    });
+  clickThreatSummaryToggle();
+  assert.equal(
+    f.threatSummaryPanel.classList.contains('cyber-threat-summary-collapsed'),
+    true,
+  );
+  assert.equal(f.threatSummaryToggle.attributes.get('aria-expanded'), 'false');
+  clickThreatSummaryToggle();
+  assert.equal(
+    f.threatSummaryPanel.classList.contains('cyber-threat-summary-collapsed'),
+    false,
+  );
+  assert.ok(
+    f.body.textContent.indexOf('Shodan Exposed Device Search') <
+      f.body.textContent.indexOf('CISA Known Exploited Vulnerabilities'),
+  );
+  assert.match(f.body.textContent, /query credit/);
+  assert.match(f.body.textContent, /Shodan Search/);
+  assert.match(f.body.textContent, /A search uses one query credit/);
+  assert.match(
+    f.body.textContent,
+    /Missing coordinates may use approximate IP geolocation/,
+  );
+  assert.match(f.body.textContent, /8\.8\.4\.4/);
+  layer.state = {
+    enabled: false,
+    selectedRadar: null,
+    nonGeographicProviders: [],
+  };
+  layer.listener(layer.state);
+  assert.equal(f.panel.hidden, true);
+  assert.equal(f.panel.inert, true);
+  assert.equal(f.legendPanel.hidden, true);
+  assert.equal(f.legendPanel.inert, true);
+  assert.equal(f.threatSummaryPanel.hidden, true);
+  assert.equal(f.threatSummaryPanel.inert, true);
+  panel.destroy();
+});
+
+test('IODA panel shows collapsible country event details and cause caveat', () => {
+  const f = fixture();
+  const layer = {
+    state: {
+      enabled: true,
+      selectedRadar: null,
+      selectedIoda: null,
+      nonGeographicProviders: [
+        {
+          id: 'ioda',
+          label: 'IODA Internet Disruptions',
+          status: 'updated 2026-09-23T13:00:00Z',
+          fetchedAt: '2026-09-23T13:00:00Z',
+          attribution: 'IODA · Georgia Tech Internet Intelligence Lab',
+          events: [
+            {
+              countryCode: 'US',
+              countryName: 'United States',
+              datasource: 'bgp',
+              method: 'bgp',
+              startedAt: '2026-09-23T12:00:00Z',
+              durationSeconds: 3600,
+            },
+          ],
+          countries: [],
+        },
+      ],
+    },
+    setThreatIntelListener(listener) {
+      this.listener = listener;
+    },
+    getThreatIntelState() {
+      return this.state;
+    },
+  };
+  const panel = new CyberIntelPanel({ documentRef: f.documentRef });
+  panel.mount(layer);
+  const results = findNode(
+    f.body,
+    (node) => node.dataset?.iodaResults === 'true',
+  );
+  assert.ok(results);
+  assert.equal(results.open, false);
+  assert.match(results.textContent, /United States/);
+  assert.match(results.textContent, /bgp/);
+  assert.match(f.body.textContent, /do not establish cause/);
+  panel.destroy();
+});
+
+test('IODA selection details label its country point as a reference location', () => {
+  const f = fixture();
+  const layer = {
+    state: {
+      enabled: true,
+      selectedRadar: null,
+      selectedIoda: {
+        type: 'ioda-country',
+        countryCode: 'US',
+        countryName: 'United States',
+        eventCount: 2,
+        latestEventAt: '2026-09-23T12:00:00Z',
+        datasources: ['bgp'],
+        attribution: 'IODA',
+        fetchedAt: '2026-09-23T13:00:00Z',
+        popupPosition: { x: 100, y: 120 },
+      },
+      nonGeographicProviders: [],
+    },
+    setThreatIntelListener(listener) {
+      this.listener = listener;
+    },
+    getThreatIntelState() {
+      return this.state;
+    },
+  };
+  const panel = new CyberIntelPanel({ documentRef: f.documentRef });
+  panel.mount(layer);
+  assert.match(
+    panel.devicePopup.textContent,
+    /Natural Earth country reference point/,
+  );
+  assert.match(panel.devicePopup.textContent, /cause is not established/);
+  panel.destroy();
+});
+
+test('Shodan device selection shows the approximate network location and provenance', () => {
+  const f = fixture();
+  let lookedUp = null;
+  const layer = {
+    state: {
+      enabled: true,
+      selectedRadar: null,
+      selectedOtxKey: 'auto:8.8.4.4',
+      otxPending: [],
+      otxResults: {
+        'auto:8.8.4.4': {
+          pulseCount: 1,
+          pulses: [{ id: 'a'.repeat(24), name: 'Example OTX pulse' }],
+        },
+      },
+      selectedShodan: {
+        ip: '8.8.4.4',
+        organization: 'Example Org',
+        services: [
+          {
+            port: 443,
+            transport: 'tcp',
+            product: 'HTTPS',
+            vulnerabilities: ['CVE-2024-12345'],
+          },
+        ],
+        reportedCves: ['CVE-2024-12345'],
+        kevMatches: [
+          {
+            cveId: 'CVE-2024-12345',
+            vendor: 'Example Vendor',
+            product: 'Example Product',
+            dueDate: '2026-10-01',
+          },
+        ],
+        hostnames: ['example.net'],
+        domains: [],
+        city: 'Example City',
+        country: 'Example Country',
+        latitude: 1,
+        longitude: 2,
+        geographicMethod: 'IPwho.is IP geolocation',
+        geographicProvenance:
+          'Approximate network location; not a device or person location.',
+        visualOffsetMeters: 42,
+        popupPosition: { x: 100, y: 120 },
+        attribution: 'Shodan',
+        fetchedAt: '2026-09-20T01:00:00Z',
+      },
+      nonGeographicProviders: [],
+    },
+    setThreatIntelListener(listener) {
+      this.listener = listener;
+    },
+    getThreatIntelState() {
+      return this.state;
+    },
+    recordOtxLookup(indicator, type) {
+      lookedUp = { indicator, type };
+    },
+  };
+  layer.state.onOtxLookup = (indicator, type) =>
+    layer.recordOtxLookup(indicator, type);
+  const panel = new CyberIntelPanel({ documentRef: f.documentRef });
+  panel.mount(layer);
+  assert.equal(panel.devicePopup.hidden, false);
+  assert.equal(panel.devicePopup.style.left, '114px');
+  assert.equal(panel.devicePopup.style.top, '134px');
+  assert.match(panel.devicePopup.textContent, /SELECTED SHODAN DEVICE/);
+  assert.match(panel.devicePopup.textContent, /8\.8\.4\.4/);
+  assert.match(panel.devicePopup.textContent, /443\/tcp/);
+  assert.match(panel.devicePopup.textContent, /CISA KEV matches · 1/);
+  assert.match(panel.devicePopup.textContent, /CVE-2024-12345/);
+  assert.match(panel.devicePopup.textContent, /IPwho\.is IP geolocation/);
+  assert.match(
+    panel.devicePopup.textContent,
+    /not a device or person location/,
+  );
+  assert.match(panel.devicePopup.textContent, /offset about 42 m/);
+  assert.match(
+    panel.devicePopup.textContent,
+    /OTX context · 1 associated pulse/,
+  );
+  assert.match(panel.devicePopup.textContent, /Example OTX pulse/);
+  const detailCard = panel.devicePopup.children.find(
+    (node) => node.className === 'cyber-intel-selection',
+  );
+  const shodanLink = detailCard.children.find(
+    (node) => node.className === 'cyber-shodan-host-link',
+  );
+  assert.equal(shodanLink.href, 'https://www.shodan.io/host/8.8.4.4');
+  assert.equal(shodanLink.target, '_blank');
+  assert.equal(shodanLink.rel, 'noopener noreferrer');
+  const otxButton = findNode(
+    detailCard,
+    (node) => node.dataset?.otxLookup === 'true',
+  );
+  panel._onDevicePopupClick({
+    target: {
+      closest: (selector) =>
+        selector === '[data-otx-lookup]' ? otxButton : null,
+    },
+  });
+  assert.deepEqual(lookedUp, { indicator: '8.8.4.4', type: 'auto' });
+  panel.destroy();
+});
+
+test('Radar selection details expand the panel and identify the country pair', () => {
+  const f = fixture();
+  const layer = {
+    state: {
+      enabled: true,
+      selectedRadar: {
+        type: 'flow',
+        origin: { code: 'US', name: 'United States' },
+        target: { code: 'BE', name: 'Belgium' },
+        share: 3.6,
+        rank: 2,
+        windowStart: '2026-09-19T00:00:00Z',
+        windowEnd: '2026-09-20T00:00:00Z',
+        geographicProvenance: 'Cloudflare Radar country-level pair',
+        popupPosition: { x: 100, y: 120 },
+      },
+      nonGeographicProviders: [],
+    },
+    setThreatIntelListener(listener) {
+      this.listener = listener;
+    },
+    getThreatIntelState() {
+      return this.state;
+    },
+  };
+  const panel = new CyberIntelPanel({ documentRef: f.documentRef });
+  panel.mount(layer);
+  assert.equal(panel.devicePopup.hidden, false);
+  assert.match(panel.devicePopup.textContent, /SELECTED RADAR FLOW/);
+  assert.match(panel.devicePopup.textContent, /United States/);
+  assert.match(panel.devicePopup.textContent, /Belgium/);
+  assert.match(panel.devicePopup.textContent, /3\.6%/);
+  assert.match(panel.devicePopup.textContent, /country-level pair/);
+  panel.destroy();
+});
+
+test('OTX lookup UI displays attributed pulse context without map geography', () => {
+  const f = fixture();
+  const layer = {
+    state: {
+      enabled: true,
+      selectedRadar: null,
+      selectedOtxKey: 'auto:8.8.8.8',
+      otxPending: [],
+      otxResults: {
+        'auto:8.8.8.8': {
+          indicator: '8.8.8.8',
+          indicatorTypeLabel: 'IPv4',
+          pulseCount: 1,
+          fetchedAt: '2026-09-20T12:00:00Z',
+          attribution: 'AlienVault Open Threat Exchange (OTX)',
+          link: 'https://otx.alienvault.com/indicator/ip/8.8.8.8',
+          pulses: [
+            {
+              id: 'a'.repeat(24),
+              name: 'Example threat pulse',
+              tags: ['phishing'],
+            },
+          ],
+        },
+      },
+      nonGeographicProviders: [],
+    },
+    setThreatIntelListener(listener) {
+      this.listener = listener;
+    },
+    getThreatIntelState() {
+      return this.state;
+    },
+  };
+  const panel = new CyberIntelPanel({ documentRef: f.documentRef });
+  panel.mount(layer);
+  assert.match(f.body.textContent, /AlienVault OTX/);
+  assert.ok(
+    f.body.textContent.indexOf('CISA Known Exploited Vulnerabilities') <
+      f.body.textContent.indexOf('AlienVault OTX'),
+  );
+  assert.match(f.body.textContent, /Example threat pulse/);
+  assert.match(f.body.textContent, /not proof of compromise/);
+  let otxResults = findNode(
+    f.body,
+    (node) => node.dataset?.otxResults === 'true',
+  );
+  assert.ok(otxResults);
+  assert.equal(otxResults.open, false);
+  otxResults.open = true;
+  otxResults.listeners.get('toggle')();
+  layer.listener(layer.state);
+  otxResults = findNode(f.body, (node) => node.dataset?.otxResults === 'true');
+  assert.equal(otxResults.open, true);
+  assert.equal(
+    findNode(f.body, (node) => node.tagName === 'a')?.href,
+    'https://otx.alienvault.com/pulse/aaaaaaaaaaaaaaaaaaaaaaaa',
+  );
+  panel.destroy();
+});
