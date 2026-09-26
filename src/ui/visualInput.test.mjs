@@ -59,6 +59,7 @@ function shortcuts() {
     'toggleLayers',
     'cycleDetection',
     'toggleCctv',
+    'toggleStreetView',
   ];
   const actions = Object.fromEntries(
     names.map((name) => [name, (...args) => calls.push([name, ...args])]),
@@ -99,6 +100,17 @@ test('letter shortcuts retain uppercase handling and existing actions', () => {
       'toggleCctv',
     ].map((name) => [name]),
   );
+});
+
+test('bare S toggles Street View; modified S stays with the browser', () => {
+  const f = shortcuts();
+  f.press('s');
+  f.press('S');
+  f.press('s', new Element(), { metaKey: true });
+  f.press('s', new Element(), { ctrlKey: true });
+  f.press('s', new Element(), { altKey: true });
+  f.press('s', new Element('INPUT'));
+  assert.deepEqual(f.calls, [['toggleStreetView'], ['toggleStreetView']]);
 });
 
 for (const tag of ['INPUT', 'SELECT', 'TEXTAREA']) {
