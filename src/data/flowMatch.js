@@ -89,7 +89,7 @@ function pointSegDist2(px, py, ax, ay, bx, by) {
  * @param {Array<{coords:number[][], trafficLevel:number, closure:boolean, coverage?:string}>} flowSegments
  * @returns {null|{
  *   project: (lon:number, lat:number) => [number, number],
- *   nearest: (x:number, y:number, bearing:number) => {best:object|null, ambiguous:boolean, candidate:boolean},
+ *   nearest: (x:number, y:number, bearing:number, radiusFor?:(segment:object) => number) => {best:object|null, ambiguous:boolean, candidate:boolean},
  * }} Null when no usable segment exists.
  */
 export function createFlowSegmentIndex(flowSegments) {
@@ -116,6 +116,7 @@ export function createFlowSegmentIndex(flowSegments) {
     const level = flow.trafficLevel;
     const closure = flow.closure === true;
     const bothDirections = flow.coverage === 'full';
+    const roadType = flow.roadType;
     for (let i = 0; i < coords.length - 1; i++) {
       const [ax, ay] = project(coords[i][0], coords[i][1]);
       const [bx, by] = project(coords[i + 1][0], coords[i + 1][1]);
@@ -135,6 +136,7 @@ export function createFlowSegmentIndex(flowSegments) {
           by: ay + (by - ay) * t1,
           bearing,
           bothDirections,
+          roadType,
           level,
           closure,
         };
@@ -154,8 +156,11 @@ export function createFlowSegmentIndex(flowSegments) {
   if (grid.size === 0) return null;
 
   const radius2 = MATCH_RADIUS_M * MATCH_RADIUS_M;
-  /** Nearest direction-compatible segment within 35 m of a projected point. */
-  function nearest(px, py, bearing) {
+  /**
+   * Nearest direction-compatible segment within 35 m of a projected point.
+   * `radiusFor(segment)` may tighten the radius per segment (never widen it).
+   */
+  function nearest(px, py, bearing, radiusFor = null) {
     const cx = Math.floor(px / CELL_SIZE_M);
     const cy = Math.floor(py / CELL_SIZE_M);
     let best = null;
@@ -170,6 +175,10 @@ export function createFlowSegmentIndex(flowSegments) {
           const d2 = pointSegDist2(px, py, seg.ax, seg.ay, seg.bx, seg.by);
           if (d2 > radius2) continue;
           candidate = true; // within radius, bearing not yet checked
+          if (radiusFor) {
+            const radius = Math.min(MATCH_RADIUS_M, radiusFor(seg));
+            if (d2 > radius * radius) continue;
+          }
           const diff = bearingDiffDeg(seg.bearing, bearing);
           if (
             diff >= BEARING_TOLERANCE_DEG &&

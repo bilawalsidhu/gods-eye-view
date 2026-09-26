@@ -4217,7 +4217,9 @@ easier to meet (detection is now on more often), but does not create it.
   draws every TomTom line and adds OpenFreeMap roads only where no TomTom line
   runs within 35 m in the same travel direction (30 degrees), tested every
   10 m; only uncovered stretches of at least 40 m are kept, and they are
-  simulated. Flow values are ignored for this test, so an uncertain overlap
+  simulated. When exactly one side is a motorway/trunk mainline (TomTom
+  `Motorway`/`International road`; OSM ramps count as ordinary roads) the
+  radius is 15 m, so frontage and service roads beside a freeway stay. Flow values are ignored for this test, so an uncertain overlap
   drops the OpenFreeMap copy, never the TomTom line; opposite carriageways
   stay. OpenFreeMap tiles stream first and are drawn plain until flow
   arrives, then one replacing snapshot applies the TomTom lines and dedupe.

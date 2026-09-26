@@ -26,6 +26,17 @@ export const ROAD_SOURCE_LABELS = Object.freeze({
 const DEDUPE_STEP_M = 10;
 /** A partly duplicated road keeps only uncovered stretches at least this long. */
 const MIN_FILL_M = 40;
+/**
+ * Overlap radius when exactly one side is a controlled-access road
+ * (motorway/trunk mainline) and the other is not. The same road drawn by
+ * both sources agrees within a few metres (z12 flow tiles quantize to about
+ * 2.4 m), while frontage and service roads beside a freeway run 20-40 m
+ * from its line; 15 m keeps the first a duplicate and the second a road.
+ * Same-class overlap keeps the full 35 m matcher radius.
+ */
+const CLASS_MISMATCH_RADIUS_M = 15;
+const CONTROLLED_ACCESS_FLOW = new Set(['Motorway', 'International road']);
+const CONTROLLED_ACCESS_OSM = new Set(['motorway', 'trunk']);
 
 /**
  * Validate an explicit choice.
@@ -103,12 +114,13 @@ function slicePolyline(coords, cum, from, to) {
 /**
  * Stretches of one travel direction of an OpenFreeMap road that no TomTom
  * line covers. A sample is covered when a TomTom line lies within the flow
- * matcher's 35 m radius and agrees with its travel bearing (30 degrees).
+ * matcher's 35 m radius (15 m across a controlled-access class mismatch)
+ * and agrees with its travel bearing (30 degrees).
  * Flow values are ignored: any geometric overlap counts, so an uncertain
  * duplicate is dropped from OpenFreeMap, never from TomTom.
  * @returns {number[][][]|'all'} Uncovered polylines, or 'all' when untouched.
  */
-function uncoveredStretches(coords, direction, index) {
+function uncoveredStretches(coords, direction, index, radiusFor) {
   const xs = [],
     ys = [],
     cum = [0];
@@ -134,8 +146,12 @@ function uncoveredStretches(coords, direction, index) {
     const bearing =
       (Math.atan2(dx, dy) * 180) / Math.PI + (direction === -1 ? 180 : 0);
     const covered = Boolean(
-      index.nearest(xs[cursor - 1] + dx * t, ys[cursor - 1] + dy * t, bearing)
-        .best,
+      index.nearest(
+        xs[cursor - 1] + dx * t,
+        ys[cursor - 1] + dy * t,
+        bearing,
+        radiusFor,
+      ).best,
     );
     if (!covered && runStart === null) runStart = s;
     if (covered && runStart !== null) {
@@ -165,9 +181,15 @@ export function createHybridFill(segments) {
     if (!Array.isArray(coords) || coords.length < 2) return [];
     const fill = { ...road, simulatedOnly: true };
     if (!index) return [fill];
+    // Ramps leave the mainline, so they compare as ordinary roads.
+    const controlled = CONTROLLED_ACCESS_OSM.has(road.type) && !road.ramp;
+    const radiusFor = (segment) =>
+      CONTROLLED_ACCESS_FLOW.has(segment.roadType) === controlled
+        ? Infinity
+        : CLASS_MISMATCH_RADIUS_M;
     const directions = road.oneway ? [road.oneway] : [1, -1];
     const stretches = directions.map((direction) =>
-      uncoveredStretches(coords, direction, index),
+      uncoveredStretches(coords, direction, index, radiusFor),
     );
     if (stretches.every((result) => result === 'all')) return [fill];
     return directions.flatMap((direction, i) =>

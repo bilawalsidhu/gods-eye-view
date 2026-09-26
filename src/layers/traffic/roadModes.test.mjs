@@ -473,3 +473,58 @@ test('a flow snapshot that misses the pass deadline cannot hold roads', async ()
   assert.ok(hybrid.roads.every((road) => road.simulatedOnly));
   await assert.rejects(request('tomtom', true), /TomTom flow timed out/);
 });
+
+test('frontage roads beside a TomTom motorway survive; same-class duplicates do not', () => {
+  const offset = (road, metres, extra = {}) => ({
+    ...road,
+    ...extra,
+    coordinates: road.coordinates.map(([lon, lat]) => [
+      lon,
+      lat + metres / 111320,
+    ]),
+  });
+  const motorwayLine = { ...flow, roadType: 'Motorway' };
+  const osmMotorway = { ...main, type: 'motorway' };
+  const roads = selectTrafficRoads(
+    [
+      offset(osmMotorway, 4), // the same motorway: dropped
+      offset(main, 25, { type: 'residential' }), // frontage, north side
+      offset(main, -25, { type: 'tertiary' }), // frontage, south side
+    ],
+    [motorwayLine],
+    'hybrid',
+  );
+  assert.equal(roads.length, 3);
+  assert.equal(roads[0].directFlow, true);
+  assert.deepEqual(
+    roads.slice(1).map((road) => road.type),
+    ['residential', 'tertiary'],
+  );
+  // A ramp beside the mainline compares as an ordinary road.
+  assert.equal(
+    selectTrafficRoads(
+      [offset(osmMotorway, 25, { ramp: true })],
+      [motorwayLine],
+      'hybrid',
+    ).length,
+    2,
+  );
+  // Across a class mismatch a true duplicate (within 15 m) is still dropped.
+  assert.equal(
+    selectTrafficRoads(
+      [offset(main, 6, { type: 'residential' })],
+      [motorwayLine],
+      'hybrid',
+    ).length,
+    1,
+  );
+  // Same class, uncertain 25 m overlap: the OpenStreetMap copy goes.
+  assert.equal(
+    selectTrafficRoads(
+      [offset(main, 25, { type: 'residential' })],
+      [{ ...flow, roadType: 'Local road' }],
+      'hybrid',
+    ).length,
+    1,
+  );
+});
