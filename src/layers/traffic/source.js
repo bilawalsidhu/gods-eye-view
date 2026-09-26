@@ -87,6 +87,7 @@ export function createTrafficSource({
             })),
           ),
         roadSource: 'OpenStreetMap',
+        roadMode: 'osm',
         partial,
         detailLimited:
           !majorOnly && (area.north !== box.north || area.east !== box.east),

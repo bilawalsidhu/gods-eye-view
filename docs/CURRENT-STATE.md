@@ -4238,7 +4238,10 @@ easier to meet (detection is now on more often), but does not create it.
   roads retain white simulated dots at free-flow speeds (unless the explicit
   uncovered-roads hide option is enabled). Cached OSM road snapshots are
   rematched on every load; TomTom and Hybrid views are recomposed from the
-  bounded tile caches each load because their roads carry flow. Failed flow
+  bounded tile caches each load because their roads carry flow. A snapshot
+  is cached only when the load drew plain OpenStreetMap roads, and the cache
+  is not read before the TomTom status probe settles (except for an explicit
+  OSM choice), so Hybrid fill is never replayed as OSM roads. Failed flow
   refreshes clear old matches and report simulation. `flowCoveragePct` is the
   percentage of shown dots on roads with flow, including all unmatched dots in
   the denominator and excluding dots hidden by closures. The OSM keyed status

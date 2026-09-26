@@ -578,6 +578,7 @@ test('OSM keyed loads run z12 then z14 and reuse road snapshots while refreshing
           json: async () => ({
             roads: ofmDetail.roads,
             roadSource: 'OpenStreetMap',
+            roadMode: 'osm',
           }),
         };
       },

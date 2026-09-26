@@ -390,3 +390,67 @@ test('TomTom and Hybrid loads skip the OSM snapshot cache; TomTom skips the deta
     assert.equal(state._roadSource, roadSource);
   }
 });
+
+test('a first keyed load whose flow fails never caches simulated fill as OSM roads', async () => {
+  const { createIngestion } = await import('./ingestion.js');
+  // Status unknown at the start of the first load; the probe then reports a
+  // key but flow fails, so Hybrid draws only simulated OpenStreetMap fill,
+  // labelled OpenStreetMap.
+  const state = {
+    _loadGeneration: 0,
+    _tileCache: new Map(),
+    _enabled: true,
+    _liveMode: false,
+    _roadMode: null,
+    _parseRoads: (data) => data.roads,
+  };
+  const requests = [];
+  const ingestion = createIngestion({
+    state,
+    services: {},
+    parts: {
+      viewport: {
+        clampBounds: (b) => b,
+        getBoundsCenter: () => ({ lat: 30.267, lon: -97.744 }),
+      },
+      flow: {
+        warmFlow: async () => {
+          state._liveMode = true;
+          state._flowStatusKnown = true;
+          throw Object.assign(new Error('flow'), { status: 502 });
+        },
+        deriveTrafficFlowError: () => 'TomTom upstream unreachable',
+        applyFlowThenRender: async () => true,
+      },
+    },
+    source: {
+      requestRoads: async (_, options) => {
+        const live = await options.flowSnapshot;
+        const mode = resolveRoadMode(options.roadMode, live.hasKey);
+        requests.push(mode);
+        const roads =
+          mode === 'osm' ? [main] : [{ ...main, simulatedOnly: true }];
+        return {
+          ok: true,
+          json: async () => ({
+            roads,
+            roadSource: 'OpenStreetMap',
+            roadMode: mode,
+          }),
+        };
+      },
+    },
+  });
+  await ingestion.loadRoadsForBounds(box, 350);
+  assert.deepEqual(requests, ['hybrid', 'hybrid']);
+  assert.equal(state._tileCache.size, 0, 'Hybrid fill is never cached');
+  // The user switches to OSM: fresh OpenStreetMap roads, not the fill.
+  state._roadMode = 'osm';
+  await ingestion.loadRoadsForBounds(box, 350);
+  assert.deepEqual(requests.slice(2), ['osm', 'osm']);
+  const [entry] = state._tileCache.values();
+  assert.ok(entry.full.every((road) => !road.simulatedOnly));
+  // ...and those plain OSM roads are what a revisit reuses.
+  await ingestion.loadRoadsForBounds(box, 350);
+  assert.equal(requests.length, 4);
+});

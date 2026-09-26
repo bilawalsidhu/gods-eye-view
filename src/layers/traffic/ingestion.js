@@ -220,21 +220,28 @@ export function createIngestion({
     const requestSignal = layerState._activeFetchAbort.signal;
     const clamped = parts.viewport.clampBounds(bounds);
 
-    // Only OpenStreetMap snapshots are cached here: TomTom and Hybrid roads
-    // carry flow, which expires, and recompose from the tile caches instead.
-    const cacheMode = resolveRoadMode(
-      layerState._roadMode,
-      layerState._liveMode,
-    );
+    // Only plain OpenStreetMap snapshots are cached here: TomTom and Hybrid
+    // roads carry flow, which expires, and recompose from the tile caches.
+    // Reads need the mode that will actually be drawn. It is known up front
+    // for an explicit OSM choice, or once the TomTom status probe has
+    // settled; before that (a session's first load) the cache is skipped
+    // rather than waiting on the probe. Writes are decided by the snapshot.
+    const cacheMode =
+      layerState._roadMode === 'osm'
+        ? 'osm'
+        : layerState._flowStatusKnown
+          ? resolveRoadMode(layerState._roadMode, layerState._liveMode)
+          : null;
     // Cache key: fixed-precision bounding-box string for deterministic lookups
-    const cacheKey = `${cacheMode}:${clamped.south.toFixed(4)},${clamped.west.toFixed(4)},${clamped.north.toFixed(4)},${clamped.east.toFixed(4)}`;
-    const retainSnapshot = () =>
-      cacheMode === 'osm' &&
+    const cacheKey = `${clamped.south.toFixed(4)},${clamped.west.toFixed(4)},${clamped.north.toFixed(4)},${clamped.east.toFixed(4)}`;
+    const retryKey = `${layerState._roadMode || 'auto'}:${cacheKey}`;
+    const retainSnapshot = (data, roads) =>
+      data?.roadMode === 'osm' &&
       !layerState._roadPartial &&
-      layerState._roadSource === ROAD_SOURCE_LABELS.osm;
+      roads.every((road) => !road.simulatedOnly && !road.directFlow);
 
-    if (cacheKey !== layerState._retryBoundsKey) {
-      layerState._retryBoundsKey = cacheKey;
+    if (retryKey !== layerState._retryBoundsKey) {
+      layerState._retryBoundsKey = retryKey;
       layerState._retryDelayMs = 1500;
       layerState._retryAttempts = 0;
       layerState._roadRetryStopped = false;
@@ -310,24 +317,15 @@ export function createIngestion({
         );
       layerState._roadFlowSnapshot.catch(() => {});
       requestSignal.throwIfAborted();
-      layerState._roadSource = ROAD_SOURCE_LABELS[cacheMode];
+      // Until the probe settles only OpenStreetMap roads can be drawn.
+      layerState._roadSource = ROAD_SOURCE_LABELS[cacheMode || 'osm'];
       let cache =
         cacheMode === 'osm' ? layerState._tileCache.get(cacheKey) : null;
       if (cache) {
+        // LRU touch; cacheRoadSnapshot() inserts and evicts on write.
         layerState._tileCache.delete(cacheKey);
         layerState._tileCache.set(cacheKey, cache);
-      }
-      if (!cache) {
-        cache = { major: null, full: null };
-        if (cacheMode === 'osm') {
-          // LRU eviction: drop the oldest entry when cache exceeds the cap
-          if (layerState._tileCache.size >= TILE_CACHE_MAX_ENTRIES) {
-            const oldest = layerState._tileCache.keys().next().value;
-            layerState._tileCache.delete(oldest);
-          }
-          layerState._tileCache.set(cacheKey, cache);
-        }
-      }
+      } else cache = { major: null, full: null };
 
       // Fast path: full road set already cached — render and return.
       // Flow is (re)applied even on cache hits: roads cache for the session,
@@ -387,7 +385,7 @@ export function createIngestion({
           : layerState._parseRoads(majorData, trace);
         phaseTiming('parse', parseStart, { roads: cache.major.length });
         cacheRoadSnapshot(layerState._tileCache, cacheKey, cache, {
-          retain: retainSnapshot(),
+          retain: retainSnapshot(majorData, cache.major),
         });
         if (
           !(await parts.flow.applyFlowThenRender(
@@ -435,7 +433,7 @@ export function createIngestion({
         : layerState._parseRoads(fullData, trace);
       phaseTiming('parse', parseStart, { roads: cache.full.length });
       cacheRoadSnapshot(layerState._tileCache, cacheKey, cache, {
-        retain: retainSnapshot(),
+        retain: retainSnapshot(fullData, cache.full),
       });
       if (
         !(await parts.flow.applyFlowThenRender(

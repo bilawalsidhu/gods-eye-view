@@ -55,6 +55,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
             layerState._flowStatusSignal = null;
           layerState._liveMode = Boolean(status?.hasKey);
           layerState._flowStatusUnavailable = false;
+          layerState._flowStatusKnown = true;
           if (layerState._liveMode) {
             console.log('[Data:Traffic] TomTom key present — live flow mode');
             registerDynamicCredit(layerState._viewer, TOMTOM_CREDIT);
@@ -68,6 +69,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
           // "server says no key" — getStats() distinguishes the two.
           layerState._liveMode = false;
           layerState._flowStatusUnavailable = true;
+          layerState._flowStatusKnown = true;
           console.warn(
             '[Data:Traffic] TomTom status unreachable — simulated traffic:',
             e?.message || e,
