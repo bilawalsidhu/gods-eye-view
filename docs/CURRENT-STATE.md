@@ -4271,7 +4271,12 @@ easier to meet (detection is now on more often), but does not create it.
   max(1.2 km, twice camera altitude), receive surface work, closest first.
   Preparation yields after a 6 ms slice (an individual synchronous Cesium pick
   cannot be preempted). Validated coordinate heights use a per-scene 40,000-point
-  LRU across loads. Provisional shared-floor estimates remain hidden until a
+  LRU across loads. The LRU belongs to the surface it sampled (the terrain
+  provider, or the set of visible 3D tilesets), so a map-provider switch
+  drops it. Each height records its detail band (log2 of the camera-to-point
+  distance in 100 m steps); a point seen from a closer band is re-sampled
+  against the finer mesh, and a failed finer sample keeps the coarser one.
+  Revisits at the same or a coarser band sample nothing. Provisional shared-floor estimates remain hidden until a
   local rendered-mesh/terrain sample resolves; a globally loading tileset does
   not block streets whose mesh is already present. Non-finite/out-of-band
   (+/-9000 m) samples defer their road and show a local-surface status, never

@@ -52,6 +52,46 @@ const validHeight = (height) =>
 
 // Per-scene, coordinate-keyed LRU. Never writes raw samples into shared ground floors.
 const sceneCaches = new WeakMap();
+
+// Stable ids for the objects heights are sampled from (tilesets, terrain).
+const surfaceIds = new WeakMap();
+let nextSurfaceId = 1;
+const surfaceId = (object) => {
+  if (!object || typeof object !== 'object') return 0;
+  if (!surfaceIds.has(object)) surfaceIds.set(object, nextSurfaceId++);
+  return surfaceIds.get(object);
+};
+
+/**
+ * Name what heights are sampled against: the terrain provider when the globe
+ * is shown, otherwise the set of visible 3D tilesets. A map-provider switch
+ * changes it and invalidates every cached height.
+ */
+export function trafficSurfaceKey(scene) {
+  if (scene.globe?.show)
+    return `globe:${surfaceId(scene.globe.terrainProvider)}`;
+  const ids = [];
+  for (let i = 0; i < (scene.primitives?.length || 0); i++) {
+    const primitive = scene.primitives.get(i);
+    if (primitive?.show && typeof primitive.tilesLoaded === 'boolean')
+      ids.push(surfaceId(primitive));
+  }
+  return `tiles:${ids.join(',')}`;
+}
+
+/**
+ * Level-of-detail band for a point seen from the camera: log2 of the
+ * camera-to-point distance in 100 m steps. Streamed meshes refine roughly
+ * one level per halving of distance, so a sample taken from a higher band
+ * came from coarser geometry than the view now shows.
+ */
+export function detailBand(cameraLon, cameraLat, cameraHeight, lon, lat) {
+  if (!Number.isFinite(cameraHeight)) return 0;
+  const dx = (lon - cameraLon) * Math.cos((lat * Math.PI) / 180) * 111320;
+  const dy = (lat - cameraLat) * 111320;
+  const distance = Math.sqrt(dx * dx + dy * dy + cameraHeight * cameraHeight);
+  return Math.max(0, Math.floor(Math.log2(distance / 100)));
+}
 const nextFrame = () =>
   new Promise((resolve) =>
     typeof requestAnimationFrame === 'function'
@@ -68,11 +108,23 @@ export async function prepareRoadSurfaces(
   signal,
   { onReady, onMetrics, frameBudgetMs = 6 } = {},
 ) {
+  // Cached heights are only as good as the surface and detail they came
+  // from: a provider switch drops them all, and a point now seen from a
+  // closer band than its sample is re-sampled against the finer mesh.
+  const surface = trafficSurfaceKey(scene);
   let cache = sceneCaches.get(scene);
-  if (!cache || cache.globe !== scene.globe?.show) {
-    cache = { globe: scene.globe?.show, heights: new Map() };
+  if (!cache || cache.surface !== surface) {
+    cache = { surface, heights: new Map() };
     sceneCaches.set(scene, cache);
   }
+  const cameraCarto = scene.camera?.positionCartographic;
+  const cameraLon = cameraCarto
+    ? Cesium.Math.toDegrees(cameraCarto.longitude)
+    : 0;
+  const cameraLat = cameraCarto
+    ? Cesium.Math.toDegrees(cameraCarto.latitude)
+    : 0;
+  const cameraHeight = cameraCarto ? cameraCarto.height : NaN;
   const start = performance.now();
   const metrics = {
     sampleCount: 0,
@@ -94,8 +146,11 @@ export async function prepareRoadSurfaces(
       const key = `${lon.toFixed(6)},${lat.toFixed(6)}`;
       const cached = cache.heights.get(key);
       const settled = trafficSurfaceReady(scene);
+      const band = detailBand(cameraLon, cameraLat, cameraHeight, lon, lat);
       let height =
-        cached && (cached.settled || !settled) ? cached.height : undefined;
+        cached && (cached.settled || !settled) && band >= cached.band
+          ? cached.height
+          : undefined;
       if (height !== undefined) {
         metrics.cacheHits++;
         cache.heights.delete(key);
@@ -126,11 +181,17 @@ export async function prepareRoadSurfaces(
         // A shared floor is a safe provisional waypoint, but not permission to
         // display a photoreal road: only local measured mesh heights admit it.
         if (!validHeight(sampled)) {
-          resolved = false;
-          height = validHeight(floor) ? floor : 0;
+          // A coarser measured height still beats an unresolved road; the
+          // finer sample is retried on the next pass.
+          if (cached) height = cached.height;
+          else {
+            resolved = false;
+            height = validHeight(floor) ? floor : 0;
+          }
         } else {
           height = validHeight(floor) ? Math.max(sampled, floor) : sampled;
-          cache.heights.set(key, { height, settled });
+          cache.heights.delete(key);
+          cache.heights.set(key, { height, settled, band });
           while (cache.heights.size > 40000)
             cache.heights.delete(cache.heights.keys().next().value);
         }
