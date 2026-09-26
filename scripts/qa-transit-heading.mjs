@@ -1,11 +1,29 @@
+import { existsSync } from 'node:fs';
 import puppeteer from 'puppeteer';
 
 /** Prove parked and moving headings in the real scene, without live feeds. */
 export async function runTransitHeadingRegression(base, check) {
+  // Resolved per run rather than at import: the caller may skip this stage.
+  const executablePath = [
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    // Pinned Chrome-for-Testing ahead of the system browser, for the reasons
+    // spelled out in qa-firms.mjs; the macOS paths stay as the last resort.
+    await Promise.resolve()
+      .then(() => puppeteer.executablePath())
+      .catch(() => null),
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  ]
+    .filter(Boolean)
+    .find((candidate) => existsSync(candidate));
+  if (!executablePath) {
+    throw new Error(
+      'No Chrome executable found. Install the pinned browser with ' +
+        '`npx puppeteer browsers install chrome`, or set PUPPETEER_EXECUTABLE_PATH.',
+    );
+  }
   const browser = await puppeteer.launch({
     headless: true,
-    executablePath:
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    executablePath,
     args: ['--no-sandbox', '--disable-background-timer-throttling'],
   });
   try {
