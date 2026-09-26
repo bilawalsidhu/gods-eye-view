@@ -4211,7 +4211,9 @@ easier to meet (detection is now on more often), but does not create it.
   TomTom / OSM / Hybrid chips (`roadMode` param, stored in the existing layer
   state `lo` field, no new share token); `?trafficRoads=tomtom|osm|hybrid`
   overrides restored state until the user picks a chip. With no stored choice
-  the default is Hybrid with a TomTom key and OSM without one. Without a key
+  the default is Hybrid with a TomTom key and OSM without one; share links
+  without a road-source choice (including older ones) likewise use the
+  installation's default (Hybrid when keyed, OpenStreetMap when keyless). Without a key
   every choice draws OSM roads and the status says the choice needs a key.
   TomTom draws only flow-tile lines with their own flow; roads without flow
   are not drawn and the status says so. A `full`-coverage flow line carries
