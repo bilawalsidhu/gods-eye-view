@@ -3533,7 +3533,10 @@ the working vector-tile source without a failed-network console entry.
 `GET /api/overpass/status` answers `{configured}`; the browser asks once per
 page and, when nothing is configured, returns the unavailable result for
 annotation and location-feature queries without sending them (so no 503 is
-logged). An older server without the probe is queried as before.
+logged). An older server without the probe is queried as before. The probe
+times out after 3 s; a failed or timed-out probe is retried after 30 s, and
+queries in between go to the server. Each query stops waiting on the probe
+when its own signal aborts.
 Configured endpoints have per-instance cooldowns for 406/429, honoring
 Retry-After; absent delays back off from 30 seconds to five minutes. Empty
 `elements` is a valid answer. Existing byte, query, concurrency and cache caps
