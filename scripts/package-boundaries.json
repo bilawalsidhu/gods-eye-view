@@ -173,6 +173,22 @@
     ],
     "external": []
   },
+  "mapillary-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/mapillary"],
+    "modules": [
+      "server/providers/mapillary.js",
+      "server/providers/mapillary/routes.js",
+      "server/providers/mapillary/constants.js",
+      "server/providers/mapillary/tiles.js",
+      "server/providers/mapillary/trim.js",
+      "src/layers/streetLevel/tileMath.js",
+      "server/providers/common/request.js",
+      "src/sources/rateLimit.js",
+      "server/providers/common/rate-limit.js"
+    ],
+    "external": ["pbf"]
+  },
   "radio-provider": {
     "runtime": "node",
     "exports": ["./server/providers/radio"],
@@ -582,6 +598,7 @@
       "src/ui/panelLayoutController.js",
       "src/ui/panelMeasurement.js",
       "src/ui/panelPositionControls.js",
+      "src/ui/panelResize.js",
       "src/ui/panelRailGeometry.js",
       "src/ui/panelRails.js",
       "src/ui/radio.js",
@@ -612,6 +629,8 @@
       "src/ui/layerBindings.js",
       "src/ui/displayBindings.js",
       "src/ui/shellFacade.js",
+      "src/ui/streetLevelControls.js",
+      "src/ui/streetLevelPresentation.js",
       "src/ui/localSdrControls.js",
       "src/layers/localAdsb/feedNames.js",
       "src/ui/localSdrPresentation.js"
@@ -1095,6 +1114,40 @@
       "src/layers/cctv/sourcePolicy.js"
     ],
     "external": ["hls.js", "cesium"]
+  },
+  "street-level-layer": {
+    "exports": [
+      "./layers/street-level",
+      "./layers/street-level/mapillary",
+      "./layers/street-level/mapillary/source"
+    ],
+    "modules": [
+      "src/layers/streetLevel/index.js",
+      "src/layers/streetLevel/providers/mapillary/index.js",
+      "src/layers/streetLevel/viewerHost.js",
+      "src/layers/streetLevel/credits.js",
+      "src/layers/streetLevel/cameraFollow.js",
+      "src/layers/streetLevel/marker.js",
+      "src/layers/streetLevel/view.js",
+      "src/layers/streetLevel/uiState.js",
+      "src/layers/streetLevel/pickRouter.js",
+      "src/layers/streetLevel/params.js",
+      "src/layers/streetLevel/registry.js",
+      "src/layers/streetLevel/filter.js",
+      "src/layers/streetLevel/policy.js",
+      "src/layers/streetLevel/state.js",
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/layers/streetLevel/providers/mapillary/coverage.js",
+      "src/layers/streetLevel/providers/mapillary/sequences.js",
+      "src/layers/streetLevel/glyphs.js",
+      "src/layers/streetLevel/providers/mapillary/decode.js",
+      "src/layers/streetLevel/tileMath.js",
+      "src/layers/streetLevel/selection.js",
+      "src/layers/streetLevel/providers/mapillary/viewer.js",
+      "src/layers/streetLevel/providers/mapillary/source.js",
+      "scripts/qa-street-level.mjs"
+    ],
+    "external": ["cesium", "pbf", "@mapbox/vector-tile", "mapillary-js"]
   },
   "alpr-cameras": {
     "exports": ["./layers/alpr"],
@@ -1768,6 +1821,7 @@
       "src/ui/panelLayoutController.js",
       "src/ui/panelMeasurement.js",
       "src/ui/panelPositionControls.js",
+      "src/ui/panelResize.js",
       "src/ui/panelRailGeometry.js",
       "src/ui/panelRails.js",
       "src/ui/radio.js",
@@ -1955,7 +2009,33 @@
       "src/layers/recentImagery/thumbnails.js",
       "src/maps/imageryHost.js",
       "src/ui/recentImagery.js",
-      "src/ui/imageryBoxTool.js"
+      "src/ui/imageryBoxTool.js",
+      "src/ui/streetLevelControls.js",
+      "src/ui/streetLevelPresentation.js",
+      "src/layers/streetLevel/index.js",
+      "src/layers/streetLevel/providers/mapillary/index.js",
+      "src/layers/streetLevel/viewerHost.js",
+      "src/layers/streetLevel/credits.js",
+      "src/layers/streetLevel/cameraFollow.js",
+      "src/layers/streetLevel/marker.js",
+      "src/layers/streetLevel/view.js",
+      "src/layers/streetLevel/uiState.js",
+      "src/layers/streetLevel/pickRouter.js",
+      "src/layers/streetLevel/params.js",
+      "src/layers/streetLevel/registry.js",
+      "src/layers/streetLevel/filter.js",
+      "src/layers/streetLevel/policy.js",
+      "src/layers/streetLevel/state.js",
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/layers/streetLevel/providers/mapillary/coverage.js",
+      "src/layers/streetLevel/providers/mapillary/sequences.js",
+      "src/layers/streetLevel/glyphs.js",
+      "src/layers/streetLevel/providers/mapillary/decode.js",
+      "src/layers/streetLevel/tileMath.js",
+      "src/layers/streetLevel/selection.js",
+      "src/layers/streetLevel/providers/mapillary/viewer.js",
+      "src/layers/streetLevel/providers/mapillary/source.js",
+      "src/app/layers/streetLevel.js"
     ],
     "external": [
       "hls.js",
@@ -1965,6 +2045,7 @@
       "mgrs",
       "pbf",
       "satellite.js",
+      "mapillary-js",
       "@jtarrio/webrtlsdr"
     ]
   },
@@ -2415,7 +2496,31 @@
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/rendering.js",
       "src/layers/recentImagery/thumbnails.js",
-      "src/maps/imageryHost.js"
+      "src/maps/imageryHost.js",
+      "src/layers/streetLevel/index.js",
+      "src/layers/streetLevel/providers/mapillary/index.js",
+      "src/layers/streetLevel/viewerHost.js",
+      "src/layers/streetLevel/credits.js",
+      "src/layers/streetLevel/cameraFollow.js",
+      "src/layers/streetLevel/marker.js",
+      "src/layers/streetLevel/view.js",
+      "src/layers/streetLevel/uiState.js",
+      "src/layers/streetLevel/pickRouter.js",
+      "src/layers/streetLevel/params.js",
+      "src/layers/streetLevel/registry.js",
+      "src/layers/streetLevel/filter.js",
+      "src/layers/streetLevel/policy.js",
+      "src/layers/streetLevel/state.js",
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/layers/streetLevel/providers/mapillary/coverage.js",
+      "src/layers/streetLevel/providers/mapillary/sequences.js",
+      "src/layers/streetLevel/glyphs.js",
+      "src/layers/streetLevel/providers/mapillary/decode.js",
+      "src/layers/streetLevel/tileMath.js",
+      "src/layers/streetLevel/selection.js",
+      "src/layers/streetLevel/providers/mapillary/viewer.js",
+      "src/layers/streetLevel/providers/mapillary/source.js",
+      "src/app/layers/streetLevel.js"
     ],
     "external": [
       "hls.js",
@@ -2425,6 +2530,7 @@
       "@mapbox/vector-tile",
       "pbf",
       "mgrs",
+      "mapillary-js",
       "@jtarrio/webrtlsdr"
     ]
   },
@@ -2548,6 +2654,7 @@
       "src/ui/panelLayoutController.js",
       "src/ui/panelMeasurement.js",
       "src/ui/panelPositionControls.js",
+      "src/ui/panelResize.js",
       "src/ui/panelRailGeometry.js",
       "src/ui/panelRails.js",
       "src/ui/rightPanelRail.js",

@@ -45,7 +45,11 @@ test('desktop Display participates in Tactical exclusivity without changing mobi
     /panel\.id !== 'pp-toggles' && !panel\.classList\.contains\('collapsed'\)/,
   );
   assert.match(ui, /if \(exclusive && panel\.classList\.contains\('collapsed'\)\)\s*panel\.setAttribute\('aria-hidden', 'true'\)/);
-  assert.match(css, /#right-context-rail\.layout-exclusive > \[data-panel-id\]\.collapsed \{/);
+  // A panel floating out of the rail (portable mode) is exempt from exclusivity.
+  assert.match(
+    css,
+    /#right-context-rail\.layout-exclusive\s*> \[data-panel-id\]\.collapsed:not\(\.panel-floating\) \{/,
+  );
 });
 
 test('explicit Contacts, Space Missions, and Cockpit actions expand Global Context after success', () => {

@@ -398,6 +398,17 @@ const OPTION_GROUPS = Object.freeze({
     ),
     booleanOption('viirs', 'v', false),
   ]),
+  'street-level': Object.freeze([
+    // One switch per registered imagery provider (src/app/layers/streetLevel.js).
+    booleanOption('mapillary', 'm', true),
+    enumOption('pano', 'p', 'all', ['all', 'pano', 'flat'], {
+      all: 'a',
+      pano: 'p',
+      flat: 'f',
+    }),
+    // "Captured since" as relative days, so a link means the same next year.
+    boundedIntegerOption('sinceDays', 's', 0, { min: 0, max: 36500 }),
+  ]),
   radio: Object.freeze([
     Object.freeze({
       key: 'filter',
@@ -536,6 +547,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 's',
     disposition: 'enabled+options',
     optionOwner: 'satellites',
+  }),
+  Object.freeze({
+    id: 'street-level',
+    token: '3',
+    disposition: 'enabled+options',
+    optionOwner: 'street-level',
   }),
   Object.freeze({
     id: 'telegeography-submarine-cables',

@@ -113,7 +113,10 @@ function element(
     getBoundingClientRect() {
       return this.rect;
     },
-    matches: (selector) => selector === '[data-panel-id]',
+    matches: (selector) =>
+      selector === '[data-panel-id]' ||
+      (selector === '[data-panel-id]:not(.panel-floating)' &&
+        !classes.has('panel-floating')),
     contains(target) {
       return (
         target === this || this.children.some((child) => child.contains(target))
@@ -319,6 +322,28 @@ test('right layout retains Display allocation during measurement and caps restor
     ),
     false,
     'stable allocation must not churn the style attribute',
+  );
+});
+
+test('right rail neither measures nor allocates a panel floating out of it', () => {
+  const f = fixture('right');
+  f.expand(f.first, 900);
+  f.expand(f.second, 300);
+  f.first.classList.add('panel-floating');
+  f.first.style.setProperty('--right-panel-allocated-height', '500px');
+  f.first.writes.length = 0;
+  f.run();
+  assert.equal(f.stack.dataset.expandedCount, '1');
+  assert.deepEqual(
+    f.first.writes,
+    [],
+    'a floating panel keeps whatever inline style it left the rail with',
+  );
+  assert.equal(f.first.getAttribute('aria-hidden'), undefined);
+  assert.equal(f.first.classList.contains('layout-auto-collapsed'), false);
+  assert.ok(
+    f.second.style.getPropertyValue('--right-panel-allocated-height'),
+    'the docked panel still receives its allocation',
   );
 });
 

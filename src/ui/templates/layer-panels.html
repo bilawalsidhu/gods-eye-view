@@ -71,6 +71,72 @@
     </div>
   </div>
 
+  <!-- Street Level (Mapillary) Panel — moved into #right-context-rail at
+       runtime next to CCTV (see PanelLayoutController). -->
+  <div id="street-level-panel" class="panel-collapsible collapsed" data-panel-id="street-level-panel">
+    <div class="panel-glow"></div>
+    <div class="street-level-panel-inner" data-rail-scroller>
+      <div class="panel-header">
+        <span class="panel-title">STREET LEVEL</span>
+        <span class="panel-divider"></span>
+        <button id="sl-status" class="sl-status" type="button" aria-pressed="false" title="Turn Street Level on or off">OFF</button>
+        <button class="panel-collapse-btn" data-collapse-target="street-level-panel" title="Expand panel">◀</button>
+      </div>
+      <div id="sl-body" class="sl-body">
+        <fieldset id="sl-controls" class="sl-controls">
+          <div id="sl-viewer-wrap" class="sl-viewer-wrap" hidden>
+            <div class="sl-viewer-bar">
+              <div class="sl-viewer-tools">
+                <button id="sl-viewer-expand" class="scene-btn" type="button" aria-pressed="false" title="Expand the street-level view (Esc shrinks it)"><span class="sl-btn-icon" aria-hidden="true">⤢</span><span class="sl-btn-text">EXPAND</span></button>
+                <div class="sl-seg" role="radiogroup" aria-label="Image fit">
+                  <button type="button" class="sl-seg-btn is-active" data-sl-render="letterbox" role="radio" aria-checked="true" title="Fit: show the whole photo, with dark bars where its shape differs from the frame">FIT</button>
+                  <button type="button" class="sl-seg-btn" data-sl-render="fill" role="radio" aria-checked="false" title="Fill: fill the frame edge to edge, cropping the photo">FILL</button>
+                </div>
+                <button id="sl-follow-btn" class="scene-btn" type="button" aria-pressed="false" aria-label="Camera follows view" title="Camera follows view: move the globe camera wherever the street-level view looks"><span class="sl-btn-icon" aria-hidden="true">⌖</span><span class="sl-btn-text">FOLLOW</span></button>
+              </div>
+              <div class="sl-viewer-tools sl-viewer-tools-right">
+                <button id="sl-viewer-close" class="sl-viewer-x" type="button" title="Close the image and deselect it on the map" aria-label="Close the street-level image">×</button>
+              </div>
+            </div>
+            <div class="sl-viewer-stage">
+              <div id="sl-viewer-placeholder" class="sl-viewer-placeholder" hidden></div>
+              <div id="sl-viewer" class="sl-viewer" aria-label="Street-level viewer"></div>
+            </div>
+            <div id="sl-image-meta" class="sl-image-meta">
+              <span id="sl-image-by" class="sl-image-by"></span>
+              <span class="sl-image-right">
+                <span id="sl-image-when" class="sl-image-when"></span>
+                <a id="sl-image-link" class="sl-image-link" href="#" target="_blank" rel="noopener noreferrer" title="Open this image on the provider's site" hidden></a>
+              </span>
+            </div>
+          </div>
+          <div class="sl-settings">
+            <div class="sl-providers" role="group" aria-label="Imagery providers">
+              <span class="cctv-summary-label">PROVIDERS</span>
+              <div id="sl-provider-chips" class="sl-chips"></div>
+            </div>
+            <div id="sl-error" class="sl-error" role="alert" hidden><span aria-hidden="true">⚠</span> <span id="sl-error-text"></span></div>
+            <div class="sl-filters" role="group" aria-label="Imagery filters">
+              <span class="cctv-summary-label">IMAGERY</span>
+              <div class="sl-seg" role="radiogroup" aria-label="Panorama filter">
+                <button type="button" class="sl-seg-btn is-active" data-sl-pano="all" role="radio" aria-checked="true">ALL</button>
+                <button type="button" class="sl-seg-btn" data-sl-pano="pano" role="radio" aria-checked="false">360°</button>
+                <button type="button" class="sl-seg-btn" data-sl-pano="flat" role="radio" aria-checked="false">FLAT</button>
+              </div>
+            </div>
+            <div class="sl-since">
+              <label class="cctv-summary-label" for="sl-since">SINCE</label>
+              <input id="sl-since" class="sl-range" type="range" min="0" max="8" step="1" value="0" aria-valuetext="ANY DATE" aria-describedby="sl-since-label" />
+              <output id="sl-since-label" class="sl-since-label" for="sl-since">ANY DATE</output>
+            </div>
+            <ul id="sl-legend" class="sl-legend" aria-label="Coverage colours"></ul>
+            <div id="sl-coverage-meta" class="sl-meta"></div>
+          </div>
+        </fieldset>
+      </div>
+    </div>
+  </div>
+
   <!-- Scene Director Panel -->
   <div id="scene-panel" class="panel-collapsible collapsed" data-panel-id="scene-panel">
     <div class="panel-glow"></div>

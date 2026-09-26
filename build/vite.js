@@ -7,6 +7,7 @@ export function createBrowserViteConfig({
   publicDir,
   googleApiKey,
   cesiumToken,
+  mapillaryToken,
   host = 'localhost',
   port = 4173,
   command,
@@ -26,6 +27,9 @@ export function createBrowserViteConfig({
         '@jtarrio/signals/demod/modes.js',
         '@jtarrio/webrtlsdr/rtlsdr.js',
         'egm96-universal',
+        // MapillaryJS is loaded on demand the first time a street-level
+        // image is opened.
+        'mapillary-js',
       ],
     },
     server: {
@@ -47,6 +51,10 @@ export function createBrowserViteConfig({
     define: {
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
+      // Mapillary client tokens are public by design (see SECURITY.md).
+      'import.meta.env.MAPILLARY_CLIENT_TOKEN': JSON.stringify(
+        mapillaryToken ?? '',
+      ),
     },
     build: { chunkSizeWarningLimit: 1500 },
   };

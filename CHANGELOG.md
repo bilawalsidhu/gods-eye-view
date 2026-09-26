@@ -1,5 +1,13 @@
 # Changelog
 
+- Rail panels can opt into a portable mode: dragging the CCTV or Street Level
+  panel by its header lifts it out of the right rail into a floating window
+  that resizes from any edge or corner, remembers its position and size across
+  reloads, and snaps back on a header double-click. A panel can also ask to
+  dock when it is collapsed while floating (Street Level does).
+
+- Street Level: a provider-neutral street-level imagery layer modelled on the iD editor's photo overlay. One panel in the right rail carries a chip per imagery provider, shared 360°/flat and captured-since filters, coverage drawn on the globe from orbit down to a single street, image cones per sequence, and one embedded viewer whose adapter follows the provider of the open image; each active provider credits its imagery on the globe, and share links carry the provider switches and the filter. Mapillary is the first provider (free client token; CC BY-SA 4.0 imagery); Google Street View, KartaView and Panoramax are next. The panel is kept simple: the viewer opens at the top so the photo needs no scrolling, the header pill and the provider chips switch the layer, and SINCE is a slider. FOLLOW (the globe camera following the street-level view) is available on the Google 3D map only.
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD

@@ -103,6 +103,119 @@
   opacity: 0.96;
 }
 
+/* ── Portable rail panels ────────────────────
+   A header drag lifts a portable panel (PanelPositionControls) out of its
+   rail into a fixed window that remembers its place and size. The rail's
+   own placement rules in layers.css are guarded with :not(.panel-floating),
+   so these only have to beat a panel's base placement (one id). */
+.panel-portable .panel-header {
+  cursor: grab;
+}
+.panel-portable.panel-dragging .panel-header {
+  cursor: grabbing;
+}
+#right-context-rail > .panel-floating {
+  position: fixed;
+  inset: auto;
+  /* Above every docked rail panel (#pp-toggles is 110). PanelPositionControls
+     promotes floating windows from this floor (PANEL_Z_FLOATING_FLOOR). */
+  z-index: 111;
+  max-height: calc(100vh - 12px);
+  margin: 0;
+  flex: none;
+  pointer-events: auto;
+}
+/* A collapsed window keeps its stored height for later but shows only its
+   header strip, so the resize handles have nothing to attach to. */
+#right-context-rail > .panel-floating.collapsed {
+  max-height: max-content;
+}
+.panel-floating[style*='height'] > .cctv-panel-inner {
+  box-sizing: border-box;
+  height: 100%;
+  max-height: none;
+}
+.panel-resize-edge,
+.panel-resize-grip {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+}
+.panel-resize-edge[data-dir='n'],
+.panel-resize-edge[data-dir='s'] {
+  left: 10px;
+  right: 10px;
+  height: 7px;
+  cursor: ns-resize;
+}
+.panel-resize-edge[data-dir='n'] {
+  top: -3px;
+}
+.panel-resize-edge[data-dir='s'] {
+  bottom: -3px;
+}
+.panel-resize-edge[data-dir='e'],
+.panel-resize-edge[data-dir='w'] {
+  top: 10px;
+  bottom: 10px;
+  width: 7px;
+  cursor: ew-resize;
+}
+.panel-resize-edge[data-dir='e'] {
+  right: -3px;
+}
+.panel-resize-edge[data-dir='w'] {
+  left: -3px;
+}
+.panel-resize-edge[data-dir='ne'],
+.panel-resize-edge[data-dir='nw'],
+.panel-resize-edge[data-dir='sw'] {
+  width: 14px;
+  height: 14px;
+}
+.panel-resize-edge[data-dir='ne'] {
+  top: -3px;
+  right: -3px;
+  cursor: nesw-resize;
+}
+.panel-resize-edge[data-dir='nw'] {
+  top: -3px;
+  left: -3px;
+  cursor: nwse-resize;
+}
+.panel-resize-edge[data-dir='sw'] {
+  bottom: -3px;
+  left: -3px;
+  cursor: nesw-resize;
+}
+.panel-resize-grip {
+  right: 3px;
+  bottom: 3px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  opacity: 0.55;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 3px,
+    rgba(0, 212, 255, 0.6) 3px 4px
+  );
+  transition: opacity var(--transition-fast);
+}
+.panel-portable:hover .panel-resize-grip,
+.panel-resizing .panel-resize-grip {
+  opacity: 1;
+}
+.panel-collapsible.collapsed > .panel-resize-edge,
+.panel-collapsible.collapsed > .panel-resize-grip {
+  display: none;
+}
+.panel-resizing,
+.panel-resizing * {
+  user-select: none;
+}
+
 .panel-title {
   font-family: var(--font-mono);
   font-size: 9px;

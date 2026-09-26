@@ -32,19 +32,21 @@
     "visualization"
   ],
   "scripts": {
+    "build": "vite build",
+    "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
+    "dev": "vite",
+    "dev:secure": "./scripts/dev-secure.sh",
     "doctor": "node scripts/setup-doctor.mjs",
     "format": "node scripts/format.mjs --write",
     "format:check": "node scripts/format.mjs --check",
-    "dev": "vite",
-    "dev:secure": "./scripts/dev-secure.sh",
     "opensky:import": "./scripts/opensky-import-client.sh",
-    "build": "vite build",
     "preview": "vite preview",
-    "test": "node scripts/run-unit-tests.mjs",
-    "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
-    "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
-    "qa:transit": "node scripts/qa-transit.mjs"
+    "qa:panel-resize": "node scripts/qa-panel-resize.mjs",
+    "qa:street-level": "node scripts/qa-street-level.mjs",
+    "qa:transit": "node scripts/qa-transit.mjs",
+    "test": "node scripts/run-unit-tests.mjs",
+    "test:track": "node scripts/track-regression.mjs"
   },
   "dependencies": {
     "@jtarrio/signals": "^0.10.0",
@@ -54,6 +56,7 @@
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
     "hls.js": "^1.7.3",
+    "mapillary-js": "^4.1.2",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
     "satellite.js": "^6.0.2"
@@ -248,6 +251,12 @@
     "./layers/transit/standalone": "./src/data/transit.js",
     "./layers/transit/source": "./src/layers/transit/source.js",
     "./sources/transit-service": "./src/sources/transitService.js",
-    "./sources/map-features": "./src/sources/overpassFeatures.js"
+    "./sources/map-features": "./src/sources/overpassFeatures.js",
+    "./server/providers/mapillary": {
+      "node": "./server/providers/mapillary.js"
+    },
+    "./layers/street-level": "./src/layers/streetLevel/index.js",
+    "./layers/street-level/mapillary": "./src/layers/streetLevel/providers/mapillary/index.js",
+    "./layers/street-level/mapillary/source": "./src/layers/streetLevel/providers/mapillary/source.js"
   }
 }

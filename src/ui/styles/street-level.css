@@ -1,0 +1,558 @@
+/* ── Street Level panel ─────────────────────────────────────────
+   Lives in the right context rail next to CCTV; the rail owns position and
+   width (see layers.css). Everything here is panel-internal. */
+#street-level-panel {
+  --sl-green: #05cb63;
+  --sl-text: 0.62rem;
+  --sl-text-small: 0.6rem;
+}
+
+#street-level-panel .panel-glow {
+  position: absolute;
+  inset: -18px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(5, 203, 99, 0.16) 0%,
+    transparent 65%
+  );
+  filter: blur(16px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.street-level-panel-inner {
+  position: relative;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.46) rgba(255, 255, 255, 0.06);
+}
+
+#street-level-panel .panel-header {
+  gap: 8px;
+}
+
+.sl-status {
+  font-family: var(--font-mono);
+  font-size: var(--sl-text-small);
+  letter-spacing: 0.1em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border-hover);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+button.sl-status {
+  background: transparent;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--sl-text-small);
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+button.sl-status:hover,
+button.sl-status:focus-visible {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  outline: none;
+}
+
+.sl-status.is-on {
+  color: var(--sl-green);
+  border-color: rgba(5, 203, 99, 0.55);
+}
+
+.sl-status.is-busy {
+  color: var(--accent);
+  border-color: rgba(0, 212, 255, 0.55);
+}
+
+.sl-status.is-warn {
+  color: #ffb300;
+  border-color: rgba(255, 179, 0, 0.55);
+}
+
+/* Collapsed strips hide the body entirely: nothing to paint or tab into. */
+#street-level-panel.collapsed .sl-body,
+#street-level-panel.collapsed .sl-status {
+  display: none;
+}
+
+.sl-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.sl-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.sl-controls:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Everything but the viewer. Docked, the whole panel scrolls; in a resized
+   window the viewer keeps its room and only this block scrolls. */
+.sl-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* ── Providers ───────────────────────────────────────────────────────────── */
+.sl-providers {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sl-chips .data-toggle-chip.chip-error {
+  color: #ffb300;
+  border-color: rgba(255, 179, 0, 0.55);
+}
+
+/* ── Errors ──────────────────────────────────────────────────────────────── */
+.sl-error {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: #ff8a80;
+}
+
+/* ── Filters and legend ──────────────────────────────────────────────────── */
+.sl-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sl-seg {
+  display: inline-flex;
+  border: 1px solid var(--glass-border-hover);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.sl-seg-btn {
+  font-family: var(--font-mono);
+  font-size: var(--sl-text-small);
+  letter-spacing: 0.08em;
+  padding: 4px 9px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.sl-seg-btn + .sl-seg-btn {
+  border-left: 1px solid var(--glass-border);
+}
+
+.sl-seg-btn.is-active {
+  background: rgba(5, 203, 99, 0.22);
+  color: var(--text-primary);
+}
+
+/* SINCE: a stepped slider, oldest window left, newest right. */
+.sl-since {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.sl-range {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--sl-green);
+  cursor: pointer;
+}
+
+.sl-range:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.sl-since-label {
+  grid-column: 2;
+  font-family: var(--font-mono);
+  font-size: var(--sl-text-small);
+  letter-spacing: 0.08em;
+  color: var(--text-primary);
+}
+
+.sl-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sl-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--sl-text-small);
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.sl-legend-swatch {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+/* ── Embedded viewer ─────────────────────────────────────────────────────── */
+.sl-viewer-wrap {
+  position: relative;
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border-hover);
+  background: #000;
+}
+
+.sl-viewer-wrap[hidden] {
+  display: none;
+}
+
+/* The image stage: the viewer and its loading veil, nothing on top of it,
+   so the provider's own controls (sequence bar, zoom, bearing) stay clear. */
+.sl-viewer-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
+.sl-viewer {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  min-height: 180px;
+}
+
+.sl-viewer-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 3;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.sl-viewer-placeholder[hidden] {
+  display: none;
+}
+
+.sl-viewer-placeholder::after {
+  content: '';
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--sl-green);
+  animation: sl-spin 0.9s linear infinite;
+}
+
+@keyframes sl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Our tools live in a bar above the image rather than over it. */
+.sl-viewer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 6px;
+  background: rgba(10, 10, 15, 0.85);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.sl-viewer-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.sl-viewer-tools .scene-btn {
+  padding: 4px 8px;
+  font-size: var(--sl-text-small);
+  background: rgba(10, 10, 15, 0.75);
+  flex: none;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sl-viewer-tools .sl-seg {
+  background: rgba(10, 10, 15, 0.75);
+}
+
+@container (max-width: 380px) {
+  .sl-viewer-tools .sl-btn-text {
+    display: none;
+  }
+}
+
+.sl-viewer-x {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(10, 10, 15, 0.8);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: all var(--transition-fast);
+}
+
+.sl-viewer-x:hover {
+  color: #0a0a0f;
+  background: #fff;
+  border-color: #fff;
+}
+
+.sl-image-meta {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: var(--sl-text-small);
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2px 10px;
+  min-height: 26px;
+}
+
+.sl-image-by {
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.sl-image-by:empty {
+  display: none;
+}
+
+.sl-image-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.sl-image-link {
+  color: var(--sl-green);
+  text-decoration: none;
+  letter-spacing: 0.1em;
+}
+
+.sl-image-link[hidden] {
+  display: none;
+}
+
+.sl-image-link:hover {
+  text-decoration: underline;
+}
+
+.sl-meta {
+  font-family: var(--font-mono);
+  font-size: var(--sl-text-small);
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.sl-meta:empty {
+  display: none;
+}
+
+/* ── Floating window ─────────────────────────────────────────────────────── */
+/* A window that was only dragged keeps its natural height; bound it to the
+   viewport so nothing runs off-screen (the rail rule's max-height: 100% does
+   not bind an auto-height parent). Id-qualified to outrank that rule. */
+#right-context-rail > #street-level-panel.panel-floating > .street-level-panel-inner {
+  max-height: calc(100vh - 12px);
+  overflow-y: auto;
+}
+
+/* A resized window (PanelPositionControls writes an inline height) hands the
+   spare height to the viewer, so the image never needs scrolling to. */
+.panel-floating[style*='height'] > .street-level-panel-inner {
+  box-sizing: border-box;
+  height: 100%;
+  max-height: none;
+  overflow: hidden;
+}
+
+.panel-floating[style*='height'] .sl-body,
+.panel-floating[style*='height'] .sl-controls {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.panel-floating[style*='height'] .sl-viewer-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.panel-floating[style*='height'] .sl-viewer-stage {
+  flex: 1 1 auto;
+  min-height: 140px;
+}
+
+.panel-floating[style*='height'] .sl-viewer {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: auto;
+}
+
+.panel-floating[style*='height'] .sl-settings {
+  flex: 0 1 auto;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* ── Expanded viewer ─────────────────────────────────────────────────────── */
+/* The panel inner's backdrop-filter makes it the containing block for fixed
+   descendants, so the expanded viewer is re-parented to <body>. z-index sits
+   above panels (≤139) and below the voice pill (150) and toasts (200). */
+.sl-viewer-wrap-expanded {
+  position: fixed;
+  left: 4vw;
+  right: 4vw;
+  top: 5vh;
+  bottom: 9vh;
+  z-index: 141;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-mono);
+  border-color: rgba(0, 212, 255, 0.55);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7);
+  outline: none;
+}
+
+.sl-viewer-wrap-expanded .sl-viewer-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sl-viewer-wrap-expanded .sl-viewer {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: auto;
+}
+
+.sl-viewer-wrap-expanded .sl-image-meta {
+  font-size: 0.66rem;
+  padding: 10px 14px;
+}
+
+.sl-viewer-wrap-expanded .sl-viewer-bar {
+  padding: 8px 10px;
+}
+
+.sl-viewer-wrap-expanded .sl-viewer-tools .scene-btn {
+  padding: 8px 14px;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  color: var(--text-primary);
+  border-color: rgba(0, 212, 255, 0.6);
+  background: rgba(10, 10, 15, 0.82);
+}
+
+.sl-viewer-wrap-expanded #sl-viewer-expand::after {
+  content: ' · ESC';
+  color: var(--text-secondary);
+}
+
+.sl-viewer-wrap-expanded .sl-viewer-x {
+  width: 34px;
+  height: 34px;
+  font-size: 1.3rem;
+}
+
+/* ── Short viewports ─────────────────────────────────────────────────────── */
+@media (max-height: 640px) {
+  .street-level-panel-inner {
+    padding: 10px;
+    gap: 6px;
+  }
+
+  .sl-viewer {
+    min-height: 150px;
+  }
+}
+
+/* ── Phones ──────────────────────────────────────────────────────────────── */
+/* At this width the right rail is the band between mid-screen and the credit
+   line (responsive.css: top 50vh + 8px, bottom 2vh + 7.5rem). Size the photo
+   from that band, less the panel's header, tool bar and caption (~150px), so
+   the whole image shows without scrolling; EXPAND still gives full screen. */
+@media (max-width: 720px) {
+  .sl-viewer {
+    aspect-ratio: auto;
+    height: clamp(110px, calc(48vh - 8px - 7.5rem - 150px), 320px);
+    min-height: 0;
+  }
+}
