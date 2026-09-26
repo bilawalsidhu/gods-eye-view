@@ -26,6 +26,7 @@
   "src/main.js",
   "docs/APPLICATION.md",
   "scripts/qa-application.mjs",
+  "scripts/qa-terrain-429.mjs",
   "src/app/application.js",
   "src/app/application.test.mjs",
   "src/app/mapLifecycle.test.mjs",
@@ -576,6 +577,8 @@
   "src/maps/imagery.js",
   "src/maps/registry.js",
   "src/maps/terrain.js",
+  "src/maps/terrainRetry.js",
+  "src/maps/terrainRetry.test.mjs",
   "src/mapStackController.js",
   "src/mapStartup.js",
   "src/mapStackChips.test.mjs",
@@ -839,5 +842,12 @@
   "src/ui/imageryBoxTool.test.mjs",
   "src/ui/recentImagery.test.mjs",
   "src/layers/recentImagery/testDoubles.mjs",
-  "scripts/qa-recent-imagery.mjs"
+  "scripts/qa-recent-imagery.mjs",
+  "scripts/qa-overpass-offload.mjs",
+  "src/overpassOffload.test.mjs",
+  "src/sources/openFreeMap.test.mjs",
+  "src/sources/vectorTiles.test.mjs",
+  "src/sources/militaryTileGeometry.test.mjs",
+  "src/layers/traffic/surface.test.mjs",
+  "src/layers/traffic/roadModes.test.mjs"
 ]

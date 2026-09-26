@@ -1,5 +1,31 @@
 # Changelog
 
+- Public Overpass instances are no longer used by default. Street Traffic
+  roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
+  on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
+  TomTom key the default is Hybrid: TomTom roads with live flow, plus
+  OpenFreeMap roads TomTom does not cover, simulated. Without a key every
+  choice draws OpenFreeMap roads. TomTom mode shows only roads with flow; OSM
+  mode matches TomTom flow onto OpenFreeMap roads for congestion colors,
+  speeds and closures, and unmatched roads stay simulated. Road failures name
+  OpenFreeMap and retain HTTP status or timeout reasons separately from TomTom.
+  Flow coverage counts
+  rendered dots on roads with flow; mapped military areas come from OpenFreeMap and
+  ALPR cameras from an hourly OpenStreetMap extract (US and Canada). Features
+  without a replacement say they are unavailable; area and footprint
+  annotations check once whether an Overpass instance is configured and skip
+  the query when none is. `OVERPASS_UPSTREAMS` sets an
+  Overpass instance you run or pay for. The cockpit regional brief resolves
+  regions from bundled Natural Earth data instead of Nominatim. Traffic starts on enable and paints
+  locally grounded roads incrementally, shares concurrent tile requests and
+  reuses validated heights across pans. Congestion and closures respect travel
+  direction. ALPR distinguishes unsupported coverage from empty results and
+  asks for zoom-in before exceeding its tile budget. Installation footprints
+  retain visible fragments without joining separate parcels across zooms. Keyless
+  terrain tiles retry HTTP 429 and transient gateway failures with bounded,
+  shared backoff. Operator-configured Overpass area and footprint queries
+  retain relation member geometry so their outlines remain available.
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD
@@ -510,6 +536,7 @@ This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
 ## [Unreleased]
+
 
 - Add ECMWF IFS model selection to Wind (#464, thanks @beneduzi), with model-scoped forecast-step caches, cancellation of replaced requests, and separate issue/valid timestamps.
 

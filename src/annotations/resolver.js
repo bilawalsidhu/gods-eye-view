@@ -1,3 +1,4 @@
+import { isUnavailableCapability } from '../sources/capability.js';
 import { requireFeatureSource } from '../sources/featureSource.js';
 import { createOverpassFeatureSource } from '../sources/overpassFeatures.js';
 import {
@@ -474,6 +475,18 @@ export function createAnnotationResolver({
         // GROUNDS-like ask must not short-circuit here: the model phrases "the Capitol
         // grounds" as around_the_thing, but the grounds ARE the thing — the real enclosing
         // polygon (below) beats a 400 m disc (field test 8's "spherical round one").
+        const availability = await fetchEnclosingArea(
+          lat,
+          lon,
+          signal,
+          matchName,
+        );
+        if (
+          isUnavailableCapability(availability) ||
+          isRateLimitedOutcome(availability)
+        )
+          return availability;
+        if (availability === undefined) return undefined;
         fp = synthesizeBufferedArea(lat, lon, AROUND_LANDMARK_RADIUS_M);
       } else if (isAdmin) {
         // Pure admin: only an admin boundary is correct — never fall back to a
@@ -501,6 +514,7 @@ export function createAnnotationResolver({
           // A neighborhood whose canonical name carries a city suffix ("Presidio of San
           // Francisco") can match the CITY admin; treat an oversized admin as a DEFINITIVE
           // no-neighborhood-polygon so it still falls through to the named-landuse path.
+          if (isUnavailableCapability(adminFp)) return adminFp;
           if (adminFp && exceedsScopeArea(adminFp, scope)) adminFp = null;
           if (adminFp) {
             fp = adminFp;
@@ -515,6 +529,7 @@ export function createAnnotationResolver({
               signal,
               'strict',
             );
+            if (isUnavailableCapability(footFp)) return footFp;
             if (footFp) {
               fp = footFp;
             } else if (footFp === null) {
@@ -531,6 +546,7 @@ export function createAnnotationResolver({
                 signal,
                 'loose',
               );
+              if (isUnavailableCapability(looseFp)) return looseFp;
               if (looseFp && looseFp.kind !== 'building') fp = looseFp;
               else if (looseFp === null)
                 fp = synthesizeBufferedArea(lat, lon, NEIGHBORHOOD_RADIUS_M);
@@ -580,6 +596,7 @@ export function createAnnotationResolver({
         // synthesized disc only when OSM DEFINITIVELY has none.
         if (groundsLike && (fp === null || fp?.kind === 'building')) {
           const area = await fetchEnclosingArea(lat, lon, signal, matchName);
+          if (isUnavailableCapability(area)) return area;
           if (area) {
             fp = area; // real grounds polygon (synthesized:false) — beats both the dome and a disc
             // It's a grounds/compound feature (already capped at SCOPE_AREA_CAP_M2.compound inside
@@ -619,7 +636,7 @@ export function createAnnotationResolver({
       ) {
         fp = null;
       }
-      if (isRateLimitedOutcome(fp)) return fp;
+      if (isUnavailableCapability(fp) || isRateLimitedOutcome(fp)) return fp;
       if (fp === undefined) return undefined; // TRANSIENT — a backoff retry may still find it
       if (!fp || !Array.isArray(fp.ring) || fp.ring.length < 3) return null;
       const centroid = ringCentroid(fp.ring);
@@ -646,10 +663,12 @@ export function createAnnotationResolver({
     let ring = null;
     let footprintKind = null; // 'building' | 'area'
     let buildingHeight = null; // meters, only for buildings
+    let outlineUnavailable = false;
     let synthesized = false; // true = buffered/approximate area, render dashed/feathered
     if (footprint && !deferFootprint) {
       const fp = await resolveOutline();
-      if (fp && !isRateLimitedOutcome(fp)) {
+      outlineUnavailable = isUnavailableCapability(fp);
+      if (fp && !outlineUnavailable && !isRateLimitedOutcome(fp)) {
         ring = fp.ring;
         footprintKind = fp.footprintKind;
         buildingHeight = fp.buildingHeight;
@@ -680,6 +699,7 @@ export function createAnnotationResolver({
       label,
       source,
       synthesized,
+      outlineUnavailable,
       viewport: placeViewport,
       ...(footprint && deferFootprint ? { resolveOutline } : {}),
     };
@@ -1004,7 +1024,8 @@ export function createAnnotationResolver({
       { lat, lon },
       { signal: signal },
     );
-    if (isRateLimitedOutcome(candidates)) return candidates;
+    if (isUnavailableCapability(candidates) || isRateLimitedOutcome(candidates))
+      return candidates;
     if (!candidates) return undefined; // transient upstream failure (vs null = definitive miss)
 
     const queryWords = normalizedWords(query);
@@ -1067,7 +1088,8 @@ export function createAnnotationResolver({
     // without first trying the place= polygon (and a named landuse via the caller).
     if (scope === 'neighborhood' && (!best || bestCoverage < 0.8)) {
       const place = await fetchPlaceArea(lat, lon, query, signal);
-      if (isRateLimitedOutcome(place)) return place;
+      if (isUnavailableCapability(place) || isRateLimitedOutcome(place))
+        return place;
       if (place) {
         cacheWrite(footprintCache, cacheKey, place);
         return place;
@@ -1097,7 +1119,8 @@ export function createAnnotationResolver({
       const relEls = await featureSource.getAreaGeometry(cand.el.id, {
         signal: signal,
       });
-      if (isRateLimitedOutcome(relEls)) return relEls;
+      if (isUnavailableCapability(relEls) || isRateLimitedOutcome(relEls))
+        return relEls;
       if (relEls === null) {
         transient = true;
         break;
@@ -1126,7 +1149,8 @@ export function createAnnotationResolver({
       if (exceedsScopeArea(fp, scope)) {
         if (scope === 'neighborhood') {
           const place = await fetchPlaceArea(lat, lon, query, signal);
-          if (isRateLimitedOutcome(place)) return place;
+          if (isUnavailableCapability(place) || isRateLimitedOutcome(place))
+            return place;
           if (place) {
             cacheWrite(footprintCache, cacheKey, place);
             return place;
@@ -1149,7 +1173,8 @@ export function createAnnotationResolver({
     // caller relies on that to gate named-landuse fallback / synthesis.
     if (scope === 'neighborhood') {
       const place = await fetchPlaceArea(lat, lon, query, signal);
-      if (isRateLimitedOutcome(place)) return place;
+      if (isUnavailableCapability(place) || isRateLimitedOutcome(place))
+        return place;
       if (place) {
         cacheWrite(footprintCache, cacheKey, place);
         return place;
@@ -1171,7 +1196,7 @@ export function createAnnotationResolver({
       { lat, lon },
       { signal: signal },
     );
-    if (isRateLimitedOutcome(els)) return els;
+    if (isUnavailableCapability(els) || isRateLimitedOutcome(els)) return els;
     if (els === null) return undefined; // transient upstream failure (vs [] = no match)
     let bestRing = null;
     let bestScore = 0;
@@ -1220,7 +1245,8 @@ export function createAnnotationResolver({
       { lat, lon },
       { signal: signal },
     );
-    if (isRateLimitedOutcome(areaEls)) return areaEls;
+    if (isUnavailableCapability(areaEls) || isRateLimitedOutcome(areaEls))
+      return areaEls;
     if (areaEls) {
       let bestRing = null;
       let bestScore = 0;
@@ -1253,7 +1279,8 @@ export function createAnnotationResolver({
       { lat, lon },
       { signal: signal },
     );
-    if (isRateLimitedOutcome(wayEls)) return wayEls;
+    if (isUnavailableCapability(wayEls) || isRateLimitedOutcome(wayEls))
+      return wayEls;
     if (wayEls) {
       const segments = [];
       for (const el of wayEls) {
@@ -1326,7 +1353,8 @@ export function createAnnotationResolver({
       { lat, lon },
       { signal: signal },
     );
-    if (isRateLimitedOutcome(elements)) return elements;
+    if (isUnavailableCapability(elements) || isRateLimitedOutcome(elements))
+      return elements;
     if (elements === null || signal?.aborted) return undefined;
     const fp = selectFootprint(elements, lat, lon, query, mode);
     if (fp) {
@@ -1374,7 +1402,8 @@ export function createAnnotationResolver({
       { lat, lon },
       { signal: signal },
     );
-    if (isRateLimitedOutcome(elements)) return elements;
+    if (isUnavailableCapability(elements) || isRateLimitedOutcome(elements))
+      return elements;
     if (elements === null) return undefined; // transient upstream failure (vs [] = definitive no-match)
 
     const queryWords = normalizedWords(query);
@@ -1497,7 +1526,11 @@ export function createAnnotationResolver({
         pending = featureSource
           .getMonuments({ lat, lon }, { signal: undefined })
           .then((elements) => {
-            if (elements === null || isRateLimitedOutcome(elements))
+            if (
+              elements === null ||
+              isUnavailableCapability(elements) ||
+              isRateLimitedOutcome(elements)
+            )
               return null; // transient — NEVER cached (a poisoned bucket
             // would silently disable the snap for the whole session, field test 7 §1)
             const feats = [];

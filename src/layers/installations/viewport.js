@@ -44,10 +44,13 @@ export function createViewport({ state: layerState, services, parts, source }) {
    * zoom-out, or disable cancels it.
    */
 
-  function scheduleUnavailableRetry() {
+  function scheduleUnavailableRetry(retryAfterMs = 0) {
     if (!layerState.enabled) return;
     clearTimeout(layerState.retryTimer);
-    layerState.retryDelayMs = installationRetryDelayMs(layerState.retryDelayMs);
+    layerState.retryDelayMs = Math.max(
+      retryAfterMs,
+      installationRetryDelayMs(layerState.retryDelayMs),
+    );
     layerState.retryAt = Date.now() + layerState.retryDelayMs;
     layerState.retryTimer = setTimeout(() => {
       layerState.retryTimer = null;
@@ -66,6 +69,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
 
   function scheduleLoad() {
     if (!layerState.enabled) return;
+    layerState.abort?.abort();
     // A user-driven load supersedes any pending retry; the load reschedules on
     // failure, so the backoff step is kept rather than reset.
     clearUnavailableRetry({ resetBackoff: false });

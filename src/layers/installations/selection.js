@@ -29,7 +29,9 @@ export function createSelection({
       if (!isPointerFree()) return;
       if (!layerState.enabled) return;
       const picked = viewer.scene.pick(click.position);
-      const id = typeof picked?.id?.id === 'string' ? picked.id.id : null;
+      const id =
+        picked?.id?.installationId ||
+        (typeof picked?.id?.id === 'string' ? picked.id.id : null);
       if (id && layerState.recordById.has(id) && id !== layerState.selectedId) {
         selectRecord(id);
       } else if (layerState.selectedId) {

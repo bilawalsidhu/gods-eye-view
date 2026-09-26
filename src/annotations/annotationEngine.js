@@ -1,3 +1,4 @@
+import { isUnavailableCapability } from '../sources/capability.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
 import {
@@ -81,6 +82,7 @@ export async function resolveOutlineWithRetry(
     } catch {
       fp = null; // hard failure — definitive, keep the honest point
     }
+    if (isUnavailableCapability(fp)) return fp;
     if (isRateLimitedOutcome(fp)) {
       // A throttle gets one deliberately spaced retry. If that retry is throttled
       // too, stop this mark's outline task instead of replaying the batch storm.
@@ -673,7 +675,9 @@ export function createAnnotationEngine({
       if (myGen !== generation || controller.signal.aborted) return; // board superseded
       if (!annotations.has(anno.id)) return; // mark replaced/removed while resolving
       anno.pendingOutline = false;
-      if (fp) {
+      anno.outlineUnavailable = isUnavailableCapability(fp);
+      if (anno.outlineUnavailable) renderer.update(anno);
+      if (fp && !anno.outlineUnavailable) {
         anno.ring = fp.ring;
         anno.footprintKind = fp.footprintKind || null;
         anno.buildingHeight = fp.buildingHeight || null;
@@ -725,7 +729,14 @@ export function createAnnotationEngine({
         id: anno.id,
         label: anno.label || null,
         target: anno.targetKey || null,
-        status: fp ? 'resolved' : 'failed',
+        status: anno.outlineUnavailable
+          ? 'unavailable'
+          : fp
+            ? 'resolved'
+            : 'failed',
+        ...(anno.outlineUnavailable
+          ? { message: 'Detailed outline unavailable' }
+          : {}),
         ...(fp && anno.synthesized ? { approximate: true } : {}),
       });
     } finally {
@@ -753,6 +764,9 @@ export function createAnnotationEngine({
       // layer narrate without waiting out a slow Overpass — and without calling the
       // missing outline a failure.
       ...(anno.pendingOutline ? { outlinePending: true } : {}),
+      ...(anno.outlineUnavailable
+        ? { outlineUnavailable: true, message: 'Detailed outline unavailable' }
+        : {}),
       // approximate=true means the area was SYNTHESIZED (a buffered blob around a label
       // point), not a real OSM boundary — so the voice layer can be honest.
       ...(anno.synthesized ? { approximate: true } : {}),
@@ -926,6 +940,7 @@ export function createAnnotationEngine({
       // the upgrade task fills ring/kind in place when it lands. Transient render state
       // (not persisted).
       pendingOutline: typeof resolved.resolveOutline === 'function',
+      outlineUnavailable: Boolean(resolved.outlineUnavailable),
       // Which THING + SHAPE was asked for — the dedup identity while geometry is still
       // pending (see findDuplicate). targetKey is the normalized place name with trailing
       // locality qualifiers stripped ("California, United States" ≡ "California"; null for

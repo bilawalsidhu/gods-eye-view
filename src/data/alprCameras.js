@@ -7,6 +7,7 @@ const slot = createSourceSlot(
   createOverpassAlprSource(),
   ['fetch'],
   'ALPR source',
+  { destroy: () => {} },
 );
 export const configureAlprSource = slot.configure;
 export default createApplicationAlpr({

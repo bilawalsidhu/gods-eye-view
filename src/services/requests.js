@@ -1,3 +1,4 @@
+import { isUnavailableCapability } from '../sources/capability.js';
 import { createOverpassFeatureSource } from '../sources/overpassFeatures.js';
 /** Parse bounded retry information from a service response. */
 function retryAfterMs(value) {
@@ -15,6 +16,7 @@ export function createApplicationRequestServices({
   signal: lifetime,
   endpoints = {},
   features,
+  boundaryProbe = { timeoutMs: 3000, retryMs: 30_000 },
 } = {}) {
   const urls = {
     boundaries: '/api/overpass',
@@ -64,17 +66,70 @@ export function createApplicationRequestServices({
       throw new Error(`${label} unavailable (${response.status})`);
     return response.data;
   }
+  // Learn once per page whether the server has an Overpass instance, so an
+  // unconfigured server is never asked (and never answers with an error).
+  // Discovery is bounded; a failed or timed-out probe is forgotten and not
+  // retried for a short backoff, during which queries go to the server as
+  // they would against an older server without the probe.
+  let boundaryCapability = null;
+  let boundaryProbeRetryAt = 0;
+  function boundariesConfigured() {
+    if (boundaryCapability) return boundaryCapability;
+    if (Date.now() < boundaryProbeRetryAt) return Promise.resolve(null);
+    boundaryCapability = request(`${urls.boundaries}/status`, {
+      signal: AbortSignal.timeout(boundaryProbe.timeoutMs),
+    }).then(
+      (response) =>
+        response.ok && typeof response.data?.configured === 'boolean'
+          ? response.data.configured
+          : null, // an older server: fall back to asking per query
+      (error) => {
+        boundaryCapability = null;
+        if (lifetime?.aborted) throw error;
+        boundaryProbeRetryAt = Date.now() + boundaryProbe.retryMs;
+        return null;
+      },
+    );
+    return boundaryCapability;
+  }
+  /** Wait for a shared promise, but give up when this caller's signal aborts. */
+  function untilAborted(promise, signal) {
+    if (!signal) return promise;
+    signal.throwIfAborted();
+    return new Promise((resolve, reject) => {
+      const abort = () => reject(signal.reason);
+      signal.addEventListener('abort', abort, { once: true });
+      promise
+        .then(resolve, reject)
+        .finally(() => signal.removeEventListener('abort', abort));
+    });
+  }
   const services = {
     boundaries: {
       async query(query, { signal } = {}) {
+        if ((await untilAborted(boundariesConfigured(), signal)) === false) {
+          signal?.throwIfAborted();
+          return {
+            unavailable: true,
+            code: 'OVERPASS_NOT_CONFIGURED',
+            retryable: false,
+          };
+        }
         const response = await request(urls.boundaries, {
           method: 'POST',
           signal,
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: `data=${encodeURIComponent(query)}`,
         });
+        if (isUnavailableCapability(response.data))
+          return {
+            unavailable: true,
+            code: 'OVERPASS_NOT_CONFIGURED',
+            retryable: false,
+          };
         const retry = response.headers?.get?.('Retry-After');
         if (
+          response.status === 406 ||
           response.status === 429 ||
           (response.status === 503 && retry != null)
         )

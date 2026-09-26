@@ -89,26 +89,52 @@ export function createRendering({
         position: displayPosition,
         point: {
           pixelSize: record.id === layerState.selectedId ? 13 : 9,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           color:
             record.id === layerState.selectedId ? Cesium.Color.WHITE : color,
           outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
           outlineWidth: 1,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
-        polygon: record.footprint
-          ? {
-              hierarchy: new Cesium.PolygonHierarchy(
-                record.footprint.map(([longitude, latitude]) =>
-                  Cesium.Cartesian3.fromDegrees(longitude, latitude),
-                ),
-              ),
-              material: color.withAlpha(0.12),
-              outline: true,
-              outlineColor: color.withAlpha(0.65),
-              height: surfaceHeightM,
-            }
-          : undefined,
       });
+      const footprints =
+        record.footprints || (record.footprint ? [[record.footprint]] : []);
+      for (let i = 0; i < footprints.length; i++) {
+        const rings = footprints[i];
+        const positions = (ring) =>
+          ring.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat));
+        const fill = layerState.dataSource.entities.add({
+          id: `${record.id}:fill:${i}`,
+          polygon: {
+            hierarchy: new Cesium.PolygonHierarchy(
+              positions(rings[0]),
+              rings
+                .slice(1)
+                .map((ring) => new Cesium.PolygonHierarchy(positions(ring))),
+            ),
+            material: color.withAlpha(0.12),
+            classificationType: Cesium.ClassificationType.BOTH,
+          },
+        });
+        fill.installationId = record.id;
+      }
+      const outlines =
+        record.outlineLines || (record.footprint ? [record.footprint] : []);
+      for (let i = 0; i < outlines.length; i++) {
+        const outline = layerState.dataSource.entities.add({
+          id: `${record.id}:outline:${i}`,
+          polyline: {
+            positions: outlines[i].map(([lon, lat]) =>
+              Cesium.Cartesian3.fromDegrees(lon, lat),
+            ),
+            width: 2,
+            material: color.withAlpha(0.85),
+            clampToGround: true,
+            classificationType: Cesium.ClassificationType.BOTH,
+          },
+        });
+        outline.installationId = record.id;
+      }
       entity.gevTrackedId = `installations:${record.id}`;
       entity.gevDisplayPosition = () => displayPosition;
       entity.gevLabelModel = {

@@ -20,3 +20,17 @@
   time is interpolated between the frames whose decoded position equals a
   dump1090 fix, timed as dump1090's `now − seen_pos`. Used by the decoder's
   category, speed-check and track-accuracy tests; never loaded at runtime.
+- `ofm-austin-{14-3743-6745,12-935-1686}.pbf` and
+  `ofm-camp-mabry-12-935-1685.pbf` — OpenFreeMap / OpenMapTiles tiles from
+  `https://tiles.openfreemap.org/planet/20260913_164504_pt/{z}/{x}/{y}.pbf`,
+  retrieved 2026-09-23. Trimmed to one transportation feature per class/direction
+  and one military landuse feature, preserving original geometry and dictionaries.
+  OpenFreeMap © OpenMapTiles Data from OpenStreetMap; © OpenStreetMap
+  contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright).
+  These modified data fixtures retain ODbL attribution and database share-alike;
+  commercial use and redistribution are permitted under that license. Test-only.
+- `osm-alpr-austin-11-467-843.pbf` — one OSM camera feature (original geometry
+  and attribute dictionary) from the community-hosted hourly US extract,
+  `https://tiles.dontgetflocked.com/cameras-us-hourly/11/467/843.mvt`,
+  retrieved 2026-09-23. © OpenStreetMap contributors, ODbL 1.0; modified by
+  trimming to one feature, test-only. Same attribution/share-alike terms above.

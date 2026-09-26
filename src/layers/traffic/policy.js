@@ -1,35 +1,10 @@
 import * as Cesium from 'cesium';
 
 /**
- * @file Street Traffic — animated dots along OSM road polylines, colored by
- * live TomTom congestion when a key is configured.
- *
- * Road geometry: OSM Overpass API (free, no auth). Fetches road polylines for
- * the camera viewport, spawns PointPrimitives that lerp along pre-computed
- * Cartesian3 waypoints. Camera-gated: only active below ~8 km altitude.
- *
- * Two modes (decided once per session via `/api/tomtom/status`):
- *  - `sim` (keyless default): white dots at hardcoded per-road-class speeds —
- *    the original simulation, byte-identical behavior.
- *  - `live`: TomTom flow tiles (`flowTiles.js`) are matched onto the same
- *    Overpass roads (`flowMatch.js`); matched roads color/slow/densify their
- *    dots by real congestion (`trafficFlowStyle.js`), closed roads spawn no
- *    dots, and unmatched roads keep the simulated white.
- *
- * Architecture overview:
- *  - Camera-change listener triggers debounced road fetching per viewport tile.
- *  - Fetch bounds center on the camera's look-at point (`trafficBounds.js`, C4).
- *  - Roads are fetched in two passes: major-only (fast) then full graph (detailed).
- *  - Fetched tiles are cached by clamped bounding-box key to avoid re-fetching.
- *  - Dot budget allocation distributes a hard cap fairly across visible roads.
- *  - Each dot lerps along pre-computed Cartesian3 waypoints every preRender frame.
- *
- * @module data/traffic
+ * @file Street Traffic always uses OpenMapTiles road geometry, with optional
+ * directional TomTom congestion matched in live mode. Tile acquisition is
+ * bounded and camera-driven; animation lerps precomputed Cartesian waypoints.
  */
-
-/** @const {string} Proxy endpoint for Overpass API queries */
-
-export const OVERPASS_URL = '/api/overpass';
 
 /** @const {number} Meters — hide all traffic dots above this camera altitude */
 

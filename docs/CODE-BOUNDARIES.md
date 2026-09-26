@@ -668,8 +668,8 @@ An empty search array is a definitive miss. HTTP failures, malformed results
 and oversized responses remain retryable. Attribution identifies OpenStreetMap /
 Nominatim.
 
-Overpass currently supplies traffic road geometry, ALPR camera records, military
-installation footprints, and annotation geometry (administrative boundaries,
+Vector tile sources supply traffic roads, ALPR records and keyless military
+areas. Operator-configured Overpass supplies named installations and annotation geometry (administrative boundaries,
 neighborhoods, streets, building/grounds outlines and monument candidates).
 Nominatim forward/reverse lookup does not replace those queries. Layer source
 interfaces select traffic, camera and installation ingestion separately;
@@ -711,7 +711,9 @@ query-language strings or decoding backend tags and relation members.
 
 Points use `{lat, lon}`. Options carry `signal`. A successful array, including an
 empty array, is definitive; `null` means a transient failure;
-`{rateLimited: true, retryAfterMs}` retains a provider's retry delay. Candidates
+`{rateLimited: true, retryAfterMs}` retains a provider's retry delay.
+`{unavailable:true, code:'OVERPASS_NOT_CONFIGURED', retryable:false}` is a
+capability miss that stops retries while preserving pins and offline geometry. Candidates
 carry `id`, `names` (`primary`, `english`, `official`, `alternate`, `short`),
 `coordinates` (objects with `lat` and `lon`), `building` and optional `heightM`,
 `center` and `point`. Administrative candidates use `category: 'administrative'`

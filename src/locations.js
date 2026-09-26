@@ -1,3 +1,4 @@
+import { isUnavailableCapability } from './sources/capability.js';
 import { createOverpassFeatureSource } from './sources/overpassFeatures.js';
 import { applicationServices } from './services/application.js';
 import * as Cesium from 'cesium';
@@ -916,7 +917,9 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
       pitch: buildingPitch(buildingBounds),
       heading: 30,
       buildingHeight: 30,
-      buildingBounds,
+      buildingBounds: isUnavailableCapability(buildingBounds)
+        ? null
+        : buildingBounds,
       duration,
       onStart: options.onStart,
       onComplete: options.onComplete,
@@ -931,6 +934,9 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
         ? navigationMode.replace('-overview', '-close')
         : navigationMode,
     rangeM: Math.round(flight.range),
+    ...(isUnavailableCapability(buildingBounds)
+      ? { outlineUnavailable: true, message: 'Detailed outline unavailable' }
+      : {}),
   };
 }
 
@@ -1360,6 +1366,7 @@ async function resolveBuildingBounds(
       { lat, lon },
       { signal },
     );
+    if (isUnavailableCapability(candidates)) return candidates;
     return selectBuildingBounds(
       Array.isArray(candidates) ? candidates : [],
       lat,

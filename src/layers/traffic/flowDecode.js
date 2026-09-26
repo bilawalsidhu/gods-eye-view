@@ -8,7 +8,7 @@ import { VectorTile } from '@mapbox/vector-tile';
  * (the TomTom key never reaches the browser) and decodes the Mapbox Vector
  * Tile layer "Traffic flow" into plain lon/lat polylines with congestion
  * attributes. Consumed by the traffic layer's live mode
- * (`src/data/traffic.js` → `src/data/flowMatch.js`).
+ * for matching congestion onto OpenStreetMap roads.
  *
  * Segment shape: `{coords: [[lon,lat],…], trafficLevel: 0..1, roadType: string,
  * closure: boolean}` — `trafficLevel` is TomTom's current/free-flow speed
@@ -23,13 +23,15 @@ import { VectorTile } from '@mapbox/vector-tile';
  */
 
 const FLOW_LAYER_NAME = 'Traffic flow';
-export function decodeFlowTile(data, z, x, y) {
+/** Decode flow geometry; strict mode distinguishes damaged tiles from valid empty coverage. */
+export function decodeFlowTile(data, z, x, y, { strict = false } = {}) {
   let layer;
   try {
     const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
     const tile = new VectorTile(new PbfReader(bytes));
     layer = tile.layers[FLOW_LAYER_NAME];
   } catch {
+    if (strict) throw new Error('Malformed TomTom flow tile');
     return [];
   }
   if (!layer) return [];
@@ -63,7 +65,16 @@ export function decodeFlowTile(data, z, x, y) {
           : [];
     for (const coords of lines) {
       if (!Array.isArray(coords) || coords.length < 2) continue;
-      segments.push({ coords, trafficLevel, roadType, closure });
+      segments.push({
+        coords,
+        trafficLevel,
+        roadType,
+        closure,
+        coverage: props.traffic_road_coverage ?? null,
+        leftHandTraffic:
+          props.left_hand_traffic === true ||
+          props.left_hand_traffic === 'true',
+      });
     }
   }
   return segments;

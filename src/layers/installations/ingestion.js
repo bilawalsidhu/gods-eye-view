@@ -1,3 +1,4 @@
+import { isUnavailableCapability } from '../../sources/capability.js';
 export function createIngestion({
   state: layerState,
   services,
@@ -57,7 +58,7 @@ export function createIngestion({
       // snap's extra ring may have crowded out sites actually on screen. Re-ask
       // for the exact viewport (separately keyed and cached) before rendering.
       let saturated = payload.saturated === true;
-      if (saturated) {
+      if (saturated && !payload.tileSource) {
         payload = await fetchInstallations(true);
         saturated = payload.saturated === true;
       }
@@ -169,7 +170,7 @@ export function createIngestion({
             : 'ready'
           : 'empty',
         payload.status === 'stale'
-          ? 'Serving cached mapped context'
+          ? `Serving cached mapped context · ${payload.records[0]?.retrievedAt || 'date unknown'}`
           : saturated
             ? 'Too many mapped sites in view to list them all'
             : placesError,
@@ -189,7 +190,8 @@ export function createIngestion({
         'unavailable',
         error?.message || 'Installation context unavailable',
       );
-      parts.viewport.scheduleUnavailableRetry();
+      if (!isUnavailableCapability(error))
+        parts.viewport.scheduleUnavailableRetry(error?.retryAfterMs);
     } finally {
       // An older aborted request must not clear a newer request's busy state.
       if (layerState.abort === requestAbort) {

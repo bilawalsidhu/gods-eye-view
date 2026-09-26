@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createOverpassAlprSource } from './source.js';
 import { validateAlprSnapshot, alprCreditMarkup } from './model.js';
 const box = { south: 30, west: -98, north: 30.1, east: -97.9 };
@@ -21,49 +22,71 @@ test('the source rejects invalid and unbounded queries before fetching', async (
   }
   assert.equal(calls, 0);
 });
-test('cancellation during body parsing rejects even when the transport ignores it', async () => {
+const fixture = readFileSync(
+  new URL(
+    '../../data/fixtures/osm-alpr-austin-11-467-843.pbf',
+    import.meta.url,
+  ),
+);
+const metadata = (country) => ({
+  tiles: [
+    `https://tiles.dontgetflocked.com/cameras-${country}-hourly/{z}/{x}/{y}.mvt`,
+  ],
+  bounds: country === 'ca' ? [-124, 42, -63, 54] : [-160, 17, -64, 59],
+});
+const austin = { south: 30.2, north: 30.35, west: -97.85, east: -97.65 };
+
+test('cancellation while reading TileJSON is preserved even if fetch ignores it', async () => {
   const abort = new AbortController();
   const source = createOverpassAlprSource({
     fetchImpl: async () => ({
       ok: true,
       headers: new Headers(),
-      json: async () => {
+      async text() {
         abort.abort();
-        return { elements: [] };
+        return JSON.stringify(metadata('us'));
       },
     }),
   });
-  await assert.rejects(source.fetch(box, abort.signal), { name: 'AbortError' });
+  await assert.rejects(source.fetch(austin, abort.signal), {
+    name: 'AbortError',
+  });
 });
 
-test('Overpass normalization returns camera records and preserves limited/stale coverage', async () => {
+test('extract detail tiles map OSM records and repeated pans reuse decoded tiles', async () => {
+  const calls = [];
   const source = createOverpassAlprSource({
-    fetchImpl: async () => ({
-      ok: true,
-      headers: new Headers({ 'x-overpass-cache': 'STALE' }),
-      json: async () => ({
-        elements: [
-          {
-            type: 'node',
-            id: 12,
-            lat: 30,
-            lon: -98,
-            tags: {
-              'surveillance:type': 'camera;ALPR',
-              'camera:direction': '90',
-            },
-          },
-        ],
-      }),
-    }),
+    fetchImpl: async (url) => {
+      calls.push(url);
+      return url.endsWith('.json')
+        ? Response.json(metadata(url.includes('-ca-') ? 'ca' : 'us'))
+        : new Response(fixture);
+    },
   });
-  const snapshot = await source.fetch(box);
-  assert.equal(snapshot.records[0].id, 'alpr:12');
-  assert.equal(snapshot.records[0].latitude, 30);
-  assert.equal(snapshot.records[0].directionDeg, 90);
-  assert.equal(snapshot.stale, true);
-  assert.equal(snapshot.saturated, false);
+  const snapshot = await source.fetch(austin);
+  assert.ok(snapshot.records.length > 0);
+  const record = snapshot.records[0];
+  assert.match(record.id, /^alpr:/);
+  assert.equal(record.manufacturer, 'Flock Safety');
+  assert.equal(record.lastVerified, null);
+  assert.ok(record.osmTimestamp);
+  assert.equal(snapshot.stale, false);
   assert.equal('elements' in snapshot, false);
+  const fetched = calls.length;
+  await source.fetch(austin);
+  assert.equal(calls.length, fetched);
+  assert.ok(calls.every((url) => !url.includes('overpass')));
+  assert.doesNotMatch(JSON.stringify(source.attribution), /flock/i);
+});
+
+test('outside extract coverage is an explicit no-data state without Overpass', async () => {
+  const source = createOverpassAlprSource({
+    fetchImpl: () => assert.fail('no network expected in Europe'),
+  });
+  assert.deepEqual(
+    await source.fetch({ south: 51, north: 51.1, west: 0, east: 0.1 }),
+    { records: [], stale: false, saturated: false, noCoverage: true },
+  );
 });
 
 test('an unsuccessful source response releases its body before reporting an error', async () => {
@@ -79,7 +102,7 @@ test('an unsuccessful source response releases its body before reporting an erro
       },
     }),
   });
-  await assert.rejects(source.fetch(box), /rate-limited/);
+  await assert.rejects(source.fetch(box), /unavailable/);
   assert.equal(cancelled, 1);
 });
 
@@ -114,4 +137,29 @@ test('provider attribution escapes markup and rejects executable links', () => {
   assert.ok(html.includes('&lt;img onerror=alert(1)&gt;'));
   assert.ok(html.includes('?a=1&amp;b=2'));
   assert.ok(!html.includes('<img'));
+});
+
+test('wide detail view returns zoom guidance before any fetch and can retry a smaller view', async () => {
+  let calls = 0;
+  const source = createOverpassAlprSource({
+    fetchImpl: async () => {
+      calls++;
+      return Response.json({
+        tiles: ['https://tiles.dontgetflocked.com/{z}/{x}/{y}.pbf'],
+        bounds: [-180, 17, -50, 84],
+      });
+    },
+  });
+  const wide = await source.fetch({
+    south: 30,
+    north: 31,
+    west: -98,
+    east: -97,
+  });
+  assert.equal(wide.zoomIn, true);
+  assert.equal(calls, 0);
+  await source
+    .fetch({ south: 30.267, north: 30.268, west: -97.744, east: -97.743 })
+    .catch(() => {});
+  assert.ok(calls > 0);
 });

@@ -115,6 +115,10 @@ export class LocationNavigation {
           placeSearch: this.placeSearch,
           ...options,
         }),
+      onResult: (destination) => {
+        if (destination.outlineUnavailable)
+          this._showToast('Detailed outline unavailable');
+      },
       onError: (error) => console.error('[Search] Geocoding failed:', error),
     });
     this._locationLookupUnsubscribe = this._locationLookup.subscribe(

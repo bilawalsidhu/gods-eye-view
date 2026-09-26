@@ -798,7 +798,7 @@ test('the unavailable retry backs off 30s to a 240s ceiling and restarts clean',
 
 test('the retry is wired to every lifecycle edge, not just declared', () => {
   assert.match(installationsSource,
-    /setInstallationStatus\(\s*'unavailable',[^]*?\);\n\s*parts\.viewport\.scheduleUnavailableRetry\(\);/,
+    /setInstallationStatus\(\s*'unavailable',[^]*?\);\n\s*if \(!isUnavailableCapability\(error\)\)\s*parts\.viewport\.scheduleUnavailableRetry\(error\?\.retryAfterMs\);/,
     'a failed load schedules the retry immediately after reporting unavailable');
   assert.match(installationsSource,
     /clearUnavailableRetry\(\);\n\s*setInstallationStatus\(\n?\s*layerState\.records\.length/,
@@ -814,4 +814,11 @@ test('the retry is wired to every lifecycle edge, not just declared', () => {
   assert.match(installationsSource,
     /layerState\.enabled && !layerState\.loading\)\s*parts\.ingestion\.loadInstallations\(\)/,
     'the fired retry re-checks enablement and never races an in-flight load');
+});
+
+
+test('a merged installation stays visible when only its second fragment intersects', () => {
+  const far = [[-96.6,30.4],[-96.4,30.4],[-96.4,30.6],[-96.6,30.6]];
+  const near = [[-97.5,30.4],[-97.4,30.4],[-97.4,30.6],[-97.5,30.6]];
+  assert.equal(installationWithinViewport({latitude:30.5,longitude:-96.5,footprint:far,footprints:[[far],[near]]},VIEWPORT), true);
 });

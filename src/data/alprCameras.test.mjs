@@ -3,7 +3,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import alprCamerasLayer, { createAlprCamerasLayer } from './alprCameras.js';
+import alprCamerasLayer, {
+  createAlprCamerasLayer,
+  configureAlprSource,
+} from './alprCameras.js';
+import { createAlprTileSource } from '../layers/alpr/source.js';
 import { DATA_CREDITS } from './dataCredits.js';
 import {
   clearSelectedEntityContextForLayer,
@@ -265,6 +269,38 @@ function cameraHarness(layer = alprCamerasLayer) {
     requests.push(args);
     return response(...args);
   };
+  // Rendering tests use normalized records; tile transport has its own fixture suite.
+  if (layer === alprCamerasLayer)
+    configureAlprSource({
+      ...createAlprTileSource(),
+      async fetch(box, signal) {
+        const response = await globalThis.fetch('/test/cameras', {
+          signal,
+          body: `data=${encodeURIComponent(buildOverpassQuery(box.south, box.west, box.north, box.east))}`,
+        });
+        if (!response.ok)
+          throw new Error('Camera source temporarily unavailable');
+        const body = await response.json();
+        if (!Array.isArray(body.elements) || body.remark)
+          throw new Error('Incomplete fixture snapshot');
+        signal?.throwIfAborted();
+        return {
+          records: [
+            ...new Map(
+              body.elements
+                .slice(0, QUERY_LIMIT)
+                .map(normalizeAlprNode)
+                .filter(Boolean)
+                .map((r) => [r.id, r]),
+            ).values(),
+          ],
+          stale: response.headers.get('x-overpass-cache') === 'STALE',
+          saturated: body.elements.length >= QUERY_LIMIT,
+          noCoverage: body.noCoverage,
+          zoomIn: body.zoomIn,
+        };
+      },
+    });
   let box = { south: 30.26, west: -97.75, north: 30.28, east: -97.73 };
   let source, click, picked;
   const credits = new Set();
@@ -366,7 +402,7 @@ test('OSM attribution introduces displayed data for five seconds, then stays dis
       credit.html,
       /href="https:\/\/www.openstreetmap.org\/copyright"/,
     );
-    assert.match(credit.html, /© OpenStreetMap<\/a>/);
+    assert.match(credit.html, /© OpenStreetMap contributors, ODbL<\/a>/);
     t.mock.timers.tick(4999);
     assert.equal(h.credits.size, 1);
     t.mock.timers.tick(1);
@@ -765,7 +801,7 @@ test('empty mapped coverage, stale data and a saturated response remain distinct
     assert.equal(alprCamerasLayer.getStats().status, 'empty');
     assert.match(
       alprCamerasLayer.getStats().loadingLabel,
-      /coverage is incomplete/,
+      /No ALPR data for this area/,
     );
     h.expire();
     h.setFetch(async () =>
@@ -1122,6 +1158,47 @@ test('nearby count and discovery control frame a real loaded camera without fetc
     assert.equal(alprCamerasLayer.getStats().countLabel, '');
     assert.equal(controls.chips[0].onClick(), false);
     assert.equal(flights.length, 1);
+  } finally {
+    h.restore();
+  }
+});
+
+test('a non-retryable capability error does not arm the ALPR retry timer', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = cameraHarness();
+  try {
+    h.setFetch(async () => {
+      throw Object.assign(new Error('Unavailable'), {
+        code: 'OVERPASS_NOT_CONFIGURED',
+        retryable: false,
+      });
+    });
+    await alprCamerasLayer.update();
+    assert.equal(alprCamerasLayer.getStats().retryAt, 0);
+    const requests = h.requests.length;
+    t.mock.timers.tick(300_000);
+    await Promise.resolve();
+    assert.equal(h.requests.length, requests);
+  } finally {
+    h.restore();
+  }
+});
+
+test('unsupported ALPR coverage suppresses the nearby count and names the extract region', async () => {
+  const h = cameraHarness();
+  try {
+    h.setFetch(async () => ({
+      ...cameraResponse([]),
+      json: async () => ({ elements: [], noCoverage: true }),
+    }));
+    await alprCamerasLayer.update();
+    const stats = alprCamerasLayer.getStats();
+    assert.equal(stats.noCoverage, true);
+    assert.equal(stats.countLabel, '');
+    assert.equal(
+      stats.loadingLabel,
+      'No ALPR data for this area — US and Canada only',
+    );
   } finally {
     h.restore();
   }

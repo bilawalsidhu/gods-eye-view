@@ -1,142 +1,276 @@
-import { normalizeOverpassRoads } from '../../sources/overpassRoads.js';
-export { normalizeOverpassRoads } from '../../sources/overpassRoads.js';
+import {
+  createHybridFill,
+  flowSegmentsToRoads,
+  resolveRoadMode,
+  ROAD_SOURCE_LABELS,
+} from './roadModes.js';
+import { phaseTiming } from '../../sources/phaseTiming.js';
 import { createFlowTileSource } from './flowSource.js';
-function buildOverpassQuery(
-  south,
-  west,
-  north,
-  east,
-  { majorOnly = false, timeoutSec = 25 } = {},
-) {
-  // Regex matches the OSM `highway` tag value against allowed road types
-  const regex = majorOnly
-    ? '^(motorway|trunk|primary|secondary)$'
-    : '^(motorway|trunk|primary|secondary|tertiary|residential|unclassified)$';
-  return `[out:json][timeout:${timeoutSec}];(way["highway"~"${regex}"](${south},${west},${north},${east}););out geom qt;`;
+import { tilesForBounds } from '../../data/tomtomTiles.js';
+import { clipTileLine } from '../../sources/openFreeMap.js';
+import { createOpenFreeMapSource } from '../../sources/openFreeMap.js';
+import { validTileBounds } from '../../sources/vectorTiles.js';
+export { normalizeOverpassRoads } from '../../sources/overpassRoads.js';
+
+/** Shrink only the detail footprint, centered on the look-at fetch box, to fit 16 tiles. */
+export function trafficDetailBounds(box) {
+  const center = {
+    lat: (box.north + box.south) / 2,
+    lon: (box.east + box.west) / 2,
+  };
+  let detail = { ...box };
+  while (tilesForBounds(detail, 14, { maxTiles: 17 }).length > 16) {
+    detail = {
+      south: center.lat + (detail.south - center.lat) * 0.9,
+      north: center.lat + (detail.north - center.lat) * 0.9,
+      west: center.lon + (detail.west - center.lon) * 0.9,
+      east: center.lon + (detail.east - center.lon) * 0.9,
+    };
+  }
+  return detail;
 }
 
-/**
- * A road request upstream declined, carrying a line fit to show an operator.
- *
- * The status travels beside the message instead of only inside it, so a caller
- * can branch on the code without parsing English — the same shape
- * `LiveSourceError` uses in `src/sources/live/contract.js`.
- */
+/** A classified road failure with a display-safe reason and machine-readable status. */
 export class RoadRequestError extends Error {
-  constructor(message, { status = null } = {}) {
-    super(message);
+  constructor(message, { status = null, cause } = {}) {
+    super(message, { cause });
     this.name = 'RoadRequestError';
     this.status = status;
   }
 }
 
-/**
- * Name an Overpass refusal in the words the traffic row will print.
- *
- * This layer has two upstreams — OpenStreetMap for road geometry and TomTom
- * for flow — and only one of them can be down at a time. A row that says
- * nothing more than "road data unavailable" sends the reader to check their
- * TomTom key, which is the wrong half of the layer and costs them the
- * afternoon. So the status upstream actually returned is reported: 406 from a
- * public mirror is not a configuration problem the reader can fix, and saying
- * so is the difference between a dead end and a next step.
- *
- * The first two lines match `alpr`'s Overpass source word for word; this is
- * the same vocabulary, not a new one. What the status adds is *which* upstream
- * and *how* it declined — the part a single-source layer never needs to say.
- *
- * Only what the browser can see is claimed. The proxy rotates mirrors behind
- * `/api/overpass`, so a refusal arriving here means the proxy had nothing
- * better to offer; how many mirrors it tried is not something this side knows,
- * and the message does not pretend otherwise.
- * @param {number} status - HTTP status the proxy returned; a code that is
- *   not a finite number is treated as absent rather than printed.
- * @returns {RoadRequestError}
- */
-export function roadRequestError(status) {
+/** Name the road upstream without exposing raw transport errors or missing codes. */
+export function roadRequestError(status, cause) {
   const code = Number.isFinite(status) ? status : null;
   const message =
     code === 429
-      ? 'Overpass rate-limited'
-      : code === 504
-        ? 'Overpass timed out'
-        : // Our own proxy answers these, not a mirror: 502 when every mirror
-          // failed at the network level, 503 from its local concurrency
-          // limiter before any mirror was asked. Neither is a refusal.
-          code === 502
-          ? 'Overpass mirrors unreachable'
-          : code === 503
-            ? 'Overpass temporarily unavailable'
-            : // A source is injected, so a caller's adapter may hand back a
-              // refusal with no status on it. "HTTP undefined" on a panel row is
-              // worse than not naming a number, so an unreadable code falls back
-              // to what `alpr` says when it cannot be more specific either.
-              code === null
-              ? 'Overpass temporarily unavailable'
-              : `Overpass refused the road query (HTTP ${code})`;
-  return new RoadRequestError(message, { status: code });
+      ? 'OpenFreeMap tiles rate-limited'
+      : code === 504 || cause?.name === 'TimeoutError'
+        ? 'OpenFreeMap tiles timed out'
+        : code === null
+          ? 'OpenFreeMap tiles unavailable'
+          : `OpenFreeMap tiles unavailable (HTTP ${code})`;
+  return Object.assign(new RoadRequestError(message, { status: code, cause }), {
+    retryable: cause?.retryable !== false,
+    code: cause?.code,
+  });
 }
 
-/** Supply road responses, flow availability and one decoded flow cache. */
+/** Supply tile-derived road geometry and flow availability without Overpass queries. */
 export function createTrafficSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
+  mapTiles = createOpenFreeMapSource({ fetchImpl }),
 } = {}) {
   const flow = createFlowTileSource({ fetchImpl });
-  return {
+  const api = {
     ...flow,
-    async requestRoads(
-      { south, west, north, east },
-      { majorOnly = false, timeoutSec = 25, signal } = {},
-    ) {
+    prefetch: () => mapTiles.getMetadata().catch(() => {}),
+    resetFlowTileCache() {
+      flow.resetFlowTileCache();
+      mapTiles.clear();
+    },
+    async requestOsmRoads(box, { majorOnly = false, signal, onTile } = {}) {
       if (
-        ![south, west, north, east].every(Number.isFinite) ||
-        south < -90 ||
-        north > 90 ||
-        west < -180 ||
-        east > 180 ||
-        north <= south ||
-        east <= west ||
-        north - south > 10 ||
-        east - west > 10 ||
-        !Number.isInteger(timeoutSec) ||
-        timeoutSec < 1 ||
-        timeoutSec > 30
+        !validTileBounds(box) ||
+        box.north - box.south > 10 ||
+        box.east - box.west > 10
       )
-        throw new TypeError('A bounded road viewport and timeout are required');
-      signal?.throwIfAborted();
-      const query = buildOverpassQuery(south, west, north, east, {
-        majorOnly,
-        timeoutSec,
+        throw new TypeError('A bounded road viewport is required');
+      const area = majorOnly ? box : trafficDetailBounds(box);
+      const snapshot = (tiles, partial = false) => ({
+        roads: tiles
+          .flatMap((tile) => tile.roads)
+          .flatMap((road) =>
+            clipTileLine(road.coordinates, area).map((coordinates) => ({
+              ...road,
+              coordinates,
+            })),
+          ),
+        roadSource: 'OpenStreetMap',
+        roadMode: 'osm',
+        partial,
+        detailLimited:
+          !majorOnly && (area.north !== box.north || area.east !== box.east),
+        detailBounds: majorOnly ? null : area,
       });
-      const response = await fetchImpl('/api/overpass', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'data=' + encodeURIComponent(query),
-        signal,
-      });
+      let result;
+      try {
+        result = await mapTiles.fetchBounds(area, {
+          zoom: majorOnly ? 12 : 14,
+          signal,
+          onTile: onTile ? (tile) => onTile(snapshot([tile])) : undefined,
+        });
+      } catch (error) {
+        signal?.throwIfAborted();
+        if (error?.name === 'AbortError') throw error;
+        throw roadRequestError(error?.status, error);
+      }
+      const data = snapshot(result.tiles, result.partial);
       signal?.throwIfAborted();
       return {
-        ok: response.ok,
-        status: response.status,
-        headers: response.headers,
+        ok: true,
+        status: 200,
+        headers: new Headers(),
         async json() {
-          const body = await response.json();
-          signal?.throwIfAborted();
-          if (!Array.isArray(body?.elements))
-            throw new Error('Malformed road snapshot');
-          return { roads: normalizeOverpassRoads(body) };
+          return data;
         },
       };
     },
     async getStatus({ signal } = {}) {
-      signal?.throwIfAborted();
-      const response = await fetchImpl('/api/tomtom/status', { signal });
-      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const start = performance.now();
+      const timeout = AbortSignal.timeout(8000);
+      const response = await fetchImpl('/api/tomtom/status', {
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      });
+      if (!response.ok)
+        throw Object.assign(new Error('TomTom status unavailable'), {
+          status: Number.isFinite(response.status) ? response.status : null,
+        });
       const status = await response.json();
       signal?.throwIfAborted();
       if (typeof status?.hasKey !== 'boolean')
         throw new Error('Malformed traffic status');
+      phaseTiming('status', start);
       return status;
     },
   };
+  /**
+   * Request roads for the selected road source.
+   *
+   * `osm` streams OpenFreeMap tiles exactly as before. `tomtom` and `hybrid`
+   * wait for the flow snapshot the layer started alongside road acquisition;
+   * OpenFreeMap tiles stream meanwhile (Hybrid) and are drawn unfiltered until
+   * flow arrives, then one replacing snapshot swaps in TomTom lines and drops
+   * the duplicated OpenFreeMap stretches. Later tiles publish only their own
+   * fill, so parsing stays incremental. TomTom never requests OpenFreeMap
+   * unless the missing key forces the OpenStreetMap fallback.
+   *
+   * @param {{south:number, west:number, north:number, east:number}} box
+   * @param {Object} [options]
+   * @param {'tomtom'|'osm'|'hybrid'|null} [options.roadMode] - Requested mode (null = default).
+   * @param {Promise<{segments:Array, hasKey:boolean, error?:string, partial?:boolean}>} [options.flowSnapshot]
+   * @param {() => boolean} [options.liveModeHint] - Key state if the snapshot misses the pass deadline.
+   * @param {number} [options.timeoutSec=20] - Pass deadline, also bounding the snapshot wait.
+   * @param {(data:Object) => void} [options.onTile] - Incremental snapshots; `replace` resets.
+   */
+  api.requestRoads = async (
+    box,
+    {
+      roadMode = null,
+      flowSnapshot,
+      liveModeHint = () => false,
+      onTile,
+      ...options
+    } = {},
+  ) => {
+    if (
+      !validTileBounds(box) ||
+      box.north - box.south > 10 ||
+      box.east - box.west > 10
+    )
+      throw new TypeError('A bounded road viewport is required');
+    if (roadMode === 'osm' || !flowSnapshot)
+      return api.requestOsmRoads(box, { ...options, onTile });
+    const signal = options.signal;
+    const osm = [];
+    let live = null,
+      mode = null,
+      metadata = {},
+      osmError = null,
+      tomtom = [],
+      fillFor = null;
+    const fillMemo = new Map();
+    const fill = (roads) =>
+      mode === 'hybrid'
+        ? roads.flatMap((road) => {
+            if (!fillMemo.has(road)) fillMemo.set(road, fillFor(road));
+            return fillMemo.get(road);
+          })
+        : roads;
+    // Hybrid without any TomTom line (flow failed, or none here) draws only
+    // OpenStreetMap roads, and says so.
+    const source = () =>
+      !mode || (mode === 'hybrid' && !tomtom.length)
+        ? ROAD_SOURCE_LABELS.osm
+        : ROAD_SOURCE_LABELS[mode];
+    const snapshot = (roads, replace) => ({
+      ...metadata,
+      roads,
+      roadSource: source(),
+      roadMode: mode,
+      replace,
+      partial: Boolean(metadata.partial || osmError || live?.partial),
+      roadWarning: osmError && mode !== 'osm' ? osmError.message : null,
+    });
+    const publish = (roads, replace = false) => {
+      if (!signal?.aborted) onTile?.(snapshot(roads, replace));
+    };
+    const composed = () =>
+      mode === 'tomtom' ? tomtom : [...tomtom, ...fill(osm)];
+    const loadOsm = async () => {
+      try {
+        const response = await api.requestOsmRoads(box, {
+          ...options,
+          onTile: (data) => {
+            osm.push(...data.roads);
+            metadata = { ...data, roads: undefined };
+            // Before flow settles the tile is drawn as plain OpenStreetMap.
+            publish(fill(data.roads));
+          },
+        });
+        const data = await response.json();
+        metadata = { ...data, roads: undefined };
+        // Every tile streams through onTile; adopt the final list if not.
+        if (osm.length !== data.roads.length)
+          osm.splice(0, osm.length, ...data.roads);
+      } catch (error) {
+        if (error?.name === 'AbortError' || signal?.aborted) throw error;
+        osmError = error;
+      }
+    };
+    const osmJob = roadMode === 'tomtom' ? null : loadOsm();
+    osmJob?.catch(() => {});
+    // The snapshot waits on the status probe and flow tiles; never let it
+    // hold the road pass past its own deadline. A late snapshot counts as a
+    // flow failure: TomTom mode reports it, Hybrid falls back to OSM roads.
+    let deadline;
+    live = await Promise.race([
+      flowSnapshot,
+      new Promise((resolve) => {
+        deadline = setTimeout(
+          () =>
+            resolve({
+              segments: [],
+              hasKey: Boolean(liveModeHint()),
+              error: 'TomTom flow timed out',
+            }),
+          (options.timeoutSec ?? 20) * 1000,
+        );
+      }),
+    ]).finally(() => clearTimeout(deadline));
+    signal?.throwIfAborted();
+    if (!live)
+      throw new TypeError(
+        'Road selection requires a flow availability snapshot',
+      );
+    mode = resolveRoadMode(roadMode, live.hasKey);
+    if (mode === 'tomtom' && live.error) throw new RoadRequestError(live.error);
+    if (mode !== 'osm') {
+      tomtom = flowSegmentsToRoads(live.segments);
+      fillFor = createHybridFill(live.segments);
+      publish(composed(), true);
+    }
+    if (osmJob) await osmJob;
+    else if (mode === 'osm') await loadOsm();
+    signal?.throwIfAborted();
+    if (osmError && (mode === 'osm' || !tomtom.length)) throw osmError;
+    const data = snapshot(composed(), true);
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      json: async () => data,
+    };
+  };
+  return api;
 }

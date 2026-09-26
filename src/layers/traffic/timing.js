@@ -1,9 +1,6 @@
 import * as Cesium from 'cesium';
-import {
-  TRAFFIC_TIMING_ENABLED,
-  MAX_WAYPOINTS_PER_ROAD,
-  DOT_HEIGHT_OFFSET,
-} from './policy.js';
+import { roadSurfaceChunks } from './surface.js';
+import { TRAFFIC_TIMING_ENABLED, DOT_HEIGHT_OFFSET } from './policy.js';
 
 export function createTiming({ state: layerState, services, parts, source }) {
   /**
@@ -221,18 +218,7 @@ export function createTiming({ state: layerState, services, parts, source }) {
         _trafficTimingParseEnd,
         { roadCount: 0 },
       );
-      trafficTimingAggregate(
-        'sample-height-total',
-        _trafficTimingState,
-        _trafficTimingParseStartTime,
-        0,
-        {
-          sampleHeightCalls: 0,
-          sampleHeightMeanMs: 0,
-          distinctCells: 0,
-          roadCount: 0,
-        },
-      );
+
       trafficTimingAggregate(
         'waypoint-materialization',
         _trafficTimingState,
@@ -246,95 +232,55 @@ export function createTiming({ state: layerState, services, parts, source }) {
 
     const roads = [];
     /* TRACE_ONLY_BEGIN */
-    const _trafficTimingSampledCells = new Set();
-    let _trafficTimingSampleHeightCalls = 0;
-    let _trafficTimingSampleHeightMs = 0;
     let _trafficTimingWaypointMaterializationMs = 0;
     /* TRACE_ONLY_END */
     for (const road of roadData.roads) {
       if (!road.coordinates || road.coordinates.length < 2) continue;
 
-      const rawCoords = road.coordinates;
-      const simplifyStep =
-        rawCoords.length > MAX_WAYPOINTS_PER_ROAD
-          ? Math.ceil(rawCoords.length / MAX_WAYPOINTS_PER_ROAD)
-          : 1;
-      const coords = [];
-      for (let i = 0; i < rawCoords.length; i += simplifyStep) {
-        coords.push(rawCoords[i]);
-      }
+      for (const coords of roadSurfaceChunks(road.coordinates)) {
+        const type = road.type;
+        const oneway = road.oneway;
 
-      const last = rawCoords[rawCoords.length - 1];
-      const tail = coords[coords.length - 1];
-      if (!tail || tail[0] !== last[0] || tail[1] !== last[1]) {
-        coords.push(last);
-      }
-      if (coords.length < 2) continue;
-
-      const type = road.type;
-      const oneway = road.oneway;
-
-      let baseHeight = 0;
-      const firstCoord = coords[0];
-      if (layerState._viewer?.scene?.sampleHeightSupported && firstCoord) {
         /* TRACE_ONLY_BEGIN */
-        _trafficTimingSampleHeightCalls += 1;
-        _trafficTimingSampledCells.add(
-          `${firstCoord[1].toFixed(3)},${firstCoord[0].toFixed(3)}`,
-        );
+        const _trafficTimingMaterializeStart = performance.now();
         /* TRACE_ONLY_END */
-        const carto = Cesium.Cartographic.fromDegrees(
-          firstCoord[0],
-          firstCoord[1],
-        );
+        const waypoints = coords.map(([lng, lat]) => {
+          const floor = services.ground?.cachedGroundFloor?.(lat, lng);
+          const h =
+            (Number.isFinite(floor) && Math.abs(floor) <= 9000 ? floor : 0) +
+            DOT_HEIGHT_OFFSET;
+          return Cesium.Cartesian3.fromDegrees(lng, lat, h);
+        });
+        const segmentDist = [];
+        for (let i = 0; i < waypoints.length - 1; i++) {
+          segmentDist.push(
+            Cesium.Cartesian3.distance(waypoints[i], waypoints[i + 1]),
+          );
+        }
         /* TRACE_ONLY_BEGIN */
-        const _trafficTimingSampleStart = performance.now();
+        _trafficTimingWaypointMaterializationMs +=
+          performance.now() - _trafficTimingMaterializeStart;
         /* TRACE_ONLY_END */
-        const sampled = layerState._viewer.scene.sampleHeight(carto);
-        /* TRACE_ONLY_BEGIN */
-        _trafficTimingSampleHeightMs +=
-          performance.now() - _trafficTimingSampleStart;
-        /* TRACE_ONLY_END */
-        if (Number.isFinite(sampled)) baseHeight = sampled;
-      }
 
-      /* TRACE_ONLY_BEGIN */
-      const _trafficTimingMaterializeStart = performance.now();
-      /* TRACE_ONLY_END */
-      const waypoints = coords.map(([lng, lat]) => {
-        const h = baseHeight + DOT_HEIGHT_OFFSET;
-        return Cesium.Cartesian3.fromDegrees(lng, lat, h);
-      });
-      const segmentDist = [];
-      for (let i = 0; i < waypoints.length - 1; i++) {
-        segmentDist.push(
-          Cesium.Cartesian3.distance(waypoints[i], waypoints[i + 1]),
-        );
+        for (const direction of oneway ? [oneway] : [1, -1])
+          roads.push({
+            densityWeight: road.densityWeight ?? (oneway ? 1 : 0.5),
+            directFlow: road.directFlow,
+            simulatedOnly: road.simulatedOnly,
+            coords,
+            type,
+            oneway: direction,
+            waypoints,
+            segmentDist,
+            flow: road.flow || null,
+          });
       }
-      /* TRACE_ONLY_BEGIN */
-      _trafficTimingWaypointMaterializationMs +=
-        performance.now() - _trafficTimingMaterializeStart;
-      /* TRACE_ONLY_END */
-
-      roads.push({ coords, type, oneway, waypoints, segmentDist });
     }
-
     /* TRACE_ONLY_BEGIN */
     const _trafficTimingMetrics = {
       roadCount: roads.length,
-      sampleHeightCalls: _trafficTimingSampleHeightCalls,
-      sampleHeightMeanMs: _trafficTimingSampleHeightCalls
-        ? _trafficTimingSampleHeightMs / _trafficTimingSampleHeightCalls
-        : 0,
-      distinctCells: _trafficTimingSampledCells.size,
     };
-    trafficTimingAggregate(
-      'sample-height-total',
-      _trafficTimingState,
-      _trafficTimingParseStartTime,
-      _trafficTimingSampleHeightMs,
-      _trafficTimingMetrics,
-    );
+
     trafficTimingAggregate(
       'waypoint-materialization',
       _trafficTimingState,

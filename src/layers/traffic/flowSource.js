@@ -1,97 +1,39 @@
-import { tilesForBounds } from '../../data/tomtomTiles.js';
+import { createVectorTileSource } from '../../sources/vectorTiles.js';
+import { clipTileLine } from '../../sources/openFreeMap.js';
+import { tileToBBox } from '../../data/tomtomTiles.js';
 import { decodeFlowTile } from './flowDecode.js';
-/** Own one decoded flow cache and its session counters. */
+
+/** Own one bounded decoded flow cache; every request still passes the server tile budget. */
 export function createFlowTileSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
 } = {}) {
-  const DECODE_CACHE_TTL_MS = 120_000;
-  /** @const {number} Max decoded tiles kept in memory before oldest-entry eviction. */
-  const DECODE_CACHE_MAX_ENTRIES = 64;
-
-  /**
-   * Decoded-tile cache keyed by "z/x/y".
-   * @type {Map<string, {at:number, segments:Array}>}
-   */
-  const _decodeCache = new Map();
-  /** @type {number} Session count of tile requests issued to the proxy (decode-cache misses). */
-  let _tilesFetched = 0;
-
-  /** Insert into the decode cache with oldest-entry eviction. */
-  function cacheSet(key, entry) {
-    if (
-      !_decodeCache.has(key) &&
-      _decodeCache.size >= DECODE_CACHE_MAX_ENTRIES
-    ) {
-      const oldest = _decodeCache.keys().next().value;
-      _decodeCache.delete(oldest);
-    }
-    _decodeCache.set(key, entry);
-  }
-
-  /**
-   * Fetch + decode all flow tiles covering the given bounds.
-   *
-   * Tiles are fetched from the local proxy in parallel; each decoded tile is
-   * cached in memory for 120 s (keyed z/x/y), so repeat calls for the same
-   * viewport are free. Partial tile failures return the segments that DID
-   * decode (last-good philosophy); the promise rejects only when every tile
-   * failed (e.g. keyless 503, aborted signal, proxy down).
-   *
-   * @param {{south:number, west:number, north:number, east:number}} bounds - Degrees.
-   * @param {Object} [opts]
-   * @param {AbortSignal} [opts.signal] - Abort signal (camera moved / layer disabled).
-   * @param {number} [opts.zoom=12] - Flow tile zoom level.
-   * @returns {Promise<Array<{coords:number[][], trafficLevel:number, roadType:string, closure:boolean}>>}
-   *   Flat array of flow segments across all covering tiles.
-   */
-  async function fetchFlowForBounds(bounds, { signal, zoom = 12 } = {}) {
-    signal?.throwIfAborted();
-    const tiles = tilesForBounds(bounds, zoom);
-    if (tiles.length === 0) return [];
-    const now = Date.now();
-
-    const results = await Promise.allSettled(
-      tiles.map(async ({ z, x, y }) => {
-        const key = `${z}/${x}/${y}`;
-        const cached = _decodeCache.get(key);
-        if (cached && now - cached.at < DECODE_CACHE_TTL_MS)
-          return cached.segments;
-
-        _tilesFetched += 1;
-        const res = await fetchImpl(`/api/tomtom/flow/${z}/${x}/${y}.pbf`, {
-          signal,
-        });
-        if (!res.ok) throw new Error(`flow tile ${key}: HTTP ${res.status}`);
-        const segments = decodeFlowTile(await res.arrayBuffer(), z, x, y);
-        signal?.throwIfAborted();
-        cacheSet(key, { at: Date.now(), segments });
-        return segments;
-      }),
-    );
-
-    signal?.throwIfAborted();
-    const fulfilled = results.filter((r) => r.status === 'fulfilled');
-    if (fulfilled.length === 0) {
-      throw results[0].reason instanceof Error
-        ? results[0].reason
-        : new Error('flow fetch failed');
-    }
-    return fulfilled.flatMap((r) => r.value);
-  }
-
-  /**
-   * Session diagnostics for `getStats()` surfaces.
-   * @returns {{tilesFetched:number}} Count of tile requests issued to the proxy
-   *   this session (decode-cache hits excluded).
-   */
-  function getFlowSessionStats() {
-    return { tilesFetched: _tilesFetched };
-  }
-
-  /** Clear the decode cache (tests + layer teardown). Session stats persist. */
-  function resetFlowTileCache() {
-    _decodeCache.clear();
-  }
-
-  return { fetchFlowForBounds, getFlowSessionStats, resetFlowTileCache };
+  const tiles = createVectorTileSource({
+    template: '/api/tomtom/flow/{z}/{x}/{y}.pbf',
+    allowedOrigin: 'http://localhost',
+    decode: (bytes, z, x, y) =>
+      decodeFlowTile(bytes, z, x, y, { strict: true }).flatMap((segment) =>
+        clipTileLine(segment.coords, tileToBBox(z, x, y)).map((coords) => ({
+          ...segment,
+          coords,
+        })),
+      ),
+    fetchImpl,
+    ttlMs: 120_000,
+    maxTiles: 16,
+  });
+  let partial = false;
+  return {
+    async fetchFlowForBounds(bounds, { signal, zoom = 12 } = {}) {
+      const result = await tiles.fetchBounds(bounds, { zoom, signal });
+      partial = result.partial;
+      return result.tiles.flat().flatMap((segment) =>
+        clipTileLine(segment.coords, bounds).map((coords) => ({
+          ...segment,
+          coords,
+        })),
+      );
+    },
+    getFlowSessionStats: () => ({ ...tiles.getStats(), partial }),
+    resetFlowTileCache: () => tiles.clear(),
+  };
 }

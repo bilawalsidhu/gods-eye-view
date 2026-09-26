@@ -95,11 +95,11 @@ export const DATA_CREDITS = [
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
   {
-    key: 'overpass',
+    key: 'openfreemap',
     html:
-      'Road geometry (traffic): ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      '(ODbL 1.0)',
+      'Roads and military areas: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> ' +
+      '© <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a> Data from ' +
+      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)',
   },
   {
     key: 'photon-geocoder',
@@ -114,8 +114,7 @@ export const DATA_CREDITS = [
     html:
       'ALPR camera locations (automatic license plate readers): ' +
       '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      '(<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL 1.0</a>); ' +
-      'community mapping includes <a href="https://deflock.org" target="_blank" rel="noopener">DeFlock</a>',
+      '(<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL 1.0</a>)',
   },
   {
     key: 'military-installations-osm',
@@ -127,7 +126,7 @@ export const DATA_CREDITS = [
   {
     key: 'cockpit-place-osm',
     html:
-      'Cockpit place context and last-resort place search: ' +
+      'Last-resort forward place search: ' +
       '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
       'via Nominatim (ODbL 1.0)',
   },

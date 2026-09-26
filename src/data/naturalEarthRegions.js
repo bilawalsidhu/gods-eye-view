@@ -325,3 +325,39 @@ export async function lookupNaturalRegionOutline(query, lat, lon) {
   }
   return null;
 }
+
+/** Resolve the smallest containing bundled physical region without a network geocoder. */
+export async function naturalRegionAtPoint(latitude, longitude) {
+  if (
+    ![latitude, longitude].every(Number.isFinite) ||
+    Math.abs(latitude) > 90 ||
+    Math.abs(longitude) > 180
+  )
+    return null;
+  await loadIndex();
+  let best = null;
+  for (const entry of _entries) {
+    const [west, south, east, north] = entry.bbox;
+    if (
+      longitude < west ||
+      longitude > east ||
+      latitude < south ||
+      latitude > north
+    )
+      continue;
+    if (best && entry.areaKm2 >= best.areaKm2) continue;
+    if (entry.polygons.some((ring) => pointInRing(ring, latitude, longitude)))
+      best = entry;
+  }
+  return best
+    ? {
+        label: best.name,
+        locality: null,
+        region: best.name,
+        country: null,
+        countryCode: null,
+        source: 'Natural Earth',
+        kind: best.kind,
+      }
+    : null;
+}

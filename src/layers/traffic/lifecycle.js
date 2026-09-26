@@ -40,7 +40,7 @@ export function createLifecycle({
       layerState._densityScale = 1.0;
       layerState._speedScale = 1.0;
       layerState._lastViewCenter = null;
-      layerState._flowCoveragePct = 0;
+      layerState._flowRoads = null;
       layerState._flowError = null;
       if (TRAFFIC_TIMING_ENABLED) {
         layerState._trafficTimingCurrentAnchor = null;
@@ -77,12 +77,10 @@ export function createLifecycle({
      */
     enable(viewer) {
       layerState._enabled = true;
+      if (layerState._roadMode !== 'tomtom') source.prefetch?.();
       holdContinuousRender('traffic'); // per-frame animator (perf wave 2)
       layerState._lastAnimTime = 0;
       layerState._pointCollection.show = true;
-
-      // One status check per session decides sim vs live-TomTom mode.
-      parts.flow.ensureFlowStatus();
 
       layerState._preRenderRemover = viewer.scene.preRender.addEventListener(
         parts.animation.animate,
@@ -106,8 +104,8 @@ export function createLifecycle({
       );
       claimCameraSensitivity(viewer.camera, 'traffic', 0.05);
 
-      // Kick off initial viewport check
-      parts.viewport.onCameraChanged();
+      // Enabling is explicit intent, not a camera gesture that needs settling.
+      parts.viewport.onCameraChanged({ immediate: true });
 
       // Boot-order guard (field-test round 1: layer sat empty until the user
       // moved): when the persisted layer state re-enables traffic during the
@@ -117,7 +115,12 @@ export function createLifecycle({
       // failed first fetch left the viewport unloaded while parked.
       clearInterval(layerState._enableKickTimer);
       layerState._enableKickTimer = setInterval(() => {
-        if (!layerState._enabled || layerState._lastUpdate) {
+        if (
+          !layerState._enabled ||
+          layerState._lastUpdate ||
+          layerState._roadRetryStopped ||
+          layerState._retryAttempts >= 3
+        ) {
           clearInterval(layerState._enableKickTimer);
           layerState._enableKickTimer = null;
           return;

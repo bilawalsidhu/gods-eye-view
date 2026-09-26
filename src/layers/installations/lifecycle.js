@@ -47,6 +47,7 @@ export function createLifecycle({
     },
 
     destroy(viewer) {
+      source.destroy?.();
       this.disable();
       layerState.moveEndRemove?.();
       layerState.clickHandler?.destroy();
