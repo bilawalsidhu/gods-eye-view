@@ -3541,6 +3541,9 @@ remain. Consumer capability misses never schedule automatic retries.
 
 Operator-configured Overpass area and focus-footprint queries use body-level
 `out geom` (with `center` for focus), preserving relation member outlines.
+Member geometry is printed only inside a box around the point (6 km for
+neighbourhoods, 3 km for street areas, 1.5 km for focus footprints); a
+relation cut by the box does not close and falls back to its pin.
 Street Traffic and ALPR never use Overpass. Installations switch once to vector
 tiles after a capability miss. Annotation and location-feature sources retain
 a distinct unavailable result and stop querying for that source lifetime.

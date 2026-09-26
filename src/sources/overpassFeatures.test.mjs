@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createOverpassFeatureSource,
+  geometryOutputBox,
   FEATURE_SOURCE_METHODS,
 } from './overpassFeatures.js';
 import { normalizeOverpassFeatures } from './overpassFeaturesRecords.js';
@@ -250,10 +251,28 @@ test('neighborhood and street-area lookups keep relation member geometry', async
     const [record] = await source[method]({ lat: 30.002, lon: -96.997 });
     assert.deepEqual(record.coordinates, relationRing, method);
   }
-  for (const text of calls) {
-    assert.match(text, /\);out geom;$/);
-    assert.doesNotMatch(text, /\bout\s+tags\b/);
-  }
+  // Member geometry is printed only inside a box around the point.
+  assert.ok(
+    calls[0].endsWith(');out geom(29.9481,-97.05924,30.0559,-96.93476);'),
+  );
+  assert.ok(
+    calls[1].endsWith(');out geom(29.97505,-97.02812,30.02895,-96.96588);'),
+  );
+  for (const text of calls) assert.doesNotMatch(text, /\bout\s+tags\b/);
+});
+
+test('the geometry output box is a bounded square around the point', () => {
+  const box = geometryOutputBox(30, -97, 6000)
+    .slice(1, -1)
+    .split(',')
+    .map(Number);
+  const [south, west, north, east] = box;
+  assert.ok(Math.abs((north - south) * 111320 - 12000) < 2);
+  assert.ok(
+    Math.abs((east - west) * 111320 * Math.cos((30 * Math.PI) / 180) - 12000) <
+      2,
+  );
+  assert.equal(geometryOutputBox(89.99, 179.99, 6000).includes('90,180'), true);
 });
 
 test('annotations outline a neighborhood or street area mapped as a relation', async () => {
@@ -322,6 +341,6 @@ test('focus footprints keep relation members and centers', async () => {
     record.coordinates,
     element.members.flatMap((member) => member.geometry || []),
   );
-  assert.match(query, /out center geom;/);
+  assert.match(query, /out center geom\([-\d.,]+\);/);
   assert.doesNotMatch(query, /out tags/);
 });
