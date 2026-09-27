@@ -27,6 +27,7 @@ import {
   getCyberSonarControlState,
   setCyberSonarControls,
 } from './cyberSonarControls.js';
+import { createStreetView } from './streetView.js';
 
 import * as Cesium from 'cesium';
 
@@ -527,6 +528,7 @@ export class StyleManager extends ShellFacade {
         _toggleOrbit: (...args) => this._toggleOrbit(...args),
         toggleCleanView: (...args) => this.toggleCleanView(...args),
         _toggleCctvEnabled: (...args) => this._toggleCctvEnabled(...args),
+        _toggleStreetView: () => this._streetView?.toggle(),
         _setBloomEnabled: (...args) => this._setBloomEnabled(...args),
         _setBloomIntensity: (...args) => this._setBloomIntensity(...args),
         _setSharpenEnabled: (...args) => this._setSharpenEnabled(...args),
@@ -573,6 +575,7 @@ export class StyleManager extends ShellFacade {
     this._initLocationBar();
     this._initShareButton();
     this._initCameraOrientationControls();
+    this._initStreetView();
     this._initClearSelectedLayersButton();
     this._initHUDToggle();
     this._initModels3dToggle();
@@ -1423,6 +1426,18 @@ export class StyleManager extends ShellFacade {
     });
   }
 
+  /** Wire the S-key Street View tool: click the globe, walk the street. */
+  _initStreetView() {
+    this._streetView?.destroy();
+    this._streetView = createStreetView({
+      viewer: this.viewer,
+      Cesium,
+      documentRef: document,
+      getApiKey: () => window.__GOOGLE_MAPS_API_KEY__,
+      showToast: (message) => this._showToast(message),
+    });
+  }
+
   // ── Share Button ─────────────────────────────
 
   /**
@@ -1531,6 +1546,7 @@ export class StyleManager extends ShellFacade {
     this._displayBindings.destroy();
     this._mapSourceControls?.destroy();
     this._cameraOrientationControls?.destroy();
+    this._streetView?.destroy();
     this._clearLayersControl?.destroy();
     this._cctvControls?.destroy();
     this._radioControls?.destroy();

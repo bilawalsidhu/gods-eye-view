@@ -751,6 +751,22 @@ shader-parameter rows. Number/style keys, H/O/V/F/D/C actions, native form-contr
 typing and Escape behavior retain their existing mappings. Capture-phase
 surfaces continue to arbitrate their own keyboard events first.
 
+A bare `S` (no Cmd/Ctrl/Alt) toggles Street View (`src/ui/streetView.js`):
+it claims the globe pointer as `street-view`, and the next globe click opens a
+Google Street View panel at the nearest outdoor panorama within 50 m, then
+250 m. A yellow globe marker follows the panorama as it moves. `S` or Escape
+cancels arming or closes the panel. It needs the browser `GOOGLE_MAPS_API_KEY`
+with the Maps JavaScript API enabled; without a key, arming is refused with a
+toast.
+
+Google bills each Street View panorama it creates (Dynamic Street View, 5,000
+free a month) and offers no quota row to cap it, so the tool caps itself at 150
+new panoramas per Pacific-time day (`STREET_VIEW_DAILY_LIMIT`). The count is
+kept per browser origin in `localStorage` under
+`godsEyeView.streetView.dailyLoads`, with an in-page fallback when storage is
+unavailable. Moving an open panel to another spot, panning and walking do not
+count. At the limit, arming and opening are refused with a toast.
+
 The UI facade retains shader values, share-restore authority, render requests,
 search dismissal, visibility and Cockpit portal policy. Parameter rows preserve
 labels, bounds, steps and precision. Rebuilding rows removes their previous

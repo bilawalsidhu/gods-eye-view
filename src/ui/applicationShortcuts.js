@@ -38,6 +38,9 @@ export function bindApplicationShortcuts({
     if (key === 'f') actions.toggleLayers();
     if (key === 'd') actions.cycleDetection();
     if (key === 'c') actions.toggleCctv();
+    // Bare S only, so browser shortcuts like Cmd+S keep their meaning.
+    const modified = event.metaKey || event.ctrlKey || event.altKey;
+    if (key === 's' && !modified) actions.toggleStreetView?.();
   };
   documentRef.addEventListener('keydown', onKeyDown);
   return {

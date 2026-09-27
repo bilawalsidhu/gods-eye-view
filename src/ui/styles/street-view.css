@@ -1,0 +1,86 @@
+/* Street View: S-key pick cursor and the floating panorama panel. */
+canvas.street-view-armed {
+  cursor: crosshair;
+}
+
+.street-view-panel {
+  position: fixed;
+  right: 72px;
+  bottom: 96px;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, calc(100vw - 32px));
+  height: min(380px, 55vh);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  transition:
+    width var(--transition-smooth),
+    height var(--transition-smooth);
+}
+
+.street-view-panel.expanded {
+  width: min(1100px, calc(100vw - 32px));
+  height: min(720px, calc(100vh - 160px));
+}
+
+.street-view-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.street-view-kicker {
+  color: #ffc400;
+  letter-spacing: 0.12em;
+}
+
+.street-view-place {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.street-view-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.street-view-btn:hover,
+.street-view-btn:focus-visible {
+  border-color: var(--accent);
+}
+
+.street-view-pano {
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 720px) {
+  .street-view-panel,
+  .street-view-panel.expanded {
+    right: 16px;
+    bottom: 88px;
+    left: 16px;
+    width: auto;
+    height: 50vh;
+  }
+}

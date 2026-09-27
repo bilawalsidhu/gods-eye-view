@@ -89,6 +89,7 @@ export class DisplayBindings {
           this._syncShareState();
         },
         toggleCctv: () => this._toggleCctvEnabled(),
+        toggleStreetView: () => this._toggleStreetView(),
       },
     });
 
