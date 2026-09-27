@@ -3189,6 +3189,30 @@ test('Local ADS-B common names toggle only the receiver layer through the normal
   }
 });
 
+test('World News common names toggle only the registered headline layer through the normal voice action', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } } };
+  const calls = [];
+  let enabled = false;
+  const dataManager = {
+    layers: new Map([['world-news', { module: {} }]]),
+    getAll: () => [{ id: 'world-news', name: 'World News' }],
+    isEnabled: () => enabled,
+    setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  for (const alias of ['world-news', 'news', 'world news', 'headlines', 'news headlines']) {
+    for (const value of [true, false]) {
+      const result = await runner('set_layer_visibility', { layerId: alias, enabled: value });
+      assert.equal(result.ok, true);
+      assert.equal(result.layerId, 'world-news');
+      assert.deepEqual(calls.at(-1), ['world-news', value]);
+    }
+  }
+});
+
 test('ISS voice lookup uses the registered satellite instance', async () => {
   const calls = [];
   const viewer = {

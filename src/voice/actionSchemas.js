@@ -142,6 +142,7 @@ const schemas = [
             'fire-perimeters',
             'alpr-cameras',
             'local-adsb',
+            'world-news',
           ],
         },
         enabled: {
@@ -175,6 +176,7 @@ const schemas = [
             'local-firms',
             'fire-perimeters',
             'alpr-cameras',
+            'world-news',
           ],
         },
       },
@@ -795,6 +797,7 @@ const schemas = [
               'local-datacenters',
               'local-dams',
               'fire-perimeters',
+              'world-news',
             ],
           },
         },
