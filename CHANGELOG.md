@@ -1,5 +1,18 @@
 # Changelog
 
+## Locale shipping/offer contract
+
+- Name the two i18n concepts the locale-PR handoff was conflating:
+  `CATALOG_LOCALES` (catalogs bundled and valid — shipping) vs the built-in
+  `FALLBACK_PAIR` (what the stock, unconfigured UI offers — offering;
+  `GEV_DEFAULT_LOCALE`/`GEV_SECONDARY_LOCALE` override it per deployment).
+  The translator guide's step 3 wrongly claimed appending to
+  `CATALOG_LOCALES` alone drives pair config, `?lang=`, storage, and the
+  selector; they follow the resolved pair, which only validates against
+  the catalog list. Promoting a shipped locale to stock secondary is now
+  documented as a separate, deliberate `FALLBACK_PAIR` edit, and
+  `i18n.test.mjs` pins that every built-in pair member ships a catalog.
+
 ## Spanish locale
 
 - Ship the Spanish catalog as the first follow-up locale on the i18n

@@ -10,17 +10,33 @@ time.
 
 ## Which locale ships, and which pair is offered
 
-Two catalogs ship: **en** (source of truth and unconditional fallback) and
-**es** (fully translated, key-for-key with en — 913 keys each). Shipping is
-catalog-driven (`CATALOG_LOCALES` in `src/i18n/locale.js`): the built-in
-locale pair is en+es and the dock language switch renders EN + ES. Which
-pair the app *offers* is configuration, not code: `GEV_DEFAULT_LOCALE` and
-`GEV_SECONDARY_LOCALE` in `.env`, injected into the browser via vite
-defines. Both values are validated against the shipped catalogs — an
-invalid, unshipped, or degenerate pair (e.g. the same locale twice) falls
-back to the built-in en+es shape with a dev-server-only `console.warn`.
-English is always resolvable — it is the fallback catalog — even when not
-part of the configured pair.
+Two concepts, two separate decisions:
+
+- **Shipping** — which catalogs are bundled and valid — is catalog-driven:
+  `CATALOG_LOCALES` in `src/i18n/locale.js`. Today that is **en** (source
+  of truth and unconditional fallback) and **es** (fully translated,
+  key-for-key with en — 913 keys each). Appending a code there (recipe
+  step 3) ships the locale: its catalog is bundled and the code becomes
+  valid as a pair member.
+- **Offering** — which locales the dock language switch renders and
+  `?lang=` / stored preference / `navigator.languages` accept — is the
+  *pair*, never the full catalog set. Without configuration the pair is
+  the built-in one (`FALLBACK_PAIR` in `src/i18n/locale.js`, en+es
+  today); a deployment overrides it with `GEV_DEFAULT_LOCALE` and
+  `GEV_SECONDARY_LOCALE` in `.env`, injected into the browser via vite
+  defines. Both members are validated against the shipped catalogs — an
+  invalid, unshipped, or degenerate pair (e.g. the same locale twice)
+  falls back to the built-in en+es shape with a dev-server-only
+  `console.warn`. English is always resolvable — it is the fallback
+  catalog — even when not part of the configured pair.
+
+Shipping and offering are therefore different operations. A locale that
+ships without being named by the pair is bundled and *configurable*
+(`GEV_SECONDARY_LOCALE=<code>` will offer it), but the stock,
+unconfigured UI will neither show nor accept it. Making a shipped locale
+the stock secondary is a separate, deliberate step — see
+[Making a locale the stock secondary](#making-a-locale-the-stock-secondary)
+below.
 
 ## How the catalog system works
 
@@ -73,11 +89,17 @@ optional — the gates below fail the build if a step is skipped.
    and one `<CODE>_NAMESPACES` array, then one entry in the `CATALOGS`
    map. Registration is append-only; nothing else in the file changes.
 3. **Shipping.** Append `'<code>'` to `CATALOG_LOCALES` in
-   `src/i18n/locale.js`. This single constant is what makes the locale
-   normalizable-to-shipped: pair config, `?lang=`, storage, and the
-   selector all read from it. Regional variants (`es-MX`, `es_419`)
-   already normalize — locale-code hygiene is shipped ahead of the
-   locales on purpose.
+   `src/i18n/locale.js`. This constant is the shipping gate: it makes the
+   locale's catalog valid to bundle and the code valid as a *pair member*
+   (`GEV_SECONDARY_LOCALE=<code>` now resolves to a working pair). It does
+   **not** by itself offer the locale: `?lang=`, storage,
+   `navigator.languages`, and the selector accept only the resolved pair —
+   the built-in `FALLBACK_PAIR` or the two env values — which validates
+   against this list but never derives from it. Promoting a locale to the
+   stock secondary is a separate, deliberate change ([see
+   below](#making-a-locale-the-stock-secondary)). Regional variants
+   (`es-MX`, `es_419`) already normalize — locale-code hygiene is shipped
+   ahead of the locales on purpose.
 4. **Selector labels.** Append
    `'locale.<code>.ariaLabel': 'Switch to <Language>'` to the `shell`
    catalog of EVERY shipped locale (en included — the en catalog names
@@ -109,6 +131,33 @@ optional — the gates below fail the build if a step is skipped.
 8. **Docs.** Add the locale's section + glossary to this file, note it
    in `docs/CURRENT-STATE.md` (Internationalization) and `CHANGELOG.md`,
    and update the shipped-locales wording in `.env.example`.
+
+## Making a locale the stock secondary
+
+Shipping a locale (the recipe above) and offering it by default are
+separate policy decisions. The stock UI — the unconfigured build, no
+`GEV_DEFAULT_LOCALE` / `GEV_SECONDARY_LOCALE` set — offers the built-in
+pair, `FALLBACK_PAIR` in `src/i18n/locale.js` (en + es today). Appending a
+third code to `CATALOG_LOCALES` does not touch it, and that is by design:
+the dock switch is a two-button *pair*, not a list of everything shipped.
+
+When a shipped locale is meant to become the stock secondary — replacing
+Spanish, say — make that decision explicit in its own change:
+
+1. Edit `FALLBACK_PAIR` in `src/i18n/locale.js` (its comment names it the
+   stock pair). The locale's catalog must already ship in
+   `CATALOG_LOCALES` — `i18n.test.mjs` pins that every built-in pair
+   member ships a catalog, so a promotion ahead of its catalog fails the
+   gate instead of offering a catalog-less locale.
+2. Record the policy change here (the shipped/stock-pair wording), in
+   `docs/CURRENT-STATE.md` (Internationalization), `CHANGELOG.md`, and
+   `.env.example`'s shipped-locales wording.
+
+Until that decision is made, a locale may land as *configurable-only*:
+shipped and pair-valid, offered only where a deployment's env pair names
+it. That is the expected posture for salvage ports (e.g. the zh-TW strings
+from the retired standalone build, #670) until a deliberate product call
+promotes them to the stock pair.
 
 ## Append-only rules
 
@@ -203,7 +252,7 @@ instrument codes **BRG** / **DEST** (see the review conventions above).
 ## Running the i18n test gates
 
 ```sh
-node --test src/i18n/            # 41 tests: core + pair config, catalog parity, markup coverage, repair-pass anchors
+node --test src/i18n/            # 42 tests: core + pair config, catalog parity, markup coverage, repair-pass anchors
 npm test                         # full suite (see below for the known environmental caveat)
 ```
 

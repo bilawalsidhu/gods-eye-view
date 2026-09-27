@@ -2748,7 +2748,12 @@ its English value. The subsystem lives in `src/i18n/`:
   `import.meta.env` defines by `vite.config.js`; both values are validated
   against the shipped catalogs (`CATALOG_LOCALES`), and the offered set is
   `dedup([default, secondary, 'en'])`. An invalid, unshipped, or degenerate
-  pair falls back to the built-in en+es (dev-only warn).
+  pair falls back to the built-in en+es (dev-only warn). Shipping and
+  offering are separate decisions: appending a locale to `CATALOG_LOCALES`
+  bundles its catalog and makes the code pair-valid, but the stock,
+  unconfigured UI offers only the built-in `FALLBACK_PAIR` (en+es, edited
+  deliberately per docs/TRANSLATORS.md "Making a locale the stock
+  secondary"); a shipped-but-unpaired locale is configurable only.
 - **Resolution order.** `?lang=<locale>` (search string only; never
   persisted, never written into share links; stripped by
   `persistLocaleAndReload`; accepted only for offered locales) → stored
@@ -2757,7 +2762,7 @@ its English value. The subsystem lives in `src/i18n/`:
   `es-MX`/`es_419` → `es`) → the CONFIGURED default locale. Unsupported
   values defer to the next
   step rather than forcing English.
-- **Gates** (all under `node --test src/i18n/`, 41 tests):
+- **Gates** (all under `node --test src/i18n/`, 42 tests):
   `catalog.test.mjs` enforces per-locale key, placeholder-name, and
   plural-shape parity with the strict exact-parity flip ON
   (`REQUIRE_FULL_PARITY`; `GEV_I18N_REQUIRE_FULL_LOCALE_PARITY=0` opts out

@@ -6,8 +6,10 @@
 // stacked follow-up PR following the recipe in docs/TRANSLATORS.md (catalog
 // files + registration + CATALOG_LOCALES entry). Spanish is the first.
 // Every shipped catalog is built UNCONDITIONALLY — the build cost is trivial
-// and the registry stays declarative — but only locales in the configured pair
-// are offered/accepted (see locale.js resolveLocalePair).
+// and the registry stays declarative — but shipping and offering are
+// separate decisions: only locales in the offered pair (the built-in
+// FALLBACK_PAIR or the GEV_* env defines) are offered/accepted (see
+// locale.js resolveLocalePair and docs/TRANSLATORS.md).
 //
 // APPEND-ONLY NAMESPACE REGISTRATION
 // ─────────────────────────────────────────────────────────────────────────────

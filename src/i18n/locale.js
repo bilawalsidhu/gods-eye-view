@@ -2,13 +2,15 @@
 //
 // English is the default-without-configuration, the ALWAYS-shipped fallback
 // catalog, and the compatibility baseline (docs/TRANSLATORS.md). Neutral
-// international Spanish ('es') is the first follow-up locale and the default
+// international Spanish ('es') is the first follow-up locale and the stock
 // secondary; further locales land as stacked PRs, one per locale, following
-// the recipe in docs/TRANSLATORS.md. Which pair the app actually offers is
-// configured at build/dev time through GEV_DEFAULT_LOCALE /
-// GEV_SECONDARY_LOCALE (vite.config.js client defines) and resolved here —
-// pair members are validated against the shipped catalogs, so a configured
-// secondary without a catalog degenerates the pair to en-only.
+// the recipe in docs/TRANSLATORS.md. SHIPPING and OFFERING are separate
+// decisions: CATALOG_LOCALES gates which catalogs are bundled and valid,
+// while the pair the app actually offers is the built-in FALLBACK_PAIR
+// unless build/dev config names another through GEV_DEFAULT_LOCALE /
+// GEV_SECONDARY_LOCALE (vite.config.js client defines) — pair members are
+// validated against the shipped catalogs, so a configured secondary
+// without a catalog falls back to the built-in pair.
 // This module owns ONLY locale resolution and document language metadata —
 // catalogs and translation helpers live in src/i18n/index.js.
 
@@ -16,11 +18,15 @@
 export const LOCALE_STORAGE_KEY = 'gev:locale:v1';
 
 /**
- * Locales with a shipped catalog. 'en' is the fallback catalog locale
- * (DEFAULT_LOCALE); every entry here can be normalized and looked up, though
- * only locales in the configured PAIR (see resolveLocalePair) are offered in
- * the UI and accepted during resolution. A locale PR appends its code here
- * alongside its catalogs (docs/TRANSLATORS.md) — nothing else flips shipping.
+ * Locales with a SHIPPED catalog — bundled and valid. 'en' is the fallback
+ * catalog locale (DEFAULT_LOCALE). Appending a code here alongside its
+ * catalogs (docs/TRANSLATORS.md) ships it and makes the code valid as a
+ * pair member, but does NOT offer it: the UI selector and the ?lang=/
+ * storage/navigator acceptance follow the resolved pair (FALLBACK_PAIR or
+ * the env values), which validates against this list and never derives
+ * from it. Making a shipped locale the stock secondary is a separate,
+ * deliberate edit to FALLBACK_PAIR (docs/TRANSLATORS.md, "Making a locale
+ * the stock secondary").
  */
 export const CATALOG_LOCALES = Object.freeze(['en', 'es']);
 
@@ -28,8 +34,9 @@ export const CATALOG_LOCALES = Object.freeze(['en', 'es']);
  * Locale codes normalizeLocale folds regional variants for. Kept ahead of
  * shipping on purpose: normalization is locale-code hygiene ('es-MX' → 'es'),
  * while SHIPPING is catalog-driven through CATALOG_LOCALES — so a locale PR
- * edits only CATALOG_LOCALES plus its catalog files, and a code listed here
- * without a catalog normalizes but is never offerable or resolvable.
+ * edits only CATALOG_LOCALES plus its catalog files to SHIP it, and a code
+ * listed here without a catalog normalizes but is never offerable or
+ * resolvable.
  */
 const NORMALIZABLE_LOCALES = Object.freeze(['en', 'es', 'fr', 'ru', 'uk']);
 
@@ -37,8 +44,14 @@ const NORMALIZABLE_LOCALES = Object.freeze(['en', 'es', 'fr', 'ru', 'uk']);
 export const DEFAULT_LOCALE = 'en';
 
 /**
- * Built-in pair used when no env/config shapes one, or a configured one is
- * unusable: English plus the first follow-up locale, Spanish.
+ * The STOCK pair: what the unconfigured build offers in the dock language
+ * switch and accepts from ?lang=/storage/navigator — and the fallback when
+ * no env/config shapes a pair, or a configured one is unusable. English
+ * plus the first follow-up locale, Spanish. Changing the stock secondary is
+ * a deliberate policy edit HERE (with the doc updates named in
+ * docs/TRANSLATORS.md, "Making a locale the stock secondary"), never a
+ * side effect of appending to CATALOG_LOCALES — members must already ship,
+ * or the unconfigured build would offer a locale with no catalog.
  */
 const FALLBACK_PAIR = Object.freeze({
   defaultLocale: 'en',

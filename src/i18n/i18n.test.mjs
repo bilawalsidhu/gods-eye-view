@@ -340,6 +340,23 @@ test('applyDocumentTranslations writes all four attributes and skips unknown key
   assert.equal(applyDocumentTranslations({}), 0);
 });
 
+test('the built-in pair only names shipped locales', () => {
+  // SHIPPING (CATALOG_LOCALES) and OFFERING (FALLBACK_PAIR) are separate
+  // decisions (docs/TRANSLATORS.md, "Making a locale the stock secondary"):
+  // promoting a locale to the stock secondary edits FALLBACK_PAIR, whose
+  // members must already ship — under node:test import.meta.env is absent,
+  // so the no-argument call resolves the built-in pair. A promotion ahead
+  // of its catalog must fail here rather than offer a catalog-less locale.
+  const { defaultLocale, secondaryLocale, availableLocales: offered } =
+    resolveLocalePair();
+  for (const locale of [defaultLocale, secondaryLocale, ...offered]) {
+    assert.ok(
+      CATALOG_LOCALES.includes(locale),
+      `built-in pair member '${locale}' must ship a catalog`,
+    );
+  }
+});
+
 test('getCatalog exposes the merged, dot-prefixed registry for every shipped locale', () => {
   assert.deepEqual([...CATALOG_LOCALES], ['en', 'es'],
     'English plus the first follow-up locale; each further locale PR appends its code here');
