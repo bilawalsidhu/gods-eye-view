@@ -1,7 +1,7 @@
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
 import { ACTIVE_FRAME_REFRESH_MS, IDLE_FRAME_REFRESH_MS } from './policy.js';
 import { headingHudToken, isHeadingEstimated } from './headingConfidence.js';
-import { specSummary } from './modelSpecs.js';
+import { specSummary, specFovCapabilityToken } from './modelSpecs.js';
 
 export function createPresentation({
   state: layerState,
@@ -42,6 +42,9 @@ export function createPresentation({
       headingHudToken(active.camera),
       // Identified hardware labels its FOV as datasheet-sourced (catalog.js).
       `FOV ${Math.round(active.camera.fovDeg)}°${active.camera.fovSource === 'datasheet' ? ' (DATASHEET)' : ''}`,
+      // A PTZ/varifocal datasheet range is what the lens can do, not its
+      // current zoom, so it is shown beside the estimate, never as it.
+      specFovCapabilityToken(active.camera),
       `COVERAGE ${area.toFixed(2)}km²`,
       overlapCount > 0 ? `OVERLAP ${overlapCount} cams` : 'ISOLATED VIEW',
       `PROJ ${layerState._showProjection ? 'MONITOR' : 'OFF'}`,
@@ -94,6 +97,8 @@ export function createPresentation({
       fovDeg: camera.fovDeg,
       // Identified-hardware enrichment passthrough (catalog.js / modelSpecs.js).
       fovSource: camera.fovSource || 'estimated',
+      specFovMinDeg: camera.specFovMinDeg ?? null,
+      specFovMaxDeg: camera.specFovMaxDeg ?? null,
       spec: camera.spec || null,
       rangeM: camera.rangeM,
       elevationM: camera.absoluteHeightM,

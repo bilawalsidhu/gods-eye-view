@@ -6,9 +6,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   lookupModelSpec,
-  horizontalFovDeg,
+  horizontalFovRangeDeg,
+  fixedHorizontalFovDeg,
+  specFovCapabilityToken,
   specSummary,
 } from './modelSpecs.js';
+import { createCatalog } from './catalog.js';
 
 test('lookupModelSpec matches case-insensitively and trims', () => {
   const spec = lookupModelSpec('  q6135-le ');
@@ -29,11 +32,11 @@ test('vendored table covers the integrated catalogs published hardware', () => {
   const cohu = lookupModelSpec('3950'); // King County publishes "3950"
   assert.equal(cohu?.brand, 'Cohu');
   const autodome = lookupModelSpec('AUTODOME IP 5000i');
-  assert.ok(autodome && horizontalFovDeg(autodome) > 0);
+  assert.ok(autodome && horizontalFovRangeDeg(autodome).maxDeg > 0);
   const vg4 = lookupModelSpec('VG4 AUTODOME H.264'); // Sarasota's string
   assert.ok(vg4);
   const axis = lookupModelSpec('Q6155-E'); // Sioux Falls
-  assert.equal(horizontalFovDeg(axis), 66.7);
+  assert.deepEqual(horizontalFovRangeDeg(axis), { minDeg: 2.36, maxDeg: 66.7 });
 });
 
 test('verbose registry strings resolve via distinctive-token fallback', () => {
@@ -80,23 +83,112 @@ test('lookupModelSpec returns null for unknown or empty input — never guesses'
   assert.equal(lookupModelSpec(undefined), null);
 });
 
-test('horizontalFovDeg takes the wide end of a varifocal/PTZ range', () => {
-  // '58.3-2.4 horizontal' → 58.3 (wide), not 2.4 (tele).
-  assert.equal(horizontalFovDeg(lookupModelSpec('Q6135-LE')), 58.3);
+test('horizontalFovRangeDeg reads the full range across real fov_deg shapes', () => {
+  const range = (model) => horizontalFovRangeDeg(lookupModelSpec(model));
+  // PTZ zoom: both ends, not just the wide one.
+  assert.deepEqual(range('Q6135-LE'), { minDeg: 2.4, maxDeg: 58.3 });
+  // Vertical figures never count.
+  assert.deepEqual(range('XNP-6400RW'), { minDeg: 1.88, maxDeg: 65.66 });
+  // Lens options: parenthesized focal lengths are not FOV figures.
+  assert.deepEqual(range('DS-2CD2087G3-LI2UY'), {
+    minDeg: 93.3,
+    maxDeg: 108.8,
+  });
+  assert.deepEqual(range('F4105-LRE'), { minDeg: 110, maxDeg: 110 });
+  // The "360 combined" panoramic figure is not a horizontal lens FOV.
+  assert.deepEqual(range('Q6000-E Mk II'), { minDeg: 113, maxDeg: 152 });
+  assert.deepEqual(range('P3707-PE'), { minDeg: 54, maxDeg: 108 });
 });
 
-test('horizontalFovDeg reads multi-variant and plain fov strings', () => {
-  // '108.8 horizontal (2.8mm) / 93.3 horizontal (4mm)' → first variant.
-  assert.equal(horizontalFovDeg(lookupModelSpec('DS-2CD2087G3-LI2UY')), 108.8);
-  // '110 horizontal, 60 vertical' → horizontal figure.
-  assert.equal(horizontalFovDeg(lookupModelSpec('F4105-LRE')), 110);
+test('horizontalFovRangeDeg returns null when no numeric FOV is stated', () => {
+  assert.equal(horizontalFovRangeDeg({ fov_deg: '' }), null);
+  assert.equal(horizontalFovRangeDeg({ fov_deg: 'wide dynamic range' }), null);
+  assert.equal(horizontalFovRangeDeg({ fov_deg: '60 vertical' }), null);
+  assert.equal(horizontalFovRangeDeg({}), null);
+  assert.equal(horizontalFovRangeDeg(null), null);
 });
 
-test('horizontalFovDeg returns null when no numeric FOV is stated', () => {
-  assert.equal(horizontalFovDeg({ fov_deg: '' }), null);
-  assert.equal(horizontalFovDeg({ fov_deg: 'wide dynamic range' }), null);
-  assert.equal(horizontalFovDeg({}), null);
-  assert.equal(horizontalFovDeg(null), null);
+test('fixedHorizontalFovDeg is the current FOV only for fixed single-lens hardware', () => {
+  // Fixed dome, one horizontal figure: the datasheet IS the optical state.
+  assert.equal(fixedHorizontalFovDeg(lookupModelSpec('F4105-LRE')), 110);
+  // Known hardware capability != known pose state: PTZ, multi-sensor, and a
+  // model sold in several lens options all stay estimated.
+  for (const model of [
+    'Q6135-LE',
+    'XNP-6400RW',
+    'AUTODOME IP 5000i',
+    'P3707-PE',
+    'Q6000-E Mk II',
+    'DS-2CD2087G3-LI2UY',
+  ]) {
+    assert.equal(fixedHorizontalFovDeg(lookupModelSpec(model)), null, model);
+  }
+  assert.equal(fixedHorizontalFovDeg(null), null);
+});
+
+test('specFovCapabilityToken labels a datasheet range as capability, never as current FOV', () => {
+  assert.equal(
+    specFovCapabilityToken({ specFovMinDeg: 2.4, specFovMaxDeg: 58.3 }),
+    'SPEC FOV 2.4–58° (CAPABILITY)',
+  );
+  assert.equal(
+    specFovCapabilityToken({ specFovMinDeg: 113, specFovMaxDeg: 113 }),
+    'SPEC FOV 113° (CAPABILITY)',
+  );
+  // Already the camera's FOV (fixed lens) or nothing known: no token.
+  assert.equal(
+    specFovCapabilityToken({
+      fovSource: 'datasheet',
+      specFovMinDeg: 110,
+      specFovMaxDeg: 110,
+    }),
+    null,
+  );
+  assert.equal(specFovCapabilityToken({}), null);
+  assert.equal(specFovCapabilityToken(null), null);
+});
+
+/** Browser catalog with the pose math stubbed: only enrichment is under test. */
+function browserCatalog() {
+  const model = {
+    safeNumber: (value, fallback = NaN) =>
+      Number.isFinite(Number(value)) ? Number(value) : fallback,
+    normalizeHeading: (deg) => ((deg % 360) + 360) % 360,
+    clamp: (value, lo, hi) => Math.min(hi, Math.max(lo, value)),
+    headingFromId: () => 0,
+    normalizeFeedType: (type) => type,
+    ensureCameraPose: () => {},
+  };
+  return createCatalog({
+    state: {},
+    services: { locations: { CITY_POIS: {} } },
+    parts: { model },
+    source: {},
+  });
+}
+
+test('catalog keeps the estimated FOV for PTZ hardware and substitutes only fixed-lens datasheets', () => {
+  const [ptz, fixed, unknown] = browserCatalog().buildCatalogFromSources([
+    { id: 'ptz', lat: 47.7, lon: -122, fovDeg: 44, model: 'Q6135-LE' },
+    { id: 'fixed', lat: 47.7, lon: -122, fovDeg: 44, model: 'F4105-LRE' },
+    { id: 'unknown', lat: 47.7, lon: -122, fovDeg: 44, model: 'NOPE-1' },
+  ]);
+
+  // PTZ: the frustum keeps its estimate; the datasheet range is metadata.
+  assert.equal(ptz.fovDeg, 44);
+  assert.equal(ptz.fovSource, undefined);
+  assert.equal(ptz.specFovMinDeg, 2.4);
+  assert.equal(ptz.specFovMaxDeg, 58.3);
+  assert.equal(ptz.spec.model, 'Q6135-LE');
+
+  // Fixed lens: the datasheet figure is the optical state.
+  assert.equal(fixed.fovDeg, 110);
+  assert.equal(fixed.fovSource, 'datasheet');
+
+  // Unknown hardware changes nothing.
+  assert.equal(unknown.fovDeg, 44);
+  assert.equal(unknown.spec, undefined);
+  assert.equal(unknown.specFovMaxDeg, undefined);
 });
 
 test('specSummary renders the HUD line and degrades by omission', () => {

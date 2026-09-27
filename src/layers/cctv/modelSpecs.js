@@ -5,8 +5,10 @@
  *
  * When a catalog camera names its hardware model (source packs may set
  * `model`; hand-authored seeds may too), the model resolves to a datasheet
- * record: the camera's frustum then uses the manufacturer's horizontal FOV
- * instead of an estimate, and the HUD meta line gains the model's real specs.
+ * record and the HUD meta line gains the model's real specs. A fixed-lens
+ * model's horizontal FOV replaces the frustum's estimate; a PTZ/varifocal or
+ * multi-sensor range is carried as capability metadata beside the estimate,
+ * because the lens's current zoom is unknown.
  * Cameras without an identified model are untouched — unknown never implies
  * anything.
  *
@@ -376,16 +378,58 @@ export function lookupModelSpec(model) {
 }
 
 /**
- * Datasheet horizontal FOV in degrees: the FIRST number in the `fov_deg`
- * string, which for varifocal/PTZ ranges ('58.3-2.4 horizontal') is the wide
- * end — the honest default for a coverage cone.
+ * Datasheet horizontal FOV as the range the hardware can cover. Only
+ * segments stating a horizontal figure count — vertical and "combined"
+ * panoramic figures never do — and parenthesized lens/sensor notes are
+ * ignored. A zoom ('58.3-2.4 horizontal') and a lens-option list
+ * ('108.8 horizontal (2.8mm) / 93.3 horizontal (4mm)') both yield a range.
  * @param {Object} spec - A record from this module.
- * @returns {number|null} Wide-end horizontal FOV, or null when unstated.
+ * @returns {{minDeg:number, maxDeg:number}|null} Null when unstated.
  */
-export function horizontalFovDeg(spec) {
-  const match = String(spec?.fov_deg || '').match(/\d+(?:\.\d+)?/);
-  const value = match ? Number(match[0]) : NaN;
-  return Number.isFinite(value) && value > 0 ? value : null;
+export function horizontalFovRangeDeg(spec) {
+  const values = [];
+  for (const segment of String(spec?.fov_deg || '').split(/[/;,]/)) {
+    if (!/horizontal/i.test(segment)) continue;
+    const figures = segment.replace(/\([^)]*\)/g, '').split(/horizontal/i)[0];
+    for (const match of figures.matchAll(/\d+(?:\.\d+)?/g)) {
+      const value = Number(match[0]);
+      if (Number.isFinite(value) && value > 0) values.push(value);
+    }
+  }
+  if (!values.length) return null;
+  return { minDeg: Math.min(...values), maxDeg: Math.max(...values) };
+}
+
+/**
+ * The datasheet horizontal FOV as the camera's CURRENT optical state, which
+ * holds only for fixed single-lens hardware stating one figure. PTZ,
+ * varifocal and multi-sensor models publish a capability range whose in-use
+ * value is unknown — known hardware capability is not known pose state — so
+ * they return null and keep their estimated FOV.
+ * @param {Object} spec - A record from this module.
+ * @returns {number|null} Fixed horizontal FOV in degrees, or null.
+ */
+export function fixedHorizontalFovDeg(spec) {
+  if (!spec || spec.ptz || spec.varifocal || (spec.lens_count || 1) > 1)
+    return null;
+  const range = horizontalFovRangeDeg(spec);
+  return range && range.minDeg === range.maxDeg ? range.minDeg : null;
+}
+
+/**
+ * HUD token for a datasheet FOV that describes capability rather than the
+ * camera's current state, e.g. 'SPEC FOV 2.4–58° (CAPABILITY)'.
+ * @param {Object} camera - Catalog camera (see applyModelEnrichment).
+ * @returns {string|null} Null when the datasheet FOV already IS the camera's
+ *   FOV (fixed lens) or no datasheet range is known.
+ */
+export function specFovCapabilityToken(camera) {
+  if (!camera || camera.fovSource === 'datasheet') return null;
+  const { specFovMinDeg: min, specFovMaxDeg: max } = camera;
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+  const fmt = (deg) => (deg < 10 ? deg.toFixed(1) : String(Math.round(deg)));
+  const span = min === max ? fmt(max) : `${fmt(min)}–${fmt(max)}`;
+  return `SPEC FOV ${span}° (CAPABILITY)`;
 }
 
 /**
