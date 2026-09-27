@@ -6,18 +6,34 @@ import { apiNotFoundPlugin } from './api-not-found.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
-/** Load this checkout's configuration and attach its local provider middleware. */
+/**
+ * Load only the environment variables required by this Vite configuration.
+ * Avoid copying the entire environment into process.env.
+ */
 export default defineConfig(({ command, mode }) => {
-  const loaded = loadEnv(mode, root, '');
-  for (const [key, value] of Object.entries(loaded)) {
-    if (process.env[key] === undefined) process.env[key] = value;
-  }
+  const env = loadEnv(mode, root, '');
+
+  const host = env.HOST || process.env.HOST;
+  const port = env.PORT || process.env.PORT;
+
+  const googleApiKey =
+    env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+
+  const cesiumToken =
+    env.CESIUM_ION_TOKEN || process.env.CESIUM_ION_TOKEN;
+
   return createBrowserViteConfig({
-    plugins: [...localProviderPlugins(), apiNotFoundPlugin()],
-    googleApiKey: process.env.GOOGLE_MAPS_API_KEY,
-    cesiumToken: process.env.CESIUM_ION_TOKEN,
-    host: process.env.HOST,
-    port: process.env.PORT,
+    plugins: [
+      ...localProviderPlugins(),
+      apiNotFoundPlugin(),
+    ],
+
+    googleApiKey,
+    cesiumToken,
+
+    host,
+    port,
+
     command,
   });
 });
