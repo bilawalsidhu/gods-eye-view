@@ -7,7 +7,11 @@
   diagonal, get a high-confidence heading; `BW` (Bothways) cameras use the
   shared id-hash fallback at low confidence. By default the 250 cameras nearest
   Seattle and Spokane load; `CCTV_WSDOT_MAX_SOURCES` sets the cap and
-  `CCTV_WSDOT_ENABLED=0` turns the pack off (bassem chagra, #644).
+  `CCTV_WSDOT_ENABLED=0` turns the pack off. The default catalog cap
+  (`CCTV_MAX_SOURCES`) rises from 4,000 to 4,500: the per-pack defaults already
+  summed to 4,054 before WSDOT, so a default install was being trimmed. A test
+  now sums every pack's default and fails if they exceed the cap
+  (bassem chagra, #644).
 
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the

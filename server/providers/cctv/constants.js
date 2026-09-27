@@ -9,9 +9,12 @@ export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
  * itself (nearest-to-anchor first); this bound only matters when the packs
  * together exceed it, and it is then filled round-robin across packs (see
  * cap.js) so no region is silently dropped. Sized above the sum of the
- * default per-pack caps so a default install never trims.
+ * default per-pack caps so a default install never trims (enforced by
+ * cctvCatalogCap.test.mjs). The per-pack defaults reached 4,304 with WSDOT,
+ * so this is 4,500: room for one more small pack while staying under
+ * CCTV_MAX_SOURCES_CEILING, which also sizes the health map.
  */
-export const DEFAULT_CCTV_MAX_SOURCES = 4000;
+export const DEFAULT_CCTV_MAX_SOURCES = 4500;
 /** Hard upper bound for CCTV_MAX_SOURCES; also sizes the health map. */
 export const CCTV_MAX_SOURCES_CEILING = 5000;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
