@@ -256,57 +256,7 @@ export class ShareRestoration {
         : result.classification === 'source-unavailable'
           ? `Shared ${subject} could not be restored — feed unavailable`
           : `Shared ${subject} is unavailable`;
-    const showAfterStartupCover = () => {
-      this._lifetime.frame(() => {
-        if (
-          !canPresentDeferredStatusNotice(
-            noticeGeneration,
-            this._shareTrackingNoticeGeneration,
-            this._disposed,
-          )
-        )
-          return;
-        const startupCover = document.getElementById('loading-screen');
-        if (
-          !startupCover ||
-          getComputedStyle(startupCover).visibility === 'hidden'
-        ) {
-          this.showStatus(message);
-          if (message === this._pendingInvalidShareLayerNotice)
-            this._pendingInvalidShareLayerNotice = null;
-          return;
-        }
-        let fallbackTimer = null;
-        let removeStartupListener = () => {};
-        const showOnce = () => {
-          removeStartupListener();
-          if (fallbackTimer) this._lifetime.cancelTimeout(fallbackTimer);
-          if (
-            canPresentDeferredStatusNotice(
-              noticeGeneration,
-              this._shareTrackingNoticeGeneration,
-              this._disposed,
-            )
-          ) {
-            this.showStatus(message);
-            if (message === this._pendingInvalidShareLayerNotice)
-              this._pendingInvalidShareLayerNotice = null;
-          }
-        };
-        removeStartupListener = this._lifetime.listen(
-          startupCover,
-          'transitionend',
-          showOnce,
-          { once: true },
-        );
-        fallbackTimer = this._lifetime.timeout(showOnce, 1000);
-      });
-    };
-    if (this._resolveInitialShareRestore) {
-      void this.initialRestorePromise.then(showAfterStartupCover);
-      return;
-    }
-    showAfterStartupCover();
+    this._scheduleDeferredShareNotice(message, noticeGeneration);
   }
   _scheduleDeferredShareNotice(message, noticeGeneration) {
     const showAfterStartupCover = () => {
