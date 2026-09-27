@@ -4,7 +4,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
-import { CATALONIA_CAMERAS_URL } from '../../server/providers/cctv/constants.js';
+import {
+  CATALONIA_CAMERAS_URL,
+  CATALONIA_MAX_CATALOG_BYTES,
+} from '../../server/providers/cctv/constants.js';
 import {
   parseCataloniaXml,
   normalizeCataloniaImageUrl,
@@ -30,6 +33,24 @@ function quiet(t) {
   t.mock.method(console, 'log', () => {});
   t.mock.method(console, 'warn', () => {});
 }
+
+/**
+ * A response whose body is a live stream, plus a flag that flips when the
+ * stream is cancelled. A rejection path that returns without cancelling holds
+ * the transport open, so the flag is what the refusal tests actually assert.
+ */
+const streamingResponse = (init = {}) => {
+  const state = { cancelled: false };
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('<?xml'));
+    },
+    cancel() {
+      state.cancelled = true;
+    },
+  });
+  return { response: new Response(body, init), state };
+};
 
 /** One `<gml:featureMember>` block matching the real feed's shape. */
 function cataloniaFeature({
@@ -143,6 +164,19 @@ test('normalizeCataloniaImageUrl accepts the other registered hosts, upgraded to
   assert.equal(normalizeCataloniaImageUrl('not a url'), '');
 });
 
+test('normalizeCataloniaImageUrl rejects credential-bearing URLs on every allowed host', () => {
+  // The hostname matches the allowlist, so only an explicit userinfo check
+  // stops catalog data injecting credentials into the frame request.
+  for (const link of [
+    'https://user:pass@www.bcn.cat/transit/imatges/a.gif',
+    'http://user@www.bcn.cat/transit/imatges/a.gif',
+    'https://:pass@emap.terrassa.cat/it_terrassa/cam02.jpeg',
+    'http://user:pass@mct.gencat.cat/mct2bo/RenderService?sctidcam=nc87.gif',
+  ]) {
+    assert.equal(normalizeCataloniaImageUrl(link), '', link);
+  }
+});
+
 test('cataloniaCameraName joins road and municipality, skipping a redundant municipality', () => {
   assert.equal(
     cataloniaCameraName('C-58', 'Nus Trinitat'),
@@ -164,8 +198,8 @@ test('Catalonia loader keeps SCT, Barcelona and Terrassa cameras with per-publis
   quiet(t);
   withEnv(t, { CCTV_CATALONIA_MAX_SOURCES: undefined });
   const requested = [];
-  t.mock.method(globalThis, 'fetch', async (url) => {
-    requested.push(String(url));
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    requested.push([String(url), init.redirect]);
     const xml = cataloniaFeed([
       cataloniaFeature({
         fid: 'cameres.fid-1',
@@ -220,7 +254,11 @@ test('Catalonia loader keeps SCT, Barcelona and Terrassa cameras with per-publis
 
   const cameras = await loadCataloniaSourcesFromOpenData();
 
-  assert.deepEqual(requested, [CATALONIA_CAMERAS_URL]);
+  assert.deepEqual(requested, [[CATALONIA_CAMERAS_URL, 'manual']]);
+  assert.ok(
+    CATALONIA_CAMERAS_URL.startsWith('https://'),
+    'the catalog is fetched over https',
+  );
   assert.deepEqual(
     cameras.map((camera) => camera.id).sort(),
     ['cat-1', 'cat-2', 'cat-3'],
@@ -264,6 +302,81 @@ test('Catalonia loader fails soft on HTTP errors, empty payloads and network err
   }
 });
 
+test('the Catalonia catalog fetch refuses redirects and oversized bodies', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  // A redirect is never followed: the list host cannot be steered or
+  // downgraded. Its body is a live stream, so the test also proves the
+  // refusal releases the transport.
+  const seen = [];
+  const redirected = streamingResponse({
+    status: 302,
+    headers: { location: 'http://www.gencat.cat/transit/opendata/cameres.xml' },
+  });
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    seen.push([String(url), init.redirect]);
+    return redirected.response;
+  });
+  assert.deepEqual(await loadCataloniaSourcesFromOpenData(), []);
+  assert.deepEqual(seen, [[CATALONIA_CAMERAS_URL, 'manual']]);
+  assert.equal(
+    redirected.state.cancelled,
+    true,
+    'the redirect body is cancelled',
+  );
+
+  // An HTTP error body is released too.
+  t.mock.restoreAll();
+  t.mock.method(console, 'warn', () => {});
+  const failed = streamingResponse({ status: 503 });
+  t.mock.method(globalThis, 'fetch', async () => failed.response);
+  assert.deepEqual(await loadCataloniaSourcesFromOpenData(), []);
+  assert.equal(failed.state.cancelled, true, 'the error body is cancelled');
+
+  const validFeed = cataloniaFeed([
+    cataloniaFeature({
+      fid: 'cameres.fid-1',
+      lon: '2.1849528',
+      lat: '41.45989301',
+      carretera: 'C-58',
+      link: 'http://mct.gencat.cat/mct2bo/RenderService?sctidcam=nc87.gif',
+      font: 'SCT',
+    }),
+  ]);
+
+  // A body that declares a size over the cap is refused rather than buffered,
+  // even though its actual content would parse.
+  t.mock.restoreAll();
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(globalThis, 'fetch', async () => {
+    return new Response(validFeed, {
+      headers: {
+        'Content-Type': 'application/xml',
+        'content-length': String(CATALONIA_MAX_CATALOG_BYTES + 1),
+      },
+    });
+  });
+  assert.deepEqual(await loadCataloniaSourcesFromOpenData(), []);
+
+  // So is a body with no declared size that only turns out too long while
+  // streaming — a valid feed padded past the cap.
+  t.mock.restoreAll();
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(globalThis, 'fetch', async () => {
+    const oversized =
+      validFeed + ' '.repeat(CATALONIA_MAX_CATALOG_BYTES + 1024);
+    return new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(oversized));
+          controller.close();
+        },
+      }),
+      { headers: { 'Content-Type': 'application/xml' } },
+    );
+  });
+  assert.deepEqual(await loadCataloniaSourcesFromOpenData(), []);
+});
+
 test('CCTV catalog merges Catalonia cameras and CCTV_CATALONIA_ENABLED=0 skips the request', async (t) => {
   quiet(t);
   const sourceRoot = fs.mkdtempSync(
@@ -282,8 +395,8 @@ test('CCTV catalog merges Catalonia cameras and CCTV_CATALONIA_ENABLED=0 skips t
     CCTV_CATALONIA_MAX_SOURCES: undefined,
   });
   const requested = [];
-  t.mock.method(globalThis, 'fetch', async (url) => {
-    requested.push(String(url));
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    requested.push([String(url), init.redirect]);
     if (String(url) !== CATALONIA_CAMERAS_URL) {
       return new Response('unavailable', { status: 503 });
     }

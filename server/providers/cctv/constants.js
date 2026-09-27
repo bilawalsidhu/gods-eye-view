@@ -238,7 +238,8 @@ export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
 /**
  * Catalonia traffic cameras (Servei Català de Trànsit): one keyless WFS/GML
- * XML list (verified 2026-09-15, hourly catalog refresh). The feed carries a
+ * XML list (verified 2026-09-15, hourly catalog refresh), fetched over https
+ * (verified 2026-09-27: same 200 body, no redirect). The feed carries a
  * `font` field naming the actual publisher per camera — SCT's own highway
  * cameras plus hotlinked Barcelona (IMI) and Terrassa municipal cameras are
  * kept, each confirmed to return a real frame. Frame URLs are checked
@@ -246,7 +247,10 @@ export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
  * publisher serves from its own host.
  */
 export const CATALONIA_CAMERAS_URL =
-  'http://www.gencat.cat/transit/opendata/cameres.xml';
+  'https://www.gencat.cat/transit/opendata/cameres.xml';
+/** Byte ceiling for the Catalonia catalog read (~90 KB observed 2026-09-27),
+ * so a runaway body cannot be buffered without limit. */
+export const CATALONIA_MAX_CATALOG_BYTES = 1024 * 1024;
 /** Allowed image hosts, one per kept `font` publisher in the feed. */
 export const CATALONIA_IMAGE_HOSTS = Object.freeze(
   new Set([
