@@ -1,4 +1,5 @@
 import { STYLE_STATUS_LABELS } from './visualPresets.js';
+import { t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
 import {
   VisualEffects,
@@ -1165,8 +1166,8 @@ export class VisualSettings {
       this._celestialBtn.disabled = !styleSupported;
       this._celestialBtn.setAttribute('aria-disabled', String(!styleSupported));
       this._celestialBtn.title = styleSupported
-        ? 'Celestial ring — reveal the full globe'
-        : 'Celestial ring — available in Normal style';
+        ? t('cockpit.display.celestialToggleTitle')
+        : t('cockpit.display.celestialUnavailableTitle');
     }
     let cameraFocused = false;
     if (nextEnabled && focus) {
@@ -1609,21 +1610,31 @@ export class VisualSettings {
     btn.setAttribute(
       'aria-label',
       enabled
-        ? `Detection overlay: ${String(modeLabel).toLowerCase()}`
-        : 'Detection overlay: off',
+        ? t('cockpit.display.detectionAriaTemplate', {
+            mode: String(modeLabel).toLowerCase(),
+          })
+        : t('cockpit.display.detectionAriaOff'),
     );
     btn.classList.remove('active', 'god', 'panoptic');
     if (modeLabel === 'SPARSE') {
-      btn.querySelector('.pp-label').textContent = 'SPARSE';
+      btn.querySelector('.pp-label').textContent = t(
+        'cockpit.display.detectionLabelSparse',
+      );
       btn.classList.add('active');
     } else if (modeLabel === 'BALANCED') {
-      btn.querySelector('.pp-label').textContent = 'BALANCED';
+      btn.querySelector('.pp-label').textContent = t(
+        'cockpit.display.detectionLabelBalanced',
+      );
       btn.classList.add('active');
     } else if (modeLabel === 'DENSE') {
-      btn.querySelector('.pp-label').textContent = 'DENSE';
+      btn.querySelector('.pp-label').textContent = t(
+        'cockpit.display.detectionLabelDense',
+      );
       btn.classList.add('active', 'panoptic');
     } else {
-      btn.querySelector('.pp-label').textContent = 'DETECT';
+      btn.querySelector('.pp-label').textContent = t(
+        'cockpit.display.detectionLabel',
+      );
     }
 
     if (this._detectionSliderRow) {

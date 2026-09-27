@@ -44,13 +44,17 @@ export {
 
 import { createRealtimeBackend } from './realtimeBackend.js';
 
-const STATUS = {
-  idle: 'OFF',
-  connecting: 'CONNECTING',
-  listening: 'LISTENING',
-  executing: 'EXECUTING',
-  error: 'ERROR',
-};
+import { t } from '../i18n/index.js';
+
+// Status enum VALUES are machine identifiers (dataset.status, CSS hooks);
+// only the LABEL rendered from them localizes, resolved at write time via t().
+const STATUS_LABEL_KEYS = Object.freeze({
+  idle: 'setup.voice.status.idle',
+  connecting: 'setup.voice.status.connecting',
+  listening: 'setup.voice.status.listening',
+  executing: 'setup.voice.status.executing',
+  error: 'setup.voice.status.error',
+});
 
 /** Compose voice state owners and coordinate ordered session startup/teardown. */
 export class GevRealtimeController extends RealtimeFacade {
@@ -267,7 +271,7 @@ export class GevRealtimeController extends RealtimeFacade {
       this.ui.root.remove();
     }
     if (!preserveStatus && !removeUi) {
-      this.setStatus('idle', 'Voice off');
+      this.setStatus('idle', t('setup.voice.detail.voiceOff'));
     }
     this.setRadioVoiceDucking(false);
     if (removeUi) this.emitSessionEvent({ type: 'disposed' });
@@ -287,24 +291,28 @@ export class GevRealtimeController extends RealtimeFacade {
     this.ui.root.dataset.status = status;
     if (status === 'error') this.ui.root.classList.remove('error-dismissed');
     this.updateVoiceButtonLabel();
-    this.ui.status.textContent = STATUS[status] || STATUS.idle;
+    this.ui.status.textContent = t(
+      STATUS_LABEL_KEYS[status] || STATUS_LABEL_KEYS.idle,
+    );
     const resolvedDetail =
       status === 'listening' && this.pushToTalkMode
         ? this.pushToTalkKeyHeld
-          ? 'Release Space to send'
-          : 'Hold Space to talk'
+          ? t('setup.voice.detail.releaseSpaceSend')
+          : t('setup.voice.detail.holdSpaceTalk')
         : detail;
     const primaryDetail =
       status === 'error'
-        ? 'VOICE UNAVAILABLE'
+        ? t('setup.voice.detail.unavailable')
         : resolvedDetail ||
-          (status === 'idle' ? 'VOICE STANDBY' : 'VOICE ACTIVE');
+          (status === 'idle'
+            ? t('setup.voice.detail.standby')
+            : t('setup.voice.detail.active'));
     this.ui.detail.textContent = primaryDetail;
     this.ui.detail.title = primaryDetail;
     if (this.ui.errorDetail) {
       this.ui.errorDetail.textContent =
         status === 'error'
-          ? resolvedDetail || 'Voice session could not be started.'
+          ? resolvedDetail || t('setup.voice.error.sessionStart')
           : '';
     }
     if (status === 'idle' || status === 'connecting' || status === 'error') {

@@ -21,6 +21,8 @@ import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
 // Choosing a mission is deliberately NOT durable suppression: picking a mission
 // is enthusiasm, not "never show me this again".
 
+import { t } from './i18n/index.js';
+
 /** Durable suppression. Written ONLY by the "Don't show this again" checkbox. */
 export const FIRST_RUN_STORAGE_KEY = 'gev:first-run-mission:v1';
 /** Per-session dismissal. Written by every close path; scoped to sessionStorage. */
@@ -34,10 +36,12 @@ export const FIRST_RUN_SESSION_KEY = 'gev:first-run-mission-session:v1';
  */
 export const ENVIRONMENTAL_LABEL_CHOICE = 'ENVIRONMENTAL';
 
-const ENVIRONMENTAL_LABELS = Object.freeze({
-  ENVIRONMENTAL: Object.freeze({ title: 'ENVIRONMENTAL' }),
-  EARTH_WATCH: Object.freeze({ title: 'EARTH WATCH' }),
-  ACTIVE_EVENTS: Object.freeze({ title: 'ACTIVE EVENTS' }),
+// Catalog keys per label choice. Resolved through t() at CALL time (init),
+// never at module load — the locale is not resolved until main.js's body runs.
+const ENVIRONMENTAL_LABEL_KEYS = Object.freeze({
+  ENVIRONMENTAL: 'setup.firstRun.environmentalTitle.environmental',
+  EARTH_WATCH: 'setup.firstRun.environmentalTitle.earthWatch',
+  ACTIVE_EVENTS: 'setup.firstRun.environmentalTitle.activeEvents',
 });
 
 /**
@@ -45,7 +49,9 @@ const ENVIRONMENTAL_LABELS = Object.freeze({
  * @returns {{title: string}} The label set the constant above selects.
  */
 export function environmentalLabel(choice = ENVIRONMENTAL_LABEL_CHOICE) {
-  return ENVIRONMENTAL_LABELS[choice] || ENVIRONMENTAL_LABELS.ENVIRONMENTAL;
+  const key =
+    ENVIRONMENTAL_LABEL_KEYS[choice] || ENVIRONMENTAL_LABEL_KEYS.ENVIRONMENTAL;
+  return { title: t(key) };
 }
 
 /*
@@ -92,12 +98,12 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
   contacts: Object.freeze({
     kind: 'context',
     contextMode: 'contacts',
-    busyText: 'Starting live contacts…',
+    busyKey: 'setup.firstRun.busy.contacts',
   }),
   'space-missions': Object.freeze({
     kind: 'context',
     contextMode: 'space-missions',
-    busyText: 'Opening space missions…',
+    busyKey: 'setup.firstRun.busy.spaceMissions',
   }),
   environmental: Object.freeze({
     kind: 'globe',
@@ -115,7 +121,7 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
     // before a launch. LEDGERED post-launch. Until it lands, keyless visitors
     // are judged on the layer row, which tells them the truth.
     layerIds: Object.freeze(['earthquakes', 'local-firms']),
-    busyText: 'Scanning active events…',
+    busyKey: 'setup.firstRun.busy.environmental',
   }),
   explore: Object.freeze({ kind: 'none' }),
 });
@@ -352,12 +358,23 @@ export function initFirstRunExperience({
   }
 
   // The tile name is owner-switchable from one constant, so paint it from the
-  // module rather than trusting the markup to have been edited to match.
+  // module rather than trusting the markup to have been edited to match. The
+  // persuasive description line and the tile's feed subcopy are the two
+  // phase-2 exceptions whose static sites are pinned verbatim by
+  // firstRunExperience.test.mjs — the runtime write is their only legal
+  // localization point (docs/TRANSLATORS.md, runtime-only static sites).
   const environmentalTitle = root.querySelector(
     '[data-first-run-environmental-title]',
   );
   if (environmentalTitle)
     environmentalTitle.textContent = environmentalLabel().title;
+  const environmentalSub = root.querySelector(
+    '[data-first-run-environmental-title] + small',
+  );
+  if (environmentalSub)
+    environmentalSub.textContent = t('setup.firstRun.choice.environmentalSub');
+  const description = root.querySelector('#first-run-description');
+  if (description) description.textContent = t('setup.firstRun.description');
 
   const status = root.querySelector('[data-first-run-status]');
   const suppressBox = root.querySelector('[data-first-run-suppress]');
@@ -440,7 +457,9 @@ export function initFirstRunExperience({
       button.setAttribute('aria-disabled', String(next));
     if (!status) return;
     if (next)
-      status.textContent = FIRST_RUN_MISSIONS[choice]?.busyText || 'Working…';
+      status.textContent = t(
+        FIRST_RUN_MISSIONS[choice]?.busyKey || 'setup.firstRun.busy.working',
+      );
     else if (status.dataset.sticky !== 'true')
       status.textContent = defaultStatus;
   };
@@ -490,7 +509,7 @@ export function initFirstRunExperience({
       Array.isArray(failed) && failed.length ? ` (${failed.join(', ')})` : '';
     if (status) {
       status.dataset.sticky = 'true';
-      status.textContent = `Could not open that mission${detail}. Retry or explore manually.`;
+      status.textContent = t('setup.firstRun.status.failed', { detail });
     }
     setBusy(false);
   };
@@ -506,8 +525,7 @@ export function initFirstRunExperience({
     if (box) box.checked = !wanted;
     if (!status) return;
     status.dataset.sticky = 'true';
-    status.textContent =
-      'This browser is blocking storage, so that could not be saved.';
+    status.textContent = t('setup.firstRun.status.storageBlocked');
   };
 
   const keyboard = createSurfaceKeyboard({

@@ -70,6 +70,14 @@
   margin-bottom: 0;
 }
 
+/* Spanish labels run ~25% longer than English and overflow the nowrap
+   .scene-btn rows inside the fixed-width CCTV panel (e.g. ENFOCAR ·
+   COBERTURA DESACTIVADA · AUTO HOP DESACTIVADO). Let the rows wrap under
+   es only; the English layout stays pixel-identical. */
+html[lang='es'] .cctv-controls {
+  flex-wrap: wrap;
+}
+
 .cctv-calibration-block {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 9px;

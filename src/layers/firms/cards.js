@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   FIRMS_OVERLAY_SOURCE_ID,
   FIRMS_AMBIENT_COHORT_LIMIT,
@@ -115,7 +116,10 @@ export function createCards({
         if (!card.interactive) return card;
         return {
           ...card,
-          accessibilityLabel: `Focus fire detection ${card.title}, ${card.details.join(', ')}`,
+          accessibilityLabel: t('layers.firms.card.focusAria', {
+            title: card.title,
+            details: card.details.join(', '),
+          }),
           activate: () => {
             const fire = layerState._fireByCardId.get(card.id);
             if (!fire) return false;

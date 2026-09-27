@@ -3,6 +3,7 @@ import {
   AWARENESS_RELATIONSHIP,
 } from '../../data/militaryAwarenessEngine.js';
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   AWARENESS_QUERY_LIMIT,
   SOURCE_LABEL,
@@ -61,7 +62,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
       cohorts: [
         {
           id: 'flights',
-          label: 'Flights',
+          label: t('layers.awareness.cohort.flights'),
           source: flightsState.stats.source || SOURCE_LABEL.flights,
           summary: parts.navigation.summarizeAwarenessCohortForNavigation(
             flights,
@@ -70,7 +71,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
         },
         {
           id: 'military',
-          label: 'Military flights',
+          label: t('layers.awareness.cohort.military'),
           source: militaryState.stats.source || SOURCE_LABEL.military,
           summary: parts.navigation.summarizeAwarenessCohortForNavigation(
             military,
@@ -79,7 +80,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
         },
         {
           id: 'ais-live-vessels',
-          label: 'AIS vessels',
+          label: t('layers.awareness.cohort.vessels'),
           source: vesselsState.stats.source || SOURCE_LABEL['ais-live-vessels'],
           summary: parts.navigation.summarizeAwarenessCohortForNavigation(
             vessels,
@@ -88,11 +89,11 @@ export function createSubject({ state: layerState, services, parts, source }) {
         },
         {
           id: 'military-installations',
-          label: 'Mapped installations',
+          label: t('layers.awareness.cohort.installations'),
           source:
             installationsState.stats.source ||
             SOURCE_LABEL['military-installations'],
-          coverage: 'CURRENT VIEWPORT ONLY',
+          coverage: t('layers.awareness.coverage.viewport'),
           summary: parts.queries.summarizeInstallationViewport(
             installations,
             installationsState,

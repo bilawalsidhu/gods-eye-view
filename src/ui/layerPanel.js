@@ -3,8 +3,52 @@ import { syncRowList } from './rowList.js';
 import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
-import { keySetupRequirement } from '../keySetupCore.mjs';
+import { keySetupRequirementEnvVars } from '../keySetupCore.mjs';
 import { createWeatherPanel } from './weatherPanel.js';
+import { t } from '../i18n/index.js';
+
+// Feed-state enum VALUES are machine identifiers (layerFeedState contract, QA
+// hooks, CSS feed-* classes); only the final label value translates, at this
+// presentation boundary. See docs/TRANSLATORS.md keep-English boundary.
+const FEED_STATE_LABEL_KEYS = Object.freeze({
+  nominal: 'layers.status.on',
+  loading: 'layers.status.loading',
+  degraded: 'layers.status.degraded',
+  stale: 'layers.status.stale',
+  partial: 'layers.status.partial',
+  fallback: 'layers.status.fallback',
+  unavailable: 'layers.status.unavailable',
+});
+
+// Layer display names, localized at the same presentation boundary. Registry
+// ids stay English; a layer without an entry here renders its module name,
+// falling back to the English panel override when one exists.
+const LAYER_NAME_KEYS = Object.freeze({
+  flights: 'layers.name.liveFlights',
+  military: 'layers.name.militaryFlights',
+  earthquakes: 'layers.name.earthquakes',
+  satellites: 'layers.name.satellites',
+  'rocket-launches': 'layers.name.rocketLaunches',
+  traffic: 'layers.name.traffic',
+  cctv: 'layers.name.cctv',
+  radio: 'layers.name.radio',
+  bikeshare: 'layers.name.bikeshare',
+  'ais-live-vessels': 'layers.name.aisVessels',
+  'military-installations': 'layers.name.installations',
+  'military-awareness': 'layers.name.globalContext',
+  'local-datacenters': 'layers.name.datacenters',
+  'local-dams': 'layers.name.dams',
+  'telegeography-submarine-cables': 'layers.name.submarineCables',
+  'local-firms': 'layers.name.fires',
+});
+
+function lifecycleStateLabel(lifecycleState) {
+  return t(
+    lifecycleState === 'enabling'
+      ? 'layers.status.enabling'
+      : 'layers.status.disabling',
+  );
+}
 const FEED_STATE_LABELS = Object.freeze({
   nominal: 'ON',
   loading: 'LOADING',
@@ -79,6 +123,8 @@ const PANEL_LABELS = {
 };
 
 function panelLabel(layer) {
+  const key = LAYER_NAME_KEYS[layer.id];
+  if (key) return t(key);
   return PANEL_LABELS[layer.id] || layer.name;
 }
 
@@ -99,7 +145,10 @@ function panelLabel(layer) {
 export function layerKeyRequirementTooltip(layer = {}) {
   if (layer?.stats?.keyRequired !== true) return '';
   const requiresKeyId = String(layer.requiresKeyId || '').trim();
-  return requiresKeyId ? keySetupRequirement(requiresKeyId) : '';
+  const envVars = requiresKeyId
+    ? keySetupRequirementEnvVars(requiresKeyId)
+    : null;
+  return envVars ? t('setup.keySetup.requirement', { envVars }) : '';
 }
 
 /** Layer row presentation over supplied state and actions; no layer imports. */
@@ -520,23 +569,35 @@ export class LayerPanel {
   _buildMetaText(layer) {
     const stats = layer.stats || {};
     const feedState = layerFeedState(stats);
-    const stateLabel = FEED_STATE_LABELS[feedState];
+    const stateLabel = t(FEED_STATE_LABEL_KEYS[feedState]);
     const source = stats.source || layer.source;
     const lifecycleState =
       layer.lifecycleState || (layer.enabled ? 'enabled' : 'disabled');
     if (lifecycleState === 'enabling' || lifecycleState === 'disabling') {
-      return `${lifecycleState.toUpperCase()} · ${source}`;
+      return t('layers.meta.transitioning', {
+        state: lifecycleStateLabel(lifecycleState),
+        source,
+      });
     }
     if (layer.lifecycleUncertain) {
-      return `UNCERTAIN · ${source} · lifecycle state requires reconciliation`;
+      return t('layers.meta.uncertainLifecycle', { source });
     }
     const presentedError =
       stats.error || stats.lastError || stats.managerRefreshError;
     if (presentedError) {
       if (typeof stats.retryInSec === 'number' && stats.retryInSec > 0) {
-        return `${stateLabel} · ${source} · ${presentedError} · retry ${stats.retryInSec}s`;
+        return t('layers.meta.stateSourceRetry', {
+          state: stateLabel,
+          source,
+          detail: presentedError,
+          seconds: stats.retryInSec,
+        });
       }
-      return `${stateLabel} · ${source} · ${presentedError}`;
+      return t('layers.meta.stateSourceDetail', {
+        state: stateLabel,
+        source,
+        detail: presentedError,
+      });
     }
     // A guidance status carries its prompt in `statusMessage`, not `error`, so
     // the row still tells the operator what to do without reporting a fault.
@@ -547,20 +608,26 @@ export class LayerPanel {
     ) {
       return `${source} · ${stats.statusMessage.trim()}`;
     }
-    const ago = stats.lastUpdate ? this._timeAgo(stats.lastUpdate) : 'never';
+    const ago = stats.lastUpdate
+      ? this._timeAgo(stats.lastUpdate)
+      : t('layers.meta.never');
     if (stats.loading) {
       const loadingLabel =
         typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()
           ? stats.loadingLabel.trim()
-          : 'loading...';
-      return `${source} · ${loadingLabel}`;
+          : t('layers.meta.loading');
+      return t('layers.meta.sourceLoading', { source, loadingLabel });
     }
     if (feedState === 'fallback') {
       const detail =
         typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()
           ? stats.loadingLabel.trim()
           : stats.coverage || ago;
-      return `${stateLabel} · ${source} · ${detail}`;
+      return t('layers.meta.stateSourceDetail', {
+        state: stateLabel,
+        source,
+        detail,
+      });
     }
     if (feedState === 'partial') {
       const { acceptedRowCount, rawRowCount } = stats;
@@ -569,21 +636,40 @@ export class LayerPanel {
         Number.isInteger(rawRowCount) &&
         acceptedRowCount >= 0 &&
         rawRowCount > acceptedRowCount
-          ? `${acceptedRowCount} of ${rawRowCount} records accepted`
-          : 'incomplete snapshot';
-      return `${stateLabel} · ${source} · ${detail} · ${ago}`;
+          ? t('layers.meta.partialCounts', {
+              accepted: acceptedRowCount,
+              raw: rawRowCount,
+            })
+          : t('layers.meta.partialIncomplete');
+      return t('layers.meta.partialDetail', {
+        state: stateLabel,
+        source,
+        detail,
+        ago,
+      });
     }
     if (feedState === 'stale') {
-      const retry =
-        typeof stats.retryInSec === 'number' && stats.retryInSec > 0
-          ? ` · retrying in ${stats.retryInSec}s`
-          : '';
-      return `${stateLabel} · ${source} · ${ago}${retry}`;
+      if (typeof stats.retryInSec === 'number' && stats.retryInSec > 0) {
+        return t('layers.meta.stateSourceAgoRetry', {
+          state: stateLabel,
+          source,
+          ago,
+          seconds: stats.retryInSec,
+        });
+      }
+      return t('layers.meta.stateSourceAgo', {
+        state: stateLabel,
+        source,
+        ago,
+      });
     }
     if (typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()) {
-      return `${source} · ${stats.loadingLabel.trim()}`;
+      return t('layers.meta.sourceLoading', {
+        source,
+        loadingLabel: stats.loadingLabel.trim(),
+      });
     }
-    return `${source} · ${ago}`;
+    return t('layers.meta.sourceAgo', { source, ago });
   }
 
   _syncToggleButton(button, layer) {
@@ -615,22 +701,24 @@ export class LayerPanel {
     button.setAttribute('aria-disabled', String(transitioning));
     button.setAttribute('aria-busy', String(transitioning));
     button.textContent = transitioning
-      ? layer.lifecycleState.toUpperCase()
+      ? lifecycleStateLabel(layer.lifecycleState)
       : uncertain
-        ? 'UNCERTAIN'
+        ? t('layers.status.uncertain')
         : layer.enabled
-          ? FEED_STATE_LABELS[feedState]
-          : 'OFF';
+          ? t(FEED_STATE_LABEL_KEYS[feedState])
+          : t('layers.status.off');
     const keyGuidance = layerKeyRequirementTooltip(layer);
     // Name the missing key on the control itself: a row reading KEY REQUIRED
     // without saying WHICH key leaves a dead control and no next step. Empty
     // when the layer needs no key, or already has one.
     button.title = keyGuidance;
+    const ariaLabel = t('layers.meta.toggleAriaLabel', {
+      name: panelLabel(layer),
+      state: button.textContent,
+    });
     button.setAttribute(
       'aria-label',
-      keyGuidance
-        ? `${panelLabel(layer)}: ${button.textContent}. ${keyGuidance}`
-        : `${panelLabel(layer)}: ${button.textContent}`,
+      keyGuidance ? `${ariaLabel}. ${keyGuidance}` : ariaLabel,
     );
   }
 
@@ -641,9 +729,10 @@ export class LayerPanel {
 
   _timeAgo(timestamp) {
     const diff = Math.floor((Date.now() - timestamp) / 1000);
-    if (diff < 5) return 'just now';
-    if (diff < 60) return `${diff}s ago`;
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 5) return t('layers.meta.justNow');
+    if (diff < 60) return t('layers.meta.secondsAgo', { count: diff });
+    if (diff < 3600)
+      return t('layers.meta.minutesAgo', { count: Math.floor(diff / 60) });
+    return t('layers.meta.hoursAgo', { count: Math.floor(diff / 3600) });
   }
 }
