@@ -43,6 +43,7 @@ export class ShareRestoration {
     this._disposed = false;
     this._shareTrackingAcquiringKey = null;
     this._shareTrackingNoticeGeneration = 0;
+    this._pendingInvalidShareLayerNotice = null;
     this._initialShareState = null;
     this._initialShareNavigationGeneration = null;
     this._initialShareRestoreTimeout = null;
@@ -115,6 +116,7 @@ export class ShareRestoration {
       }, 1500);
       const invalidLayerNotice = invalidShareLayerSelectionNotice(savedState);
       if (invalidLayerNotice) {
+        this._pendingInvalidShareLayerNotice = invalidLayerNotice;
         this._scheduleDeferredShareNotice(
           invalidLayerNotice,
           ++this._shareTrackingNoticeGeneration,
@@ -230,13 +232,23 @@ export class ShareRestoration {
     if (
       result.classification === 'followed' ||
       result.classification === 'cancelled'
-    )
+    ) {
+      if (ownsAcquiringNotice && this._pendingInvalidShareLayerNotice) {
+        this._scheduleDeferredShareNotice(
+          this._pendingInvalidShareLayerNotice,
+          ++this._shareTrackingNoticeGeneration,
+        );
+      }
       return;
+    }
     // A stale terminal result must never replace a newer target's acquisition.
     if (this._shareTrackingAcquiringKey) return;
     const noticeGeneration = ownsAcquiringNotice
       ? this._shareTrackingNoticeGeneration
       : ++this._shareTrackingNoticeGeneration;
+    // A concrete tracking failure is more actionable than the generic
+    // rejected-layer warning when both happened in one shared link.
+    this._pendingInvalidShareLayerNotice = null;
     const subject = result.label || 'entity';
     const message =
       result.classification === 'expired'
@@ -260,6 +272,8 @@ export class ShareRestoration {
           getComputedStyle(startupCover).visibility === 'hidden'
         ) {
           this.showStatus(message);
+          if (message === this._pendingInvalidShareLayerNotice)
+            this._pendingInvalidShareLayerNotice = null;
           return;
         }
         let fallbackTimer = null;
@@ -273,8 +287,11 @@ export class ShareRestoration {
               this._shareTrackingNoticeGeneration,
               this._disposed,
             )
-          )
+          ) {
             this.showStatus(message);
+            if (message === this._pendingInvalidShareLayerNotice)
+              this._pendingInvalidShareLayerNotice = null;
+          }
         };
         removeStartupListener = this._lifetime.listen(
           startupCover,
@@ -353,6 +370,7 @@ export class ShareRestoration {
     this._disposed = true;
     this._shareTrackingNoticeGeneration += 1;
     this._shareTrackingAcquiringKey = null;
+    this._pendingInvalidShareLayerNotice = null;
     this._layerStateCoordinator?.destroy();
     this._layerStateCoordinator = null;
     this._layerStateRestorePromise = null;
