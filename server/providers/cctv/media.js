@@ -4,6 +4,7 @@ import {
   CCTV_FRAME_FETCH_TIMEOUT_MS,
   CCTV_FRAME_MAX_BODY_BYTES,
   CCTV_MEDIA_FETCH_TIMEOUT_MS,
+  CCTV_MEDIA_IDLE_TIMEOUT_MS,
   CCTV_MEDIA_MAX_BODY_BYTES,
   NSW_IMAGE_ORIGIN,
   NSW_IMAGE_USER_AGENT,
@@ -103,11 +104,17 @@ export function toReadable(body) {
  * @param {Response} upstream - fetch() Response object.
  * @param {object} [opts]
  * @param {string} [opts.sourceHeader='upstream'] - Value for X-CCTV-Source header.
+ * @param {number} [opts.idleTimeoutMs=CCTV_MEDIA_IDLE_TIMEOUT_MS] - Silence
+ *   allowed between upstream chunks before the stream is released. Injectable
+ *   only to keep the deadline unit-testable.
  */
 export async function proxyMediaResponse(
   res,
   upstream,
-  { sourceHeader = 'upstream' } = {},
+  {
+    sourceHeader = 'upstream',
+    idleTimeoutMs = CCTV_MEDIA_IDLE_TIMEOUT_MS,
+  } = {},
 ) {
   const contentType =
     upstream.headers.get('content-type') || 'application/octet-stream';
@@ -153,7 +160,20 @@ export async function proxyMediaResponse(
     return;
   }
 
+  // The header deadline only covers the wait for a response line. Past that an
+  // upstream can hold the connection open and send nothing at all, and the
+  // relay would wait on it for as long as the camera host cared to. The
+  // deadline below measures the gap between upstream chunks rather than the
+  // life of the stream, so a feed that keeps delivering keeps its connection.
+  let idleTimer = null;
+  const clearIdleDeadline = () => {
+    if (!idleTimer) return;
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  };
+
   stream.on('error', () => {
+    clearIdleDeadline();
     if (!res.writableEnded) res.end();
   });
 
@@ -164,6 +184,7 @@ export async function proxyMediaResponse(
   const releaseUpstream = () => {
     if (released) return;
     released = true;
+    clearIdleDeadline();
     stream.unpipe(res);
     // Destroying the Node stream cancels the web body it wraps; the direct
     // cancel covers a body that was never wrapped, and rejects harmlessly when
@@ -176,14 +197,37 @@ export async function proxyMediaResponse(
       /* already closed */
     }
   };
+  const armIdleDeadline = () => {
+    clearIdleDeadline();
+    idleTimer = setTimeout(onIdleDeadline, idleTimeoutMs);
+    idleTimer.unref?.();
+  };
+  const onIdleDeadline = () => {
+    // A viewer who cannot keep up pauses the pipe, and no upstream bytes arrive
+    // while it is paused. That is a slow client rather than a dead camera, so
+    // it gets the deadline again instead of a teardown.
+    if (res.writableNeedDrain) {
+      armIdleDeadline();
+      return;
+    }
+    releaseUpstream();
+    if (!res.writableEnded) res.end();
+  };
   res.once('close', () => {
+    clearIdleDeadline();
     if (!res.writableEnded) releaseUpstream();
   });
   res.once('error', releaseUpstream);
   stream.once('end', () => {
+    clearIdleDeadline();
     released = true;
   });
+  armIdleDeadline();
   stream.pipe(res);
+  // Attached after the pipe because a data listener resumes the stream, and
+  // flowing before the destination is attached would spill chunks nobody
+  // forwards. Only bytes from upstream renew the deadline.
+  stream.on('data', armIdleDeadline);
 }
 
 /**

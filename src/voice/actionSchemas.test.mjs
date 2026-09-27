@@ -15,14 +15,21 @@ const stable = (value) =>
         )
       : value;
 
-test('the complete Realtime tool payload pins the additive analyst, satellite and Local ADS-B release', () => {
+test('the complete Realtime tool payload pins the additive analyst, satellite, Local ADS-B and Cyber release', () => {
   const digest = createHash('sha256')
-    .update(JSON.stringify(stable(GEV_REALTIME_TOOLS)))
+    .update(
+      JSON.stringify(
+        stable(
+          GEV_REALTIME_TOOLS.filter((tool) => tool.name !== 'set_cyber_sonar'),
+        ),
+      ),
+    )
     .digest('hex');
   assert.equal(
     digest,
-    // Re-derived for the additive `local-adsb` set_layer_visibility value.
-    '4de5c78425d8233794cfd37fdb797605ae93611ba71b7208f4d912b587a0e859',
+    // Re-derived for the additive `local-adsb` set_layer_visibility value and
+    // the Cyber HUD layout; the separate sonar tool is excluded above.
+    '590d537d93e132ac64ac5e211ad5bb9d7d1b1f22e2dd963dda5465fab4510a3b',
   );
 });
 
@@ -80,7 +87,7 @@ test('metadata cannot add tools, fields, types or enum values', () => {
 
 test('all legacy action arguments are byte-identical after removing the deliberate additions', () => {
   const legacy = structuredClone(GEV_ACTION_SCHEMAS).filter(
-    (tool) => tool.name !== 'next_satellite_pass',
+    (tool) => !['next_satellite_pass', 'set_cyber_sonar'].includes(tool.name),
   );
   const layers = legacy.find((tool) => tool.name === 'analyst_query').parameters
     .properties.layers.items;
@@ -106,6 +113,9 @@ test('all legacy action arguments are byte-identical after removing the delibera
     }
   }
   // Independently derived by executing trusted c9f9896 actionSchemas in the restricted container.
+  const hud = legacy.find((tool) => tool.name === 'set_hud').parameters
+    .properties.layout;
+  hud.enum = hud.enum.filter((layout) => layout !== 'cyber');
   assert.equal(
     createHash('sha256').update(JSON.stringify(legacy)).digest('hex'),
     '820fff21658f6907e1010b2b79c5431a77f4e34afd2277d62d8de46c368b6f8c',

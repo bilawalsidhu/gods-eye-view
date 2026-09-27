@@ -1059,6 +1059,10 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
       this.parentElement = null;
     }
     setAttribute() {}
+    // This fixture has no parsed DOM children; it exercises native label
+    // ownership, not the replay overlay's separately rendered icon children.
+    querySelectorAll() { return []; }
+    querySelector() { return null; }
     getBoundingClientRect() { return { left: 0, top: 0, width: 1600, height: 900 }; }
     getContext() { return this.tagName === 'CANVAS' ? context : null; }
   }

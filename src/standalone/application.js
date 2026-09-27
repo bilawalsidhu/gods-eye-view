@@ -48,6 +48,8 @@ export function createStandaloneApplication({
             'Nepal',
             signal,
             placeSearch,
+            // The locator draws the border whenever it arrives.
+            { budgetMs: Infinity },
           ),
         signal: context.signal,
         surface: scene.operations.surface,

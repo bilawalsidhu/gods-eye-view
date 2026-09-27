@@ -1058,6 +1058,17 @@ export function createGevActionRunner({
       return { ...out, hud: styleManager.getControlState().hud };
     }
 
+    if (name === 'set_cyber_sonar') {
+      if (typeof styleManager?.setCyberSonar !== 'function') {
+        return {
+          ok: false,
+          action: 'set_cyber_sonar',
+          error: 'Cyber sonar controls are unavailable.',
+        };
+      }
+      return { action: 'set_cyber_sonar', ...styleManager.setCyberSonar(args) };
+    }
+
     if (name === 'set_detection') {
       const result = styleManager.setDetection({
         enabled: typeof args.enabled === 'boolean' ? args.enabled : undefined,
@@ -4312,6 +4323,7 @@ async function runAnalystQuery(
     return {
       ok: false,
       action: 'analyst_query',
+      ...(result.code ? { code: result.code } : {}),
       error: result.error,
       coverage: result.coverage,
     };

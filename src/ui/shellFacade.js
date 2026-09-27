@@ -762,6 +762,14 @@ export class ShellFacade {
     return this._visualSettings._setHudVariant(...arguments);
   }
 
+  _setCyberSonarEnabled(enabled) {
+    return this._visualSettings._setCyberSonarEnabled(...arguments);
+  }
+
+  _setCyberSonarSetting(name, value) {
+    return this._visualSettings._setCyberSonarSetting(...arguments);
+  }
+
   /**
    * Keeps both responsive panel lanes and Cockpit's utility strip on the same
    * measured layout commit. HUD visibility transitions can outlive the first
