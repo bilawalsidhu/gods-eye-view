@@ -1,5 +1,14 @@
 # Changelog
 
+- Add WSDOT highway cameras (Washington State) as a keyless CCTV source pack:
+  WSDOT's official Travel Center camera layer, with frames registered only on
+  WSDOT's own image host (partner-hosted cameras such as Oregon DOT and City of
+  Seattle are skipped). Cameras with a single `CompassDirection`, cardinal or
+  diagonal, get a high-confidence heading; `BW` (Bothways) cameras use the
+  shared id-hash fallback at low confidence. By default the 250 cameras nearest
+  Seattle and Spokane load; `CCTV_WSDOT_MAX_SOURCES` sets the cap and
+  `CCTV_WSDOT_ENABLED=0` turns the pack off (bassem chagra, #644).
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD
@@ -235,6 +244,7 @@
 Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+
 - New Fire Perimeters layer (Events group): live NIFC WFIGS interagency
   wildfire incident perimeters as ground-clamped polygons with a
   containment-colored fire line, refreshed every 5 minutes from the public
