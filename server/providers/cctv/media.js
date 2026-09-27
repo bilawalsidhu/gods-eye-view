@@ -8,6 +8,7 @@ import {
   CCTV_MEDIA_MAX_BODY_BYTES,
   NSW_IMAGE_ORIGIN,
   NSW_IMAGE_USER_AGENT,
+  VIGO_IMAGE_ORIGIN,
 } from './constants.js';
 /**
  * Generate a synthetic SVG billboard image for a CCTV camera placeholder.
@@ -485,6 +486,10 @@ export async function fetchWithinHost(url, init, fetchImpl = fetch) {
  */
 const CCTV_IMAGE_USER_AGENT_BY_HOST = Object.freeze({
   [new URL(NSW_IMAGE_ORIGIN).hostname]: NSW_IMAGE_USER_AGENT,
+  // camaras.vigo.org (verified 2026-09-27) serves frames only to
+  // browser-identified clients; the proxy's own identifying User-Agent gets
+  // a different (non-image) response, same class of issue as NSW above.
+  [new URL(VIGO_IMAGE_ORIGIN).hostname]: NSW_IMAGE_USER_AGENT,
 });
 
 /**
@@ -502,6 +507,54 @@ export function cctvUpstreamUserAgent(url) {
   } catch {
     return 'gods-eye-view-cctv-proxy/1.0';
   }
+}
+
+/**
+ * Identify an image format from its leading magic bytes, ignoring whatever
+ * (if anything) the upstream claimed as `Content-Type`.
+ *
+ * Some registered upstreams (observed on Concello de Vigo's `camv2.php`
+ * cameras) serve a perfectly valid JPEG frame with no `Content-Type` header
+ * at all, or a wrong one (e.g. `text/html`). Rejecting on the header alone
+ * would drop a real frame, so the header is trusted first and this sniff is
+ * only the fallback when it is missing or wrong — never a way to accept
+ * non-image bytes, since every branch below still requires a real image
+ * signature.
+ *
+ * @param {Buffer} body
+ * @returns {?string} A concrete `image/*` MIME type, or null when the bytes
+ *   don't match any known image signature.
+ */
+export function sniffImageContentType(body) {
+  if (!Buffer.isBuffer(body) || body.length < 4) return null;
+  if (body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (
+    body.length >= 8 &&
+    body[0] === 0x89 &&
+    body[1] === 0x50 &&
+    body[2] === 0x4e &&
+    body[3] === 0x47
+  ) {
+    return 'image/png';
+  }
+  if (
+    body[0] === 0x47 &&
+    body[1] === 0x49 &&
+    body[2] === 0x46 &&
+    body[3] === 0x38
+  ) {
+    return 'image/gif';
+  }
+  if (
+    body.length >= 12 &&
+    body.toString('ascii', 0, 4) === 'RIFF' &&
+    body.toString('ascii', 8, 12) === 'WEBP'
+  ) {
+    return 'image/webp';
+  }
+  return null;
 }
 
 /**
@@ -542,14 +595,18 @@ export async function fetchCctvImageFromUpstream(
       },
       fetchImpl,
     );
-    if (!upstream) return null;
-    const contentType = upstream.headers.get('content-type') || '';
-    if (!upstream.ok || !contentType.startsWith('image/')) {
+    if (!upstream || !upstream.ok) {
       controller.abort();
       return null;
     }
+    const headerContentType = upstream.headers.get('content-type') || '';
+    const trustHeader = headerContentType.startsWith('image/');
     const body = await readCappedResponseBytes(upstream, maxBytes);
     if (!body) return null;
+    const contentType = trustHeader
+      ? headerContentType
+      : sniffImageContentType(body);
+    if (!contentType) return null;
     return { ok: true, body, contentType };
   } catch {
     return null;

@@ -59,6 +59,11 @@ import {
   DELDOT_CCTV_URL,
   DEFAULT_DELDOT_MAX_SOURCES,
   DELDOT_ANCHORS,
+  VIGO_CAMERAS_URL,
+  VIGO_IMAGE_ORIGIN,
+  DEFAULT_VIGO_MAX_SOURCES,
+  VIGO_CENTER,
+  VIGO_MAX_CATALOG_BYTES,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -76,6 +81,7 @@ import {
   isLikelyTexasCoordinate,
   isLikelyNswCoordinate,
   isLikelyCalgaryCoordinate,
+  isLikelyVigoCoordinate,
   cameraDisplayCode,
   rowArrayToObject,
   prioritizeSources,
@@ -1594,6 +1600,151 @@ export async function loadCalgarySourcesFromOpenData() {
       '[CCTV] Calgary camera download error:',
       error?.message || error,
     );
+    return [];
+  }
+}
+
+/**
+ * Upgrade a catalog frame URL to HTTPS and pin it to the official
+ * camaras.vigo.org host.
+ *
+ * The dataset publishes `http://` frame URLs, but the host does not answer
+ * on plain HTTP at all (verified 2026-09-27), only on HTTPS. Anything not on
+ * the official origin is refused rather than proxied, the same pin the
+ * Calgary and TfL packs apply.
+ *
+ * @param {string|null|undefined} raw - `url` from the FeatureServer.
+ * @returns {?string} Pinned HTTPS URL, or null when unusable.
+ */
+export function normalizeVigoImageUrl(raw) {
+  const text = String(raw ?? '').trim();
+  if (!text) return null;
+  let parsed;
+  try {
+    parsed = new URL(text);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  parsed.protocol = 'https:';
+  const upgraded = parsed.toString();
+  return upgraded.startsWith(VIGO_IMAGE_ORIGIN) ? upgraded : null;
+}
+
+/**
+ * One Vigo FeatureServer feature -> one catalog source, or null.
+ *
+ * The dataset carries no heading, so cameras use the shared id-hash fallback
+ * at low confidence, exactly as headingless TfL and Fintraffic cameras do,
+ * and the operator corrects them with the calibration gizmo.
+ *
+ * @param {object} feature - Raw GeoJSON feature from the FeatureServer.
+ * @returns {?object}
+ */
+export function vigoCameraToSource(feature) {
+  if (!feature || typeof feature !== 'object') return null;
+  const props = feature.properties;
+  if (!props || typeof props !== 'object') return null;
+
+  const coordinates = feature?.geometry?.coordinates;
+  const lon = Array.isArray(coordinates)
+    ? toFiniteNumber(coordinates[0])
+    : toFiniteNumber(props.lon);
+  const lat = Array.isArray(coordinates)
+    ? toFiniteNumber(coordinates[1])
+    : toFiniteNumber(props.lat);
+  if (!isLikelyVigoCoordinate(lat, lon)) return null;
+
+  const imageUrl = normalizeVigoImageUrl(props.url);
+  if (!imageUrl) return null;
+
+  const rawId = String(props.id ?? '').trim();
+  if (!rawId) return null;
+  const cameraId = `vigo-${rawId}`;
+
+  const name = String(props.nombre ?? '').trim() || `Vigo Camera ${rawId}`;
+
+  return {
+    id: cameraId,
+    name,
+    city: 'Vigo',
+    cityId: 'vigo',
+    provider: 'Concello de Vigo',
+    lat,
+    lon,
+    headingDeg: fallbackHeadingFromId(cameraId),
+    headingConfidence: 'low',
+    pitchDeg: -18,
+    fovDeg: 44,
+    rangeM: 120,
+    mountHeightM: 8,
+    groundElevationM: 30,
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'vigo-open-data',
+    // CC BY 4.0 (https://datos.vigo.org/es/condiciones-de-uso-de-los-datos/);
+    // attribution is mandatory.
+    license: 'Fuente de los datos: Ayuntamiento de Vigo',
+    code: cameraDisplayCode(name.toUpperCase()),
+  };
+}
+
+/**
+ * Fetch Concello de Vigo traffic cameras from its public ArcGIS FeatureServer,
+ * keyless. Frames are stills on camaras.vigo.org.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadVigoSourcesFromOpenData() {
+  try {
+    const endpoint = process.env.CCTV_VIGO_ROWS_URL || VIGO_CAMERAS_URL;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: 'application/json' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn(
+        '[CCTV] Vigo catalog redirected; redirects are not followed',
+      );
+      return discard();
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] Vigo camera download failed:', resp.status);
+      return discard();
+    }
+    const payload = await readResponseJsonCapped(resp, VIGO_MAX_CATALOG_BYTES);
+    const features = Array.isArray(payload?.features) ? payload.features : [];
+    const cameras = [];
+    const seen = new Set();
+    for (const feature of features) {
+      const camera = vigoCameraToSource(feature);
+      if (!camera || seen.has(camera.id)) continue;
+      seen.add(camera.id);
+      cameras.push(camera);
+    }
+    const maxRaw = Number(
+      process.env.CCTV_VIGO_MAX_SOURCES || DEFAULT_VIGO_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(200, Math.floor(maxRaw)))
+      : DEFAULT_VIGO_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, [VIGO_CENTER]);
+    console.log(
+      `[CCTV] Loaded Vigo camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] Vigo camera download error:', error?.message || error);
     return [];
   }
 }
