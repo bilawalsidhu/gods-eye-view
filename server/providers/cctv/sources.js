@@ -1706,13 +1706,19 @@ export async function loadDelDOTSourcesFromOpenData() {
   }
 }
 
-/** WSDOT compass letters as headings in degrees. `B` (both directions), `O`
- * (other) and null carry no single facing and fall through to the id hash. */
+/** WSDOT `CompassDirection` codes as headings in degrees, per the layer's own
+ * metadata (N/E/S/W, NE/NW/SE/SW, BW = Bothways). `BW` and anything else
+ * (`O`, null, unknown codes) carry no single facing and fall through to the
+ * id hash. */
 const WSDOT_COMPASS_HEADINGS = Object.freeze({
   N: 0,
+  NE: 45,
   E: 90,
+  SE: 135,
   S: 180,
+  SW: 225,
   W: 270,
+  NW: 315,
 });
 
 /**
@@ -1749,8 +1755,9 @@ function isLikelyWashingtonCoordinate(lat, lon) {
  * finite in-state coordinates, and a frame on WSDOT's own image host are
  * kept — the catalog's ~70 partner cameras (Oregon DOT, City of Seattle,
  * lodges, airports) are skipped rather than proxied under someone else's
- * terms. `CompassDirection` letters give a high-confidence heading; `B`
- * (both directions, the majority) and `O`/null fall back to the id hash.
+ * terms. A single-facing `CompassDirection` (cardinal or diagonal) gives a
+ * high-confidence heading; `BW` (Bothways) and `O`/null fall back to the id
+ * hash.
  * The feed carries Windows-1252 bytes (en-dashes in titles) with no charset
  * declaration, so the body is decoded explicitly before parsing.
  *

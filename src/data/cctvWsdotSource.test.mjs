@@ -89,7 +89,7 @@ test('WSDOT loader keeps official-host cameras and maps compass directions', asy
           },
         }),
         wsdotFeature(9059, 47.66, -117.43, {
-          attributes: { CompassDirection: 'B' },
+          attributes: { CompassDirection: 'BW' },
         }),
         // Partner-hosted frame (Oregon DOT): skipped, never proxied.
         wsdotFeature(1002, 45.62, -122.675, {
@@ -127,12 +127,54 @@ test('WSDOT loader keeps official-host cameras and maps compass directions', asy
   assert.ok(Math.abs(seattle.lat - 47.6097) < 0.001);
   assert.ok(Math.abs(seattle.lon - -122.3331) < 0.001);
 
-  // "Both directions" carries no single facing: id-hash fallback at low
+  // `BW` (Bothways) carries no single facing: id-hash fallback at low
   // confidence, with the low-confidence pose personality.
   const spokane = cameras.find((camera) => camera.id === 'wsdot-9059');
   assert.equal(spokane.headingConfidence, 'low');
   assert.equal(spokane.fovDeg, 44);
   assert.ok(spokane.headingDeg >= 0 && spokane.headingDeg < 360);
+});
+
+test('WSDOT loader maps every documented CompassDirection code', async (t) => {
+  quiet(t);
+  withEnv(t, { CCTV_WSDOT_MAX_SOURCES: undefined });
+  const codes = {
+    N: 0,
+    NE: 45,
+    E: 90,
+    SE: 135,
+    S: 180,
+    SW: 225,
+    W: 270,
+    NW: 315,
+    // Lower-case and padded codes are the same code.
+    ' nw ': 315,
+  };
+  const noFacing = ['BW', 'O', null];
+  const entries = [...Object.keys(codes), ...noFacing];
+  t.mock.method(globalThis, 'fetch', async () =>
+    cp1252Response({
+      features: entries.map((code, i) =>
+        wsdotFeature(3000 + i, 47.0 + i * 0.05, -122.9 + i * 0.05, {
+          attributes: { CompassDirection: code },
+        }),
+      ),
+    }),
+  );
+
+  const cameras = await loadWsdotSourcesFromOpenData();
+  const byId = new Map(cameras.map((camera) => [camera.id, camera]));
+  entries.forEach((code, i) => {
+    const camera = byId.get(`wsdot-${3000 + i}`);
+    if (code in codes) {
+      assert.equal(camera.headingDeg, codes[code], `heading for ${code}`);
+      assert.equal(camera.headingConfidence, 'high', `confidence for ${code}`);
+      assert.equal(camera.fovDeg, 56, `pose personality for ${code}`);
+    } else {
+      assert.equal(camera.headingConfidence, 'low', `confidence for ${code}`);
+      assert.equal(camera.fovDeg, 44, `pose personality for ${code}`);
+    }
+  });
 });
 
 test('WSDOT loader honors the max-sources cap', async (t) => {
