@@ -95,18 +95,20 @@ test('deferred terminal notices lose ownership to newer acquisition epochs and d
 test('share-follow failures use the universal top-center status instead of the bottom toast', () => {
   const ui = readShellSource();
   const handler = shellMethod('_handleShareTrackingRestoreStatus').toString();
-  assert.match(handler, /this\.showStatus\(message\)/);
-  assert.match(handler, /this\.initialRestorePromise\.then\(showAfterStartupCover\)/);
-  assert.match(handler, /this\._lifetime\.frame\(\(\) => \{/);
-  assert.match(handler, /this\._lifetime\.listen\(\s*startupCover,\s*'transitionend',\s*showOnce,\s*\{ once: true \},?\s*\)/);
-  assert.match(handler, /fallbackTimer = this\._lifetime\.timeout\(showOnce, 1000\)/);
+  const scheduler = shellMethod('_scheduleDeferredShareNotice').toString();
+  assert.match(handler, /this\._scheduleDeferredShareNotice\(message, noticeGeneration\)/);
+  assert.match(scheduler, /this\.showStatus\(message\)/);
+  assert.match(scheduler, /this\.initialRestorePromise\.then\(showAfterStartupCover\)/);
+  assert.match(scheduler, /this\._lifetime\.frame\(\(\) => \{/);
+  assert.match(scheduler, /this\._lifetime\.listen\(\s*startupCover,\s*'transitionend',\s*showOnce,\s*\{ once: true \},?\s*\)/);
+  assert.match(scheduler, /fallbackTimer = this\._lifetime\.timeout\(showOnce, 1000\)/);
   assert.doesNotMatch(handler, /this\._showToast\(message\)/);
   assert.doesNotMatch(handler, /pushCockpitSignal/);
   assert.match(handler, /result\.classification === 'pending'/);
   assert.match(handler, /state: 'acquiring'/);
   assert.match(handler, /persistent: true/);
   assert.match(handler, /this\._shareTrackingNoticeGeneration \+= 1/);
-  assert.match(handler, /canPresentDeferredStatusNotice\(/);
+  assert.match(scheduler, /canPresentDeferredStatusNotice\(/);
   assert.match(handler, /if \(this\._shareTrackingAcquiringKey\) return/);
   assert.match(handler, /result\.classification === 'followed'\s*\|\|\s*result\.classification === 'cancelled'/);
 });
