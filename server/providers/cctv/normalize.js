@@ -524,5 +524,11 @@ export function normalizeSourceItem(item) {
       typeof item.model === 'string' && item.model.trim()
         ? item.model.trim()
         : undefined,
+    // Bare model strings collide across vendors (e.g. "3950"), so the
+    // publishing pack's manufacturer rides along for disambiguation.
+    manufacturer:
+      typeof item.manufacturer === 'string' && item.manufacturer.trim()
+        ? item.manufacturer.trim()
+        : undefined,
   };
 }

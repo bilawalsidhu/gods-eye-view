@@ -1,11 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import {
   DEFAULT_KING_COUNTY_MAX_SOURCES,
   KING_COUNTY_CAMERAS_URL,
 } from '../../server/providers/cctv/constants.js';
 import { loadKingCountySourcesFromOpenData } from '../../server/providers/cctv/sources.js';
 import { normalizeSourceItem } from '../../server/providers/cctv/normalize.js';
+import { cctvProxy } from '../../server/providers/cctv.js';
+import { createCatalog } from '../layers/cctv/catalog.js';
 
 /** Set (or, for `undefined`, delete) environment variables for one test. */
 function withEnv(t, env) {
@@ -106,6 +111,7 @@ test('King County loader keeps live county cameras and upgrades frame URLs to HT
   assert.equal(novelty.feedType, 'image');
   // Published hardware model rides along, whitespace-collapsed.
   assert.equal(novelty.model, 'Q6135-LE');
+  assert.equal(novelty.manufacturer, 'Axis');
   assert.equal(novelty.credit, '');
   // No facing in the layer: id-hash fallback at low confidence.
   assert.equal(novelty.headingConfidence, 'low');
@@ -115,6 +121,8 @@ test('King County loader keeps live county cameras and upgrades frame URLs to HT
   const redmond = cameras.find((camera) => camera.id === 'kingcounty-90');
   assert.equal(redmond.credit, 'City of Redmond');
   assert.equal(redmond.model, undefined);
+  // A manufacturer without a model identifies nothing, so it is dropped too.
+  assert.equal(redmond.manufacturer, undefined);
 });
 
 test('normalizeSourceItem passes a hardware model through and omits it otherwise', () => {
@@ -123,8 +131,10 @@ test('normalizeSourceItem passes a hardware model through and omits it otherwise
     lat: 47.7,
     lon: -122.0,
     model: ' Q6135-LE ',
+    manufacturer: ' Axis ',
   });
   assert.equal(withModel.model, 'Q6135-LE');
+  assert.equal(withModel.manufacturer, 'Axis');
 
   const withoutModel = normalizeSourceItem({
     id: 'austin-1',
@@ -132,7 +142,103 @@ test('normalizeSourceItem passes a hardware model through and omits it otherwise
     lon: -97.7,
   });
   assert.equal(withoutModel.model, undefined);
+  assert.equal(withoutModel.manufacturer, undefined);
   assert.equal(normalizeSourceItem({ id: 'x', model: '   ' }).model, undefined);
+});
+
+/** Drive the real `/api/cctv/sources` middleware and return its parsed body. */
+async function requestSources(plugin) {
+  let handler;
+  plugin.configureServer({
+    middlewares: {
+      use(_route, fn) {
+        handler = fn;
+      },
+    },
+  });
+  const res = {
+    writeHead(status, headers) {
+      Object.assign(this, { status, headers });
+    },
+    end(body) {
+      this.body = body;
+    },
+  };
+  await handler({ url: '/sources', method: 'GET' }, res);
+  assert.equal(res.status, 200);
+  return JSON.parse(res.body);
+}
+
+/** The browser catalog with the pose math stubbed out: only field
+ * passthrough is under test here. */
+function browserCatalog() {
+  const model = {
+    safeNumber: (value, fallback = NaN) =>
+      Number.isFinite(Number(value)) ? Number(value) : fallback,
+    normalizeHeading: (deg) => ((deg % 360) + 360) % 360,
+    clamp: (value, lo, hi) => Math.min(hi, Math.max(lo, value)),
+    headingFromId: () => 0,
+    normalizeFeedType: (type) => type,
+    ensureCameraPose: () => {},
+  };
+  return createCatalog({
+    state: {},
+    services: { locations: { CITY_POIS: {} } },
+    parts: { model },
+    source: {},
+  });
+}
+
+test('King County model and manufacturer survive the /api/cctv/sources boundary into the browser catalog', async (t) => {
+  quiet(t);
+  const root = mkdtempSync(path.join(tmpdir(), 'gev-kingcounty-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  // No file/env catalog, so the live packs load; every pack but King County
+  // sees an upstream failure and contributes nothing.
+  withEnv(t, {
+    CCTV_SOURCES_FILE: undefined,
+    CCTV_SOURCES_JSON: undefined,
+    CCTV_FORCE_AUSTIN: undefined,
+    CCTV_PREFER_AUSTIN: undefined,
+    CCTV_KINGCOUNTY_ENABLED: undefined,
+    CCTV_KINGCOUNTY_MAX_SOURCES: undefined,
+    CCTV_MAX_SOURCES: undefined,
+  });
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (String(url) !== KING_COUNTY_CAMERAS_URL)
+      return new Response('', { status: 503 });
+    return Response.json({
+      type: 'FeatureCollection',
+      features: [
+        kingCountyFeature(56, 47.70059, -122.02443, {
+          properties: { Model: 'Q6135-LE\n', Manufacturer: 'Axis' },
+        }),
+        kingCountyFeature(90, 47.674, -122.119, {
+          properties: { Model: null, Manufacturer: 'Cohu' },
+        }),
+      ],
+    });
+  });
+
+  const body = await requestSources(cctvProxy({ sourceRoot: root }));
+  const served = new Map(body.sources.map((source) => [source.id, source]));
+  assert.deepEqual([...served.keys()].sort(), [
+    'kingcounty-56',
+    'kingcounty-90',
+  ]);
+  assert.equal(served.get('kingcounty-56').model, 'Q6135-LE');
+  assert.equal(served.get('kingcounty-56').manufacturer, 'Axis');
+  // Absent hardware is an explicit empty string on the wire, like
+  // headingConfidence, so consumers never have to probe for the key.
+  assert.equal(served.get('kingcounty-90').model, '');
+  assert.equal(served.get('kingcounty-90').manufacturer, '');
+
+  const cameras = browserCatalog().buildCatalogFromSources(body.sources);
+  const byId = new Map(cameras.map((camera) => [camera.id, camera]));
+  assert.equal(byId.get('kingcounty-56').model, 'Q6135-LE');
+  assert.equal(byId.get('kingcounty-56').manufacturer, 'Axis');
+  assert.equal(byId.get('kingcounty-90').model, '');
+  assert.equal(byId.get('kingcounty-90').manufacturer, '');
 });
 
 test('King County loader honors the max-sources cap', async (t) => {

@@ -1776,6 +1776,9 @@ export async function loadKingCountySourcesFromOpenData() {
       const model = String(attrs.Model || '')
         .replace(/\s+/g, ' ')
         .trim();
+      const manufacturer = String(attrs.Manufacturer || '')
+        .replace(/\s+/g, ' ')
+        .trim();
       const camera = {
         id: cameraId,
         name:
@@ -1800,6 +1803,7 @@ export async function loadKingCountySourcesFromOpenData() {
         credit: owner && owner !== 'King County' ? owner : '',
       };
       if (model) camera.model = model;
+      if (model && manufacturer) camera.manufacturer = manufacturer;
       cameras.push(camera);
     }
 
