@@ -29,6 +29,7 @@ import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
 import { createBhoteKoshiLocatorLayer } from '../data/bhoteKoshiLocator.js';
+import * as credits from '../data/dataCredits.js';
 
 const SOURCE_METHODS = Object.freeze({
   flights: ['getSnapshot'],
@@ -170,6 +171,7 @@ export function createApplicationCatalog({
           feed: sources.weather,
           id: 'weather-radar',
           clock: weatherClock,
+          credits,
         }),
         createWeatherLayer({
           feed: sources.weather,
@@ -180,6 +182,7 @@ export function createApplicationCatalog({
           feed: sources.weather,
           id: 'weather-lightning',
           clock: weatherClock,
+          credits,
         }),
         createCyclonesLayer({ feed: sources.cyclones }),
         ...createInfrastructureLayers(localGeoJsonServices),

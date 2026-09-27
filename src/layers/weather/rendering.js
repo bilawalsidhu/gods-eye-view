@@ -246,9 +246,11 @@ function createGlobeRendering({
         collection,
         kind,
         priority:
-          snapshot.product === 'lightning'
+          snapshot.product === 'lightning' ||
+          snapshot.product === 'xweather-lightning'
             ? 3
-            : snapshot.product === 'radar'
+            : snapshot.product === 'radar' ||
+                snapshot.product === 'xweather-radar'
               ? 2
               : 1,
         product: snapshot.product,
@@ -334,11 +336,14 @@ function createGlobeRendering({
             : undefined,
         );
         const credit = new cesium.Credit(
-          snapshot.product === 'lightning'
-            ? 'NOAA/NWS lightning density · derived from Vaisala NLDN/GLD360'
-            : snapshot.product === 'radar'
-              ? 'NOAA nowCOAST · NWS/OAR MRMS'
-              : 'NOAA nowCOAST · NESDIS GOES / global satellite partners',
+          snapshot.product === 'xweather-radar' ||
+            snapshot.product === 'xweather-lightning'
+            ? 'Vaisala Xweather'
+            : snapshot.product === 'lightning'
+              ? 'NOAA/NWS lightning density · derived from Vaisala NLDN/GLD360'
+              : snapshot.product === 'radar'
+                ? 'NOAA nowCOAST · NWS/OAR MRMS'
+                : 'NOAA nowCOAST · NESDIS GOES / global satellite partners',
           false,
         );
         const provider = global

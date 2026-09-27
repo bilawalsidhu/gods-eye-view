@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createWeatherRendering } from './rendering.js';
 import { createWeatherLayer } from './index.js';
 import { createWeatherClock } from './clock.js';
+import { LayerLifecycle } from '../../data/lifecycle.js';
 import * as Cesium from 'cesium';
 import { Color, ImageryLayerCollection, GeographicTilingScheme } from 'cesium';
 import { NO_IMAGERY_HOST } from './imageryHost.js';
@@ -434,6 +435,9 @@ function layerHarness({
   feed,
   id,
   eventTarget = target(),
+  credits,
+  // Leave init and enable to a LayerLifecycle, as the app does.
+  managed = false,
 } = {}) {
   const stages = [];
   const motion = target({ matches: reducedMotion });
@@ -502,11 +506,15 @@ function layerHarness({
     eventTarget,
     matchMedia: () => motion,
     createRendering: () => rendering,
+    credits,
   });
-  layer.init(viewer);
-  layer.enable();
+  if (!managed) {
+    layer.init(viewer);
+    layer.enable();
+  }
   return {
     layer,
+    viewer,
     rendering,
     stages,
     eventTarget,
@@ -1742,7 +1750,7 @@ test('one row steps every registered observation; missing frames hide and latest
   });
   assert.deepEqual(
     radar.layer.getParams(),
-    { opacity: 'strong' },
+    { source: 'nowcoast', opacity: 'strong' },
     'history is never serialized',
   );
   satellite.layer.disable();
@@ -1876,20 +1884,31 @@ test('switching to history cancels a still-loading latest refresh and a later ta
   assert.equal(h.layer.getDiagnostics().clock.target, times[1]);
 });
 
-test('observed descriptors keep configuration only and label satellite clouds by coverage', () => {
-  for (const [id, coverage] of [
-    ['weather-radar', 'CONUS'],
-    ['weather-satellite', 'North America'],
-    ['weather-lightning', 'Americas + Pacific'],
+test('observed descriptors keep configuration only and label satellite clouds by coverage', async () => {
+  for (const [id, coverage, hasKey] of [
+    ['weather-radar', 'CONUS', false],
+    ['weather-radar', 'CONUS', true],
+    ['weather-satellite', 'North America', false],
+    ['weather-lightning', 'Americas + Pacific', false],
+    ['weather-lightning', 'Americas + Pacific', true],
   ]) {
-    const h = layerHarness({ id });
+    const h = layerHarness({
+      id,
+      feed: xweatherFeed(xweatherStatus({ hasKey })).feed,
+    });
+    void h.layer.update();
+    await flush();
     const controls = h.layer.getRowControls();
     assert.equal(controls.readout, true);
     assert.equal(controls.summary.coverage, coverage);
     assert.equal(controls.summary.sections, undefined);
     assert.deepEqual(
       controls.summary.settings.map(({ label }) => label),
-      id === 'weather-satellite' ? ['REGION', 'IMAGE', 'OPACITY'] : ['OPACITY'],
+      id === 'weather-satellite'
+        ? ['REGION', 'IMAGE', 'OPACITY']
+        : hasKey
+          ? ['SOURCE', 'OPACITY']
+          : ['OPACITY'],
     );
     assert.deepEqual(
       controls.summary.settings.flatMap(({ chips }) => chips),
@@ -1925,6 +1944,372 @@ test('observed descriptors keep configuration only and label satellite clouds by
     }
     h.layer.destroy();
   }
+});
+
+const xweatherStatus = (extra = {}) => ({
+  hasKey: true,
+  month: '2026-09',
+  used: 0,
+  allowance: 15_000,
+  over: false,
+  upstreamError: null,
+  ...extra,
+});
+// Frames a few minutes old, so freshness warnings stay out of the way.
+const recentTimes = () =>
+  [10, 5, 1].map((minutes) =>
+    new Date(
+      Math.floor((Date.now() - minutes * 60_000) / 1000) * 1000,
+    ).toISOString(),
+  );
+function xweatherFeed(status, timesFor) {
+  const products = [];
+  const recent = recentTimes();
+  const feed = {
+    status,
+    statusCalls: 0,
+    stale: false,
+    getXweatherStatus: async ({ signal } = {}) => {
+      feed.statusCalls++;
+      return typeof feed.status === 'function'
+        ? feed.status({ signal })
+        : feed.status;
+    },
+    getSnapshot: async ({ product }) => {
+      products.push(product);
+      const advertised = timesFor?.(product) ?? recent;
+      return {
+        ...snapshot,
+        product,
+        times: advertised,
+        latest: advertised.at(-1),
+        ...(feed.stale ? { stale: true } : {}),
+      };
+    },
+  };
+  return { feed, products };
+}
+async function settle(h) {
+  for (let i = 0; i < 4; i++) {
+    await flush();
+    for (const stage of h.stages) stage.finish();
+  }
+  await flush();
+}
+const later = (t, ms) => {
+  const now = Date.now();
+  t.mock.method(Date, 'now', () => now + ms);
+};
+
+test('the source setting appears only when an Xweather key is present', async () => {
+  for (const hasKey of [false, true]) {
+    const h = layerHarness({
+      feed: xweatherFeed(xweatherStatus({ hasKey })).feed,
+    });
+    void h.layer.update();
+    await settle(h);
+    const { settings } = h.layer.getRowControls().summary;
+    assert.deepEqual(
+      settings.map(({ label }) => label),
+      hasKey ? ['SOURCE', 'OPACITY'] : ['OPACITY'],
+    );
+    if (hasKey)
+      assert.deepEqual(
+        settings[0].chips.map(({ label, title }) => [label, title]),
+        [
+          ['NOAA', 'NOAA nowCOAST · keyless'],
+          [
+            'Global (Xweather)',
+            "Vaisala Xweather · uses your key, counts toward your account's free monthly allowance",
+          ],
+        ],
+      );
+    h.layer.destroy();
+  }
+});
+
+test('choosing Global (Xweather) restages the card on the xweather product and keeps the clock target', async (t) => {
+  const clock = createWeatherClock();
+  const credited = [];
+  const { feed, products } = xweatherFeed(xweatherStatus(), () => times);
+  const h = layerHarness({
+    clock,
+    feed,
+    credits: {
+      registerDynamicCredit: (_viewer, credit) => credited.push(credit.key),
+      XWEATHER_CREDIT: { key: 'xweather', html: 'Vaisala Xweather' },
+    },
+  });
+  t.after(() => {
+    h.layer.destroy();
+    clock.destroy();
+  });
+  void h.layer.update();
+  await settle(h);
+  const moved = clock.setTarget(times[1]);
+  await settle(h);
+  await moved;
+  assert.deepEqual(credited, []);
+  const before = products.length;
+  h.layer.setParams({ source: 'xweather' });
+  await settle(h);
+  assert.equal(products[before], 'xweather-radar');
+  assert.equal(clock.getState().target, times[1]);
+  assert.equal(h.layer.getParams().source, 'xweather');
+  assert.equal(h.layer.getRowControls().summary.label, 'Rain radar · Global');
+  assert.equal(h.layer.getStats().source, 'Vaisala Xweather');
+  assert.deepEqual(credited, ['xweather']);
+});
+
+test('losing the key falls back to NOAA with a status line and no Xweather request', async (t) => {
+  const { feed, products } = xweatherFeed(xweatherStatus());
+  const h = layerHarness({ feed });
+  t.after(() => h.layer.destroy());
+  void h.layer.update();
+  await settle(h);
+  h.layer.setParams({ source: 'xweather' });
+  await settle(h);
+  assert.equal(products.at(-1), 'xweather-radar');
+  feed.status = xweatherStatus({ hasKey: false });
+  later(t, 61_000);
+  const before = products.length;
+  void h.layer.update();
+  await settle(h);
+  assert.equal(h.layer.getParams().source, 'nowcoast');
+  assert.equal(
+    h.layer.getRowControls().summary.status,
+    'Xweather key removed · showing NOAA',
+  );
+  assert.deepEqual(
+    products.slice(before).filter((product) => product.startsWith('xweather')),
+    [],
+  );
+  assert.equal(products.at(-1), 'radar');
+});
+
+test('the budget line shows free-month usage and warns past it', async (t) => {
+  const { feed } = xweatherFeed(
+    xweatherStatus({ used: 4210, allowance: 15000, over: false }),
+  );
+  const h = layerHarness({ id: 'weather-lightning', feed });
+  t.after(() => h.layer.destroy());
+  const budget = () =>
+    h.layer
+      .getRowControls()
+      .summary.lines.find(({ id }) => id === 'xweather-budget');
+  void h.layer.update();
+  await settle(h);
+  h.layer.setParams({ source: 'xweather' });
+  await settle(h);
+  assert.deepEqual(budget(), {
+    id: 'xweather-budget',
+    text: 'Xweather · 4,210 / 15,000 free this month',
+    muted: true,
+  });
+  feed.status = xweatherStatus({ used: 15001, allowance: 15000, over: true });
+  later(t, 61_000);
+  void h.layer.update();
+  await settle(h);
+  assert.deepEqual(budget(), {
+    id: 'xweather-budget',
+    text: 'Xweather · past the free 15,000 this month · requests may fail',
+    muted: false,
+  });
+  feed.status = xweatherStatus({ upstreamError: 'HTTP 401' });
+  Date.now.mock.restore();
+  later(t, 122_000);
+  void h.layer.update();
+  await settle(h);
+  assert.equal(
+    h.layer.getRowControls().summary.status,
+    'Xweather refused the request · see Provider Settings',
+  );
+});
+
+test('an Xweather refusal outranks the frame error it causes; without one the frame error shows', async (t) => {
+  const { feed } = xweatherFeed(
+    xweatherStatus({ upstreamError: 'xweather_upstream_error' }),
+  );
+  const noaa = feed.getSnapshot;
+  feed.getSnapshot = async (options) =>
+    options.product.startsWith('xweather')
+      ? { ...snapshot, product: options.product, unavailable: true }
+      : noaa(options);
+  const h = layerHarness({ feed });
+  t.after(() => h.layer.destroy());
+  void h.layer.update();
+  await settle(h);
+  h.layer.setParams({ source: 'xweather' });
+  await settle(h);
+  assert.equal(
+    h.layer.getRowControls().summary.status,
+    'Xweather refused the request · see Provider Settings',
+  );
+  feed.status = xweatherStatus();
+  later(t, 61_000);
+  void h.layer.update();
+  await settle(h);
+  assert.equal(
+    h.layer.getRowControls().summary.status,
+    'Weather source unavailable; previous observation retained',
+  );
+});
+
+test('a keyless s.x link over a stale NOAA feed reports the stale source, not the fallback', async (t) => {
+  const { feed, products } = xweatherFeed(xweatherStatus({ hasKey: false }));
+  feed.stale = true;
+  const h = layerHarness({ feed });
+  t.after(() => h.layer.destroy());
+  h.layer.setParams({ source: 'xweather' });
+  await settle(h);
+  assert.deepEqual(products, ['radar']);
+  assert.equal(h.layer.getParams().source, 'nowcoast');
+  assert.equal(h.layer.getRowControls().summary.status, 'Stale source');
+});
+
+test('a keyless s.x share link enabled through the lifecycle ends on NOAA with the fallback notice', async (t) => {
+  const { feed, products } = xweatherFeed(xweatherStatus({ hasKey: false }));
+  const h = layerHarness({ feed, managed: true });
+  const lifecycle = new LayerLifecycle(h.viewer);
+  lifecycle.register(h.layer);
+  lifecycle.finalizeRegistrations([
+    { id: 'weather-radar', disposition: 'enabled+options' },
+  ]);
+  const errors = [];
+  t.mock.method(console, 'error', (...args) => errors.push(args.join(' ')));
+  t.mock.method(console, 'warn', (...args) => errors.push(args.join(' ')));
+  t.after(() => lifecycle.destroyAll());
+  let done = false;
+  const restored = lifecycle
+    .restoreLayerState(
+      'weather-radar',
+      { enabled: true, params: { source: 'xweather' } },
+      { origin: 'restore' },
+    )
+    .finally(() => {
+      done = true;
+    });
+  for (let i = 0; i < 20 && !done; i++) await settle(h);
+  const result = await restored;
+  assert.equal(result.succeeded, true);
+  assert.equal(result.settledEnabled, true);
+  assert.equal(lifecycle.isEnabled('weather-radar'), true);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(products, ['radar']);
+  assert.equal(h.layer.getParams().source, 'nowcoast');
+  assert.ok(h.layer.getDiagnostics().time);
+  assert.equal(
+    h.layer.getRowControls().summary.status,
+    'Xweather key removed · showing NOAA',
+  );
+});
+
+test('the key-removed notice clears a poll interval after the first NOAA frame', async (t) => {
+  const { feed } = xweatherFeed(xweatherStatus({ hasKey: false }));
+  const h = layerHarness({ feed });
+  t.after(() => h.layer.destroy());
+  h.layer.setParams({ source: 'xweather' });
+  await settle(h);
+  assert.ok(h.layer.getDiagnostics().time);
+  assert.equal(
+    h.layer.getRowControls().summary.status,
+    'Xweather key removed · showing NOAA',
+  );
+  later(t, 59_000);
+  assert.equal(
+    h.layer.getRowControls().summary.status,
+    'Xweather key removed · showing NOAA',
+  );
+  Date.now.mock.restore();
+  later(t, 61_000);
+  assert.equal(h.layer.getRowControls().summary.status, null);
+});
+
+test('a failed or aborted status request keeps the last known status and retries next update', async (t) => {
+  const { feed } = xweatherFeed(xweatherStatus({ used: 4210 }));
+  const h = layerHarness({ feed });
+  t.after(() => h.layer.destroy());
+  const labels = () =>
+    h.layer.getRowControls().summary.settings.map(({ label }) => label);
+  void h.layer.update();
+  await settle(h);
+  h.layer.setParams({ source: 'xweather' });
+  await settle(h);
+  assert.deepEqual(labels(), ['SOURCE', 'OPACITY']);
+  // An update superseded while its status request is in flight.
+  feed.status = ({ signal }) =>
+    new Promise((_resolve, reject) =>
+      signal.addEventListener('abort', () => reject(signal.reason), {
+        once: true,
+      }),
+    );
+  later(t, 61_000);
+  void h.layer.update();
+  await flush();
+  void h.layer.update();
+  await settle(h);
+  assert.deepEqual(labels(), ['SOURCE', 'OPACITY']);
+  assert.equal(
+    h.layer
+      .getRowControls()
+      .summary.lines.find(({ id }) => id === 'xweather-budget').text,
+    'Xweather · 4,210 / 15,000 free this month',
+  );
+  // A thrown status is retried on the very next update, not a minute later.
+  feed.status = async () => {
+    throw new Error('Xweather status HTTP 502');
+  };
+  const calls = feed.statusCalls;
+  void h.layer.update();
+  await settle(h);
+  void h.layer.update();
+  await settle(h);
+  assert.equal(feed.statusCalls, calls + 2);
+  assert.equal(h.layer.getParams().source, 'xweather');
+  assert.deepEqual(labels(), ['SOURCE', 'OPACITY']);
+});
+
+test('history target between Xweather frames selects the latest within the gap, else nothing', async (t) => {
+  const clock = createWeatherClock();
+  const radar = layerHarness({
+    clock,
+    feed: xweatherFeed(xweatherStatus(), (product) =>
+      product === 'xweather-radar'
+        ? ['2026-09-24T16:28:34.000Z', '2026-09-24T16:30:34.000Z']
+        : ['2026-09-24T16:30:00.000Z'],
+    ).feed,
+  });
+  const lightning = layerHarness({
+    clock,
+    id: 'weather-lightning',
+    feed: xweatherFeed(xweatherStatus(), () => ['2026-09-24T16:30:00.000Z'])
+      .feed,
+  });
+  t.after(() => {
+    radar.layer.destroy();
+    lightning.layer.destroy();
+    clock.destroy();
+  });
+  radar.layer.setParams({ source: 'xweather' });
+  void lightning.layer.update();
+  await settle(radar);
+  await settle(lightning);
+  const selected = clock.setTarget('2026-09-24T16:29:00.000Z');
+  await settle(radar);
+  await settle(lightning);
+  await selected;
+  assert.equal(
+    clock.selectFor('weather-radar', clock.getState().target),
+    '2026-09-24T16:28:34.000Z',
+  );
+  assert.equal(
+    clock.selectFor('weather-lightning', clock.getState().target),
+    null,
+  );
+  assert.equal(
+    clock.selectFor('weather-radar', '2026-09-24T17:01:35.000Z'),
+    null,
+  );
 });
 
 const globalSnapshot = { ...snapshot, product: 'clouds' };

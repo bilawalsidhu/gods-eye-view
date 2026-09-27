@@ -9,6 +9,11 @@ export const WEATHER_SHELL_HEIGHTS = Object.freeze({
   'clouds-regional': 5_800,
   radar: 6_200,
   lightning: 6_600,
+  // Only one source (NOAA or Xweather) is shown per card, so the keyed
+  // products share the NOAA products' shell heights rather than adding new
+  // stacking positions.
+  'xweather-radar': 6_200,
+  'xweather-lightning': 6_600,
 });
 // Decoded canvases per renderer, full-extent and detail images alike: the shown
 // frame and the warmed next frame, each full-extent and detail (four 4096×2048

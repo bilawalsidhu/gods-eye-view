@@ -419,6 +419,23 @@ test('cyclones lead, and observed history owns one bordered group with only acti
   view.destroy();
 });
 
+test('the observed-history scope names each card as its source labels it', () => {
+  const f = fixture();
+  const view = createWeatherPanel(f);
+  view.update([
+    { ...radar, summary: { label: 'Rain radar · Global' } },
+    { ...lightning, summary: { label: 'Lightning · 5 min flashes' } },
+  ]);
+  const group = f.find((n) => n.className === 'weather-observed-group');
+  assert.equal(group.children[1].textContent, 'Rain radar · Lightning');
+  view.update([
+    radar,
+    { ...lightning, summary: { label: 'Lightning density · 15 min' } },
+  ]);
+  assert.equal(group.children[1].textContent, 'Rain radar · Lightning density');
+  view.destroy();
+});
+
 test('accordion changes only on headers, newly enabled layers and loss of the open layer', () => {
   const f = fixture();
   const calls = [];

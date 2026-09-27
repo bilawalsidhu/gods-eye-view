@@ -20,6 +20,10 @@ test('provider requirements name the registry env vars and next step', () => {
     keySetupRequirement('cesium-ion'),
     'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
   );
+  assert.equal(
+    keySetupRequirement('xweather'),
+    'Needs XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET — add it in Provider Settings',
+  );
   assert.equal(keySetupRequirement('unknown'), '');
 });
 
@@ -61,6 +65,8 @@ test('the status payload reports presence without any credential material', () =
     GOOGLE_MAPS_API_KEY: 'AIzaSyFakeFakeFakeFake1234',
     OPENSKY_CLIENT_ID: 'client-id-abcdef',
     // Secret missing: the OpenSky pair must read as NOT set.
+    XWEATHER_CLIENT_ID: 'xw-client-abcdef',
+    // Secret missing: the Xweather pair must read as NOT set too.
   };
   const status = keySetupStatus(env);
   assert.equal(status.total, KEY_SETUP_KEYS.filter((key) => !key.hidden).length);
@@ -68,9 +74,12 @@ test('the status payload reports presence without any credential material', () =
   assert.equal(google.set, true);
   const opensky = status.keys.find((key) => key.id === 'opensky');
   assert.equal(opensky.set, false, 'half a credential pair is not configured');
+  const xweather = status.keys.find((key) => key.id === 'xweather');
+  assert.equal(xweather.set, false, 'half a credential pair is not configured');
   const serialized = JSON.stringify(status);
   assert.ok(!serialized.includes('AIzaSyFakeFakeFakeFake1234'), 'a value leaked into status');
   assert.ok(!serialized.includes('client-id-abcdef'), 'a value leaked into status');
+  assert.ok(!serialized.includes('xw-client-abcdef'), 'a value leaked into status');
   assert.ok(!serialized.includes('1234'), 'a credential suffix leaked into status');
   assert.ok(!serialized.includes('abcdef'), 'a credential suffix leaked into status');
   assert.ok(!serialized.includes('tails'), 'status must not expose a credential-tail field');
