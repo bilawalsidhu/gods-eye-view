@@ -352,6 +352,33 @@ export function createControls({ state: layerState, services, parts, source }) {
       }
       return nearest;
     },
+
+    /**
+     * Restores the previous camera view (the map location the operator left
+     * before the last explicit camera flight).
+     * @returns {boolean} False when there is no earlier view to return to.
+     */
+    historyBack() {
+      return parts.navigation.historyBack();
+    },
+
+    /**
+     * Re-applies the view abandoned by the most recent BACK.
+     * @returns {boolean} False when there is no abandoned view to re-apply.
+     */
+    historyForward() {
+      return parts.navigation.historyForward();
+    },
+
+    /** @returns {boolean} Whether BACK can undo an earlier view. */
+    canGoBack() {
+      return parts.navigation.canGoBack();
+    },
+
+    /** @returns {boolean} Whether FORWARD can re-apply an abandoned view. */
+    canGoForward() {
+      return parts.navigation.canGoForward();
+    },
   };
 
   return { methods };

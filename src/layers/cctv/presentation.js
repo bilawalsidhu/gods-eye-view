@@ -179,6 +179,8 @@ export function createPresentation({
       cameras: layerState._records.map((record) =>
         getPublicCameraState(record, activeId),
       ),
+      canGoBack: parts.navigation.canGoBack(),
+      canGoForward: parts.navigation.canGoForward(),
       summary: buildSummaryText(),
     };
     return payload;

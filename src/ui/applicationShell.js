@@ -987,6 +987,8 @@ export class StyleManager extends ShellFacade {
         _cctvCoverageBtn: this._cctvCoverageBtn,
         _cctvEnableBtn: this._cctvEnableBtn,
         _cctvFocusBtn: this._cctvFocusBtn,
+        _cctvBackBtn: this._cctvBackBtn,
+        _cctvForwardBtn: this._cctvForwardBtn,
         _cctvFrame: this._cctvFrame,
         _cctvFrameWrap: this._cctvFrameWrap,
         _cctvVideo: this._cctvVideo,
@@ -1011,6 +1013,8 @@ export class StyleManager extends ShellFacade {
           this._dataManager?.setLayerParams('cctv', params, options),
         toggleEnabled: (...args) => this._toggleCctvEnabled(...args),
         runExplicitFocus: (...args) => this._runExplicitCctvFocus(...args),
+        runExplicitNavigation: (...args) =>
+          this._runExplicitNavigation(...args),
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
         showToast: (message) => this._showToast(message),
         syncViewport: () => this._syncCctvPanelViewport(),
@@ -1025,7 +1029,7 @@ export class StyleManager extends ShellFacade {
    * @param {boolean} [forceState] - Explicit on/off. Omit to toggle.
    * @returns {Promise<boolean>} True if the layer is now in the requested state.
    */
-  async _toggleCctvEnabled(forceState) {
+  async _toggleCctvEnabled(forceState, { suppressAutoFocus = false } = {}) {
     const { cctvLayer } = this.services;
     if (this._disposed) return false;
     if (!this._dataManager || !this._dataManager.layers?.has('cctv')) {
@@ -1044,6 +1048,7 @@ export class StyleManager extends ShellFacade {
         cockpitActive: !!this.cockpitView?.active,
       }),
       shouldFocus: () =>
+        !suppressAutoFocus &&
         !this._disposed &&
         this._dataManager.isEnabled('cctv') &&
         !this._cctvControls?.getState()?.activeCameraId,
