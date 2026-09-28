@@ -4279,6 +4279,22 @@ on purpose:
   Refused fixes are counted (`positionsRejected` in the SDR state; the layer
   applies the same check to merged feed records and reports the total as
   `rejectedPositions` in its stats). Three refusals in a row re-anchor.
+- **Altitude filter.** A corrupt frame can pass CRC, and a decoder feed can
+  relay one: a DC-9 was logged at 108,800 ft. The browser decoder cannot
+  produce that value, since it decodes only 25 ft (Q=1) altitudes and those
+  stop at 50,175 ft, so the check runs in the layer where both paths merge
+  (`gateLocalAdsbAltitude` in `src/sources/adsbRecords.js`). Each new report
+  must be reachable from the last accepted altitude at 1.5 × the larger
+  reported vertical rate + 2,000 ft/min (12,500 ft/min without a rate) over
+  the elapsed time + 1 s, plus 300 ft. A refused report holds the last
+  accepted altitude for the marker height, the card, the model ceiling and
+  route plausibility alike, and is counted as `rejectedAltitudes` in the
+  layer stats. Only a newer message is judged, so the layer's repeated
+  re-reads of one record neither count twice nor let a refused value
+  through. Three refusals in a row re-anchor, so a bad first altitude clears
+  itself. A surface report passes unjudged, because a feed's `ground` is 0
+  and not a barometric reading. There is no absolute ceiling: balloons really
+  do fly above 100,000 ft.
 - **Trail.** A selected aircraft draws a magenta trail of the positions the
   receiver heard (up to 10 minutes / 600 fixes, dropped with the aircraft),
   with the tracked-flight trail look and a live head segment. No network

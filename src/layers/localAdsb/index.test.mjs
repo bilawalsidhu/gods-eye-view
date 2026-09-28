@@ -399,6 +399,55 @@ test('an implausible jump in a feed record is ignored by the display', async (t)
   assert.equal(layer.getStats().rejectedPositions, 1);
 });
 
+test('a corrupt altitude reaches neither the marker height nor the card', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer, sources } = await enabledLayer(receiver, clock);
+  t.after(() => layer.destroy());
+  const entity = () => sources[0].entities.getById('local-adsb:abc123');
+  const heightM = () =>
+    Cesium.Cartographic.fromCartesian(entity().position.getValue()).height;
+  const altitudeLine = () =>
+    entity().gevLabelModel.details.find((line) => line.startsWith('ALT '));
+  receiver.set({ aircraft: [record()] });
+  await layer.update();
+  const cruiseM = heightM();
+  assert.match(altitudeLine(), /^ALT 10,000 FT/);
+
+  clock.now = 101_000;
+  receiver.set({
+    aircraft: [
+      record({
+        altitudeFt: 108_800,
+        lastPositionAt: 101_000,
+        lastMessageAt: 101_000,
+      }),
+    ],
+  });
+  await layer.update();
+  await layer.update();
+  assert.ok(
+    Math.abs(heightM() - cruiseM) < 1,
+    `held at cruise (${heightM()} m vs ${cruiseM} m)`,
+  );
+  assert.match(altitudeLine(), /^ALT 10,000 FT/);
+  assert.equal(layer.getStats().rejectedAltitudes, 1, 'counted once');
+
+  clock.now = 102_000;
+  receiver.set({
+    aircraft: [
+      record({
+        altitudeFt: 10_100,
+        lastPositionAt: 102_000,
+        lastMessageAt: 102_000,
+      }),
+    ],
+  });
+  await layer.update();
+  assert.match(altitudeLine(), /^ALT 10,100 FT/);
+  assert.equal(layer.getStats().rejectedAltitudes, 1);
+});
+
 test('selecting an aircraft draws a magenta trail of the fixes the receiver heard', async (t) => {
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };

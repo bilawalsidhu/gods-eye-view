@@ -6,6 +6,9 @@ import {
   LOCAL_ADSB_MESSAGE_STALE_MS,
   LOCAL_ADSB_POSITION_STALE_MS,
   LOCAL_ADSB_REFERENCE_MAX_AGE_MS,
+  createLocalAdsbAltitudeGate,
+  gateLocalAdsbAltitude,
+  localAdsbAltitudeIsPlausible,
   localAdsbFixIsPlausible,
   localAdsbPositionIsFresh,
   localAdsbRecordIsLive,
@@ -322,5 +325,107 @@ test('the position sanity check follows dump1090: speed × 1.5 + margin over ela
     ),
     true,
     'the fixed 500 m margin absorbs CPR and reception error',
+  );
+});
+
+test('the altitude check allows the vertical rate × 1.5 + margin over elapsed + 1 s', () => {
+  const from = { altitudeFt: 30_000, at: 0, verticalRateFpm: null };
+  // 9 s later, so the allowance covers 10 s: a sixth of a minute.
+  const at = 9_000;
+  const check = (altitudeFt, rates = {}) =>
+    localAdsbAltitudeIsPlausible(
+      { ...from, verticalRateFpm: rates.previous ?? null },
+      { altitudeFt, at, verticalRateFpm: rates.next ?? null },
+    );
+  assert.equal(
+    localAdsbAltitudeIsPlausible(null, { altitudeFt: 108_800, at }),
+    true,
+    'no reference',
+  );
+  // Unknown rate: 12,500 ft/min → 2,083 ft + 300 ft.
+  assert.equal(check(32_380), true);
+  assert.equal(check(32_390), false);
+  assert.equal(check(27_620), true, 'the limit is symmetric');
+  assert.equal(check(27_610), false);
+  // Level flight reported: 2,000 ft/min → 333 ft + 300 ft.
+  assert.equal(check(30_630, { previous: 0 }), true);
+  assert.equal(check(30_640, { previous: 0 }), false);
+  // The larger of the two reported rates counts: 6,000 × 1.5 + 2,000
+  // = 11,000 ft/min → 1,833 ft + 300 ft.
+  assert.equal(check(27_870, { previous: 0, next: -6_000 }), true);
+  assert.equal(check(27_860, { previous: 0, next: -6_000 }), false);
+  assert.equal(
+    localAdsbAltitudeIsPlausible(
+      { altitudeFt: 30_000, at: 9_000 },
+      { altitudeFt: 30_400, at: 0 },
+    ),
+    true,
+    'an out-of-order report gets the zero-gap allowance, not a negative one',
+  );
+});
+
+/** Feed one aircraft's reports, `[seconds, altitudeFt, extra]`, through a gate. */
+function gateReports(reports) {
+  const gate = createLocalAdsbAltitudeGate();
+  const altitudes = reports.map(
+    ([seconds, altitudeFt, extra = {}]) =>
+      gateLocalAdsbAltitude(
+        {
+          icao: 'abc123',
+          lastMessageAt: seconds * 1_000,
+          altitudeFt,
+          ...extra,
+        },
+        gate,
+      ).altitudeFt,
+  );
+  return { altitudes, rejected: gate.rejected };
+}
+
+test('a corrupt altitude is held at the last accepted one and judged once', () => {
+  // The logged case: a DC-9 cruising at 35,000 ft reported once at 108,800 ft.
+  // The layer re-reads the same record several times a second; a re-read of
+  // the refused report is neither let through nor counted again.
+  assert.deepEqual(
+    gateReports([
+      [0, 35_000],
+      [0.5, 35_000],
+      [1, 108_800],
+      [1, 108_800],
+      [1, 108_800],
+      [1.5, 35_025],
+    ]),
+    {
+      altitudes: [35_000, 35_000, 35_000, 35_000, 35_000, 35_025],
+      rejected: 1,
+    },
+  );
+});
+
+test('a bad first altitude clears itself on the third refusal', () => {
+  assert.deepEqual(
+    gateReports([
+      [0, 108_800],
+      [0.5, 35_000],
+      [1, 35_000],
+      [1.5, 35_000],
+      [2, 35_000],
+    ]),
+    { altitudes: [108_800, 108_800, 108_800, 35_000, 35_000], rejected: 3 },
+  );
+});
+
+test('a surface report is not compared with the last airborne altitude', () => {
+  // Denver: the last airborne report is 5,600 ft barometric, and a feed
+  // reports `alt_baro: "ground"` as 0. Neither the landing nor the next
+  // takeoff is a jump.
+  assert.deepEqual(
+    gateReports([
+      [0, 5_600],
+      [20, 0, { onGround: true }],
+      [300, 5_700],
+      [301, 5_720],
+    ]),
+    { altitudes: [5_600, 0, 5_700, 5_720], rejected: 0 },
   );
 });
