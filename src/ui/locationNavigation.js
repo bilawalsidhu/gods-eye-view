@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { createStateChannel } from '../app/stateChannel.js';
 import { LocationControls } from './location.js';
+import { readCameraTargetFrame } from './cameraOrientationControls.js';
 
 /** Own destination selection, lookup, orbit and world-jump lifetime. */
 export class LocationNavigation {
@@ -162,8 +163,27 @@ export class LocationNavigation {
     this._updateRestoreHiddenControl();
   }
 
-  /** The current camera's ground point, height and orientation, in the shape a POI needs. */
+  /**
+   * The point actually on screen — not just under the camera — plus the
+   * orbit orientation/range needed to fly back to it, in the shape a POI
+   * needs. Ray-picks the real terrain/3D-tile surface under the viewport
+   * center (readCameraTargetFrame, shared with the orbit controller), so a
+   * saved pin lands on what was actually visible even at a steep tilt.
+   * Falls back to the camera's own ground projection if picking fails
+   * (e.g. nothing rendered yet under the crosshair).
+   */
   _captureCurrentView() {
+    const frame = readCameraTargetFrame(this.viewer);
+    if (frame) {
+      const carto = Cesium.Cartographic.fromCartesian(frame.target);
+      return {
+        lat: Cesium.Math.toDegrees(carto.latitude),
+        lon: Cesium.Math.toDegrees(carto.longitude),
+        alt: Math.max(50, Math.round(frame.range)),
+        heading: Cesium.Math.toDegrees(frame.heading),
+        pitch: Cesium.Math.toDegrees(frame.pitch),
+      };
+    }
     const carto = Cesium.Cartographic.fromCartesian(
       this.viewer.camera.positionWC,
     );

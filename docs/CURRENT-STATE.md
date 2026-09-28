@@ -700,8 +700,14 @@ built by `src/services/customLocations.js` on top of the same `CITY_POIS`
 registry bundled cities use, via `registerLocation()`/`unregisterLocation()` in
 `locations.js`:
 
-- **Add** (`+`): saves the current camera view as a new named pin — name,
-  lat/lon, heading/pitch and the camera's height (reused as the fly-back range).
+- **Add** (`+`): saves the current camera view as a new named pin.
+  `LocationNavigation._captureCurrentView()` gets the point *actually on
+  screen* via `readCameraTargetFrame()` (`cameraOrientationControls.js`,
+  shared with the orbit controller) — a ray-pick against the real
+  terrain/3D-tile surface under the viewport center, not just the camera's
+  own ground projection — so a saved pin reproduces the exact view even at a
+  steep tilt, not just the neighborhood. Falls back to the camera's ground
+  projection if picking fails (nothing rendered yet under the crosshair).
 - **Rename**: works on both a custom pin and a bundled city. Renaming a bundled
   city writes a local override, never the shipped entry.
 - **Hide/Delete** (`×`): a custom pin is deleted outright; a bundled city is
