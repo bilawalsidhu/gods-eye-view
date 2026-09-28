@@ -10,6 +10,7 @@ const ORDER = [
   'weather-radar',
   'weather-satellite',
   'weather-lightning',
+  'weather-alerts',
 ];
 const OBSERVED = new Set(ORDER.slice(2));
 const utc = (time) =>
@@ -135,8 +136,18 @@ export function createWeatherPanel({
       'weather-radar': 'Rain radar',
       'weather-satellite': 'Satellite clouds',
       'weather-lightning': 'Lightning density',
+      'weather-alerts': 'Warnings',
     };
-    set(scope, 'textContent', observed.map(({ id }) => names[id]).join(' · '));
+    // The card label's head names the product its source draws
+    // ('Lightning · 5 min flashes' on Xweather, 'Lightning density · 15 min'
+    // on NOAA); the fixed names cover a card without a label.
+    set(
+      scope,
+      'textContent',
+      observed
+        .map(({ id, summary }) => summary.label?.split(' · ')[0] || names[id])
+        .join(' · '),
+    );
     set(timelineHost, 'hidden', !showTimeline);
     const index =
       state.mode === 'latest'
@@ -161,7 +172,8 @@ export function createWeatherPanel({
     const models = active.map(({ id, icon, summary, legend = [], list }) => {
       let detail = summary.detail;
       const product = state.products.find((item) => item.id === id);
-      if (OBSERVED.has(id)) {
+      // A card waiting for its key keeps its own detail: the requirement.
+      if (OBSERVED.has(id) && !summary.keyRequired) {
         const shown = product?.shown ?? summary.shownTime;
         if (state.mode === 'history' && product?.selected === null) {
           const gap = summary.maxGapMinutes || 30;

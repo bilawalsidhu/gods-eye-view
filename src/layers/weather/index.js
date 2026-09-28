@@ -28,6 +28,10 @@ const LIGHTNING_STOPS = [
   ['200', '#00C7FF'],
   ['300+', '#00FF00'],
 ];
+// Xweather colours warnings by alert type and publishes no scale beyond that
+// reference, so the card links it instead of drawing a ramp.
+const ALERT_TYPES_URL =
+  'https://www.xweather.com/docs/maps/reference/alert-types';
 const utc = (value) =>
   value ? `${value.slice(5, 16).replace('T', ' ')} UTC` : 'Unavailable';
 
@@ -42,13 +46,40 @@ export function createWeatherLayer({
   documentRef = globalThis.document,
   eventTarget = globalThis.window,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
+  credits = null,
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Weather requires a snapshot source');
   const radar = id === 'weather-radar';
   const lightning = id === 'weather-lightning';
-  const satellite = !radar && !lightning;
-  let product = radar ? 'radar' : lightning ? 'lightning' : 'clouds-regional';
+  // Official warnings: Xweather only, so the card needs its key.
+  const alerts = id === 'weather-alerts';
+  const satellite = !radar && !lightning && !alerts;
+  let source = alerts ? 'xweather' : 'nowcoast';
+  let product = radar
+    ? 'radar'
+    : lightning
+      ? 'lightning'
+      : alerts
+        ? 'xweather-alerts'
+        : 'clouds-regional';
+  const productFor = () =>
+    radar
+      ? source === 'xweather'
+        ? 'xweather-radar'
+        : 'radar'
+      : lightning
+        ? source === 'xweather'
+          ? 'xweather-lightning'
+          : 'lightning'
+        : product;
+  // Key presence and the free-month count, asked at most once a minute.
+  let xweatherStatus = null;
+  let statusAt = -Infinity;
+  let keyFallback = false;
+  let fallbackShownAt = null;
+  // The warnings card without a key: it asks for status and nothing else.
+  let keyRequired = false;
   let opacity = 'strong';
   let infrared = 'filtered';
   let viewer = null,
@@ -73,8 +104,13 @@ export function createWeatherLayer({
   let unregisterClock = null;
   let frameRequest = null;
   let noFrame = false;
+  const xweather = () => source === 'xweather';
+  // A notice, not a header: gone a poll interval after the first NOAA frame.
+  const fallbackNotice = () =>
+    keyFallback &&
+    (fallbackShownAt === null || Date.now() - fallbackShownAt < 60_000);
   const maxGap = () =>
-    radar
+    radar || alerts
       ? RADAR_MAX_GAP_MS
       : lightning
         ? LIGHTNING_MAX_GAP_MS
@@ -147,6 +183,27 @@ export function createWeatherLayer({
     notify();
   }
   const onMapStackChanged = () => checkHost();
+  // Drop the current product's frames and acquire the newly chosen one.
+  /** Drop the shown frame and manifest; the running update is left alone. */
+  function clearFrames() {
+    ++generation;
+    frameRequest?.abort();
+    frameRequest = null;
+    noFrame = false;
+    stop();
+    manifest = null;
+    error = null;
+    followLatest = true;
+    rendering?.clear();
+  }
+  function restage() {
+    clearFrames();
+    request?.abort();
+    request = null;
+    loading = false;
+    if (clock) void clock.refresh();
+    if (enabled) void layer.update(viewer);
+  }
 
   function schedule() {
     if (clock) return;
@@ -225,6 +282,10 @@ export function createWeatherLayer({
       if (ok) {
         noFrame = false;
         rendering.setHidden?.(false);
+        // Xweather terms want attribution once its imagery is on screen.
+        if (xweather())
+          credits?.registerDynamicCredit(viewer, credits.XWEATHER_CREDIT);
+        else if (keyFallback) fallbackShownAt ??= Date.now();
         void warmNext(time);
       }
       error = ok ? null : 'Frame unavailable; previous observation retained';
@@ -253,9 +314,18 @@ export function createWeatherLayer({
       ? 'Rain radar'
       : lightning
         ? 'Lightning density'
-        : 'Satellite clouds',
-    icon: radar ? '◉' : lightning ? 'ϟ' : '☁',
-    source: 'NOAA nowCOAST · OBSERVED',
+        : alerts
+          ? 'Warnings'
+          : 'Satellite clouds',
+    icon: radar ? '◉' : lightning ? 'ϟ' : alerts ? '⚠' : '☁',
+    // Registry id of the key this card needs; `getStats().keyRequired` says
+    // when it is missing, and the panel names it.
+    requiresKeyId: alerts ? 'xweather' : null,
+    get source() {
+      return xweather()
+        ? 'Vaisala Xweather · OBSERVED'
+        : 'NOAA nowCOAST · OBSERVED';
+    },
     updateInterval: lightning ? 600_000 : 120_000,
     init(nextViewer) {
       viewer = nextViewer;
@@ -311,6 +381,7 @@ export function createWeatherLayer({
       manifest = null;
       loading = false;
       error = null;
+      keyRequired = false;
       followLatest = true;
     },
     async update(_viewer, { signal } = {}) {
@@ -331,6 +402,51 @@ export function createWeatherLayer({
       notify();
       try {
         signal?.throwIfAborted();
+        if (
+          (radar || lightning || alerts) &&
+          feed.getXweatherStatus &&
+          Date.now() - statusAt >= 60_000
+        ) {
+          statusAt = Date.now();
+          const status = await feed
+            .getXweatherStatus({ signal: controller.signal })
+            .catch(() => null);
+          // Keep the last status through a failure; ask again next update.
+          if (status) xweatherStatus = status;
+          else statusAt = -Infinity;
+          if (!enabled || controller.signal.aborted || request !== controller)
+            return false;
+          if (xweatherStatus?.hasKey) keyFallback = false;
+          // A removed key must not leave the card asking Xweather for frames.
+          // Switch to NOAA and fetch it in this same update: the lifecycle
+          // reads `false` from a first update as a rejection and turns the
+          // card off (a keyless share link with the Xweather source).
+          // Warnings have no NOAA product to fall back to (below).
+          if (
+            !alerts &&
+            xweather() &&
+            xweatherStatus &&
+            !xweatherStatus.hasKey
+          ) {
+            source = 'nowcoast';
+            product = productFor();
+            keyFallback = true;
+            fallbackShownAt = null;
+            clearFrames();
+            notify();
+          }
+        }
+        if (alerts) {
+          // No key, or no answer yet: never ask Xweather for frames. A
+          // removed key also takes its last frame off the map.
+          const missing = xweatherStatus?.hasKey !== true;
+          if (missing && (manifest || shownTime())) clearFrames();
+          keyRequired = xweatherStatus?.hasKey === false;
+          if (missing) {
+            error = keyRequired ? null : 'Xweather status unavailable';
+            return true;
+          }
+        }
         const snapshot = await feed.getSnapshot({
           product,
           signal: controller.signal,
@@ -397,20 +513,19 @@ export function createWeatherLayer({
         params.product !== product
       ) {
         product = params.product;
-        ++generation;
-        frameRequest?.abort();
-        frameRequest = null;
-        noFrame = false;
-        request?.abort();
-        request = null;
-        stop();
-        manifest = null;
-        error = null;
-        loading = false;
-        followLatest = true;
-        rendering?.clear();
-        if (clock) void clock.refresh();
-        if (enabled) void layer.update(viewer);
+        restage();
+      }
+      if (
+        (radar || lightning) &&
+        ['nowcoast', 'xweather'].includes(params.source) &&
+        params.source !== source
+      ) {
+        source = params.source;
+        product = productFor();
+        keyFallback = false;
+        // Ask again now: the choice may be the first spend this month.
+        statusAt = -Infinity;
+        restage();
       }
       if (infraredChanged && enabled && manifest) {
         clearTimeout(timer);
@@ -424,9 +539,10 @@ export function createWeatherLayer({
         manifest?.bounds &&
         runNavigation
       ) {
-        const b = lightning
-          ? { west: 110, south: -25, east: 0, north: 80 }
-          : manifest.bounds;
+        const b =
+          lightning && !xweather()
+            ? { west: 110, south: -25, east: 0, north: 80 }
+            : manifest.bounds;
         runNavigation(() =>
           viewer.camera.flyTo({
             destination: cesium.Rectangle.fromDegrees(
@@ -474,16 +590,18 @@ export function createWeatherLayer({
       notify();
     },
     getParams() {
-      return radar
-        ? { opacity }
-        : satellite
-          ? { product, opacity, infrared }
-          : { product, opacity };
+      return satellite
+        ? { product, opacity, infrared }
+        : alerts
+          ? { opacity }
+          : { source, opacity };
     },
     getRowControls() {
       const shared = clock?.getState();
       const followLatest = isLatest();
+      // A card waiting for its key has no frame to miss.
       const missing =
+        !keyRequired &&
         noFrame &&
         shared?.mode === 'history' &&
         shared.products.find((entry) => entry.id === id)?.selected === null
@@ -534,44 +652,103 @@ export function createWeatherLayer({
           lon > b.east ||
           lat < b.south ||
           lat > b.north ||
-          (lightning && lon > 0 && lon < 110));
+          (lightning && !xweather() && lon > 0 && lon < 110));
+      const count = (value) => Number(value).toLocaleString('en-US');
+      const budget =
+        xweather() && xweatherStatus?.hasKey
+          ? xweatherStatus.over
+            ? `Xweather · past the free ${count(xweatherStatus.allowance)} this month · requests may fail`
+            : `Xweather · ${count(xweatherStatus.used)} / ${count(xweatherStatus.allowance)} free this month`
+          : null;
       const controls = {
         readout: true,
         summary: {
           label: radar
-            ? 'Rain radar · US'
+            ? xweather()
+              ? 'Rain radar · Global'
+              : 'Rain radar · US'
             : lightning
-              ? 'Lightning density · 15 min'
-              : 'Satellite clouds',
-          coverage: radar
-            ? 'CONUS'
-            : lightning
-              ? 'Americas + Pacific'
-              : product === 'clouds'
-                ? 'Global · 60°S–60°N'
-                : 'North America',
+              ? xweather()
+                ? 'Lightning · 5 min flashes'
+                : 'Lightning density · 15 min'
+              : alerts
+                ? 'Warnings · Xweather'
+                : 'Satellite clouds',
+          coverage: alerts
+            ? 'US · Canada · Europe · Australia · Japan · Korea'
+            : xweather()
+              ? 'Global · 85°S–85°N'
+              : radar
+                ? 'CONUS'
+                : lightning
+                  ? 'Americas + Pacific'
+                  : product === 'clouds'
+                    ? 'Global · 60°S–60°N'
+                    : 'North America',
           shownTime: time,
           maxGapMinutes: maxGap() / 60_000,
           detail: time
             ? `${followLatest ? 'Observed' : 'History'} · ${utc(time)} · ${lag}${relation}`
             : missing
               ? 'Observation unavailable'
-              : 'Waiting for observation',
+              : keyRequired
+                ? 'Xweather key required'
+                : 'Waiting for observation',
+          keyRequired,
+          // The status line is one line high: the short form here, and the
+          // panel puts the full key requirement on the detail line.
           status:
+            (keyRequired
+              ? 'Needs an Xweather key · see Provider Settings'
+              : null) ||
             missing ||
             hostStatus ||
+            // A refusal also fails the frame, so it must outrank that error.
+            (xweather() && xweatherStatus?.upstreamError
+              ? 'Xweather refused the request · see Provider Settings'
+              : null) ||
             error ||
             diagnostic?.error ||
             (observationDelayed()
               ? 'Source observations delayed'
               : manifest?.stale
                 ? 'Stale source'
-                : loading
-                  ? 'Loading next frame…'
-                  : outside
-                    ? 'Map center outside coverage'
-                    : null),
-          units: radar ? 'dBZ' : lightning ? 'strikes/km²/min ×10³' : '',
+                : fallbackNotice()
+                  ? 'Xweather key removed · showing NOAA'
+                  : loading
+                    ? 'Loading next frame…'
+                    : outside
+                      ? 'Map center outside coverage'
+                      : null),
+          units: xweather()
+            ? ''
+            : radar
+              ? 'dBZ'
+              : lightning
+                ? 'strikes/km²/min ×10³'
+                : '',
+          lines: xweather()
+            ? [
+                {
+                  id: 'caveat',
+                  text: radar
+                    ? 'Radar where available; satellite-derived elsewhere'
+                    : alerts
+                      ? 'Official warnings where issued · no global coverage'
+                      : 'Individual flashes, last 5 min · not density',
+                  muted: true,
+                },
+                ...(budget
+                  ? [
+                      {
+                        id: 'xweather-budget',
+                        text: budget,
+                        muted: !xweatherStatus.over,
+                      },
+                    ]
+                  : []),
+              ]
+            : [],
         },
         chips: [
           ...(satellite
@@ -608,6 +785,21 @@ export function createWeatherLayer({
                 },
               ]
             : []),
+          ...((radar || lightning) && (xweatherStatus?.hasKey || xweather())
+            ? [
+                ['nowcoast', 'NOAA'],
+                ['xweather', 'Global (Xweather)'],
+              ].map(([value, label]) => ({
+                id: value,
+                label,
+                active: source === value,
+                params: { source: value },
+                title:
+                  value === 'xweather'
+                    ? "Vaisala Xweather · uses your key, counts toward your account's free monthly allowance"
+                    : 'NOAA nowCOAST · keyless',
+              }))
+            : []),
           ...['light', 'strong'].map((value) => ({
             id: `opacity-${value}`,
             label: value === 'light' ? 'Soft' : 'Vivid',
@@ -615,19 +807,30 @@ export function createWeatherLayer({
             params: { opacity: value },
             title: 'Image opacity; does not alter the observed values',
           })),
-          {
-            id: 'coverage',
-            label: radar
-              ? 'View US radar'
-              : lightning
-                ? 'View Americas & Pacific'
-                : 'View coverage',
-            disabled: !manifest || !runNavigation,
-            params: { focus: true },
-          },
+          // Warnings cover a set of countries, not the global manifest bounds,
+          // so flying there would imply global coverage.
+          ...(alerts
+            ? []
+            : [
+                {
+                  id: 'coverage',
+                  label: xweather()
+                    ? 'View coverage'
+                    : radar
+                      ? 'View US radar'
+                      : lightning
+                        ? 'View Americas & Pacific'
+                        : 'View coverage',
+                  disabled: !manifest || !runNavigation,
+                  params: { focus: true },
+                },
+              ]),
         ],
+        // Xweather publishes no colour scale for radar-global or
+        // lightning-flash (https://www.xweather.com/docs/maps/reference/legends);
+        // info links the layer docs instead of a guessed ramp.
         legend:
-          radar || lightning
+          (radar || lightning) && !xweather()
             ? (lightning ? LIGHTNING_STOPS : STOPS).map(([label, color]) => ({
                 label: String(label),
                 color,
@@ -638,12 +841,18 @@ export function createWeatherLayer({
             : [],
         info: hostHidden
           ? hostStatus
-          : `${radar ? 'RADAR REFLECTIVITY · dBZ' : lightning ? 'LIGHTNING DENSITY · 15 min accumulation' : product === 'clouds' ? 'GLOBAL INFRARED · hourly' : 'GOES INFRARED · ~5 min'}\n${time ? `${followLatest ? 'Latest observation' : 'History'}: ${utc(time)}\n${lag}${current && !followLatest ? ` · frame ${index + 1}/${times.length}` : ''}${loading ? ' · loading' : ''}` : `Observation: unavailable${loading ? ' · loading' : ''}`}${missing ? `\n${missing}` : ''}${manifest?.stale ? '\nSTALE · cached source metadata' : ''}${error || diagnostic?.error ? '\n' + (error || diagnostic.error) : ''}\n${radar ? 'Contiguous US · gaps ≠ no rain' : lightning ? 'Americas + Pacific · not individual strikes\nColor: strikes/km²/min ×10³' : product === 'clouds' ? '60°S–60°N · typically 2–3 h delayed' : 'North America · infrared imagery'}${outside ? '\nMap center is outside source coverage' : ''}${motion?.matches ? (clock ? '\nReduced motion · history playback unavailable' : '\nReduced motion · manual history available') : ''}`,
-        infoTitle: lightning
-          ? 'NOAA/NWS 15-minute lightning density derived from Vaisala NLDN/GLD360. Coverage 110°E across the Pacific/Americas to 0°, 25°S–80°N. Not a live strike count, global coverage or a safety warning.'
-          : radar
-            ? 'NOAA MRMS radar echoes indicate precipitation patterns, not rain rate, a storm warning or a future forecast. Native source approximately 1 km; display is limited to level 6. Frames use exact advertised observation times.'
-            : 'GOES-19/18 longwave infrared Band 14 regional; NESDIS global longwave mosaic. Clouds only dims everything but bright, cold cloud tops; a brightness filter, not a cloud mask. Coverage and freshness differ by region.',
+          : `${xweather() ? (radar ? 'GLOBAL RADAR · ~2 min' : alerts ? 'OFFICIAL WARNINGS · ~3 min' : 'LIGHTNING FLASHES · last 5 min') : radar ? 'RADAR REFLECTIVITY · dBZ' : lightning ? 'LIGHTNING DENSITY · 15 min accumulation' : product === 'clouds' ? 'GLOBAL INFRARED · hourly' : 'GOES INFRARED · ~5 min'}\n${time ? `${followLatest ? 'Latest observation' : 'History'}: ${utc(time)}\n${lag}${current && !followLatest ? ` · frame ${index + 1}/${times.length}` : ''}${loading ? ' · loading' : ''}` : `Observation: unavailable${loading ? ' · loading' : ''}`}${missing ? `\n${missing}` : ''}${manifest?.stale ? '\nSTALE · cached source metadata' : ''}${error || diagnostic?.error ? '\n' + (error || diagnostic.error) : ''}\n${alerts ? `US · Canada · Europe · Australia · Japan · Korea · where agencies issue warnings\nColours: Xweather alert types — ${ALERT_TYPES_URL}` : xweather() ? `85°S–85°N · ${radar ? 'satellite-derived where radar is absent' : 'individual flashes, not density'}\nColours: Xweather ${radar ? 'radar' : 'lightning'} legend — https://www.xweather.com/docs/maps/layers` : radar ? 'Contiguous US · gaps ≠ no rain' : lightning ? 'Americas + Pacific · not individual strikes\nColor: strikes/km²/min ×10³' : product === 'clouds' ? '60°S–60°N · typically 2–3 h delayed' : 'North America · infrared imagery'}${outside ? '\nMap center is outside source coverage' : ''}${motion?.matches ? (clock ? '\nReduced motion · history playback unavailable' : '\nReduced motion · manual history available') : ''}`,
+        infoTitle: alerts
+          ? 'Vaisala Xweather alerts: official warnings, watches and advisories from national weather agencies in the US, Canada, Europe, Australia, Japan and Korea, coloured by alert type. Nothing is drawn where no agency issues warnings through Xweather. Not a forecast. Uses your key and counts toward the free monthly allowance.'
+          : xweather()
+            ? radar
+              ? 'Vaisala Xweather radar-global: radar where available, satellite-derived radar elsewhere, about every 2 minutes. Web Mercator source, so coverage stops at 85°S–85°N. Not rain rate, a storm warning or a forecast. Uses your key and counts toward the free monthly allowance.'
+              : 'Vaisala Xweather lightning-flash: cloud-to-ground and in-cloud flashes aggregated over the last 5 minutes. Coverage 85°S–85°N. Not a density or a safety warning. Uses your key and counts toward the free monthly allowance.'
+            : lightning
+              ? 'NOAA/NWS 15-minute lightning density derived from Vaisala NLDN/GLD360. Coverage 110°E across the Pacific/Americas to 0°, 25°S–80°N. Not a live strike count, global coverage or a safety warning.'
+              : radar
+                ? 'NOAA MRMS radar echoes indicate precipitation patterns, not rain rate, a storm warning or a future forecast. Native source approximately 1 km; display is limited to level 6. Frames use exact advertised observation times.'
+                : 'GOES-19/18 longwave infrared Band 14 regional; NESDIS global longwave mosaic. Clouds only dims everything but bright, cold cloud tops; a brightness filter, not a cloud mask. Coverage and freshness differ by region.',
       };
       controls.summary.settings = [
         ...(satellite
@@ -657,6 +866,15 @@ export function createWeatherLayer({
                 id: 'image',
                 label: 'IMAGE',
                 chips: controls.chips.filter(({ params }) => params.infrared),
+              },
+            ]
+          : []),
+        ...(controls.chips.some(({ params }) => params.source)
+          ? [
+              {
+                id: 'source',
+                label: 'SOURCE',
+                chips: controls.chips.filter(({ params }) => params.source),
               },
             ]
           : []),
@@ -680,9 +898,12 @@ export function createWeatherLayer({
         countLabel: isLatest() ? 'Observed' : 'History',
         lastUpdate: shownTime() ? Date.parse(shownTime()) : null,
         loading,
+        // The panel names the key from `requiresKeyId`; this says it is due.
+        keyRequired,
+        ...(keyRequired ? { loadingLabel: 'KEY REQUIRED' } : {}),
         error: error || rendering?.getDiagnostics().error || null,
         stale: Boolean(manifest?.stale || observationDelayed()),
-        source: 'NOAA nowCOAST',
+        source: xweather() ? 'Vaisala Xweather' : 'NOAA nowCOAST',
         observedAt: shownTime(),
       };
     },

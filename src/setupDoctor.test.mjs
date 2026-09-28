@@ -64,6 +64,11 @@ test('doctor selects a Windows-safe npm process without changing Unix behavior',
   assert.deepEqual(npmProcessSpec('linux'), { command: 'npm', shell: false });
 });
 
+test('doctor recognizes the Xweather credential pair with no invented Keychain alias', () => {
+  assert.deepEqual(credential('XWEATHER_CLIENT_ID').keychain, []);
+  assert.deepEqual(credential('XWEATHER_CLIENT_SECRET').keychain, []);
+});
+
 test('doctor recognizes every OpenSky OAuth keychain alias used by dev-fresh', () => {
   assert.deepEqual(
     credential('OPENSKY_CLIENT_ID').keychain,
@@ -207,6 +212,29 @@ test('doctor reports auto mode without assuming its eventual credential choice',
   }
 });
 
+test('doctor reports the Xweather source only when both credentials are present', () => {
+  for (const [credentials, expected] of [
+    [{}, 'NOAA observed (keyless)'],
+    [
+      { XWEATHER_CLIENT_ID: { configured: true } },
+      'NOAA observed (keyless)',
+    ],
+    [
+      { XWEATHER_CLIENT_SECRET: { configured: true } },
+      'NOAA observed (keyless)',
+    ],
+    [
+      {
+        XWEATHER_CLIENT_ID: { configured: true },
+        XWEATHER_CLIENT_SECRET: { configured: true },
+      },
+      'NOAA observed + Xweather global radar and lightning',
+    ],
+  ]) {
+    assert.equal(buildCapabilitySummary(credentials).weather, expected);
+  }
+});
+
 test('doctor describes the credential ladder without exposing values', () => {
   const credentials = {
     GOOGLE_MAPS_API_KEY: { configured: false },
@@ -216,6 +244,8 @@ test('doctor describes the credential ladder without exposing values', () => {
     AISSTREAM_API_KEY: { configured: false },
     FIRMS_MAP_KEY: { configured: false },
     TOMTOM_API_KEY: { configured: false },
+    XWEATHER_CLIENT_ID: { configured: false },
+    XWEATHER_CLIENT_SECRET: { configured: false },
     OPENSKY_CLIENT_ID: { configured: false },
     OPENSKY_CLIENT_SECRET: { configured: false },
     LL2_API_TOKEN: { configured: true, source: 'environment' },
@@ -226,6 +256,7 @@ test('doctor describes the credential ladder without exposing values', () => {
   assert.equal(capabilities.voice, 'available');
   assert.match(capabilities.missions, /token allowance/);
   assert.equal(capabilities.flights, 'OpenSky keyless anonymous access (rate-limited)');
+  assert.equal(capabilities.weather, 'NOAA observed (keyless)');
 
   const report = formatSetupReport({
     ready: true,
@@ -238,6 +269,7 @@ test('doctor describes the credential ladder without exposing values', () => {
   assert.doesNotMatch(report, /configured-value/);
   assert.match(report, /Cesium ion \(environment\)/);
   assert.match(report, /Launch Library 2 \(environment\)/);
+  assert.match(report, /Weather: NOAA observed \(keyless\)/);
 
   const pinokioReport = formatSetupReport({
     ready: true,
@@ -260,6 +292,8 @@ test('doctor sends Keychain-backed reports to dev-fresh and describes OpenSky as
     'AISSTREAM_API_KEY',
     'FIRMS_MAP_KEY',
     'TOMTOM_API_KEY',
+    'XWEATHER_CLIENT_ID',
+    'XWEATHER_CLIENT_SECRET',
     'OPENSKY_CLIENT_ID',
     'OPENSKY_CLIENT_SECRET',
     'LL2_API_TOKEN',
@@ -292,6 +326,8 @@ test('doctor never calls a dependency-missing setup ready', () => {
     'AISSTREAM_API_KEY',
     'FIRMS_MAP_KEY',
     'TOMTOM_API_KEY',
+    'XWEATHER_CLIENT_ID',
+    'XWEATHER_CLIENT_SECRET',
     'OPENSKY_CLIENT_ID',
     'OPENSKY_CLIENT_SECRET',
     'LL2_API_TOKEN',

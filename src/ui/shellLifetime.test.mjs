@@ -140,7 +140,7 @@ test('weather shell supplies live imagery hosts to wind and observations and rel
   let host = { collection: {}, kind: 'tileset' };
   owner.services.imageryHost = () => host;
   const attached = new Map();
-  const ids = ['wind', 'weather-radar', 'weather-satellite', 'weather-lightning'];
+  const ids = ['wind', 'weather-radar', 'weather-satellite', 'weather-lightning', 'weather-alerts'];
   owner.attachDataManager({
     layers: new Map(ids.map(id => [id, { module: {
       attachShellServices(services) { attached.set(id, services); },

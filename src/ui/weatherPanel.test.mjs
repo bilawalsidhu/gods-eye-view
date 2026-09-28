@@ -419,6 +419,90 @@ test('cyclones lead, and observed history owns one bordered group with only acti
   view.destroy();
 });
 
+test('the panel order is cyclones, wind, radar, satellite, lightning, warnings', () => {
+  const f = fixture();
+  const view = createWeatherPanel(f);
+  const warnings = {
+    id: 'weather-alerts',
+    icon: '⚠',
+    summary: { label: 'Warnings · Xweather', coverage: 'US · Canada' },
+  };
+  view.update([warnings, lightning, radar, wind, cyclone, satellite]);
+  const root = f.container.children[0];
+  assert.deepEqual(
+    root.children[0].children.map((n) => n.dataset.cardId),
+    ['weather-cyclones', 'wind'],
+  );
+  const group = f.find((n) => n.className === 'weather-observed-group');
+  assert.deepEqual(
+    group.children[3].children.map((n) => n.dataset.cardId),
+    [
+      'weather-radar',
+      'weather-satellite',
+      'weather-lightning',
+      'weather-alerts',
+    ],
+  );
+  assert.equal(
+    group.children[1].textContent,
+    'Rain radar · Satellite clouds · Lightning density · Warnings',
+  );
+  view.update([{ ...warnings, summary: { coverage: 'US' } }]);
+  assert.equal(group.hidden, false);
+  assert.equal(group.children[1].textContent, 'Warnings');
+  view.destroy();
+});
+
+test('a card that needs a key keeps its detail in history instead of a missing frame', () => {
+  const f = fixture();
+  const view = createWeatherPanel(f);
+  f.state({
+    mode: 'history',
+    target: ticks[0],
+    products: [
+      { id: radar.id, shown: ticks[0], selected: ticks[0] },
+      { id: 'weather-alerts', shown: null, selected: null },
+    ],
+  });
+  view.update([
+    radar,
+    {
+      id: 'weather-alerts',
+      icon: '⚠',
+      summary: {
+        label: 'Warnings · Xweather',
+        detail:
+          'Needs XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET — add it in Provider Settings',
+        status: 'Needs an Xweather key · see Provider Settings',
+        keyRequired: true,
+      },
+    },
+  ]);
+  assert.equal(
+    line(f, 'weather-alerts', 'time').textContent,
+    'Needs XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET — add it in Provider Settings',
+  );
+  assert.match(line(f, radar.id, 'time').textContent, /synced/);
+  view.destroy();
+});
+
+test('the observed-history scope names each card as its source labels it', () => {
+  const f = fixture();
+  const view = createWeatherPanel(f);
+  view.update([
+    { ...radar, summary: { label: 'Rain radar · Global' } },
+    { ...lightning, summary: { label: 'Lightning · 5 min flashes' } },
+  ]);
+  const group = f.find((n) => n.className === 'weather-observed-group');
+  assert.equal(group.children[1].textContent, 'Rain radar · Lightning');
+  view.update([
+    radar,
+    { ...lightning, summary: { label: 'Lightning density · 15 min' } },
+  ]);
+  assert.equal(group.children[1].textContent, 'Rain radar · Lightning density');
+  view.destroy();
+});
+
 test('accordion changes only on headers, newly enabled layers and loss of the open layer', () => {
   const f = fixture();
   const calls = [];

@@ -19,6 +19,8 @@ export const CREDENTIALS = Object.freeze([
   { name: 'AISSTREAM_API_KEY', label: 'AISStream vessels', keychain: [['aisstream-api', 'api-key']] },
   { name: 'FIRMS_MAP_KEY', label: 'NASA FIRMS fires', keychain: [['firms-map', 'map-key']] },
   { name: 'TOMTOM_API_KEY', label: 'TomTom traffic', keychain: [['tomtom-api', 'api-key']] },
+  { name: 'XWEATHER_CLIENT_ID', label: 'Xweather client ID', keychain: [] },
+  { name: 'XWEATHER_CLIENT_SECRET', label: 'Xweather client secret', keychain: [] },
   {
     name: 'OPENSKY_CLIENT_ID',
     label: 'OpenSky client ID',
@@ -179,6 +181,9 @@ export function buildCapabilitySummary(
     vessels: configured('AISSTREAM_API_KEY') ? 'live AISStream feed' : 'off until an AISStream key is added',
     fires: configured('FIRMS_MAP_KEY') ? 'live NASA FIRMS feed' : 'off until a FIRMS key is added',
     traffic: configured('TOMTOM_API_KEY') ? 'live TomTom flow' : 'built-in traffic simulation',
+    weather: configured('XWEATHER_CLIENT_ID') && configured('XWEATHER_CLIENT_SECRET')
+      ? 'NOAA observed + Xweather global radar and lightning'
+      : 'NOAA observed (keyless)',
     missions: configured('LL2_API_TOKEN')
       ? 'Launch Library 2 token allowance'
       : 'Launch Library 2 public access',
@@ -236,6 +241,7 @@ export function formatSetupReport(report, { readyMessage } = {}) {
     `Vessels: ${report.capabilities.vessels}`,
     `Fires:   ${report.capabilities.fires}`,
     `Traffic: ${report.capabilities.traffic}`,
+    `Weather: ${report.capabilities.weather}`,
     `Missions: ${report.capabilities.missions}`,
     '',
     'Configured providers:',

@@ -71,8 +71,8 @@ test('dev-fresh passes names-only boot provenance before resolving file fallback
   assert.ok(capture >= 0 && capture < dotenvResolution, 'parent-shell provenance must be captured first');
   for (const name of [
     'GOOGLE_MAPS_API_KEY', 'CESIUM_ION_TOKEN', 'OPENAI_API_KEY', 'AISSTREAM_API_KEY',
-    'FIRMS_MAP_KEY', 'TOMTOM_API_KEY', 'OPENSKY_CLIENT_ID',
-    'OPENSKY_CLIENT_SECRET', 'LL2_API_TOKEN',
+    'FIRMS_MAP_KEY', 'TOMTOM_API_KEY', 'XWEATHER_CLIENT_ID', 'XWEATHER_CLIENT_SECRET',
+    'OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET', 'LL2_API_TOKEN',
   ]) {
     assert.match(source, new RegExp(`KEY_SETUP_EXTERNAL_KEYS\\+=\\(${name}\\)`));
   }

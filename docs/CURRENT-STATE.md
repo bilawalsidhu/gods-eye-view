@@ -1,5 +1,148 @@
 # God's Eye View Current State
 
+## Xweather weather source — September 25, 2026
+
+Rain radar and Lightning can draw from Vaisala Xweather instead of NOAA
+nowCOAST. Each card's Settings gains a SOURCE row with `NOAA` ("NOAA nowCOAST ·
+keyless") and `Global (Xweather)` ("Vaisala Xweather · uses your key, counts
+toward your account's free monthly allowance"). The row appears only when
+`/api/xweather/status` reports a configured key, or while the card is already
+on Xweather; NOAA is the default. Radar on Xweather is the `xweather-radar`
+product (Xweather layer `radar-global`: radar where available,
+satellite-derived elsewhere, frames about every 2 minutes). Lightning is
+`xweather-lightning` (`lightning-flash`: flashes over the last 5 minutes, frames
+about every 5 minutes), which bills one unit per tile; `lightning-strikes` and
+`lightning-all` bill ten and are not offered. The cards read `Rain radar ·
+Global` and `Lightning · 5 min flashes` with coverage `Global · 85°S–85°N` and
+a muted caveat line: "Radar where available; satellite-derived elsewhere" or
+"Individual flashes, last 5 min · not density". There is no colour legend,
+because Xweather publishes no machine-readable scale for these layers; the info
+text links its layer documentation instead. A linked "Powered by Vaisala
+Xweather" credit is registered in Data attribution once an Xweather frame is
+shown.
+
+`/api/xweather` serves the contract the renderers already read from
+`/api/weather`, with the same query validation: `/status` (`hasKey`, `month`,
+`used`, `allowance`, `over`, `upstreamError`), `/manifest?product=`, `/tile`
+(geographic, advertised to level 6, as globe hosts request it) and `/image`
+(whole extent or a `bbox` detail window, as the 3D Tiles shells request it).
+Without a key `/status` reports `hasKey: false`, `/manifest` answers
+unavailable, `/tile` and `/image` answer 503 `no_key`, and nothing is sent
+upstream. Both products reuse the existing globe and shell renderers. On 3D
+Tiles the Xweather shells take the NOAA heights (radar 6.2 km, lightning
+6.6 km), since a card shows one source at a time.
+
+Xweather serves Web Mercator only, with no EPSG:4326 or WMS, so the proxy
+stitches source tiles and reprojects them bilinearly to the geographic grid.
+Coverage ends at ±85.05°; geographic tiles wholly beyond it are answered with
+a transparent PNG and no upstream call. A full-size (4096×2048) whole-extent
+image is drawn from zoom 3 (64 units), a detail window from at most 192 source
+tiles and a globe tile from at most 9, each source tile body capped at 1 MiB.
+PNGs are decoded and encoded by a small `node:zlib` codec for the formats
+Xweather serves; no dependency was added.
+
+Frame lookups cost no map units (whether they count toward the account's
+billing-period allowance is unknown). Xweather answers `current`, or a UTC
+`YYYYMMDDhhmmss` time, with a 302 (`x-cost-tokens: 0`) to the canonical frame
+`…/{valid}_{run}.png`, the first frame at or after the time asked. Valid
+times are irregular (seconds vary), so from each frame the proxy asks for
+1.5 × the product's cadence earlier (3 min for radar, 7.5 min for lightning),
+which resolves to the frame before it while frames stay between about 0.75 ×
+and 1.5 × the cadence apart. A lookup that is not earlier (a gap) is retried
+once twice as far back; a second miss ends the walk, which lists at most 13
+exact frames with at most two lookups each. Only canonical tile fetches are
+billed.
+
+A cold start walks the whole list. After that the proxy keeps each frame list
+for 2 minutes for radar and 5 for lightning, and a refresh walks back only
+until it meets a frame it already lists, then merges: one new frame costs two
+lookups and none costs one. Refreshes are single-flight per product and do
+not belong to a client. A stale list keeps serving while one runs: `/manifest`
+returns it at once, and `/tile` or `/image` at a time it already names is
+served without waiting. Only a cold start, a list older than an hour or an
+unknown time waits for the walk, so a new frame reaches a card at its next
+manifest poll after the refresh.
+
+Upstream work passes one single-flight gate (8 running, 96 queued, 120
+operations, 12 s deadline); compositions run 4 at a time with at most 8 source
+tiles in flight each. A composition that misses the output cache is charged
+the source tiles it would fetch that are not already decoded, against 600 per
+minute per client and 3,000 overall, which bounds spend at 600 map units a
+minute per client. A new frame walk counts as one request against 120 a
+minute per client and 1,200 overall. Cache hits never count. Refusals are 429
+`xweather_rate_limited` or `xweather_busy` with `Retry-After: 2`, before any
+upstream work. Compositions deflate their PNG on the thread pool, off the
+event loop. Caches are memory only: 512 decoded source tiles (up to 128 MiB)
+and 128 composed outputs (up to 64 MiB, 24 hours each). Four compositions in
+flight hold up to about 160 MiB each (192 decoded tiles 48, mosaic 48, output
+32, encode buffer 32), for a worst case of about 830 MiB. The one file
+written is `.gev-cache/xweather/budget.json`.
+
+The budget counts `x-cost-tokens` from each billed tile response (1 when the
+header is absent) per UTC month. Flushes re-read the file and add only this
+process's units, so two processes sharing it add up, except that two flushes
+overlapping exactly can lose one delta (read-modify-write without a lock);
+units count toward the month they are flushed in, at most about a second
+after they are recorded. The card shows, for example, `Xweather · 4,210 /
+15,000 free this month` (muted) and, past the allowance, `Xweather · past
+the free 15,000 this month · requests may fail`. It warns but does not
+block, because a paid Xweather plan keeps working past the free 15,000 —
+`XWEATHER_MONTHLY_FREE_UNITS` only moves where this warning fires, not
+Xweather's behavior. A free-plan account is different: once its shared
+allowance for the billing period runs out, Xweather refuses all requests
+with a 403 whose body reads "Maximum number of daily accesses reached"
+(seen on 2026-09-25; Xweather documents only per-minute and
+per-billing-period limits, not a separate daily one); the counter does
+not model that cutoff. `XWEATHER_MONTHLY_FREE_UNITS` (a positive
+integer, default 15,000) changes the allowance (lower it if the account's
+shared free allowance is also used elsewhere) and is read when the server
+starts. An upstream refusal (401 or 403, or a 200 with a JSON body, from a
+tile or a frame lookup) shows `Xweather refused the request · see Provider
+Settings`, ahead of the frame error the refusal also causes; a 404, 429
+or 5xx is reported as unavailable instead, and the next successful tile or
+frame lookup clears it.
+
+The radar and lightning cards poll `/status` independently, each at most once a
+minute and again straight after a SOURCE change, with a 5 s timeout; a failed
+poll keeps the last known status. If a poll finds no key while a card is on
+Xweather (removed in Provider Settings, or a share link opened where no key is
+configured), the card falls back to NOAA and shows `Xweather key removed ·
+showing NOAA` for about a minute after the first NOAA frame; stale and delayed
+warnings take precedence. The saved and shared state keeps the Xweather choice,
+so a link copied after a fallback still asks for Xweather. Share links carry
+the source as option `s` on the existing radar (`v`) and lightning (`l`)
+tokens: `n` for NOAA (the default, omitted) or `x` for Xweather. The radar
+and lightning source adds no layer token.
+
+A Warnings card (`weather-alerts`, product `xweather-alerts`, Xweather layer
+`alerts`) is Xweather only. It shows official warning, watch and advisory areas
+from national agencies, coloured by Xweather alert type, and sits last in the
+observed-history group, after Lightning. It reads `Warnings · Xweather` with
+coverage `US · Canada · Europe · Australia · Japan · Korea` and the muted
+caveat "Official warnings where issued · no global coverage"; nothing is drawn
+where no agency issues through Xweather. There is no SOURCE row, no colour
+ramp and no View coverage action (coverage is per country, not the global
+bounds): Settings offers only OPACITY, and the info text links Xweather's
+alert-type reference. The card declares `requiresKeyId: 'xweather'`. Without a
+key it polls `/status` (at most once a minute) and nothing else and reports
+`keyRequired`. Its one-line status reads `Needs an Xweather key · see Provider
+Settings`, and the detail line above it and the toggle give the full shared
+key guidance, `Needs XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET — add it in
+Provider Settings`, in history mode too; a key removed at runtime clears its
+frame. With a key it follows the
+shared history clock and shows the budget line, the refusal status and the
+Xweather credit like the radar card. The proxy lists its frames every 3 minutes
+(Xweather documents 2–3 minute updates; not yet measured) and fetches tiles to
+zoom 8, within the same 192-tile cap. It draws above lightning: priority 4 on
+the globe, a 6.9 km shell on 3D Tiles. Its share-link token is the placeholder
+`9`, with opacity as option `o`, until the maintainers assign one.
+
+The credentials, `XWEATHER_CLIENT_ID` and `XWEATHER_CLIENT_SECRET`, are
+server-side only and read on each request, so Provider Settings (XWEATHER) can
+add or remove them live. They appear only in upstream URL paths; errors to the
+browser are bare codes, logs pass through a redactor, and redirect `Location`
+headers never reach the browser. `npm run doctor` prints a `Weather:` line.
+
 ## Cyber HUD — September 23, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice

@@ -329,16 +329,16 @@ consumers. They expose `summary.settings`, `summary.actions` and optional
 subscriptions still refresh the cards. Cards own configuration and readings.
 
 Weather orders cyclones, wind, then a bordered Observed history group containing
-the timeline and active radar, satellite and lightning cards. The group heading
-and scope name its active products. The timeline stays visible whenever any
-observed product is enabled; fewer than two ticks disables transport. Pass
-`heading: false` to the timeline when the containing group owns the heading.
-Exactly one active card is open. Header clicks and newly enabled ids choose it
-(the last new entry wins a batch); refreshes and clock ticks retain it. First
-appearance uses cyclones with storms, otherwise the first card. Disabling the
-open layer falls back to the first remaining card. A WeakMap per document keeps
-explicit choices through body remounts without adding share state. Card opening,
-storm selection and layer enabling remain independent.
+the timeline and active radar, satellite, lightning and warnings cards. The
+group heading and scope name its active products. The timeline stays visible
+whenever any observed product is enabled; fewer than two ticks disables
+transport. Pass `heading: false` to the timeline when the containing group owns
+the heading. Exactly one active card is open. Header clicks and newly enabled
+ids choose it (the last new entry wins a batch); refreshes and clock ticks
+retain it. First appearance uses cyclones with storms, otherwise the first card.
+Disabling the open layer falls back to the first remaining card. A WeakMap per
+document keeps explicit choices through body remounts without adding share
+state. Card opening, storm selection and layer enabling remain independent.
 
 Optional card/badge/slider class names provide feature styling. Card titles use
 `.data-name` typography; meta/time/badges use `.data-toggle-meta` typography;

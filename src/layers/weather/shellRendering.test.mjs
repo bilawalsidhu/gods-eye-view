@@ -120,13 +120,16 @@ async function show(h, time, options) {
   return pending;
 }
 
-test('shell heights stack every product with lightning highest', () => {
+test('shell heights stack every product with warnings highest', () => {
   assert.deepEqual(WEATHER_SHELL_HEIGHTS, {
     wind: 5_000,
     clouds: 5_500,
     'clouds-regional': 5_800,
     radar: 6_200,
     lightning: 6_600,
+    'xweather-radar': 6_200,
+    'xweather-lightning': 6_600,
+    'xweather-alerts': 6_900,
   });
   assert.equal(WEATHER_SHELL_CACHE_BYTES, 128 * 1024 * 1024);
 });

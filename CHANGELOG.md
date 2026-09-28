@@ -1,5 +1,33 @@
 # Changelog
 
+- A Warnings card joins the WEATHER panel's observed history, after
+  Lightning: official warning, watch and advisory areas from national agencies
+  through Xweather's `alerts` layer (`xweather-alerts` on `/api/xweather`),
+  coloured by Xweather alert type. Coverage is the US, Canada, Europe,
+  Australia, Japan and Korea, where those agencies issue through Xweather; the
+  card says `Official warnings where issued · no global coverage`. It needs the
+  Xweather key: without one it shows the Provider Settings requirement and asks
+  only `/api/xweather/status`. With one it follows the shared history clock and
+  shows the same budget line, refusal status and credit as Xweather radar, with
+  only an OPACITY setting. It draws above lightning. Its share-link token, `9`,
+  is a placeholder until the maintainers assign one (#658 / #744).
+
+- Rain radar and Lightning can show Vaisala Xweather's global radar and
+  lightning flashes with your own key. Set `XWEATHER_CLIENT_ID` and
+  `XWEATHER_CLIENT_SECRET` (Provider Settings → XWEATHER) and each card's
+  Settings gains a SOURCE row, NOAA or Global (Xweather); NOAA stays the
+  default and needs no key. The server-side `/api/xweather` proxy reprojects
+  Xweather's Web Mercator tiles to the globe's grid (85°S–85°N), builds one
+  image from at most 192 map units, and counts spend in
+  `.gev-cache/xweather/budget.json` against the free monthly allowance
+  (`XWEATHER_MONTHLY_FREE_UNITS`, default 15,000). Past the allowance the card
+  warns but doesn't block, with spend bounded at 600 source tiles a minute
+  per client (3,000 overall) — a paid Xweather plan keeps working past the
+  free 15,000; a free-plan account that exhausts its shared allowance for the
+  billing period gets a 403 that reads "Maximum number of daily accesses
+  reached" until the allowance resets. Share links keep the choice as
+  option `s` on the radar and lightning tokens.
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD

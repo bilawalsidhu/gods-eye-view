@@ -176,6 +176,69 @@ test('readout rows contain only toggles and metadata; ordinary rows retain contr
   }
 });
 
+test('a weather card whose key is missing shows the key requirement as its status', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const { railFixture } = await import('./railTestFixture.mjs');
+  const f = railFixture();
+  const body = f.document.createElement('div');
+  f.document.getElementById = (id) =>
+    id === 'weather-panel-body' ? body : null;
+  const previousDocument = globalThis.document;
+  globalThis.document = f.document;
+  const layer = {
+    id: 'weather-alerts',
+    name: 'Warnings',
+    icon: '⚠',
+    source: 'Vaisala Xweather · OBSERVED',
+    enabled: true,
+    showInTogglePanel: true,
+    requiresKeyId: 'xweather',
+    stats: { keyRequired: true },
+  };
+  const panel = new LayerPanel({
+    getLayers: () => [layer],
+    isEnabled: () => true,
+    setEnabled() {},
+    setLayerParams() {},
+    hasRowControls: () => true,
+    subscribeRowControls() {},
+    getRowControls: () => ({
+      readout: true,
+      summary: {
+        label: 'Warnings · Xweather',
+        status: 'Needs an Xweather key · see Provider Settings',
+        detail: 'Xweather key required',
+        keyRequired: true,
+      },
+    }),
+  });
+  const status = () =>
+    f.find((n) => n.dataset.lineId === 'status', body)?.textContent;
+  const detail = () =>
+    f.find((n) => n.dataset.lineId === 'time', body)?.textContent;
+  try {
+    panel.mount(f.container);
+    panel._refreshWeatherPanel();
+    // The status line is one line high: it keeps the short text, and the
+    // full requirement goes on the wrapping line above it.
+    assert.equal(status(), 'Needs an Xweather key · see Provider Settings');
+    assert.equal(
+      detail(),
+      'Needs XWEATHER_CLIENT_ID + XWEATHER_CLIENT_SECRET — add it in Provider Settings',
+    );
+    const toggle = f
+      .find((n) => n.dataset.layerId === 'weather-alerts')
+      .querySelector('.data-toggle-btn');
+    assert.match(toggle.title, /^Needs XWEATHER_CLIENT_ID/);
+    layer.stats = { keyRequired: false };
+    panel._refreshWeatherPanel();
+    assert.equal(detail(), 'Xweather key required');
+  } finally {
+    panel.destroy();
+    globalThis.document = previousDocument;
+  }
+});
+
 test('the Recent Imagery readout mounts in its rail body like the weather readout and is rebuilt or released with the panel', async () => {
   const { LayerPanel } = await import('./layerPanel.js');
   const { railFixture } = await import('./railTestFixture.mjs');
