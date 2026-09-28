@@ -35,8 +35,7 @@ export function createEarthquakesLayer({
   let _selectedContextEntity = null;
   const _rowById = new Map();
 
-  const canSelect = () =>
-    screenSpaceEventHandlerFactory && picking && context;
+  const canSelect = () => screenSpaceEventHandlerFactory && picking && context;
 
   function clearSelectedContext() {
     context?.removeEntityContextsForLayer?.('earthquakes');
@@ -57,7 +56,9 @@ export function createEarthquakesLayer({
       layerName: 'Earthquakes (24h)',
       source: 'USGS',
       dataSource: _dataSource,
-      label: `Earthquake · M${Number(row.mag).toFixed(1)}${row.place ? ` · ${row.place}` : ''}`,
+      label: `Earthquake · M${Number(row.mag).toFixed(1)}${
+        row.place ? ` · ${row.place}` : ''
+      }`,
       latitude: row.lat,
       longitude: row.lon,
       properties: {
@@ -68,7 +69,8 @@ export function createEarthquakesLayer({
         usgsId: row.usgsId ?? null,
       },
     });
-    if (announce && record) context?.selectEntityContext?.(_selectedContextEntity);
+    if (announce && record)
+      context?.selectEntityContext?.(_selectedContextEntity);
     return record || null;
   }
 
