@@ -1,5 +1,13 @@
 # God's Eye View Current State
 
+## Photorealistic 3D Tiles fallback — September 28, 2026
+
+Photoreal startup tries direct Google access, then Cesium ion's hosted Google
+asset, then the keyless globe. An attempt succeeds only if the tileset can draw:
+one that resolved without a root is released and recorded as a failure, and the
+next route is tried. With no working route the keyless globe shows and the loader
+line names the last upstream error.
+
 ## Cyber HUD — September 23, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice

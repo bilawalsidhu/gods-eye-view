@@ -18,6 +18,7 @@ export function selectMapStartupRoute({
  * Load Google Photorealistic 3D Tiles through direct Google access when
  * configured, otherwise through Cesium ion's hosted Google asset. If the
  * direct request fails and an ion token is available, ion is the recovery path.
+ * A resolved tileset that cannot draw counts as a failure, not a success.
  *
  * @param {object} Cesium
  * @param {{googleApiKey?: string, cesiumToken?: string}} credentials
@@ -40,6 +41,14 @@ export async function loadPhotorealisticTileset(
       const tileset = attempt.googleKey
         ? await createGoogleDirectTileset(Cesium, attempt.googleKey)
         : await createGoogleIonTileset(Cesium, ionToken);
+      // No root means it will never draw, so try the next route.
+      if (!tilesetCanServeContent(tileset)) {
+        errors.push(
+          new Error(`${attempt.route} tileset has no root and cannot draw`),
+        );
+        if (tileset && !tileset.isDestroyed?.()) tileset.destroy?.();
+        continue;
+      }
       return { tileset, route: attempt.route, errors };
     } catch (error) {
       errors.push(error instanceof Error ? error : new Error(String(error)));
@@ -47,6 +56,18 @@ export async function loadPhotorealisticTileset(
   }
 
   return { tileset: null, route: 'osm', errors };
+}
+
+/**
+ * True when a tileset has a root and so has something to draw. Cesium can
+ * resolve a tileset whose root never arrived; with no root there is nothing to
+ * traverse and no tile is ever requested.
+ *
+ * @param {object} tileset - A constructed Cesium3DTileset.
+ * @returns {boolean}
+ */
+export function tilesetCanServeContent(tileset) {
+  return Boolean(tileset && tileset.root);
 }
 
 /** Pass credentials to the source instead of changing SDK-wide defaults. */
