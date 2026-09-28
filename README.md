@@ -433,7 +433,8 @@ Add these if you need higher polling allowances.
 `npm run doctor` reports Node/npm readiness, the primary provider routes, and
 where each configured provider was found without printing credential values.
 On macOS its Keychain-aware result previews `./scripts/dev-fresh.sh`; plain
-`npm run dev` reads only explicit environment and Vite dotenv values. The
+`npm run dev` reads explicit environment and Vite dotenv values, then resolves
+configured Proton Pass or Bitwarden Secrets Manager references. The
 OpenSky summary reports keyless anonymous access for explicit `anon` or an
 OAuth mode without a client pair, retains presence-only wording for a complete
 OAuth pair, and identifies selected Basic or auto mode without guessing which
@@ -441,21 +442,47 @@ credentials runtime will accept. Basic and credentials-file modes remain
 advanced `dev-fresh.sh` configuration.
 
 <details>
-<summary>Advanced setup: environment variables and macOS Keychain</summary>
+<summary>Advanced setup: env vars, credential managers, and macOS Keychain</summary>
 
 For headless machines, coding agents, or scripted setups:
 
 ```bash
-# Put keys in .env (see .env.example), or pass them as env vars:
+# Literal env / .env still works and has highest precedence:
 OPENAI_API_KEY="…" AISSTREAM_API_KEY="…" npm run dev -- --host localhost --port 4173
 
-# On macOS, store any of them in the Keychain and dev-fresh.sh pulls them in:
+# Proton Pass CLI — authenticate once, then store only a secret reference:
+pass-cli login
+GEV_SECRET_OPENAI_API_KEY='pass://Gods Eye View/OpenAI/password' npm run dev
+
+# Bitwarden Secrets Manager — keep its machine access token in the host env.
+# A project secret is imported only when its key matches a supported GEV env var.
+export BWS_ACCESS_TOKEN='…'
+GEV_BWS_PROJECT_ID='project-uuid' npm run dev
+
+# Or resolve one GEV key from one BWS secret id:
+GEV_SECRET_TOMTOM_API_KEY='bws://secret-uuid' npm run dev
+
+# On macOS, Keychain remains supported by dev-fresh.sh:
 security add-generic-password -U -s "google-maps-api" -a "api-key" -w
 security add-generic-password -U -s "openai-api"      -a "api-key" -w
 security add-generic-password -U -s "aisstream-api"   -a "api-key" -w
 security add-generic-password -U -s "firms-map"       -a "map-key" -w
 security add-generic-password -U -s "cesium-ion"      -a "token"   -w
 ```
+
+Credential precedence is deterministic: a literal provider env var wins, then
+a manager reference stored directly in that env var, then
+`GEV_SECRET_<ENV_VAR>`, then a matching key from `GEV_BWS_PROJECT_ID` or the
+comma-separated `GEV_BWS_PROJECT_IDS`. Manager-backed values stay in process
+memory and appear as **configured externally** in Provider Settings; GEV does
+not write the resolved value back to `.env`. Supported names come from the
+same Provider Settings registry, so BWS project import cannot populate
+unrelated environment variables.
+
+Proton Pass references use `pass-cli item view pass://...`; see the
+[Pass CLI secret-reference docs](https://protonpass.github.io/pass-cli/commands/contents/secret-references/).
+BWS uses the official `secret get` / `secret list` commands; see the
+[Bitwarden Secrets Manager CLI docs](https://bitwarden.com/help/secrets-manager-cli/).
 
 OpenSky can run fully anonymous (`OPENSKY_AUTH_MODE=anon`), or import OAuth credentials with `./scripts/opensky-import-client.sh /path/to/credentials.json`.
 
