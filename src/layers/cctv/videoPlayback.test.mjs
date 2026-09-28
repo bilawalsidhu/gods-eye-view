@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attachCctvVideo } from './videoPlayback.js';
+import { attachCctvVideo, livePlaybackRateFor } from './videoPlayback.js';
 function video() {
   const v = new EventTarget();
   Object.assign(v, {
@@ -90,4 +90,32 @@ test('finite video feeds retain looping while live HLS does not loop', async () 
       playback.dispose();
     }
   }
+});
+
+test('live rate backs off only on a thin buffer and speeds up when behind', () => {
+  // A slow encoder still needs to hold just under 1x to avoid stalling.
+  assert.equal(livePlaybackRateFor(0), 0.9);
+  assert.equal(livePlaybackRateFor(1.5), 0.9);
+  assert.equal(livePlaybackRateFor(4), 0.95);
+  // In-sync footage runs at wall time rather than idling below it.
+  assert.equal(livePlaybackRateFor(8), 1);
+  assert.equal(livePlaybackRateFor(15), 1.15);
+  // A fat buffer means we fell behind live, so close the gap.
+  assert.equal(livePlaybackRateFor(21), 1.25);
+  assert.equal(livePlaybackRateFor(600), 1.25);
+});
+
+test('native HLS runs the live-rate governor without an hls.js decoder', async () => {
+  const source = video();
+  source.canPlayType = () => 'probably';
+  source.currentTime = 100;
+  source.buffered = { length: 1, end: () => 115 };
+  const playback = attachCctvVideo(source, '/api/cctv/media/a', 'hls', {
+    loadHls: async () => ({ default: { isSupported: () => false } }),
+    fetchImpl: async () => {},
+  });
+  await playback.ready;
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  playback.dispose();
+  assert.equal(source.playbackRate, 1.15);
 });
