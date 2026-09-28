@@ -181,6 +181,14 @@ export function readShellElements(document = globalThis.document) {
     _locationSearch: document.getElementById('location-search'),
     _searchToggle: document.getElementById('search-toggle'),
     _locationPills: document.getElementById('location-pills'),
+    _locationPillsScrollLeft: document.getElementById(
+      'location-pills-scroll-left',
+    ),
+    _locationPillsScrollRight: document.getElementById(
+      'location-pills-scroll-right',
+    ),
+    _locationPinAdd: document.getElementById('location-pin-add'),
+    _locationPinName: document.getElementById('location-pin-name'),
     _poiRow: document.getElementById('poi-row'),
     _locationBarDivider: document.getElementById('location-bar-divider'),
     _styleMiniValue: document.getElementById('style-mini-value'),

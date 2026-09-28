@@ -693,6 +693,21 @@ and result presentation. Existing search providers and camera handoff policy are
 preserved. Replacing or closing a POI row cancels its pending expansion frame;
 destruction releases listeners, pending searches and the orbit indicator.
 
+The pill row scrolls horizontally — a wheel gesture over it and two always-visible
+arrow buttons — since the bar's 720px cap means only a handful of pills fit on
+most screens. A `+` control saves the current camera view as a named pin: name,
+lat/lon, heading/pitch and the camera's height (reused as the fly-back range) are
+written to `src/services/customLocations.js`, which persists pins in
+`localStorage` (`gev.customLocations.v1`) and registers them into the same
+`CITY_POIS` registry via `registerLocation()`/`unregisterLocation()` in
+`locations.js` — so a pin is flyable, searchable and voice-addressable exactly
+like a bundled city, with no changes needed to those paths. Bundled cities are
+never removable; a pin gets a dashed border and a hover-revealed remove control.
+`hydrateCustomLocations()` loads saved pins into the registry once, at the start
+of `_initLocationBar()`. A missing or throwing `localStorage` (private browsing,
+storage full) is a silent no-op — pins still work for the rest of the session
+via the in-memory registry, they just don't persist across reloads.
+
 ## Layer panel ownership
 
 Layer rows, feed feedback, counts, focus-preserving chips and toggle listeners

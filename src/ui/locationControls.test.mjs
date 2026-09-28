@@ -57,9 +57,13 @@ function node() {
     },
   };
 }
-function fixture() {
+function fixture(extraCities = {}) {
   const elements = {
     pills: node(),
+    pillsScrollLeft: node(),
+    pillsScrollRight: node(),
+    addPin: node(),
+    addPinInput: node(),
     poiRow: node(),
     divider: node(),
     search: node(),
@@ -74,6 +78,7 @@ function fixture() {
   const cities = {
     a: { name: 'City A', pois: [{ name: 'First' }, { name: 'Second' }] },
     b: { name: 'City B', pois: [{ name: 'Elsewhere' }] },
+    ...extraCities,
   };
   const calls = [];
   const frames = new Map();
@@ -87,6 +92,8 @@ function fixture() {
     onPoi: (id, index) => calls.push(['poi', id, index]),
     onSearch: (query) => calls.push(['search', query]),
     onReset: () => calls.push(['reset']),
+    onAddPin: (name) => calls.push(['addPin', name]),
+    onRemovePin: (id) => calls.push(['removePin', id]),
     doc,
     requestFrame: (fn) => {
       const id = next++;
@@ -146,4 +153,93 @@ test('location and POI keys route once while form controls retain typing', () =>
   f.doc.fire('keydown', { key: 'Q', target: { matches: () => true } });
   f.elements.resetButtons[1].fire('click');
   assert.deepEqual(f.calls, [['poi', 'a', 1], ['reset']]);
+});
+
+test('a vertical wheel over the pill row scrolls it horizontally', () => {
+  const f = fixture();
+  f.elements.pills.scrollLeft = 0;
+  let prevented = false;
+  f.elements.pills.fire('wheel', {
+    deltaY: 40,
+    deltaX: 0,
+    preventDefault: () => {
+      prevented = true;
+    },
+  });
+  assert.equal(f.elements.pills.scrollLeft, 40);
+  assert.equal(prevented, true);
+});
+
+test('a horizontal wheel gesture (deltaX set) is left to native scrolling', () => {
+  const f = fixture();
+  f.elements.pills.scrollLeft = 0;
+  f.elements.pills.fire('wheel', { deltaY: 40, deltaX: 5 });
+  assert.equal(f.elements.pills.scrollLeft, 0);
+});
+
+test('the scroll arrows step the pill row left and right', () => {
+  const f = fixture();
+  f.elements.pills.scrollLeft = 100;
+  f.elements.pillsScrollLeft.fire('click');
+  assert.equal(f.elements.pills.scrollLeft, -60);
+  f.elements.pillsScrollRight.fire('click');
+  f.elements.pillsScrollRight.fire('click');
+  assert.equal(f.elements.pills.scrollLeft, 260);
+});
+
+test('the add-pin button expands the name input and focuses it', () => {
+  const f = fixture();
+  f.elements.addPin.fire('click');
+  assert.equal(f.elements.addPinInput.classList.contains('expanded'), true);
+  assert.equal(f.elements.addPinInput.focused, true);
+  f.elements.addPin.fire('click');
+  assert.equal(f.elements.addPinInput.classList.contains('expanded'), false);
+});
+
+test('Enter in the name input saves the pin and collapses the input', () => {
+  const f = fixture();
+  f.elements.addPinInput.value = 'Waterloo Intl Airport';
+  f.elements.addPinInput.fire('keydown', { key: 'Enter' });
+  assert.deepEqual(f.calls, [['addPin', 'Waterloo Intl Airport']]);
+  assert.equal(f.elements.addPinInput.value, '');
+  assert.equal(f.elements.addPinInput.classList.contains('expanded'), false);
+});
+
+test('Escape in the name input discards it without saving', () => {
+  const f = fixture();
+  f.elements.addPinInput.value = 'Abandoned';
+  f.elements.addPinInput.fire('keydown', { key: 'Escape' });
+  assert.deepEqual(f.calls, []);
+  assert.equal(f.elements.addPinInput.value, '');
+});
+
+test('a custom pin renders with a remove control that removes without flying there', () => {
+  const f = fixture({
+    pin: { name: 'Waterloo Intl', custom: true, pois: [{ name: 'Terminal' }] },
+  });
+  const wrap = f.elements.pills.children.find(
+    (child) => child.className === 'location-pill-wrap',
+  );
+  assert.ok(wrap, 'custom pin renders inside a wrap with a remove control');
+  const [pill, remove] = wrap.children;
+  assert.equal(pill.dataset.custom, 'true');
+  assert.equal(remove.className, 'location-pill-remove');
+  remove.fire('click');
+  assert.deepEqual(f.calls, [['removePin', 'pin']]);
+  pill.fire('click');
+  assert.deepEqual(f.calls, [
+    ['removePin', 'pin'],
+    ['city', 'pin'],
+  ]);
+});
+
+test('highlightCity finds a custom pin nested inside its wrap', () => {
+  const f = fixture({
+    pin: { name: 'Waterloo Intl', custom: true, pois: [{ name: 'Terminal' }] },
+  });
+  f.controls.highlightCity('pin');
+  const wrap = f.elements.pills.children.find(
+    (child) => child.className === 'location-pill-wrap',
+  );
+  assert.equal(wrap.children[0].classList.contains('active'), true);
 });

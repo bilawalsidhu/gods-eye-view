@@ -1,5 +1,6 @@
 import { locationMiniStatus } from '../locationStatus.js';
 const POI_KEYS = ['Q', 'W', 'E', 'R', 'T'];
+const SCROLL_STEP_PX = 160;
 
 /** Location DOM, keyboard handling and pending row animation over supplied actions. */
 export class LocationControls {
@@ -11,6 +12,8 @@ export class LocationControls {
     onPoi,
     onSearch,
     onReset,
+    onAddPin = () => {},
+    onRemovePin = () => {},
     doc = document,
     requestFrame = (callback) => requestAnimationFrame(callback),
     cancelFrame = (id) => cancelAnimationFrame(id),
@@ -23,6 +26,8 @@ export class LocationControls {
       onPoi,
       onSearch,
       onReset,
+      onAddPin,
+      onRemovePin,
       doc,
       requestFrame,
       cancelFrame,
@@ -39,8 +44,28 @@ export class LocationControls {
       pill.className = 'location-pill';
       pill.dataset.locationId = id;
       pill.textContent = city.name;
+      if (city.custom) pill.dataset.custom = 'true';
       this.bind(pill, 'click', () => onCity(id));
-      elements.pills.appendChild(pill);
+
+      if (!city.custom) {
+        elements.pills.appendChild(pill);
+        continue;
+      }
+      // A saved pin gets a sibling remove control. Kept out of the pill
+      // button itself — nesting an interactive element inside a <button>
+      // is invalid HTML and would break the existing highlight/keyboard logic.
+      const wrap = doc.createElement('span');
+      wrap.className = 'location-pill-wrap';
+      const remove = doc.createElement('button');
+      remove.type = 'button';
+      remove.className = 'location-pill-remove';
+      remove.dataset.locationId = id;
+      remove.ariaLabel = `Remove ${city.name}`;
+      remove.title = `Remove ${city.name}`;
+      remove.textContent = '×';
+      this.bind(remove, 'click', () => onRemovePin(id));
+      wrap.append(pill, remove);
+      elements.pills.appendChild(wrap);
     }
     this.bind(doc, 'keydown', (event) => {
       const cityId = getExpandedCity();
@@ -64,6 +89,45 @@ export class LocationControls {
     });
     for (const button of elements.resetButtons)
       this.bind(button, 'click', onReset);
+
+    // The pill row overflows on most screens once enough locations are
+    // pinned; a plain mouse wheel doesn't natively scroll it horizontally,
+    // and the scroll capability itself isn't otherwise discoverable.
+    this.bind(elements.pills, 'wheel', (event) => {
+      if (!event.deltaY || event.deltaX) return;
+      event.preventDefault?.();
+      elements.pills.scrollLeft =
+        (elements.pills.scrollLeft || 0) + event.deltaY;
+    });
+    if (elements.pillsScrollLeft)
+      this.bind(elements.pillsScrollLeft, 'click', () => {
+        elements.pills.scrollLeft =
+          (elements.pills.scrollLeft || 0) - SCROLL_STEP_PX;
+      });
+    if (elements.pillsScrollRight)
+      this.bind(elements.pillsScrollRight, 'click', () => {
+        elements.pills.scrollLeft =
+          (elements.pills.scrollLeft || 0) + SCROLL_STEP_PX;
+      });
+
+    if (elements.addPin)
+      this.bind(elements.addPin, 'click', () => {
+        elements.addPinInput?.classList.toggle('expanded');
+        if (elements.addPinInput?.classList.contains('expanded'))
+          elements.addPinInput.focus();
+      });
+    if (elements.addPinInput)
+      this.bind(elements.addPinInput, 'keydown', (event) => {
+        if (event.key === 'Enter') {
+          const name = elements.addPinInput.value;
+          elements.addPinInput.value = '';
+          elements.addPinInput.classList.remove('expanded');
+          onAddPin(name);
+        } else if (event.key === 'Escape') {
+          elements.addPinInput.value = '';
+          elements.addPinInput.classList.remove('expanded');
+        }
+      });
   }
   bind(element, event, handler, removers = this.removers) {
     if (!element) return;

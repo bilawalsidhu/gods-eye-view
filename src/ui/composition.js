@@ -9,6 +9,11 @@ import {
   flyToPOI,
   searchAndFlyTo,
 } from '../locations.js';
+import {
+  hydrateCustomLocations,
+  addCustomLocation,
+  removeCustomLocation,
+} from '../services/customLocations.js';
 import { interruptCameraMotion } from '../cameraVerbs.js';
 import { IntelHUD } from '../hud.js';
 import { ShareLinkManager } from '../sharelink.js';
@@ -72,6 +77,9 @@ export class StyleManager extends ApplicationShell {
         flyToPresetLocation,
         flyToPOI,
         searchAndFlyTo,
+        hydrateCustomLocations,
+        addCustomLocation,
+        removeCustomLocation,
         interruptCameraMotion,
         IntelHUD,
         ShareLinkManager,

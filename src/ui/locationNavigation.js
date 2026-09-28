@@ -100,7 +100,9 @@ export class LocationNavigation {
   }
 
   _initLocationBar() {
-    const { CITY_POIS, searchAndFlyTo, LocationSearch } = this.services;
+    const { CITY_POIS, searchAndFlyTo, LocationSearch, hydrateCustomLocations } =
+      this.services;
+    hydrateCustomLocations();
     this._locationControls?.destroy();
     this._locationLookupUnsubscribe?.();
     this._locationLookup?.destroy();
@@ -125,6 +127,10 @@ export class LocationNavigation {
     this._locationControls = new LocationControls({
       elements: {
         pills: this._locationPills,
+        pillsScrollLeft: this._locationPillsScrollLeft,
+        pillsScrollRight: this._locationPillsScrollRight,
+        addPin: this._locationPinAdd,
+        addPinInput: this._locationPinName,
         poiRow: this._poiRow,
         divider: this._locationBarDivider,
         search: this._locationSearch,
@@ -139,7 +145,36 @@ export class LocationNavigation {
       onPoi: (id, index) => this._onPoiClick(id, index),
       onSearch: (query) => this._locationLookup.run(query),
       onReset: () => this.resetToGlobeView(),
+      onAddPin: (name) => this._onAddLocationPin(name),
+      onRemovePin: (id) => this._onRemoveLocationPin(id),
     });
+  }
+
+  /** Save the current camera view as a named quick-reference pin. */
+  _onAddLocationPin(name) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return;
+    const { addCustomLocation } = this.services;
+    const carto = Cesium.Cartographic.fromCartesian(
+      this.viewer.camera.positionWC,
+    );
+    addCustomLocation({
+      name: trimmed,
+      lat: Cesium.Math.toDegrees(carto.latitude),
+      lon: Cesium.Math.toDegrees(carto.longitude),
+      alt: Math.max(200, Math.round(carto.height)),
+      heading: Cesium.Math.toDegrees(this.viewer.camera.heading),
+      pitch: Cesium.Math.toDegrees(this.viewer.camera.pitch),
+    });
+    this._initLocationBar();
+  }
+
+  /** Remove a previously saved quick-reference pin. */
+  _onRemoveLocationPin(id) {
+    if (this._activeLocationId === id) this._setActiveLocation(null);
+    if (this._expandedCityId === id) this._collapsePOIRow();
+    this.services.removeCustomLocation(id);
+    this._initLocationBar();
   }
 
   _beginWorldJumpTransition() {

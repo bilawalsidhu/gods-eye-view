@@ -10,13 +10,17 @@ import fs from 'node:fs';
 import * as Cesium from 'cesium';
 import {
   CANCELLED_SEARCH,
+  CITY_POIS,
   placeFramingViewport,
   PLACE_VIEWPORT_MAX_SPAN_KM,
   PLACE_ANCHOR_OFFSET_RATIO,
   flyToGlobeView,
   flyToPresetLocation,
+  flyToPOI,
   geocodeNavigationMode,
   regionFramingPlan,
+  registerLocation,
+  unregisterLocation,
   REGION_SWATH_SPAN_KM,
   GLOBE_VIEW,
   searchAndFlyTo,
@@ -597,4 +601,30 @@ test('search without an authority hook preserves the existing caller contract', 
   const result = await runSearch(viewer, {});
   assert.equal(result.navigationMode, 'city-overview');
   assert.equal(viewer.flights.length, 1);
+});
+
+test('registerLocation makes an entry resolvable by flyToPresetLocation and flyToPOI', () => {
+  const viewer = stubViewer();
+  try {
+    registerLocation('test:pin', {
+      name: 'Test Pin',
+      custom: true,
+      groundElevation: 0,
+      pois: [
+        { name: 'Test Pin', lat: 1, lon: 2, alt: 500, pitch: -20, heading: 0 },
+      ],
+    });
+    assert.ok(flyToPresetLocation(viewer, 'test:pin'));
+    assert.ok(flyToPOI(viewer, 'test:pin', 0));
+    assert.equal(flyToPOI(viewer, 'test:pin', 1), null); // out-of-range POI index
+  } finally {
+    unregisterLocation('test:pin');
+  }
+});
+
+test('unregisterLocation removes an entry so flyToPresetLocation reports it missing', () => {
+  const viewer = stubViewer();
+  registerLocation('test:temp', CITY_POIS.austin);
+  unregisterLocation('test:temp');
+  assert.equal(flyToPresetLocation(viewer, 'test:temp'), null);
 });

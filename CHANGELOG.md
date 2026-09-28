@@ -1,5 +1,14 @@
 # Changelog
 
+- Location pills scroll and now hold personal pins. The row overflows on most
+  screens once a few cities are pinned — the bar caps at 720px — with no way to
+  reach the rest; it now scrolls on a wheel gesture and via two always-visible
+  arrow buttons. A `+` control saves the current camera view as a named pin,
+  persisted in `localStorage` and registered into the same `CITY_POIS` lookup
+  bundled cities use, so a pin is flyable, searchable and voice-addressable like
+  any of them with no changes to those paths. Bundled cities stay fixed; a pin
+  gets a dashed border and a hover-revealed remove control (Eric Morin, #TODO).
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD
