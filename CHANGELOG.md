@@ -1,5 +1,14 @@
 # Changelog
 
+- Add opt-in external credential-manager resolution for every API key already
+  registered in Provider Settings. Proton Pass CLI accepts `pass://`
+  references; Bitwarden Secrets Manager accepts per-secret `bws://` references
+  or project hydration. Literal provider env values keep highest precedence,
+  BWS project keys are registry-allowlisted, resolved values stay in process
+  memory, and manager-backed credentials remain read-only in Provider Settings.
+  The two browser credentials (Google Maps and Cesium ion) keep their existing
+  browser-exposure boundary.
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD
