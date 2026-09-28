@@ -482,3 +482,22 @@ test('the upstream host is pinned: a redirect is refused, not followed', async (
   await request('/api/route', '?profile=car&coords=-97,30;-97.01,30.01');
   assert.deepEqual(seen, ['error'], 'a redirect would escape the pinned host');
 });
+
+test('the routing proxy declines a non-GET before rate limiting or upstream', async (t) => {
+  // The documented shape is a GET with query parameters, but every verb was
+  // answered alike. Refuse first: a stubbed fetch that throws shows the
+  // rejection costs neither an upstream call nor a rate-limit slot.
+  const request = install(installRouteMiddleware);
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('upstream must not be reached');
+  });
+  for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+    const response = await request(
+      '/api/route',
+      '?profile=car&coords=-97,30;-97.01,30.01',
+      method,
+    );
+    assert.equal(response.statusCode, 405, method);
+    assert.deepEqual(response.body, { error: 'Method Not Allowed' });
+  }
+});

@@ -68,6 +68,13 @@ export function adsbLolProxy() {
 
   const installMiddleware = (server) => {
     server.middlewares.use('/api/adsblol/mil', async (req, res) => {
+      // Read-only snapshot endpoint; match the method contract its sibling
+      // query proxies already declare instead of serving every verb alike.
+      if (req.method !== 'GET') {
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+        return;
+      }
       try {
         const now = Date.now();
         if (_cache && now - _cacheAt < CACHE_MS) {

@@ -381,3 +381,26 @@ test('track backfill proxy returns 502 on an oversized upstream body and caches 
   assert.equal(res2.statusCode, 502);
   assert.equal(callCount, 1);
 });
+
+test('the aircraft snapshot routes decline a non-GET before any upstream work', async (t) => {
+  // Both routes answered every verb with the full snapshot, unlike the query
+  // proxies beside them, so nothing said whether a body was read or ignored.
+  // A stubbed fetch that throws proves the refusal happens before the handler
+  // reaches upstream, rather than after paying for the work and discarding it.
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    throw new Error(`upstream must not be reached: ${url}`);
+  });
+  const cases = [
+    [install(providers.openSkyProxy()), '/api/opensky'],
+    [install(providers.adsbLolProxy()), '/api/adsblol/mil'],
+  ];
+  for (const [request, route] of cases) {
+    for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+      const response = await request(route, '/', method);
+      assert.equal(response.statusCode, 405, `${method} ${route}`);
+      assert.deepEqual(JSON.parse(response.body), {
+        error: 'Method Not Allowed',
+      });
+    }
+  }
+});
