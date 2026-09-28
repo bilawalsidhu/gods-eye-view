@@ -240,20 +240,26 @@ const MUTATIONS = [
   {
     defect: 'ENVIRONMENTAL drops the keyless earthquakes that carry it without a key',
     file: 'module',
-    from: "layerIds: Object.freeze(['earthquakes', 'local-firms']),",
-    to: "layerIds: Object.freeze(['local-firms']),",
+    from: "layerIds: Object.freeze(['earthquakes', 'local-firms', 'fire-perimeters']),",
+    to: "layerIds: Object.freeze(['local-firms', 'fire-perimeters']),",
   },
   {
     defect: 'FIRMS is dropped again from the tile whose subcopy promises it',
     file: 'module',
-    from: "layerIds: Object.freeze(['earthquakes', 'local-firms']),",
-    to: "layerIds: Object.freeze(['earthquakes']),",
+    from: "layerIds: Object.freeze(['earthquakes', 'local-firms', 'fire-perimeters']),",
+    to: "layerIds: Object.freeze(['earthquakes', 'fire-perimeters']),",
   },
   {
-    defect: 'the tile stops promising the fires it actually turns on',
+    defect: 'wildfire perimeters are dropped from the hazard mission',
+    file: 'module',
+    from: "layerIds: Object.freeze(['earthquakes', 'local-firms', 'fire-perimeters']),",
+    to: "layerIds: Object.freeze(['earthquakes', 'local-firms']),",
+  },
+  {
+    defect: 'the tile stops promising the wildfire perimeters it actually turns on',
     file: 'html',
-    from: '<small>Live earthquakes and active fires, from USGS and NASA</small>',
-    to: '<small>Live earthquakes worldwide, straight from USGS</small>',
+    from: '<small>Live earthquakes, active fires and wildfire perimeters</small>',
+    to: '<small>Live earthquakes and active fires</small>',
   },
   {
     defect: "the owner-authored first-run line is quietly rewritten",
