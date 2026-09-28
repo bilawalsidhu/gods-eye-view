@@ -35,6 +35,37 @@ These are designed to be used directly in the browser (like a Mapbox public toke
 
 Never commit real keys. `.env` is gitignored; only `.env.example` (placeholder names) is tracked. On macOS `dev-fresh.sh` can read keys from the Keychain; plain Vite uses env vars or a local `.env`, and Pinokio uses its ignored app `ENVIRONMENT` file.
 
+### External credential managers
+
+Terminal launches can resolve registered provider credentials from **Proton
+Pass CLI** and **Bitwarden Secrets Manager (BWS)** before provider middleware
+or browser build definitions are created.
+
+- Proton Pass: set `GEV_SECRET_<ENV_VAR>=pass://<vault>/<item>/<field>` (or put
+  the `pass://` reference directly in the provider env var). GEV invokes
+  `pass-cli item view` without a shell. Proton login/session storage remains
+  the Pass CLI's responsibility.
+- BWS: set a per-key `bws://<secret-id>` reference, or
+  `GEV_BWS_PROJECT_ID` / comma-separated `GEV_BWS_PROJECT_IDS`. Project
+  imports admit only keys already registered by Provider Settings; names such
+  as `PATH` or arbitrary project secrets are ignored. BWS authentication
+  remains the CLI's responsibility through `BWS_ACCESS_TOKEN`.
+- Literal provider env values always win. Resolved values live only in the
+  running process; the resolver does not persist them to `.env`, return them
+  to the browser, or include CLI stderr in surfaced errors.
+- Manager references can expose vault/item/project identifiers as configuration
+  metadata, so treat those names accordingly even though they are not provider
+  credential values.
+- A credential manager cannot make a browser credential secret:
+  `GOOGLE_MAPS_API_KEY` and `CESIUM_ION_TOKEN` are still deliberately
+  injected client-side and must still be provider-restricted.
+
+Manager-backed credentials are reported by Provider Settings as **configured
+externally** and cannot be replaced or removed there. Change the reference or
+the secret in its manager instead. If a configured manager CLI is unavailable
+or resolution fails, startup fails rather than silently treating the reference
+as a provider key.
+
 The official Pinokio launcher stores optional values in its ignored local
 `pinokio/ENVIRONMENT` file and Vite explicitly denies that filename. Add,
 replace, or remove those values through the in-app **POWER UP → Provider
