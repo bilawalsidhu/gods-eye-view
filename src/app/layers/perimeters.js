@@ -5,6 +5,7 @@ import {
   createInciwebPublicationSource,
 } from '../../layers/perimeters/index.js';
 import * as picking from '../../data/pickRegistry.js';
+import * as context from '../../data/contextStore.js';
 import * as overlays from '../../overlays/worldOverlay.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 
@@ -23,6 +24,7 @@ export function createApplicationFirePerimeters(options) {
     screenSpaceEventHandlerFactory: (viewer) =>
       new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas),
     picking,
+    context,
     pointer: { isPointerFree },
     ...options,
   });
