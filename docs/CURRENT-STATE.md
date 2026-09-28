@@ -529,6 +529,15 @@ Selection changes, disable and destruction cancel pending trail requests; late
 responses cannot refill a cleared or replacement trail. Heading and course,
 sea-surface placement, click ownership and card selection policy are unchanged.
 
+The selected-vessel card and the `hud-ais-vessel` readout carry a
+`↗ VESSELFINDER` line for any vessel with a 9-digit MMSI. Pressing `L` (plain
+key, outside text inputs and editable fields) or clicking the HUD readout opens
+`https://www.vesselfinder.com/vessels/details/<MMSI>` in a new tab with
+`noopener,noreferrer`. The opener is the application-supplied `openExternal`
+service in `src/app/layers/aisLiveVessels.js`, as for fire-perimeter InciWeb
+links; without it the line is omitted and the key is inert. Card clicks keep
+their existing select-and-refocus behavior and never open the page.
+
 ## Military-flight components and aircraft mechanics
 
 `gods-eye-view/layers/military` exports `createMilitaryFlightLayer`. It uses the
@@ -1746,7 +1755,9 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   status, message time, and raw/accepted row counts for diagnosis.
 > - **Vessel/fire camera transfer:** clicking an actionable AIS vessel sprite
 >   or painted card selects that MMSI and requests one close oblique camera
->   transfer; re-clicking the selected vessel refocuses it. FIRMS detection
+>   transfer; re-clicking the selected vessel refocuses it. With a vessel
+>   selected, `L` or a click on the HUD AIS readout opens its VesselFinder
+>   listing in a new tab (see "Vessel components and sources"). FIRMS detection
 >   sprites and actionable detection cards do the same using a refetch-stable
 >   identity that includes position, acquisition time, and source satellite.
 >   Aggregate fire cells remain non-actionable. Painted actionable cards are

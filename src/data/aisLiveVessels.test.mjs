@@ -27,6 +27,7 @@ import {
   _updateVesselCardsForTest,
   applyVesselFocusDeemphasis,
   mapAnalystRecord,
+  vesselListingUrl,
 } from './aisLiveVessels.js';
 import aisLiveVesselsLayer from './aisLiveVessels.js';
 import { registerEntityContext, selectEntityContext } from './contextStore.js';
@@ -861,6 +862,12 @@ function makeClassList(...initial) {
   return {
     add(value) { classes.add(value); },
     remove(value) { classes.delete(value); },
+    toggle(value, force) {
+      if (force === undefined) force = !classes.has(value);
+      if (force) classes.add(value);
+      else classes.delete(value);
+      return force;
+    },
     contains(value) { return classes.has(value); },
   };
 }
@@ -936,7 +943,18 @@ function installWireHarness(picked, stateOverrides = {}) {
   const trail = makeTrailSpy();
   const hud = {
     textContent: `AIS: ${record.name}`,
+    title: '',
     classList: makeClassList('active'),
+    listeners: {},
+    addEventListener(type, callback) {
+      this.listeners[type] = callback;
+    },
+  };
+  // The layer's openExternal service goes through window.open.
+  const opened = [];
+  windowTarget.open = (url, target, features) => {
+    opened.push({ url, target, features });
+    return null;
   };
 
   globalThis.window = windowTarget;
@@ -961,6 +979,7 @@ function installWireHarness(picked, stateOverrides = {}) {
     record,
     trail,
     hud,
+    opened,
     viewer,
     windowTarget,
     reinstalledHandlers,
@@ -1107,6 +1126,80 @@ test('vessel interaction wire: Escape deselects the selected vessel', () => {
     assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
     assert.equal(harness.hud.textContent, 'AIS: --');
     assert.equal(harness.hud.classList.contains('active'), false);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+const EVER_GIVEN_LISTING =
+  'https://www.vesselfinder.com/vessels/details/353136000';
+
+test('vessel interaction wire: L opens the selected vessel on VesselFinder in a new tab', () => {
+  const harness = installWireHarness(undefined);
+  try {
+    let prevented = 0;
+    harness.keyTarget.dispatch({
+      key: 'l',
+      target: { tagName: 'CANVAS' },
+      preventDefault: () => { prevented += 1; },
+    });
+    assert.deepEqual(harness.opened, [
+      { url: EVER_GIVEN_LISTING, target: '_blank', features: 'noopener,noreferrer' },
+    ]);
+    assert.equal(prevented, 1);
+    // Upper-case (Shift or Caps Lock) reads the same.
+    harness.keyTarget.dispatch({ key: 'L', target: { tagName: 'BODY' } });
+    assert.equal(harness.opened.length, 2);
+    // The selection is untouched.
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test('vessel interaction wire: L is ignored while typing, with modifiers, or without a selection', () => {
+  const harness = installWireHarness(undefined);
+  try {
+    harness.keyTarget.dispatch({ key: 'l', target: { tagName: 'INPUT' } });
+    harness.keyTarget.dispatch({ key: 'l', target: { tagName: 'TEXTAREA' } });
+    harness.keyTarget.dispatch({ key: 'l', target: { isContentEditable: true } });
+    harness.keyTarget.dispatch({ key: 'l', ctrlKey: true, target: {} });
+    harness.keyTarget.dispatch({ key: 'l', metaKey: true, target: {} });
+    harness.keyTarget.dispatch({ key: 'l', altKey: true, target: {} });
+    assert.equal(harness.opened.length, 0);
+
+    harness.keyTarget.dispatch({ key: 'Escape' });
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null);
+    harness.keyTarget.dispatch({ key: 'l', target: {} });
+    assert.equal(harness.opened.length, 0);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test('vessel interaction wire: selecting a vessel makes the HUD readout a VesselFinder link', () => {
+  const harness = installWireHarness(undefined, { selectedRecord: null });
+  try {
+    // Re-pick the live record through the scene click path so the HUD is
+    // written by the real selection flow.
+    harness.viewer.scene.pick = () => ({ id: harness.record });
+    harness.handler.click({ position: { x: 10, y: 20 } });
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi);
+
+    assert.equal(harness.hud.classList.contains('has-listing'), true);
+    assert.match(harness.hud.textContent, /↗ VESSELFINDER \(L\)$/);
+    assert.equal(harness.hud.title, 'Open EVER GIVEN on VesselFinder');
+
+    harness.hud.listeners.click();
+    assert.equal(harness.opened.length, 1);
+    assert.equal(harness.opened[0].url, EVER_GIVEN_LISTING);
+
+    // Deselecting clears the affordance; a click on the idle readout is inert.
+    harness.keyTarget.dispatch({ key: 'Escape' });
+    assert.equal(harness.hud.classList.contains('has-listing'), false);
+    assert.equal(harness.hud.title, '');
+    harness.hud.listeners.click();
+    assert.equal(harness.opened.length, 1);
   } finally {
     harness.cleanup();
   }
@@ -1337,7 +1430,24 @@ test('buildSelectedVesselCard: full detail card with MMSI + position time', () =
   assert.deepEqual(card.details, [
     'CONTAINER SHIP · 14.5KT · 231°',
     'MMSI 353136000 · POS: 11:22:33Z',
+    '↗ VESSELFINDER · L',
   ]);
+});
+
+test('vesselListingUrl: 9-digit MMSI maps to the VesselFinder details page; anything else is null', () => {
+  assert.equal(
+    vesselListingUrl(makeRecord()),
+    'https://www.vesselfinder.com/vessels/details/353136000',
+  );
+  assert.equal(vesselListingUrl(makeRecord({ mmsi: '' })), null);
+  assert.equal(vesselListingUrl(makeRecord({ mmsi: '12345' })), null);
+  assert.equal(vesselListingUrl(makeRecord({ mmsi: '35313600A' })), null);
+  assert.equal(vesselListingUrl(null), null);
+});
+
+test('buildSelectedVesselCard: unkeyed vessels carry no listing line', () => {
+  const card = buildSelectedVesselCard(makeRecord({ mmsi: '' }));
+  assert.equal(card.details.some((line) => line.includes('VESSELFINDER')), false);
 });
 
 test('vessel host publication preserves the shipped grid winner and separation selector', () => {
@@ -1451,6 +1561,7 @@ test('buildSelectedVesselCard: destination line + STALE marker; placeholders for
     'TANKER · --KT · --°',
     '→ ROTTERDAM',
     'MMSI 353136000 · POS: LIVE · STALE',
+    '↗ VESSELFINDER · L',
   ]);
 });
 

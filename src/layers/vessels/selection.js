@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
+import { VESSEL_LISTING_KEY } from './cards.js';
 
 export function createSelection({
   vesselState,
@@ -153,14 +154,41 @@ export function createSelection({
   }
 
   function onVesselKeyDown(event) {
-    if (!state.feed.enabled || event.key !== 'Escape') return;
-    const transition = components.queries.reduceVesselSelection({
-      selectedMmsi: state.selectedRecord?.mmsi,
-      gesture: 'escape',
-    });
-    if (transition.action === 'deselect') {
-      clearVesselInspection();
+    if (!state.feed.enabled) return;
+    if (event.key === 'Escape') {
+      const transition = components.queries.reduceVesselSelection({
+        selectedMmsi: state.selectedRecord?.mmsi,
+        gesture: 'escape',
+      });
+      if (transition.action === 'deselect') {
+        clearVesselInspection();
+      }
+      return;
     }
+    // L opens the selected vessel's VesselFinder listing. Plain key only, and
+    // never while the user is typing into a field.
+    if (
+      String(event.key || '').toUpperCase() === VESSEL_LISTING_KEY &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      state.selectedRecord &&
+      !isTypingTarget(event.target)
+    ) {
+      if (components.cards.openSelectedVesselListing(state.selectedRecord))
+        event.preventDefault?.();
+    }
+  }
+
+  function isTypingTarget(target) {
+    if (!target) return false;
+    const tag = String(target.tagName || '').toUpperCase();
+    return (
+      tag === 'INPUT' ||
+      tag === 'TEXTAREA' ||
+      tag === 'SELECT' ||
+      target.isContentEditable === true
+    );
   }
 
   function selectVessel(record) {

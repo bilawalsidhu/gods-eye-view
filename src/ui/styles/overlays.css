@@ -211,6 +211,18 @@
   opacity: 0.95;
 }
 
+/* The selected-vessel readout doubles as the VesselFinder link. */
+.hud-ais-vessel.active.has-listing {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.hud-ais-vessel.active.has-listing:hover {
+  opacity: 1;
+  text-decoration: underline;
+  text-decoration-color: var(--hud-border);
+}
+
 .hud-classification {
   font-size: 12px;
   letter-spacing: 2.5px;

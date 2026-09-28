@@ -26,6 +26,9 @@ export function createApplicationVessels({ source, options = {} }) {
       focus,
       worldFocus,
       render,
+      // Vessel listing click-through (VesselFinder). Mirrors the perimeters
+      // layer: the card/HUD affordance is inert when this is absent.
+      openExternal: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
     },
   });
 }

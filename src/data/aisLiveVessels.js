@@ -12,6 +12,11 @@ const aisLiveVesselsLayer = createApplicationVessels({
   },
 });
 export { AIS_FIRST_CONNECT_GRACE_MS } from '../layers/vessels/policy.js';
+export {
+  VESSEL_LISTING_KEY,
+  VESSEL_LISTING_LABEL,
+  vesselListingUrl,
+} from '../layers/vessels/cards.js';
 export const deriveAisFeedError = aisLiveVesselsLayer.deriveAisFeedError;
 export const classifyAisFeedSnapshot =
   aisLiveVesselsLayer.classifyAisFeedSnapshot;

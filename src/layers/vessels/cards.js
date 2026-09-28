@@ -3,6 +3,25 @@ import {
   normalizeVesselType,
 } from '../../data/vesselLabels.js';
 
+/** Public vessel register the selected-vessel card links out to. */
+export const VESSEL_LISTING_LABEL = 'VESSELFINDER';
+/** Hotkey that opens the selected vessel's listing (case-insensitive). */
+export const VESSEL_LISTING_KEY = 'L';
+const VESSEL_LISTING_BASE_URL = 'https://www.vesselfinder.com/vessels/details/';
+
+/**
+ * VesselFinder listing URL for one AIS record, keyed by its 9-digit MMSI.
+ * Pure — exported for unit tests. Returns null for unkeyed or malformed ids so
+ * callers never open a page that cannot resolve to one hull.
+ * @param {Object} record - Vessel record.
+ * @returns {string|null}
+ */
+export function vesselListingUrl(record) {
+  const mmsi = String(record?.mmsi || '').trim();
+  if (!/^\d{9}$/.test(mmsi)) return null;
+  return `${VESSEL_LISTING_BASE_URL}${mmsi}`;
+}
+
 export function createCards({
   vesselState,
   services,
@@ -11,6 +30,39 @@ export function createCards({
   options,
 }) {
   const { state } = vesselState;
+  // HUD readouts that already forward clicks to the listing opener.
+  const hudListingBound = new WeakSet();
+
+  /** True when the host supplied a way to open external pages. */
+  function canOpenListing() {
+    return typeof services?.openExternal === 'function';
+  }
+
+  /**
+   * Open the VesselFinder listing for `record` (default: the selected vessel)
+   * in a new tab. Inert without an MMSI or without an `openExternal` service.
+   * @param {Object} [record] - Vessel record; defaults to the selection.
+   * @returns {boolean} True when a page was opened.
+   */
+  function openSelectedVesselListing(record = state.selectedRecord) {
+    const url = vesselListingUrl(record);
+    if (!url || !canOpenListing()) return false;
+    services.openExternal(url);
+    return true;
+  }
+
+  function listingAvailable(record) {
+    return canOpenListing() && vesselListingUrl(record) !== null;
+  }
+
+  function bindHudListingClick(el) {
+    if (hudListingBound.has(el) || typeof el.addEventListener !== 'function')
+      return;
+    el.addEventListener('click', () => {
+      openSelectedVesselListing();
+    });
+    hudListingBound.add(el);
+  }
 
   function updateSelectedVesselHud(record) {
     const el = document.getElementById('hud-ais-vessel');
@@ -18,18 +70,30 @@ export function createCards({
 
     // Pinned vessels missing from recent refreshes get a stale marker
     const stale = (record.missedRefreshes || 0) > 0;
+    const listing = listingAvailable(record);
     el.classList.add('active');
-    el.textContent = [
+    el.classList.toggle?.('has-listing', listing);
+    const lines = [
       `AIS: ${trimHudValue(record.name, 32)}`,
       `${trimHudValue(record.type || 'VESSEL', 24)}  SPD: ${formatSpeed(record.speed)}  HDG: ${formatHeading(record.heading ?? record.course)}`,
       `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? '  · STALE' : ''}`,
-    ].join('\n');
+    ];
+    if (listing) {
+      lines.push(`↗ ${VESSEL_LISTING_LABEL} (${VESSEL_LISTING_KEY})`);
+      el.title = `Open ${displayVesselName(record)} on VesselFinder`;
+      bindHudListingClick(el);
+    } else {
+      el.title = '';
+    }
+    el.textContent = lines.join('\n');
   }
 
   function resetSelectedVesselHud() {
     const el = document.getElementById('hud-ais-vessel');
     if (!el) return;
     el.classList.remove('active');
+    el.classList.remove('has-listing');
+    el.title = '';
     el.textContent = 'AIS: --';
   }
 
@@ -96,6 +160,9 @@ export function createCards({
     details.push(
       `MMSI ${record.mmsi || '--'} · ${formatPositionTime(record)}${stale ? ' · STALE' : ''}`,
     );
+    // Listing click-through: the L key (or the HUD readout) opens VesselFinder.
+    if (listingAvailable(record))
+      details.push(`↗ ${VESSEL_LISTING_LABEL} · ${VESSEL_LISTING_KEY}`);
     return {
       id: vesselOverlayEntryId(record),
       actionable: Boolean(record?.mmsi),
@@ -171,6 +238,8 @@ export function createCards({
   return {
     updateSelectedVesselHud,
     resetSelectedVesselHud,
+    openSelectedVesselListing,
+    vesselListingUrl,
     trimHudValue,
     buildVesselCard,
     buildSelectedVesselCard,
