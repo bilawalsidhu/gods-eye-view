@@ -1,5 +1,16 @@
 # Changelog
 
+- Bound what a caller can grow through `/api/terrain/heights`. Every distinct
+  5-decimal point was a permanent in-memory entry, a permanent line in an
+  uncapped `.gev-cache/terrain-heights.json`, and a live upstream call, with
+  nothing limiting the rate and only a finite-number check on the coordinates.
+  Coordinates outside WGS-84 range are now rejected with `400`, the point cache
+  holds at most 50,000 entries and evicts oldest-first, a cache file above
+  24 MB is not read back, and the route is limited to 90 requests/minute per
+  client (270 global). Evicting a point costs one refetch, never a wrong
+  answer, since terrain does not move. Ordinary use is unaffected: a full
+  `test:track` run drives 10 requests, peaking at 8/min.
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD

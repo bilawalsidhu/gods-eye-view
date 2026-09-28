@@ -101,7 +101,9 @@
     "exports": ["./server/providers/terrain"],
     "modules": [
       "server/providers/terrain.js",
-      "src/data/terrainHeightsProxy.js"
+      "src/data/terrainHeightsProxy.js",
+      "server/providers/common/rate-limit.js",
+      "src/sources/rateLimit.js"
     ],
     "external": []
   },

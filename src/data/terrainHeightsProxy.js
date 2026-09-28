@@ -18,6 +18,13 @@ function defaultSleep(ms) {
 
 /**
  * Parse the proxy's `points=lon,lat;...` query parameter.
+ *
+ * Finite is not the same as on Earth. A coordinate outside WGS-84 range can
+ * never resolve to a height, but it is still a distinct 5dp cache key, so
+ * accepting it meant an out-of-range point became a permanent cache entry and
+ * a live upstream call. Range is checked here, at the edge, so no later stage
+ * has to.
+ *
  * @param {string|null|undefined} raw
  * @returns {Array<[number, number]>|null}
  */
@@ -36,6 +43,7 @@ export function parseTerrainPoints(raw) {
     const lon = Number(parts[0]);
     const lat = Number(parts[1]);
     if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
     points.push([lon, lat]);
   }
   return points;
