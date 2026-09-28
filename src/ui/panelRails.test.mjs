@@ -1,4 +1,5 @@
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
+import { displayPanelScroller } from './displayPanelScroll.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -6,6 +7,58 @@ import {
   layoutRightPanelRail,
   measurePanelNaturalHeight,
 } from './panelRails.js';
+
+test('Display uses an inner scroll body only in Cyber', () => {
+  const body = { scrollTop: 95 };
+  const panel = {
+    ownerDocument: { documentElement: { dataset: { uiTheme: 'cyber' } } },
+    querySelector: () => body,
+  };
+  assert.equal(displayPanelScroller(panel), body);
+  panel.ownerDocument.documentElement.dataset.uiTheme = 'tactical';
+  assert.equal(displayPanelScroller(panel), panel);
+  assert.equal(displayPanelScroller(null), null);
+});
+
+test('Cyber restores one expanded owner, keeps launchers, and restores other theme preferences', () => {
+  for (const mobile of [false, true]) {
+    const f = fixture('right', {
+      mobile,
+      hud: { visible: true, variant: 'cyber' },
+    });
+    f.expand(f.first, 250);
+    f.expand(f.second, 250);
+    f.options.preferredPanelId = f.second.id;
+    f.run();
+    assert.equal(f.first.classList.contains('cyber-accordion-collapsed'), true);
+    assert.equal(f.second.classList.contains('collapsed'), false);
+    assert.equal(f.first.getAttribute('aria-hidden'), undefined);
+    f.run();
+    assert.equal(
+      f.first.classList.contains('collapsed'),
+      true,
+      'layout does not reopen a peer',
+    );
+    f.options.hud.variant = 'operator';
+    f.run();
+    assert.equal(f.first.classList.contains('collapsed'), false);
+    assert.equal(
+      f.first.classList.contains('cyber-accordion-collapsed'),
+      false,
+    );
+    assert.equal(f.second.classList.contains('collapsed'), false);
+  }
+});
+
+test('Cyber restored accordion prefers keyboard focus when no explicit owner exists', () => {
+  const f = fixture('right', { hud: { visible: true, variant: 'cyber' } });
+  f.expand(f.first, 250);
+  f.expand(f.second, 250);
+  f.options.documentRef.activeElement = f.second;
+  f.run();
+  assert.equal(f.first.classList.contains('collapsed'), true);
+  assert.equal(f.second.classList.contains('collapsed'), false);
+});
 
 function element(
   id,

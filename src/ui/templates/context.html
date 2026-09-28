@@ -2,7 +2,7 @@
   <aside id="right-context-rail">
     <div id="weather-panel" class="panel-collapsible" data-panel-id="weather-panel" hidden>
       <div class="panel-glow"></div>
-      <div class="weather-panel-inner">
+      <div class="weather-panel-inner" data-rail-scroller>
         <div class="panel-header">
           <span class="panel-title">WEATHER</span>
           <span id="weather-panel-count" aria-label="Active weather products">0</span>
@@ -14,7 +14,7 @@
     </div>
     <div id="recent-imagery-panel" class="panel-collapsible" data-panel-id="recent-imagery-panel" hidden>
       <div class="panel-glow"></div>
-      <div class="recent-imagery-panel-inner">
+      <div class="recent-imagery-panel-inner" data-rail-scroller>
         <div class="panel-header">
           <span class="panel-title">RECENT IMAGERY</span>
           <span id="recent-imagery-panel-count" aria-label="Imagery days in the box"></span>
@@ -26,7 +26,7 @@
     </div>
     <div id="global-context-panel" class="panel-collapsible collapsed" data-panel-id="global-context-panel">
       <div class="panel-glow"></div>
-      <div class="global-context-panel-inner">
+      <div class="global-context-panel-inner" data-rail-scroller>
         <div class="panel-header">
           <span class="panel-title">CONTEXT</span>
           <span class="panel-divider"></span>
@@ -62,6 +62,7 @@
           </div>
           <button class="panel-collapse-btn" data-collapse-target="global-context-panel" title="Expand panel">▶</button>
         </div>
+        <div class="cyber-panel-body" data-rail-scroller>
         <div class="global-context-modes" role="tablist" aria-label="Context mode">
           <button id="global-context-flights-btn" class="context-mode-button" type="button" role="tab" tabindex="0" aria-selected="false" aria-controls="context-flights-view" aria-label="CONTACTS" title="Cycles the nearest contacts of whatever type you select — planes, vessels, installations. Satellites track independently.">
             <span class="material-symbols-outlined" aria-hidden="true">radar</span>
@@ -109,7 +110,7 @@
             </div>
           </div>
         </section>
-        <section id="radio-panel" class="panel-collapsible collapsed" data-panel-id="radio-panel" aria-label="Internet radio companion">
+        <section id="radio-panel" class="panel-collapsible collapsed" data-panel-id="radio-panel" aria-label="Internet radio and local SDR">
           <div class="radio-panel-inner">
             <div class="panel-header">
               <span class="panel-title">RADIO</span>
@@ -162,8 +163,82 @@
               <a href="https://www.radio-browser.info/" target="_blank" rel="noopener noreferrer">DIRECTORY: RADIO BROWSER</a>
             </div>
             <p class="radio-privacy">Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.</p>
+            <div id="sdr-radio-card" class="sdr-radio-card" role="group" aria-label="Local RTL-SDR receiver">
+              <div class="sdr-radio-heading">
+                <strong>LOCAL RTL-SDR</strong>
+                <span id="sdr-connection-state">NO USB</span>
+              </div>
+              <p>Chrome/Edge · WebUSB · one local tuner shared by FM and the Local ADS-B layer.</p>
+              <div class="sdr-radio-actions">
+                <button id="sdr-connect-btn" class="panel-layer-toggle" type="button" aria-pressed="false">CONNECT</button>
+                <button id="sdr-locate-btn" type="button" title="Use your location for faster ADS-B position decoding">LOCATE</button>
+                <button id="sdr-change-device-btn" type="button" title="Choose a different RTL-SDR or receiver channel">CHANGE DEVICE</button>
+              </div>
+              <div class="sdr-mode-row" role="group" aria-label="RTL-SDR receiver mode">
+                <button id="sdr-mode-fm-btn" class="active" type="button" aria-pressed="true">FM</button>
+                <button id="sdr-mode-adsb-btn" type="button" aria-pressed="false">ADS-B · 1090</button>
+              </div>
+              <div class="sdr-gain-row">
+                <label for="sdr-gain-select">GAIN</label>
+                <select id="sdr-gain-select" aria-label="RTL-SDR tuner gain for the current mode">
+                  <option value="auto">AUTO</option>
+                  <option value="0.0">0.0 dB</option>
+                  <option value="0.9">0.9 dB</option>
+                  <option value="1.4">1.4 dB</option>
+                  <option value="2.7">2.7 dB</option>
+                  <option value="3.7">3.7 dB</option>
+                  <option value="7.7">7.7 dB</option>
+                  <option value="8.7">8.7 dB</option>
+                  <option value="12.5">12.5 dB</option>
+                  <option value="14.4">14.4 dB</option>
+                  <option value="15.7">15.7 dB</option>
+                  <option value="16.6">16.6 dB</option>
+                  <option value="19.7">19.7 dB</option>
+                  <option value="20.7">20.7 dB</option>
+                  <option value="22.9">22.9 dB</option>
+                  <option value="25.4">25.4 dB</option>
+                  <option value="28.0">28.0 dB</option>
+                  <option value="29.7">29.7 dB</option>
+                  <option value="32.8">32.8 dB</option>
+                  <option value="33.8">33.8 dB</option>
+                  <option value="36.4">36.4 dB</option>
+                  <option value="37.2">37.2 dB</option>
+                  <option value="38.6">38.6 dB</option>
+                  <option value="40.2">40.2 dB</option>
+                  <option value="42.1">42.1 dB</option>
+                  <option value="43.4">43.4 dB</option>
+                  <option value="43.9">43.9 dB</option>
+                  <option value="44.5">44.5 dB</option>
+                  <option value="48.0">48.0 dB</option>
+                  <option value="49.6">49.6 dB</option>
+                </select>
+              </div>
+              <div id="sdr-adsb-stats" class="sdr-adsb-stats" role="status" aria-live="off" hidden>
+                <span><output id="sdr-stat-rate">--</output> MSG/S</span>
+                <span><output id="sdr-stat-heard">0</output> HEARD</span>
+                <span><output id="sdr-stat-positioned">0</output> POSITIONED</span>
+                <span>IQ <output id="sdr-stat-iq">--</output></span>
+              </div>
+              <div class="sdr-frequency-row">
+                <label for="sdr-frequency-input">FM MHZ</label>
+                <input id="sdr-frequency-input" type="number" min="87.5" max="108" step="0.1" value="98.5" inputmode="decimal" />
+                <button id="sdr-tune-btn" type="button">TUNE</button>
+              </div>
+              <div class="sdr-seek-row" role="group" aria-label="Seek broadcast FM stations">
+                <button id="sdr-seek-back-btn" type="button" disabled>◀ SEEK</button>
+                <button id="sdr-seek-forward-btn" type="button" disabled>SEEK ▶</button>
+              </div>
+              <label class="radio-volume-row" for="sdr-volume">
+                <span>SDR VOL</span>
+                <input id="sdr-volume" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Local SDR volume" />
+                <output id="sdr-volume-value" class="gev-slider-value" for="sdr-volume">80%</output>
+              </label>
+              <div id="sdr-status" class="radio-playback-state" role="status" aria-live="polite">Connect an RTL-SDR to begin.</div>
+              <div id="sdr-feed-status" class="sdr-feed-status" role="status" aria-live="off" hidden></div>
+            </div>
           </div>
         </section>
+        </div>
       </div>
     </div>
   </aside>

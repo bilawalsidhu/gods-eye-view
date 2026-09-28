@@ -71,6 +71,8 @@ export function createShellCesium({ maximumTextureSize = 0 } = {}) {
     GeometryInstance,
     BlendingState: Cesium.BlendingState,
     Cartesian4: Cesium.Cartesian4,
+    Ellipsoid: Cesium.Ellipsoid,
+    Matrix4: Cesium.Matrix4,
     Math: Cesium.Math,
     Rectangle: Cesium.Rectangle,
     ContextLimits: { maximumTextureSize },

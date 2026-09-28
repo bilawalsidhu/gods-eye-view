@@ -7,7 +7,7 @@ import { apiNotFoundPlugin } from './api-not-found.js';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
 /** Load this checkout's configuration and attach its local provider middleware. */
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const loaded = loadEnv(mode, root, '');
   for (const [key, value] of Object.entries(loaded)) {
     if (process.env[key] === undefined) process.env[key] = value;
@@ -18,5 +18,6 @@ export default defineConfig(({ mode }) => {
     cesiumToken: process.env.CESIUM_ION_TOKEN,
     host: process.env.HOST,
     port: process.env.PORT,
+    command,
   });
 });

@@ -6,6 +6,7 @@ import {
   createWeatherShell,
   detailWindow,
   orderWeatherShells,
+  shellLift,
   WEATHER_SHELL_CACHE_BYTES,
   WEATHER_SHELL_HEIGHTS,
 } from './shellRendering.js';
@@ -295,6 +296,44 @@ test('a surface applies a new detail window only once its image has drawn; the s
   surface.setDetail(image(), b);
   assert.deepEqual(windowOf(primitive), { x: 0.25, y: 0.5, z: 0.5, w: 0.75 });
   assert.equal(scene.postRender.size, 0);
+});
+
+test('shells rise with the camera over coarse 3D tiles, in steps, up to 60 km', () => {
+  assert.equal(shellLift(undefined), 0);
+  assert.equal(shellLift(1_200), 0, 'city views keep the shell heights');
+  assert.equal(shellLift(3_000_000), 12_000);
+  assert.equal(shellLift(8_000_000), 32_000);
+  assert.equal(shellLift(18_500_000), 60_000);
+  const camera = { positionCartographic: { height: 1_200 } };
+  const scene = {
+    primitives: new Cesium.PrimitiveCollection(),
+    preRender: new Cesium.Event(),
+    postRender: new Cesium.Event(),
+    camera,
+    requestRender() {},
+  };
+  const surface = createShellSurface({
+    viewer: { scene },
+    cesium: Cesium,
+    rectangle: Cesium.Rectangle.fromDegrees(-130, 20, -60, 55),
+    height: 5_800,
+  });
+  const primitive = scene.primitives.get(0);
+  const identity = primitive.modelMatrix;
+  scene.preRender.raiseEvent();
+  assert.equal(primitive.modelMatrix, identity, 'no lift, no new matrix');
+  camera.positionCartographic.height = 8_000_000;
+  scene.preRender.raiseEvent();
+  const radius = Cesium.Ellipsoid.WGS84.maximumRadius;
+  assert.ok(
+    Math.abs(primitive.modelMatrix[0] * radius - (radius + 32_000)) < 1e-3,
+  );
+  const lifted = primitive.modelMatrix;
+  camera.positionCartographic.height = 8_010_000;
+  scene.preRender.raiseEvent();
+  assert.equal(primitive.modelMatrix, lifted, 'the same step keeps the matrix');
+  surface.destroy();
+  assert.equal(scene.preRender.numberOfListeners, 0);
 });
 
 test('real Cesium builds the two-texture material, the opaque-pass appearance and the rectangle primitive', () => {

@@ -1,5 +1,9 @@
 import * as Cesium from 'cesium';
 import {
+  createCyberSonarSampler,
+  isCyberContactSonarActive as isCyberSonarActive,
+} from '../../cyberSonar.js';
+import {
   formatAwarenessLabel,
   formatAwarenessDistance,
   AWARENESS_RADIUS_M,
@@ -105,6 +109,9 @@ export function createRendering({
     const canvas = layerState.viewer.scene.canvas;
     const width = canvas.clientWidth || canvas.width;
     const height = canvas.clientHeight || canvas.height;
+    const sonar = isCyberSonarActive()
+      ? createCyberSonarSampler(width, height)
+      : null;
     const geometry = getKeyholeGeometry(width, height);
     if (!(geometry.radius > 0)) {
       root.hidden = true;
@@ -182,6 +189,15 @@ export function createRendering({
       marker.style.left = `${geometry.centerX + Math.cos(projection.angle) * markerRadius}px`;
       marker.style.top = `${geometry.centerY + Math.sin(projection.angle) * markerRadius}px`;
       marker.style.opacity = String(projection.opacity);
+      const sonarFactor =
+        sonar?.at(
+          geometry.centerX + Math.cos(projection.angle) * markerRadius,
+          geometry.centerY + Math.sin(projection.angle) * markerRadius,
+        ) ?? 1;
+      marker._arrow.style.opacity = String(sonarFactor);
+      marker._label.style.opacity = String(
+        sonar ? sonar.label(sonarFactor) : 1,
+      );
       marker._arrow.style.transform = `translate(-50%, -50%) rotate(${projection.angle}rad)`;
       marker._label.style.transform = `translate(-50%, -50%) translate(${-Math.cos(projection.angle) * 56}px, ${-Math.sin(projection.angle) * 56}px)`;
       const label = formatAwarenessLabel(item);

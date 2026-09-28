@@ -8,6 +8,8 @@ import {
   trailAnchorForModel,
 } from '../../data/modelVisualAnchor.js';
 import * as Cesium from 'cesium';
+import { selectModelEligible } from '../../data/modelEligibility.js';
+import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import { cockpitContactDotImage } from '../../data/cockpitContactDot.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
 import {
@@ -151,7 +153,7 @@ export function createRendering({
     const isCockpitNear =
       isCockpitContact && flightState._cockpitNearContacts.has(icao24);
     if (isCockpitContact && !isCockpitNear) {
-      const freshnessAlpha = bb.color?.alpha ?? 1;
+      const freshnessAlpha = cyberSonarBaseAlpha(bb);
       bb.image = cockpitContactDotImage();
       bb.width = COCKPIT_CONTACT_SIZE_PX;
       bb.height = COCKPIT_CONTACT_SIZE_PX;
@@ -171,7 +173,7 @@ export function createRendering({
     bb.height = icao24 === flightState._trackedIcao ? 24 : 20;
     bb.scale = _militaryBillboardScale(icao24) * limbScale;
     bb.scaleByDistance = _normalBillboardScaleByDistance();
-    bb.color = MIL_ICON_COLOR.withAlpha(bb.color?.alpha ?? 1);
+    bb.color = MIL_ICON_COLOR.withAlpha(cyberSonarBaseAlpha(bb));
   }
 
   /** Sprite kind for one contact's billboard. Identity for every aircraft except
@@ -892,25 +894,11 @@ export function createRendering({
         );
         flightState._lastModelCapWarnMs = nowMs;
       }
-      modelEligible = new Set();
-      for (const [icao, , inF] of cand) {
-        if (modelEligible.size >= cap) break;
-        if (inF && flightState._models.has(icao)) modelEligible.add(icao);
-      } // 1. KEEP on-screen
-      for (const [icao, d2, inF] of cand) {
-        if (modelEligible.size >= cap) break;
-        if (inF && d2 <= addDistSq && !modelEligible.has(icao))
-          modelEligible.add(icao);
-      } // 2. ADD on-screen
-      for (const [icao, , inF] of cand) {
-        if (modelEligible.size >= cap) break;
-        if (!inF && flightState._models.has(icao)) modelEligible.add(icao);
-      } // 3. KEEP off-screen (can't starve visible)
-      for (const [icao, d2, inF] of cand) {
-        if (modelEligible.size >= cap) break;
-        if (!inF && d2 <= addDistSq && !modelEligible.has(icao))
-          modelEligible.add(icao);
-      } // 4. ADD off-screen leftover
+      modelEligible = selectModelEligible(cand, {
+        cap,
+        addDistSq,
+        isModeled: (icao) => flightState._models.has(icao),
+      });
       const toRelease = [];
       for (const icao of flightState._models.keys()) {
         if (icao !== flightState._trackedIcao && !modelEligible.has(icao))
@@ -977,6 +965,7 @@ export function createRendering({
       const isCockpitNear =
         flightState._cockpitContactMode &&
         flightState._cockpitNearContacts.has(icao24);
+      const baseColor = MIL_ICON_COLOR;
       const treatment = applyAircraftBillboardTreatment({
         billboard: bb,
         baseScale:
@@ -984,7 +973,7 @@ export function createRendering({
             ? 1
             : _militaryBillboardScale(icao24),
         baseAlpha: flightState.records.missingPolls.get(icao24) ? 0.45 : 1,
-        baseColor: MIL_ICON_COLOR,
+        baseColor,
         focusFactor: focus.factor,
         cameraDistanceM,
         cameraHeightM: camera.positionCartographic?.height,

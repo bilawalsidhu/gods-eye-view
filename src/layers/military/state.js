@@ -227,6 +227,8 @@ export function createFlightState({ source, services }) {
 
   flightState._scratchFleetPos = new Cesium.Cartesian3();
 
+  flightState._scratchSonarScreen = new Cesium.Cartesian2();
+
   flightState._scratchDrRaw = new Cesium.Cartesian3();
 
   flightState._scratchWarmupTime = new Cesium.JulianDate();

@@ -342,11 +342,11 @@ test('Clear Selected Layers uses one adopted batch and discards Context restorat
 
 test('Cockpit Display portal retains both scroll owners across round trips', () => {
   const portal = CockpitDisplayPortal.toString();
-  assert.match(portal, /this\.standardScrollTop = standardPanel\?\.scrollTop \|\| 0/);
+  assert.match(portal, /this\.standardScrollTop =\s*displayPanelScroller\(standardPanel\)\?\.scrollTop \|\| 0/);
   assert.match(portal, /this\.cockpitScrollTop = cockpitPanel\?\.scrollTop \|\| 0/);
-  assert.match(portal, /if \(!this\.active\)[\s\S]*?this\.standardScrollTop = standardPanel\.scrollTop/);
+  assert.match(portal, /if \(!this\.active\)[\s\S]*?this\.standardScrollTop =\s*displayPanelScroller\(standardPanel\)\.scrollTop/);
   assert.match(portal, /if \(this\.active\)[\s\S]*?this\.cockpitScrollTop = cockpitPanel\.scrollTop/);
-  assert.match(portal, /this\.cockpitPanel\.scrollTop = this\.cockpitScrollTop[\s\S]*?this\.standardPanel\.scrollTop = this\.standardScrollTop/);
+  assert.match(portal, /this\.cockpitPanel\.scrollTop = this\.cockpitScrollTop[\s\S]*?displayPanelScroller\(this\.standardPanel\)\.scrollTop =\s*this\.standardScrollTop/);
 });
 
 test('Cockpit side surfaces behave as two single-expanded accordions', () => {

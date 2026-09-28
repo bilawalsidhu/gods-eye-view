@@ -1,5 +1,9 @@
 import * as Cesium from 'cesium';
 import {
+  createCyberSonarSampler,
+  isCyberContactSonarActive as isCyberSonarActive,
+} from '../../cyberSonar.js';
+import {
   ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
   ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
   ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID,
@@ -303,6 +307,15 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       <span data-replay-overlay-detail></span>
     </div>`;
     host.appendChild(layerState._replayVehicleOverlay);
+    layerState._replayVehicleOverlay._sonarIcons = [
+      ...layerState._replayVehicleOverlay.querySelectorAll(
+        '.mission-replay-flight-symbol, .mission-replay-orbit-dot',
+      ),
+    ];
+    layerState._replayVehicleOverlay._sonarLabel =
+      layerState._replayVehicleOverlay.querySelector(
+        '.mission-replay-overlay-callout',
+      );
   }
 
   function hideReplayVehicleOverlay() {
@@ -502,6 +515,17 @@ export function createOverlays({ state: layerState, services, parts, source }) {
         : windowPosition;
     track.lastOverlayWindowPosition = renderedWindowPosition;
     track.lastOverlayMode = mode;
+    const sonar = isCyberSonarActive()
+      ? createCyberSonarSampler(canvas.clientWidth, canvas.clientHeight)
+      : null;
+    const factor =
+      sonar?.at(renderedWindowPosition.x, renderedWindowPosition.y) ?? 1;
+    for (const icon of layerState._replayVehicleOverlay._sonarIcons || [])
+      icon.style.opacity = String(factor);
+    if (layerState._replayVehicleOverlay._sonarLabel)
+      layerState._replayVehicleOverlay._sonarLabel.style.opacity = String(
+        sonar ? sonar.label(factor) : 1,
+      );
     layerState._replayVehicleOverlay.hidden = false;
     layerState._replayVehicleOverlay.dataset.mode = mode;
     layerState._replayVehicleOverlay.classList.toggle(

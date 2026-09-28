@@ -1,5 +1,6 @@
 /** Own rail measurement, layout scheduling and dock tray observation. */
 import { layoutLeftPanelRail, layoutRightPanelRail } from './panelRails.js';
+import { syncRadioPanelPlacement } from './radioPanelPlacement.js';
 const COCKPIT_LAYOUT_SETTLE_MS = 240;
 /**
  * Fixed UI regions that can occupy the left accordion's vertical lane.
@@ -229,6 +230,7 @@ export class PanelLayoutController {
         this._weatherPanel,
         this._recentImageryPanel,
         globalContextPanel,
+        document.getElementById('radio-panel'),
       ]) {
         if (panel) this._rightStackResizeObserver.observe(panel);
       }
@@ -301,6 +303,7 @@ export class PanelLayoutController {
 
   _syncRightPanelAdaptiveLayout() {
     if (this.destroyed) return;
+    syncRadioPanelPlacement(document);
     layoutRightPanelRail({
       stack: this._rightPanelStack,
       obstacles: document.querySelectorAll(RIGHT_STACK_OBSTACLE_SELECTOR),

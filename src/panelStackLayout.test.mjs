@@ -197,7 +197,7 @@ test('share-panel state excludes responsive collapse and preserves recipient pre
 
   assert.match(
     ui,
-    /const collapsed = panelEl\.classList\.contains\('layout-auto-collapsed'\)\s*\? false\s*: panelEl\.classList\.contains\('collapsed'\);/,
+    /const collapsed =[\s\S]*?panelEl\.classList\.contains\('layout-auto-collapsed'\)[\s\S]*?panelEl\.classList\.contains\('cyber-accordion-collapsed'\)[\s\S]*?\? false\s*: panelEl\.classList\.contains\('collapsed'\);/,
     'responsive auto-collapse must serialize the explicit expanded preference',
   );
   assert.match(
@@ -218,9 +218,9 @@ test('parameterized Display presets keep one stable scroll owner', () => {
   const ui = readShellSource();
   const css = readStylesheet(new URL('../style.css', import.meta.url));
 
-  assert.match(css, /#pp-toggles:not\(\.collapsed\) > #param-slider-panel\.active\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*visible;/);
-  assert.match(ui, /readDisplayScrollTop: \(\) =>\s*this\._displayPortalScrollRestoreOwner === 'standard'[\s\S]*?this\._standardDisplayScrollTop[\s\S]*?this\._ppToggles\?\.scrollTop \|\| 0/);
-  assert.match(rightRail, /displayPanel\.scrollTop = Math\.min\(displayScrollTop, maxScrollTop\);/);
+  assert.match(css, /#pp-toggles:not\(\.collapsed\) > \.pp-panel-body > #param-slider-panel\.active\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*visible;/);
+  assert.match(ui, /readDisplayScrollTop: \(\) =>\s*this\._displayPortalScrollRestoreOwner === 'standard'[\s\S]*?this\._standardDisplayScrollTop[\s\S]*?displayPanelScroller\(this\._ppToggles\)\?\.scrollTop \|\| 0/);
+  assert.match(rightRail, /scroller\.scrollTop = Math\.min\(displayScrollTop, maxScrollTop\);/);
   assert.match(
     ui,
     /this\._sliderPanel\.classList\.remove\('active'\);\s*this\._scheduleRightPanelLayout\(\);/,

@@ -255,8 +255,9 @@
 }
 
 @media (max-width: 520px) {
+  /* 16px keeps the Radio broadcast waves (15px above the logo) on-screen. */
   #title-bar {
-    top: 14px;
+    top: 16px;
     left: 16px;
   }
 

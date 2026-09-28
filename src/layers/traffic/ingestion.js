@@ -4,6 +4,7 @@ import {
   TILE_CACHE_MAX_ENTRIES,
   FAST_FETCH_ALTITUDE,
 } from './policy.js';
+import { RoadRequestError, roadRequestError } from './source.js';
 
 export function createIngestion({
   state: layerState,
@@ -67,7 +68,7 @@ export function createIngestion({
     );
 
     if (!response.ok) {
-      throw new Error(`Overpass API returned ${response.status}`);
+      throw roadRequestError(response.status);
     }
 
     if (!state) {
@@ -307,8 +308,16 @@ export function createIngestion({
       renderedSomething = true;
     } catch (e) {
       if (e?.name === 'AbortError') return;
-      if (generation === layerState._loadGeneration && !renderedSomething)
-        layerState._roadError = 'Road data temporarily unavailable';
+      if (generation === layerState._loadGeneration && !renderedSomething) {
+        // A refusal we classified carries its own line; anything else — a
+        // dropped connection, a malformed snapshot — keeps the general one,
+        // because `e.message` from the platform is not a sentence anyone
+        // should have to read off a panel.
+        layerState._roadError =
+          e instanceof RoadRequestError
+            ? e.message
+            : 'Road data temporarily unavailable';
+      }
       console.warn('[Data:Traffic] Fetch error:', e);
     } finally {
       if (generation === layerState._loadGeneration) {

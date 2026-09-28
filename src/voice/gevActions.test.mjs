@@ -3165,6 +3165,30 @@ test('ALPR common names toggle only the registered camera layer through the norm
   }
 });
 
+test('Local ADS-B common names toggle only the receiver layer through the normal voice action', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } } };
+  const calls = [];
+  let enabled = false;
+  const dataManager = {
+    layers: new Map([['local-adsb', { module: {} }]]),
+    getAll: () => [{ id: 'local-adsb', name: 'Local ADS-B' }],
+    isEnabled: () => enabled,
+    setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  for (const alias of ['local-adsb', 'local ADS-B', 'Local ADSB', 'my receiver', 'my antenna', 'my SDR']) {
+    for (const value of [true, false]) {
+      const result = await runner('set_layer_visibility', { layerId: alias, enabled: value });
+      assert.equal(result.ok, true);
+      assert.equal(result.layerId, 'local-adsb');
+      assert.deepEqual(calls.at(-1), ['local-adsb', value]);
+    }
+  }
+});
+
 test('ISS voice lookup uses the registered satellite instance', async () => {
   const calls = [];
   const viewer = {

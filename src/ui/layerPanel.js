@@ -23,7 +23,7 @@ const PANEL_GROUPS = [
       'satellites',
       'flights',
       'military',
-      'flight-patterns',
+      'local-adsb',
       'ais-live-vessels',
       'traffic',
       'transit',
@@ -46,7 +46,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Events',
-    ids: ['rocket-launches', 'earthquakes', 'local-firms'],
+    ids: ['rocket-launches', 'earthquakes', 'local-firms', 'fire-perimeters'],
   },
   {
     label: 'Weather',
@@ -222,6 +222,7 @@ export class LayerPanel {
       left.className = 'data-toggle-left';
       const icon = document.createElement('span');
       icon.className = 'data-icon';
+      icon.setAttribute('aria-hidden', 'true');
       icon.textContent = layer.icon;
       const name = document.createElement('span');
       name.className = 'data-name';

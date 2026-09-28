@@ -1,0 +1,2714 @@
+/* Cyber is selected from DISPLAY > HUD > Layout. It skins the application
+   shell while map imagery and source media retain their original colours. */
+
+/* Radio retains Context's nested player and disclosure geometry in Cyber. */
+:root[data-ui-theme='cyber'] #radio-panel.collapsed .radio-panel-inner {
+  height: 50px;
+  min-height: 50px;
+  box-sizing: border-box;
+}
+:root[data-ui-theme='cyber'] #radio-panel:not(.collapsed) .radio-panel-inner {
+  max-height: 100%;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+:root[data-ui-theme='cyber'] #right-context-rail > #pp-toggles:not(.collapsed) {
+  overflow: hidden;
+}
+
+:root[data-ui-theme='cyber'] #pp-toggles > .pp-header-row {
+  flex: 0 0 auto;
+}
+
+:root[data-ui-theme='cyber']
+  #right-context-rail
+  :is(#cctv-panel, #global-context-panel):not(.collapsed)
+  > :is(.cctv-panel-inner, .global-context-panel-inner) {
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+
+:root[data-ui-theme='cyber']
+  :is(.cctv-panel-inner, .global-context-panel-inner)
+  > .panel-header {
+  flex: 0 0 auto;
+}
+
+:root[data-ui-theme='cyber'] .cyber-panel-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(165, 188, 199, 0.35) transparent;
+}
+
+:root[data-ui-theme='cyber'] .cctv-panel-inner > .cyber-panel-body {
+  gap: 8px;
+}
+
+:root[data-ui-theme='cyber'] .cyber-panel-body > * {
+  flex-shrink: 0;
+}
+
+:root[data-ui-theme='cyber']
+  .panel-collapsible.collapsed
+  > :is(.cctv-panel-inner, .global-context-panel-inner)
+  > .cyber-panel-body {
+  display: none;
+}
+
+:root[data-ui-theme='cyber'] #pp-toggles > .pp-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(165, 188, 199, 0.35) transparent;
+}
+
+:root[data-ui-theme='cyber'] #pp-toggles > .pp-panel-body > * {
+  flex-shrink: 0;
+}
+
+:root[data-ui-theme='cyber'] #pp-toggles.collapsed > .pp-panel-body {
+  display: none;
+}
+
+:root[data-ui-theme='cyber'] {
+  color-scheme: dark;
+  --cyber-red: #c45454;
+  --cyber-red-bright: #e16666;
+  --cyber-slate: #26343a;
+  --cyber-slate-raised: #334a53;
+  --cyber-grid: rgba(188, 211, 218, 0.1);
+  --cyber-telemetry-fill: rgba(13, 20, 23, 0.985);
+  --cyber-panel-width: 272px;
+  --cyber-right-panel-width: 312px;
+  --cyber-panel-collapsed-width: 200px;
+  --cyber-panel-gap: 8px;
+  --cyber-panel-control-size: 30px;
+  --cyber-panel-surface: rgba(18, 24, 27, 0.92);
+  --cyber-panel-surface-detail: linear-gradient(
+    135deg,
+    rgba(68, 88, 94, 0.16),
+    transparent 48%
+  );
+  --cyber-panel-shadow:
+    3px 0 0 rgba(196, 84, 84, 0.2) inset,
+    -1px 0 0 rgba(226, 235, 236, 0.05) inset, 0 10px 28px rgba(0, 0, 0, 0.42);
+  --bg-dark: #090d0f;
+  --glass-bg: var(--cyber-panel-surface);
+  --glass-border: rgba(206, 222, 226, 0.28);
+  --glass-border-hover: rgba(196, 84, 84, 0.82);
+  --accent: #e9f0f1;
+  --accent-dim: rgba(196, 84, 84, 0.2);
+  --accent-glow: rgba(196, 84, 84, 0.34);
+  --text-primary: #f2f5f4;
+  --text-secondary: rgba(226, 235, 236, 0.82);
+  --text-dim: rgba(180, 198, 202, 0.58);
+  --panel-radius: 1px;
+  --btn-radius: 1px;
+  --cyber-panel-frame: polygon(
+    0 10px,
+    10px 0,
+    calc(50% - 25px) 0,
+    calc(50% - 18px) 6px,
+    calc(50% + 18px) 6px,
+    calc(50% + 25px) 0,
+    calc(100% - 10px) 0,
+    100% 10px,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    10px 100%,
+    0 calc(100% - 10px)
+  );
+}
+
+:root[data-ui-theme='cyber'] body {
+  font-family: var(--font-mono);
+  background-color: var(--bg-dark);
+}
+
+/* A restrained technical grid echoes the reference without obscuring the map. */
+:root[data-ui-theme='cyber'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.32;
+  background-image:
+    linear-gradient(var(--cyber-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--cyber-grid) 1px, transparent 1px);
+  background-size: 116px 116px;
+  background-position: center center;
+  -webkit-mask-image: radial-gradient(
+    circle at 50% 50%,
+    transparent 0 min(40vw, 52vh),
+    #000 calc(min(40vw, 52vh) + 18px)
+  );
+  mask-image: radial-gradient(
+    circle at 50% 50%,
+    transparent 0 min(40vw, 52vh),
+    #000 calc(min(40vw, 52vh) + 18px)
+  );
+}
+
+:root[data-ui-theme='cyber']
+  :where(
+    .panel-inner,
+    .panel-collapsible,
+    #pp-toggles:not(.collapsed),
+    #pp-toggles .pp-header-row,
+    .pp-toggle-btn,
+    .style-btn,
+    .dock-tray-toggle,
+    .dock-popover,
+    .scene-btn,
+    .context-mode-button,
+    .map-stack-chip,
+    .key-setup-chip,
+    .first-run-card
+  ) {
+  border-color: var(--glass-border);
+  border-radius: var(--btn-radius);
+  background-color: var(--cyber-panel-surface);
+  background-image: var(--cyber-panel-surface-detail);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.32) inset,
+    0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+/* Carry the raised voice-module silhouette across the primary panel system.
+   The six-pixel calibration bay is decorative and stays outside panel content. */
+:root[data-ui-theme='cyber']
+  :is(
+    .data-panel-inner,
+    .cctv-panel-inner,
+    .weather-panel-inner,
+    .recent-imagery-panel-inner,
+    .scene-panel-inner,
+    .global-context-panel-inner,
+    .radio-panel-inner,
+    #pp-toggles:not(.collapsed),
+    #pp-toggles.collapsed > .pp-header-row
+  ) {
+  border-radius: 0;
+  clip-path: var(--cyber-panel-frame);
+  box-shadow: var(--cyber-panel-shadow);
+}
+
+/* Turn every panel header into a compact instrument readout. The stronger
+   title marker and tapered divider improve hierarchy without adding another
+   decorative object over the keyhole. */
+:root[data-ui-theme='cyber']
+  :is(
+    .data-panel-inner,
+    .cctv-panel-inner,
+    .weather-panel-inner,
+    .recent-imagery-panel-inner,
+    .scene-panel-inner,
+    .global-context-panel-inner,
+    .radio-panel-inner
+  )
+  > .panel-header {
+  min-height: 28px;
+  gap: 9px;
+  padding: 0 2px 7px 8px;
+  border-bottom: 1px solid rgba(206, 222, 226, 0.08);
+}
+
+:root[data-ui-theme='cyber']
+  :is(
+    .data-panel-inner,
+    .cctv-panel-inner,
+    .weather-panel-inner,
+    .recent-imagery-panel-inner,
+    .scene-panel-inner,
+    .global-context-panel-inner,
+    .radio-panel-inner
+  )
+  > .panel-header
+  .panel-title {
+  position: relative;
+}
+
+:root[data-ui-theme='cyber']
+  :is(
+    .data-panel-inner,
+    .cctv-panel-inner,
+    .weather-panel-inner,
+    .recent-imagery-panel-inner,
+    .scene-panel-inner,
+    .global-context-panel-inner,
+    .radio-panel-inner
+  )
+  > .panel-header
+  .panel-title::before {
+  position: absolute;
+  top: 50%;
+  left: -8px;
+  width: 3px;
+  height: 11px;
+  background: var(--cyber-red);
+  clip-path: polygon(0 0, 100% 2px, 100% calc(100% - 2px), 0 100%);
+  content: '';
+  transform: translateY(-50%);
+}
+
+:root[data-ui-theme='cyber']
+  :is(
+    .data-panel-inner,
+    .cctv-panel-inner,
+    .weather-panel-inner,
+    .recent-imagery-panel-inner,
+    .scene-panel-inner,
+    .global-context-panel-inner,
+    .radio-panel-inner
+  )
+  > .panel-header
+  .panel-divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(196, 84, 84, 0.62),
+    rgba(206, 222, 226, 0.08)
+  );
+}
+
+:root[data-ui-theme='cyber'] .panel-collapsible.collapsed::after {
+  width: 24px;
+  opacity: 0.56;
+}
+
+:root[data-ui-theme='cyber'] .panel-collapsible:not(.collapsed)::after {
+  width: 58px;
+}
+
+:root[data-ui-theme='cyber']
+  :is(.panel-collapse-btn, body.cockpit-mode .cockpit-utility-glyph) {
+  display: grid;
+  width: var(--cyber-panel-control-size);
+  min-width: var(--cyber-panel-control-size);
+  height: var(--cyber-panel-control-size);
+  place-items: center;
+  padding: 0;
+  border-color: rgba(206, 222, 226, 0.22);
+  clip-path: polygon(
+    5px 0,
+    calc(100% - 5px) 0,
+    100% 5px,
+    100% calc(100% - 5px),
+    calc(100% - 5px) 100%,
+    5px 100%,
+    0 calc(100% - 5px),
+    0 5px
+  );
+}
+
+:root[data-ui-theme='cyber']
+  .panel-collapsible:not(#location-bar):not(#control-panel) {
+  position: relative;
+}
+
+:root[data-ui-theme='cyber']
+  .panel-collapsible:not(#location-bar):not(#control-panel)::after {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  left: 50%;
+  width: 36px;
+  height: 6px;
+  border-top: 1px solid rgba(225, 102, 102, 0.84);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(196, 84, 84, 0.22) 18% 82%,
+    transparent
+  );
+  clip-path: polygon(0 0, 7px 100%, calc(100% - 7px) 100%, 100% 0);
+  content: '';
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+/* Display follows the same red title treatment as the other panel headers. */
+:root[data-ui-theme='cyber'] #pp-toggles:not(.collapsed) {
+  background-color: var(--cyber-panel-surface);
+  background-image: var(--cyber-panel-surface-detail);
+}
+
+:root[data-ui-theme='cyber'] #pp-toggles .pp-header-label {
+  color: var(--cyber-red-bright);
+}
+
+/* Clip the Display surface, not its shared calibration accent. Data Layers
+   already separates its inner frame from the outer accent in the same way. */
+:root[data-ui-theme='cyber']
+  body:not(.cockpit-mode)
+  #pp-toggles:not(.collapsed),
+:root[data-ui-theme='cyber']
+  #global-context-panel.panel-collapsible
+  .global-context-panel-inner,
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-control.is-expanded:has([data-cockpit-launcher='display']) {
+  isolation: isolate;
+  clip-path: none;
+  background: none;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-ui-theme='cyber']
+  body:not(.cockpit-mode)
+  #pp-toggles:not(.collapsed)::before,
+:root[data-ui-theme='cyber']
+  #global-context-panel.panel-collapsible
+  .global-context-panel-inner::before,
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-control.is-expanded:has(
+    [data-cockpit-launcher='display']
+  )::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border: 1px solid var(--glass-border);
+  background-color: var(--cyber-panel-surface);
+  background-image: var(--cyber-panel-surface-detail);
+  box-shadow: var(--cyber-panel-shadow);
+  clip-path: var(--cyber-panel-frame);
+}
+
+:root[data-ui-theme='cyber'] #pp-toggles > .pp-header-row .pp-collapse-btn {
+  width: var(--cyber-panel-control-size);
+  min-width: var(--cyber-panel-control-size);
+  height: var(--cyber-panel-control-size);
+}
+
+:root[data-ui-theme='cyber'] :where(button, select, input, textarea) {
+  border-radius: var(--btn-radius);
+  font-family: var(--font-mono);
+}
+
+:root[data-ui-theme='cyber']
+  :where(
+    button:hover,
+    button.active,
+    button[aria-pressed='true'],
+    button[aria-selected='true'],
+    .style-btn.active,
+    .map-stack-chip.active
+  ) {
+  border-color: var(--cyber-red);
+  color: var(--text-primary);
+  background-color: rgba(64, 45, 46, 0.94);
+  box-shadow:
+    3px 0 0 var(--cyber-red) inset,
+    0 0 12px rgba(196, 84, 84, 0.14);
+}
+
+:root[data-ui-theme='cyber'] .pp-toggle-btn.active,
+:root[data-ui-theme='cyber'] .style-btn.active,
+:root[data-ui-theme='cyber'] .map-stack-chip.active {
+  border-color: var(--cyber-red);
+  color: var(--text-primary);
+  background: rgba(64, 45, 46, 0.94);
+  box-shadow:
+    3px 0 0 var(--cyber-red) inset,
+    0 0 12px rgba(196, 84, 84, 0.14);
+}
+
+:root[data-ui-theme='cyber'] .pp-mode-seg {
+  border-color: rgba(206, 222, 226, 0.24);
+  border-radius: 1px;
+}
+
+:root[data-ui-theme='cyber'] .pp-mode-btn.active {
+  background: var(--cyber-red);
+  color: #f7f8f7;
+}
+
+:root[data-ui-theme='cyber'] .pp-toggle-btn.active .pp-label {
+  color: #f5f7f6;
+}
+
+:root[data-ui-theme='cyber'] #detection-toggle.active,
+:root[data-ui-theme='cyber'] #detection-toggle.panoptic,
+:root[data-ui-theme='cyber'] #detection-toggle.god {
+  border-color: var(--cyber-red);
+  background: rgba(64, 45, 46, 0.94);
+  box-shadow:
+    3px 0 0 var(--cyber-red) inset,
+    0 0 12px rgba(196, 84, 84, 0.14);
+}
+
+:root[data-ui-theme='cyber']
+  #detection-toggle.active
+  :where(.pp-label, .pp-icon),
+:root[data-ui-theme='cyber']
+  #detection-toggle.panoptic
+  :where(.pp-label, .pp-icon),
+:root[data-ui-theme='cyber'] #detection-toggle.god :where(.pp-label, .pp-icon) {
+  color: #f5f7f6;
+  text-shadow: none;
+}
+
+:root[data-ui-theme='cyber'] :where(.pp-select, select, input, textarea) {
+  border-color: rgba(206, 222, 226, 0.24);
+  background-color: rgba(26, 35, 39, 0.96);
+  color: var(--text-primary);
+}
+
+:root[data-ui-theme='cyber']
+  :where(
+    .panel-title,
+    .panel-mini-label,
+    .pp-header-label,
+    .pp-label,
+    .pp-slider-mini-label,
+    .btn-label,
+    .layer-name,
+    .context-mode-label,
+    .dock-tray-label,
+    label
+  ) {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-shadow: none;
+}
+
+:root[data-ui-theme='cyber']
+  :where(.panel-title, .pp-header-label, .panel-mini-label) {
+  color: var(--cyber-red-bright);
+}
+
+:root[data-ui-theme='cyber']
+  :where(
+    .material-symbols-outlined,
+    .pp-icon,
+    .btn-icon,
+    .dock-label-icon,
+    .first-run-arrow,
+    .panel-collapse-btn
+  ) {
+  color: #f2f5f4;
+  text-shadow: none;
+}
+
+/* Replace pictographic emoji with a single-colour instrument glyph set while
+   Cyber is active. Data semantics and accessible labels remain unchanged. */
+:root[data-ui-theme='cyber'] .data-icon,
+:root[data-ui-theme='cyber'] #command-dock .btn-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.05rem;
+  min-width: 1.05rem;
+  color: rgba(235, 241, 241, 0.88);
+  font-family: var(--font-mono);
+  font-size: 0 !important;
+  font-style: normal;
+  line-height: 1;
+  filter: none;
+}
+
+:root[data-ui-theme='cyber'] .data-icon::before,
+:root[data-ui-theme='cyber'] #command-dock .btn-icon::before {
+  content: '◇';
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='satellites']
+  .data-icon::before {
+  content: '◎';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='flights']
+  .data-icon::before {
+  content: '△';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='military']
+  .data-icon::before {
+  content: '✦';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='vessels']
+  .data-icon::before {
+  content: '◭';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='traffic']
+  .data-icon::before {
+  content: '◈';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='transit']
+  .data-icon::before {
+  content: '▤';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='bikeshare']
+  .data-icon::before {
+  content: '∞';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='cctv']
+  .data-icon::before {
+  content: '◉';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='alpr-cameras']
+  .data-icon::before {
+  content: '⌗';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='military-installations']
+  .data-icon::before {
+  content: '⌖';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='local-datacenters']
+  .data-icon::before {
+  content: '▦';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='submarine-cables']
+  .data-icon::before {
+  content: '≋';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='local-dams']
+  .data-icon::before {
+  content: '▰';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='rocket-launches']
+  .data-icon::before {
+  content: '↑';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='earthquakes']
+  .data-icon::before {
+  content: '≋';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='local-firms']
+  .data-icon::before {
+  content: '▲';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='directions']
+  .data-icon::before {
+  content: '⌁';
+}
+:root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='radio']
+  .data-icon::before {
+  content: '◉';
+}
+
+:root[data-ui-theme='cyber']
+  #command-dock
+  .style-btn[data-style='normal']
+  .btn-icon::before {
+  content: '○';
+}
+:root[data-ui-theme='cyber']
+  #command-dock
+  .style-btn[data-style='retro']
+  .btn-icon::before {
+  content: '▦';
+}
+:root[data-ui-theme='cyber']
+  #command-dock
+  .style-btn[data-style='surveillance']
+  .btn-icon::before {
+  content: '◒';
+}
+:root[data-ui-theme='cyber']
+  #command-dock
+  .style-btn[data-style='thermal']
+  .btn-icon::before {
+  content: '≋';
+}
+:root[data-ui-theme='cyber']
+  #command-dock
+  .style-btn[data-style='anime']
+  .btn-icon::before {
+  content: '✦';
+}
+:root[data-ui-theme='cyber']
+  #command-dock
+  .style-btn[data-style='noir']
+  .btn-icon::before {
+  content: '◐';
+}
+:root[data-ui-theme='cyber']
+  #command-dock
+  .style-btn[data-style='snow']
+  .btn-icon::before {
+  content: '❄︎';
+}
+
+:root[data-ui-theme='cyber'] :where(#bloom-toggle, #sharpen-toggle) {
+  font-size: 0;
+}
+
+:root[data-ui-theme='cyber'] :where(#bloom-toggle, #sharpen-toggle)::before {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1rem;
+  color: #f2f5f4;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+:root[data-ui-theme='cyber'] #bloom-toggle::before {
+  content: '✦';
+}
+:root[data-ui-theme='cyber'] #sharpen-toggle::before {
+  content: '⌕';
+}
+:root[data-ui-theme='cyber'] :where(#bloom-toggle, #sharpen-toggle) .pp-icon {
+  display: none;
+}
+
+:root[data-ui-theme='cyber'] :where(#bloom-toggle, #sharpen-toggle) .pp-label {
+  font-size: 0.7rem;
+}
+
+:root[data-ui-theme='cyber']
+  :where(
+    button:hover,
+    button.active,
+    button[aria-pressed='true'],
+    button[aria-selected='true']
+  )
+  :where(.material-symbols-outlined, .pp-icon, .btn-icon, .dock-label-icon) {
+  color: var(--cyber-red-bright);
+}
+
+:root[data-ui-theme='cyber']
+  :where(.dock-pin-btn img, .title-logo img, .brand-logo img) {
+  filter: grayscale(1) brightness(2.2) contrast(1.1);
+}
+
+:root[data-ui-theme='cyber']
+  :where(input[type='range'], input[type='checkbox'], input[type='radio']) {
+  accent-color: var(--cyber-red);
+}
+
+:root[data-ui-theme='cyber']
+  :where(button, a[href], input, select, textarea):focus-visible {
+  outline-color: var(--cyber-red-bright) !important;
+  box-shadow:
+    0 0 0 2px #090d0f,
+    0 0 0 4px var(--cyber-red-bright);
+}
+
+/* These controls are clipped to a chamfered tag. Keep focus inside that shape;
+   an outside outline/shadow is clipped away, including in cockpit launchers. */
+:root[data-ui-theme='cyber']
+  :is(.panel-collapse-btn, body.cockpit-mode .cockpit-utility-glyph):is(
+    :hover,
+    :focus-visible
+  ) {
+  border-color: var(--cyber-red-bright);
+  color: var(--text-primary);
+  background-color: rgba(64, 45, 46, 0.94);
+}
+
+:root[data-ui-theme='cyber']
+  :is(
+    .panel-collapse-btn,
+    body.cockpit-mode .cockpit-utility-glyph
+  ):focus-visible {
+  outline: 2px solid var(--cyber-red-bright) !important;
+  outline-offset: -3px;
+  box-shadow: none;
+}
+
+:root[data-ui-theme='cyber'] #title-bar h1,
+:root[data-ui-theme='cyber'] #style-indicator {
+  color: #f5f7f6;
+  text-shadow: 2px 2px 0 rgba(196, 84, 84, 0.3);
+}
+
+:root[data-ui-theme='cyber'] #title-bar .subtitle,
+:root[data-ui-theme='cyber'] #style-indicator .label,
+:root[data-ui-theme='cyber'] #style-indicator .indicator-label {
+  color: var(--cyber-red-bright);
+}
+
+:root[data-ui-theme='cyber'] #title-bar .title-logo {
+  filter: drop-shadow(0 0 10px rgba(196, 84, 84, 0.24));
+}
+
+:root[data-ui-theme='cyber']
+  #title-bar
+  .title-logo
+  :is(#outer_eye, #inner_eye) {
+  fill: #090d0f;
+  stroke: #f5f7f6;
+}
+
+:root[data-ui-theme='cyber'] #title-bar .title-logo #globe {
+  fill: var(--cyber-red);
+  stroke: var(--cyber-red-bright);
+}
+
+:root[data-ui-theme='cyber'] #title-bar .title-logo #globe_cage {
+  fill: #f5f7f6;
+  stroke: #090d0f;
+  opacity: 0.72;
+}
+
+:root[data-ui-theme='cyber'] #top-center-actions button {
+  --cyber-action-edge: rgba(226, 235, 236, 0.34);
+  --cyber-action-fill: rgba(14, 20, 23, 0.94);
+  position: relative;
+  isolation: isolate;
+  border: 0;
+  border-radius: 0;
+  background: var(--cyber-action-edge);
+  clip-path: polygon(
+    29% 0,
+    71% 0,
+    100% 29%,
+    100% 71%,
+    71% 100%,
+    29% 100%,
+    0 71%,
+    0 29%
+  );
+  color: #f2f5f4;
+  box-shadow: none;
+}
+
+:root[data-ui-theme='cyber'] #top-center-actions button::before {
+  position: absolute;
+  z-index: -1;
+  inset: 1px;
+  background: var(--cyber-action-fill);
+  clip-path: inherit;
+  content: '';
+  pointer-events: none;
+}
+
+:root[data-ui-theme='cyber'] #top-center-actions button:hover,
+:root[data-ui-theme='cyber'] #top-center-actions button:focus-visible,
+:root[data-ui-theme='cyber'] #top-center-actions button[aria-pressed='true'] {
+  --cyber-action-edge: var(--cyber-red);
+  --cyber-action-fill: rgba(64, 45, 46, 0.94);
+  color: var(--cyber-red-bright);
+  box-shadow: none;
+}
+
+:root[data-ui-theme='cyber'] #command-dock {
+  --dock-side-compact: clamp(9rem, 11vw, 9.75rem);
+  --dock-voice-width: 8rem;
+  padding: 0.3rem 0.48rem 0.34rem;
+  gap: 0.12rem;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  isolation: isolate;
+}
+
+:root[data-ui-theme='cyber'] #command-dock::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(196, 84, 84, 0.16),
+      transparent 18% 82%,
+      rgba(196, 84, 84, 0.16)
+    ),
+    rgba(10, 15, 18, 0.96);
+  box-shadow:
+    0 0 0 1px rgba(196, 84, 84, 0.62) inset,
+    0 0 0 2px rgba(238, 243, 243, 0.035) inset;
+  clip-path: polygon(
+    12px 0,
+    calc(100% - 12px) 0,
+    100% 12px,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    12px 100%,
+    0 calc(100% - 12px),
+    0 12px
+  );
+  filter: drop-shadow(0 13px 18px rgba(0, 0, 0, 0.52));
+  pointer-events: none;
+}
+
+:root[data-ui-theme='cyber'] #command-dock::after {
+  content: '';
+  position: absolute;
+  right: 1rem;
+  bottom: -0.26rem;
+  left: 1rem;
+  height: 0.22rem;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(196, 84, 84, 0.9) 0 2px,
+    transparent 2px 6px,
+    rgba(226, 235, 236, 0.38) 6px 7px,
+    transparent 7px 11px
+  );
+  opacity: 0.68;
+  pointer-events: none;
+}
+
+:root[data-ui-theme='cyber'] #command-dock > #location-bar,
+:root[data-ui-theme='cyber'] #command-dock > #control-panel {
+  border: 1px solid rgba(112, 145, 153, 0.34);
+  background:
+    linear-gradient(135deg, rgba(62, 86, 94, 0.26), transparent 52%),
+    rgba(28, 39, 43, 0.92);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.32) inset,
+    3px 0 0 rgba(196, 84, 84, 0.18) inset;
+}
+
+:root[data-ui-theme='cyber'] #command-dock > #location-bar {
+  border-left-color: rgba(196, 84, 84, 0.68);
+}
+
+:root[data-ui-theme='cyber'] #command-dock > #control-panel {
+  border-right-color: rgba(196, 84, 84, 0.68);
+}
+
+:root[data-ui-theme='cyber'] #command-dock > #location-bar::after,
+:root[data-ui-theme='cyber'] #command-dock > #control-panel::after {
+  position: absolute;
+  bottom: 0.22rem;
+  color: rgba(165, 190, 196, 0.42);
+  font-size: 0.32rem;
+  letter-spacing: 0.1rem;
+  pointer-events: none;
+}
+
+:root[data-ui-theme='cyber'] #command-dock > #location-bar::after {
+  content: 'LOC / GRID';
+  left: 0.75rem;
+}
+
+:root[data-ui-theme='cyber'] #command-dock > #control-panel::after {
+  content: 'OPT / MATRIX';
+  right: 0.75rem;
+}
+
+:root[data-ui-theme='cyber'] #command-dock > #gev-voice-control {
+  --cyber-voice-wave: 105, 203, 209;
+  --cyber-voice-peak: 226, 240, 240;
+  --cyber-voice-alert: 196, 84, 84;
+  border-color: rgba(196, 84, 84, 0.58);
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(196, 84, 84, 0.14), transparent 34%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(188, 211, 218, 0.035) 0 1px,
+      transparent 1px 9px
+    ),
+    rgba(38, 52, 58, 0.98);
+  box-shadow:
+    0 9px 22px rgba(0, 0, 0, 0.48),
+    3px 0 0 rgba(196, 84, 84, 0.72) inset,
+    -3px 0 0 rgba(196, 84, 84, 0.32) inset;
+  clip-path: polygon(
+    12px 0,
+    calc(100% - 12px) 0,
+    100% 12px,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    12px 100%,
+    0 calc(100% - 12px),
+    0 12px
+  );
+}
+
+:root[data-ui-theme='cyber'] #command-dock #gev-voice-button {
+  border: 1px solid rgba(226, 235, 236, 0.24);
+  background: rgba(8, 13, 15, 0.32);
+  box-shadow: 0 0 0 3px rgba(196, 84, 84, 0.08) inset;
+  clip-path: polygon(
+    8px 0,
+    100% 0,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    0 100%,
+    0 8px
+  );
+}
+
+:root[data-ui-theme='cyber'] #command-dock .gev-mic-orbit {
+  position: relative;
+  border-color: rgba(196, 84, 84, 0.58);
+  border-radius: 0;
+  background: rgba(196, 84, 84, 0.1);
+  box-shadow:
+    0 0 0 0.16rem rgba(196, 84, 84, 0.07),
+    0 0 0.7rem rgba(196, 84, 84, 0.12);
+  transform: rotate(45deg) scale(0.8);
+}
+
+:root[data-ui-theme='cyber'] #command-dock .gev-mic-orbit::before {
+  position: absolute;
+  inset: -0.3rem;
+  border: 1px solid rgba(var(--cyber-voice-wave), 0.26);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 0 0.55rem rgba(var(--cyber-voice-wave), 0.12);
+  content: '';
+  opacity: 0.56;
+  pointer-events: none;
+}
+
+:root[data-ui-theme='cyber']
+  #command-dock
+  #gev-voice-control:is(
+    [data-status='connecting'],
+    [data-status='listening'],
+    [data-status='executing']
+  )
+  .gev-mic-orbit::before {
+  animation: gev-cyber-voice-lock 1.45s ease-in-out infinite;
+}
+
+:root[data-ui-theme='cyber'] #command-dock .gev-mic-orbit > * {
+  transform: rotate(-45deg) scale(1.25);
+}
+
+:root[data-ui-theme='cyber']
+  #command-dock
+  #gev-voice-control[data-speaker='user'] {
+  --cyber-voice-wave: 232, 157, 78;
+  --cyber-voice-peak: 255, 218, 154;
+}
+
+:root[data-ui-theme='cyber']
+  #command-dock
+  #gev-voice-control[data-speaker='ai'] {
+  --cyber-voice-wave: 105, 203, 209;
+  --cyber-voice-peak: 211, 247, 248;
+}
+
+:root[data-ui-theme='cyber'] #command-dock .gev-voice-visualizer {
+  position: relative;
+  isolation: isolate;
+  align-items: center;
+  justify-content: center;
+  gap: 0.11rem;
+  height: 2.25rem;
+  padding: 0.28rem 0.24rem;
+  overflow: hidden;
+  border: 1px solid rgba(var(--cyber-voice-wave), 0.26);
+  border-left-color: rgba(var(--cyber-voice-alert), 0.72);
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(var(--cyber-voice-wave), 0.07) 0 1px,
+      transparent 1px 6px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(var(--cyber-voice-wave), 0.055) 0 1px,
+      transparent 1px 7px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(var(--cyber-voice-alert), 0.09),
+      rgba(3, 13, 16, 0.9) 24% 76%,
+      rgba(var(--cyber-voice-wave), 0.08)
+    );
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.34),
+    inset 0 0 0.7rem rgba(var(--cyber-voice-wave), 0.055);
+  clip-path: polygon(
+    5px 0,
+    100% 0,
+    100% calc(100% - 5px),
+    calc(100% - 5px) 100%,
+    0 100%,
+    0 5px
+  );
+}
+
+:root[data-ui-theme='cyber'] #command-dock .gev-voice-visualizer::before {
+  position: absolute;
+  top: 50%;
+  right: 0.2rem;
+  left: 0.2rem;
+  z-index: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(var(--cyber-voice-wave), 0.62) 18% 82%,
+    transparent
+  );
+  box-shadow: 0 0 0.35rem rgba(var(--cyber-voice-wave), 0.28);
+  content: '';
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+:root[data-ui-theme='cyber'] #command-dock .gev-voice-visualizer::after {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: -34%;
+  z-index: 0;
+  width: 32%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(var(--cyber-voice-wave), 0.04) 28%,
+    rgba(var(--cyber-voice-peak), 0.36) 82%,
+    rgba(var(--cyber-voice-peak), 0.78) 96%,
+    transparent
+  );
+  content: '';
+  opacity: 0.42;
+  pointer-events: none;
+  transform: skewX(-10deg);
+  animation: gev-cyber-voice-scan 2.8s linear infinite;
+}
+
+:root[data-ui-theme='cyber'] #command-dock .gev-voice-visualizer span,
+:root[data-ui-theme='cyber']
+  #command-dock
+  .gev-voice-visualizer
+  span:nth-child(n) {
+  position: relative;
+  z-index: 1;
+  width: 0.13rem;
+  min-height: 2px;
+  height: var(--audio-level, 5px);
+  border-radius: 0;
+  opacity: var(--audio-opacity, 0.6);
+  background: linear-gradient(
+    180deg,
+    rgba(var(--cyber-voice-peak), 0.98),
+    rgba(var(--cyber-voice-wave), 0.9) 42% 72%,
+    rgba(var(--cyber-voice-alert), 0.82)
+  );
+  box-shadow:
+    0 0 0.32rem rgba(var(--cyber-voice-wave), 0.42),
+    0 0 1px rgba(var(--cyber-voice-peak), 0.94);
+  transform-origin: center;
+  clip-path: polygon(0 9%, 100% 0, 100% 91%, 0 100%);
+}
+
+:root[data-ui-theme='cyber']
+  #command-dock
+  #gev-voice-control:is(
+    [data-status='connecting'],
+    [data-status='listening'],
+    [data-status='executing']
+  )
+  .gev-voice-visualizer {
+  border-color: rgba(var(--cyber-voice-wave), 0.58);
+  border-left-color: rgba(var(--cyber-voice-alert), 0.9);
+  opacity: 1;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.34),
+    inset 0 0 0.9rem rgba(var(--cyber-voice-wave), 0.12),
+    0 0 0.55rem rgba(var(--cyber-voice-wave), 0.12);
+}
+
+:root[data-ui-theme='cyber']
+  #command-dock
+  #gev-voice-control:is([data-status='listening'], [data-status='executing'])
+  .gev-voice-visualizer::after {
+  opacity: 0.72;
+  animation-duration: 1.65s;
+}
+
+@keyframes gev-cyber-voice-scan {
+  from {
+    left: -34%;
+  }
+
+  to {
+    left: 104%;
+  }
+}
+
+@keyframes gev-cyber-voice-lock {
+  0%,
+  100% {
+    opacity: 0.34;
+    transform: scale(0.94);
+  }
+
+  50% {
+    opacity: 0.9;
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-ui-theme='cyber'] #command-dock .gev-voice-visualizer::after,
+  :root[data-ui-theme='cyber']
+    #command-dock
+    #gev-voice-control:is(
+      [data-status='connecting'],
+      [data-status='listening'],
+      [data-status='executing']
+    )
+    .gev-mic-orbit::before {
+    animation: none;
+  }
+
+  :root[data-ui-theme='cyber'] #command-dock .gev-voice-visualizer::after {
+    left: 52%;
+    opacity: 0.2;
+  }
+}
+
+:root[data-ui-theme='cyber'] #command-dock .dock-popover-content {
+  padding-top: 1.65rem;
+  border: 1px solid rgba(196, 84, 84, 0.62);
+  border-radius: 0;
+  background:
+    linear-gradient(135deg, rgba(62, 86, 94, 0.22), transparent 46%),
+    linear-gradient(rgba(188, 211, 218, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(188, 211, 218, 0.045) 1px, transparent 1px),
+    rgba(12, 18, 21, 0.98);
+  background-size:
+    auto,
+    32px 32px,
+    32px 32px,
+    auto;
+  box-shadow:
+    0 1rem 2.6rem rgba(0, 0, 0, 0.64),
+    4px 0 0 rgba(196, 84, 84, 0.2) inset;
+  clip-path: var(--cyber-panel-frame);
+}
+
+:root[data-ui-theme='cyber'] #command-dock .dock-popover-content::before {
+  position: absolute;
+  top: 0.46rem;
+  left: 0.7rem;
+  color: rgba(225, 102, 102, 0.78);
+  font-size: 0.4rem;
+  letter-spacing: 0.12rem;
+  pointer-events: none;
+}
+
+:root[data-ui-theme='cyber'] #command-dock #location-bar-popover::before {
+  content: 'NAVIGATION DECK  //  01';
+}
+
+:root[data-ui-theme='cyber'] #command-dock #control-panel-popover::before {
+  content: 'VISUAL MATRIX  //  03';
+}
+
+:root[data-ui-theme='cyber']
+  #command-dock
+  :where(.style-btn, .location-pill, .poi-pill) {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(142, 171, 178, 0.3);
+  border-radius: 0;
+  background:
+    linear-gradient(135deg, rgba(55, 78, 85, 0.42), transparent 66%),
+    rgba(31, 45, 50, 0.94);
+  clip-path: polygon(
+    0 0,
+    calc(100% - 7px) 0,
+    100% 7px,
+    100% 100%,
+    7px 100%,
+    0 calc(100% - 7px)
+  );
+}
+
+:root[data-ui-theme='cyber']
+  #command-dock
+  :where(.style-btn, .location-pill, .poi-pill)::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 7px;
+  height: 7px;
+  background: var(--cyber-red);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+:root[data-ui-theme='cyber'] #command-dock .style-btn.active {
+  border-color: rgba(225, 102, 102, 0.78);
+  background:
+    linear-gradient(135deg, rgba(196, 84, 84, 0.42), transparent 72%),
+    rgba(60, 42, 43, 0.96);
+  box-shadow: 3px 0 0 var(--cyber-red) inset;
+}
+
+:root[data-ui-theme='cyber'] #command-dock #search-toggle {
+  color: rgba(235, 241, 241, 0.9);
+  font-size: 0;
+}
+
+:root[data-ui-theme='cyber'] #command-dock #search-toggle > span {
+  display: none;
+}
+
+:root[data-ui-theme='cyber'] #command-dock #search-toggle::before {
+  content: '⌕';
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+}
+
+:root[data-ui-theme='cyber']
+  #command-dock
+  :where(.panel-title, .location-toolbar-label, .gev-voice-kicker) {
+  color: var(--cyber-red-bright);
+}
+
+:root[data-ui-theme='cyber'] #top-center-actions #key-setup-chip {
+  position: relative;
+  inset: auto;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+:root[data-ui-theme='cyber'] #key-setup-chip[hidden] {
+  display: none;
+}
+
+:root[data-ui-theme='cyber'] #key-setup-chip [data-key-setup-chip-label] {
+  display: none;
+}
+
+:root[data-ui-theme='cyber'] #north-up-view .camera-compass-n {
+  color: var(--text-secondary);
+}
+
+:root[data-ui-theme='cyber']
+  #north-up-view[data-north-up='true']
+  .camera-compass-n {
+  color: var(--cyber-red-bright);
+  text-shadow: 0 0 6px var(--cyber-red);
+}
+
+:root[data-ui-theme='cyber'] .dock-tray-toggle,
+:root[data-ui-theme='cyber'] .context-mode-button {
+  background-color: rgba(38, 52, 58, 0.95);
+  border-color: rgba(152, 179, 186, 0.34);
+}
+
+#intel-hud[data-variant='cyber'] {
+  --hud-color: rgba(244, 247, 246, 0.94) !important;
+  --hud-glow: rgba(196, 84, 84, 0.24) !important;
+  --hud-border: rgba(196, 84, 84, 0.74) !important;
+}
+
+#intel-hud[data-variant='cyber'] .hud-sonar {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  display: block;
+  width: min(
+    var(--cyber-sonar-size-vw, 80vw),
+    var(--cyber-sonar-size-vh, 104vh)
+  );
+  aspect-ratio: 1;
+  border: 1px solid rgba(226, 235, 236, 0.2);
+  border-radius: 50%;
+  opacity: var(--cyber-sonar-visual-intensity, 0.57);
+  overflow: hidden;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  box-shadow:
+    0 0 0 1px rgba(196, 84, 84, 0.12),
+    inset 0 0 48px rgba(196, 84, 84, 0.035);
+}
+
+:root[data-cyber-sonar='off'] #intel-hud[data-variant='cyber'] .hud-sonar {
+  display: none;
+}
+
+#intel-hud[data-variant='cyber'] .hud-sonar::before,
+#intel-hud[data-variant='cyber'] .hud-sonar::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: '';
+}
+
+#intel-hud[data-variant='cyber'] .hud-sonar::before {
+  opacity: 0.52;
+  background: repeating-radial-gradient(
+    circle,
+    transparent 0 calc(var(--cyber-sonar-ring-step, 12.5%) - 1px),
+    rgba(226, 235, 236, 0.17) calc(var(--cyber-sonar-ring-step, 12.5%) - 1px)
+      var(--cyber-sonar-ring-step, 12.5%)
+  );
+}
+
+#intel-hud[data-variant='cyber'] .hud-sonar::after {
+  background: conic-gradient(
+    from 0deg,
+    rgba(245, 250, 250, 0.3) 0deg,
+    rgba(235, 116, 116, 0.14) 0.55deg,
+    rgba(196, 84, 84, 0.075) var(--cyber-sonar-sector-quarter, 6deg),
+    rgba(150, 206, 215, 0.035) var(--cyber-sonar-sector-middle, 14.4deg),
+    transparent var(--cyber-sonar-sector-width, 24deg) 360deg
+  );
+  filter: drop-shadow(0 0 4px rgba(226, 235, 236, 0.1));
+  mask-image: radial-gradient(
+    circle,
+    #000 0 84%,
+    rgba(0, 0, 0, 0.65) 92%,
+    transparent 100%
+  );
+  transform-origin: 50% 50%;
+  will-change: transform;
+  animation: cyber-sonar-sweep 5.2s linear infinite;
+  animation-delay: var(--cyber-sonar-phase-delay, 0ms);
+}
+
+@keyframes cyber-sonar-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+#cyber-sonar-status:empty {
+  display: none;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .hud-sonar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #intel-hud[data-variant='cyber'] .hud-sonar::after {
+    display: none;
+    animation: none;
+  }
+}
+
+#intel-hud[data-variant='cyber'] .hud-bottom-bar {
+  display: flex;
+  border-color: var(--hud-border);
+  background-color: rgba(14, 20, 23, 0.9);
+  background-image: linear-gradient(
+    90deg,
+    rgba(196, 84, 84, 0.12),
+    transparent 46%
+  );
+  box-shadow: 0 0 0 1px rgba(234, 240, 241, 0.06) inset;
+  clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+}
+
+#intel-hud[data-variant='cyber'] .hud-top-bar {
+  display: none;
+}
+
+/* Cyber keeps the useful style and locality readouts, not fictional IDs. */
+#intel-hud[data-variant='cyber'] .hud-top-left .hud-classification,
+#intel-hud[data-variant='cyber'] .hud-top-left .hud-system {
+  display: none;
+}
+
+#intel-hud[data-variant='cyber'] .hud-bottom-bar {
+  bottom: calc(2vh + 9.8rem);
+  width: min(48vw, 680px);
+}
+
+#intel-hud[data-variant='cyber'] .hud-top-left,
+#intel-hud[data-variant='cyber'] .hud-top-right {
+  top: max(14vh, 136px);
+}
+
+#intel-hud[data-variant='cyber'] .hud-bottom-left,
+#intel-hud[data-variant='cyber'] .hud-bottom-right {
+  bottom: calc(2vh + 6.5rem);
+}
+
+#intel-hud[data-variant='cyber'] .hud-corner {
+  position: fixed;
+  isolation: isolate;
+  box-sizing: border-box;
+  padding: 8px 11px;
+  border: 0;
+  background: rgba(196, 84, 84, 0.72);
+  clip-path: var(--cyber-panel-frame);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+}
+
+#intel-hud[data-variant='cyber'] .hud-corner::before {
+  position: absolute;
+  z-index: -1;
+  inset: 1px;
+  background:
+    linear-gradient(135deg, rgba(68, 88, 94, 0.2), transparent 48%),
+    var(--cyber-telemetry-fill);
+  clip-path: inherit;
+  content: '';
+  pointer-events: none;
+}
+
+#intel-hud[data-variant='cyber'] .hud-bracket {
+  color: var(--cyber-red-bright);
+  text-shadow: none;
+}
+
+#intel-hud[data-variant='cyber'] .hud-mode::after {
+  content: ' // CYBER';
+  color: var(--cyber-red-bright);
+  font-size: 0.62em;
+  letter-spacing: 0.18em;
+}
+
+/* Cyber also owns a distinct desktop composition. Existing components keep
+   their controls and semantics, but move onto asymmetric mission-deck rails. */
+@media (min-width: 961px) and (min-height: 650px) {
+  :root[data-ui-theme='cyber'] {
+    /* Compose the upper mission card and both panel rails as one compact lane.
+       The shared rail anchor keeps expanded left/right panels aligned. */
+    --cyber-hud-card-top: max(100px, 10.25vh);
+    --cyber-left-rail-top: max(252px, calc(var(--cyber-hud-card-top) + 146px));
+  }
+
+  /* Keep the rotated COLL / ONA telemetry in the upper clearance lane. Its
+     lower edge follows the panel rail instead of crossing expanded controls. */
+  #intel-hud[data-variant='cyber'] .hud-left-edge {
+    top: calc(var(--cyber-left-rail-top) - 18px);
+    left: 14px;
+  }
+
+  :root[data-ui-theme='cyber'] #left-panel-stack {
+    top: var(--cyber-left-rail-top) !important;
+    bottom: calc(2vh + 11rem);
+    left: 54px;
+    width: 300px;
+    padding-left: 10px;
+    border-left: 1px solid rgba(196, 84, 84, 0.72);
+  }
+
+  :root[data-ui-theme='cyber']
+    body:not(.cockpit-mode)
+    #left-panel-stack:has(> [data-panel-id]:not(.collapsed))
+    > :is(#data-panel, #cctv-panel, #scene-panel):not(.collapsed) {
+    flex: 1 1 auto;
+    height: auto;
+    max-height: none;
+  }
+
+  :root[data-ui-theme='cyber']
+    #left-panel-stack.layout-focus
+    > [data-panel-id].collapsed {
+    display: block;
+    flex: 0 0 auto;
+  }
+
+  :root[data-ui-theme='cyber']
+    #left-panel-stack
+    > :is(#data-panel, #scene-panel) {
+    --panel-expanded-width: var(--cyber-panel-width);
+    width: var(--panel-expanded-width);
+  }
+
+  :root[data-ui-theme='cyber']
+    #left-panel-stack
+    > :is(#data-panel, #scene-panel).collapsed {
+    width: var(--cyber-panel-collapsed-width);
+  }
+
+  :root[data-ui-theme='cyber']
+    #left-panel-stack
+    > :is(#data-panel, #scene-panel).collapsed
+    :is(.data-panel-inner, .scene-panel-inner) {
+    box-sizing: border-box;
+    height: 50px;
+    min-height: 50px;
+    overflow: hidden;
+  }
+
+  /* Match the collapsed Data Layers frame without shrinking expanded headers
+     or changing the compact-screen cockpit layout. */
+  :root[data-ui-theme='cyber']
+    body.cockpit-mode
+    .cockpit-utility-control:not(.is-expanded)
+    .cockpit-utility-launcher {
+    height: 50px;
+    min-height: 50px;
+    padding: 8px 18px 10px 24px;
+  }
+
+  :root[data-ui-theme='cyber']
+    body.cockpit-mode
+    .cockpit-utility-control:not(.is-expanded)
+    .cockpit-utility-launcher::after {
+    bottom: 6px;
+  }
+
+  :root[data-ui-theme='cyber']
+    body:not(.cockpit-mode)
+    :is(#data-panel, #scene-panel)
+    .panel-collapse-btn {
+    width: var(--cyber-panel-control-size);
+    min-width: var(--cyber-panel-control-size);
+    height: var(--cyber-panel-control-size);
+  }
+
+  :root[data-ui-theme='cyber'] #right-context-rail {
+    --right-display-collapsed-width: var(--cyber-panel-collapsed-width);
+    --right-context-collapsed-width: var(--cyber-panel-collapsed-width);
+    right: 62px;
+    width: 312px;
+  }
+
+  /* The map rails now use one visible expanded width. Keeping the rail itself
+     wider preserves its overlay-avoidance corridor while the framed surfaces
+     align to the same measure on both sides of the scene. */
+  :root[data-ui-theme='cyber']
+    #right-context-rail
+    > :is(
+      #pp-toggles,
+      #cctv-panel,
+      #weather-panel,
+      #recent-imagery-panel,
+      #global-context-panel
+    ):not(.collapsed) {
+    width: var(--cyber-right-panel-width);
+  }
+
+  :root[data-ui-theme='cyber'] #right-context-rail > #pp-toggles {
+    --pp-expanded-width: var(--cyber-right-panel-width);
+  }
+
+  :root[data-ui-theme='cyber'] #global-context-panel #radio-panel.collapsed {
+    width: 100%;
+  }
+
+  /* The shared rail owns intrinsic sizing and constrained allocations. A
+     zero flex basis here collapses expanded bodies when the rail has only a
+     max-height (normal mode), and overrides its focus-mode allocation. */
+
+  #intel-hud[data-variant='cyber'] .hud-top-left {
+    top: var(--cyber-hud-card-top);
+    right: auto;
+    left: 28px;
+    width: 238px;
+    box-sizing: border-box;
+    transform: none;
+  }
+
+  #intel-hud[data-variant='cyber'] .hud-top-left .hud-content,
+  #intel-hud[data-variant='cyber'] .hud-top-left .hud-summary-wrap {
+    width: 100%;
+    max-width: none;
+  }
+
+  #intel-hud[data-variant='cyber'] .hud-top-left .hud-summary {
+    max-width: 100%;
+    padding-right: 18px;
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      #000 0 calc(100% - 24px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      90deg,
+      #000 0 calc(100% - 24px),
+      transparent 100%
+    );
+  }
+
+  :root[data-ui-theme='cyber']
+    #right-context-rail.layout-focus
+    #global-context-panel:not(.collapsed)
+    .context-mode-standby:not([hidden]) {
+    position: relative;
+    isolation: isolate;
+    min-height: 132px;
+    flex: 1 1 auto;
+    border-style: solid;
+    border-color: rgba(206, 222, 226, 0.14);
+    overflow: hidden;
+    background:
+      linear-gradient(
+        90deg,
+        transparent 49.8%,
+        rgba(206, 222, 226, 0.08) 50%,
+        transparent 50.2%
+      ),
+      linear-gradient(
+        transparent 49.8%,
+        rgba(206, 222, 226, 0.08) 50%,
+        transparent 50.2%
+      ),
+      radial-gradient(
+        circle at center,
+        transparent 0 22px,
+        rgba(196, 84, 84, 0.18) 23px 24px,
+        transparent 25px 45px,
+        rgba(206, 222, 226, 0.1) 46px 47px,
+        transparent 48px
+      ),
+      rgba(7, 12, 14, 0.44);
+  }
+
+  :root[data-ui-theme='cyber']
+    #right-context-rail.layout-focus
+    #global-context-panel:not(.collapsed)
+    .context-mode-standby:not([hidden])::before {
+    position: absolute;
+    z-index: -1;
+    top: 50%;
+    left: 50%;
+    width: 84px;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(225, 102, 102, 0.5),
+      transparent
+    );
+    content: '';
+    transform: translate(-50%, -50%);
+  }
+
+  #intel-hud[data-variant='cyber'] .hud-bottom-bar {
+    display: none;
+  }
+
+  #intel-hud[data-variant='cyber'] .hud-bottom-right {
+    right: 28px;
+    bottom: 28px;
+  }
+
+  /* Match the lower telemetry cards by their top edge while leaving the
+     shorter coordinate card clear of Cesium attribution. */
+  #intel-hud[data-variant='cyber'] .hud-bottom-left {
+    bottom: 60px;
+  }
+}
+
+@media (max-width: 720px) {
+  :root[data-ui-theme='cyber'] body::after {
+    background-size: 78px 78px;
+  }
+
+  #intel-hud[data-variant='cyber'] .hud-top-bar,
+  #intel-hud[data-variant='cyber'] .hud-bottom-bar {
+    display: none;
+  }
+
+  :root[data-ui-theme='cyber'] #command-dock {
+    padding-right: 0.32rem;
+    padding-left: 0.32rem;
+  }
+
+  :root[data-ui-theme='cyber'] #command-dock::before {
+    content: 'NAV // COMMAND // VIS';
+    top: -0.72rem;
+  }
+}
+
+/* Cyber cockpit
+   The map shell becomes a purpose-built sensor visor in first person. The
+   concentric scanner is line-only so the optical center and target labels stay
+   readable; controls and source-backed telemetry remain at the perimeter. */
+:root[data-ui-theme='cyber'] body.cockpit-mode #cockpit-hud {
+  --cockpit-accent: #69cbd1;
+  --cockpit-caution: #c45454;
+  --cockpit-side-panel-width: min(294px, 23vw);
+  color: #e9f2f2;
+  text-shadow: none;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(4, 24, 29, 0.38),
+      transparent 18% 82%,
+      rgba(4, 24, 29, 0.38)
+    ),
+    linear-gradient(
+      180deg,
+      rgba(2, 13, 16, 0.5),
+      transparent 24% 78%,
+      rgba(2, 13, 16, 0.44)
+    );
+  box-shadow:
+    inset 0 0 0 1px rgba(105, 203, 209, 0.18),
+    inset 0 0 96px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode #cockpit-hud::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 18px 20px 24px;
+  pointer-events: none;
+  opacity: 0.58;
+  background:
+    linear-gradient(var(--cockpit-accent), var(--cockpit-accent)) 0 72px / 76px
+      1px no-repeat,
+    linear-gradient(var(--cockpit-caution), var(--cockpit-caution)) 76px 72px /
+      42px 1px no-repeat,
+    linear-gradient(var(--cockpit-accent), var(--cockpit-accent)) 100% 72px /
+      76px 1px no-repeat,
+    linear-gradient(var(--cockpit-caution), var(--cockpit-caution))
+      calc(100% - 76px) 72px / 42px 1px no-repeat,
+    linear-gradient(var(--cockpit-accent), var(--cockpit-accent)) 0
+      calc(100% - 54px) / 122px 1px no-repeat,
+    linear-gradient(var(--cockpit-accent), var(--cockpit-accent)) 100%
+      calc(100% - 54px) / 122px 1px no-repeat;
+  border-right: 1px solid rgba(105, 203, 209, 0.16);
+  border-left: 1px solid rgba(105, 203, 209, 0.16);
+  clip-path: polygon(
+    0 0,
+    34% 0,
+    36% 8px,
+    64% 8px,
+    66% 0,
+    100% 0,
+    100% 100%,
+    68% 100%,
+    66% calc(100% - 8px),
+    34% calc(100% - 8px),
+    32% 100%,
+    0 100%
+  );
+}
+
+/* Cyber cockpit has its own complete telemetry hierarchy. Suppress the map-mode
+   intelligence cards so they cannot compete with the scanner or duplicate the
+   source-backed cockpit rails. */
+:root[data-ui-theme='cyber'] body.cockpit-mode #intel-hud.active {
+  opacity: 0;
+  visibility: hidden;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-visor-shell {
+  inset: clamp(76px, 10vh, 104px) clamp(20px, 3vw, 48px) clamp(40px, 6vh, 64px);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-visor-shell::before,
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-visor-shell::after {
+  display: none;
+}
+
+/* Native instrument geometry is hidden in every other HUD theme. */
+.cockpit-scan-array,
+.cockpit-frame-lines {
+  display: none;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-frame-lines {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  color: rgba(105, 203, 209, 0.38);
+  stroke-width: 0.8;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-frame-warning {
+  stroke: rgba(196, 84, 84, 0.65);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-frame-meter {
+  stroke: rgba(105, 203, 209, 0.9);
+  stroke-width: 4;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-scan-array {
+  display: block;
+  position: absolute;
+  z-index: 1;
+  top: 46%;
+  left: 50%;
+  /* Grow into the clear center lane without reaching the side panels/readouts. */
+  width: min(48vw, 60vh);
+  aspect-ratio: 1;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(3, 13, 19, 0.42) 0 28%,
+    rgba(3, 13, 19, 0.14) 58%,
+    transparent 70%
+  );
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-geometry {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  stroke: rgba(186, 212, 220, 0.45);
+  stroke-width: 1;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-hairline {
+  stroke: rgba(105, 203, 209, 0.4);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-side-arcs {
+  stroke: rgba(211, 225, 230, 0.58);
+  stroke-width: 16;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-ticks {
+  stroke: rgba(213, 233, 237, 0.75);
+  stroke-width: 6;
+  stroke-dasharray: 1 9;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-dots {
+  stroke: rgba(105, 203, 209, 0.8);
+  stroke-width: 3;
+  stroke-dasharray: 2 13;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-warning-dots {
+  stroke: rgba(196, 84, 84, 0.88);
+  stroke-width: 4;
+  stroke-dasharray: 2 14;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-core {
+  stroke: rgba(206, 222, 230, 0.5);
+  stroke-width: 1;
+}
+
+/* Decorative motion only: the sight, attitude references and telemetry stay
+   fixed. Transform/opacity animations add no Cesium render loop or JS timer. */
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  :is(
+    .cockpit-target-rotor,
+    .cockpit-target-drift,
+    .cockpit-target-ticks,
+    .cockpit-target-orbit,
+    .cockpit-target-dots,
+    .cockpit-target-warning-dots
+  ) {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-rotor {
+  transform: rotate(9deg);
+  animation: cockpit-instrument-rotate 24s linear infinite;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-drift {
+  animation: cockpit-instrument-drift 48s linear infinite;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-ticks {
+  animation: cockpit-instrument-trim 8s ease-in-out infinite alternate;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-side-arcs {
+  animation: cockpit-instrument-breathe 4.8s ease-in-out infinite alternate;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-orbit {
+  animation: cockpit-instrument-drift 36s linear infinite;
+}
+
+/* Small opposing sweeps preserve the open sides of the instrument. */
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-dots {
+  animation: cockpit-instrument-band 10s ease-in-out infinite alternate;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-warning-dots {
+  animation: cockpit-instrument-band 13s ease-in-out infinite alternate-reverse;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-spokes {
+  animation: cockpit-instrument-support 6s ease-in-out infinite alternate;
+}
+
+@keyframes cockpit-instrument-band {
+  from {
+    transform: rotate(-5deg);
+  }
+  to {
+    transform: rotate(5deg);
+  }
+}
+
+@keyframes cockpit-instrument-support {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 0.9;
+  }
+}
+
+@keyframes cockpit-instrument-rotate {
+  from {
+    transform: rotate(9deg);
+  }
+  to {
+    transform: rotate(369deg);
+  }
+}
+
+@keyframes cockpit-instrument-drift {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes cockpit-instrument-trim {
+  from {
+    transform: rotate(-3deg);
+  }
+  to {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes cockpit-instrument-breathe {
+  from {
+    opacity: 0.68;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-ui-theme='cyber']
+    body.cockpit-mode
+    :is(
+      .cockpit-target-rotor,
+      .cockpit-target-drift,
+      .cockpit-target-ticks,
+      .cockpit-target-side-arcs,
+      .cockpit-target-orbit,
+      .cockpit-target-dots,
+      .cockpit-target-warning-dots,
+      .cockpit-target-spokes
+    ) {
+    animation: none;
+  }
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-roll-arc {
+  top: 12px;
+  width: min(560px, 44vw);
+  height: 82px;
+  transform: translateX(-50%);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-roll-arc::before {
+  content: 'TARGET SCANNING  //  LIVE VECTOR';
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  width: max-content;
+  padding: 0 12px 8px;
+  border: 0;
+  color: rgba(231, 241, 241, 0.84);
+  background: none;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-align: center;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-roll-arc::after {
+  inset: 20px 8% 0;
+  border-color: rgba(105, 203, 209, 0.52);
+  border-radius: 50% 50% 0 0;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-roll-arc span {
+  color: rgba(205, 225, 226, 0.5);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-roll-arc span::after {
+  background: rgba(105, 203, 209, 0.72);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-roll-arc span.active {
+  color: #f1f6f6;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-topline {
+  top: 24px;
+  left: 30px;
+  right: 30px;
+  align-items: start;
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-topline
+  > div:first-child,
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-topline::after {
+  width: min(252px, 24vw);
+  box-sizing: border-box;
+  padding: 8px 12px 7px;
+  border-top: 1px solid rgba(105, 203, 209, 0.46);
+  border-bottom: 1px solid rgba(105, 203, 209, 0.16);
+  background: linear-gradient(90deg, rgba(10, 27, 31, 0.72), transparent);
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-topline::after {
+  content: 'SYS 06  //  SENSOR FUSION  //  READY';
+  grid-column: 3;
+  justify-self: end;
+  color: rgba(205, 225, 226, 0.6);
+  background: linear-gradient(270deg, rgba(10, 27, 31, 0.72), transparent);
+  font-size: 7px;
+  letter-spacing: 0.16em;
+  text-align: right;
+  clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
+}
+
+/* The universal loading/status feed normally sits at 74px with the map shell.
+   That puts it underneath this cockpit's target-scan rail (z145). Give it the
+   narrow protected slot below the vision selector and promote only this live
+   status surface above the visor. */
+:root[data-ui-theme='cyber'] body.cockpit-mode #global-loading-status {
+  top: 60px;
+  z-index: 146;
+  max-width: min(430px, calc(100vw - 40px));
+  padding: 3px 10px;
+  border-color: rgba(105, 203, 209, 0.46);
+  border-radius: 1px;
+  background: rgba(5, 18, 22, 0.94);
+  color: rgba(220, 238, 239, 0.94);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.42);
+  clip-path: polygon(
+    6px 0,
+    calc(100% - 6px) 0,
+    100% 6px,
+    100% 100%,
+    0 100%,
+    0 6px
+  );
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode #global-loading-detail {
+  color: var(--cockpit-accent);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-kicker,
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-readout-label {
+  color: var(--cockpit-accent);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode #cockpit-callsign {
+  font-size: 16px;
+  letter-spacing: 0.16em;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-aircraft-meta {
+  color: rgba(205, 225, 226, 0.48);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-vision-controls {
+  margin-top: 0;
+  border-color: rgba(105, 203, 209, 0.38);
+  border-radius: 1px;
+  background: rgba(6, 20, 24, 0.78);
+  box-shadow: none;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-vision-controls button {
+  border-radius: 0;
+  background: transparent;
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-vision-controls
+  .cockpit-vision-current {
+  border-color: rgba(196, 84, 84, 0.7);
+  background: rgba(196, 84, 84, 0.12);
+  box-shadow: inset 0 -2px 0 rgba(196, 84, 84, 0.82);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-reticle {
+  z-index: 6;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 0;
+  border-radius: 0;
+  color: transparent;
+  background:
+    linear-gradient(rgba(231, 241, 241, 0.86), rgba(231, 241, 241, 0.86)) 50%
+      0 / 1px 11px no-repeat,
+    linear-gradient(rgba(231, 241, 241, 0.86), rgba(231, 241, 241, 0.86)) 50%
+      100% / 1px 11px no-repeat,
+    linear-gradient(90deg, rgba(231, 241, 241, 0.86), rgba(231, 241, 241, 0.86))
+      0 50% / 11px 1px no-repeat,
+    linear-gradient(90deg, rgba(231, 241, 241, 0.86), rgba(231, 241, 241, 0.86))
+      100% 50% / 11px 1px no-repeat;
+  font-size: 0;
+  opacity: 0.92;
+  box-shadow: none;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-reticle::before,
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-reticle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-reticle::before {
+  width: 5px;
+  height: 5px;
+  border: 1px solid rgba(231, 241, 241, 0.86);
+  transform: translate(-50%, -50%);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-reticle::after {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(196, 84, 84, 0.96);
+  box-shadow: 0 0 8px rgba(196, 84, 84, 0.8);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-horizon-guide {
+  display: none;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-route-direction {
+  top: 74%;
+  filter: none;
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-route-direction
+  .cockpit-route-chevron {
+  width: 26px;
+  height: 26px;
+  filter: none;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-horizon-guide small {
+  padding: 3px 8px;
+  border: 1px solid rgba(196, 84, 84, 0.62);
+  color: #eef4f4;
+  background: rgba(8, 22, 26, 0.58);
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  :is(.cockpit-altitude-rim, .cockpit-speed-rim) {
+  color: var(--cockpit-accent);
+  opacity: 0.72;
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-altitude-rim-rail::before {
+  border: 0;
+  box-shadow: none;
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-altitude-rim-scale
+  > span
+  b {
+  border-radius: 0;
+  background: rgba(4, 18, 22, 0.38);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-compass {
+  bottom: clamp(34px, 5vh, 52px);
+  width: min(650px, 56vw);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-readout {
+  min-width: 104px;
+  padding: 5px 10px 6px;
+  border-top-color: rgba(105, 203, 209, 0.48);
+  border-bottom-color: rgba(196, 84, 84, 0.34);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(6, 22, 26, 0.56),
+    transparent
+  );
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-readout strong {
+  font-size: clamp(26px, 3vw, 40px);
+  letter-spacing: -0.03em;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-heading-value {
+  min-width: 66px;
+  color: #f0f5f5;
+  font-size: 29px;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-compass-tape::before {
+  border-color: rgba(105, 203, 209, 0.54);
+  background: transparent;
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-compass-tape
+  span::before {
+  background: rgba(105, 203, 209, 0.66);
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  :is(.cockpit-context-window, .cockpit-signal-window) {
+  top: var(--cockpit-context-top, clamp(255px, 28vh, 300px));
+  bottom: auto;
+  max-height: min(44vh, 410px);
+  border-color: rgba(105, 203, 209, 0.34);
+  border-top-color: rgba(196, 84, 84, 0.82);
+  border-radius: 0;
+  background:
+    linear-gradient(135deg, rgba(105, 203, 209, 0.07), transparent 38%),
+    rgba(8, 23, 27, 0.78);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.025),
+    0 12px 30px rgba(0, 0, 0, 0.24);
+  text-shadow: none;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-context-window {
+  left: 30px;
+  transform: none;
+  clip-path: polygon(
+    0 0,
+    calc(100% - 14px) 0,
+    100% 14px,
+    100% 100%,
+    14px 100%,
+    0 calc(100% - 14px)
+  );
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-signal-window {
+  top: var(--cockpit-signal-top, clamp(255px, 28vh, 300px));
+  max-height: min(44vh, 410px, var(--cockpit-signal-max-height, 410px));
+  right: 30px;
+  transform: none;
+  clip-path: polygon(
+    14px 0,
+    100% 0,
+    100% calc(100% - 14px),
+    calc(100% - 14px) 100%,
+    0 100%,
+    0 14px
+  );
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  :is(.cockpit-context-header, .cockpit-signal-header) {
+  border-bottom-color: rgba(105, 203, 209, 0.25);
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  :is(.cockpit-context-kicker, .cockpit-signal-kicker, .cockpit-route-kicker) {
+  color: var(--cockpit-caution);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-context-cohorts > div,
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-signal-list li {
+  border-color: rgba(105, 203, 209, 0.16);
+  border-radius: 0;
+  background: rgba(7, 19, 23, 0.42);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-utility-controls {
+  top: var(--cockpit-utility-top, clamp(164px, 19vh, 204px));
+  right: 30px;
+  width: var(--cyber-right-panel-width);
+  gap: var(--cyber-panel-gap);
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  #cockpit-hud:has(.cockpit-utility-control.is-expanded)
+  .cockpit-signal-window[data-collapsed='true'] {
+  top: auto;
+  bottom: 80px;
+  visibility: visible;
+  pointer-events: auto;
+  z-index: 12;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-utility-launcher {
+  position: relative;
+  box-sizing: border-box;
+  width: var(--cyber-panel-width);
+  min-height: 60px;
+  padding: 14px 18px 20px 24px;
+  gap: 9px;
+  border-color: var(--glass-border);
+  border-radius: 0;
+  background-color: var(--cyber-panel-surface);
+  background-image: var(--cyber-panel-surface-detail);
+  box-shadow: var(--cyber-panel-shadow);
+  clip-path: var(--cyber-panel-frame);
+  color: var(--cyber-red-bright);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-control:not(.is-expanded)
+  .cockpit-utility-launcher {
+  width: var(--cyber-panel-collapsed-width);
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-launcher::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: calc(50% - 25px);
+  width: 50px;
+  height: 6px;
+  background: rgba(196, 84, 84, 0.22);
+  pointer-events: none;
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-launcher::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  left: 16px;
+  border-bottom: 1px solid rgba(206, 222, 226, 0.08);
+  pointer-events: none;
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-launcher
+  > span:first-child {
+  position: relative;
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-launcher
+  > span:first-child::before {
+  position: absolute;
+  top: 50%;
+  left: -8px;
+  width: 3px;
+  height: 11px;
+  background: var(--cyber-red);
+  clip-path: polygon(0 0, 100% 2px, 100% calc(100% - 2px), 0 100%);
+  content: '';
+  transform: translateY(-50%);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-utility-divider {
+  background: linear-gradient(
+    90deg,
+    rgba(196, 84, 84, 0.62),
+    rgba(206, 222, 226, 0.08)
+  );
+  box-shadow: none;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-utility-glyph {
+  border-color: rgba(206, 222, 226, 0.22);
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.03);
+  color: #f2f5f4;
+  font-size: 0;
+}
+
+/* Keep the existing button labels/expanded semantics; match Data Layers' glyph. */
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-utility-glyph::after {
+  content: '+';
+  font-size: 13px;
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-glyph[aria-expanded='true']::after {
+  content: '−';
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-control.is-expanded
+  .cockpit-utility-launcher {
+  width: 100%;
+  min-height: 42px;
+  padding: 6px 2px 8px 14px;
+  clip-path: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-control.is-expanded
+  .cockpit-utility-launcher::before,
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-control.is-expanded
+  .cockpit-utility-launcher::after {
+  display: none;
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-control.is-expanded {
+  position: relative;
+  width: var(--cyber-right-panel-width);
+  padding: 8px;
+  border-color: rgba(105, 203, 209, 0.34);
+  border-radius: 0;
+  background-color: var(--cyber-panel-surface);
+  background-image: var(--cyber-panel-surface-detail);
+  box-shadow: var(--cyber-panel-shadow);
+  clip-path: var(--cyber-panel-frame);
+}
+
+/* Expanded utility panels are full panel surfaces, not floating popovers.
+   Reuse the same centered calibration tab as Data Layers so Display and Radio
+   read as equal members of the cockpit rail. */
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-control.is-expanded::after {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  left: 50%;
+  width: 36px;
+  height: 6px;
+  border-top: 1px solid rgba(225, 102, 102, 0.84);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(196, 84, 84, 0.22) 18% 82%,
+    transparent
+  );
+  clip-path: polygon(0 0, 7px 100%, calc(100% - 7px) 100%, 100% 0);
+  content: '';
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-control.is-expanded:has([data-cockpit-launcher='display']),
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-control.is-expanded:has([data-cockpit-launcher='radio']) {
+  width: var(--cyber-right-panel-width);
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-utility-control.is-expanded:has([data-cockpit-launcher='display']) {
+  overflow: hidden;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode #cockpit-display-panel {
+  max-height: calc(var(--cockpit-utility-expanded-max-height, 72vh) - 62px);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode #left-panel-stack {
+  top: clamp(164px, 19vh, 204px) !important;
+  bottom: auto;
+  left: 30px;
+  width: var(--cyber-panel-width);
+  padding-left: 0;
+  border-left: 0;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode #left-panel-stack > #data-panel {
+  --panel-expanded-width: var(--cyber-panel-width);
+  width: var(--cyber-panel-width);
+  max-height: min(64vh, 610px);
+}
+
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  #left-panel-stack
+  > #data-panel.collapsed {
+  width: var(--cyber-panel-collapsed-width);
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-position-readout,
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-help {
+  bottom: 24px;
+  color: rgba(205, 225, 226, 0.54);
+  font-size: 8px;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-position-readout {
+  right: 30px;
+}
+
+:root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-help {
+  left: 30px;
+}
+
+@media (min-width: 761px) and (max-height: 820px) {
+  :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-roll-arc::before {
+    top: -18px;
+  }
+}
+
+/* Both expanded side panels occupy the same slot; footers clear the frame. */
+@media (min-width: 761px) {
+  :root[data-ui-theme='cyber']
+    body.cockpit-mode
+    #left-panel-stack
+    > #data-panel:not(.collapsed) {
+    flex: 0 0 var(--cyber-cockpit-panel-height, 40vh);
+    height: var(--cyber-cockpit-panel-height, 40vh);
+    max-height: var(--cyber-cockpit-panel-height, 40vh);
+  }
+
+  :root[data-ui-theme='cyber']
+    body.cockpit-mode
+    .cockpit-utility-control.is-expanded {
+    height: var(--cyber-cockpit-panel-height, 40vh);
+    max-height: var(--cyber-cockpit-panel-height, 40vh);
+  }
+
+  :root[data-ui-theme='cyber']
+    body.cockpit-mode
+    #cockpit-hud:has(.cockpit-utility-control.is-expanded)
+    .cockpit-signal-window[data-collapsed='true'] {
+    top: var(--cockpit-signal-top);
+    bottom: auto;
+  }
+}
+
+@media (max-width: 960px), (max-height: 700px) {
+  :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-topline::after {
+    display: none;
+  }
+
+  :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-scan-array {
+    width: min(54vw, 58vh);
+  }
+}
+
+@media (max-width: 760px) {
+  :root[data-ui-theme='cyber'] body.cockpit-mode #cockpit-hud::before {
+    inset: 10px;
+  }
+
+  :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-topline {
+    top: 14px;
+    right: 14px;
+    left: 14px;
+  }
+
+  :root[data-ui-theme='cyber']
+    body.cockpit-mode
+    .cockpit-topline
+    > div:first-child {
+    width: min(210px, 50vw);
+    padding: 6px 8px;
+  }
+
+  :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-roll-arc {
+    top: 44px;
+    width: 78vw;
+  }
+
+  :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-roll-arc::before {
+    display: none;
+  }
+
+  :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-scan-array {
+    width: min(76vw, 52vh);
+  }
+
+  :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-compass {
+    width: 94vw;
+  }
+
+  :root[data-ui-theme='cyber'] #pp-toggles > .pp-panel-body {
+    max-height: min(48vh, 440px);
+  }
+
+  :root[data-ui-theme='cyber'] .cyber-panel-body {
+    max-height: min(48vh, 440px);
+  }
+
+  :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-utility-controls {
+    top: 92px !important;
+    right: 12px;
+    bottom: auto;
+  }
+
+  :root[data-ui-theme='cyber']
+    body.cockpit-mode
+    .cockpit-utility-control:not(.is-expanded)
+    .cockpit-utility-launcher {
+    width: min(150px, calc((100vw - 32px) / 2));
+    min-height: 54px;
+    padding: 10px 12px 18px 18px;
+  }
+}

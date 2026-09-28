@@ -16,6 +16,8 @@ const VALID_LAYER_SERIALIZATION_DISPOSITIONS = new Set([
   'enabled-only',
   'enabled+options',
   'enabled+mirrored-options',
+  // Registered but never serialized (for example hardware-local layers).
+  'local-only',
 ]);
 
 function isAbortError(error) {
@@ -2300,6 +2302,14 @@ export class LayerLifecycle {
     if (typeof callback !== 'function') return () => {};
     this._activityListeners.add(callback);
     return () => this._activityListeners.delete(callback);
+  }
+
+  /**
+   * Ask presentation to repaint layer rows now, for data that lands outside
+   * the manager tick (Transit's proximity polls, Directions' route steps).
+   */
+  refreshLayerStats() {
+    this._publishActivity({ type: 'status' });
   }
 
   _publishActivity(change) {
