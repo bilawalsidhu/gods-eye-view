@@ -12,7 +12,15 @@ import {
 import {
   hydrateCustomLocations,
   addCustomLocation,
-  removeCustomLocation,
+  removeLocation,
+  renameLocation,
+  addLocationPoi,
+  renameLocationPoi,
+  removeLocationPoi,
+  resetLocation,
+  isLocationOverridden,
+  listHiddenBundledLocations,
+  restoreHiddenBundledLocations,
 } from '../services/customLocations.js';
 import { interruptCameraMotion } from '../cameraVerbs.js';
 import { IntelHUD } from '../hud.js';
@@ -79,7 +87,15 @@ export class StyleManager extends ApplicationShell {
         searchAndFlyTo,
         hydrateCustomLocations,
         addCustomLocation,
-        removeCustomLocation,
+        removeLocation,
+        renameLocation,
+        addLocationPoi,
+        renameLocationPoi,
+        removeLocationPoi,
+        resetLocation,
+        isLocationOverridden,
+        listHiddenBundledLocations,
+        restoreHiddenBundledLocations,
         interruptCameraMotion,
         IntelHUD,
         ShareLinkManager,

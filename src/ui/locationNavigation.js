@@ -100,8 +100,12 @@ export class LocationNavigation {
   }
 
   _initLocationBar() {
-    const { CITY_POIS, searchAndFlyTo, LocationSearch, hydrateCustomLocations } =
-      this.services;
+    const {
+      CITY_POIS,
+      searchAndFlyTo,
+      LocationSearch,
+      hydrateCustomLocations,
+    } = this.services;
     hydrateCustomLocations();
     this._locationControls?.destroy();
     this._locationLookupUnsubscribe?.();
@@ -130,7 +134,7 @@ export class LocationNavigation {
         pillsScrollLeft: this._locationPillsScrollLeft,
         pillsScrollRight: this._locationPillsScrollRight,
         addPin: this._locationPinAdd,
-        addPinInput: this._locationPinName,
+        editInput: this._locationEditName,
         poiRow: this._poiRow,
         divider: this._locationBarDivider,
         search: this._locationSearch,
@@ -147,34 +151,105 @@ export class LocationNavigation {
       onReset: () => this.resetToGlobeView(),
       onAddPin: (name) => this._onAddLocationPin(name),
       onRemovePin: (id) => this._onRemoveLocationPin(id),
+      onRenamePin: (id, name) => this._onRenameLocation(id, name),
+      onResetPin: (id) => this._onResetLocation(id),
+      onAddPoi: (id, name) => this._onAddLocationPoi(id, name),
+      onRenamePoi: (id, index, name) =>
+        this._onRenameLocationPoi(id, index, name),
+      onRemovePoi: (id, index) => this._onRemoveLocationPoi(id, index),
+      isOverridden: (id) => this.services.isLocationOverridden(id),
     });
+    this._updateRestoreHiddenControl();
+  }
+
+  /** The current camera's ground point, height and orientation, in the shape a POI needs. */
+  _captureCurrentView() {
+    const carto = Cesium.Cartographic.fromCartesian(
+      this.viewer.camera.positionWC,
+    );
+    return {
+      lat: Cesium.Math.toDegrees(carto.latitude),
+      lon: Cesium.Math.toDegrees(carto.longitude),
+      alt: Math.max(200, Math.round(carto.height)),
+      heading: Cesium.Math.toDegrees(this.viewer.camera.heading),
+      pitch: Cesium.Math.toDegrees(this.viewer.camera.pitch),
+    };
   }
 
   /** Save the current camera view as a named quick-reference pin. */
   _onAddLocationPin(name) {
     const trimmed = (name || '').trim();
     if (!trimmed) return;
-    const { addCustomLocation } = this.services;
-    const carto = Cesium.Cartographic.fromCartesian(
-      this.viewer.camera.positionWC,
-    );
-    addCustomLocation({
+    this.services.addCustomLocation({
       name: trimmed,
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
-      alt: Math.max(200, Math.round(carto.height)),
-      heading: Cesium.Math.toDegrees(this.viewer.camera.heading),
-      pitch: Cesium.Math.toDegrees(this.viewer.camera.pitch),
+      ...this._captureCurrentView(),
     });
     this._initLocationBar();
   }
 
-  /** Remove a previously saved quick-reference pin. */
+  /** Remove a custom pin outright, or hide a bundled city (restorable). */
   _onRemoveLocationPin(id) {
     if (this._activeLocationId === id) this._setActiveLocation(null);
     if (this._expandedCityId === id) this._collapsePOIRow();
-    this.services.removeCustomLocation(id);
+    this.services.removeLocation(id);
     this._initLocationBar();
+  }
+
+  /** Rename a city/pin — a local override for a bundled city, a plain edit for a pin. */
+  _onRenameLocation(id, name) {
+    this.services.renameLocation(id, name);
+    this._initLocationBar();
+  }
+
+  /** Discard local edits to a bundled city and restore its shipped default. */
+  _onResetLocation(id) {
+    this.services.resetLocation(id);
+    this._initLocationBar();
+  }
+
+  /** Add a landmark (POI) to a city/pin at the current camera view. */
+  _onAddLocationPoi(id, name) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return;
+    this.services.addLocationPoi(id, {
+      name: trimmed,
+      ...this._captureCurrentView(),
+    });
+    this._initLocationBar();
+    this._expandPOIRow(id);
+  }
+
+  /** Rename a single landmark within a city/pin. */
+  _onRenameLocationPoi(id, index, name) {
+    this.services.renameLocationPoi(id, index, name);
+    this._initLocationBar();
+    if (this._expandedCityId === id) this._expandPOIRow(id);
+  }
+
+  /** Remove a single landmark within a city/pin (a city always keeps at least one). */
+  _onRemoveLocationPoi(id, index) {
+    this.services.removeLocationPoi(id, index);
+    this._initLocationBar();
+    if (this._expandedCityId === id) this._expandPOIRow(id);
+  }
+
+  /** Show or hide the "N hidden cities — restore" control based on current overrides. */
+  _updateRestoreHiddenControl() {
+    const button = this._locationRestoreHidden;
+    if (!button) return;
+    const hidden = this.services.listHiddenBundledLocations();
+    button.hidden = hidden.length === 0;
+    if (hidden.length === 0) return;
+    button.textContent = `${hidden.length} hidden – restore`;
+    button.title = hidden.map((city) => city.name).join(', ');
+    if (!this._restoreHiddenListener) {
+      this._restoreHiddenListener = () => {
+        if (this._disposed) return;
+        this.services.restoreHiddenBundledLocations();
+        this._initLocationBar();
+      };
+      button.addEventListener('click', this._restoreHiddenListener);
+    }
   }
 
   _beginWorldJumpTransition() {
@@ -453,6 +528,12 @@ export class LocationNavigation {
     this._locationLookupUnsubscribe = null;
     this._locationLookup?.destroy();
     this._locationControls?.destroy();
+    if (this._restoreHiddenListener)
+      this._locationRestoreHidden?.removeEventListener(
+        'click',
+        this._restoreHiddenListener,
+      );
+    this._restoreHiddenListener = null;
     this._cancelGlobeReset?.();
     this._cancelGlobeReset = null;
     if (this._worldJumpActive) this._endWorldJumpTransition();

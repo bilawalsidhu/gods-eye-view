@@ -695,18 +695,39 @@ destruction releases listeners, pending searches and the orbit indicator.
 
 The pill row scrolls horizontally — a wheel gesture over it and two always-visible
 arrow buttons — since the bar's 720px cap means only a handful of pills fit on
-most screens. A `+` control saves the current camera view as a named pin: name,
-lat/lon, heading/pitch and the camera's height (reused as the fly-back range) are
-written to `src/services/customLocations.js`, which persists pins in
-`localStorage` (`gev.customLocations.v1`) and registers them into the same
-`CITY_POIS` registry via `registerLocation()`/`unregisterLocation()` in
-`locations.js` — so a pin is flyable, searchable and voice-addressable exactly
-like a bundled city, with no changes needed to those paths. Bundled cities are
-never removable; a pin gets a dashed border and a hover-revealed remove control.
-`hydrateCustomLocations()` loads saved pins into the registry once, at the start
-of `_initLocationBar()`. A missing or throwing `localStorage` (private browsing,
-storage full) is a silent no-op — pins still work for the rest of the session
-via the in-memory registry, they just don't persist across reloads.
+most screens. Every pill (bundled or custom) gets hover-revealed edit controls,
+built by `src/services/customLocations.js` on top of the same `CITY_POIS`
+registry bundled cities use, via `registerLocation()`/`unregisterLocation()` in
+`locations.js`:
+
+- **Add** (`+`): saves the current camera view as a new named pin — name,
+  lat/lon, heading/pitch and the camera's height (reused as the fly-back range).
+- **Rename**: works on both a custom pin and a bundled city. Renaming a bundled
+  city writes a local override, never the shipped entry.
+- **Hide/Delete** (`×`): a custom pin is deleted outright; a bundled city is
+  hidden — its data is kept so it can come back. A "N hidden – restore" control
+  (`#location-restore-hidden`) appears next to the add button whenever any
+  bundled city is hidden, and brings all of them back in one click.
+  `resetLocation()`/the pill's `↺` (shown only on an overridden bundled city)
+  discards edits to one city, using the pristine copy `customLocations.js`
+  captures into `BUNDLED_DEFAULTS` once at import time, before anything can
+  mutate the live registry.
+- **Add/rename/remove a landmark**: the expanded POI row gets a trailing `+`
+  (captures the current view as a new landmark, same as the top-level add) and
+  each landmark gets a rename control; a city always keeps at least one
+  landmark, so the last one has no remove control.
+
+All of the above funnel through one shared inline text input
+(`#location-edit-name`) rather than one per action — add-pin, rename and
+add-landmark are mutually exclusive, so `LocationControls` tracks which is
+pending and dispatches on Enter. A city or pin is flyable, searchable and
+voice-addressable exactly like a bundled city regardless of any of this, since
+every edit still goes through `registerLocation()` into the one registry those
+paths already read. `hydrateCustomLocations()` loads saved pins/overrides into
+the registry once, at the start of `_initLocationBar()`. A missing or throwing
+`localStorage` (private browsing, storage full) is a silent no-op — edits still
+work for the rest of the session via the in-memory registry, they just don't
+persist across reloads.
 
 ## Layer panel ownership
 

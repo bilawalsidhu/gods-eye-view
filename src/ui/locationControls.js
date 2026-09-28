@@ -14,6 +14,12 @@ export class LocationControls {
     onReset,
     onAddPin = () => {},
     onRemovePin = () => {},
+    onRenamePin = () => {},
+    onResetPin = () => {},
+    onAddPoi = () => {},
+    onRenamePoi = () => {},
+    onRemovePoi = () => {},
+    isOverridden = () => false,
     doc = document,
     requestFrame = (callback) => requestAnimationFrame(callback),
     cancelFrame = (id) => cancelAnimationFrame(id),
@@ -28,6 +34,12 @@ export class LocationControls {
       onReset,
       onAddPin,
       onRemovePin,
+      onRenamePin,
+      onResetPin,
+      onAddPoi,
+      onRenamePoi,
+      onRemovePoi,
+      isOverridden,
       doc,
       requestFrame,
       cancelFrame,
@@ -37,36 +49,8 @@ export class LocationControls {
     this.frame = null;
     this.destroyed = false;
     this.rowGeneration = 0;
-    elements.pills.replaceChildren();
-    for (const [id, city] of Object.entries(cities)) {
-      const pill = doc.createElement('button');
-      pill.type = 'button';
-      pill.className = 'location-pill';
-      pill.dataset.locationId = id;
-      pill.textContent = city.name;
-      if (city.custom) pill.dataset.custom = 'true';
-      this.bind(pill, 'click', () => onCity(id));
-
-      if (!city.custom) {
-        elements.pills.appendChild(pill);
-        continue;
-      }
-      // A saved pin gets a sibling remove control. Kept out of the pill
-      // button itself — nesting an interactive element inside a <button>
-      // is invalid HTML and would break the existing highlight/keyboard logic.
-      const wrap = doc.createElement('span');
-      wrap.className = 'location-pill-wrap';
-      const remove = doc.createElement('button');
-      remove.type = 'button';
-      remove.className = 'location-pill-remove';
-      remove.dataset.locationId = id;
-      remove.ariaLabel = `Remove ${city.name}`;
-      remove.title = `Remove ${city.name}`;
-      remove.textContent = '×';
-      this.bind(remove, 'click', () => onRemovePin(id));
-      wrap.append(pill, remove);
-      elements.pills.appendChild(wrap);
-    }
+    this._pendingEdit = null;
+    this.renderPills();
     this.bind(doc, 'keydown', (event) => {
       const cityId = getExpandedCity();
       if (
@@ -112,21 +96,12 @@ export class LocationControls {
 
     if (elements.addPin)
       this.bind(elements.addPin, 'click', () => {
-        elements.addPinInput?.classList.toggle('expanded');
-        if (elements.addPinInput?.classList.contains('expanded'))
-          elements.addPinInput.focus();
+        this.openEdit({ type: 'add-pin' }, '', 'Name this pin…');
       });
-    if (elements.addPinInput)
-      this.bind(elements.addPinInput, 'keydown', (event) => {
-        if (event.key === 'Enter') {
-          const name = elements.addPinInput.value;
-          elements.addPinInput.value = '';
-          elements.addPinInput.classList.remove('expanded');
-          onAddPin(name);
-        } else if (event.key === 'Escape') {
-          elements.addPinInput.value = '';
-          elements.addPinInput.classList.remove('expanded');
-        }
+    if (elements.editInput)
+      this.bind(elements.editInput, 'keydown', (event) => {
+        if (event.key === 'Enter') this.commitEdit();
+        else if (event.key === 'Escape') this.closeEdit();
       });
   }
   bind(element, event, handler, removers = this.removers) {
@@ -137,10 +112,107 @@ export class LocationControls {
     element.addEventListener(event, listener);
     removers.push(() => element.removeEventListener(event, listener));
   }
+  /** Open the shared inline text input for one pending edit action. */
+  openEdit(pending, prefillValue, placeholder) {
+    if (this.destroyed || !this.elements.editInput) return;
+    this._pendingEdit = pending;
+    this.elements.editInput.value = prefillValue || '';
+    this.elements.editInput.placeholder = placeholder || '';
+    this.elements.editInput.classList.add('expanded');
+    this.elements.editInput.focus();
+  }
+  closeEdit() {
+    this._pendingEdit = null;
+    if (!this.elements.editInput) return;
+    this.elements.editInput.value = '';
+    this.elements.editInput.classList.remove('expanded');
+  }
+  commitEdit() {
+    const pending = this._pendingEdit;
+    const value = this.elements.editInput?.value;
+    this.closeEdit();
+    if (!pending) return;
+    if (pending.type === 'add-pin') this.onAddPin(value);
+    else if (pending.type === 'rename-city')
+      this.onRenamePin(pending.id, value);
+    else if (pending.type === 'add-poi') this.onAddPoi(pending.id, value);
+    else if (pending.type === 'rename-poi')
+      this.onRenamePoi(pending.id, pending.poiIndex, value);
+  }
   cancelExpansion() {
     this.rowGeneration++;
     if (this.frame !== null) this.cancelFrame(this.frame);
     this.frame = null;
+  }
+  /** (Re)build every pill from `this.cities`. Called on construction and after any edit. */
+  renderPills() {
+    const {
+      doc,
+      elements,
+      cities,
+      onCity,
+      onRemovePin,
+      onResetPin,
+      isOverridden,
+    } = this;
+    elements.pills.replaceChildren();
+    for (const [id, city] of Object.entries(cities)) {
+      const pill = doc.createElement('button');
+      pill.type = 'button';
+      pill.className = 'location-pill';
+      pill.dataset.locationId = id;
+      pill.textContent = city.name;
+      if (city.custom) pill.dataset.custom = 'true';
+      this.bind(pill, 'click', () => onCity(id));
+
+      // Edit controls are kept as siblings, never nested inside the pill
+      // button itself — nesting interactive elements inside a <button> is
+      // invalid HTML and would break the existing highlight/keyboard logic.
+      const wrap = doc.createElement('span');
+      wrap.className = 'location-pill-wrap';
+      wrap.append(pill);
+
+      const rename = doc.createElement('button');
+      rename.type = 'button';
+      rename.className = 'location-pill-rename';
+      rename.ariaLabel = `Rename ${city.name}`;
+      rename.title = `Rename ${city.name}`;
+      rename.textContent = '✎';
+      this.bind(rename, 'click', () =>
+        this.openEdit(
+          { type: 'rename-city', id },
+          city.name,
+          `Rename ${city.name}…`,
+        ),
+      );
+      wrap.append(rename);
+
+      const remove = doc.createElement('button');
+      remove.type = 'button';
+      remove.className = 'location-pill-remove';
+      remove.dataset.locationId = id;
+      const removeLabel = city.custom
+        ? `Delete ${city.name}`
+        : `Hide ${city.name}`;
+      remove.ariaLabel = removeLabel;
+      remove.title = removeLabel;
+      remove.textContent = '×';
+      this.bind(remove, 'click', () => onRemovePin(id));
+      wrap.append(remove);
+
+      if (isOverridden(id)) {
+        const reset = doc.createElement('button');
+        reset.type = 'button';
+        reset.className = 'location-pill-reset-btn';
+        reset.ariaLabel = `Reset ${city.name} to default`;
+        reset.title = `Reset ${city.name} to default`;
+        reset.textContent = '↺';
+        this.bind(reset, 'click', () => onResetPin(id));
+        wrap.append(reset);
+      }
+
+      elements.pills.appendChild(wrap);
+    }
   }
   showPois(cityId) {
     if (this.destroyed) return;
@@ -168,8 +240,68 @@ export class LocationControls {
         () => this.onPoi(cityId, index),
         this.poiRemovers,
       );
-      this.elements.poiRow.appendChild(pill);
+
+      const wrap = this.doc.createElement('span');
+      wrap.className = 'poi-pill-wrap';
+      wrap.append(pill);
+
+      const rename = this.doc.createElement('button');
+      rename.type = 'button';
+      rename.className = 'poi-pill-rename';
+      rename.ariaLabel = `Rename ${poi.name}`;
+      rename.title = `Rename ${poi.name}`;
+      rename.textContent = '✎';
+      this.bind(
+        rename,
+        'click',
+        () =>
+          this.openEdit(
+            { type: 'rename-poi', id: cityId, poiIndex: index },
+            poi.name,
+            `Rename ${poi.name}…`,
+          ),
+        this.poiRemovers,
+      );
+      wrap.append(rename);
+
+      if (city.pois.length > 1) {
+        const remove = this.doc.createElement('button');
+        remove.type = 'button';
+        remove.className = 'poi-pill-remove';
+        remove.ariaLabel = `Remove landmark ${poi.name}`;
+        remove.title = `Remove landmark ${poi.name}`;
+        remove.textContent = '×';
+        this.bind(
+          remove,
+          'click',
+          () => this.onRemovePoi(cityId, index),
+          this.poiRemovers,
+        );
+        wrap.append(remove);
+      }
+
+      this.elements.poiRow.appendChild(wrap);
     });
+
+    const addPoi = this.doc.createElement('button');
+    addPoi.type = 'button';
+    addPoi.className = 'poi-pill-add';
+    addPoi.ariaLabel = `Add a landmark to ${city.name} at the current view`;
+    addPoi.title = 'Add a landmark here';
+    addPoi.textContent = '+';
+    this.bind(
+      addPoi,
+      'click',
+      () =>
+        this.openEdit(
+          { type: 'add-poi', id: cityId },
+          '',
+          'Name this landmark…',
+        ),
+      this.poiRemovers,
+    );
+    this.elements.poiRow.appendChild(addPoi);
+
     this.frame = this.requestFrame(() => {
       if (this.destroyed || generation !== this.rowGeneration) return;
       this.frame = null;
