@@ -257,6 +257,7 @@ test('NEAREST enables CCTV without the transition grab, then flies once to the v
 test('BACK and FORWARD buttons restore prior camera views through explicit navigation', async () => {
   const backBtn = new EventTarget();
   const forwardBtn = new EventTarget();
+  const enables = [];
   const navigations = [];
   const controls = new CctvControls({
     elements: {
@@ -275,7 +276,8 @@ test('BACK and FORWARD buttons restore prior camera views through explicit navig
     actions: {
       isEnabled: () => true,
       syncViewport() {},
-      toggleEnabled() {
+      toggleEnabled(force, options) {
+        enables.push([force, options]);
         return Promise.resolve(true);
       },
       runExplicitNavigation(noun, navigate) {
@@ -287,9 +289,48 @@ test('BACK and FORWARD buttons restore prior camera views through explicit navig
   await new Promise((resolve) => setImmediate(resolve));
   forwardBtn.dispatchEvent(new Event('click'));
   await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(enables, [
+    [true, { suppressAutoFocus: true }],
+    [true, { suppressAutoFocus: true }],
+  ]);
   assert.deepEqual(navigations, [
     ['camera', true],
     ['camera', true],
   ]);
+  controls.destroy();
+});
+
+test('NEAREST refuses to fly when the active camera changes while enabling', async () => {
+  const button = new EventTarget();
+  const activations = [];
+  const state = { activeCameraId: 'cam-a' };
+  const controls = new CctvControls({
+    elements: { _cctvPanel: {}, _cctvNearestBtn: button },
+    cctv: {
+      focusNearest() {
+        return 'view-cam';
+      },
+    },
+    actions: {
+      syncViewport() {},
+      // The enable resolves after the operator already switched to a
+      // different camera elsewhere, so the pending nearest flight must not
+      // override the newer selection.
+      async toggleEnabled() {
+        state.activeCameraId = 'cam-b';
+        return true;
+      },
+      isEnabled() {
+        return true;
+      },
+      runExplicitFocus(activate, focus) {
+        activations.push([activate, focus]);
+      },
+    },
+  });
+  controls._cctvState = state;
+  button.dispatchEvent(new Event('click'));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(activations.length, 0);
   controls.destroy();
 });

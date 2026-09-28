@@ -8,6 +8,7 @@ export function _initCctvPanel() {
 
   this.listen(this._cctvNearestBtn, 'click', async () => {
     const generation = ++this._actionGeneration;
+    const activeId = this._cctvState?.activeCameraId;
     // Enable without the transition's own nearest auto-focus / flight: this
     // handler is the single source of truth, so it always measures against
     // the map location the operator is looking at right now (never a stale
@@ -17,7 +18,8 @@ export function _initCctvPanel() {
     if (
       this.destroyed ||
       generation !== this._actionGeneration ||
-      !this.actions.isEnabled()
+      !this.actions.isEnabled() ||
+      (activeId && activeId !== this._cctvState?.activeCameraId)
     )
       return;
     this.actions.runExplicitFocus(
@@ -28,7 +30,11 @@ export function _initCctvPanel() {
 
   this.listen(this._cctvBackBtn, 'click', async () => {
     const generation = ++this._actionGeneration;
-    if (!(await this.actions.toggleEnabled(true))) return;
+    // Suppress the enable-transition's own flight so BACK is the single
+    // movement: the transition must not pre-activate a camera or flash a
+    // nearest-camera flight the restore immediately cancels.
+    if (!(await this.actions.toggleEnabled(true, { suppressAutoFocus: true })))
+      return;
     if (
       this.destroyed ||
       generation !== this._actionGeneration ||
@@ -42,7 +48,8 @@ export function _initCctvPanel() {
 
   this.listen(this._cctvForwardBtn, 'click', async () => {
     const generation = ++this._actionGeneration;
-    if (!(await this.actions.toggleEnabled(true))) return;
+    if (!(await this.actions.toggleEnabled(true, { suppressAutoFocus: true })))
+      return;
     if (
       this.destroyed ||
       generation !== this._actionGeneration ||

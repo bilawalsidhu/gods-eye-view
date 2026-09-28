@@ -1886,6 +1886,37 @@ test('CCTV NEAREST measures against the ground point being viewed, not the camer
   }
 });
 
+test('CCTV history ignores a pose that only changes the heading across the 2π wrap', () => {
+  const viewer = makeHistoryViewer();
+  const records = [makeDeselectRecord('cam-1', 0)];
+  _setCctvOverlayHostForTest({
+    setEntries() {},
+    setVisible() {},
+    clearSource() {},
+  });
+  try {
+    _setCctvCoverageStateForTest({
+      viewer,
+      records,
+      activeCameraId: 'cam-1',
+      enabled: true,
+      coverageMode: 'off',
+      showProjection: false,
+    });
+    viewer.camera.heading = 0;
+    cctvLayer.focusCamera('cam-1', 0.2);
+    // Rotating the heading VALUE past 2π means the same physical view: the
+    // re-focus must not capture a second entry, so one BACK exhausts history.
+    viewer.camera.heading = 2 * Math.PI;
+    cctvLayer.focusCamera('cam-1', 0.2);
+    assert.equal(cctvLayer.historyBack(), true);
+    assert.equal(cctvLayer.canGoBack(), false);
+  } finally {
+    _setCctvOverlayHostForTest();
+    _setCctvCoverageStateForTest({ enabled: false });
+  }
+});
+
 test('CCTV focus pushes a BACK entry and BACK/FORWARD restore the abandoned views', () => {
   const viewer = makeHistoryViewer();
   const records = [makeDeselectRecord('cam-1', 0)];

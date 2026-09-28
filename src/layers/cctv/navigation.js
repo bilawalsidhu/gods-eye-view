@@ -135,11 +135,18 @@ export function createNavigation({
 
   function posesEquivalent(a, b) {
     if (!a || !b) return false;
+    const wrap = (value) => {
+      const half = Math.PI;
+      let result = value % (2 * half);
+      if (result > half) result -= 2 * half;
+      if (result < -half) result += 2 * half;
+      return result;
+    };
     return (
       Cesium.Cartesian3.distance(a.position, b.position) <= 5 &&
-      Math.abs(a.heading - b.heading) <= 0.05 &&
-      Math.abs(a.pitch - b.pitch) <= 0.05 &&
-      Math.abs(a.roll - b.roll) <= 0.05
+      Math.abs(wrap(a.heading - b.heading)) <= 0.05 &&
+      Math.abs(wrap(a.pitch - b.pitch)) <= 0.05 &&
+      Math.abs(wrap(a.roll - b.roll)) <= 0.05
     );
   }
 
