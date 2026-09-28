@@ -25,7 +25,8 @@ export function parseBwsSecretObject(stdout) {
   }
   const item = Array.isArray(parsed) ? parsed[0] : parsed;
   const value = String(item?.value ?? '').trim();
-  if (!value) throw new Error('Bitwarden Secrets Manager returned an empty secret');
+  if (!value)
+    throw new Error('Bitwarden Secrets Manager returned an empty secret');
   return value;
 }
 
@@ -37,14 +38,17 @@ export function parseBwsProjectSecrets(stdout, allowedNames) {
     throw new Error('Bitwarden Secrets Manager returned invalid project JSON');
   }
   if (!Array.isArray(parsed)) {
-    throw new Error('Bitwarden Secrets Manager project response was not a list');
+    throw new Error(
+      'Bitwarden Secrets Manager project response was not a list',
+    );
   }
   const allowed = new Set(allowedNames || []);
   const secrets = {};
   for (const item of parsed) {
     const key = String(item?.key ?? '').trim();
     const value = String(item?.value ?? '').trim();
-    if (allowed.has(key) && value && secrets[key] === undefined) secrets[key] = value;
+    if (allowed.has(key) && value && secrets[key] === undefined)
+      secrets[key] = value;
   }
   return secrets;
 }
@@ -82,7 +86,11 @@ function resolveReference(ref, { env, runCommand }) {
   }
   if (ref.provider === 'bws') {
     return parseBwsSecretObject(
-      runCommand('bws', ['secret', 'get', ref.secretId, '--output', 'json'], env),
+      runCommand(
+        'bws',
+        ['secret', 'get', ref.secretId, '--output', 'json'],
+        env,
+      ),
     );
   }
   throw new Error('Unsupported credential reference');
@@ -154,8 +162,9 @@ export function resolveCredentialEnvironment({
 
   return {
     resolved: Object.fromEntries(
-      names.filter((name) => sources[name]).map((name) => [name, sources[name]]),
+      names
+        .filter((name) => sources[name])
+        .map((name) => [name, sources[name]]),
     ),
   };
 }
-
