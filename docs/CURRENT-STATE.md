@@ -660,6 +660,8 @@ Location component and are included in whole-UI browser teardown acceptance.
 
 ## Radio controls
 
+The compact Context-header Radio disclosure is valid only while Global Context is collapsed. Any request to leave Global Context expanded closes that disclosure even when the panel itself was already expanded, so stale compact state cannot overlap Contacts or Space Missions content.
+
 Radio panel, compact controls and tuner presentation have a dedicated owner.
 It receives playback, layer actions and layout callbacks; station ingestion,
 marker placement, audio playback and camera policy stay with their existing
