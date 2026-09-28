@@ -5,6 +5,7 @@ import {
   buildQldRoadEventCard,
   qldRoadEventGlyph,
   qldRoadEventStyle,
+  wrapCardLine,
 } from './cards.js';
 import { QLD_ROAD_EVENT_CATEGORIES } from './records.js';
 
@@ -64,19 +65,23 @@ test('the card carries type, road, impact, advice, age and the QLDTraffic link',
   assert.equal(card.accent, QLD_ROAD_EVENT_STYLES.crash.color);
   assert.equal(card.interactive, true);
   assert.match(card.accessibilityLabel, /QLDTraffic/);
-  assert.equal(card.details.length, 7);
-  assert.deepEqual(card.details.slice(0, 5), [
+  for (const line of card.details) assert.ok(line.length <= 64, line);
+  assert.deepEqual(card.details.slice(0, 2), [
     'Single vehicle · Medium priority',
     'Pacific Motorway · Yatala · Gold Coast City',
-    'Northbound towards Brisbane · Lane or lanes reduced · Delays expected',
-    'Exit 41',
-    'Advice: Proceed with caution',
   ]);
-  assert.match(
-    card.details[5],
-    /^updated 25m ago · since 28 Sep.* 2026 · Department of Transport and Main Roads$/,
+  const text = card.details.join(' ');
+  assert.ok(
+    text.includes(
+      'Northbound towards Brisbane · Lane or lanes reduced · Delays expected',
+    ),
   );
-  assert.equal(card.details[6], 'QLDTraffic ↗ · click card to open');
+  assert.ok(text.includes('Exit 41 Advice: Proceed with caution'));
+  assert.match(
+    text,
+    /updated 25m ago · since 28 Sep.* 2026 · Department of Transport and Main Roads/,
+  );
+  assert.equal(card.details.at(-1), 'QLDTraffic ↗ · click card to open');
 });
 
 test('a sparse event still produces a readable card', () => {
@@ -86,4 +91,34 @@ test('a sparse event still produces a readable card', () => {
   );
   assert.equal(card.title, 'OTHER · Queensland road');
   assert.deepEqual(card.details, ['QLDTraffic ↗ · click card to open']);
+});
+
+test('long card lines wrap so the card stays narrow', () => {
+  const streets =
+    'Castlemaine Street / Caxton Street / Hale Street / Milton Road · Milton / Paddington / Petrie Terrace · Brisbane City';
+  const card = buildQldRoadEventCard(
+    {
+      id: 'wide',
+      category: 'special-event',
+      type: 'Special event',
+      road: 'Castlemaine Street / Caxton Street / Hale Street / Milton Road',
+      locality: 'Milton / Paddington / Petrie Terrace',
+      description: streets,
+    },
+    Date.now(),
+  );
+  assert.ok(card.title.length <= 64);
+  for (const line of card.details) assert.ok(line.length <= 64, line);
+  assert.equal(
+    card.details.join(' ').includes('Brisbane City'),
+    true,
+    'wrapping keeps every word',
+  );
+});
+
+test('wrapCardLine breaks at words and hard-cuts a single over-long word', () => {
+  assert.deepEqual(wrapCardLine('aa bb cc', 5), ['aa bb', 'cc']);
+  assert.deepEqual(wrapCardLine('abcdefghij', 4), ['abcd', 'efgh', 'ij']);
+  assert.deepEqual(wrapCardLine('   ', 10), []);
+  assert.deepEqual(wrapCardLine('short', 64), ['short']);
 });

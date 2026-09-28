@@ -146,6 +146,37 @@ function clip(value, limit = 180) {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
 }
 
+/** Widest card line in characters; the overlay host does not wrap text. */
+const CARD_LINE_CHARS = 64;
+
+/**
+ * Break one detail string into lines of at most `width` characters at word
+ * boundaries. The overlay host draws each entry as a single line, and the
+ * card is centred on its marker, so an unwrapped 180-character street list
+ * makes the card wide enough to slide under the side rails.
+ * @param {string} value - Detail text.
+ * @param {number} [width] - Maximum characters per line.
+ * @returns {string[]} Wrapped lines (a single over-long word is hard-cut).
+ */
+export function wrapCardLine(value, width = CARD_LINE_CHARS) {
+  const lines = [];
+  let line = '';
+  for (const word of value.split(/\s+/).filter(Boolean)) {
+    if (!line) line = word;
+    else if (line.length + 1 + word.length <= width) line += ` ${word}`;
+    else {
+      lines.push(line);
+      line = word;
+    }
+    while (line.length > width) {
+      lines.push(line.slice(0, width));
+      line = line.slice(width);
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
 /**
  * Build the overlay-host entry for one selected event. The caller supplies
  * `position` (Cartesian) separately so this stays JSON-safe for tests. The
@@ -202,8 +233,8 @@ export function buildQldRoadEventCard(event, nowMs) {
     selected: true,
     interactive: true,
     accessibilityLabel: `Open QLDTraffic for ${title}`,
-    title,
-    details,
+    title: clip(title, CARD_LINE_CHARS),
+    details: details.flatMap((line) => wrapCardLine(line)),
     accent: style.color,
     priority: Number.MAX_SAFE_INTEGER,
     gapPx: 15,
