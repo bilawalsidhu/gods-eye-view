@@ -85,3 +85,23 @@ test('non-Cyber explicit panels and restored preferences retain their existing p
     } finally { globalThis.document = prior; }
   }
 });
+
+test('already-expanded Context closes a stale compact Radio disclosure', () => {
+  const f = fixture('tactical'), prior = globalThis.document;
+  const disclosureClasses = new Set(['disclosure-open']);
+  f.context.classList.remove('collapsed');
+  f.owner._contextRadioDock = {
+    classList: {
+      contains: (name) => disclosureClasses.has(name),
+    },
+  };
+  f.owner._setRadioDisclosure = (open) => {
+    if (open) disclosureClasses.add('disclosure-open');
+    else disclosureClasses.delete('disclosure-open');
+  };
+  globalThis.document = f.doc;
+  try {
+    f.owner.setPanelCollapsed('global-context-panel', false);
+    assert.equal(disclosureClasses.has('disclosure-open'), false);
+  } finally { globalThis.document = prior; }
+});

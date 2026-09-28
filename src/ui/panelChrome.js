@@ -474,6 +474,15 @@ export class PanelChrome {
         syncShare,
       });
     }
+    // Context cannot own a compact Radio popover while it is expanded.
+    // Enforce this even when the panel expansion itself is otherwise a no-op.
+    if (
+      !nextCollapsed &&
+      panelId === 'global-context-panel' &&
+      this._contextRadioDock?.classList.contains('disclosure-open')
+    ) {
+      this._setRadioDisclosure?.(false);
+    }
     if (
       panelEl.classList.contains('collapsed') === nextCollapsed &&
       !wasAutoCollapsed
@@ -501,13 +510,6 @@ export class PanelChrome {
       if (this._cockpitContextCollapsedForDataPanel) {
         this.cockpitView.setContextCollapsed(true);
       }
-    }
-    if (
-      !nextCollapsed &&
-      panelId === 'global-context-panel' &&
-      this._contextRadioDock?.classList.contains('disclosure-open')
-    ) {
-      this._setRadioDisclosure?.(false);
     }
     if (
       !nextCollapsed &&
