@@ -692,6 +692,13 @@
   min-width: 200px;
 }
 
+/* Text size stands alone rather than hanging under a toggle button, so it
+   takes the full card border and radius. */
+.text-size-row {
+  border-top: 1px solid var(--glass-border);
+  border-radius: 8px;
+}
+
 .cyber-sonar-control {
   display: none;
 }

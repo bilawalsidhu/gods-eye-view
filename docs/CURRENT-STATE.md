@@ -744,6 +744,26 @@ The application supplies actions and retains effect settings, restore claims and
 rendering. Native keyboard editing, model modes and current defaults are preserved.
 Destroying the UI removes these listeners before asynchronous teardown.
 
+## UI text size
+
+Display ends with a **Text size** select: Default (100%), Large (115%) and
+Larger (130%). The choice is per viewer, stored in `localStorage` under
+`gev:text-scale:v1` (the default clears the key), and is not part of share
+links. Blocked or throwing storage falls back to 100% for the page.
+`src/uiTextScale.js` owns the steps, normalization and persistence;
+`VisualSettings` applies it at construction, before the first rail pass.
+
+Every stylesheet font size is written as `calc(<size> * var(--gev-text-scale))`,
+with `--gev-text-scale: 1` on `:root`, so 100% renders exactly as before.
+Material Symbols glyphs and `#cesium-credits` (whose measured height the
+attribution keep-out depends on) are not scaled. Spacing and panel widths do
+not scale; rails measure rendered heights, and the text-derived floors that
+cannot be measured scale with the step: the 96 px usable panel floor in both
+rails and the Cyber Cockpit footer fallbacks (launcher 60, briefing 44,
+CONTACT 64 px). Globe labels are canvas-drawn (world overlay, detection,
+Cesium labels) and keep their size; scaling them needs the overlay allocator's
+metrics to follow the font and is left for a follow-up.
+
 ## Application shortcuts and shader parameter controls
 
 `ui/input` supplies the bubbling application shortcut listener and generated

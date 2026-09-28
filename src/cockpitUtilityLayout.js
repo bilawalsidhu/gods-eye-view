@@ -101,14 +101,35 @@ export function resolveCockpitUtilityLayout({
   };
 }
 
-/** Shared Cyber panel slot, with footer controls above the lower frame (83vh). */
+/**
+ * Shared Cyber panel slot, with footer controls above the lower frame (83vh).
+ * Unmeasured footer rows fall back to their 100% text heights multiplied by
+ * `textScale`, so larger UI text reserves room for taller headers.
+ *
+ * @param {object} input
+ * @param {number} input.viewportHeight Viewport height, in px.
+ * @param {number} input.top Lane top, in px.
+ * @param {number} [input.launcherHeight] Measured collapsed launcher height.
+ * @param {number} [input.signalHeight] Measured collapsed briefing height.
+ * @param {number} [input.contactHeight] Measured collapsed CONTACT height.
+ * @param {number} [input.textScale=1] Applied UI text scale.
+ * @returns {{ panelHeight: number, utilityHeight: number, signalTop: number }}
+ */
 export function resolveCyberCockpitPanelLane({
   viewportHeight,
   top,
-  launcherHeight = 60,
-  signalHeight = 44,
-  contactHeight = 64,
+  launcherHeight,
+  signalHeight,
+  contactHeight,
+  textScale = 1,
 }) {
+  const factor =
+    Number.isFinite(Number(textScale)) && Number(textScale) > 0
+      ? Number(textScale)
+      : 1;
+  launcherHeight ??= 60 * factor;
+  signalHeight ??= 44 * factor;
+  contactHeight ??= 64 * factor;
   const gap = 8;
   const footerHeight = Math.max(
     contactHeight + gap,

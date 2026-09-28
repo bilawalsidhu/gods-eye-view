@@ -1,5 +1,10 @@
 # Changelog
 
+- Add a Text size setting to the Display panel: Default (100%), Large (115%)
+  and Larger (130%). It scales panel and HUD text through one
+  `--gev-text-scale` custom property, is remembered per browser, and leaves
+  the 100% layout unchanged. Globe labels keep their size for now (#659).
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD

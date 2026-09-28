@@ -12,6 +12,7 @@ import {
   COCKPIT_UTILITY_LAUNCHER_MIN_HEIGHT_PX,
   isRenderedOnScreen,
 } from './cockpitPresentation.js';
+import { readAppliedTextScale, scaleTextMetric } from '../uiTextScale.js';
 
 export function scheduleContextLayout() {
   if (this.destroyed) return false;
@@ -227,18 +228,21 @@ export function syncSignalLayout() {
         )
       : 0;
     if (alignedTop !== null) {
+      const textScale = readAppliedTextScale(document.documentElement);
       const lane = resolveCyberCockpitPanelLane({
         viewportHeight: window.innerHeight,
         top: alignedTop,
         launcherHeight: Math.max(
           collapsedHeight,
-          collapsedLauncher?.getBoundingClientRect().height || 60,
+          collapsedLauncher?.getBoundingClientRect().height ||
+            scaleTextMetric(60, textScale),
         ),
-        signalHeight: this.signalCollapsed ? signalBounds.height : 44,
+        signalHeight: this.signalCollapsed ? signalBounds.height : undefined,
         contactHeight:
           this.contextCollapsed && this.context
             ? this.context.getBoundingClientRect().height
-            : 64,
+            : undefined,
+        textScale,
       });
       document.body.style.setProperty(
         '--cyber-cockpit-panel-height',

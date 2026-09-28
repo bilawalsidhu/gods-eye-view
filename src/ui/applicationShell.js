@@ -209,6 +209,7 @@ export class StyleManager extends ShellFacade {
         _cyberSonarSectorValue: this._cyberSonarSectorValue,
         _hudLayoutRow: this._hudLayoutRow,
         _hudLayoutSelect: this._hudLayoutSelect,
+        _textSizeSelect: this._textSizeSelect,
         _ppToggles: this._ppToggles,
         _scopeBtn: this._scopeBtn,
         _scopeFeatherSlider: this._scopeFeatherSlider,
@@ -501,6 +502,7 @@ export class StyleManager extends ShellFacade {
         _scopeBtn: this._scopeBtn,
         _scopeFeatherSlider: this._scopeFeatherSlider,
         _hudLayoutSelect: this._hudLayoutSelect,
+        _textSizeSelect: this._textSizeSelect,
         _hudBtn: this._hudBtn,
         _cyberSonarBtn: this._cyberSonarBtn,
         _cyberSonarRings: this._cyberSonarRings,
@@ -533,6 +535,7 @@ export class StyleManager extends ShellFacade {
         _applySharpenIntensity: (...args) =>
           this._applySharpenIntensity(...args),
         _setHudVariant: (...args) => this._setHudVariant(...args),
+        _setTextScale: (...args) => this._visualSettings._setTextScale(...args),
         _setCyberSonarEnabled: (...args) => this._setCyberSonarEnabled(...args),
         _setCyberSonarSetting: (...args) => this._setCyberSonarSetting(...args),
         _applyDetectionDensityFromUi: (...args) =>
