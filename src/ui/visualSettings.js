@@ -39,6 +39,11 @@ import {
   setCyberSonarEnabled,
 } from '../cyberSonar.js';
 import { cyberVisualDefaultsForHudTransition } from '../hudLayouts.js';
+import {
+  applyTextScale,
+  readStoredTextScale,
+  writeStoredTextScale,
+} from '../uiTextScale.js';
 const DETECTION_ALLOCATION_STORAGE_KEY = 'gev:detection-allocation:v1';
 
 /** Own visual preferences, detection overrides and display-control state. */
@@ -215,6 +220,38 @@ export class VisualSettings {
     this._detectionAllocationPreference = normalizeAllocationStrategy(
       storedDetectionAllocation,
     );
+    this._setTextScale(readStoredTextScale(this._readStorage()).id, {
+      persist: false,
+    });
+  }
+
+  /** @returns {Storage|null} Local storage, or null where access throws. */
+  _readStorage() {
+    try {
+      return globalThis.localStorage ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Apply a UI text-size step to the document, mirror it in the Display
+   * select and persist it for this viewer. Text size is a personal preference
+   * and is deliberately not carried in share links.
+   * @param {unknown} value Step id, factor or percentage.
+   * @param {{ persist?: boolean }} [options]
+   * @returns {string} The applied step id.
+   */
+  _setTextScale(value, { persist = true } = {}) {
+    const option = applyTextScale(document.documentElement, value);
+    this._textScaleId = option.id;
+    if (this._textSizeSelect && this._textSizeSelect.value !== option.id)
+      this._textSizeSelect.value = option.id;
+    if (persist) {
+      writeStoredTextScale(this._readStorage(), option.id);
+      this._scheduleAdaptivePanelLayout?.({ settle: true });
+    }
+    return option.id;
   }
   get hud() {
     return this.readHud();

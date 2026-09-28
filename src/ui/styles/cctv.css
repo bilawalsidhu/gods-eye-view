@@ -99,7 +99,7 @@
 
 .cctv-cal-value {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 0.7px;
   color: #91edff;
   background: rgba(255, 255, 255, 0.04);
@@ -120,7 +120,7 @@
 .cctv-cal-input {
   width: 58px;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 0.7px;
   color: var(--text-primary);
   background: rgba(0, 212, 255, 0.1);
@@ -156,7 +156,7 @@
   color: var(--text-primary);
   padding: 6px 8px;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: calc(12px * var(--gev-text-scale));
   outline: none;
 }
 
@@ -187,7 +187,7 @@
   border: 1px solid rgba(0, 212, 255, 0.2);
   border-radius: 8px;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 1px;
   color: #8fe7ff;
   background: rgba(0, 212, 255, 0.08);
@@ -269,7 +269,7 @@
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 2.2px;
   color: rgba(145, 237, 255, 0.62);
   pointer-events: none;
@@ -320,7 +320,7 @@
 
 #cctv-meta {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 1px;
   color: var(--text-secondary);
 }
@@ -332,7 +332,7 @@
   background: rgba(0, 212, 255, 0.09);
   color: #9defff;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1.3px;
   padding: 4px 8px;
 }
@@ -351,7 +351,7 @@
 
 .cctv-summary-label {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1.7px;
   color: var(--text-dim);
 }
@@ -359,7 +359,7 @@
 #cctv-summary {
   min-height: 38px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: calc(10px * var(--gev-text-scale));
   letter-spacing: 0.8px;
   line-height: 1.45;
   color: #a8f7ff;

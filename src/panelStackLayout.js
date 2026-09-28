@@ -1,4 +1,10 @@
 /**
+ * Usable floor, in px at 100% text, for one constrained expanded panel: room
+ * for its header and one row. Callers scale it with the UI text size.
+ */
+export const PANEL_STACK_MIN_HEIGHT_PX = 96;
+
+/**
  * Fits expanded panels into a shared vertical corridor. Natural heights are
  * retained when they fit; constrained panels keep a usable floor and share
  * the remaining room in proportion to their unmet height.
@@ -12,7 +18,7 @@
 export function allocatePanelStackHeights({
   naturalHeights,
   availableHeight,
-  minimumHeight = 96,
+  minimumHeight = PANEL_STACK_MIN_HEIGHT_PX,
 }) {
   const natural = naturalHeights.map((height) =>
     Math.max(0, Number(height) || 0),

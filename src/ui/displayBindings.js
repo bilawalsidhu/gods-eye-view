@@ -103,6 +103,7 @@ export class DisplayBindings {
         scopeButton: this._scopeBtn,
         scopeFeatherSlider: this._scopeFeatherSlider,
         hudLayout: this._hudLayoutSelect,
+        textSize: this._textSizeSelect,
         hudButton: this._hudBtn,
         sonarButton: this._cyberSonarBtn,
         sonarRingsSlider: this._cyberSonarRings,
@@ -161,6 +162,7 @@ export class DisplayBindings {
           this.shareLinkManager?.claimRestoreLane?.('visual');
           this._setHudVariant(value, { applyVisualDefaults: true });
         },
+        setTextScale: (value) => this._setTextScale(value),
         toggleCleanView: () => this.toggleCleanView(),
         exitCleanView: () => this.toggleCleanView(false),
         setDensity: (value) => {

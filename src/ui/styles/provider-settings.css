@@ -15,7 +15,7 @@
   padding: 0.45rem 0.7rem;
   color: rgba(225, 244, 248, 0.92);
   font-family: var(--font-mono);
-  font-size: 0.6rem;
+  font-size: calc(0.6rem * var(--gev-text-scale));
   letter-spacing: 0.09rem;
   background: linear-gradient(
     145deg,
@@ -122,7 +122,7 @@
   gap: 1rem;
   color: rgba(171, 210, 220, 0.6);
   font-family: var(--font-mono);
-  font-size: 0.58rem;
+  font-size: calc(0.58rem * var(--gev-text-scale));
   letter-spacing: 0.1rem;
   text-transform: uppercase;
 }
@@ -159,7 +159,7 @@
 #key-setup h2 {
   margin-top: 0.6rem;
   font-family: var(--font-mono);
-  font-size: clamp(1.25rem, 2.4vw, 1.75rem);
+  font-size: calc(clamp(1.25rem, 2.4vw, 1.75rem) * var(--gev-text-scale));
   font-weight: 500;
   letter-spacing: -0.045rem;
 }
@@ -168,7 +168,7 @@
   max-width: 31rem;
   margin-top: 0.3rem;
   color: rgba(215, 231, 235, 0.66);
-  font-size: 0.78rem;
+  font-size: calc(0.78rem * var(--gev-text-scale));
   line-height: 1.5;
 }
 
@@ -221,7 +221,7 @@
 }
 
 .key-setup-row-head strong {
-  font-size: 0.7rem;
+  font-size: calc(0.7rem * var(--gev-text-scale));
   font-weight: 600;
   letter-spacing: 0.08rem;
 }
@@ -240,13 +240,13 @@
 }
 
 .key-setup-tier {
-  font-size: 0.55rem;
+  font-size: calc(0.55rem * var(--gev-text-scale));
 }
 
 .key-setup-exposed {
   padding: 0.05rem 0.3rem;
   color: rgba(255, 200, 120, 0.75);
-  font-size: 0.5rem;
+  font-size: calc(0.5rem * var(--gev-text-scale));
   letter-spacing: 0.06rem;
   text-transform: uppercase;
   border: 1px solid rgba(255, 200, 120, 0.3);
@@ -256,7 +256,7 @@
 .key-setup-get {
   margin-left: auto;
   color: rgba(54, 220, 255, 0.75);
-  font-size: 0.58rem;
+  font-size: calc(0.58rem * var(--gev-text-scale));
   letter-spacing: 0.08rem;
   text-decoration: none;
   white-space: nowrap;
@@ -272,7 +272,7 @@
 .key-setup-unlocks {
   margin: 0;
   color: rgba(198, 220, 226, 0.6);
-  font-size: 0.66rem;
+  font-size: calc(0.66rem * var(--gev-text-scale));
 }
 
 .key-setup-fields {
@@ -285,7 +285,7 @@
   padding: 0.42rem 0.55rem;
   color: rgba(225, 244, 248, 0.92);
   font-family: var(--font-mono);
-  font-size: 0.66rem;
+  font-size: calc(0.66rem * var(--gev-text-scale));
   background: rgba(4, 14, 20, 0.72);
   border: 1px solid rgba(100, 200, 220, 0.22);
   border-radius: 0.32rem;
@@ -308,7 +308,7 @@
   padding: 0.5rem 0.95rem;
   color: #04141c;
   font-family: var(--font-mono);
-  font-size: 0.66rem;
+  font-size: calc(0.66rem * var(--gev-text-scale));
   font-weight: 700;
   letter-spacing: 0.09rem;
   background: linear-gradient(180deg, #45e0ff, #1fb9dd);
@@ -335,7 +335,7 @@
   margin-top: 0.5rem;
   color: rgba(199, 225, 231, 0.62);
   font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-size: calc(0.62rem * var(--gev-text-scale));
   line-height: 1.35;
 }
 
@@ -363,7 +363,7 @@ body.scene-playback-mode #key-setup {
 .key-setup-external {
   padding: 0.05rem 0.3rem;
   color: rgba(148, 200, 220, 0.7);
-  font-size: 0.5rem;
+  font-size: calc(0.5rem * var(--gev-text-scale));
   letter-spacing: 0.06rem;
   text-transform: uppercase;
   border: 1px solid rgba(148, 200, 220, 0.28);
@@ -376,7 +376,7 @@ body.scene-playback-mode #key-setup {
   padding: 0.28rem 0.55rem;
   color: rgba(255, 170, 150, 0.8);
   font-family: var(--font-mono);
-  font-size: 0.55rem;
+  font-size: calc(0.55rem * var(--gev-text-scale));
   letter-spacing: 0.08rem;
   background: none;
   border: 1px solid rgba(255, 170, 150, 0.3);

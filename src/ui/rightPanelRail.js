@@ -1,7 +1,9 @@
 import {
+  PANEL_STACK_MIN_HEIGHT_PX,
   allocatePanelStackHeights,
   panelStackAutoCollapseIndices,
 } from '../panelStackLayout.js';
+import { readAppliedTextScale, scaleTextMetric } from '../uiTextScale.js';
 import {
   resolveHudRailLayout,
   shouldHideCollapsedRightPanels,
@@ -244,6 +246,10 @@ export function layoutRightPanelRail({
   const expandedHeights = allocatePanelStackHeights({
     naturalHeights: expandedPanels.map((panel) => naturalHeights.get(panel)),
     availableHeight: expandedAvailableHeight,
+    minimumHeight: scaleTextMetric(
+      PANEL_STACK_MIN_HEIGHT_PX,
+      readAppliedTextScale(windowRef.document?.documentElement),
+    ),
   });
   // Other HUD variants restore automatic collapse at the start of each pass.
   // Do not immediately collapse those panels again and schedule a loop.

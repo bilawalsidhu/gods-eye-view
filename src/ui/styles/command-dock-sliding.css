@@ -121,7 +121,7 @@
   border: 1px solid rgba(123, 189, 211, 0.2);
   border-radius: 0.2rem;
   font-family: var(--font-mono);
-  font-size: 0.35rem;
+  font-size: calc(0.35rem * var(--gev-text-scale));
   letter-spacing: 0.04rem;
   cursor: pointer;
 }
@@ -635,14 +635,14 @@
 #gev-voice-control .gev-voice-help-kicker {
   color: rgba(54, 220, 255, 0.72);
   font-family: var(--font-mono);
-  font-size: 0.46rem;
+  font-size: calc(0.46rem * var(--gev-text-scale));
   font-weight: 600;
   letter-spacing: 0.1rem;
 }
 
 #gev-voice-control .gev-voice-help-detail {
   font-family: var(--font-sans);
-  font-size: 0.7rem;
+  font-size: calc(0.7rem * var(--gev-text-scale));
   line-height: 1.35;
   white-space: nowrap;
 }

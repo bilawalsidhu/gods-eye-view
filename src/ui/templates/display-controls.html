@@ -177,6 +177,18 @@
         <span class="pp-slider-value" id="sharpen-intensity-value">49%</span>
       </div>
     </div>
+    <!-- Per-viewer text size (issue #659). Scales DOM panel and HUD text via
+         --gev-text-scale; globe labels are canvas-drawn and keep their size. -->
+    <div class="pp-toggle-group" id="text-size-group">
+      <div class="pp-slider-row visible text-size-row" id="text-size-row">
+        <label class="pp-slider-mini-label" for="text-size-select">Text size</label>
+        <select id="text-size-select" class="pp-select" title="Size of panel and HUD text">
+          <option value="default">Default · 100%</option>
+          <option value="large">Large · 115%</option>
+          <option value="larger">Larger · 130%</option>
+        </select>
+      </div>
+    </div>
   </div>
   </div>
   <button id="clean-view-exit" title="Return UI controls">EXIT CLEAN VIEW</button>

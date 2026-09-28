@@ -1,9 +1,11 @@
 import {
+  PANEL_STACK_MIN_HEIGHT_PX,
   allocatePanelStackHeights,
   panelStackAutoCollapseIndices,
   resolveLeftStackBottomBoundary,
   resolvePanelStackCorridor,
 } from '../panelStackLayout.js';
+import { readAppliedTextScale, scaleTextMetric } from '../uiTextScale.js';
 import { measurePanelNaturalHeight } from './panelMeasurement.js';
 
 /**
@@ -232,6 +234,10 @@ export function layoutLeftPanelRail({
   const allocatedExpandedHeights = allocatePanelStackHeights({
     naturalHeights: naturalExpandedHeights,
     availableHeight: expandedAvailableHeight,
+    minimumHeight: scaleTextMetric(
+      PANEL_STACK_MIN_HEIGHT_PX,
+      readAppliedTextScale(windowRef.document?.documentElement),
+    ),
   });
   const autoCollapseIndices = hud.visible
     ? panelStackAutoCollapseIndices({

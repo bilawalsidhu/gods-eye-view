@@ -26,7 +26,7 @@
 }
 .radio-layer-state {
   color: var(--text-dim);
-  font: 8px/1 var(--font-mono);
+  font: calc(8px * var(--gev-text-scale))/1 var(--font-mono);
   letter-spacing: 0.12em;
 }
 .radio-layer-state.active {
@@ -41,7 +41,7 @@
 .radio-filter-label {
   grid-column: 2;
   color: var(--text-dim);
-  font: 7px/1 var(--font-mono);
+  font: calc(7px * var(--gev-text-scale))/1 var(--font-mono);
   letter-spacing: 0.12em;
 }
 #radio-enable-btn {
@@ -55,7 +55,7 @@
   border-radius: 5px;
   color: #c5faff;
   background: rgba(5, 24, 31, 0.88);
-  font: 9px/1.2 var(--font-mono);
+  font: calc(9px * var(--gev-text-scale))/1.2 var(--font-mono);
 }
 .radio-station-card {
   display: grid;
@@ -68,12 +68,12 @@
 }
 .radio-station-card strong {
   color: #e8feff;
-  font: 11px/1.25 var(--font-mono);
+  font: calc(11px * var(--gev-text-scale))/1.25 var(--font-mono);
   letter-spacing: 0.05em;
 }
 .radio-station-card span {
   color: var(--text-dim);
-  font: 8px/1.35 var(--font-mono);
+  font: calc(8px * var(--gev-text-scale))/1.35 var(--font-mono);
 }
 #radio-station-tags {
   color: #72dce6;
@@ -104,7 +104,7 @@
   justify-content: space-between;
   gap: 8px;
   color: #6daeb5;
-  font: 7px/1.2 var(--font-mono);
+  font: calc(7px * var(--gev-text-scale))/1.2 var(--font-mono);
   letter-spacing: 0.1em;
 }
 #radio-tuner-value {
@@ -145,7 +145,7 @@
   inset: 0;
   overflow: hidden;
   color: #58cbd6;
-  font: 9px/1 var(--font-mono);
+  font: calc(9px * var(--gev-text-scale))/1 var(--font-mono);
   text-shadow: 0 0 7px rgba(65, 220, 231, 0.5);
   pointer-events: none;
 }
@@ -256,7 +256,7 @@
   border-radius: 5px;
   color: #8feaf2;
   background: rgba(14, 69, 78, 0.14);
-  font: 8px/1 var(--font-mono);
+  font: calc(8px * var(--gev-text-scale))/1 var(--font-mono);
   letter-spacing: 0.06em;
   cursor: pointer;
 }
@@ -283,7 +283,7 @@
   gap: 8px;
   align-items: center;
   color: var(--text-dim);
-  font: 7px/1 var(--font-mono);
+  font: calc(7px * var(--gev-text-scale))/1 var(--font-mono);
   letter-spacing: 0.1em;
 }
 .radio-volume-row input {
@@ -292,7 +292,7 @@
 .radio-playback-state {
   min-height: 12px;
   color: #79d7df;
-  font: 8px/1.35 var(--font-mono);
+  font: calc(8px * var(--gev-text-scale))/1.35 var(--font-mono);
 }
 .radio-playback-state.error {
   color: #ff9d8f;
@@ -305,7 +305,7 @@
 }
 .radio-links a {
   color: #64cbd5;
-  font: 7px/1.3 var(--font-mono);
+  font: calc(7px * var(--gev-text-scale))/1.3 var(--font-mono);
   letter-spacing: 0.06em;
   text-decoration: none;
 }
@@ -316,7 +316,7 @@
 .radio-privacy {
   margin: 0;
   color: rgba(190, 230, 230, 0.48);
-  font: 7px/1.4 var(--font-mono);
+  font: calc(7px * var(--gev-text-scale))/1.4 var(--font-mono);
 }
 #military-awareness-panel {
   width: 100%;
@@ -328,7 +328,7 @@
   background: transparent;
   border: 0;
   font:
-    11px/1.35 ui-monospace,
+    calc(11px * var(--gev-text-scale))/1.35 ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
@@ -354,7 +354,7 @@
   color: #a9d9ff;
   background: rgba(42, 113, 171, 0.12);
   font:
-    9px/1.2 ui-monospace,
+    calc(9px * var(--gev-text-scale))/1.2 ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
@@ -432,7 +432,7 @@
 }
 .military-awareness-note {
   margin: 8px 0 0;
-  font-size: 10px;
+  font-size: calc(10px * var(--gev-text-scale));
 }
 .military-awareness-standby {
   display: grid;
@@ -442,12 +442,12 @@
 }
 .military-awareness-standby strong {
   color: #79c2ff;
-  font-size: 10px;
+  font-size: calc(10px * var(--gev-text-scale));
   letter-spacing: 0.1em;
 }
 .military-awareness-standby span {
   color: #8192a6;
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 0.05em;
 }
 .military-awareness-standby button {
@@ -458,7 +458,7 @@
   color: #a9d9ff;
   background: rgba(42, 113, 171, 0.12);
   font:
-    9px/1.2 ui-monospace,
+    calc(9px * var(--gev-text-scale))/1.2 ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
@@ -533,7 +533,7 @@
   transform: translate(-50%, -50%);
   color: rgba(156, 213, 255, 0.7);
   font:
-    9px/1 ui-monospace,
+    calc(9px * var(--gev-text-scale))/1 ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
@@ -545,7 +545,7 @@
 }
 .military-awareness-compass-heading {
   color: rgba(190, 225, 249, 0.76);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
 }
 .military-awareness-direction-marker {
   position: absolute;
@@ -562,7 +562,7 @@
   left: 50%;
   top: 50%;
   color: #74dbff;
-  font: 23px/1 sans-serif;
+  font: calc(23px * var(--gev-text-scale))/1 sans-serif;
   transform-origin: 50% 50%;
   text-shadow:
     0 0 5px rgba(87, 223, 255, 0.9),
@@ -578,7 +578,7 @@
   color: #bceeff;
   background: rgba(5, 12, 20, 0.68);
   font:
-    8px/1.3 ui-monospace,
+    calc(8px * var(--gev-text-scale))/1.3 ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
@@ -614,7 +614,7 @@
 
 .data-name {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: calc(13px * var(--gev-text-scale));
   font-weight: 500;
   color: var(--text-primary);
   letter-spacing: 0.3px;
@@ -628,7 +628,7 @@
 
 .data-count {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--gev-text-scale));
   letter-spacing: 0.5px;
   color: var(--text-secondary);
   min-width: 30px;
@@ -638,7 +638,7 @@
 .data-toggle-btn {
   padding: 3px 10px;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 1.5px;
   color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
@@ -710,7 +710,7 @@
 
 .data-toggle-meta {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 0.5px;
   color: var(--text-dim);
   padding-left: 26px;
@@ -736,7 +736,7 @@
 .data-toggle-chip {
   padding: 2px 7px;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1.2px;
   color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
@@ -787,7 +787,7 @@
   align-items: center;
   gap: 4px;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 0.5px;
   color: var(--text-dim);
   cursor: default;
@@ -827,7 +827,7 @@
   width: 100%;
   padding: 2px 4px;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 0.4px;
   text-align: left;
   color: var(--text-dim);
@@ -894,7 +894,7 @@
 .data-toggle-controls-info {
   flex-basis: 100%;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   color: var(--text-secondary);
   padding-top: 3px;
   overflow-wrap: anywhere;
@@ -928,12 +928,12 @@
 }
 .sdr-radio-heading strong {
   color: #ffd38a;
-  font: 9px/1 var(--font-mono);
+  font: calc(9px * var(--gev-text-scale))/1 var(--font-mono);
   letter-spacing: 0.1em;
 }
 #sdr-connection-state {
   color: #9e865f;
-  font: 7px/1 var(--font-mono);
+  font: calc(7px * var(--gev-text-scale))/1 var(--font-mono);
   letter-spacing: 0.1em;
 }
 #sdr-connection-state.active {
@@ -942,7 +942,7 @@
 .sdr-radio-card > p {
   margin: 0;
   color: rgba(213, 230, 225, 0.58);
-  font: 7px/1.4 var(--font-mono);
+  font: calc(7px * var(--gev-text-scale))/1.4 var(--font-mono);
 }
 .sdr-radio-card button,
 .sdr-radio-card select,
@@ -952,7 +952,7 @@
   border-radius: 5px;
   color: #ffd79a;
   background: rgba(38, 25, 8, 0.52);
-  font: 8px/1 var(--font-mono);
+  font: calc(8px * var(--gev-text-scale))/1 var(--font-mono);
 }
 .sdr-radio-card button {
   padding: 6px 8px;
@@ -979,7 +979,7 @@
 .sdr-gain-row label,
 .sdr-frequency-row label {
   color: #9e865f;
-  font: 7px/1 var(--font-mono);
+  font: calc(7px * var(--gev-text-scale))/1 var(--font-mono);
   letter-spacing: 0.08em;
 }
 .sdr-gain-row select {
@@ -992,7 +992,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px 8px;
   color: #9e865f;
-  font: 7px/1.3 var(--font-mono);
+  font: calc(7px * var(--gev-text-scale))/1.3 var(--font-mono);
   letter-spacing: 0.08em;
 }
 .sdr-adsb-stats[hidden] {
@@ -1000,7 +1000,7 @@
 }
 .sdr-adsb-stats output {
   color: #ffd79a;
-  font: 9px/1 var(--font-mono);
+  font: calc(9px * var(--gev-text-scale))/1 var(--font-mono);
 }
 .sdr-frequency-row input[type='number'] {
   width: 78px;
@@ -1021,7 +1021,7 @@
 }
 .sdr-feed-status {
   color: #9e865f;
-  font: 8px/1.3 var(--font-mono);
+  font: calc(8px * var(--gev-text-scale))/1.3 var(--font-mono);
   letter-spacing: 0.08em;
   overflow-wrap: anywhere;
 }

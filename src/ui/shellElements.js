@@ -17,6 +17,7 @@ export function readShellElements(document = globalThis.document) {
     _hudBtn: document.getElementById('hud-toggle'),
     _hudLayoutRow: document.getElementById('hud-layout-row'),
     _hudLayoutSelect: document.getElementById('hud-layout-select'),
+    _textSizeSelect: document.getElementById('text-size-select'),
     _cyberSonarBtn: document.getElementById('cyber-sonar-toggle'),
     _cyberSonarRings: document.getElementById('cyber-sonar-rings'),
     _cyberSonarRingsValue: document.getElementById('cyber-sonar-rings-value'),

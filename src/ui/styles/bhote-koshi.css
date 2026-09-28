@@ -245,7 +245,7 @@
 
 .bhote-embedded-callout footer strong {
   overflow: hidden;
-  font-size: 11px;
+  font-size: calc(11px * var(--gev-text-scale));
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -254,7 +254,7 @@
 .bhote-embedded-callout footer small {
   grid-column: 1;
   color: rgba(151, 211, 224, 0.7);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   line-height: 1.35;
 }
 
@@ -263,7 +263,7 @@
   grid-row: 1 / span 2;
   align-self: center;
   color: #6be8ff;
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   text-decoration: none;
 }
 
@@ -290,7 +290,7 @@
 .bhote-event-status,
 .bhote-event-evidence summary,
 .bhote-event-report small {
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   line-height: 1.35;
   text-transform: uppercase;
   color: var(--accent);
@@ -299,7 +299,7 @@
 
 .bhote-event-title {
   margin-top: 5px;
-  font-size: 17px;
+  font-size: calc(17px * var(--gev-text-scale));
   line-height: 1.2;
   color: var(--text-primary);
 }
@@ -368,7 +368,7 @@
 }
 
 .bhote-event-dates {
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   color: rgba(174, 208, 216, 0.62);
 }
 
@@ -388,7 +388,7 @@
   border-radius: 4px;
   color: var(--accent);
   background: rgba(7, 25, 35, 0.9);
-  font: 22px/1 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  font: calc(22px * var(--gev-text-scale))/1 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
   cursor: pointer;
 }
 
@@ -406,14 +406,14 @@
 .bhote-event-story-current span,
 .bhote-event-story-current small {
   color: rgba(116, 216, 235, 0.7);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   line-height: 1.25;
 }
 
 .bhote-event-story-current strong {
   overflow: hidden;
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: calc(11px * var(--gev-text-scale));
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -443,7 +443,7 @@
   color: var(--text-primary);
   background: rgba(7, 25, 35, 0.9);
   font: inherit;
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 0;
   cursor: pointer;
 }
@@ -453,7 +453,7 @@
   min-height: 30px;
   padding: 0 5px;
   overflow: hidden;
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -519,7 +519,7 @@
   padding: 8px 0 0;
   border-top: 1px solid rgba(95, 213, 236, 0.16);
   color: rgba(116, 216, 235, 0.62);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   line-height: 1.35;
 }
 
@@ -537,7 +537,7 @@
 
 .bhote-event-caveat {
   margin: 11px 16px 14px;
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   line-height: 1.5;
   color: rgba(179, 204, 210, 0.62);
 }
@@ -573,7 +573,7 @@
   box-shadow:
     0 0 0 5px rgba(62, 112, 125, 0.3),
     0 0 13px rgba(94, 216, 239, 0.3);
-  font: 700 14px/1 var(--font-mono);
+  font: 700 calc(14px * var(--gev-text-scale))/1 var(--font-mono);
   transform: translate(-50%, -50%);
   pointer-events: auto;
   touch-action: none;

@@ -18,7 +18,7 @@
   align-items: center;
   gap: 0.42rem;
   color: rgba(206, 232, 239, 0.72);
-  font-size: 0.58rem;
+  font-size: calc(0.58rem * var(--gev-text-scale));
   font-weight: 500;
   letter-spacing: 0.13rem;
 }
@@ -214,12 +214,12 @@
 #command-dock .location-pill,
 #command-dock .poi-pill,
 #command-dock .btn-label {
-  font-size: 0.56rem;
+  font-size: calc(0.56rem * var(--gev-text-scale));
 }
 
 #command-dock #location-search,
 #command-dock #location-search.expanded {
-  font-size: 0.68rem;
+  font-size: calc(0.68rem * var(--gev-text-scale));
 }
 
 #command-dock > #gev-voice-control {
@@ -248,7 +248,7 @@
 #command-dock .gev-voice-kicker {
   position: static;
   padding-right: 0;
-  font-size: 0.46rem;
+  font-size: calc(0.46rem * var(--gev-text-scale));
   font-weight: 500;
   letter-spacing: 0.08rem;
 }
@@ -282,7 +282,7 @@
 #command-dock .gev-mic-label {
   display: block;
   margin-top: 0.18rem;
-  font-size: 0.42rem;
+  font-size: calc(0.42rem * var(--gev-text-scale));
   letter-spacing: 0.035rem;
 }
 
@@ -317,7 +317,7 @@
   width: auto;
   padding-top: 0;
   color: var(--accent);
-  font-size: 0.43rem;
+  font-size: calc(0.43rem * var(--gev-text-scale));
   text-align: left;
 }
 
@@ -328,7 +328,7 @@
   padding-top: 0.12rem;
   max-width: 100%;
   overflow: hidden;
-  font-size: 0.39rem;
+  font-size: calc(0.39rem * var(--gev-text-scale));
   font-weight: 500;
   letter-spacing: 0.035rem;
   text-align: left;
@@ -340,7 +340,7 @@
 #command-dock #gev-voice-control[data-status='listening'] #gev-voice-detail,
 #command-dock #gev-voice-control[data-status='executing'] #gev-voice-detail {
   grid-row: 3;
-  font-size: 0.43rem;
+  font-size: calc(0.43rem * var(--gev-text-scale));
 }
 
 #command-dock #gev-voice-control[data-status='error'] {
@@ -408,7 +408,7 @@
   gap: 0.75rem;
   color: #ff8f9d;
   font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-size: calc(0.62rem * var(--gev-text-scale));
   font-weight: 600;
   letter-spacing: 0.1rem;
 }
@@ -420,7 +420,7 @@
   border: 1px solid rgba(255, 143, 157, 0.32);
   border-radius: 0.2rem;
   font-family: var(--font-mono);
-  font-size: 0.43rem;
+  font-size: calc(0.43rem * var(--gev-text-scale));
   letter-spacing: 0.06rem;
   cursor: pointer;
 }
@@ -429,7 +429,7 @@
   margin-top: 0.65rem;
   color: rgba(255, 232, 235, 0.92);
   font-family: var(--font-sans);
-  font-size: 0.78rem;
+  font-size: calc(0.78rem * var(--gev-text-scale));
   line-height: 1.45;
 }
 
@@ -437,7 +437,7 @@
   margin-top: 0.5rem;
   color: rgba(255, 196, 203, 0.58);
   font-family: var(--font-mono);
-  font-size: 0.52rem;
+  font-size: calc(0.52rem * var(--gev-text-scale));
   line-height: 1.45;
   letter-spacing: 0.035rem;
 }

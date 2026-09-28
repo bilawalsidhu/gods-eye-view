@@ -18,6 +18,9 @@
   --menu-bg: #12121c;
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* UI text-size factor (1, 1.15 or 1.3), set on <html> by src/uiTextScale.js.
+     Font sizes multiply by it; spacing and panel widths do not. */
+  --gev-text-scale: 1;
   --panel-radius: 16px;
   --btn-radius: 10px;
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -365,7 +368,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  font-size: 12px !important;
+  font-size: calc(12px * var(--gev-text-scale)) !important;
   line-height: 1.35;
   white-space: normal;
 }
@@ -431,7 +434,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   border: 1px solid rgba(0, 212, 255, 0.28);
   border-radius: var(--btn-radius);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: calc(10px * var(--gev-text-scale));
   letter-spacing: 0;
   cursor: pointer;
 }
@@ -449,7 +452,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
 }
 
 #gev-voice-status {
-  font-size: 10px;
+  font-size: calc(10px * var(--gev-text-scale));
   color: var(--accent);
 }
 
@@ -458,7 +461,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   margin-top: 2px;
   overflow: hidden;
   color: var(--text-secondary);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -533,7 +536,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   align-items: center;
   gap: 12px;
   font-family: var(--font-mono);
-  font-size: 26px;
+  font-size: calc(26px * var(--gev-text-scale));
   font-weight: 600;
   letter-spacing: 8px;
   color: var(--text-primary);
@@ -625,7 +628,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
 
 #title-bar .subtitle {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--gev-text-scale));
   letter-spacing: 5px;
   color: var(--text-dim);
   margin-top: 8px;
@@ -635,7 +638,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
 #title-bar .frame-rate-readout {
   margin-top: 6px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--gev-text-scale));
   font-variant-numeric: tabular-nums;
   letter-spacing: 1px;
   color: var(--accent);
@@ -655,7 +658,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
 #style-indicator .indicator-label {
   display: block;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: calc(10px * var(--gev-text-scale));
   letter-spacing: 3px;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -664,7 +667,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
 #style-indicator .indicator-value {
   display: block;
   font-family: var(--font-mono);
-  font-size: 16px;
+  font-size: calc(16px * var(--gev-text-scale));
   font-weight: 500;
   letter-spacing: 5px;
   color: var(--accent);

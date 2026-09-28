@@ -327,6 +327,7 @@
   "panel-rail-layout": {
     "exports": ["./ui/layout"],
     "modules": [
+      "src/uiTextScale.js",
       "src/ui/panelRails.js",
       "src/ui/displayPanelScroll.js",
       "src/ui/leftPanelRail.js",
@@ -458,6 +459,7 @@
       "./ui/cockpit/vision"
     ],
     "modules": [
+      "src/uiTextScale.js",
       "src/ui/cockpit.js",
       "src/ui/cockpitBriefing.js",
       "src/ui/cockpitCamera.js",
@@ -490,6 +492,7 @@
   "ui-shell": {
     "exports": ["./ui/shell"],
     "modules": [
+      "src/uiTextScale.js",
       "src/hudLayouts.js",
       "src/hudLayoutPolicy.js",
       "src/cyberSonar.js",
@@ -1267,6 +1270,7 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/uiTextScale.js",
       "src/cyberSonarScene.js",
       "src/cyberSonar.js",
       "src/hudLayouts.js",
@@ -2519,6 +2523,7 @@
   "ui-visual-settings": {
     "exports": ["./ui/visual-settings"],
     "modules": [
+      "src/uiTextScale.js",
       "src/cyberSonar.js",
       "src/hudLayouts.js",
       "src/hudLayoutPolicy.js",
@@ -2547,6 +2552,7 @@
   "ui-panel-chrome": {
     "exports": ["./ui/panel-chrome"],
     "modules": [
+      "src/uiTextScale.js",
       "src/ui/displayPanelScroll.js",
       "src/ui/radioPanelPlacement.js",
       "src/panelStackLayout.js",

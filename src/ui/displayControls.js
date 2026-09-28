@@ -34,6 +34,7 @@ export function bindDisplayControls({ elements, actions }) {
     listen(elements[name], 'input', action, integer);
   listen(elements.densitySlider, 'input', 'setDensity', (el) => el.value);
   listen(elements.hudLayout, 'change', 'setHudLayout', (el) => el.value);
+  listen(elements.textSize, 'change', 'setTextScale', (el) => el.value);
   for (const [name, action] of [
     ['sonarRingsSlider', 'setSonarRings'],
     ['sonarRangeSlider', 'setSonarRange'],
