@@ -239,7 +239,9 @@ export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 /** Concello de Vigo open-data traffic cameras: one keyless ArcGIS
  * FeatureServer for the whole city (~59 cameras); frames are stills on
  * camaras.vigo.org, refreshed roughly every minute per the dataset
- * description. Source: https://datos-ckan.vigo.org/dataset/t-camaras */
+ * description. Source / license record: https://datos-ckan.vigo.org/dataset/t-camaras
+ * (this dataset declares Open Data Commons Attribution License (ODC-BY),
+ * which governs over the portal's general CC BY 4.0 default). */
 export const VIGO_CAMERAS_URL =
   'https://datos.vigo.org/arcgis/trafico/camaras-trafico/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson';
 /** The only origin Vigo camera frames may come from. The catalog publishes

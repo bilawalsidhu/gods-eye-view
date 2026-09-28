@@ -1683,9 +1683,13 @@ export function vigoCameraToSource(feature) {
     url: imageUrl,
     snapshotUrl: imageUrl,
     sourceKind: 'vigo-open-data',
-    // CC BY 4.0 (https://datos.vigo.org/es/condiciones-de-uso-de-los-datos/);
-    // attribution is mandatory.
-    license: 'Fuente de los datos: Ayuntamiento de Vigo',
+    // Open Data Commons Attribution License (ODC-BY), per the "Cámaras de
+    // Tráfico" dataset's own CKAN record (https://datos-ckan.vigo.org/dataset/t-camaras),
+    // which governs over the portal's general CC BY 4.0 default per
+    // https://datos.vigo.org/es/condiciones-de-uso-de-los-datos/; attribution
+    // is mandatory either way.
+    license:
+      'Open Data Commons Attribution License (ODC-BY) — Fuente de los datos: Ayuntamiento de Vigo',
     code: cameraDisplayCode(name.toUpperCase()),
   };
 }
