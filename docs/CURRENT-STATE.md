@@ -4422,3 +4422,14 @@ Desktop wind now allows 7,200 baked native GPU paths (narrow viewports remain at
 Temperature uses stronger fixed −40..50°C colors; the underlying 1° forecast and
 numeric inspection values are unchanged. No volumetric cloud height or local rain
 arrival prediction is claimed. NOAA source limits are documented in DATA_SOURCES.
+
+
+### Traffic road terrain elevation clamping (September 2026)
+
+- `parseRoads` and the development-only timed parser accept road terrain
+  samples only between `-500 m` and `9000 m`.
+- If `scene.sampleHeight()` throws or returns an out-of-bounds finite artifact,
+  the parser tries `scene.globe.getHeight()` before falling back to the
+  ellipsoid baseline. The runtime regression covers the measured `-16800 m`
+  failure from #656, a valid 45 m sample, no-globe fallback, and timed-parser
+  parity.

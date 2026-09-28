@@ -1,5 +1,10 @@
 # Changelog
 
+- Traffic road elevation samples now reject physically impossible finite values
+  outside -500 m to 9000 m. Invalid or throwing scene samples fall back to the
+  globe surface when available, then the ellipsoid baseline, preventing
+  unstreamed 3D-tile artifacts such as -16.8 km from burying traffic (#656).
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD

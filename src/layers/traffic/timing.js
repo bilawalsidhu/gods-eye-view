@@ -3,6 +3,8 @@ import {
   TRAFFIC_TIMING_ENABLED,
   MAX_WAYPOINTS_PER_ROAD,
   DOT_HEIGHT_OFFSET,
+  MIN_ROAD_TERRAIN_HEIGHT_M,
+  MAX_ROAD_TERRAIN_HEIGHT_M,
 } from './policy.js';
 
 export function createTiming({ state: layerState, services, parts, source }) {
@@ -276,26 +278,46 @@ export function createTiming({ state: layerState, services, parts, source }) {
 
       let baseHeight = 0;
       const firstCoord = coords[0];
-      if (layerState._viewer?.scene?.sampleHeightSupported && firstCoord) {
-        /* TRACE_ONLY_BEGIN */
-        _trafficTimingSampleHeightCalls += 1;
-        _trafficTimingSampledCells.add(
-          `${firstCoord[1].toFixed(3)},${firstCoord[0].toFixed(3)}`,
-        );
-        /* TRACE_ONLY_END */
+      if (layerState._viewer?.scene && firstCoord) {
         const carto = Cesium.Cartographic.fromDegrees(
           firstCoord[0],
           firstCoord[1],
         );
-        /* TRACE_ONLY_BEGIN */
-        const _trafficTimingSampleStart = performance.now();
-        /* TRACE_ONLY_END */
-        const sampled = layerState._viewer.scene.sampleHeight(carto);
-        /* TRACE_ONLY_BEGIN */
-        _trafficTimingSampleHeightMs +=
-          performance.now() - _trafficTimingSampleStart;
-        /* TRACE_ONLY_END */
-        if (Number.isFinite(sampled)) baseHeight = sampled;
+        let sampled;
+        if (layerState._viewer.scene.sampleHeightSupported) {
+          /* TRACE_ONLY_BEGIN */
+          _trafficTimingSampleHeightCalls += 1;
+          _trafficTimingSampledCells.add(
+            `${firstCoord[1].toFixed(3)},${firstCoord[0].toFixed(3)}`,
+          );
+          const _trafficTimingSampleStart = performance.now();
+          /* TRACE_ONLY_END */
+          try {
+            sampled = layerState._viewer.scene.sampleHeight(carto);
+          } catch {
+            /* streaming tiles */
+          }
+          /* TRACE_ONLY_BEGIN */
+          _trafficTimingSampleHeightMs +=
+            performance.now() - _trafficTimingSampleStart;
+          /* TRACE_ONLY_END */
+        }
+        if (
+          Number.isFinite(sampled) &&
+          sampled >= MIN_ROAD_TERRAIN_HEIGHT_M &&
+          sampled <= MAX_ROAD_TERRAIN_HEIGHT_M
+        ) {
+          baseHeight = sampled;
+        } else if (layerState._viewer.scene.globe?.show) {
+          const globeHeight = layerState._viewer.scene.globe.getHeight?.(carto);
+          if (
+            Number.isFinite(globeHeight) &&
+            globeHeight >= MIN_ROAD_TERRAIN_HEIGHT_M &&
+            globeHeight <= MAX_ROAD_TERRAIN_HEIGHT_M
+          ) {
+            baseHeight = globeHeight;
+          }
+        }
       }
 
       /* TRACE_ONLY_BEGIN */

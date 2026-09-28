@@ -47,6 +47,10 @@ export const FETCH_DEBOUNCE = 320;
 
 export const DOT_HEIGHT_OFFSET = 3.0;
 
+/** Physical sanity bounds for road terrain samples. */
+export const MIN_ROAD_TERRAIN_HEIGHT_M = -500;
+export const MAX_ROAD_TERRAIN_HEIGHT_M = 9000;
+
 /** @const {number} Fraction (0-1) — skip re-fetch when viewport overlap exceeds this */
 
 export const OVERLAP_THRESHOLD = 0.6;
