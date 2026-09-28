@@ -3498,11 +3498,33 @@ silently demoting every later lookup for the session.
   with compact fields for enabled layers, allowlisted layer options, panel state,
   and the active preset's allowlisted shader controls. An absent layer field uses
   deterministic defaults; an explicit empty field means no enabled layers.
-- The registry seals only after all 16 production layers register, and every
-  layer has an explicit serialization disposition. Unknown enabled-layer tokens
-  reject the layer payload; unknown option tokens are ignored. Restoration
+- The registry seals only after every production layer registers, and every
+  layer has an explicit serialization disposition. Unknown, empty, or repeated
+  enabled-layer tokens reject the whole layer payload (`l=` alone is the valid
+  explicit-empty form); unknown option tokens are ignored. Restoration
   settles independently per layer so one failed or unavailable source cannot
   block its siblings.
+- Layer tokens are permanent public compatibility identifiers. The reservation
+  JSON ledger at `src/data/layerStateTokenReservations.json` pins all existing
+  one-character assignments (all letters plus `1` and
+  `2` on current `main`) even if a layer is later removed. New layers allocate
+  the remaining unreserved single-character digits first (`0`, then `3`
+  through `9` on current `main`), then the next unreserved two-character
+  base-36 token (`00` through `zz`) after rebasing onto the merge-time `main`;
+  the dot-delimited v2 codec accepts both widths without changing existing
+  links or the schema version. The contributor
+  check reads the complete published JSON ledger from `origin/main`, including
+  retired reservations, so later assignments cannot silently replace published
+  ones. The pre-ledger base is accepted only at its known source blob; unknown
+  historical shapes fail closed.
+  Pull-request CI runs this check against `origin/main`.
+- `scripts/qa-layer-token-twochar.mjs` simulates exhaustion of the earlier
+  digit slots and injects a no-network `00` layer only into isolated dev-browser
+  responses. It proves encoding, a cold-recipient reload, restoration, explicit
+  OFF, and legacy-token compatibility. This is synthetic
+  end-to-end evidence, not production allocation: `00` remains unreserved until
+  the first eligible real layer receives it after the free digits through the
+  normal allocation process and passes its own application share/reload check.
 - Stable visible options are limited to aircraft 3D mode, selected civilian and
   military flight IDs, Satellite catalog and selection, CCTV coverage/projection/
   auto-hop, and Radio filter/volume. Playback and tuning, live-data health,
