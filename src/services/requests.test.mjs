@@ -42,3 +42,32 @@ test('boundary throttle status survives empty or invalid error bodies', async ()
     assert.deepEqual(await services.boundaries.query('fixture'), { rateLimited: true, retryAfterMs: 5000 });
   }
 });
+
+test('Dutch news categories are same-origin and preserve explicit error and retry details', async () => {
+  let request;
+  const services = createApplicationRequestServices({
+    fetchImpl: async (url, init) => {
+      request = { url, init };
+      return Response.json({ status: 'ready', articles: [] });
+    },
+  });
+  assert.deepEqual(await services.news.getHeadlines('crises'), {
+    status: 'ready',
+    articles: [],
+  });
+  assert.equal(request.url, '/api/news?category=crises');
+  assert.equal(request.init.redirect, 'error');
+
+  const limited = createApplicationRequestServices({
+    fetchImpl: async () =>
+      Response.json(
+        { code: 'rate_limited', error: 'NewsAPI request limit reached' },
+        { status: 429, headers: { 'Retry-After': '30' } },
+      ),
+  });
+  await assert.rejects(limited.news.getHeadlines('politics'), (error) => {
+    assert.equal(error.code, 'rate_limited');
+    assert.equal(error.retryAfterMs, 30_000);
+    return true;
+  });
+});

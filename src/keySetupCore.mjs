@@ -74,6 +74,14 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'free',
   }),
   Object.freeze({
+    id: 'newsapi',
+    title: 'NEWSAPI',
+    unlocks: 'Dutch politics, economy, and crisis headlines',
+    getUrl: 'https://newsapi.org/register',
+    envVars: Object.freeze(['NEWSAPI_API_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
     id: 'tomtom',
     title: 'TOMTOM',
     unlocks: 'Real live traffic (keyless runs a simulation)',

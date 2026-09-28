@@ -119,6 +119,9 @@
     "./server/providers/regional": {
       "node": "./server/providers/regional.js"
     },
+    "./server/providers/newsapi": {
+      "node": "./server/providers/newsapi.js"
+    },
     "./server/providers/openai": {
       "node": "./server/providers/openai.js"
     },

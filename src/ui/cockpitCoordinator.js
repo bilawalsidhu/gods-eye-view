@@ -46,6 +46,7 @@ export class CockpitCoordinator {
       holdContinuousRender,
       releaseContinuousRender,
       fetchRegionalBrief,
+      fetchNewsHeadlines,
       regionalDistanceM,
       weatherCodeLabel,
     } = services;
@@ -67,6 +68,7 @@ export class CockpitCoordinator {
         holdContinuousRender,
         releaseContinuousRender,
         fetchRegionalBrief,
+        fetchNewsHeadlines,
         regionalDistanceM,
         weatherCodeLabel,
       },

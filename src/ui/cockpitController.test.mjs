@@ -188,6 +188,7 @@ test('stopped Cockpit cannot rearm briefing rotation or request a fresh region',
         releaseContinuousRender() {},
       },
     });
+
     owner.active = true;
     owner.showBriefPage = () => {
       paints++;
@@ -204,6 +205,37 @@ test('stopped Cockpit cannot rearm briefing rotation or request a fresh region',
     assert.equal(frames.size, 0);
     assert.equal(paints, 0);
     assert.equal(fetches, 0);
+    owner.dispose();
+  } finally {
+    env.restore();
+  }
+});
+
+test('Cockpit news category reports a missing NewsAPI key without losing the selected category', async () => {
+  const env = environment();
+  try {
+    const owner = new CockpitViewController(env.viewer, {
+      services: {
+        releaseContinuousRender() {},
+        fetchNewsHeadlines: async () => {
+          const error = new Error('missing key');
+          error.code = 'missing_api_key';
+          throw error;
+        },
+      },
+    });
+    owner.active = true;
+    owner.newsStatus = {
+      hidden: true,
+      dataset: {},
+      textContent: '',
+    };
+    assert.equal(owner.newsCategory, 'world');
+    owner.selectNewsCategory('politics');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(owner.newsCategory, 'politics');
+    assert.match(owner.newsStatus.textContent, /NEWSAPI_API_KEY REQUIRED/);
+    assert.equal(owner.newsStatus.dataset.state, 'unavailable');
     owner.dispose();
   } finally {
     env.restore();

@@ -42,9 +42,9 @@ test('setup placement moves the same button only in Cyber and disconnects on tea
 });
 
 test('the chip counts what is missing, and retires the count at zero', () => {
-  assert.equal(keySetupChipLabel({ setCount: 0, total: 8 }), 'POWER UP · 8 KEYS WAITING');
-  assert.equal(keySetupChipLabel({ setCount: 7, total: 8 }), 'POWER UP · 1 KEY WAITING');
-  assert.equal(keySetupChipLabel({ setCount: 8, total: 8 }), 'POWERED UP');
+  assert.equal(keySetupChipLabel({ setCount: 0, total: 9 }), 'POWER UP · 9 KEYS WAITING');
+  assert.equal(keySetupChipLabel({ setCount: 8, total: 9 }), 'POWER UP · 1 KEY WAITING');
+  assert.equal(keySetupChipLabel({ setCount: 9, total: 9 }), 'POWERED UP');
   assert.equal(keySetupChipLabel(null), 'POWERED UP', 'no status is not a broken label');
 });
 

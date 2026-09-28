@@ -60,6 +60,7 @@ import {
   regionalDistanceM,
   weatherCodeLabel,
 } from '../data/regionalBrief.js';
+import { fetchNewsHeadlines } from '../data/newsHeadlines.js';
 
 export class StyleManager extends ApplicationShell {
   constructor(viewer, options = {}) {
@@ -108,6 +109,7 @@ export class StyleManager extends ApplicationShell {
         getScopeTerminusOverride,
         clampScopeTerminusPct,
         fetchRegionalBrief,
+        fetchNewsHeadlines,
         regionalDistanceM,
         weatherCodeLabel,
         LocationSearch,

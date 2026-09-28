@@ -69,6 +69,7 @@ Start with the included data sources, then add your own. Each layer is a separat
 - **🔗 Share Links:** Camera, style, layers, and even one tracked target serialize into a URL — a live target is a handoff, not a bookmark.
 - **🏠 Reset Globe:** One control — or one sentence — back to the full Earth.
 - **🌦️ Weather:** Animate GFS or ECMWF forecast wind, replay observed radar, satellite clouds and lightning on one timeline, and follow NHC/CPHC cyclone tracks. No key needed.
+- **📰 Worldwide news:** Dutch-language world headlines, politics, economy and disaster/crisis coverage in the Cockpit News page, with location-matched regional reporting as a separate view. Optional NewsAPI key stays server-side.
 - **📷 Mapped ALPR cameras:** License-plate-reader camera locations tagged in OpenStreetMap, one city at a time. Locations and tags only; no key needed.
 - **🔭 Satellite passes:** Ask by voice when any loaded satellite next rises over you: rise, peak and set times, and whether you can see it.
 - **🔎 Analyst answers:** Count, filter and rank satellites, datacenters and dams by voice, alongside flights, ships, fires and quakes; answers say when a feed is stale or on a fallback.

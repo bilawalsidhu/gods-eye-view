@@ -10,6 +10,7 @@ const slots = Object.fromEntries(
     boundaries: ['query'],
     terrain: ['getHeights'],
     regional: ['getBrief'],
+    news: ['getHeadlines'],
     weather: ['getConditions'],
     summary: ['summarize'],
   }).map(([name, methods]) => [

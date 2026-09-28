@@ -20,6 +20,7 @@ export function createApplicationRequestServices({
     boundaries: '/api/overpass',
     terrain: '/api/terrain/heights',
     regional: '/api/regional-brief',
+    news: '/api/news',
     weather: '/api/weather-effects',
     summary: '/api/openai/hud-summary',
     ...endpoints,
@@ -106,6 +107,22 @@ export function createApplicationRequestServices({
           await request(pointUrl(urls.regional, latitude, longitude), options),
           'Regional brief',
         );
+      },
+    },
+    news: {
+      async getHeadlines(category, { signal } = {}) {
+        const response = await request(
+          `${urls.news}?${new URLSearchParams({ category: String(category) })}`,
+          { signal },
+        );
+        if (response.ok) return response.data;
+        const error = new Error(
+          response.data?.error || `News unavailable (${response.status})`,
+        );
+        error.code = response.data?.code || 'upstream_error';
+        const retryAfter = retryAfterMs(response.headers?.get?.('Retry-After'));
+        if (retryAfter !== null) error.retryAfterMs = retryAfter;
+        throw error;
       },
     },
     weather: {

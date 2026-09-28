@@ -366,6 +366,7 @@ export class StyleManager extends ShellFacade {
         holdContinuousRender: services.holdContinuousRender,
         releaseContinuousRender: services.releaseContinuousRender,
         fetchRegionalBrief: services.fetchRegionalBrief,
+        fetchNewsHeadlines: services.fetchNewsHeadlines,
         regionalDistanceM: services.regionalDistanceM,
         weatherCodeLabel: services.weatherCodeLabel,
       },
