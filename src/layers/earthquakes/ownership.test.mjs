@@ -83,6 +83,7 @@ function harness(source, { pick = () => null } = {}) {
   layer.enable(viewer);
   return { layer, viewer, sources, events, clicks, owners, contexts };
 }
+
 const row = {
   stableId: 'event-a',
   usgsId: 'event-a',
