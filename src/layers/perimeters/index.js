@@ -40,6 +40,7 @@ export function createFirePerimetersLayer({
   overlayHost = null,
   screenSpaceEventHandlerFactory = null,
   picking = null,
+  context = null,
   pointer = null,
   inciwebSource = null,
   inciwebPublications = null,
@@ -60,6 +61,7 @@ export function createFirePerimetersLayer({
   let _selectedId = null;
   let _selectedLink = null;
   let _selectedCardId = null;
+  let _selectedContextEntity = null;
   let _inciwebIndex = [];
   let _indexFetchedAt = 0;
   let _indexFetchInFlight = false;
@@ -75,6 +77,43 @@ export function createFirePerimetersLayer({
 
   const canSelect = () =>
     overlayHost && screenSpaceEventHandlerFactory && picking;
+
+
+  function clearSelectedContext() {
+    context?.removeEntityContextsForLayer?.('fire-perimeters');
+    _selectedContextEntity = null;
+  }
+
+  function publishSelectedContext({ announce = false } = {}) {
+    const row = _selectedId ? _rowById.get(_selectedId) : null;
+    if (!row) {
+      clearSelectedContext();
+      return null;
+    }
+    _selectedContextEntity ||= { show: true };
+    const record = context?.registerEntityContext?.(_selectedContextEntity, {
+      id: `fire-perimeter:${row.stableId}`,
+      layerId: 'fire-perimeters',
+      layerName: 'Fire Perimeters',
+      source: 'NIFC WFIGS',
+      dataSource: _dataSource,
+      label: row.name ? `Wildfire · ${row.name}` : 'Wildfire perimeter',
+      latitude: row.anchor.lat,
+      longitude: row.anchor.lon,
+      properties: {
+        acres: row.acres ?? null,
+        containedPct: row.containedPct ?? null,
+        state: row.state ?? null,
+        category: row.category ?? null,
+        discoveredTime: row.discoveredTime ?? null,
+        updatedTime: row.updatedTime ?? null,
+        cause: row.cause ?? null,
+        behavior: row.behavior ?? null,
+      },
+    });
+    if (announce && record) context?.selectEntityContext?.(_selectedContextEntity);
+    return record || null;
+  }
 
   /**
    * Refresh the InciWeb catalog off the render path: a hanging or failed
@@ -145,6 +184,7 @@ export function createFirePerimetersLayer({
         [],
         CARD_HOST_OPTIONS,
       );
+      clearSelectedContext();
       return;
     }
     const candidate = findInciwebLink(_inciwebIndex, row);
@@ -170,6 +210,7 @@ export function createFirePerimetersLayer({
       [card],
       CARD_HOST_OPTIONS,
     );
+    publishSelectedContext();
   }
 
   /** Resolve a scene pick to one of this layer's incident ids, or null. */
@@ -208,6 +249,7 @@ export function createFirePerimetersLayer({
         abortLinkVerification();
         _selectedId = incidentId;
         publishSelectedCard();
+        publishSelectedContext({ announce: true });
         return;
       }
       // A pick that belongs to a sibling layer (e.g. an aircraft) is not
@@ -220,6 +262,7 @@ export function createFirePerimetersLayer({
         abortLinkVerification();
         _selectedId = null;
         publishSelectedCard();
+        clearSelectedContext();
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
@@ -236,6 +279,7 @@ export function createFirePerimetersLayer({
     _selectedId = null;
     _selectedLink = null;
     _selectedCardId = null;
+    clearSelectedContext();
     if (overlayHost) {
       overlayHost.clearSource(PERIMETER_OVERLAY_SOURCE_ID);
       overlayHost.setVisible?.(PERIMETER_OVERLAY_SOURCE_ID, false);
