@@ -616,7 +616,7 @@ async function main() {
     await open(page, { query: "?welcome=1", errorSink: consoleErrors });
     before = await appState(page);
     await watchLoadingChip(page);
-    await pick(page, 'environmental', { settle: ['earthquakes', 'local-firms'] });
+    await pick(page, 'environmental', { settle: ['earthquakes', 'local-firms', 'fire-perimeters'] });
     state = await appState(page);
     record('ENVIRONMENTAL leaves the detection override untouched',
       state.detectionOverridden === false, `_detectionUserOverridden=${state.detectionOverridden}`);
