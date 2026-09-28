@@ -29,6 +29,8 @@ import {
   maybeRefreshRegionalBrief,
   renderRegionalBriefStatus,
   renderRegionalBrief,
+  selectNewsCategory,
+  renderNewsResponse,
 } from './cockpitBriefing.js';
 import {
   handleSignalClick,
@@ -177,6 +179,14 @@ export class CockpitViewController {
     );
     this.newsStatus = document.getElementById('cockpit-news-status');
     this.newsList = document.getElementById('cockpit-news-list');
+    this.newsCategoryTabs = Array.from(
+      document.querySelectorAll('[data-news-category]'),
+    );
+    this.newsCategory = 'world';
+    this.newsResults = new Map();
+    this.newsFetchedAt = new Map();
+    this.newsAbort = null;
+    this.newsRequestToken = 0;
     this.localPlace = document.getElementById('cockpit-local-place');
     this.localCoordinates = document.getElementById(
       'cockpit-local-coordinates',
@@ -268,6 +278,11 @@ export class CockpitViewController {
     );
     this._listen(this.signalList, 'click', (event) =>
       this.handleSignalClick(event),
+    );
+    this.newsCategoryTabs.forEach((button) =>
+      this._listen(button, 'click', () =>
+        this.selectNewsCategory(button.dataset.newsCategory),
+      ),
     );
     this._listen(this.briefPrevious, 'click', () =>
       this.showBriefPage(this.briefPageIndex - 1, { manual: true }),
@@ -376,6 +391,12 @@ export class CockpitViewController {
   renderRegionalBrief(payload, info) {
     return renderRegionalBrief.call(this, payload, info);
   }
+  selectNewsCategory(category) {
+    return selectNewsCategory.call(this, category);
+  }
+  renderNewsResponse(payload) {
+    return renderNewsResponse.call(this, payload);
+  }
   renderCockpitSignals() {
     return renderCockpitSignals.call(this);
   }
@@ -415,6 +436,9 @@ export class CockpitViewController {
     this.regionalBriefAbort?.abort();
     this.regionalBriefAbort = null;
     this.regionalBriefRequestToken += 1;
+    this.newsAbort?.abort();
+    this.newsAbort = null;
+    this.newsRequestToken += 1;
     this.stopBriefRotation();
     if (this.contextLayoutFrame !== null)
       cancelAnimationFrame(this.contextLayoutFrame);

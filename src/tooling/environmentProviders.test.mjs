@@ -58,6 +58,11 @@ test('standalone composition mounts every extracted provider exactly once withou
     throw Error('construction must not fetch');
   });
   const plugins = localProviderPlugins();
+  assert.equal(
+    plugins.filter((plugin) => plugin.name === 'newsapi-proxy').length,
+    1,
+    'NewsAPI is mounted once as a local server provider',
+  );
   for (const factory of [
     terrainHeightsProxy,
     tomtomProxy,

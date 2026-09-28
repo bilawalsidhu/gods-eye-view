@@ -250,8 +250,15 @@
         <section data-cockpit-brief-page="signals" aria-label="Live signals">
           <ol id="cockpit-signal-list" class="cockpit-signal-list" aria-live="polite"></ol>
         </section>
-        <section data-cockpit-brief-page="news" aria-label="Latest regional news" hidden>
-          <div id="cockpit-news-status" class="cockpit-brief-status">ACQUIRING REGIONAL NEWS</div>
+        <section data-cockpit-brief-page="news" aria-label="Current worldwide Dutch-language news" hidden>
+          <nav class="cockpit-news-categories" aria-label="News categories">
+            <button type="button" data-news-category="world" aria-pressed="true">WERELD</button>
+            <button type="button" data-news-category="politics" aria-pressed="false">POLITIEK</button>
+            <button type="button" data-news-category="economy" aria-pressed="false">ECONOMIE</button>
+            <button type="button" data-news-category="crises" aria-pressed="false">RAMPEN</button>
+            <button type="button" data-news-category="regional" aria-pressed="false">REGION</button>
+          </nav>
+          <div id="cockpit-news-status" class="cockpit-brief-status">SELECT A NEWS CATEGORY</div>
           <ol id="cockpit-news-list" class="cockpit-news-list" aria-live="polite"></ol>
         </section>
         <section data-cockpit-brief-page="local" aria-label="Location-based information" hidden>

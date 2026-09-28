@@ -50,9 +50,9 @@ export const COCKPIT_BRIEF_PAGES = [
   },
   {
     id: 'news',
-    kicker: 'REGIONAL NEWS',
-    subtitle: 'LATEST LOCATION-MATCHED REPORTING',
-    source: 'GOOGLE NEWS RSS · LOCATION QUERY · RECENT',
+    kicker: 'NEDERLANDS NIEUWS',
+    subtitle: 'WERELDWIJD · POLITIEK · ECONOMIE · RAMPEN',
+    source: 'NEWSAPI · WORLDWIDE DUTCH-LANGUAGE NEWS · NEWEST FIRST',
   },
   {
     id: 'local',

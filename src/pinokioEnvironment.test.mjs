@@ -24,6 +24,7 @@ const PROVIDER_FIELDS = [
   'OPENAI_API_KEY',
   'AISSTREAM_API_KEY',
   'FIRMS_MAP_KEY',
+  'NEWSAPI_API_KEY',
   'TOMTOM_API_KEY',
   'OPENSKY_CLIENT_ID',
   'OPENSKY_CLIENT_SECRET',
@@ -54,6 +55,7 @@ test('raw app-file values override Pinokio-global values, including blanks', () 
     const filepath = path.join(root, 'ENVIRONMENT');
     writeFileSync(filepath, [
       'GOOGLE_MAPS_API_KEY=app-configured',
+      'NEWSAPI_API_KEY=app-newsapi',
       'OPENAI_API_KEY=',
       'GEV_RATELIMIT_OPENAI_PER_MIN=45',
       'GEV_RATELIMIT_GOOGLE_PER_MIN=',
@@ -64,6 +66,7 @@ test('raw app-file values override Pinokio-global values, including blanks', () 
     ].join('\n'));
     const environment = {
       GOOGLE_MAPS_API_KEY: 'global-google',
+      NEWSAPI_API_KEY: 'global-newsapi',
       CESIUM_ION_TOKEN: 'global-ion',
       OPENAI_API_KEY: 'global-openai',
       GEV_RATELIMIT_OPENAI_PER_MIN: '999',
@@ -76,6 +79,7 @@ test('raw app-file values override Pinokio-global values, including blanks', () 
     applyPinokioEnvironment({ environment, filepath });
 
     assert.equal(environment.GOOGLE_MAPS_API_KEY, 'app-configured');
+    assert.equal(environment.NEWSAPI_API_KEY, 'app-newsapi');
     assert.equal(environment.CESIUM_ION_TOKEN, '');
     assert.equal(environment.OPENAI_API_KEY, '');
     assert.equal(environment.GEV_RATELIMIT_OPENAI_PER_MIN, '45');

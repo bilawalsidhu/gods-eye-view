@@ -38,6 +38,148 @@ export function showBriefPage(index, { manual = false } = {}) {
   if (this.signalStream) this.signalStream.dataset.briefPage = page.id;
   if (manual && this.briefAutoRotateEnabled)
     this.startBriefRotation({ reset: true });
+  if (page.id === 'news') this.selectNewsCategory(this.newsCategory);
+  this.scheduleContextLayout();
+}
+
+function renderNewsArticles(list, articles) {
+  if (!list) return;
+  list.replaceChildren(
+    ...articles.slice(0, 8).map((article) => {
+      const entry = document.createElement('li');
+      const link = document.createElement('a');
+      link.href = article.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      const title = document.createElement('strong');
+      title.textContent = article.title;
+      const metadata = document.createElement('span');
+      metadata.textContent = `${article.source || article.domain || 'SOURCE'} · ${formatCockpitBriefAge(article.publishedAt)}`;
+      link.append(title, metadata);
+      entry.append(link);
+      return entry;
+    }),
+  );
+}
+
+function renderNewsStatus(controller, state, message) {
+  if (!controller.newsStatus) return;
+  controller.newsStatus.hidden = false;
+  controller.newsStatus.dataset.state = state;
+  controller.newsStatus.textContent = message;
+}
+
+export function selectNewsCategory(category) {
+  if (
+    !['world', 'politics', 'economy', 'crises', 'regional'].includes(category)
+  )
+    return;
+  this.newsCategory = category;
+  this.newsCategoryTabs?.forEach((button) => {
+    button.setAttribute(
+      'aria-pressed',
+      String(button.dataset.newsCategory === category),
+    );
+  });
+  this.newsAbort?.abort();
+  this.newsAbort = null;
+  this.newsRequestToken += 1;
+  this.newsList?.replaceChildren();
+
+  if (category === 'regional') {
+    const regional = this.regionalBrief;
+    if (!regional) {
+      if (this.active && this.lastAircraftInfo) {
+        renderNewsStatus(this, 'loading', 'ACQUIRING REGIONAL HEADLINES');
+        this.maybeRefreshRegionalBrief(this.lastAircraftInfo);
+      } else {
+        renderNewsStatus(this, 'unavailable', 'REGIONAL NEWS UNAVAILABLE');
+      }
+      return;
+    }
+    const articles = Array.isArray(regional.articles) ? regional.articles : [];
+    renderNewsArticles(this.newsList, articles);
+    if (articles.length) {
+      if (this.newsStatus) this.newsStatus.hidden = true;
+      if (this.briefSource)
+        this.briefSource.textContent = `${String(regional.newsSource || 'REGIONAL NEWS').toUpperCase()} · LOCATION QUERY`;
+    } else {
+      renderNewsStatus(
+        this,
+        regional.newsStatus === 'empty' ? 'empty' : 'unavailable',
+        regional.newsStatus === 'empty'
+          ? 'NO RECENT LOCATION MATCHES'
+          : 'REGIONAL NEWS UNAVAILABLE',
+      );
+    }
+    return;
+  }
+
+  const cached = this.newsResults.get(category);
+  const cachedAt = this.newsFetchedAt.get(category) || 0;
+  if (cached && Date.now() - cachedAt < 5 * 60_000) {
+    this.renderNewsResponse(cached);
+    return;
+  }
+  if (!this.active || this.destroyed) return;
+  const controller = new AbortController();
+  const requestToken = ++this.newsRequestToken;
+  this.newsAbort = controller;
+  renderNewsStatus(
+    this,
+    'loading',
+    `LOADING ${category.toUpperCase()} HEADLINES`,
+  );
+  Promise.resolve()
+    .then(() =>
+      this.services.fetchNewsHeadlines(category, {
+        signal: controller.signal,
+      }),
+    )
+    .then((payload) => {
+      if (
+        !this.active ||
+        requestToken !== this.newsRequestToken ||
+        category !== this.newsCategory
+      )
+        return;
+      this.newsResults.set(category, payload);
+      this.newsFetchedAt.set(category, Date.now());
+      this.renderNewsResponse(payload);
+    })
+    .catch((error) => {
+      if (
+        error?.name === 'AbortError' ||
+        requestToken !== this.newsRequestToken ||
+        category !== this.newsCategory
+      )
+        return;
+      const messages = {
+        missing_api_key: 'NEWSAPI_API_KEY REQUIRED · ADD IN PROVIDER SETTINGS',
+        rate_limited: `NEWSAPI RATE LIMIT · RETRY IN ${Math.ceil((error.retryAfterMs || 60_000) / 1000)}S`,
+        upstream_error: 'NEWSAPI TEMPORARILY UNAVAILABLE',
+      };
+      renderNewsStatus(
+        this,
+        error.code === 'rate_limited' ? 'rate_limited' : 'unavailable',
+        messages[error.code] || 'NEWS SERVICE UNAVAILABLE',
+      );
+    })
+    .finally(() => {
+      if (this.newsAbort === controller) this.newsAbort = null;
+    });
+}
+
+export function renderNewsResponse(payload) {
+  const articles = Array.isArray(payload?.articles) ? payload.articles : [];
+  renderNewsArticles(this.newsList, articles);
+  if (articles.length) {
+    if (this.newsStatus) this.newsStatus.hidden = true;
+    if (this.briefSource)
+      this.briefSource.textContent = `NEWSAPI · WORLDWIDE · DUTCH · ${this.newsCategory.toUpperCase()}`;
+  } else {
+    renderNewsStatus(this, 'empty', 'NO RECENT HEADLINES IN THIS CATEGORY');
+  }
   this.scheduleContextLayout();
 }
 
@@ -170,15 +312,16 @@ export function maybeRefreshRegionalBrief(info) {
 }
 
 export function renderRegionalBriefStatus(status, info) {
-  if (this.newsStatus) {
-    this.newsStatus.hidden = false;
-    this.newsStatus.dataset.state = status;
-    this.newsStatus.textContent =
+  if (this.newsCategory === 'regional') {
+    renderNewsStatus(
+      this,
+      status,
       status === 'loading'
-        ? 'ACQUIRING REGIONAL NEWS'
-        : 'REGIONAL NEWS UNAVAILABLE';
+        ? 'ACQUIRING REGIONAL HEADLINES'
+        : 'REGIONAL NEWS UNAVAILABLE',
+    );
+    if (status === 'unavailable') this.newsList?.replaceChildren();
   }
-  if (status === 'unavailable') this.newsList?.replaceChildren();
   if (this.localPlace && status === 'loading')
     this.localPlace.textContent = 'RESOLVING REGION';
   if (this.localPlace && status === 'unavailable')
@@ -188,31 +331,19 @@ export function renderRegionalBriefStatus(status, info) {
 
 export function renderRegionalBrief(payload, info) {
   const articles = Array.isArray(payload?.articles) ? payload.articles : [];
-  if (this.newsStatus) {
-    this.newsStatus.hidden = articles.length > 0;
-    this.newsStatus.dataset.state = payload?.newsStatus || 'unavailable';
-    this.newsStatus.textContent =
-      payload?.newsStatus === 'empty'
-        ? 'NO RECENT LOCATION MATCHES'
-        : 'REGIONAL NEWS UNAVAILABLE';
-  }
-  if (this.newsList) {
-    this.newsList.replaceChildren(
-      ...articles.slice(0, 4).map((article) => {
-        const entry = document.createElement('li');
-        const link = document.createElement('a');
-        link.href = article.url;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        const title = document.createElement('strong');
-        title.textContent = article.title;
-        const metadata = document.createElement('span');
-        metadata.textContent = `${article.domain || 'SOURCE'} · ${formatCockpitBriefAge(article.publishedAt)}`;
-        link.append(title, metadata);
-        entry.append(link);
-        return entry;
-      }),
-    );
+  if (this.newsCategory === 'regional') {
+    renderNewsArticles(this.newsList, articles);
+    if (articles.length) {
+      if (this.newsStatus) this.newsStatus.hidden = true;
+    } else {
+      renderNewsStatus(
+        this,
+        payload?.newsStatus === 'empty' ? 'empty' : 'unavailable',
+        payload?.newsStatus === 'empty'
+          ? 'NO RECENT LOCATION MATCHES'
+          : 'REGIONAL NEWS UNAVAILABLE',
+      );
+    }
   }
 
   const placeLabel =
@@ -253,7 +384,11 @@ export function renderRegionalBrief(payload, info) {
   }
   if (this.signalStream)
     this.signalStream.dataset.regionalStatus = payload?.status || 'partial';
-  if (this.briefPageIndex === 1 && this.briefSource) {
+  if (
+    this.briefPageIndex === 1 &&
+    this.briefSource &&
+    this.newsCategory === 'regional'
+  ) {
     this.briefSource.textContent = `${String(payload?.newsSource || 'REGIONAL NEWS').toUpperCase()} · LOCATION QUERY`;
   }
   this.scheduleContextLayout();

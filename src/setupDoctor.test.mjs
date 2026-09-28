@@ -215,6 +215,7 @@ test('doctor describes the credential ladder without exposing values', () => {
     OPENAI_API_KEY: { configured: true, source: 'dotenv files' },
     AISSTREAM_API_KEY: { configured: false },
     FIRMS_MAP_KEY: { configured: false },
+    NEWSAPI_API_KEY: { configured: true, source: 'environment' },
     TOMTOM_API_KEY: { configured: false },
     OPENSKY_CLIENT_ID: { configured: false },
     OPENSKY_CLIENT_SECRET: { configured: false },
@@ -224,6 +225,7 @@ test('doctor describes the credential ladder without exposing values', () => {
   assert.match(capabilities.map, /Google Photorealistic 3D Tiles through Cesium ion/);
   assert.match(capabilities.map, /Bing and world-terrain stacks/);
   assert.equal(capabilities.voice, 'available');
+  assert.equal(capabilities.news, 'Dutch headlines available');
   assert.match(capabilities.missions, /token allowance/);
   assert.equal(capabilities.flights, 'OpenSky keyless anonymous access (rate-limited)');
 
@@ -238,6 +240,7 @@ test('doctor describes the credential ladder without exposing values', () => {
   assert.doesNotMatch(report, /configured-value/);
   assert.match(report, /Cesium ion \(environment\)/);
   assert.match(report, /Launch Library 2 \(environment\)/);
+  assert.match(report, /NewsAPI Dutch headlines \(environment\)/);
 
   const pinokioReport = formatSetupReport({
     ready: true,
@@ -259,6 +262,7 @@ test('doctor sends Keychain-backed reports to dev-fresh and describes OpenSky as
     'OPENAI_API_KEY',
     'AISSTREAM_API_KEY',
     'FIRMS_MAP_KEY',
+    'NEWSAPI_API_KEY',
     'TOMTOM_API_KEY',
     'OPENSKY_CLIENT_ID',
     'OPENSKY_CLIENT_SECRET',
@@ -291,6 +295,7 @@ test('doctor never calls a dependency-missing setup ready', () => {
     'OPENAI_API_KEY',
     'AISSTREAM_API_KEY',
     'FIRMS_MAP_KEY',
+    'NEWSAPI_API_KEY',
     'TOMTOM_API_KEY',
     'OPENSKY_CLIENT_ID',
     'OPENSKY_CLIENT_SECRET',

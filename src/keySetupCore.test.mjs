@@ -77,6 +77,16 @@ test('the status payload reports presence without any credential material', () =
   assert.equal(status.setCount, 1);
 });
 
+test('NewsAPI is a server-side Provider Settings key with presence-only status', () => {
+  const secret = 'newsapi-fixture-secret';
+  const status = keySetupStatus({ NEWSAPI_API_KEY: secret });
+  const key = status.keys.find((entry) => entry.id === 'newsapi');
+  assert.equal(key.set, true);
+  assert.equal(key.clientExposed, false);
+  assert.equal(JSON.stringify(status).includes(secret), false);
+  assert.equal(validateKeySetupUpdates({ NEWSAPI_API_KEY: secret }).ok, true);
+});
+
 test('whitespace-only env values do not count as configured', () => {
   const status = keySetupStatus({ OPENAI_API_KEY: '   ' });
   assert.equal(status.keys.find((key) => key.id === 'openai').set, false);

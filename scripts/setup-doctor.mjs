@@ -18,6 +18,7 @@ export const CREDENTIALS = Object.freeze([
   { name: 'OPENAI_API_KEY', label: 'OpenAI voice', keychain: [['openai-api', 'api-key']] },
   { name: 'AISSTREAM_API_KEY', label: 'AISStream vessels', keychain: [['aisstream-api', 'api-key']] },
   { name: 'FIRMS_MAP_KEY', label: 'NASA FIRMS fires', keychain: [['firms-map', 'map-key']] },
+  { name: 'NEWSAPI_API_KEY', label: 'NewsAPI Dutch headlines', keychain: [] },
   { name: 'TOMTOM_API_KEY', label: 'TomTom traffic', keychain: [['tomtom-api', 'api-key']] },
   {
     name: 'OPENSKY_CLIENT_ID',
@@ -178,6 +179,7 @@ export function buildCapabilitySummary(
     voice: configured('OPENAI_API_KEY') ? 'available' : 'off until an OpenAI key is added',
     vessels: configured('AISSTREAM_API_KEY') ? 'live AISStream feed' : 'off until an AISStream key is added',
     fires: configured('FIRMS_MAP_KEY') ? 'live NASA FIRMS feed' : 'off until a FIRMS key is added',
+    news: configured('NEWSAPI_API_KEY') ? 'Dutch headlines available' : 'off until a NewsAPI key is added',
     traffic: configured('TOMTOM_API_KEY') ? 'live TomTom flow' : 'built-in traffic simulation',
     missions: configured('LL2_API_TOKEN')
       ? 'Launch Library 2 token allowance'
@@ -235,6 +237,7 @@ export function formatSetupReport(report, { readyMessage } = {}) {
     `Voice:   ${report.capabilities.voice}`,
     `Vessels: ${report.capabilities.vessels}`,
     `Fires:   ${report.capabilities.fires}`,
+    `News:    ${report.capabilities.news}`,
     `Traffic: ${report.capabilities.traffic}`,
     `Missions: ${report.capabilities.missions}`,
     '',

@@ -21,6 +21,8 @@ export function createApplicationControls({
       searchAndFlyTo: operations.searchAndFlyTo,
       fetchRegionalBrief: (...args) =>
         operations.requests.regional.getBrief(...args),
+      fetchNewsHeadlines: (...args) =>
+        operations.requests.news.getHeadlines(...args),
       ...catalogControlServices(catalog),
     },
     requestServices: operations.requests,
