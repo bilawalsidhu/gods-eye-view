@@ -7,13 +7,19 @@ import { overlayHost } from './overlayHost.js';
 
 /** Wire earthquake observations to the application overlay host. */
 export function createApplicationEarthquakes(options) {
+  const browserSelection =
+    typeof window !== 'undefined'
+      ? {
+          context,
+          picking,
+          pointer: { isPointerFree },
+          screenSpaceEventHandlerFactory: (viewer) =>
+            new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas),
+        }
+      : {};
   return createEarthquakesLayer({
     overlayHost,
-    context,
-    picking,
-    pointer: { isPointerFree },
-    screenSpaceEventHandlerFactory: (viewer) =>
-      new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas),
+    ...browserSelection,
     ...options,
   });
 }
