@@ -1,5 +1,15 @@
 # Changelog
 
+- Add a keyless QLD Road Events layer (Events group, off by default) showing
+  live QLDTraffic incidents across Queensland: crashes, hazards, flooding,
+  congestion, special events and roadworks. Markers are coloured and glyphed by
+  type, with roadworks drawn small, faded and dashed so incidents stand out.
+  Clicking an event shows its road, locality, impact, advice and last update,
+  and the card opens QLDTraffic. `/api/qld-road-events` normalizes and
+  simplifies the feed once per two minutes for every client, serves the last
+  good snapshot for up to six hours while the upstream is down, and rate-limits
+  each client. Data: QLDTraffic, Queensland Government (CC BY 4.0).
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD

@@ -14,6 +14,7 @@ import { createLaunchSource } from '../layers/launches/source.js';
 import { createOverpassAlprSource } from '../layers/alpr/source.js';
 import { createWeatherSource } from '../layers/weather/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
+import { createQldRoadEventsSource } from '../layers/qldRoadEvents/source.js';
 import { createWindSource } from '../layers/wind/source.js';
 import { createFirmsSource } from '../layers/firms/source.js';
 import { createReferenceSources } from '../sources/reference.js';
@@ -41,5 +42,6 @@ export function createStandaloneLayerSources() {
     wind: createWindSource(),
     weather: createWeatherSource(),
     cyclones: createCycloneSource(),
+    'qld-road-events': createQldRoadEventsSource(),
   };
 }
