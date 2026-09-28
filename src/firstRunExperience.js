@@ -27,7 +27,7 @@ export const FIRST_RUN_STORAGE_KEY = 'gev:first-run-mission:v1';
 export const FIRST_RUN_SESSION_KEY = 'gev:first-run-mission-session:v1';
 
 /**
- * Owner-selectable name for the fires/quakes mission. Flip this ONE constant to
+ * Owner-selectable name for the environmental-hazards mission. Flip this ONE constant to
  * re-label the tile; the alternates are pre-written so the choice is a taste
  * call at review time, not an edit.
  * @type {'ENVIRONMENTAL'|'EARTH_WATCH'|'ACTIVE_EVENTS'}
@@ -101,20 +101,21 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
   }),
   environmental: Object.freeze({
     kind: 'globe',
-    // Live USGS earthquakes AND NASA FIRMS active fires. The launcher optimizes
-    // for the FULLY CONFIGURED experience (owner ruling, 2026-08-23): the tile
-    // promises both, so it turns on both, and the subcopy in index.html says so.
+    // Live USGS earthquakes, NASA FIRMS active fires, AND keyless NIFC wildfire
+    // perimeters. The launcher optimizes for the FULLY CONFIGURED experience
+    // (owner ruling, 2026-08-23): the tile promises all three, so it turns on all
+    // three, and the visible subcopy says so.
     //
     // Keyless, FIRMS is honest where it counts — its own layer row reads
-    // "UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED", and the quakes half of
-    // the tile still delivers in full. What is NOT honest is the GLOBAL status
+    // "UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED", while the keyless
+    // earthquakes and wildfire-perimeters layers still deliver in full. What is NOT honest is the GLOBAL status
     // chip, which has no key-required terminal state and folds that row into
     // "LOAD FAILED". That aggregation is the defect, not this preset: fixing it
     // means a KEY REQUIRED terminal state in src/loadingFeedback.js, a state
     // machine shared by every layer and not a thing to refactor the night
     // before a launch. LEDGERED post-launch. Until it lands, keyless visitors
     // are judged on the layer row, which tells them the truth.
-    layerIds: Object.freeze(['earthquakes', 'local-firms']),
+    layerIds: Object.freeze(['earthquakes', 'local-firms', 'fire-perimeters']),
     busyText: 'Scanning active events…',
   }),
   explore: Object.freeze({ kind: 'none' }),
