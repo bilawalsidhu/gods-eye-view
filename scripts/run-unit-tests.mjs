@@ -8,15 +8,16 @@ export const ALLOCATION_TEST_FILES = Object.freeze([
   'src/overlays/worldOverlayAllocation.test.mjs',
 ]);
 
-/** Whether this runtime matches the one the allocation budgets were calibrated on. */
+/** Whether this runtime matches a supported major the allocation budgets are calibrated on. */
 export function isCalibratedAllocationRuntime(version = process.versions.node) {
-  return Number.parseInt(String(version).split('.')[0], 10) === 24;
+  const major = Number.parseInt(String(version).split('.')[0], 10);
+  return major === 24 || major === 26;
 }
 
-/** Require the runtime on which allocation budgets were calibrated. */
-export function assertNode24AllocationRuntime(version = process.versions.node) {
+/** Require a runtime on which allocation budgets are calibrated. */
+export function assertCalibratedAllocationRuntime(version = process.versions.node) {
   if (!isCalibratedAllocationRuntime(version)) {
-    throw new Error(`Allocation budgets require the calibrated Node 24 runtime; received ${version}`);
+    throw new Error(`Allocation budgets require calibrated Node 24 or 26; received ${version}`);
   }
   return version;
 }
@@ -75,19 +76,18 @@ export function runUnitTests() {
   const parallelStatus = runTests(['--test', ...plan.parallel]);
   if (parallelStatus !== 0) return parallelStatus;
 
-  // The GC-bracketed budgets are calibrated on Node 24 and are meaningless on
-  // other allocators. A contributor's suite must stay green on any supported
-  // engine (package.json permits >=24), so uncalibrated runtimes skip the
+  // The GC-bracketed budgets are calibrated on every supported Node major.
+  // Unsupported runtimes may still run ordinary tests, so uncalibrated runtimes skip the
   // probes with a warning. Set GEV_REQUIRE_ALLOCATION_GATE=1 (pinned CI /
   // release batteries) to make an uncalibrated runtime a hard failure.
   if (!isCalibratedAllocationRuntime()) {
     if (process.env.GEV_REQUIRE_ALLOCATION_GATE === '1') {
-      assertNode24AllocationRuntime();
+      assertCalibratedAllocationRuntime();
     }
     console.warn(
       `[unit] SKIPPED ${ALLOCATION_TEST_FILES.length} allocation microbenchmarks: `
-      + `budgets are calibrated for Node 24, running ${process.versions.node}. `
-      + 'Run under Node 24 (or set GEV_REQUIRE_ALLOCATION_GATE=1 to fail instead).',
+      + `budgets are calibrated for Node 24 and 26, running ${process.versions.node}. `
+      + 'Run under Node 24 or 26 (or set GEV_REQUIRE_ALLOCATION_GATE=1 to fail instead).',
     );
     return 0;
   }
