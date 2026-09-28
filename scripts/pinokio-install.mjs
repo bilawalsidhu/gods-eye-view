@@ -11,12 +11,18 @@ const ROOT = realpathSync(path.resolve(path.dirname(MODULE_PATH), '..'));
 const READY_FILE = path.join(ROOT, 'pinokio', '.installed');
 
 export function runChecked(command, args, { shell = false } = {}) {
-  const result = spawnSync(command, args, {
-    cwd: ROOT,
-    env: { ...process.env, PUPPETEER_SKIP_DOWNLOAD: '1' },
-    shell,
-    stdio: 'inherit',
-  });
+  const result = shell
+    ? spawnSync(`${command} ${args.join(' ')}`, {
+        cwd: ROOT,
+        env: { ...process.env, PUPPETEER_SKIP_DOWNLOAD: '1' },
+        shell: true,
+        stdio: 'inherit',
+      })
+    : spawnSync(command, args, {
+        cwd: ROOT,
+        env: { ...process.env, PUPPETEER_SKIP_DOWNLOAD: '1' },
+        stdio: 'inherit',
+      });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status || 1);
 }
