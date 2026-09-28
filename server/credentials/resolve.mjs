@@ -2,7 +2,6 @@ import { spawnSync } from 'node:child_process';
 
 import { knownKeySetupEnvVars } from '../../src/keySetupCore.mjs';
 
-const MANAGER_SOURCE_STATE = '__GEV_CREDENTIAL_SOURCES';
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_BUFFER = 1024 * 1024;
 
@@ -101,10 +100,6 @@ function bwsProjectIds(env) {
     : [];
 }
 
-function managerSources() {
-  return (globalThis[MANAGER_SOURCE_STATE] ??= Object.create(null));
-}
-
 /**
  * Resolve external secret-manager references into the process environment.
  *
@@ -122,7 +117,7 @@ export function resolveCredentialEnvironment({
   runCommand = defaultRunCommand,
 } = {}) {
   const names = [...knownKeySetupEnvVars()];
-  const sources = managerSources();
+  const sources = {};
 
   // Resolve explicit per-key references first. A literal key always wins.
   for (const name of names) {
@@ -164,6 +159,3 @@ export function resolveCredentialEnvironment({
   };
 }
 
-export function credentialSourceFor(name) {
-  return managerSources()[name] || null;
-}
