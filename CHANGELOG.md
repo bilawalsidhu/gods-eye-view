@@ -1,5 +1,14 @@
 # Changelog
 
+- A window resize now re-solves the Cockpit utility strip, not just the two
+  panel rails. Cockpit republishes the strip's anchor on a layout tick, and a
+  resize was not one: the only other ticks are a cockpit disclosure change and
+  the Radio row refresh, so shrinking the window below roughly 830 px left the
+  collapsed Live Signals launcher at the previous height's offset — off-screen
+  and unhittable — until an unrelated radio refresh happened to move it. The
+  resize handler now runs the adaptive pass that covers both rails and Cockpit,
+  which also re-solves once a drag stops (daikaginza, #786).
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD

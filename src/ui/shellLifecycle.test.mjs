@@ -6,6 +6,7 @@ import { PanelLayoutController } from './panelLayoutController.js';
 import { PanelPositionControls } from './panelPositionControls.js';
 import { ShellFeedback } from './shellFeedback.js';
 import { RecordingControls } from './recordingControls.js';
+import { StyleManager } from './applicationShell.js';
 
 function fixture() {
   const saved = Object.fromEntries(
@@ -362,6 +363,44 @@ test('weather rail orders between CCTV and Context, resets positions, observes a
     owner.destroy();
     assert.equal(observed.size, 0);
     assert.equal(f.frames.size, 0);
+  } finally {
+    f.restore();
+  }
+});
+
+test('a window resize republishes the Cockpit anchor, not only the two rails', () => {
+  const f = fixture();
+  try {
+    let cockpitLayouts = 0;
+    const layout = new PanelLayoutController({
+      readHud: () => ({}),
+      scheduleCockpitLayout() {
+        cockpitLayouts += 1;
+      },
+      syncPanelCollapseButton() {},
+      readDisplayScrollTop: () => 0,
+    });
+    layout._syncLeftPanelAdaptiveLayout = () => {};
+    const shell = Object.create(StyleManager.prototype);
+    shell._panelChrome = { _panelLayout: layout };
+    let cctvSyncs = 0;
+    shell._syncCctvPanelViewport = () => {
+      cctvSyncs += 1;
+    };
+
+    shell._handleWindowResize();
+
+    assert.equal(cctvSyncs, 1);
+    // The utility strip hangs off the HUD readout and only moves on a layout
+    // tick. Scheduling the rails alone left it at the previous height's anchor,
+    // which put the collapsed Live Signals launcher off-screen under ~830px.
+    assert.equal(cockpitLayouts, 1);
+    assert.equal(
+      f.timers.size,
+      1,
+      'a settle pass is armed for the end of a drag',
+    );
+    layout.destroy();
   } finally {
     f.restore();
   }

@@ -1938,8 +1938,9 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   against left-lane obstacles and has nothing to say about the right margin,
 >   which dropped the strip into Live Signals below roughly 830 px of browser
 >   height. Cockpit owns the strip's anchor and republishes it on every layout
->   tick — including the settling pass after HUD transitions and asynchronous
->   map-provider swaps — hanging it 12 px under the REC readout, clamping it up
+>   tick — including a window resize and the settling pass after HUD transitions
+>   and asynchronous map-provider swaps — hanging it 12 px under the REC readout,
+>   clamping it up
 >   to keep 8 px above Live Signals, and never letting it rise past
 >   `max(96 px, 12vh)`. The utility height is measured from that resolved top
 >   and floors on a launcher height rather than a fixed minimum, so expansion is

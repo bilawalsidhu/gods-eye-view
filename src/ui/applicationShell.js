@@ -589,11 +589,7 @@ export class StyleManager extends ShellFacade {
     // Keep the parameter panel from overlapping toggle controls.
     this._layoutRightPanels();
     this._syncCctvPanelViewport();
-    this._windowResizeHandler = () => {
-      this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
-      this._syncCctvPanelViewport();
-      this._scheduleLeftPanelLayout({ reconsiderAutoCollapse: true });
-    };
+    this._windowResizeHandler = () => this._handleWindowResize();
     window.addEventListener('resize', this._windowResizeHandler);
     // The loading-chip ticker is stopped while the tab is hidden (it can do no
     // useful work off-screen and must not hold a 60ms timer there). Resample on
@@ -601,6 +597,23 @@ export class StyleManager extends ShellFacade {
     // re-arms its own ticker if the batch is still running.
     this._feedback.observeVisibility();
     this._layerBindings.observeCamera();
+  }
+
+  /**
+   * Re-solve every surface whose geometry depends on the viewport.
+   *
+   * A resize used to schedule the two rails directly, which left Cockpit out:
+   * `CockpitView` republishes the utility strip's anchor on a layout tick, and
+   * the only ticks were a cockpit disclosure change and the Radio row refresh.
+   * So the strip kept the previous height's anchor, and shrinking the window
+   * below roughly 830px left the collapsed Live Signals launcher at its old
+   * offset — off-screen and unhittable — until an unrelated radio refresh
+   * happened to move it. The adaptive pass is the one that covers all three,
+   * and its settle pass re-solves once the drag stops.
+   */
+  _handleWindowResize() {
+    this._syncCctvPanelViewport();
+    this._scheduleAdaptivePanelLayout({ settle: true });
   }
 
   // Compatibility reads for existing controls, scene snapshots and Cockpit.
