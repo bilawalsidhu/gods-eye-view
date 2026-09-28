@@ -24,6 +24,7 @@ import { keySetupEndpoint } from '../standalone/key-setup.js';
 import { weatherProxy } from './weather.js';
 import { firePerimetersProxy } from './firePerimeters.js';
 import { cycloneProxy } from './cyclones.js';
+import { qldRoadEventsProxy } from './qldRoadEvents.js';
 import { windProxy } from './wind.js';
 
 /** Construct the local provider plugins in their established order. */
@@ -55,6 +56,7 @@ function localProviderPlugins() {
     weatherProxy(),
     cycloneProxy(),
     firePerimetersProxy(),
+    qldRoadEventsProxy(),
     keySetupEndpoint(),
   ];
 }
