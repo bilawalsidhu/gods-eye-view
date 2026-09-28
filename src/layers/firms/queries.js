@@ -86,6 +86,11 @@ export function createQueries({
         // from a broken feed, and the row reads as a fault instead of a step
         // the operator can take.
         keyRequired: layerState._keyRequired,
+        // Which backend answered: 'firms' (keyed) or 'goes' (keyless fallback).
+        provider: layerState._provider ?? null,
+        source: layerState._sourceText || source,
+        status: layerState._guidance ? 'guidance' : '',
+        statusMessage: layerState._guidance || '',
         error: layerState._keyRequired
           ? 'KEY REQUIRED'
           : layerState._stale

@@ -38,6 +38,8 @@ export function createFirmsState({ services, config }) {
   /** Surfaced error string when the live fetch failed outright. */
 
   layerState._error = null;
+  layerState._sourceText = null;
+  layerState._guidance = null;
 
   layerState._fires = [];
 
