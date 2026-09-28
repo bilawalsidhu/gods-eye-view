@@ -67,8 +67,7 @@ function harness(source, { pick = () => null } = {}) {
         return record;
       },
       selectEntityContext(entity) {
-        contexts.selected =
-          contexts.records.get(entity.__gevContextId) || null;
+        contexts.selected = contexts.records.get(entity.__gevContextId) || null;
         contexts.selectedEvents += 1;
         return contexts.selected;
       },
@@ -119,10 +118,7 @@ test('late refresh cannot publish after disable, re-enable, or destroy', async (
 });
 test('clicking an earthquake publishes one shared USGS context record', async () => {
   let picked = { id: 'earthquake:event-a' };
-  const h = harness(
-    { getSnapshot: async () => [row] },
-    { pick: () => picked },
-  );
+  const h = harness({ getSnapshot: async () => [row] }, { pick: () => picked });
   await h.layer.update(h.viewer);
 
   assert.equal(typeof h.clicks.handler, 'function');
