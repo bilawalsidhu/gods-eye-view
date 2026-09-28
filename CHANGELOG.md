@@ -1,5 +1,7 @@
 # Changelog
 
+- Keep the compact Radio disclosure from surviving into an already-expanded Global Context panel. Repeating an open transition now enforces the same cleanup as a real collapsed-to-expanded transition, so the absolute-positioned mini player cannot paint over Space Missions content (#804).
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD
