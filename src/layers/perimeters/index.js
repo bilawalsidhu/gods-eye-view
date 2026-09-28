@@ -78,7 +78,6 @@ export function createFirePerimetersLayer({
   const canSelect = () =>
     overlayHost && screenSpaceEventHandlerFactory && picking;
 
-
   function clearSelectedContext() {
     context?.removeEntityContextsForLayer?.('fire-perimeters');
     _selectedContextEntity = null;
@@ -111,7 +110,8 @@ export function createFirePerimetersLayer({
         behavior: row.behavior ?? null,
       },
     });
-    if (announce && record) context?.selectEntityContext?.(_selectedContextEntity);
+    if (announce && record)
+      context?.selectEntityContext?.(_selectedContextEntity);
     return record || null;
   }
 
