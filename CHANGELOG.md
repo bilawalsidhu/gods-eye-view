@@ -16,7 +16,7 @@
   "N hidden – restore" control. Everything persists in `localStorage` and
   registers into the same `CITY_POIS` lookup bundled cities use, so an edited
   pin or city is flyable, searchable and voice-addressable exactly like any
-  other, with no changes to those paths (Eric Morin, #TODO).
+  other, with no changes to those paths (Eric Morin, #798).
 
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
