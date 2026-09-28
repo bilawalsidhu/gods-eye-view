@@ -57,7 +57,8 @@ with a reason; usefulness can also be `decline` or `discuss`.
 - Inspect removed tests, skipped tests, relaxed assertions, snapshot updates, mocks,
   and test-runner changes. A green result from weakened tests is not acceptance.
 - Check applicable documentation updates: runtime changes need `CURRENT-STATE.md`
-  and `CHANGELOG.md`; source changes need `DATA_SOURCES.md`.
+  and a `changelog.d/<pr-number>-<slug>.md` fragment rather than an edit to
+  `CHANGELOG.md`; source changes need `DATA_SOURCES.md`.
 
 ### 3. Security and supply chain
 
@@ -172,6 +173,14 @@ Before merging:
    If a head or base change is detected, return to validation rather than retrying
    a stale merge. Verify the merged result matches the validated candidate tree
    and record the resulting commit and PR URL. Stop and report any mismatch.
+
+Pending release notes live in `changelog.d/` as one file per pull request, so an
+integration never has to resolve the top of `CHANGELOG.md`. When cutting a release,
+run `npm run changelog:check` to see the batch and the order it would take, then
+`npm run changelog` to splice it into `CHANGELOG.md` and empty the directory. The
+assembler refuses a malformed filename or two fragments claiming one pull request
+number before it writes anything, and copies the text through unchanged, so the
+contributor's own wording and credit are what ship.
 
 Repository rules enforce only their configured requirements; this document and
 the skill do not configure branch protection or CI. Maintainers should require
