@@ -1,5 +1,14 @@
 # Changelog
 
+- Bound how often the GBFS proxy will relay. `/api/gbfs` already restricted
+  where it could go — https, an allowlisted host, a station feed path, no
+  redirects, a 12-second deadline and a 5 MB body cap — but nothing restricted
+  how often, so the dev server would make unlimited requests at a third-party
+  bikeshare operator on any caller's behalf. The route now admits 120
+  requests/minute per client address, refusing the rest with 429 and
+  `Retry-After` before any outbound fetch. The bikeshare layer needs about 15 a
+  minute with every catalogued system in range, so ordinary use is unchanged.
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD
