@@ -75,7 +75,7 @@
   gap: 1rem;
   color: rgba(171, 210, 220, 0.6);
   font-family: var(--font-mono);
-  font-size: 0.58rem;
+  font-size: calc(0.58rem * var(--gev-text-scale));
   letter-spacing: 0.1rem;
   text-transform: uppercase;
 }
@@ -87,7 +87,7 @@
 #first-run-launcher h2 {
   margin-top: 0.6rem;
   font-family: var(--font-mono);
-  font-size: clamp(1.25rem, 2.4vw, 1.75rem);
+  font-size: calc(clamp(1.25rem, 2.4vw, 1.75rem) * var(--gev-text-scale));
   font-weight: 500;
   letter-spacing: -0.045rem;
 }
@@ -96,7 +96,7 @@
   max-width: 29rem;
   margin-top: 0.3rem;
   color: rgba(215, 231, 235, 0.66);
-  font-size: 0.78rem;
+  font-size: calc(0.78rem * var(--gev-text-scale));
   line-height: 1.5;
 }
 
@@ -174,19 +174,19 @@
 
 .first-run-choices strong {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: calc(0.72rem * var(--gev-text-scale));
   font-weight: 600;
   letter-spacing: 0.08rem;
 }
 
 .first-run-choices small {
   color: rgba(198, 220, 226, 0.55);
-  font-size: 0.66rem;
+  font-size: calc(0.66rem * var(--gev-text-scale));
 }
 
 .first-run-arrow {
   color: rgba(54, 220, 255, 0.4);
-  font-size: 1rem;
+  font-size: calc(1rem * var(--gev-text-scale));
   transition:
     transform var(--transition-fast),
     color var(--transition-fast);
@@ -205,7 +205,7 @@
 
 .first-run-footer {
   margin-top: 0.85rem;
-  font-size: 0.48rem;
+  font-size: calc(0.48rem * var(--gev-text-scale));
   letter-spacing: 0.055rem;
 }
 
@@ -215,7 +215,7 @@
   gap: 0.4rem;
   color: rgba(199, 225, 231, 0.66);
   text-transform: none;
-  font-size: 0.62rem;
+  font-size: calc(0.62rem * var(--gev-text-scale));
   letter-spacing: 0.02rem;
   cursor: pointer;
 }
@@ -239,7 +239,7 @@
   margin-top: 0.5rem;
   color: rgba(199, 225, 231, 0.62);
   font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-size: calc(0.62rem * var(--gev-text-scale));
   line-height: 1.35;
 }
 
@@ -277,7 +277,7 @@ body.scene-playback-mode #first-run-launcher {
   }
   #first-run-description {
     margin-top: 0.25rem;
-    font-size: 0.72rem;
+    font-size: calc(0.72rem * var(--gev-text-scale));
   }
   .first-run-choices {
     margin-top: 0.75rem;
@@ -287,7 +287,7 @@ body.scene-playback-mode #first-run-launcher {
     padding: 0.45rem 0.6rem;
   }
   .first-run-choices small {
-    font-size: 0.62rem;
+    font-size: calc(0.62rem * var(--gev-text-scale));
   }
   .first-run-footer > span:last-child {
     display: none;
@@ -305,11 +305,11 @@ body.scene-playback-mode #first-run-launcher {
   }
   #first-run-launcher h2 {
     margin-top: 0.3rem;
-    font-size: 1.1rem;
+    font-size: calc(1.1rem * var(--gev-text-scale));
   }
   #first-run-description {
     margin-top: 0.2rem;
-    font-size: 0.7rem;
+    font-size: calc(0.7rem * var(--gev-text-scale));
     line-height: 1.4;
   }
   .first-run-choices {
@@ -320,10 +320,10 @@ body.scene-playback-mode #first-run-launcher {
     padding: 0.36rem 0.6rem;
   }
   .first-run-choices strong {
-    font-size: 0.68rem;
+    font-size: calc(0.68rem * var(--gev-text-scale));
   }
   .first-run-choices small {
-    font-size: 0.6rem;
+    font-size: calc(0.6rem * var(--gev-text-scale));
   }
   .first-run-footer {
     margin-top: 0.5rem;

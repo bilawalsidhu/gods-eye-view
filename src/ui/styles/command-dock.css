@@ -77,7 +77,7 @@
   overflow: hidden;
   color: rgba(190, 221, 230, 0.52);
   font-family: var(--font-mono);
-  font-size: 7px;
+  font-size: calc(7px * var(--gev-text-scale));
   letter-spacing: 1.5px;
   text-align: center;
   text-overflow: ellipsis;
@@ -126,7 +126,7 @@
 
 #command-dock .panel-title,
 #command-dock .location-toolbar-label {
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1.6px;
   color: rgba(190, 221, 230, 0.58);
 }
@@ -159,7 +159,7 @@
 
 #command-dock .btn-label {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 0.4px;
   text-transform: uppercase;
 }
@@ -167,7 +167,7 @@
 #command-dock .btn-key {
   top: 3px;
   right: 4px;
-  font-size: 7px;
+  font-size: calc(7px * var(--gev-text-scale));
 }
 
 #command-dock .location-city-row {
@@ -194,7 +194,7 @@
   width: 100%;
   min-width: 0;
   padding: 6px 8px;
-  font-size: 11px;
+  font-size: calc(11px * var(--gev-text-scale));
 }
 
 #command-dock .location-pills {
@@ -206,7 +206,7 @@
   padding: 7px 10px;
   border-radius: 6px;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   text-transform: uppercase;
 }
 

@@ -45,7 +45,7 @@
 
 .location-toolbar-label {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 2px;
   color: var(--text-dim);
 }
@@ -62,14 +62,14 @@
 
 .location-mini-city {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 0.8px;
   color: #bdefff;
 }
 
 .location-mini-poi {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1px;
   color: var(--text-secondary);
   max-width: 190px;
@@ -106,7 +106,7 @@
   outline: none;
   white-space: nowrap;
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: calc(11px * var(--gev-text-scale));
   font-weight: 500;
   color: var(--text-secondary);
   letter-spacing: 0.3px;
@@ -210,7 +210,7 @@
 
 .poi-pill-name {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: calc(10px * var(--gev-text-scale));
   font-weight: 500;
   color: var(--text-secondary);
   letter-spacing: 0.3px;
@@ -222,7 +222,7 @@
 
 .poi-pill-key {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1px;
   color: var(--text-dim);
   background: rgba(255, 255, 255, 0.06);
@@ -260,7 +260,7 @@
     box-shadow var(--transition-fast),
     color var(--transition-fast);
   outline: none;
-  font-size: 14px;
+  font-size: calc(14px * var(--gev-text-scale));
   flex-shrink: 0;
 }
 
@@ -277,7 +277,7 @@
   outline: none;
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: calc(13px * var(--gev-text-scale));
   letter-spacing: 0.3px;
   transition:
     width var(--transition-smooth),

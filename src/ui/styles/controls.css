@@ -57,7 +57,7 @@
 
 .panel-mini-label {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1.4px;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -65,7 +65,7 @@
 
 .panel-mini-value {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 1.8px;
   color: var(--accent);
   text-transform: uppercase;
@@ -89,7 +89,7 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.04);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1.4px;
   color: var(--text-dim);
 }
@@ -105,7 +105,7 @@
 
 .panel-title {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 3px;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -126,7 +126,7 @@
   background: rgba(255, 255, 255, 0.03);
   color: var(--text-dim);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: calc(13px * var(--gev-text-scale));
   line-height: 1;
   cursor: pointer;
   transition:
@@ -240,7 +240,7 @@
 
 .btn-label {
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: calc(11px * var(--gev-text-scale));
   font-weight: 500;
   color: var(--text-secondary);
   letter-spacing: 0.3px;
@@ -252,7 +252,7 @@
   top: 6px;
   right: 6px;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   color: var(--text-dim);
   opacity: 0;
   transition: opacity var(--transition-fast);
@@ -310,7 +310,7 @@
 
 .loader-content h2 {
   font-family: var(--font-mono);
-  font-size: 18px;
+  font-size: calc(18px * var(--gev-text-scale));
   font-weight: 600;
   letter-spacing: 6px;
   color: var(--text-primary);
@@ -319,7 +319,7 @@
 
 .loader-status {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--gev-text-scale));
   letter-spacing: 2px;
   color: var(--text-dim);
   animation: pulse 2s ease-in-out infinite;
@@ -446,7 +446,7 @@
 
 #pp-toggles .pp-header-label {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1.4px;
   color: var(--text-dim);
 }
@@ -455,7 +455,7 @@
   width: 20px;
   height: 20px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: calc(12px * var(--gev-text-scale));
   padding: 0;
 }
 
@@ -505,7 +505,7 @@
 
 .pp-label {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 1.5px;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -579,7 +579,7 @@
 
 .pp-slider-value {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 0.5px;
   color: var(--accent);
   min-width: 28px;
@@ -646,7 +646,7 @@
   min-width: 28px;
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 0.5px;
   text-align: right;
   flex-shrink: 0;
@@ -654,7 +654,7 @@
 
 .pp-slider-mini-label {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1px;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -684,7 +684,7 @@
 }
 
 .detection-allocation-seg .pp-mode-btn {
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 0.35px;
 }
 
@@ -729,7 +729,7 @@
   justify-content: space-between;
   color: rgba(190, 221, 230, 0.62);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1.35px;
 }
 
@@ -746,7 +746,7 @@
   gap: 4px;
   padding: 4px 7px;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 0.6px;
   text-transform: uppercase;
   white-space: nowrap;
@@ -815,7 +815,7 @@
 }
 
 .map-stack-chip-req {
-  font-size: 7px;
+  font-size: calc(7px * var(--gev-text-scale));
   letter-spacing: 0.3px;
   color: rgba(232, 234, 237, 0.28);
 }
@@ -827,7 +827,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 0.8px;
   color: var(--accent);
   text-align: center;
@@ -847,7 +847,7 @@
   border-radius: 6px;
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: calc(10px * var(--gev-text-scale));
   letter-spacing: 0.6px;
   padding: 2px 6px;
   outline: none;
@@ -870,7 +870,7 @@
   border-radius: 6px;
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: calc(10px * var(--gev-text-scale));
   letter-spacing: 0.6px;
   padding: 2px 6px;
   outline: none;
@@ -890,7 +890,7 @@
 .draw-hint {
   flex-basis: 100%;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 0.6px;
   color: var(--text-dim);
   line-height: 1.4;
@@ -917,7 +917,7 @@ body.gev-drawing #cesiumContainer canvas {
   border: none;
   color: var(--text-dim);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 0.6px;
   text-transform: uppercase;
   cursor: pointer;
@@ -971,7 +971,7 @@ body.gev-drawing #cesiumContainer canvas {
   background: rgba(8, 10, 14, 0.88);
   color: #d9f7ff;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: calc(10px * var(--gev-text-scale));
   letter-spacing: 1.8px;
   padding: 8px 14px;
   cursor: pointer;
@@ -1101,7 +1101,7 @@ body.ui-clean-view #scene-runtime.active {
 
 .param-panel-title {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 2.5px;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -1136,7 +1136,7 @@ body.ui-clean-view #scene-runtime.active {
 
 .param-label {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 1px;
   color: var(--text-secondary);
   min-width: 72px;
@@ -1183,7 +1183,7 @@ body.ui-clean-view #scene-runtime.active {
 
 .param-value {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: calc(10px * var(--gev-text-scale));
   letter-spacing: 0.5px;
   color: var(--accent);
   min-width: 32px;

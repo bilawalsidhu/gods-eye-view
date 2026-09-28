@@ -24,7 +24,7 @@
   border-radius: 0.18rem;
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 0.4rem;
+  font-size: calc(0.4rem * var(--gev-text-scale));
   letter-spacing: 0.045rem;
   line-height: 1;
   cursor: pointer;
@@ -51,7 +51,7 @@
 .gev-voice-cost-value {
   color: var(--text-dim);
   font-family: var(--font-mono);
-  font-size: 0.4rem;
+  font-size: calc(0.4rem * var(--gev-text-scale));
   letter-spacing: 0.02rem;
   line-height: 1;
   font-variant-numeric: tabular-nums;

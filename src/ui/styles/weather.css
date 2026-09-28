@@ -35,7 +35,7 @@
 }
 #weather-panel-count {
   color: var(--text-secondary);
-  font: 9px var(--font-mono);
+  font: calc(9px * var(--gev-text-scale)) var(--font-mono);
 }
 #weather-panel-body {
   min-height: 0;
@@ -51,7 +51,7 @@
   display: none !important;
 }
 #weather-panel.collapsed .panel-title {
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1.8px;
 }
 #weather-panel.collapsed .panel-header {
@@ -66,7 +66,7 @@
 .rail-timeline {
   min-width: 0;
   color: var(--text-dim);
-  font: 9px/1.45 var(--font-mono);
+  font: calc(9px * var(--gev-text-scale))/1.45 var(--font-mono);
   letter-spacing: 0.5px;
 }
 .weather-readout {
@@ -108,13 +108,13 @@
 }
 .rail-card-disclosure {
   color: var(--text-dim);
-  font: 9px/1.45 var(--font-mono);
+  font: calc(9px * var(--gev-text-scale))/1.45 var(--font-mono);
 }
 .rail-card-title {
   flex: 1 1 auto;
   min-width: 0;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: calc(13px * var(--gev-text-scale));
   font-weight: 500;
   color: var(--text-secondary);
   letter-spacing: 0.3px;
@@ -137,7 +137,7 @@
 .rail-card-line,
 .rail-timeline-readout {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 0.5px;
   color: var(--text-dim);
 }
@@ -160,7 +160,7 @@
 }
 .rail-card-scale {
   text-align: right;
-  font: 9px/1.45 var(--font-mono);
+  font: calc(9px * var(--gev-text-scale))/1.45 var(--font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
 }
@@ -184,7 +184,7 @@
 .rail-card .data-row-list-item {
   min-width: 0;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 0.5px;
 }
 .rail-card [hidden],
@@ -214,7 +214,7 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 3px 8px;
-  font: 8px/1.45 var(--font-mono);
+  font: calc(8px * var(--gev-text-scale))/1.45 var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 .rail-timeline-endpoints span {
@@ -258,7 +258,7 @@ body.recording-mode .gev-wind-inspection-marker {
   top: 8px;
   left: 0;
   transform: translateX(-50%);
-  font: 9px/1.45 var(--font-mono);
+  font: calc(9px * var(--gev-text-scale))/1.45 var(--font-mono);
   color: var(--text-dim);
 }
 
@@ -305,7 +305,7 @@ body.recording-mode .gev-wind-inspection-marker {
   text-overflow: ellipsis;
   /* Dim and secondary fall below 4.5:1 over bright imagery through glass. */
   color: var(--text-primary);
-  font: 9px/1.45 var(--font-mono);
+  font: calc(9px * var(--gev-text-scale))/1.45 var(--font-mono);
   letter-spacing: 0.5px;
 }
 .rail-card-compact.status {
@@ -320,7 +320,7 @@ body.recording-mode .gev-wind-inspection-marker {
 }
 .rail-card-setting-label {
   color: var(--text-dim);
-  font: 9px var(--font-mono);
+  font: calc(9px * var(--gev-text-scale)) var(--font-mono);
   letter-spacing: 3px;
   text-transform: uppercase;
 }
@@ -346,7 +346,7 @@ body.recording-mode .gev-wind-inspection-marker {
   flex: 1;
   min-width: 0;
   color: var(--text-dim);
-  font: 9px/1.45 var(--font-mono);
+  font: calc(9px * var(--gev-text-scale))/1.45 var(--font-mono);
   letter-spacing: 0.5px;
 }
 .rail-card-result .rail-card-lines {
@@ -356,10 +356,10 @@ body.recording-mode .gev-wind-inspection-marker {
 }
 .rail-card-result [data-line-id='wind'] {
   color: #e8feff;
-  font: 13px/1.25 var(--font-mono);
+  font: calc(13px * var(--gev-text-scale))/1.25 var(--font-mono);
 }
 .rail-card-result [data-line-id='explanation'] {
-  font: 8px/1.35 var(--font-mono);
+  font: calc(8px * var(--gev-text-scale))/1.35 var(--font-mono);
 }
 .rail-card-actions {
   align-items: center;

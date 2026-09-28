@@ -37,7 +37,7 @@
 }
 #recent-imagery-panel-count {
   color: var(--text-secondary);
-  font: 9px var(--font-mono);
+  font: calc(9px * var(--gev-text-scale)) var(--font-mono);
   letter-spacing: 1px;
   white-space: nowrap;
 }
@@ -57,7 +57,7 @@
   display: none !important;
 }
 #recent-imagery-panel.collapsed .panel-title {
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1.8px;
 }
 #recent-imagery-panel.collapsed .panel-header {
@@ -75,7 +75,7 @@
   gap: 6px;
   min-width: 0;
   color: var(--text-dim);
-  font: 9px/1.45 var(--font-mono);
+  font: calc(9px * var(--gev-text-scale))/1.45 var(--font-mono);
   letter-spacing: 0.5px;
 }
 .recent-imagery-readout .ri-block {
@@ -120,7 +120,7 @@
 /* 2 and 3b. One-line notice and hint: always there, empty or not. */
 .recent-imagery-readout .ri-line {
   height: 14px;
-  line-height: 14px;
+  line-height: calc(14px * var(--gev-text-scale));
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -147,8 +147,8 @@
   width: 46px;
   height: 14px;
   padding: 0 3px;
-  font-size: 8px;
-  line-height: 12px;
+  font-size: calc(8px * var(--gev-text-scale));
+  line-height: calc(12px * var(--gev-text-scale));
   letter-spacing: 0.4px;
   color: var(--accent);
   border-color: var(--accent);
@@ -241,7 +241,7 @@
 .recent-imagery-readout .ri-thumb-text {
   padding: 0 4px;
   text-align: center;
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
 }
 .recent-imagery-readout .ri-card-flag,
 .recent-imagery-readout .ri-card-start {
@@ -249,9 +249,9 @@
   padding: 0 4px;
   border-radius: 3px;
   background: rgba(4, 17, 27, 0.9);
-  font-size: 7px;
+  font-size: calc(7px * var(--gev-text-scale));
   font-weight: 700;
-  line-height: 12px;
+  line-height: calc(12px * var(--gev-text-scale));
   letter-spacing: 0.8px;
   white-space: nowrap;
 }
@@ -273,14 +273,14 @@
   text-overflow: ellipsis;
 }
 .recent-imagery-readout .ri-card-date {
-  font-size: 10px;
-  line-height: 13px;
+  font-size: calc(10px * var(--gev-text-scale));
+  line-height: calc(13px * var(--gev-text-scale));
   color: var(--text-primary);
 }
 .recent-imagery-readout .ri-card-sensor,
 .recent-imagery-readout .ri-card-cloud {
-  font-size: 8px;
-  line-height: 11px;
+  font-size: calc(8px * var(--gev-text-scale));
+  line-height: calc(11px * var(--gev-text-scale));
   letter-spacing: 0;
   color: var(--text-dim);
 }
@@ -320,11 +320,11 @@
 }
 .recent-imagery-readout .ri-slot-tag {
   height: 16px;
-  line-height: 16px;
+  line-height: calc(16px * var(--gev-text-scale));
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 3px;
   text-align: center;
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   font-weight: 700;
   letter-spacing: 1px;
   white-space: nowrap;
@@ -350,7 +350,7 @@
 .recent-imagery-readout .ri-unpin {
   width: 22px;
   padding: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--gev-text-scale));
   letter-spacing: 0;
 }
 
@@ -367,7 +367,7 @@
   display: flex;
   justify-content: space-between;
   gap: 4px;
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1px;
   white-space: nowrap;
 }
@@ -401,7 +401,7 @@
 }
 .recent-imagery-readout .ri-details .rail-card-title {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: calc(9px * var(--gev-text-scale));
   letter-spacing: 1.2px;
   text-transform: uppercase;
 }
@@ -439,7 +439,7 @@ body.gev-imagery-box .cesium-widget canvas {
   border-radius: 3px;
   background: rgba(4, 17, 27, 0.82);
   color: rgba(239, 247, 249, 0.92);
-  font: 700 9px/1.4 var(--font-mono);
+  font: 700 calc(9px * var(--gev-text-scale))/1.4 var(--font-mono);
   letter-spacing: 1.2px;
   white-space: nowrap;
   pointer-events: none;
@@ -465,7 +465,7 @@ body.gev-imagery-box .cesium-widget canvas {
   box-shadow:
     0 0 0 5px rgba(62, 112, 125, 0.3),
     0 0 13px rgba(94, 216, 239, 0.3);
-  font: 700 14px/1 var(--font-mono);
+  font: 700 calc(14px * var(--gev-text-scale))/1 var(--font-mono);
   transform: translate(-50%, -50%);
   pointer-events: auto;
   touch-action: none;

@@ -69,13 +69,13 @@
   top: 2px;
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   font-weight: 700;
   line-height: 1;
 }
 
 #north-up-view .camera-compass-needle {
-  font-size: 17px;
+  font-size: calc(17px * var(--gev-text-scale));
   transform: rotate(calc(-1 * var(--camera-heading)));
   transition: transform var(--transition-fast);
 }
@@ -97,7 +97,7 @@
   -webkit-backdrop-filter: blur(14px);
   color: rgba(170, 252, 255, 0.92);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1.35px;
   text-transform: uppercase;
   transform: translateX(-50%);
@@ -191,7 +191,7 @@
   -webkit-backdrop-filter: blur(14px);
   color: rgba(170, 252, 255, 0.92);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   letter-spacing: 1.35px;
   text-transform: uppercase;
   opacity: 0;
@@ -396,7 +396,7 @@
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: calc(11px * var(--gev-text-scale));
   letter-spacing: 2px;
   color: var(--accent);
   text-transform: uppercase;

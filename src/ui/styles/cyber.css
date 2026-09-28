@@ -676,7 +676,7 @@
   min-width: 1rem;
   color: #f2f5f4;
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: calc(0.82rem * var(--gev-text-scale));
 }
 
 :root[data-ui-theme='cyber'] #bloom-toggle::before {
@@ -690,7 +690,7 @@
 }
 
 :root[data-ui-theme='cyber'] :where(#bloom-toggle, #sharpen-toggle) .pp-label {
-  font-size: 0.7rem;
+  font-size: calc(0.7rem * var(--gev-text-scale));
 }
 
 :root[data-ui-theme='cyber']
@@ -905,7 +905,7 @@
   position: absolute;
   bottom: 0.22rem;
   color: rgba(165, 190, 196, 0.42);
-  font-size: 0.32rem;
+  font-size: calc(0.32rem * var(--gev-text-scale));
   letter-spacing: 0.1rem;
   pointer-events: none;
 }
@@ -1215,7 +1215,7 @@
   top: 0.46rem;
   left: 0.7rem;
   color: rgba(225, 102, 102, 0.78);
-  font-size: 0.4rem;
+  font-size: calc(0.4rem * var(--gev-text-scale));
   letter-spacing: 0.12rem;
   pointer-events: none;
 }
@@ -1283,7 +1283,7 @@
 :root[data-ui-theme='cyber'] #command-dock #search-toggle::before {
   content: '⌕';
   font-family: var(--font-mono);
-  font-size: 0.86rem;
+  font-size: calc(0.86rem * var(--gev-text-scale));
 }
 
 :root[data-ui-theme='cyber']
@@ -2046,7 +2046,7 @@
   border: 0;
   color: rgba(231, 241, 241, 0.84);
   background: none;
-  font-size: 7px;
+  font-size: calc(7px * var(--gev-text-scale));
   font-weight: 700;
   letter-spacing: 0.28em;
   text-align: center;
@@ -2099,7 +2099,7 @@
   justify-self: end;
   color: rgba(205, 225, 226, 0.6);
   background: linear-gradient(270deg, rgba(10, 27, 31, 0.72), transparent);
-  font-size: 7px;
+  font-size: calc(7px * var(--gev-text-scale));
   letter-spacing: 0.16em;
   text-align: right;
   clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
@@ -2139,7 +2139,7 @@
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode #cockpit-callsign {
-  font-size: 16px;
+  font-size: calc(16px * var(--gev-text-scale));
   letter-spacing: 0.16em;
 }
 
@@ -2283,14 +2283,14 @@
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-readout strong {
-  font-size: clamp(26px, 3vw, 40px);
+  font-size: calc(clamp(26px, 3vw, 40px) * var(--gev-text-scale));
   letter-spacing: -0.03em;
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-heading-value {
   min-width: 66px;
   color: #f0f5f5;
-  font-size: 29px;
+  font-size: calc(29px * var(--gev-text-scale));
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-compass-tape::before {
@@ -2404,7 +2404,7 @@
   box-shadow: var(--cyber-panel-shadow);
   clip-path: var(--cyber-panel-frame);
   color: var(--cyber-red-bright);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
   font-weight: 600;
   letter-spacing: 1.8px;
 }
@@ -2599,7 +2599,7 @@
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-help {
   bottom: 24px;
   color: rgba(205, 225, 226, 0.54);
-  font-size: 8px;
+  font-size: calc(8px * var(--gev-text-scale));
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-position-readout {
