@@ -58,6 +58,59 @@ test('decodes standard callsign, velocity, and altitude examples', () => {
   assert.equal(position.cpr.odd, false);
 });
 
+test('Q=0 airborne positions decode their Gillham altitude, as pyModeS does', () => {
+  // The frame above with its altitude field replaced and the parity rebuilt;
+  // each expected value is pyModeS 2.x's adsb.altitude() of the same frame.
+  for (const [hex, altitudeFt] of [
+    ['8d40621d580802d690c8acc250e1', -1_200],
+    ['8d40621d582802d690c8ac662638', -1_100],
+    // 13,900 and 14,000 straddle a 500 ft band whose 100 ft digit runs backwards.
+    ['8d40621d583822d690c8acaabe90', 13_900],
+    ['8d40621d583022d690c8acfc5e24', 14_000],
+    ['8d40621d589232d690c8acecfb4f', 50_200],
+    ['8d40621d5858c2d690c8ac60a8bb', 108_800],
+    ['8d40621d580842d690c8ac00e361', 126_700],
+    // C1 C2 C4 = 000 is no altitude: unknown, never a guess.
+    ['8d40621d580002d690c8ac94b055', null],
+    // Nor are 101 and 111.
+    ['8d40621d588802d690c8ac53979e', null],
+    ['8d40621d58a802d690c8acf7e147', null],
+  ])
+    assert.equal(decodeAdsbMessage(fromHex(hex)).altitudeFt, altitudeFt, hex);
+});
+
+/** Encode an altitude into the Q=0 field, straight from the Gillham tables. */
+function gillhamField(altitudeFt) {
+  const steps = (altitudeFt + 1_200) / 100;
+  const fiveHundreds = Math.floor(steps / 5);
+  let hundreds = (steps % 5) + 1;
+  if (fiveHundreds % 2) hundreds = 6 - hundreds;
+  const gray500 = fiveHundreds ^ (fiveHundreds >> 1);
+  // 100 ft digit 1..5 as C1 C2 C4.
+  const c = [0b001, 0b011, 0b010, 0b110, 0b100][hundreds - 1];
+  const [d2, d4, a1, a2, a4, b1, b2, b4] = [7, 6, 5, 4, 3, 2, 1, 0].map(
+    (shift) => (gray500 >> shift) & 1,
+  );
+  const [c1, c2, c4] = [2, 1, 0].map((shift) => (c >> shift) & 1);
+  // C1 A1 C2 A2 C4 A4 B1 Q B2 D2 B4 D4, Q = 0.
+  return [c1, a1, c2, a2, c4, a4, b1, 0, b2, d2, b4, d4].reduce(
+    (field, value) => field * 2 + value,
+    0,
+  );
+}
+
+test('every Gillham altitude from -1,200 to 126,700 ft decodes to itself', () => {
+  const frame = fromHex('8D40621D58C382D690C8AC2863A7');
+  for (let altitudeFt = -1_200; altitudeFt <= 126_700; altitudeFt += 100) {
+    const field = gillhamField(altitudeFt);
+    frame[5] = field >> 4;
+    frame[6] = (frame[6] & 0x0f) | ((field & 0x0f) << 4);
+    const parity = modeSChecksum(frame.subarray(0, 11));
+    frame.set([parity >> 16, (parity >> 8) & 0xff, parity & 0xff], 11);
+    assert.equal(decodeAdsbMessage(frame).altitudeFt, altitudeFt);
+  }
+});
+
 test('globally decodes a valid even/odd CPR pair and expires tracks at 60 seconds', () => {
   const tracks = new Map();
   const even = decodeAdsbMessage(fromHex('8D40621D58C382D690C8AC2863A7'), {
