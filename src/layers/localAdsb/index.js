@@ -10,6 +10,8 @@ import { isPointerFree } from '../../data/inputOwnership.js';
 import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
 import { routePlausible } from '../../data/routePlausible.js';
 import {
+  createLocalAdsbAltitudeGate,
+  gateLocalAdsbAltitude,
   localAdsbPositionIsFresh,
   mergeLocalAdsbRecords,
   summarizeLocalAdsb,
@@ -145,6 +147,7 @@ export function createLocalAdsbLayer({
   let models = null;
   let geoidReady = false;
   let rejectedFixes = 0;
+  let rejectedAltitudes = 0;
   let state = receiver.getState();
   const markers = new Map();
   // Per-ICAO receptions (band|source -> last message) across merges.
@@ -408,30 +411,36 @@ export function createLocalAdsbLayer({
 
   // ── Markers ─────────────────────────────────────────────────────────────
 
-  function upsertMarker(record, at) {
-    const id = `${ENTITY_PREFIX}${record.icao}`;
+  function upsertMarker(heard, at) {
+    const id = `${ENTITY_PREFIX}${heard.icao}`;
     let marker = markers.get(id);
     if (!marker) {
       marker = {
         id,
         entity: null,
-        record,
+        record: heard,
         motion: new LocalAdsbMotion(),
+        altitude: createLocalAdsbAltitudeGate(),
         position: null,
         lat: null,
         lon: null,
-        courseDeg: Number.isFinite(record.trackDeg) ? record.trackDeg : null,
+        courseDeg: Number.isFinite(heard.trackDeg) ? heard.trackDeg : null,
         lastRotation: 0,
         klass: null,
         evidence: false,
         iconKind: null,
         iconScale: null,
-        onGround: Boolean(record.onGround),
+        onGround: Boolean(heard.onGround),
         geoidN: null,
         modelOwnsVisual: false,
       };
       markers.set(id, marker);
     }
+    // Gated before anything reads the record, so the marker height, the card,
+    // the 3D-model ceiling and route plausibility agree on one altitude.
+    const altitudesRejectedBefore = marker.altitude.rejected;
+    const record = gateLocalAdsbAltitude(heard, marker.altitude);
+    rejectedAltitudes += marker.altitude.rejected - altitudesRejectedBefore;
     marker.record = record;
     marker.onGround = Boolean(record.onGround);
     const rejectedBefore = marker.motion.rejectedFixes;
@@ -810,6 +819,8 @@ export function createLocalAdsbLayer({
         // plus the layer's check on every merged record.
         rejectedPositions:
           Math.max(0, Number(current.positionsRejected) || 0) + rejectedFixes,
+        // Altitude reports refused by the vertical-rate check.
+        rejectedAltitudes,
         ...localAdsbStatus({
           receiver: current,
           feedState: feeds?.getState?.() || null,

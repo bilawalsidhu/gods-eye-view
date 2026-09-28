@@ -54,6 +54,25 @@ export const LOCAL_ADSB_POSITION_MARGIN_M = 500;
  * reference: the previously accepted fix was the outlier, not the stream.
  */
 export const LOCAL_ADSB_REANCHOR_AFTER = 3;
+/**
+ * Altitude change always allowed between two reports: Gillham altitudes step
+ * in 100 ft and barometric readings jitter.
+ */
+export const LOCAL_ADSB_ALTITUDE_MARGIN_FT = 300;
+/** Vertical-rate limit (ft/min) for an aircraft that has not reported one. */
+export const LOCAL_ADSB_UNKNOWN_VERTICAL_RATE_FPM = 12_500;
+/** Reported vertical rate is multiplied by this, plus the margin below. */
+export const LOCAL_ADSB_VERTICAL_RATE_FACTOR = 1.5;
+export const LOCAL_ADSB_VERTICAL_RATE_MARGIN_FPM = 2_000;
+/**
+ * Ceiling (ft) for the fixed-wing weight categories A1–A5. Nothing certified
+ * in them flies above 51,000 ft now that Concorde (60,000 ft) is retired, so
+ * a report above this is a corrupt frame, not an aircraft. High-performance
+ * (A6), rotorcraft (A7) and every B category are left without one: gliders
+ * have soared to 76,000 ft and balloons fly above 100,000 ft.
+ */
+export const LOCAL_ADSB_FIXED_WING_CEILING_FT = 60_000;
+const CEILING_CATEGORIES = new Set(['A1', 'A2', 'A3', 'A4', 'A5']);
 const SLOW_CATEGORIES = new Set(['A1', 'A7', 'B1', 'B4']);
 const KT_TO_MPS = 1852 / 3600;
 const EARTH_RADIUS_M = 6_371_008.8;
@@ -162,6 +181,142 @@ export function localAdsbFixIsPlausible(
   return (
     surfaceDistanceM(previous.lat, previous.lon, next.lat, next.lon) <= allowedM
   );
+}
+
+/**
+ * The fastest an aircraft is assumed to climb or descend, in ft/min: 1.5 × the
+ * larger reported vertical rate + 2,000 ft/min, or 12,500 ft/min when neither
+ * report carries one.
+ * @param {...(number|null|undefined)} rates Reported vertical rates (ft/min).
+ * @returns {number}
+ */
+export function localAdsbVerticalRateLimitFpm(...rates) {
+  const known = rates.filter(Number.isFinite).map(Math.abs);
+  if (!known.length) return LOCAL_ADSB_UNKNOWN_VERTICAL_RATE_FPM;
+  return (
+    Math.max(...known) * LOCAL_ADSB_VERTICAL_RATE_FACTOR +
+    LOCAL_ADSB_VERTICAL_RATE_MARGIN_FPM
+  );
+}
+
+/**
+ * The altitude counterpart of {@link localAdsbFixIsPlausible}: whether `next`
+ * is reachable from the previous accepted altitude at a plausible vertical
+ * rate. A corrupt frame can still pass CRC, and a decoder feed can relay one,
+ * so a single report of a DC-9 at 108,800 ft has to be refused here. The
+ * allowance is a fixed margin plus the climb covered in the elapsed time + 1 s
+ * at {@link localAdsbVerticalRateLimitFpm}. Without a reference every altitude
+ * is plausible. There is no reference age limit, unlike positions: the
+ * allowance grows with the gap anyway, 125,000 ft over 10 minutes at the
+ * unknown rate.
+ * @param {{altitudeFt:number, at:number, verticalRateFpm?:number|null}|null}
+ *   previous Last accepted altitude.
+ * @param {{altitudeFt:number, at:number, verticalRateFpm?:number|null}} next
+ *   Candidate altitude.
+ * @returns {boolean}
+ */
+export function localAdsbAltitudeIsPlausible(previous, next) {
+  if (
+    !Number.isFinite(previous?.altitudeFt) ||
+    !Number.isFinite(previous?.at) ||
+    !Number.isFinite(next?.altitudeFt) ||
+    !Number.isFinite(next?.at)
+  )
+    return true;
+  const elapsedMs = Math.max(0, next.at - previous.at);
+  const limitFpm = localAdsbVerticalRateLimitFpm(
+    previous.verticalRateFpm,
+    next.verticalRateFpm,
+  );
+  const allowedFt =
+    LOCAL_ADSB_ALTITUDE_MARGIN_FT + ((elapsedMs + 1_000) / 60_000) * limitFpm;
+  return Math.abs(next.altitudeFt - previous.altitudeFt) <= allowedFt;
+}
+
+/**
+ * The highest altitude an emitter category can report, or null when the
+ * category has no ceiling or is not yet known.
+ * @param {unknown} category ADS-B emitter category ('A3').
+ * @returns {number|null}
+ */
+export function localAdsbAltitudeCeilingFt(category) {
+  return CEILING_CATEGORIES.has(normalizeAdsbCategory(category))
+    ? LOCAL_ADSB_FIXED_WING_CEILING_FT
+    : null;
+}
+
+/**
+ * State for {@link gateLocalAdsbAltitude}, one per aircraft, owned by the
+ * caller and dropped with the aircraft.
+ * @returns {{accepted:object|null, judgedAt:number|null, rejectStreak:number,
+ *   rejected:number}}
+ */
+export function createLocalAdsbAltitudeGate() {
+  return { accepted: null, judgedAt: null, rejectStreak: 0, rejected: 0 };
+}
+
+/**
+ * Hold a record's barometric altitude at its last plausible value.
+ *
+ * Returns `record` itself, or a copy whose `altitudeFt` is the last accepted
+ * altitude, so the marker height, the card, the 3D-model ceiling and route
+ * plausibility all read the same value. A refused report is counted in
+ * `gate.rejected`. From the third consecutive refusal on, the candidate
+ * becomes the new reference, as positions do: a bad first altitude cannot
+ * freeze the aircraft at it.
+ *
+ * For categories with a ceiling ({@link localAdsbAltitudeCeilingFt}) a report
+ * above it is refused outright and never re-anchors, a reference above it is
+ * dropped once the category is known, and with nothing to hold the altitude
+ * is returned as null: unknown, not impossible.
+ *
+ * Only a report with a newer `lastMessageAt` is judged. The layer re-reads the
+ * same record several times a second, and a re-read must neither count toward
+ * a re-anchor nor slip a refused value through. A surface report passes
+ * unjudged: a feed reports `alt_baro: "ground"` as 0, which is not a
+ * barometric reading, so a landing at a high field is not a 5,000 ft drop.
+ * @param {object} record Local ADS-B record.
+ * @param {ReturnType<typeof createLocalAdsbAltitudeGate>} gate Mutated.
+ * @returns {object}
+ */
+export function gateLocalAdsbAltitude(record, gate) {
+  if (record?.onGround) return record;
+  const altitudeFt = finiteOrNull(record?.altitudeFt);
+  const at = finiteOrNull(record?.lastMessageAt);
+  if (altitudeFt === null || at === null) return record;
+  const ceilingFt = localAdsbAltitudeCeilingFt(record.category);
+  const aboveCeiling = (value) => ceilingFt !== null && value > ceilingFt;
+  // The category often arrives seconds after the first altitude, so a
+  // reference accepted before it was known is dropped once it is.
+  if (aboveCeiling(gate.accepted?.altitudeFt)) gate.accepted = null;
+  if (gate.judgedAt === null || at > gate.judgedAt) {
+    gate.judgedAt = at;
+    const candidate = {
+      altitudeFt,
+      at,
+      verticalRateFpm: finiteOrNull(record.verticalRateFpm),
+    };
+    if (aboveCeiling(altitudeFt)) {
+      // Refused outright, and never toward a re-anchor: a feed that keeps
+      // relaying the same corrupt value must not make it the reference.
+      gate.rejected += 1;
+    } else if (localAdsbAltitudeIsPlausible(gate.accepted, candidate)) {
+      gate.accepted = candidate;
+      gate.rejectStreak = 0;
+    } else {
+      gate.rejected += 1;
+      gate.rejectStreak += 1;
+      if (gate.rejectStreak >= LOCAL_ADSB_REANCHOR_AFTER) {
+        gate.accepted = candidate;
+        gate.rejectStreak = 0;
+      }
+    }
+  }
+  const held = gate.accepted?.altitudeFt;
+  if (Number.isFinite(held))
+    return held !== altitudeFt ? { ...record, altitudeFt: held } : record;
+  // Nothing accepted to hold: an impossible altitude is shown as unknown.
+  return aboveCeiling(altitudeFt) ? { ...record, altitudeFt: null } : record;
 }
 
 function normalizePosition(lat, lon) {

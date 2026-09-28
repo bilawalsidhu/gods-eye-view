@@ -217,8 +217,43 @@ function decodeSurfaceMovement(movement) {
   return firstKt + (movement - firstCode) * stepKt;
 }
 
+function grayToBinary(gray) {
+  let value = gray;
+  for (let shift = gray >> 1; shift; shift >>= 1) value ^= shift;
+  return value;
+}
+
+/**
+ * The 12-bit altitude field with Q=0: a Gillham (Mode C) altitude in 100 ft
+ * steps from -1,200 to 126,700 ft, sent by transponders whose encoder has no
+ * 25 ft resolution and by any aircraft above 50,175 ft. Field order is
+ * C1 A1 C2 A2 C4 A4 B1 Q B2 D2 B4 D4. The 500 ft count is the Gray code
+ * D2 D4 A1 A2 A4 B1 B2 B4; the 100 ft digit is C1 C2 C4, a five-step
+ * reflected code that runs backwards in odd 500 ft bands. A C digit no
+ * altitude uses returns null rather than a guess.
+ */
+function decodeGillhamAltitude(field) {
+  const at = (index) => (field >> (11 - index)) & 1;
+  const fiveHundreds = grayToBinary(
+    (at(9) << 7) |
+      (at(11) << 6) |
+      (at(1) << 5) |
+      (at(3) << 4) |
+      (at(5) << 3) |
+      (at(6) << 2) |
+      (at(8) << 1) |
+      at(10),
+  );
+  let hundreds = grayToBinary((at(0) << 2) | (at(2) << 1) | at(4));
+  // C1 C2 C4 = 100 is the fifth step; 000, 101 and 111 are not altitudes.
+  if (hundreds === 7) hundreds = 5;
+  else if (hundreds === 0 || hundreds > 4) return null;
+  if (fiveHundreds % 2) hundreds = 6 - hundreds;
+  return fiveHundreds * 500 + hundreds * 100 - 1_300;
+}
+
 function decodeAltitude(bytes) {
-  if (!bit(bytes, 47)) return null;
+  if (!bit(bytes, 47)) return decodeGillhamAltitude(bits(bytes, 40, 12));
   const encoded = (bits(bytes, 40, 7) << 4) | bits(bytes, 48, 4);
   return encoded * 25 - 1_000;
 }

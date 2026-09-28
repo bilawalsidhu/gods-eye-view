@@ -4228,6 +4228,12 @@ reception does not interrupt internet radio.
 - **Gain.** AUTO (tuner AGC) or a manual R820T step from 0.0 to 49.6 dB,
   stored per mode in `gev:sdr:gain:v1`. Defaults: ADS-B 28.0 dB, FM AUTO.
   Changes apply to the open receiver without reconnecting.
+- **Altitude decoding.** Airborne positions carry either a 25 ft altitude
+  (Q=1, up to 50,175 ft) or a Gillham (Mode C) altitude in 100 ft steps
+  (Q=0, -1,200 to 126,700 ft). Q=0 is what a transponder with a 100 ft
+  encoder sends, and what anything above 50,175 ft has to send. Both are
+  decoded; a Gillham code that maps to no altitude leaves the altitude
+  unknown. All 2,048 Q=0 codes match pyModeS.
 - **Receiver stats (ADS-B).** CRC-valid messages per second, aircraft heard,
   aircraft with a fresh position and the IQ level.
 - **Devices.** An already-authorized receiver opens without the WebUSB
@@ -4279,6 +4285,28 @@ on purpose:
   Refused fixes are counted (`positionsRejected` in the SDR state; the layer
   applies the same check to merged feed records and reports the total as
   `rejectedPositions` in its stats). Three refusals in a row re-anchor.
+- **Altitude filter.** A corrupt frame can pass CRC, and a decoder feed can
+  relay one: a DC-9 was logged at 108,800 ft. The check runs in the layer,
+  where the browser decoder and the decoder feeds merge
+  (`gateLocalAdsbAltitude` in `src/sources/adsbRecords.js`). Each new report
+  must be reachable from the last accepted altitude at 1.5 × the larger
+  reported vertical rate + 2,000 ft/min (12,500 ft/min without a rate) over
+  the elapsed time + 1 s, plus 300 ft. A refused report holds the last
+  accepted altitude for the marker height, the card, the model ceiling and
+  route plausibility alike, and is counted as `rejectedAltitudes` in the
+  layer stats. Only a newer message is judged, so the layer's repeated
+  re-reads of one record neither count twice nor let a refused value
+  through. Three refusals in a row re-anchor, so a bad first altitude clears
+  itself. A surface report passes unjudged, because a feed's `ground` is 0
+  and not a barometric reading. The fixed-wing weight categories A1–A5 also
+  have a 60,000 ft ceiling (`localAdsbAltitudeCeilingFt`), since nothing
+  certified in them flies above 51,000 ft. A report above it is refused
+  outright and never counts toward a re-anchor, so a feed that keeps relaying
+  one corrupt value cannot make it the reference. A reference accepted before
+  the category arrived is dropped once the category is known. With nothing to
+  hold, the altitude shows as unknown. A6, A7 and every B category have no
+  ceiling: gliders have soared to 76,000 ft and balloons fly above
+  100,000 ft.
 - **Trail.** A selected aircraft draws a magenta trail of the positions the
   receiver heard (up to 10 minutes / 600 fixes, dropped with the aircraft),
   with the tracked-flight trail look and a live head segment. No network
