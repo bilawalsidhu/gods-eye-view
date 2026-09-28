@@ -42,6 +42,21 @@ let _openskyTtlMs = OPENSKY_CACHE_MS;
 /** @type {number} Epoch-ms before which no upstream fetch is attempted. */
 let _openskyCooldownUntil = 0;
 /**
+ * Milliseconds left on the 429 cooldown, or 0 when upstream may be called.
+ *
+ * Read-only view of lever 2 above, exported so the OTHER routes that spend the
+ * same daily credit budget can honor it. `/api/opensky-track` costs 4 credits
+ * per call against this account just as `/states/all` does, so minting one
+ * while this proxy is cooling would spend budget the account has already been
+ * told it does not have. Only this module writes the cooldown.
+ *
+ * @param {number} [now] - Epoch-ms; injectable so tests need no clock control.
+ * @returns {number} Remaining cooldown in ms (0 when clear).
+ */
+export function openSkyCooldownRemainingMs(now = Date.now()) {
+  return Math.max(0, _openskyCooldownUntil - now);
+}
+/**
  * Picks the cache TTL from the remaining daily credit budget.
  * Client polls every 30 s, so tiers ≤30 s cost the same 480 credits/h; the
  * later tiers stretch the day: >2400 → ~3 h of full freshness, then 30 s
