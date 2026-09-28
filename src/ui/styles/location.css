@@ -80,11 +80,27 @@
 
 .location-pills {
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   gap: 6px;
   overflow-x: auto;
   scroll-behavior: smooth;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 12px,
+    black calc(100% - 12px),
+    transparent
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 12px,
+    black calc(100% - 12px),
+    transparent
+  );
 }
 
 .location-pills::-webkit-scrollbar {
@@ -131,6 +147,170 @@
   border-color: var(--accent);
   color: var(--accent);
   box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
+}
+
+/* ── Pill row scrolling and custom pins ──────── */
+.location-pills-arrow {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 26px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.location-pills-arrow:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--glass-border-hover);
+  color: var(--text-primary);
+}
+
+.location-pill-wrap {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.location-pill[data-custom='true'] {
+  border-style: dashed;
+}
+
+.location-pill-remove,
+.location-pill-rename,
+.location-pill-reset-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin-left: -6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0;
+  transition:
+    opacity var(--transition-fast),
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.location-pill-wrap:hover .location-pill-remove,
+.location-pill-wrap:hover .location-pill-rename,
+.location-pill-wrap:hover .location-pill-reset-btn,
+.location-pill-remove:focus-visible,
+.location-pill-rename:focus-visible,
+.location-pill-reset-btn:focus-visible {
+  opacity: 1;
+}
+
+.location-pill-remove:hover {
+  background: rgba(255, 80, 80, 0.15);
+  border-color: rgba(255, 80, 80, 0.4);
+  color: #ff8080;
+}
+
+.location-pill-rename:hover,
+.location-pill-reset-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.location-restore-hidden {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 20px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.location-restore-hidden:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.location-pill-add {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.location-pill-add:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.location-pin-name-input {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  opacity: 0;
+  transition:
+    width 200ms ease,
+    opacity 150ms ease,
+    padding 200ms ease;
+}
+
+.location-pin-name-input.expanded {
+  width: 140px;
+  padding: 6px 10px;
+  opacity: 1;
+  margin-left: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 /* ── Expandable POI Row ──────────────────────── */
@@ -234,6 +414,83 @@
 .poi-pill.active .poi-pill-key {
   color: var(--accent);
   background: rgba(0, 212, 255, 0.12);
+}
+
+.poi-pill-wrap {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.poi-pill-rename,
+.poi-pill-remove {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin-left: -6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0;
+  transition:
+    opacity var(--transition-fast),
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.poi-pill-wrap:hover .poi-pill-rename,
+.poi-pill-wrap:hover .poi-pill-remove,
+.poi-pill-rename:focus-visible,
+.poi-pill-remove:focus-visible {
+  opacity: 1;
+}
+
+.poi-pill-rename:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.poi-pill-remove:hover {
+  background: rgba(255, 80, 80, 0.15);
+  border-color: rgba(255, 80, 80, 0.4);
+  color: #ff8080;
+}
+
+.poi-pill-add {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.poi-pill-add:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* ── Location Search ─────────────────────────── */

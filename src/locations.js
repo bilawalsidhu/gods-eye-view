@@ -517,6 +517,22 @@ export const CITY_POIS = {
 };
 
 /**
+ * Register or replace a location entry in the shared registry so
+ * flyToPresetLocation/flyToPOI and the location pill tray can resolve it —
+ * the extension point for user-added quick-reference pins (see
+ * src/services/customLocations.js). Bundled entries are never overwritten by
+ * callers outside this module; custom pin ids are namespaced to avoid clashes.
+ */
+export function registerLocation(id, entry) {
+  CITY_POIS[id] = entry;
+}
+
+/** Remove a previously registered location entry (e.g. a deleted custom pin). */
+export function unregisterLocation(id) {
+  delete CITY_POIS[id];
+}
+
+/**
  * Absolute full-earth camera preset for the zoom_to_globe voice tool. The height
  * must stay inside the app's 'global' view-scale band (>12,000 km — classifyViewScale
  * in gevActions.js) so downstream context/screenshot policy treats it as a globe view,

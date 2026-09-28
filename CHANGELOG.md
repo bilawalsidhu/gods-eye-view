@@ -1,5 +1,23 @@
 # Changelog
 
+- Location pills scroll and are now fully editable — bundled cities included.
+  The row overflows on most screens once a few cities are pinned — the bar caps
+  at 720px — with no way to reach the rest; it now scrolls on a wheel gesture
+  and via two always-visible arrow buttons. A `+` control saves the current
+  camera view as a new named pin — ray-picked against the real
+  terrain/3D-tile surface under the viewport center (the same technique the
+  orbit controller uses), so it lands on what was actually on screen even at
+  a steep tilt, not just the camera's own ground projection; every pill,
+  bundled or custom, gets
+  hover-revealed rename and hide/delete controls, and the expanded landmark row
+  gets its own add/rename/remove controls. A bundled city's edits are a local
+  override, never the shipped entry — an overridden pill gets a reset (`↺`)
+  back to default, and a hidden bundled city can be brought back via a
+  "N hidden – restore" control. Everything persists in `localStorage` and
+  registers into the same `CITY_POIS` lookup bundled cities use, so an edited
+  pin or city is flyable, searchable and voice-addressable exactly like any
+  other, with no changes to those paths (Eric Morin, #798).
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD

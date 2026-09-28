@@ -1695,6 +1695,7 @@
       "src/search/http.js",
       "src/search/placeSearch.js",
       "src/services/application.js",
+      "src/services/customLocations.js",
       "src/services/groundFloor.js",
       "src/services/groundSnap.js",
       "src/services/meshFloorSampler.js",

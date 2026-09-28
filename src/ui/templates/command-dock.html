@@ -83,7 +83,12 @@
         <div id="poi-row" class="poi-row-container"></div>
         <div class="location-bar-divider" id="location-bar-divider"></div>
         <div class="location-city-row">
+          <button id="location-pills-scroll-left" class="location-pills-arrow" type="button" aria-label="Scroll locations left" title="Scroll left">&#x2039;</button>
           <div id="location-pills" class="location-pills"></div>
+          <button id="location-pills-scroll-right" class="location-pills-arrow" type="button" aria-label="Scroll locations right" title="Scroll right">&#x203A;</button>
+          <button id="location-pin-add" class="location-pill-add" type="button" aria-label="Save current view as a quick-reference pin" title="Save current view as a pin">+</button>
+          <button id="location-restore-hidden" class="location-restore-hidden" type="button" hidden></button>
+          <input type="text" id="location-edit-name" class="location-pin-name-input" autocomplete="off" spellcheck="false" maxlength="40" aria-label="Location name" />
           <div class="location-search-wrap">
             <button id="search-toggle" class="search-toggle-btn" title="Search any location">
               <span>&#x1F50E;</span>
