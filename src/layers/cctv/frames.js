@@ -507,7 +507,14 @@ export function createFrames({ state: layerState, services, parts, source }) {
       layerState._vehicleObservationCount = 0;
     }
     layerState._vehicleObservationSourceId = sourceId;
-    if (!previousPixels || !traffic) return 0;
+    if (!previousPixels) return 0;
+    if (!traffic) {
+      if (layerState._vehicleObservationCount !== 0) {
+        layerState._vehicleObservationCount = 0;
+        parts.presentation.notifyListenersThrottled();
+      }
+      return 0;
+    }
 
     const candidates = detectMotionVehicleCandidates(
       previousPixels,
