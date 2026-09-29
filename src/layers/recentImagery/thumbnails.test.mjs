@@ -316,7 +316,6 @@ test('a request queued behind an aborted fetch still starts once the abort settl
   });
 });
 
-
 test('decoded thumbnail residency also respects a byte budget', async () => {
   const bytesPerImage = 128 * 128 * 4;
   const { loader, fetch, revoked } = fixture({
