@@ -1,5 +1,14 @@
 # Changelog
 
+- Add a provider-neutral observed-traffic source contract behind Street Traffic.
+  External producers can supply bounded road-segment, approach or intersection
+  observations with timestamps, coarse counts/rates, movements, quality and
+  provenance. The contract normalizes malformed siblings fail-soft, distinguishes
+  fresh/partial/stale/error states, caps payload size, preserves cancellation and
+  keeps observed-source health separate from TomTom flow and simulated traffic.
+  With no observed source configured the shipped Traffic behavior is unchanged
+  (#830).
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
