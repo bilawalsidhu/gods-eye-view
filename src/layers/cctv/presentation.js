@@ -149,6 +149,12 @@ export function createPresentation({
       showCoverage: layerState._coverageMode !== 'off',
       coverageMode: layerState._coverageMode,
       showProjection: layerState._showProjection,
+      vehicleObservations: layerState._vehicleObservationsEnabled,
+      vehicleObservation: {
+        backend: 'local-motion',
+        count: layerState._vehicleObservationCount,
+        lastObservedAt: layerState._vehicleObservationLastAt,
+      },
       calibrationMode: layerState._calibrationMode,
       autoHop: layerState._autoHop,
       autoHopSuspended: layerState._autoHopSuspended,
