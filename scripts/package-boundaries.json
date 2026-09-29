@@ -1040,6 +1040,7 @@
       "src/data/trafficFlowStyle.js",
       "src/data/trafficPresetStyle.js",
       "src/data/trafficQueue.js",
+      "src/layers/traffic/observed.js",
       "src/layers/traffic/animation.js",
       "src/layers/traffic/controls.js",
       "src/layers/traffic/flow.js",
