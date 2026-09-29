@@ -26,10 +26,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -49,6 +49,10 @@ jobs:
 
       - name: Deploy to Cloudflare Pages (production)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        # NOT SHA-pinned (unlike the actions above): the cloudflare/pages-action
+        # repository now 404s upstream, so no fresh SHA can be verified. The
+        # floating tag still resolves via GitHub's cached copy; migrating this
+        # deploy to wrangler-action is an owner decision, not an audit edit.
         uses: cloudflare/pages-action@v1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
