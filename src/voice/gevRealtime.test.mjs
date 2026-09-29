@@ -3242,3 +3242,54 @@ test('a genuinely different refused call still gets its own output', async () =>
   await controller.handleRealtimeEvent(lateToolItemEvent('resp_old', 'call_two', 'item_two'));
   assert.deepEqual(outputs, ['call_one', 'call_two'], 'each distinct call is answered');
 });
+
+test('a tool result that outlives its conversation publishes into neither session', async () => {
+  // Ported from upstream e7970c5: a stop (or stop + restart) while a tool
+  // runner is parked must orphan that tool's continuation. sendToolOutput's
+  // "some channel is open" check is not enough — after a restart the
+  // REPLACEMENT's channel is open, and the old result would land in it.
+  for (const fail of [false, true]) {
+    let release;
+    const gate = new Promise((resolve, reject) => {
+      release = () => (fail
+        ? reject(new Error('superseded action failed'))
+        : resolve({ ok: true }));
+    });
+    const ui = {
+      root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+      status: { textContent: '' },
+      detail: { textContent: '', title: '' },
+      errorDetail: { textContent: '' },
+    };
+    const controller = new GevRealtimeController({ ui, runner: () => gate });
+    controller.debugLog = () => {};
+    controller.cancelRadioHandoff = () => {};
+    const recorded = { dead: [], replacement: [] };
+    const makeChannel = (sink) => ({
+      readyState: 'open',
+      send: (data) => sink.push(JSON.parse(data)),
+    });
+    controller.dc = makeChannel(recorded.dead);
+
+    const pending = controller.handleRealtimeEvent({
+      data: JSON.stringify({
+        type: 'response.function_call_arguments.done',
+        name: 'fly_to_location',
+        call_id: `call_late_${fail}`,
+        arguments: '{}',
+      }),
+    });
+    // The runner is parked on the gate. The conversation ends and is
+    // replaced: this.dc now points at the replacement's fresh channel.
+    controller.dc = makeChannel(recorded.replacement);
+    controller.status = 'listening';
+    release();
+    await pending;
+
+    const phase = fail ? 'rejection' : 'result';
+    assert.deepEqual(recorded.dead, [], `${phase}: nothing reaches the dead channel`);
+    assert.deepEqual(recorded.replacement, [], `${phase}: no old output or response.create enters the replacement`);
+    assert.equal(controller.pendingResponseInstructions, null, `${phase}: no follow-up is queued`);
+    assert.equal(controller.status, 'listening', `${phase}: the replacement keeps status ownership`);
+  }
+});

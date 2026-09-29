@@ -1285,6 +1285,10 @@ export class GevRealtimeController {
     let sentOutput = false;
     let lastResult = null;
     let stopAfterRadioTool = false;
+    // This event's conversation identity. A tool can outlive it — a stop (or
+    // stop + restart) while the runner ran closes or swaps this.dc — so every
+    // publish below re-checks against THIS channel before it writes.
+    const conversationChannel = this.dc;
     for (const call of calls) {
       // No per-iteration spend-cap re-check here by design: `calls` holds at
       // most one entry (see the pre-loop gate above), so there is no mid-batch
@@ -1431,6 +1435,10 @@ export class GevRealtimeController {
           this.activeRadioToolControllers.delete(toolController);
         }
       }
+      // Rejections also arrive after cancellation; never publish into a new
+      // session. (sendToolOutput only checks that SOME channel is open —
+      // after a restart the replacement's channel is open too.)
+      if (!this.ownsConversation(conversationChannel)) return;
       if (radioReservationToken && result?.ok) {
         // Successful authority commits before its output is serialized. The
         // sibling abort synchronously restores manager ownership, so report
@@ -1479,12 +1487,12 @@ export class GevRealtimeController {
       this.stop();
       return;
     }
-    if (sentOutput && this.dc?.readyState === 'open') {
+    if (sentOutput && this.ownsConversation(conversationChannel)) {
       // The viewport-image send is best-effort context. It must never block the
       // response — a throw here would strand the turn at EXECUTING (M13). Guard
       // it so queueResponseCreate always runs, image or not.
       try {
-        await this.sendVisualContextIfUseful(lastResult);
+        await this.sendVisualContextIfUseful(lastResult, conversationChannel);
       } catch (error) {
         this.debugLog('viewport_context.failed', { error: error?.message || String(error) });
       }
@@ -1495,6 +1503,21 @@ export class GevRealtimeController {
       ));
     }
     this.setStatus('listening', 'Ask or command');
+  }
+
+  /**
+   * True when `channel` is still THIS conversation's live data channel — the
+   * identity check every post-await continuation must pass before publishing
+   * output, queueing a response, or touching status. A plain "some channel is
+   * open" check is not enough: after a stop + restart the replacement
+   * session's channel is open too, and a late result from the old
+   * conversation would otherwise land in it.
+   * @param {RTCDataChannel|null} channel - Channel captured before the await.
+   * @returns {boolean} True only when `channel` is still this session's live
+   *   data channel.
+   */
+  ownsConversation(channel) {
+    return this.dc === channel && channel?.readyState === 'open';
   }
 
   sendToolOutput(callId, result) {
@@ -1510,13 +1533,17 @@ export class GevRealtimeController {
     return true;
   }
 
-  async sendVisualContextIfUseful(result) {
+  async sendVisualContextIfUseful(result, channel = null) {
     if (result?.action !== 'get_entity_context' || !this.dc || this.dc.readyState !== 'open') return false;
+    if (channel && !this.ownsConversation(channel)) return false;
     const viewScale = result.scene?.basemap?.viewScale;
     if (!shouldSendViewportImage(viewScale)) return false;
     if (hasStructuredViewIdentity(result)) return false;
     const imageUrl = await captureViewportImage();
     if (!imageUrl) return false;
+    // The capture is the long pole: the conversation can close while it runs,
+    // and the image must not enter whatever replaced it.
+    if (channel && !this.ownsConversation(channel)) return false;
 
     // Keep at most one viewport screenshot in context. Images are the single
     // most expensive item (re-billed every turn they linger), so we proactively

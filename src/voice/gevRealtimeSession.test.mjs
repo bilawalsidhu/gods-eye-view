@@ -1018,6 +1018,34 @@ test('a local-scale entity query with no structured identity sends the screensho
   globalThis.window.__godsEyeView = null;
 });
 
+test('a viewport capture that outlives its conversation sends nothing', async () => {
+  // The capture is the long pole of the continuation: the conversation can
+  // close while the screenshot runs, and the image must not enter whatever
+  // replaced it (ported from upstream e7970c5's post-capture guard).
+  resetFetch();
+  documentStub.hidden = false;
+  canvasPixels = lightGrayFrame();
+  globalThis.window.__godsEyeView = { viewer: makeCaptureViewer() };
+  const controller = makeViewportController();
+  const stale = new FakeDataChannel();
+  controller.dc = new FakeDataChannel();
+
+  assert.equal(
+    await controller.sendVisualContextIfUseful(localContextResult(), stale),
+    false,
+    'a stale channel is refused before the capture runs',
+  );
+  assert.equal(controller.dc.sent.length, 0);
+
+  // Channel healthy at entry, replaced while the capture is in flight.
+  const pending = controller.sendVisualContextIfUseful(localContextResult(), stale);
+  stale.close();
+  assert.equal(await pending, false, 'the captured image must not enter the replacement');
+  assert.equal(controller.dc.sent.length, 0, 'the replacement received nothing');
+
+  globalThis.window.__godsEyeView = null;
+});
+
 test('viewport context is skipped for non-local scales, structured results, and closed channels', async () => {
   const controller = makeViewportController();
   assert.equal(await controller.sendVisualContextIfUseful({ action: 'zoom_to_globe' }), false);
