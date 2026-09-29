@@ -24,7 +24,11 @@ export function nearestRoadSnap(roads, point, maxDistanceM = 18) {
     const road = roads[roadIndex];
     const coords = road?.coords;
     if (!Array.isArray(coords) || coords.length < 2) continue;
-    for (let segmentIndex = 0; segmentIndex < coords.length - 1; segmentIndex++) {
+    for (
+      let segmentIndex = 0;
+      segmentIndex < coords.length - 1;
+      segmentIndex++
+    ) {
       const a = coords[segmentIndex];
       const b = coords[segmentIndex + 1];
       if (!Array.isArray(a) || !Array.isArray(b)) continue;
