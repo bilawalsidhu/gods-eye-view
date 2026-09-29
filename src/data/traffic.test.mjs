@@ -9,6 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import trafficLayer, {
   deriveTrafficFlowError,
+  nearestRoadSnap,
   trafficFeedPresentation,
 } from './traffic.js';
 import { DataLayerManager, layerFeedState } from './manager.js';
@@ -20,6 +21,37 @@ import { DataLayerManager, layerFeedState } from './manager.js';
  * remedy without claiming one.
  */
 const LIVE_CLAIM = /\bLIVE\b|\bGPS\b|\breal[- ]?time\b/;
+
+test('nearestRoadSnap admits a close CCTV projection and rejects a distant one', () => {
+  const roads = [
+    {
+      type: 'primary',
+      coords: [
+        [-87.628, 41.882],
+        [-87.627, 41.882],
+      ],
+    },
+  ];
+  const near = nearestRoadSnap(
+    roads,
+    { lat: 41.882045, lon: -87.6275 },
+    18,
+  );
+  assert.ok(near);
+  assert.equal(near.roadIndex, 0);
+  assert.equal(near.segmentIndex, 0);
+  assert.equal(near.roadType, 'primary');
+  assert.ok(near.distanceM > 4 && near.distanceM < 6);
+  assert.ok(Math.abs(near.lat - 41.882) < 1e-9);
+  assert.equal(
+    nearestRoadSnap(
+      roads,
+      { lat: 41.882045, lon: -87.6275 },
+      2,
+    ),
+    null,
+  );
+});
 
 test('a superseded flow fetch is not an outage', () => {
   assert.equal(deriveTrafficFlowError({ name: 'AbortError', message: 'aborted' }), null);
