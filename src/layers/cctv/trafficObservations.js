@@ -149,8 +149,7 @@ export function summarizeCameraTrafficObservation(
   const ageMs = Math.max(0, Number(now) - observedAt);
   const staleLimit = Math.max(0, Number(staleAfterMs) || 0);
   const stale =
-    Boolean(snapshot.error || snapshot.state === 'stale') ||
-    ageMs > staleLimit;
+    Boolean(snapshot.error || snapshot.state === 'stale') || ageMs > staleLimit;
   const partial = Boolean(snapshot.partial);
   const state = stale ? 'stale' : partial ? 'partial' : 'fresh';
   const rate = finiteNonNegative(record?.flow?.vehiclesPerMin);
