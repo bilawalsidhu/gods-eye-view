@@ -141,7 +141,10 @@ export function detectReflexCandidates(
   const minimum = Math.max(2, Math.floor(Number(minOccurrences) || 0));
   const requiredRate = Math.min(
     1,
-    Math.max(0, Number.isFinite(Number(minSuccessRate)) ? Number(minSuccessRate) : 1),
+    Math.max(
+      0,
+      Number.isFinite(Number(minSuccessRate)) ? Number(minSuccessRate) : 1,
+    ),
   );
   const groups = new Map();
 
