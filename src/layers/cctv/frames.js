@@ -389,6 +389,171 @@ export function createFrames({ state: layerState, services, parts, source }) {
     runtime.image.src = `${frameUrl}${sep}projTs=${Math.floor(now / refreshMs)}`;
   }
 
+  function trafficObservationPort() {
+    const entry = layerState._dataManager?.layers?.get?.('traffic');
+    if (!entry?.enabled) return null;
+    const traffic = entry.module;
+    if (
+      typeof traffic?.snapObservedPoint !== 'function' ||
+      typeof traffic?.replaceExternalVehicleObservations !== 'function' ||
+      typeof traffic?.clearExternalVehicleObservations !== 'function'
+    )
+      return null;
+    return traffic;
+  }
+
+  function clearPublishedVehicleObservations() {
+    const sourceId = layerState._vehicleObservationSourceId;
+    if (sourceId) {
+      const entry = layerState._dataManager?.layers?.get?.('traffic');
+      entry?.module?.clearExternalVehicleObservations?.(sourceId);
+    }
+    layerState._vehicleObservationSourceId = null;
+    layerState._vehicleObservationCount = 0;
+  }
+
+  /** Reset detector history and remove every contact this CCTV layer published. */
+  function clearVehicleObservationState() {
+    clearPublishedVehicleObservations();
+    layerState._vehicleObservationLastAt = null;
+    for (const record of layerState._records || []) {
+      const runtime = record?.projection;
+      if (!runtime) continue;
+      runtime.vehicleObservationPixels = null;
+      runtime.vehicleObservationLastAt = 0;
+      if (runtime.vehicleObservationCanvas) {
+        runtime.vehicleObservationCanvas.width = 0;
+        runtime.vehicleObservationCanvas.height = 0;
+      }
+      runtime.vehicleObservationCanvas = null;
+      runtime.vehicleObservationCtx = null;
+    }
+  }
+
+  function ensureVehicleObservationCanvas(runtime) {
+    if (runtime.vehicleObservationCanvas && runtime.vehicleObservationCtx)
+      return runtime.vehicleObservationCtx;
+    const canvas = document.createElement('canvas');
+    canvas.width = VEHICLE_ANALYSIS_WIDTH;
+    canvas.height = VEHICLE_ANALYSIS_HEIGHT;
+    runtime.vehicleObservationCanvas = canvas;
+    runtime.vehicleObservationCtx = canvas.getContext('2d', {
+      willReadFrequently: true,
+    });
+    return runtime.vehicleObservationCtx;
+  }
+
+  /**
+   * Analyze one already-fetched active-camera frame locally and publish
+   * anonymous moving vehicle-shaped contacts into the Traffic layer.
+   * @param {Object} record Active CCTV runtime record.
+   * @param {CanvasImageSource} media Already-decoded image/video source.
+   * @param {number} [now=Date.now()]
+   * @returns {number} Number of admitted road-snapped observations.
+   */
+  function processVehicleObservationFrame(record, media, now = Date.now()) {
+    if (
+      !layerState._vehicleObservationsEnabled ||
+      !layerState._enabled ||
+      !record?.projection ||
+      record.camera?.id !== layerState._activeCameraId ||
+      !media
+    )
+      return 0;
+    const runtime = record.projection;
+    if (
+      now - (runtime.vehicleObservationLastAt || 0) <
+      VEHICLE_ANALYSIS_INTERVAL_MS
+    )
+      return layerState._vehicleObservationCount;
+    runtime.vehicleObservationLastAt = now;
+
+    const ctx = ensureVehicleObservationCanvas(runtime);
+    if (!ctx) return 0;
+    let pixels;
+    try {
+      ctx.clearRect(0, 0, VEHICLE_ANALYSIS_WIDTH, VEHICLE_ANALYSIS_HEIGHT);
+      ctx.drawImage(
+        media,
+        0,
+        0,
+        VEHICLE_ANALYSIS_WIDTH,
+        VEHICLE_ANALYSIS_HEIGHT,
+      );
+      pixels = ctx.getImageData(
+        0,
+        0,
+        VEHICLE_ANALYSIS_WIDTH,
+        VEHICLE_ANALYSIS_HEIGHT,
+      ).data;
+    } catch {
+      // A tainted/unreadable frame stays presentation-only.
+      return 0;
+    }
+
+    const currentPixels = new Uint8ClampedArray(pixels);
+    const previousPixels = runtime.vehicleObservationPixels;
+    runtime.vehicleObservationPixels = currentPixels;
+
+    const traffic = trafficObservationPort();
+    const sourceId = `cctv:${record.camera.id}`;
+    if (
+      layerState._vehicleObservationSourceId &&
+      layerState._vehicleObservationSourceId !== sourceId
+    ) {
+      const oldId = layerState._vehicleObservationSourceId;
+      const oldTraffic = layerState._dataManager?.layers?.get?.('traffic')?.module;
+      oldTraffic?.clearExternalVehicleObservations?.(oldId);
+      layerState._vehicleObservationCount = 0;
+    }
+    layerState._vehicleObservationSourceId = sourceId;
+    if (!previousPixels || !traffic) return 0;
+
+    const candidates = detectMotionVehicleCandidates(
+      previousPixels,
+      currentPixels,
+      VEHICLE_ANALYSIS_WIDTH,
+      VEHICLE_ANALYSIS_HEIGHT,
+    );
+    const groundAlt = Number.isFinite(record.frustumGeometry?.groundAltM)
+      ? record.frustumGeometry.groundAltM
+      : (Number(record.camera.absoluteHeightM) || 0) -
+        (Number(record.camera.mountHeightM) || 0);
+    const contacts = [];
+    for (const candidate of candidates) {
+      const projected = parts.geometry.projectFramePointToGround(
+        record.camera,
+        groundAlt,
+        {
+          x: candidate.x + candidate.width / 2,
+          y: candidate.y + candidate.height,
+        },
+        { width: VEHICLE_ANALYSIS_WIDTH, height: VEHICLE_ANALYSIS_HEIGHT },
+      );
+      if (!projected) continue;
+      const snapped = traffic.snapObservedPoint(projected, {
+        maxDistanceM: 22,
+      });
+      if (!snapped) continue;
+      contacts.push({
+        ...snapped,
+        type: candidate.type,
+        confidence: candidate.confidence,
+        observedAt: now,
+        cameraId: record.camera.id,
+        cameraCode: record.camera.code || record.camera.id,
+      });
+    }
+
+    layerState._vehicleObservationCount =
+      traffic.replaceExternalVehicleObservations(sourceId, contacts, {
+        ttlMs: VEHICLE_OBSERVATION_TTL_MS,
+      }) || 0;
+    layerState._vehicleObservationLastAt = now;
+    parts.presentation.notifyListenersThrottled();
+    return layerState._vehicleObservationCount;
+  }
+
   /**
    * Repaints the projection placeholder at most once per PLACEHOLDER_REPAINT_MS.
    * The projection loop runs at RAF cadence — unthrottled, a pending feed would
@@ -451,6 +616,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
           PROJECTION_CANVAS_HEIGHT,
         );
         runtime.canvasStamp = (runtime.canvasStamp || 0) + 1;
+        processVehicleObservationFrame(record, video);
         return;
       }
       paintPlaceholderThrottled(record, runtime, health);
@@ -492,6 +658,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
         );
         runtime.canvasStamp = (runtime.canvasStamp || 0) + 1;
         runtime.lastPlaceholderPaintAt = 0;
+        processVehicleObservationFrame(record, runtime.image);
       }
       return;
     }
@@ -503,6 +670,9 @@ export function createFrames({ state: layerState, services, parts, source }) {
     }
   }
   return {
+    detectMotionVehicleCandidates,
+    processVehicleObservationFrame,
+    clearVehicleObservationState,
     frameSignatureFromPixels,
     projectionFrameSignature,
     paintNextProjectionBuffer,
