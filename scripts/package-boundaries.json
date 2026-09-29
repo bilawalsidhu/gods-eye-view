@@ -1751,6 +1751,7 @@
       "src/services/groundSnap.js",
       "src/services/meshFloorSampler.js",
       "src/services/requests.js",
+      "src/services/singleflight.js",
       "src/services/terrainHeights.js",
       "src/sharelink.js",
       "src/sources/live/aircraft.js",
