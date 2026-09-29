@@ -122,6 +122,15 @@ export function _renderCctvState(state) {
     this._cctvProjectionBtn.disabled = !enabled;
   }
 
+  if (this._cctvVehiclesBtn) {
+    const observing = !!state?.vehicleObservations;
+    this._cctvVehiclesBtn.classList.toggle('active', observing);
+    this._cctvVehiclesBtn.textContent = observing
+      ? 'VEHICLES EXP ON'
+      : 'VEHICLES EXP OFF';
+    this._cctvVehiclesBtn.disabled = !enabled;
+  }
+
   if (this._cctvQualityChip) {
     // CAL badge (cctv-v2 design §3b, amended by LOCKED §9.2 — panel-only,
     // no in-world tint): three states driven by cctv.js's deriveCalBadge,
@@ -155,6 +164,9 @@ export function _renderCctvState(state) {
         ? this._calBadgeLabel(activeCamera.calBadge)
         : '';
       const projLabel = state?.showProjection !== false ? 'MONITOR' : 'OFF';
+      const observedLabel = state?.vehicleObservations
+        ? ` · VEH OBS ${state?.vehicleObservation?.count || 0}`
+        : '';
       this._cctvMeta.textContent = `${activeCamera.city} · HDG ${Math.round(activeCamera.headingDeg)}° · FOV ${Math.round(activeCamera.fovDeg)}° · RANGE ${Math.round(activeCamera.rangeM)}m · ${projLabel}${calBadge ? ` · ${calBadge}` : ''} · ${provider}${credit}${statusMsg}`;
     } else if (cameras.length > 0) {
       this._cctvMeta.textContent = enabled
