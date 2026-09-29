@@ -2719,3 +2719,101 @@ per 11.3's entry rule: baseline re-measured with the same metrics as
   Full accounting in the RUNBOOK 2026-09-25 section. Acceptance met:
   release verified on production; matrix verdict honestly recorded
   with the residual classified and exonerated same-window.
+
+## Phase 13 — Upstream audit & selective extraction (2026-09-27 → 2026-09-29, v0.10.3)
+
+*This fork diverged from bilawalsidhu/gods-eye-view months ago and has
+rebuilt most of the seams upstream has since touched (componentized
+`src/layers/*`, `src/app/*`, `src/ui/styles/*` vs. this tree's monolithic
+`src/data/*`, `src/main.js`, root `style.css`). The audit therefore asked
+one question per upstream commit: **does the defect or capability it
+addresses exist in THIS tree, at THIS tree's equivalent seam?** Verdicts:
+EXTRACT (ported with re-derivation), SKIP (mechanism absent or already
+handled here), or PROPOSE (a feature graft worth building, recorded as a
+phased proposal below — not auto-executed).*
+
+### 13.1 Audit method
+
+All 513 upstream commits since the divergence point were enumerated and
+categorized (fix / feature / style / CI / docs / chore). Each fix was
+mapped to this tree's equivalent seam by grepping for the consumers and
+call sites rather than the upstream paths; each candidate extraction was
+ported only when its triggering mechanism was verified to exist here.
+Every port landed with unit tests, co-located per this tree's
+convention, and where the port's contract depended on a source-shape
+(anchor comments, call ordering), the tests pin that shape via
+`readSource`. No upstream code was copied verbatim across layouts.
+
+### 13.2 Extracted (17 extraction commits on `extract/upstream-sync-2026-09`)
+
+*Two further commits on the branch (`186129d`, `3233dab`) are gate
+repairs — completing the oversized-track contract migration in three
+sites the `6e90a94` commit missed, and filling JSDoc param descriptions
+in two extraction files — not extractions.*
+
+| Commit | Extraction | Upstream provenance |
+| --- | --- | --- |
+| `69356c3` | Sanitize upstream error relay in voice + CCTV endpoints | upstream error-relay hardening |
+| `353f29c` | AIS `not-available` sentinels + TomTom monthly quota sizing | upstream AIS/quota work |
+| `6e90a94` | Oversized track responses answer 502 and cache like errors | upstream track guard |
+| `d2cb1d7` | Antimeridian-aware `clampBoundsAroundCenter` | upstream traffic fix |
+| `be8f17e` | Identifying User-Agent to every Overpass mirror | upstream mirror policy |
+| `47d8e93` | Preserve landmark identity on address-only geocodes | upstream geocode fix |
+| `0083608` | LRU-bounded client terrain-height cache | upstream cache bound |
+| `6ae891c` | Release bundled GeoJSON entities on toggle-off, not hide | upstream lifecycle fix |
+| `02e51f9` | Cancel the active location lookup on dispose | upstream search hygiene |
+| `7aa2ffa` | CCTV: bound the Range ask, release abandoned streams, idle deadline | upstream stream hygiene |
+| `ddbecc1` | Budget the analyst region lookup (3 s); `region-timeout` is its own code; the abandoned lookup keeps filling the caches so retries answer warm | upstream region-budget work |
+| `6c33a0e` | Name the missing provider key on a key-gated row (`src/data/keySetup.js`; FIRMS → `FIRMS_MAP_KEY`) | upstream key-guidance work |
+| `d622c07` | CCTV heading confidence: ` (ESTIMATED)` HUD token, dashed coverage arcs for low-confidence bearings, `headingEstimated` public bit; dash materials memoized by color value so the emphasis loop's fresh `withAlpha()` allocations hit the same cache | upstream heading-confidence work |
+| `5285db2` | Voice conversation identity: `ownsConversation(channel)` pinned at dispatch and re-checked after every await (viewport capture included); late results from a dead session publish nowhere | upstream turn-ownership work |
+| `b8022ca` | CI: SHA-pin third-party workflow actions (see 13.4) | upstream supply-chain posture |
+| `17e0acf` | Apple Metal/ANGLE model-atmosphere quarantine (`src/atmosphereCompat.js`): WebGL2 out-param/varying link probe, Apple-mobile backstop incl. desktop-mode iPad, clears `scene.fog.renderable` (never `enabled` — SSE scaling survives and `visualSettings.js`'s enabled-restore cannot resurrect the bug) | `b456eb8` + `20a03aa` |
+| `7ba082f` | Native `<select>` popups follow the dark scheme (`color-scheme: dark` scoped to select; explicit option colors) | `59b2637` |
+
+### 13.3 Skipped, with rationale
+
+- **`f01b6a5` (glow scrollbars in 720px rails).** The mechanism does not
+  exist here: `html, body { overflow: hidden }` (style.css) rules out
+  viewport scrollbars, and every `.panel-glow` (negative-inset, -30px)
+  is a *sibling* of its panel's `overflow-y: auto` inner scroller, never
+  a child — an absolutely positioned element outside a scroll container
+  cannot feed it scroll area.
+- **`143cffd` (panel scroll preservation during measurement).** This
+  tree's `src/ui/panelAdaptiveLayout.js` already saves and restores
+  `#pp-toggles.scrollTop` around its measurement pass and never lifts
+  other panels' scrollers (it reads `scrollHeight` without mutating
+  scroll positions). Upstream's bug lived in a scroller-lifting
+  measurement this tree does not have.
+- **`b641ad2` (trackpad pinch zoom).** Upstream's fix lives in their
+  `src/app/viewer.js` input layer, which has no equivalent here (the
+  viewer is built inline in `src/main.js`); this tree's Cesium pin
+  handles trackpad pinch natively and no pinch defect has been reported
+  against this fork.
+
+### 13.4 CI action pinning — decision record
+
+Third-party workflow actions in `.github/workflows/ci.yml` and
+`cloudflare-pages.yml` are now SHA-pinned, each SHA verified against its
+upstream tag via `git ls-remote <repo> <tag> '<tag>^{}'` (checkout and
+setup-node v4.4.0, upload-artifact v4.6.2, dtolnay/rust-toolchain stable
+branch head). **`cloudflare/pages-action` is deliberately left
+tag-pinned with an in-file comment**: its repository now 404s upstream,
+so no fresh SHA can be verified; migrating this deploy to
+`wrangler-action` is an owner decision, not an audit edit. Surfaced for
+owner review.
+
+### 13.5 Proposed, not executed (feature grafts)
+
+The audit also surfaced upstream capabilities this fork lacks. These are
+recorded as phased proposals for owner prioritization — none were
+grafted in this release: **MODIS true-color imagery layer**, **Fire
+Perimeters (NIFC)**, **RTL-SDR receiver overlay**, **Recent Imagery
+browser**, **Cyber HUD pane**, scoped Prettier alongside the strict
+ESLint tier, and a boundary lint enforcing the `apiEndpoints` inventory
+at the style level. Each requires its own layout mapping and test plan
+per 13.1 before any port.
+
+### 13.6 Release record
+
+Filled in after gates + deploy verification (below).

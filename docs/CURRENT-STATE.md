@@ -1,6 +1,29 @@
 # God's Eye View Current State
 
-Updated: September 24, 2026
+Updated: September 29, 2026
+
+> **2026-09-29 — v0.10.3 upstream-extraction behaviors** (full accounting
+> in `docs/PLAN.md` Phase 13). At boot, `src/atmosphereCompat.js` probes
+> WebGL2 for the Apple Metal/ANGLE out-param/varying link failure and, on
+> failure — or on any iOS/iPadOS device, desktop-mode iPad included —
+> clears `scene.fog.renderable` (never `enabled`: 3D Tiles
+> screen-space-error scaling keeps working, and `visualSettings.js`'s
+> enabled-save/restore around IR boost cannot resurrect the broken
+> shader). Affected devices lose distance fog on tiles/globe; sky
+> atmosphere is a different shader path and stays on. CCTV cameras with
+> low-confidence headings read `HDG …° (ESTIMATED)` in the HUD/panel and
+> draw **dashed** coverage arcs; calibrated/curated cameras are unchanged,
+> and public camera state carries `headingConfidence`/`headingEstimated`.
+> A key-gated layer row whose key is missing carries setup guidance in
+> its tooltip/aria-label (`src/data/keySetup.js` — FIRMS names
+> `FIRMS_MAP_KEY`). The analyst's region lookups answer
+> `region-timeout` as their own code after a 3 s budget (the lookup keeps
+> filling its caches, so the retry answers warm). Voice tool results that
+> outlive their conversation publish nowhere (`ownsConversation`).
+> Track routes (`/api/opensky-track`, `/api/adsblol/trace`, and the dev
+> mirror) answer an oversized (>5 MB) upstream document with **502**,
+> cached for the TTL like any status. Native `<select>` popups follow the
+> dark scheme. Workflow actions are SHA-pinned in CI.
 
 > **2026-08-23 — first-run mission launcher** (`src/firstRunExperience.js`,
 > `#first-run-launcher`, styles at the tail of `style.css`). After startup

@@ -5,6 +5,93 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+## [0.10.3] — 2026-09-29
+
+Upstream-audit extraction release: 16 fixes and one CI hardening grafted
+from a categorized audit of all 513 upstream commits
+(bilawalsidhu/gods-eye-view) onto this fork's tree. Every extraction was
+re-targeted at this fork's layout (the upstream tree is componentized;
+this one is largely monolithic), re-derived where this fork had already
+rebuilt the seam, and shipped with its own unit tests. Audit verdicts,
+skip rationales, and the phased feature-graft proposals (MODIS, Fire
+Perimeters, RTL-SDR, Recent Imagery, Cyber HUD, scoped Prettier) are
+recorded in [`docs/PLAN.md`](docs/PLAN.md) Phase 13. No new data layer,
+no new production API surface.
+
+### Fixed
+
+- **Voice continuations no longer bleed across sessions.** A tool call
+  that outlives its conversation (stop → restart mid-tool) published its
+  result into the replacement session's channel, because the publish path
+  only checked that *some* channel was open. Conversation identity is now
+  pinned at dispatch (`ownsConversation(channel)`) and re-checked after
+  every await, including the viewport capture; late results are dropped
+  and the replacement session stays clean. (Ported from upstream
+  turn-ownership work.)
+- **CCTV headings that are estimates now say so.** Cameras with a
+  `headingConfidence: 'low'` bearing (or no calibration source) get an
+  ` (ESTIMATED)` token in the HUD row and the panel meta line, dashed
+  coverage arcs instead of solid ones, and a `headingEstimated` bit in
+  public camera state. Manually calibrated and curated cameras are
+  unaffected. Dash materials are memoized by color value, so the emphasis
+  loop's fresh `withAlpha()` allocations hit the same cache. (Ported from
+  upstream heading-confidence work.)
+- **Analyst region lookups answer "still resolving" instead of hanging
+  the turn.** The geocode + admin-boundary rung is raced against a 3 s
+  budget; on expiry the analyst turn returns a dedicated
+  `region-timeout` code while the lookup keeps running and warms the
+  caches, so the retry answers immediately. (Ported from upstream.)
+- **Missing provider keys are named, not just implied.** A key-gated
+  layer row whose key is absent now carries setup guidance in its
+  tooltip and aria-label (`src/data/keySetup.js` registry; FIRMS
+  names `FIRMS_MAP_KEY` and links the free map-key page). Layers
+  project `requiresKeyId` through the manager's `getAll()`.
+- **iPad/iPhone render-loop teardown fixed.** Cesium's per-vertex model
+  atmosphere cannot LINK on Apple Metal/ANGLE (out params bound to
+  varyings), tearing the whole render loop down. A WebGL2 probe at boot
+  reproduces the exact bind; on failure — or unconditionally on
+  iOS/iPadOS, desktop-mode iPad included — the broken stage is kept out
+  of the pipeline via `scene.fog.renderable` (fog *enabled* stays on, so
+  3D Tiles screen-space-error scaling is unaffected; sky atmosphere is a
+  different shader path and stays on). (Ported from upstream b456eb8 +
+  20a03aa.)
+- **Native `<select>` popups follow the dark theme** instead of falling
+  back to the platform's light palette (white-on-white on some
+  platforms). Scoped to `select` so the app's hand-tuned scrollbar and
+  input skins are untouched. (Ported from upstream 59b2637.)
+- **CCTV streams can no longer pile up.** The Range ask is bounded,
+  abandoned streams are released, and idle deadlines stop
+  session-accumulating connections. (Extraction of upstream stream
+  hygiene.)
+- **Address-only geocodes keep their landmark identity** in annotations:
+  an address-only result no longer overwrites a landmark hit's geometry.
+- **Terrain-height cache is LRU-bounded** on the client, so long
+  sessions no longer grow it without limit.
+- **Bundled GeoJSON layers release their entities on toggle-off** rather
+  than hiding them, returning their memory.
+- **Location lookups are cancelled on dispose**, so a closed search can
+  no longer complete and mutate UI state.
+- **Oversized track responses answer 502 and cache like errors**
+  instead of being trusted downstream.
+- **AIS `not-available` sentinels are handled, and the TomTom monthly
+  quota is sized** from actual usage rather than a stale estimate.
+- **Antimeridian crossings no longer corrupt the traffic clamp**:
+  `clampBoundsAroundCenter` is antimeridian-aware.
+- **Overpass mirrors receive an identifying User-Agent**, per mirror
+  policy.
+- **Upstream error relay is sanitized** in the voice and CCTV endpoints
+  before it reaches the client.
+
+### Changed
+
+- **CI: third-party workflow actions are SHA-pinned** (actions/checkout,
+  actions/setup-node, actions/upload-artifact, dtolnay/rust-toolchain;
+  SHAs verified against the upstream tags via `git ls-remote`).
+  `cloudflare/pages-action` is left tag-pinned with a documented
+  rationale — its repository now 404s upstream, so no fresh SHA can be
+  verified, and migrating the deploy to `wrangler-action` is an owner
+  decision, not an audit edit.
+
 ## [0.10.2] — 2026-09-24
 
 Compliance and QA-infrastructure patch: the Google Maps Platform
