@@ -18,7 +18,8 @@
  *
  * Providers (injected — keeps the engine pure and node-testable):
  *   getRecords(layerKey) → Array<record>            (layer accessor snapshot)
- *   resolveRegionRing(name) → Promise<{ring, name}|null>  (NE pack / admin boundary)
+ *   resolveRegionRing(name) → Promise<{ring, name}|{error:'region-timeout'}|null>
+ *                                     (NE pack / budgeted admin boundary)
  *   getViewContext() → {lat, lon, viewRadiusKm, bounds?}  (camera-derived)
  *
  * @module data/analystEngine
@@ -230,6 +231,19 @@ export function createAnalystEngine(providers) {
     const scope = spec.scope || { kind: 'view' };
     if (scope.kind === 'region' && scope.name) {
       const region = await providers.resolveRegionRing(scope.name);
+      // The resolver reports a blown lookup budget as the 'region-timeout'
+      // sentinel rather than null: the lookup keeps running and fills its
+      // caches, so the honest answer is "ask again in a moment" — a distinct
+      // code the surface can render differently from a true unresolved
+      // (ported from upstream ce671ce).
+      if (region?.error === 'region-timeout') {
+        return {
+          ok: false,
+          code: 'region-timeout',
+          error: `"${scope.name}" is still resolving — give it a moment and ask again.`,
+          coverage: { layersQueried, scope: `region:${scope.name}:timeout` },
+        };
+      }
       if (!region?.ring) {
         return {
           ok: false,

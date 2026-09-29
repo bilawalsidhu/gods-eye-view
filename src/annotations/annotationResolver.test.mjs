@@ -1561,6 +1561,37 @@ test('resolveRegionRingForQuery: admin geocode → boundary ring (or honest null
   assert.equal(await resolveRegionRingForQuery('Nevada'), null, 'no boundary → honest null');
 });
 
+test('resolveRegionRingForQuery: the network rung is budgeted — timeout is a sentinel and the lookup keeps filling the cache', async (t) => {
+  let releaseGeocode;
+  const slowGeocode = new Promise((resolve) => { releaseGeocode = resolve; });
+  const mocks = installResolverMocks(t, {
+    geocode: () => slowGeocode, // held until the test releases it
+    overpass: (ql) => {
+      if (ql.includes('is_in(')) return [areaEl(7, 'Slowhaven', 4)];
+      if (ql.includes('rel(pivot')) return [relEl(7, 40.0, -83.0, 20_000, { boundary: 'administrative', name: 'Slowhaven' })];
+      return [];
+    },
+  });
+
+  const first = resolveRegionRingForQuery('Slowhaven', undefined, { budgetMs: 20 });
+  assert.deepEqual(await first, { error: 'region-timeout' }, 'a blown budget is the sentinel, not a plain null');
+  assert.equal(mocks.overpassCalls.length, 0, 'the geocode was still in flight when the budget fired');
+
+  // The abandoned lookup is abandoned, NOT cancelled: release the geocode and
+  // let the rung reach Overpass, which fills the geocode + footprint caches.
+  releaseGeocode(geocodeBody(40.0, -83.0, ['administrative_area_level_1', 'political'], 'Slowhaven, USA'));
+  for (let waited = 0; mocks.overpassBy('rel(pivot').length === 0 && waited < 2000; waited += 5) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.ok(mocks.overpassBy('rel(pivot').length >= 1, 'the abandoned lookup reached the admin-boundary rung');
+  await new Promise((resolve) => setTimeout(resolve, 10)); // let its tail settle before mocks restore
+
+  // The retry — the same question asked a moment later — resolves warm.
+  const retry = await resolveRegionRingForQuery('Slowhaven', undefined, { budgetMs: 5000 });
+  assert.ok(retry?.ring, 'the retry resolves from the cache the abandoned lookup filled');
+  assert.equal(retry.name, 'Slowhaven');
+});
+
 // ── I. placesNearViewRecovery ───────────────────────────────────────────────
 
 test('placesNearViewRecovery: near geocode is kept; no view centre → null', async () => {

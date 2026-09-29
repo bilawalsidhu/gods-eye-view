@@ -2265,11 +2265,22 @@ function shortLabel(formattedAddress) {
  * resolve to a region-like boundary — the analyst engine reports that
  * honestly rather than silently scoping to nothing.
  *
+ * The geocode + boundary rung runs under a wall-clock budget (ported from
+ * upstream): a spoken analyst query is interactive, and a slow geocoder or a
+ * crawling Overpass must not hold the whole answer hostage. When the budget
+ * expires the lookup is ABANDONED, NOT CANCELLED — it keeps running and fills
+ * the Tier A caches, so the retry (the same question asked again a moment
+ * later) resolves instantly from cache. The expiry is reported as the
+ * `{ error: REGION_LOOKUP_TIMEOUT }` sentinel; the analyst engine turns that
+ * into its own distinct "still resolving" answer.
+ *
  * @param {string} name - Region name as uttered, e.g. "Texas", "the Alps", "France", "Gulf of Mexico".
  * @param {AbortSignal} [signal] - Forwards cancellation to the geocode and admin-boundary fetches.
- * @returns {Promise<{name:string, ring:Array<[number,number]>}|null>} The boundary ring plus the canonical name it resolved to, or null when the name is empty or not region-like.
+ * @param {{budgetMs?: number}} [opts] - Wall-clock budget for the network rung;
+ *   injectable only to keep the timeout unit-testable.
+ * @returns {Promise<{name:string, ring:Array<[number,number]>}|{error:string}|null>} The boundary ring plus the canonical name it resolved to; the REGION_LOOKUP_TIMEOUT sentinel when the budget expired; or null when the name is empty or not region-like.
  */
-export async function resolveRegionRingForQuery(name, signal) {
+export async function resolveRegionRingForQuery(name, signal, { budgetMs = REGION_LOOKUP_BUDGET_MS } = {}) {
   const q = String(name || '').trim();
   if (!q) return null;
   const ne = await findNaturalRegion(q).catch(() => null);
@@ -2279,11 +2290,32 @@ export async function resolveRegionRingForQuery(name, signal) {
     const ring = [...ne.polygons].sort((a, b) => b.length - a.length)[0];
     if (ring?.length >= 3) return { name: ne.name, ring };
   }
-  const geo = await geocodePlace(q, null, signal).catch(() => null);
-  if (!geo) return null;
-  const scope = scopeFromTypes(geo.types);
-  if (!['country', 'state', 'county', 'city'].includes(scope)) return null;
-  const fp = await fetchAdminArea(geo.lat, geo.lon, q, scope, signal).catch(() => null);
-  if (fp?.ring?.length >= 3) return { name: q, ring: fp.ring };
-  return null;
+  // The network rung never rejects (every step catches to null), so the race
+  // below cannot leak an unhandled rejection after the budget winner returns.
+  const lookup = (async () => {
+    const geo = await geocodePlace(q, null, signal).catch(() => null);
+    if (!geo) return null;
+    const scope = scopeFromTypes(geo.types);
+    if (!['country', 'state', 'county', 'city'].includes(scope)) return null;
+    const fp = await fetchAdminArea(geo.lat, geo.lon, q, scope, signal).catch(() => null);
+    return fp?.ring?.length >= 3 ? { name: q, ring: fp.ring } : null;
+  })();
+  if (!(budgetMs > 0)) return lookup;
+  let timer = null;
+  const expired = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(REGION_LOOKUP_TIMEOUT), budgetMs);
+  });
+  const winner = await Promise.race([lookup, expired]);
+  clearTimeout(timer);
+  return winner === REGION_LOOKUP_TIMEOUT ? { error: REGION_LOOKUP_TIMEOUT } : winner;
 }
+
+/** Region-resolution timeout sentinel (see resolveRegionRingForQuery).
+ * @type {string} */
+export const REGION_LOOKUP_TIMEOUT = 'region-timeout';
+
+/** Wall-clock budget for the analyst region lookup's network rung. Long
+ * enough for a warm cache to always beat it; short enough that a spoken
+ * query never waits on a crawling geocoder.
+ * @type {number} */
+export const REGION_LOOKUP_BUDGET_MS = 3 * 1000;

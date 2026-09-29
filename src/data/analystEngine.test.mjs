@@ -187,6 +187,23 @@ test('analyst: unresolved region is an honest failure, not empty success', async
   assert.match(r.error, /Atlantis/);
 });
 
+test('analyst: a region-timeout reports its own code, distinct from unresolved', async () => {
+  // The resolver abandons (never cancels) a lookup that blows its budget —
+  // the caches keep filling, so the honest answer is "ask again in a moment".
+  // That must not render as "I couldn't resolve a boundary" (which reads like
+  // the name is wrong) nor as an unresolved coverage scope.
+  const e = createAnalystEngine({
+    getRecords: () => FLIGHTS,
+    resolveRegionRing: async () => ({ error: 'region-timeout' }),
+    getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
+  });
+  const r = await e.query({ layers: ['flights'], scope: { kind: 'region', name: 'Kazakhstan' } });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'region-timeout');
+  assert.match(r.error, /still resolving/);
+  assert.equal(r.coverage.scope, 'region:Kazakhstan:timeout');
+});
+
 test('analyst: route fields queryable from cached enrichment only', async () => {
   const r = await makeEngine().query({
     layers: ['flights'], scope: { kind: 'anywhere' },
