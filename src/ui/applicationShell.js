@@ -953,6 +953,7 @@ export class StyleManager extends ShellFacade {
         _cctvPanel: this._cctvPanel,
         _cctvPrevBtn: this._cctvPrevBtn,
         _cctvProjectionBtn: this._cctvProjectionBtn,
+        _cctvVehiclesBtn: this._cctvVehiclesBtn,
         _cctvQualityChip: this._cctvQualityChip,
         _cctvSelect: this._cctvSelect,
         _cctvSourceBadge: this._cctvSourceBadge,
