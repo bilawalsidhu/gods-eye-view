@@ -160,9 +160,11 @@ export function summarizeCameraTrafficObservation(
       ? 'TRAFFIC OBS · PARTIAL'
       : 'TRAFFIC OBS · MEASURED';
 
+  const cardMix = observedTrafficClassMix(counts, { limit: 2 });
+  const cardStatus = stale ? 'STALE' : partial ? 'PARTIAL' : 'OBSERVED';
   const cardDetails = [
-    primary,
-    classMix || ageLabel,
+    `${cardStatus} · ${primary}`,
+    [cardMix, ageLabel].filter(Boolean).join(' · '),
   ].filter(Boolean);
 
   return {
