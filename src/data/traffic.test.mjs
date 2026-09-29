@@ -8,6 +8,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import trafficLayer, {
+  classifyExternalObservationFreshness,
   deriveTrafficFlowError,
   nearestRoadSnap,
   trafficFeedPresentation,
@@ -21,6 +22,25 @@ import { DataLayerManager, layerFeedState } from './manager.js';
  * remedy without claiming one.
  */
 const LIVE_CLAIM = /\bLIVE\b|\bGPS\b|\breal[- ]?time\b/;
+
+test('CCTV observation freshness is explicit across observed, stale, and unavailable', () => {
+  assert.equal(
+    classifyExternalObservationFreshness(1000, 3000, 13000, 2999),
+    'observed',
+  );
+  assert.equal(
+    classifyExternalObservationFreshness(1000, 3000, 13000, 3000),
+    'stale',
+  );
+  assert.equal(
+    classifyExternalObservationFreshness(1000, 3000, 13000, 13000),
+    'unavailable',
+  );
+  assert.equal(
+    classifyExternalObservationFreshness(NaN, 3000, 13000, 2000),
+    'unavailable',
+  );
+});
 
 test('nearestRoadSnap admits a close CCTV projection and rejects a distant one', () => {
   const roads = [
