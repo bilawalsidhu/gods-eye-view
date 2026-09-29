@@ -1032,6 +1032,9 @@ export async function readBytesCapped(response, maxBytes) {
  * @param {object} [options] - Request shaping + injection points.
  * @param {Record<string,string>} [options.headers] Request headers (Range etc.).
  * @param {number} [options.timeoutMs=CCTV_STREAM_HEADER_TIMEOUT_MS] Header wait budget.
+ * @param {AbortSignal} [options.signal] Downstream (viewer) cancellation: when
+ *   it fires the header wait ends early, so a viewer who leaves mid-request
+ *   takes the upstream request with them.
  * @param {typeof fetch} [options.fetchImpl=fetch] Injectable for tests.
  * @returns {Promise<{ok:true, upstream:Response, disarm:()=>void}|{ok:false}>}
  *   Open upstream plus the disarm handle, or `{ok:false}` on timeout/error.
@@ -1039,16 +1042,29 @@ export async function readBytesCapped(response, maxBytes) {
 export async function fetchMediaHeadersBounded(url, {
   headers = {},
   timeoutMs = CCTV_STREAM_HEADER_TIMEOUT_MS,
+  signal = null,
   fetchImpl = fetch,
 } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => {
     controller.abort(new DOMException('CCTV upstream media headers timed out', 'TimeoutError'));
   }, timeoutMs);
+  const onDownstreamAbort = () => {
+    controller.abort(signal.reason);
+  };
+  if (signal) {
+    if (signal.aborted) {
+      clearTimeout(timer);
+      return { ok: false };
+    }
+    signal.addEventListener('abort', onDownstreamAbort, { once: true });
+  }
   try {
     const upstream = await fetchImpl(url, { headers, signal: controller.signal });
+    if (signal) signal.removeEventListener('abort', onDownstreamAbort);
     return { ok: true, upstream, disarm: () => clearTimeout(timer) };
   } catch {
+    if (signal) signal.removeEventListener('abort', onDownstreamAbort);
     clearTimeout(timer);
     return { ok: false };
   }

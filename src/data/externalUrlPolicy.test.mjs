@@ -60,16 +60,26 @@ test('isNonGlobalIpv4: the reserved ranges, piece by piece', () => {
   assert.equal(isNonGlobalIpv4('example.com'), false, 'not an IPv4 literal at all');
 });
 
-test('safeRangeHeader: single byte ranges pass, everything else is dropped', () => {
-  assert.equal(safeRangeHeader('bytes=0-'), 'bytes=0-');
-  assert.equal(safeRangeHeader('bytes=100-499'), 'bytes=100-499');
+test('safeRangeHeader: accepted forms are canonicalized and span-bounded, junk is dropped', () => {
+  // Bounding bounds what is ASKED FOR, not what arrives (ported from upstream):
+  // an open-ended range cannot request an upstream's whole unknown-size file —
+  // it is clamped to one span, and a player wanting more asks for the next.
+  const cap = 64 * 1024 * 1024;
+  assert.equal(safeRangeHeader('bytes=0-'), `bytes=0-${cap - 1}`, 'open-ended clamped to one span');
+  assert.equal(safeRangeHeader('bytes=100-499'), 'bytes=100-499', 'a span under the cap passes through');
+  assert.equal(safeRangeHeader('bytes=100-999999999'), `bytes=100-${100 + cap - 1}`, 'an over-wide span is clamped from its first byte');
   assert.equal(safeRangeHeader('  bytes=0-1023  '), 'bytes=0-1023', 'trimmed');
   assert.equal(safeRangeHeader('bytes=500-400'), null, 'reversed range');
-  assert.equal(safeRangeHeader('bytes=0-99, 200-299'), null, 'multi-range');
-  assert.equal(safeRangeHeader('bytes=-500'), null, 'suffix form');
+  assert.equal(safeRangeHeader('bytes=0-99, 200-299'), null, 'multi-range (its multipart answer would stream uncapped)');
+  assert.equal(safeRangeHeader('bytes=-500'), 'bytes=-500', 'suffix form accepted under the cap');
+  assert.equal(safeRangeHeader('bytes=-999999999'), `bytes=-${cap}`, 'suffix clamped to the cap');
+  assert.equal(safeRangeHeader('bytes=-0'), null, 'a zero suffix is unsatisfiable by definition');
+  assert.equal(safeRangeHeader('bytes=-'), null, 'neither position is meaningless');
+  assert.equal(safeRangeHeader('BYTES=0-99'), 'bytes=0-99', 'the unit is case-insensitive (RFC 7233 §2.1)');
   assert.equal(safeRangeHeader('items=0-99'), null, 'wrong unit');
   assert.equal(safeRangeHeader('bytes=12345678901234567890-'), null, '20-digit number rejected');
-  assert.equal(safeRangeHeader('bytes=0000000000000000001-'), 'bytes=0000000000000000001-', 'leading zeros stay valid HTTP (19 digits)');
+  assert.equal(safeRangeHeader('bytes=9999999999999999999-'), null, 'a 19-digit first byte past 2^53 is not a safe integer');
+  assert.equal(safeRangeHeader('bytes=0000000000000000001-'), `bytes=1-${1 + cap - 1}`, 'leading zeros canonicalize to the bounded form');
   assert.equal(safeRangeHeader(''), null);
   assert.equal(safeRangeHeader(undefined), null);
   assert.equal(safeRangeHeader(null), null);
@@ -131,12 +141,18 @@ test('isSafeExternalHttpUrl: IPv6 literals, credentials, and truncation dots', (
 test('safeRangeHeader: the contract both CCTV media proxies rely on', () => {
   // Wave-6b: pure function, pinned here because the Pages Function twin
   // imports THIS module — a regression here is a production regression.
-  assert.equal(safeRangeHeader('bytes=0-'), 'bytes=0-', 'open-ended passes through');
-  assert.equal(safeRangeHeader('bytes=100-199'), 'bytes=100-199', 'bounded passes through');
+  assert.equal(safeRangeHeader('bytes=0-'), `bytes=0-${64 * 1024 * 1024 - 1}`, 'open-ended is clamped, never open');
+  assert.equal(safeRangeHeader('bytes=100-199'), 'bytes=100-199', 'a span under the cap passes through');
   assert.equal(safeRangeHeader('  bytes=5-9  '), 'bytes=5-9', 'trimmed');
   assert.equal(safeRangeHeader('bytes=199-100'), null, 'reversed range rejected');
   assert.equal(safeRangeHeader('bytes=abc-'), null, 'malformed rejected');
   assert.equal(safeRangeHeader('bytes=0-99999999999999999999999'), null, 'over-long last byte rejected');
   assert.equal(safeRangeHeader('item=0-5'), null, 'non-bytes unit rejected');
   assert.equal(safeRangeHeader(42), null, 'non-string rejected');
+  // A caller may tighten the ceiling (the CCTV relays pass their 64 MB body
+  // cap explicitly); an unusable ceiling drops the header rather than
+  // forwarding something unbounded.
+  assert.equal(safeRangeHeader('bytes=0-', 16), 'bytes=0-15', 'a custom ceiling is honored');
+  assert.equal(safeRangeHeader('bytes=8-', 16), 'bytes=8-23', 'the window follows the first byte');
+  assert.equal(safeRangeHeader('bytes=0-', 0), null, 'a zero ceiling is refused');
 });

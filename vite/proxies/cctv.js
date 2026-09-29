@@ -8,33 +8,16 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { DEFAULT_CCTV_SOURCE_FILE, buildMediaPassthrough, buildStreamPayload, buildSyntheticCctvSvg, createCctvHealthTracker, fetchCctvImageFromUpstream, fetchMediaHeadersBounded, getCctvSources, isVideoFeedType, normalizeFeedType, parseConfiguredSourcesFromEnv, streetViewFallback } from '../../src/data/cctvSources.js';
+import { DEFAULT_CCTV_SOURCE_FILE, MEDIA_DECLARED_CAP_BYTES, buildStreamPayload, buildSyntheticCctvSvg, createCctvHealthTracker, fetchCctvImageFromUpstream, fetchMediaHeadersBounded, getCctvSources, isVideoFeedType, normalizeFeedType, parseConfiguredSourcesFromEnv, streetViewFallback } from '../../src/data/cctvSources.js';
+import { proxyMediaResponse, watchDownstreamClose } from '../../src/data/cctvMediaRelay.js';
 import { safeRangeHeader } from '../../src/data/externalUrlPolicy.js';
 import { resolveServerGoogleApiKey } from '../../src/data/googlePlacesPolicy.js';
-import { Readable } from 'node:stream';
 
 import { fileURLToPath } from 'node:url';
 
 /** Repo-root resolution: vite.config.js sat at the checkout root, so its
  *  `__dirname` pointed there; these modules live one level deeper. */
 const __dirname = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-
-/**
- * Coerce a fetch() response body to a Node.js Readable stream.
- *
- * Handles both Node-native streams (.pipe) and web ReadableStreams (.getReader).
- *
- * @param {ReadableStream|import('stream').Readable|null} body
- * @returns {import('stream').Readable|null}
- */
-export function toReadable(body) {
-  if (!body) return null;
-  if (typeof body.pipe === 'function') return body;
-  if (typeof body.getReader === 'function') {
-    return Readable.fromWeb(body);
-  }
-  return null;
-}
 
 /**
  * Load CCTV sources from a local JSON file (CCTV_SOURCES_FILE env or default).
@@ -80,31 +63,6 @@ export function loadSourcesFromFile() {
  */
 export function cctvProxy() {
   const { setHealth, listHealth } = createCctvHealthTracker();
-
-  /** Pipe an upstream media Response into the Node client response. */
-  const proxyMediaResponse = async (res, upstream, { sourceHeader = 'upstream' } = {}) => {
-    const passthrough = buildMediaPassthrough(upstream, { sourceHeader });
-    if (!passthrough.ok) {
-      res.writeHead(passthrough.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({ error: passthrough.error }));
-      try { await upstream.body?.cancel(); } catch { /* no-op */ }
-      return;
-    }
-
-    res.writeHead(passthrough.status, passthrough.headers);
-
-    const stream = toReadable(upstream.body);
-    if (!stream) {
-      const buf = Buffer.from(await upstream.arrayBuffer());
-      res.end(buf);
-      return;
-    }
-
-    stream.on('error', () => {
-      if (!res.writableEnded) res.end();
-    });
-    stream.pipe(res);
-  };
 
   return {
     name: 'cctv-proxy',
@@ -185,19 +143,33 @@ export function cctvProxy() {
               return;
             }
 
+            // Bound before the request goes out: most of the wait is before any
+            // header arrives, and a viewer who leaves during it must take the
+            // upstream request with them.
+            const downstream = watchDownstreamClose(res);
             try {
               const upstreamHeaders = { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' };
-              // Forward only a well-formed byte range; anything else is dropped
-              // and the upstream serves the full body (issue #27).
-              const requestRange = safeRangeHeader(req.headers?.range);
+              // Never forward the client's own string: a Range this proxy does
+              // not accept is dropped, and an accepted one is bounded to the
+              // same span ceiling the relay applies to a declared body.
+              const requestRange = safeRangeHeader(req.headers?.range, MEDIA_DECLARED_CAP_BYTES);
               if (requestRange) upstreamHeaders.Range = requestRange;
               // Bounded wait for response headers (issue #25): a dark upstream
               // cannot hold this request forever; disarmed below once we take
-              // the body so a healthy unbounded stream is never killed.
-              const media = await fetchMediaHeadersBounded(mediaUrl, { headers: upstreamHeaders });
+              // the body so a healthy unbounded stream is never killed. A
+              // viewer who leaves during the wait cancels it outright.
+              const media = await fetchMediaHeadersBounded(mediaUrl, {
+                headers: upstreamHeaders,
+                signal: downstream.signal,
+              });
               if (!media.ok) throw new Error('Media upstream timed out');
               const upstream = media.upstream;
               media.disarm();
+              if (downstream.closed) {
+                // The headers arrived for a viewer who is no longer there.
+                try { await upstream.body?.cancel(); } catch { /* already closed */ }
+                return;
+              }
               const contentType = upstream.headers.get('content-type') || '';
               if (!upstream.ok) {
                 setHealth(cameraId, {
@@ -232,6 +204,11 @@ export function cctvProxy() {
               });
               return;
             } catch (error) {
+              if (downstream.closed) {
+                // The viewer left mid-request. That is not a camera fault and
+                // there is nobody to answer.
+                return;
+              }
               // Only our own controlled timeout sentinel reaches the health
               // message; raw network error text (errno, hostnames) stays
               // server-side (dev console) — the UI renders a fixed string

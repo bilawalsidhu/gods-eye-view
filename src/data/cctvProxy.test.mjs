@@ -156,6 +156,35 @@ test('fetchMediaHeadersBounded: without disarm the timer still fires (contract)'
   assert.equal(upstreamSignal.aborted, true, 'callers MUST disarm once they take the body');
 });
 
+test('fetchMediaHeadersBounded: a downstream abort cancels the header wait (viewer left)', async () => {
+  const downstream = new AbortController();
+  let upstreamSignal = null;
+  const result = await fetchMediaHeadersBounded('https://example.com/live.mjpeg', {
+    timeoutMs: 10_000,
+    signal: downstream.signal,
+    fetchImpl: (_url, options) => new Promise((_resolve, reject) => {
+      upstreamSignal = options.signal;
+      options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true });
+    }),
+  });
+  assert.equal(result.ok, false, 'the wait ends as an upstream miss when the viewer leaves');
+  assert.equal(upstreamSignal.aborted, true, 'the internal controller carried the downstream abort');
+  downstream.abort();
+});
+
+test('fetchMediaHeadersBounded: an already-aborted downstream signal never fetches', async () => {
+  const downstream = new AbortController();
+  downstream.abort();
+  let fetched = false;
+  const result = await fetchMediaHeadersBounded('https://example.com/live.mjpeg', {
+    timeoutMs: 10_000,
+    signal: downstream.signal,
+    fetchImpl: async () => { fetched = true; return new Response('x'); },
+  });
+  assert.equal(result.ok, false);
+  assert.equal(fetched, false, 'a viewer who left before the request must not send it');
+});
+
 test('normalizeSourceItem: load-time URL validation (issue #29)', () => {
   const good = normalizeSourceItem({
     id: 'cam-1',

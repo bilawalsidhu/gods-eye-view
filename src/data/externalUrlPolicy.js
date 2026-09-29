@@ -76,22 +76,67 @@ export function isSafeExternalHttpUrl(value, { httpsOnly = false } = {}) {
 }
 
 /**
- * Validate a client-supplied HTTP Range header before it is forwarded to an
- * upstream (CCTV media proxy). Accepts only well-formed single byte ranges —
- * `bytes=<first>-<last>` with an open end allowed — capped to 19 digits per
- * number so a hostile value cannot be an upstream-breaking novelty (or a
- * multi-range / suffix-form abuse vector). Anything else returns null and
- * the proxy simply omits the header (upstream serves the full body, which
- * the player also handles).
- * @param {string|undefined} raw The client Range header value.
- * @returns {?string} The validated value, or null to drop it.
+ * Default ceiling for the byte span a forwarded Range may ask for — the same
+ * 64 MB cap the CCTV media relay applies to a declared response body.
+ * @type {number}
  */
-export function safeRangeHeader(raw) {
+export const DEFAULT_RANGE_SPAN_MAX_BYTES = 64 * 1024 * 1024;
+
+/**
+ * Validate, canonicalize and BOUND a client-supplied HTTP Range header before
+ * it is forwarded to an upstream (CCTV media proxy). Bounding bounds what is
+ * ASKED FOR, not what arrives: every accepted form — `bytes=<first>-<last>`,
+ * `bytes=<first>-`, `bytes=-<suffix>` — is clamped to `maxBytes` of span,
+ * including the open-ended and suffix forms, which otherwise ask an upstream
+ * for a whole file of unknown size. A player that wants more than one span's
+ * worth asks for the next range, which is ordinary partial-content behavior.
+ *
+ * Anything that is not a single well-formed `bytes=` range is DROPPED (null)
+ * and the proxy sends no Range, which is what RFC 7233 §3.1 prescribes for a
+ * Range a server cannot understand: the upstream serves the full body, which
+ * the player also handles. Dropped values include multi-range (a comma fails
+ * the single-range pattern — its multipart answer would stream uncapped) and
+ * any value carrying CR/LF, which an outbound fetch would refuse to carry.
+ *
+ * @param {string|undefined} raw The client Range header value.
+ * @param {number} [maxBytes=DEFAULT_RANGE_SPAN_MAX_BYTES] Ceiling for the
+ *   requested span.
+ * @returns {?string} The canonical bounded value, or null to drop it.
+ */
+export function safeRangeHeader(raw, maxBytes = DEFAULT_RANGE_SPAN_MAX_BYTES) {
   if (typeof raw !== 'string') return null;
-  const match = /^bytes=(\d{1,19})(-(\d{1,19})?)$/.exec(raw.trim());
+  // The unit is case-insensitive (RFC 7233 §2.1); `bytes` is the only one the
+  // proxy understands, and the anchored digits pattern is what keeps CRLF,
+  // commas (multi-range) and junk out.
+  const match = /^bytes=(\d{0,19})-(\d{0,19})?$/i.exec(raw.trim());
   if (!match) return null;
-  const first = match[1];
-  const last = match[3]; // undefined for an open-ended range "bytes=N-"
-  if (last !== undefined && BigInt(last) < BigInt(first)) return null;
-  return `bytes=${first}-${last ?? ''}`;
+  const firstText = match[1];
+  // `undefined` (the group never participated) for an open-ended "bytes=N-";
+  // `''` only for the meaningless "bytes=-".
+  const lastText = match[2];
+
+  // "bytes=-" carries neither position and is meaningless.
+  if (firstText === '' && !lastText) return null;
+
+  const cap = Number(maxBytes);
+  if (!Number.isSafeInteger(cap) || cap <= 0) return null;
+
+  // Suffix form: the final N bytes. N === 0 is unsatisfiable by definition.
+  if (firstText === '') {
+    const suffix = Number(lastText);
+    if (!Number.isSafeInteger(suffix) || suffix <= 0) return null;
+    return `bytes=-${Math.min(suffix, cap)}`;
+  }
+
+  const first = Number(firstText);
+  if (!Number.isSafeInteger(first) || first < 0) return null;
+  const ceiling = first + cap - 1;
+  if (!Number.isSafeInteger(ceiling)) return null;
+
+  // Open-ended: everything from `first` on, bounded to one span.
+  if (lastText === undefined) return `bytes=${first}-${ceiling}`;
+
+  const last = Number(lastText);
+  if (!Number.isSafeInteger(last) || last < first) return null;
+  return `bytes=${first}-${Math.min(last, ceiling)}`;
 }

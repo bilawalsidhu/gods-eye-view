@@ -51,6 +51,7 @@
  * Catalog and health state are per-isolate (same honesty as `functions/_lib.js`).
  */
 import {
+  MEDIA_DECLARED_CAP_BYTES,
   buildMediaPassthrough,
   buildStreamPayload,
   buildSyntheticCctvSvg,
@@ -156,7 +157,9 @@ export async function onRequest(context) {
         const upstreamHeaders = { 'User-Agent': 'gods-eye-view-cctv-proxy/1.0' };
         // Forward only a well-formed byte range; anything else is dropped
         // and the upstream serves the full body (issue #27).
-        const requestRange = safeRangeHeader(request.headers.get('range'));
+        // Bounded ask: an accepted Range is clamped to the same span ceiling the
+        // passthrough applies to a declared body (ported from upstream).
+        const requestRange = safeRangeHeader(request.headers.get('range'), MEDIA_DECLARED_CAP_BYTES);
         if (requestRange) upstreamHeaders.Range = requestRange;
         // Bounded wait for response headers (issue #25); disarmed below once
         // we take the body so a healthy unbounded stream is never killed.
