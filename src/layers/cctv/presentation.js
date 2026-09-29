@@ -1,6 +1,10 @@
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
 import { ACTIVE_FRAME_REFRESH_MS, IDLE_FRAME_REFRESH_MS } from './policy.js';
 import { headingHudToken, isHeadingEstimated } from './headingConfidence.js';
+import {
+  formatCameraTrafficObservation,
+  summarizeCameraTrafficObservation,
+} from './trafficObservations.js';
 
 export function createPresentation({
   state: layerState,
@@ -54,6 +58,27 @@ export function createPresentation({
       .join(' · ');
   }
 
+  function observedTrafficSnapshot() {
+    try {
+      return services.observedTraffic?.getSnapshot?.() || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function getTrafficObservationForCamera(
+    cameraId,
+    snapshot = observedTrafficSnapshot(),
+    now = Date.now(),
+  ) {
+    const summary = summarizeCameraTrafficObservation(snapshot, cameraId, {
+      now,
+    });
+    return summary
+      ? { ...summary, text: formatCameraTrafficObservation(summary) }
+      : null;
+  }
+
   /**
    * Builds a public-facing camera state object for UI consumption.
    * Includes all pose, calibration, CAL badge, projection, and feed metadata.
@@ -62,7 +87,12 @@ export function createPresentation({
    * @returns {Object} Public camera state.
    */
 
-  function getPublicCameraState(record, activeId = null) {
+  function getPublicCameraState(
+    record,
+    activeId = null,
+    observedSnapshot = observedTrafficSnapshot(),
+    observedNow = Date.now(),
+  ) {
     const resolvedActiveId =
       activeId || parts.selection.getActiveRecord()?.camera.id || null;
     const camera = record.camera;
@@ -102,6 +132,11 @@ export function createPresentation({
       sourceMessage: health?.message || '',
       sourceLabel: health?.label || camera.provider || '',
       credit: camera.credit || '',
+      trafficObservation: getTrafficObservationForCamera(
+        camera.id,
+        observedSnapshot,
+        observedNow,
+      ),
       calibration: {
         ...parts.calibration.normalizeCalibration(camera.calibration),
       },
@@ -143,6 +178,8 @@ export function createPresentation({
   function uiState() {
     const active = parts.selection.getActiveRecord();
     const activeId = active?.camera.id || null;
+    const observedSnapshot = observedTrafficSnapshot();
+    const observedNow = Date.now();
     const payload = {
       enabled: layerState._enabled,
       // Compat boolean + the full tri-state (viewshed design §3b).
@@ -175,9 +212,21 @@ export function createPresentation({
         hoverId: layerState._hoverCardId,
       },
       activeCameraId: activeId,
-      activeCamera: active ? getPublicCameraState(active, activeId) : null,
+      activeCamera: active
+        ? getPublicCameraState(
+            active,
+            activeId,
+            observedSnapshot,
+            observedNow,
+          )
+        : null,
       cameras: layerState._records.map((record) =>
-        getPublicCameraState(record, activeId),
+        getPublicCameraState(
+          record,
+          activeId,
+          observedSnapshot,
+          observedNow,
+        ),
       ),
       summary: buildSummaryText(),
     };
@@ -212,6 +261,7 @@ export function createPresentation({
   return {
     buildSummaryText,
     getPublicCameraState,
+    getTrafficObservationForCamera,
     uiState,
     notifyListeners,
     notifyListenersThrottled,
