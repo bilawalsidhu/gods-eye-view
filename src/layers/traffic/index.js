@@ -29,10 +29,7 @@ export function createTrafficLayer({
     ].every((key) => typeof source?.[key] === 'function')
   )
     throw new TypeError('A traffic source is required');
-  if (
-    observedSource !== null &&
-    typeof observedSource?.request !== 'function'
-  )
+  if (observedSource !== null && typeof observedSource?.request !== 'function')
     throw new TypeError('Invalid observed traffic source');
   const state = createState({ services });
   const parts = {};
