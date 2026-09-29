@@ -216,6 +216,34 @@ test('record and geometry bounds degrade the snapshot to partial', () => {
   assert.equal(snapshot.dropped, 1);
 });
 
+test('observed snapshot subscribers receive committed snapshots only', async () => {
+  const state = {
+    _observedTrafficSnapshot: emptyObservedTrafficSnapshot(),
+    _observedTrafficLoading: false,
+    _observedTrafficGeneration: 0,
+    _observedTrafficListeners: new Set(),
+  };
+  const observed = createObservedTraffic({
+    state,
+    observedSource: {
+      async request() {
+        return normalizeObservedTrafficSnapshot(
+          { source: 'fixture', records: [validRecord()] },
+          { now: NOW },
+        );
+      },
+    },
+  });
+  const states = [];
+  const unsubscribe = observed.methods.subscribeObservedTraffic((value) =>
+    states.push(value.state),
+  );
+  await observed.methods.refreshObservedTraffic({}, { now: NOW });
+  unsubscribe();
+  await observed.methods.refreshObservedTraffic({}, { now: NOW });
+  assert.deepEqual(states, ['unconfigured', 'fresh']);
+});
+
 test('later observed refresh owns state when an older request settles late', async () => {
   const pending = [];
   const observedSource = {
