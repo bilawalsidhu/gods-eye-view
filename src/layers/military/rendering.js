@@ -175,7 +175,9 @@ export function createRendering({
     bb.height = icao24 === flightState._trackedIcao ? 24 : 20;
     bb.scale = _militaryBillboardScale(icao24) * limbScale;
     bb.scaleByDistance = _normalBillboardScaleByDistance();
-    bb.color = _fleetBillboardColor(icao24).withAlpha(cyberSonarBaseAlpha(bb));
+    bb.color = _fleetBillboardColor(icao24, meta).withAlpha(
+      cyberSonarBaseAlpha(bb),
+    );
   }
 
   /** Sprite kind for one contact's billboard. Identity for every aircraft except

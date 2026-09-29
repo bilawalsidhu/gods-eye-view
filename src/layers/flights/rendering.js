@@ -66,14 +66,20 @@ export function createRendering({
    *  amber for known-military, white otherwise.
    *  Ground traffic gets NO special tint (owner verdict 2026-07-03 field test). */
 
-  function _fleetBillboardColor(icao24, info) {
+  function _fleetBillboardColor(
+    icao24,
+    info = flightState.records.data.get(icao24),
+  ) {
     if (_isEmergency(icao24, info)) return EMERGENCY_TINT;
     return isMilitaryIcao(icao24) ? MIL_TINT : Cesium.Color.WHITE;
   }
 
   /** Cockpit far-contact dot tint: the emergency red outranks the category tint. */
 
-  function _cockpitContactColor(icao24, info) {
+  function _cockpitContactColor(
+    icao24,
+    info = flightState.records.data.get(icao24),
+  ) {
     if (_isEmergency(icao24, info)) return EMERGENCY_TINT;
     return isMilitaryIcao(icao24) ? MIL_TINT : COCKPIT_CIVILIAN_COLOR;
   }
