@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  createObservedTraffic,
   createObservedTrafficSource,
   emptyObservedTrafficSnapshot,
   normalizeObservedTrafficRecord,
@@ -151,6 +152,94 @@ test('provider failures become error snapshots while cancellation still propagat
   await assert.rejects(() => cancelled.request({}, { now: NOW }), {
     name: 'AbortError',
   });
+});
+
+test('null metrics and records without observed evidence fail closed', () => {
+  assert.equal(
+    normalizeObservedTrafficRecord(
+      validRecord({
+        flow: { vehiclesPerMin: null, counts: {} },
+        movements: [],
+      }),
+    ),
+    null,
+  );
+
+  const zero = normalizeObservedTrafficRecord(
+    validRecord({
+      flow: { vehiclesPerMin: 0, counts: {} },
+    }),
+  );
+  assert.ok(zero);
+  assert.equal(zero.flow.vehiclesPerMin, 0);
+});
+
+test('record and geometry bounds degrade the snapshot to partial', () => {
+  const tooManyPoints = Array.from({ length: 257 }, (_, index) => [
+    -87.63 + index * 0.000001,
+    41.88,
+  ]);
+  const snapshot = normalizeObservedTrafficSnapshot(
+    {
+      records: [
+        validRecord(),
+        validRecord({
+          id: 'too-large',
+          geometry: {
+            type: 'road-segment',
+            coordinates: tooManyPoints,
+          },
+        }),
+      ],
+    },
+    { now: NOW },
+  );
+  assert.equal(snapshot.state, 'partial');
+  assert.equal(snapshot.accepted, 1);
+  assert.equal(snapshot.dropped, 1);
+});
+
+test('later observed refresh owns state when an older request settles late', async () => {
+  const pending = [];
+  const observedSource = {
+    request(query) {
+      return new Promise((resolve) => pending.push({ query, resolve }));
+    },
+  };
+  const state = {
+    _observedTrafficSnapshot: emptyObservedTrafficSnapshot(),
+    _observedTrafficLoading: false,
+    _observedTrafficGeneration: 0,
+  };
+  const observed = createObservedTraffic({ state, observedSource });
+
+  const first = observed.methods.refreshObservedTraffic({ id: 'first' });
+  const second = observed.methods.refreshObservedTraffic({ id: 'second' });
+
+  pending[1].resolve(
+    normalizeObservedTrafficSnapshot(
+      { source: 'second', records: [validRecord({ id: 'second' })] },
+      { now: NOW },
+    ),
+  );
+  await second;
+  assert.equal(
+    observed.methods.getObservedTrafficSnapshot().records[0].id,
+    'second',
+  );
+
+  pending[0].resolve(
+    normalizeObservedTrafficSnapshot(
+      { source: 'first', records: [validRecord({ id: 'first' })] },
+      { now: NOW },
+    ),
+  );
+  await first;
+  assert.equal(
+    observed.methods.getObservedTrafficSnapshot().records[0].id,
+    'second',
+    'stale completion must not replace the newer snapshot',
+  );
 });
 
 test('intersection geometry accepts one point and invalid windows fail closed', () => {
