@@ -213,20 +213,10 @@ export function createPresentation({
       },
       activeCameraId: activeId,
       activeCamera: active
-        ? getPublicCameraState(
-            active,
-            activeId,
-            observedSnapshot,
-            observedNow,
-          )
+        ? getPublicCameraState(active, activeId, observedSnapshot, observedNow)
         : null,
       cameras: layerState._records.map((record) =>
-        getPublicCameraState(
-          record,
-          activeId,
-          observedSnapshot,
-          observedNow,
-        ),
+        getPublicCameraState(record, activeId, observedSnapshot, observedNow),
       ),
       summary: buildSummaryText(),
     };
