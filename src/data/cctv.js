@@ -67,6 +67,7 @@ import {
   unregisterPickOwner,
 } from './pickRegistry.js';
 import { resolveEllipsoidalGround } from './terrainHeights.js';
+import { headingHudToken, isHeadingEstimated } from './cctvHeadingConfidence.js';
 import { cachedGroundFloor, resolveGroundFloorCells, warmGroundFloor } from './groundFloor.js';
 import { sampleMeshFloorCells } from './meshFloorSampler.js';
 import { horizonOccluder } from './iconOrientation.js';
@@ -3309,17 +3310,17 @@ export function refreshCoverageStyles() {
       // active camera keeps its width/alpha emphasis in both schemes.
       const hue = viewshedOn ? record.viewshedColors : null;
       if (entity._coverageRole === 'cap') {
-        entity.polyline.material = hue
+        entity.polyline.material = coverageLineMaterial(record, hue
           ? (isActive ? hue.lineActive : hue.line)
-          : (isActive ? ACTIVE_COVERAGE_CENTER : IDLE_COVERAGE_CENTER_MUTED);
+          : (isActive ? ACTIVE_COVERAGE_CENTER : IDLE_COVERAGE_CENTER_MUTED));
         entity.polyline.width = isActive ? 2.2 : 1.0;
         entity.polyline.depthFailMaterial = planeShowing
           ? (hue ? hue.line.withAlpha(0.26) : ACTIVE_COVERAGE_CENTER_DEPTHFAIL)
           : undefined;
       } else {
-        entity.polyline.material = hue
+        entity.polyline.material = coverageLineMaterial(record, hue
           ? (isActive ? hue.lineActive : hue.line.withAlpha(0.6))
-          : (isActive ? ACTIVE_COVERAGE_EDGE : IDLE_COVERAGE_EDGE_MUTED);
+          : (isActive ? ACTIVE_COVERAGE_EDGE : IDLE_COVERAGE_EDGE_MUTED));
         entity.polyline.width = isActive ? 1.8 : 0.9;
         entity.polyline.depthFailMaterial = planeShowing
           ? (hue ? hue.line.withAlpha(0.18) : ACTIVE_COVERAGE_EDGE_DEPTHFAIL)
@@ -3416,7 +3417,9 @@ function buildSummaryText() {
   return [
     `${active.camera.city.toUpperCase()} CCTV`,
     `${active.camera.name.toUpperCase()}`,
-    `HDG ${Math.round(active.camera.headingDeg)}°`,
+    // A synthetic bearing (headingConfidence 'low', no human calibration) is
+    // tagged so a hashed guess never reads as a surveyed facing (#639).
+    headingHudToken(active.camera),
     `FOV ${Math.round(active.camera.fovDeg)}°`,
     `COVERAGE ${area.toFixed(2)}km²`,
     overlapCount > 0 ? `OVERLAP ${overlapCount} cams` : 'ISOLATED VIEW',
@@ -3449,6 +3452,11 @@ function getPublicCameraState(record, activeId = null) {
     lat: camera.lat,
     lon: camera.lon,
     headingDeg: camera.headingDeg,
+    // Bearing provenance (#639): the pack's confidence flag plus the derived
+    // "is this a synthetic guess" bit (calibration-aware), so UI consumers
+    // never have to re-derive it.
+    headingConfidence: camera.headingConfidence || null,
+    headingEstimated: isHeadingEstimated(camera),
     pitchDeg: camera.pitchDeg,
     fovDeg: camera.fovDeg,
     rangeM: camera.rangeM,
@@ -3849,6 +3857,41 @@ export function cctvEmptyClickDeselects(picked, {
 }
 
 /**
+ * Dash-aware material for a camera's coverage wireframe: an ESTIMATED bearing
+ * (headingConfidence 'low', no human calibration — cctvHeadingConfidence.js)
+ * draws dashed so a hashed guess reads as provisional rather than rendering
+ * identically to a surveyed one (#639, ported from upstream). Colors, widths,
+ * and the active/idle emphasis are unchanged; the dash is the only signal.
+ *
+ * `PolylineDashMaterialProperty` instances are memoized per record + color
+ * VALUE — the emphasis loop reassigns materials every pass, and a fresh
+ * property object each pass would churn Cesium's material dirty state. (The
+ * key is the color's rgba string, not object identity: the viewshed scheme
+ * derives colors with `withAlpha` per pass, which would otherwise grow the
+ * memo without bound.) The dash bit is re-derived per call, so a calibration
+ * flip propagates on the next pass with no invalidation hook.
+ * @param {object} record - Camera record (owns the memo).
+ * @param {Cesium.Color} color - Line color from the active scheme.
+ * @returns {Cesium.Color|Cesium.PolylineDashMaterialProperty} Solid color, or
+ *   its memoized dashed wrapper for an estimated bearing.
+ */
+function coverageLineMaterial(record, color) {
+  if (!isHeadingEstimated(record.camera)) return color;
+  let memo = record._dashedLineMaterials;
+  if (!memo) {
+    memo = new Map();
+    record._dashedLineMaterials = memo;
+  }
+  const key = color.toCssColorString();
+  let dashed = memo.get(key);
+  if (!dashed) {
+    dashed = new Cesium.PolylineDashMaterialProperty({ color });
+    memo.set(key, dashed);
+  }
+  return dashed;
+}
+
+/**
  * Creates the five Cesium polyline entities that visualize a camera's pitched
  * frustum: 4 corner rays (mount → far-plane corner) + the closed far-plane
  * rectangle. Entity ids stay in the `cctv-<id>-<role>` scheme (pick-owner
@@ -3881,7 +3924,7 @@ function buildCoverageEntities(record) {
     polyline: {
       positions: linePositions,
       width: 1.2,
-      material: IDLE_COVERAGE_COLOR,
+      material: coverageLineMaterial(record, IDLE_COVERAGE_COLOR),
     },
   });
 

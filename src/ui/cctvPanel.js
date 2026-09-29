@@ -9,6 +9,7 @@
  */
 
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
+import { headingHudToken } from '../data/cctvHeadingConfidence.js';
 import cctvLayer from '../data/cctv.js';
 
 /**
@@ -584,7 +585,7 @@ export function renderCctvState(mgr, state) {
         const statusMsg = activeCamera.sourceMessage ? ` · ${activeCamera.sourceMessage}` : '';
         const calBadge = activeCamera.calBadge ? calBadgeLabel(mgr, activeCamera.calBadge) : '';
         const projLabel = state?.showProjection !== false ? 'MONITOR' : 'OFF';
-        mgr._cctvMeta.textContent = `${activeCamera.city} · HDG ${Math.round(activeCamera.headingDeg)}° · FOV ${Math.round(activeCamera.fovDeg)}° · RANGE ${Math.round(activeCamera.rangeM)}m · ${projLabel}${calBadge ? ` · ${calBadge}` : ''} · ${provider}${statusMsg}`;
+        mgr._cctvMeta.textContent = `${activeCamera.city} · ${headingHudToken(activeCamera)} · FOV ${Math.round(activeCamera.fovDeg)}° · RANGE ${Math.round(activeCamera.rangeM)}m · ${projLabel}${calBadge ? ` · ${calBadge}` : ''} · ${provider}${statusMsg}`;
       } else if (cameras.length > 0) {
         mgr._cctvMeta.textContent = enabled
           ? `${cameras.length} cameras loaded · click a camera to activate`
