@@ -1,3 +1,12 @@
+## Byte-bounded Recent Imagery thumbnails — September 29, 2026
+
+The Recent Imagery thumbnail loader now enforces both its existing decoded-image
+count ceiling and an explicit decoded-byte ceiling. The default byte budget is
+derived from the existing count and configured thumbnail size, so shipped
+behavior is unchanged; constrained profiles may supply a lower byte budget.
+Eviction remains least-recently-used and preserves the already-probed
+availability/acquisition metadata when decoded pixels are released.
+
 # God's Eye View Current State
 
 ## Cyber HUD — September 23, 2026
