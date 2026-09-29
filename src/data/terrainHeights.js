@@ -34,17 +34,87 @@ import { api } from '../config/apiEndpoints.js';
 /** Max points per outgoing request to `/api/terrain/heights` (see file header, point 1). */
 const CHUNK_SIZE = 200;
 
+/** Default live-entry ceiling for the in-memory cache (see CACHE_MAX_ENTRIES). */
+export const DEFAULT_MAX_CACHE_ENTRIES = 20_000;
+
 /** Avoid repeatedly hitting a known-failing proxy from warm fallback reads. */
 const GEOID_FALLBACK_COOLDOWN_MS = 60_000;
+
+/**
+ * Live entry ceiling for the cache below. The 5-decimal key rounding makes
+ * repeated visits to one place share a key; it does nothing to bound the
+ * number of DISTINCT places a session visits, and this cache had no eviction,
+ * so a long session kept every coordinate it ever resolved for the lifetime
+ * of the page.
+ *
+ * This is a bound, not a budget. At the ~111 m floor grid a city-scale
+ * session stays well under it, so eviction is the pathological case rather
+ * than the normal one and a well-behaved session sees no extra network.
+ * Sized above the sibling caches (adsb.lol points 80, track history 200,
+ * TomTom tiles 256) because a miss here costs a proxy round trip, not just
+ * RAM. Test-overridable via `setCacheLimitForTest` so the bound is testable
+ * without minting twenty thousand coordinates.
+ */
+let CACHE_MAX_ENTRIES = DEFAULT_MAX_CACHE_ENTRIES;
+
+/**
+ * Test-only override of CACHE_MAX_ENTRIES (mirrors the injectable
+ * `maxCacheEntries` on upstream's factory form). Pass
+ * `DEFAULT_MAX_CACHE_ENTRIES` to restore.
+ * @param {number} max
+ */
+export function setCacheLimitForTest(max) {
+  CACHE_MAX_ENTRIES = Number.isFinite(max) && max > 0
+    ? Math.floor(max)
+    : DEFAULT_MAX_CACHE_ENTRIES;
+}
 
 /**
  * In-memory cache: `"lat.toFixed(5),lon.toFixed(5)"` -> `{ellipsoid, source}`.
  * Module-scoped (not exported) — the only reads are through
  * `cachedEllipsoidalGround` and the internal lookup in
- * `resolveEllipsoidalGround`.
+ * `resolveEllipsoidalGround`. Bounded at CACHE_MAX_ENTRIES; write through
+ * `cacheStore` and read a consumer-facing hit through `cacheTouch` so the
+ * eviction order stays least-recently-used.
  * @type {Map<string, {ellipsoid: number, source: 'reearth'|'geoid-fallback', retryAt?: number}>}
  */
 const cache = new Map();
+
+/**
+ * Store an entry and drop the coldest ones once past the cap. `Map` iterates
+ * in insertion order, so deleting the first key evicts the least recently
+ * used provided every write and every consumer read re-inserts its key.
+ *
+ * Recency rather than plain insertion order because revisits here are
+ * spatial: a session comes back to cells near where it already was, so the
+ * cell it is parked on must not be evicted merely for having been resolved
+ * early.
+ * @param {string} key
+ * @param {{ellipsoid: number, source: 'reearth'|'geoid-fallback', retryAt?: number}} entry
+ */
+function cacheStore(key, entry) {
+  cache.delete(key);
+  cache.set(key, entry);
+  while (cache.size > CACHE_MAX_ENTRIES) {
+    const coldest = cache.keys().next().value;
+    if (coldest === undefined) break;
+    cache.delete(coldest);
+  }
+}
+
+/**
+ * Read an entry and promote it to newest, so a coordinate a consumer keeps
+ * asking about survives eviction. Returns undefined on a miss.
+ * @param {string} key
+ * @returns {{ellipsoid: number, source: 'reearth'|'geoid-fallback', retryAt?: number}|undefined}
+ */
+function cacheTouch(key) {
+  const entry = cache.get(key);
+  if (entry === undefined) return undefined;
+  cache.delete(key);
+  cache.set(key, entry);
+  return entry;
+}
 
 /**
  * Builds the rounded cache key shared between the in-memory cache and the
@@ -66,7 +136,7 @@ function cacheKey(lat, lon) {
  * @returns {number|null} ellipsoidal height in meters, or null when cold.
  */
 export function cachedEllipsoidalGround(lat, lon) {
-  const entry = cache.get(cacheKey(lat, lon));
+  const entry = cacheTouch(cacheKey(lat, lon));
   return entry ? entry.ellipsoid : null;
 }
 
@@ -84,7 +154,7 @@ export function cachedEllipsoidalGround(lat, lon) {
  *   the point is cold or was answered by the geoid fallback.
  */
 export function cachedRealEllipsoidalGround(lat, lon) {
-  const entry = cache.get(cacheKey(lat, lon));
+  const entry = cacheTouch(cacheKey(lat, lon));
   return entry && entry.source === 'reearth' ? entry.ellipsoid : null;
 }
 
@@ -200,6 +270,12 @@ export async function resolveEllipsoidalGround(coords) {
     uncached.push(item);
   }
 
+  // What this call resolved, so the assembly below can report a point even
+  // if a later chunk's writes pushed it past CACHE_MAX_ENTRIES. Without it a
+  // batch big enough to evict its own earlier chunks would report points as
+  // unresolved that it had in fact just resolved.
+  const resolvedThisCall = new Map();
+
   // Resolve the network path in sequential <=CHUNK_SIZE chunks. Each chunk's
   // failure is isolated to that chunk's points (geoid fallback), so a single
   // bad chunk doesn't lose results for the rest of a large batch.
@@ -216,7 +292,9 @@ export async function resolveEllipsoidalGround(coords) {
         // one contact frozen at the geoid while its neighbors resolved).
         // An omitted point now caches nothing and retries on the next warm.
         if (Number.isFinite(ellipsoid)) {
-          cache.set(item.key, { ellipsoid, source: 'reearth' });
+          const entry = { ellipsoid, source: 'reearth' };
+          resolvedThisCall.set(item.key, entry);
+          cacheStore(item.key, entry);
         }
       }
     } catch {
@@ -227,11 +305,13 @@ export async function resolveEllipsoidalGround(coords) {
       await ensureGeoidReady();
       for (const item of chunk) {
         const ellipsoid = geoidFallback(item.lat, item.lon, item.sourceOrthometricM);
-        cache.set(item.key, {
+        const entry = {
           ellipsoid,
           source: 'geoid-fallback',
           retryAt: Date.now() + GEOID_FALLBACK_COOLDOWN_MS,
-        });
+        };
+        resolvedThisCall.set(item.key, entry);
+        cacheStore(item.key, entry);
       }
     }
   }
@@ -240,7 +320,7 @@ export async function resolveEllipsoidalGround(coords) {
   // the upstream omitted has NO entry (round 6 — deliberately uncached so it
   // retries later): report it unresolved instead of throwing.
   return work.map((item) => {
-    const entry = cache.get(item.key);
+    const entry = cache.get(item.key) || resolvedThisCall.get(item.key);
     return entry
       ? { ellipsoid: entry.ellipsoid, source: entry.source }
       : { ellipsoid: null, source: 'unresolved' };

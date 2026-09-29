@@ -19,6 +19,8 @@ import assert from 'node:assert/strict';
 import {
   resolveEllipsoidalGround,
   cachedEllipsoidalGround,
+  DEFAULT_MAX_CACHE_ENTRIES,
+  setCacheLimitForTest,
 } from './terrainHeights.js';
 
 const AUSTIN = { lat: 30.2672, lon: -97.7431 };
@@ -349,4 +351,75 @@ test('resolveEllipsoidalGround: an empty input array resolves to an empty array 
     }
   );
   assert.equal(fetchCount, 0);
+});
+
+// ── LRU eviction (ported from upstream) ─────────────────────────────────────
+// The cache had no eviction: a session kept every coordinate it ever resolved
+// for the lifetime of the page. It is now bounded (LRU — revisits are spatial,
+// so the cell the camera is parked on must not be dropped for having been
+// resolved early) and the bound is test-overridable.
+
+test('the cache evicts least-recently-used once past the entry cap', async () => {
+  setCacheLimitForTest(2);
+  try {
+    const pts = [
+      { lat: 10.0001, lon: 10.0001 },
+      { lat: 10.0002, lon: 10.0002 },
+      { lat: 10.0003, lon: 10.0003 },
+    ];
+    await withFakeFetch(async () => proxyResponse(pts.map((p) => [p.lon, p.lat])), async () => {
+      await resolveEllipsoidalGround(pts);
+    });
+    // The third write pushed past the cap: the first coordinate is coldest.
+    assert.equal(cachedEllipsoidalGround(10.0001, 10.0001), null, 'oldest entry evicted');
+    assert.ok(cachedEllipsoidalGround(10.0002, 10.0002) !== null, 'middle entry survives');
+    assert.ok(cachedEllipsoidalGround(10.0003, 10.0003) !== null, 'newest entry survives');
+  } finally {
+    setCacheLimitForTest(DEFAULT_MAX_CACHE_ENTRIES);
+  }
+});
+
+test('a consumer read promotes an entry so it survives eviction', async () => {
+  setCacheLimitForTest(2);
+  try {
+    const pts = [
+      { lat: 20.0001, lon: 20.0001 },
+      { lat: 20.0002, lon: 20.0002 },
+    ];
+    await withFakeFetch(async () => proxyResponse(pts.map((p) => [p.lon, p.lat])), async () => {
+      await resolveEllipsoidalGround(pts);
+    });
+    // Touch the FIRST coordinate, then write a third: without the promotion
+    // the first would be the coldest and would be evicted.
+    assert.ok(cachedEllipsoidalGround(20.0001, 20.0001) !== null, 'pre-touch read hits');
+    await withFakeFetch(async () => proxyResponse([[20.0003, 20.0003]]), async () => {
+      await resolveEllipsoidalGround([{ lat: 20.0003, lon: 20.0003 }]);
+    });
+    assert.ok(cachedEllipsoidalGround(20.0001, 20.0001) !== null, 'touched entry survives');
+    assert.equal(cachedEllipsoidalGround(20.0002, 20.0002), null, 'untouched coldest entry evicted');
+  } finally {
+    setCacheLimitForTest(DEFAULT_MAX_CACHE_ENTRIES);
+  }
+});
+
+test('a batch that evicts its own earlier chunks still reports them resolved', async () => {
+  setCacheLimitForTest(2);
+  try {
+    const pts = [
+      { lat: 30.0001, lon: 30.0001 },
+      { lat: 30.0002, lon: 30.0002 },
+      { lat: 30.0003, lon: 30.0003 },
+    ];
+    const out = await withFakeFetch(async () => proxyResponse(pts.map((p) => [p.lon, p.lat])), async () => {
+      return resolveEllipsoidalGround(pts);
+    });
+    assert.deepEqual(out.map((r) => r.source),
+      ['reearth', 'reearth', 'reearth'],
+      'eviction during the batch cannot un-resolve a just-resolved point');
+    assert.deepEqual(out.map((r) => r.ellipsoid),
+      pts.map((p) => p.lon + p.lat),
+      'values still map by input position');
+  } finally {
+    setCacheLimitForTest(DEFAULT_MAX_CACHE_ENTRIES);
+  }
 });
