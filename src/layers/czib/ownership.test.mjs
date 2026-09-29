@@ -257,13 +257,17 @@ test('an enabled refresh shades each named country of every active bulletin', as
   assert.deepEqual(
     controls.list.items.map(({ lead, text, params }) => [lead, text, params]),
     [
-      ['', 'Mali · 2026-01', { bulletinId: '1', focus: true }],
+      ['WHOLE', 'Mali · 2026-01', { bulletinId: '1', focus: true }],
       [
-        '',
+        'WHOLE',
         'Persian Gulf · 2026-02 · 2 countries',
         { bulletinId: '2', focus: true },
       ],
-      ['', 'Yemen – Sana’a FIR · 2026-03', { bulletinId: '3', focus: true }],
+      [
+        'PART',
+        'Yemen – Sana’a FIR · 2026-03',
+        { bulletinId: '3', focus: true },
+      ],
     ],
   );
   assert.deepEqual(controls.chips, []);

@@ -534,7 +534,7 @@ export function createCzibLayer({
             id: bulletin.id,
             ordinal: index + 1,
             // Area first: the bulletin number is the least telling part.
-            lead: '',
+            lead: bulletin.partial ? 'PART' : 'WHOLE',
             text: [
               bulletin.area,
               bulletin.number.replace(/^CZIB-/, ''),

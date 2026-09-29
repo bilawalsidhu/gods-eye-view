@@ -457,6 +457,19 @@ async function main() {
         !cleared.chips.includes('bulletin'),
       `space=${JSON.stringify(space)} chips=${JSON.stringify(cleared.chips)}`,
     );
+    // Inside Baluchistan: a part-country zone keeps only a faint fill, which
+    // must still take real picks.
+    const partPoint = await placeOnScreen(page, 66, 28);
+    if (partPoint) await page.mouse.click(partPoint.x, partPoint.y);
+    await sleep(500);
+    const partClicked = await rowDom(page);
+    record(
+      'SELECT: a globe click inside the faint part-country fill selects Pakistan',
+      partPoint !== null &&
+        (await selectedId(page)) === '13' &&
+        partClicked.activeItems.join() === '13',
+      `point=${JSON.stringify(partPoint)} active=${JSON.stringify(partClicked.activeItems)}`,
+    );
     await page.click(
       `[data-layer-id="${LAYER_ID}"] .data-row-list-item[data-list-item-id="12"]`,
     );
