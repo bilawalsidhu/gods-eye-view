@@ -30,4 +30,5 @@ export const deriveTrafficFlowError = layer.deriveTrafficFlowError;
 export const trafficFeedPresentation = layer.trafficFeedPresentation;
 export const getObservedTrafficSnapshot = layer.getObservedTrafficSnapshot;
 export const refreshObservedTraffic = layer.refreshObservedTraffic;
+export const subscribeObservedTraffic = layer.subscribeObservedTraffic;
 export default layer;
