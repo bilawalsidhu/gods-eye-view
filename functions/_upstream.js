@@ -133,7 +133,13 @@ export async function fetchTrackJson({ key, upstreamUrl, headers = {} }) {
   const upstream = await fetch(upstreamUrl, { headers, signal: AbortSignal.timeout(12_000) });
   const { tooLarge, text } = await readTextCapped(upstream, TRACK_RESPONSE_CAP_BYTES);
   let body;
+  // An oversized body is an upstream failure (502), not a success — the
+  // client must see an error status, and the 502 is cached like any other
+  // upstream error: tracks cost OpenSky credits, so a retry inside the
+  // cache window must not re-download the same oversized body.
+  let status = upstream.status;
   if (tooLarge) {
+    status = 502;
     body = JSON.stringify({ error: 'Upstream track response too large' });
   } else if (!upstream.ok) {
     // Sanitize upstream error surface; status code is signal enough.
@@ -141,8 +147,8 @@ export async function fetchTrackJson({ key, upstreamUrl, headers = {} }) {
   } else {
     body = text;
   }
-  trackCachePut(key, { at: Date.now(), status: upstream.status, body });
-  return { status: upstream.status, body, cacheHit: false };
+  trackCachePut(key, { at: Date.now(), status, body });
+  return { status, body, cacheHit: false };
 }
 
 /**

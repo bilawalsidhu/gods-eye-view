@@ -19,11 +19,12 @@
  *                  `application/json` — reached when ?icao24 is absent or not
  *                  exactly 6 lowercase-able hex chars
  *   502          → {"error":"OpenSky track fetch failed"} — transport failure,
- *                  including the OAuth token request blowing up
- *   200 + error  → {"error":"Upstream track response too large"} when the
- *                  document exceeds 5 MB (status stays the upstream 200, which
- *                  is what dev does — the client sees a JSON `error` field and
- *                  keeps its trail)
+ *                  including the OAuth token request blowing up; also
+ *                  {"error":"Upstream track response too large"} when the
+ *                  document exceeds 5 MB (an oversized body is an upstream
+ *                  failure — the client sees an error status and keeps its
+ *                  trail, and the 502 is cached for the TTL so a reselect does
+ *                  not re-download the same oversized document)
  *
  * Upstream: https://opensky-network.org/api/tracks/all?icao24=<icao24>&time=0,
  * 12 s timeout, 5 MB cap. `time=0` is load-bearing: it asks for the full
