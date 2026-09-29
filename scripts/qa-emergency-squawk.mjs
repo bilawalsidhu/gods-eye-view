@@ -14,6 +14,8 @@
  *         the broadcast code on the aircraft-meta line, in red.
  *   (iii) CLEAR — the next poll drops the code: the HUD line returns to its
  *         normal wording (the status is not sticky).
+ *   (iv)  RELEASE — the code returns and tracking stops: the restored fleet
+ *         billboard is red, not the plain military amber.
  *
  * Screenshots saved to qa-shots/emergency-*.png (gitignored).
  *
@@ -410,6 +412,31 @@ async function main() {
       JSON.stringify(after),
     );
     await shoot(page, 'cockpit-cleared');
+
+    // ── (iv) RELEASE ──────────────────────────────────────────────────────
+    console.log('\n(iv) RELEASE — the code returns, then tracking stops...');
+    await page.evaluate(async () => {
+      window.__squawkQaPhase = 'emergency';
+      const dm = window.__godsEyeView.dataManager;
+      await dm.refreshLayer('military');
+      dm.layers.get('military').module.stopTracking({ origin: 'user' });
+    });
+    const releaseProbe = `(${billboardColors})(["ae7700"])`;
+    const released = await page
+      .waitForFunction(`Boolean((${releaseProbe}).ae7700)`, {
+        timeout: 20000,
+        polling: 250,
+      })
+      .then(
+        () => true,
+        () => false,
+      );
+    const releasedColor = (await page.evaluate(releaseProbe)).ae7700;
+    record(
+      'RELEASE: untracked emergency billboard is red',
+      released && isRed(releasedColor),
+      JSON.stringify(releasedColor ?? null),
+    );
     record(
       'no uncaught browser errors',
       errors.length === 0,

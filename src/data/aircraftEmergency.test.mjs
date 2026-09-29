@@ -39,6 +39,15 @@ test('the ADS-B emergency field wins, and `none` defers to the squawk', () => {
     aircraftEmergency({ squawk: '7700', emergency: 'none' }).source,
     'squawk',
   );
+  assert.equal(
+    aircraftEmergency({ squawk: '7700', emergency: 'general' }).source,
+    'squawk',
+    'a code that names the status stays quotable',
+  );
+  assert.equal(
+    aircraftEmergency({ squawk: '1200', emergency: 'general' }).source,
+    'ads-b',
+  );
   assert.equal(aircraftEmergency({ emergency: 'downed' }).kind, 'downed');
   assert.equal(aircraftEmergency({ emergency: 'none' }), null);
   assert.equal(aircraftEmergency({ emergency: 'reserved' }), null);

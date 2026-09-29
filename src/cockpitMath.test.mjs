@@ -10,10 +10,10 @@ import {
   cockpitGroundSafeHeight,
   cockpitSurfaceWaitExpired,
   cockpitUiUpdateDue,
-  formatCockpitEmergency,
   compassDivisions,
   formatAltitudeRulerTick,
   formatCockpitContextScope,
+  formatCockpitEmergency,
   formatCompassDivision,
   formatSpeedRulerTick,
   normalizeHeading,
@@ -42,11 +42,7 @@ test('cockpit anchor correction cannot turn a forward step into a reversal', () 
   const speedMps = 200;
   const dtSec = 0.1;
   const forwardStepM = speedMps * dtSec;
-  const backwardCorrectionM = cockpitAnchorCorrectionStep(
-    1000,
-    speedMps,
-    dtSec,
-  );
+  const backwardCorrectionM = cockpitAnchorCorrectionStep(1000, speedMps, dtSec);
   assert.ok(backwardCorrectionM > 0);
   assert.ok(backwardCorrectionM < forwardStepM);
 });
@@ -82,7 +78,10 @@ test('cockpit Context scope distinguishes radius-complete feeds from viewport in
 });
 
 test('cockpit Context scope preserves zero and replaces missing values intentionally', () => {
-  assert.equal(formatCockpitContextScope('', 0), '— · 0 KM AIR/SEA WINDOW');
+  assert.equal(
+    formatCockpitContextScope('', 0),
+    '— · 0 KM AIR/SEA WINDOW',
+  );
   assert.equal(
     formatCockpitContextScope(undefined, Number.NaN, {}),
     '— · — KM AIR/SEA WINDOW',
@@ -170,29 +169,26 @@ test('relative bearing stays on the shortest signed arc', () => {
 });
 
 test('HUD rail layout centers between intersecting upper and lower obstacles', () => {
-  assert.deepEqual(
-    resolveHudRailLayout({
-      viewportHeight: 1000,
-      panelHeight: 200,
-      laneLeft: 50,
-      laneRight: 410,
-      baseTop: 280,
-      baseBottom: 940,
-      gap: 10,
-      obstacles: [
-        { left: 40, right: 240, top: 320, bottom: 460 },
-        { left: 300, right: 1000, top: 780, bottom: 930 },
-        { left: 900, right: 1100, top: 300, bottom: 700 },
-      ],
-    }),
-    {
-      top: 520,
-      maxHeight: 300,
-      safeTop: 470,
-      safeBottom: 770,
-      constrained: false,
-    },
-  );
+  assert.deepEqual(resolveHudRailLayout({
+    viewportHeight: 1000,
+    panelHeight: 200,
+    laneLeft: 50,
+    laneRight: 410,
+    baseTop: 280,
+    baseBottom: 940,
+    gap: 10,
+    obstacles: [
+      { left: 40, right: 240, top: 320, bottom: 460 },
+      { left: 300, right: 1000, top: 780, bottom: 930 },
+      { left: 900, right: 1100, top: 300, bottom: 700 },
+    ],
+  }), {
+    top: 520,
+    maxHeight: 300,
+    safeTop: 470,
+    safeBottom: 770,
+    constrained: false,
+  });
 });
 
 test('HUD rail layout constrains an oversized panel to the safe corridor', () => {
@@ -246,10 +242,7 @@ function contextSnapshot(subject, extra = {}) {
 }
 
 test('Contact panel hides only when there is no snapshot at all', () => {
-  const readout = resolveCockpitContextReadout({
-    snapshot: null,
-    info: TRACKED_INFO,
-  });
+  const readout = resolveCockpitContextReadout({ snapshot: null, info: TRACKED_INFO });
   assert.equal(readout.visible, false);
   assert.equal(readout.mode, 'standby');
   assert.equal(
@@ -265,22 +258,14 @@ test('Contact panel survives NEXT onto a vessel or installation subject', () => 
   // camera: "click next... whole left panel disappears").
   for (const subject of [
     { layerId: 'ais-live-vessels', id: '353136000', label: 'MAERSK DETROIT' },
-    {
-      layerId: 'military-installations',
-      id: 'fort-hood',
-      label: 'FORT CAVAZOS',
-    },
+    { layerId: 'military-installations', id: 'fort-hood', label: 'FORT CAVAZOS' },
     { layerId: 'military', id: 'ae01ce', label: 'RCH451' },
   ]) {
     const readout = resolveCockpitContextReadout({
       snapshot: contextSnapshot(subject),
       info: TRACKED_INFO,
     });
-    assert.equal(
-      readout.visible,
-      true,
-      `${subject.layerId} subject must keep the panel up`,
-    );
+    assert.equal(readout.visible, true, `${subject.layerId} subject must keep the panel up`);
     assert.equal(readout.mode, 'foreign');
     assert.equal(readout.subjectMatchesTracked, false);
   }
@@ -288,11 +273,7 @@ test('Contact panel survives NEXT onto a vessel or installation subject', () => 
 
 test('a foreign subject dashes the aircraft-relative fields and keeps the rest live', () => {
   const readout = resolveCockpitContextReadout({
-    snapshot: contextSnapshot({
-      layerId: 'ais-live-vessels',
-      id: '353136000',
-      label: 'MAERSK DETROIT',
-    }),
+    snapshot: contextSnapshot({ layerId: 'ais-live-vessels', id: '353136000', label: 'MAERSK DETROIT' }),
     info: TRACKED_INFO,
   });
   assert.equal(readout.visible, true);
@@ -301,20 +282,12 @@ test('a foreign subject dashes the aircraft-relative fields and keeps the rest l
   // frame while every other row value is measured from the subject; rendering
   // both live would present one mixed-frame reading as a single measurement.
   assert.equal(readout.aircraftRelative, false);
-  assert.equal(
-    readout.contactLost,
-    false,
-    'subject-frame values still refresh',
-  );
+  assert.equal(readout.contactLost, false, 'subject-frame values still refresh');
 });
 
 test('the tracked aircraft as subject keeps every field in its own frame', () => {
   const readout = resolveCockpitContextReadout({
-    snapshot: contextSnapshot({
-      layerId: 'flights',
-      id: 'aaa077',
-      label: 'SWA1234',
-    }),
+    snapshot: contextSnapshot({ layerId: 'flights', id: 'aaa077', label: 'SWA1234' }),
     info: TRACKED_INFO,
   });
   assert.equal(readout.visible, true);
@@ -333,11 +306,7 @@ test('a fast-culled subject keeps the panel up as CONTACT LOST instead of collap
       snapshot: contextSnapshot(subject, { subjectPresent: false }),
       info: TRACKED_INFO,
     });
-    assert.equal(
-      readout.visible,
-      true,
-      'a lost contact must not take the panel down',
-    );
+    assert.equal(readout.visible, true, 'a lost contact must not take the panel down');
     assert.equal(readout.mode, 'lost');
     assert.equal(readout.contactLost, true, 'last-known values stay on screen');
   }
@@ -345,10 +314,7 @@ test('a fast-culled subject keeps the panel up as CONTACT LOST instead of collap
 
 test('an explicitly present subject is never reported lost', () => {
   const present = resolveCockpitContextReadout({
-    snapshot: contextSnapshot(
-      { layerId: 'flights', id: 'aaa077' },
-      { subjectPresent: true },
-    ),
+    snapshot: contextSnapshot({ layerId: 'flights', id: 'aaa077' }, { subjectPresent: true }),
     info: TRACKED_INFO,
   });
   assert.equal(present.contactLost, false);
@@ -367,36 +333,20 @@ test('the tracked flight layer is resolved by normalized tracked identity', () =
   // Both layers describe a tracked aircraft during a cross-layer handoff;
   // civilian-first precedence would hand the cockpit the wrong aircraft.
   assert.equal(
-    resolveTrackedAircraftInfo({
-      civilian,
-      military,
-      trackedId: 'military:ae01ce',
-    }).layerId,
+    resolveTrackedAircraftInfo({ civilian, military, trackedId: 'military:ae01ce' }).layerId,
     'military',
   );
   assert.equal(
-    resolveTrackedAircraftInfo({
-      civilian,
-      military,
-      trackedId: 'military:ae01ce',
-    }).icao24,
+    resolveTrackedAircraftInfo({ civilian, military, trackedId: 'military:ae01ce' }).icao24,
     'ae01ce',
   );
   assert.equal(
-    resolveTrackedAircraftInfo({
-      civilian,
-      military,
-      trackedId: 'flights:aaa077',
-    }).layerId,
+    resolveTrackedAircraftInfo({ civilian, military, trackedId: 'flights:aaa077' }).layerId,
     'flights',
   );
   // Case-insensitive: layers stamp lowercase hex, callers may not.
   assert.equal(
-    resolveTrackedAircraftInfo({
-      civilian,
-      military,
-      trackedId: 'MILITARY:AE01CE',
-    }).layerId,
+    resolveTrackedAircraftInfo({ civilian, military, trackedId: 'MILITARY:AE01CE' }).layerId,
     'military',
   );
 });
@@ -406,37 +356,29 @@ test('tracked-identity resolution falls back to layer precedence', () => {
   const military = { icao24: 'ae01ce' };
   // No stamped identity (or one that matches neither layer) keeps the historic
   // civilian-first order so tracking paths without gevTrackedId still work.
+  assert.equal(resolveTrackedAircraftInfo({ civilian, military }).layerId, 'flights');
   assert.equal(
-    resolveTrackedAircraftInfo({ civilian, military }).layerId,
+    resolveTrackedAircraftInfo({ civilian, military, trackedId: 'satellites:25544' }).layerId,
     'flights',
   );
-  assert.equal(
-    resolveTrackedAircraftInfo({
-      civilian,
-      military,
-      trackedId: 'satellites:25544',
-    }).layerId,
-    'flights',
-  );
-  assert.equal(
-    resolveTrackedAircraftInfo({ military, trackedId: '' }).layerId,
-    'military',
-  );
-  assert.equal(
-    resolveTrackedAircraftInfo({ trackedId: 'flights:aaa077' }),
-    null,
-  );
+  assert.equal(resolveTrackedAircraftInfo({ military, trackedId: '' }).layerId, 'military');
+  assert.equal(resolveTrackedAircraftInfo({ trackedId: 'flights:aaa077' }), null);
   assert.equal(resolveTrackedAircraftInfo(), null);
 });
 
 test('cockpit emergency wording states the broadcast code, not a conclusion', () => {
   assert.equal(
-    formatCockpitEmergency({ label: 'General emergency', squawk: '7700' }),
+    formatCockpitEmergency({ label: 'General emergency', squawk: '7700', source: 'squawk', severity: 'emergency' }),
     'SQUAWK 7700 · GENERAL EMERGENCY',
   );
   assert.equal(
-    formatCockpitEmergency({ label: 'Minimum fuel', squawk: null }),
-    'MINIMUM FUEL',
+    formatCockpitEmergency({ label: 'Downed aircraft', squawk: '1200', source: 'ads-b', severity: 'emergency' }),
+    'ADS-B EMERGENCY · DOWNED AIRCRAFT',
+    'an unrelated squawk is not quoted beside an ADS-B status',
+  );
+  assert.equal(
+    formatCockpitEmergency({ label: 'Minimum fuel', squawk: null, source: 'ads-b', severity: 'priority' }),
+    'ADS-B PRIORITY · MINIMUM FUEL',
   );
   assert.equal(formatCockpitEmergency(null), null);
   assert.equal(formatCockpitEmergency({ label: '' }), null);

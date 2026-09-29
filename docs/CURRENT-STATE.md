@@ -623,6 +623,26 @@ use the supplied asset resolver, including the preload path. Enrichment receives
 an abort signal and cannot update a later lifecycle after destruction. Existing
 camera, terrain floor, trail, selection and measured model-size policies remain.
 
+## Transponder emergency highlighting
+
+`src/data/aircraftEmergency.js` derives one status per poll from the Mode A
+squawk (7500 unlawful interference, 7600 radio failure, 7700 general emergency;
+ICAO-standard worldwide) and, where the feed carries it, the readsb ADS-B
+`emergency` field (adsb.lol; OpenSky state vectors carry the squawk only). An
+explicit ADS-B status wins over the squawk. `general`, `unlawful`, `nordo` and
+`downed` are emergencies; `minfuel` and `lifeguard` are priorities.
+
+Both aircraft layers keep `squawk` and `emergency` on each record and replace
+them on every poll, so the status is never sticky. Civil and military fleet
+billboards and Cockpit far-contact dots are tinted `EMERGENCY_TINT_CSS` red
+only for emergencies; priorities keep the normal tint. The military layer uses
+the same tint when a billboard is first created and when a tracked contact is
+released. While a broadcasting aircraft is tracked, the Cockpit aircraft-meta
+line reads `SQUAWK 7700 · GENERAL EMERGENCY` when the code names the status,
+else `ADS-B EMERGENCY · …` or `ADS-B PRIORITY · …`, in red. Analyst records and
+the voice query fields expose `squawk`, `emergency` (flag) and `emergencyKind`.
+`scripts/qa-emergency-squawk.mjs` proves the tint, HUD line and clearing.
+
 ## Browser live-source observations
 
 Flights, Military Flights and AIS Vessels obtain snapshots and optional history

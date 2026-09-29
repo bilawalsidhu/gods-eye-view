@@ -58,23 +58,23 @@ export function createRendering({
 
   /** True while this contact's latest poll broadcast an emergency code. */
 
-  function _isEmergency(icao24) {
-    return isEmergency(flightState.records.data.get(icao24)?.emergency);
+  function _isEmergency(icao24, info = flightState.records.data.get(icao24)) {
+    return isEmergency(info?.emergency);
   }
 
   /** Fleet (untracked) billboard tint: red while broadcasting an emergency,
    *  amber for known-military, white otherwise.
    *  Ground traffic gets NO special tint (owner verdict 2026-07-03 field test). */
 
-  function _fleetBillboardColor(icao24) {
-    if (_isEmergency(icao24)) return EMERGENCY_TINT;
+  function _fleetBillboardColor(icao24, info) {
+    if (_isEmergency(icao24, info)) return EMERGENCY_TINT;
     return isMilitaryIcao(icao24) ? MIL_TINT : Cesium.Color.WHITE;
   }
 
   /** Cockpit far-contact dot tint: the emergency red outranks the category tint. */
 
-  function _cockpitContactColor(icao24) {
-    if (_isEmergency(icao24)) return EMERGENCY_TINT;
+  function _cockpitContactColor(icao24, info) {
+    if (_isEmergency(icao24, info)) return EMERGENCY_TINT;
     return isMilitaryIcao(icao24) ? MIL_TINT : COCKPIT_CIVILIAN_COLOR;
   }
 
@@ -1024,8 +1024,8 @@ export function createRendering({
         flightState._cockpitNearContacts.has(icao24);
       const layerBaseColor =
         flightState._cockpitContactMode && !isCockpitNear
-          ? _cockpitContactColor(icao24)
-          : _fleetBillboardColor(icao24);
+          ? _cockpitContactColor(icao24, info)
+          : _fleetBillboardColor(icao24, info);
       const baseColor = layerBaseColor;
       const treatment = applyAircraftBillboardTreatment({
         billboard: bb,

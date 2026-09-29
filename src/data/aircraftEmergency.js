@@ -43,7 +43,9 @@ export function normalizeSquawk(value) {
  * 7x00 squawk counts even when the ADS-B field says `none`.
  * @param {{squawk?: unknown, emergency?: unknown}} [observation]
  * @returns {{kind: string, label: string, severity: 'emergency'|'priority',
- *   squawk: string|null, source: 'ads-b'|'squawk'}|null}
+ *   squawk: string|null, source: 'ads-b'|'squawk'}|null} `source` is
+ *   'squawk' when the Mode A code itself names the status (so it can be
+ *   quoted), else 'ads-b'.
  */
 export function aircraftEmergency({ squawk, emergency } = {}) {
   const code = normalizeSquawk(squawk);
@@ -57,7 +59,7 @@ export function aircraftEmergency({ squawk, emergency } = {}) {
     kind,
     ...KINDS[kind],
     squawk: code,
-    source: fromAdsb ? 'ads-b' : 'squawk',
+    source: SQUAWK_KINDS[code] === kind ? 'squawk' : 'ads-b',
   };
 }
 

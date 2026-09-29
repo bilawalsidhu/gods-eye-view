@@ -197,10 +197,11 @@ export function createRendering({
   /** Fleet (untracked) tint: red while the latest poll broadcast an emergency,
    *  amber otherwise. Cockpit far-contact dots use it too. */
 
-  function _fleetBillboardColor(icao24) {
-    return isEmergency(flightState.records.data.get(icao24)?.emergency)
-      ? EMERGENCY_ICON_COLOR
-      : MIL_ICON_COLOR;
+  function _fleetBillboardColor(
+    icao24,
+    info = flightState.records.data.get(icao24),
+  ) {
+    return isEmergency(info?.emergency) ? EMERGENCY_ICON_COLOR : MIL_ICON_COLOR;
   }
 
   /** The FLEET's 3D-model regime: models3d enabled AND the camera zoomed in past the altitude
@@ -976,7 +977,7 @@ export function createRendering({
       const isCockpitNear =
         flightState._cockpitContactMode &&
         flightState._cockpitNearContacts.has(icao24);
-      const baseColor = _fleetBillboardColor(icao24);
+      const baseColor = _fleetBillboardColor(icao24, info);
       const treatment = applyAircraftBillboardTreatment({
         billboard: bb,
         baseScale:

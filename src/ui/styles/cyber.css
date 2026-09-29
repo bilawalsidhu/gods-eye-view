@@ -2150,7 +2150,7 @@
 :root[data-ui-theme='cyber']
   body.cockpit-mode
   .cockpit-aircraft-meta.emergency {
-  color: #ff4444;
+  color: var(--cyber-red-bright);
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-vision-controls {
