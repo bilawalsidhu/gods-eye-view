@@ -325,6 +325,31 @@
   color: var(--text-secondary);
 }
 
+#cctv-traffic-observation {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  line-height: 1.4;
+  letter-spacing: 0.9px;
+  color: #8bdde8;
+}
+
+#cctv-traffic-observation[data-state='unknown'] {
+  color: var(--text-dim);
+}
+
+#cctv-traffic-observation[data-state='partial'],
+#cctv-traffic-observation[data-state='stale'] {
+  color: #ffe59b;
+}
+
+#cctv-traffic-observation[data-state='unavailable'] {
+  color: #ffb0b0;
+}
+
+#cctv-traffic-observation[hidden] {
+  display: none;
+}
+
 #cctv-source-badge {
   align-self: flex-start;
   border: 1px solid rgba(0, 212, 255, 0.32);
