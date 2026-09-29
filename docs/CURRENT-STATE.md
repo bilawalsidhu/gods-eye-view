@@ -1,5 +1,33 @@
 # God's Eye View Current State
 
+## Experimental CCTV vehicle observations — September 28, 2026
+
+The CCTV panel has an off-by-default **VEHICLES EXP** control for one active
+camera at a time. Turning it on first enables Traffic so current OSM road
+geometry is available. The browser reuses already-fetched camera pixels; it does
+not make an analysis-specific image request or send analyzed pixels to another
+service. A bounded 160×90 local frame-difference pass runs at most once per
+second, producing only coarse moving, vehicle-shaped candidates. Stationary
+vehicles are outside this v0 detector, and the coarse vehicle labels are
+geometry heuristics rather than semantic classification.
+
+Each candidate uses the bottom-centre of its frame box as an approximate tyre /
+road contact. That pixel is cast through the calibrated CCTV heading, pitch and
+FOV onto the camera mount's local ground plane. Implausible/upward/over-range
+rays are rejected, then the Traffic layer admits only projections within 22 m of
+its currently loaded road polylines and reuses the road's rendered Cartesian
+height. Accepted contacts are cyan **CCTV observed** entities with source camera,
+coarse type, confidence and observation age. They are replaced as a set on the
+next analyzed frame and expire after 12 seconds. Camera changes, deselection,
+layer disable and teardown clear them immediately. They are also available to
+the shared detection overlay ahead of simulated traffic dots.
+
+The path deliberately keeps no object identity between frames or cameras and
+stores no trajectory history. It performs no face detection/recognition, plate
+OCR/ALPR, named-person lookup, vehicle identity inference or frame archival.
+The existing CCTV projection and Traffic simulation remain unchanged while the
+experiment is off.
+
 ## Cyber HUD — September 23, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice
