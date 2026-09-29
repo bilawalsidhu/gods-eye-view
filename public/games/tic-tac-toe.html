@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>God's Eye — Tic-Tac-Toe</title>
+  <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root{
+      --bg:#0b0d0a; --text-dim:#9db089; --text-bright:#d7f0c7; --accent:#8fffa0;
+      --phone-body:#101410; --screen:#e9efe1; --screen-ink:#141a11; --crosshair:#e8f5df;
+      color-scheme: dark;
+    }
+    *{box-sizing:border-box}
+    html, body{ height:100% }
+    body{
+      background:var(--bg); color:var(--text-dim); margin:0;
+      font-family:'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+      overflow-x:hidden; position:relative;
+    }
+    #field{position:fixed; inset:0; z-index:0; filter:contrast(1.05) brightness(0.9)}
+    .hud{
+      position:fixed; z-index:3; font-size:12px; line-height:1.6; letter-spacing:.03em;
+      color:var(--text-bright); text-shadow:0 0 6px rgba(143,255,160,.25);
+      pointer-events:none; white-space:pre;
+    }
+    .hud b{color:var(--accent); font-weight:600}
+    .hud.tl{top:max(18px, env(safe-area-inset-top,0px)); left:18px; text-align:left}
+    .hud.br{bottom:max(18px, env(safe-area-inset-bottom,0px)); right:18px; text-align:right}
+
+    .back{
+      position:fixed; z-index:5; top:max(18px, env(safe-area-inset-top,0px)); right:18px;
+      font-family:'Inter', ui-sans-serif, system-ui, sans-serif; font-size:11px; letter-spacing:.08em;
+      color:var(--text-bright); text-decoration:none; border:1px solid rgba(215,240,199,.35);
+      padding:7px 12px; border-radius:2px; background:rgba(11,13,10,.55); backdrop-filter:blur(4px);
+    }
+    .back:hover{ background:rgba(143,255,160,.12); border-color:var(--accent) }
+
+    .crosshair{
+      position:fixed; top:50%; left:50%; width:min(74vmin,560px); height:min(74vmin,560px);
+      transform:translate(-50%,-50%); z-index:1; pointer-events:none; opacity:.55;
+    }
+    .crosshair::before, .crosshair::after{ content:""; position:absolute; background:var(--crosshair); opacity:.6 }
+    .crosshair::before{ top:50%; left:0; right:0; height:1px; transform:translateY(-.5px) }
+    .crosshair::after{ left:50%; top:0; bottom:0; width:1px; transform:translateX(-.5px) }
+    .crosshair-ring{ position:absolute; inset:0; border:1px solid var(--crosshair); border-radius:50%; opacity:.5 }
+    .crosshair-ring.inner{ inset:34%; opacity:.35 }
+    .tick{ position:absolute; background:var(--crosshair); opacity:.5 }
+    .tick.n{ top:-10px; left:50%; width:1px; height:10px }
+    .tick.s{ bottom:-10px; left:50%; width:1px; height:10px }
+    .tick.e{ right:-10px; top:50%; width:10px; height:1px }
+    .tick.w{ left:-10px; top:50%; width:10px; height:1px }
+
+    .stage{
+      position:relative; z-index:2; min-height:100%; display:flex; align-items:center;
+      justify-content:center; padding:96px 20px;
+    }
+    .phone{
+      width:min(92vw, 320px); background:var(--phone-body); border-radius:34px;
+      padding:14px; box-shadow:0 30px 80px -20px rgba(0,0,0,.8), inset 0 0 0 1px #2a2e28;
+    }
+    .notch{ width:70px; height:6px; background:#000; border-radius:4px; margin:0 auto 10px }
+    .screen{ background:var(--screen); border-radius:20px; overflow:hidden; box-shadow:inset 0 0 0 1px rgba(0,0,0,.15) }
+    .titlebar{
+      background:var(--screen-ink); color:var(--screen); text-align:center;
+      font-size:15px; letter-spacing:.16em; padding:12px 0 10px; font-weight:600;
+    }
+    .titlebar small{ display:block; font-size:9px; letter-spacing:.2em; color:#7d8a6e; font-weight:500; margin-top:3px }
+    .board{ display:grid; grid-template-columns:repeat(3,1fr); gap:2px; background:#c7cfb9; padding:12px; padding-top:14px }
+    .cell{
+      aspect-ratio:1; background:var(--screen); border:0; display:flex; align-items:center;
+      justify-content:center; font-size:34px; font-weight:700; color:var(--screen-ink);
+      cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s;
+      font-family:'JetBrains Mono', monospace;
+    }
+    .cell:disabled{ cursor:default }
+    .cell:not(:disabled):hover{ background:#dde4cf }
+    .cell.win{ background:#c9e8b8 }
+    .status{
+      padding:11px 14px 14px; text-align:center; font-size:11px; letter-spacing:.08em;
+      color:var(--screen-ink); background:var(--screen); border-top:1px dashed #c7cfb9;
+    }
+    .status b{ text-transform:uppercase }
+    .status .sub{ display:block; margin-top:3px; color:#7d8a6e; font-size:9.5px; letter-spacing:.14em }
+    .reset{
+      width:100%; margin-top:10px; padding:11px; border:1px solid #b9c2a5; background:transparent;
+      color:var(--screen-ink); font-family:inherit; font-size:10.5px; letter-spacing:.16em;
+      text-transform:uppercase; cursor:pointer; border-radius:0;
+    }
+    .reset:hover{ background:#dde4cf }
+    .under-phone{
+      max-width:320px; margin:14px auto 0; font-size:9.5px; letter-spacing:.1em;
+      color:var(--text-dim); text-align:center; opacity:.75; font-family:'Inter', sans-serif;
+    }
+
+    .scanline{
+      position:fixed; inset:0; z-index:4; pointer-events:none; mix-blend-mode:overlay; opacity:.25;
+      background:repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0px, rgba(255,255,255,.05) 1px, transparent 1px, transparent 3px);
+    }
+    .vignette{
+      position:fixed; inset:0; z-index:4; pointer-events:none;
+      background:radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.55) 100%);
+    }
+
+    @media (max-width:420px){
+      .hud{ font-size:10px }
+      .hud.tl{ left:12px } .hud.br{ right:12px }
+      .stage{ padding:78px 14px }
+      .back{ font-size:10px; padding:6px 10px }
+    }
+  </style>
+</head>
+<body>
+  <div id="field"></div>
+  <div class="vignette"></div>
+  <div class="scanline"></div>
+
+  <a class="back" href="/">&larr; Back to the globe</a>
+
+  <div class="crosshair">
+    <div class="crosshair-ring"></div>
+    <div class="crosshair-ring inner"></div>
+    <div class="tick n"></div><div class="tick s"></div><div class="tick e"></div><div class="tick w"></div>
+  </div>
+
+  <div class="hud tl" id="hud-tl"></div>
+  <div class="hud br">CAM: <b>EO/IR-12</b>
+AZ: <b>180&deg;</b>
+EL: <b>-90&deg;</b>
+ZOOM: <b id="zoom">250x</b></div>
+
+  <div class="stage">
+    <div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="titlebar">GOD'S EYE<small>TACTICAL TIC-TAC-TOE</small></div>
+          <div class="board" id="board"></div>
+          <div class="status" id="status">
+            <b id="status-main">YOUR MOVE, OPERATOR</b>
+            <span class="sub" id="status-sub">YOU ARE X &middot; THE EYE IS O</span>
+          </div>
+          <div style="padding:0 14px 14px">
+            <button class="reset" id="reset">Re-task surveillance</button>
+          </div>
+        </div>
+      </div>
+      <div class="under-phone">LIVE FEED &middot; NO RECORDING &middot; SESSION LOCAL ONLY</div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    // ---------- procedural aerial "satellite" background ----------
+    var field = document.getElementById('field');
+    var canvas = document.createElement('canvas');
+    field.appendChild(canvas);
+    var ctx = canvas.getContext('2d');
+    var W, H, seed = 91177;
+
+    function rand(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed / 0x7fffffff); }
+
+    function resize(){
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+      draw();
+    }
+
+    function draw(){
+      ctx.fillStyle = '#171b13';
+      ctx.fillRect(0,0,W,H);
+      var block = 92;
+      seed = 91177;
+      for (var y = -block; y < H + block; y += block){
+        for (var x = -block; x < W + block; x += block){
+          var jx = x + rand()*14, jy = y + rand()*14;
+          var w = block*0.62 + rand()*block*0.22;
+          var h = block*0.58 + rand()*block*0.24;
+          var shade = 22 + Math.floor(rand()*20);
+          ctx.fillStyle = 'rgb(' + shade + ',' + (shade+4) + ',' + (shade-3) + ')';
+          ctx.fillRect(jx, jy, w, h);
+          if (rand() > 0.55){
+            ctx.fillStyle = 'rgba(0,0,0,0.25)';
+            ctx.fillRect(jx + w*0.15, jy + h*0.15, w*0.3, h*0.3);
+          }
+        }
+      }
+      ctx.strokeStyle = 'rgba(10,12,8,0.85)';
+      ctx.lineWidth = 10;
+      for (var rx = -block; rx < W + block; rx += block*2.3){
+        ctx.beginPath(); ctx.moveTo(rx, 0); ctx.lineTo(rx + H*0.15, H); ctx.stroke();
+      }
+      for (var ry = -block; ry < H + block; ry += block*2.7){
+        ctx.beginPath(); ctx.moveTo(0, ry); ctx.lineTo(W, ry + W*0.05); ctx.stroke();
+      }
+      var imgData = ctx.getImageData(0,0,W,H);
+      var d = imgData.data;
+      for (var i=0; i<d.length; i+=4){
+        var n = (Math.random() - 0.5) * 10;
+        d[i]+=n; d[i+1]+=n; d[i+2]+=n;
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    // ---------- live HUD readout ----------
+    var LAT = 34.0522, LON = -118.2437, ALT = 12500;
+    var hudTl = document.getElementById('hud-tl');
+    var zoomEl = document.getElementById('zoom');
+
+    function pad(n){ return String(n).padStart(2,'0'); }
+    function tick(){
+      var now = new Date();
+      var ts = now.getUTCFullYear() + '-' + pad(now.getUTCMonth()+1) + '-' + pad(now.getUTCDate())
+        + ' T ' + pad(now.getUTCHours()) + ':' + pad(now.getUTCMinutes()) + ':' + pad(now.getUTCSeconds()) + ' Z';
+      hudTl.innerHTML = 'TS: <b>' + ts + '</b>\nLAT: <b>' + LAT.toFixed(4) + '&deg; N</b>\nLON: <b>'
+        + Math.abs(LON).toFixed(4) + '&deg; W</b>\nALT: <b>' + ALT.toLocaleString() + ' FT</b>';
+    }
+    tick();
+    setInterval(tick, 1000);
+    setInterval(function(){
+      var z = 240 + Math.round(Math.sin(Date.now()/1400) * 12);
+      zoomEl.textContent = z + 'x';
+    }, 200);
+
+    // ---------- tic-tac-toe, human (X) vs the Eye (O, perfect play) ----------
+    var boardEl = document.getElementById('board');
+    var statusMain = document.getElementById('status-main');
+    var statusSub = document.getElementById('status-sub');
+    var resetBtn = document.getElementById('reset');
+    var LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    var board, over;
+
+    function winner(b){
+      for (var i=0;i<LINES.length;i++){
+        var l = LINES[i];
+        if (b[l[0]] && b[l[0]]===b[l[1]] && b[l[1]]===b[l[2]]) return {mark:b[l[0]], line:l};
+      }
+      if (b.every(function(v){return v;})) return {mark:'draw', line:[]};
+      return null;
+    }
+
+    function minimax(b, mark){
+      var res = winner(b);
+      if (res){
+        if (res.mark==='draw') return {score:0};
+        return {score: res.mark==='O' ? 10 : -10};
+      }
+      var best = null;
+      for (var i=0;i<9;i++){
+        if (b[i]) continue;
+        b[i] = mark;
+        var s = minimax(b, mark==='O'?'X':'O').score;
+        b[i] = null;
+        var depthAdj = s>0 ? s - 1 : s<0 ? s + 1 : s;
+        if (best===null || (mark==='O' ? depthAdj>best.score : depthAdj<best.score)){
+          best = {score:depthAdj, move:i};
+        }
+      }
+      return best;
+    }
+
+    function render(){
+      boardEl.innerHTML = '';
+      var res = winner(board);
+      for (var i=0;i<9;i++){
+        (function(i){
+          var btn = document.createElement('button');
+          btn.className = 'cell';
+          btn.textContent = board[i] || '';
+          btn.disabled = !!board[i] || !!over;
+          if (res && res.line.indexOf(i) > -1) btn.classList.add('win');
+          btn.addEventListener('click', function(){ play(i); });
+          boardEl.appendChild(btn);
+        })(i);
+      }
+    }
+
+    function setStatus(main, sub){
+      statusMain.textContent = main;
+      statusSub.textContent = sub;
+    }
+
+    function play(i){
+      if (over || board[i]) return;
+      board[i] = 'X';
+      var res = winner(board);
+      if (res){ finish(res); return; }
+      render();
+      setStatus('THE EYE IS THINKING', 'ANALYZING BOARD STATE');
+      setTimeout(function(){
+        var m = minimax(board.slice(), 'O');
+        if (m && m.move !== undefined) board[m.move] = 'O';
+        var res2 = winner(board);
+        if (res2){ finish(res2); return; }
+        render();
+        setStatus('YOUR MOVE, OPERATOR', 'YOU ARE X · THE EYE IS O');
+      }, 420);
+    }
+
+    function finish(res){
+      over = true;
+      render();
+      if (res.mark==='draw') setStatus('STALEMATE', 'NEITHER SIDE HELD THE GRID');
+      else if (res.mark==='X') setStatus('TARGET EVADED', 'YOU BROKE SURVEILLANCE · YOU WIN');
+      else setStatus('ENGAGEMENT COMPLETE', 'THE EYE WINS · NOTHING ESCAPES OBSERVATION');
+    }
+
+    function reset(){
+      board = new Array(9).fill(null);
+      over = false;
+      setStatus('YOUR MOVE, OPERATOR', 'YOU ARE X · THE EYE IS O');
+      render();
+    }
+
+    resetBtn.addEventListener('click', reset);
+    reset();
+  })();
+  </script>
+</body>
+</html>
