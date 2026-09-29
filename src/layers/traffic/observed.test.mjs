@@ -88,6 +88,15 @@ test('fresh and stale observations remain distinct', () => {
   assert.equal(stale.records.length, 1, 'stale evidence is retained, not relabeled fresh');
 });
 
+test('a malformed records container is an error, not an empty success', () => {
+  const snapshot = normalizeObservedTrafficSnapshot(
+    { source: 'fixture', records: { not: 'an-array' } },
+    { now: NOW },
+  );
+  assert.equal(snapshot.state, 'error');
+  assert.equal(snapshot.error, 'Observed traffic source unavailable');
+});
+
 test('source errors use fixed presentation-safe copy', () => {
   const snapshot = normalizeObservedTrafficSnapshot(
     {
