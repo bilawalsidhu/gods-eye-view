@@ -496,6 +496,9 @@ body.cockpit-mode:has(#left-panel-stack > .panel-collapsible:not(.collapsed))
   font-size: 7px;
   letter-spacing: 0.16em;
 }
+.cockpit-aircraft-meta.emergency {
+  color: #ff4444;
+}
 .cockpit-mode-chip {
   margin-top: 2px;
   padding: 7px 11px;

@@ -3,6 +3,7 @@ import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import { selectModelEligible } from '../../data/modelEligibility.js';
 import { civilAircraftModelSpec } from './modelSpec.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
+import { isEmergency } from '../../data/aircraftEmergency.js';
 import { cockpitContactDotImage } from '../../data/cockpitContactDot.js';
 import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
 import {
@@ -13,6 +14,7 @@ import {
 import { limitCourseStep, courseSlewCapDps } from '../../data/motionModel.js';
 import {
   MIL_TINT,
+  EMERGENCY_TINT,
   GROUND_SCALE,
   COCKPIT_CONTACT_SIZE_PX,
   COCKPIT_CIVILIAN_COLOR,
@@ -54,11 +56,26 @@ export function createRendering({
   const { applyAircraftBillboardTreatment, applyAircraftModelTreatment } =
     services.recession;
 
-  /** Fleet (untracked) billboard tint: amber for known-military, white otherwise.
+  /** True while this contact's latest poll broadcast an emergency code. */
+
+  function _isEmergency(icao24) {
+    return isEmergency(flightState.records.data.get(icao24)?.emergency);
+  }
+
+  /** Fleet (untracked) billboard tint: red while broadcasting an emergency,
+   *  amber for known-military, white otherwise.
    *  Ground traffic gets NO special tint (owner verdict 2026-07-03 field test). */
 
   function _fleetBillboardColor(icao24) {
+    if (_isEmergency(icao24)) return EMERGENCY_TINT;
     return isMilitaryIcao(icao24) ? MIL_TINT : Cesium.Color.WHITE;
+  }
+
+  /** Cockpit far-contact dot tint: the emergency red outranks the category tint. */
+
+  function _cockpitContactColor(icao24) {
+    if (_isEmergency(icao24)) return EMERGENCY_TINT;
+    return isMilitaryIcao(icao24) ? MIL_TINT : COCKPIT_CIVILIAN_COLOR;
   }
 
   /** Fleet billboard scale: per-class scale, ×GROUND_SCALE while grounded. */
@@ -129,9 +146,7 @@ export function createRendering({
       bb.height = COCKPIT_CONTACT_SIZE_PX;
       bb.scale = limbScale;
       bb.scaleByDistance = _cockpitBillboardScaleByDistance();
-      bb.color = (
-        isMilitaryIcao(icao24) ? MIL_TINT : COCKPIT_CIVILIAN_COLOR
-      ).withAlpha(freshnessAlpha);
+      bb.color = _cockpitContactColor(icao24).withAlpha(freshnessAlpha);
       bb.rotation = 0;
       return;
     }
@@ -162,7 +177,7 @@ export function createRendering({
 
   function _modelColor(icao24) {
     if (icao24 === flightState._trackedIcao) return Cesium.Color.CYAN;
-    return isMilitaryIcao(icao24) ? MIL_TINT : Cesium.Color.WHITE;
+    return _fleetBillboardColor(icao24);
   }
 
   /** The FLEET's 3D-model regime: models3d enabled AND the camera zoomed in past the altitude
@@ -1009,9 +1024,7 @@ export function createRendering({
         flightState._cockpitNearContacts.has(icao24);
       const layerBaseColor =
         flightState._cockpitContactMode && !isCockpitNear
-          ? isMilitaryIcao(icao24)
-            ? MIL_TINT
-            : COCKPIT_CIVILIAN_COLOR
+          ? _cockpitContactColor(icao24)
           : _fleetBillboardColor(icao24);
       const baseColor = layerBaseColor;
       const treatment = applyAircraftBillboardTreatment({

@@ -4,6 +4,7 @@ import {
   pickRenderAltitudeM,
 } from '../../data/renderAltitude.js';
 import { classifyAircraft } from '../../data/aircraftClass.js';
+import { aircraftEmergency } from '../../data/aircraftEmergency.js';
 import {
   approxDistanceKm,
   GROUND_FLOOR_CLAMP_RADIUS_KM,
@@ -226,6 +227,10 @@ export class FlightRecords {
       // like callsign so a transient blank row doesn't blank the field.
       originCountry:
         stickyText(origin_country, prevMeta?.originCountry) || null,
+      // Per poll, NOT sticky: an emergency code clears when the crew resets
+      // it, so a blank squawk must not hold a stale 7700 on screen.
+      squawk: observation.squawk ?? null,
+      emergency: aircraftEmergency(observation),
       // OpenSky distinguishes the last position epoch from the last
       // transponder message. The fleet coast horizon uses this actual
       // contact time so a temporarily old position does not hard-freeze

@@ -4357,6 +4357,8 @@ async function runAnalystQuery(
       'aircraftClass',
       'military',
       'onGround',
+      'squawk',
+      'emergencyKind',
       'distanceKm',
       'confidence',
       'place',

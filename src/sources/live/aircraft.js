@@ -30,6 +30,9 @@ export function normalizeOpenSkyAircraft(row) {
     typeCode: null,
     registration: null,
     operator: null,
+    squawk: cleanText(row[14]) || null,
+    // State vectors carry no ADS-B emergency field; the squawk stands alone.
+    emergency: null,
   };
 }
 
@@ -68,6 +71,8 @@ export function normalizeReadsbAircraft(row, snapshotTimeMs) {
     typeCode: cleanText(row.t),
     registration: cleanText(row.r),
     operator: cleanText(row.ownOp),
+    squawk: cleanText(row.squawk) || null,
+    emergency: cleanText(row.emergency).toLowerCase() || null,
   };
 }
 
