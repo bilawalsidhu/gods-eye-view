@@ -261,6 +261,11 @@ export function createState({ services }) {
 
   /** Reusable scratch Cartesian3 to avoid per-frame allocation / GC pressure */
 
+  /** Transient anonymous vehicle observations keyed by producer source id. */
+  layerState._externalVehicleObservations = new Map();
+  layerState._externalObservationTimer = null;
+  layerState._externalObservationSequence = 0;
+
   layerState._scratchLerp = new Cesium.Cartesian3();
 
   // ─── Animation ─────────────────────────────────────────────
