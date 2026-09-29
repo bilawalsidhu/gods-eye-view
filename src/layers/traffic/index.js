@@ -7,7 +7,7 @@ import { createAnimation } from './animation.js';
 import { createViewport } from './viewport.js';
 import { createFlow } from './flow.js';
 import { createRendering } from './rendering.js';
-import { createControls } from './controls.js';
+import { createControls, nearestRoadSnap } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 import { createState } from './state.js';
 
@@ -56,6 +56,7 @@ export function createTrafficLayer({ services, source }) {
       getTrafficTimingDiagnostics: parts.timing.getTrafficTimingDiagnostics,
       deriveTrafficFlowError: parts.flow.deriveTrafficFlowError,
       trafficFeedPresentation: parts.model.trafficFeedPresentation,
+      nearestRoadSnap,
     },
   );
 }
