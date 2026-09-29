@@ -114,8 +114,13 @@ test('fetchTrackJson sanitizes upstream failures and reports an oversized docume
     assert.equal(failed.body, '{"error":"Track source HTTP 500"}', 'the upstream body is never surfaced');
 
     const big = await fetchTrackJson({ key: 'k:big', upstreamUrl: 'https://up.test/x' });
-    assert.equal(big.status, 200, 'the upstream status survives the cap');
+    assert.equal(big.status, 502, 'an oversized body is an upstream failure, not a success');
     assert.equal(big.body, '{"error":"Upstream track response too large"}');
+    // The 502 is cached like any upstream status: a retry inside the TTL
+    // must not re-download the same oversized document.
+    const replay = await fetchTrackJson({ key: 'k:big', upstreamUrl: 'https://up.test/x' });
+    assert.equal(replay.status, 502, 'the cached 502 replays for the TTL');
+    assert.equal(n, 2, 'the oversize retry never re-fetched upstream');
   } finally {
     globalThis.fetch = original;
   }

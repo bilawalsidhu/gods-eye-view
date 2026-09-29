@@ -23,8 +23,10 @@
  *                  `application/json` — note the regex is /^[0-9a-f~]{6,7}$/
  *                  (NOT plain hex): adsb.lol addresses TIS-B/ADS-R targets with
  *                  a leading `~`, so 7-char `~<hex6>` values are valid
- *   502          → {"error":"adsb.lol trace fetch failed"} — transport failure
- *   200 + error  → {"error":"Upstream track response too large"} past the 5 MB cap
+ *   502          → {"error":"adsb.lol trace fetch failed"} — transport failure;
+ *                  also {"error":"Upstream track response too large"} when the
+ *                  document exceeds 5 MB (an oversized body is an upstream
+ *                  failure, and the 502 is cached for the TTL like any status)
  *
  * Upstream: https://adsb.lol/data/traces/<last-2-hex>/trace_full_<hex>.json —
  * the shard directory is the LAST TWO characters of the address, 12 s timeout,

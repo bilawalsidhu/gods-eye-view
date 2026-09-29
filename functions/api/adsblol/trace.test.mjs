@@ -140,17 +140,26 @@ test('a 404 is forwarded with a sanitized body — and cached like any status', 
   }
 });
 
-test('a document over the 5 MB cap answers 200 with an error field', async () => {
+test('a document over the 5 MB cap answers 502 and is cached like an error', async () => {
   resetTrackCacheForTest();
+  let calls = 0;
   const original = globalThis.fetch;
-  globalThis.fetch = async () => new Response('truncated', {
-    status: 200,
-    headers: { 'content-length': String(5 * 1024 * 1024 + 1) },
-  });
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response('truncated', {
+      status: 200,
+      headers: { 'content-length': String(5 * 1024 * 1024 + 1) },
+    });
+  };
   try {
     const res = await onRequest(ctx(new Request(url('?hex=cafe02'))));
-    assert.equal(res.status, 200, 'dev keeps the upstream status on this branch');
+    assert.equal(res.status, 502, 'an oversized body is an upstream failure, not a success');
     assert.deepEqual(await res.json(), { error: 'Upstream track response too large' });
+    // The 502 is cached: a reselect inside the TTL must not re-download the
+    // same oversized document.
+    const again = await onRequest(ctx(new Request(url('?hex=cafe02'))));
+    assert.equal(again.status, 502, 'the cached 502 replays for the TTL');
+    assert.equal(calls, 1, 'the oversize reselect never re-fetched upstream');
   } finally {
     globalThis.fetch = original;
   }
