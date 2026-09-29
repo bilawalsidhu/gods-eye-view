@@ -2357,6 +2357,10 @@
       "src/layers/gnss/index.js",
       "src/layers/gnss/source.js",
       "src/layers/gnss/records.js",
+      "src/app/layers/gdacs.js",
+      "src/layers/gdacs/index.js",
+      "src/layers/gdacs/source.js",
+      "src/layers/gdacs/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -2992,6 +2996,10 @@
       "src/layers/gnss/index.js",
       "src/layers/gnss/source.js",
       "src/layers/gnss/records.js",
+      "src/app/layers/gdacs.js",
+      "src/layers/gdacs/index.js",
+      "src/layers/gdacs/source.js",
+      "src/layers/gdacs/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -3582,7 +3590,9 @@
       "src/layers/submarineCables/bundledSource.js",
       "src/layers/gnss/source.js",
       "src/layers/airQuality/model.js",
-      "src/layers/airQuality/source.js"
+      "src/layers/airQuality/source.js",
+      "src/layers/gdacs/source.js",
+      "src/layers/gdacs/records.js"
     ],
     "external": []
   },
@@ -3821,6 +3831,25 @@
       "src/i18n/locales/zh-CN.json"
     ],
     "external": ["cesium"]
+  },
+  "gdacs": {
+    "exports": ["./layers/gdacs"],
+    "modules": [
+      "src/layers/gdacs/index.js",
+      "src/sources/httpBody.js",
+      "src/layers/gdacs/source.js",
+      "src/layers/gdacs/records.js"
+    ],
+    "external": ["cesium"]
+  },
+  "gdacs-source": {
+    "exports": ["./layers/gdacs/source"],
+    "modules": [
+      "src/sources/httpBody.js",
+      "src/layers/gdacs/source.js",
+      "src/layers/gdacs/records.js"
+    ],
+    "external": []
   },
   "gnss": {
     "exports": ["./layers/gnss"],
