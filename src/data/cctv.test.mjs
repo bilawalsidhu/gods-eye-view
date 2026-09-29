@@ -1747,7 +1747,7 @@ test('frameSignatureFromPixels: empty or junk input yields null (always redraw)'
   assert.equal(frameSignatureFromPixels({}), null);
 });
 
-// Experimental anonymous CCTV vehicle observations (#89)
+// Experimental anonymous CCTV vehicle observations (kvnloo/gods-eye-view#89)
 // ---------------------------------------------------------------------------
 
 test('projectFramePointToGround casts the calibrated centre ray onto ground', () => {
