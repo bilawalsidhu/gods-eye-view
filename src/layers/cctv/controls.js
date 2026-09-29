@@ -59,6 +59,16 @@ export function createControls({ state: layerState, services, parts, source }) {
           parts.projection.startProjectionLoop();
         }
       }
+      if (typeof params.vehicleObservations === 'boolean') {
+        const enabled = params.vehicleObservations === true;
+        if (layerState._vehicleObservationsEnabled !== enabled) {
+          layerState._vehicleObservationsEnabled = enabled;
+          // Always start from a fresh temporal pair; stale history could create
+          // a giant false motion component when this experiment is re-enabled.
+          parts.frames.clearVehicleObservationState();
+          if (enabled) parts.projection.startProjectionLoop();
+        }
+      }
       if (typeof params.autoHop === 'boolean') {
         layerState._autoHop = params.autoHop;
         if (params.autoHop) layerState._autoHopSuspended = false;
@@ -180,6 +190,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         showCoverage: layerState._coverageMode !== 'off',
         coverageMode: layerState._coverageMode,
         showProjection: layerState._showProjection,
+        vehicleObservations: layerState._vehicleObservationsEnabled,
         calibrationMode: layerState._calibrationMode,
         autoHop: layerState._autoHop,
         autoHopSec: layerState._autoHopSec,
@@ -239,6 +250,8 @@ export function createControls({ state: layerState, services, parts, source }) {
     getStats() {
       return {
         count: layerState._count,
+        observedVehicles: layerState._vehicleObservationCount,
+        lastVehicleObservationAt: layerState._vehicleObservationLastAt,
         lastUpdate: layerState._lastUpdate,
         error: layerState._lastError,
         loading: layerState._geoLoading,
@@ -248,6 +261,11 @@ export function createControls({ state: layerState, services, parts, source }) {
         ),
         loadingTotal: layerState._geoLoadTotal,
       };
+    },
+
+    /** Keep the manager handle for the opt-in CCTV → Traffic observation bridge. */
+    attachDataManager(dataManager) {
+      layerState._dataManager = dataManager || null;
     },
 
     /**
