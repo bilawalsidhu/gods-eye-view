@@ -72,7 +72,9 @@ export function createCctvLayer({ services, source }) {
       writeCalibrationStoreV2: parts.calibration.writeCalibrationStoreV2,
       deriveCalBadge: parts.calibration.deriveCalBadge,
       computeFrustumGeometry: parts.geometry.computeFrustumGeometry,
+      projectFramePointToGround: parts.geometry.projectFramePointToGround,
       activationProbeClampRange: parts.geometry.activationProbeClampRange,
+      detectMotionVehicleCandidates: parts.frames.detectMotionVehicleCandidates,
       frameSignatureFromPixels: parts.frames.frameSignatureFromPixels,
       _createCctvProjectionPlaneForTest:
         parts.testing._createCctvProjectionPlaneForTest,
