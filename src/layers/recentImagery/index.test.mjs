@@ -1061,6 +1061,10 @@ test('alpha, split and visible range notify without re-rendering the row', async
   f.layer.setSplit(0.25);
   f.layer.setVisibleRange(1, 3);
   assert.equal(f.thumbnails.calls.at(-1)[2].firstVisible, 1);
+  assert.ok(
+    f.thumbnails.retained.at(-1).includes(f.snap().focus.key),
+    'the current focus remains in the retained refinement intent',
+  );
   assert.equal(rowRenders, rows);
   assert.deepEqual(f.reasons.slice(-2), ['alpha', 'split']);
   f.layer.setAlpha('bad');
