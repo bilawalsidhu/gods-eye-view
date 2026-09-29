@@ -3,6 +3,10 @@ const GEOMETRY_TYPES = new Set([
   'approach',
   'intersection',
 ]);
+const MAX_RECORDS = 5000;
+const MAX_GEOMETRY_POINTS = 256;
+const MAX_COUNT_KEYS = 64;
+const MAX_MOVEMENTS = 32;
 
 export const OBSERVED_TRAFFIC_GEOMETRY_TYPES = Object.freeze([
   ...GEOMETRY_TYPES,
@@ -54,7 +58,11 @@ function normalizeGeometry(value) {
     return point ? { type, coordinates: point } : null;
   }
 
-  if (!Array.isArray(value.coordinates) || value.coordinates.length < 2)
+  if (
+    !Array.isArray(value.coordinates) ||
+    value.coordinates.length < 2 ||
+    value.coordinates.length > MAX_GEOMETRY_POINTS
+  )
     return null;
   const coordinates = value.coordinates.map(normalizedCoordinate);
   if (coordinates.some((point) => point === null)) return null;
@@ -64,7 +72,10 @@ function normalizeGeometry(value) {
 function normalizeCounts(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const counts = {};
-  for (const [rawKey, rawValue] of Object.entries(value)) {
+  for (const [rawKey, rawValue] of Object.entries(value).slice(
+    0,
+    MAX_COUNT_KEYS,
+  )) {
     const key = safeString(rawKey, 48);
     const count = nonNegativeNumber(rawValue);
     if (
@@ -157,7 +168,10 @@ export function normalizeObservedTrafficRecord(value) {
   const vehiclesPerMin = nonNegativeNumber(value.flow?.vehiclesPerMin);
   const counts = normalizeCounts(value.flow?.counts);
   const movements = Array.isArray(value.movements)
-    ? value.movements.map(normalizeMovement).filter(Boolean).slice(0, 32)
+    ? value.movements
+        .slice(0, MAX_MOVEMENTS)
+        .map(normalizeMovement)
+        .filter(Boolean)
     : [];
   if (
     vehiclesPerMin === null &&
@@ -227,11 +241,12 @@ export function normalizeObservedTrafficSnapshot(
     };
   }
 
-  const inputRecords = Array.isArray(value.records) ? value.records : [];
+  const rawRecords = Array.isArray(value.records) ? value.records : [];
+  const inputRecords = rawRecords.slice(0, MAX_RECORDS);
   const records = inputRecords
     .map(normalizeObservedTrafficRecord)
     .filter(Boolean);
-  const dropped = inputRecords.length - records.length;
+  const dropped = rawRecords.length - records.length;
   const staleLimit = Math.max(0, Number(staleAfterMs) || 0);
   const staleCount = records.filter(
     (record) => now - (record.windowEnd ?? record.observedAt) > staleLimit,
@@ -254,7 +269,7 @@ export function normalizeObservedTrafficSnapshot(
     source: safeString(value.source, 160),
     fetchedAt,
     records,
-    received: inputRecords.length,
+    received: rawRecords.length,
     accepted: records.length,
     dropped,
     staleCount,
@@ -295,11 +310,16 @@ export function createObservedTrafficSource({
       try {
         const result = await read(query, { signal });
         signal?.throwIfAborted?.();
+        if (!result || typeof result !== 'object' || Array.isArray(result))
+          return normalizeObservedTrafficSnapshot(result, {
+            now,
+            staleAfterMs,
+          });
         return normalizeObservedTrafficSnapshot(
           {
             ...result,
-            configured: result?.configured !== false,
-            source: result?.source || sourceLabel,
+            configured: result.configured !== false,
+            source: result.source || sourceLabel,
           },
           { now, staleAfterMs },
         );
