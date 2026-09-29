@@ -19,7 +19,9 @@ const VEHICLE_OBSERVATION_TTL_MS = 12000;
 
 function pixelLuma(data, offset) {
   return (
-    (77 * data[offset] + 150 * data[offset + 1] + 29 * data[offset + 2]) >>
+    (77 * data[offset] +
+      150 * data[offset + 1] +
+      29 * data[offset + 2]) >>
     8
   );
 }
