@@ -440,7 +440,10 @@ export function createModel({ state: layerState, services, parts, source }) {
 
   function projectionLoopIsNeeded() {
     if (!layerState._enabled || !layerState._viewer) return false;
-    if (layerState._showProjection && parts.selection.getActiveRecord())
+    if (
+      (layerState._showProjection || layerState._vehicleObservationsEnabled) &&
+      parts.selection.getActiveRecord()
+    )
       return true;
     return focusPassIsNeeded(
       getFocusTarget(),
