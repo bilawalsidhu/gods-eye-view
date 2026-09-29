@@ -315,3 +315,32 @@ test('a request queued behind an aborted fetch still starts once the abort settl
     tracked: 1,
   });
 });
+
+
+test('decoded thumbnail residency also respects a byte budget', async () => {
+  const bytesPerImage = 128 * 128 * 4;
+  const { loader, fetch, revoked } = fixture({
+    maxInFlight: 10,
+    maxDecoded: 10,
+    maxDecodedBytes: bytesPerImage * 2,
+    size: 128,
+  });
+
+  loader.request(candidate('S30', '2026-09-10'), BOX, 0);
+  loader.request(candidate('S30', '2026-09-11'), BOX, 1);
+  loader.request(candidate('S30', '2026-09-12'), BOX, 2);
+  fetch.respond(0);
+  fetch.respond(1);
+  fetch.respond(2);
+  await settle();
+
+  assert.equal(loader.stats().decoded, 2);
+  assert.deepEqual(loader.memoryStats(), {
+    decodedBytes: bytesPerImage * 2,
+    decodedBudgetBytes: bytesPerImage * 2,
+    decodedBytesPerImage: bytesPerImage,
+  });
+  assert.deepEqual(revoked, ['blob:1']);
+  assert.equal(loader.get('S30:2026-09-10').status, 'present');
+  assert.equal(loader.get('S30:2026-09-10').objectUrl, null);
+});
