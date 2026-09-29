@@ -398,6 +398,9 @@ test('the aircraft snapshot routes decline a non-GET before any upstream work', 
     for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
       const response = await request(route, '/', method);
       assert.equal(response.statusCode, 405, `${method} ${route}`);
+      // RFC 9110 section 15.5.6 requires a 405 to name the methods it does
+      // accept, which is what `/api/radio/stations` already does in-tree.
+      assert.equal(response.headers.allow, 'GET', `${method} ${route}`);
       assert.deepEqual(JSON.parse(response.body), {
         error: 'Method Not Allowed',
       });

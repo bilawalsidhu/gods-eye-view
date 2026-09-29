@@ -71,7 +71,10 @@ export function adsbLolProxy() {
       // Read-only snapshot endpoint; match the method contract its sibling
       // query proxies already declare instead of serving every verb alike.
       if (req.method !== 'GET') {
-        res.writeHead(405, { 'Content-Type': 'application/json' });
+        res.writeHead(405, {
+          'Content-Type': 'application/json',
+          Allow: 'GET',
+        });
         res.end(JSON.stringify({ error: 'Method Not Allowed' }));
         return;
       }

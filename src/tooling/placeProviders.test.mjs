@@ -498,6 +498,8 @@ test('the routing proxy declines a non-GET before rate limiting or upstream', as
       method,
     );
     assert.equal(response.statusCode, 405, method);
+    // RFC 9110 section 15.5.6 requires a 405 to name the methods it accepts.
+    assert.equal(response.headers.allow, 'GET', method);
     assert.deepEqual(response.body, { error: 'Method Not Allowed' });
   }
 });

@@ -230,7 +230,7 @@ export function installRouteMiddleware(
     // The documented shape above is a GET with query parameters; say so,
     // the way the other query proxies do, instead of answering any verb.
     if (req.method !== 'GET') {
-      res.writeHead(405, { 'Content-Type': 'application/json' });
+      res.writeHead(405, { 'Content-Type': 'application/json', Allow: 'GET' });
       res.end(JSON.stringify({ error: 'Method Not Allowed' }));
       return;
     }
