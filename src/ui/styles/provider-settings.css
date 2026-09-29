@@ -300,6 +300,43 @@
   color: rgba(148, 178, 188, 0.42);
 }
 
+.key-setup-cloud-auth {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.key-setup-cloud-auth-state {
+  color: rgba(190, 214, 222, 0.7);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.05rem;
+}
+
+.key-setup-cloud-auth-toggle {
+  margin-left: auto;
+  padding: 0.28rem 0.55rem;
+  color: rgba(54, 220, 255, 0.9);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.06rem;
+  background: rgba(54, 220, 255, 0.08);
+  border: 1px solid rgba(54, 220, 255, 0.28);
+  border-radius: 0.32rem;
+  cursor: pointer;
+}
+
+.key-setup-cloud-auth-toggle:hover,
+.key-setup-cloud-auth-toggle:focus-visible {
+  border-color: rgba(54, 220, 255, 0.65);
+  outline: none;
+}
+
+.key-setup-cloud-auth-toggle:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
 .key-setup-footer {
   margin-top: 0.85rem;
 }
