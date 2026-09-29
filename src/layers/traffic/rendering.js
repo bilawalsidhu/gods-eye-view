@@ -55,7 +55,8 @@ export function createRendering({
           entry.entity.label.text = observationLabel(entry.contact, ageSec);
         keep.push(entry);
       }
-      if (keep.length) layerState._externalVehicleObservations.set(sourceId, keep);
+      if (keep.length)
+        layerState._externalVehicleObservations.set(sourceId, keep);
       else layerState._externalVehicleObservations.delete(sourceId);
     }
     stopExternalObservationTimerIfIdle();
@@ -85,7 +86,11 @@ export function createRendering({
    * Replace a producer's current ephemeral vehicle observations. No identity is
    * retained across calls: the prior frame's entities are destroyed first.
    */
-  function replaceExternalVehicleObservations(sourceId, contacts, options = {}) {
+  function replaceExternalVehicleObservations(
+    sourceId,
+    contacts,
+    options = {},
+  ) {
     const id = String(sourceId || '').trim();
     if (!id || !layerState._viewer || !layerState._enabled) return 0;
     clearExternalVehicleObservations(id);
