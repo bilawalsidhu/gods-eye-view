@@ -1425,6 +1425,27 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   outline: none;
 }
 
+/* Native <select> popups are painted by the browser, not by this sheet: the
+   closed control inherits its panel skin, but the option list falls back to
+   the platform's light palette unless the control declares a scheme. Declare
+   it on the controls rather than on :root so the app keeps its own hand-tuned
+   scrollbar and input skins, and set the option colors explicitly because the
+   popup surface is not themed on every platform. (Ported from upstream
+   59b2637; --bg-dark is this sheet's opaque dark surface.) */
+select {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  background-color: var(--bg-dark);
+  color: var(--text-primary);
+}
+
+select option:disabled {
+  color: var(--text-dim);
+}
+
 /* Proximity / All segmented control under the 3D toggle */
 #models3d-mode-row { min-width: 184px; }
 .pp-mode-seg {
