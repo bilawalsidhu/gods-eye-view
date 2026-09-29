@@ -120,15 +120,6 @@ export async function formatAdoptedFiles(root, mode) {
   }
 
   const changed = files.filter(({ source, formatted }) => source !== formatted);
-  if (mode === '--check') {
-    const target = changed.find(
-      ({ name }) => name === 'src/voice/realtimeViewportPolicy.test.mjs',
-    );
-    if (target)
-      console.error(
-        `FORMAT_EXPECTED BEGIN\n${target.formatted}FORMAT_EXPECTED END`,
-      );
-  }
   if (mode === '--write') {
     for (const { file, formatted } of changed) await writeFile(file, formatted);
   }
