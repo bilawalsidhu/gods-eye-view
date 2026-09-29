@@ -3174,7 +3174,7 @@ test('EASA CZIB common names toggle only the conflict zone layer through the nor
   let enabled = false;
   const dataManager = {
     layers: new Map([['easa-czib', { module: {} }]]),
-    getAll: () => [{ id: 'easa-czib', name: 'Conflict Zone Bulletins' }],
+    getAll: () => [{ id: 'easa-czib', name: 'Conflict Zones' }],
     isEnabled: () => enabled,
     setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
   };

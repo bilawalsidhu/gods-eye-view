@@ -249,7 +249,7 @@ test('an enabled refresh shades each named country of every active bulletin', as
     controls.legend.map(({ label, count }) => [label, count]),
     [
       ['Whole country named', 2],
-      ['Part of a country', 1],
+      ['Part of a country (dashed)', 1],
     ],
   );
   assert.match(controls.legend[0].blurb, /not the exact airspace/);
@@ -257,13 +257,13 @@ test('an enabled refresh shades each named country of every active bulletin', as
   assert.deepEqual(
     controls.list.items.map(({ lead, text, params }) => [lead, text, params]),
     [
-      ['2026-01', 'Mali', { bulletinId: '1', focus: true }],
+      ['', 'Mali · 2026-01', { bulletinId: '1', focus: true }],
       [
-        '2026-02',
-        'Persian Gulf · 2 countries',
+        '',
+        'Persian Gulf · 2026-02 · 2 countries',
         { bulletinId: '2', focus: true },
       ],
-      ['2026-03', 'Yemen – Sana’a FIR', { bulletinId: '3', focus: true }],
+      ['', 'Yemen – Sana’a FIR · 2026-03', { bulletinId: '3', focus: true }],
     ],
   );
   assert.deepEqual(controls.chips, []);
@@ -413,6 +413,7 @@ test('choosing a list row selects the bulletin, moves the camera and offers the 
       'Countries named: Qatar, Oman',
       'Valid until 29 Oct 2026, unless reviewed earlier',
       'Revised 27 Sep 2026',
+      'Shading marks the countries named, not the exact airspace',
     ].join(' · '),
   );
   assert.deepEqual(labels(), [

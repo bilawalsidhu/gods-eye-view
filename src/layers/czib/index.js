@@ -6,7 +6,10 @@ export { createCzibSource } from './source.js';
 const LAYER_ID = 'easa-czib';
 const ENTITY_PREFIX = `${LAYER_ID}:`;
 const COLORS = Object.freeze({ whole: '#ff5a36', part: '#ffb020' });
-const FILL_ALPHA = Object.freeze({ whole: 0.2, part: 0.1, selected: 0.36 });
+// Part-country zones keep only a faint fill, enough to pick, so the dashed
+// outline and not the shading carries them.
+const FILL_ALPHA = Object.freeze({ whole: 0.2, part: 0.03, selected: 0.36 });
+const STROKE_WIDTH = Object.freeze({ whole: 1.5, part: 2.5, selected: 3 });
 const LABEL_LIMIT = 32;
 const LABEL_MAX_CHARS = 40;
 const DAY_MS = 86_400_000;
@@ -143,10 +146,12 @@ export function createCzibLayer({
           active ? FILL_ALPHA.selected : FILL_ALPHA[kindOf(zone)],
         ),
       );
-      entity.polyline.width = active ? 3 : 1.5;
+      entity.polyline.width = active
+        ? STROKE_WIDTH.selected
+        : STROKE_WIDTH[kindOf(zone)];
       const stroke = active ? C.Color.WHITE : color.withAlpha(0.9);
       entity.polyline.material = zone.bulletin.partial
-        ? new C.PolylineDashMaterialProperty({ color: stroke, dashLength: 12 })
+        ? new C.PolylineDashMaterialProperty({ color: stroke, dashLength: 24 })
         : new C.ColorMaterialProperty(stroke);
     }
   }
@@ -338,6 +343,7 @@ export function createCzibLayer({
       unresolved.length && parts.length
         ? `Not drawn: ${unresolved.join(', ')}`
         : '',
+      CAVEAT,
     ].filter(Boolean);
   }
 
@@ -369,7 +375,7 @@ export function createCzibLayer({
 
   const layer = {
     id: LAYER_ID,
-    name: 'Conflict Zone Bulletins',
+    name: 'Conflict Zones',
     icon: '✈',
     source: 'EASA',
     updateInterval: 3_600_000,
@@ -516,7 +522,7 @@ export function createCzibLayer({
             blurb: DISCLAIMER,
           },
           {
-            label: 'Part of a country',
+            label: 'Part of a country (dashed)',
             color: COLORS.part,
             count: count('part'),
           },
@@ -527,11 +533,17 @@ export function createCzibLayer({
           items: _zones.map(({ bulletin }, index) => ({
             id: bulletin.id,
             ordinal: index + 1,
-            lead: bulletin.number.replace(/^CZIB-/, ''),
-            text:
+            // Area first: the bulletin number is the least telling part.
+            lead: '',
+            text: [
+              bulletin.area,
+              bulletin.number.replace(/^CZIB-/, ''),
               bulletin.countries.length > 1
-                ? `${bulletin.area} · ${bulletin.countries.length} countries`
-                : bulletin.area,
+                ? `${bulletin.countries.length} countries`
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' · '),
             active: bulletin.id === _selectedId,
             params: { bulletinId: bulletin.id, focus: true },
           })),

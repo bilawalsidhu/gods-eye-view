@@ -1,6 +1,6 @@
 # Changelog
 
-- Conflict Zone Bulletins layer (Events group): the active EASA Conflict Zone
+- Conflict Zones layer (Events group): the active EASA Conflict Zone
   Information Bulletins, worldwide and keyless. Each bulletin shades the
   countries it names from the bundled Natural Earth boundaries, dashed when
   it covers only part of a country, and is labelled on the globe. The row

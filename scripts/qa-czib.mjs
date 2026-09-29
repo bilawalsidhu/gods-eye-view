@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * qa-czib.mjs — headless proof for the Conflict Zone Bulletins (EASA CZIB)
+ * qa-czib.mjs — headless proof for the Conflict Zones (EASA CZIB)
  * layer.
  *
  * Drives the REAL app in headless Chromium against a dev server (keyless).
@@ -156,7 +156,7 @@ const rowDom = (page) =>
     const row = document.querySelector(`[data-layer-id="${id}"]`);
     const all = (selector) => [...(row?.querySelectorAll(selector) || [])];
     return {
-      leads: all('.data-row-list-lead').map((node) => node.textContent),
+      leads: all('.data-row-list-text').map((node) => node.textContent),
       activeItems: all('.data-row-list-item.active').map(
         (node) => node.dataset.listItemId,
       ),
@@ -281,7 +281,7 @@ const drawnState = (page) =>
   }, LAYER_ID);
 
 async function main() {
-  console.log('\nConflict Zone Bulletins proof (qa-czib)');
+  console.log('\nConflict Zones proof (qa-czib)');
   console.log(`  App URL : ${APP_URL}\n`);
   try {
     const res = await fetch(APP_URL);
