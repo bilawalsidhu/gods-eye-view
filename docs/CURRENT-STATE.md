@@ -1,3 +1,11 @@
+## Terrain request singleflight — September 29, 2026
+
+Identical concurrent client requests to `/api/terrain/heights` share one transport
+request. Each caller retains independent cancellation; one cancelled consumer
+does not abort work still needed by another, while the final cancelled waiter
+does abort the shared request. This adds no TTL or stale-data policy and does not
+change the existing terrain result/cache semantics.
+
 # God's Eye View Current State
 
 ## Cyber HUD — September 23, 2026
