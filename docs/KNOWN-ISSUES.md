@@ -81,9 +81,10 @@ Status: Open (owner-accepted 2026-07-08, documented)
 ### Weather layers: coverage and meaning
 Status: Open (source limits, by design)
 
-- **Rain radar covers the contiguous United States only.** It shows MRMS
-  reflectivity in dBZ, not rainfall rate or a forecast; a gap in coverage does not
-  mean no precipitation.
+- **Rain radar:** the US option is MRMS for the contiguous United States; the
+  Global option is RainViewer’s composite where national radars exist, past
+  2 hours only. Both show reflectivity in dBZ, not rainfall rate or a forecast;
+  gaps are not “no rain”.
 - **Lightning density is a ground-network grid, not GLM flashes.** It is NOAA's
   15-minute density product derived from Vaisala NLDN/GLD360 on an approximately
   8 km grid, for the Americas and Pacific only (110°E across the dateline to 0°,

@@ -88,7 +88,10 @@ function createGlobeRendering({
       ? cesium.Rectangle.intersection(bounds, view)
       : bounds;
     if (!coverage) return [];
-    const scheme = new cesium.GeographicTilingScheme();
+    const scheme =
+      snapshot.tilingScheme === 'web-mercator'
+        ? new cesium.WebMercatorTilingScheme()
+        : new cesium.GeographicTilingScheme();
     const template = weatherTileUrl(snapshot.product, time, {
       size: profile(snapshot.product).tileSize,
     });
@@ -248,7 +251,7 @@ function createGlobeRendering({
         priority:
           snapshot.product === 'lightning'
             ? 3
-            : snapshot.product === 'radar'
+            : ['radar', 'radar-global'].includes(snapshot.product)
               ? 2
               : 1,
         product: snapshot.product,
@@ -324,21 +327,26 @@ function createGlobeRendering({
           viewer.scene.requestRender();
           return;
         }
-        const tilingScheme = new cesium.GeographicTilingScheme(
-          global
-            ? {
-                rectangle,
-                numberOfLevelZeroTilesX: 2,
-                numberOfLevelZeroTilesY: 1,
-              }
-            : undefined,
-        );
+        const mercator = snapshot.tilingScheme === 'web-mercator';
+        const tilingScheme = mercator
+          ? new cesium.WebMercatorTilingScheme()
+          : new cesium.GeographicTilingScheme(
+              global
+                ? {
+                    rectangle,
+                    numberOfLevelZeroTilesX: 2,
+                    numberOfLevelZeroTilesY: 1,
+                  }
+                : undefined,
+            );
         const credit = new cesium.Credit(
-          snapshot.product === 'lightning'
-            ? 'NOAA/NWS lightning density · derived from Vaisala NLDN/GLD360'
-            : snapshot.product === 'radar'
-              ? 'NOAA nowCOAST · NWS/OAR MRMS'
-              : 'NOAA nowCOAST · NESDIS GOES / global satellite partners',
+          snapshot.product === 'radar-global'
+            ? '<a href="https://www.rainviewer.com">RainViewer</a>'
+            : snapshot.product === 'lightning'
+              ? 'NOAA/NWS lightning density · derived from Vaisala NLDN/GLD360'
+              : snapshot.product === 'radar'
+                ? 'NOAA nowCOAST · NWS/OAR MRMS'
+                : 'NOAA nowCOAST · NESDIS GOES / global satellite partners',
           false,
         );
         const provider = global
@@ -360,7 +368,9 @@ function createGlobeRendering({
               rectangle,
               tileWidth: nextProfile.tileSize,
               tileHeight: nextProfile.tileSize,
-              maximumLevel: nextProfile.maximumLevel,
+              maximumLevel: mercator
+                ? Math.min(nextProfile.maximumLevel, 7)
+                : nextProfile.maximumLevel,
               enablePickFeatures: false,
               credit,
             });

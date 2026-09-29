@@ -1,5 +1,10 @@
 # Changelog
 
+- Add Global (RainViewer) beside US (NOAA) in Rain radar, with shared observed
+  history and share-link region selection. Validated, rate-limited Web Mercator
+  tiles draw on globe basemaps and compose into reprojected images on 3D Tiles
+  shells; coverage follows national radar networks, with 2 hours of history.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a

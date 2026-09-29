@@ -1742,7 +1742,7 @@ test('one row steps every registered observation; missing frames hide and latest
   });
   assert.deepEqual(
     radar.layer.getParams(),
-    { opacity: 'strong' },
+    { product: 'radar', opacity: 'strong' },
     'history is never serialized',
   );
   satellite.layer.disable();
@@ -1889,7 +1889,11 @@ test('observed descriptors keep configuration only and label satellite clouds by
     assert.equal(controls.summary.sections, undefined);
     assert.deepEqual(
       controls.summary.settings.map(({ label }) => label),
-      id === 'weather-satellite' ? ['REGION', 'IMAGE', 'OPACITY'] : ['OPACITY'],
+      id === 'weather-satellite'
+        ? ['REGION', 'IMAGE', 'OPACITY']
+        : id === 'weather-radar'
+          ? ['REGION', 'OPACITY']
+          : ['OPACITY'],
     );
     assert.deepEqual(
       controls.summary.settings.flatMap(({ chips }) => chips),
@@ -2253,3 +2257,163 @@ for (const product of ['radar', 'clouds-regional', 'lightning']) {
     assert.equal(h.viewer.camera.moveEnd.size, 0);
   });
 }
+
+test('global radar uses Web Mercator provider, linked credit and square-grid prefetch', async () => {
+  const urls = [];
+  const h = renderingHarness({
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return mockResponse();
+    },
+  });
+  h.cesium.WebMercatorTilingScheme = Cesium.WebMercatorTilingScheme;
+  const globalRadar = {
+    ...snapshot,
+    product: 'radar-global',
+    tilingScheme: 'web-mercator',
+    maxLevel: 7,
+    bounds: { west: -180, south: -85.0511, east: 180, north: 85.0511 },
+  };
+  const pending = h.rendering.setFrame(globalRadar, times[0]);
+  const provider = h.providers[0].options;
+  assert.ok(provider.tilingScheme instanceof Cesium.WebMercatorTilingScheme);
+  assert.equal(provider.maximumLevel, 6);
+  assert.equal(provider.tileWidth, 256);
+  assert.match(provider.credit.html, /href="https:\/\/www.rainviewer.com"/);
+  h.settle();
+  assert.equal(await pending, true);
+  assert.equal(await h.rendering.prefetch(globalRadar, times[1]), true);
+  const xyz = urls.map((url) => {
+    const params = new URL(url, 'https://example.test').searchParams;
+    return ['z', 'x', 'y'].map((key) => Number(params.get(key)));
+  });
+  assert.deepEqual(xyz, [
+    [0, 0, 0],
+    [1, 0, 0],
+    [1, 1, 0],
+    [1, 0, 1],
+    [1, 1, 1],
+  ]);
+  h.rendering.clear();
+});
+
+test('radar region switch cancels old work, retains clock target and advertises RainViewer semantics', async () => {
+  const clock = createWeatherClock();
+  const products = [];
+  const h = layerHarness({
+    clock,
+    feed: {
+      getSnapshot: async ({ product }) => {
+        products.push(product);
+        return {
+          ...snapshot,
+          product,
+          bounds:
+            product === 'radar-global'
+              ? { west: -180, south: -85.0511, east: 180, north: 85.0511 }
+              : snapshot.bounds,
+        };
+      },
+    },
+  });
+  const initial = h.layer.update();
+  await flush();
+  const old = h.stages.at(-1);
+  h.layer.setParams({ product: 'radar-global' });
+  await flush();
+  assert.equal(old.signal.aborted, true);
+  assert.deepEqual(products, ['radar', 'radar-global']);
+  h.stages.at(-1).finish();
+  await flush();
+  await initial;
+  assert.equal(h.layer.getParams().product, 'radar-global');
+  const controls = h.layer.getRowControls();
+  assert.equal(controls.summary.coverage, 'Global · where radars exist');
+  assert.equal(controls.summary.maxGapMinutes, 30);
+  assert.deepEqual(
+    controls.summary.settings[0].chips.map(({ label }) => label),
+    ['US (NOAA)', 'Global (RainViewer)'],
+  );
+  assert.deepEqual(
+    controls.legend.map(({ color }) => color),
+    [
+      '#cec087',
+      '#00a3e0',
+      '#005588',
+      '#ffee00',
+      '#ffaa00',
+      '#ff4400',
+      '#c10000',
+      '#ffaaff',
+      '#ffffff',
+    ],
+  );
+  assert.match(controls.infoTitle, /gap does not mean no rain/);
+  assert.equal(h.layer.getStats().source, 'RainViewer');
+  const history = clock.setTarget(times[1]);
+  await flush();
+  h.stages.at(-1).finish();
+  await history;
+  assert.equal(h.layer.getDiagnostics().time, times[1]);
+  h.layer.setParams({ product: 'radar' });
+  await flush();
+  h.stages.at(-1).finish();
+  await flush();
+  assert.equal(clock.getState().target, times[1]);
+  assert.equal(h.layer.getRowControls().summary.coverage, 'CONUS');
+  h.layer.destroy();
+  clock.destroy();
+});
+
+test('global radar coverage status follows the active bounds over land and ocean', async () => {
+  let location = Cesium.Cartesian3.fromDegrees(0, 51);
+  let shown = null;
+  const latest = new Date().toISOString();
+  const layer = createWeatherLayer({
+    documentRef: null,
+    eventTarget: null,
+    matchMedia: null,
+    feed: {
+      getSnapshot: async ({ product }) => ({
+        product,
+        times: [latest],
+        latest,
+        bounds:
+          product === 'radar-global'
+            ? { west: -180, south: -85.0511, east: 180, north: 85.0511 }
+            : snapshot.bounds,
+      }),
+    },
+    createRendering: () => ({
+      rehome() {},
+      clear() {
+        shown = null;
+      },
+      setAlpha() {},
+      async setFrame(_snapshot, time) {
+        shown = time;
+        return true;
+      },
+      getDiagnostics: () => ({ time: shown }),
+    }),
+  });
+  layer.init({
+    camera: { pickEllipsoid: () => location },
+    scene: {
+      canvas: { clientWidth: 800, clientHeight: 600 },
+      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
+    },
+  });
+  layer.enable();
+  await layer.update();
+  assert.equal(
+    layer.getRowControls().summary.status,
+    'Map center outside coverage',
+  );
+  layer.setParams({ product: 'radar-global' });
+  await flush();
+  assert.equal(layer.getRowControls().summary.status, null);
+  location = Cesium.Cartesian3.fromDegrees(-150, -30);
+  assert.equal(layer.getRowControls().summary.status, null);
+  layer.destroy();
+});
