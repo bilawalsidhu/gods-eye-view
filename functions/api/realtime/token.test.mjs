@@ -133,13 +133,40 @@ test('a hostile tier degrades to standard and is flagged, never forwarded', asyn
   }
 });
 
-test('a transport failure becomes the dev 502 shape', async () => {
+test('a transport failure becomes the fixed dev 502 shape', async () => {
   const original = globalThis.fetch;
-  globalThis.fetch = async () => { throw new Error('connect ECONNREFUSED'); };
+  globalThis.fetch = async () => { throw new Error('connect ECONNREFUSED 10.0.0.1:443'); };
   try {
     const res = await onRequest(ctx(new Request(url(), { method: 'POST' }), { OPENAI_API_KEY: 'k' }));
     assert.equal(res.status, 502);
-    assert.deepEqual(await res.json(), { error: 'connect ECONNREFUSED' });
+    const payload = await res.json();
+    assert.deepEqual(payload, { error: 'Failed to create Realtime token' });
+    assert.ok(!JSON.stringify(payload).includes('ECONNREFUSED'), 'network errno text is not relayed');
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('a non-ok upstream mint is gated: fixed error body, upstream body never relayed', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => new Response(
+    JSON.stringify({ error: { message: 'quota exceeded for org acme-corp' } }),
+    { status: 429, headers: { 'Content-Type': 'application/json' } },
+  );
+  try {
+    const res = await onRequest(ctx(new Request(url('?tier=mini'), { method: 'POST' }), {
+      OPENAI_API_KEY: 'k',
+    }));
+    assert.equal(res.status, 429);
+    const payload = await res.json();
+    assert.deepEqual(payload, { error: 'Failed to create Realtime token' });
+    assert.ok(!JSON.stringify(payload).includes('quota'), 'upstream quota wording is not relayed');
+    assert.ok(!JSON.stringify(payload).includes('acme-corp'), 'org identifiers are not relayed');
+    // The tier headers stay authoritative even on the failure path (the
+    // client logs which tier the mint attempt was for).
+    assert.equal(res.headers.get('X-GEV-Voice-Tier'), 'mini');
+    assert.equal(res.headers.get('X-GEV-Voice-Model'), VOICE_MODELS.mini.id);
+    assert.match(res.headers.get('Content-Type'), /application\/json/);
   } finally {
     globalThis.fetch = original;
   }

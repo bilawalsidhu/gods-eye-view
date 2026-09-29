@@ -88,28 +88,35 @@ test('the default HUD model rides the shared registry default', async () => {
   }
 });
 
-test('an upstream error passes its status and message through', async () => {
+test('an upstream error keeps its status but never relays the upstream message', async () => {
   const original = globalThis.fetch;
   globalThis.fetch = async () => new Response(
-    JSON.stringify({ error: { message: 'quota exhausted' } }),
+    JSON.stringify({ error: { message: 'quota exhausted for key sk-proj-SECRET' } }),
     { status: 429 },
   );
   try {
     const res = await onRequest(post({}, { OPENAI_API_KEY: 'k' }));
     assert.equal(res.status, 429);
-    assert.deepEqual(await res.json(), { summary: null, error: 'quota exhausted' });
+    const payload = await res.json();
+    assert.deepEqual(payload, { summary: null, error: 'OpenAI HUD summary request failed' });
+    // The whole point of the sanitization: no fragment of the upstream text
+    // (quota wording, key hints) reaches the browser.
+    assert.ok(!JSON.stringify(payload).includes('quota'), 'upstream quota wording is not relayed');
+    assert.ok(!JSON.stringify(payload).includes('sk-proj'), 'upstream key hints are not relayed');
   } finally {
     globalThis.fetch = original;
   }
 });
 
-test('a transport failure becomes the dev 502 shape', async () => {
+test('a transport failure becomes the fixed dev 502 shape', async () => {
   const original = globalThis.fetch;
-  globalThis.fetch = async () => { throw new Error('dns fail'); };
+  globalThis.fetch = async () => { throw new Error('getaddrinfo ENOTFOUND api.openai.com'); };
   try {
     const res = await onRequest(post({}, { OPENAI_API_KEY: 'k' }));
     assert.equal(res.status, 502);
-    assert.deepEqual(await res.json(), { error: 'dns fail' });
+    const payload = await res.json();
+    assert.deepEqual(payload, { error: 'OpenAI HUD summary request failed' });
+    assert.ok(!JSON.stringify(payload).includes('ENOTFOUND'), 'network errno text is not relayed');
   } finally {
     globalThis.fetch = original;
   }

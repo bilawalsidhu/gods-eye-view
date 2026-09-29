@@ -90,16 +90,24 @@ export async function onRequest(context) {
     });
     const data = await response.json().catch(() => ({}));
     const summary = toFiveWordHudSummary(extractOpenAiResponseText(data));
+    // Upstream error text is never relayed to the client: it can embed
+    // provider internals (request ids, quota wording, account hints). The
+    // operator gets a console warn with the status; the client gets a fixed
+    // string (dev/Pages parity — ported from upstream).
+    if (!response.ok) {
+      console.warn(`[hud-summary] upstream HTTP ${response.status}`);
+    }
     return jsonResponse(
       {
         summary: summary || null,
-        error: response.ok ? null : data.error?.message || 'OpenAI HUD summary request failed',
+        error: response.ok ? null : 'OpenAI HUD summary request failed',
       },
       { status: response.ok && summary ? 200 : response.status || 502, cacheControl: 'no-store' },
     );
   } catch (error) {
+    console.warn(`[hud-summary] request failed: ${error?.message}`);
     return jsonResponse(
-      { error: error?.message || 'OpenAI HUD summary request failed' },
+      { error: 'OpenAI HUD summary request failed' },
       { status: 502 },
     );
   }

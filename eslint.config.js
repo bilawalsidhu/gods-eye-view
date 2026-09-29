@@ -41,6 +41,11 @@ export default [
       'node_modules/**',
       'public/**',
       'coverage/**',
+      // Local QA scratch (gitignored by design — Puppeteer probes etc.).
+      // Flat config does not read .gitignore, so without this entry
+      // `npm run lint` fails on whatever throwaway scripts the current
+      // QA session has parked there.
+      '.gev-logs/**',
       'rust/target/**',
       '.wrangler/**',
       // Separate sub-project with its own toolchain (TS + vitest + prettier);

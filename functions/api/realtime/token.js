@@ -130,10 +130,23 @@ export async function onRequest(context) {
     if (requestedTier && !isKnownVoiceTier(requestedTier)) {
       headers.set('X-GEV-Voice-Tier-Fallback', '1');
     }
+    // Only successful upstream bodies are passed through (dev/Pages parity —
+    // ported from upstream): an error body would otherwise relay OpenAI's
+    // message (quota wording, request ids) to the browser alongside the
+    // tier headers the client treats as authoritative.
+    if (!response.ok) {
+      console.warn(`[realtime-token] upstream HTTP ${response.status}`);
+      headers.set('Content-Type', 'application/json; charset=utf-8');
+      return new Response(JSON.stringify({ error: 'Failed to create Realtime token' }), {
+        status: response.status || 502,
+        headers,
+      });
+    }
     return new Response(body, { status: response.status, headers });
   } catch (error) {
+    console.warn(`[realtime-token] request failed: ${error?.message}`);
     return jsonResponse(
-      { error: error?.message || 'Failed to create Realtime token' },
+      { error: 'Failed to create Realtime token' },
       { status: 502 },
     );
   }

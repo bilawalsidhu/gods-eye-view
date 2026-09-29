@@ -212,11 +212,19 @@ export async function onRequest(context) {
           headers: passthrough.headers,
         });
       } catch (error) {
+        // Only our own controlled timeout sentinel reaches the health
+        // message; raw network error text (errno, hostnames) stays
+        // server-side (Pages log) — the UI renders a fixed string
+        // (dev/Pages parity — ported from upstream).
+        const timedOut = error?.message === 'Media upstream timed out';
+        if (!timedOut) {
+          console.warn(`[cctv] media fetch failed for ${cameraId}: ${error?.message}`);
+        }
         cctvHealth.setHealth(cameraId, {
           status: 'degraded',
           sourceKind: 'upstream',
           label: source?.provider || 'Configured source',
-          message: error?.message || 'Media fetch failed',
+          message: timedOut ? 'Media upstream timed out' : 'Media fetch failed',
         });
         return jsonResponse({ error: 'Media proxy failed' }, { status: 502, cacheControl: 'no-store' });
       }

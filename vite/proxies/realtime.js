@@ -114,17 +114,25 @@ export function openAiRealtimeProxy() {
         });
         const data = await response.json().catch(() => ({}));
         const summary = toFiveWordHudSummary(extractOpenAiResponseText(data));
+        // Upstream error text is never relayed to the client: it can embed
+        // provider internals (request ids, quota wording, account hints).
+        // The operator gets a server-side warn with the status; the client
+        // gets a fixed string (dev/Pages parity — ported from upstream).
+        if (!response.ok) {
+          console.warn(`[hud-summary] upstream HTTP ${response.status}`);
+        }
         res.statusCode = response.ok && summary ? 200 : response.status || 502;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         res.end(JSON.stringify({
           summary: summary || null,
-          error: response.ok ? null : data.error?.message || 'OpenAI HUD summary request failed',
+          error: response.ok ? null : 'OpenAI HUD summary request failed',
         }));
       } catch (error) {
+        console.warn(`[hud-summary] request failed: ${error?.message}`);
         res.statusCode = 502;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: error?.message || 'OpenAI HUD summary request failed' }));
+        res.end(JSON.stringify({ error: 'OpenAI HUD summary request failed' }));
       }
     });
 
@@ -168,9 +176,12 @@ export function openAiRealtimeProxy() {
         res.statusCode = 204;
         res.end();
       } catch (error) {
+        // Fixed client string; the raw error (JSON.parse offsets, fs paths)
+        // stays server-side only.
+        console.warn(`[realtime-debug-log] write failed: ${error?.message}`);
         res.statusCode = 400;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: error?.message || 'Failed to write Realtime debug log' }));
+        res.end(JSON.stringify({ error: 'Failed to write Realtime debug log' }));
       }
     });
 
@@ -253,6 +264,19 @@ export function openAiRealtimeProxy() {
           body: JSON.stringify(sessionConfig),
         });
         const body = await response.text();
+        // Only successful upstream bodies are passed through (dev/Pages
+        // parity — ported from upstream): an error body would otherwise
+        // relay OpenAI's message (quota wording, request ids) to the
+        // browser along with a 2xx-shaped contract the client can't parse.
+        if (!response.ok) {
+          console.warn(`[realtime-token] upstream HTTP ${response.status}`);
+          res.statusCode = response.status || 502;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.setHeader('X-GEV-Voice-Tier', tier);
+          res.setHeader('X-GEV-Voice-Model', model);
+          res.end(JSON.stringify({ error: 'Failed to create Realtime token' }));
+          return;
+        }
         res.statusCode = response.status;
         res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json');
         // Which tier/model this secret was actually minted for. The upstream
@@ -266,9 +290,10 @@ export function openAiRealtimeProxy() {
         }
         res.end(body);
       } catch (error) {
+        console.warn(`[realtime-token] request failed: ${error?.message}`);
         res.statusCode = 502;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: error?.message || 'Failed to create Realtime token' }));
+        res.end(JSON.stringify({ error: 'Failed to create Realtime token' }));
       }
     });
   }
