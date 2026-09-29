@@ -162,8 +162,7 @@ export function createApplicationCatalog({
           source: sources.cctv,
           observedTraffic: {
             getSnapshot: () => traffic.getObservedTrafficSnapshot(),
-            subscribe: (callback) =>
-              traffic.subscribeObservedTraffic(callback),
+            subscribe: (callback) => traffic.subscribeObservedTraffic(callback),
           },
         }),
         createApplicationRadio({ surface, source: sources.radio }),
