@@ -23,6 +23,7 @@ function finiteTimestamp(value) {
 }
 
 function nonNegativeNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : null;
 }
@@ -66,7 +67,12 @@ function normalizeCounts(value) {
   for (const [rawKey, rawValue] of Object.entries(value)) {
     const key = safeString(rawKey, 48);
     const count = nonNegativeNumber(rawValue);
-    if (!key || count === null) continue;
+    if (
+      !key ||
+      count === null ||
+      ['__proto__', 'prototype', 'constructor'].includes(key)
+    )
+      continue;
     counts[key] = count;
   }
   return counts;
@@ -99,9 +105,14 @@ function normalizeMovement(value) {
 function normalizeQuality(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const status = safeString(value.status, 64);
-  const score = Number(value.score);
+  const rawScore =
+    value.score === null || value.score === undefined || value.score === ''
+      ? null
+      : Number(value.score);
   const normalizedScore =
-    Number.isFinite(score) && score >= 0 && score <= 1 ? score : null;
+    Number.isFinite(rawScore) && rawScore >= 0 && rawScore <= 1
+      ? rawScore
+      : null;
   if (!status && normalizedScore === null) return null;
   return {
     ...(status ? { status } : {}),
@@ -112,11 +123,10 @@ function normalizeQuality(value) {
 function normalizeProvenance(value, sourceId) {
   const raw =
     value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const method = safeString(raw.method, 120);
   return {
     source: safeString(raw.source, 160) || sourceId,
-    ...(safeString(raw.method, 120)
-      ? { method: safeString(raw.method, 120) }
-      : {}),
+    ...(method ? { method } : {}),
   };
 }
 
@@ -149,6 +159,12 @@ export function normalizeObservedTrafficRecord(value) {
   const movements = Array.isArray(value.movements)
     ? value.movements.map(normalizeMovement).filter(Boolean).slice(0, 32)
     : [];
+  if (
+    vehiclesPerMin === null &&
+    Object.keys(counts).length === 0 &&
+    movements.length === 0
+  )
+    return null;
 
   return {
     id,
@@ -281,9 +297,9 @@ export function createObservedTrafficSource({
         signal?.throwIfAborted?.();
         return normalizeObservedTrafficSnapshot(
           {
-            configured: true,
-            source: result?.source || sourceLabel,
             ...result,
+            configured: result?.configured !== false,
+            source: result?.source || sourceLabel,
           },
           { now, staleAfterMs },
         );
