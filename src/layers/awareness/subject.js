@@ -48,8 +48,13 @@ export function createSubject({ state: layerState, services, parts, source }) {
         (item) =>
           !parts.queries.isSame(subject, item, 'ais-live-vessels', 'mmsi'),
       );
+    const coverage = installationsState.stats?.coverage;
+    const installationRadius =
+      coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)
+        ? coverage.radiusM
+        : AWARENESS_RADIUS_M;
     const installations = militaryInstallationsLayer
-      .getNearby(position, AWARENESS_RADIUS_M, AWARENESS_QUERY_LIMIT)
+      .getNearby(position, installationRadius, AWARENESS_QUERY_LIMIT)
       .filter(
         (item) =>
           !parts.queries.isSame(subject, item, 'military-installations', 'id'),
@@ -92,7 +97,8 @@ export function createSubject({ state: layerState, services, parts, source }) {
           source:
             installationsState.stats.source ||
             SOURCE_LABEL['military-installations'],
-          coverage: 'CURRENT VIEWPORT ONLY',
+          coverage:
+            installationsState.stats.coverageLabel || 'CURRENT VIEWPORT ONLY',
           summary: parts.queries.summarizeInstallationViewport(
             installations,
             installationsState,
@@ -326,6 +332,11 @@ export function createSubject({ state: layerState, services, parts, source }) {
     });
     if (!resolved) return;
     const { position, presence } = resolved;
+    // Mapped installations load around the subject, not the (follow/Cockpit)
+    // camera view. The installation layer moves its window only after the
+    // subject travels far enough, so this per-refresh call is cheap.
+    if (!layerState.passive)
+      militaryInstallationsLayer.setContextAnchor?.(position);
     // UNCHECKED leaves the verdict alone: this tick simply did not look.
     if (presence === SUBJECT_PRESENCE.LIVE) layerState.subjectMissing = false;
     else if (presence === SUBJECT_PRESENCE.MISSING)
@@ -392,6 +403,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
       layerId: record.layerId,
       id: record.properties?.mmsi || record.id,
       label: record.label || record.id,
+      memberNames: record.properties?.memberNames || [],
       position: Cesium.Cartesian3.fromDegrees(longitude, latitude, 0),
     };
   }
@@ -411,6 +423,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
   }
 
   function clearAwarenessSubject() {
+    militaryInstallationsLayer.setContextAnchor?.(null);
     layerState.autoFocusRetryPending = false;
     layerState.subject = null;
     layerState.subjectMissing = false;
