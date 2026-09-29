@@ -290,6 +290,43 @@ matrix run above, the live dev-server dock probe, the
 reasonableDefaults + creditsDock unit pins, CI's two allocation-gated
 unit suites, and the production C13-equivalent PASS above.
 
+### 2026-09-29 verification run (v0.10.3 deploy, production alias)
+
+Deployed from `main` at `76cc1c5` (the release commit) with
+`npx wrangler pages deploy dist --project-name globe --branch main`.
+GitForge run `03fc342d` on the release commit **succeeded 6/6** (lint+audit,
+Aegis, allocation-gated units on Node 24 AND Node 26, coverage,
+wasm+build+budgets). Two in-run notes for the next release: (1) the
+push of the branch AND of main each trigger a run at the same commit —
+duplicate runs contend for the runner (this release ran 3 concurrent);
+(2) the first CI attempt (`80dff880`) failed Aegis because the
+extraction edits shifted 8 accepted findings' positions — baseline
+regenerated per `.gitforce.yml` with the gev-ci-node:1 image binary
+(aegis 0.6.1), 68 raw findings all in triaged classes, CI then exited 0.
+Local gates before the deploy: lint clean, 4049+1+13 unit tests,
+BUILD-GATE / BUNDLE-BUDGETS / AUDIT-GATE PASS.
+
+| Check | Result |
+| --- | --- |
+| `verify-prod-render.mjs` | **PASS, 8/8, twice** — boot, 1600×900 canvas, camera 2500 m over target, tiles loaded, photoreal stream 158/160 → 200, CCTV 200, debug-log 204, regional-brief 200, no console errors; second run at 1-min load ~66 |
+| `/api/openzenith/elevation` | 200 — 91 m Austin |
+| `/api/openzenith/reverse-geocode` | 200 (real Congress Ave `display_name`) |
+| `/api/cctv/sources` | 200 |
+| `POST /api/realtime/debug-log` | 204 |
+| `POST /api/openai/hud-summary` | 200 (keyless honest degrade) |
+| Attribution dock on production (C13-equivalent) | **GREEN in both attempts** — `#cesium-credits` visible in clean view (324×46 with 10 credits registered; 221×28 with fewer), "Data attribution" link present |
+| Full `qa-attribution-b12` verdict | **NOT GREEN this window (environmental)** — attempt 1: 21 PASS / 0 FAIL then CDP `protocolTimeout`; attempt 2: 23 passed / 1 failed, the FAIL being the session-aggregate console-error check with Cesium's "Rendering has stopped" teardown signature under 1-min load 46–66 |
+
+Attribution residual accounting (same structure as the v0.10.2 matrix
+verdict): the suite's own header documents the identical crash class at
+load 95–102 (2026-09-24) with every displayed check green; zero content
+checks failed in either attempt; the boot-window console check — the
+least load-exposed window — passed twice today under load, and the
+product rows all hold same-window evidence. `qa-attribution-b12` was
+built against a local dev server; run against the production origin the
+CDP round-trips are slower and the minutes-long interactive session is
+far more exposed to software-GL context loss on a contended box.
+
 ## Credentials & environment
 
 All keys are optional except `GOOGLE_MAPS_API_KEY`. See `.env.example` for the

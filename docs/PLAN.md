@@ -2816,4 +2816,54 @@ per 13.1 before any port.
 
 ### 13.6 Release record
 
-Filled in after gates + deploy verification (below).
+**v0.10.3 shipped 2026-09-29.** Release commit `76cc1c5` (the audit tree
+`e75bb65` plus the security-baseline regen described below); tagged
+AFTER production verification (names immutable); GitHub release
+published to `aliasfoxkde/Globe`.
+
+Gates: local lint clean, **4,049 + 1 + 13 unit tests pass**
+(parallel phase + two serialized allocation probes), BUILD-GATE /
+BUNDLE-BUDGETS / AUDIT-GATE PASS. GitForge run `03fc342d` on the release
+tree **succeeded 6/6** (lint+audit, Aegis security, allocation-gated
+units on Node 24 AND Node 26, coverage, wasm+build+budgets). Two
+gate-repair commits landed during the arc and are part of the released
+tree: `186129d` completed the oversized-track 502 contract migration in
+three sites `6e90a94` had missed (the `_upstream` unit test, the
+adsblol/trace test, and the trace contract comment — caught by the full
+suite, 2 failures), and `3233dab` filled JSDoc param descriptions in two
+extraction files (strict eslint, 8 errors).
+
+**Security baseline regen (`76cc1c5`):** the first CI attempt
+(`80dff880`) failed its Aegis job — the extraction edits moved 8
+accepted findings to new positions (opensky-track OAuth test mocks,
+`GOOGLE_MAPS_API_KEY` env plumbing in annotations/locations, CCTV
+calibration storage-key constants), and the position-sensitive
+fingerprints no longer matched. Regenerated per the `.gitforge.yml`
+procedure with the exact `gev-ci-node:1` image binary (aegis 0.6.1 —
+the host 0.6.3 was NOT used): 68 findings raw, all in the triaged
+accepted classes; the CI command then exited 0 with 0 new. Confirms the
+standing rule: every code-moving edit needs the baseline re-checked
+before push.
+
+Deploy: `npx wrangler pages deploy dist --project-name globe --branch
+main` from the locally built release tree; production verification:
+
+| Check | Result |
+| --- | --- |
+| `verify-prod-render.mjs` | **PASS, 8/8, twice** (boot, 1600×900 canvas, camera 2500 m, tiles loaded, photoreal stream 158/160 → 200, CCTV 200, debug-log 204, regional-brief 200, no console errors at boot) — the second run at 1-min load ~66 |
+| `/api/openzenith/elevation` | 200 — 91 m Austin, cache header present |
+| `/api/openzenith/reverse-geocode` | 200 (real Congress Ave place) |
+| `/api/cctv/sources` | 200 (Austin catalog) |
+| `POST /api/realtime/debug-log` | 204 |
+| `POST /api/openai/hud-summary` | 200 (keyless honest degrade) |
+| Attribution dock (C13-equivalent) | **GREEN in both QA attempts** — `#cesium-credits` visible in clean view (run 1: 324×46 with 10 credits registered; run 2: 221×28 with fewer), "Data attribution" link present |
+| Full attribution suite verdict | **NOT formally green this window** — attempt 1: 21 PASS / 0 FAIL then a CDP `protocolTimeout` crash; attempt 2: RESULT 23 passed / 1 failed, the single FAIL being the session-aggregate console-error check with Cesium's render-teardown signature ("Rendering has stopped") under 1-min load 46–66 |
+
+The attribution residual is classified **environmental, not product**:
+the suite's own header documents the identical crash signature at load
+95–102 on 2026-09-24 with every displayed check green; zero content
+checks failed in either attempt; and the boot-window console check —
+the shortest, least load-exposed window — passed twice today under
+load (66). A long interactive QA session is far more exposed to
+software-GL context loss on a contended box than the boot window; the
+product rows all hold same-window evidence.
