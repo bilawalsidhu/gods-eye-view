@@ -213,8 +213,8 @@ export const COURSE_SLEW_DT_MAX_SEC = 0.25;
 // adsbdb enrichment (best-effort, fail-silent). Bounded fan-out: max 4
 // concurrent requests, dispatches dripped ≥ENRICH_DISPATCH_GAP_MS apart
 // (≤5/s — adsbdb is a free community API; the dev-server proxy additionally
-// caches per-key on disk forever, negative results included, so repeat
-// sessions never re-hit adsbdb). Each key is requested at most once per
+// caches successful and 404 responses per key for 24 hours, so later sessions
+// may refresh them). Each key is requested at most once per
 // session. Priority jobs (tracked plane, model-eligible planes) jump the
 // queue; the ambient fleet sweep (below) fills the back at poll cadence.
 // ---------------------------------------------------------------------------
