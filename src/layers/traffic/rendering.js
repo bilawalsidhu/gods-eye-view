@@ -19,14 +19,21 @@ export function createRendering({
   source,
 }) {
   function observationLabel(contact, ageSec) {
-    const camera = String(contact.cameraCode || contact.cameraId || 'CCTV').toUpperCase();
+    const camera = String(
+      contact.cameraCode || contact.cameraId || 'CCTV',
+    ).toUpperCase();
     const type = String(contact.type || 'vehicle').toUpperCase();
-    const confidence = Math.round(Math.max(0, Math.min(1, Number(contact.confidence) || 0)) * 100);
+    const confidence = Math.round(
+      Math.max(0, Math.min(1, Number(contact.confidence) || 0)) * 100,
+    );
     return `${camera} · ${type} · ${confidence}% · ${ageSec}s`;
   }
 
   function stopExternalObservationTimerIfIdle() {
-    if (layerState._externalVehicleObservations.size || !layerState._externalObservationTimer)
+    if (
+      layerState._externalVehicleObservations.size ||
+      !layerState._externalObservationTimer
+    )
       return;
     clearInterval(layerState._externalObservationTimer);
     layerState._externalObservationTimer = null;
@@ -44,7 +51,8 @@ export function createRendering({
           continue;
         }
         const ageSec = Math.max(0, Math.floor((now - entry.observedAt) / 1000));
-        if (entry.entity?.label) entry.entity.label.text = observationLabel(entry.contact, ageSec);
+        if (entry.entity?.label)
+          entry.entity.label.text = observationLabel(entry.contact, ageSec);
         keep.push(entry);
       }
       if (keep.length) layerState._externalVehicleObservations.set(sourceId, keep);
@@ -116,7 +124,10 @@ export function createRendering({
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           pixelOffset: new Cesium.Cartesian2(0, -18),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5000),
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(
+            0,
+            5000,
+          ),
         },
       });
       entries.push({
