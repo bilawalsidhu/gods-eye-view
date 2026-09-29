@@ -57,6 +57,31 @@ function observationTime(record) {
   );
 }
 
+/**
+ * Index one normalized snapshot by camera, retaining only the freshest record.
+ * Building this once keeps large CCTV catalogs O(records + cameras) instead of
+ * scanning every observed record for every camera in uiState().
+ */
+export function indexCameraTrafficObservations(snapshot) {
+  const index = new Map();
+  if (!snapshot?.configured || !Array.isArray(snapshot.records)) return index;
+  for (const record of snapshot.records) {
+    const cameraId = String(record?.cameraId || '').trim();
+    if (!cameraId) continue;
+    const current = index.get(cameraId);
+    const nextTime = observationTime(record);
+    const currentTime = observationTime(current);
+    if (
+      !current ||
+      nextTime > currentTime ||
+      (nextTime === currentTime &&
+        String(record?.id || '').localeCompare(String(current?.id || '')) < 0)
+    )
+      index.set(cameraId, record);
+  }
+  return index;
+}
+
 function unavailableSummary(cameraId) {
   return {
     cameraId,
@@ -101,29 +126,31 @@ function unknownSummary(cameraId, snapshot) {
 export function summarizeCameraTrafficObservation(
   snapshot,
   cameraId,
-  { now = Date.now(), staleAfterMs = DEFAULT_STALE_AFTER_MS } = {},
+  {
+    now = Date.now(),
+    staleAfterMs = DEFAULT_STALE_AFTER_MS,
+    recordIndex = null,
+  } = {},
 ) {
   const id = String(cameraId || '').trim();
   if (!id || !snapshot?.configured) return null;
 
-  const records = Array.isArray(snapshot.records) ? snapshot.records : [];
-  const matches = records.filter((record) => record?.cameraId === id);
-  if (!matches.length)
+  const record =
+    recordIndex instanceof Map
+      ? recordIndex.get(id) || null
+      : indexCameraTrafficObservations(snapshot).get(id) || null;
+  if (!record)
     return snapshot.error
       ? unavailableSummary(id)
       : unknownSummary(id, snapshot);
-
-  const record = [...matches].sort(
-    (a, b) =>
-      observationTime(b) - observationTime(a) ||
-      String(a?.id || '').localeCompare(String(b?.id || '')),
-  )[0];
   const observedAt = observationTime(record);
   if (!Number.isFinite(observedAt)) return unknownSummary(id, snapshot);
 
   const ageMs = Math.max(0, Number(now) - observedAt);
   const staleLimit = Math.max(0, Number(staleAfterMs) || 0);
-  const stale = Boolean(snapshot.error) || ageMs > staleLimit;
+  const stale =
+    Boolean(snapshot.error || snapshot.state === 'stale') ||
+    ageMs > staleLimit;
   const partial = Boolean(snapshot.partial);
   const state = stale ? 'stale' : partial ? 'partial' : 'fresh';
   const rate = finiteNonNegative(record?.flow?.vehiclesPerMin);
@@ -146,7 +173,16 @@ export function summarizeCameraTrafficObservation(
           : 'Measured traffic';
   const source =
     record?.provenance?.source || record?.sourceId || snapshot?.source || null;
-  const quality = record?.quality?.status || null;
+  const qualityStatus = String(record?.quality?.status || '').trim();
+  const qualityScore = Number(record?.quality?.score);
+  const qualityLabel = [
+    qualityStatus ? `Q ${qualityStatus}` : null,
+    Number.isFinite(qualityScore)
+      ? `${Math.round(Math.max(0, Math.min(1, qualityScore)) * 100)}%`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
   const ageLabel = formatObservedTrafficAge(ageMs);
   const statusLabel = stale
     ? 'TRAFFIC OBS · STALE'
@@ -170,7 +206,8 @@ export function summarizeCameraTrafficObservation(
     ageMs,
     ageLabel,
     source,
-    quality,
+    quality: record?.quality || null,
+    qualityLabel: qualityLabel || null,
     partial,
     recordId: record.id || null,
     cardDetails,
@@ -185,6 +222,7 @@ export function formatCameraTrafficObservation(summary) {
     summary.statusLabel,
     summary.primary,
     summary.classMix,
+    summary.qualityLabel,
     summary.ageLabel,
     summary.source,
   ]
