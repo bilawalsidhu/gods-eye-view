@@ -123,18 +123,6 @@ export async function formatAdoptedFiles(root, mode) {
   if (mode === '--write') {
     for (const { file, formatted } of changed) await writeFile(file, formatted);
   }
-  if (mode === '--check') {
-    for (const { name, formatted } of changed) {
-      if (
-        name === 'src/layers/traffic/index.js' ||
-        name === 'src/layers/traffic/observed.js'
-      ) {
-        console.error(`FORMAT_PROBE_START:${name}`);
-        console.error(formatted);
-        console.error(`FORMAT_PROBE_END:${name}`);
-      }
-    }
-  }
   return { count: files.length, changed: changed.map(({ name }) => name) };
 }
 
