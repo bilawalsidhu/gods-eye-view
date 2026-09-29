@@ -44,6 +44,12 @@ const AIRCRAFT_FIELDS = {
 
 const layers = [
   {
+    id: 'gdacs-alerts',
+    aliases: ['gdacs', 'gdacs alerts', 'disaster alerts', 'disasters'],
+    context: true,
+    noQuery: 'GDACS event centroids; no countable analyst records',
+  },
+  {
     id: 'gnss-integrity',
     aliases: [
       'gnss integrity',

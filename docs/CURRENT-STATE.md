@@ -3508,6 +3508,7 @@ its criteria cannot be silently ignored.
 | Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
 | GNSS Integrity 📡 (`gnss-integrity`) | adsb.lol point snapshot, low navigation accuracy binned per 0.5° cell (GEV NIC/NACp threshold + gpsjam.org formula and bands, keyless, ODbL) | `src/layers/gnss/` via `src/app/layers/gnss.js` | `/api/gnss-integrity` | camera-driven (600 ms debounce, minimum 2.5 s between reads) + 60s poll (server cache 60 s; 30 min rolling window) |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
+| Disaster Alerts ⚠ | GDACS event centroids for earthquakes, tropical cyclones, floods, volcanoes, droughts and wildfires with the green / orange / red alert level (keyless, worldwide, © EU CC BY 4.0) | `src/layers/gdacs/` via `src/app/layers/gdacs.js` | `/api/gdacs` | 10 min (server caches per type: 10 min to 3 h) |
 
 GNSS Integrity samples a 250 nm circle around the Earth point under the screen
 centre. Camera reads debounce for 600 ms with a monotonic 2.5 s minimum gap;
@@ -3821,6 +3822,7 @@ from fixtures (`providers/mapillary/coverageFixture.mjs`,
 needs no network. It opens and closes a photo from Mapillary, KartaView and
 Panoramax; stepping, EXPAND, FIT/FILL, the filters and Street View stay with
 the unit tests. CI runs the fixture gate against a production build served by `vite preview` with a dummy token.
+Disaster Alerts reads the six GDACS event feeds through `/api/gdacs`, which keeps only each event's published centroid and serves the last good copy of a feed when GDACS fails. Points are sized and coloured by alert level, red and orange events are labelled, and points behind the globe are hidden each frame. The row lists events most severe first; choosing one selects it and flies the camera there through the shell's navigation policy (refused in Cockpit, instant under reduced motion), and a chip opens the GDACS report. Globe clicks select events, yield to sibling layers' picks and clear on empty map. Missing or cached feeds are named in the row. The row, legend and help text carry GDACS's own caveat that alerts are automatic estimates, not official warnings. Globe labels shorten multi-country names to the first country and a count.
 
 Directions is a keyless front end to the routing the voice agent already
 uses. Its row chips are the whole interface: DRIVE / WALK / BIKE pick the
