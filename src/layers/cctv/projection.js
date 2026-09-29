@@ -366,11 +366,21 @@ export function createProjection({
       parts.rendering.refreshCctvFocusStyles(performance.now());
 
       const active = parts.selection.getActiveRecord();
-      if (layerState._enabled && layerState._showProjection && active) {
+      const needsActiveFrames =
+        layerState._showProjection || layerState._vehicleObservationsEnabled;
+      if (layerState._enabled && needsActiveFrames && active) {
         ensureProjectionRuntime(active);
-        if (active.projection && !active.projection.video) {
+        if (active.projection?.video) {
+          if (layerState._vehicleObservationsEnabled) {
+            parts.frames.processVehicleObservationFrame(
+              active,
+              active.projection.video,
+            );
+          }
+        } else if (active.projection) {
           parts.frames.drawProjectionFrame(active);
-          parts.frames.refreshProjectionTextures(active);
+          if (layerState._showProjection)
+            parts.frames.refreshProjectionTextures(active);
         }
       }
 
