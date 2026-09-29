@@ -30,8 +30,7 @@ export function formatObservedTrafficAge(ageMs) {
   const age = Math.max(0, Number(ageMs) || 0);
   if (age < 60_000) return `${Math.max(0, Math.round(age / 1000))}s ago`;
   if (age < 60 * 60_000) return `${Math.round(age / 60_000)}m ago`;
-  if (age < 24 * 60 * 60_000)
-    return `${Math.round(age / (60 * 60_000))}h ago`;
+  if (age < 24 * 60 * 60_000) return `${Math.round(age / (60 * 60_000))}h ago`;
   return `${Math.round(age / (24 * 60 * 60_000))}d ago`;
 }
 
@@ -102,10 +101,7 @@ function unknownSummary(cameraId, snapshot) {
 export function summarizeCameraTrafficObservation(
   snapshot,
   cameraId,
-  {
-    now = Date.now(),
-    staleAfterMs = DEFAULT_STALE_AFTER_MS,
-  } = {},
+  { now = Date.now(), staleAfterMs = DEFAULT_STALE_AFTER_MS } = {},
 ) {
   const id = String(cameraId || '').trim();
   if (!id || !snapshot?.configured) return null;
@@ -149,10 +145,7 @@ export function summarizeCameraTrafficObservation(
           ? `${record.movements.length} movement${record.movements.length === 1 ? '' : 's'}`
           : 'Measured traffic';
   const source =
-    record?.provenance?.source ||
-    record?.sourceId ||
-    snapshot?.source ||
-    null;
+    record?.provenance?.source || record?.sourceId || snapshot?.source || null;
   const quality = record?.quality?.status || null;
   const ageLabel = formatObservedTrafficAge(ageMs);
   const statusLabel = stale
