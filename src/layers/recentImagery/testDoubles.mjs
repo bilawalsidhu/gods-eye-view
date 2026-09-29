@@ -287,7 +287,7 @@ export function fakeThumbnails() {
     requestOrdered(candidates, box, window) {
       calls.push(['ordered', candidates.map((c) => c.key), window]);
       const { focusIndex, firstVisible, lastVisible, extra } = window;
-      thumbnailOrder(
+      const order = thumbnailOrder(
         focusIndex,
         firstVisible,
         lastVisible,
