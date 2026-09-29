@@ -17,6 +17,132 @@ import {
   requiredPlaneLift,
 } from '../../data/cctvFootprint.js';
 
+const EARTH_RADIUS_M = 6371000;
+
+function finiteNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function projectSurfacePoint(latDeg, lonDeg, bearingDeg, distanceM) {
+  const lat1 = Cesium.Math.toRadians(latDeg);
+  const lon1 = Cesium.Math.toRadians(lonDeg);
+  const bearing = Cesium.Math.toRadians(bearingDeg);
+  const angular = distanceM / EARTH_RADIUS_M;
+  const sinLat1 = Math.sin(lat1);
+  const cosLat1 = Math.cos(lat1);
+  const sinAngular = Math.sin(angular);
+  const cosAngular = Math.cos(angular);
+  const lat2 = Math.asin(
+    sinLat1 * cosAngular + cosLat1 * sinAngular * Math.cos(bearing),
+  );
+  const lon2 =
+    lon1 +
+    Math.atan2(
+      Math.sin(bearing) * sinAngular * cosLat1,
+      cosAngular - sinLat1 * Math.sin(lat2),
+    );
+  return {
+    lat: Cesium.Math.toDegrees(lat2),
+    lon: Cesium.Math.toDegrees(lon2),
+  };
+}
+
+/**
+ * Cast one CCTV frame pixel through the calibrated pinhole camera onto the
+ * camera mount's ground plane. The bottom-centre of an object box is the
+ * intended input because it approximates the tyre/road contact point.
+ *
+ * This is deliberately planar for v0: road snapping rejects implausible
+ * intersections, while terrain/mesh refinement remains the CCTV geometry
+ * subsystem's responsibility.
+ *
+ * @param {Object} camera Calibrated camera pose.
+ * @param {number} groundAltM Ground altitude at the camera mount, metres.
+ * @param {{x:number,y:number}} point Frame-space point in pixels.
+ * @param {{width:number,height:number}} frame Frame dimensions.
+ * @param {Object} [options]
+ * @param {number} [options.maxRangeM] Maximum accepted horizontal range.
+ * @returns {{lat:number,lon:number,rangeM:number,bearingDeg:number}|null}
+ */
+export function projectFramePointToGround(
+  camera,
+  groundAltM,
+  point,
+  frame,
+  options = {},
+) {
+  const width = finiteNumber(frame?.width, 0);
+  const height = finiteNumber(frame?.height, 0);
+  const x = finiteNumber(point?.x, Number.NaN);
+  const y = finiteNumber(point?.y, Number.NaN);
+  const lat = finiteNumber(camera?.lat, Number.NaN);
+  const lon = finiteNumber(camera?.lon, Number.NaN);
+  if (
+    width <= 0 ||
+    height <= 0 ||
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon)
+  )
+    return null;
+
+  const heading = Cesium.Math.toRadians(finiteNumber(camera?.headingDeg, 0));
+  const pitch = Cesium.Math.toRadians(
+    Math.max(-89, Math.min(89, finiteNumber(camera?.pitchDeg, -17))),
+  );
+  const hFov = Cesium.Math.toRadians(
+    Math.max(8, Math.min(160, finiteNumber(camera?.fovDeg, 74))),
+  );
+  const vFov = 2 * Math.atan(Math.tan(hFov / 2) / (width / height));
+  const nx = Math.max(-1, Math.min(1, (2 * x) / width - 1));
+  const ny = Math.max(-1, Math.min(1, 1 - (2 * y) / height));
+  const xScale = nx * Math.tan(hFov / 2);
+  const yScale = ny * Math.tan(vFov / 2);
+
+  // Camera frame expressed in local east/north/up coordinates.
+  const forward = {
+    e: Math.sin(heading) * Math.cos(pitch),
+    n: Math.cos(heading) * Math.cos(pitch),
+    u: Math.sin(pitch),
+  };
+  const right = {
+    e: Math.cos(heading),
+    n: -Math.sin(heading),
+    u: 0,
+  };
+  const up = {
+    e: -Math.sin(pitch) * Math.sin(heading),
+    n: -Math.sin(pitch) * Math.cos(heading),
+    u: Math.cos(pitch),
+  };
+  const ray = {
+    e: forward.e + right.e * xScale + up.e * yScale,
+    n: forward.n + right.n * xScale + up.n * yScale,
+    u: forward.u + right.u * xScale + up.u * yScale,
+  };
+
+  // A ray at/above the horizon cannot produce a road contact below the mount.
+  if (ray.u >= -1e-4) return null;
+  const ground = finiteNumber(groundAltM, 0);
+  const mountAlt = ground + Math.max(0, finiteNumber(camera?.mountHeightM, 24));
+  const t = (ground - mountAlt) / ray.u;
+  if (!Number.isFinite(t) || t <= 0) return null;
+
+  const eastM = ray.e * t;
+  const northM = ray.n * t;
+  const rangeM = Math.hypot(eastM, northM);
+  const defaultMax = Math.max(30, finiteNumber(camera?.rangeM, 700) * 1.35);
+  const maxRangeM = Math.max(1, finiteNumber(options.maxRangeM, defaultMax));
+  if (!Number.isFinite(rangeM) || rangeM > maxRangeM) return null;
+
+  const bearingDeg =
+    (Cesium.Math.toDegrees(Math.atan2(eastM, northM)) + 360) % 360;
+  const surface = projectSurfacePoint(lat, lon, bearingDeg, rangeM);
+  return { ...surface, rangeM, bearingDeg };
+}
+
 export function createGeometry({ state: layerState, services, parts, source }) {
   const { warmGroundFloor, cachedGroundFloor } = services.ground;
   const { sampleMeshFloorCells } = services.mesh;
@@ -816,6 +942,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     layerState._projectionEntities = [];
   }
   return {
+    projectFramePointToGround,
     computeFrustumGeometry,
     hasShippedFootprint,
     footprintPose,
