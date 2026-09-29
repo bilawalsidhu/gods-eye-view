@@ -1,5 +1,7 @@
 # Changelog
 
+- Cancel Recent Imagery thumbnail acquisition that no longer belongs to the current focus/visible/pin/preview intent. Stale queued work is removed and stale in-flight fetches are aborted while known-good decoded/probed entries may remain warm under the existing cache policy; cancellation counters are exposed for diagnostics.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
