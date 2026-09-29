@@ -1,5 +1,7 @@
 # Changelog
 
+- Add an explicit decoded-byte ceiling to Recent Imagery thumbnail residency, alongside the existing LRU image-count cap. The default is derived from the current count and thumbnail dimensions so normal behavior is unchanged, while low-memory profiles can set a tighter byte budget without losing probed availability metadata.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
