@@ -1,5 +1,14 @@
 # Changelog
 
+- Conflict Zone Bulletins layer (Events group): the active EASA Conflict Zone
+  Information Bulletins, worldwide and keyless. Each bulletin shades the
+  countries it names from the bundled Natural Earth boundaries, dashed when
+  it covers only part of a country, and is labelled on the globe. The row
+  lists bulletins by latest revision, selects and flies to one, shows its
+  number, validity and revision date, and links to the bulletin on the EASA
+  website. `/api/czib` reads EASA's fixed JSON export and RSS feed with a
+  one-hour cache, a 429 cooldown and the last good copy on failure.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a

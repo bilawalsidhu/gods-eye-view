@@ -1893,6 +1893,10 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/czib.js",
+      "src/layers/czib/index.js",
+      "src/layers/czib/source.js",
+      "src/layers/czib/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -2422,6 +2426,10 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/czib.js",
+      "src/layers/czib/index.js",
+      "src/layers/czib/source.js",
+      "src/layers/czib/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -2853,7 +2861,9 @@
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
-      "src/layers/submarineCables/bundledSource.js"
+      "src/layers/submarineCables/bundledSource.js",
+      "src/layers/czib/source.js",
+      "src/layers/czib/records.js"
     ],
     "external": []
   },
@@ -3063,6 +3073,25 @@
       "src/layers/perimeters/inciweb.js"
     ],
     "external": ["cesium"]
+  },
+  "czib": {
+    "exports": ["./layers/czib"],
+    "modules": [
+      "src/layers/czib/index.js",
+      "src/sources/httpBody.js",
+      "src/layers/czib/source.js",
+      "src/layers/czib/records.js"
+    ],
+    "external": ["cesium"]
+  },
+  "czib-source": {
+    "exports": ["./layers/czib/source"],
+    "modules": [
+      "src/sources/httpBody.js",
+      "src/layers/czib/source.js",
+      "src/layers/czib/records.js"
+    ],
+    "external": []
   },
   "perimeters-source": {
     "exports": ["./layers/perimeters/source"],

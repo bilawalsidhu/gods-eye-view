@@ -160,6 +160,14 @@ export const DATA_CREDITS = [
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
+  {
+    key: 'easa-czib',
+    html:
+      'Conflict zone bulletins: ' +
+      '<a href="https://www.easa.europa.eu/en/domains/air-operations/czibs" target="_blank" rel="noopener">EASA</a>' +
+      ' (European Union Aviation Safety Agency), reproduced with ' +
+      '<a href="https://www.easa.europa.eu/en/copyright-disclaimer" target="_blank" rel="noopener">acknowledgement</a>',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {

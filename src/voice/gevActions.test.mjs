@@ -3165,6 +3165,30 @@ test('ALPR common names toggle only the registered camera layer through the norm
   }
 });
 
+test('EASA CZIB common names toggle only the conflict zone layer through the normal voice action', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } } };
+  const calls = [];
+  let enabled = false;
+  const dataManager = {
+    layers: new Map([['easa-czib', { module: {} }]]),
+    getAll: () => [{ id: 'easa-czib', name: 'Conflict Zone Bulletins' }],
+    isEnabled: () => enabled,
+    setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  for (const alias of ['easa-czib', 'czib', 'czibs', 'conflict zones', 'conflict zone bulletins']) {
+    for (const value of [true, false]) {
+      const result = await runner('set_layer_visibility', { layerId: alias, enabled: value });
+      assert.equal(result.ok, true);
+      assert.equal(result.layerId, 'easa-czib');
+      assert.deepEqual(calls.at(-1), ['easa-czib', value]);
+    }
+  }
+});
+
 test('Local ADS-B common names toggle only the receiver layer through the normal voice action', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
