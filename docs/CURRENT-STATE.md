@@ -1,5 +1,35 @@
 # God's Eye View Current State
 
+## CCTV observed-traffic summaries — September 28, 2026
+
+CCTV can consume the provider-neutral observed-traffic snapshot introduced by
+#830 as a **read-only presentation input**. The application catalog passes CCTV
+only `getSnapshot()` and `subscribe()`; CCTV cannot refresh or mutate the
+traffic source. Snapshot changes are event-driven, so there is no camera-side
+polling loop.
+
+For each camera, presentation selects the freshest record whose `cameraId`
+matches that camera. It deliberately does not sum multiple approach or
+road-segment records because their windows may overlap or describe different
+movements. A fresh record can show a compact measured rate, class mix,
+observation age and provenance. Ambient world thumbnail cards receive at most
+two terse detail lines; the main CCTV panel gets a secondary `TRAFFIC OBS`
+row below the existing camera/source metadata.
+
+Presentation states remain explicit:
+
+- no observed source configured → no observation row/card details
+- configured source but no matching camera evidence → `UNKNOWN`
+- fresh evidence → `MEASURED`
+- partial snapshot → `PARTIAL`
+- expired or error-backed last evidence → `STALE`
+- source error with no retained camera evidence → `UNAVAILABLE`
+
+Camera health, source state and calibration remain visually primary. This slice
+adds no CV runtime, raw-video transport, identity/person/plate fields or
+automatic observation refresh. It is the presentation follow-up for upstream
+#829 and stacks on the #830 contract implementation (#844).
+
 ## Provider-neutral observed traffic — September 28, 2026
 
 Street Traffic accepts an optional observed-traffic source without coupling the
