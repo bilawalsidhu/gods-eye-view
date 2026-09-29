@@ -350,6 +350,23 @@ export function createObservedTraffic({
     return layerState._observedTrafficSnapshot;
   }
 
+  function notifyObservedTraffic() {
+    for (const callback of layerState._observedTrafficListeners || []) {
+      try {
+        callback(layerState._observedTrafficSnapshot);
+      } catch (error) {
+        console.warn('[Data:Traffic] observed listener error:', error);
+      }
+    }
+  }
+
+  function subscribeObservedTraffic(callback) {
+    if (typeof callback !== 'function') return () => {};
+    layerState._observedTrafficListeners.add(callback);
+    callback(layerState._observedTrafficSnapshot);
+    return () => layerState._observedTrafficListeners.delete(callback);
+  }
+
   async function refreshObservedTraffic(
     query = {},
     { signal = null, now = Date.now() } = {},
@@ -358,8 +375,10 @@ export function createObservedTraffic({
     layerState._observedTrafficLoading = true;
     try {
       const snapshot = await source.request(query, { signal, now });
-      if (generation === layerState._observedTrafficGeneration)
+      if (generation === layerState._observedTrafficGeneration) {
         layerState._observedTrafficSnapshot = snapshot;
+        notifyObservedTraffic();
+      }
       return snapshot;
     } finally {
       if (generation === layerState._observedTrafficGeneration)
@@ -371,12 +390,14 @@ export function createObservedTraffic({
     layerState._observedTrafficGeneration += 1;
     layerState._observedTrafficLoading = false;
     layerState._observedTrafficSnapshot = emptyObservedTrafficSnapshot();
+    notifyObservedTraffic();
   }
 
   return {
     methods: {
       getObservedTrafficSnapshot,
       refreshObservedTraffic,
+      subscribeObservedTraffic,
     },
     resetObservedTraffic,
   };
