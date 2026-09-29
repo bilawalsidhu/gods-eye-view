@@ -1,5 +1,6 @@
 import { isUnavailableCapability } from '../sources/capability.js';
 import { createOverpassFeatureSource } from '../sources/overpassFeatures.js';
+import { createSingleflight } from './singleflight.js';
 /** Parse bounded retry information from a service response. */
 function retryAfterMs(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -18,6 +19,7 @@ export function createApplicationRequestServices({
   features,
   boundaryProbe = { timeoutMs: 3000, retryMs: 30_000 },
 } = {}) {
+  const terrainSingleflight = createSingleflight();
   const urls = {
     boundaries: '/api/overpass',
     terrain: '/api/terrain/heights',
@@ -147,12 +149,18 @@ export function createApplicationRequestServices({
         const query = points
           .map(({ lat, lon }) => `${lon.toFixed(5)},${lat.toFixed(5)}`)
           .join(';');
-        return requireOk(
-          await request(`${urls.terrain}?points=${encodeURIComponent(query)}`, {
-            signal,
-          }),
-          'Terrain heights',
-        )?.results;
+        return terrainSingleflight.run(
+          query,
+          async ({ signal: sharedSignal }) =>
+            requireOk(
+              await request(
+                `${urls.terrain}?points=${encodeURIComponent(query)}`,
+                { signal: sharedSignal },
+              ),
+              'Terrain heights',
+            )?.results,
+          { signal },
+        );
       },
     },
     regional: {
