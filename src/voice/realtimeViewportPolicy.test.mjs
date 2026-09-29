@@ -10,10 +10,13 @@ const localContext = (overrides = {}) => ({
 });
 
 test('viewport context reasons preserve the existing escalation gate', () => {
-  assert.deepEqual(viewportContextDecision({ action: 'get_current_view_state' }), {
-    send: false,
-    reason: 'not-entity-context',
-  });
+  assert.deepEqual(
+    viewportContextDecision({ action: 'get_current_view_state' }),
+    {
+      send: false,
+      reason: 'not-entity-context',
+    },
+  );
   assert.deepEqual(
     viewportContextDecision(localContext(), { channelOpen: false }),
     { send: false, reason: 'channel-closed' },
