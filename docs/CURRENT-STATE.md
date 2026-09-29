@@ -1,3 +1,12 @@
+## Generation-style stale thumbnail cancellation — September 29, 2026
+
+Recent Imagery thumbnail acquisition now retains only the current refinement
+intent. When focus, visible strip range, pins or preview intent changes, queued
+thumbnail work for no-longer-wanted days is removed and in-flight acquisition is
+aborted. Already-probed/decoded entries may remain warm under the existing LRU
+residency policy, and cancelling a re-fetch never forgets proven availability or
+acquisition metadata. Diagnostics count superseded queued and in-flight work.
+
 # God's Eye View Current State
 
 ## Cyber HUD — September 23, 2026
