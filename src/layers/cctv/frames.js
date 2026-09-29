@@ -560,6 +560,10 @@ export function createFrames({ state: layerState, services, parts, source }) {
     layerState._vehicleObservationCount =
       traffic.replaceExternalVehicleObservations(sourceId, contacts, {
         ttlMs: VEHICLE_OBSERVATION_TTL_MS,
+        // At 1 Hz, missing two expected analyses is enough to stop presenting
+        // the contact as current. Keep it visible (but stale) until the longer
+        // TTL removes it entirely.
+        freshForMs: VEHICLE_ANALYSIS_INTERVAL_MS * 2,
       }) || 0;
     layerState._vehicleObservationLastAt = now;
     parts.presentation.notifyListenersThrottled();
