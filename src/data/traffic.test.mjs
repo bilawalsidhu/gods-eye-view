@@ -9,6 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import trafficLayer, {
   deriveTrafficFlowError,
+  getObservedTrafficSnapshot,
   trafficFeedPresentation,
 } from './traffic.js';
 import { DataLayerManager, layerFeedState } from './manager.js';
@@ -20,6 +21,27 @@ import { DataLayerManager, layerFeedState } from './manager.js';
  * remedy without claiming one.
  */
 const LIVE_CLAIM = /\bLIVE\b|\bGPS\b|\breal[- ]?time\b/;
+
+test('observed traffic is unconfigured by default and does not alter shipped traffic state', () => {
+  const observed = getObservedTrafficSnapshot();
+  assert.equal(observed.configured, false);
+  assert.equal(observed.state, 'unconfigured');
+  assert.deepEqual(observed.records, []);
+
+  const stats = trafficLayer.getStats();
+  assert.deepEqual(stats.observedTraffic, {
+    configured: false,
+    state: 'unconfigured',
+    source: null,
+    count: 0,
+    staleCount: 0,
+    partial: false,
+    loading: false,
+    error: null,
+    latestObservedAt: null,
+  });
+  assert.equal(stats.mode, 'sim');
+});
 
 test('a superseded flow fetch is not an outage', () => {
   assert.equal(deriveTrafficFlowError({ name: 'AbortError', message: 'aborted' }), null);

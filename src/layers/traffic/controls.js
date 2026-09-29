@@ -295,8 +295,29 @@ export function createControls({ state: layerState, services, parts, source }) {
         statusUnavailable: layerState._flowStatusUnavailable,
         roadSource: layerState._roadSource,
       });
+      const observed = layerState._observedTrafficSnapshot || {
+        configured: false,
+        state: 'unconfigured',
+        source: null,
+        accepted: 0,
+        staleCount: 0,
+        partial: false,
+        error: null,
+        latestObservedAt: null,
+      };
       return {
         count: layerState._count,
+        observedTraffic: {
+          configured: observed.configured,
+          state: observed.state,
+          source: observed.source,
+          count: observed.accepted,
+          staleCount: observed.staleCount,
+          partial: observed.partial,
+          loading: layerState._observedTrafficLoading,
+          error: observed.error,
+          latestObservedAt: observed.latestObservedAt,
+        },
         motion: { ...layerState._motion },
         surfaceBudgetOmitted: layerState._surfaceBudgetOmitted || 0,
         lastUpdate: layerState._lastUpdate,
