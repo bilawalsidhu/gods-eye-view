@@ -61,12 +61,23 @@ test('accept-encoding is read the way clients actually write it', () => {
   assert.equal(acceptsGzip({}), false);
   assert.equal(acceptsGzip(undefined), false);
 
-  // A quality of zero names gzip and refuses it (RFC 9110 section 12.4.2),
-  // and an unreadable quality falls back to the encoding every client accepts.
+  // A quality of zero names gzip and refuses it (RFC 9110 section 12.4.2).
   assert.equal(acceptsGzip(request('gzip;q=0')), false);
   assert.equal(acceptsGzip(request('gzip;q=0.000')), false);
-  assert.equal(acceptsGzip(request('gzip;q=bogus')), false);
   assert.equal(acceptsGzip(request('gzip;q=0.001')), true);
+  assert.equal(acceptsGzip(request('gzip;q=1')), true);
+  assert.equal(acceptsGzip(request('gzip;q=1.000')), true);
+
+  // A quality that is not a whole `qvalue` is unreadable, not a number with
+  // trailing noise: the grammar allows three decimals and a ceiling of 1, so
+  // these must not round into acceptance.
+  assert.equal(acceptsGzip(request('gzip;q=bogus')), false);
+  assert.equal(acceptsGzip(request('gzip;q=1oops')), false);
+  assert.equal(acceptsGzip(request('gzip;q=0.5abc')), false);
+  assert.equal(acceptsGzip(request('gzip;q=2')), false);
+  assert.equal(acceptsGzip(request('gzip;q=1.5')), false);
+  assert.equal(acceptsGzip(request('gzip;q=0.0001')), false);
+  assert.equal(acceptsGzip(request('gzip;q=')), false);
 
   // `gzip` is not matched as a substring of a neighbouring token.
   assert.equal(acceptsGzip(request('x-gzip')), false);

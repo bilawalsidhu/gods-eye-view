@@ -24,11 +24,19 @@ const gzipAsync = promisify(gzip);
 const MIN_COMPRESSED_BYTES = 1024;
 
 /**
+ * The `qvalue` grammar of RFC 9110 section 12.4.2: zero to three decimals
+ * below one, or one with only zeros after it. Matching the whole token rather
+ * than parsing a numeric prefix is what makes `q=1oops` and the out-of-range
+ * `q=2` unreadable instead of quietly rounding to something acceptable.
+ */
+const QVALUE = /^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/;
+
+/**
  * Whether the client offered gzip in `Accept-Encoding`.
  *
- * Anything this cannot read confidently — a missing header, a malformed
- * quality value, the `x-gzip` alias — reads as "no", because the fallback is an
- * identity response every client can decode.
+ * Anything this cannot read confidently — a missing header, a malformed or
+ * out-of-range quality value, the `x-gzip` alias — reads as "no", because the
+ * fallback is an identity response every client can decode.
  *
  * @param {import('node:http').IncomingMessage} request
  * @returns {boolean}
@@ -39,12 +47,13 @@ export function acceptsGzip(request) {
   return header.split(',').some((part) => {
     const [token, ...parameters] = part.split(';');
     if (token.trim().toLowerCase() !== 'gzip') return false;
-    // `q=0` is the one way a client can name an encoding and still refuse it
-    // (RFC 9110 section 12.4.2).
     const quality = parameters
       .map((parameter) => parameter.trim().toLowerCase())
       .find((parameter) => parameter.startsWith('q='));
-    return quality === undefined || Number.parseFloat(quality.slice(2)) > 0;
+    if (quality === undefined) return true;
+    // `q=0` is the one way a client can name an encoding and still refuse it.
+    const value = quality.slice(2);
+    return QVALUE.test(value) && Number(value) > 0;
   });
 }
 
