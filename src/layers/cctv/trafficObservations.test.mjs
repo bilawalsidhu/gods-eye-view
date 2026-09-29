@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   formatCameraTrafficObservation,
   formatObservedTrafficAge,
+  indexCameraTrafficObservations,
   observedTrafficClassMix,
   summarizeCameraTrafficObservation,
 } from './trafficObservations.js';
@@ -61,6 +62,30 @@ test('configured source with no camera record is explicitly unknown', () => {
   assert.deepEqual(summary.cardDetails, []);
 });
 
+test('camera index retains one freshest record per camera', () => {
+  const older = record({
+    id: 'older',
+    windowEnd: NOW - 40_000,
+    flow: { vehiclesPerMin: 100, counts: { car: 100 } },
+  });
+  const newer = record({
+    id: 'newer',
+    windowEnd: NOW - 5_000,
+    flow: { vehiclesPerMin: 12, counts: { car: 9, heavyVehicle: 3 } },
+  });
+  const other = record({
+    id: 'other',
+    cameraId: 'cam-2',
+    windowEnd: NOW - 1_000,
+  });
+  const index = indexCameraTrafficObservations(
+    snapshot({ records: [older, other, newer] }),
+  );
+  assert.equal(index.size, 2);
+  assert.equal(index.get('cam-1').id, 'newer');
+  assert.equal(index.get('cam-2').id, 'other');
+});
+
 test('freshest matching camera record wins without summing approaches', () => {
   const older = record({
     id: 'older',
@@ -80,6 +105,26 @@ test('freshest matching camera record wins without summing approaches', () => {
   assert.equal(summary.recordId, 'newer');
   assert.equal(summary.primary, '12 veh/min');
   assert.equal(summary.classMix, '75% car · 25% heavy vehicle');
+  assert.equal(summary.qualityLabel, 'Q measured 90%');
+  assert.match(
+    formatCameraTrafficObservation(summary),
+    /Q measured 90%.*City traffic camera/,
+  );
+});
+
+test('preindexed lookup returns the same summary without rescanning records', () => {
+  const data = snapshot({
+    records: [
+      record({ id: 'cam-1-current' }),
+      record({ id: 'cam-2-current', cameraId: 'cam-2' }),
+    ],
+  });
+  const index = indexCameraTrafficObservations(data);
+  const summary = summarizeCameraTrafficObservation(data, 'cam-2', {
+    now: NOW,
+    recordIndex: index,
+  });
+  assert.equal(summary.recordId, 'cam-2-current');
 });
 
 test('stale measurements remain visible but are clearly stale', () => {
