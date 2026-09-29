@@ -18,6 +18,150 @@ export function createRendering({
   parts,
   source,
 }) {
+  function observationLabel(contact, ageSec) {
+    const camera = String(contact.cameraCode || contact.cameraId || 'CCTV').toUpperCase();
+    const type = String(contact.type || 'vehicle').toUpperCase();
+    const confidence = Math.round(Math.max(0, Math.min(1, Number(contact.confidence) || 0)) * 100);
+    return `${camera} · ${type} · ${confidence}% · ${ageSec}s`;
+  }
+
+  function stopExternalObservationTimerIfIdle() {
+    if (layerState._externalVehicleObservations.size || !layerState._externalObservationTimer)
+      return;
+    clearInterval(layerState._externalObservationTimer);
+    layerState._externalObservationTimer = null;
+  }
+
+  function pruneExternalVehicleObservations() {
+    const now = Date.now();
+    let changed = false;
+    for (const [sourceId, entries] of layerState._externalVehicleObservations) {
+      const keep = [];
+      for (const entry of entries) {
+        if (entry.expiresAt <= now) {
+          layerState._viewer?.entities?.remove(entry.entity);
+          changed = true;
+          continue;
+        }
+        const ageSec = Math.max(0, Math.floor((now - entry.observedAt) / 1000));
+        if (entry.entity?.label) entry.entity.label.text = observationLabel(entry.contact, ageSec);
+        keep.push(entry);
+      }
+      if (keep.length) layerState._externalVehicleObservations.set(sourceId, keep);
+      else layerState._externalVehicleObservations.delete(sourceId);
+    }
+    stopExternalObservationTimerIfIdle();
+    if (changed) layerState._viewer?.scene?.requestRender?.();
+  }
+
+  /** Remove one producer's observations, or every producer when sourceId is null. */
+  function clearExternalVehicleObservations(sourceId = null) {
+    const sourceIds =
+      sourceId === null
+        ? [...layerState._externalVehicleObservations.keys()]
+        : [String(sourceId)];
+    let removed = 0;
+    for (const id of sourceIds) {
+      const entries = layerState._externalVehicleObservations.get(id) || [];
+      for (const entry of entries) {
+        if (layerState._viewer?.entities?.remove(entry.entity)) removed += 1;
+      }
+      layerState._externalVehicleObservations.delete(id);
+    }
+    stopExternalObservationTimerIfIdle();
+    if (removed) layerState._viewer?.scene?.requestRender?.();
+    return removed;
+  }
+
+  /**
+   * Replace a producer's current ephemeral vehicle observations. No identity is
+   * retained across calls: the prior frame's entities are destroyed first.
+   */
+  function replaceExternalVehicleObservations(sourceId, contacts, options = {}) {
+    const id = String(sourceId || '').trim();
+    if (!id || !layerState._viewer || !layerState._enabled) return 0;
+    clearExternalVehicleObservations(id);
+    const ttlMs = Math.max(1000, Number(options.ttlMs) || 12000);
+    const now = Date.now();
+    const entries = [];
+    for (const contact of Array.isArray(contacts) ? contacts : []) {
+      if (!contact?.position) continue;
+      const observedAt = Number.isFinite(Number(contact.observedAt))
+        ? Number(contact.observedAt)
+        : now;
+      const entity = layerState._viewer.entities.add({
+        id: `traffic-observed-${++layerState._externalObservationSequence}`,
+        position: contact.position,
+        properties: {
+          gevSource: 'cctv-observed',
+          sourceId: id,
+          cameraId: contact.cameraId || null,
+          confidence: Number(contact.confidence) || 0,
+          observedAt,
+        },
+        point: {
+          pixelSize: 10,
+          color: Cesium.Color.CYAN.withAlpha(0.95),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.9),
+          outlineWidth: 2,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(100, 1.2, 15000, 0.55),
+        },
+        label: {
+          text: observationLabel(contact, 0),
+          font: '11px monospace',
+          fillColor: Cesium.Color.CYAN,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, -18),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5000),
+        },
+      });
+      entries.push({
+        entity,
+        contact,
+        observedAt,
+        expiresAt: observedAt + ttlMs,
+      });
+    }
+    if (entries.length) {
+      layerState._externalVehicleObservations.set(id, entries);
+      if (!layerState._externalObservationTimer) {
+        layerState._externalObservationTimer = setInterval(
+          pruneExternalVehicleObservations,
+          1000,
+        );
+      }
+      layerState._viewer.scene?.requestRender?.();
+    }
+    return entries.length;
+  }
+
+  function getExternalVehicleObservationCount() {
+    let count = 0;
+    for (const entries of layerState._externalVehicleObservations.values())
+      count += entries.length;
+    return count;
+  }
+
+  function getExternalVehicleDetectableObjects() {
+    const result = [];
+    for (const [sourceId, entries] of layerState._externalVehicleObservations) {
+      for (const entry of entries) {
+        result.push({
+          position: entry.contact.position,
+          id: `CCTV-VEH-${entry.entity.id}`,
+          type: 'VEH',
+          sourceId,
+          observed: true,
+        });
+      }
+    }
+    return result;
+  }
+
   /**
    * At high altitude only major roads render — shared by the render pass and
    * the late-flow heat-line rebuild so lines never mark roads without dots.
@@ -310,6 +454,10 @@ export function createRendering({
     }
   }
   return {
+    clearExternalVehicleObservations,
+    replaceExternalVehicleObservations,
+    getExternalVehicleObservationCount,
+    getExternalVehicleDetectableObjects,
     visibleRoadsForAltitude,
     removeHeatLines,
     rebuildHeatLines,
