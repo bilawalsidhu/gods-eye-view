@@ -881,6 +881,16 @@
     ],
     "external": ["cesium"]
   },
+  "gdelt": {
+    "exports": ["./layers/gdelt"],
+    "modules": [
+      "src/layers/gdelt/index.js",
+      "src/layers/gdelt/model.js",
+      "src/layers/gdelt/source.js",
+      "src/layers/gdelt/records.js"
+    ],
+    "external": ["cesium"]
+  },
   "recent-imagery": {
     "exports": ["./layers/recent-imagery"],
     "modules": [
@@ -1343,6 +1353,7 @@
       "src/app/layers/earthquakes.js",
       "src/app/layers/firms.js",
       "src/app/layers/flights.js",
+      "src/app/layers/gdelt.js",
       "src/app/layers/militaryAwareness.js",
       "src/app/layers/militaryFlights.js",
       "src/app/layers/militaryInstallations.js",
@@ -1588,6 +1599,10 @@
       "src/layers/flights/state.js",
       "src/layers/flights/testing.js",
       "src/layers/flights/tracking.js",
+      "src/layers/gdelt/index.js",
+      "src/layers/gdelt/model.js",
+      "src/layers/gdelt/source.js",
+      "src/layers/gdelt/records.js",
       "src/layers/installations/controls.js",
       "src/layers/installations/index.js",
       "src/layers/installations/ingestion.js",
@@ -2078,6 +2093,7 @@
       "src/app/layers/earthquakes.js",
       "src/app/layers/firms.js",
       "src/app/layers/flights.js",
+      "src/app/layers/gdelt.js",
       "src/app/layers/militaryAwareness.js",
       "src/app/layers/militaryFlights.js",
       "src/app/layers/militaryInstallations.js",
@@ -2252,6 +2268,10 @@
       "src/layers/flights/state.js",
       "src/layers/flights/testing.js",
       "src/layers/flights/tracking.js",
+      "src/layers/gdelt/index.js",
+      "src/layers/gdelt/model.js",
+      "src/layers/gdelt/source.js",
+      "src/layers/gdelt/records.js",
       "src/layers/installations/controls.js",
       "src/layers/installations/index.js",
       "src/layers/installations/ingestion.js",
@@ -2782,6 +2802,14 @@
     "modules": [
       "src/layers/earthquakes/records.js",
       "src/layers/earthquakes/source.js"
+    ],
+    "external": []
+  },
+  "gdelt-source": {
+    "exports": ["./layers/gdelt/source"],
+    "modules": [
+      "src/layers/gdelt/records.js",
+      "src/layers/gdelt/source.js"
     ],
     "external": []
   },

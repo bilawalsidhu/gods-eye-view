@@ -153,6 +153,11 @@ export const DATA_CREDITS = [
       '<a href="https://lpdaac.usgs.gov/products/hlss30v002/" target="_blank" rel="noopener">HLS product page</a>',
   },
   {
+    id: 'gdelt-events',
+    name: 'Global OSINT Events',
+    html: 'Global OSINT & Events: <a href="https://www.gdeltproject.org/" target="_blank" rel="noopener noreferrer">GDELT Project</a> · <a href="https://eonet.gsfc.nasa.gov/" target="_blank" rel="noopener noreferrer">NASA EONET</a>',
+  },
+  {
     key: 'wfigs',
     html:
       'Wildfire perimeters: ' +
