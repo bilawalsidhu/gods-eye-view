@@ -18,7 +18,10 @@ const VEHICLE_ANALYSIS_INTERVAL_MS = 1000;
 const VEHICLE_OBSERVATION_TTL_MS = 12000;
 
 function pixelLuma(data, offset) {
-  return (77 * data[offset] + 150 * data[offset + 1] + 29 * data[offset + 2]) >> 8;
+  return (
+    (77 * data[offset] + 150 * data[offset + 1] + 29 * data[offset + 2]) >>
+    8
+  );
 }
 
 /**
@@ -143,7 +146,9 @@ export function detectMotionVehicleCandidates(
     else if (areaFraction > 0.035) type = 'truck';
     const confidence = Math.min(
       0.95,
-      0.45 + Math.min(0.28, count / (pixelCount * 0.08)) + Math.min(0.18, fill * 0.25),
+      0.45 +
+        Math.min(0.28, count / (pixelCount * 0.08)) +
+        Math.min(0.18, fill * 0.25),
     );
     candidates.push({
       x: minX,
@@ -502,7 +507,8 @@ export function createFrames({ state: layerState, services, parts, source }) {
       layerState._vehicleObservationSourceId !== sourceId
     ) {
       const oldId = layerState._vehicleObservationSourceId;
-      const oldTraffic = layerState._dataManager?.layers?.get?.('traffic')?.module;
+      const oldTraffic =
+        layerState._dataManager?.layers?.get?.('traffic')?.module;
       oldTraffic?.clearExternalVehicleObservations?.(oldId);
       layerState._vehicleObservationCount = 0;
     }
