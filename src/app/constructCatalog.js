@@ -135,14 +135,6 @@ export function createApplicationCatalog({
       surface,
       observedSource: observedTrafficSource,
     });
-    const cctv = createApplicationCctv({
-      surface,
-      source: sources.cctv,
-      observedTraffic: {
-        getSnapshot: () => traffic.getObservedTrafficSnapshot(),
-        subscribe: (callback) => traffic.subscribeObservedTraffic(callback),
-      },
-    });
     const catalog = createLayerCatalog(
       [
         createBhoteKoshiEventLayer(),
@@ -165,7 +157,15 @@ export function createApplicationCatalog({
         satellites,
         createApplicationLaunches({ source: sources.launches, satellites }),
         traffic,
-        cctv,
+        createApplicationCctv({
+          surface,
+          source: sources.cctv,
+          observedTraffic: {
+            getSnapshot: () => traffic.getObservedTrafficSnapshot(),
+            subscribe: (callback) =>
+              traffic.subscribeObservedTraffic(callback),
+          },
+        }),
         createApplicationRadio({ surface, source: sources.radio }),
         createApplicationTransit({ surface, source: sources.transit }),
         createApplicationBikeshare({ source: sources.bikeshare }),
