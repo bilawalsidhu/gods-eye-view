@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import {
   GNSS_LEVEL_COLORS,
+  GNSS_MIN_AIRCRAFT,
   GNSS_WINDOW_MS,
   accumulateGnssObservations,
   binGnssCells,
@@ -8,7 +9,8 @@ import {
 export * from './records.js';
 export { createAdsbGnssSource } from './source.js';
 
-const FILL_ALPHA = Object.freeze({ low: 0.14, medium: 0.32, high: 0.45 });
+/** Low stays visible over land so coverage reads apart from no data. */
+const FILL_ALPHA = Object.freeze({ low: 0.3, medium: 0.42, high: 0.55 });
 const LEVEL_LABELS = Object.freeze({
   low: 'Under 2% degraded',
   medium: '2–10% degraded',
@@ -56,13 +58,9 @@ export function createGnssInterferenceLayer({
   const _observations = new Map();
 
   function render() {
+    // Only the id and band change what is drawn; counts alone do not.
     const signature = JSON.stringify(
-      _cells.map(({ id, level, aircraft, degraded }) => [
-        id,
-        level,
-        aircraft,
-        degraded,
-      ]),
+      _cells.map(({ id, level }) => [id, level]),
     );
     if (signature === _signature) return;
     _signature = signature;
@@ -122,7 +120,10 @@ export function createGnssInterferenceLayer({
     async update() {
       if (!_enabled || !_dataSource) return false;
       const anchor = viewAnchor(_viewer);
-      if (!anchor) return false;
+      // No anchor yet (camera still settling) is not a failure: returning
+      // false would make the manager reject the enable. The next interval
+      // retries.
+      if (!anchor) return true;
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -137,7 +138,7 @@ export function createGnssInterferenceLayer({
         });
         _cells = binGnssCells(_observations);
         render();
-        _stale = snapshot.stale;
+        _stale = snapshot.stale === true;
         _lastUpdate = now();
         _lastError = null;
         return true;
@@ -178,8 +179,7 @@ export function createGnssInterferenceLayer({
           count: _cells.filter((cell) => cell.level === level).length,
           ...(index === 0
             ? {
-                blurb:
-                  'Share of ADS-B aircraft reporting low navigation integrity (NIC/NACp) over the last 30 minutes, around the views you visit. An inference of jamming or spoofing, not a detection.',
+                blurb: `Share of ADS-B aircraft reporting low navigation integrity (NIC/NACp) over the last 30 minutes, around the views you visit. Cells with fewer than ${GNSS_MIN_AIRCRAFT} aircraft are not drawn, so blank areas mean no data, not clean GNSS. An inference of jamming or spoofing, not a detection.`,
               }
             : {}),
         })),
@@ -192,6 +192,8 @@ export function createGnssInterferenceLayer({
         lastUpdate: _lastUpdate,
         error: _lastError,
         stale: _stale,
+        // Load-bearing: without an explicit boolean, layerFeedState reads the
+        // adsb.lol source name as a flights fallback (src/data/feedState.js).
         fallback: false,
       };
     },

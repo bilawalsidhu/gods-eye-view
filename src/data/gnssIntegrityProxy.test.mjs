@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   gnssIntegrityAnchor,
   gnssIntegrityProxy,
+  gnssRetryCooldownMs,
 } from '../../server/providers/gnssIntegrity.js';
 
 const snapshot = {
@@ -154,17 +155,79 @@ test('an upstream 429 starts a cooldown with no further upstream calls', async (
       calls += 1;
       return new Response('slow down', {
         status: 429,
-        headers: { 'retry-after': '120' },
+        headers: { 'retry-after': '90' },
       });
     },
   });
-  assert.equal((await request()).status, 502);
+  const first = await request();
+  assert.equal(first.status, 429);
+  assert.equal(first.headers['Retry-After'], '90');
+  clock = 30_500;
   const cooling = await request('/?lat=1&lon=1');
   assert.equal(cooling.status, 429);
+  // The browser is told the remaining shared cooldown, rounded up.
+  assert.equal(cooling.headers['Retry-After'], '60');
   assert.equal(calls, 1);
-  clock = 121_000;
+  clock = 91_000;
   await request('/?lat=2&lon=2');
   assert.equal(calls, 2);
+});
+
+test('Retry-After accepts seconds or an HTTP date, clamped to 5 s – 120 s', () => {
+  const nowMs = Date.parse('2026-09-29T12:00:00Z');
+  assert.equal(gnssRetryCooldownMs('30', nowMs), 30_000);
+  assert.equal(gnssRetryCooldownMs('1', nowMs), 5_000);
+  assert.equal(gnssRetryCooldownMs('3600', nowMs), 120_000);
+  assert.equal(
+    gnssRetryCooldownMs('Tue, 29 Sep 2026 12:00:45 GMT', nowMs),
+    45_000,
+  );
+  // Garbage, a past date or no header fall back to the default minute.
+  assert.equal(gnssRetryCooldownMs('soon', nowMs), 60_000);
+  assert.equal(
+    gnssRetryCooldownMs('Tue, 29 Sep 2026 11:00:00 GMT', nowMs),
+    60_000,
+  );
+  assert.equal(gnssRetryCooldownMs(null, nowMs), 60_000);
+});
+
+test('a cached anchor keeps serving its last snapshot as stale during a cooldown', async () => {
+  let clock = 0;
+  let limited = false;
+  let calls = 0;
+  const request = install({
+    now: () => clock,
+    fetchImpl: async () => {
+      calls += 1;
+      return limited
+        ? new Response('slow down', { status: 429 })
+        : Response.json(snapshot);
+    },
+  });
+  await request();
+  limited = true;
+  clock = 61_000;
+  // Another anchor trips the shared cooldown…
+  assert.equal((await request('/?lat=5&lon=5')).status, 429);
+  clock = 62_000;
+  // …and the cached anchor is answered from cache without an upstream call.
+  const stale = await request();
+  assert.equal(stale.status, 200);
+  assert.equal(stale.body.stale, true);
+  assert.equal(stale.body.rows.length, 1);
+  assert.equal(calls, 2);
+});
+
+test('an oversized upstream body is refused as 502 without being parsed', async () => {
+  const request = install({
+    fetchImpl: async () =>
+      new Response('{}', {
+        headers: { 'content-length': String(9 * 1024 * 1024) },
+      }),
+  });
+  const res = await request();
+  assert.equal(res.status, 502);
+  assert.deepEqual(res.body, { error: 'gnss_integrity_unavailable' });
 });
 
 test('the route rejects other methods, paths, bad anchors, a malformed feed and floods', async () => {

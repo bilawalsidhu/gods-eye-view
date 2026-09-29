@@ -32,14 +32,26 @@ test('normalization keeps only airborne self-reported ADS-B v1/v2 positions', ()
       aircraft({ hex: '000005', seen_pos: 120 }),
       aircraft({ hex: '000006', nic: undefined }),
       aircraft({ hex: '000007', lat: 95 }),
+      aircraft({ hex: '000008', version: undefined }),
       aircraft({ hex: 'not-hex' }),
       aircraft(),
+      // A non-ICAO (`~`) address still self-reports over 1090ES ADS-B.
+      aircraft({ hex: '~a1b2c3' }),
       null,
     ],
   });
   assert.deepEqual(rows, [
     {
       hex: '4ca7b5',
+      lat: 50.1,
+      lon: 19.9,
+      nic: 8,
+      nacp: 10,
+      gpsLost: false,
+      degraded: false,
+    },
+    {
+      hex: '~a1b2c3',
       lat: 50.1,
       lon: 19.9,
       nic: 8,
@@ -77,9 +89,11 @@ test('cell keys are stable half-degree bins, clamped at the poles and antimeridi
   assert.notEqual(gnssCellKey(50.1, 19.9), gnssCellKey(50.6, 19.9));
   assert.equal(gnssCellKey(90, 180), gnssCellKey(89.9, 179.9));
   assert.equal(gnssCellKey(-90, -180), '0:0');
+  // Just south-west of the origin falls in the last cell before 0°, not cell 0.
+  assert.equal(gnssCellKey(-0.1, -0.1), '179:359');
 });
 
-test('interference level follows the published gpsjam formula and bands', () => {
+test('interference level follows the gpsjam.org published cell formula and bands', () => {
   assert.deepEqual(gnssInterferenceLevel(10, 0), { percent: 0, level: 'low' });
   // One degraded aircraft is always discounted.
   assert.deepEqual(gnssInterferenceLevel(10, 1), { percent: 0, level: 'low' });
@@ -114,6 +128,20 @@ test('observations count each aircraft once per cell and expire after the window
   accumulateGnssObservations(store, [], 1200, { windowMs: 1000 });
   assert.equal(store.size, 1);
   assert.deepEqual(binGnssCells(store), []);
+});
+
+test('rows without finite coordinates never key a cell', () => {
+  const store = new Map();
+  accumulateGnssObservations(
+    store,
+    [
+      { hex: 'n1', lat: Number.NaN, lon: 10.1, degraded: true },
+      { hex: 'n2', lat: 10.1, lon: '10.1', degraded: true },
+      null,
+    ],
+    0,
+  );
+  assert.equal(store.size, 0);
 });
 
 test('cells below the minimum aircraft count are withheld', () => {
