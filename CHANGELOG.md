@@ -13,6 +13,14 @@
   largest cities) and `CCTV_VEGVESEN_VIDEO=0` keeps stills only. Attributed
   under NLOD 2.0.
 
+- GNSS Interference layer (Events group): ADS-B aircraft that report degraded
+  navigation accuracy (NIC < 7 or NACp < 8, or readsb's GPS-loss flag) are
+  binned into 0.5° cells over a rolling 30-minute window and coloured with the
+  gpsjam.org bands. Keyless, worldwide wherever adsb.lol has receivers; reads
+  a capped 250 nm snapshot around the camera through `/api/gnss-integrity`,
+  which returns integrity fields only and serves the last snapshot when the
+  upstream fails.
+
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
 - Ship each bundled data pack once. The region, marine, admin-boundary,
