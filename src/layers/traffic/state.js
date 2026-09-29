@@ -265,6 +265,7 @@ export function createState({ services }) {
   layerState._externalVehicleObservations = new Map();
   layerState._externalObservationTimer = null;
   layerState._externalObservationSequence = 0;
+  layerState._externalObservationRevision = 0;
 
   layerState._scratchLerp = new Cesium.Cartesian3();
 
