@@ -1,5 +1,7 @@
 # Changelog
 
+- Accept a God's Eye View-owned ChatGPT OAuth session for Realtime voice when `OPENAI_API_KEY` is unset. `node scripts/openai-oauth-login.mjs` writes `.gev/openai-oauth.json` and does not read or refresh Codex or Hermes. The HUD summary still needs a platform API key (#819).
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a

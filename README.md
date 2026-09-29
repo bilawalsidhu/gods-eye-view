@@ -231,7 +231,7 @@ _Why cockpit mode exists: you're riding a real aircraft over real terrain — an
 
 ## 🎙️ Talk to It
 
-> Voice needs an **OpenAI key**. Without one the entire app still runs — the mic button just reports voice is unavailable. The same key drives the **AI HUD summary**: a terse, five-word intelligence-style readout of the current view that regenerates as you move.
+> Voice needs an **OpenAI key** for the full experience, including the AI HUD summary. A ChatGPT subscription can authorize Realtime only: `node scripts/openai-oauth-login.mjs` stores a separate session in `.gev/openai-oauth.json` and does not read Codex or Hermes. That login is not an OpenAI-registered app for God's Eye View. Without either credential the rest of the app still runs — the mic button just reports voice is unavailable.
 
 Click **GEV MIC**, grant the microphone, and just talk. This is more than a voice-controlled remote:
 

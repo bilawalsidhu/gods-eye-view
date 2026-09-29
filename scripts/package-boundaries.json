@@ -269,6 +269,7 @@
       "server/providers/common/source-root.js",
       "server/providers/openai.js",
       "server/providers/openai/constants.js",
+      "server/providers/openai/credential.js",
       "server/providers/openai/debug-log.js",
       "server/providers/openai/hud-summary.js",
       "server/providers/openai/instructions.js",

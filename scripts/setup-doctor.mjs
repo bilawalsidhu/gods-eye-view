@@ -147,7 +147,7 @@ export function resolveCredential(spec, {
 
 export function buildCapabilitySummary(
   credentials,
-  { openSkyAuthMode = OPENSKY_AUTH_MODE_DEFAULT } = {},
+  { openSkyAuthMode = OPENSKY_AUTH_MODE_DEFAULT, chatGptOAuth = false } = {},
 ) {
   const configured = (name) => credentials[name]?.configured === true;
   const hasOAuthCredentials = configured('OPENSKY_CLIENT_ID') && configured('OPENSKY_CLIENT_SECRET');
@@ -175,7 +175,11 @@ export function buildCapabilitySummary(
         ? 'Google Photorealistic 3D Tiles through Cesium ion; Bing and world-terrain stacks available'
         : 'Esri World Imagery (keyless satellite basemap) with keyless terrain',
     flights,
-    voice: configured('OPENAI_API_KEY') ? 'available' : 'off until an OpenAI key is added',
+    voice: configured('OPENAI_API_KEY')
+      ? 'available'
+      : chatGptOAuth
+        ? 'Realtime via ChatGPT OAuth; HUD summary still needs an API key'
+        : 'off until an OpenAI key is added',
     vessels: configured('AISSTREAM_API_KEY') ? 'live AISStream feed' : 'off until an AISStream key is added',
     fires: configured('FIRMS_MAP_KEY') ? 'live NASA FIRMS feed' : 'off until a FIRMS key is added',
     traffic: configured('TOMTOM_API_KEY') ? 'live TomTom flow' : 'built-in traffic simulation',
@@ -207,6 +211,9 @@ export function inspectSetup({ includeKeychain = true, authoritativeEnvironment 
     credentials,
     capabilities: buildCapabilitySummary(credentials, {
       openSkyAuthMode: resolveOpenSkyAuthMode({ authoritativeEnvironment, rootDir }),
+      chatGptOAuth: isConfiguredValue(process.env.OPENAI_OAUTH_ACCESS_TOKEN)
+        || isConfiguredValue(readDoctorDotenvValue('OPENAI_OAUTH_ACCESS_TOKEN', rootDir))
+        || existsSync(path.join(rootDir, '.gev', 'openai-oauth.json')),
     }),
   };
 }

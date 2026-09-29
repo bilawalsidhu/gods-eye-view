@@ -13,12 +13,14 @@ import {
 } from './constants.js';
 import { realtimeInstructions } from './instructions.js';
 import { GEV_REALTIME_TOOLS } from './tools.js';
+import { resolveOpenAiCredential } from './credential.js';
 
 function createRealtimeTokenHandler({
   annotationGuidance,
   endpoint = 'https://api.openai.com/v1/realtime/client_secrets',
   fetchImpl = (...args) => fetch(...args),
-  resolveApiKey = () => process.env.OPENAI_API_KEY,
+  resolveCredential = () => resolveOpenAiCredential(),
+  resolveApiKey,
   models = {},
 } = {}) {
   return async (req, res) => {
@@ -33,7 +35,8 @@ function createRealtimeTokenHandler({
     // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
     if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
 
-    const apiKey = resolveApiKey();
+    const credential = resolveCredential();
+    const apiKey = credential?.bearer || resolveApiKey?.() || '';
     if (!apiKey) {
       res.statusCode = 503;
       res.setHeader('Content-Type', 'application/json');
