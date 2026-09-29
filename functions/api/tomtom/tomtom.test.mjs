@@ -41,7 +41,7 @@ test('status reports hasKey and the daily budget without touching upstream', asy
   try {
     const res = await onRequest(ctx(new Request(url('/status')), { TOMTOM_API_KEY: 'k' }));
     assert.equal(res.status, 200);
-    assert.deepEqual(await res.json(), { hasKey: true, dailyCount: 0, budget: 40000, date: new Date().toISOString().slice(0, 10) });
+    assert.deepEqual(await res.json(), { hasKey: true, dailyCount: 0, budget: 6000, date: new Date().toISOString().slice(0, 10) });
   } finally {
     stub.restore();
   }

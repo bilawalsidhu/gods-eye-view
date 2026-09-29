@@ -21,8 +21,10 @@
  *   OPTIONS → 204 CORS preflight
  *
  * Quota protection: tiles are single-flighted per key with a 120 s TTL and a
- * soft daily budget (TOMTOM_DAILY_TILE_BUDGET, default 40 000 — the free
- * tier) that resets per UTC date. Workers are multi-isolate, so the counter
+ * soft daily budget (TOMTOM_DAILY_TILE_BUDGET, default 6 000/day — TomTom's
+ * free tier is 200,000 Traffic Flow & Incidents tile requests per MONTH;
+ * 6 000/day keeps a 31-day month at 186K, inside the allowance) that resets
+ * per UTC date. Workers are multi-isolate, so the counter
  * is per-isolate — a backstop, not a global quota (same honesty note as the
  * dev limiter in functions/_lib.js); a hard global cap needs a Durable
  * Object and stays out of scope until the budget is actually hit.
@@ -39,7 +41,7 @@ const MEM_MAX_ENTRIES = 256;
 /** Upstream call bound (dev parity). */
 const UPSTREAM_TIMEOUT_MS = 15_000;
 /** Soft daily tile cap when TOMTOM_DAILY_TILE_BUDGET is unset. */
-const DEFAULT_DAILY_BUDGET = 40_000;
+const DEFAULT_DAILY_BUDGET = 6_000;
 
 // Per-isolate state: tile cache, single-flight map, daily budget counter.
 const mem = new Map();
