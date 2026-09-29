@@ -79,7 +79,15 @@ test('fresh and stale observations remain distinct', () => {
   assert.equal(fresh.stale, false);
 
   const stale = normalizeObservedTrafficSnapshot(
-    { records: [validRecord({ observedAt: NOW - 900_000, windowEnd: NOW - 900_000 })] },
+    {
+      records: [
+        validRecord({
+          observedAt: NOW - 900_000,
+          windowStart: NOW - 960_000,
+          windowEnd: NOW - 900_000,
+        }),
+      ],
+    },
     { now: NOW, staleAfterMs: 120_000 },
   );
   assert.equal(stale.state, 'stale');
