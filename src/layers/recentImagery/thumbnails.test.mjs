@@ -315,3 +315,27 @@ test('a request queued behind an aborted fetch still starts once the abort settl
     tracked: 1,
   });
 });
+
+
+test('retain aborts stale acquisition while allowing the current intent to start', async () => {
+  const { loader, fetch } = fixture({ maxInFlight: 1 });
+  const stale = candidate('S30', '2026-09-10');
+  const current = candidate('S30', '2026-09-11');
+
+  loader.request(stale, BOX, 0);
+  loader.request(current, BOX, 1);
+  assert.equal(fetch.calls.length, 1);
+  assert.match(fetch.calls[0].url, /TIME=2026-09-10/);
+
+  loader.retain([current.key]);
+  assert.equal(fetch.calls[0].signal.aborted, true);
+  await settle();
+
+  assert.equal(fetch.calls.length, 2, 'current intent starts after stale abort');
+  assert.match(fetch.calls[1].url, /TIME=2026-09-11/);
+  assert.deepEqual(loader.refinementStats(), {
+    supersededQueued: 0,
+    supersededInFlight: 1,
+  });
+  assert.equal(loader.get(stale.key).status, 'unknown');
+});
