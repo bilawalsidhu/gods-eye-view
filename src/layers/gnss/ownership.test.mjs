@@ -88,6 +88,7 @@ test('an enabled refresh bins the snapshot into coloured ground cells', async ()
     [1, 0, 0],
   );
   assert.match(legend[0].blurb, /not a detection/);
+  assert.match(legend[0].blurb, /fewer than 3 aircraft are not drawn/);
 });
 
 test('a failed refresh keeps the last cells and reports the error', async () => {
@@ -153,9 +154,28 @@ test('no view anchor means no request, and destroy releases the data source', as
     { anchor: null },
   );
   layer.enable();
-  assert.equal(await layer.update(), false);
+  assert.equal(
+    await layer.update(),
+    true,
+    'a settling camera is not a failure',
+  );
   assert.equal(calls, 0);
+  assert.equal(layer.getStats().error, null);
   layer.destroy();
   assert.equal(sources.length, 0);
   assert.equal(layer.getStats().count, 0);
+});
+
+const threeCells = () => ({
+  rows: [row('a1', 50.1, true), row('a2', 50.1, true), row('a3', 50.2, false)],
+});
+
+test('an identical snapshot leaves the drawn entities untouched', async () => {
+  const { layer, sources } = harness(async () => threeCells());
+  layer.enable();
+  await layer.update();
+  const [first] = sources[0].entities.values;
+  await layer.update();
+  assert.equal(sources[0].entities.values.length, 1);
+  assert.equal(sources[0].entities.values[0], first);
 });

@@ -5,17 +5,20 @@
  * their own position: NIC (integrity containment radius) and NACp (position
  * accuracy). Both collapse when the GNSS receiver is jammed or spoofed, so a
  * cluster of aircraft reporting low values in one area is a well-known public
- * proxy for interference (the method popularized by gpsjam.org and the
- * readsb/tar1090 `gpsOkBefore` flag). It is an inference, not a detection:
+ * proxy for interference (popularized by gpsjam.org, whose published cell
+ * formula and bands this module uses, and by the readsb/tar1090 `gpsOkBefore`
+ * flag). gpsjam does not publish its per-aircraft thresholds; here an aircraft
+ * is degraded when it reports below the 14 CFR 91.227(c) ADS-B Out minima
+ * (NIC < 7 or NACp < 8). It is an inference, not a detection:
  * avionics faults and old transponders also report low values, which is why
  * cells need several aircraft and the first degraded aircraft is discounted.
  */
 
 /** Direct 1090ES ADS-B only: MLAT, TIS-B and ADS-R positions are not self-reported. */
 const QUALIFYING_TYPES = new Set(['adsb_icao']);
-/** NIC below 7 means a containment radius above 0.2 NM (RNP 0.3 and worse). */
+/** NIC below 7 means a containment radius of 0.2 NM or more (below the 91.227 ADS-B Out minimum). */
 export const GNSS_NIC_THRESHOLD = 7;
-/** NACp below 8 means an estimated position uncertainty of 93 m or more. */
+/** NACp below 8 means an estimated position uncertainty of 93 m or more (below the 91.227 minimum). */
 export const GNSS_NACP_THRESHOLD = 8;
 /** Positions older than this are not current evidence of the local sky. */
 const MAX_POSITION_AGE_S = 60;
@@ -54,6 +57,9 @@ export function normalizeGnssAircraft(payload) {
     if (!finite(nic) || !finite(nacp)) continue;
     if (finite(aircraft.seen_pos) && aircraft.seen_pos > MAX_POSITION_AGE_S)
       continue;
+    // readsb sets gpsOkBefore when an aircraft's integrity collapses and keeps
+    // it for roughly 15 minutes after GPS recovers, so it can outlast the
+    // current NIC/NACp; the rolling window treats that as recent evidence.
     const gpsLost = aircraft.gpsOkBefore != null;
     seen.add(hex);
     rows.push({
@@ -95,6 +101,7 @@ export function accumulateGnssObservations(
   { windowMs = GNSS_WINDOW_MS, cellDeg = GNSS_CELL_DEG } = {},
 ) {
   for (const row of rows || []) {
+    if (!Number.isFinite(row?.lat) || !Number.isFinite(row?.lon)) continue;
     const cell = gnssCellKey(row.lat, row.lon, cellDeg);
     const key = `${row.hex}|${cell}`;
     const previous = store.get(key);
@@ -111,7 +118,7 @@ export function accumulateGnssObservations(
 }
 
 /**
- * Interference level of a cell, using gpsjam.org's published formula and
+ * Interference level of a cell, using gpsjam.org's published cell formula and
  * bands: the first degraded aircraft is discounted to limit false positives,
  * then under 2% is low, 2–10% medium and over 10% high.
  */

@@ -1,25 +1,46 @@
 import { normalizeGnssAircraft } from '../../src/layers/gnss/records.js';
+import { adsbLolFallbackAnchor } from './aircraft/opensky.js';
 import { coalesceProxyRequest, readResponseJsonCapped } from './common/http.js';
-import { requiredFiniteQueryNumber } from './common/query.js';
 import { makeRateLimiter, clientKey } from './common/rate-limit.js';
 
 // adsb.lol regional snapshot (keyless, ODbL). Only the integrity fields the
 // GNSS layer needs leave this proxy, so the browser never sees the full feed.
+// This is a separate read from the flights fallback on purpose: that point
+// cache keeps only the fields the flights layer renders (no nic / nac_p), is
+// keyed on 0.25° anchors and lives for 12 s, while integrity cells need
+// whole-degree anchors held for a minute.
 const RADIUS_NM = 250;
 const CACHE_MS = 60_000;
 const CACHE_MAX = 64;
+/** Cooldown after a 429 or 5xx when upstream sends no usable Retry-After. */
 const COOLDOWN_MS = 60_000;
+/** Bounds for an upstream-supplied Retry-After. */
+const COOLDOWN_MIN_MS = 5_000;
+const COOLDOWN_MAX_MS = 120_000;
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const TIMEOUT_MS = 10_000;
 
 /** Snap a view anchor to a whole degree so nearby views share one upstream read. */
 export function gnssIntegrityAnchor(url) {
-  const params = new URL(url || '/', 'http://localhost').searchParams;
-  const lat = requiredFiniteQueryNumber(params, 'lat');
-  const lon = requiredFiniteQueryNumber(params, 'lon');
-  if (!Number.isFinite(lat) || lat < -90 || lat > 90) return null;
-  if (!Number.isFinite(lon) || lon < -180 || lon > 180) return null;
-  return { lat: Math.round(lat), lon: Math.round(lon) };
+  const anchor = adsbLolFallbackAnchor({ url });
+  if (!anchor) return null;
+  return {
+    lat: Math.round(anchor.latitude),
+    lon: Math.round(anchor.longitude),
+  };
+}
+
+/** Cooldown (ms) an upstream 429 earns, honouring Retry-After when sane. */
+export function gnssRetryCooldownMs(raw, nowMs) {
+  const clamp = (ms) =>
+    Math.min(COOLDOWN_MAX_MS, Math.max(COOLDOWN_MIN_MS, ms));
+  if (raw) {
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds) && seconds > 0) return clamp(seconds * 1000);
+    const at = Date.parse(raw);
+    if (Number.isFinite(at) && at > nowMs) return clamp(at - nowMs);
+  }
+  return COOLDOWN_MS;
 }
 
 /** Fixed-origin, bounded adsb.lol integrity route for dev and preview. */
@@ -50,12 +71,12 @@ export function gnssIntegrityProxy({
     if (!response.ok) {
       await response.body?.cancel();
       if (response.status === 429) {
-        const retryS = Number(response.headers.get('retry-after'));
         cooldownUntil =
           now() +
-          (Number.isFinite(retryS) && retryS > 0
-            ? Math.min(retryS * 1000, 10 * COOLDOWN_MS)
-            : COOLDOWN_MS);
+          gnssRetryCooldownMs(response.headers.get('retry-after'), now());
+        throw Object.assign(new Error('upstream_rate_limited'), {
+          status: 429,
+        });
       }
       throw new Error('upstream_unavailable');
     }
@@ -95,13 +116,13 @@ export function gnssIntegrityProxy({
   }
 
   async function handler(req, res) {
-    const json = (status, value, stale = false) => {
+    const json = (status, value, stale = false, retryAfterS = 60) => {
       if (res.destroyed) return;
       res.writeHead(status, {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store',
         ...(status === 405 ? { Allow: 'GET' } : {}),
-        ...(status === 429 ? { 'Retry-After': '60' } : {}),
+        ...(status === 429 ? { 'Retry-After': String(retryAfterS) } : {}),
         ...(stale ? { 'X-Data-Stale': 'true' } : {}),
       });
       res.end(JSON.stringify(value));
@@ -117,9 +138,20 @@ export function gnssIntegrityProxy({
       const { value, stale } = await acquire(anchor);
       json(200, stale ? { ...value, stale: true } : value, stale);
     } catch (error) {
-      json(error.status === 429 ? 429 : 502, {
-        error: 'gnss_integrity_unavailable',
-      });
+      if (error.status === 429) {
+        // Tell the browser how long the shared upstream cooldown has left.
+        const retryAfterS = Math.max(
+          1,
+          Math.ceil((cooldownUntil - now()) / 1000),
+        );
+        return json(
+          429,
+          { error: 'gnss_integrity_rate_limited' },
+          false,
+          retryAfterS,
+        );
+      }
+      json(502, { error: 'gnss_integrity_unavailable' });
     }
   }
 

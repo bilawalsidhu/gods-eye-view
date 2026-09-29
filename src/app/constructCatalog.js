@@ -56,6 +56,7 @@ const SOURCE_METHODS = Object.freeze({
   earthquakes: ['getSnapshot'],
   'fire-perimeters': ['getSnapshot'],
   cables: ['fetch'],
+  'gnss-interference': ['getSnapshot'],
 });
 
 /**
@@ -148,7 +149,9 @@ export function createApplicationCatalog({
         createApplicationFirePerimeters({
           source: sources['fire-perimeters'],
         }),
-        createApplicationGnssInterference(),
+        createApplicationGnssInterference({
+          source: sources['gnss-interference'],
+        }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         satellites,
         createApplicationLaunches({ source: sources.launches, satellites }),
