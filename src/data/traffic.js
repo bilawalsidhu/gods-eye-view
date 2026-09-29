@@ -2,6 +2,8 @@ import { createApplicationTraffic } from '../app/layers/traffic.js';
 import { createSourceSlot } from '../sources/sourceSlot.js';
 import { createTrafficSource } from '../layers/traffic/source.js';
 
+export { classifyExternalObservationFreshness } from '../layers/traffic/rendering.js';
+
 const sourceSlot = createSourceSlot(
   createTrafficSource(),
   ['requestRoads', 'getStatus', 'fetchFlowForBounds'],
