@@ -204,5 +204,14 @@ export function createState({ services }) {
 
   layerState._moveStartListener = null;
   layerState._sourceAbort = null;
+
+  // Experimental CCTV-derived anonymous vehicle observations. Off by default;
+  // frames remain presentation-only unless the operator explicitly enables it.
+  layerState._dataManager = null;
+  layerState._vehicleObservationsEnabled = false;
+  layerState._vehicleObservationSourceId = null;
+  layerState._vehicleObservationCount = 0;
+  layerState._vehicleObservationLastAt = null;
+
   return layerState;
 }
