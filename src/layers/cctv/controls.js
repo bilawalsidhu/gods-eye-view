@@ -66,7 +66,15 @@ export function createControls({ state: layerState, services, parts, source }) {
           // Always start from a fresh temporal pair; stale history could create
           // a giant false motion component when this experiment is re-enabled.
           parts.frames.clearVehicleObservationState();
-          if (enabled) parts.projection.startProjectionLoop();
+          if (enabled) {
+            const active = parts.selection.getActiveRecord();
+            const runtime = active?.projection;
+            const media = runtime?.video ||
+              (runtime?.imageReady ? runtime.image : null);
+            if (active && media)
+              parts.frames.processVehicleObservationFrame(active, media);
+            parts.projection.startProjectionLoop();
+          }
         }
       }
       if (typeof params.autoHop === 'boolean') {
