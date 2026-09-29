@@ -356,6 +356,7 @@ export function createCctvThumbnailOverlayEntry({
   position,
   title,
   frameSlot,
+  details = [],
   rank = 0,
   pinned = false,
   active = false,
@@ -368,7 +369,10 @@ export function createCctvThumbnailOverlayEntry({
     variant: 'thumbnail',
     paintLane: 'thumbnail',
     title,
-    details: [],
+    details: (Array.isArray(details) ? details : [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+      .slice(0, 2),
     image: frameSlot,
     requireImage: true,
     accent: CCTV_THUMBNAIL_STYLE.accent,
