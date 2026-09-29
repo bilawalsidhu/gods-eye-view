@@ -12,6 +12,155 @@ import {
   PLACEHOLDER_REPAINT_MS,
 } from './policy.js';
 
+const VEHICLE_ANALYSIS_WIDTH = 160;
+const VEHICLE_ANALYSIS_HEIGHT = 90;
+const VEHICLE_ANALYSIS_INTERVAL_MS = 1000;
+const VEHICLE_OBSERVATION_TTL_MS = 12000;
+
+function pixelLuma(data, offset) {
+  return (77 * data[offset] + 150 * data[offset + 1] + 29 * data[offset + 2]) >> 8;
+}
+
+/**
+ * Find coarse moving, vehicle-sized blobs between two downsampled CCTV frames.
+ * This is intentionally not identity recognition: it has no model, OCR, face
+ * path, persistence or cross-camera association. Stationary vehicles are not
+ * detected by this v0 backend.
+ *
+ * @param {Uint8ClampedArray|number[]} previous Previous RGBA pixels.
+ * @param {Uint8ClampedArray|number[]} current Current RGBA pixels.
+ * @param {number} width Pixel width.
+ * @param {number} height Pixel height.
+ * @param {Object} [options]
+ * @returns {Array<{x:number,y:number,width:number,height:number,type:string,confidence:number,pixels:number}>}
+ */
+export function detectMotionVehicleCandidates(
+  previous,
+  current,
+  width,
+  height,
+  options = {},
+) {
+  const w = Math.floor(Number(width));
+  const h = Math.floor(Number(height));
+  const pixelCount = w * h;
+  if (
+    w < 4 ||
+    h < 4 ||
+    !previous ||
+    !current ||
+    previous.length < pixelCount * 4 ||
+    current.length < pixelCount * 4
+  )
+    return [];
+
+  const threshold = Math.max(8, Number(options.threshold) || 30);
+  const minPixels = Math.max(4, Number(options.minPixels) || 12);
+  const maxCandidates = Math.max(1, Number(options.maxCandidates) || 8);
+  const raw = new Uint8Array(pixelCount);
+  for (let i = 0; i < pixelCount; i++) {
+    const offset = i * 4;
+    if (
+      Math.abs(pixelLuma(current, offset) - pixelLuma(previous, offset)) >=
+      threshold
+    )
+      raw[i] = 1;
+  }
+
+  // Reject isolated codec/noise pixels before connected-component extraction.
+  const mask = new Uint8Array(pixelCount);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const index = y * w + x;
+      if (!raw[index]) continue;
+      let neighbors = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (raw[(y + dy) * w + x + dx]) neighbors += 1;
+        }
+      }
+      if (neighbors >= 3) mask[index] = 1;
+    }
+  }
+
+  const seen = new Uint8Array(pixelCount);
+  const queue = new Int32Array(pixelCount);
+  const candidates = [];
+  for (let start = 0; start < pixelCount; start++) {
+    if (!mask[start] || seen[start]) continue;
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = start;
+    seen[start] = 1;
+    let count = 0;
+    let minX = w;
+    let minY = h;
+    let maxX = 0;
+    let maxY = 0;
+    while (head < tail) {
+      const index = queue[head++];
+      const x = index % w;
+      const y = Math.floor(index / w);
+      count += 1;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+          const next = ny * w + nx;
+          if (!mask[next] || seen[next]) continue;
+          seen[next] = 1;
+          queue[tail++] = next;
+        }
+      }
+    }
+
+    const boxW = maxX - minX + 1;
+    const boxH = maxY - minY + 1;
+    const boxArea = boxW * boxH;
+    const fill = count / Math.max(1, boxArea);
+    const areaFraction = boxArea / pixelCount;
+    const bottom = maxY + 1;
+    if (
+      count < minPixels ||
+      boxW < 3 ||
+      boxH < 2 ||
+      fill < 0.08 ||
+      areaFraction > 0.18 ||
+      bottom < h * 0.35
+    )
+      continue;
+
+    const aspect = boxW / boxH;
+    let type = 'car';
+    if (aspect < 0.72 && areaFraction < 0.025) type = 'motorcycle';
+    else if (aspect > 2.5 || areaFraction > 0.07) type = 'bus';
+    else if (areaFraction > 0.035) type = 'truck';
+    const confidence = Math.min(
+      0.95,
+      0.45 + Math.min(0.28, count / (pixelCount * 0.08)) + Math.min(0.18, fill * 0.25),
+    );
+    candidates.push({
+      x: minX,
+      y: minY,
+      width: boxW,
+      height: boxH,
+      type,
+      confidence,
+      pixels: count,
+    });
+  }
+
+  return candidates
+    .sort((a, b) => b.confidence * b.pixels - a.confidence * a.pixels)
+    .slice(0, maxCandidates);
+}
+
 export function createFrames({ state: layerState, services, parts, source }) {
   /**
    * FNV-1a over the RGB channels of a downsampled frame. Pure (takes the raw
