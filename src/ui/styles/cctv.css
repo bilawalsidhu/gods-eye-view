@@ -172,7 +172,8 @@
 #cctv-enable-btn.active,
 #cctv-coverage-btn.active,
 #cctv-auto-hop-btn.active,
-#cctv-projection-btn.active {
+#cctv-projection-btn.active,
+#cctv-vehicles-btn.active {
   color: var(--accent);
   border-color: var(--accent);
   background: rgba(0, 212, 255, 0.14);
