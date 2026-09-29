@@ -2353,6 +2353,7 @@
       "src/sources/requestDeadline.js",
       "src/layers/traffic/lifecycle.js",
       "src/layers/traffic/model.js",
+      "src/layers/traffic/observed.js",
       "src/layers/traffic/policy.js",
       "src/layers/traffic/rendering.js",
       "src/layers/traffic/retention.js",
@@ -3076,3 +3077,4 @@
     "external": []
   }
 }
+
