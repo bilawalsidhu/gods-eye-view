@@ -1,5 +1,13 @@
 # Changelog
 
+- Surface optional observed-traffic evidence in CCTV presentation without
+  coupling cameras to a detector. A configured #830 source can annotate the
+  active camera and ambient thumbnail cards with the freshest camera-scoped
+  measured rate/class mix, age and provenance. Missing sources add no UI;
+  configured cameras without evidence show UNKNOWN, stale/error-backed evidence
+  is never presented as current, and multiple approach records are deliberately
+  not summed (#829).
+
 - Add a provider-neutral observed-traffic source contract behind Street Traffic.
   External producers can supply bounded road-segment, approach or intersection
   observations with timestamps, coarse counts/rates, movements, quality and
