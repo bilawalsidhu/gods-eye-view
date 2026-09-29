@@ -463,7 +463,7 @@ async function flyKeylessGeocode(viewer, query, options) {
 
   let payload;
   try {
-    const response = await fetch(api.geocode(params.join('&')));
+    const response = await fetch(api.geocode(params.join('&')), { signal: options.signal });
     if (!response?.ok) return null;
     payload = await response.json();
   } catch {
@@ -542,6 +542,10 @@ async function flyKeylessGeocode(viewer, query, options) {
  *   and stands down the locality sanity gate.
  * @param {Function} [options.beforeFly] - Veto hook; returning false cancels
  *   before the camera moves (searchAndFlyTo then returns CANCELLED_SEARCH).
+ * @param {AbortSignal} [options.signal] - Cancels the in-flight lookup's
+ *   network fetches (geocode, Places recovery). The owner aborts it when the
+ *   lookup is superseded or the app is tearing down, so a disposed session
+ *   stops paying for a search nobody will read.
  * @param {Function} [options.onStart] - Called when the flight starts.
  * @param {Function} [options.onComplete] - Called when the flight completes.
  * @param {Function} [options.onCancel] - Called when the flight is cancelled.
@@ -583,7 +587,7 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
   let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
   const bias = viewportBias(viewer);
   if (bias) url += `&bounds=${bias}`;
-  const response = await fetch(url);
+  const response = await fetch(url, { signal: options.signal });
   const data = await response.json();
 
   const result = (data.status === 'OK' && data.results?.length) ? data.results[0] : null;
@@ -596,7 +600,7 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
   // Places-near-view recovery (annotationResolver's twin): a missed geocode, or one
   // that landed implausibly far from the view centre, snaps back to a view-biased
   // Places hit within the trust bound — "the Capitol" means the one on screen.
-  const recovered = await placesNearViewRecovery(viewer, query, result ? { lat, lon: lng } : null);
+  const recovered = await placesNearViewRecovery(viewer, query, result ? { lat, lon: lng } : null, options.signal);
   if (recovered) {
     lat = recovered.lat;
     lng = recovered.lon;

@@ -6497,6 +6497,10 @@ export class StyleManager {
     this._globalStatusNotice = null;
     if (this._globalLoadingStatus) this._globalLoadingStatus.hidden = true;
     this._disposed = true;
+    // Cancel the active location lookup's network fetches: the result would be
+    // generation-guarded away anyway, but the fetch (and its Places recovery)
+    // would keep running to completion after teardown.
+    this._locationSearchAbort?.abort();
     // Revoke persistence/hash authority before teardown can emit manager changes.
     this._layerStateCoordinator?.destroy();
     this._layerStateCoordinator = null;

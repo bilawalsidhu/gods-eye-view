@@ -76,8 +76,16 @@ export function initLocationBar(mgr) {
       }
       mgr._activeLocationSearchGeneration = generation;
       mgr._locationSearch.classList.add('searching');
+      // This lookup's AbortController: a newer search supersedes the old
+      // in-flight one (its result is generation-guarded away anyway), and
+      // dispose() aborts it so teardown stops paying for a search nobody
+      // will read. AbortError settles silently — it is not a failure.
+      mgr._locationSearchAbort?.abort();
+      const lookupAbort = new AbortController();
+      mgr._locationSearchAbort = lookupAbort;
       try {
         const destination = await searchAndFlyTo(mgr.viewer, query, {
+          signal: lookupAbort.signal,
           beforeFly: () => mgr._reassertNavigationHandoff(generation),
         });
         if (mgr._disposed || generation !== mgr._navigationGeneration) return;
@@ -101,8 +109,9 @@ export function initLocationBar(mgr) {
           mgr._showToast('Location not found');
         }
       } catch (err) {
+        if (mgr._disposed || generation !== mgr._navigationGeneration
+          || err?.name === 'AbortError') return;
         logError('Search', 'Geocoding failed:', err);
-        if (mgr._disposed || generation !== mgr._navigationGeneration) return;
         mgr._showToast('Search failed');
       } finally {
         mgr._settleLocationSearchUi(generation);
