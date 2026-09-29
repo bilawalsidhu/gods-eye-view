@@ -154,6 +154,29 @@ test('fetchOverpassPayload: rate-limited and 5xx mirrors fall through to a clean
   }
 });
 
+test('fetchOverpassPayload: every mirror gets the identifying User-Agent', async () => {
+  const agents = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (_endpoint, init) => {
+    agents.push(init?.headers?.['User-Agent'] || null);
+    // First mirror declines so the fan-out is actually exercised.
+    if (agents.length === 1) return new Response('gateway timeout', { status: 504 });
+    return new Response('{"elements":[]}', { status: 200 });
+  };
+  try {
+    await fetchOverpassPayload(body('[out:json];node;out;'));
+    assert.equal(agents.length, 2, 'one refusal, one answer');
+    for (const agent of agents) {
+      // The OSM usage policy wants an identifying application + version —
+      // a bare "proxy" label is not one, and a mirror may 406 it.
+      assert.match(agent, /^gods-eye-view\/\d/);
+      assert.match(agent, /\+https:\/\//);
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 test('fetchOverpassPayload: an oversized response is skipped for the next mirror', async () => {
   const { calls, restore } = scriptFetch([
     // Declared content-length above the cap -> readTextCapped reports tooLarge.

@@ -39,6 +39,20 @@ export const OVERPASS_UPSTREAMS = Object.freeze([
   'https://overpass.private.coffee/api/interpreter',
 ]);
 
+/**
+ * User-Agent sent to every Overpass mirror.
+ *
+ * The OSM API usage policy asks for a "Valid User-Agent identifying
+ * application and version"; a generic proxy label is not one. A mirror is
+ * free to refuse a client it cannot identify (overpass-api.de has answered
+ * 406 to unnamed proxies while other mirrors answer 200 to the same query),
+ * and a refusal is never data — the query falls through to whatever mirrors
+ * are left. Keep this honest and stable — if it is ever refused, the answer
+ * is less query volume, not a new name. (Ported from upstream.)
+ */
+export const OVERPASS_USER_AGENT =
+  'gods-eye-view/0.1 (+https://github.com/aliasfoxkde/Globe)';
+
 /** Per-upstream fetch timeout (ms). */
 export const OVERPASS_TIMEOUT_MS = 22000;
 /**
@@ -394,7 +408,7 @@ export async function fetchOverpassPayload(body, maxResponseBytes = OVERPASS_MAX
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': 'gods-eye-view-overpass-proxy/1.0',
+          'User-Agent': OVERPASS_USER_AGENT,
         },
         body,
         signal: controller.signal,
