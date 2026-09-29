@@ -27,9 +27,9 @@ test('the complete Realtime tool payload pins the additive analyst, satellite, L
     .digest('hex');
   assert.equal(
     digest,
-    // Re-derived for the additive `local-adsb` set_layer_visibility value and
-    // the Cyber HUD layout; the separate sonar tool is excluded above.
-    '590d537d93e132ac64ac5e211ad5bb9d7d1b1f22e2dd963dda5465fab4510a3b',
+    // Re-derived for the additive `local-adsb` and `gdacs-alerts` layer
+    // values and the Cyber HUD layout; the separate sonar tool is excluded above.
+    'b5fb4528e1ca0b4e61cbf737e4837b7bc0ab3326d8c2e174ec520ffbb31ce458',
   );
 });
 
@@ -109,7 +109,9 @@ test('all legacy action arguments are byte-identical after removing the delibera
   for (const tool of legacy) {
     for (const value of Object.values(tool.parameters.properties)) {
       if (value.enum)
-        value.enum = value.enum.filter((key) => key !== 'fire-perimeters');
+        value.enum = value.enum.filter(
+          (key) => !['fire-perimeters', 'gdacs-alerts'].includes(key),
+        );
     }
   }
   // Independently derived by executing trusted c9f9896 actionSchemas in the restricted container.
