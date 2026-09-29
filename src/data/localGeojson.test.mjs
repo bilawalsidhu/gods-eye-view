@@ -358,6 +358,152 @@ test('real layer disable clears its published host entries and balances settle l
   env.cleanup();
 });
 
+test('disable releases the data source entirely; re-enable rebuilds from cache without refetching', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  globalThis.window = { dispatchEvent() {} };
+  const dataSources = [];
+  const viewer = {
+    selectedEntity: undefined,
+    dataSources: {
+      add(dataSource) { dataSources.push(dataSource); return dataSource; },
+      remove(dataSource) {
+        const index = dataSources.indexOf(dataSource);
+        if (index >= 0) dataSources.splice(index, 1);
+        return index >= 0;
+      },
+    },
+    camera: {
+      positionWC: Cesium.Cartesian3.fromDegrees(-97.695, 30.205, 100_000),
+      frustum: { fov: Math.PI / 3 },
+      moveEnd: new MockLayerEvent(),
+      flyTo() {},
+    },
+    scene: {
+      canvas: { clientWidth: 800, clientHeight: 600 },
+      preRender: new MockLayerEvent(),
+      sampleHeightSupported: false,
+      sampleHeight: () => 150,
+      screenSpaceCameraController: { enableInputs: true },
+      pick() { return null; },
+      requestRender() {},
+    },
+  };
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    return { ok: true, status: 200, text: async () => RUNTIME_DAM_FEATURE };
+  };
+  const layer = createLocalGeoJsonLayer({
+    id: 'local-dams',
+    url: '/runtime-dam.geojsonl',
+    name: 'Runtime Dams',
+    color: '#0088ff',
+    overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
+    projectToWindow: () => ({ x: 400, y: 300 }),
+    screenSpaceEventHandlerFactory: () => ({ setInputAction() {}, destroy() {} }),
+  });
+  try {
+    await layer.enable(viewer);
+    assert.equal(dataSources.length, 1, 'layer is loaded');
+
+    // Toggle off: the source leaves the scene entirely. A HIDDEN source still
+    // costs DataSourceDisplay a per-frame visualizer walk over every entity —
+    // the "sluggish after toggle-off" field report — so release, don't park.
+    layer.disable(viewer);
+    assert.equal(dataSources.length, 0, 'disable must remove the data source');
+    assert.equal(fetchCalls, 1);
+
+    // Toggle on: the rebuild is served from the cached parsed features.
+    await layer.enable(viewer);
+    assert.equal(fetchCalls, 1, 'a cached re-enable must not refetch');
+    assert.equal(dataSources.length, 1, 'the rebuilt source is back in the scene');
+    assert.equal(layer.getStats().count, 1);
+
+    // And the built entities really were dropped, not carried over: the
+    // rebuilt source is a NEW object, not the released one re-shown.
+    layer.disable(viewer);
+    await layer.enable(viewer);
+    assert.equal(fetchCalls, 1, 'still no refetch on the second re-enable');
+    assert.equal(dataSources.length, 1);
+    layer.destroy(viewer);
+    assert.equal(dataSources.length, 0, 'destroy releases the rebuilt source');
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  }
+});
+
+test('a disable that lands while the load is in flight releases the finished build', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  globalThis.window = { dispatchEvent() {} };
+  const dataSources = [];
+  const viewer = {
+    selectedEntity: undefined,
+    dataSources: {
+      add(dataSource) { dataSources.push(dataSource); return dataSource; },
+      remove(dataSource) {
+        const index = dataSources.indexOf(dataSource);
+        if (index >= 0) dataSources.splice(index, 1);
+        return index >= 0;
+      },
+    },
+    camera: {
+      positionWC: Cesium.Cartesian3.fromDegrees(-97.695, 30.205, 100_000),
+      frustum: { fov: Math.PI / 3 },
+      moveEnd: new MockLayerEvent(),
+      flyTo() {},
+    },
+    scene: {
+      canvas: { clientWidth: 800, clientHeight: 600 },
+      preRender: new MockLayerEvent(),
+      sampleHeightSupported: false,
+      sampleHeight: () => 150,
+      screenSpaceCameraController: { enableInputs: true },
+      pick() { return null; },
+      requestRender() {},
+    },
+  };
+  let releaseFetch;
+  let fetchCalls = 0;
+  globalThis.fetch = () => new Promise((resolve) => {
+    fetchCalls += 1;
+    releaseFetch = () => resolve({ ok: true, status: 200, text: async () => RUNTIME_DAM_FEATURE });
+  });
+  const layer = createLocalGeoJsonLayer({
+    id: 'local-dams',
+    url: '/runtime-dam.geojsonl',
+    name: 'Runtime Dams',
+    color: '#0088ff',
+    overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
+    projectToWindow: () => ({ x: 400, y: 300 }),
+    screenSpaceEventHandlerFactory: () => ({ setInputAction() {}, destroy() {} }),
+  });
+  try {
+    const enabling = layer.enable(viewer);
+    layer.disable(viewer);
+    releaseFetch();
+    await enabling;
+    // The load finished after the toggle-off: the source it built must be
+    // released, not parked invisible in the scene. The parsed features it
+    // cached while loading remain valid, so getStats still reports the
+    // dataset it holds for the next enable.
+    assert.equal(dataSources.length, 0, 'the post-disable build must not park in the scene');
+    assert.equal(layer.getStats().count, 1);
+
+    await layer.enable(viewer);
+    assert.equal(fetchCalls, 1, 'the released build had already cached its features — no refetch');
+    assert.equal(dataSources.length, 1);
+    layer.destroy(viewer);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  }
+});
+
 test('unchanged moveEnds do not redefine stem constants and real tip changes update once', async () => {
   const env = await createRealLocalLayerHarness();
   env.preRender.raise();

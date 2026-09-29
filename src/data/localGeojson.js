@@ -3,6 +3,7 @@ import { governorRequestRender } from '../renderGovernor.js';
 import {
   clearSelectedEntityContextForLayer,
   registerEntityContext,
+  removeEntityContextsForLayer,
   selectEntityContext,
 } from './contextStore.js';
 import {
@@ -310,6 +311,18 @@ export function createLocalGeoJsonLayer({
   projectToWindow = (scene, position) => Cesium.SceneTransforms.worldToWindowCoordinates(scene, position),
 }) {
   let _dataSource = null;
+  /**
+   * The parsed bundled dataset, kept across disable/enable so a re-enable
+   * rebuilds entities without refetching. The Cesium entities themselves are
+   * NOT kept: a hidden data source still costs every frame
+   * (DataSourceDisplay walks every visualizer over every entity regardless of
+   * `show`), and the ~11k entities of the three bundled layers hold hundreds
+   * of MB, so leaving them parked after a toggle-off made the whole scene
+   * render ~2x slower for the rest of the session (owner field test
+   * 2026-09-13; ported from upstream).
+   * @type {Array<object>|null}
+   */
+  let _cachedFeatures = null;
   let _enabled = false;
   let _clickHandler = null;
   let _count = 0;
@@ -372,10 +385,31 @@ export function createLocalGeoJsonLayer({
     host: overlayHost,
   });
 
+  /**
+   * Take the built entities out of the scene entirely. The parsed features
+   * stay cached, so the next enable() rebuilds without a fetch; what must not
+   * survive a disable is the per-frame visualizer walk and the entity memory.
+   * @param {object} viewer Viewer that owned the data source.
+   */
+  const releaseDataSource = (viewer) => {
+    if (!_dataSource) return;
+    const source = _dataSource;
+    _dataSource = null;
+    _stemRecords = [];
+    _stemGeometryDirty = true;
+    _lastVisibilityUpdate = Number.NEGATIVE_INFINITY;
+    removeEntityContextsForLayer(id);
+    try {
+      viewer?.dataSources?.remove(source, true);
+    } catch {
+      /* already gone */
+    }
+  };
+
   const disableLayer = (viewer) => {
     _enabled = false;
     clearGroundRetryRender();
-    if (_dataSource) _dataSource.show = false;
+    releaseDataSource(viewer);
     _overlayPublisher.hide();
     clearSelectedEntityContextForLayer(id);
     if (viewer?.selectedEntity?.__localLayerId === id) {
@@ -441,16 +475,23 @@ export function createLocalGeoJsonLayer({
         // windows (before vs after the add settles) need different cleanup.
         let addedToScene = false;
         try {
-          const response = await fetch(url);
-          // A 404 returns an HTML body that would otherwise die in JSON.parse
-          // one line later, reported as a parse error for a missing file.
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status ?? '?'}`);
+          // The parsed dataset is cached across disable/enable (the entities
+          // are NOT — see releaseDataSource) so a re-enable rebuilds without
+          // a refetch or re-parse.
+          let features = _cachedFeatures;
+          if (!features) {
+            const response = await fetch(url);
+            // A 404 returns an HTML body that would otherwise die in JSON.parse
+            // one line later, reported as a parse error for a missing file.
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status ?? '?'}`);
+            }
+            const text = await response.text();
+            const lines = text.split('\n').filter(l => l.trim().length > 0);
+
+            features = lines.map(line => JSON.parse(line));
+            _cachedFeatures = features;
           }
-          const text = await response.text();
-          const lines = text.split('\n').filter(l => l.trim().length > 0);
-          
-          const features = lines.map(line => JSON.parse(line));
           
           const geojson = {
             type: 'FeatureCollection',
@@ -732,9 +773,14 @@ export function createLocalGeoJsonLayer({
       }
 
       // Honor a disable() that landed while we were awaiting the fetch/parse:
-      // disable() runs before _dataSource exists, so its show=false is a no-op —
-      // reading _enabled here (rather than forcing true) respects the toggle-off.
-      if (_dataSource) _dataSource.show = _enabled;
+      // the source would otherwise be added invisible-but-alive, still paying
+      // every frame. Release it (entities dropped, features stay cached) and
+      // leave _dataSource null so a later enable() rebuilds cleanly.
+      if (!_enabled) {
+        releaseDataSource(viewer);
+        return;
+      }
+      if (_dataSource) _dataSource.show = true;
       viewer.scene.requestRender?.();
     },
 
@@ -750,11 +796,11 @@ export function createLocalGeoJsonLayer({
         _clickHandler.destroy();
         _clickHandler = null;
       }
-      if (_dataSource && viewer) {
-        viewer.dataSources.remove(_dataSource, true);
-      }
+      // disableLayer above already released the data source from the scene;
+      // nothing here may remove it a second time.
       _overlayPublisher.destroy();
       _dataSource = null;
+      _cachedFeatures = null;
       _stemRecords = [];
       _count = 0;
       _lastUpdate = null;

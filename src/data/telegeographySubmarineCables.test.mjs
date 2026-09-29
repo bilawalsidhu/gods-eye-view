@@ -744,12 +744,17 @@ test('an abort landing at the post-cable-GeoJson boundary stops the stale load b
     env.layer.disable();
     env.layer.enable(env.viewer);
     await env.settle();
-    assert.equal(geojson.calls.length, 1, 'stale load A must not start the landing GeoJson build');
+    // Two builds STARTED: A's cable build (now resolved) and load B's own
+    // cable build — B rebuilds from the warm fetch cache (A cached the JSON
+    // while it still owned the layer) and so has no fetch to park on. A third
+    // call would mean stale A started the landing build, which is the
+    // ownership violation this test exists to catch.
+    assert.equal(geojson.calls.length, 2, 'stale load A must not start the landing GeoJson build');
 
     env.releaseAll();
     await env.settle();
     await geojson.drainOpen(() => env.settle());
-    assert.equal(geojson.calls.length, 3, 'load B adds its own two GeoJson builds');
+    assert.equal(geojson.calls.length, 3, 'load B completes the rebuild from its cached JSON');
     assert.equal(env.addCalls.count, 3);
     assert.equal(env.dataSources.length, 3);
     assert.equal(env.layer.getStats().count, 2);
@@ -958,6 +963,61 @@ test('destroy mid-load stays clean and a re-enabled layer reloads exactly once',
     env.releaseAll();
     await env.settle();
     assert.equal(env.addCalls.count, 3, 'the destroyed load added nothing; the re-enable added once');
+    assert.equal(env.dataSources.length, 3);
+    assert.equal(env.layer.getStats().count, 2);
+  } finally {
+    env.layer.destroy(env.viewer);
+    env.cleanup();
+  }
+});
+
+test('disable releases the built data sources; re-enable rebuilds from cache without refetching', async () => {
+  const env = createDeferredCableLayerHarness();
+  try {
+    env.layer.enable(env.viewer);
+    env.releaseAll();
+    await env.settle();
+    assert.equal(env.dataSources.length, 3, 'layer is fully loaded');
+
+    // Toggle off: the three sources leave the scene entirely (a hidden source
+    // still costs DataSourceDisplay a per-frame visualizer walk — the "sluggish
+    // after toggle-off" report), and the fetched JSON is what survives.
+    env.layer.disable();
+    await env.settle();
+    assert.equal(env.dataSources.length, 0, 'disable must remove every data source');
+
+    // Toggle on: the rebuild is served from the fetch cache — no network.
+    env.layer.enable(env.viewer);
+    await env.settle();
+    assert.equal(env.pendingFetches.length, 0, 'a cached re-enable must not refetch');
+    assert.equal(env.dataSources.length, 3, 'the rebuilt trio is back in the scene');
+    assert.equal(env.addCalls.count, 6, 'two trios added in total (one per enable)');
+    assert.equal(env.layer.getStats().count, 2);
+  } finally {
+    env.layer.destroy(env.viewer);
+    env.cleanup();
+  }
+});
+
+test('a disable that lands mid-load caches nothing; the next enable refetches', async () => {
+  const env = createDeferredCableLayerHarness();
+  try {
+    // Load A's fetches are aborted before they can settle, so A never owns a
+    // completed fetch and must not poison the cache with a partial pair.
+    env.layer.enable(env.viewer);
+    assert.equal(env.pendingFetches.length, 2);
+    env.layer.disable();
+    await env.settle();
+
+    env.layer.enable(env.viewer);
+    assert.equal(
+      env.pendingFetches.filter((entry) => !entry.settled).length,
+      2,
+      'the re-enable after a mid-load disable refetches both documents',
+    );
+    env.releaseAll();
+    await env.settle();
+    assert.equal(env.addCalls.count, 3, 'only the second load adds a trio');
     assert.equal(env.dataSources.length, 3);
     assert.equal(env.layer.getStats().count, 2);
   } finally {
