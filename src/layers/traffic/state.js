@@ -1,6 +1,7 @@
 import { normalizeRoadMode } from './roadModes.js';
 import * as Cesium from 'cesium';
 import { FLOW_BUCKET_COLORS, TRAFFIC_TIMING_ENABLED } from './policy.js';
+import { emptyObservedTrafficSnapshot } from './observed.js';
 
 export function createState({ services }) {
   const layerState = {};
@@ -241,6 +242,16 @@ export function createState({ services }) {
   layerState._roadPartial = false;
   layerState._roadRetryStopped = false;
   layerState._retryAttempts = 0;
+
+  /**
+   * Optional provider-neutral measured traffic. It is intentionally separate
+   * from TomTom flow and simulated dots so no consumer can silently relabel
+   * estimated/simulated state as an observation.
+   */
+  layerState._observedTrafficSnapshot = emptyObservedTrafficSnapshot();
+  layerState._observedTrafficLoading = false;
+  layerState._observedTrafficGeneration = 0;
+  layerState._observedTrafficListeners = new Set();
 
   /** Parsed road set whose current flow request owns the feed status. */
   layerState._flowRoads = null;

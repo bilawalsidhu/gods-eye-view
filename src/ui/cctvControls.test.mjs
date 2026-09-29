@@ -47,6 +47,42 @@ function fixture(t) {
   return { controls, requests };
 }
 
+test('observed traffic row is hidden when absent and renders camera evidence when present', (t) => {
+  const { controls } = fixture(t);
+  const row = { hidden: true, textContent: '', dataset: {} };
+  controls._cctvTrafficObservation = row;
+  controls._lastSeenCctvActiveId = 'cam-1';
+
+  controls._renderCctvState({
+    enabled: true,
+    activeCameraId: 'cam-1',
+    activeCamera: {
+      id: 'cam-1',
+      trafficObservation: {
+        state: 'fresh',
+        text: 'TRAFFIC OBS · MEASURED · 18 veh/min · 10s ago',
+      },
+    },
+    cameras: [],
+  });
+  assert.equal(row.hidden, false);
+  assert.equal(
+    row.textContent,
+    'TRAFFIC OBS · MEASURED · 18 veh/min · 10s ago',
+  );
+  assert.equal(row.dataset.state, 'fresh');
+
+  controls._renderCctvState({
+    enabled: true,
+    activeCameraId: 'cam-1',
+    activeCamera: { id: 'cam-1', trafficObservation: null },
+    cameras: [],
+  });
+  assert.equal(row.hidden, true);
+  assert.equal(row.textContent, '');
+  assert.equal(row.dataset.state, '');
+});
+
 test('a late image completion cannot replace a newer camera preview', (t) => {
   const { controls, requests } = fixture(t);
   controls._queueCctvFrame('first.jpg', 'a', true);

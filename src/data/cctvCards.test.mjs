@@ -104,6 +104,22 @@ test('thumbnail entry carries the exact shipped contract and stable frame-slot r
   assert.equal(entry.minAnchorSeparationPx, CCTV_CARD_MIN_SEP_PX);
 });
 
+test('thumbnail entry carries at most two compact observation details', () => {
+  const entry = createCctvThumbnailOverlayEntry({
+    id: 'cam-a',
+    position: { x: 1, y: 2, z: 3 },
+    title: 'Main & 5th',
+    frameSlot: createFrameSlot(),
+    details: ['OBSERVED · 18 veh/min', '83% car · 17% heavy vehicle', 'extra'],
+  });
+  assert.deepEqual(entry.details, [
+    'OBSERVED · 18 veh/min',
+    '83% car · 17% heavy vehicle',
+  ]);
+});
+
+
+
 test('active CCTV thumbnail is protected while ambient and pinned policies stay distinct', () => {
   const base = { id: 'cam-a', position: { x: 1, y: 2, z: 3 }, title: 'A', frameSlot: createFrameSlot() };
   const ambient = createCctvThumbnailOverlayEntry(base);

@@ -53,6 +53,8 @@ export function createLifecycle({
      * @param {Cesium.Viewer} viewer - The Cesium viewer instance.
      */
     async init(viewer) {
+      layerState._observedTrafficUnsubscribe?.();
+      layerState._observedTrafficUnsubscribe = null;
       layerState._sourceAbort?.abort();
       const sourceAbort = new AbortController();
       layerState._sourceAbort = sourceAbort;
@@ -326,6 +328,13 @@ export function createLifecycle({
 
       await parts.health.syncHealthState(true);
       parts.rendering.refreshCoverageStyles();
+      layerState._observedTrafficUnsubscribe =
+        services.observedTraffic?.subscribe?.(() => {
+          if (!layerState._viewer) return;
+          if (layerState._enabled) parts.cards.pushAmbientCardEntries();
+          parts.presentation.notifyListeners();
+          layerState._viewer.scene?.requestRender?.();
+        }) || null;
       parts.presentation.notifyListeners();
       restoreSpriteOrder(layerState._viewer);
       console.log('[Data:CCTV] Initialized with', layerState._count, 'cameras');
@@ -416,6 +425,8 @@ export function createLifecycle({
      */
     destroy(viewer) {
       services.credits?.hideOsmCredit?.(layerState._viewer, 'cctv');
+      layerState._observedTrafficUnsubscribe?.();
+      layerState._observedTrafficUnsubscribe = null;
       layerState._sourceAbort?.abort();
       if (typeof document !== 'undefined')
         document.removeEventListener(

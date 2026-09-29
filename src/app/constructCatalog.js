@@ -83,6 +83,7 @@ export function createApplicationCatalog({
   vesselOptions,
   resolveAsset,
   nepalBoundaryResolver,
+  observedTrafficSource = null,
 }) {
   if (!signal?.addEventListener)
     throw new TypeError('An application lifetime signal is required');
@@ -129,6 +130,11 @@ export function createApplicationCatalog({
     const satellites = createApplicationSatellites({
       source: sources.satellites,
     });
+    const traffic = createApplicationTraffic({
+      source: sources.traffic,
+      surface,
+      observedSource: observedTrafficSource,
+    });
     const catalog = createLayerCatalog(
       [
         createBhoteKoshiEventLayer(),
@@ -150,8 +156,15 @@ export function createApplicationCatalog({
         createApplicationAlpr({ surface, source: sources.alpr }),
         satellites,
         createApplicationLaunches({ source: sources.launches, satellites }),
-        createApplicationTraffic({ source: sources.traffic, surface }),
-        createApplicationCctv({ surface, source: sources.cctv }),
+        traffic,
+        createApplicationCctv({
+          surface,
+          source: sources.cctv,
+          observedTraffic: {
+            getSnapshot: () => traffic.getObservedTrafficSnapshot(),
+            subscribe: (callback) => traffic.subscribeObservedTraffic(callback),
+          },
+        }),
         createApplicationRadio({ surface, source: sources.radio }),
         createApplicationTransit({ surface, source: sources.transit }),
         createApplicationBikeshare({ source: sources.bikeshare }),

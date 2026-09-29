@@ -1,5 +1,63 @@
 # God's Eye View Current State
 
+## CCTV observed-traffic summaries — September 28, 2026
+
+CCTV can consume the provider-neutral observed-traffic snapshot introduced by
+#830 as a **read-only presentation input**. The application catalog passes CCTV
+only `getSnapshot()` and `subscribe()`; CCTV cannot refresh or mutate the
+traffic source. Snapshot changes are event-driven, so there is no camera-side
+polling loop.
+
+For each camera, presentation selects the freshest record whose `cameraId`
+matches that camera. It deliberately does not sum multiple approach or
+road-segment records because their windows may overlap or describe different
+movements. A fresh record can show a compact measured rate, class mix,
+quality, observation age and provenance. Ambient world thumbnail cards receive at most
+two terse detail lines; the main CCTV panel gets a secondary `TRAFFIC OBS`
+row below the existing camera/source metadata.
+
+Presentation states remain explicit:
+
+- no observed source configured → no observation row/card details
+- configured source but no matching camera evidence → `UNKNOWN`
+- fresh evidence → `MEASURED`
+- partial snapshot → `PARTIAL`
+- expired or error-backed last evidence → `STALE`
+- source error with no retained camera evidence → `UNAVAILABLE`
+
+Camera health, source state and calibration remain visually primary. This slice
+adds no CV runtime, raw-video transport, identity/person/plate fields or
+automatic observation refresh. It is the presentation follow-up for upstream
+#829 and stacks on the #830 contract implementation (#844).
+
+## Provider-neutral observed traffic — September 28, 2026
+
+Street Traffic accepts an optional observed-traffic source without coupling the
+layer to CCTV or a computer-vision runtime. Embedders pass an `observedSource`
+to `createTrafficLayer`, or the standalone composition can bind one through
+`configureObservedTrafficSource`. The source exposes one bounded
+`request(query, { signal })` method; `createObservedTrafficSource({ read })`
+wraps an external producer with normalization and fixed error semantics.
+
+Normalized records keep measured evidence separate from the layer's existing
+TomTom/provider-estimated flow and simulated dots. Each record has stable source
+identity and observation time, optional observation-window and camera identity,
+one geographic association (`road-segment`, `approach` or `intersection`),
+coarse rate/count/movement measurements, optional quality and provenance.
+Coordinates, records, count keys, movements and strings are bounded. Invalid
+siblings are dropped while valid records survive and mark the snapshot partial.
+
+Snapshot state is explicitly `unconfigured`, `empty`, `fresh`, `partial`,
+`stale` or `error`. Stale evidence is retained as stale rather than silently
+becoming current. Provider error text is not surfaced; cancellation propagates.
+The Traffic stats expose observed-source state under `observedTraffic`, so an
+observed-source outage does not turn otherwise healthy Street Traffic into a
+degraded TomTom/road-source state. No observed source is configured by default,
+so this contract adds no polling, rendering or network work to the shipped app.
+
+This is the generic contract required by upstream #830. CCTV cards/rendering and
+the bounded corridor prototype remain separate follow-ups (#829 and #831).
+
 ## Cyber HUD — September 23, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice

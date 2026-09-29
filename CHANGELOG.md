@@ -1,5 +1,22 @@
 # Changelog
 
+- Surface optional observed-traffic evidence in CCTV presentation without
+  coupling cameras to a detector. A configured #830 source can annotate the
+  active camera and ambient thumbnail cards with the freshest camera-scoped
+  measured rate/class mix, quality, age and provenance. Missing sources add no UI;
+  configured cameras without evidence show UNKNOWN, stale/error-backed evidence
+  is never presented as current, and multiple approach records are deliberately
+  not summed (#829).
+
+- Add a provider-neutral observed-traffic source contract behind Street Traffic.
+  External producers can supply bounded road-segment, approach or intersection
+  observations with timestamps, coarse counts/rates, movements, quality and
+  provenance. The contract normalizes malformed siblings fail-soft, distinguishes
+  fresh/partial/stale/error states, caps payload size, preserves cancellation and
+  keeps observed-source health separate from TomTom flow and simulated traffic.
+  With no observed source configured the shipped Traffic behavior is unchanged
+  (#830).
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a

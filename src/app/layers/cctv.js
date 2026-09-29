@@ -9,7 +9,11 @@ import * as focus from '../../data/focusDeemphasis.js';
 import * as render from '../../renderGovernor.js';
 
 /** Construct one layer using the application scene owners and a supplied source. */
-export function createApplicationCctv({ surface, source }) {
+export function createApplicationCctv({
+  surface,
+  source,
+  observedTraffic = null,
+}) {
   const { terrain, groundFloor: ground, meshFloor: mesh } = surface;
   return createCctvLayer({
     source,
@@ -25,6 +29,7 @@ export function createApplicationCctv({ surface, source }) {
       mesh,
       focus,
       render,
+      observedTraffic,
     },
   });
 }
