@@ -177,8 +177,17 @@ test('an enabled refresh draws one point per reading, labelling raised and high 
   );
   assert.ok(entities.every((entity) => !entity.label));
   assert.deepEqual(
-    entities.map(({ point }) => point.pixelSize.getValue()),
-    [13, 11, 6],
+    entities.map(({ point }) => [
+      point.pixelSize.getValue(),
+      point.outlineWidth.getValue(),
+      point.scaleByDistance?.getValue() instanceof Cesium.NearFarScalar,
+    ]),
+    [
+      [13, 1, false],
+      [11, 1, false],
+      [6, 0, true],
+    ],
+    'typical readings are drawn quietly, raised and high at full size',
   );
   assert.deepEqual(labels(), [
     ['safecast-1', 'Kryva Hora 2.73 µSv/h', false],
@@ -192,10 +201,10 @@ test('an enabled refresh draws one point per reading, labelling raised and high 
   assert.deepEqual(
     controls.legend.map(({ label, count }) => [label, count]),
     [
-      ['1 µSv/h or more', 1],
-      ['0.5–1 µSv/h', 1],
-      ['0.2–0.5 µSv/h', 0],
-      ['Under 0.2 µSv/h', 1],
+      ['High · 1 µSv/h or more', 1],
+      ['Raised · 0.5–1 µSv/h', 1],
+      ['Elevated · 0.2–0.5 µSv/h', 0],
+      ['Typical · under 0.2 µSv/h', 1],
     ],
   );
   assert.match(controls.legend[0].blurb, /Not an official warning/);
@@ -247,6 +256,43 @@ test('the row lists only the 25 highest readings and says so', async () => {
   assert.equal(controls.list.items.length, 25);
   assert.equal(controls.list.items[0].id, 'bfs-DEZ100');
   assert.match(controls.info, /List shows the 25 highest readings/);
+});
+
+test('rows of sensors that share a name carry their number, and totals use separators', async () => {
+  const many = Array.from({ length: 1_200 }, (_, index) =>
+    reading(`bfs-DEZ${1000 + index}`, 0.1, 10, 50),
+  );
+  const { layer } = harness(
+    snapshot([HIGH, { ...HIGH, id: 'safecast-7', usvh: 1.5 }, ...many]),
+  );
+  layer.enable();
+  await layer.update();
+  const controls = layer.getRowControls();
+  assert.deepEqual(
+    controls.list.items.slice(0, 2).map(({ text }) => text),
+    ['Kryva Hora #1 · UA · Safecast', 'Kryva Hora #7 · UA · Safecast'],
+  );
+  assert.equal(
+    controls.list.items[2].text,
+    'Station bfs-DEZ1000 · DE · BfS ODL',
+  );
+  assert.match(controls.info, /^1,202 readings · 1,200 BfS ODL · 2 Safecast/);
+});
+
+test('a renamed station keeps its point and relabels it', async () => {
+  let name = 'Kryva Hora';
+  const { layer, sources, labels } = harness(async () => ({
+    readings: [{ ...HIGH, name }],
+  }));
+  layer.enable();
+  await layer.update();
+  const [first] = sources[0].entities.values;
+  name = 'Kryva Hora village';
+  await layer.update();
+  assert.equal(sources[0].entities.values[0], first);
+  assert.deepEqual(labels(), [
+    ['safecast-1', 'Kryva Hora village 2.73 µSv/h', false],
+  ]);
 });
 
 test('an identical snapshot leaves the drawn entities untouched', async () => {
@@ -317,7 +363,7 @@ test('choosing a list row selects the reading, moves the camera and offers the s
     controls.info,
     [
       'Limbach (DE)',
-      '0.100 µSv/h · BfS ODL',
+      'Typical · 0.100 µSv/h · BfS ODL',
       '1-hour mean ending 2026-09-29 20:00 UTC',
       'Station DEZ1',
       'Ambient dose rate, not an official warning',
@@ -337,7 +383,7 @@ test('choosing a list row selects the reading, moves the camera and offers the s
     layer.getRowControls().info,
     [
       'Kryva Hora (UA)',
-      '2.73 µSv/h · Safecast',
+      'High · 2.73 µSv/h · Safecast',
       'Measured 2026-09-29 20:00 UTC',
       '911 CPM on an LND 7318 tube (334 CPM = 1 µSv/h)',
       'Ambient dose rate, not an official warning',
@@ -406,7 +452,10 @@ test('globe clicks select owned points, yield to sibling picks and clear on empt
 
   click({ id: sources[0].entities.values[1] });
   assert.equal(layer.getDiagnostics().selectedId, 'bfs-DEZ1');
-  assert.equal(sources[0].entities.values[1].point.pixelSize.getValue(), 16);
+  const point = sources[0].entities.values[1].point;
+  assert.equal(point.pixelSize.getValue(), 16);
+  assert.equal(point.outlineWidth.getValue(), 3);
+  assert.equal(point.scaleByDistance, undefined, 'a selection is full size');
   click({ id: 'aircraft-1' });
   assert.equal(
     layer.getDiagnostics().selectedId,
@@ -415,7 +464,9 @@ test('globe clicks select owned points, yield to sibling picks and clear on empt
   );
   click(undefined);
   assert.equal(layer.getDiagnostics().selectedId, null);
-  assert.equal(sources[0].entities.values[1].point.pixelSize.getValue(), 6);
+  assert.equal(point.pixelSize.getValue(), 6);
+  assert.equal(point.outlineWidth.getValue(), 0);
+  assert.ok(point.scaleByDistance.getValue() instanceof Cesium.NearFarScalar);
 
   layer.disable();
   assert.equal(handlers[0].destroyed, true);

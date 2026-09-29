@@ -40,6 +40,10 @@ const safecastFeed = () => [
     lnd_7318u: 40,
     device_contact_name: 'Private Person',
     device_contact_email: 'someone@example.com',
+    device_urn: 'note:dev:863740067201258',
+    device_sn: 'Pointcast #99',
+    dev_dashboard: 'https://example.net/dashboard?imei=863740067201258',
+    service_transport: 'udp:203.0.113.7:9000',
   },
 ];
 
@@ -106,7 +110,10 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
         ['safecast-4070352005', 0.12],
       ],
     );
-    assert.doesNotMatch(res.raw, /contact|example\.com|Private Person/);
+    assert.doesNotMatch(
+      res.raw,
+      /contact|example\.(com|net)|Private Person|863740067201258|Pointcast|203\.0\.113|urn|dashboard|transport/,
+    );
   });
 }
 
@@ -177,6 +184,68 @@ test('an upstream failure serves the last copy of a feed as stale, else 502', as
   assert.equal(res.headers['X-Data-Stale'], 'true');
   assert.ok(res.body.feeds.every(({ stale }) => stale));
   assert.equal(res.body.readings.length, 2);
+});
+
+test('a cached copy stops serving readings once they are no longer current', async () => {
+  let clock = NOW;
+  let fail = false;
+  const request = install({
+    now: () => clock,
+    fetchImpl: async (url) => {
+      if (fail) throw new Error('network');
+      return Response.json(feedFor(url));
+    },
+  });
+  await request();
+  fail = true;
+  // The BfS hour ended at 20:00; six hours on it is no longer current.
+  clock = Date.parse('2026-09-30T02:00:01Z');
+  const res = await request();
+  assert.equal(res.status, 200);
+  assert.deepEqual(
+    res.body.feeds.map(({ source, stale, missing }) => [
+      source,
+      stale,
+      missing,
+    ]),
+    [
+      ['bfs', false, true],
+      ['safecast', true, undefined],
+    ],
+  );
+  assert.deepEqual(
+    res.body.readings.map(({ id }) => id),
+    ['safecast-4070352005'],
+  );
+  // A day after its capture the Safecast reading goes too.
+  clock = Date.parse('2026-09-30T20:30:01Z');
+  assert.equal((await request()).status, 502);
+});
+
+test('a feed with rows but none current keeps the last good copy', async () => {
+  let clock = NOW;
+  let late = false;
+  const request = install({
+    now: () => clock,
+    fetchImpl: async (url) => {
+      if (late && url === BFS_URL) {
+        const feed = bfsFeed();
+        feed.features[0].properties.end_measure = '2026-09-29T10:00:00Z';
+        return Response.json(feed);
+      }
+      return Response.json(feedFor(url));
+    },
+  });
+  await request();
+  late = true;
+  clock = NOW + RADIATION_TTL_MS.bfs;
+  const res = await request();
+  assert.deepEqual(res.body.feeds[0], {
+    source: 'bfs',
+    fetchedAt: NOW,
+    stale: true,
+  });
+  assert.ok(res.body.readings.some(({ id }) => id === 'bfs-DEZ2240'));
 });
 
 test('an upstream 429 cools that feed down with no further upstream calls', async () => {

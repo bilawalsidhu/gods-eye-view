@@ -5,6 +5,7 @@ import {
   RADIATION_SOURCE_NAMES,
   SAFECAST_CPM_PER_USVH,
   radiationBand,
+  radiationBandName,
 } from './records.js';
 export * from './records.js';
 export { createRadiationSource } from './source.js';
@@ -18,6 +19,12 @@ const MARKER_PX = Object.freeze({
   typical: 6,
 });
 const SELECTED_PX = 16;
+/**
+ * Bands drawn quietly: smaller with distance and without an outline, so about
+ * 1,600 German stations read as green at world scale instead of a mass of
+ * overlapping black outlines. Raised and high readings keep full size.
+ */
+const QUIET = new Set(['typical', 'elevated']);
 /** Bands whose readings are always labelled on the globe. */
 const LABELLED = new Set(['high', 'raised']);
 const LABEL_PRIORITY = Object.freeze({
@@ -42,7 +49,8 @@ const utc = (ms) =>
   Number.isFinite(ms)
     ? `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`
     : 'unknown';
-const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+const plural = (count, word) =>
+  `${count.toLocaleString('en-US')} ${word}${count === 1 ? '' : 's'}`;
 const clip = (text, max) =>
   text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 /** µSv/h with the precision a reading supports. */
@@ -144,12 +152,17 @@ export function createRadiationLayer({
 
   function styleMarker(reading, entity) {
     const active = reading.id === _selectedId;
-    entity.point.pixelSize = active
-      ? SELECTED_PX
-      : MARKER_PX[radiationBand(reading.usvh)];
+    const band = radiationBand(reading.usvh);
+    entity.point.pixelSize = active ? SELECTED_PX : MARKER_PX[band];
     entity.point.outlineColor = active ? C.Color.WHITE : C.Color.BLACK;
-    entity.point.outlineWidth = active ? 3 : 1;
+    entity.point.outlineWidth = active ? 3 : QUIET.has(band) ? 0 : 1;
+    entity.point.scaleByDistance =
+      !active && QUIET.has(band) ? quietScale() : undefined;
   }
+
+  let _quietScale = null;
+  const quietScale = () =>
+    (_quietScale ||= new C.NearFarScalar(3e5, 1, 1.2e7, 0.35));
 
   /** Name raised and high readings, and the selected one, on the globe. */
   function publishLabels() {
@@ -206,10 +219,14 @@ export function createRadiationLayer({
       _readings.map(({ id, lon, lat, usvh }) => [id, lon, lat, usvh]),
     );
     if (signature === _signature) {
+      let renamed = false;
       for (const reading of _readings) {
         const marker = _markers.get(reading.id);
-        if (marker) marker.reading = reading;
+        if (!marker) continue;
+        renamed ||= marker.reading.name !== reading.name;
+        marker.reading = reading;
       }
+      if (renamed) publishLabels();
       return;
     }
     _signature = signature;
@@ -230,7 +247,8 @@ export function createRadiationLayer({
             pixelSize: MARKER_PX[band],
             color: C.Color.fromCssColorString(RADIATION_BAND_COLORS[band]),
             outlineColor: C.Color.BLACK,
-            outlineWidth: 1,
+            outlineWidth: QUIET.has(band) ? 0 : 1,
+            scaleByDistance: QUIET.has(band) ? quietScale() : undefined,
           },
         }),
       );
@@ -310,7 +328,7 @@ export function createRadiationLayer({
     const bfs = reading.source === 'bfs';
     return [
       `${reading.name}${reading.country ? ` (${reading.country})` : ''}`,
-      `${formatDose(reading.usvh)} µSv/h · ${RADIATION_SOURCE_NAMES[reading.source]}`,
+      `${radiationBandName(reading.usvh)} · ${formatDose(reading.usvh)} µSv/h · ${RADIATION_SOURCE_NAMES[reading.source]}`,
       bfs
         ? `1-hour mean ending ${utc(reading.atMs)}`
         : `Measured ${utc(reading.atMs)}`,
@@ -325,7 +343,9 @@ export function createRadiationLayer({
   // The legend carries the per-band counts; the summary names the total.
   function summaryLines() {
     const count = (id) =>
-      _readings.filter((reading) => reading.source === id).length;
+      _readings
+        .filter((reading) => reading.source === id)
+        .length.toLocaleString('en-US');
     return [
       _readings.length
         ? `${plural(_readings.length, 'reading')} · ${count('bfs')} ${RADIATION_SOURCE_NAMES.bfs} · ${count('safecast')} ${RADIATION_SOURCE_NAMES.safecast}`
@@ -469,6 +489,16 @@ export function createRadiationLayer({
 
     getRowControls() {
       const reading = selected();
+      const listed = _readings.slice(0, LIST_LIMIT);
+      // Two sensors at one place share a name; the station or device number
+      // tells their rows apart.
+      const names = new Map();
+      for (const entry of listed)
+        names.set(entry.name, (names.get(entry.name) || 0) + 1);
+      const listName = (entry) =>
+        names.get(entry.name) > 1
+          ? `${entry.name} #${entry.id.slice(entry.id.indexOf('-') + 1)}`
+          : entry.name;
       return {
         chips: reading
           ? [
@@ -493,11 +523,11 @@ export function createRadiationLayer({
         })),
         list: {
           ariaLabel: 'Highest current dose-rate readings, highest first',
-          items: _readings.slice(0, LIST_LIMIT).map((entry, index) => ({
+          items: listed.map((entry, index) => ({
             id: entry.id,
             ordinal: index + 1,
             lead: formatDose(entry.usvh),
-            text: `${entry.name}${entry.country ? ` · ${entry.country}` : ''} · ${RADIATION_SOURCE_NAMES[entry.source]}`,
+            text: `${listName(entry)}${entry.country ? ` · ${entry.country}` : ''} · ${RADIATION_SOURCE_NAMES[entry.source]}`,
             active: entry.id === _selectedId,
             params: { readingId: entry.id, focus: true },
           })),

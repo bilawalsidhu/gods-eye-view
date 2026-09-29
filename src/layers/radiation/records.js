@@ -22,10 +22,30 @@ export const RADIATION_SOURCE_NAMES = Object.freeze({
 
 /** Dose-rate bands (µSv/h lower bounds), from the highest down. */
 export const RADIATION_BANDS = Object.freeze([
-  Object.freeze({ id: 'high', min: 1, label: '1 µSv/h or more' }),
-  Object.freeze({ id: 'raised', min: 0.5, label: '0.5–1 µSv/h' }),
-  Object.freeze({ id: 'elevated', min: 0.2, label: '0.2–0.5 µSv/h' }),
-  Object.freeze({ id: 'typical', min: 0, label: 'Under 0.2 µSv/h' }),
+  Object.freeze({
+    id: 'high',
+    min: 1,
+    name: 'High',
+    label: 'High · 1 µSv/h or more',
+  }),
+  Object.freeze({
+    id: 'raised',
+    min: 0.5,
+    name: 'Raised',
+    label: 'Raised · 0.5–1 µSv/h',
+  }),
+  Object.freeze({
+    id: 'elevated',
+    min: 0.2,
+    name: 'Elevated',
+    label: 'Elevated · 0.2–0.5 µSv/h',
+  }),
+  Object.freeze({
+    id: 'typical',
+    min: 0,
+    name: 'Typical',
+    label: 'Typical · under 0.2 µSv/h',
+  }),
 ]);
 
 export const RADIATION_BAND_COLORS = Object.freeze({
@@ -35,7 +55,13 @@ export const RADIATION_BAND_COLORS = Object.freeze({
   typical: '#4cc764',
 });
 
-/** Safecast: 334 CPM = 1 µSv/h for the LND 7318 pancake tube. */
+/**
+ * Safecast: 334 CPM = 1 µSv/h for the LND 7318 pancake tube. Safecast's own
+ * ingest applies 334 to both `lnd_7318u` and `lnd_7318c` (the unshielded and
+ * energy-compensated variants of the same tube): `mapview_schema.sql` in
+ * Safecast/ingest and `conversion.go` in Safecast/safecast-new-map. Their
+ * factors for the LND 712 / 7128 tubes disagree, so those are left out.
+ */
 export const SAFECAST_CPM_PER_USVH = 334;
 const SAFECAST_TUBES = Object.freeze(['lnd_7318u', 'lnd_7318c']);
 
@@ -58,6 +84,17 @@ const round = (value, digits) => {
   const scale = 10 ** digits;
   return Math.round(value * scale) / scale;
 };
+
+/** The display name of the band a dose rate falls in. */
+export function radiationBandName(usvh) {
+  const id = radiationBand(usvh);
+  return RADIATION_BANDS.find((band) => band.id === id).name;
+}
+
+/** How old a source's reading may be and still count as current. */
+export function radiationMaxAgeMs(source) {
+  return source === 'bfs' ? BFS_MAX_AGE_MS : SAFECAST_MAX_AGE_MS;
+}
 
 /** The band a dose rate falls in. */
 export function radiationBand(usvh) {
@@ -129,9 +166,11 @@ export function normalizeSafecastDevice(device, nowMs) {
   if (!validPosition(lon, lat)) return null;
   const tube = SAFECAST_TUBES.find((key) => Number.isFinite(device[key]));
   if (!tube) return null;
+  // Some firmware reports a fractional count; the dose keeps it, the
+  // displayed count is rounded.
   const cpm = device[tube];
   const usvh = cpm / SAFECAST_CPM_PER_USVH;
-  if (!Number.isInteger(cpm) || !validDose(usvh)) return null;
+  if (!validDose(usvh)) return null;
   const atMs = parseTime(device.when_captured);
   if (!fresh(atMs, nowMs, SAFECAST_MAX_AGE_MS)) return null;
   const country = text(device.loc_country).toUpperCase();
@@ -143,7 +182,7 @@ export function normalizeSafecastDevice(device, nowMs) {
     lon: round(lon, 4),
     lat: round(lat, 4),
     usvh: round(usvh, 3),
-    cpm,
+    cpm: Math.round(cpm),
     atMs,
   };
 }

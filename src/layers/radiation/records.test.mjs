@@ -115,7 +115,6 @@ test('Safecast test devices, other tubes, stale, future or malformed records are
     device({ lnd_7318c: undefined, lnd_712u: 40 }),
     device({ lnd_7318c: undefined, lnd_7128ec: 40 }),
     device({ lnd_7318c: 0 }),
-    device({ lnd_7318c: 12.5 }),
     device({ lnd_7318c: 10_000_000 }),
     device({
       when_captured: new Date(NOW - SAFECAST_MAX_AGE_MS - 1).toISOString(),
@@ -134,6 +133,10 @@ test('Safecast test devices, other tubes, stale, future or malformed records are
     normalizeSafecastDevice(device({ loc_country: 'Japan' }), NOW).country,
     '',
   );
+  // A fractional count keeps its dose; the shown count is rounded.
+  const fractional = normalizeSafecastDevice(device({ lnd_7318c: 167.4 }), NOW);
+  assert.equal(fractional.cpm, 167);
+  assert.equal(fractional.usvh, 0.501);
 });
 
 test('collections keep one record per station or device, the latest Safecast reading winning', () => {

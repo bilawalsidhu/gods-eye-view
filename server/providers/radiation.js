@@ -1,6 +1,7 @@
 import {
   RADIATION_SOURCES,
   normalizeBfsCollection,
+  radiationMaxAgeMs,
   normalizeSafecastDevices,
 } from '../../src/layers/radiation/records.js';
 import { coalesceProxyRequest, readResponseJsonCapped } from './common/http.js';
@@ -16,10 +17,12 @@ const FEEDS = Object.freeze({
   bfs: Object.freeze({
     url: 'https://www.imis.bfs.de/ogc/opendata/ows?service=WFS&version=1.1.0&request=GetFeature&typeName=opendata:odlinfo_odl_1h_latest&outputFormat=application/json',
     normalize: normalizeBfsCollection,
+    rows: (payload) => payload?.features?.length || 0,
   }),
   safecast: Object.freeze({
     url: 'https://tt.safecast.org/devices',
     normalize: normalizeSafecastDevices,
+    rows: (payload) => (Array.isArray(payload) ? payload.length : 0),
   }),
 });
 const MINUTE = 60_000;
@@ -95,6 +98,10 @@ export function radiationProxy({
     );
     const readings = FEEDS[feed].normalize(payload, now());
     if (!readings) throw new Error('invalid_feed');
+    // A feed that published rows but none current (a late BfS hour, say) is
+    // a failure: it must not replace the last good copy.
+    if (!readings.length && FEEDS[feed].rows(payload))
+      throw new Error('no_current_readings');
     return { fetchedAt: now(), readings };
   }
 
@@ -110,7 +117,14 @@ export function radiationProxy({
       });
       return { value: await promise, stale: false };
     } catch (error) {
-      if (previous) return { value: previous, stale: true };
+      // The last good copy only serves readings that are still current; a
+      // long outage empties it and the feed is reported missing.
+      const maxAgeMs = radiationMaxAgeMs(feed);
+      const current = previous?.readings.filter(
+        (reading) => now() - reading.atMs <= maxAgeMs,
+      );
+      if (current?.length)
+        return { value: { ...previous, readings: current }, stale: true };
       throw error;
     }
   }
@@ -150,6 +164,8 @@ export function radiationProxy({
     if (feeds.every((feed) => feed.missing)) {
       if (rateLimited) {
         // Tell the browser how long the shortest upstream cooldown has left.
+        // When the other feed failed some other way this is only a hint: the
+        // browser's next poll simply tries again.
         const until = Math.min(
           ...[...cooldownUntil.values()].filter((at) => at > now()),
         );
