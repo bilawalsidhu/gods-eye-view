@@ -1490,6 +1490,7 @@
       "src/data/trailRenderer.js",
       "src/data/vesselLabels.js",
       "src/firstRunExperience.js",
+      "src/firstRunLocale.js",
       "src/hud.js",
       "src/hudLocality.js",
       "src/hudSummaryResponse.js",

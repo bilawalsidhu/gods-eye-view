@@ -2,6 +2,8 @@
 
 # 🌐 God's Eye View
 
+**[Português (Brasil)](README.pt-BR.md) · English**
+
 [![CI](https://github.com/bilawalsidhu/gods-eye-view/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bilawalsidhu/gods-eye-view/actions/workflows/ci.yml) [![Reached #1 on GitHub Trending](https://img.shields.io/badge/%231_GitHub_Trending-thank_you!-F0A63C?style=flat-square&logo=github)](https://x.com/bilawalsidhu/status/2093798887815348521)
 
 ### A spy-satellite simulator in your browser — then you realize the sources are public and the data is real.

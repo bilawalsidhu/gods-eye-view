@@ -1,5 +1,9 @@
 # Changelog
 
+- Added a Brazilian Portuguese quick-start and contributor guide, plus Portuguese
+  first-run mission-card text for browsers using a `pt` locale. English remains
+  the default for other browser locales.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a

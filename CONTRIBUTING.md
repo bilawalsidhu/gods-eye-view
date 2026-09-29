@@ -1,5 +1,7 @@
 # Contributing to God's Eye View
 
+**[Português (Brasil)](CONTRIBUTING.pt-BR.md) · English**
+
 Thanks for being here. God's Eye View is an open foundation for live spatial intelligence in the browser, and it gets better when more people run it, break it, and extend it.
 
 ## Getting set up

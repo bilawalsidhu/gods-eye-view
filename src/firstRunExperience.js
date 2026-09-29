@@ -1,4 +1,5 @@
 import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
+import { FIRST_RUN_PT_BR_BUSY, localizeFirstRun } from './firstRunLocale.js';
 
 // First-run mission launcher.
 //
@@ -358,6 +359,7 @@ export function initFirstRunExperience({
   );
   if (environmentalTitle)
     environmentalTitle.textContent = environmentalLabel().title;
+  const portuguese = localizeFirstRun(root, globalThis.navigator?.language);
 
   const status = root.querySelector('[data-first-run-status]');
   const suppressBox = root.querySelector('[data-first-run-suppress]');
@@ -440,7 +442,10 @@ export function initFirstRunExperience({
       button.setAttribute('aria-disabled', String(next));
     if (!status) return;
     if (next)
-      status.textContent = FIRST_RUN_MISSIONS[choice]?.busyText || 'Working…';
+      status.textContent =
+        (portuguese && FIRST_RUN_PT_BR_BUSY[choice]) ||
+        FIRST_RUN_MISSIONS[choice]?.busyText ||
+        (portuguese ? 'Aguarde…' : 'Working…');
     else if (status.dataset.sticky !== 'true')
       status.textContent = defaultStatus;
   };
@@ -490,7 +495,9 @@ export function initFirstRunExperience({
       Array.isArray(failed) && failed.length ? ` (${failed.join(', ')})` : '';
     if (status) {
       status.dataset.sticky = 'true';
-      status.textContent = `Could not open that mission${detail}. Retry or explore manually.`;
+      status.textContent = portuguese
+        ? `Não foi possível abrir esta missão${detail}. Tente novamente ou explore manualmente.`
+        : `Could not open that mission${detail}. Retry or explore manually.`;
     }
     setBusy(false);
   };
@@ -506,8 +513,9 @@ export function initFirstRunExperience({
     if (box) box.checked = !wanted;
     if (!status) return;
     status.dataset.sticky = 'true';
-    status.textContent =
-      'This browser is blocking storage, so that could not be saved.';
+    status.textContent = portuguese
+      ? 'Este navegador bloqueia o armazenamento; não foi possível salvar a preferência.'
+      : 'This browser is blocking storage, so that could not be saved.';
   };
 
   const keyboard = createSurfaceKeyboard({
