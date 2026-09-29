@@ -3072,5 +3072,15 @@
       "src/layers/perimeters/source.js"
     ],
     "external": []
+  },
+  "agent-world-packet": {
+    "exports": ["./agent/world-packet"],
+    "modules": [
+      "src/agent/worldPacket.js",
+      "src/data/layerSnapshot.js",
+      "src/data/feedState.js",
+      "src/contextModePolicy.js"
+    ],
+    "external": ["cesium"]
   }
 }
