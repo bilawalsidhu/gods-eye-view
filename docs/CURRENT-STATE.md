@@ -12,7 +12,7 @@ For each camera, presentation selects the freshest record whose `cameraId`
 matches that camera. It deliberately does not sum multiple approach or
 road-segment records because their windows may overlap or describe different
 movements. A fresh record can show a compact measured rate, class mix,
-observation age and provenance. Ambient world thumbnail cards receive at most
+quality, observation age and provenance. Ambient world thumbnail cards receive at most
 two terse detail lines; the main CCTV panel gets a secondary `TRAFFIC OBS`
 row below the existing camera/source metadata.
 
