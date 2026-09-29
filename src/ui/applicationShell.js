@@ -968,6 +968,14 @@ export class StyleManager extends ShellFacade {
         setParams: (params, options) =>
           this._dataManager?.setLayerParams('cctv', params, options),
         toggleEnabled: (...args) => this._toggleCctvEnabled(...args),
+        ensureTrafficEnabled: async () => {
+          if (!this._dataManager?.layers?.has('traffic')) return false;
+          if (this._dataManager.isEnabled('traffic')) return true;
+          const enabled = await this._dataManager.setEnabled('traffic', true, {
+            origin: 'user',
+          });
+          return enabled === true && this._dataManager.isEnabled('traffic');
+        },
         runExplicitFocus: (...args) => this._runExplicitCctvFocus(...args),
         setPanelCollapsed: (...args) => this.setPanelCollapsed(...args),
         showToast: (message) => this._showToast(message),
