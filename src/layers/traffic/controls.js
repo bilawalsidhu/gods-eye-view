@@ -1,8 +1,61 @@
+import * as Cesium from 'cesium';
 import {
   trafficBucketTier,
   trafficStyleProfile,
 } from '../../data/trafficPresetStyle.js';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
+
+/**
+ * Find the nearest point on the currently loaded road polylines.
+ * @param {Array<{coords:number[][],type?:string}>} roads Parsed traffic roads.
+ * @param {{lat:number,lon:number}} point Geographic observation.
+ * @param {number} [maxDistanceM=18] Admission radius.
+ * @returns {{lat:number,lon:number,distanceM:number,roadIndex:number,segmentIndex:number,t:number,roadType:string|null}|null}
+ */
+export function nearestRoadSnap(roads, point, maxDistanceM = 18) {
+  const lat = Number(point?.lat);
+  const lon = Number(point?.lon);
+  const maxDistance = Math.max(1, Number(maxDistanceM) || 18);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const metresLat = 111320;
+  const metresLon = Math.max(1, metresLat * Math.cos((lat * Math.PI) / 180));
+  let best = null;
+  for (let roadIndex = 0; roadIndex < (roads || []).length; roadIndex++) {
+    const road = roads[roadIndex];
+    const coords = road?.coords;
+    if (!Array.isArray(coords) || coords.length < 2) continue;
+    for (let segmentIndex = 0; segmentIndex < coords.length - 1; segmentIndex++) {
+      const a = coords[segmentIndex];
+      const b = coords[segmentIndex + 1];
+      if (!Array.isArray(a) || !Array.isArray(b)) continue;
+      const ax = (Number(a[0]) - lon) * metresLon;
+      const ay = (Number(a[1]) - lat) * metresLat;
+      const bx = (Number(b[0]) - lon) * metresLon;
+      const by = (Number(b[1]) - lat) * metresLat;
+      if (![ax, ay, bx, by].every(Number.isFinite)) continue;
+      const dx = bx - ax;
+      const dy = by - ay;
+      const lengthSq = dx * dx + dy * dy;
+      if (lengthSq <= 1e-6) continue;
+      const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / lengthSq));
+      const x = ax + dx * t;
+      const y = ay + dy * t;
+      const distanceM = Math.hypot(x, y);
+      if (distanceM > maxDistance || (best && distanceM >= best.distanceM))
+        continue;
+      best = {
+        lat: lat + y / metresLat,
+        lon: lon + x / metresLon,
+        distanceM,
+        roadIndex,
+        segmentIndex,
+        t,
+        roadType: road.type || null,
+      };
+    }
+  }
+  return best;
+}
 
 export function createControls({ state: layerState, services, parts, source }) {
   const { getFlowSessionStats } = source;
@@ -79,6 +132,45 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
+     * Snap a CCTV-derived observation onto nearby loaded road geometry.
+     * Returns the interpolated rendered-road Cartesian so observed contacts use
+     * the same height datum as normal traffic dots.
+     * @param {{lat:number,lon:number}} point
+     * @param {{maxDistanceM?:number}} [options]
+     * @returns {Object|null}
+     */
+    snapObservedPoint(point, options = {}) {
+      const snap = nearestRoadSnap(
+        layerState._roads,
+        point,
+        options.maxDistanceM,
+      );
+      if (!snap) return null;
+      const road = layerState._roads[snap.roadIndex];
+      const a = road?.waypoints?.[snap.segmentIndex];
+      const b = road?.waypoints?.[snap.segmentIndex + 1];
+      const position =
+        a && b
+          ? Cesium.Cartesian3.lerp(a, b, snap.t, new Cesium.Cartesian3())
+          : Cesium.Cartesian3.fromDegrees(snap.lon, snap.lat, 2);
+      return { ...snap, position };
+    },
+
+    /** Replace one producer's anonymous transient observed contacts. */
+    replaceExternalVehicleObservations(sourceId, contacts, options = {}) {
+      return parts.rendering.replaceExternalVehicleObservations(
+        sourceId,
+        contacts,
+        options,
+      );
+    },
+
+    /** Clear one producer, or every external observation when sourceId is null. */
+    clearExternalVehicleObservations(sourceId = null) {
+      return parts.rendering.clearExternalVehicleObservations(sourceId);
+    },
+
+    /**
      * Return a sub-sampled list of active dot positions for detection overlays
      * (e.g. CCTV bounding-box rendering).
      *
@@ -91,16 +183,19 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @returns {Array<{position:Cesium.Cartesian3, id:string, type:string}>}
      */
     getDetectableObjects(options = {}) {
-      if (!layerState._enabled || layerState._dots.length === 0) return [];
+      if (!layerState._enabled) return [];
+      const observed = parts.rendering.getExternalVehicleDetectableObjects();
+      if (!layerState._dots.length && !observed.length) return [];
       const maxCount = Number.isFinite(options.maxCount)
         ? Math.max(1, Math.floor(options.maxCount))
-        : layerState._dots.length;
+        : layerState._dots.length + observed.length;
       const seed = Number.isFinite(options.seed) ? Math.floor(options.seed) : 0;
       // Stride-based sampling: step through dots evenly to get ~maxCount samples
       const stride = Math.max(1, Math.ceil(layerState._dots.length / maxCount));
       const start = seed % stride;
 
-      const result = [];
+      const result = observed.slice(0, maxCount);
+      if (result.length >= maxCount) return result;
       for (let i = start; i < layerState._dots.length; i += stride) {
         const pos = layerState._dots[i].point.position;
         if (!pos) continue;
@@ -151,6 +246,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       });
       return {
         count: layerState._count,
+        observedVehicles: parts.rendering.getExternalVehicleObservationCount(),
         lastUpdate: layerState._lastUpdate,
         loading,
         mode: feed.mode,
