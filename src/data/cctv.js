@@ -30,7 +30,8 @@ export const deriveCalBadge = layer.deriveCalBadge;
 export const computeFrustumGeometry = layer.computeFrustumGeometry;
 export const projectFramePointToGround = layer.projectFramePointToGround;
 export const activationProbeClampRange = layer.activationProbeClampRange;
-export const detectMotionVehicleCandidates = layer.detectMotionVehicleCandidates;
+export const detectMotionVehicleCandidates =
+  layer.detectMotionVehicleCandidates;
 export const frameSignatureFromPixels = layer.frameSignatureFromPixels;
 export const _createCctvProjectionPlaneForTest =
   layer._createCctvProjectionPlaneForTest;
