@@ -1,5 +1,33 @@
 # God's Eye View Current State
 
+## Provider-neutral observed traffic — September 28, 2026
+
+Street Traffic accepts an optional observed-traffic source without coupling the
+layer to CCTV or a computer-vision runtime. Embedders pass an `observedSource`
+to `createTrafficLayer`, or the standalone composition can bind one through
+`configureObservedTrafficSource`. The source exposes one bounded
+`request(query, { signal })` method; `createObservedTrafficSource({ read })`
+wraps an external producer with normalization and fixed error semantics.
+
+Normalized records keep measured evidence separate from the layer's existing
+TomTom/provider-estimated flow and simulated dots. Each record has stable source
+identity and observation time, optional observation-window and camera identity,
+one geographic association (`road-segment`, `approach` or `intersection`),
+coarse rate/count/movement measurements, optional quality and provenance.
+Coordinates, records, count keys, movements and strings are bounded. Invalid
+siblings are dropped while valid records survive and mark the snapshot partial.
+
+Snapshot state is explicitly `unconfigured`, `empty`, `fresh`, `partial`,
+`stale` or `error`. Stale evidence is retained as stale rather than silently
+becoming current. Provider error text is not surfaced; cancellation propagates.
+The Traffic stats expose observed-source state under `observedTraffic`, so an
+observed-source outage does not turn otherwise healthy Street Traffic into a
+degraded TomTom/road-source state. No observed source is configured by default,
+so this contract adds no polling, rendering or network work to the shipped app.
+
+This is the generic contract required by upstream #830. CCTV cards/rendering and
+the bounded corridor prototype remain separate follow-ups (#829 and #831).
+
 ## Cyber HUD — September 23, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice
