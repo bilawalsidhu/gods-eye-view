@@ -58,7 +58,9 @@ import cctvLayer, {
   cctvGeometryDrainPacing,
   createGeometryProgressNotifier,
   normalizeCoverageMode,
+  detectMotionVehicleCandidates,
   frameSignatureFromPixels,
+  projectFramePointToGround,
   focusCctvRecord,
   hideCctvRecordVisuals,
   materializeCctvActiveCoverageEntities,
@@ -1743,6 +1745,97 @@ test('frameSignatureFromPixels: empty or junk input yields null (always redraw)'
   assert.equal(frameSignatureFromPixels(null), null);
   assert.equal(frameSignatureFromPixels(undefined), null);
   assert.equal(frameSignatureFromPixels({}), null);
+});
+
+// Experimental anonymous CCTV vehicle observations (#89)
+// ---------------------------------------------------------------------------
+
+test('projectFramePointToGround casts the calibrated centre ray onto ground', () => {
+  const camera = {
+    lat: 41.8819,
+    lon: -87.6278,
+    headingDeg: 90,
+    pitchDeg: -20,
+    fovDeg: 60,
+    rangeM: 200,
+    mountHeightM: 10,
+  };
+  const projected = projectFramePointToGround(
+    camera,
+    0,
+    { x: 80, y: 45 },
+    { width: 160, height: 90 },
+  );
+  assert.ok(projected);
+  assert.ok(Math.abs(projected.bearingDeg - 90) < 1e-9);
+  assert.ok(
+    Math.abs(projected.rangeM - 10 / Math.tan(toRad(20))) < 1e-6,
+    `range=${projected.rangeM}`,
+  );
+  assert.ok(projected.lon > camera.lon, 'east-facing ray should move east');
+});
+
+test('projectFramePointToGround rejects rays that never meet ground', () => {
+  const camera = {
+    lat: 41.8819,
+    lon: -87.6278,
+    headingDeg: 0,
+    pitchDeg: 0,
+    fovDeg: 60,
+    rangeM: 200,
+    mountHeightM: 10,
+  };
+  assert.equal(
+    projectFramePointToGround(
+      camera,
+      0,
+      { x: 80, y: 45 },
+      { width: 160, height: 90 },
+    ),
+    null,
+  );
+});
+
+test('detectMotionVehicleCandidates finds a compact lower-frame moving blob', () => {
+  const width = 32;
+  const height = 18;
+  const previous = new Uint8ClampedArray(width * height * 4);
+  const current = new Uint8ClampedArray(width * height * 4);
+  for (let y = 10; y <= 12; y++) {
+    for (let x = 10; x <= 14; x++) {
+      const offset = (y * width + x) * 4;
+      current[offset] = 255;
+      current[offset + 1] = 255;
+      current[offset + 2] = 255;
+      current[offset + 3] = 255;
+    }
+  }
+  const candidates = detectMotionVehicleCandidates(
+    previous,
+    current,
+    width,
+    height,
+  );
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].type, 'car');
+  assert.deepEqual(
+    {
+      x: candidates[0].x,
+      y: candidates[0].y,
+      width: candidates[0].width,
+      height: candidates[0].height,
+    },
+    { x: 10, y: 10, width: 5, height: 3 },
+  );
+  assert.ok(candidates[0].confidence >= 0.45);
+});
+
+test('detectMotionVehicleCandidates emits nothing for unchanged frames', () => {
+  const frame = new Uint8ClampedArray(32 * 18 * 4);
+  assert.deepEqual(
+    detectMotionVehicleCandidates(frame, frame, 32, 18),
+    [],
+  );
 });
 
 test('a saved rangeScale keeps its effective range when the catalog range floor drops', () => {
