@@ -12,13 +12,34 @@ import {
   MAX_DOTS,
 } from './policy.js';
 
+export function classifyExternalObservationFreshness(
+  observedAt,
+  staleAt,
+  expiresAt,
+  now = Date.now(),
+) {
+  const observed = Number(observedAt);
+  const stale = Number(staleAt);
+  const expires = Number(expiresAt);
+  const current = Number(now);
+  if (
+    !Number.isFinite(observed) ||
+    !Number.isFinite(expires) ||
+    !Number.isFinite(current) ||
+    current >= expires
+  )
+    return 'unavailable';
+  if (Number.isFinite(stale) && current >= stale) return 'stale';
+  return 'observed';
+}
+
 export function createRendering({
   state: layerState,
   services,
   parts,
   source,
 }) {
-  function observationLabel(contact, ageSec) {
+  function observationLabel(contact, ageSec, freshness = 'observed') {
     const camera = String(
       contact.cameraCode || contact.cameraId || 'CCTV',
     ).toUpperCase();
@@ -26,7 +47,8 @@ export function createRendering({
     const confidence = Math.round(
       Math.max(0, Math.min(1, Number(contact.confidence) || 0)) * 100,
     );
-    return `${camera} · ${type} · ${confidence}% · ${ageSec}s`;
+    const freshnessLabel = freshness === 'stale' ? ' · STALE' : '';
+    return `${camera} · ${type} · ${confidence}% · ${ageSec}s${freshnessLabel}`;
   }
 
   function stopExternalObservationTimerIfIdle() {
@@ -51,8 +73,14 @@ export function createRendering({
           continue;
         }
         const ageSec = Math.max(0, Math.floor((now - entry.observedAt) / 1000));
+        const freshness = classifyExternalObservationFreshness(
+          entry.observedAt,
+          entry.staleAt,
+          entry.expiresAt,
+          now,
+        );
         if (entry.entity?.label)
-          entry.entity.label.text = observationLabel(entry.contact, ageSec);
+          entry.entity.label.text = observationLabel(entry.contact, ageSec, freshness);
         keep.push(entry);
       }
       if (keep.length)
@@ -95,7 +123,12 @@ export function createRendering({
     if (!id || !layerState._viewer || !layerState._enabled) return 0;
     clearExternalVehicleObservations(id);
     const ttlMs = Math.max(1000, Number(options.ttlMs) || 12000);
+    const freshForMs = Math.max(
+      0,
+      Math.min(ttlMs, Number(options.freshForMs) || ttlMs),
+    );
     const now = Date.now();
+    const observationRevision = ++layerState._externalObservationRevision;
     const entries = [];
     for (const contact of Array.isArray(contacts) ? contacts : []) {
       if (!contact?.position) continue;
@@ -111,6 +144,10 @@ export function createRendering({
           cameraId: contact.cameraId || null,
           confidence: Number(contact.confidence) || 0,
           observedAt,
+          observationRevision,
+          staleAt: observedAt + freshForMs,
+          expiresAt: observedAt + ttlMs,
+          authority: 'observation-only',
         },
         point: {
           pixelSize: 10,
@@ -139,6 +176,8 @@ export function createRendering({
         entity,
         contact,
         observedAt,
+        observationRevision,
+        staleAt: observedAt + freshForMs,
         expiresAt: observedAt + ttlMs,
       });
     }
@@ -164,14 +203,32 @@ export function createRendering({
 
   function getExternalVehicleDetectableObjects() {
     const result = [];
+    const now = Date.now();
     for (const [sourceId, entries] of layerState._externalVehicleObservations) {
       for (const entry of entries) {
+        const freshness = classifyExternalObservationFreshness(
+          entry.observedAt,
+          entry.staleAt,
+          entry.expiresAt,
+          now,
+        );
+        if (freshness === 'unavailable') continue;
         result.push({
           position: entry.contact.position,
           id: `CCTV-VEH-${entry.entity.id}`,
           type: 'VEH',
           sourceId,
           observed: true,
+          freshness,
+          observedAt: entry.observedAt,
+          validUntil: entry.expiresAt,
+          observationRevision: entry.observationRevision,
+          authority: 'observation-only',
+          provenance: {
+            kind: 'cctv',
+            sourceId,
+            cameraId: entry.contact.cameraId || null,
+          },
         });
       }
     }
