@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  ACTION_EPISODE_VERSION,
   detectReflexCandidates,
   normalizeActionEpisode,
 } from './actionEpisodes.js';
@@ -11,11 +12,15 @@ function episode({
   actions = [
     {
       name: 'open_recent_imagery',
+      schemaFingerprint: 'schema:imagery:v1',
+      capabilityFingerprint: 'caps:imagery+cctv:v1',
       args: { longitude: -97.7, latitude: 30.2 },
       outcome: 'success',
     },
     {
       name: 'focus_nearest_camera',
+      schemaFingerprint: 'schema:cctv-nearest:v1',
+      capabilityFingerprint: 'caps:imagery+cctv:v1',
       args: { latitude: 30.2, longitude: -97.7 },
       outcome: 'success',
     },
@@ -25,6 +30,7 @@ function episode({
   completedAt = 200,
 } = {}) {
   return {
+    version: ACTION_EPISODE_VERSION,
     contextFingerprint: context,
     actions,
     correctedOrUndone,
@@ -41,6 +47,8 @@ test('episode normalization keeps only bounded semantic action receipts', () => 
         actions: [
           {
             name: 'open_recent_imagery',
+            schemaFingerprint: 'schema:imagery:v1',
+            capabilityFingerprint: 'caps:imagery+cctv:v1',
             args: { latitude: Number.NaN },
             outcome: 'success',
           },
@@ -56,7 +64,15 @@ test('episode normalization keeps only bounded semantic action receipts', () => 
   assert.equal(
     normalizeActionEpisode(
       episode({
-        actions: [{ name: 'x', args: {}, outcome: 'invented' }],
+        actions: [
+          {
+            name: 'x',
+            schemaFingerprint: 'schema:x:v1',
+            capabilityFingerprint: 'caps:x:v1',
+            args: {},
+            outcome: 'invented',
+          },
+        ],
       }),
     ),
     null,
@@ -85,11 +101,15 @@ test('argument key order does not split an otherwise identical sequence', () => 
     actions: [
       {
         name: 'open_recent_imagery',
+        schemaFingerprint: 'schema:imagery:v1',
+        capabilityFingerprint: 'caps:imagery+cctv:v1',
         args: { latitude: 30.2, longitude: -97.7 },
         outcome: 'success',
       },
       {
         name: 'focus_nearest_camera',
+        schemaFingerprint: 'schema:cctv-nearest:v1',
+        capabilityFingerprint: 'caps:imagery+cctv:v1',
         args: { longitude: -97.7, latitude: 30.2 },
         outcome: 'success',
       },
@@ -103,6 +123,79 @@ test('argument key order does not split an otherwise identical sequence', () => 
   );
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].occurrences, 2);
+});
+
+test('schema and capability drift split otherwise identical sequences', () => {
+  const changedSchema = episode({
+    actions: [
+      {
+        name: 'open_recent_imagery',
+        schemaFingerprint: 'schema:imagery:v2',
+        capabilityFingerprint: 'caps:imagery+cctv:v1',
+        args: { longitude: -97.7, latitude: 30.2 },
+        outcome: 'success',
+      },
+      {
+        name: 'focus_nearest_camera',
+        schemaFingerprint: 'schema:cctv-nearest:v1',
+        capabilityFingerprint: 'caps:imagery+cctv:v1',
+        args: { latitude: 30.2, longitude: -97.7 },
+        outcome: 'success',
+      },
+    ],
+    startedAt: 300,
+    completedAt: 400,
+  });
+  const changedCapabilities = episode({
+    actions: [
+      {
+        name: 'open_recent_imagery',
+        schemaFingerprint: 'schema:imagery:v1',
+        capabilityFingerprint: 'caps:imagery-only:v1',
+        args: { longitude: -97.7, latitude: 30.2 },
+        outcome: 'success',
+      },
+      {
+        name: 'focus_nearest_camera',
+        schemaFingerprint: 'schema:cctv-nearest:v1',
+        capabilityFingerprint: 'caps:imagery-only:v1',
+        args: { latitude: 30.2, longitude: -97.7 },
+        outcome: 'success',
+      },
+    ],
+    startedAt: 500,
+    completedAt: 600,
+  });
+
+  assert.equal(
+    detectReflexCandidates(
+      [episode(), changedSchema, changedCapabilities],
+      { minOccurrences: 2 },
+    ).length,
+    0,
+  );
+});
+
+test('missing or future receipt versions and semantic fingerprints fail closed', () => {
+  assert.equal(
+    normalizeActionEpisode({ ...episode(), version: ACTION_EPISODE_VERSION + 1 }),
+    null,
+  );
+  assert.equal(
+    normalizeActionEpisode({
+      ...episode(),
+      actions: [
+        {
+          name: 'open_recent_imagery',
+          schemaFingerprint: '',
+          capabilityFingerprint: 'caps:imagery+cctv:v1',
+          args: {},
+          outcome: 'success',
+        },
+      ],
+    }),
+    null,
+  );
 });
 
 test('context, corrections, and observed failures prevent unsafe promotion', () => {
@@ -135,11 +228,15 @@ test('context, corrections, and observed failures prevent unsafe promotion', () 
     actions: [
       {
         name: 'open_recent_imagery',
+        schemaFingerprint: 'schema:imagery:v1',
+        capabilityFingerprint: 'caps:imagery+cctv:v1',
         args: { longitude: -97.7, latitude: 30.2 },
         outcome: 'failed',
       },
       {
         name: 'focus_nearest_camera',
+        schemaFingerprint: 'schema:cctv-nearest:v1',
+        capabilityFingerprint: 'caps:imagery+cctv:v1',
         args: { latitude: 30.2, longitude: -97.7 },
         outcome: 'success',
       },
