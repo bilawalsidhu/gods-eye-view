@@ -1,8 +1,4 @@
-const GEOMETRY_TYPES = new Set([
-  'road-segment',
-  'approach',
-  'intersection',
-]);
+const GEOMETRY_TYPES = new Set(['road-segment', 'approach', 'intersection']);
 const MAX_RECORDS = 5000;
 const MAX_GEOMETRY_POINTS = 256;
 const MAX_COUNT_KEYS = 64;
@@ -96,13 +92,7 @@ function normalizeMovement(value) {
   const label = safeString(value.label, 120);
   const count = nonNegativeNumber(value.count);
   const vehiclesPerMin = nonNegativeNumber(value.vehiclesPerMin);
-  if (
-    !from &&
-    !to &&
-    !label &&
-    count === null &&
-    vehiclesPerMin === null
-  )
+  if (!from && !to && !label && count === null && vehiclesPerMin === null)
     return null;
   return {
     ...(from ? { from } : {}),
@@ -158,11 +148,7 @@ export function normalizeObservedTrafficRecord(value) {
 
   const windowStart = finiteTimestamp(value.windowStart);
   const windowEnd = finiteTimestamp(value.windowEnd);
-  if (
-    windowStart !== null &&
-    windowEnd !== null &&
-    windowEnd < windowStart
-  )
+  if (windowStart !== null && windowEnd !== null && windowEnd < windowStart)
     return null;
 
   const vehiclesPerMin = nonNegativeNumber(value.flow?.vehiclesPerMin);
