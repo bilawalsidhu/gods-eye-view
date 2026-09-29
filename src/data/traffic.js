@@ -18,4 +18,5 @@ const layer = createApplicationTraffic({
 export const getTrafficTimingDiagnostics = layer.getTrafficTimingDiagnostics;
 export const deriveTrafficFlowError = layer.deriveTrafficFlowError;
 export const trafficFeedPresentation = layer.trafficFeedPresentation;
+export const nearestRoadSnap = layer.nearestRoadSnap;
 export default layer;
