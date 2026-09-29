@@ -1,5 +1,7 @@
 const INVALID = Symbol('invalid-action-episode-value');
 
+export const ACTION_EPISODE_VERSION = 1;
+
 export const ACTION_EPISODE_OUTCOMES = Object.freeze([
   'success',
   'failed',
@@ -42,22 +44,38 @@ function normalizePlainValue(value, ancestors = new Set()) {
 export function normalizeActionEpisodeStep(value) {
   if (!value || typeof value !== 'object') return null;
   const name = boundedText(value.name, 120);
+  const schemaFingerprint = boundedText(value.schemaFingerprint, 160);
+  const capabilityFingerprint = boundedText(value.capabilityFingerprint, 160);
   const outcome = String(value.outcome || '');
-  if (!name || !ACTION_EPISODE_OUTCOMES.includes(outcome)) return null;
+  if (
+    !name ||
+    !schemaFingerprint ||
+    !capabilityFingerprint ||
+    !ACTION_EPISODE_OUTCOMES.includes(outcome)
+  )
+    return null;
   const args = normalizePlainValue(value.args ?? {});
   if (args === INVALID || Array.isArray(args) || args === null) return null;
-  return { name, args, outcome };
+  return {
+    name,
+    schemaFingerprint,
+    capabilityFingerprint,
+    args,
+    outcome,
+  };
 }
 
 /**
  * Normalize one bounded verified interaction episode.
  *
- * The receipt stores semantic action names/arguments plus their observed
- * outcomes. It deliberately does not store DOM selectors, pointer coordinates,
- * model reasoning, or arbitrary result payloads.
+ * The receipt stores semantic action names/arguments, schema/capability
+ * fingerprints, and observed outcomes. It deliberately does not store DOM
+ * selectors, pointer coordinates, model reasoning, full capability snapshots,
+ * or arbitrary result payloads.
  */
 export function normalizeActionEpisode(value) {
   if (!value || typeof value !== 'object') return null;
+  if (Number(value.version) !== ACTION_EPISODE_VERSION) return null;
   const contextFingerprint = boundedText(value.contextFingerprint, 256);
   const actions = Array.isArray(value.actions)
     ? value.actions.map(normalizeActionEpisodeStep)
@@ -76,6 +94,7 @@ export function normalizeActionEpisode(value) {
   )
     return null;
   return {
+    version: ACTION_EPISODE_VERSION,
     contextFingerprint,
     actions,
     correctedOrUndone: value.correctedOrUndone === true,
@@ -85,11 +104,17 @@ export function normalizeActionEpisode(value) {
 }
 
 function stepIdentity(step) {
-  return JSON.stringify([step.name, step.args]);
+  return JSON.stringify([
+    step.name,
+    step.schemaFingerprint,
+    step.capabilityFingerprint,
+    step.args,
+  ]);
 }
 
 function sequenceIdentity(episode) {
   return JSON.stringify([
+    episode.version,
     episode.contextFingerprint,
     episode.actions.map(stepIdentity),
   ]);
@@ -129,7 +154,14 @@ export function detectReflexCandidates(
       group = {
         key,
         contextFingerprint: episode.contextFingerprint,
-        steps: episode.actions.map(({ name, args }) => ({ name, args })),
+        steps: episode.actions.map(
+          ({ name, schemaFingerprint, capabilityFingerprint, args }) => ({
+            name,
+            schemaFingerprint,
+            capabilityFingerprint,
+            args,
+          }),
+        ),
         occurrences: 0,
         verifiedSuccesses: 0,
       };
