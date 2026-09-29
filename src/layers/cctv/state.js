@@ -64,6 +64,8 @@ export function createState({ services }) {
 
   layerState._listeners = new Set();
 
+  layerState._observedTrafficUnsubscribe = null;
+
   layerState._projectionRaf = 0;
 
   layerState._removeFocusAppearListener = null;
