@@ -864,5 +864,8 @@
   "src/layers/traffic/motion.test.mjs",
   "scripts/qa-journey-recorder.mjs",
   "scripts/qa-alpr-journey.mjs",
-  "scripts/qa-context-arrivals.mjs"
+  "scripts/qa-context-arrivals.mjs",
+  "scripts/build-atc-frequencies.mjs",
+  "src/data/ourAirportsAtc.js",
+  "src/data/ourAirportsAtc.test.mjs"
 ]

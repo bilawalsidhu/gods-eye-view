@@ -386,6 +386,16 @@ export const US_CENSUS_CREDIT = {
     '<a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">U.S. Census Bureau</a> (public domain)',
 };
 
+/** Registered when the ATC frequency panel first resolves an airport. Public
+ * domain — OurAirports asks for no credit; credited as a courtesy, and because
+ * a reader deserves to know which database a frequency came from. */
+export const OURAIRPORTS_CREDIT = {
+  key: 'ourairports',
+  html:
+    'Airport radio frequencies from ' +
+    '<a href="https://ourairports.com/data/" target="_blank" rel="noopener">OurAirports</a> (public domain)',
+};
+
 /**
  * Per-feed transit credit, registered the first time that feed's vehicles
  * render (see `src/data/transitFeeds.js` for the license of each).
