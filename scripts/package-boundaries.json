@@ -536,6 +536,7 @@
       "src/ui/cockpitCoordinator.js",
       "src/ui/cameraOrientationControls.js",
       "src/ui/applicationShortcuts.js",
+      "src/ui/attentionPolicy.js",
       "src/ui/cctv.js",
       "src/ui/cctvBindings.js",
       "src/ui/cctvCalibration.js",
