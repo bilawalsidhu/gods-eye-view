@@ -39,18 +39,12 @@ test('perception policy always chooses the cheapest sufficient tier', () => {
     }),
     'crop',
   );
-  assert.equal(
-    resolvePerceptionTier({ viewportSufficient: true }),
-    'viewport',
-  );
+  assert.equal(resolvePerceptionTier({ viewportSufficient: true }), 'viewport');
 });
 
 test('perception policy escalates or abstains when lower tiers are insufficient', () => {
   assert.equal(resolvePerceptionTier(), 'multimodal');
-  assert.equal(
-    resolvePerceptionTier({ multimodalAllowed: false }),
-    'abstain',
-  );
+  assert.equal(resolvePerceptionTier({ multimodalAllowed: false }), 'abstain');
 });
 
 test('perception receipts distinguish missed from wasted escalation', () => {
