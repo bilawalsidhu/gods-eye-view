@@ -119,8 +119,15 @@ export function _initCctvPanel() {
     this.actions.setParams({ showProjection: !current }, { origin: 'user' });
   });
 
-  this.listen(this._cctvVehiclesBtn, 'click', () => {
+  this.listen(this._cctvVehiclesBtn, 'click', async () => {
     const current = !!this._cctvState?.vehicleObservations;
+    if (!current) {
+      const trafficReady = await this.actions.ensureTrafficEnabled?.();
+      if (!trafficReady) {
+        this.actions.showToast('Traffic roads are required for CCTV vehicles');
+        return;
+      }
+    }
     this.actions.setParams(
       { vehicleObservations: !current },
       { origin: 'user' },
