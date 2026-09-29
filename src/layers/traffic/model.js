@@ -1,15 +1,14 @@
 import * as Cesium from 'cesium';
+import { roadSurfaceChunks } from './surface.js';
 import {
   flowDensityMult,
   flowBucket,
   flowSpeedScale,
 } from '../../data/trafficFlowStyle.js';
 import {
-  MAX_WAYPOINTS_PER_ROAD,
   DOT_HEIGHT_OFFSET,
   DENSITY_MULT,
   JAM_DOT_FAR_SCALE,
-  JAM_DOT_DEPTH_PUNCH,
 } from './policy.js';
 
 export function createModel({ state: layerState, services, parts, source }) {
@@ -23,57 +22,43 @@ export function createModel({ state: layerState, services, parts, source }) {
     for (const road of roadData.roads) {
       if (!road.coordinates || road.coordinates.length < 2) continue;
 
-      const rawCoords = road.coordinates;
+      for (const coords of roadSurfaceChunks(road.coordinates)) {
+        const type = road.type;
+        const oneway = road.oneway;
+        // Pre-compute Cartesian3 waypoints (lon, lat, height) for fast lerp animation
+        const waypoints = coords.map(([lng, lat]) => {
+          const floor = services.ground?.cachedGroundFloor?.(lat, lng);
+          const h =
+            (Number.isFinite(floor) && Math.abs(floor) <= 9000
+              ? floor
+              : layerState._viewHeightEstimate || 0) + DOT_HEIGHT_OFFSET;
+          return Cesium.Cartesian3.fromDegrees(lng, lat, h);
+        });
 
-      // Sub-sample long polylines: keep every Nth vertex to stay within budget
-      const simplifyStep =
-        rawCoords.length > MAX_WAYPOINTS_PER_ROAD
-          ? Math.ceil(rawCoords.length / MAX_WAYPOINTS_PER_ROAD)
-          : 1;
-      const coords = [];
-      for (let i = 0; i < rawCoords.length; i += simplifyStep) {
-        coords.push(rawCoords[i]);
+        // Pre-compute segment distances in meters for speed-to-t conversion
+        const segmentDist = [];
+        for (let i = 0; i < waypoints.length - 1; i++) {
+          segmentDist.push(
+            Cesium.Cartesian3.distance(waypoints[i], waypoints[i + 1]),
+          );
+        }
+
+        for (const direction of oneway ? [oneway] : [1, -1])
+          roads.push({
+            densityWeight: road.densityWeight ?? (oneway ? 1 : 0.5),
+            drivable: road.drivable,
+            roadClass: road.roadClass,
+            roadProperties: road.roadProperties,
+            directFlow: road.directFlow,
+            simulatedOnly: road.simulatedOnly,
+            coords,
+            type,
+            oneway: direction,
+            waypoints,
+            segmentDist,
+            flow: road.flow || null,
+          });
       }
-
-      // Ensure the original endpoint is always preserved
-      const last = rawCoords[rawCoords.length - 1];
-      const tail = coords[coords.length - 1];
-      if (!tail || tail[0] !== last[0] || tail[1] !== last[1]) {
-        coords.push(last);
-      }
-
-      if (coords.length < 2) continue;
-
-      const type = road.type;
-      const oneway = road.oneway;
-
-      // Sample terrain height once at the road start to avoid per-vertex cost
-      let baseHeight = 0;
-      const firstCoord = coords[0];
-      if (layerState._viewer?.scene?.sampleHeightSupported && firstCoord) {
-        const carto = Cesium.Cartographic.fromDegrees(
-          firstCoord[0],
-          firstCoord[1],
-        );
-        const sampled = layerState._viewer.scene.sampleHeight(carto);
-        if (Number.isFinite(sampled)) baseHeight = sampled;
-      }
-
-      // Pre-compute Cartesian3 waypoints (lon, lat, height) for fast lerp animation
-      const waypoints = coords.map(([lng, lat]) => {
-        const h = baseHeight + DOT_HEIGHT_OFFSET;
-        return Cesium.Cartesian3.fromDegrees(lng, lat, h);
-      });
-
-      // Pre-compute segment distances in meters for speed-to-t conversion
-      const segmentDist = [];
-      for (let i = 0; i < waypoints.length - 1; i++) {
-        segmentDist.push(
-          Cesium.Cartesian3.distance(waypoints[i], waypoints[i + 1]),
-        );
-      }
-
-      roads.push({ coords, type, oneway, waypoints, segmentDist });
     }
 
     return roads;
@@ -130,10 +115,14 @@ export function createModel({ state: layerState, services, parts, source }) {
     const lengthM = estimateRoadLengthDeg(road.coords);
 
     // Altitude-adaptive spacing: closer camera = denser dots
+    const clearance = Math.max(
+      0,
+      altitude - (layerState._viewHeightEstimate || 0),
+    );
     let spacing;
-    if (altitude < 1000) spacing = 30;
-    else if (altitude < 3000) spacing = 80;
-    else if (altitude < 5000) spacing = 150;
+    if (clearance < 1000) spacing = 30;
+    else if (clearance < 3000) spacing = 80;
+    else if (clearance < 5000) spacing = 150;
     else spacing = 250;
 
     const mult =
@@ -142,7 +131,10 @@ export function createModel({ state: layerState, services, parts, source }) {
       (flow
         ? flowDensityMult(flow.level, { jamBoost: parts.style.jamDensityOn() })
         : 1);
-    return Math.max(1, Math.floor((lengthM / spacing) * mult));
+    return Math.max(
+      1,
+      Math.floor((lengthM / spacing) * mult * (road.densityWeight || 1)),
+    );
   }
 
   /**
@@ -236,8 +228,9 @@ export function createModel({ state: layerState, services, parts, source }) {
    * @param {boolean} [input.liveMode] - `/api/tomtom/status` reported a key.
    * @param {boolean} [input.fetching] - A viewport load is in flight.
    * @param {string|null} [input.flowError] - `deriveTrafficFlowError` result, if any.
-   * @param {number} [input.coveragePct] - Matched-road coverage, 0–100.
+   * @param {number} [input.coveragePct] - Share of shown dots on matched roads, 0–100.
    * @param {boolean} [input.statusUnavailable] - The status probe itself failed.
+   * @param {string} [input.roadSource] - Name of the geometry being drawn.
    * @returns {{mode:'live'|'sim', error:string|null, loadingLabel:string}}
    */
 
@@ -247,6 +240,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     flowError = null,
     coveragePct = 0,
     statusUnavailable = false,
+    roadSource = 'OpenStreetMap',
   } = {}) {
     // `mode` is the CONFIGURED source (live key present vs keyless), not this
     // instant's health — health rides on `error`. The qa-traffic harness pins
@@ -260,13 +254,36 @@ export function createModel({ state: layerState, services, parts, source }) {
       const degraded = `SIMULATED — ${flowError}`;
       return { mode, error: degraded, loadingLabel: degraded };
     }
+    // TomTom and Hybrid name their geometry; OpenStreetMap keeps its match copy.
+    if (liveMode && roadSource === 'TomTom') {
+      return {
+        mode,
+        error: null,
+        loadingLabel: fetching
+          ? 'Syncing flow · Roads: TomTom'
+          : coveragePct > 0
+            ? 'LIVE · Roads: TomTom · Roads without flow hidden'
+            : 'LIVE · Roads: TomTom · No flow roads in view',
+      };
+    }
+    if (liveMode && roadSource === 'TomTom + OpenStreetMap') {
+      return {
+        mode,
+        error: null,
+        loadingLabel: fetching
+          ? `Syncing flow · Roads: ${roadSource}`
+          : `${coveragePct > 0 ? 'LIVE' : 'SIMULATED'} · Roads: ${roadSource} · Flow ${coveragePct}%`,
+      };
+    }
     if (liveMode) {
       return {
         mode,
         error: null,
         loadingLabel: fetching
-          ? 'syncing LIVE traffic flow'
-          : `LIVE · TomTom flow · ${coveragePct}% cov`,
+          ? 'Syncing flow · Roads: OpenStreetMap · Flow: TomTom · Unmatched: simulated'
+          : coveragePct > 0
+            ? `LIVE · Roads: OpenStreetMap · Flow: TomTom · ${coveragePct}% cov${coveragePct < 100 ? ' · Unmatched: simulated' : ''}`
+            : 'SIMULATED · Roads: OpenStreetMap · Flow: TomTom (no matches)',
       };
     }
     // Keyless simulation — one terse line that names the mode and the remedy
@@ -295,29 +312,24 @@ export function createModel({ state: layerState, services, parts, source }) {
     let closedDots = 0;
     const now = Date.now();
     for (const dot of layerState._dots) {
-      const flow = dot.road ? dot.road.flow : null;
-      if (flow?.closure) {
+      const flow = dot.road?.source ? dot.road.source.flow : dot.road?.flow;
+      dot.road.flow = flow;
+      if (flow?.closure || (!flow && layerState._uncoveredMode === 'hide')) {
         dot.point.show = false;
+        dot.mps = 0;
         closedDots += 1;
         continue;
       }
+      dot.point.show = true;
       const bucket = flow ? flowBucket(flow.level) : null;
       dot.bucket = bucket;
       dot.point.color = bucket
         ? layerState._activeBucketColors[bucket]
         : Cesium.Color.WHITE.withAlpha(0.85);
-      if (bucket === 'jam') {
-        dot.point.pixelSize =
-          parts.style.baseDotSize(dot.road?.type, bucket) +
-          1 +
-          parts.style.activeSizeDelta('jam');
-      } else if (bucket && parts.style.presetProfileActive()) {
-        // Preset profiles size-floor every bucket; the shipped normal path
-        // keeps its jam-only size touch (byte-identical behavior).
-        dot.point.pixelSize =
-          parts.style.baseDotSize(dot.road?.type, bucket) +
-          parts.style.activeSizeDelta(bucket);
-      }
+      dot.nominalSize =
+        parts.style.baseDotSize(dot.road?.type, bucket) +
+        (bucket === 'jam' ? 1 : 0) +
+        parts.style.activeSizeDelta(bucket);
       // Late flow can move a dot between buckets — keep the preset halo in
       // step (no-op writes under the normal profile, whose dots have none).
       if (parts.style.presetProfileActive())
@@ -338,12 +350,12 @@ export function createModel({ state: layerState, services, parts, source }) {
           layerState._fadeScaleFar,
           JAM_DOT_FAR_SCALE,
         );
-        dot.point.disableDepthTestDistance = JAM_DOT_DEPTH_PUNCH;
       } else {
         dot.creep = null;
       }
       layerState._bucketCounts[bucket || 'sim'] += 1;
     }
+    layerState._count = layerState._dots.length - closedDots;
     layerState._closedRoads = layerState._roads.reduce(
       (n, r) => n + (r.flow?.closure ? 1 : 0),
       0,

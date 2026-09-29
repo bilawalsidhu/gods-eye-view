@@ -99,6 +99,10 @@ non-commercial use, or a **Google Maps key** for the direct, metered route and
 Google place search. Provider terms and quotas apply. Add keys through the
 app's **POWER UP** panel; [Keys & Costs](#-api-keys) explains the options.
 
+> **Already installed?** Update to the latest version. Older versions query
+> public OpenStreetMap Overpass servers, which now refuse them, so Traffic,
+> Mapped Installations and ALPR stay empty until you update.
+
 ### Path 1 — One click, no terminal
 
 1. Install or update [Pinokio](https://desktop.pinokio.co/) to **8.2 or later**.
