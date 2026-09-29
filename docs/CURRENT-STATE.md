@@ -1,5 +1,10 @@
 # God's Eye View Current State
 
+The first-run mission card uses Brazilian Portuguese copy when the browser's
+language starts with `pt`, including mission progress and error messages.
+Other browser languages retain English. Mission IDs, selection behavior, and
+storage policy are unchanged.
+
 ## Cyber HUD — September 23, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice
