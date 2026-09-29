@@ -11,9 +11,14 @@ import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 import { createRetention } from './retention.js';
 import { createState } from './state.js';
+import { createObservedTraffic } from './observed.js';
 
 /** Construct one layer with its own scene state and supplied application services. */
-export function createTrafficLayer({ services, source }) {
+export function createTrafficLayer({
+  services,
+  source,
+  observedSource = null,
+}) {
   if (
     ![
       'requestRoads',
@@ -24,9 +29,14 @@ export function createTrafficLayer({ services, source }) {
     ].every((key) => typeof source?.[key] === 'function')
   )
     throw new TypeError('A traffic source is required');
+  if (
+    observedSource !== null &&
+    typeof observedSource?.request !== 'function'
+  )
+    throw new TypeError('Invalid observed traffic source');
   const state = createState({ services });
   const parts = {};
-  const context = { state, services, parts, source };
+  const context = { state, services, parts, source, observedSource };
   parts.style = createStyle(context);
   parts.timing = createTiming(context);
   parts.model = createModel(context);
@@ -36,6 +46,7 @@ export function createTrafficLayer({ services, source }) {
   parts.flow = createFlow(context);
   parts.retention = createRetention(context);
   parts.rendering = createRendering(context);
+  parts.observed = createObservedTraffic(context);
   parts.controls = createControls(context);
   parts.lifecycle = createLifecycle(context);
   state._parseRoads = TRAFFIC_TIMING_ENABLED
@@ -52,6 +63,7 @@ export function createTrafficLayer({ services, source }) {
   return Object.assign(
     {},
     parts.controls.methods,
+    parts.observed.methods,
     parts.lifecycle.methods,
     parts.ingestion?.methods,
     {
@@ -63,3 +75,11 @@ export function createTrafficLayer({ services, source }) {
 }
 
 export { createTrafficSource } from './source.js';
+export {
+  DEFAULT_OBSERVED_TRAFFIC_STALE_AFTER_MS,
+  OBSERVED_TRAFFIC_GEOMETRY_TYPES,
+  createObservedTrafficSource,
+  emptyObservedTrafficSnapshot,
+  normalizeObservedTrafficRecord,
+  normalizeObservedTrafficSnapshot,
+} from './observed.js';
