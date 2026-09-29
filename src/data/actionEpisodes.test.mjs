@@ -57,10 +57,7 @@ test('episode normalization keeps only bounded semantic action receipts', () => 
     ),
     null,
   );
-  assert.equal(
-    normalizeActionEpisode(episode({ completedAt: 50 })),
-    null,
-  );
+  assert.equal(normalizeActionEpisode(episode({ completedAt: 50 })), null);
   assert.equal(
     normalizeActionEpisode(
       episode({
@@ -117,10 +114,9 @@ test('argument key order does not split an otherwise identical sequence', () => 
     startedAt: 300,
     completedAt: 400,
   });
-  const candidates = detectReflexCandidates(
-    [episode(), reversed],
-    { minOccurrences: 2 },
-  );
+  const candidates = detectReflexCandidates([episode(), reversed], {
+    minOccurrences: 2,
+  });
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].occurrences, 2);
 });
@@ -168,17 +164,19 @@ test('schema and capability drift split otherwise identical sequences', () => {
   });
 
   assert.equal(
-    detectReflexCandidates(
-      [episode(), changedSchema, changedCapabilities],
-      { minOccurrences: 2 },
-    ).length,
+    detectReflexCandidates([episode(), changedSchema, changedCapabilities], {
+      minOccurrences: 2,
+    }).length,
     0,
   );
 });
 
 test('missing or future receipt versions and semantic fingerprints fail closed', () => {
   assert.equal(
-    normalizeActionEpisode({ ...episode(), version: ACTION_EPISODE_VERSION + 1 }),
+    normalizeActionEpisode({
+      ...episode(),
+      version: ACTION_EPISODE_VERSION + 1,
+    }),
     null,
   );
   assert.equal(
@@ -206,7 +204,11 @@ test('context, corrections, and observed failures prevent unsafe promotion', () 
   });
   assert.equal(
     detectReflexCandidates(
-      [episode(), episode({ startedAt: 210, completedAt: 280 }), differentContext],
+      [
+        episode(),
+        episode({ startedAt: 210, completedAt: 280 }),
+        differentContext,
+      ],
       { minOccurrences: 3 },
     ).length,
     0,
@@ -218,9 +220,11 @@ test('context, corrections, and observed failures prevent unsafe promotion', () 
     completedAt: 400,
   });
   assert.equal(
-    detectReflexCandidates(
-      [episode(), episode({ startedAt: 210, completedAt: 280 }), corrected],
-    ).length,
+    detectReflexCandidates([
+      episode(),
+      episode({ startedAt: 210, completedAt: 280 }),
+      corrected,
+    ]).length,
     0,
   );
 
@@ -245,9 +249,11 @@ test('context, corrections, and observed failures prevent unsafe promotion', () 
     completedAt: 400,
   });
   assert.equal(
-    detectReflexCandidates(
-      [episode(), episode({ startedAt: 210, completedAt: 280 }), failed],
-    ).length,
+    detectReflexCandidates([
+      episode(),
+      episode({ startedAt: 210, completedAt: 280 }),
+      failed,
+    ]).length,
     0,
   );
 });
