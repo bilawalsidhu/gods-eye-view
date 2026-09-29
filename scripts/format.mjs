@@ -120,6 +120,17 @@ export async function formatAdoptedFiles(root, mode) {
   }
 
   const changed = files.filter(({ source, formatted }) => source !== formatted);
+  if (mode === '--check') {
+    for (const target of changed.filter(({ name }) =>
+      [
+        'src/data/actionEpisodes.js',
+        'src/data/actionEpisodes.test.mjs',
+      ].includes(name),
+    ))
+      console.error(
+        `FORMAT_EXPECTED ${target.name} BEGIN\n${target.formatted}FORMAT_EXPECTED ${target.name} END`,
+      );
+  }
   if (mode === '--write') {
     for (const { file, formatted } of changed) await writeFile(file, formatted);
   }
