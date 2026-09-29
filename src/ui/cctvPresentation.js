@@ -26,6 +26,7 @@ export function _renderCctvState(state) {
   const enabled = !!state?.enabled && !!this.actions.isEnabled();
   const activeId = state?.activeCameraId || '';
   const activeCamera = state?.activeCamera || null;
+  const trafficObservation = activeCamera?.trafficObservation || null;
 
   // Auto-expand the panel when the active camera CHANGES to a new non-null
   // id while the layer is enabled. Covers click-on-globe, panel controls,
@@ -163,6 +164,17 @@ export function _renderCctvState(state) {
     } else {
       this._cctvMeta.textContent = 'Enable CCTV to load camera intersections';
     }
+  }
+
+  if (this._cctvTrafficObservation) {
+    const visible = !!enabled && !!activeCamera && !!trafficObservation;
+    this._cctvTrafficObservation.hidden = !visible;
+    this._cctvTrafficObservation.textContent = visible
+      ? trafficObservation.text || trafficObservation.statusLabel || ''
+      : '';
+    this._cctvTrafficObservation.dataset.state = visible
+      ? trafficObservation.state || ''
+      : '';
   }
 
   const liveIntent = enabled && !!activeCamera?.isVideo;
