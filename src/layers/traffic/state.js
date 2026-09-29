@@ -251,6 +251,7 @@ export function createState({ services }) {
   layerState._observedTrafficSnapshot = emptyObservedTrafficSnapshot();
   layerState._observedTrafficLoading = false;
   layerState._observedTrafficGeneration = 0;
+  layerState._observedTrafficListeners = new Set();
 
   /** Parsed road set whose current flow request owns the feed status. */
   layerState._flowRoads = null;
