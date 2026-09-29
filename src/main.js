@@ -52,6 +52,7 @@ import {
 import { setLogLevel, getLogLevel, peekLogBuffer, drainLogBuffer } from './logger.js';
 import { applyTilesetCachePolicy } from './tilesetCachePolicy.js';
 import { applySceneRenderScale } from './sceneRenderScale.js';
+import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
 import { installScopeMask } from './scopeMask.js';
 import { initFirstRunExperience } from './firstRunExperience.js';
 
@@ -216,6 +217,14 @@ async function init() {
     // globe at all LODs (street level → orbital). The default globe's 2D imagery
     // clips through 3D tile buildings at close range.
     viewer.scene.globe.show = false;
+
+    // Before any tile builds a draw command: Cesium's per-vertex model
+    // atmosphere cannot LINK on Apple Metal/ANGLE (out params bound to
+    // varyings), which tears the whole render loop down on iPad/iPhone. On
+    // affected devices this clears scene.fog.renderable — fog.enabled stays
+    // on, so 3D Tiles screen-space-error scaling is unaffected. Sky
+    // atmosphere is a different shader path and stays on. (No-op elsewhere.)
+    applyModelAtmosphereWorkaround(viewer.scene);
 
     // Keep a sky behind Google 3D Tiles, but soften Cesium's high-intensity
     // default atmosphere. With the globe hidden its bright limb otherwise
