@@ -864,5 +864,18 @@
   "src/layers/traffic/motion.test.mjs",
   "scripts/qa-journey-recorder.mjs",
   "scripts/qa-alpr-journey.mjs",
-  "scripts/qa-context-arrivals.mjs"
+  "scripts/qa-context-arrivals.mjs",
+  "scripts/build-atc-frequencies.mjs",
+  "src/data/ourAirportsAtc.js",
+  "src/data/ourAirportsAtc.test.mjs",
+  "src/data/audioOwnership.js",
+  "src/data/audioOwnership.test.mjs",
+  "src/data/flightPhase.js",
+  "src/data/flightPhase.test.mjs",
+  "src/data/atcTuning.js",
+  "src/data/atcTuning.test.mjs",
+  "src/data/atcStreamPreference.js",
+  "src/data/atcStreamPreference.test.mjs",
+  "src/data/atcAudio.js",
+  "src/data/atcAudio.test.mjs"
 ]
