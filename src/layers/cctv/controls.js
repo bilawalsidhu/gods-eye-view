@@ -69,8 +69,8 @@ export function createControls({ state: layerState, services, parts, source }) {
           if (enabled) {
             const active = parts.selection.getActiveRecord();
             const runtime = active?.projection;
-            const media = runtime?.video ||
-              (runtime?.imageReady ? runtime.image : null);
+            const media =
+              runtime?.video || (runtime?.imageReady ? runtime.image : null);
             if (active && media)
               parts.frames.processVehicleObservationFrame(active, media);
             parts.projection.startProjectionLoop();
