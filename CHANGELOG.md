@@ -1,5 +1,11 @@
 # Changelog
 
+- Fall back to the keyless globe when photorealistic 3D Tiles cannot draw.
+  Startup counted any tileset Cesium resolved as a success, including one whose
+  root never arrived, so the globe was hidden behind tiles that never appeared
+  and the ion route was never tried. A rootless tileset now counts as a failed
+  attempt and the next route is used.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
