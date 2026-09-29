@@ -108,3 +108,39 @@ test('span clamp is idempotent on already-clamped bounds (loadRoadsForBounds re-
   const twice = clampBoundsAroundCenter(once, midpoint, 0.05);
   assert.deepEqual(twice, once);
 });
+
+// ── Antimeridian (ported from upstream 62abcfd) ─────────────────────────────
+// A viewport crossing the antimeridian reports west > east (179.98 / -179.98).
+// The span must wrap through 360, and the clamped box must stay monotonic
+// (west <= east) while remaining inside [-180, 180] — the road source accepts
+// one monotonic bounding box, and getBoundsCenter/boundsOverlap assume it.
+
+test('span clamp: an antimeridian viewport produces a monotonic in-range box', () => {
+  const bounds = { south: -17.0, north: -16.9, west: 179.98, east: -179.98 };
+  const center = { lat: -16.95, lon: 179.999 };
+  const clamped = clampBoundsAroundCenter(bounds, center, 0.05);
+  assert.ok(clamped.west <= clamped.east, 'west <= east across the wrap');
+  assert.ok(clamped.west >= -180 && clamped.east <= 180, 'inside the legal domain');
+  // The viewport's true span is 0.04 (179.98 -> -179.98 wraps through 360),
+  // so the box keeps that span, shifted to fit under the 180 edge.
+  assert.ok(Math.abs((clamped.east - clamped.west) - 0.04) < 1e-9,
+    `span kept: ${clamped.east - clamped.west}`);
+});
+
+test('span clamp: a center just west of the line shifts the box, never inverts it', () => {
+  const bounds = { south: -17.0, north: -16.9, west: 179.98, east: -179.98 };
+  const center = { lat: -16.95, lon: -179.999 };
+  const clamped = clampBoundsAroundCenter(bounds, center, 0.05);
+  assert.ok(clamped.west <= clamped.east, 'west <= east across the wrap');
+  assert.ok(clamped.west >= -180 && clamped.east <= 180, 'inside the legal domain');
+  assert.ok(clamped.east >= -180.05 + 1e-9 && clamped.west <= -179.95 - 1e-9,
+    'the box hugs the antimeridian from the west side');
+});
+
+test('span clamp: mid-ocean centers are untouched by the range bounder', () => {
+  const bounds = { south: 29.5, north: 30.5, west: -98.5, east: -97.5 };
+  const center = { lat: 0, lon: 0 };
+  const clamped = clampBoundsAroundCenter(bounds, center, 0.05);
+  assert.ok(Math.abs(clamped.west - -0.025) < 1e-12);
+  assert.ok(Math.abs(clamped.east - 0.025) < 1e-12);
+});
