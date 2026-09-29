@@ -143,6 +143,7 @@ export const WORLD_OVERLAY_OCCLUDER_SELECTORS = Object.freeze([
  * @property {number} [alpha=1]
  * @property {number} [cohortLimit=256] Ambient surplus retained per domain.
  * @property {number} [collisionCapacity=96] Shared domain paint budget.
+ * @property {number} [maxVisible=Infinity] Source ceiling within a shared domain.
  * @property {boolean} [moving=false] Enables bounded interval re-solves.
  * @property {number} [solveIntervalMs=125]
  */
@@ -696,6 +697,10 @@ function normalizeSourceOptions(options = {}, previous = {}) {
     collisionCapacity: Number.isFinite(requestedCapacity)
       ? Math.max(0, Math.floor(requestedCapacity))
       : DEFAULT_COLLISION_CAPACITY,
+    maxVisible: Math.max(
+      0,
+      options.maxVisible ?? previous.maxVisible ?? Infinity,
+    ),
     moving:
       options.moving !== undefined
         ? options.moving === true
@@ -786,6 +791,7 @@ function getOrCreateDomain(domainId) {
       sepCount: 0,
       renderEntries: [],
       demandBySource: new Map(),
+      limitsBySource: new Map(),
       capacity: DEFAULT_COLLISION_CAPACITY,
       lastSolveAt: Number.NEGATIVE_INFINITY,
       moving: false,
@@ -951,6 +957,9 @@ export function setOverlayEntries(sourceId, entries, options = {}) {
   for (const entry of normalized) next.set(entry.id, entry);
   for (const entry of source.entries.values()) {
     if (!next.has(entry.id)) _records.delete(entry._overlayKey);
+    const replacement = next.get(entry.id);
+    if (replacement && isProtected(entry) !== isProtected(replacement))
+      getOrCreateDomain(entry.collisionGroup).arbiter.remove(entry._overlayKey);
   }
   source.entries = next;
   rebuildSourceCohorts(source);
@@ -2122,6 +2131,7 @@ function collectFrameCandidates(keyhole, viewProjection) {
         source.id,
         source.demandByDomain.get(domainId) || 0,
       );
+      domain.limitsBySource.set(source.id, source.options.maxVisible);
       candidateCount += cohort.length;
       for (let i = 0; i < cohort.length; i++) {
         const entry = cohort[i];
@@ -2289,6 +2299,7 @@ function solveDomains(timestamp) {
       domain.arbiter.solve(domain.candidates, {
         capacity: Math.min(domain.capacity, domain.candidates.length),
         demandByLayer: domain.demandBySource,
+        limitsByLayer: domain.limitsBySource,
         now: timestamp,
         // The host publishes its own pooled counters below, so duplicating a
         // per-layer diagnostic object in the arbiter adds no observable data.
@@ -2311,6 +2322,7 @@ function solveDomains(timestamp) {
       domain.candidateMap,
       timestamp,
       domain.renderEntries,
+      domain.limitsBySource,
     );
     for (let r = 0; r < rendered.length; r++) {
       const renderedEntry = rendered[r];

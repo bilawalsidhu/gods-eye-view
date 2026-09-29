@@ -38,6 +38,89 @@ test('adsbdb is credited and carries its published route-data restriction', () =
   assert.match(credit.html, /href="https:\/\/www\.adsbdb\.com"/);
 });
 
+test('OpenStreetMap has one generic data credit with separate tile and names distributors', () => {
+  const osm = DATA_CREDITS.filter((entry) =>
+    entry.html.includes('openstreetmap.org/copyright'),
+  );
+  assert.equal(osm.length, 1);
+  assert.equal(osm[0].key, 'openstreetmap');
+  assert.match(osm[0].html, /Map and place data/);
+  assert.match(osm[0].html, /© OpenStreetMap contributors/);
+  assert.match(
+    DATA_CREDITS.find((entry) => entry.key === 'openfreemap').html,
+    /Vector tiles:/,
+  );
+  assert.match(
+    DATA_CREDITS.find((entry) => entry.key === 'overture-military-names').html,
+    /Overture Maps Foundation/,
+  );
+});
+
+test('inline OSM attribution persists until its last display owner leaves', async (t) => {
+  const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const visible = new Set();
+  const viewer = {
+    creditDisplay: {
+      addStaticCredit: (c) => visible.add(c),
+      removeStaticCredit: (c) => visible.delete(c),
+    },
+    scene: { requestRender() {} },
+  };
+  assert.equal(showOsmCredit(viewer, 'alpr'), true);
+  assert.equal(showOsmCredit(viewer, 'alpr'), false);
+  assert.equal(visible.size, 1);
+  assert.match(
+    [...visible][0].html,
+    /href="https:\/\/www.openstreetmap.org\/copyright"/,
+  );
+  assert.match([...visible][0].html, />© OpenStreetMap</);
+  assert.ok([...visible][0].showOnScreen);
+  t.mock.timers.tick(60000);
+  assert.equal(visible.size, 1);
+  showOsmCredit(viewer, 'traffic', { openMapTiles: true });
+  assert.equal(visible.size, 2);
+  hideOsmCredit(viewer, 'alpr');
+  assert.equal(visible.size, 2, 'traffic still owns both credits');
+  showOsmCredit(viewer, 'datacenters');
+  hideOsmCredit(viewer, 'traffic');
+  assert.equal(
+    visible.size,
+    1,
+    'bundled data does not retain the tile distributor',
+  );
+  hideOsmCredit(viewer, 'datacenters');
+  assert.equal(visible.size, 0);
+  assert.equal(hideOsmCredit(viewer, 'datacenters'), false);
+  showOsmCredit(viewer, 'alpr');
+  assert.equal(visible.size, 1, 'reenabling restores the short credit');
+});
+
+test('tile attribution follows source changes and viewers have independent ownership', async () => {
+  const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
+  const create = () => {
+    const credits = new Set();
+    return {
+      credits,
+      creditDisplay: {
+        addStaticCredit: (c) => credits.add(c),
+        removeStaticCredit: (c) => credits.delete(c),
+      },
+    };
+  };
+  const a = create(),
+    b = create();
+  showOsmCredit(a, 'installations', { openMapTiles: true });
+  showOsmCredit(b, 'installations');
+  assert.equal(a.credits.size, 2);
+  assert.equal(b.credits.size, 1);
+  showOsmCredit(a, 'installations');
+  assert.equal(a.credits.size, 1, 'wide names no longer use tiles');
+  hideOsmCredit(a, 'installations');
+  assert.equal(a.credits.size, 0);
+  assert.equal(b.credits.size, 1);
+});
+
 test('OurAirports is credited even though its license does not require it', () => {
   // Public domain: "no need to credit us, though we appreciate it". The
   // courtesy credit is also the only place a reader can see WHICH database a

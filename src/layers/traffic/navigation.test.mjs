@@ -11,7 +11,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function setup(t, requestRoads) {
+function setup(t, requestRoads, getStatus = async () => ({ hasKey: false })) {
   t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
   const camera = {
     positionCartographic: Cesium.Cartographic.fromDegrees(
@@ -44,6 +44,7 @@ function setup(t, requestRoads) {
     camera,
     scene: {
       canvas: { width: 100, height: 100 },
+      globe: { show: true, tilesLoaded: true, getHeight: () => 0 },
       preRender: new Cesium.Event(),
       primitives: { add: (value) => value, remove: () => true },
     },
@@ -55,7 +56,7 @@ function setup(t, requestRoads) {
     },
     source: {
       requestRoads,
-      getStatus: async () => ({ hasKey: false }),
+      getStatus,
       fetchFlowForBounds: async () => [],
       getFlowSessionStats: () => ({ tilesFetched: 0 }),
       resetFlowTileCache() {},
@@ -204,7 +205,7 @@ test('parked failures back off and disabling cancels the scheduled retry', async
   await tick(400);
   assert.equal(calls, 1);
   assert.equal(layer.getStats().loading, false);
-  assert.equal(layer.getStats().error, 'Road data temporarily unavailable');
+  assert.equal(layer.getStats().error, 'OpenFreeMap tiles unavailable');
   await tick(1500);
   await tick(400);
   assert.equal(calls, 2);
@@ -217,38 +218,211 @@ test('parked failures back off and disabling cancels the scheduled retry', async
   assert.equal(layer.getStats().error, null);
 });
 
+test('not-configured roads stop both parked retries and the enable-time kick', async (t) => {
+  let requests = 0;
+  const h = setup(t, async () => {
+    requests++;
+    return {
+      ok: false,
+      status: 503,
+      headers: new Headers(),
+      json: async () => ({ code: 'OVERPASS_NOT_CONFIGURED', retryable: false }),
+    };
+  });
+  h.layer.enable(h.viewer);
+  await h.tick(400);
+  await h.tick(60_000);
+  assert.equal(requests, 1);
+  assert.equal(h.layer.getStats().loading, false);
+  assert.match(h.layer.getStats().loadingLabel, /UNAVAILABLE/);
+});
+
 test('a declined road request reaches the row as the reason, not as a shrug', async (t) => {
-  // Issue #661: with every public Overpass mirror refusing a network, the row
-  // read "Road data temporarily unavailable" while the console already held
-  // "Overpass API returned 406". The reporter went looking for a bad TomTom
-  // key — the other half of this layer, and never the problem. The status the
-  // code already has must survive the trip to the panel.
   let status = 406;
   const { layer, viewer, tick } = setup(t, async () => ({ ok: false, status }));
   layer.enable(viewer);
   await tick(400);
   assert.equal(
     layer.getStats().error,
-    'Overpass refused the road query (HTTP 406)',
+    'OpenFreeMap tiles unavailable (HTTP 406)',
   );
 
   status = 429;
   for (let i = 0; i < 20; i++) await tick(1500);
   assert.equal(
     layer.getStats().error,
-    'Overpass rate-limited',
+    'OpenFreeMap tiles rate-limited',
     'a rate limit is a different instruction to the reader than a refusal',
   );
 });
 
 test('an unclassified road failure keeps the general line', async (t) => {
-  // The complement of the test above, and the reason this is not just
-  // `e.message`: a dropped socket throws whatever the platform felt like
-  // saying, and "Failed to fetch" on a panel row helps nobody.
   const { layer, viewer, tick } = setup(t, async () => {
     throw new Error('socket hang up');
   });
   layer.enable(viewer);
   await tick(400);
-  assert.equal(layer.getStats().error, 'Road data temporarily unavailable');
+  assert.equal(layer.getStats().error, 'OpenFreeMap tiles unavailable');
+});
+
+test('a stalled TomTom status never blocks road acquisition or first simulated dots', async (t) => {
+  let calls = 0;
+  const { layer, viewer, tick } = setup(
+    t,
+    async (box) => {
+      calls++;
+      return roads(box);
+    },
+    () => new Promise(() => {}),
+  );
+  // The source contract is exercised independently of status by the production
+  // load path; the real source status cancellation case is in source.test.
+  layer.enable(viewer);
+  await tick(400);
+  await tick(2000);
+  assert.ok(calls > 0);
+  assert.ok(layer.getStats().count > 0);
+});
+
+test('explicit enable starts roads without the camera debounce', async (t) => {
+  let calls = 0;
+  const { layer, viewer, tick } = setup(t, async (box) => {
+    calls++;
+    return roads(box);
+  });
+  layer.enable(viewer);
+  await tick(0);
+  assert.ok(calls > 0, 'the first load starts before 320 ms');
+});
+
+test('moveEnd starts the destination request without another gesture debounce', async (t) => {
+  let calls = 0;
+  const { layer, viewer, move, tick } = setup(t, async (bounds) => {
+    calls++;
+    return roads(bounds);
+  });
+  layer.enable(viewer);
+  await tick(400);
+  const before = calls;
+  move(-0.1276, 51.5072);
+  await tick(0);
+  assert.ok(calls > before, 'arrival loads in the next task, before 320 ms');
+});
+
+test('traffic surface observers belong to enable and leave no listener after disable or destroy', async (t) => {
+  const { layer, viewer, tick } = setup(t, async (bounds) => roads(bounds));
+  viewer.camera.viewMatrix = Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY);
+  viewer.camera.frustum = {
+    projectionMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
+  };
+  viewer.scene.camera = viewer.camera;
+  viewer.scene.postRender = new Cesium.Event();
+  assert.equal(viewer.scene.postRender.numberOfListeners, 0);
+  for (let i = 0; i < 3; i++) {
+    layer.enable(viewer);
+    layer.enable(viewer);
+    assert.equal(viewer.scene.postRender.numberOfListeners, 1);
+    viewer.scene.postRender.raiseEvent();
+    await tick(1);
+    layer.disable(viewer);
+    assert.equal(viewer.scene.postRender.numberOfListeners, 0);
+    await tick(5000);
+    assert.equal(
+      viewer.scene.postRender.numberOfListeners,
+      0,
+      'late work cannot resubscribe',
+    );
+  }
+  layer.enable(viewer);
+  assert.equal(viewer.scene.postRender.numberOfListeners, 1);
+  layer.destroy(viewer);
+  assert.equal(viewer.scene.postRender.numberOfListeners, 0);
+  assert.equal(viewer.scene.preRender.numberOfListeners, 0);
+});
+
+test('coverage changes at the same center reload and disabling invalidates coverage without dropping source caches', async (t) => {
+  const calls = [];
+  const { layer, viewer, tick } = setup(t, async (bounds) => {
+    calls.push(bounds);
+    return roads(bounds);
+  });
+  layer.enable(viewer);
+  await tick(1000);
+  await tick(2000);
+  assert.ok(layer.getStats().count > 0);
+  const before = calls.length;
+  layer.disable(viewer);
+  layer.enable(viewer);
+  await tick(1000);
+  await tick(2000);
+  assert.ok(layer.getStats().count > 0, 'enable must repaint the same view');
+  assert.ok(calls.length >= before);
+});
+
+test('a settled footprint loads new tiles even when the camera centre stays put', async (t) => {
+  const seen = [];
+  const { layer, viewer, tick } = setup(
+    t,
+    async (bounds, { majorOnly, coverage }) => {
+      if (!majorOnly) seen.push({ ...bounds, coverage });
+      return roads(bounds);
+    },
+  );
+  layer.setParams({ roadMode: 'osm' });
+  let reach = 0.005;
+  const camera = viewer.camera;
+  camera.getPickRay = () => null;
+  camera.heading = 0;
+  camera.pitch = -Math.PI / 2;
+  camera.pickEllipsoid = (pixel, ellipsoid, result) =>
+    Cesium.Cartesian3.fromDegrees(
+      -97.744 + (pixel.x - 50) / 10000,
+      30.267 + (pixel.y / 100) * reach,
+      0,
+      ellipsoid,
+      result,
+    );
+  layer.enable(viewer);
+  await tick(400);
+  assert.equal(seen.length, 1);
+  const firstKey = seen[0].coverage.key;
+  camera.changed.raiseEvent();
+  // The final flight step occurs below the changed-event threshold.
+  reach = 0.08;
+  camera.pitch = -Math.PI / 12;
+  await tick(400);
+  assert.equal(seen.length, 2);
+  assert.notEqual(seen[1].coverage.key, firstKey);
+  assert.ok(
+    seen[1].north > 30.33,
+    'sample the final view when the debounce fires',
+  );
+  camera.moveEnd.raiseEvent();
+  await tick(400);
+  assert.equal(
+    seen.length,
+    2,
+    'an identical settled footprint does not reload',
+  );
+});
+
+test('partial coverage retries while coarse roads render, then stops after three retries', async (t) => {
+  let calls = 0;
+  const { layer, viewer, tick } = setup(t, async (bounds) => {
+    calls++;
+    const response = roads(bounds);
+    const data = await response.json();
+    return { ok: true, json: async () => ({ ...data, partial: true }) };
+  });
+  layer.enable(viewer);
+  await tick(400);
+  await tick(0);
+  assert.ok(layer.getStats().count > 0);
+  const initial = calls;
+  for (let i = 0; i < 12; i++) {
+    await tick(30000);
+    await tick(400);
+  }
+  assert.equal(calls, initial * 4, 'initial load plus three bounded retries');
+  assert.ok(layer.getStats().count > 0);
 });
