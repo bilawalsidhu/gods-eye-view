@@ -160,6 +160,15 @@ export const DATA_CREDITS = [
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
+  {
+    key: 'radiation',
+    html:
+      'Radiation: ' +
+      '<a href="https://safecast.org/data/" target="_blank" rel="noopener">Safecast</a>' +
+      ' (CC0); © ' +
+      '<a href="https://odlinfo.bfs.de/ODL/EN/home/home_node.html" target="_blank" rel="noopener">Bundesamt für Strahlenschutz (BfS)</a>' +
+      ', <a href="https://www.govdata.de/dl-de/by-2-0" target="_blank" rel="noopener">dl-de/by-2-0</a>',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {

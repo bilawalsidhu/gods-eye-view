@@ -15,6 +15,7 @@
   ["military", "m"],
   ["military-awareness", "g"],
   ["military-installations", "i"],
+  ["radiation", "0"],
   ["radio", "r"],
   ["recent-imagery", "1"],
   ["rocket-launches", "x"],

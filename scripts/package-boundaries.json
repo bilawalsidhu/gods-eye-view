@@ -1893,6 +1893,10 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/radiation.js",
+      "src/layers/radiation/index.js",
+      "src/layers/radiation/source.js",
+      "src/layers/radiation/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -2422,6 +2426,10 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/radiation.js",
+      "src/layers/radiation/index.js",
+      "src/layers/radiation/source.js",
+      "src/layers/radiation/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -2853,7 +2861,9 @@
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
-      "src/layers/submarineCables/bundledSource.js"
+      "src/layers/submarineCables/bundledSource.js",
+      "src/layers/radiation/source.js",
+      "src/layers/radiation/records.js"
     ],
     "external": []
   },
@@ -3063,6 +3073,25 @@
       "src/layers/perimeters/inciweb.js"
     ],
     "external": ["cesium"]
+  },
+  "radiation": {
+    "exports": ["./layers/radiation"],
+    "modules": [
+      "src/layers/radiation/index.js",
+      "src/sources/httpBody.js",
+      "src/layers/radiation/source.js",
+      "src/layers/radiation/records.js"
+    ],
+    "external": ["cesium"]
+  },
+  "radiation-source": {
+    "exports": ["./layers/radiation/source"],
+    "modules": [
+      "src/sources/httpBody.js",
+      "src/layers/radiation/source.js",
+      "src/layers/radiation/records.js"
+    ],
+    "external": []
   },
   "perimeters-source": {
     "exports": ["./layers/perimeters/source"],

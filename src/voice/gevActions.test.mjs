@@ -3165,6 +3165,30 @@ test('ALPR common names toggle only the registered camera layer through the norm
   }
 });
 
+test('Radiation common names toggle only the radiation layer through the normal voice action', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } } };
+  const calls = [];
+  let enabled = false;
+  const dataManager = {
+    layers: new Map([['radiation', { module: {} }]]),
+    getAll: () => [{ id: 'radiation', name: 'Radiation' }],
+    isEnabled: () => enabled,
+    setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  for (const alias of ['radiation', 'radiation levels', 'dose rate', 'gamma dose rate', 'safecast']) {
+    for (const value of [true, false]) {
+      const result = await runner('set_layer_visibility', { layerId: alias, enabled: value });
+      assert.equal(result.ok, true);
+      assert.equal(result.layerId, 'radiation');
+      assert.deepEqual(calls.at(-1), ['radiation', value]);
+    }
+  }
+});
+
 test('Local ADS-B common names toggle only the receiver layer through the normal voice action', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const viewer = { clock: { onTick: { addEventListener: () => () => {} } },

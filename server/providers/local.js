@@ -23,6 +23,7 @@ import { googlePlacesContextProxy } from './places.js';
 import { keySetupEndpoint } from '../standalone/key-setup.js';
 import { weatherProxy } from './weather.js';
 import { firePerimetersProxy } from './firePerimeters.js';
+import { radiationProxy } from './radiation.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
 
@@ -55,6 +56,7 @@ function localProviderPlugins() {
     weatherProxy(),
     cycloneProxy(),
     firePerimetersProxy(),
+    radiationProxy(),
     keySetupEndpoint(),
   ];
 }
