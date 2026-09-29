@@ -2736,12 +2736,11 @@
   },
   "voice-action-schemas": {
     "exports": ["./voice/action-schemas"],
-    "modules": ["src/voice/actionSchemas.js", "src/hudLayoutPolicy.js"],
-    "external": []
-  },
-  "action-episodes": {
-    "exports": ["./actions/episodes"],
-    "modules": ["src/data/actionEpisodes.js"],
+    "modules": [
+      "src/voice/actionSchemas.js",
+      "src/data/actionEpisodes.js",
+      "src/hudLayoutPolicy.js"
+    ],
     "external": []
   },
   "voice-session": {
