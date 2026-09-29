@@ -130,7 +130,16 @@ function longitudeSpanDeg(west, east) {
   return raw >= 0 ? raw : raw + 360;
 }
 
-/** Keep a monotonic longitude range inside the traffic source's legal domain. */
+/**
+ * Keep a monotonic longitude range inside the traffic source's legal domain.
+ *
+ * Builds the west/east pair around `center`, then shifts the pair (never
+ * widens it) just far enough that both edges sit inside [-180, 180].
+ *
+ * @param {number} center - Range center longitude (degrees).
+ * @param {number} span - Full longitude span (degrees).
+ * @returns {{west:number, east:number}} Monotonic range with west <= east.
+ */
 function boundedLongitudeRange(center, span) {
   let west = center - span / 2;
   let east = center + span / 2;

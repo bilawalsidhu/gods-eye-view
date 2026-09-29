@@ -61,7 +61,8 @@ let CACHE_MAX_ENTRIES = DEFAULT_MAX_CACHE_ENTRIES;
  * Test-only override of CACHE_MAX_ENTRIES (mirrors the injectable
  * `maxCacheEntries` on upstream's factory form). Pass
  * `DEFAULT_MAX_CACHE_ENTRIES` to restore.
- * @param {number} max
+ * @param {number} max the replacement entry cap; a non-finite or
+ *   non-positive value restores `DEFAULT_MAX_CACHE_ENTRIES`.
  */
 export function setCacheLimitForTest(max) {
   CACHE_MAX_ENTRIES = Number.isFinite(max) && max > 0
@@ -89,8 +90,9 @@ const cache = new Map();
  * spatial: a session comes back to cells near where it already was, so the
  * cell it is parked on must not be evicted merely for having been resolved
  * early.
- * @param {string} key
+ * @param {string} key the `"lat,lon"` cache key to write.
  * @param {{ellipsoid: number, source: 'reearth'|'geoid-fallback', retryAt?: number}} entry
+ *   the resolved height record to store under `key`.
  */
 function cacheStore(key, entry) {
   cache.delete(key);
@@ -105,8 +107,9 @@ function cacheStore(key, entry) {
 /**
  * Read an entry and promote it to newest, so a coordinate a consumer keeps
  * asking about survives eviction. Returns undefined on a miss.
- * @param {string} key
+ * @param {string} key the `"lat,lon"` cache key to read and promote.
  * @returns {{ellipsoid: number, source: 'reearth'|'geoid-fallback', retryAt?: number}|undefined}
+ *   the stored record, or undefined when `key` has no entry.
  */
 function cacheTouch(key) {
   const entry = cache.get(key);
