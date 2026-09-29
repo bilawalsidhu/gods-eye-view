@@ -10,6 +10,7 @@ import { makeFixtureRoot } from './fixtureRoot.mjs';
 test('data providers have both hooks; credential editing stays development-only', () => {
   const plugins = localProviderPlugins();
   assert.ok(plugins.some(({ name }) => name === 'fire-perimeters'));
+  assert.ok(plugins.some(({ name }) => name === 'radiation'));
   for (const plugin of plugins) {
     if (plugin.name === 'gev-key-setup') {
       assert.equal(plugin.configurePreviewServer, undefined);
@@ -102,6 +103,7 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         ['/api/adsbdb/type/invalid', 400],
         ['/api/firms/status', 200],
         ['/api/fire-perimeters/inciweb/publication/invalid', 400],
+        ['/api/radiation/unknown', 404],
         ['/api/terrain/heights?points=invalid', 400],
         ['/api/overpass', 405],
         ['/api/overpass/status', 200],

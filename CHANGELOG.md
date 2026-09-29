@@ -1,5 +1,16 @@
 # Changelog
 
+- Radiation layer (Events group): ambient gamma dose rate in µSv/h from the
+  German Federal Office for Radiation Protection (BfS ODL, about 1,600
+  stations, hourly means) and from Safecast's worldwide fixed sensors
+  (CC0), keyless. Points are sized and coloured by dose band; readings of
+  0.5 µSv/h or more are labelled; the row lists the 25 highest readings,
+  selects and flies to one, and links to the source's own map.
+  `/api/radiation` reads the two fixed feeds with a per-feed cache, a per-feed
+  429 cooldown and the last good copy on failure, converts Safecast LND 7318
+  counts at 334 CPM per µSv/h, and never forwards Safecast owner contact
+  fields.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
