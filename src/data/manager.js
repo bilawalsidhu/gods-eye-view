@@ -1,5 +1,6 @@
 import { governorRequestRender } from '../renderGovernor.js';
 import { markDetectionSourcesChanged } from './detection.js';
+import { layerKeyRequirementTooltip } from './keySetup.js';
 
 /**
  * Deep-copy plain layer parameters so a caller's object can never be mutated by
@@ -2133,6 +2134,10 @@ export class DataLayerManager {
         icon: entry.module.icon,
         source: entry.module.source,
         showInTogglePanel: entry.module.showInTogglePanel !== false,
+        // Registry id of the provider key this layer needs, if any (mirrors
+        // showInTogglePanel). The layer reports stats.keyRequired while that
+        // key is absent; the row names it via keySetup.js guidance.
+        requiresKeyId: entry.module.requiresKeyId || null,
         enabled: entry.enabled,
         lifecycleState: entry.lifecycleState,
         lifecycleUncertain: entry.lifecycleUncertain,
@@ -2552,7 +2557,18 @@ export class DataLayerManager {
     button.textContent = transitioning
       ? layer.lifecycleState.toUpperCase()
       : (uncertain ? 'UNCERTAIN' : (layer.enabled ? FEED_STATE_LABELS[feedState] : 'OFF'));
-    button.setAttribute('aria-label', `${layer.name}: ${button.textContent}`);
+    // Name the missing key on the control itself: a row reading KEY REQUIRED
+    // without saying WHICH key leaves a dead control and no next step. Empty
+    // when the layer needs no key, or already has one.
+    const keyGuidance = layerKeyRequirementTooltip(layer);
+    // Assigned unconditionally: '' clears a stale tooltip once the key lands.
+    button.title = keyGuidance;
+    button.setAttribute(
+      'aria-label',
+      keyGuidance
+        ? `${layer.name}: ${button.textContent}. ${keyGuidance}`
+        : `${layer.name}: ${button.textContent}`,
+    );
   }
 
   _formatCount(n) {

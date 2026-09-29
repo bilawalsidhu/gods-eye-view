@@ -243,6 +243,11 @@ export function createFirmsHeatmapLayer({
     // which refetches through the /api/firms proxy (the proxy's 30 min TTL —
     // not this interval — is what protects the upstream FIRMS quota).
     updateInterval: REFRESH_INTERVAL_MS,
+    // The one data-layer control a provider key gates: the proxy answers
+    // 503 {error:'no_key'} without FIRMS_MAP_KEY. Declared as a key-registry
+    // id rather than an env-var string, so the row names the key from the one
+    // place that owns what each key is called (keySetup.js).
+    requiresKeyId: 'firms',
 
     init(viewer) {
       if (_destroyed) return;
