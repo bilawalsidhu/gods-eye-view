@@ -35,6 +35,8 @@ export function createThumbnailLoader({
   const queue = [];
   let inFlight = 0;
   let touchCounter = 0;
+  let supersededQueued = 0;
+  let supersededInFlight = 0;
   let destroyed = false;
 
   function notify(key) {
@@ -212,9 +214,39 @@ export function createThumbnailLoader({
         candidates.length,
         extra,
       );
+      const keys = [];
       order.forEach((index, priority) => {
-        this.request(candidates[index], box, priority);
+        const candidate = candidates[index];
+        if (!candidate?.key) return;
+        keys.push(candidate.key);
+        this.request(candidate, box, priority);
       });
+      return keys;
+    },
+
+    /**
+     * Keep only refinement work still wanted by the current UI intent.
+     *
+     * Known decoded/probed entries may remain warm under the LRU residency
+     * policy, but queued or in-flight acquisition for no-longer-wanted keys is
+     * cancelled. A cancelled known-present re-fetch keeps its proven metadata.
+     * @param {Iterable<string>} keys
+     */
+    retain(keys) {
+      const wanted = new Set(keys || []);
+      for (let index = queue.length - 1; index >= 0; index -= 1) {
+        const entry = queue[index];
+        if (wanted.has(entry.key)) continue;
+        queue.splice(index, 1);
+        supersededQueued += 1;
+        if (entry.status === 'unknown') entries.delete(entry.key);
+      }
+      for (const entry of [...entries.values()]) {
+        if (!entry.loading || wanted.has(entry.key)) continue;
+        entry.controller?.abort();
+        supersededInFlight += 1;
+        if (entry.status === 'unknown') entries.delete(entry.key);
+      }
     },
 
     /**
@@ -257,6 +289,13 @@ export function createThumbnailLoader({
       if (typeof listener !== 'function') return () => {};
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+
+    refinementStats() {
+      return {
+        supersededQueued,
+        supersededInFlight,
+      };
     },
 
     stats() {
