@@ -123,6 +123,15 @@ export async function formatAdoptedFiles(root, mode) {
   if (mode === '--write') {
     for (const { file, formatted } of changed) await writeFile(file, formatted);
   }
+  if (mode === '--check') {
+    for (const { name, formatted } of changed) {
+      if (name === 'src/layers/cctv/frames.js') {
+        console.error('FORMAT_PROBE_START');
+        console.error(formatted);
+        console.error('FORMAT_PROBE_END');
+      }
+    }
+  }
   return { count: files.length, changed: changed.map(({ name }) => name) };
 }
 
