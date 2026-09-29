@@ -227,6 +227,17 @@ export function normalizeObservedTrafficSnapshot(
     };
   }
 
+  if ('records' in value && !Array.isArray(value.records)) {
+    return {
+      ...emptyObservedTrafficSnapshot(),
+      configured: true,
+      source: safeString(value.source, 160),
+      fetchedAt,
+      error: 'Observed traffic source unavailable',
+      state: 'error',
+    };
+  }
+
   const rawRecords = Array.isArray(value.records) ? value.records : [];
   const inputRecords = rawRecords.slice(0, MAX_RECORDS);
   const records = inputRecords
