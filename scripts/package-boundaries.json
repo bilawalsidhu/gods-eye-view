@@ -2357,6 +2357,10 @@
       "src/layers/gnss/index.js",
       "src/layers/gnss/source.js",
       "src/layers/gnss/records.js",
+      "src/app/layers/wildlife.js",
+      "src/layers/wildlife/index.js",
+      "src/layers/wildlife/source.js",
+      "src/layers/wildlife/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -2992,6 +2996,10 @@
       "src/layers/gnss/index.js",
       "src/layers/gnss/source.js",
       "src/layers/gnss/records.js",
+      "src/app/layers/wildlife.js",
+      "src/layers/wildlife/index.js",
+      "src/layers/wildlife/source.js",
+      "src/layers/wildlife/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -3582,7 +3590,9 @@
       "src/layers/submarineCables/bundledSource.js",
       "src/layers/gnss/source.js",
       "src/layers/airQuality/model.js",
-      "src/layers/airQuality/source.js"
+      "src/layers/airQuality/source.js",
+      "src/layers/wildlife/source.js",
+      "src/layers/wildlife/records.js"
     ],
     "external": []
   },
@@ -3846,6 +3856,26 @@
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "src/layers/gnss/source.js"
+    ],
+    "external": []
+  },
+  "wildlife": {
+    "exports": ["./layers/wildlife"],
+    "modules": [
+      "src/layers/wildlife/index.js",
+      "src/data/iconOrientation.js",
+      "src/layers/wildlife/records.js",
+      "src/sources/httpBody.js",
+      "src/layers/wildlife/source.js"
+    ],
+    "external": ["cesium"]
+  },
+  "wildlife-source": {
+    "exports": ["./layers/wildlife/source"],
+    "modules": [
+      "src/sources/httpBody.js",
+      "src/layers/wildlife/source.js",
+      "src/layers/wildlife/records.js"
     ],
     "external": []
   },
