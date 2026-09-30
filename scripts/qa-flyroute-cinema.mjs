@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const getOpt = (flag, fallback) => {
@@ -25,11 +26,7 @@ const OUT_DIR = getOpt('--out', path.join(ROOT, 'qa-shots', 'flyroute'));
 const MIRROR_DIR = getOpt('--mirror', '');
 const SHOT_EVERY_MS = Number(getOpt('--shot-ms', '2000'));
 
-const CHROME_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-].filter(Boolean);
-const CHROME_EXECUTABLE = CHROME_CANDIDATES.find((c) => { try { return fs.existsSync(c); } catch { return false; } });
+const CHROME_EXECUTABLE = await resolveChromeExecutable(puppeteer);
 
 // A 6-waypoint downtown Austin route: north, right, left, right, left.
 const ROUTE_POINTS = [
