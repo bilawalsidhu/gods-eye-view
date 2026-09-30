@@ -99,8 +99,13 @@ export function createQueries({
   /** True when a raw AIS row can enter the production vessel normalizer. */
 
   function hasUsableVesselCoordinates(row) {
+    const lat = Number(row?.lat);
+    const lon = Number(row?.lon);
     return (
-      Number.isFinite(Number(row?.lat)) && Number.isFinite(Number(row?.lon))
+      Number.isFinite(lat) &&
+      Number.isFinite(lon) &&
+      Math.abs(lat) <= 90 &&
+      Math.abs(lon) <= 180
     );
   }
 
