@@ -329,7 +329,7 @@ test('a channel plays only when chosen, restarts on a repeat and stops cleanly',
   );
   assert.equal(
     h.layer.getRowControls().info,
-    'Kino · starting · Poland · Page 1 of 1',
+    'Kino · starting · Page 1 of 1 · Third-party streams, linked not hosted',
   );
   h.players[0].options.onStatus({ state: 'connecting', index: 1, total: 2 });
   assert.match(
@@ -448,6 +448,16 @@ test('adult channels stay hidden until Adult 18+ is on', async () => {
   h.layer.setParams({ channelId: 'Late.pl' });
   h.layer.setParams({ showAdult: false });
   assert.equal(h.layer.getDiagnostics().channelId, null, 'adult player stops');
+  assert.match(
+    h.layer.getRowControls().info,
+    /^Adult channel stopped · Poland/,
+  );
+  h.layer.setParams({ channelId: 'Late.pl' });
+  assert.equal(
+    h.layer.getDiagnostics().channelId,
+    null,
+    'hidden, not playable',
+  );
   assert.equal(h.layer.getDiagnostics().selectedCountry, 'PL');
 
   h.layer.setParams({ showAdult: true });
@@ -457,6 +467,10 @@ test('adult channels stay hidden until Adult 18+ is on', async () => {
     h.layer.getDiagnostics().selectedCountry,
     null,
     'an adult-only country closes when its pin goes',
+  );
+  assert.match(
+    h.layer.getRowControls().info,
+    /^Netherlands has only adult channels · /,
   );
 
   const shown = harness({ countries, channels, showAdult: true });

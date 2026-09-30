@@ -83,6 +83,8 @@ export function createLiveTvLayer({
   let _page = 0;
   let _newsOnly = false;
   let _showAdult = showAdult === true;
+  /** One-shot line saying why hiding adult channels changed the row. */
+  let _notice = null;
   let _channelId = null;
   let _playSerial = 0;
   let _status = null;
@@ -389,16 +391,16 @@ export function createLiveTvLayer({
     });
   }
 
-  function statusLine(channel) {
-    if (!_status) return `${channel.name} · starting`;
+  function statusLine({ name: title, adult }) {
+    const name = adult ? `18+ ${title}` : title;
+    if (!_status) return `${name} · starting`;
     const attempt =
       _status.total > 1
         ? ` (stream ${_status.index + 1} of ${_status.total})`
         : '';
-    if (_status.state === 'playing') return `▶ ${channel.name}${attempt}`;
-    if (_status.state === 'connecting')
-      return `${channel.name} · connecting${attempt}`;
-    return `${channel.name} · stream unavailable: ${REASONS[_status.reason] || REASONS.error}. Try another channel.`;
+    if (_status.state === 'playing') return `▶ ${name}${attempt}`;
+    if (_status.state === 'connecting') return `${name} · connecting${attempt}`;
+    return `${name} · stream unavailable: ${REASONS[_status.reason] || REASONS.error}. Try another channel.`;
   }
 
   function mediaDescriptor() {
@@ -428,6 +430,7 @@ export function createLiveTvLayer({
       0,
     );
     return [
+      _notice || '',
       _countries.length
         ? `${plural(channels, 'channel')} in ${plural(_countries.length, 'country', 'countries')} · select a TV pin`
         : _lastUpdate
@@ -449,6 +452,7 @@ export function createLiveTvLayer({
     const pages = Math.max(1, Math.ceil(list.length / LIVE_TV_PAGE_SIZE));
     const page = `Page ${_page + 1} of ${pages}`;
     return [
+      _notice || '',
       channel
         ? statusLine(channel)
         : `${country.name} · ${plural(country.channels, 'channel')}`,
@@ -461,9 +465,9 @@ export function createLiveTvLayer({
               ? 'No news channels here'
               : 'No channels'
             : channel
-              ? `${country.name} · ${page}`
+              ? `${page} · ${CAVEAT}`
               : `${page} · choose a channel to play it`,
-    ];
+    ].filter(Boolean);
   }
 
   const layer = {
@@ -507,6 +511,7 @@ export function createLiveTvLayer({
       _request?.abort();
       _request = null;
       _enabled = false;
+      _notice = null;
       picking?.unregisterPickOwner(LAYER_ID);
       removeSelection();
       syncHorizonListener();
@@ -549,6 +554,7 @@ export function createLiveTvLayer({
 
     setParams(params = {}) {
       if (!_enabled) return;
+      _notice = null;
       if (params.clear === true || params.country === null) {
         select(null);
         notify();
@@ -568,10 +574,17 @@ export function createLiveTvLayer({
       if (params.showAdult !== undefined) {
         _showAdult = params.showAdult === true;
         _page = 0;
-        if (!_showAdult && playingChannel()?.adult) stopPlayback();
+        if (!_showAdult && playingChannel()?.adult) {
+          stopPlayback();
+          _notice = 'Adult channel stopped';
+        }
         applyCountries();
         render();
-        if (_selectedCode && !_markers.has(_selectedCode)) select(null);
+        if (_selectedCode && !_markers.has(_selectedCode)) {
+          const gone = _all.find(({ code }) => code === _selectedCode);
+          _notice = `${gone?.name || _selectedCode} has only adult channels`;
+          select(null);
+        }
         notify();
         return;
       }
@@ -592,7 +605,7 @@ export function createLiveTvLayer({
       }
       if (
         typeof params.channelId === 'string' &&
-        _channels?.some(({ id }) => id === params.channelId)
+        filteredChannels().some(({ id }) => id === params.channelId)
       ) {
         // Picking the channel that is already playing restarts it: the
         // obvious retry after a stream dropped.
