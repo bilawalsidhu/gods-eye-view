@@ -34,18 +34,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const CHROME_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
-const CHROME_EXECUTABLE = CHROME_CANDIDATES.find((candidate) => {
-  try { return fs.existsSync(candidate); } catch { return false; }
-});
+const CHROME_EXECUTABLE = await resolveChromeExecutable(puppeteer);
 
 // ── CLI ─────────────────────────────────────────────────────
 function getOpt(flag, fallback) {

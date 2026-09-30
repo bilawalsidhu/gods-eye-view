@@ -6,7 +6,7 @@
 // Run: node scripts/qa-floor-verify.mjs   (dev server on :4173, real GPU best)
 // with the poison fix + simplified chain live.
 import puppeteer from 'puppeteer';
-import fs from 'node:fs';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 // QA_BASE_URL matches the sibling harnesses (qa-height-datum / qa-cctv-v2) so a
 // secondary checkout can verify against its own dev server instead of the default :4173.
@@ -20,18 +20,11 @@ const SITE = {
   floorMax: Number.isFinite(argv['floor-max']) ? argv['floor-max'] : 250,
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-// Prefer puppeteer's version-pinned Chrome-for-Testing over the system Chrome
-// (2026-07-30 lesson, already applied to the other harnesses): /Applications
-// auto-updates underneath the harnesses and its software-GL behavior shifts
-// across majors.
-const chrome = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-].filter(Boolean).find((p) => fs.existsSync(p));
+const chrome = await resolveChromeExecutable(puppeteer);
 
 const browser = await puppeteer.launch({
-  headless: 'new', executablePath: chrome,
+  headless: 'new',
+  ...(chrome ? { executablePath: chrome } : {}),
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist', '--no-sandbox'],
 });
 const page = await browser.newPage();
