@@ -58,6 +58,11 @@ test('standalone composition mounts every extracted provider exactly once withou
     throw Error('construction must not fetch');
   });
   const plugins = localProviderPlugins();
+  assert.equal(
+    plugins.filter((plugin) => plugin.name === 'gev-key-setup').length,
+    1,
+    'the credential status/save/test routes must share the credential-aware provider tester',
+  );
   for (const factory of [
     terrainHeightsProxy,
     tomtomProxy,

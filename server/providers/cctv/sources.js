@@ -16,6 +16,20 @@ import {
   ONTARIO_511_IMAGE_ORIGIN,
   DEFAULT_ONTARIO_MAX_SOURCES,
   ONTARIO_ANCHORS,
+  NY511_CAMERAS_URL,
+  DEFAULT_NY511_MAX_SOURCES,
+  NY511_ANCHORS,
+  ALASKA_511_CAMERAS_URL,
+  DEFAULT_ALASKA_511_MAX_SOURCES,
+  ALASKA_511_ANCHORS,
+  ARIZONA_511_CAMERAS_URL,
+  DEFAULT_ARIZONA_511_MAX_SOURCES,
+  ARIZONA_511_ANCHORS,
+  IOWA_DOT_CAMERAS_QUERY_URL,
+  DEFAULT_IOWA_DOT_MAX_SOURCES,
+  IOWA_DOT_SOURCE_CACHE_MS,
+  IOWA_DOT_MAX_CATALOG_BYTES,
+  IOWA_DOT_ANCHORS,
   FINTRAFFIC_STATIONS_URL,
   FINTRAFFIC_IMAGE_ORIGIN,
   FINTRAFFIC_GROUND_ELEVATION_M,
@@ -550,6 +564,371 @@ export async function loadOntarioSourcesFromOpenData() {
       error?.message || error,
     );
     return [];
+  }
+}
+
+const CARS_511_PROVIDERS = Object.freeze({
+  ny: {
+    label: '511NY',
+    provider: '511 New York',
+    namespace: 'ny511',
+    city: 'New York',
+    cityId: 'new-york',
+    apiUrl: NY511_CAMERAS_URL,
+    keyEnv: 'CCTV_511NY_API_KEY',
+    maxEnv: 'CCTV_511NY_MAX_SOURCES',
+    maxSources: DEFAULT_NY511_MAX_SOURCES,
+    anchors: NY511_ANCHORS,
+    hosts: ['511ny.org', 'www.511ny.org'],
+    license: '511NY developer access agreement',
+    credit: 'Powered by 511NY',
+    isInRegion: (lat, lon) =>
+      lat >= 40.3 && lat <= 45.2 && lon >= -80.1 && lon <= -71.7,
+  },
+  alaska: {
+    label: 'Alaska 511',
+    provider: 'Alaska 511',
+    namespace: 'ak511',
+    city: 'Alaska',
+    cityId: 'alaska',
+    apiUrl: ALASKA_511_CAMERAS_URL,
+    keyEnv: 'CCTV_511_ALASKA_API_KEY',
+    maxEnv: 'CCTV_511_ALASKA_MAX_SOURCES',
+    maxSources: DEFAULT_ALASKA_511_MAX_SOURCES,
+    anchors: ALASKA_511_ANCHORS,
+    hosts: ['511.alaska.gov'],
+    license: 'Alaska 511 developer API',
+    credit: 'Alaska 511 / Alaska DOT&PF',
+    isInRegion: (lat, lon) =>
+      lat >= 50 && lat <= 72 && ((lon >= -180 && lon <= -129) || lon >= 170),
+  },
+  arizona: {
+    label: 'AZ 511',
+    provider: 'Arizona 511',
+    namespace: 'az511',
+    city: 'Arizona',
+    cityId: 'arizona',
+    apiUrl: ARIZONA_511_CAMERAS_URL,
+    keyEnv: 'CCTV_511_ARIZONA_API_KEY',
+    maxEnv: 'CCTV_511_ARIZONA_MAX_SOURCES',
+    maxSources: DEFAULT_ARIZONA_511_MAX_SOURCES,
+    anchors: ARIZONA_511_ANCHORS,
+    hosts: ['az511.com', 'www.az511.com'],
+    license: 'Arizona 511 developer API',
+    credit: 'Arizona DOT / AZ 511',
+    isInRegion: (lat, lon) =>
+      lat >= 31 && lat <= 37.2 && lon >= -115 && lon <= -108.8,
+  },
+});
+
+async function request511Cameras(config) {
+  const key = String(process.env[config.keyEnv] || '').trim();
+  if (!key) {
+    throw Object.assign(new Error('missing_credentials'), {
+      code: 'missing_credentials',
+    });
+  }
+  const url = new URL(config.apiUrl);
+  url.searchParams.set('key', key);
+  url.searchParams.set('format', 'json');
+  let response;
+  try {
+    response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+      redirect: 'error',
+    });
+  } catch {
+    throw Object.assign(new Error('provider_unavailable'), {
+      code: 'provider_unavailable',
+    });
+  }
+  if (response.status === 401 || response.status === 403) {
+    throw Object.assign(new Error('invalid_credentials'), {
+      code: 'invalid_credentials',
+    });
+  }
+  if (response.status === 429) {
+    throw Object.assign(new Error('rate_limited'), { code: 'rate_limited' });
+  }
+  if (!response.ok) {
+    throw Object.assign(new Error('provider_unavailable'), {
+      code:
+        response.status === 400
+          ? 'invalid_credentials'
+          : 'provider_unavailable',
+    });
+  }
+  let rows;
+  try {
+    rows = await readResponseJsonCapped(response, 8 * 1024 * 1024);
+  } catch {
+    throw Object.assign(new Error('invalid_response'), {
+      code: 'invalid_response',
+    });
+  }
+  if (!Array.isArray(rows)) {
+    throw Object.assign(new Error('invalid_response'), {
+      code: 'invalid_response',
+    });
+  }
+  return rows;
+}
+
+/** Test one authenticated CARS-style provider request without returning secrets. */
+async function test511Connection(config) {
+  const rows = await request511Cameras(config);
+  return {
+    message: `${config.label} connection succeeded (${rows.length} camera records).`,
+  };
+}
+
+export const testNy511Connection = () =>
+  test511Connection(CARS_511_PROVIDERS.ny);
+export const testAlaska511Connection = () =>
+  test511Connection(CARS_511_PROVIDERS.alaska);
+export const testArizona511Connection = () =>
+  test511Connection(CARS_511_PROVIDERS.arizona);
+
+function normalize511StillUrl(value, config) {
+  try {
+    const parsed = new URL(String(value || '').trim());
+    if (
+      parsed.protocol !== 'https:' ||
+      parsed.username ||
+      parsed.password ||
+      (parsed.port && parsed.port !== '443') ||
+      !config.hosts.includes(parsed.hostname.toLowerCase()) ||
+      !/^\/map\/Cctv\/[A-Za-z0-9_.-]+$/.test(parsed.pathname) ||
+      parsed.searchParams.has('key')
+    )
+      return '';
+    return `https://${config.hosts[0]}${parsed.pathname}`;
+  } catch {
+    return '';
+  }
+}
+
+/** Shared 511/CARS camera adapter; config owns credentials, region and media allowlist. */
+async function load511Sources(config) {
+  try {
+    const rows = await request511Cameras(config);
+    const cameras = [];
+    for (const row of rows) {
+      const rawId = String(row?.Id ?? row?.id ?? '').trim();
+      if (!/^[A-Za-z0-9_.-]{1,100}$/.test(rawId)) continue;
+      const lat = toFiniteNumber(row?.Latitude ?? row?.latitude);
+      const lon = toFiniteNumber(row?.Longitude ?? row?.longitude);
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lon) ||
+        !isPlausibleLatLon(lat, lon) ||
+        !config.isInRegion(lat, lon)
+      )
+        continue;
+      // Select an enabled view, then re-pin it to the provider's official host
+      // before registering it with the existing media proxy.
+      const views = Array.isArray(row?.Views ?? row?.views)
+        ? (row.Views ?? row.views)
+        : [];
+      const view = views.find(
+        (candidate) =>
+          String(candidate?.Status || candidate?.status || '').toLowerCase() ===
+          'enabled',
+      );
+      const viewUrl = normalize511StillUrl(view?.Url || view?.url, config);
+      if (!view || !viewUrl) continue;
+      const cameraId = `${config.namespace}-${rawId}`;
+      const direction = String(row?.Direction || '').trim();
+      const heading = directionToHeading(direction, true);
+      const roadway = String(row?.Roadway || '').trim();
+      const location = String(row?.Location || '').trim();
+      cameras.push({
+        id: cameraId,
+        name:
+          [roadway, direction, location].filter(Boolean).join(' · ') ||
+          `${config.label} Camera ${rawId}`,
+        city: location || roadway || config.city,
+        cityId: config.cityId,
+        provider: config.provider,
+        lat,
+        lon,
+        headingDeg: Number.isFinite(heading)
+          ? heading
+          : fallbackHeadingFromId(cameraId),
+        headingConfidence: Number.isFinite(heading) ? 'high' : 'low',
+        pitchDeg: Number.isFinite(heading) ? -24 : -18,
+        fovDeg: Number.isFinite(heading) ? 56 : 44,
+        rangeM: Number.isFinite(heading) ? 210 : 145,
+        mountHeightM: 8,
+        groundElevationM: 100,
+        feedType: 'image',
+        url: viewUrl,
+        snapshotUrl: viewUrl,
+        sourceKind: `${config.namespace}-api`,
+        license: config.license,
+        credit: config.credit,
+      });
+    }
+    const unique = Array.from(
+      new Map(cameras.map((camera) => [camera.id, camera])).values(),
+    );
+    const requested = Number(process.env[config.maxEnv] || config.maxSources);
+    const maxCount = Number.isFinite(requested)
+      ? Math.max(8, Math.min(2000, Math.floor(requested)))
+      : config.maxSources;
+    return prioritizeSources(unique, maxCount, config.anchors);
+  } catch (error) {
+    // A provider-specific miss must not suppress Iowa or the existing packs.
+    if (error?.code === 'missing_credentials') return [];
+    console.warn(
+      `[CCTV] ${config.label} camera catalog unavailable:`,
+      error?.code || 'provider_error',
+    );
+    return [];
+  }
+}
+
+export const loadNy511SourcesFromOpenData = () =>
+  load511Sources(CARS_511_PROVIDERS.ny);
+export const loadAlaska511SourcesFromOpenData = () =>
+  load511Sources(CARS_511_PROVIDERS.alaska);
+export const loadArizona511SourcesFromOpenData = () =>
+  load511Sources(CARS_511_PROVIDERS.arizona);
+
+let iowaCatalogCache = { fetchedAt: 0, sources: [] };
+
+function isLikelyIowaCoordinate(lat, lon) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    lat >= 40.3 &&
+    lat <= 43.8 &&
+    lon >= -97.3 &&
+    lon <= -89.8
+  );
+}
+
+function normalizeIowaMediaUrl(value, kind) {
+  try {
+    const parsed = new URL(String(value || '').trim());
+    const host = parsed.hostname.toLowerCase();
+    if (
+      parsed.protocol !== 'https:' ||
+      parsed.username ||
+      parsed.password ||
+      (parsed.port && parsed.port !== '443')
+    )
+      return '';
+    if (kind === 'image') {
+      if (
+        host !== 'atmsqf.iowadot.gov' ||
+        !/^\/(?:[^?#]+)$/.test(parsed.pathname)
+      )
+        return '';
+      return parsed.toString();
+    }
+    if (
+      !/^video\d*\.iowadot\.gov$/.test(host) ||
+      !/\.m3u8$/i.test(parsed.pathname)
+    )
+      return '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+}
+
+/** Public Iowa DOT GIS cameras; respects the source's daily update cadence. */
+export async function loadIowaDotSourcesFromOpenData({
+  now = Date.now(),
+} = {}) {
+  if (now - iowaCatalogCache.fetchedAt < IOWA_DOT_SOURCE_CACHE_MS)
+    return iowaCatalogCache.sources;
+  try {
+    const url = new URL(IOWA_DOT_CAMERAS_QUERY_URL);
+    for (const [key, value] of Object.entries({
+      where: "Type='Iowa DOT'",
+      outFields:
+        'device_id,Desc_,Route,ORG,latitude,longitude,ImageURL,VideoURL,Type',
+      returnGeometry: 'false',
+      outSR: '4326',
+      orderByFields: 'device_id',
+      resultRecordCount: '1000',
+      f: 'json',
+    }))
+      url.searchParams.set(key, value);
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+      redirect: 'error',
+    });
+    if (!response.ok) return iowaCatalogCache.sources;
+    const payload = await readResponseJsonCapped(
+      response,
+      IOWA_DOT_MAX_CATALOG_BYTES,
+    );
+    if (payload?.error || !Array.isArray(payload?.features))
+      return iowaCatalogCache.sources;
+    const cameras = [];
+    for (const feature of payload.features) {
+      const attributes = feature?.attributes || {};
+      if (String(attributes.Type || '').trim() !== 'Iowa DOT') continue;
+      const rawId = String(attributes.device_id ?? feature?.id ?? '').trim();
+      if (!/^[A-Za-z0-9_.-]{1,100}$/.test(rawId)) continue;
+      const lat = toFiniteNumber(attributes.latitude ?? feature?.geometry?.y);
+      const lon = toFiniteNumber(attributes.longitude ?? feature?.geometry?.x);
+      if (!isLikelyIowaCoordinate(lat, lon)) continue;
+      const snapshotUrl = normalizeIowaMediaUrl(attributes.ImageURL, 'image');
+      const streamUrl = normalizeIowaMediaUrl(attributes.VideoURL, 'video');
+      if (!snapshotUrl && !streamUrl) continue;
+      const cameraId = `iowadot-${rawId}`;
+      const name = String(
+        attributes.Desc_ || attributes.Route || `Iowa DOT Camera ${rawId}`,
+      ).trim();
+      cameras.push({
+        id: cameraId,
+        name,
+        city: String(attributes.Route || attributes.ORG || 'Iowa').trim(),
+        cityId: 'iowa',
+        provider: 'Iowa DOT',
+        lat,
+        lon,
+        headingDeg: fallbackHeadingFromId(cameraId),
+        headingConfidence: 'low',
+        pitchDeg: -18,
+        fovDeg: 44,
+        rangeM: 145,
+        mountHeightM: 8,
+        groundElevationM: 300,
+        feedType: streamUrl ? 'hls' : 'image',
+        url: streamUrl || snapshotUrl,
+        snapshotUrl,
+        sourceKind: 'iowa-dot-arcgis-open-data',
+        license: 'Creative Commons Attribution 4.0 International (CC BY 4.0)',
+        credit: 'Iowa DOT',
+      });
+    }
+    const unique = Array.from(
+      new Map(cameras.map((camera) => [camera.id, camera])).values(),
+    );
+    const requested = Number(
+      process.env.CCTV_IOWA_DOT_MAX_SOURCES || DEFAULT_IOWA_DOT_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(requested)
+      ? Math.max(8, Math.min(1200, Math.floor(requested)))
+      : DEFAULT_IOWA_DOT_MAX_SOURCES;
+    iowaCatalogCache = {
+      fetchedAt: now,
+      sources: prioritizeSources(unique, maxCount, IOWA_DOT_ANCHORS),
+    };
+    return iowaCatalogCache.sources;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Iowa DOT camera catalog unavailable:',
+      error?.message || 'provider_error',
+    );
+    return iowaCatalogCache.sources;
   }
 }
 
@@ -1617,7 +1996,16 @@ export async function loadDelDOTSourcesFromOpenData() {
 
     const cameras = [];
     for (const row of rows) {
-      if (String(row?.status).toLowerCase() !== 'active') continue;
+      // DelDOT's current feed separates whether a camera is enabled from its
+      // live availability: enabled cameras can report `status: unavailable`
+      // when no image/stream is currently available. Keep those catalog
+      // locations visible so temporary media outages do not erase Delaware.
+      // Older payloads without `enabled` retain the former active-status rule.
+      const isEnabled =
+        typeof row?.enabled === 'boolean'
+          ? row.enabled
+          : String(row?.status || '').toLowerCase() === 'active';
+      if (!isEnabled) continue;
       const lat = toFiniteNumber(row?.lat);
       const lon = toFiniteNumber(row?.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
@@ -1690,7 +2078,7 @@ export async function loadDelDOTSourcesFromOpenData() {
       : DEFAULT_DELDOT_MAX_SOURCES;
     const prioritized = prioritizeSources(unique, maxCount, DELDOT_ANCHORS);
     console.log(
-      `[CCTV] Loaded DelDOT camera sources: ${unique.length} Active (using nearest ${prioritized.length})`,
+      `[CCTV] Loaded DelDOT camera sources: ${unique.length} enabled (using nearest ${prioritized.length})`,
     );
     return prioritized;
   } catch (error) {

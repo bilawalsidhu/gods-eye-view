@@ -293,6 +293,9 @@ function keySetupEndpoint({
             shodan: 'Shodan',
             greynoise: 'GreyNoise',
             'alienvault-otx': 'AlienVault OTX',
+            '511ny': '511 New York',
+            '511-alaska': 'Alaska 511',
+            '511-arizona': 'Arizona 511',
           }[parsed?.provider];
           if (!providerTitle)
             return respond(res, 400, { error: 'Unknown provider test' });
@@ -305,7 +308,7 @@ function keySetupEndpoint({
             });
           } catch (error) {
             const messageByCode = {
-              missing_credentials: `Add a ${providerTitle} API key in Provider Settings first.`,
+              missing_credentials: `Configure ${providerTitle} with an API key in Provider Settings first.`,
               invalid_credentials:
                 parsed.provider === 'cloudflare-radar'
                   ? 'Cloudflare rejected this token. Check its permissions and replace it in Provider Settings.'

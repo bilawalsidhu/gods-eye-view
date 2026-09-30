@@ -1,5 +1,14 @@
 # Changelog
 
+- Add Iowa DOT's public statewide roadway-camera catalog through the existing
+  CCTV source catalog, with daily catalog caching, pinned official media hosts,
+  and CC BY 4.0 attribution. Add an approval-gated 511NY provider whose API key
+  is configured and tested through POWER UP → Provider Settings; missing
+  credentials leave all other camera packs available.
+- Extend the secured 511/CARS camera adapter to Alaska and Arizona. Both use
+  independent Provider Settings credentials, API connection tests, source
+  namespaces, state bounds, catalog caps, and official-host media pinning.
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD

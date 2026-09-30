@@ -9,6 +9,10 @@ import {
   loadCaltransSourcesFromOpenData,
   loadTflSourcesFromOpenData,
   loadOntarioSourcesFromOpenData,
+  loadNy511SourcesFromOpenData,
+  loadAlaska511SourcesFromOpenData,
+  loadArizona511SourcesFromOpenData,
+  loadIowaDotSourcesFromOpenData,
   loadFintrafficSourcesFromOpenData,
   loadDriveBcSourcesFromOpenData,
   loadTxdotSourcesFromOpenData,
@@ -46,6 +50,26 @@ const LIVE_PACKS = [
     name: 'ontario',
     enabled: () => envEnabled('CCTV_ONTARIO_ENABLED'),
     load: loadOntarioSourcesFromOpenData,
+  },
+  {
+    name: 'ny511',
+    enabled: () => envEnabled('CCTV_511NY_ENABLED'),
+    load: loadNy511SourcesFromOpenData,
+  },
+  {
+    name: 'alaska-511',
+    enabled: () => envEnabled('CCTV_511_ALASKA_ENABLED'),
+    load: loadAlaska511SourcesFromOpenData,
+  },
+  {
+    name: 'arizona-511',
+    enabled: () => envEnabled('CCTV_511_ARIZONA_ENABLED'),
+    load: loadArizona511SourcesFromOpenData,
+  },
+  {
+    name: 'iowa-dot',
+    enabled: () => envEnabled('CCTV_IOWA_DOT_ENABLED'),
+    load: loadIowaDotSourcesFromOpenData,
   },
   {
     name: 'fintraffic',

@@ -26,6 +26,11 @@ import { firePerimetersProxy } from './firePerimeters.js';
 import { cycloneProxy } from './cyclones.js';
 import { cyberProxy } from './cyber.js';
 import { windProxy } from './wind.js';
+import {
+  testAlaska511Connection,
+  testArizona511Connection,
+  testNy511Connection,
+} from './cctv/sources.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -57,7 +62,6 @@ function localProviderPlugins() {
     weatherProxy(),
     cycloneProxy(),
     firePerimetersProxy(),
-    keySetupEndpoint(),
     cyber,
     keySetupEndpoint({
       testProvider: (id) =>
@@ -69,7 +73,13 @@ function localProviderPlugins() {
               ? cyber.testGreyNoiseConnection()
               : id === 'alienvault-otx'
                 ? cyber.testOtxConnection()
-                : Promise.reject(new Error('unknown_test_provider')),
+                : id === '511ny'
+                  ? testNy511Connection()
+                  : id === '511-alaska'
+                    ? testAlaska511Connection()
+                    : id === '511-arizona'
+                      ? testArizona511Connection()
+                      : Promise.reject(new Error('unknown_test_provider')),
     }),
   ];
 }

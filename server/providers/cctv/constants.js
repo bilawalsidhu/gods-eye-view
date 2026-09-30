@@ -132,6 +132,45 @@ export const ONTARIO_ANCHORS = [
   { lat: 42.9849, lon: -81.2453 }, // London, Ontario
   { lat: 42.3149, lon: -83.0364 }, // Windsor
 ];
+/** NY 511 requires an approved developer API key. Keep the key server-side. */
+export const NY511_CAMERAS_URL = 'https://511ny.org/api/v2/get/cameras';
+export const DEFAULT_NY511_MAX_SOURCES = 1200;
+export const NY511_ANCHORS = [
+  { lat: 40.7128, lon: -74.006 },
+  { lat: 42.6526, lon: -73.7562 },
+  { lat: 43.0481, lon: -76.1474 },
+  { lat: 43.1566, lon: -77.6088 },
+  { lat: 42.8864, lon: -78.8784 },
+];
+/** Approval-gated CARS-style API camera providers. */
+export const ALASKA_511_CAMERAS_URL =
+  'https://511.alaska.gov/api/v2/get/cameras';
+export const DEFAULT_ALASKA_511_MAX_SOURCES = 800;
+export const ALASKA_511_ANCHORS = [
+  { lat: 61.2181, lon: -149.9003 },
+  { lat: 64.8378, lon: -147.7164 },
+  { lat: 58.3019, lon: -134.4197 },
+];
+export const ARIZONA_511_CAMERAS_URL = 'https://az511.com/api/v2/get/cameras';
+export const DEFAULT_ARIZONA_511_MAX_SOURCES = 1000;
+export const ARIZONA_511_ANCHORS = [
+  { lat: 33.4484, lon: -112.074 },
+  { lat: 32.2226, lon: -110.9747 },
+  { lat: 35.1983, lon: -111.6513 },
+  { lat: 34.54, lon: -112.4685 },
+];
+/** Iowa DOT's public ArcGIS camera layer, licensed CC BY 4.0. */
+export const IOWA_DOT_CAMERAS_QUERY_URL =
+  'https://services.arcgis.com/8lRhdTsQyJpO52F1/arcgis/rest/services/Traffic_Cameras_View/FeatureServer/0/query';
+export const DEFAULT_IOWA_DOT_MAX_SOURCES = 800;
+export const IOWA_DOT_SOURCE_CACHE_MS = 24 * 60 * 60 * 1000;
+export const IOWA_DOT_MAX_CATALOG_BYTES = 8 * 1024 * 1024;
+export const IOWA_DOT_ANCHORS = [
+  { lat: 41.5868, lon: -93.625 },
+  { lat: 41.9779, lon: -91.6656 },
+  { lat: 41.2565, lon: -95.9345 },
+  { lat: 42.499, lon: -96.4003 },
+];
 /** Fintraffic road weather cameras (Digitraffic): one keyless GeoJSON list
  * covering all of Finland. Each STATION carries N presets (fixed camera views)
  * that share the station position; one preset is one camera here. */
@@ -238,7 +277,7 @@ export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
 /** DelDOT CCTV: one keyless statewide JSON catalog; live video via RTMP-over-HTTP (rtmpt:80). */
 export const DELDOT_CCTV_URL = 'https://tmc.deldot.gov/json/videocamera.json';
-export const DEFAULT_DELDOT_MAX_SOURCES = 300;
+export const DEFAULT_DELDOT_MAX_SOURCES = 400;
 export const DELDOT_ANCHORS = [
   { lat: 39.7459, lon: -75.5466 }, // Wilmington (New Castle)
   { lat: 39.1582, lon: -75.5244 }, // Dover (Kent)

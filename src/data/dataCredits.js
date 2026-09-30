@@ -210,6 +210,22 @@ export const DATA_CREDITS = [
       '(<a href="https://www.ontario.ca/page/open-government-licence-ontario" target="_blank" rel="noopener">Open Government Licence - Ontario</a>)',
   },
   {
+    key: 'iowa-dot-cctv',
+    html: 'CCTV cameras &amp; frames (Iowa): <a href="https://iowadot.gov/travel-tools/iowa-511/511-data-feeds" target="_blank" rel="noopener">Iowa DOT</a> camera dataset, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>',
+  },
+  {
+    key: 'ny511-cctv',
+    html: 'CCTV cameras &amp; frames (New York): <a href="https://511ny.org/" target="_blank" rel="noopener">Powered by 511NY</a>',
+  },
+  {
+    key: 'alaska-511-cctv',
+    html: 'CCTV cameras &amp; frames (Alaska): <a href="https://511.alaska.gov/" target="_blank" rel="noopener">Alaska 511 / Alaska DOT&amp;PF</a>',
+  },
+  {
+    key: 'arizona-511-cctv',
+    html: 'CCTV cameras &amp; frames (Arizona): <a href="https://az511.gov/" target="_blank" rel="noopener">Arizona DOT / AZ 511</a>',
+  },
+  {
     key: 'fintraffic-cctv',
     html:
       'CCTV cameras &amp; frames (Finland): Fintraffic / ' +

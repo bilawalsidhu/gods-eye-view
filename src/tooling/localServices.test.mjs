@@ -300,6 +300,65 @@ test('Cloudflare test-connection endpoint is local-only, bounded and never relay
   assert.equal(oversized.status, 413);
 });
 
+test('511NY Provider Settings connection test reports missing access without exposing server errors', async (t) => {
+  const routes = install(
+    keySetupEndpoint({
+      sourceRoot: root(t),
+      testProvider: async (provider) => {
+        assert.equal(provider, '511ny');
+        throw Object.assign(new Error('secret-bearing upstream detail'), {
+          code: 'missing_credentials',
+        });
+      },
+    }),
+  );
+  const response = await request(routes.get('/api/setup/test'), {
+    method: 'POST',
+    body: JSON.stringify({ provider: '511ny' }),
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.json(), {
+    ok: false,
+    message:
+      'Configure 511 New York with an API key in Provider Settings first.',
+  });
+  assert.doesNotMatch(response.body, /secret-bearing|CCTV_511NY_API_KEY/);
+});
+
+test('Alaska and Arizona 511 Provider Settings tests name only their own missing credential', async (t) => {
+  const routes = install(
+    keySetupEndpoint({
+      sourceRoot: root(t),
+      testProvider: async (provider) => {
+        throw Object.assign(new Error('secret-bearing upstream detail'), {
+          code: 'missing_credentials',
+        });
+      },
+    }),
+  );
+  for (const [provider, expected] of [
+    [
+      '511-alaska',
+      'Configure Alaska 511 with an API key in Provider Settings first.',
+    ],
+    [
+      '511-arizona',
+      'Configure Arizona 511 with an API key in Provider Settings first.',
+    ],
+  ]) {
+    const response = await request(routes.get('/api/setup/test'), {
+      method: 'POST',
+      body: JSON.stringify({ provider }),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.json(), { ok: false, message: expected });
+    assert.doesNotMatch(
+      response.body,
+      /secret-bearing|CCTV_511_(ALASKA|ARIZONA)_API_KEY/,
+    );
+  }
+});
+
 test('Realtime service configuration selects compatible endpoint/model without forwarding request model IDs or keys', async () => {
   const handler = install(
     openAiRealtimeProxy({

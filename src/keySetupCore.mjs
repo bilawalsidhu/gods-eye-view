@@ -144,6 +144,33 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'free',
     testId: 'alienvault-otx',
   }),
+  Object.freeze({
+    id: '511ny',
+    title: '511 NEW YORK',
+    unlocks: 'New York State DOT traffic cameras',
+    getUrl: 'https://www.511ny.org/developers/resources',
+    envVars: Object.freeze(['CCTV_511NY_API_KEY']),
+    tier: 'free',
+    testId: '511ny',
+  }),
+  Object.freeze({
+    id: '511-alaska',
+    title: 'ALASKA 511',
+    unlocks: 'Alaska DOT&PF traffic cameras',
+    getUrl: 'https://511.alaska.gov/developers/doc',
+    envVars: Object.freeze(['CCTV_511_ALASKA_API_KEY']),
+    tier: 'free',
+    testId: '511-alaska',
+  }),
+  Object.freeze({
+    id: '511-arizona',
+    title: 'ARIZONA 511',
+    unlocks: 'Arizona DOT traffic cameras',
+    getUrl: 'https://az511.gov/developers/doc',
+    envVars: Object.freeze(['CCTV_511_ARIZONA_API_KEY']),
+    tier: 'free',
+    testId: '511-arizona',
+  }),
 ]);
 
 /** Hostnames a Provider Settings request may arrive under or originate from. */
