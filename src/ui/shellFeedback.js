@@ -23,6 +23,8 @@ export class ShellFeedback {
         null;
     this._loadingVisibilityHandler = null;
     this._lastLoadingFeedbackUpdateAt = 0;
+    this._lastTrafficChipUpdateAt = 0;
+    this._lastTrafficGlobalUpdateAt = 0;
     this._globalLoadingStatus = document.getElementById(
       'global-loading-status',
     );
@@ -74,7 +76,10 @@ export class ShellFeedback {
     // the flap keeps textContent equal to the settled label throughout, so
     // this stays a no-op on the repeat ticks exactly as it did before.
     if (presentation.label)
-      setSplitFlapText(this._trafficSyncLabel, presentation.label);
+      setSplitFlapText(this._trafficSyncLabel, presentation.label, {
+        // Completion is a timing signal, not another animated loading stage.
+        immediate: !presentation.busy,
+      });
     // Written on every change INCLUDING the empty settled value — the reducer
     // clears the progress number once the sync lands, and a truthiness guard
     // here would strand the last "..." beside the settled label.
@@ -142,9 +147,20 @@ export class ShellFeedback {
     if (this._trafficChipTicker) return;
     this._trafficChipTicker = setInterval(() => {
       if (document.hidden) return;
-      this._updateTrafficSyncChip();
-      this._updateGlobalLoadingFeedback();
-    }, 500);
+      const now = performance.now();
+      // Poll busy traffic promptly; retain the idle/global 500 ms read budget.
+      if (
+        this._trafficSyncFeedbackState.busy ||
+        now - this._lastTrafficChipUpdateAt >= 500
+      ) {
+        this._lastTrafficChipUpdateAt = now;
+        this._updateTrafficSyncChip(false, now);
+      }
+      if (now - this._lastTrafficGlobalUpdateAt >= 500) {
+        this._lastTrafficGlobalUpdateAt = now;
+        this._updateGlobalLoadingFeedback(now);
+      }
+    }, 100);
   }
 
   _armLoadingFeedbackTicker() {

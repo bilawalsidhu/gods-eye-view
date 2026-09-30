@@ -254,7 +254,9 @@ test('retry: HTTP 429 Retry-After 5s gets one ladder-spaced retry; a second 429 
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 10_000 });
   globalThis.window = { setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout };
   const requestTimes = [];
-  globalThis.fetch = async () => {
+  globalThis.fetch = async (url) => {
+    // The one-time capability probe is not an outline request.
+    if (String(url).endsWith('/status')) return httpFailure(404);
     requestTimes.push(Date.now());
     return httpFailure(429, '5');
   };
