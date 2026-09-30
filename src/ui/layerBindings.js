@@ -134,6 +134,7 @@ export class LayerBindings {
       'weather-radar',
       'weather-satellite',
       'weather-lightning',
+      'weather-aurora',
       'weather-cyclones',
       'air-quality',
     ]) {

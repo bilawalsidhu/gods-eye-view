@@ -95,6 +95,7 @@ const PANEL_GROUPS = [
       'weather-radar',
       'weather-satellite',
       'weather-lightning',
+      'weather-aurora',
       'weather-cyclones',
     ],
   },
@@ -277,6 +278,7 @@ const WEATHER_PANEL_IDS = Object.freeze([
   'weather-radar',
   'weather-satellite',
   'weather-lightning',
+  'weather-aurora',
   'weather-cyclones',
   'air-quality',
 ]);

@@ -5770,7 +5770,10 @@
       "src/data/aircraftViews.js",
       "src/data/aircraftViews.json",
       "src/data/viewSheet.js",
-      "src/ui/contextCard.js"
+      "src/ui/contextCard.js",
+      "src/layers/aurora/rendering.js",
+      "src/layers/aurora/source.js",
+      "src/layers/aurora/index.js"
     ],
     "external": [
       "hls.js",
@@ -6647,7 +6650,9 @@
       "src/localRequestGate.mjs",
       "src/data/aircraftViews.js",
       "src/data/aircraftViews.json",
-      "src/data/viewSheet.js"
+      "src/data/viewSheet.js",
+      "src/layers/aurora/rendering.js",
+      "src/layers/aurora/index.js"
     ],
     "external": [
       "hls.js",
