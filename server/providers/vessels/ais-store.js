@@ -1,6 +1,13 @@
 import { isRecognizedAisEnvelope } from '../../../src/data/aisStreamAdapter.js';
 export const AISSTREAM_CACHE_MAX = 50000;
 export const AISSTREAM_STALE_MS = 30 * 60 * 1000;
+// Static reports also arrive for MMSIs that never send a position, so the
+// static side keeps more entries than the live cache but is still bounded.
+const AISSTREAM_STATIC_MAX = AISSTREAM_CACHE_MAX * 2;
+// The pending-fix sweep walks its whole map, so it runs on a timer rather
+// than per message; every other prune is O(evicted) and stays per message.
+const AISSTREAM_PENDING_SWEEP_MS = 60 * 1000;
+let _lastPendingSweepAt = 0;
 // Per-MMSI recent-path ring buffers (PRD WS-F F3). Float32 lat/lon (~1m
 // precision, fine for 25m thinning) + Uint32 epoch seconds ≈ 12B/sample;
 // 64 samples × 50k MMSIs worst case ≈ 38MB. Tracks exist only while the dev
@@ -49,6 +56,8 @@ export function ingestAisStreamEnvelope(envelope) {
       destination: stringValue(message.Destination),
       imo: stringValue(message.ImoNumber ?? message.IMO),
     };
+    // Re-insert so Map order stays least-recently-updated first.
+    _aisStreamStatic.delete(mmsi);
     _aisStreamStatic.set(mmsi, staticData);
     mergeAisStaticIntoLiveVessel(mmsi, staticData);
   }
@@ -59,11 +68,15 @@ export function ingestAisStreamEnvelope(envelope) {
   const lon = numberValue(
     metadata.longitude ?? metadata.Longitude ?? message.Longitude,
   );
-  // A positionless but well-formed record (static data) is still the feed
-  // delivering AIS traffic, so it counts as liveness.
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return true;
+  // A positionless but well-formed record (static data, or a transponder
+  // without a fix) is still the feed delivering AIS traffic, so it counts as
+  // liveness.
+  if (!isAvailableAisPosition(lat, lon)) return true;
 
   const staticData = _aisStreamStatic.get(mmsi) || {};
+  // Re-insert so Map order stays least-recently-updated first; pruning then
+  // evicts from the front without scanning or sorting the whole cache.
+  _aisStreamVessels.delete(mmsi);
   _aisStreamVessels.set(mmsi, {
     lat,
     lon,
@@ -228,33 +241,54 @@ export function aisStreamRows(maxRows) {
   return rows.slice(0, maxRows).map(({ _updatedAt, ...row }) => row);
 }
 
+/**
+ * Runs on every position message, so it must not scan the cache. Vessel and
+ * static maps are kept in update order (delete + set on write), which lets
+ * stale and over-cap eviction stop at the first entry that survives.
+ */
 function pruneAisStreamCache() {
-  const cutoff = Date.now() - AISSTREAM_STALE_MS;
+  const now = Date.now();
+  const cutoff = now - AISSTREAM_STALE_MS;
   for (const [mmsi, row] of _aisStreamVessels) {
-    if (row._updatedAt < cutoff) {
-      _aisStreamVessels.delete(mmsi);
-      _aisStreamTracks.delete(mmsi);
-      _aisStreamTrackPending.delete(mmsi);
-    }
+    if (
+      row._updatedAt >= cutoff &&
+      _aisStreamVessels.size <= AISSTREAM_CACHE_MAX
+    )
+      break;
+    dropAisStreamVessel(mmsi);
+  }
+  for (const mmsi of _aisStreamStatic.keys()) {
+    if (_aisStreamStatic.size <= AISSTREAM_STATIC_MAX) break;
+    _aisStreamStatic.delete(mmsi);
   }
   // Pending single-fix entries for vessels never seen again must not leak
+  if (now - _lastPendingSweepAt < AISSTREAM_PENDING_SWEEP_MS) return;
+  _lastPendingSweepAt = now;
   const pendingCutoffSec = Math.floor(cutoff / 1000);
   for (const [mmsi, pending] of _aisStreamTrackPending) {
     if (pending.epochSec < pendingCutoffSec)
       _aisStreamTrackPending.delete(mmsi);
   }
-  if (_aisStreamVessels.size <= AISSTREAM_CACHE_MAX) return;
-  const ordered = [..._aisStreamVessels.entries()].sort(
-    (a, b) => a[1]._updatedAt - b[1]._updatedAt,
+}
+
+function dropAisStreamVessel(mmsi) {
+  _aisStreamVessels.delete(mmsi);
+  _aisStreamTracks.delete(mmsi);
+  _aisStreamTrackPending.delete(mmsi);
+}
+
+/**
+ * ITU-R M.1371 reports "position not available" as latitude 91 and longitude
+ * 181. Both are finite, so without a range check a transponder with no fix is
+ * drawn near the pole and seeds its trail with that point.
+ */
+function isAvailableAisPosition(lat, lon) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lon) <= 180
   );
-  for (const [mmsi] of ordered.slice(
-    0,
-    _aisStreamVessels.size - AISSTREAM_CACHE_MAX,
-  )) {
-    _aisStreamVessels.delete(mmsi);
-    _aisStreamTracks.delete(mmsi);
-    _aisStreamTrackPending.delete(mmsi);
-  }
 }
 
 export function newestAisPositionAt(rows) {

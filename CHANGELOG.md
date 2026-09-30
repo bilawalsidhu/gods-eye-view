@@ -1,5 +1,12 @@
 # Changelog
 
+- Ignore AIS positions that carry the standard "not available" code (latitude
+  91, longitude 181). A transponder without a fix no longer appears near the
+  pole or starts its trail there; the report still counts as feed liveness.
+  AIS cache pruning no longer scans and sorts every stored vessel on each
+  message: with 40,000 cached vessels, ingest drops from about 1 ms to 4 µs per
+  message. Static vessel reports are now bounded.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a

@@ -823,6 +823,7 @@
   "src/layers/cyclones/index.test.mjs",
   "src/layers/cyclones/source.test.mjs",
   "src/data/aisStreamSentinels.test.mjs",
+  "src/data/aisStreamPruning.test.mjs",
   "scripts/qa-weather-perf.mjs",
   "scripts/qa-weather-journey.mjs",
   "scripts/qa-weather-swap.mjs",

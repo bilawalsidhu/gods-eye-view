@@ -8,6 +8,8 @@ export function normalizeVessel(row) {
   const lat = Number(row.lat);
   const lon = Number(row.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  // AIS "position not available" is lat 91 / lon 181; never place it.
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
   return {
     lat,
     lon,
