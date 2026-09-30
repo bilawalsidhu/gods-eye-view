@@ -308,6 +308,7 @@
   "src/layers/flights/tracking.js",
   "src/layers/flights/rendering.js",
   "src/layers/flights/testing.js",
+  "src/layers/flights/hiddenContactRotation.test.mjs",
   "src/layers/flights/evidence.js",
   "src/layers/flights/ingestion.js",
   "src/layers/flights/queries.js",
