@@ -36,6 +36,7 @@ import {
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 import { createTransitHistory } from '../server/providers/transitHistory.js';
 import { DETECTION_THEME_MAP } from '../src/overlays/worldOverlayTokens.js';
 import { transitModeTier } from '../src/data/transitPresetStyle.js';
@@ -259,11 +260,11 @@ check(
 historyProbe.clear();
 await mkdir(SHOTS, { recursive: true });
 
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
 const browser = await puppeteer.launch({
   headless: false,
   protocolTimeout: 150000,
-  executablePath:
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
   args: [
     '--no-sandbox',
     '--disable-background-timer-throttling',
