@@ -144,6 +144,30 @@ test('analyst: region coverage carries resolver provenance', async () => {
   assert.equal(result.coverage.scopeSource, 'natural-earth');
 });
 
+test('analyst: a duplicate Natural Earth name uses the resolver fallback result', async () => {
+  const lookups = [];
+  const engine = createAnalystEngine({
+    getRecords: () => FLIGHTS,
+    resolveRegionRing: async (name) => {
+      lookups.push(name);
+      return { ...TEXLAND, name, source: 'remote-boundary' };
+    },
+    getViewContext: () => ({
+      lat: 30.27,
+      lon: -97.74,
+      viewRadiusKm: 150,
+    }),
+  });
+  const result = await engine.query({
+    layers: ['flights'],
+    scope: { kind: 'region', name: 'Cordillera Oriental' },
+  });
+
+  assert.deepEqual(lookups, ['Cordillera Oriental']);
+  assert.equal(result.ok, true);
+  assert.equal(result.coverage.scopeSource, 'remote-boundary');
+});
+
 test('analyst: attribute filter — above 40,000 ft (~12,192 m)', async () => {
   const r = await makeEngine().query({
     layers: ['flights'], scope: { kind: 'anywhere' },

@@ -2074,8 +2074,8 @@ export function createAnnotationResolver({
   /**
    * Region ring for ANALYST queries ("how many flights over Texas / the Alps") —
    * a name-only entry point that reuses this module's boundary machinery
-   * without the annotation pipeline. Natural Earth pack first (offline,
-   * instant; largest-area match is correct for a global name-only ask), then
+   * without the annotation pipeline. An unambiguous Natural Earth match is
+   * returned first (offline and instant); duplicate names continue through
    * geocode + admin boundary for states/countries/counties (Tier A disk-cached
    * Overpass, so repeat asks are instant). Returns null when the name doesn't
    * resolve to a region-like boundary — the analyst engine reports that
@@ -2107,7 +2107,7 @@ export function createAnnotationResolver({
     const q = String(name || '').trim();
     if (!q) return null;
     const ne = await findNaturalRegion(q).catch(() => null);
-    if (ne?.polygons?.length) {
+    if (ne?.candidates === 1 && ne.polygons?.length) {
       // Largest ring carries the query scope; multi-ring regions (Andes) keep
       // their main cordillera — good enough for containment counting.
       const ring = [...ne.polygons].sort((a, b) => b.length - a.length)[0];

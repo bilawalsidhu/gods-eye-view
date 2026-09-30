@@ -49,6 +49,22 @@ test('region ring: Natural Earth names resolve without a geocoder', async () => 
   }
 });
 
+test('region ring: duplicate Natural Earth names continue through place lookup', async () => {
+  const { resolveRegionRingForQuery } = createAnnotationResolver({
+    featureSource: featureSource(),
+  });
+  const geocoder = geocoderFor(null);
+  const region = await resolveRegionRingForQuery(
+    'Cordillera Oriental',
+    undefined,
+    geocoder,
+    { budgetMs: Infinity },
+  );
+
+  assert.equal(region, null);
+  assert.deepEqual(geocoder.calls, ['Cordillera Oriental']);
+});
+
 test('region ring: a slow admin-boundary lookup returns region-timeout within the budget', async () => {
   let adminSignal;
   let release;
