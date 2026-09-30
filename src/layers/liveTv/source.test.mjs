@@ -8,6 +8,7 @@ const country = {
   lon: 19.4,
   lat: 52.1,
   channels: 1,
+  adult: 0,
 };
 const channel = {
   id: 'News.pl',

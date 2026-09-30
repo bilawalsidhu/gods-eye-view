@@ -106,6 +106,7 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
         lon: -2.12,
         lat: 54.4,
         channels: 1,
+        adult: 0,
       },
     ]);
     assert.equal(res.body.totals.excluded.blocklist, 1);
@@ -172,6 +173,14 @@ test('the index is cached for its TTL, then rebuilt; failures serve the last cop
   assert.equal(stale.body.stale, true);
   assert.equal(stale.headers['X-Data-Stale'], 'true');
   assert.equal(stale.body.countries.length, 1);
+  const failedCalls = calls;
+  assert.equal((await request('/')).body.stale, true);
+  assert.equal(calls, failedCalls, 'the stale copy is served without a retry');
+  clock += 5 * 60_000;
+  fail = false;
+  const fresh = await request('/');
+  assert.equal(fresh.body.stale, undefined);
+  assert.ok(calls > failedCalls, 'rebuilt once the backoff passes');
 });
 
 test('without any good copy a failure is a 502 and the next try waits', async () => {

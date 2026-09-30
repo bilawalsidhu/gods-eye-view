@@ -5,8 +5,9 @@
   channels it has; choosing a country lists its channels (News only filter,
   40 per page) and choosing a channel plays it in the layer row, straight
   from the broadcaster. `/api/live-tv` reads iptv-org's fixed directory files
-  (6-hour cache, last good copy on failure), drops blocklisted, NSFW and
-  closed channels and keeps only direct HLS links a browser can open. Video
+  (6-hour cache, last good copy on failure), drops blocklisted and closed
+  channels, keeps adult channels behind an Adult 18+ toggle that is off by
+  default, and keeps only direct HLS links a browser can open. Video
   is never proxied, nothing streams until a channel is chosen, a dead stream
   falls through to the channel's next one, and the row says the streams are
   third-party, linked not hosted. The layer panel gained a generic `media`
@@ -336,6 +337,7 @@
 Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+
 - New Fire Perimeters layer (Events group): live NIFC WFIGS interagency
   wildfire incident perimeters as ground-clamped polygons with a
   containment-colored fire line, refreshed every 5 minutes from the public
@@ -611,7 +613,6 @@ This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
 ## [Unreleased]
-
 
 - Add ECMWF IFS model selection to Wind (#464, thanks @beneduzi), with model-scoped forecast-step caches, cancellation of replaced requests, and separate issue/valid timestamps.
 

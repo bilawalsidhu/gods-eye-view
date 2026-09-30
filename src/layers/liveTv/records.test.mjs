@@ -44,6 +44,9 @@ test('stream URLs must be direct http(s) HLS playlists on non-platform hosts', (
     'https://user:secret@example.tv/live/index.m3u8',
     'https://www.youtube.com/live/index.m3u8',
     'https://m.twitch.tv/x/index.m3u8',
+    // A worker that re-streams a Twitch channel as HLS.
+    'https://twitch-m3u8.someone.workers.dev/live/channel.m3u8',
+    'https://rr1---sn-x.googlevideo.com/hls/index.m3u8',
     `https://example.tv/${'a'.repeat(2048)}.m3u8`,
     'not a url',
     null,
@@ -51,7 +54,7 @@ test('stream URLs must be direct http(s) HLS playlists on non-platform hosts', (
     assert.equal(isPlayableStreamUrl(url), false, String(url));
 });
 
-test('the index drops blocklisted, NSFW and closed channels and unplayable streams', () => {
+test('the index drops blocklisted and closed channels and unplayable streams, and flags adult ones', () => {
   const index = buildLiveTvIndex({
     channels: [
       channel('Good.uk', 'UK'),
@@ -93,6 +96,15 @@ test('the index drops blocklisted, NSFW and closed channels and unplayable strea
       lon: LIVE_TV_COUNTRY_ANCHORS.UK[0],
       lat: LIVE_TV_COUNTRY_ANCHORS.UK[1],
       channels: 2,
+      adult: 0,
+    },
+    {
+      code: 'US',
+      name: 'US',
+      lon: LIVE_TV_COUNTRY_ANCHORS.US[0],
+      lat: LIVE_TV_COUNTRY_ANCHORS.US[1],
+      channels: 0,
+      adult: 1,
     },
   ]);
   assert.deepEqual(index.channelsByCountry.get('UK'), [
@@ -118,13 +130,25 @@ test('the index drops blocklisted, NSFW and closed channels and unplayable strea
       ],
     },
   ]);
-  assert.equal(index.channelsByCountry.has('US'), false);
+  // Adult channels stay in the index, flagged; the blocklist never does.
+  assert.deepEqual(index.channelsByCountry.get('US'), [
+    {
+      id: 'Adult.us',
+      name: 'Adult',
+      categories: ['news'],
+      streams: [
+        { url: 'https://e.example/adult.m3u8', quality: '720p', labels: [] },
+      ],
+      adult: true,
+    },
+  ]);
   assert.equal(index.channelsByCountry.has('ZZ'), false);
   // Totals count every playable channel, including the unplaced ZZ one.
   assert.deepEqual(index.totals, {
-    channels: 3,
-    streams: 4,
-    excluded: { blocklist: 1, nsfw: 1, closed: 1, headers: 2, format: 1 },
+    channels: 4,
+    streams: 5,
+    adult: 1,
+    excluded: { blocklist: 1, closed: 1, headers: 2, format: 1 },
     unplaced: 1,
   });
 });
@@ -154,6 +178,26 @@ test('channels keep a bounded stream list and countries sort busiest first', () 
   assert.equal(
     index.channelsByCountry.get('DE')[0].streams.length,
     LIVE_TV_MAX_STREAMS_PER_CHANNEL,
+  );
+});
+
+test('a channel main feed is tried before its other feeds', () => {
+  const index = buildLiveTvIndex({
+    channels: [channel('Feeds.de', 'DE')],
+    streams: [
+      stream('Feeds.de', 'https://a.example/west.m3u8', { feed: 'West' }),
+      stream('Feeds.de', 'https://a.example/main.m3u8'),
+      stream('Feeds.de', 'https://a.example/east.m3u8', { feed: 'East' }),
+    ],
+    blocklist: [],
+  });
+  assert.deepEqual(
+    index.channelsByCountry.get('DE')[0].streams.map(({ url }) => url),
+    [
+      'https://a.example/main.m3u8',
+      'https://a.example/west.m3u8',
+      'https://a.example/east.m3u8',
+    ],
   );
 });
 
@@ -189,8 +233,34 @@ test('browser sanitizers keep only well-formed countries and playable channels',
       { code: 'xx', name: 'Lower', lon: 0, lat: 0, channels: 1 },
       { code: 'FR', name: 'Far', lon: 500, lat: 0, channels: 1 },
       { code: 'PL', name: 'Empty', lon: 19, lat: 52, channels: 0 },
+      {
+        code: 'CZ',
+        name: 'Bad adult',
+        lon: 15,
+        lat: 50,
+        channels: 1,
+        adult: -1,
+      },
+      {
+        code: 'NL',
+        name: 'Adult only',
+        lon: 5,
+        lat: 52,
+        channels: 0,
+        adult: 2,
+      },
     ]),
-    [{ code: 'DE', name: 'Germany', lon: 10, lat: 51, channels: 3 }],
+    [
+      { code: 'DE', name: 'Germany', lon: 10, lat: 51, channels: 3, adult: 0 },
+      {
+        code: 'NL',
+        name: 'Adult only',
+        lon: 5,
+        lat: 52,
+        channels: 0,
+        adult: 2,
+      },
+    ],
   );
   assert.equal(sanitizeLiveTvChannels('nope'), null);
   assert.deepEqual(
@@ -206,6 +276,18 @@ test('browser sanitizers keep only well-formed countries and playable channels',
       },
       { id: 'NoStreams.de', name: 'None', streams: [] },
       {
+        id: 'Late.de',
+        name: 'Late',
+        adult: true,
+        streams: [{ url: 'https://ok.example/late.m3u8' }],
+      },
+      {
+        id: 'Truthy.de',
+        name: 'Truthy',
+        adult: 'yes',
+        streams: [{ url: 'https://ok.example/truthy.m3u8' }],
+      },
+      {
         id: '<script>',
         name: 'Bad',
         streams: [{ url: 'https://ok.example/b.m3u8' }],
@@ -218,6 +300,23 @@ test('browser sanitizers keep only well-formed countries and playable channels',
         categories: ['news'],
         streams: [
           { url: 'https://ok.example/a.m3u8', quality: '720p', labels: [] },
+        ],
+      },
+      {
+        id: 'Late.de',
+        name: 'Late',
+        categories: [],
+        streams: [
+          { url: 'https://ok.example/late.m3u8', quality: '', labels: [] },
+        ],
+        adult: true,
+      },
+      {
+        id: 'Truthy.de',
+        name: 'Truthy',
+        categories: [],
+        streams: [
+          { url: 'https://ok.example/truthy.m3u8', quality: '', labels: [] },
         ],
       },
     ],

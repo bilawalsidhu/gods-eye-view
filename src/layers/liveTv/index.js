@@ -19,12 +19,12 @@ const COUNTRY_LIST_LIMIT = 25;
 const FOCUS_HEIGHT_M = 2_500_000;
 const PROJECT_PAGE = 'https://github.com/iptv-org/iptv';
 const DISCLAIMER =
-  'Channels and stream links come from the community-maintained iptv-org database. Streams are third-party broadcasts that are linked, not hosted: playing one connects your browser directly to the broadcaster. Many are geo-blocked, offline or refuse playback in a browser. Pins sit at the country label point, not at the broadcaster.';
+  'Channels and stream links come from the community-maintained iptv-org database. Streams are third-party broadcasts that are linked, not hosted: playing one connects your browser directly to the broadcaster. Many are geo-blocked, offline or refuse playback in a browser. Channels iptv-org marks adult are listed only while Adult 18+ is on. Pins sit at the country label point, not at the broadcaster.';
 const CAVEAT = 'Third-party streams, linked not hosted';
 const REASONS = Object.freeze({
-  insecure: 'this page is https and the stream is http',
+  insecure: 'http stream blocked on an https page',
   timeout: 'no picture within 15 s',
-  network: 'the stream host refused or did not answer',
+  network: 'the host refused or did not answer',
   media: 'the stream could not be decoded',
   error: 'the stream could not be played',
   unsupported: 'this browser cannot play HLS',
@@ -59,6 +59,7 @@ export function createLiveTvLayer({
   picking = null,
   pointer = null,
   overlayHost = null,
+  showAdult = false,
 } = {}) {
   if (
     typeof source?.getSnapshot !== 'function' ||
@@ -71,6 +72,9 @@ export function createLiveTvLayer({
   let _request = null;
   let _countryRequest = null;
   let _enabled = false;
+  /** Country summaries as served: general and adult counts apart. */
+  let _all = [];
+  /** The countries on the globe, counted for the current adult setting. */
   let _countries = [];
   let _signature = null;
   let _selectedCode = null;
@@ -78,6 +82,7 @@ export function createLiveTvLayer({
   let _countryError = null;
   let _page = 0;
   let _newsOnly = false;
+  let _showAdult = showAdult === true;
   let _channelId = null;
   let _playSerial = 0;
   let _status = null;
@@ -105,7 +110,9 @@ export function createLiveTvLayer({
     (_selectedCode && _markers.get(_selectedCode)?.country) || null;
   const filteredChannels = () =>
     (_channels || []).filter(
-      (channel) => !_newsOnly || channel.categories.includes('news'),
+      (channel) =>
+        (_showAdult || !channel.adult) &&
+        (!_newsOnly || channel.categories.includes('news')),
     );
   const playingChannel = () =>
     (_channelId && _channels?.find(({ id }) => id === _channelId)) || null;
@@ -244,6 +251,17 @@ export function createLiveTvLayer({
     if (_removePreRender) cullHorizon(true);
     publishLabels();
     requestRender();
+  }
+
+  /** Count each country for the adult setting; adult-only ones may vanish. */
+  function applyCountries() {
+    _countries = _all
+      .map((country) => ({
+        ...country,
+        channels: country.channels + (_showAdult ? country.adult || 0 : 0),
+      }))
+      .filter(({ channels }) => channels > 0)
+      .sort((a, b) => b.channels - a.channels || a.code.localeCompare(b.code));
   }
 
   function stopPlayback() {
@@ -429,18 +447,23 @@ export function createLiveTvLayer({
     const channel = playingChannel();
     const list = filteredChannels();
     const pages = Math.max(1, Math.ceil(list.length / LIVE_TV_PAGE_SIZE));
+    const page = `Page ${_page + 1} of ${pages}`;
     return [
-      channel ? statusLine(channel) : '',
-      `${country.name} · ${plural(country.channels, 'channel')}`,
+      channel
+        ? statusLine(channel)
+        : `${country.name} · ${plural(country.channels, 'channel')}`,
       _countryError
         ? `Channel list unavailable: ${_countryError}`
         : !_channels
           ? 'Loading channels…'
-          : list.length
-            ? `Page ${_page + 1} of ${pages} · choose a channel to play it`
-            : 'No news channels here',
-      CAVEAT,
-    ].filter(Boolean);
+          : !list.length
+            ? _newsOnly
+              ? 'No news channels here'
+              : 'No channels'
+            : channel
+              ? `${country.name} · ${page}`
+              : `${page} · choose a channel to play it`,
+    ];
   }
 
   const layer = {
@@ -504,7 +527,8 @@ export function createLiveTvLayer({
         const snapshot = await source.getSnapshot({ signal: request.signal });
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
-        _countries = snapshot.countries;
+        _all = snapshot.countries;
+        applyCountries();
         render();
         if (_selectedCode && !_markers.has(_selectedCode)) select(null);
         _stale = snapshot.stale === true;
@@ -541,6 +565,16 @@ export function createLiveTvLayer({
         notify();
         return;
       }
+      if (params.showAdult !== undefined) {
+        _showAdult = params.showAdult === true;
+        _page = 0;
+        if (!_showAdult && playingChannel()?.adult) stopPlayback();
+        applyCountries();
+        render();
+        if (_selectedCode && !_markers.has(_selectedCode)) select(null);
+        notify();
+        return;
+      }
       if (params.newsOnly !== undefined) {
         _newsOnly = params.newsOnly === true;
         _page = 0;
@@ -572,6 +606,15 @@ export function createLiveTvLayer({
     },
 
     getRowControls() {
+      const adultChip = {
+        id: 'adult',
+        label: 'Adult 18+',
+        title: _showAdult
+          ? 'Hide adult channels (18+)'
+          : 'Show adult channels (18+)',
+        active: _showAdult,
+        params: { showAdult: !_showAdult },
+      };
       const country = selectedCountry();
       if (!country) {
         return {
@@ -583,6 +626,7 @@ export function createLiveTvLayer({
                 'Open the iptv-org project, the source of the channel list, in a new tab',
               params: { projectPage: true },
             },
+            adultChip,
           ],
           list: {
             ariaLabel: 'Countries with the most channels, most first',
@@ -615,6 +659,7 @@ export function createLiveTvLayer({
             active: _newsOnly,
             params: { newsOnly: !_newsOnly },
           },
+          adultChip,
           {
             id: 'previous',
             label: '‹ Prev',
@@ -629,6 +674,12 @@ export function createLiveTvLayer({
             disabled: _page >= pages - 1,
             params: { page: 'next' },
           },
+          {
+            id: 'countries',
+            label: 'All countries',
+            title: 'Back to the country list',
+            params: { clear: true },
+          },
           ...(_channelId
             ? [
                 {
@@ -639,12 +690,6 @@ export function createLiveTvLayer({
                 },
               ]
             : []),
-          {
-            id: 'countries',
-            label: 'All countries',
-            title: 'Back to the country list',
-            params: { clear: true },
-          },
         ],
         list: {
           ariaLabel: `${country.name} channels, page ${_page + 1} of ${pages}`,
@@ -656,8 +701,9 @@ export function createLiveTvLayer({
             return {
               id: channel.id,
               ordinal: _page * LIVE_TV_PAGE_SIZE + index + 1,
-              lead: channel.id === _channelId ? '▶' : stream.quality || 'TV',
+              lead: channel.id === _channelId ? '▶' : stream.quality || '—',
               text: [
+                channel.adult ? '18+' : '',
                 channel.name,
                 channel.categories.join(', '),
                 labels.join(', '),
@@ -705,6 +751,7 @@ export function createLiveTvLayer({
 
     destroy(viewer = _viewer) {
       layer.disable();
+      _all = [];
       _countries = [];
       _signature = null;
       _entityCountries.clear();

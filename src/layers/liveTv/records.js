@@ -12,12 +12,14 @@ const CHANNEL_ID = /^[A-Za-z0-9][A-Za-z0-9._&+-]{0,127}$/;
 /** Stream labels iptv-org publishes that the row repeats to the viewer. */
 const KNOWN_LABELS = new Set(['Geo-blocked', 'Not 24/7']);
 /**
- * Hosts whose pages are not direct media streams. iptv-org lists direct
- * stream URLs; these are refused anyway so nothing here ever embeds or
- * resolves a video platform page (the reason #285 was closed).
+ * Video platforms, matched anywhere in the host name. iptv-org lists direct
+ * stream URLs, but a few are relays that re-stream a platform channel
+ * (`twitch-m3u8.<x>.workers.dev`); those are refused too, so nothing here
+ * ever plays or resolves a video platform's content (the reason #285 was
+ * closed).
  */
 const PLATFORM_HOSTS =
-  /(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com|twitch\.tv|dailymotion\.com|facebook\.com|vimeo\.com)$/i;
+  /(youtube|youtu\.be|googlevideo|ytimg|twitch|dailymotion|facebook|fbcdn|vimeo)/i;
 
 const text = (value, max = MAX_TEXT_CHARS) => {
   if (typeof value !== 'string') return '';
@@ -47,10 +49,12 @@ export function isPlayableStreamUrl(value) {
 
 /**
  * Join the iptv-org channels, streams, blocklist and countries files into a
- * per-country index of channels with playable streams. Blocklisted, NSFW
- * and closed channels are dropped, and so are streams that need a custom
- * User-Agent or Referer (a browser cannot send them) or that are not direct
- * HLS playlists. Countries without a known anchor are counted, not placed.
+ * per-country index of channels with playable streams. Blocklisted (legal
+ * and DMCA removals) and closed channels are dropped, and so are streams that
+ * need a custom User-Agent or Referer (a browser cannot send them) or that are
+ * not direct HLS playlists. Channels iptv-org marks NSFW are kept but flagged
+ * `adult` and counted apart, so the viewer decides whether to list them.
+ * Countries without a known anchor are counted, not placed.
  * @param {{channels: unknown, streams: unknown, blocklist: unknown, countries?: unknown}} files
  * @returns {{countries: object[], channelsByCountry: Map<string, object[]>, totals: object} | null}
  */
@@ -74,7 +78,8 @@ export function buildLiveTvIndex({ channels, streams, blocklist, countries }) {
   const totals = {
     channels: 0,
     streams: 0,
-    excluded: { blocklist: 0, nsfw: 0, closed: 0, headers: 0, format: 0 },
+    adult: 0,
+    excluded: { blocklist: 0, closed: 0, headers: 0, format: 0 },
     unplaced: 0,
   };
   const known = new Map();
@@ -86,10 +91,6 @@ export function buildLiveTvIndex({ channels, streams, blocklist, countries }) {
       totals.excluded.blocklist++;
       continue;
     }
-    if (channel.is_nsfw === true) {
-      totals.excluded.nsfw++;
-      continue;
-    }
     if (channel.closed) {
       totals.excluded.closed++;
       continue;
@@ -97,7 +98,17 @@ export function buildLiveTvIndex({ channels, streams, blocklist, countries }) {
     known.set(id, channel);
   }
   const playable = new Map();
-  for (const stream of streams) {
+  // A channel's main feed first: other feeds may be another region or
+  // language, so the player only falls back to them.
+  const ordered = streams
+    .map((stream, order) => ({ stream, order }))
+    .sort(
+      (a, b) =>
+        (a.stream?.feed == null ? 0 : 1) - (b.stream?.feed == null ? 0 : 1) ||
+        a.order - b.order,
+    )
+    .map(({ stream }) => stream);
+  for (const stream of ordered) {
     const channel = known.get(stream?.channel);
     if (!channel) continue;
     if (stream.user_agent || stream.referrer) {
@@ -132,9 +143,11 @@ export function buildLiveTvIndex({ channels, streams, blocklist, countries }) {
         .filter(Boolean)
         .slice(0, MAX_CATEGORIES),
       streams: list,
+      ...(channel.is_nsfw === true ? { adult: true } : {}),
     });
     channelsByCountry.set(channel.country, entries);
     totals.channels++;
+    if (channel.is_nsfw === true) totals.adult++;
     totals.streams += list.length;
   }
   const summary = [];
@@ -148,16 +161,21 @@ export function buildLiveTvIndex({ channels, streams, blocklist, countries }) {
       channelsByCountry.delete(code);
       continue;
     }
+    const adult = entries.filter((entry) => entry.adult).length;
     summary.push({
       code,
       name: names.get(code) || code,
       lon: anchor[0],
       lat: anchor[1],
-      channels: entries.length,
+      channels: entries.length - adult,
+      adult,
     });
   }
   summary.sort(
-    (a, b) => b.channels - a.channels || a.code.localeCompare(b.code),
+    (a, b) =>
+      b.channels - a.channels ||
+      b.adult - a.adult ||
+      a.code.localeCompare(b.code),
   );
   return { countries: summary, channelsByCountry, totals };
 }
@@ -165,8 +183,11 @@ export function buildLiveTvIndex({ channels, streams, blocklist, countries }) {
 const finite = (value, min, max) =>
   Number.isFinite(value) && value >= min && value <= max;
 
+const count = (value) => Number.isInteger(value) && value >= 0;
+
 /**
- * Validate the per-country summary the proxy returns.
+ * Validate the per-country summary the proxy returns. `channels` counts the
+ * general channels and `adult` the 18+ ones; a country needs at least one.
  * @param {unknown} rows
  * @returns {object[] | null}
  */
@@ -177,7 +198,9 @@ export function sanitizeLiveTvCountries(rows) {
   for (const row of rows) {
     if (!COUNTRY_CODE.test(row?.code) || seen.has(row.code)) continue;
     if (!finite(row.lon, -180, 180) || !finite(row.lat, -90, 90)) continue;
-    if (!Number.isInteger(row.channels) || row.channels < 1) continue;
+    const adult = row.adult ?? 0;
+    if (!count(row.channels) || !count(adult) || row.channels + adult < 1)
+      continue;
     seen.add(row.code);
     out.push({
       code: row.code,
@@ -185,6 +208,7 @@ export function sanitizeLiveTvCountries(rows) {
       lon: row.lon,
       lat: row.lat,
       channels: row.channels,
+      adult,
     });
   }
   return out;
@@ -219,6 +243,7 @@ export function sanitizeLiveTvChannels(rows) {
         .filter(Boolean)
         .slice(0, MAX_CATEGORIES),
       streams,
+      ...(row.adult === true ? { adult: true } : {}),
     });
   }
   return out;

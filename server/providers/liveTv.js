@@ -69,8 +69,11 @@ export function liveTvProxy({
   async function acquire() {
     if (cached && now() - cached.fetchedAt < LIVE_TV_TTL_MS)
       return { index: cached, stale: false };
-    if (!cached && now() - failedAt < FAILURE_BACKOFF_MS)
+    if (now() - failedAt < FAILURE_BACKOFF_MS) {
+      // Upstream just failed: serve the last good copy without asking again.
+      if (cached) return { index: cached, stale: true };
       throw new Error('upstream_backoff');
+    }
     try {
       const { promise } = coalesceProxyRequest(inFlight, 'index', load);
       cached = await promise;

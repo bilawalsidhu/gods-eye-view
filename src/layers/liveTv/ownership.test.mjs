@@ -49,6 +49,7 @@ function harness({
   countries = [POLAND, GERMANY],
   channels = { PL: POLISH },
   picking = null,
+  showAdult,
 } = {}) {
   const sources = [];
   const flights = [];
@@ -144,6 +145,7 @@ function harness({
     picking,
     pointer: { isPointerFree: () => true },
     overlayHost: overlay,
+    showAdult,
   });
   layer.init(viewer);
   return {
@@ -226,7 +228,10 @@ test('an enabled refresh draws one pin per country and labels the busiest', asyn
   const controls = layer.getRowControls();
   assert.deepEqual(
     controls.chips.map(({ id, label }) => [id, label]),
-    [['project', 'iptv-org ↗']],
+    [
+      ['project', 'iptv-org ↗'],
+      ['adult', 'Adult 18+'],
+    ],
   );
   assert.deepEqual(
     controls.list.items.map(({ lead, text, params }) => [lead, text, params]),
@@ -277,6 +282,7 @@ test('choosing a country lists its channels, pages them and filters news', async
     controls.chips.map(({ id, disabled }) => [id, disabled]),
     [
       ['news', undefined],
+      ['adult', undefined],
       ['previous', true],
       ['next', false],
       ['countries', undefined],
@@ -307,7 +313,7 @@ test('a channel plays only when chosen, restarts on a repeat and stops cleanly',
   assert.equal(h.layer.getRowControls().media, null);
   h.layer.setParams({ channelId: 'Kino.pl' });
   let controls = h.layer.getRowControls();
-  assert.ok(controls.chips.some(({ id }) => id === 'stop'));
+  assert.equal(controls.chips.at(-1).id, 'stop', 'Stop is the last chip');
   assert.equal(controls.list.items[1].lead, '▶');
   assert.equal(controls.list.items[1].active, true);
   const { media } = controls;
@@ -321,7 +327,10 @@ test('a channel plays only when chosen, restarts on a repeat and stops cleanly',
     h.players[0].streams.map(({ url }) => url),
     ['https://kino.pl.example/a.m3u8', 'https://kino.pl.example/b.m3u8'],
   );
-  assert.match(h.layer.getRowControls().info, /^Kino · starting/);
+  assert.equal(
+    h.layer.getRowControls().info,
+    'Kino · starting · Poland · Page 1 of 1',
+  );
   h.players[0].options.onStatus({ state: 'connecting', index: 1, total: 2 });
   assert.match(
     h.layer.getRowControls().info,
@@ -335,7 +344,7 @@ test('a channel plays only when chosen, restarts on a repeat and stops cleanly',
   });
   assert.match(
     h.layer.getRowControls().info,
-    /^Kino · stream unavailable: the stream host refused or did not answer\. Try another channel\./,
+    /^Kino · stream unavailable: the host refused or did not answer\. Try another channel\./,
   );
   assert.equal(h.layer.getDiagnostics().playback.reason, 'network');
 
@@ -373,7 +382,13 @@ test('switching country or disabling stops the player and the country request', 
   h.layer.setParams({ channelId: 'Info.pl' });
   await chooseCountry(h, 'DE');
   assert.equal(h.layer.getDiagnostics().channelId, null);
-  assert.match(h.layer.getRowControls().info, /No news channels here|Page 1/);
+  assert.equal(
+    h.layer.getRowControls().info,
+    'Germany · 2 channels · No channels',
+  );
+  h.layer.setParams({ newsOnly: true });
+  assert.match(h.layer.getRowControls().info, /No news channels here$/);
+  h.layer.setParams({ newsOnly: false });
   await chooseCountry(h, 'PL');
   h.layer.setParams({ channelId: 'Info.pl' });
   h.layer.disable();
@@ -386,6 +401,68 @@ test('switching country or disabling stops the player and the country request', 
   );
   assert.equal(h.sources[0].show, false);
   assert.equal(h.overlay.visible.get('live-tv'), false);
+});
+
+test('adult channels stay hidden until Adult 18+ is on', async () => {
+  const NETHERLANDS = {
+    code: 'NL',
+    name: 'Netherlands',
+    lon: 5.6,
+    lat: 52.2,
+    channels: 0,
+    adult: 2,
+  };
+  const channels = {
+    PL: [...POLISH, tv('Late.pl', ['general'], { adult: true })],
+    NL: [
+      tv('Night.nl', ['general'], { adult: true }),
+      tv('Club.nl', ['general'], { adult: true }),
+    ],
+  };
+  const countries = [
+    { ...POLAND, adult: 1 },
+    { ...GERMANY, adult: 0 },
+    NETHERLANDS,
+  ];
+  const h = harness({ countries, channels });
+  h.layer.enable();
+  await h.layer.update();
+  const pins = () => h.sources[0].entities.values.map(({ id }) => id);
+  assert.deepEqual(pins(), ['live-tv:PL', 'live-tv:DE']);
+  assert.equal(h.layer.getStats().count, 5);
+  await chooseCountry(h);
+  let controls = h.layer.getRowControls();
+  assert.equal(controls.list.items.length, 3);
+  assert.equal(controls.chips.find(({ id }) => id === 'adult').active, false);
+
+  h.layer.setParams({ showAdult: true });
+  assert.deepEqual(pins(), ['live-tv:PL', 'live-tv:DE', 'live-tv:NL']);
+  assert.equal(h.layer.getStats().count, 8);
+  assert.deepEqual(h.labels()[0], ['PL', 'Poland · 4 TV', true]);
+  controls = h.layer.getRowControls();
+  assert.equal(controls.chips.find(({ id }) => id === 'adult').active, true);
+  assert.equal(
+    controls.list.items.find(({ id }) => id === 'Late.pl').text,
+    '18+ · Late · general · Geo-blocked',
+  );
+  h.layer.setParams({ channelId: 'Late.pl' });
+  h.layer.setParams({ showAdult: false });
+  assert.equal(h.layer.getDiagnostics().channelId, null, 'adult player stops');
+  assert.equal(h.layer.getDiagnostics().selectedCountry, 'PL');
+
+  h.layer.setParams({ showAdult: true });
+  await chooseCountry(h, 'NL');
+  h.layer.setParams({ showAdult: false });
+  assert.equal(
+    h.layer.getDiagnostics().selectedCountry,
+    null,
+    'an adult-only country closes when its pin goes',
+  );
+
+  const shown = harness({ countries, channels, showAdult: true });
+  shown.layer.enable();
+  await shown.layer.update();
+  assert.equal(shown.sources[0].entities.values.length, 3, 'opt-in default');
 });
 
 test('a failed channel list is reported on the row', async () => {

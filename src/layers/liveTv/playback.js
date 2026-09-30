@@ -89,13 +89,15 @@ export function attachLiveTvStreams(
     onStatus({ state: 'connecting', index: attempt, total });
     video.addEventListener('playing', onPlaying);
     video.addEventListener('error', onError);
-    startup = setTimer(() => {
-      if (!disposed && attempt === index && !playing) next('timeout');
-    }, LIVE_TV_STARTUP_MS);
     (async () => {
       try {
         const { default: Hls } = await loadHls();
         if (disposed || attempt !== index) return;
+        // Armed once the player code is here, so a slow first download of
+        // hls.js is never blamed on the stream.
+        startup = setTimer(() => {
+          if (!disposed && attempt === index && !playing) next('timeout');
+        }, LIVE_TV_STARTUP_MS);
         if (!Hls.isSupported()) {
           if (video.canPlayType('application/vnd.apple.mpegurl')) {
             video.src = url;

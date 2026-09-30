@@ -462,6 +462,11 @@ export class LayerPanel {
       if (node.title !== title) node.title = title;
       const hidden = !text;
       if (node.hidden !== hidden) node.hidden = hidden;
+      // A row hosting a player announces its playback state as it changes.
+      if (controls?.media) {
+        if (node.getAttribute?.('role') !== 'status')
+          node.setAttribute?.('role', 'status');
+      } else if (node.getAttribute?.('role')) node.removeAttribute?.('role');
     }
   }
 
@@ -512,6 +517,8 @@ export class LayerPanel {
       release: () => {
         if (container._rowMedia !== state) return;
         container._rowMedia = null;
+        const at = this._removers.indexOf(state.release);
+        if (at !== -1) this._removers.splice(at, 1);
         try {
           dispose?.();
         } finally {

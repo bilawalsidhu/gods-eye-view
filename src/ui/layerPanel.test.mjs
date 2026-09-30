@@ -269,7 +269,11 @@ test('a row media slot mounts one video after the list, keyed, and releases it',
     subscribeRowControls: () => null,
     getRowControls: () => ({
       info: 'Channels',
-      list: { items: [{ id: 'a', text: 'A', params: { channelId: 'a' } }] },
+      list: {
+        items: [
+          { id: 'a', ordinal: 41, text: 'A', params: { channelId: 'a' } },
+        ],
+      },
       media,
     }),
   });
@@ -304,6 +308,11 @@ test('a row media slot mounts one video after the list, keyed, and releases it',
     const siblings = list.parent.children;
     assert.equal(siblings[siblings.indexOf(list) + 1], video.parent);
     assert.deepEqual(attached, [['a#1', video]]);
+    // A later page numbers on from its first item, not from 1.
+    assert.equal(list.start, 41);
+    assert.equal(list.style.counterReset, 'gev-step 40');
+    const info = f.find((n) => n.className === 'data-toggle-controls-info');
+    assert.equal(info.getAttribute('role'), 'status', 'playback is announced');
 
     refresh();
     assert.equal(attached.length, 1, 'the same key keeps the same player');
@@ -316,6 +325,12 @@ test('a row media slot mounts one video after the list, keyed, and releases it',
     refresh();
     assert.deepEqual(released, ['a#1', 'a#2']);
     assert.deepEqual(videos(), []);
+    assert.equal(
+      f
+        .find((n) => n.className === 'data-toggle-controls-info')
+        .getAttribute('role'),
+      null,
+    );
 
     media = descriptor('a#3');
     refresh();

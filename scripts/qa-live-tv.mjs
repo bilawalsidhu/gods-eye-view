@@ -255,10 +255,26 @@ const channel = (id, categories, streams) => ({
 function fixture() {
   return {
     countries: [
-      { code: 'PL', name: 'Poland', lon: 19.4, lat: 52.1, channels: 3 },
+      {
+        code: 'PL',
+        name: 'Poland',
+        lon: 19.4,
+        lat: 52.1,
+        channels: 3,
+        adult: 1,
+      },
       { code: 'DE', name: 'Germany', lon: 10.3, lat: 51.1, channels: 1 },
       // The far side of the globe from a camera above Europe.
       { code: 'FJ', name: 'Fiji', lon: 178, lat: -17.8, channels: 1 },
+      // Adult channels only: no pin until Adult 18+ is on.
+      {
+        code: 'NL',
+        name: 'Netherlands',
+        lon: 5.6,
+        lat: 52.2,
+        channels: 0,
+        adult: 1,
+      },
       // Malformed: dropped by the client sanitizer.
       { code: 'pl', name: 'Bad', lon: 0, lat: 0, channels: 1 },
     ],
@@ -267,6 +283,16 @@ function fixture() {
         channel('Dead_News.pl', ['news'], DEAD_STREAMS),
         channel('Kino.pl', ['movies'], ['http://127.0.0.1:9/kino.m3u8']),
         channel('Sport.pl', ['sports'], ['http://127.0.0.1:9/sport.m3u8']),
+        {
+          ...channel('Late.pl', ['general'], ['http://127.0.0.1:9/late.m3u8']),
+          adult: true,
+        },
+      ],
+      NL: [
+        {
+          ...channel('Night.nl', ['general'], ['http://127.0.0.1:9/nl.m3u8']),
+          adult: true,
+        },
       ],
       DE: [channel('Info.de', ['news'], ['http://127.0.0.1:9/de.m3u8'])],
       FJ: [channel('Fiji_One.fj', ['general'], ['http://127.0.0.1:9/fj.m3u8'])],
@@ -332,6 +358,16 @@ async function main() {
       'LIVE: the row carries the linked-not-hosted caveat',
       /linked not hosted/.test(l.info),
       l.info,
+    );
+    const adultDefault = await live.evaluate(() =>
+      document
+        .querySelector('[data-chip-id="adult"]')
+        ?.getAttribute('aria-pressed'),
+    );
+    record(
+      'LIVE: Adult 18+ is offered and off by default',
+      adultDefault === 'false',
+      String(adultDefault),
     );
     await shoot(live, 'live-world');
 
@@ -447,7 +483,7 @@ async function main() {
       };
     }, LAYER_ID);
     record(
-      'FIXTURE: 3 pins drawn, the malformed country dropped, 5 channels counted',
+      'FIXTURE: 3 pins drawn, the malformed and adult-only countries left off, 5 channels counted',
       f.entities === 3 && f.stats.count === 5,
       `pins=${f.entities} channels=${f.stats.count}`,
     );
@@ -495,7 +531,7 @@ async function main() {
         DEAD_STREAMS.every((url) => playlists.includes(url)) &&
         /stream unavailable/.test(failed.info) &&
         failed.video?.label === 'Live TV: Dead News' &&
-        failed.chips.includes('stop'),
+        failed.chips.at(-1) === 'stop',
       `playback=${JSON.stringify(dead.playback)} playlists=${JSON.stringify(playlists)} info=${JSON.stringify(failed.info)}`,
     );
     await shoot(page, 'unavailable');
@@ -508,6 +544,41 @@ async function main() {
         !stopped.chips.includes('stop') &&
         (await diagnostics(page)).selectedCountry === 'PL',
       JSON.stringify(stopped.chips),
+    );
+    await clickRow(page, '[data-chip-id="news"]');
+    await clickRow(page, '[data-chip-id="adult"]');
+    await sleep(500);
+    const adultOn = await page.evaluate((id) => {
+      const { viewer, dataManager } = window.__godsEyeView;
+      const controls = dataManager.layers.get(id).module.getRowControls();
+      return {
+        pins: viewer.dataSources.getByName(id)[0].entities.values.length,
+        pressed: document
+          .querySelector('[data-chip-id="adult"]')
+          ?.getAttribute('aria-pressed'),
+        late: controls.list.items.find((item) => item.id === 'Late.pl')?.text,
+      };
+    }, LAYER_ID);
+    record(
+      'FIXTURE: Adult 18+ adds the adult-only pin and lists 18+ channels, labelled',
+      adultOn.pins === 4 &&
+        adultOn.pressed === 'true' &&
+        /^18\+ · Late/.test(adultOn.late || ''),
+      JSON.stringify(adultOn),
+    );
+    await shoot(page, 'adult-on');
+    await clickRow(page, '[data-chip-id="adult"]');
+    await sleep(500);
+    const adultOff = await rowDom(page);
+    record(
+      'FIXTURE: turning Adult 18+ off hides them again',
+      (await page.evaluate(
+        (id) =>
+          window.__godsEyeView.viewer.dataSources.getByName(id)[0].entities
+            .values.length,
+        LAYER_ID,
+      )) === 3 && !adultOff.items.includes('Late.pl'),
+      JSON.stringify(adultOff.items),
     );
     await clickRow(page, '[data-chip-id="countries"]');
     await sleep(300);
