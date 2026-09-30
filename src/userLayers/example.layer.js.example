@@ -11,6 +11,11 @@ export default {
       id: 'example-points',
       name: 'Example Points',
       icon: '*',
+      // Required. The manager calls this once before the first enable and does
+      // not check that it exists — a layer without one can never switch on.
+      async init() {
+        // Build entities, load a dataset, resolve a provider here.
+      },
       enable() {
         enabled = true;
       },
