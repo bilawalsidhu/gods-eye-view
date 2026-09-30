@@ -1,6 +1,6 @@
 const priorities = new WeakMap();
 
-/** Scalar context, infrared, radar, then lightning: independent of enable order. */
+/** Scalar context, infrared, radar, lightning, then aurora: independent of enable order. */
 export function orderWeatherImagery(collection, layer, priority) {
   priorities.set(layer, priority);
   if (typeof collection.raiseToTop !== 'function') return;
