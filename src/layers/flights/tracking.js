@@ -476,19 +476,31 @@ export function createTracking({
 
   async function _backfillTrail(icao24, token, oldestFixEpochSec) {
     let path = null;
+    let trackCredit = null;
     try {
       const track = await flightState.feed._source.getTrack?.(
         flightState.records.data.get(icao24)?.sourceReference ?? icao24,
         {
           signal: AbortSignal.any([
             flightState.lifetime.signal,
-            AbortSignal.timeout(8000),
+            AbortSignal.timeout(12000),
           ]),
         },
       );
       path = track?.records ?? null;
+      // A keyed historical fallback (issue #446) tags its result with the
+      // credit its terms require; register it once, on first use.
+      trackCredit = track?.credit ?? null;
     } catch {
       return; // silent fallback to the accumulated trail
+    }
+    if (trackCredit && trackCredit.key && trackCredit.html) {
+      // registerDynamicCredit is sync, idempotent per key, and no-ops without
+      // a viewer (same contract as the TomTom/transit conditional credits).
+      services.credits?.registerDynamicCredit?.(
+        flightState._viewer,
+        trackCredit,
+      );
     }
     if (
       !path ||

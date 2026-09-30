@@ -3,6 +3,8 @@ export {
   normalizeOpenSkyAircraft,
   normalizeReadsbAircraft,
   normalizeAircraftTrack,
+  normalizeAeroApiTrackPosition,
+  normalizeAeroApiTrack,
   openSkySnapshot,
   readsbSnapshot,
   readsbIdentities,
@@ -15,5 +17,6 @@ export {
 export {
   createOpenSkySource,
   createAdsbLolSource,
+  createAeroApiSource,
   createAisStreamSource,
 } from './standalone.js';

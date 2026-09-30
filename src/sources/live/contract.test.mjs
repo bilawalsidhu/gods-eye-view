@@ -3,12 +3,15 @@ import assert from 'node:assert/strict';
 import {
   createOpenSkySource,
   createAdsbLolSource,
+  createAeroApiSource,
   createAisStreamSource,
   normalizeReadsbAircraft,
   normalizeVesselObservation,
+  normalizeAeroApiTrack,
   openSkySnapshot,
   readsbSnapshot,
 } from './index.js';
+import { composeSource } from './contract.js';
 
 const now = 1800000000000;
 const aircraft = [
@@ -312,4 +315,170 @@ test('identity lookup validates its response and honors body-parse cancellation'
   await assert.rejects(source.getIdentities({}, { signal: abort.signal }), {
     name: 'AbortError',
   });
+});
+
+test('AeroAPI track rows normalize to the shared contract with dedupe and delta rejection', () => {
+  const payload = {
+    positions: [
+      {
+        timestamp: '2026-09-16T12:00:00Z',
+        latitude: 30,
+        longitude: -97,
+        altitude: 100,
+        update_type: 'A',
+      },
+      // Same 90 s window + same rounded coords: a duplicate receiver report.
+      {
+        timestamp: '2026-09-16T12:00:30Z',
+        latitude: 30.0001,
+        longitude: -97.0001,
+        altitude: 101,
+        update_type: 'A',
+      },
+      // Delta rows are waypoint summaries, not observations.
+      {
+        timestamp: '2026-09-16T12:01:00Z',
+        latitude: 31,
+        longitude: -97,
+        delta: true,
+      },
+      // Surface position: altitude 0, on-ground flagged.
+      {
+        timestamp: '2026-09-16T12:02:00Z',
+        latitude: 31,
+        longitude: -98,
+        altitude: 0,
+        update_type: 'X',
+      },
+      // Invalid rows never admit.
+      { latitude: 31, longitude: -98, altitude: 0 },
+      {
+        timestamp: '2026-09-16T12:03:00Z',
+        latitude: 200,
+        longitude: -98,
+      },
+    ],
+  };
+  const records = normalizeAeroApiTrack(payload);
+  assert.equal(records.length, 2);
+  assert.equal(records[0].observedAtMs, Date.parse('2026-09-16T12:00:00Z'));
+  assert.ok(Math.abs(records[0].baroAltitudeM - 3048) < 1e-6);
+  assert.equal(records[0].onGround, false);
+  assert.equal(records[1].onGround, true);
+  assert.equal(records[1].baroAltitudeM, 0);
+  // Malformed payloads degrade to an empty (never throwing) track.
+  assert.deepEqual(normalizeAeroApiTrack({}), []);
+  assert.deepEqual(normalizeAeroApiTrack({ positions: 'nope' }), []);
+});
+
+test('AeroAPI source resolves ident to flight id, then fetches and normalizes the track', async () => {
+  const requests = [];
+  const trackResponse = {
+    positions: [
+      {
+        timestamp: '2026-09-16T12:00:00Z',
+        latitude: 30,
+        longitude: -97,
+        altitude: 340,
+      },
+    ],
+  };
+  const source = createAeroApiSource({
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      if (url.includes('/api/aeroapi/flights/N123AB?'))
+        return response({
+          flights: [
+            { fa_flight_id: 'F-1', scheduled_out: '2026-09-16T11:00:00Z' },
+          ],
+        });
+      if (url.includes('/api/aeroapi/flights/F-1/track'))
+        return response(trackResponse);
+      return response({ title: 'Not Found' }, {}, 404);
+    },
+  });
+  const track = await source.getTrackByQuery({
+    id: 'abc123',
+    registration: 'N123AB',
+    callsign: 'TEST',
+  });
+  assert.equal(track.records.length, 1);
+  assert.equal(track.complete, false);
+  const listCalls = requests.filter((r) =>
+    r.url.includes('/api/aeroapi/flights/N123AB?'),
+  );
+  assert.equal(listCalls.length, 1);
+  assert.ok(
+    listCalls[0].url.includes('start=') && listCalls[0].url.includes('end='),
+    'flight list is windowed',
+  );
+  // String references satisfy the getTrack contract shape but have no ident.
+  await assert.rejects(source.getTrack('abc123'), { code: 'unsupported' });
+  // No candidates → unsupported, without any request.
+  const before = requests.length;
+  await assert.rejects(source.getTrackByQuery({}), { code: 'unsupported' });
+  assert.equal(requests.length, before);
+});
+
+test('composeSource prefers primary history and falls back with attribution tagging', async () => {
+  const fallbackTrack = {
+    records: [{ latitude: 30, longitude: -97 }],
+    complete: false,
+  };
+  const primary = {
+    label: 'Primary',
+    async getSnapshot() {
+      return {};
+    },
+    async getTrack(reference) {
+      if (reference === 'primary-ok')
+        return { records: [{ latitude: 1, longitude: 1 }] };
+      if (reference === 'primary-error') throw Error('primary down');
+      return { records: [] };
+    },
+  };
+  const fallback = {
+    label: 'Fallback',
+    credit: { key: 'k', html: 'h' },
+    async getTrackByQuery(reference) {
+      if (reference.id === 'fallback-empty') return { records: [] };
+      return fallbackTrack;
+    },
+  };
+  const composed = composeSource(primary, fallback);
+  assert.equal(composed.label, 'Primary');
+  assert.equal(typeof composed.getSnapshot, 'function');
+
+  const primaryWin = await composed.getTrack('primary-ok');
+  assert.equal(primaryWin.records.length, 1);
+  assert.equal(primaryWin.historySource, undefined);
+
+  const emptyPrimary = await composed.getTrack('primary-empty');
+  assert.deepEqual(emptyPrimary.records, fallbackTrack.records);
+  assert.equal(emptyPrimary.historySource, 'Fallback');
+  assert.deepEqual(emptyPrimary.credit, { key: 'k', html: 'h' });
+
+  const errorPrimary = await composed.getTrack('primary-error');
+  assert.equal(errorPrimary.historySource, 'Fallback');
+
+  const bothEmpty = await composed.getTrack('fallback-empty');
+  assert.deepEqual(bothEmpty.records, []);
+
+  // A failing fallback after a failing primary propagates the primary error.
+  const failing = composeSource(
+    {
+      label: 'P',
+      async getTrack() {
+        throw Error('boom');
+      },
+    },
+    {
+      async getTrackByQuery() {
+        throw Error('fallback boom');
+      },
+    },
+  );
+  await assert.rejects(failing.getTrack('x'), /boom/);
+  // No fallback → pass-through.
+  assert.equal(composeSource(primary, null), primary);
 });

@@ -7,6 +7,7 @@ import {
 } from './contract.js';
 import {
   normalizeAircraftTrack,
+  normalizeAeroApiTrack,
   openSkySnapshot,
   readsbSnapshot,
   readsbIdentities,
@@ -161,6 +162,110 @@ export function createAdsbLolSource({
               }),
         complete: false,
       };
+    },
+  };
+}
+
+/**
+ * FlightAware AeroAPI historical track lookup (issue #446), resolved through
+ * the same-origin /api/aeroapi proxy so the key stays server-side. Mounted as
+ * a FALLBACK on the civil flight source: `getTrack` first tries the primary
+ * source's own history and only resolves ident → fa_flight_id when that
+ * history is exhausted or missing — a failed resolution silently degrades to
+ * the local-only trail. Each attempt honors a caller-provided signal.
+ */
+export function createAeroApiSource({ fetchImpl = defaultFetch } = {}) {
+  async function readJson(url, source, signal) {
+    const { response, payload } = await readResponse(
+      fetchImpl,
+      url,
+      { signal },
+      source,
+    );
+    if (!response.ok) throw httpError(response, source);
+    return payload;
+  }
+
+  /**
+   * Resolve an ICAO 24-bit address to the fa_flight_id of its most recent
+   * position-only/airborne flight. Registration and callsign come from live
+   * enrichment and the scheduled-flight window is ±10 days, so the ident
+   * variants are queried in parallel and the in-window newest departure wins.
+   * Unresolvable inputs (no callsign/registration) throw unsupported.
+   */
+  async function resolveFlightId(reference, { signal } = {}) {
+    const candidates = [reference.registration, reference.callsign].filter(
+      (value) => typeof value === 'string' && value.trim(),
+    );
+    if (!candidates.length)
+      throw new LiveSourceError(
+        'unsupported',
+        'AeroAPI needs a callsign or registration',
+      );
+    const start = new Date(
+      (reference.lastContactEpochMs || Date.now()) - 9.5 * 86400000,
+    )
+      .toISOString()
+      .slice(0, 10);
+    const end = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const flightLists = await Promise.allSettled(
+      candidates.map((ident) =>
+        readJson(
+          `/api/aeroapi/flights/${encodeURIComponent(ident.trim())}` +
+            `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
+          'AeroAPI',
+          signal,
+        ),
+      ),
+    );
+    const flights = flightLists
+      .flatMap((settled) =>
+        settled.status === 'fulfilled' ? (settled.value.flights ?? []) : [],
+      )
+      .filter((flight) => typeof flight?.fa_flight_id === 'string')
+      .sort(
+        (a, b) =>
+          Date.parse(b?.scheduled_out ?? '') -
+          Date.parse(a?.scheduled_out ?? ''),
+      );
+    const flightId = flights[0]?.fa_flight_id;
+    if (!flightId)
+      throw new LiveSourceError(
+        'unavailable',
+        'AeroAPI has no recent flight for this aircraft',
+      );
+    return flightId;
+  }
+
+  return {
+    label: 'FlightAware AeroAPI',
+    /** Registered into the Data-attribution popover when history resolves. */
+    credit: {
+      key: 'flightaware-aeroapi',
+      html:
+        'Historical flight tracks: ' +
+        '<a href="https://www.flightaware.com" target="_blank" rel="noopener">FlightAware</a> ' +
+        '(AeroAPI)',
+    },
+    /**
+     * History for one aircraft. `reference` is the layer's shared-contract
+     * record ({ id, callsign, registration, lastContactEpochMs }); a plain
+     * string (raw icao24) has no ident to resolve and fails unsupported.
+     */
+    async getTrackByQuery(reference, { signal } = {}) {
+      const flightId = await resolveFlightId(reference ?? {}, { signal });
+      const payload = await readJson(
+        `/api/aeroapi/flights/${encodeURIComponent(flightId)}/track`,
+        'AeroAPI',
+        signal,
+      );
+      return { records: normalizeAeroApiTrack(payload), complete: false };
+    },
+    /** getTrack-contract shape so a composeSource consumer works unchanged. */
+    async getTrack(reference, options = {}) {
+      const resolved =
+        typeof reference === 'string' ? { id: reference } : (reference ?? {});
+      return this.getTrackByQuery(resolved, options);
     },
   };
 }
