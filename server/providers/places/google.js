@@ -8,6 +8,10 @@ import {
   projectTextSearchPlaces,
 } from '../../../src/data/placeProviderPayloads.js';
 
+// Without a signal a stalled Places request holds the search for undici's
+// 300 s default; a timeout lands in the handler's 502 path instead.
+const GOOGLE_PLACES_TIMEOUT_MS = 10_000;
+
 // Construct lazily after the standalone environment has loaded.
 // undefined = not built yet; null = unlimited; fn = active limiter
 let _googleRateLimiter;
@@ -104,6 +108,7 @@ export function googlePlacesContextProxy({
           {
             method: 'POST',
             redirect: 'error',
+            signal: AbortSignal.timeout(GOOGLE_PLACES_TIMEOUT_MS),
             headers: {
               'Content-Type': 'application/json',
               'X-Goog-Api-Key': apiKey,
@@ -224,6 +229,7 @@ export function googlePlacesContextProxy({
           {
             method: 'POST',
             redirect: 'error',
+            signal: AbortSignal.timeout(GOOGLE_PLACES_TIMEOUT_MS),
             headers: {
               'Content-Type': 'application/json',
               'X-Goog-Api-Key': apiKey,

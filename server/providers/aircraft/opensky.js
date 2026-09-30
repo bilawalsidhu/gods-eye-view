@@ -25,6 +25,12 @@ let _openskyCacheMeta = null;
 let _openskyCacheSourceEpochMs = null;
 /** TTL for the OpenSky response cache (ms). */
 const OPENSKY_CACHE_MS = 9000;
+// Undici's defaults only give up after 300 s without headers or body. A
+// stalled token request would hold every /api/opensky and /api/opensky-track
+// caller that awaits it, and a stalled /states/all holds its poll, for that
+// long. The global snapshot is several MB, so it gets the longer budget.
+const OPENSKY_TOKEN_TIMEOUT_MS = 10_000;
+const OPENSKY_STATES_TIMEOUT_MS = 20_000;
 // --- OpenSky credit governor (field-test fix 2026-07-06) -------------------
 // The global /states/all this proxy fetches costs 4 CREDITS per call against
 // OpenSky's ~4000/day authenticated budget — a day with the app open burned
@@ -108,6 +114,7 @@ export async function getOpenSkyToken() {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}`,
+          signal: AbortSignal.timeout(OPENSKY_TOKEN_TIMEOUT_MS),
         },
       );
 
@@ -472,7 +479,7 @@ export function openSkyProxy() {
 
         let upstream = await fetch(
           'https://opensky-network.org/api/states/all?extended=1',
-          { headers },
+          { headers, signal: AbortSignal.timeout(OPENSKY_STATES_TIMEOUT_MS) },
         );
         // Auto-mode fallback: if OAuth was rejected, retry with Basic credentials
         if (
@@ -487,7 +494,10 @@ export function openSkyProxy() {
           };
           upstream = await fetch(
             'https://opensky-network.org/api/states/all?extended=1',
-            { headers: retryHeaders },
+            {
+              headers: retryHeaders,
+              signal: AbortSignal.timeout(OPENSKY_STATES_TIMEOUT_MS),
+            },
           );
           usedMode = 'basic';
           reason = 'oauth_rejected_fallback_basic';
