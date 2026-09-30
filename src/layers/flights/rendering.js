@@ -33,6 +33,8 @@ import {
   COURSE_SLEW_DT_MAX_SEC,
   ROTATION_REFRESH_MS,
   COURSE_MAX_DPS,
+  HIDDEN_CONTACT_DR_TICKS,
+  hiddenContactDrPhase,
 } from './policy.js';
 
 export function createRendering({
@@ -811,6 +813,12 @@ export function createRendering({
     }
   }
 
+  /** The contact's hidden-rotation slot, cached on its billboard. */
+  function _hiddenDrPhase(bb, icao24) {
+    bb._gevHiddenDrPhase ??= hiddenContactDrPhase(icao24);
+    return bb._gevHiddenDrPhase;
+  }
+
   function _fleetTick() {
     if (
       !flightState._viewer ||
@@ -931,8 +939,24 @@ export function createRendering({
       for (const icao of toRelease) _releaseModel(icao);
     }
 
+    const hiddenDrPhase = flightState._fleetTickSeq++ % HIDDEN_CONTACT_DR_TICKS;
+
     for (const [icao24, bb] of flightState._billboards) {
       if (icao24 === flightState._trackedIcao) continue; // tracked entity owns its own motion
+
+      // A contact still behind the horizon at its last position would only be
+      // re-reckoned to be hidden again, so off its turn it keeps that position
+      // (see HIDDEN_CONTACT_DR_TICKS). Anything the stale position puts in view,
+      // and any contact with a fleet model, takes the full pass below at once.
+      if (
+        !bb.show &&
+        _hiddenDrPhase(bb, icao24) !== hiddenDrPhase &&
+        !flightState._models.has(icao24) &&
+        !occluder.isPointVisible(
+          flightState._cullPositions.get(icao24) || bb.position,
+        )
+      )
+        continue;
 
       const info = flightState.records.data.get(icao24);
 

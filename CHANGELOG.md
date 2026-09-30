@@ -1,5 +1,12 @@
 # Changelog
 
+- Stop dead-reckoning every flight hidden behind the horizon on every fleet
+  tick. With the worldwide feed (~13k contacts, ~56 on screen over Colombia at
+  4 km), the fleet pass drops from 7.7 ms to 2.0 ms per frame and its longest
+  tick from 51 ms to about 16 ms; the scene goes from 43 to 58 FPS. Hidden
+  contacts re-reckon about once a second, staggered, and appear as soon as
+  their position is in view.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
