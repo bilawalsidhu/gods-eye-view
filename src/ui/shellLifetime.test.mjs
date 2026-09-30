@@ -153,3 +153,20 @@ test('weather shell supplies live imagery hosts to wind and observations and rel
   owner.disconnect();
   for (const id of ids) assert.equal(attached.get(id), null);
 });
+
+test('Live TV navigates through the shell policy with its own Cockpit noun', (t) => {
+  const { owner } = bindings(t);
+  const nouns = [];
+  owner.runImmediateNavigation = (noun, navigate) => { nouns.push(noun); return navigate(7); };
+  let services;
+  owner.attachDataManager({
+    layers: new Map([['live-tv', { module: {
+      attachShellServices(value) { services = value; },
+    } }]]),
+    subscribe: () => () => {},
+  });
+  assert.equal(services.runNavigation((generation) => generation), 7);
+  assert.deepEqual(nouns, ['TV country']);
+  owner.disconnect();
+  assert.equal(services, null);
+});

@@ -776,6 +776,11 @@
 /* Async sub-controls: a chip must never read ACTIVE before the data it turns
    on actually exists, so loading and failure are their own visible states. */
 .data-toggle-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.data-toggle-chip.chip-loading:disabled {
   cursor: wait;
   opacity: 0.7;
 }
@@ -898,6 +903,24 @@
   cursor: default;
   opacity: 0.75;
   font-style: italic;
+}
+
+/* A layer's player below its row list (Live TV). 16:9 at the row's width,
+   letterboxed on black so odd broadcast aspect ratios never reflow the rail. */
+.data-row-media {
+  margin: 6px 0 0 26px;
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #000;
+}
+
+.data-row-media video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  background: #000;
 }
 
 .data-toggle-controls-info {

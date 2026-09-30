@@ -1893,6 +1893,12 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/liveTv.js",
+      "src/layers/liveTv/index.js",
+      "src/layers/liveTv/source.js",
+      "src/layers/liveTv/records.js",
+      "src/layers/liveTv/anchors.js",
+      "src/layers/liveTv/playback.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -2422,6 +2428,12 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/liveTv.js",
+      "src/layers/liveTv/index.js",
+      "src/layers/liveTv/source.js",
+      "src/layers/liveTv/records.js",
+      "src/layers/liveTv/anchors.js",
+      "src/layers/liveTv/playback.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -2853,7 +2865,10 @@
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
-      "src/layers/submarineCables/bundledSource.js"
+      "src/layers/submarineCables/bundledSource.js",
+      "src/layers/liveTv/source.js",
+      "src/layers/liveTv/records.js",
+      "src/layers/liveTv/anchors.js"
     ],
     "external": []
   },
@@ -3063,6 +3078,28 @@
       "src/layers/perimeters/inciweb.js"
     ],
     "external": ["cesium"]
+  },
+  "live-tv": {
+    "exports": ["./layers/live-tv"],
+    "modules": [
+      "src/layers/liveTv/index.js",
+      "src/sources/httpBody.js",
+      "src/layers/liveTv/source.js",
+      "src/layers/liveTv/records.js",
+      "src/layers/liveTv/anchors.js",
+      "src/layers/liveTv/playback.js"
+    ],
+    "external": ["cesium", "hls.js"]
+  },
+  "live-tv-source": {
+    "exports": ["./layers/live-tv/source"],
+    "modules": [
+      "src/sources/httpBody.js",
+      "src/layers/liveTv/source.js",
+      "src/layers/liveTv/records.js",
+      "src/layers/liveTv/anchors.js"
+    ],
+    "external": []
   },
   "perimeters-source": {
     "exports": ["./layers/perimeters/source"],
