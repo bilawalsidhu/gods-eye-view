@@ -1,5 +1,13 @@
 # Changelog
 
+- Let the scene idle with AIS vessels enabled. Vessels no longer hold the
+  continuous render loop; they request frames for new data and selection, one
+  trailing frame after the camera stops, and hold the loop only while focus
+  emphasis animates. A parked vessels-only scene went from continuous
+  rendering to 0 frames in 5 s. While anything is tracked, the vessel focus
+  pass skips hidden sprites at rest: about 4 ms to 1.2 ms per pass over 12,000
+  vessels (11,353 hidden).
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
