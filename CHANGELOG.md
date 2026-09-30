@@ -1,5 +1,15 @@
 # Changelog
 
+- Wildlife layer (Movement group): keyless animal tracks from Movebank.
+  Seven curated public CC0 studies (storks, gulls, spoonbills) show each
+  animal's latest GPS fix as a glyph pointing where it was heading, coloured
+  by species (with a legend), and a fading track of its recent fixes that
+  stops at long silences or jumps. Choosing an animal shows species,
+  study, owner, licence and the time of its last fix. `/api/wildlife`
+  walks the studies one at a time (Movebank allows one request per IP),
+  caches them for an hour, drops a study its owner makes private, and shows
+  only what owners publish (hidden or embargoed animals stay hidden).
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
