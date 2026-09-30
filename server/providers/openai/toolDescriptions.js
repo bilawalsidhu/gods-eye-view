@@ -102,8 +102,31 @@ export const ACTION_DESCRIPTIONS = {
     },
   },
   set_panel_open: {
-    description: 'Open or close a GEV UI panel/dropdown.',
+    description:
+      'Open or close a GEV UI panel/dropdown. DISPLAY is pp-toggles; VISUAL PRESETS is control-panel; POWER UP / PROVIDER SETTINGS is provider-settings. Keep those surfaces distinct. While Cockpit is active, pp-toggles and radio-panel automatically target the Cockpit-specific Display and Radio controls.',
     $position: 1,
+    parameters: {
+      properties: {
+        panelId: {
+          description:
+            'Use pp-toggles for DISPLAY. Use control-panel only for VISUAL PRESETS, visual styles, filters, map sources, or basemaps. Use provider-settings for POWER UP, Provider Settings, or API keys.',
+          $position: 1,
+        },
+      },
+    },
+  },
+  set_voice_provider: {
+    description:
+      'Change the selected voice provider between OpenAI and Gemini. If voice is active, the change is applied after the current response completes and the replacement provider remains off until the user starts voice again.',
+    $position: 1,
+    parameters: {
+      properties: {
+        provider: {
+          description: 'The voice provider to select.',
+          $position: 1,
+        },
+      },
+    },
   },
   set_context_mode: {
     description:

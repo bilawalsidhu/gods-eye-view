@@ -82,3 +82,78 @@
 .gev-voice-cost-value[hidden] {
   display: none;
 }
+
+/* Provider selection has its own row so the existing status/cost readout stays legible. */
+.gev-voice-provider-field {
+  position: fixed;
+  right: 36px;
+  bottom: calc(36px + 4.4rem);
+  z-index: 151;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 214px;
+  min-height: 1.85rem;
+  padding: 0.2rem 0.45rem;
+  color: var(--text-secondary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.5rem;
+  backdrop-filter: blur(24px);
+  font: 0.58rem var(--font-mono);
+  box-sizing: border-box;
+}
+.gev-voice-provider-field[hidden] {
+  display: none;
+}
+#gev-voice-provider {
+  flex: 1;
+  min-width: 0;
+  min-height: 1.45rem;
+  padding: 0.12rem 0.1rem;
+  color: var(--text-primary);
+  background: #10212a;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.25rem;
+  font: 0.65rem var(--font-mono);
+  cursor: pointer;
+}
+#gev-voice-provider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+#gev-voice-control[data-provider] .gev-voice-help-tray {
+  bottom: calc(100% + 2.6rem);
+}
+
+/* The provider owns a separate row above the voice panel. It remains a dock
+   sibling so it cannot replace the visualizer or inherit the panel clip-path. */
+#command-dock > .gev-voice-provider-field {
+  position: absolute;
+  right: auto;
+  bottom: calc(100% + 1.25rem);
+  left: 50%;
+  z-index: 7;
+  width: var(--dock-voice-width);
+  max-width: calc(100vw - 2rem);
+  min-height: 1.65rem;
+  transform: translateX(-50%);
+}
+#command-dock #gev-voice-provider {
+  width: 100%;
+}
+#command-dock #gev-voice-control[data-provider] .gev-voice-help-tray {
+  bottom: calc(100% + 3.25rem);
+}
+#command-dock.dock-has-pinned-tray
+  #gev-voice-control[data-provider]
+  .gev-voice-help-tray {
+  bottom: calc(100% + 4.25rem + var(--dock-pinned-stack-height));
+}
+
+@media (max-width: 900px) {
+  /* Compact wing labels must not paint or intercept clicks over the selector. */
+  #command-dock:has(#gev-voice-control[data-provider]) .dock-tray-toggle {
+    overflow: hidden;
+  }
+}

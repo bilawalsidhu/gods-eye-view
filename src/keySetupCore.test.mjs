@@ -362,3 +362,35 @@ test('server Google key remains supported without appearing in setup or its miss
   assert.ok(!JSON.stringify(status).includes('GOOGLE_MAPS_SERVER_API_KEY'));
   assert.ok(!JSON.stringify(status).includes(secret));
 });
+
+
+test('Gemini voice has an independent server-only key and never reuses Maps credentials', () => {
+  const mapsOnly = keySetupStatus({ GOOGLE_MAPS_API_KEY: 'maps-fixture' });
+  const gemini = mapsOnly.keys.find((key) => key.id === 'gemini');
+  assert.equal(gemini.title, 'GEMINI VOICE');
+  assert.equal(gemini.getUrl, 'https://aistudio.google.com/apikey');
+  assert.deepEqual(gemini.envVars, ['GEMINI_API_KEY']);
+  assert.equal(gemini.clientExposed, false);
+  assert.equal(gemini.set, false);
+  assert.match(gemini.unlocks, /quota/);
+  assert.equal(keySetupRequirement('gemini'), 'Needs GEMINI_API_KEY — add it in Provider Settings');
+
+  const geminiOnly = keySetupStatus({ GEMINI_API_KEY: 'gemini-private-fixture' });
+  assert.equal(geminiOnly.keys.find((key) => key.id === 'gemini').set, true);
+  assert.equal(geminiOnly.keys.find((key) => key.id === 'google-maps').set, false);
+  assert.equal(geminiOnly.keys.find((key) => key.id === 'openai').set, false);
+  assert.equal(geminiOnly.setCount, 1);
+  assert.doesNotMatch(JSON.stringify(geminiOnly), /gemini-private-fixture/);
+  assert.equal(keySetupStatus({ GEMINI_API_KEY: '   ' }).keys.find((key) => key.id === 'gemini').set, false);
+});
+
+test('saving and removing a Gemini key preserves Google Maps and OpenAI credentials', () => {
+  const original = 'GOOGLE_MAPS_API_KEY=maps-fixture\nOPENAI_API_KEY=openai-fixture\n# GEMINI_API_KEY=\n';
+  const update = validateKeySetupUpdates({ GEMINI_API_KEY: 'gemini-fixture' });
+  assert.equal(update.ok, true);
+  const saved = upsertDotenvValues(original, update.updates);
+  assert.equal(saved, original.replace('# GEMINI_API_KEY=', 'GEMINI_API_KEY=gemini-fixture'));
+  const removal = validateKeySetupUpdates({ GEMINI_API_KEY: null });
+  assert.equal(removal.ok, true);
+  assert.equal(upsertDotenvValues(saved, removal.updates), original);
+});

@@ -1,11 +1,25 @@
 /** Build the voice control independently of its connection backend. */
 export function createVoiceControl({ reset = false } = {}) {
   let root = document.getElementById('gev-voice-control');
+  let providerField = document.getElementById('gev-voice-provider-field');
   if (root && reset) {
     root.remove();
+    providerField?.remove();
     root = null;
+    providerField = null;
   }
   if (!root) {
+    providerField = document.createElement('div');
+    providerField.id = 'gev-voice-provider-field';
+    providerField.className = 'gev-voice-provider-field';
+    providerField.hidden = true;
+    providerField.innerHTML = `
+      <label for="gev-voice-provider">VOICE</label>
+      <select id="gev-voice-provider" aria-label="Voice provider" title="Changing provider stops the current voice session">
+        <option value="openai">OpenAI</option>
+        <option value="gemini">Gemini</option>
+      </select>
+    `;
     root = document.createElement('div');
     root.id = 'gev-voice-control';
     root.dataset.status = 'idle';
@@ -46,10 +60,12 @@ export function createVoiceControl({ reset = false } = {}) {
     if (commandDock) {
       const locationBar = document.getElementById('location-bar');
       const controlPanel = document.getElementById('control-panel');
+      commandDock.appendChild(providerField);
       commandDock.appendChild(root);
       if (locationBar) commandDock.insertBefore(locationBar, root);
       if (controlPanel) commandDock.appendChild(controlPanel);
     } else {
+      document.body.appendChild(providerField);
       document.body.appendChild(root);
     }
     root
@@ -60,6 +76,8 @@ export function createVoiceControl({ reset = false } = {}) {
   }
   return {
     root,
+    providerField,
+    providerSelect: providerField?.querySelector('#gev-voice-provider'),
     button: root.querySelector('#gev-voice-button'),
     buttonLabel: root.querySelector('.gev-mic-label'),
     status: root.querySelector('#gev-voice-status'),

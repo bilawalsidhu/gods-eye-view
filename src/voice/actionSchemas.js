@@ -197,6 +197,7 @@ const schemas = [
             'scene-panel',
             'pp-toggles',
             'global-context-panel',
+            'provider-settings',
           ],
         },
         open: {
@@ -204,6 +205,20 @@ const schemas = [
         },
       },
       required: ['panelId', 'open'],
+    },
+  },
+  {
+    name: 'set_voice_provider',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        provider: {
+          type: 'string',
+          enum: ['openai', 'gemini'],
+        },
+      },
+      required: ['provider'],
     },
   },
   {

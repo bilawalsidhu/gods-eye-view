@@ -155,6 +155,148 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
   };
 }
 
+test('panel aliases keep Display separate from Visual Presets', async () => {
+  const calls = [];
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  styleManager.setPanelCollapsed = (panelId, collapsed, options) => {
+    calls.push({ panelId, collapsed, options });
+  };
+  const runner = createActionRunner({
+    viewer,
+    styleManager,
+  });
+
+  assert.deepEqual(await runner('set_panel_open', { panelId: 'display', open: true }), {
+    ok: true,
+    action: 'set_panel_open',
+    panelId: 'pp-toggles',
+    open: true,
+  });
+  assert.deepEqual(
+    await runner('set_panel_open', {
+      panelId: 'visual presets',
+      open: true,
+    }),
+    {
+      ok: true,
+      action: 'set_panel_open',
+      panelId: 'control-panel',
+      open: true,
+    },
+  );
+  assert.deepEqual(calls, [
+    { panelId: 'pp-toggles', collapsed: false, options: { explicit: true } },
+    {
+      panelId: 'control-panel',
+      collapsed: false,
+      options: { explicit: true },
+    },
+  ]);
+});
+
+test('Display and Radio voice actions use Cockpit-specific disclosures in Cockpit', async () => {
+  const panelCalls = [];
+  const cockpitCalls = [];
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  styleManager.getCockpitState = () => ({ active: true });
+  styleManager._setCockpitDisclosure = (kind, open) => {
+    cockpitCalls.push({ kind, open });
+  };
+  styleManager.setPanelCollapsed = (...args) => panelCalls.push(args);
+  const runner = createActionRunner({ viewer, styleManager });
+
+  await runner('set_panel_open', { panelId: 'display', open: true });
+  await runner('set_panel_open', { panelId: 'radio', open: true });
+  await runner('set_panel_open', { panelId: 'display', open: false });
+
+  assert.deepEqual(cockpitCalls, [
+    { kind: 'display', open: true },
+    { kind: 'radio', open: true },
+    { kind: 'display', open: false },
+  ]);
+  assert.deepEqual(panelCalls, []);
+});
+
+test('Provider Settings can be opened and closed through the shared panel action', async () => {
+  const calls = [];
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  const runner = createActionRunner({
+    viewer,
+    styleManager,
+    readKeySetup: () => ({
+      open: () => calls.push('open'),
+      close: () => calls.push('close'),
+    }),
+  });
+
+  assert.deepEqual(
+    await runner('set_panel_open', { panelId: 'power up', open: true }),
+    {
+      ok: true,
+      action: 'set_panel_open',
+      panelId: 'provider-settings',
+      open: true,
+    },
+  );
+  assert.deepEqual(
+    await runner('set_panel_open', {
+      panelId: 'provider-settings',
+      open: false,
+    }),
+    {
+      ok: true,
+      action: 'set_panel_open',
+      panelId: 'provider-settings',
+      open: false,
+    },
+  );
+  assert.deepEqual(calls, ['open', 'close']);
+
+  const unavailable = createActionRunner({
+    viewer,
+    styleManager,
+    readKeySetup: () => null,
+  });
+  assert.equal(
+    (await unavailable('set_panel_open', {
+      panelId: 'provider-settings',
+      open: true,
+    })).ok,
+    false,
+  );
+});
+
+test('voice provider selection is delegated without replacing the running action', async () => {
+  const calls = [];
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  const runner = createActionRunner({
+    viewer,
+    styleManager,
+    readVoiceCommands: () => ({
+      provider: 'openai',
+      requestProviderChange(provider) {
+        calls.push(provider);
+        return {
+          ok: true,
+          changed: true,
+          pending: true,
+          previousProvider: 'openai',
+        };
+      },
+    }),
+  });
+
+  assert.deepEqual(await runner('set_voice_provider', { provider: 'gemini' }), {
+    ok: true,
+    action: 'set_voice_provider',
+    provider: 'gemini',
+    previousProvider: 'openai',
+    changed: true,
+    pending: true,
+  });
+  assert.deepEqual(calls, ['gemini']);
+});
+
 test('zoom to globe adopts the shared visible reset route and returns its result', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const viewer = {

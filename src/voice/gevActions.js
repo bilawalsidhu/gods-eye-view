@@ -60,6 +60,7 @@ const PANEL_ALIASES = new Map([
   ['styles', 'control-panel'],
   ['filters', 'control-panel'],
   ['visual styles', 'control-panel'],
+  ['visual presets', 'control-panel'],
   ['cctv', 'cctv-panel'],
   ['cameras', 'cctv-panel'],
   ['radio', 'radio-panel'],
@@ -74,11 +75,18 @@ const PANEL_ALIASES = new Map([
   ['scene', 'scene-panel'],
   ['post processing', 'pp-toggles'],
   ['hud controls', 'pp-toggles'],
+  ['display', 'pp-toggles'],
+  ['display panel', 'pp-toggles'],
   ['map stack', 'control-panel'],
   ['stack', 'control-panel'],
   ['basemap', 'control-panel'],
   ['map sources', 'control-panel'],
   ['sources', 'control-panel'],
+  ['power up', 'provider-settings'],
+  ['powerup', 'provider-settings'],
+  ['provider settings', 'provider-settings'],
+  ['api keys', 'provider-settings'],
+  ['keys', 'provider-settings'],
 ]);
 
 const PANEL_IDS = new Set([
@@ -90,6 +98,7 @@ const PANEL_IDS = new Set([
   'global-context-panel',
   'scene-panel',
   'pp-toggles',
+  'provider-settings',
 ]);
 const CONTEXT_MODE_ALIASES = new Map([
   ['off', 'off'],
@@ -335,6 +344,8 @@ export function createGevActionRunner({
   floorServices = defaultFloorServices,
   annotationResolver = defaultAnnotationResolver,
   searchNavigation = searchAndFlyTo,
+  readVoiceCommands = () => globalThis.window?.__gevVoiceCommands,
+  readKeySetup = () => globalThis.window?.__gevKeySetup,
 }) {
   // Voice enable times and analyst follow-up memory belong to this runner.
   const _layerEnabledAt = new Map();
@@ -699,8 +710,52 @@ export function createGevActionRunner({
           `Unknown panel: ${args.panelId || args.panel || 'missing'}`,
         );
       const open = args.open !== false;
+      if (panelId === 'provider-settings') {
+        const keySetup = readKeySetup?.();
+        const operation = open ? keySetup?.open : keySetup?.close;
+        if (typeof operation !== 'function') {
+          return {
+            ok: false,
+            action: 'set_panel_open',
+            panelId,
+            open,
+            error: 'Provider Settings are unavailable in this build',
+          };
+        }
+        operation();
+        return { ok: true, action: 'set_panel_open', panelId, open };
+      }
       setPanelOpen(styleManager, panelId, open);
       return { ok: true, action: 'set_panel_open', panelId, open };
+    }
+
+    if (name === 'set_voice_provider') {
+      const provider = String(args.provider || '')
+        .trim()
+        .toLowerCase();
+      if (!['openai', 'gemini'].includes(provider))
+        throw new Error(
+          `Unknown voice provider: ${args.provider || 'missing'}`,
+        );
+      const voice = readVoiceCommands?.();
+      if (!voice || typeof voice.requestProviderChange !== 'function') {
+        return {
+          ok: false,
+          action: 'set_voice_provider',
+          provider,
+          error: 'Voice provider selection is unavailable',
+        };
+      }
+      const result = voice.requestProviderChange(provider);
+      return {
+        ok: result?.ok !== false,
+        action: 'set_voice_provider',
+        provider,
+        previousProvider: result?.previousProvider ?? voice.provider ?? null,
+        changed: Boolean(result?.changed),
+        pending: Boolean(result?.pending),
+        ...(result?.error ? { error: result.error } : {}),
+      };
     }
 
     if (name === 'set_context_mode') {
@@ -2822,6 +2877,23 @@ function normalizeAircraftClassFilter(value) {
 }
 
 function setPanelOpen(styleManager, panelId, open) {
+  const cockpitPanel =
+    panelId === 'pp-toggles'
+      ? 'display'
+      : panelId === 'radio-panel'
+        ? 'radio'
+        : null;
+  const cockpitActive =
+    styleManager?.getCockpitState?.()?.active === true ||
+    styleManager?.cockpitView?.active === true;
+  if (
+    cockpitActive &&
+    cockpitPanel &&
+    typeof styleManager?._setCockpitDisclosure === 'function'
+  ) {
+    styleManager._setCockpitDisclosure(cockpitPanel, open);
+    return;
+  }
   if (styleManager && typeof styleManager.setPanelCollapsed === 'function') {
     styleManager.setPanelCollapsed(panelId, !open, { explicit: true });
   } else {

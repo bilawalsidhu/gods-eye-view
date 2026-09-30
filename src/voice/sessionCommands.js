@@ -12,8 +12,12 @@ export function createVoiceCommands({
   signal,
   debugSink,
   createControl = createVoiceControl,
+  resetExisting = true,
+  provider,
+  onProviderChange,
+  onSessionEvent,
 }) {
-  window.__gevVoiceCommands?.stop?.({ removeUi: true });
+  if (resetExisting) window.__gevVoiceCommands?.stop?.({ removeUi: true });
   const ui = createControl({ reset: true });
   const session = createVoiceSession({
     runner,
@@ -32,6 +36,13 @@ export function createVoiceCommands({
   });
   const adapter = session.adapter;
   const capabilities = adapter.capabilities || {};
+  const providerHandler = () => onProviderChange?.(ui.providerSelect.value);
+  if (ui.providerField) ui.providerField.hidden = !onProviderChange;
+  if (ui.providerSelect && onProviderChange) {
+    ui.providerSelect.value = provider;
+    ui.root.dataset.provider = provider;
+    ui.providerSelect.addEventListener('change', providerHandler);
+  }
   if (ui.tierButton) ui.tierButton.hidden = !capabilities.costControls;
   if (ui.costValue) ui.costValue.hidden = !capabilities.costControls;
   if (!capabilities.pushToTalk) {
@@ -42,6 +53,7 @@ export function createVoiceCommands({
   const controls = adapter.controller || session;
   controls.session = session;
   const updateStatus = session.subscribe((event) => {
+    onSessionEvent?.(event);
     if (event.type !== 'state') return;
     ui.root.dataset.status = event.state;
     ui.status.textContent =
@@ -69,16 +81,20 @@ export function createVoiceCommands({
     'abort',
     () => {
       ui.button.removeEventListener('click', buttonHandler);
+      ui.providerSelect?.removeEventListener('change', providerHandler);
       annotationUnsubscribe?.();
       updateStatus();
+      ui.providerField?.remove?.();
       ui.root.remove();
     },
     { once: true },
   );
   if (session.disposed) {
     ui.button.removeEventListener('click', buttonHandler);
+    ui.providerSelect?.removeEventListener('change', providerHandler);
     annotationUnsubscribe?.();
     updateStatus();
+    ui.providerField?.remove?.();
     ui.root.remove();
   } else adapter.bindControls?.();
   window.__gevVoiceCommands = controls;

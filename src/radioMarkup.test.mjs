@@ -25,15 +25,16 @@ const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 function realtimeTools() { return GEV_REALTIME_TOOLS; }
 
-test('Realtime schema exposes the authoritative 30-tool inventory', () => {
+test('Realtime schema exposes the authoritative 31-tool inventory', () => {
   const tools = realtimeTools();
-  assert.equal(tools.length, 30);
+  assert.equal(tools.length, 31);
   const names = tools.map((tool) => tool.name);
-  assert.equal(new Set(names).size, 30, 'tool names are unique');
+  assert.equal(new Set(names).size, 31, 'tool names are unique');
   assert.ok(names.includes('set_context_mode'));
   assert.ok(names.includes('control_cockpit'));
   assert.ok(names.includes('select_nearest_aircraft'));
   assert.ok(names.includes('control_radio'));
+  assert.ok(names.includes('set_voice_provider'));
   assert.ok(names.includes('next_satellite_pass'));
   assert.ok(names.includes('next_iss_pass'));
   // Every tool closes its parameter object: an open schema lets the model
@@ -78,6 +79,58 @@ test('Context panel opening stays distinct from Contacts activation', () => {
   assert.match(text, /does not activate a Context sub-mode/);
   assert.match(text, /"Open Contacts" means set_context_mode\{mode:"contacts"\}/);
   assert.match(text, /expands the parent Context panel before activating Contacts/);
+});
+
+test('Display opening stays distinct from Visual Presets', () => {
+  const start = voice.indexOf(
+    "'For requests to open, show, reveal, or focus a menu/panel",
+  );
+  assert.ok(start >= 0, 'panel-routing instruction is missing');
+  const text = voice.slice(start, voice.indexOf('\n', start));
+  assert.match(
+    text,
+    /"Open Display" means set_panel_open\{panelId:\"pp-toggles\",open:true\}/,
+  );
+  assert.match(text, /never route that phrase to control-panel/);
+  assert.match(
+    text,
+    /"Open Visual Presets" means set_panel_open\{panelId:\"control-panel\",open:true\}/,
+  );
+
+  const panel = new Map(realtimeTools().map((tool) => [tool.name, tool])).get(
+    'set_panel_open',
+  );
+  assert.match(panel.description, /DISPLAY is pp-toggles/);
+  assert.match(panel.description, /VISUAL PRESETS is control-panel/);
+  assert.match(
+    panel.parameters.properties.panelId.description,
+    /Use pp-toggles for DISPLAY/,
+  );
+  assert.match(panel.description, /POWER UP \/ PROVIDER SETTINGS/);
+  assert.match(
+    panel.parameters.properties.panelId.description,
+    /Use provider-settings for POWER UP/,
+  );
+});
+
+test('voice can open Provider Settings and switch between OpenAI and Gemini', () => {
+  const start = voice.indexOf(
+    "'For requests to open, show, reveal, or focus a menu/panel",
+  );
+  const text = voice.slice(start, voice.indexOf('\n', start));
+  assert.match(
+    text,
+    /"Open Power Up".*set_panel_open\{panelId:"provider-settings",open:true\}/,
+  );
+  const provider = realtimeTools().find(
+    (tool) => tool.name === 'set_voice_provider',
+  );
+  assert.deepEqual(provider.parameters.required, ['provider']);
+  assert.deepEqual(provider.parameters.properties.provider.enum, [
+    'openai',
+    'gemini',
+  ]);
+  assert.match(provider.description, /current response completes/);
 });
 
 test('nearest-aircraft selection stays out of Contacts and Cockpit', () => {
@@ -147,7 +200,7 @@ test('the edited existing tools changed exactly as intended', () => {
   const panel = byName.get('set_panel_open');
   assert.deepEqual(
     panel.parameters.properties.panelId.enum,
-    ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'pp-toggles', 'global-context-panel'],
+    ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'pp-toggles', 'global-context-panel', 'provider-settings'],
   );
   assert.deepEqual(panel.parameters.required, ['panelId', 'open']);
 
@@ -177,6 +230,7 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'set_context_mode',
     'control_cockpit',
     'set_panel_open',
+    'set_voice_provider',
     'get_current_view_state',
     'fly_to_location',
     'select_nearest_aircraft',

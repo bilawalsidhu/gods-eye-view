@@ -105,6 +105,10 @@ export class GevRealtimeController extends RealtimeFacade {
         abortTools: () => this._turns.abortTools(),
         isActive: (...args) => this.isActive(...args),
         stop: (...args) => this.stop(...args),
+        readVoiceResumeSettings: () => ({
+          pushToTalk: Boolean(this.pushToTalkMode),
+        }),
+        resumeVoice: (settings) => this.start(settings),
         setStatus: (...args) => this.setStatus(...args),
         queueResponseCreate: (...args) => this.queueResponseCreate(...args),
         debugLog: (...args) => this.debugLog(...args),

@@ -661,11 +661,21 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
   // Canonical serialization pins every tool name, description, property and
   // ordering while allowing source formatting. Derived from the unchanged
   // release schema before formatting (the previous source-byte pin passed).
-  const legacyTools = structuredClone(GEV_REALTIME_TOOLS).filter((tool) => tool.name !== 'set_cyber_sonar');
+  const legacyTools = structuredClone(GEV_REALTIME_TOOLS).filter(
+    (tool) =>
+      !['set_cyber_sonar', 'set_voice_provider'].includes(tool.name),
+  );
   const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud').parameters.properties.layout;
   assert.deepEqual(hudLayout.enum, ['tactical', 'operator', 'minimal', 'cyber']);
   // Cyber deliberately adds one layout; first-run missions still change no tools.
   hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
+  const panelTool = legacyTools.find((tool) => tool.name === 'set_panel_open');
+  panelTool.description = 'Open or close a GEV UI panel/dropdown.';
+  const panelIds = panelTool.parameters.properties.panelId;
+  panelIds.enum = panelIds.enum.filter(
+    (panelId) => panelId !== 'provider-settings',
+  );
+  delete panelIds.description;
   const block = JSON.stringify(legacyTools);
   // Re-derived for the additive `local-adsb` set_layer_visibility value and
   // its common-name mapping; the missions still ride existing tools.

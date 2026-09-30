@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+- Add Gemini Live as a selectable voice provider alongside OpenAI, using the
+  same map actions, click-to-talk and Space push-to-talk controls. Add a separate
+  Gemini key from Google AI Studio in Provider Settings; the server keeps it
+  private and issues a short-lived token for the browser. Gemini defaults to
+  `gemini-3.8-live`, reports connection and quota failures, and releases audio
+  and pending actions when stopped or switched. OpenAI retains its model tiers
+  and spend cap; Gemini uses the project's provider quotas without an in-app
+  spend meter or cap. AI HUD summaries continue to use OpenAI.
+  Gemini Space-started sessions use explicit speech start/end markers, with
+  the input mode locked into the server-issued token. Releasing Space flushes
+  buffered microphone audio before ending the turn; click-started sessions
+  retain automatic speech detection. Cancelling a Gemini tool revokes only
+  that call's Radio work; unrelated calls keep their prepared playback and
+  reservations. New user activity and explicit Radio stop still cancel the
+  previous handoff. Voice panel routing keeps the right-rail **Display**
+  controls separate from the bottom **Visual Presets** tray, and routes
+  **Display** and **Radio** to their cockpit-specific controls while Cockpit is
+  active. Voice can open or close **POWER UP / Provider Settings** and request
+  an OpenAI/Gemini provider change; an active reply finishes before the new
+  provider is mounted. A voice-started Radio handoff now carries a one-use
+  resume lease: pausing or disabling that same Radio session restarts the prior
+  voice mode, while manual Radio playback, ordinary voice stops, provider
+  changes, and teardown never auto-resume voice.
+
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
 - Ship each bundled data pack once. The region, marine, admin-boundary,

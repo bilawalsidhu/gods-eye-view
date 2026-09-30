@@ -210,7 +210,7 @@ Choose a first-run mission, or try these in order. The GIFs show Google Photorea
 
 ![Cycling a dense live globe through CRT, FLIR, and NVG in one continuous view](docs/media/01-style-sweep.gif)
 
-7. **Talk to it** _(needs an OpenAI key)_: _"Take me to LAX and select the nearest airborne aircraft."_
+7. **Talk to it** _(needs an OpenAI or Gemini key)_: _"Take me to LAX and select the nearest airborne aircraft."_
 8. **Come home.** Hit **Reset Globe** — or just say _"zoom out to a globe view."_
 
 **Keyboard:** `1`–`7` visual styles · `H` HUD · `D` detection · `C` cockpit · `` ` `` frame rate · `Esc` out. Trackpad pinch zooms the globe.
@@ -235,17 +235,21 @@ _Why cockpit mode exists: you're riding a real aircraft over real terrain — an
 
 ## 🎙️ Talk to It
 
-> Voice needs an **OpenAI key**. Without one the entire app still runs — the mic button just reports voice is unavailable. The same key drives the **AI HUD summary**: a terse, five-word intelligence-style readout of the current view that regenerates as you move.
+> Voice needs an **OpenAI key** or a **Gemini key**. Add your chosen key in **Provider Settings**. For Gemini, create a separate `GEMINI_API_KEY` in [Google AI Studio](https://aistudio.google.com/apikey); the Google Maps key does not configure Gemini voice. The rest of the app works without either voice key. The **AI HUD summary** continues to use OpenAI.
 
-Click **GEV MIC**, grant the microphone, and just talk. This is more than a voice-controlled remote:
+Choose **OpenAI** or **Gemini** in the **VOICE** selector, then click **GEV MIC**, grant the microphone, and talk; hold **Space** for push-to-talk. The app remembers your provider choice. Changing it ends the current session; start voice again to connect with the new provider.
+
+Gemini uses the Developer API's Live API with `gemini-3.8-live` by default (`GEMINI_LIVE_MODEL` overrides it on the server). AI Studio is where you create its key. Free-tier availability depends on the model and project quotas; see the [Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing) and [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits). A connection or quota failure appears in the voice error tray. If the session expires, start voice again to reconnect.
+
+This is more than a voice-controlled remote:
 
 - **🧠 It knows what it's looking at.** The agent pulls live scene context before answering — including coordinates, street names, active layers, and view scale. Ask _"what city is this?"_ mid-flight and it knows.
 - **🎯 Entity Q&A.** Click any plane, ship, or datacenter and ask _"what's this?"_ It answers using the object's live telemetry.
 - **👁️ Visual grounding.** At street level, it reads a viewport screenshot to identify legible signage and building names, and is instructed never to hallucinate labels.
 - **🎬 Cinematic framing.** _"Show me the planes overhead"_ pulls the camera back, angles it, and frames the live traffic like a director.
-- **🔒 Honest and secure.** The agent only confirms actions that succeeded. Your `OPENAI_API_KEY` never touches the browser; the client only gets a short-lived session token.
+- **🔒 Honest and secure.** The agent only confirms actions that succeeded. Your `OPENAI_API_KEY` and `GEMINI_API_KEY` stay on the server; the client only gets a short-lived session token for the selected provider.
 
-Twenty-nine tools, four jobs — the commands below come straight from the product's voice test suite and tool playbook:
+Thirty-one tools, four jobs — the commands below come straight from the product's voice test suite and tool playbook:
 
 **🎥 Direct it** — drone-operator camera verbs:
 
@@ -267,7 +271,12 @@ Twenty-nine tools, four jobs — the commands below come straight from the produ
 
 **🎛️ Operate it** — the whole console, hands-free:
 
-> 🗣️ _"Switch to night vision and turn on the flights layer."_ · _"Turn on the camera viewsheds."_ · _"Play a news radio station near Austin."_ · _"Track that plane."_ → _"Enter Cockpit."_
+> 🗣️ _"Switch to night vision and turn on the flights layer."_ · _"Open Provider Settings."_ · _"Switch voice to Gemini."_ · _"Play a news radio station near Austin."_ · _"Track that plane."_ → _"Enter Cockpit."_
+
+When voice starts Radio playback, Radio takes the speaker and voice turns off.
+Pausing or disabling that same Radio session resumes the prior voice mode once.
+Manual Radio playback and ordinary voice stops do not trigger an automatic
+restart.
 
 **And the rapid-fire tier** — one sentence each:
 
@@ -349,7 +358,7 @@ Once the basics click, run these:
 | **🪦 Walk the boneyard**            | Fly from regional context down into dense, fully resolved rows of retired aircraft.                                                                                                                       |
 | **🏗️ Orbit Three Gorges**           | Sweep the dam and its terrain at a glance — then flip on the **Dams** layer and find 703 more.                                                                                                            |
 
-_🎙️ = voice missions — they need an OpenAI key._
+_🎙️ = voice missions — they need an OpenAI or Gemini key._
 
 ![Resolving a selected aircraft's recent flight path into stacked 3D loops above the terrain](docs/media/07-helicopter-loops.gif)
 
@@ -374,8 +383,8 @@ How the globe handles live data:
 - **Honest satellites.** SGP4 propagation with orbit rings that stay locked to their satellites via GMST realignment — no drift, no per-second flicker.
 - **Sits on the real ground.** Entity heights are aligned to work with Google 3D tiles, so aircraft park on aprons and cameras stand on street corners instead of floating.
 - **Caching and request budgets.** An OpenSky credit governor, a TomTom daily tile budget, and disk-cached TLEs reduce repeated requests. These controls do not replace provider quotas or billing controls.
-- **Server-side credentials.** Every API that touches a private key (OpenAI, AISStream, OpenSky OAuth, camera frames) is brokered through a hardened server-side proxy with SSRF protection, response caps, and sanitized errors. The only keys the browser sees are Google Maps and Cesium ion (restrict both at the provider).
-- **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet and the **OpenAI Realtime API** for voice. Fast to read, fast to hack on.
+- **Server-side credentials.** Every API that touches a private key (OpenAI, Gemini, AISStream, OpenSky OAuth, camera frames) is brokered through a hardened server-side proxy with SSRF protection, response caps, and sanitized errors. The only keys the browser sees are Google Maps and Cesium ion (restrict both at the provider).
+- **No framework.** Vanilla JavaScript, **CesiumJS**, and **Vite** — plus **Google Photorealistic 3D Tiles** for the planet and **OpenAI Realtime** or the **Gemini Live API** for voice. Fast to read, fast to hack on.
 
 ```
 src/
@@ -384,7 +393,7 @@ src/
 ├── hud.js                  # Intelligence HUD + AI scene summary
 ├── keySetup.js             # POWER UP panel — in-app provider keys (dev server only)
 ├── mapStackController.js   # Basemap switching — Google 3D / Esri / OSM / ion stacks
-├── voice/                  # OpenAI Realtime session + 29 voice tools
+├── voice/                  # OpenAI/Gemini sessions + shared voice tools
 ├── layers/                 # Layer components — weather, wind, cyclones, transit, ALPR, …
 ├── data/                   # One module per layer + orchestration + context store
 │   ├── iconOrientation.js  # Screen-projected headings + horizon cull
@@ -412,13 +421,14 @@ names it.
 
 ### Choose the capabilities you want
 
-Six keys. Four have a free tier, and the two 🔴 ones are metered:
+Optional provider keys unlock these capabilities; free tiers have quotas and eligibility requirements:
 
 |     | Key             | Why                                                                                                                                                                                  | Get it                                                                                                                                                               |
 | --- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 🟡  | **Cesium ion**  | 🗺️ Google Photorealistic 3D, world terrain, and additional ion-hosted imagery stacks. The free Community plan is for eligible individual, personal/non-commercial use and has quotas | [cesium.com/ion](https://cesium.com/ion) — use a public `assets:read` token and check current [pricing/eligibility](https://cesium.com/platform/cesium-ion/pricing/) |
 | 🔴  | **Google Maps** | Direct Google Photorealistic 3D + Google place search ([Map Tiles API](https://developers.google.com/maps/documentation/tile))                                                       | [Google Cloud Console](https://console.cloud.google.com/) — URL-restrict it                                                                                          |
-| 🔴  | **OpenAI**      | 🎙️ The voice experience + AI HUD summary. The mini model works; the standard model is noticeably smarter. Want Gemini or another provider behind the mic? PRs welcome                | [platform.openai.com](https://platform.openai.com) — metered, see costs below                                                                                        |
+| 🔴  | **OpenAI**      | 🎙️ OpenAI voice + AI HUD summary, with standard and mini voice models                | [platform.openai.com](https://platform.openai.com) — metered, see costs below                                                                                        |
+| 🟡  | **Gemini**      | 🎙️ Gemini Live voice; separate from the Google Maps key. Free tier depends on model and project quotas | [Google AI Studio](https://aistudio.google.com/apikey) — create `GEMINI_API_KEY` |
 | 🟡  | **AISStream**   | 🚢 Live global ships                                                                                                                                                                 | [aisstream.io](https://aisstream.io) — free signup                                                                                                                   |
 | 🟡  | **NASA FIRMS**  | 🔥 Live active fires                                                                                                                                                                 | [firms.modaps.eosdis.nasa.gov](https://firms.modaps.eosdis.nasa.gov/api/map_key/) — free                                                                             |
 | 🟡  | **TomTom**      | 🚦 Live flow speeds and congestion colors for the simulated traffic layer                                                                                                            | [developer.tomtom.com](https://developer.tomtom.com) — free tier available                                                                                           |
@@ -496,7 +506,8 @@ Honest numbers, roughly, as of mid-2026 — always check the provider pricing pa
 | **🟢 Most layers**       | **$0, no signup.** OpenSky anon, USGS, CelesTrak, adsb.lol, city CCTV, Radio Browser, GBFS, Launch Library 2, transit feeds, OSRM routing, NOAA and ECMWF weather, OpenStreetMap ALPR mapping, bundled datasets.                                                                                                                                                            |
 | **🟡 The free-key tier** | **$0 with a signup.** AISStream, FIRMS, TomTom, OpenSky, plus Cesium ion for eligible personal/non-commercial use. Provider quotas and eligibility still apply.                                                                                                                                                                                                             |
 | **🗺️ Google 3D tiles**   | **Free through an eligible Cesium ion Community account within its quota; metered through a direct Google key.** Use the direct route for Google place search or commercial deployment, verify current provider terms, and set budget alerts where billing is enabled.                                                                                                      |
-| **🔴 OpenAI voice**      | **The one that costs real money — so the app meters it for you.** Realtime audio runs a few cents per active minute; an evening of heavy use is single-digit dollars. A live session-spend readout sits next to the mic, with an STD/MINI model toggle, a $2 warning, and a **$5 hard cap that ends the session**. The voice context window is kept deliberately short too. |
+| **🔴 OpenAI voice**      | **Metered realtime audio, with an in-app estimate.** A live session-spend readout sits next to the mic, with an STD/MINI model toggle, a $2 warning, and a **$5 hard cap that ends the session**. The voice context window is kept deliberately short too. |
+| **🟡 Gemini voice** | **Free tier where available within your project quotas; paid usage follows your Google plan.** Gemini has no in-app spend estimate or hard cap. Check [pricing](https://ai.google.dev/gemini-api/docs/pricing) and [project rate limits](https://ai.google.dev/gemini-api/docs/rate-limits). |
 
 Google's direct 3D route is surprisingly generous: the first 1,000 Photorealistic
 3D Tiles sessions each month are currently free, and one root request supports

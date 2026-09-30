@@ -56,6 +56,7 @@ KEY_SETUP_EXTERNAL_KEYS=()
 [[ -n "${GOOGLE_MAPS_SERVER_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(GOOGLE_MAPS_SERVER_API_KEY)
 [[ -n "${CESIUM_ION_TOKEN:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(CESIUM_ION_TOKEN)
 [[ -n "${OPENAI_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(OPENAI_API_KEY)
+[[ -n "${GEMINI_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(GEMINI_API_KEY)
 [[ -n "${AISSTREAM_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(AISSTREAM_API_KEY)
 [[ -n "${FIRMS_MAP_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(FIRMS_MAP_KEY)
 [[ -n "${TOMTOM_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(TOMTOM_API_KEY)
@@ -233,6 +234,9 @@ resolve_opensky_credentials
 # Add to Keychain with e.g.:
 #   security add-generic-password -U -s "openai-api" -a "api-key" -w
 OPENAI_API_KEY="${OPENAI_API_KEY:-$(read_dotenv_value "OPENAI_API_KEY")}"
+# Gemini uses its own voice credential, never the Google Maps key or Keychain.
+GEMINI_API_KEY="${GEMINI_API_KEY:-$(read_dotenv_value "GEMINI_API_KEY")}"
+GEMINI_LIVE_MODEL="${GEMINI_LIVE_MODEL:-$(read_dotenv_value "GEMINI_LIVE_MODEL")}"
 AISSTREAM_API_KEY="${AISSTREAM_API_KEY:-$(read_dotenv_value "AISSTREAM_API_KEY")}"
 CESIUM_ION_TOKEN="${CESIUM_ION_TOKEN:-$(read_dotenv_value "CESIUM_ION_TOKEN")}"
 LL2_API_TOKEN="${LL2_API_TOKEN:-$(read_dotenv_value "LL2_API_TOKEN")}"
@@ -347,7 +351,13 @@ case "${OPENSKY_AUTH_MODE}" in
     echo "OpenSky auth: disabled (anonymous mode)"
     ;;
 esac
-[[ -n "${OPENAI_API_KEY}" ]] && echo "OpenAI key (voice + HUD summary): configured" || echo "OpenAI key (voice + HUD summary): not set — GEV MIC disabled"
+[[ -n "${OPENAI_API_KEY}" ]] && echo "OpenAI key (voice + HUD summary): configured" || echo "OpenAI key (voice + HUD summary): not set"
+[[ -n "${GEMINI_API_KEY}" ]] && echo "Gemini key (voice): configured" || echo "Gemini key (voice): not set"
+if [[ -n "${OPENAI_API_KEY}" || -n "${GEMINI_API_KEY}" ]]; then
+  echo "Voice control: available"
+else
+  echo "Voice control: add an OpenAI or Gemini key in Provider Settings — GEV MIC disabled"
+fi
 [[ -n "${AISSTREAM_API_KEY}" ]] && echo "AISStream key (live vessels): configured" || echo "AISStream key (live vessels): not set — ships layer empty"
 if [[ -n "${GOOGLE_MAPS_API_KEY}" ]]; then
   echo "Startup map: Google Photorealistic 3D Tiles (direct)"
@@ -415,6 +425,8 @@ put_env_if_set OPENSKY_CLIENT_SECRET "${OPENSKY_CLIENT_SECRET}"
 put_env_if_set OPENSKY_USERNAME "${OPENSKY_USERNAME}"
 put_env_if_set OPENSKY_PASSWORD "${OPENSKY_PASSWORD}"
 put_env_if_set OPENAI_API_KEY "${OPENAI_API_KEY}"
+put_env_if_set GEMINI_API_KEY "${GEMINI_API_KEY}"
+put_env_if_set GEMINI_LIVE_MODEL "${GEMINI_LIVE_MODEL}"
 put_env_if_set AISSTREAM_API_KEY "${AISSTREAM_API_KEY}"
 put_env_if_set CESIUM_ION_TOKEN "${CESIUM_ION_TOKEN}"
 put_env_if_set TOMTOM_API_KEY "${TOMTOM_API_KEY}"
