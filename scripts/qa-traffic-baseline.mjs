@@ -36,7 +36,7 @@
  */
 
 import puppeteer from 'puppeteer';
-import fs from 'node:fs';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, dflt) => {
@@ -53,20 +53,8 @@ const HEADFUL = argv.includes('--headful');
 const TIMEOUT_MS = Math.max(10_000, getNumberOpt('--timeout-ms', 120_000));
 const DEGRADED_DELAY_MS = Math.max(0, getNumberOpt('--degraded-delay-ms', 2500));
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
-
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try { if (fs.existsSync(candidate)) return candidate; } catch { /* ignore */ }
-  }
-  return null;
-}
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
+const findChromeExecutable = () => chromeExecutable;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
