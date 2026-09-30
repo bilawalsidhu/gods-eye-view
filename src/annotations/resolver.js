@@ -202,6 +202,28 @@ export function createAnnotationResolver({
       );
       signal?.throwIfAborted();
       if (admin) return bundledAdminTarget(viewer, admin, trace.query);
+
+      // Natural regions are already in the bundled pack. A unique name is
+      // authoritative by itself; duplicate names still require containment by
+      // the current view. This prevents a wrong remote geocode (for example,
+      // "The Alps" in Queensland) from blocking the real Alps ring without
+      // guessing between same-name entries such as "Cordillera Oriental".
+      const namedNatural = await findNaturalRegion(trace.query).catch(
+        () => null,
+      );
+      signal?.throwIfAborted();
+      if (namedNatural?.candidates === 1)
+        return bundledNaturalTarget(viewer, namedNatural, trace.query);
+      if (center && namedNatural) {
+        const containedNatural = await lookupNaturalRegionOutline(
+          trace.query,
+          center.lat,
+          center.lon,
+        ).catch(() => null);
+        signal?.throwIfAborted();
+        if (containedNatural)
+          return bundledNaturalTarget(viewer, containedNatural, trace.query);
+      }
     }
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
@@ -834,6 +856,54 @@ export function createAnnotationResolver({
       viewport: {
         low: { latitude: south, longitude: west },
         high: { latitude: north, longitude: east },
+      },
+    };
+  }
+
+  /** A complete resolved target for an unambiguous or view-contained natural region. */
+  function bundledNaturalTarget(viewer, natural, query) {
+    registerDynamicCredit(viewer, NATURAL_EARTH_CREDIT);
+    const naturalRings = natural.polygons?.length
+      ? natural.polygons
+      : [natural.ring];
+    const mainRing = [...naturalRings]
+      .filter((candidate) => Array.isArray(candidate))
+      .sort((a, b) => b.length - a.length)[0];
+    if (!mainRing) return null;
+    const ring = closeRing([...mainRing]);
+    const centroid = ringCentroid(ring);
+    if (!centroid) return null;
+    const points = naturalRings.flat();
+    const lons = points.map(([lon]) => lon);
+    const lats = points.map(([, lat]) => lat);
+    console.log(
+      `[Resolver] "${query}": bundled ${natural.kind} "${natural.name}" ` +
+        '(natural-earth, offline) → FINAL source=bundled',
+    );
+    return {
+      lon: centroid.lon,
+      lat: centroid.lat,
+      height: sampleGroundHeight(viewer, centroid.lon, centroid.lat),
+      ring,
+      ...(natural.polygons?.length
+        ? { polygons: natural.polygons.map((part) => [part]) }
+        : {}),
+      footprintKind: 'area',
+      buildingHeight: null,
+      label: natural.name,
+      source: 'bundled',
+      synthesized: false,
+      outlineUnavailable: false,
+      naturalRegion: natural.name,
+      viewport: {
+        low: {
+          latitude: Math.min(...lats),
+          longitude: Math.min(...lons),
+        },
+        high: {
+          latitude: Math.max(...lats),
+          longitude: Math.max(...lons),
+        },
       },
     };
   }

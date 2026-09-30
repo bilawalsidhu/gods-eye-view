@@ -120,6 +120,26 @@ test('Georgia resolves from camera geography without a geocoder', async () => {
   assert.deepEqual(geocodes, []);
 });
 
+test('a natural region under the camera wins over a wrong remote geocode', async () => {
+  const { resolve, lookups, geocodes } = harness({
+    lat: -27.96,
+    lng: 152.2,
+    label: 'The Alps, Queensland, Australia',
+    name: 'The Alps',
+    types: ['locality', 'political'],
+  });
+  const resolved = await resolve('the Alps', viewerAt(46.5, 10, 248_000));
+  assert.ok(resolved);
+  assert.equal(resolved.source, 'bundled');
+  assert.equal(resolved.label, 'Alps');
+  assert.equal(resolved.naturalRegion, 'Alps');
+  assert.equal(resolved.footprintKind, 'area');
+  assert.ok(resolved.ring.length >= 8, 'real Alps ring');
+  assert.equal(resolved.resolveOutline, undefined, 'drawn at once');
+  assert.deepEqual(geocodes, [], 'wrong remote match was never consulted');
+  assert.deepEqual(lookups, [], 'no boundary lookup');
+});
+
 test('country asks and geocoded country scopes use the bundled outline', async () => {
   const direct = harness();
   for (const name of ['Switzerland', 'Iran', 'France', 'Japan']) {

@@ -22,12 +22,21 @@ test('marquee ranges resolve with sane areas (owner acceptance: Alps + Rockies)'
 });
 
 test('aliases and articles: "the Alps", "Rockies", "Sahara Desert", "Himalaya"', async () => {
-  assert.equal((await findNaturalRegion('the Alps'))?.name, 'Alps');
+  const alps = await findNaturalRegion('the Alps');
+  assert.equal(alps?.name, 'Alps');
+  assert.equal(alps?.candidates, 1, 'Alps is an unambiguous bundled name');
   assert.equal((await findNaturalRegion('Rockies'))?.name, 'Rocky Mountains');
   assert.equal((await findNaturalRegion('the Rockies'))?.name, 'Rocky Mountains');
   assert.equal((await findNaturalRegion('Sahara Desert'))?.name, 'Sahara');
   assert.equal((await findNaturalRegion('Himalaya'))?.name, 'Himalayas');
   assert.equal((await findNaturalRegion('  THE ALPS  '))?.name, 'Alps');
+});
+
+test('duplicate natural-region names report their candidate count', async () => {
+  assert.ok(
+    (await findNaturalRegion('Cordillera Oriental'))?.candidates > 1,
+    'Cordillera Oriental stays ambiguous without a containment anchor',
+  );
 });
 
 test('major deserts/ranges resolve with sane areas', async () => {
