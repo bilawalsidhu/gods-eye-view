@@ -63,6 +63,10 @@ const PANEL_GROUPS = [
     ids: ['cyber'],
   },
   {
+    label: 'Geo-Political',
+    ids: ['geopolitical'],
+  },
+  {
     label: 'Utilities',
     ids: ['directions', 'radio'],
   },
@@ -80,6 +84,7 @@ const PANEL_LABELS = {
   'alpr-cameras': 'Mapped ALPR Cameras',
   'local-datacenters': 'Data Centers',
   'local-firms': 'Active Fires',
+  geopolitical: 'Geo-Political',
 };
 
 function panelLabel(layer) {

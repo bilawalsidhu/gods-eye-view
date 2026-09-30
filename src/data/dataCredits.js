@@ -116,6 +116,42 @@ export const DATA_CREDITS = [
       'country reference points from public-domain Natural Earth data; markers are not outage locations',
   },
   {
+    key: 'gdelt-conflict',
+    html:
+      'Geo-Political CAMEO conflict events: ' +
+      '<a href="https://www.gdeltproject.org/" target="_blank" rel="noopener">The GDELT Project</a> · automated event extraction and geolocation; check linked report context',
+  },
+  {
+    key: 'acled',
+    html:
+      'Geo-Political conflict event data: ' +
+      '<a href="https://acleddata.com/" target="_blank" rel="noopener">ACLED</a> · event classifications and coordinates can be revised; see source details',
+  },
+  {
+    key: 'ucdp',
+    html:
+      'Geo-Political armed-conflict history: ' +
+      '<a href="https://ucdp.uu.se/" target="_blank" rel="noopener">Uppsala Conflict Data Program (UCDP)</a> · versioned Georeferenced Event Dataset',
+  },
+  {
+    key: 'ucdp-candidate',
+    html:
+      'Geo-Political preliminary armed-conflict events: ' +
+      '<a href="https://ucdp.uu.se/" target="_blank" rel="noopener">Uppsala Conflict Data Program (UCDP)</a> · monthly candidate records may be revised or excluded from the final GED',
+  },
+  {
+    key: 'hapi-conflict',
+    html:
+      'Geo-Political monthly country-level conflict aggregates: ' +
+      '<a href="https://data.humdata.org/dataset/acled-conflict-events-data-series" target="_blank" rel="noopener">HDX HAPI / ACLED</a> · categories overlap; country markers use <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth public-domain reference points</a>, not incident locations',
+  },
+  {
+    key: 'reliefweb',
+    html:
+      'Geo-Political humanitarian reports: ' +
+      '<a href="https://reliefweb.int/" target="_blank" rel="noopener">ReliefWeb / OCHA</a> · report content remains attributed to original publishers',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +

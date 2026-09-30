@@ -68,6 +68,34 @@
     </div>
   </section>
   <section
+    id="geopolitical-panel"
+    class="panel-collapsible collapsed"
+    data-panel-id="geopolitical-panel"
+    aria-label="Geo-Political Intelligence"
+    hidden
+    inert
+  >
+    <div class="panel-glow"></div>
+    <div class="geopolitical-panel-inner" data-rail-scroller>
+      <div class="panel-header">
+        <span class="panel-title">GEO-POLITICAL</span>
+        <span class="panel-divider"></span>
+        <button
+          class="panel-collapse-btn"
+          data-collapse-target="geopolitical-panel"
+          type="button"
+          title="Expand Geo-Political"
+          aria-label="Expand Geo-Political"
+          aria-expanded="false"
+        >
+          ▶
+        </button>
+      </div>
+      <div id="geopolitical-panel-body" class="geopolitical-panel-body" data-rail-scroller></div>
+    </div>
+  </section>
+  <div id="geopolitical-map-popup" class="geopolitical-map-popup" hidden inert></div>
+  <section
     id="cyber-intel-legend-panel"
     class="cyber-intel-map-legend-panel"
     aria-label="Cyber Intel Map Legend"

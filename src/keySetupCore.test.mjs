@@ -136,9 +136,15 @@ test('Windows owner SID parsing reads only the structured user-SID CSV field', (
 test('validation accepts every registry env var and only those', () => {
   const known = knownKeySetupEnvVars();
   for (const name of known) {
-    const verdict = validateKeySetupUpdates({ [name]: 'valid-value-123' });
+    const value =
+      name === 'HAPI_CONTACT_EMAIL'
+        ? 'analyst@example.test'
+        : name === 'HAPI_APP_NAME'
+          ? 'Gods Eye View Test'
+          : 'valid-value-123';
+    const verdict = validateKeySetupUpdates({ [name]: value });
     assert.equal(verdict.ok, true, `${name} should validate`);
-    assert.equal(verdict.updates[name], 'valid-value-123');
+    assert.equal(verdict.updates[name], value);
   }
   assert.equal(validateKeySetupUpdates({ PATH: '/usr/bin' }).ok, false, 'PATH must be refused');
   assert.equal(validateKeySetupUpdates({ NODE_OPTIONS: '--x' }).ok, false, 'NODE_OPTIONS must be refused');

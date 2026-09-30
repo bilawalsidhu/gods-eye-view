@@ -31,6 +31,7 @@ import {
   testArizona511Connection,
   testNy511Connection,
 } from './cctv/sources.js';
+import { geopoliticalProxy } from './geopolitical.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -59,6 +60,7 @@ function localProviderPlugins() {
     openAiRealtimeProxy(),
     googlePlacesContextProxy(),
     windProxy(),
+    geopoliticalProxy(),
     weatherProxy(),
     cycloneProxy(),
     firePerimetersProxy(),

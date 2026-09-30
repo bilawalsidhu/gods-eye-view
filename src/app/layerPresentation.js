@@ -2,6 +2,7 @@ import { LayerPanel } from '../ui/layers.js';
 import { governorRequestRender } from '../renderGovernor.js';
 import { markDetectionSourcesChanged } from '../data/detection.js';
 import { CyberIntelPanel } from '../ui/cyberIntelPanel.js';
+import { GeopoliticalPanel } from '../ui/geopoliticalPanel.js';
 
 /** Own the layer panel and application reactions to lifecycle activity. */
 export class LayerPresentation {
@@ -17,11 +18,13 @@ export class LayerPresentation {
     this.weatherClock = weatherClock;
     this._panel = null;
     this._cyberIntelPanel = null;
+    this._geopoliticalPanel = null;
     this.pendingVisible = false;
     this._unsubscribe = manager.subscribeActivity((change) => {
       if (change.type === 'status') {
         this.refresh();
         this._refreshCyberIntel();
+        this._refreshGeopolitical();
       } else if (change.type === 'destroy-all') this.destroy();
       else {
         const reason =
@@ -34,6 +37,7 @@ export class LayerPresentation {
                 : null;
         if (!reason) return;
         this._refreshCyberIntel();
+        this._refreshGeopolitical();
         requestRender(reason);
         if (change.type !== 'params-settled') invalidateDetection(reason);
       }
@@ -76,10 +80,18 @@ export class LayerPresentation {
     this.panel.mount(container);
     this._cyberIntelPanel = new CyberIntelPanel();
     this._cyberIntelPanel.mount(this.manager.layers.get('cyber')?.module);
+    this._geopoliticalPanel = new GeopoliticalPanel();
+    this._geopoliticalPanel.mount(
+      this.manager.layers.get('geopolitical')?.module,
+    );
   }
   _refreshCyberIntel() {
     const module = this.manager.layers.get('cyber')?.module;
     if (module) this._cyberIntelPanel?.render(module.getThreatIntelState?.());
+  }
+  _refreshGeopolitical() {
+    const module = this.manager.layers.get('geopolitical')?.module;
+    if (module) this._geopoliticalPanel?.render(module.getPanelState?.());
   }
   /** Hand the Recent Imagery readout factory to the panel (see LayerPanel). */
   attachRecentImagery(factory) {
@@ -100,6 +112,8 @@ export class LayerPresentation {
     this._panel = null;
     this._cyberIntelPanel?.destroy();
     this._cyberIntelPanel = null;
+    this._geopoliticalPanel?.destroy();
+    this._geopoliticalPanel = null;
     this.pendingVisible = false;
     this._unsubscribe?.();
     this._unsubscribe = null;
