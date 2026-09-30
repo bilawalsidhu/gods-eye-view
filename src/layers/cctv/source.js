@@ -44,7 +44,12 @@ export function createCctvSource({
   }
   return {
     getCatalog(options) {
-      return read('/api/cctv/sources', 'sources', options);
+      const focus = options?.focus;
+      const query =
+        Number.isFinite(focus?.lat) && Number.isFinite(focus?.lon)
+          ? `?lat=${encodeURIComponent(focus.lat)}&lon=${encodeURIComponent(focus.lon)}`
+          : '';
+      return read(`/api/cctv/sources${query}`, 'sources', options);
     },
     getHealth(options) {
       return read('/api/cctv/health', 'cameras', options);

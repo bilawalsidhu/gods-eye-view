@@ -204,5 +204,17 @@ export function createState({ services }) {
 
   layerState._moveStartListener = null;
   layerState._sourceAbort = null;
+
+  layerState._catalogFocus = null;
+
+  layerState._catalogMoveEndListener = null;
+
+  layerState._catalogRefreshController = null;
+
+  layerState._catalogRefreshInFlight = false;
+
+  layerState._catalogRefreshTimer = null;
+
+  layerState._pendingCatalogSources = null;
   return layerState;
 }

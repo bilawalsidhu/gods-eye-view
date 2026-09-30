@@ -83,7 +83,13 @@ export function createCatalog({ state: layerState, services, parts, source }) {
   async function loadCameraSources() {
     try {
       const signal = layerState._sourceAbort?.signal;
-      const data = await source.getCatalog({ signal });
+      const data = Array.isArray(layerState._pendingCatalogSources)
+        ? { sources: layerState._pendingCatalogSources }
+        : await source.getCatalog({
+            signal,
+            focus: layerState._catalogFocus,
+          });
+      layerState._pendingCatalogSources = null;
       signal?.throwIfAborted();
       if (!Array.isArray(data?.sources)) return [];
       return data.sources;

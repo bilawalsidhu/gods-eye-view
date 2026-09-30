@@ -9,6 +9,42 @@ import {
   CALIBRATION_RANGE_FLOOR_M,
 } from './policy.js';
 
+const CATALOG_VIEW_REFRESH_DISTANCE_M = 450_000;
+const CATALOG_VIEW_REFRESH_DEBOUNCE_MS = 1_200;
+
+function cctvViewFocus(viewer) {
+  const canvas = viewer?.scene?.canvas;
+  const globe = viewer?.scene?.globe;
+  if (!canvas || !globe) return null;
+  const center = new Cesium.Cartesian2(
+    canvas.clientWidth / 2,
+    canvas.clientHeight / 2,
+  );
+  const ray = viewer.camera.getPickRay(center);
+  const surfacePoint = ray ? globe.pick(ray, viewer.scene) : null;
+  const point =
+    surfacePoint || viewer.camera.pickEllipsoid(center, globe.ellipsoid);
+  if (!point) return null;
+  const cartographic = Cesium.Cartographic.fromCartesian(point);
+  const lat = Cesium.Math.toDegrees(cartographic.latitude);
+  const lon = Cesium.Math.toDegrees(cartographic.longitude);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+}
+
+function cctvFocusDistanceM(a, b) {
+  const radians = (degrees) => (degrees * Math.PI) / 180;
+  const lat1 = radians(a.lat);
+  const lat2 = radians(b.lat);
+  const dLat = lat2 - lat1;
+  const dLon = radians(b.lon - a.lon);
+  const haversine =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return (
+    6_371_000 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
+  );
+}
+
 export function createLifecycle({
   state: layerState,
   services,
@@ -21,6 +57,91 @@ export function createLifecycle({
     services.picking;
   const { onFocusTargetAppear } = services.focus;
   const { releaseContinuousRender } = services.render;
+
+  async function refreshCatalogForFocus(viewer, focus) {
+    if (layerState._catalogRefreshInFlight) return;
+    layerState._catalogRefreshInFlight = true;
+    const controller = new AbortController();
+    layerState._catalogRefreshController = controller;
+    try {
+      const payload = await source.getCatalog({
+        signal: controller.signal,
+        focus,
+      });
+      controller.signal.throwIfAborted();
+      if (!Array.isArray(payload?.sources) || payload.sources.length === 0)
+        return;
+      const nextIds = new Set(payload.sources.map((camera) => camera?.id));
+      if (
+        nextIds.size === layerState._recordById.size &&
+        layerState._records.every((record) => nextIds.has(record.camera.id))
+      ) {
+        layerState._catalogFocus = focus;
+        return;
+      }
+
+      const wasEnabled = layerState._enabled;
+      const activeRecord = layerState._recordById.get(
+        layerState._activeCameraId,
+      );
+      const activeCameraId = layerState._activeCameraId;
+      const restoreActiveCamera = activeRecord?.activationDone === true;
+      layerState._catalogFocus = focus;
+      layerState._pendingCatalogSources = payload.sources;
+      methods.destroy(viewer, {
+        preserveListeners: true,
+        preserveCatalogRefresh: true,
+      });
+      await methods.init(viewer);
+      if (wasEnabled) methods.enable();
+      if (
+        restoreActiveCamera &&
+        activeCameraId &&
+        layerState._recordById.has(activeCameraId)
+      )
+        parts.selection.setActiveCamera(activeCameraId);
+      console.info(
+        `[Data:CCTV] Refreshed camera catalog for current view (${payload.sources.length} cameras)`,
+      );
+    } catch (error) {
+      if (error?.name !== 'AbortError')
+        console.warn('[Data:CCTV] View-based catalog refresh failed');
+    } finally {
+      if (layerState._catalogRefreshController === controller)
+        layerState._catalogRefreshController = null;
+      layerState._catalogRefreshInFlight = false;
+      const pendingFocus = layerState._catalogPendingFocus;
+      layerState._catalogPendingFocus = null;
+      if (pendingFocus && layerState._viewer === viewer)
+        scheduleCatalogRefresh(viewer, pendingFocus, true);
+    }
+  }
+
+  function scheduleCatalogRefresh(viewer, focus, immediate = false) {
+    const baseline = layerState._catalogFocus;
+    if (
+      !focus ||
+      (baseline &&
+        cctvFocusDistanceM(baseline, focus) < CATALOG_VIEW_REFRESH_DISTANCE_M)
+    )
+      return;
+    if (layerState._catalogRefreshInFlight) {
+      layerState._catalogPendingFocus = focus;
+      return;
+    }
+    layerState._catalogPendingFocus = focus;
+    if (layerState._catalogRefreshTimer)
+      clearTimeout(layerState._catalogRefreshTimer);
+    layerState._catalogRefreshTimer = setTimeout(
+      () => {
+        layerState._catalogRefreshTimer = null;
+        const nextFocus = layerState._catalogPendingFocus;
+        layerState._catalogPendingFocus = null;
+        if (nextFocus) void refreshCatalogForFocus(viewer, nextFocus);
+      },
+      immediate ? 0 : CATALOG_VIEW_REFRESH_DEBOUNCE_MS,
+    );
+  }
 
   /** Resets all module-scoped runtime state to initial values. */
 
@@ -62,6 +183,7 @@ export function createLifecycle({
           parts.cards.handleVisibilityChange,
         );
       layerState._viewer = viewer;
+      layerState._catalogFocus ||= cctvViewFocus(viewer);
       clearRuntimeState();
       layerState._enabled = false;
       layerState._activeCameraId = null;
@@ -265,6 +387,17 @@ export function createLifecycle({
           layerState._moveStartListener,
         );
       }
+      if (!layerState._catalogMoveEndListener) {
+        layerState._catalogMoveEndListener = () => {
+          scheduleCatalogRefresh(viewer, cctvViewFocus(viewer));
+        };
+        viewer.camera.moveEnd.addEventListener(
+          layerState._catalogMoveEndListener,
+        );
+      }
+      // A view may settle while a prior catalog is being rebuilt and its
+      // moveEnd listener is detached. Recheck the live focus after each init.
+      scheduleCatalogRefresh(viewer, cctvViewFocus(viewer));
       parts.rendering.refreshHorizonCulling();
 
       layerState._clickHandler = new Cesium.ScreenSpaceEventHandler(
@@ -407,8 +540,19 @@ export function createLifecycle({
      * entities, billboards, and clears all runtime state and subscribers.
      * @param {Cesium.Viewer} [viewer] - Viewer instance (falls back to stored ref).
      */
-    destroy(viewer) {
+    destroy(
+      viewer,
+      { preserveListeners = false, preserveCatalogRefresh = false } = {},
+    ) {
       layerState._sourceAbort?.abort();
+      if (!preserveCatalogRefresh) {
+        layerState._catalogRefreshController?.abort();
+        layerState._catalogRefreshController = null;
+        if (layerState._catalogRefreshTimer)
+          clearTimeout(layerState._catalogRefreshTimer);
+        layerState._catalogRefreshTimer = null;
+        layerState._catalogPendingFocus = null;
+      }
       if (typeof document !== 'undefined')
         document.removeEventListener(
           'visibilitychange',
@@ -434,6 +578,15 @@ export function createLifecycle({
           layerState._moveStartListener,
         );
         layerState._moveStartListener = null;
+      }
+      if (
+        layerState._catalogMoveEndListener &&
+        teardownViewer?.camera?.moveEnd
+      ) {
+        teardownViewer.camera.moveEnd.removeEventListener(
+          layerState._catalogMoveEndListener,
+        );
+        layerState._catalogMoveEndListener = null;
       }
       if (layerState._gizmo) {
         layerState._gizmo.destroy();
@@ -463,7 +616,11 @@ export function createLifecycle({
       layerState._autoHopSuspended = false;
       // Clear existing subscribers rather than replacing the Set —
       // replacing would silently orphan any unsubscribe() closures
-      layerState._listeners.clear();
+      if (!preserveListeners) {
+        layerState._listeners.clear();
+        layerState._catalogFocus = null;
+        layerState._pendingCatalogSources = null;
+      }
     },
   };
 

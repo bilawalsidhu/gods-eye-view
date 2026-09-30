@@ -1,7 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
-import { allocateSourceCap, resolveCatalogCap } from './cap.js';
+import {
+  allocateSourceCap,
+  allocateSourceCapNearView,
+  resolveCatalogCap,
+} from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { normalizeSourceItem } from './normalize.js';
 import {
@@ -26,6 +30,13 @@ import {
   loadOregonTripCheckSourcesFromOpenData,
   loadWsdotSourcesFromOpenData,
 } from './sources.js';
+import {
+  loadMarylandChartSources,
+  loadConnecticut511Sources,
+  loadGeorgia511Sources,
+  loadDriveNCSources,
+  loadNewEngland511Sources,
+} from './sources-east-coast.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
 const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
@@ -120,6 +131,31 @@ const LIVE_PACKS = [
     load: loadDelDOTSourcesFromOpenData,
   },
   {
+    name: 'maryland-chart',
+    enabled: () => envEnabled('CCTV_MARYLAND_ENABLED'),
+    load: loadMarylandChartSources,
+  },
+  {
+    name: 'ctroads',
+    enabled: () => envEnabled('CCTV_CTROADS_ENABLED'),
+    load: loadConnecticut511Sources,
+  },
+  {
+    name: '511ga',
+    enabled: () => envEnabled('CCTV_511GA_ENABLED'),
+    load: loadGeorgia511Sources,
+  },
+  {
+    name: 'drivenc',
+    enabled: () => envEnabled('CCTV_DRIVENC_ENABLED'),
+    load: loadDriveNCSources,
+  },
+  {
+    name: 'new-england-511',
+    enabled: () => envEnabled('CCTV_NEW_ENGLAND_511_ENABLED'),
+    load: loadNewEngland511Sources,
+  },
+  {
     name: 'ohgo',
     enabled: () => envEnabled('CCTV_OHGO_ENABLED'),
     load: loadOhgoSourcesFromOpenData,
@@ -180,6 +216,9 @@ function loadSourcesFromEnv() {
 export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
   /** @type {Array<object>} Cached merged + normalized CCTV source list. */
   let _cctvSourceCache = [];
+  /** Full normalized provider packs retained so view changes never refetch providers. */
+  let _cctvPackCache = [];
+  let _cctvAllSourceCache = [];
   /** @type {number} Epoch-ms when the source cache was last refreshed. */
   let _cctvSourceCacheAt = 0;
   /** @type {Promise<Array<object>>|null} In-flight refresh, shared by concurrent
@@ -195,23 +234,49 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
    *
    * @returns {Promise<Array<object>>} Deduplicated, capped source list.
    */
-  async function getCctvSources() {
+  async function getCctvSources(focus) {
     const now = Date.now();
     if (
       _cctvSourceCache.length &&
       now - _cctvSourceCacheAt <= CCTV_SOURCE_CACHE_MS
     ) {
-      return _cctvSourceCache;
+      return selectSources(focus);
     }
     // Single-flight: a burst of requests arriving past the TTL shares ONE refresh
     // instead of each launching the full multi-provider refetch. The `.finally`
     // clears the ref so the next post-TTL cycle starts fresh.
-    if (_cctvSourceInflight) return _cctvSourceInflight;
+    if (_cctvSourceInflight) {
+      await _cctvSourceInflight;
+      return selectSources(focus);
+    }
     _cctvSourceInflight = refreshCctvSources().finally(() => {
       _cctvSourceInflight = null;
     });
-    return _cctvSourceInflight;
+    await _cctvSourceInflight;
+    return selectSources(focus);
   }
+
+  function selectSources(focus) {
+    if (
+      !focus ||
+      !Number.isFinite(focus.lat) ||
+      !Number.isFinite(focus.lon) ||
+      !_cctvPackCache.length
+    )
+      return _cctvSourceCache;
+    const maxCount = resolveCatalogCap(process.env.CCTV_MAX_SOURCES);
+    const allocation = allocateSourceCapNearView(
+      _cctvPackCache,
+      maxCount,
+      focus,
+    );
+    return joinGroundHeights(allocation.sources, loadGroundHeights(sourceRoot));
+  }
+
+  getCctvSources.getAllSources = async () => {
+    await getCctvSources();
+    return _cctvAllSourceCache;
+  };
 
   /**
    * Assemble and cache the merged CCTV source list from file/env + live packs.
@@ -286,6 +351,14 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     }
     if (capped.length > 0 || _cctvSourceCache.length === 0) {
       _cctvSourceCache = capped;
+      _cctvPackCache = packs;
+      const byId = new Map();
+      for (const pack of packs) {
+        for (const source of pack.sources) {
+          if (source?.id) byId.set(source.id, source);
+        }
+      }
+      _cctvAllSourceCache = Array.from(byId.values());
     } else {
       // Every source came back empty (all live packs timed out / upstream outage)
       // but a good catalog is already cached — serve it stale rather than blanking

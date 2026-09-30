@@ -210,7 +210,7 @@ test('OHGO uses the authorization header and only registers validated Ohio snaps
     assert.equal(options.headers.Authorization, 'APIKEY ohgo-fixture-secret');
     assert.equal(options.redirect, 'error');
     return Response.json({ results: [
-      { id: 'OH-1', latitude: 39.96, longitude: -83.0, location: 'I-70 Columbus', cameraViews: [{ direction: 'Eastbound', smallUrl: 'https://api.ohgo.com/roadmarkers/cameras/OH-1/small.jpg', largeUrl: 'https://api.ohgo.com/roadmarkers/cameras/OH-1/large.jpg', mainRoute: 'I-70' }] },
+      { id: 'OH-1', latitude: 39.96, longitude: -83.0, location: 'I-70 Columbus', cameraViews: [{ direction: 'Eastbound', smallUrl: 'https://itscameras.dot.state.oh.us/images/CMH/OH-1.jpg', largeUrl: 'https://itscameras.dot.state.oh.us/images/CMH/OH-1-large.jpg', mainRoute: 'I-70' }] },
       { id: 'OUT-OF-STATE', latitude: 40.7, longitude: -74, location: 'Outside Ohio', cameraViews: [{ smallUrl: 'https://api.ohgo.com/roadmarkers/cameras/x.jpg' }] },
       { id: 'BAD-HOST', latitude: 39.96, longitude: -83, cameraViews: [{ smallUrl: 'https://attacker.invalid/oh.jpg' }] },
     ] });
@@ -219,10 +219,10 @@ test('OHGO uses the authorization header and only registers validated Ohio snaps
     const sources = await loadOhgoSourcesFromOpenData();
     assert.equal(seenUrl.searchParams.get('page-all'), 'true');
     assert.deepEqual(sources.map((source) => source.id), ['ohgo-OH-1']);
-    assert.equal(sources[0].url, 'https://api.ohgo.com/roadmarkers/cameras/OH-1/small.jpg');
+    assert.equal(sources[0].url, 'https://itscameras.dot.state.oh.us/images/CMH/OH-1.jpg');
     assert.equal(sources[0].provider, 'OHGO / Ohio DOT');
     assert.doesNotMatch(JSON.stringify(sources), /ohgo-fixture-secret/);
-    assert.match((await testOhgoConnection()).message, /3 camera records/);
+    assert.match((await testOhgoConnection()).message, /3 records; 3 with coordinates, 2 in Ohio, 1 with accepted image URLs; 1 map-ready/);
   } finally {
     globalThis.fetch = oldFetch;
     if (oldKey === undefined) delete process.env.CCTV_OHGO_API_KEY;
@@ -240,7 +240,7 @@ test('TripCheck uses its server-side subscription header and caches its 24-hour 
     assert.equal(String(input), 'https://api.odot.state.or.us/tripcheck/Cctv/Inventory');
     assert.equal(options.headers['Ocp-Apim-Subscription-Key'], 'tripcheck-fixture-secret');
     return Response.json({ CCTVInventoryRequest: [
-      { 'device-id': 'OR-101', 'route-id': 'I-5', milepoint: 250, 'cctv-other': 'Wilsonville', latitude: 45.3, longitude: -122.77, 'cctv-url': 'https://www.tripcheck.com/roadcams/or101.jpg' },
+      { 'device-id': 'OR-101', 'route-id': 'I-5', milepoint: 250, 'cctv-other': 'Wilsonville', latitude: 45.3, longitude: -122.77, 'cctv-url': 'http://www.tripcheck.com/roadcams/cams/or101.jpg' },
       { 'device-id': 'OR-102', latitude: 45.3, longitude: -122.77, 'cctv-url': 'https://third-party.invalid/or102.jpg' },
     ] });
   };
@@ -249,10 +249,10 @@ test('TripCheck uses its server-side subscription header and caches its 24-hour 
     const cached = await loadOregonTripCheckSourcesFromOpenData({ now: 2_000_000_001_000 });
     assert.equal(calls, 1);
     assert.deepEqual(sources.map((source) => source.id), ['ortripcheck-OR-101']);
-    assert.equal(sources[0].url, 'https://www.tripcheck.com/roadcams/or101.jpg');
+    assert.equal(sources[0].url, 'https://www.tripcheck.com/roadcams/cams/or101.jpg');
     assert.deepEqual(cached, sources);
     assert.doesNotMatch(JSON.stringify(sources), /tripcheck-fixture-secret/);
-    assert.match((await testOregonTripCheckConnection()).message, /2 camera records/);
+    assert.match((await testOregonTripCheckConnection()).message, /2 records; 2 with coordinates, 2 in Oregon, 1 with accepted image URLs; 1 map-ready/);
   } finally {
     globalThis.fetch = oldFetch;
     if (oldKey === undefined) delete process.env.CCTV_TRIPCHECK_API_KEY;

@@ -41,6 +41,8 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
    * CCTV_MAX_SOURCES ceiling so health/status observability is never evicted
    * for any catalog the proxy can actually serve. */
   const HEALTH_MAX_ENTRIES = CCTV_MAX_SOURCES_CEILING;
+  let registrySnapshot = null;
+  let sourceByIdCache = new Map();
   /** Live HLS strategies (see ./cctv/stream.js). Shared across dev and preview. */
   const puller = createHlsPuller();
 
@@ -135,11 +137,33 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     });
     server.middlewares.use('/api/cctv', async (req, res) => {
       try {
-        const sources = await getCctvSources();
-        const sourceById = new Map(
-          sources.map((source) => [source.id, source]),
-        );
         const url = new URL(req.url || '/', 'http://localhost');
+        const focusLat = Number(url.searchParams.get('lat'));
+        const focusLon = Number(url.searchParams.get('lon'));
+        const hasViewFocus =
+          url.pathname === '/sources' &&
+          url.searchParams.has('lat') &&
+          url.searchParams.has('lon') &&
+          Number.isFinite(focusLat) &&
+          focusLat >= -90 &&
+          focusLat <= 90 &&
+          Number.isFinite(focusLon) &&
+          focusLon >= -180 &&
+          focusLon <= 180;
+        const sources =
+          url.pathname === '/sources'
+            ? await getCctvSources(
+                hasViewFocus ? { lat: focusLat, lon: focusLon } : null,
+              )
+            : await getCctvSources();
+        const registeredSources = await getCctvSources.getAllSources();
+        if (registeredSources !== registrySnapshot) {
+          registrySnapshot = registeredSources;
+          sourceByIdCache = new Map(
+            registeredSources.map((source) => [source.id, source]),
+          );
+        }
+        const sourceById = sourceByIdCache;
 
         if (url.pathname === '/sources') {
           const body = {

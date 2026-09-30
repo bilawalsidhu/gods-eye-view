@@ -2127,6 +2127,27 @@ function normalizeHttpsImage(value, { hosts, pathPattern }) {
   }
 }
 
+function normalizeTripCheckImage(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    if (
+      !['tripcheck.com', 'www.tripcheck.com'].includes(
+        url.hostname.toLowerCase(),
+      )
+    )
+      return '';
+    // TripCheck publishes HTTP image URLs; upgrade only its exact official host.
+    url.protocol = 'https:';
+    return normalizeHttpsImage(url.toString(), {
+      hosts: ['tripcheck.com', 'www.tripcheck.com'],
+      pathPattern: /^\/roadcams\/cams\/[A-Za-z0-9_.%-]+$/i,
+    });
+  } catch {
+    return '';
+  }
+}
+
 function limitedSourceCount(envName, defaultCount, maximum = 2000) {
   const configured = Number(process.env[envName] || defaultCount);
   return Number.isFinite(configured)
@@ -2213,6 +2234,33 @@ function regionSources(rows, config) {
   );
 }
 
+/** Sanitized adapter diagnostics: aggregate counts only, never raw records or URLs. */
+function regionSourceStages(rows, config) {
+  let validCoordinates = 0;
+  let inRegion = 0;
+  let mediaAccepted = 0;
+  for (const row of rows) {
+    const coordinates = config.coordinates?.(row);
+    const lat = toFiniteNumber(
+      coordinates?.lat ?? row?.latitude ?? row?.Latitude,
+    );
+    const lon = toFiniteNumber(
+      coordinates?.lon ?? row?.longitude ?? row?.Longitude,
+    );
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      !isPlausibleLatLon(lat, lon)
+    )
+      continue;
+    validCoordinates += 1;
+    if (!config.isInRegion(lat, lon)) continue;
+    inRegion += 1;
+    if (config.imageUrl(row)) mediaAccepted += 1;
+  }
+  return { validCoordinates, inRegion, mediaAccepted };
+}
+
 const OHIO_CCTV = {
   label: 'OHGO / Ohio DOT',
   keyEnv: 'CCTV_OHGO_API_KEY',
@@ -2234,9 +2282,9 @@ const OHIO_CCTV = {
     return normalizeHttpsImage(
       view?.smallUrl ?? view?.SmallUrl ?? view?.largeUrl ?? view?.LargeUrl,
       {
-        hosts: ['api.ohgo.com', 'publicapi.ohgo.com', 'www.ohgo.com'],
+        hosts: ['itscameras.dot.state.oh.us'],
         pathPattern:
-          /^\/(?:roadmarkers\/cameras|api\/v1\/cameras)\/[A-Za-z0-9_./-]+$/,
+          /^\/images\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*\.(?:jpe?g|png)$/i,
       },
     );
   },
@@ -2264,8 +2312,10 @@ export async function testOhgoConnection() {
     throw Object.assign(new Error('invalid_response'), {
       code: 'invalid_response',
     });
+  const stages = regionSourceStages(payload.results, OHIO_CCTV);
+  const mapReady = regionSources(payload.results, OHIO_CCTV).length;
   return {
-    message: `OHGO connection succeeded (${payload.results.length} camera records).`,
+    message: `OHGO connection succeeded (${payload.results.length} records; ${stages.validCoordinates} with coordinates, ${stages.inRegion} in Ohio, ${stages.mediaAccepted} with accepted image URLs; ${mapReady} map-ready).`,
   };
 }
 
@@ -2310,10 +2360,7 @@ const OREGON_CCTV = {
   isInRegion: (lat, lon) =>
     lat >= 41.8 && lat <= 46.4 && lon >= -125.1 && lon <= -116.4,
   imageUrl: (row) =>
-    normalizeHttpsImage(row?.['cctv-url'] ?? row?.cctvUrl ?? row?.CctvUrl, {
-      hosts: ['tripcheck.com', 'www.tripcheck.com'],
-      pathPattern: /^\/[A-Za-z0-9_./%-]+$/,
-    }),
+    normalizeTripCheckImage(row?.['cctv-url'] ?? row?.cctvUrl ?? row?.CctvUrl),
   name: (row) =>
     [
       row?.['route-id'],
@@ -2347,8 +2394,10 @@ export async function testOregonTripCheckConnection() {
     throw Object.assign(new Error('invalid_response'), {
       code: 'invalid_response',
     });
+  const stages = regionSourceStages(rows, OREGON_CCTV);
+  const mapReady = regionSources(rows, OREGON_CCTV).length;
   return {
-    message: `TripCheck connection succeeded (${rows.length} camera records).`,
+    message: `TripCheck connection succeeded (${rows.length} records; ${stages.validCoordinates} with coordinates, ${stages.inRegion} in Oregon, ${stages.mediaAccepted} with accepted image URLs; ${mapReady} map-ready).`,
   };
 }
 
@@ -2440,8 +2489,16 @@ async function requestWsdotCameras() {
 
 export async function testWsdotConnection() {
   const rows = await requestWsdotCameras();
+  const owned = rows.filter((row) => {
+    const owner = String(row?.CameraOwner || '').trim();
+    return !owner || /^wsdot$/i.test(owner);
+  });
+  const mapReady = regionSources(
+    owned.filter((row) => row?.IsActive !== false),
+    WASHINGTON_CCTV,
+  ).length;
   return {
-    message: `WSDOT connection succeeded (${rows.length} camera records).`,
+    message: `WSDOT connection succeeded (${rows.length} camera records; ${mapReady} WSDOT cameras map-ready).`,
   };
 }
 
