@@ -2090,7 +2090,7 @@ export function createAnnotationResolver({
    * @param {AbortSignal} [signal]
    * @param {object} [placeSearch]
    * @param {{budgetMs?: number}} [options]  `Infinity` waits for the lookup.
-   * @returns {Promise<{name:string, ring:Array<[number,number]>}|{name:string, ring:null, error:'region-timeout'}|null>}
+   * @returns {Promise<{name:string, ring:Array<[number,number]>, source?:string}|{name:string, ring:null, error:'region-timeout'}|null>}
    */
   async function resolveRegionRingForQuery(
     name,
@@ -2111,12 +2111,18 @@ export function createAnnotationResolver({
       // Largest ring carries the query scope; multi-ring regions (Andes) keep
       // their main cordillera — good enough for containment counting.
       const ring = [...ne.polygons].sort((a, b) => b.length - a.length)[0];
-      if (ring?.length >= 3) return { name: ne.name, ring };
+      if (ring?.length >= 3)
+        return { name: ne.name, ring, source: 'natural-earth' };
     }
     // Bundled states/provinces/counties by name (offline); the main part only,
     // like the Natural Earth rung above.
     const admin = await findAdminArea(q).catch(() => null);
-    if (admin) return { name: admin.name, ring: [...admin.ring] };
+    if (admin)
+      return {
+        name: admin.name,
+        ring: [...admin.ring],
+        source: 'bundled-admin',
+      };
     const lookup = resolveAdminRegionRing(q, signal, placeSearch);
     if (!Number.isFinite(budgetMs)) return lookup;
     let timer;
@@ -2147,12 +2153,14 @@ export function createAnnotationResolver({
         geo.lon,
         scope,
       ).catch(() => null);
-      if (admin) return { name: q, ring: [...admin.ring] };
+      if (admin)
+        return { name: q, ring: [...admin.ring], source: 'bundled-admin' };
     }
     const fp = await fetchAdminArea(geo.lat, geo.lon, q, scope, signal).catch(
       () => null,
     );
-    if (fp?.ring?.length >= 3) return { name: q, ring: fp.ring };
+    if (fp?.ring?.length >= 3)
+      return { name: q, ring: fp.ring, source: 'remote-boundary' };
     return null;
   }
 

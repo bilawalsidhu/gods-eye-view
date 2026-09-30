@@ -235,7 +235,7 @@ _Why cockpit mode exists: you're riding a real aircraft over real terrain — an
 
 ## 🎙️ Talk to It
 
-> Voice needs an **OpenAI key** or a **Gemini key**. Add your chosen key in **Provider Settings**. For Gemini, create a separate `GEMINI_API_KEY` in [Google AI Studio](https://aistudio.google.com/apikey); the Google Maps key does not configure Gemini voice. The rest of the app works without either voice key. The **AI HUD summary** continues to use OpenAI.
+> Voice needs an **OpenAI key** or a **Gemini key**. Add your chosen key in **Provider Settings**. For Gemini, use a separate Gemini API key created in [Google AI Studio](https://aistudio.google.com/apikey) as `GEMINI_API_KEY`; the Google Maps key does not configure Gemini voice. See Google's [API key setup and security guidance](https://ai.google.dev/gemini-api/docs/api-key). The rest of the app works without either voice key. The **AI HUD summary** continues to use OpenAI.
 
 Choose **OpenAI** or **Gemini** in the **VOICE** selector, then click **GEV MIC**, grant the microphone, and talk; hold **Space** for push-to-talk. The app remembers your provider choice. Changing it ends the current session; start voice again to connect with the new provider.
 

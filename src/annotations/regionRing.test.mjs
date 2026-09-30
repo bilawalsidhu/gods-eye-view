@@ -44,6 +44,7 @@ test('region ring: Natural Earth names resolve without a geocoder', async () => 
   for (const name of ['Gulf of Mexico', 'the Alps']) {
     const region = await resolveRegionRingForQuery(name);
     assert.ok(region?.ring?.length >= 3, `${name} resolves to a ring`);
+    assert.equal(region.source, 'natural-earth');
     assert.equal(region.error, undefined);
   }
 });
@@ -116,6 +117,7 @@ test('region ring: bundled states and counties resolve without a geocoder', asyn
   ]) {
     const region = await resolveRegionRingForQuery(query, undefined, geocoder);
     assert.equal(region?.name, name, query);
+    assert.equal(region?.source, 'bundled-admin', query);
     assert.ok(region.ring.length >= 8, `${query} has a real ring`);
   }
   assert.deepEqual(geocoder.calls, [], 'no geocoding');

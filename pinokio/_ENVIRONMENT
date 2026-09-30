@@ -14,7 +14,9 @@
 # GOOGLE_MAPS_SERVER_API_KEY=
 # CESIUM_ION_TOKEN=
 # OPENAI_API_KEY=
-# Gemini voice uses its own Google AI Studio key, separate from Google Maps.
+# Gemini voice uses a separate Gemini API key created in Google AI Studio,
+# separate from Google Maps: https://aistudio.google.com/apikey
+# Setup and security: https://ai.google.dev/gemini-api/docs/api-key
 # GEMINI_API_KEY=
 # GEMINI_LIVE_MODEL=gemini-3.8-live
 # AISSTREAM_API_KEY=

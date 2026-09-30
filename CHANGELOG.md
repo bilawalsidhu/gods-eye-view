@@ -4,7 +4,7 @@
 
 - Add Gemini Live as a selectable voice provider alongside OpenAI, using the
   same map actions, click-to-talk and Space push-to-talk controls. Add a separate
-  Gemini key from Google AI Studio in Provider Settings; the server keeps it
+  Gemini API key created in Google AI Studio in Provider Settings; the server keeps it
   private and issues a short-lived token for the browser. Gemini defaults to
   `gemini-3.8-live`, reports connection and quota failures, and releases audio
   and pending actions when stopped or switched. OpenAI retains its model tiers
