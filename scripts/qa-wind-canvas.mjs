@@ -1,7 +1,14 @@
 /** Real-canvas wind regression. Run against this candidate's dev server. */
 import assert from 'node:assert/strict';
 import puppeteer from 'puppeteer';
-const browser = await puppeteer.launch({ executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || await puppeteer.executablePath(), headless: false, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+import { resolveChromeExecutable } from './qa-browser.mjs';
+
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
+const browser = await puppeteer.launch({
+  ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
+  headless: false,
+  args: ['--no-sandbox', '--disable-dev-shm-usage'],
+});
 try {
   const page = await browser.newPage();
   await page.goto(`${process.env.QA_BASE_URL || 'http://localhost:4173'}/`, { waitUntil: 'domcontentloaded' });
