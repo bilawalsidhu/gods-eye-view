@@ -134,6 +134,15 @@ test('outline lookup: duplicate names disambiguate by anchor containment', async
   assert.ok(pointInRing(us.ring, 37.2, -119.0), 'returned ring contains the US anchor');
 });
 
+test('outline lookup: overlapping duplicate candidates remain unresolved', async () => {
+  const overlap = await lookupNaturalRegionOutline(
+    'Canadian Shield',
+    45.6336,
+    -74.86493,
+  );
+  assert.equal(overlap, null, 'two containing entries must use the fallback');
+});
+
 test('outline lookup: anchor outside every ring → null (wrong-place guard)', async () => {
   assert.equal(await lookupNaturalRegionOutline('the Alps', 30.26, -97.77), null);
 });

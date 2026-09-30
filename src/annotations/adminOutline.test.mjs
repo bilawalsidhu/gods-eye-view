@@ -140,6 +140,24 @@ test('a natural region under the camera wins over a wrong remote geocode', async
   assert.deepEqual(lookups, [], 'no boundary lookup');
 });
 
+test('overlapping duplicate natural regions continue through geocoding', async () => {
+  const anchor = {
+    lat: 45.6336,
+    lng: -74.86493,
+    label: 'Canadian Shield',
+    name: 'Canadian Shield',
+    types: ['natural_feature'],
+  };
+  const { resolve, geocodes } = harness(anchor);
+  const resolved = await resolve(
+    'Canadian Shield',
+    viewerAt(anchor.lat, anchor.lng, 248_000),
+  );
+
+  assert.equal(resolved?.source, 'geocode');
+  assert.deepEqual(geocodes, ['Canadian Shield']);
+});
+
 test('country asks and geocoded country scopes use the bundled outline', async () => {
   const direct = harness();
   for (const name of ['Switzerland', 'Iran', 'France', 'Japan']) {

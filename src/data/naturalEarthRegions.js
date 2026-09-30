@@ -278,8 +278,8 @@ export function pointInRing(ring, lat, lon) {
 /**
  * Resolve a natural-region OUTLINE ring for the annotation resolver's first
  * rung. Stricter than `findNaturalRegion`: walks ALL entries sharing the
- * matched name (duplicate names included) and returns the single ring that
- * CONTAINS the geocoded anchor. Containment is simultaneously the
+ * matched name (duplicate names included) and returns a ring only when exactly
+ * one indexed entry CONTAINS the geocoded anchor. Containment is simultaneously the
  * disambiguator and the wrong-place guard: when no ring contains the anchor
  * this returns null and the resolver's normal ladder continues unchanged.
  *
@@ -299,24 +299,28 @@ export async function lookupNaturalRegionOutline(query, lat, lon) {
     ...suffixVariants(ALIASES[norm] || norm),
   ];
   const seen = new Set();
+  const containingEntries = new Map();
   for (const key of candidates) {
     if (!key || seen.has(key)) continue;
     seen.add(key);
     for (const entry of index.get(key) || []) {
-      for (const ring of entry.polygons) {
-        if (pointInRing(ring, lat, lon)) {
-          return {
-            name: entry.name,
-            kind: entry.kind,
-            featurecla: entry.featurecla,
-            ring,
-            areaKm2: entry.areaKm2,
-          };
-        }
-      }
+      if (containingEntries.has(entry)) continue;
+      const ring = entry.polygons.find((candidate) =>
+        pointInRing(candidate, lat, lon),
+      );
+      if (!ring) continue;
+      containingEntries.set(entry, ring);
     }
   }
-  return null;
+  if (containingEntries.size !== 1) return null;
+  const [[entry, ring]] = containingEntries;
+  return {
+    name: entry.name,
+    kind: entry.kind,
+    featurecla: entry.featurecla,
+    ring,
+    areaKm2: entry.areaKm2,
+  };
 }
 
 /** Resolve the smallest containing bundled physical region without a network geocoder. */
