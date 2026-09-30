@@ -9,6 +9,12 @@ import {
   testArizona511Connection,
   loadNy511SourcesFromOpenData,
   testNy511Connection,
+  loadOhgoSourcesFromOpenData,
+  loadOregonTripCheckSourcesFromOpenData,
+  loadWsdotSourcesFromOpenData,
+  testOhgoConnection,
+  testOregonTripCheckConnection,
+  testWsdotConnection,
 } from '../../server/providers/cctv/sources.js';
 
 test('DelDOT keeps enabled camera locations when the live status reports unavailable', async () => {
@@ -191,5 +197,94 @@ test('Iowa DOT accepts only road cameras and pinned DOT media, with daily cache'
     assert.equal(first[0].license, 'Creative Commons Attribution 4.0 International (CC BY 4.0)');
   } finally {
     globalThis.fetch = oldFetch;
+  }
+});
+
+test('OHGO uses the authorization header and only registers validated Ohio snapshots', async () => {
+  const oldFetch = globalThis.fetch;
+  const oldKey = process.env.CCTV_OHGO_API_KEY;
+  process.env.CCTV_OHGO_API_KEY = 'ohgo-fixture-secret';
+  let seenUrl;
+  globalThis.fetch = async (input, options) => {
+    seenUrl = new URL(input);
+    assert.equal(options.headers.Authorization, 'APIKEY ohgo-fixture-secret');
+    assert.equal(options.redirect, 'error');
+    return Response.json({ results: [
+      { id: 'OH-1', latitude: 39.96, longitude: -83.0, location: 'I-70 Columbus', cameraViews: [{ direction: 'Eastbound', smallUrl: 'https://api.ohgo.com/roadmarkers/cameras/OH-1/small.jpg', largeUrl: 'https://api.ohgo.com/roadmarkers/cameras/OH-1/large.jpg', mainRoute: 'I-70' }] },
+      { id: 'OUT-OF-STATE', latitude: 40.7, longitude: -74, location: 'Outside Ohio', cameraViews: [{ smallUrl: 'https://api.ohgo.com/roadmarkers/cameras/x.jpg' }] },
+      { id: 'BAD-HOST', latitude: 39.96, longitude: -83, cameraViews: [{ smallUrl: 'https://attacker.invalid/oh.jpg' }] },
+    ] });
+  };
+  try {
+    const sources = await loadOhgoSourcesFromOpenData();
+    assert.equal(seenUrl.searchParams.get('page-all'), 'true');
+    assert.deepEqual(sources.map((source) => source.id), ['ohgo-OH-1']);
+    assert.equal(sources[0].url, 'https://api.ohgo.com/roadmarkers/cameras/OH-1/small.jpg');
+    assert.equal(sources[0].provider, 'OHGO / Ohio DOT');
+    assert.doesNotMatch(JSON.stringify(sources), /ohgo-fixture-secret/);
+    assert.match((await testOhgoConnection()).message, /3 camera records/);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldKey === undefined) delete process.env.CCTV_OHGO_API_KEY;
+    else process.env.CCTV_OHGO_API_KEY = oldKey;
+  }
+});
+
+test('TripCheck uses its server-side subscription header and caches its 24-hour catalog', async () => {
+  const oldFetch = globalThis.fetch;
+  const oldKey = process.env.CCTV_TRIPCHECK_API_KEY;
+  process.env.CCTV_TRIPCHECK_API_KEY = 'tripcheck-fixture-secret';
+  let calls = 0;
+  globalThis.fetch = async (input, options) => {
+    calls += 1;
+    assert.equal(String(input), 'https://api.odot.state.or.us/tripcheck/Cctv/Inventory');
+    assert.equal(options.headers['Ocp-Apim-Subscription-Key'], 'tripcheck-fixture-secret');
+    return Response.json({ CCTVInventoryRequest: [
+      { 'device-id': 'OR-101', 'route-id': 'I-5', milepoint: 250, 'cctv-other': 'Wilsonville', latitude: 45.3, longitude: -122.77, 'cctv-url': 'https://www.tripcheck.com/roadcams/or101.jpg' },
+      { 'device-id': 'OR-102', latitude: 45.3, longitude: -122.77, 'cctv-url': 'https://third-party.invalid/or102.jpg' },
+    ] });
+  };
+  try {
+    const sources = await loadOregonTripCheckSourcesFromOpenData({ now: 2_000_000_000_000 });
+    const cached = await loadOregonTripCheckSourcesFromOpenData({ now: 2_000_000_001_000 });
+    assert.equal(calls, 1);
+    assert.deepEqual(sources.map((source) => source.id), ['ortripcheck-OR-101']);
+    assert.equal(sources[0].url, 'https://www.tripcheck.com/roadcams/or101.jpg');
+    assert.deepEqual(cached, sources);
+    assert.doesNotMatch(JSON.stringify(sources), /tripcheck-fixture-secret/);
+    assert.match((await testOregonTripCheckConnection()).message, /2 camera records/);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldKey === undefined) delete process.env.CCTV_TRIPCHECK_API_KEY;
+    else process.env.CCTV_TRIPCHECK_API_KEY = oldKey;
+  }
+});
+
+test('WSDOT key stays server-side, partner cameras and off-host images are excluded', async () => {
+  const oldFetch = globalThis.fetch;
+  const oldKey = process.env.CCTV_WSDOT_ACCESS_CODE;
+  process.env.CCTV_WSDOT_ACCESS_CODE = 'wsdot-fixture-secret';
+  globalThis.fetch = async (input, options) => {
+    const url = new URL(input);
+    assert.equal(url.protocol, 'https:');
+    assert.equal(url.searchParams.get('AccessCode'), 'wsdot-fixture-secret');
+    assert.equal(options.redirect, 'error');
+    return Response.json([
+      { CameraID: 21, IsActive: true, Title: 'I-5 Seattle', DisplayLatitude: 47.6, DisplayLongitude: -122.3, ImageURL: 'https://images.wsdot.wa.gov/seattle/21.jpg', CameraLocation: { Direction: 'North' } },
+      { CameraID: 22, IsActive: true, CameraOwner: 'Partner Agency', Title: 'Partner', DisplayLatitude: 47.6, DisplayLongitude: -122.3, ImageURL: 'https://images.wsdot.wa.gov/seattle/22.jpg' },
+      { CameraID: 23, IsActive: true, Title: 'Bad image host', DisplayLatitude: 47.6, DisplayLongitude: -122.3, ImageURL: 'https://attacker.invalid/camera.jpg' },
+    ]);
+  };
+  try {
+    const sources = await loadWsdotSourcesFromOpenData();
+    assert.deepEqual(sources.map((source) => source.id), ['wsdot-21']);
+    assert.equal(sources[0].provider, 'WSDOT');
+    assert.equal(sources[0].url, 'https://images.wsdot.wa.gov/seattle/21.jpg');
+    assert.doesNotMatch(JSON.stringify(sources), /wsdot-fixture-secret/);
+    assert.match((await testWsdotConnection()).message, /3 camera records/);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldKey === undefined) delete process.env.CCTV_WSDOT_ACCESS_CODE;
+    else process.env.CCTV_WSDOT_ACCESS_CODE = oldKey;
   }
 });

@@ -296,6 +296,9 @@ function keySetupEndpoint({
             '511ny': '511 New York',
             '511-alaska': 'Alaska 511',
             '511-arizona': 'Arizona 511',
+            ohgo: 'OHGO / Ohio DOT Cameras',
+            'tripcheck-oregon': 'Oregon TripCheck',
+            wsdot: 'Washington WSDOT Cameras',
           }[parsed?.provider];
           if (!providerTitle)
             return respond(res, 400, { error: 'Unknown provider test' });
@@ -308,7 +311,10 @@ function keySetupEndpoint({
             });
           } catch (error) {
             const messageByCode = {
-              missing_credentials: `Configure ${providerTitle} with an API key in Provider Settings first.`,
+              missing_credentials:
+                parsed.provider === 'wsdot'
+                  ? `Configure ${providerTitle} with an access code in Provider Settings first.`
+                  : `Configure ${providerTitle} with an API key in Provider Settings first.`,
               invalid_credentials:
                 parsed.provider === 'cloudflare-radar'
                   ? 'Cloudflare rejected this token. Check its permissions and replace it in Provider Settings.'

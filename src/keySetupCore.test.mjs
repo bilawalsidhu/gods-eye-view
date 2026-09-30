@@ -66,6 +66,9 @@ test('the status payload reports presence without any credential material', () =
     CCTV_511NY_API_KEY: 'ny511-fixture-secret',
     CCTV_511_ALASKA_API_KEY: 'alaska-fixture-secret',
     CCTV_511_ARIZONA_API_KEY: 'arizona-fixture-secret',
+    CCTV_OHGO_API_KEY: 'ohgo-fixture-secret',
+    CCTV_TRIPCHECK_API_KEY: 'tripcheck-fixture-secret',
+    CCTV_WSDOT_ACCESS_CODE: 'wsdot-fixture-secret',
     // Secret missing: the OpenSky pair must read as NOT set.
   };
   const status = keySetupStatus(env);
@@ -82,6 +85,9 @@ test('the status payload reports presence without any credential material', () =
     ['511ny', '511ny', 'CCTV_511NY_API_KEY'],
     ['511-alaska', '511-alaska', 'CCTV_511_ALASKA_API_KEY'],
     ['511-arizona', '511-arizona', 'CCTV_511_ARIZONA_API_KEY'],
+    ['ohgo', 'ohgo', 'CCTV_OHGO_API_KEY'],
+    ['tripcheck-oregon', 'tripcheck-oregon', 'CCTV_TRIPCHECK_API_KEY'],
+    ['wsdot', 'wsdot', 'CCTV_WSDOT_ACCESS_CODE'],
   ]) {
     const key = status.keys.find((row) => row.id === id);
     assert.equal(key.set, true);
@@ -102,7 +108,10 @@ test('the status payload reports presence without any credential material', () =
   assert.ok(!serialized.includes('ny511-fixture-secret'));
   assert.ok(!serialized.includes('alaska-fixture-secret'));
   assert.ok(!serialized.includes('arizona-fixture-secret'));
-  assert.equal(status.setCount, 7);
+  assert.ok(!serialized.includes('ohgo-fixture-secret'));
+  assert.ok(!serialized.includes('tripcheck-fixture-secret'));
+  assert.ok(!serialized.includes('wsdot-fixture-secret'));
+  assert.equal(status.setCount, 10);
 });
 
 test('whitespace-only env values do not count as configured', () => {

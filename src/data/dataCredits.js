@@ -262,6 +262,18 @@ export const DATA_CREDITS = [
     html: 'CCTV cameras &amp; frames (Arizona): <a href="https://az511.gov/" target="_blank" rel="noopener">Arizona DOT / AZ 511</a>',
   },
   {
+    key: 'ohgo-cctv',
+    html: 'CCTV cameras &amp; frames (Ohio): <a href="https://publicapi.ohgo.com/" target="_blank" rel="noopener">OHGO / Ohio Department of Transportation</a> (public-domain transportation data)',
+  },
+  {
+    key: 'oregon-tripcheck-cctv',
+    html: 'CCTV cameras &amp; frames (Oregon): <a href="https://www.tripcheck.com/" target="_blank" rel="noopener">Camera courtesy of ODOT / TripCheck</a>',
+  },
+  {
+    key: 'wsdot-cctv',
+    html: 'CCTV cameras &amp; frames (Washington): <a href="https://wsdot.wa.gov/traffic/api/" target="_blank" rel="noopener">Washington State Department of Transportation</a> · WSDOT-owned cameras only',
+  },
+  {
     key: 'fintraffic-cctv',
     html:
       'CCTV cameras &amp; frames (Finland): Fintraffic / ' +

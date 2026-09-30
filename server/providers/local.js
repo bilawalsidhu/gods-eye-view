@@ -30,6 +30,9 @@ import {
   testAlaska511Connection,
   testArizona511Connection,
   testNy511Connection,
+  testOhgoConnection,
+  testOregonTripCheckConnection,
+  testWsdotConnection,
 } from './cctv/sources.js';
 import { geopoliticalProxy } from './geopolitical.js';
 
@@ -81,7 +84,15 @@ function localProviderPlugins() {
                     ? testAlaska511Connection()
                     : id === '511-arizona'
                       ? testArizona511Connection()
-                      : Promise.reject(new Error('unknown_test_provider')),
+                      : id === 'ohgo'
+                        ? testOhgoConnection()
+                        : id === 'tripcheck-oregon'
+                          ? testOregonTripCheckConnection()
+                          : id === 'wsdot'
+                            ? testWsdotConnection()
+                            : Promise.reject(
+                                new Error('unknown_test_provider'),
+                              ),
     }),
   ];
 }

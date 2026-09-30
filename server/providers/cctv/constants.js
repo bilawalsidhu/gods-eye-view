@@ -283,6 +283,34 @@ export const DELDOT_ANCHORS = [
   { lat: 39.1582, lon: -75.5244 }, // Dover (Kent)
   { lat: 38.6906, lon: -75.3877 }, // Georgetown (Sussex)
 ];
+/** State DOT camera APIs added in the Phase 4 bespoke-adapter pass. */
+export const OHGO_CAMERAS_URL = 'https://publicapi.ohgo.com/api/v1/cameras';
+export const DEFAULT_OHGO_MAX_SOURCES = 700;
+export const OHGO_ANCHORS = [
+  { lat: 39.9612, lon: -82.9988 }, // Columbus
+  { lat: 41.4993, lon: -81.6944 }, // Cleveland
+  { lat: 39.1031, lon: -84.512 }, // Cincinnati
+  { lat: 41.0814, lon: -81.519 }, // Akron
+];
+export const OREGON_TRIPCHECK_CCTV_URL =
+  'https://api.odot.state.or.us/tripcheck/Cctv/Inventory';
+export const DEFAULT_OREGON_TRIPCHECK_MAX_SOURCES = 500;
+export const OREGON_TRIPCHECK_CACHE_MS = 24 * 60 * 60 * 1000;
+export const OREGON_TRIPCHECK_ANCHORS = [
+  { lat: 45.5152, lon: -122.6784 }, // Portland
+  { lat: 44.0521, lon: -123.0868 }, // Eugene
+  { lat: 44.9429, lon: -123.0351 }, // Salem
+  { lat: 42.3265, lon: -122.8756 }, // Medford
+];
+export const WSDOT_CAMERAS_URL =
+  'https://wsdot.wa.gov/Traffic/api/HighwayCameras/HighwayCamerasREST.svc/GetCamerasAsJson';
+export const DEFAULT_WSDOT_MAX_SOURCES = 700;
+export const WASHINGTON_ANCHORS = [
+  { lat: 47.6062, lon: -122.3321 }, // Seattle
+  { lat: 47.2529, lon: -122.4443 }, // Tacoma
+  { lat: 47.6588, lon: -117.426 }, // Spokane
+  { lat: 46.2396, lon: -119.1006 }, // Tri-Cities
+];
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one

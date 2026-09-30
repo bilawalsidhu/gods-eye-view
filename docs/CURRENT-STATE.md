@@ -1,5 +1,19 @@
 # God's Eye View Current State
 
+## Statewide CCTV Phase 4 — September 29, 2026
+
+Ohio OHGO, Oregon TripCheck, and Washington WSDOT cameras now flow through the
+existing CCTV catalog and side pane. Each API has its own Provider Settings
+credential and connectivity test; secrets remain server-side. Each adapter
+validates state coordinates and exact HTTPS camera-image hosts before a source
+can enter the existing media proxy. TripCheck's inventory cache follows ODOT's
+24-hour refresh guidance. WSDOT partner-owned camera records are omitted.
+These keyed providers require operator credentials and end-user verification
+of live catalog and image delivery. North Carolina is deferred because the
+official DriveNC sample URLs use a staging camera-media host and no production
+image origin was confirmed. The nationwide work does not add another CCTV
+layer, catalog, or viewer.
+
 ## Cyber HUD — September 23, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice

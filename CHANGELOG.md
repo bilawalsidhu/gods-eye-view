@@ -1,5 +1,12 @@
 # Changelog
 
+- Add Ohio OHGO, Oregon TripCheck and Washington WSDOT traffic-camera packs to
+  the existing CCTV catalog. Each has a separate credential entry and
+  connection test in Provider Settings, statewide bounds, catalog caps and
+  server-side pinned image hosts. TripCheck follows its daily inventory cadence;
+  the WSDOT pack excludes partner-owned cameras. North Carolina remains deferred
+  because its documented sample media URL points to a staging host.
+
 - Add Iowa DOT's public statewide roadway-camera catalog through the existing
   CCTV source catalog, with daily catalog caching, pinned official media hosts,
   and CC BY 4.0 attribution. Add an approval-gated 511NY provider whose API key

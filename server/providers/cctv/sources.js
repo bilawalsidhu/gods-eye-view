@@ -73,6 +73,16 @@ import {
   DELDOT_CCTV_URL,
   DEFAULT_DELDOT_MAX_SOURCES,
   DELDOT_ANCHORS,
+  OHGO_CAMERAS_URL,
+  DEFAULT_OHGO_MAX_SOURCES,
+  OHGO_ANCHORS,
+  OREGON_TRIPCHECK_CCTV_URL,
+  DEFAULT_OREGON_TRIPCHECK_MAX_SOURCES,
+  OREGON_TRIPCHECK_CACHE_MS,
+  OREGON_TRIPCHECK_ANCHORS,
+  WSDOT_CAMERAS_URL,
+  DEFAULT_WSDOT_MAX_SOURCES,
+  WASHINGTON_ANCHORS,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -2086,6 +2096,380 @@ export async function loadDelDOTSourcesFromOpenData() {
       '[CCTV] DelDOT source download error:',
       error?.message || error,
     );
+    return [];
+  }
+}
+
+function requireCctvCredential(envName) {
+  const value = String(process.env[envName] || '').trim();
+  if (!value)
+    throw Object.assign(new Error('missing_credentials'), {
+      code: 'missing_credentials',
+    });
+  return value;
+}
+
+function normalizeHttpsImage(value, { hosts, pathPattern }) {
+  try {
+    const url = new URL(String(value || '').trim());
+    if (
+      url.protocol !== 'https:' ||
+      url.username ||
+      url.password ||
+      (url.port && url.port !== '443') ||
+      !hosts.includes(url.hostname.toLowerCase()) ||
+      !pathPattern.test(url.pathname)
+    )
+      return '';
+    return url.toString();
+  } catch {
+    return '';
+  }
+}
+
+function limitedSourceCount(envName, defaultCount, maximum = 2000) {
+  const configured = Number(process.env[envName] || defaultCount);
+  return Number.isFinite(configured)
+    ? Math.max(8, Math.min(maximum, Math.floor(configured)))
+    : defaultCount;
+}
+
+async function readCctvJson(
+  url,
+  { headers = {}, maxBytes = 8 * 1024 * 1024 } = {},
+) {
+  const response = await fetch(url, {
+    headers: { Accept: 'application/json', ...headers },
+    signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    redirect: 'error',
+  });
+  if (response.status === 401 || response.status === 403)
+    throw Object.assign(new Error('invalid_credentials'), {
+      code: 'invalid_credentials',
+    });
+  if (response.status === 429)
+    throw Object.assign(new Error('rate_limited'), { code: 'rate_limited' });
+  if (!response.ok)
+    throw Object.assign(new Error('provider_unavailable'), {
+      code: 'provider_unavailable',
+    });
+  return readResponseJsonCapped(response, maxBytes);
+}
+
+function regionSources(rows, config) {
+  const cameras = [];
+  for (const row of rows) {
+    const rawId = String(
+      config.id?.(row) ?? row?.id ?? row?.Id ?? row?.cameraId ?? '',
+    ).trim();
+    const lat = toFiniteNumber(
+      config.coordinates?.(row)?.lat ?? row?.latitude ?? row?.Latitude,
+    );
+    const lon = toFiniteNumber(
+      config.coordinates?.(row)?.lon ?? row?.longitude ?? row?.Longitude,
+    );
+    if (
+      !/^[A-Za-z0-9_.-]{1,100}$/.test(rawId) ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      !isPlausibleLatLon(lat, lon) ||
+      !config.isInRegion(lat, lon)
+    )
+      continue;
+    const imageUrl = config.imageUrl(row);
+    if (!imageUrl) continue;
+    const direction = String(config.direction(row) || '').trim();
+    const heading = directionToHeading(direction, true);
+    const cameraId = `${config.namespace}-${rawId}`;
+    cameras.push({
+      id: cameraId,
+      name: String(
+        config.name(row) || `${config.label} Camera ${rawId}`,
+      ).trim(),
+      city: String(config.city(row) || config.state).trim(),
+      cityId: config.stateId,
+      provider: config.label,
+      lat,
+      lon,
+      headingDeg: Number.isFinite(heading)
+        ? heading
+        : fallbackHeadingFromId(cameraId),
+      headingConfidence: Number.isFinite(heading) ? 'high' : 'low',
+      pitchDeg: Number.isFinite(heading) ? -24 : -18,
+      fovDeg: Number.isFinite(heading) ? 56 : 44,
+      rangeM: Number.isFinite(heading) ? 210 : 145,
+      mountHeightM: 8,
+      groundElevationM: config.groundElevationM,
+      feedType: 'image',
+      url: imageUrl,
+      snapshotUrl: imageUrl,
+      sourceKind: config.sourceKind,
+      license: config.license,
+      credit: config.credit,
+    });
+  }
+  return Array.from(
+    new Map(cameras.map((camera) => [camera.id, camera])).values(),
+  );
+}
+
+const OHIO_CCTV = {
+  label: 'OHGO / Ohio DOT',
+  keyEnv: 'CCTV_OHGO_API_KEY',
+  maxEnv: 'CCTV_OHGO_MAX_SOURCES',
+  maxSources: DEFAULT_OHGO_MAX_SOURCES,
+  state: 'Ohio',
+  stateId: 'ohio',
+  namespace: 'ohgo',
+  sourceKind: 'ohgo-api',
+  license: 'Ohio DOT OHGO Public API (public-domain transportation data)',
+  credit: 'OHGO / Ohio DOT',
+  groundElevationM: 300,
+  anchors: OHGO_ANCHORS,
+  isInRegion: (lat, lon) =>
+    lat >= 38.2 && lat <= 42.1 && lon >= -85.1 && lon <= -80.4,
+  imageUrl: (row) => {
+    const views = row?.cameraViews ?? row?.CameraViews ?? [];
+    const view = Array.isArray(views) ? views[0] : null;
+    return normalizeHttpsImage(
+      view?.smallUrl ?? view?.SmallUrl ?? view?.largeUrl ?? view?.LargeUrl,
+      {
+        hosts: ['api.ohgo.com', 'publicapi.ohgo.com', 'www.ohgo.com'],
+        pathPattern:
+          /^\/(?:roadmarkers\/cameras|api\/v1\/cameras)\/[A-Za-z0-9_./-]+$/,
+      },
+    );
+  },
+  name: (row) =>
+    [
+      row?.location ?? row?.Location,
+      row?.cameraViews?.[0]?.mainRoute ?? row?.CameraViews?.[0]?.MainRoute,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  city: () => 'Ohio',
+  direction: (row) =>
+    row?.cameraViews?.[0]?.direction ?? row?.CameraViews?.[0]?.Direction,
+  id: (row) => row?.id ?? row?.Id,
+};
+
+export async function testOhgoConnection() {
+  const key = requireCctvCredential(OHIO_CCTV.keyEnv);
+  const url = new URL(OHGO_CAMERAS_URL);
+  url.searchParams.set('page-all', 'true');
+  const payload = await readCctvJson(url, {
+    headers: { Authorization: `APIKEY ${key}` },
+  });
+  if (!Array.isArray(payload?.results))
+    throw Object.assign(new Error('invalid_response'), {
+      code: 'invalid_response',
+    });
+  return {
+    message: `OHGO connection succeeded (${payload.results.length} camera records).`,
+  };
+}
+
+export async function loadOhgoSourcesFromOpenData() {
+  try {
+    const key = requireCctvCredential(OHIO_CCTV.keyEnv);
+    const url = new URL(OHGO_CAMERAS_URL);
+    url.searchParams.set('page-all', 'true');
+    const payload = await readCctvJson(url, {
+      headers: { Authorization: `APIKEY ${key}` },
+    });
+    if (!Array.isArray(payload?.results)) return [];
+    return prioritizeSources(
+      regionSources(payload.results, OHIO_CCTV),
+      limitedSourceCount(OHIO_CCTV.maxEnv, OHIO_CCTV.maxSources),
+      OHIO_CCTV.anchors,
+    );
+  } catch (error) {
+    if (error?.code !== 'missing_credentials')
+      console.warn(
+        '[CCTV] OHGO camera catalog unavailable:',
+        error?.code || 'provider_error',
+      );
+    return [];
+  }
+}
+
+let oregonTripCheckCache = { fetchedAt: 0, sources: [] };
+const OREGON_CCTV = {
+  label: 'Oregon TripCheck',
+  keyEnv: 'CCTV_TRIPCHECK_API_KEY',
+  maxEnv: 'CCTV_TRIPCHECK_MAX_SOURCES',
+  maxSources: DEFAULT_OREGON_TRIPCHECK_MAX_SOURCES,
+  state: 'Oregon',
+  stateId: 'oregon',
+  namespace: 'ortripcheck',
+  sourceKind: 'oregon-tripcheck-api',
+  license: 'ODOT TripCheck API; camera courtesy of ODOT',
+  credit: 'Camera courtesy of ODOT / TripCheck',
+  groundElevationM: 300,
+  anchors: OREGON_TRIPCHECK_ANCHORS,
+  isInRegion: (lat, lon) =>
+    lat >= 41.8 && lat <= 46.4 && lon >= -125.1 && lon <= -116.4,
+  imageUrl: (row) =>
+    normalizeHttpsImage(row?.['cctv-url'] ?? row?.cctvUrl ?? row?.CctvUrl, {
+      hosts: ['tripcheck.com', 'www.tripcheck.com'],
+      pathPattern: /^\/[A-Za-z0-9_./%-]+$/,
+    }),
+  name: (row) =>
+    [
+      row?.['route-id'],
+      row?.['milepoint'] ? `MP ${row['milepoint']}` : '',
+      row?.['cctv-other'],
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  city: (row) => row?.['route-id'] || 'Oregon',
+  direction: (row) => row?.direction,
+  id: (row) => row?.['device-id'] ?? row?.['cctv-id'] ?? row?.id,
+};
+
+function unwrapTripCheckRows(payload) {
+  const rows =
+    payload?.CCTVInventoryRequest ?? payload?.cctvInventoryRequest ?? payload;
+  return Array.isArray(rows)
+    ? rows
+    : rows && typeof rows === 'object'
+      ? [rows]
+      : [];
+}
+
+export async function testOregonTripCheckConnection() {
+  const key = requireCctvCredential(OREGON_CCTV.keyEnv);
+  const payload = await readCctvJson(OREGON_TRIPCHECK_CCTV_URL, {
+    headers: { 'Ocp-Apim-Subscription-Key': key },
+  });
+  const rows = unwrapTripCheckRows(payload);
+  if (!rows.length)
+    throw Object.assign(new Error('invalid_response'), {
+      code: 'invalid_response',
+    });
+  return {
+    message: `TripCheck connection succeeded (${rows.length} camera records).`,
+  };
+}
+
+export async function loadOregonTripCheckSourcesFromOpenData({
+  now = Date.now(),
+} = {}) {
+  if (now - oregonTripCheckCache.fetchedAt < OREGON_TRIPCHECK_CACHE_MS)
+    return oregonTripCheckCache.sources;
+  try {
+    const key = requireCctvCredential(OREGON_CCTV.keyEnv);
+    const payload = await readCctvJson(OREGON_TRIPCHECK_CCTV_URL, {
+      headers: { 'Ocp-Apim-Subscription-Key': key },
+    });
+    const rows = unwrapTripCheckRows(payload);
+    if (!rows.length) return oregonTripCheckCache.sources;
+    const sources = regionSources(rows, OREGON_CCTV);
+    oregonTripCheckCache = {
+      fetchedAt: now,
+      sources: prioritizeSources(
+        sources,
+        limitedSourceCount(OREGON_CCTV.maxEnv, OREGON_CCTV.maxSources),
+        OREGON_CCTV.anchors,
+      ),
+    };
+    return oregonTripCheckCache.sources;
+  } catch (error) {
+    if (error?.code !== 'missing_credentials')
+      console.warn(
+        '[CCTV] Oregon TripCheck camera catalog unavailable:',
+        error?.code || 'provider_error',
+      );
+    return oregonTripCheckCache.sources;
+  }
+}
+
+const WASHINGTON_CCTV = {
+  label: 'WSDOT',
+  keyEnv: 'CCTV_WSDOT_ACCESS_CODE',
+  maxEnv: 'CCTV_WSDOT_MAX_SOURCES',
+  maxSources: DEFAULT_WSDOT_MAX_SOURCES,
+  state: 'Washington',
+  stateId: 'washington',
+  namespace: 'wsdot',
+  sourceKind: 'wsdot-traveler-api',
+  license: 'WSDOT Traveler Information API',
+  credit: 'Washington State DOT',
+  groundElevationM: 300,
+  anchors: WASHINGTON_ANCHORS,
+  isInRegion: (lat, lon) =>
+    lat >= 45.4 && lat <= 49.1 && lon >= -125 && lon <= -116.7,
+  imageUrl: (row) =>
+    normalizeHttpsImage(row?.ImageURL ?? row?.imageURL, {
+      hosts: ['images.wsdot.wa.gov'],
+      pathPattern: /^\/[A-Za-z0-9_./%-]+$/,
+    }),
+  name: (row) =>
+    [
+      row?.Title,
+      row?.CameraLocation?.RoadName,
+      row?.CameraLocation?.Description,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  city: (row) => row?.Region || 'Washington',
+  direction: (row) => row?.CameraLocation?.Direction,
+  coordinates: (row) => ({
+    lat: row?.DisplayLatitude ?? row?.CameraLocation?.Latitude,
+    lon: row?.DisplayLongitude ?? row?.CameraLocation?.Longitude,
+  }),
+  id: (row) => row?.CameraID,
+};
+
+async function requestWsdotCameras() {
+  const accessCode = requireCctvCredential(WASHINGTON_CCTV.keyEnv);
+  const url = new URL(WSDOT_CAMERAS_URL);
+  url.searchParams.set('AccessCode', accessCode);
+  const payload = await readCctvJson(url);
+  const rows = Array.isArray(payload)
+    ? payload
+    : (payload?.d ??
+      payload?.GetCamerasAsJsonResult ??
+      payload?.GetCamerasResult);
+  if (!Array.isArray(rows))
+    throw Object.assign(new Error('invalid_response'), {
+      code: 'invalid_response',
+    });
+  return rows;
+}
+
+export async function testWsdotConnection() {
+  const rows = await requestWsdotCameras();
+  return {
+    message: `WSDOT connection succeeded (${rows.length} camera records).`,
+  };
+}
+
+export async function loadWsdotSourcesFromOpenData() {
+  try {
+    const rows = await requestWsdotCameras();
+    const owned = rows.filter((row) => {
+      const owner = String(row?.CameraOwner || '').trim();
+      return !owner || /^wsdot$/i.test(owner);
+    });
+    const cameras = regionSources(
+      owned.filter((row) => row?.IsActive !== false),
+      {
+        ...WASHINGTON_CCTV,
+        imageUrl: (row) => WASHINGTON_CCTV.imageUrl(row),
+      },
+    );
+    return prioritizeSources(
+      cameras,
+      limitedSourceCount(WASHINGTON_CCTV.maxEnv, WASHINGTON_CCTV.maxSources),
+      WASHINGTON_CCTV.anchors,
+    );
+  } catch (error) {
+    if (error?.code !== 'missing_credentials')
+      console.warn(
+        '[CCTV] WSDOT camera catalog unavailable:',
+        error?.code || 'provider_error',
+      );
     return [];
   }
 }

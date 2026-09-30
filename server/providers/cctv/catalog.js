@@ -22,6 +22,9 @@ import {
   loadNswSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
+  loadOhgoSourcesFromOpenData,
+  loadOregonTripCheckSourcesFromOpenData,
+  loadWsdotSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -115,6 +118,21 @@ const LIVE_PACKS = [
     name: 'deldot',
     enabled: () => envEnabled('CCTV_DELDOT_ENABLED'),
     load: loadDelDOTSourcesFromOpenData,
+  },
+  {
+    name: 'ohgo',
+    enabled: () => envEnabled('CCTV_OHGO_ENABLED'),
+    load: loadOhgoSourcesFromOpenData,
+  },
+  {
+    name: 'oregon-tripcheck',
+    enabled: () => envEnabled('CCTV_TRIPCHECK_ENABLED'),
+    load: loadOregonTripCheckSourcesFromOpenData,
+  },
+  {
+    name: 'wsdot',
+    enabled: () => envEnabled('CCTV_WSDOT_ENABLED'),
+    load: loadWsdotSourcesFromOpenData,
   },
 ];
 /**

@@ -1,6 +1,6 @@
 # U.S. State DOT / 511 CCTV Source Matrix
 
-**Phase:** Camera expansion Phase 3 (shared adapter implementation)  
+**Phase:** Camera expansion Phase 4 (bespoke adapter implementation)
 **Research date:** 2026-09-29  
 **Scope:** Publicly presented state DOT / 511 roadway cameras that could be added through the existing CCTV catalog/provider pipeline. This is not authorization to scrape a website or to proxy a camera URL.
 
@@ -11,6 +11,7 @@
 - **READY-KEYED** — official developer API documentation describes a camera resource and an access key/account path. Live credentials and a representative response are still needed before calling the integration verified.
 - **NEEDS-TERMS-REVIEW** — an official camera service exists, but the public material found does not establish third-party machine access, redistribution/display rights, or stable media access. Obtain written permission or the applicable agreement before use.
 - **NO-USABLE-OFFICIAL-SOURCE-FOUND** — this audit did not find a documented, usable official catalog/feed for this purpose. It does not mean the state has no cameras or that a private partner feed cannot exist.
+- **DEFERRED-MEDIA-ORIGIN** — a documented API exists, but current official examples do not establish the production camera-media origin; do not register staging or guessed media URLs.
 
 ## State-by-state screening
 
@@ -48,11 +49,11 @@
 | New Jersey | NO-USABLE-OFFICIAL-SOURCE-FOUND | No current official machine-readable camera catalog and reuse terms verified. | Public traveler portal alone is insufficient evidence. | No current implementation candidate. |
 | New Mexico | NO-USABLE-OFFICIAL-SOURCE-FOUND | No current official machine-readable camera catalog and reuse terms verified. | Public traveler portal alone is insufficient evidence. | No current implementation candidate. |
 | New York | READY-KEYED | [511NY API documentation](https://511ny.org/developers/help) documents camera endpoints/resources. | Developer application/key and approval are required; API fields include location and image/video URL fields. Need issued access and live response; follow the granted API agreement. | Phase 2 511/CARS adapter; shared in Phase 3 with Alaska and Arizona. |
-| North Carolina | READY-KEYED | [DriveNC API docs](https://www.drivenc.gov/developers/doc) explicitly list the Cameras resource. | Registered developer key; published throttle is 10 calls per 60 seconds. Camera API is intended for developer traffic applications; verify current response/media fields with a key. | REST JSON; provider-key setting and one cached catalog request per refresh. |
+| North Carolina | DEFERRED-MEDIA-ORIGIN | [DriveNC camera API docs](https://www.drivenc.gov/help/endpoint/cameras) list the official camera catalog and require a developer key. | The official sample response uses `NC.stage.traveliq.co` for camera-view URLs. No current production media hostname/path was confirmed; the staging URL is intentionally rejected. | Revisit when DriveNC documents or returns a production HTTPS still-image origin. |
 | North Dakota | NO-USABLE-OFFICIAL-SOURCE-FOUND | No current official machine-readable camera catalog and reuse terms verified. | Public traveler portal alone is insufficient evidence. | No current implementation candidate. |
-| Ohio | READY-KEYED | [OHGO camera docs](https://publicapi.ohgo.com/docs/v1/cameras) and [terms](https://publicapi.ohgo.com/docs/terms-of-use) document a camera API. | Free registered API key; docs specify coordinates, view image URLs, and snapshots updated every five seconds. OHGO says data is public domain; key and live response still needed. | REST JSON; promising keyed adapter with snapshot-only camera media. |
+| Ohio | IMPLEMENTED-KEYED | [OHGO camera docs](https://publicapi.ohgo.com/docs/v1/cameras) and [terms](https://publicapi.ohgo.com/docs/terms-of-use) document a camera API. | Free registered API key; docs specify coordinates, view image URLs, and snapshots updated every five seconds. OHGO says data is public domain. Requires user key and live media verification. | Existing CCTV catalog, Provider Settings test, Ohio bounds, bounded all-page request, strict OHGO media host/path pinning. |
 | Oklahoma | NO-USABLE-OFFICIAL-SOURCE-FOUND | ODOT public map/data portals found, but not a documented public roadway-camera catalog/API with reuse terms. | Some camera operations are not publicly accessible; no eligible source verified. | No current implementation candidate. |
-| Oregon | READY-KEYED | [ODOT TripCheck API](https://tripcheck.com/Pages/API) documents CCTV Inventory and a developer portal. | Official API key via ODOT portal; inventory refresh is documented at 24 hours and includes still image URLs. ODOT describes data as free for integration into applications; key and live response required. | XML API adapter; daily catalog refresh, image access through existing server-side media policy. |
+| Oregon | IMPLEMENTED-KEYED | [ODOT TripCheck API](https://tripcheck.com/Pages/API) documents CCTV Inventory and a developer portal. | Official subscription key via ODOT portal; inventory refresh is documented at 24 hours and includes still image URLs. Requires user key and live response verification. | Existing CCTV catalog, Provider Settings test, daily inventory cache, Oregon bounds, strict TripCheck HTTPS media host pinning. Partner-hosted frames are skipped. |
 | Pennsylvania | NEEDS-TERMS-REVIEW | [511PA developer access](https://www.511pa.com/developers) has an application process for camera data/video. | Access requires approval and a video sharing agreement/license; attribution and stream constraints apply. Do not integrate until the applicable agreement is reviewed and accepted. | Agreement-gated; assess signed/session media separately. |
 | Rhode Island | NO-USABLE-OFFICIAL-SOURCE-FOUND | No current official machine-readable camera catalog and reuse terms verified. | Public traveler portal alone is insufficient evidence. | No current implementation candidate. |
 | South Carolina | NEEDS-TERMS-REVIEW | [511SC](https://511sc.org/) is the official camera/traveler portal. | Camera UI exists, but official API documentation and third-party image reuse terms were not found. | Request official source and reuse terms; do not scrape. |
@@ -62,7 +63,7 @@
 | Utah | NEEDS-TERMS-REVIEW | [UDOT Traffic](https://udottraffic.utah.gov/) is the official traffic-camera portal. | Public map exists; current official API documentation and programmatic camera reuse terms were not verified. | Request UDOT developer source/terms. |
 | Vermont | NO-USABLE-OFFICIAL-SOURCE-FOUND | No current official machine-readable camera catalog and reuse terms verified. | Public traveler portal alone is insufficient evidence. | No current implementation candidate. |
 | Virginia | NEEDS-TERMS-REVIEW | [VDOT 511 video access](https://www.vdot.virginia.gov/news-events/media/) confirms an API/feed for 511 traffic video. | VDOT states a user agreement is required; free internal/public distribution is possible, resale is paid. Obtain the applicable agreement before integration. | Agreement-gated API/media source. |
-| Washington | READY-KEYED | [WSDOT Traveler Information API](https://www.wsdot.wa.gov/traffic/api/) documents Highway Cameras REST operations. | Access code required; camera schema includes camera ID, coordinates, active flag, image URL, location and attribution/owner fields. Need key and live response; confirm redistribution terms. | REST JSON; preserve per-camera owner and media host allowlist. |
+| Washington | IMPLEMENTED-KEYED | [WSDOT Traveler Information API](https://www.wsdot.wa.gov/traffic/api/) documents Highway Cameras REST operations. | Access code required; camera schema includes camera ID, coordinates, active flag, image URL, location and owner fields. Requires user code and live response verification. | Existing CCTV catalog, Provider Settings test, active WSDOT-owned cameras only, Washington bounds, pinned HTTPS WSDOT image host. |
 | West Virginia | NO-USABLE-OFFICIAL-SOURCE-FOUND | No current official machine-readable camera catalog and reuse terms verified. | Public traveler portal alone is insufficient evidence. | No current implementation candidate. |
 | Wisconsin | NEEDS-TERMS-REVIEW | [511 Wisconsin](https://511wi.gov/) publishes camera views; WisTransPortal exposes a Wisconsin 511 CCTV inventory feed. | A public technical inventory endpoint is documented by a university transportation portal, but a current WisDOT permission/reuse statement for camera images was not verified. | Obtain WisDOT confirmation; do not treat accessible XML/JSON as license. |
 | Wyoming | NO-USABLE-OFFICIAL-SOURCE-FOUND | No current official machine-readable camera catalog and reuse terms verified. | Public traveler portal alone is insufficient evidence. | No current implementation candidate. |
@@ -73,7 +74,9 @@
 |---|---:|---|
 | ALREADY-COVERED | 3 | California, Delaware, Texas (Austin is an existing city source within Texas). |
 | READY-KEYLESS | 1 | Iowa (public ArcGIS source; camera data license and representative catalog response verified). |
-| READY-KEYED | 8 | Alaska, Arizona, Georgia, New York, North Carolina, Ohio, Oregon, Washington. These are documented candidates, not yet live-response verified. |
+| READY-KEYED | 4 | Alaska, Arizona, Georgia, New York. These are documented providers whose live access requires operator credentials. |
+| IMPLEMENTED-KEYED | 3 | Ohio, Oregon, Washington. Adapters are implemented; live catalog/media verification requires operator credentials. |
+| DEFERRED-MEDIA-ORIGIN | 1 | North Carolina. Official examples use a staging camera-media hostname. |
 | NEEDS-TERMS-REVIEW | 14 | Alabama, Arkansas, Colorado, Connecticut, Florida, Idaho, Maryland, Nevada, Pennsylvania, South Carolina, Tennessee, Utah, Virginia, Wisconsin. |
 | NO-USABLE-OFFICIAL-SOURCE-FOUND | 24 | Hawaii, Illinois, Indiana, Kansas, Kentucky, Louisiana, Maine, Massachusetts, Michigan, Minnesota, Mississippi, Missouri, Montana, Nebraska, New Hampshire, New Jersey, New Mexico, North Dakota, Oklahoma, Rhode Island, South Dakota, Vermont, West Virginia, Wyoming. |
 
@@ -87,15 +90,15 @@ All accepted sources should normalize into the existing CCTV catalog record, pas
 
 1. **Existing pack adapters:** Caltrans, TxDOT, DelDOT, and Austin. Preserve and extend only when there is a concrete source gap.
 2. **511/CARS-style JSON:** New York, Alaska, and Arizona are routed through one provider-configured parser while keeping separate API endpoints, credentials, geographic bounds, IDs, attribution, and exact media-host allowlists. Sampled response shapes support the common camera fields; actual keyed responses and camera playback remain to be verified by users with issued keys. Georgia remains deferred because its camera-media path may be session-backed.
-3. **State REST APIs:** DriveNC (North Carolina), OHGO (Ohio), and WSDOT (Washington). Keep provider-specific parsers and key names even if normalizing to the same catalog type.
-4. **XML feeds:** Oregon TripCheck and Iowa DOT. Use an XML parser only if access and terms are approved. Iowa's public CC BY 4.0 ArcGIS CCTV FeatureServer is implemented as the keyless Phase 2 source; its separate XML feed remains approval-gated.
+3. **State REST APIs:** Ohio OHGO and Washington WSDOT now use provider-specific parsers and independent credentials. DriveNC (North Carolina) remains deferred because its official sample points to a staging camera-media hostname.
+4. **ODOT TripCheck:** Oregon's keyed CCTV Inventory API is accessed as JSON, cached at its documented 24-hour cadence, and restricted to official TripCheck media URLs. Iowa's public CC BY 4.0 ArcGIS CCTV FeatureServer is the keyless Phase 2 source; its separate XML feed remains approval-gated.
 5. **Agreement-gated / opaque portals:** Alabama, Arkansas, Colorado, Connecticut, Florida, Idaho, Maryland, Nevada, Pennsylvania, South Carolina, Tennessee, Utah, Virginia, and Wisconsin. No production adapter should be built until the agency/vendor gives a current API specification and terms that allow this app's use.
 
 ### Implementation batches
 
 1. **Phase 2:** New York's approval-gated 511 REST API and Iowa's keyless ArcGIS FeatureServer were added through the current CCTV source catalog.
 2. **Phase 3:** Alaska and Arizona use the shared 511/CARS adapter. Their provider keys are managed independently in POWER UP → Provider Settings. Georgia remains deferred until its camera media path is validated.
-3. **Next candidate families:** inspect Ohio, North Carolina, Oregon, and Washington as their documented APIs use distinct response formats. No second audited keyless ArcGIS state qualified for a generalized ArcGIS adapter in this phase, so Iowa stays provider-specific.
+3. **Phase 4:** Ohio, Oregon, and Washington are implemented as isolated keyed providers through Provider Settings. North Carolina remains deferred pending an official production media origin. Georgia remains deferred pending validation of session-backed media.
 4. **Permission-dependent sources:** contact DOT/vendor for Virginia, Pennsylvania, Florida, Alabama, Arkansas and remaining flagged states. Record approval, limits, attribution, cache/refresh guidance and media hostnames before provider work.
 5. **Re-screen no-source states:** revisit through state DOT/vendor contacts or newly published developer portals. Do not substitute third-party aggregators for official sources without separate provenance and terms review.
 
@@ -125,6 +128,6 @@ All accepted sources should normalize into the existing CCTV catalog record, pas
 - [PennDOT 511 developer portal](https://www.511pa.com/developers)
 - [WisTransPortal CCTV inventory service](https://transportal.cee.wisc.edu/its/inventory/?resource=CCTV&format=INFO)
 
-## Phase 3 disposition
+## Phase 4 disposition
 
-The 50-state screen identified Iowa as the only ready-keyless candidate in the audited set; it was implemented in Phase 2 through a provider-specific ArcGIS FeatureServer loader. Phase 3 reused the documented 511/CARS-style JSON family for New York, Alaska, and Arizona, with provider-specific credentials, geographic filtering, source IDs, attribution, and exact media-host allowlists. Alaska and Arizona remain live-response unverified until the user enters issued keys through Provider Settings. Remaining documented but distinct provider families (North Carolina, Ohio, Oregon, Washington) are candidates for Phase 4. Georgia remains deferred pending validation of camera-media access. This work does not claim that a developer key alone grants republication rights; each provider's granted terms still apply.
+Phase 4 adds OHGO (Ohio), TripCheck (Oregon), and WSDOT (Washington) as independent, keyed catalog packs with state-coordinate checks, per-provider caps, secure Provider Settings credentials and connection tests, and strict server-side media URL validation. Oregon's inventory refresh follows its published 24-hour cadence. WSDOT partner-owned feeds are excluded. These providers still require operator-supplied API credentials and live end-user confirmation of successful catalog and image playback. North Carolina is deferred because the official DriveNC API sample camera URLs point to a staging host and a production media origin could not be verified. Georgia remains deferred pending validation of its session-backed camera media. A developer key alone does not grant rights beyond each provider's applicable terms.
