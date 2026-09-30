@@ -1,6 +1,6 @@
 export const LAYER_ID = 'military-installations';
 
-export const REQUEST_DEBOUNCE_MS = 500;
+export const REQUEST_DEBOUNCE_MS = 180;
 
 export const MAX_VIEWPORT_DEGREES = 10;
 
@@ -19,3 +19,6 @@ export const COLOR_BY_CLASS = {
 export const EARTH_MEAN_RADIUS_M = 6371008.8;
 
 export const DISTANCE_PREFILTER_MARGIN_M = 5000;
+
+/** A Contacts subject must move this far before its installation window moves. */
+export const ANCHOR_REFRESH_M = 20_000;
