@@ -900,6 +900,24 @@
   font-style: italic;
 }
 
+/* A layer's player below its row list (Live TV). 16:9 at the row's width,
+   letterboxed on black so odd broadcast aspect ratios never reflow the rail. */
+.data-row-media {
+  margin: 6px 0 0 26px;
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #000;
+}
+
+.data-row-media video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  background: #000;
+}
+
 .data-toggle-controls-info {
   flex-basis: 100%;
   font-family: var(--font-mono);

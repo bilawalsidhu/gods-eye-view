@@ -60,7 +60,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Utilities',
-    ids: ['directions', 'radio'],
+    ids: ['directions', 'radio', 'live-tv'],
   },
 ];
 const PANEL_ORDER = PANEL_GROUPS.flatMap(({ label, ids }) =>
@@ -402,6 +402,7 @@ export class LayerPanel {
     if (!container) return;
     const controls = layer.enabled ? this._rowControlsFor(layer.id) : null;
     if (controls?.readout) {
+      container._rowMedia?.release();
       container.remove();
       listContainer?.remove();
       return;
@@ -410,6 +411,7 @@ export class LayerPanel {
     const legend = controls?.legend || [];
     const infoText = controls?.info;
     this._syncRowList(listContainer, controls?.list || null);
+    this._syncRowMedia(container, listContainer, controls?.media || null);
     container.hidden = chips.length === 0 && legend.length === 0 && !infoText;
 
     const info = container._rowControlsInfo || null;
@@ -477,6 +479,49 @@ export class LayerPanel {
    */
   _syncRowList(container, list) {
     syncRowList(container, list);
+  }
+
+  /**
+   * Host a layer's player (Live TV): one `<video>` below the row list,
+   * created when the layer supplies a `media` descriptor and torn down when
+   * its key changes, the descriptor goes away or the panel re-renders. The
+   * layer decides what plays through `media.attach(video)`, which returns
+   * its own dispose; the panel owns the element and its lifetime.
+   * @param {HTMLElement} container The row's `.data-toggle-controls` node.
+   * @param {HTMLElement|null} anchor Node the player follows (the row list).
+   * @param {{key: string, label?: string, attach: (video: HTMLVideoElement) => (() => void)}|null} media
+   */
+  _syncRowMedia(container, anchor, media) {
+    const current = container._rowMedia || null;
+    if (current && current.key === media?.key) return;
+    current?.release();
+    if (!media || typeof media.attach !== 'function') return;
+    const document = container.ownerDocument;
+    const root = document.createElement('div');
+    root.className = 'data-row-media';
+    const video = document.createElement('video');
+    video.controls = true;
+    video.playsInline = true;
+    video.preload = 'none';
+    video.setAttribute('aria-label', media.label || 'Layer video');
+    root.appendChild(video);
+    (anchor || container).after(root);
+    let dispose = null;
+    const state = {
+      key: media.key,
+      release: () => {
+        if (container._rowMedia !== state) return;
+        container._rowMedia = null;
+        try {
+          dispose?.();
+        } finally {
+          root.remove();
+        }
+      },
+    };
+    container._rowMedia = state;
+    this._removers.push(state.release);
+    dispose = media.attach(video);
   }
 
   _refreshTogglePanel() {

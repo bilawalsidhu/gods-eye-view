@@ -42,6 +42,11 @@ export function railFixture(onWrite = () => {}) {
         append(...nodes) {
           for (const child of nodes) this.appendChild(child);
         },
+        after(sibling) {
+          const parent = this.parent;
+          const next = parent.children[parent.children.indexOf(this) + 1];
+          parent.insertBefore(sibling, next || null);
+        },
         remove() {
           if (!this.parent) return;
           onWrite('remove');

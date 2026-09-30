@@ -228,3 +228,106 @@ test('the Recent Imagery readout mounts in its rail body like the weather readou
     globalThis.document = previousDocument;
   }
 });
+
+test('a row media slot mounts one video after the list, keyed, and releases it', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const { railFixture } = await import('./railTestFixture.mjs');
+  const f = railFixture();
+  const previousDocument = globalThis.document;
+  globalThis.document = f.document;
+  const attached = [];
+  const released = [];
+  let media = null;
+  let enabled = true;
+  const layers = [
+    {
+      id: 'live-tv',
+      name: 'Live TV',
+      icon: '*',
+      source: 'iptv-org',
+      get enabled() {
+        return enabled;
+      },
+      showInTogglePanel: true,
+      stats: {},
+    },
+  ];
+  const descriptor = (key) => ({
+    key,
+    label: `Live TV: ${key}`,
+    attach(video) {
+      attached.push([key, video]);
+      return () => released.push(key);
+    },
+  });
+  const panel = new LayerPanel({
+    getLayers: () => layers,
+    isEnabled: () => enabled,
+    setEnabled() {},
+    setLayerParams() {},
+    hasRowControls: () => true,
+    subscribeRowControls: () => null,
+    getRowControls: () => ({
+      info: 'Channels',
+      list: { items: [{ id: 'a', text: 'A', params: { channelId: 'a' } }] },
+      media,
+    }),
+  });
+  const videos = () => {
+    const found = [];
+    const walk = (node) => {
+      if (node.tagName === 'VIDEO') found.push(node);
+      node.children.forEach(walk);
+    };
+    walk(f.container);
+    return found;
+  };
+  // What a scheduled row refresh does for this row.
+  const refresh = () =>
+    panel._syncRowControls(
+      f.find((n) => n.className === 'data-toggle-controls'),
+      layers[0],
+      f.find((n) => n.className === 'data-row-list'),
+    );
+  try {
+    panel.mount(f.container);
+    assert.deepEqual(videos(), [], 'no media, no video element');
+    media = descriptor('a#1');
+    refresh();
+    const [video] = videos();
+    assert.ok(video);
+    assert.equal(video.preload, 'none');
+    assert.equal(video.controls, true);
+    assert.equal(video.getAttribute('aria-label'), 'Live TV: a#1');
+    assert.equal(video.parent.className, 'data-row-media');
+    const list = f.find((n) => n.className === 'data-row-list');
+    const siblings = list.parent.children;
+    assert.equal(siblings[siblings.indexOf(list) + 1], video.parent);
+    assert.deepEqual(attached, [['a#1', video]]);
+
+    refresh();
+    assert.equal(attached.length, 1, 'the same key keeps the same player');
+    media = descriptor('a#2');
+    refresh();
+    assert.deepEqual(released, ['a#1']);
+    assert.equal(videos().length, 1);
+    assert.equal(attached.at(-1)[0], 'a#2');
+    media = null;
+    refresh();
+    assert.deepEqual(released, ['a#1', 'a#2']);
+    assert.deepEqual(videos(), []);
+
+    media = descriptor('a#3');
+    refresh();
+    enabled = false;
+    refresh();
+    assert.deepEqual(released, ['a#1', 'a#2', 'a#3'], 'disabling releases');
+    enabled = true;
+    media = descriptor('a#4');
+    refresh();
+  } finally {
+    panel.destroy();
+    globalThis.document = previousDocument;
+  }
+  assert.deepEqual(released, ['a#1', 'a#2', 'a#3', 'a#4'], 'destroy releases');
+});

@@ -160,6 +160,13 @@ export const DATA_CREDITS = [
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
+  {
+    key: 'live-tv',
+    html:
+      'Live TV channel list: ' +
+      '<a href="https://github.com/iptv-org/iptv" target="_blank" rel="noopener">iptv-org</a>' +
+      ' (Unlicense); streams belong to their broadcasters, linked not hosted',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
