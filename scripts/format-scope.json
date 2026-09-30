@@ -66,6 +66,7 @@
   "server/providers/vessels/ais-live.js",
   "server/providers/live.js",
   "src/tooling/liveProviders.test.mjs",
+  "src/tooling/upstreamTimeouts.test.mjs",
   "src/data/adsbLolFallback.js",
   "src/data/aisStreamAdapter.js",
   "src/data/aisWatchdog.js",
