@@ -86,7 +86,7 @@ test('the external field is refused beyond the model validity, not extrapolated'
   const external = externalFieldFor({
     coefficients,
     sunDirection: { x: 1, y: 0, z: 0 },
-    band: 4,
+    parameters: 4,
     evaluate: t89,
     earthRadiusKm: EARTH_RADIUS_KM,
   });

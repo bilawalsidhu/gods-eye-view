@@ -21,6 +21,7 @@ import { describeMagnetopause } from '../../src/layers/magnetosphere/magnetopaus
 const SOLAR_WIND_URL =
   'https://services.swpc.noaa.gov/products/geospace/propagated-solar-wind-1-hour.json';
 const KP_URL = 'https://services.swpc.noaa.gov/json/planetary_k_index_1m.json';
+const DST_URL = 'https://services.swpc.noaa.gov/products/kyoto-dst.json';
 const MAX_BYTES = 512 * 1024;
 const CACHE_MS = 60_000;
 const STALE_LIMIT_MS = 6 * 3600_000;
@@ -29,6 +30,19 @@ function invalid(reason) {
   const error = new Error(`invalid_solar_wind_data:${reason}`);
   error.reason = reason;
   return error;
+}
+
+/**
+ * Number() coerces null, '' and false to 0, which for a geomagnetic index means
+ * a missing reading becomes a perfectly quiet one. Every index here goes
+ * through this instead.
+ *
+ * @param {*} value Raw cell from the upstream feed.
+ * @returns {number} The number, or NaN if there was not one.
+ */
+function indexValue(value) {
+  if (value === null || value === undefined || value === '') return Number.NaN;
+  return Number(value);
 }
 
 function finite(value, reason) {
@@ -59,6 +73,9 @@ export function latestSolarWind(payload) {
   const iDensity = column('density');
   const iBz = column('bz');
   const iBt = column('bt');
+  // By is only needed by T96, so a feed without it still serves T89 and the
+  // boundary. Looked up rather than required for that reason.
+  const iBy = header.indexOf('by');
   const iPropagated = header.indexOf('propagated_time_tag');
 
   for (let i = rows.length - 1; i >= 0; i--) {
@@ -74,6 +91,13 @@ export function latestSolarWind(payload) {
     if (speed <= 0 || speed > 5000) throw invalid('speed_range');
     if (density <= 0 || density > 500) throw invalid('density_range');
     if (Math.abs(bz) > 500) throw invalid('bz_range');
+    // GSM, as the propagated geospace product documents, which is the frame
+    // both the Shue boundary and T96 want.
+    let by = null;
+    if (iBy >= 0 && row[iBy] !== null) {
+      by = finite(row[iBy], 'by');
+      if (Math.abs(by) > 500) throw invalid('by_range');
+    }
     const propagatedAt =
       iPropagated >= 0 ? Date.parse(row[iPropagated]) : Number.NaN;
     return {
@@ -83,6 +107,7 @@ export function latestSolarWind(payload) {
         : null,
       speedKmPerS: speed,
       densityPerCm3: density,
+      byNT: by,
       bzNT: bz,
       btNT: row[iBt] === null ? null : finite(row[iBt], 'bt'),
     };
@@ -102,7 +127,8 @@ export function latestKp(payload) {
   if (!Array.isArray(payload)) return null;
   for (let i = payload.length - 1; i >= 0; i--) {
     const row = payload[i];
-    const value = Number(row?.estimated_kp ?? row?.kp_index);
+    const raw = row?.estimated_kp ?? row?.kp_index;
+    const value = indexValue(raw);
     if (!Number.isFinite(value) || value < 0 || value > 9) continue;
     return {
       kp: value,
@@ -112,8 +138,41 @@ export function latestKp(payload) {
   return null;
 }
 
+/**
+ * Newest hourly Dst.
+ *
+ * T96 is keyed to Dst for its ring current amplitude, so without this the
+ * client drops to T89. Kyoto's provisional index, relayed by SWPC as a flat
+ * list of objects, newest last - no header row, unlike the solar wind product.
+ *
+ * Timestamps arrive without a zone designator but are UTC, so one is added
+ * rather than letting the client parse them as local time.
+ *
+ * @param {*} payload Parsed upstream JSON.
+ * @returns {?{dst: number, observedAt: ?string}} Newest usable value, or null.
+ */
+export function latestDst(payload) {
+  if (!Array.isArray(payload)) return null;
+  for (let i = payload.length - 1; i >= 0; i--) {
+    const row = payload[i];
+    const value = indexValue(row?.dst);
+    // The record minimum is about -589 nT; anything beyond this is a bad feed,
+    // and a positive Dst of a few tens of nT is ordinary quiet-time behaviour.
+    if (!Number.isFinite(value) || value < -1000 || value > 200) continue;
+    const stamp = row.time_tag ? String(row.time_tag) : null;
+    return {
+      dst: value,
+      observedAt: stamp ? `${stamp.replace(/Z$/, '')}Z` : null,
+    };
+  }
+  return null;
+}
+
 /** Shape the client consumes. Keep it small and explicit. */
-export function describeState(sample, { stale = false, kp = null } = {}) {
+export function describeState(
+  sample,
+  { stale = false, kp = null, dst = null } = {},
+) {
   const magnetopause = describeMagnetopause(
     sample.densityPerCm3,
     sample.speedKmPerS,
@@ -125,6 +184,7 @@ export function describeState(sample, { stale = false, kp = null } = {}) {
     product: 'swpc-propagated-solar-wind',
     solarWind: sample,
     kp,
+    dst,
     magnetopause,
     stale,
     unavailable: false,
@@ -138,6 +198,7 @@ export function magnetosphereProxy({
   let cache = null;
   let inFlight = null;
   let kpCache = null;
+  let dstCache = null;
 
   async function loadKp(signal) {
     if (kpCache && now() - kpCache.fetchedAt < CACHE_MS) return kpCache.value;
@@ -156,6 +217,27 @@ export function magnetosphereProxy({
       // Kp is a refinement, not a prerequisite: the boundary and the field
       // both stand without it. Keep the last good value if there is one.
       return kpCache?.value ?? null;
+    }
+  }
+
+  async function loadDst(signal) {
+    if (dstCache && now() - dstCache.fetchedAt < CACHE_MS)
+      return dstCache.value;
+    try {
+      const response = await fetchImpl(DST_URL, { signal });
+      if (!response.ok) throw new Error(`dst_http_${response.status}`);
+      const { tooLarge, text } = await readCappedResponseText(
+        response,
+        MAX_BYTES,
+      );
+      if (tooLarge) throw invalid('dst_too_large');
+      const value = latestDst(JSON.parse(text));
+      dstCache = { value, fetchedAt: now() };
+      return value;
+    } catch {
+      // Losing Dst costs T96 and nothing else: the client drops to T89 and the
+      // boundary is untouched. Keep the last good value if there is one.
+      return dstCache?.value ?? null;
     }
   }
 
@@ -213,18 +295,26 @@ export function magnetosphereProxy({
       if (req.url !== '/' && req.url !== '')
         return json(400, { error: 'invalid_magnetosphere_query' });
       try {
-        const [sample, kp] = await Promise.all([
+        const [sample, kp, dst] = await Promise.all([
           acquire(controller.signal),
           loadKp(controller.signal),
+          loadDst(controller.signal),
         ]);
-        json(200, describeState(sample, { kp }));
+        json(200, describeState(sample, { kp, dst }));
       } catch (error) {
         // A bounded last-good answer beats a blank boundary, but it is only
         // offered while it is still plausibly the current state, and it is
         // always labelled.
         const usable = cache && now() - cache.fetchedAt <= STALE_LIMIT_MS;
         if (usable)
-          return json(200, describeState(cache.sample, { stale: true }));
+          return json(
+            200,
+            describeState(cache.sample, {
+              stale: true,
+              kp: kpCache?.value ?? null,
+              dst: dstCache?.value ?? null,
+            }),
+          );
         json(200, {
           schemaVersion: 1,
           product: 'swpc-propagated-solar-wind',
