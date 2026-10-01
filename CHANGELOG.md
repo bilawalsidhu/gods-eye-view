@@ -7,8 +7,11 @@
   stops at long silences or jumps. Choosing an animal shows species,
   study, owner, licence and the time of its last fix. `/api/wildlife`
   walks the studies one at a time (Movebank allows one request per IP),
-  caches them for an hour, drops a study its owner makes private, and shows
-  only what owners publish (hidden or embargoed animals stay hidden).
+  caches them for an hour, and fails closed on revocation: a study Movebank
+  answers empty, 401, 403, 404 or 410 for is dropped at once, a copy past
+  the hour is marked stale while refreshes fail, and no copy is served past
+  six hours. Only what owners publish is shown (hidden or embargoed animals
+  stay hidden).
 
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen

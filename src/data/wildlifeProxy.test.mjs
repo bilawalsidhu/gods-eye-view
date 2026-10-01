@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  WILDLIFE_MAX_STALE_MS,
   WILDLIFE_TTL_MS,
   wildlifeProxy,
 } from '../../server/providers/wildlife.js';
@@ -156,7 +157,7 @@ test('a single retry clears a Movebank 500; two failures back off', async () => 
   assert.deepEqual(
     after.body.studies.map(({ id, status }) => [id, status]),
     [
-      [GULLS, 'ok'],
+      [GULLS, 'fresh'],
       [STORKS, 'unavailable'],
     ],
   );
@@ -201,8 +202,8 @@ test('a study that stops being public is dropped with its cached tracks', async 
       withdrawn,
     ]),
     [
-      [GULLS, 'unavailable', true],
-      [STORKS, 'ok', undefined],
+      [GULLS, 'withdrawn', true],
+      [STORKS, 'fresh', undefined],
     ],
   );
   assert.deepEqual(
@@ -223,7 +224,7 @@ test('malformed answers count as failures, not data', async () => {
   const after = await request();
   assert.deepEqual(
     after.body.studies.map(({ status }) => status),
-    ['unavailable', 'ok'],
+    ['unavailable', 'fresh'],
   );
 });
 
@@ -244,3 +245,146 @@ test('routes, methods and the per-client rate limit', async () => {
   assert.equal((await request('/', 'GET', 'other')).status, 200);
   await plugin.refreshing;
 });
+
+const statuses = (snapshot) =>
+  snapshot.body.studies.map(({ id, status }) => [id, status]);
+const animalIds = (snapshot) => snapshot.body.animals.map(({ id }) => id);
+const MINUTE = 60_000;
+
+test('the hard maximum stale age outlives the TTL and is bounded', () => {
+  assert.ok(WILDLIFE_MAX_STALE_MS > WILDLIFE_TTL_MS);
+  assert.ok(WILDLIFE_MAX_STALE_MS <= 24 * 60 * MINUTE);
+});
+
+test('a study is fresh within the TTL and asks Movebank nothing', async () => {
+  const clock = { t: NOW };
+  const { request, plugin, fake } = install({
+    clock,
+    script: { [GULLS]: [body(GULLS, 'H1')], [STORKS]: [body(STORKS, 'S1')] },
+  });
+  await request();
+  await plugin.refreshing;
+  clock.t += WILDLIFE_TTL_MS - 1;
+  const within = await request();
+  assert.equal(plugin.refreshing, null);
+  assert.deepEqual(statuses(within), [
+    [GULLS, 'fresh'],
+    [STORKS, 'fresh'],
+  ]);
+  assert.deepEqual(animalIds(within), [`${GULLS}:H1`, `${STORKS}:S1`]);
+  assert.equal(fake.calls.length, 2);
+});
+
+test('failing refreshes serve a stale copy, then stop serving coordinates', async () => {
+  const clock = { t: NOW };
+  // Gulls answer once, then Movebank fails for this study for good (5xx and
+  // network errors alike); storks keep answering.
+  const failures = Array.from({ length: 200 }, (_, i) => (i % 2 ? 503 : 500));
+  const storks = Array.from({ length: 200 }, () => body(STORKS, 'S1', 8, 48));
+  const { request, plugin } = install({
+    clock,
+    script: { [GULLS]: [body(GULLS, 'H1'), ...failures], [STORKS]: storks },
+  });
+  await request();
+  await plugin.refreshing;
+  assert.deepEqual(statuses(await request()), [
+    [GULLS, 'fresh'],
+    [STORKS, 'fresh'],
+  ]);
+  // Past the TTL, refresh after refresh fails.
+  clock.t = NOW + WILDLIFE_TTL_MS;
+  let rounds = 0;
+  while (clock.t < NOW + WILDLIFE_MAX_STALE_MS - 16 * MINUTE) {
+    // A fresh client each round keeps the per-client rate limit out of it.
+    const peer = `round-${rounds}`;
+    await request('/', 'GET', peer);
+    await plugin.refreshing;
+    const now = await request('/', 'GET', peer);
+    assert.deepEqual(
+      statuses(now)[0],
+      [GULLS, 'stale'],
+      `stale ${clock.t - NOW} ms after the fetch`,
+    );
+    assert.ok(animalIds(now).includes(`${GULLS}:H1`), 'stale copy served');
+    assert.equal(now.body.studies[0].fetchedAt, NOW);
+    rounds++;
+    clock.t += 16 * MINUTE;
+  }
+  assert.ok(rounds >= 10, `the refresh failed ${rounds} times`);
+  // Past the hard maximum: the coordinates are gone, failing or not.
+  clock.t = NOW + WILDLIFE_MAX_STALE_MS;
+  const expired = await request();
+  assert.notEqual(statuses(expired)[0][1], 'stale');
+  assert.notEqual(statuses(expired)[0][1], 'fresh');
+  assert.deepEqual(animalIds(expired), [`${STORKS}:S1`]);
+  await plugin.refreshing;
+  const after = await request();
+  assert.deepEqual(statuses(after), [
+    [GULLS, 'unavailable'],
+    [STORKS, 'fresh'],
+  ]);
+  assert.deepEqual(animalIds(after), [`${STORKS}:S1`]);
+  assert.equal(after.body.studies[0].fetchedAt, null);
+  assert.ok(
+    after.body.fetchedAt > NOW,
+    'the payload age no longer counts the dropped copy',
+  );
+});
+
+test('the max stale age holds even when no refresh runs', async () => {
+  const clock = { t: NOW };
+  const { request, plugin } = install({
+    clock,
+    script: {
+      [GULLS]: [body(GULLS, 'H1')],
+      [STORKS]: [body(STORKS, 'S1')],
+    },
+  });
+  await request();
+  await plugin.refreshing;
+  // The next walk throws on its first request (no more scripted answers) and
+  // backs off; nothing refreshes again before the copy expires.
+  clock.t += WILDLIFE_MAX_STALE_MS;
+  const expired = await request();
+  assert.deepEqual(animalIds(expired), []);
+  await plugin.refreshing;
+  assert.deepEqual(animalIds(await request()), []);
+});
+
+for (const status of [401, 403, 404, 410])
+  test(`HTTP ${status} withdraws a study at once, without a retry`, async () => {
+    const clock = { t: NOW };
+    const { request, plugin, fake } = install({
+      clock,
+      script: {
+        [GULLS]: [body(GULLS, 'H1'), status, body(GULLS, 'H2')],
+        [STORKS]: [body(STORKS, 'S1'), body(STORKS, 'S2')],
+      },
+    });
+    await request();
+    await plugin.refreshing;
+    clock.t += WILDLIFE_TTL_MS;
+    await request();
+    await plugin.refreshing;
+    const after = await request();
+    assert.deepEqual(statuses(after), [
+      [GULLS, 'withdrawn'],
+      [STORKS, 'fresh'],
+    ]);
+    assert.equal(after.body.studies[0].withdrawn, true);
+    assert.equal(after.body.studies[0].fetchedAt, null);
+    assert.deepEqual(animalIds(after), [`${STORKS}:S2`]);
+    assert.equal(
+      fake.calls.filter(({ study }) => study === GULLS).length,
+      2,
+      'one request, no retry',
+    );
+    // Republished: the next good answer after the back-off restores it.
+    clock.t += 16 * MINUTE;
+    await request();
+    await plugin.refreshing;
+    const back = await request();
+    assert.equal(statuses(back)[0][1], 'fresh');
+    assert.equal(back.body.studies[0].withdrawn, undefined);
+    assert.ok(animalIds(back).includes(`${GULLS}:H2`));
+  });

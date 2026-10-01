@@ -345,7 +345,22 @@ export function wildlifeTime(ms) {
   return `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
-const STATUSES = new Set(['ok', 'pending', 'unavailable']);
+/**
+ * A study's state on the proxy: 'fresh' within the cache TTL, 'stale' past it
+ * while refreshes fail (bounded by a hard maximum age), 'pending' on its first
+ * fetch, 'withdrawn' when Movebank stopped serving it publicly, 'unavailable'
+ * otherwise. Only fresh and stale studies may carry animals.
+ */
+const STATUSES = new Set([
+  'fresh',
+  'stale',
+  'pending',
+  'withdrawn',
+  'unavailable',
+]);
+const SERVABLE = new Set(['fresh', 'stale']);
+/** An older proxy's single "served" state. */
+const LEGACY_STATUS = { ok: 'fresh' };
 
 /**
  * Validate the proxy's snapshot in the browser: curated studies only, sane
@@ -356,20 +371,24 @@ export function sanitizeWildlifeSnapshot(payload) {
     return null;
   const studies = [];
   const known = new Set();
+  /** Studies whose animals may be drawn: fail closed on any other state. */
+  const servable = new Set();
   for (const row of payload.studies) {
     const entry = STUDIES_BY_ID.get(row?.id);
-    if (!entry || known.has(entry.id) || !STATUSES.has(row.status)) continue;
+    const status = LEGACY_STATUS[row?.status] || row?.status;
+    if (!entry || known.has(entry.id) || !STATUSES.has(status)) continue;
     known.add(entry.id);
+    if (SERVABLE.has(status)) servable.add(entry.id);
     studies.push({
       ...entry,
-      status: row.status,
+      status,
       fetchedAt: Number.isFinite(row.fetchedAt) ? row.fetchedAt : null,
     });
   }
   const animals = [];
   const ids = new Set();
   for (const row of payload.animals.slice(0, WILDLIFE_MAX_ANIMALS)) {
-    if (!known.has(row?.study) || typeof row.id !== 'string') continue;
+    if (!servable.has(row?.study) || typeof row.id !== 'string') continue;
     if (ids.has(row.id) || !row.id.startsWith(`${row.study}:`)) continue;
     const name = text(row.name, 60);
     if (!name || !Array.isArray(row.track)) continue;

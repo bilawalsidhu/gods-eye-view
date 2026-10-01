@@ -19,7 +19,7 @@ const SPOONBILLS = 2313947453;
 const studies = (statuses = {}) =>
   WILDLIFE_STUDIES.map((study) => ({
     ...study,
-    status: statuses[study.id] || 'ok',
+    status: statuses[study.id] || 'fresh',
     fetchedAt: NOW,
   }));
 const animal = (
@@ -537,6 +537,44 @@ test('studies still on their way are named and polled for', async () => {
   );
   h.layer.disable();
   assert.equal(h.timers.size, 0, 'disabling cancels the poll');
+});
+
+test('stale and withdrawn studies are named honestly, never as current', async () => {
+  const h = harness();
+  h.setSnapshot({
+    studies: studies({ [GULLS]: 'stale', [SPOONBILLS]: 'withdrawn' }).map(
+      (study) =>
+        study.id === GULLS
+          ? { ...study, fetchedAt: NOW - 3 * HOUR }
+          : study.id === SPOONBILLS
+            ? { ...study, fetchedAt: null }
+            : study,
+    ),
+    animals: ANIMALS.filter(({ study }) => study !== SPOONBILLS),
+  });
+  h.layer.enable();
+  await h.layer.update();
+  const controls = h.layer.getRowControls();
+  assert.match(controls.info, /1 study not refreshed since 3 h ago/);
+  const row = (id) =>
+    controls.list.items.find((item) => item.id === String(id));
+  assert.match(row(GULLS).text, /last fix 2 h ago · not refreshed$/);
+  assert.match(row(STORKS).text, /last fix 3 h ago$/);
+  assert.match(row(SPOONBILLS).text, /no longer public$/);
+  assert.equal(h.layer.getStats().partial, true);
+  h.layer.setParams({ study: GULLS });
+  assert.match(h.layer.getRowControls().info, /Not refreshed since 3 h ago/);
+  h.layer.setParams({ clear: true });
+  h.layer.setParams({ study: SPOONBILLS });
+  assert.match(
+    h.layer.getRowControls().info,
+    /no longer public on Movebank; its tracks were removed/,
+  );
+  const fresh = harness();
+  fresh.layer.enable();
+  await fresh.layer.update();
+  assert.equal(fresh.layer.getStats().partial, false);
+  assert.doesNotMatch(fresh.layer.getRowControls().info, /not refreshed/);
 });
 
 test('a failed refresh keeps the animals and says so', async () => {

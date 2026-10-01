@@ -21,6 +21,30 @@ const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 const RETRY_DELAY_MS = 5_000;
 /** After a study fails twice, leave it alone this long. */
 const FAILURE_BACKOFF_MS = 15 * MINUTE;
+/**
+ * The oldest copy of a study's coordinates ever served. Past the TTL a copy is
+ * served as 'stale' while refreshes fail (outage, 5xx, timeout); past this age
+ * it is dropped and the study reads 'unavailable' until Movebank answers again.
+ * These are exact positions of live animals, so revocation must fail closed:
+ * if an owner withdraws a study in a way the proxy cannot see (a new error
+ * shape, a long outage), its last public positions disappear within six hours.
+ * Six hours is six refresh cycles and about twenty backed-off retries, enough
+ * to ride out a Movebank restart or maintenance window, and by then the copy
+ * is several report intervals behind the tags anyway.
+ */
+export const WILDLIFE_MAX_STALE_MS = 6 * 60 * MINUTE;
+/**
+ * Answers that mean the study is no longer public: drop its tracks at once,
+ * without the retry a transient failure gets.
+ */
+const REVOKED_STATUSES = new Set([401, 403, 404, 410]);
+
+class StudyWithdrawn extends Error {
+  constructor(status) {
+    super(`study_withdrawn (HTTP ${status})`);
+    this.name = 'StudyWithdrawn';
+  }
+}
 
 /** Keyless, sequential, cached Movebank tracks for dev and preview. */
 export function wildlifeProxy({
@@ -33,7 +57,10 @@ export function wildlifeProxy({
   const cache = new Map();
   /** study id -> time of the last failed refresh */
   const failedAt = new Map();
-  /** Studies Movebank no longer serves publicly (empty answer). */
+  /**
+   * Studies Movebank no longer serves publicly (empty answer, or 401, 403,
+   * 404, 410). Their tracks are purged; cleared by the next good answer.
+   */
   const withdrawn = new Set();
   let refreshing = null;
   const allow = makeRateLimiter({ windowMs: 60_000, max: 30, globalMax: 300 });
@@ -54,6 +81,8 @@ export function wildlifeProxy({
     });
     if (!response.ok) {
       await response.body?.cancel();
+      if (REVOKED_STATUSES.has(response.status))
+        throw new StudyWithdrawn(response.status);
       throw new Error('upstream_unavailable');
     }
     const body = await readResponseTextCapped(
@@ -69,20 +98,35 @@ export function wildlifeProxy({
     return animals;
   }
 
+  /** The owner made the study private: its tracks go with its licence. */
+  function withdraw(id) {
+    cache.delete(id);
+    withdrawn.add(id);
+    failedAt.set(id, now());
+  }
+
+  /** Drop every copy older than the hard maximum stale age. */
+  function expire() {
+    for (const [id, { fetchedAt }] of cache)
+      if (now() - fetchedAt >= WILDLIFE_MAX_STALE_MS) {
+        cache.delete(id);
+        console.warn(
+          `[wildlife] Movebank study ${id}: cached tracks expired unrefreshed`,
+        );
+      }
+  }
+
   async function refreshStudy(id) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const animals = await fetchStudy(id);
         if (animals === null) {
+          // An empty 200 has once been a hiccup; ask once more before acting.
           if (attempt === 0) {
             await wait(RETRY_DELAY_MS);
             continue;
           }
-          // The owner made the study private: its licence no longer applies,
-          // so its cached tracks go too.
-          cache.delete(id);
-          withdrawn.add(id);
-          failedAt.set(id, now());
+          withdraw(id);
           return;
         }
         cache.set(id, { animals, fetchedAt: now() });
@@ -90,6 +134,11 @@ export function wildlifeProxy({
         failedAt.delete(id);
         return;
       } catch (error) {
+        if (error instanceof StudyWithdrawn) {
+          console.warn(`[wildlife] Movebank study ${id}: ${error.message}`);
+          withdraw(id);
+          return;
+        }
         if (attempt === 0) {
           await wait(RETRY_DELAY_MS);
           continue;
@@ -99,6 +148,7 @@ export function wildlifeProxy({
           error?.message || error,
         );
         failedAt.set(id, now());
+        expire();
       }
     }
   }
@@ -117,17 +167,32 @@ export function wildlifeProxy({
     return refreshing;
   }
 
+  /**
+   * Each study is 'fresh' (copy younger than the TTL), 'stale' (older, while
+   * refreshes fail, never past WILDLIFE_MAX_STALE_MS), 'pending' (first fetch
+   * on its way), 'withdrawn' (no longer public; tracks purged) or
+   * 'unavailable' (no copy to serve). Only fresh and stale studies have
+   * animals.
+   */
+  function studyStatus(id, entry, walking) {
+    if (entry)
+      return now() - entry.fetchedAt < WILDLIFE_TTL_MS ? 'fresh' : 'stale';
+    if (withdrawn.has(id)) return 'withdrawn';
+    return walking.has(id) ? 'pending' : 'unavailable';
+  }
+
   function snapshot() {
+    expire();
     const walking = new Set(
       refreshing ? studies.filter(({ id }) => due(id)).map(({ id }) => id) : [],
     );
     const rows = studies.map(({ id }) => {
       const entry = cache.get(id);
-      const status = entry ? 'ok' : walking.has(id) ? 'pending' : 'unavailable';
       return {
         id,
-        status,
+        status: studyStatus(id, entry, walking),
         fetchedAt: entry?.fetchedAt ?? null,
+        // Kept for clients that read the flag rather than the status.
         ...(withdrawn.has(id) ? { withdrawn: true } : {}),
       };
     });
