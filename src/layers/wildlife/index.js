@@ -428,6 +428,16 @@ export function createWildlifeLayer({
     return `Fetching ${plural(pending.length, 'study', 'studies')} from Movebank…`;
   }
 
+  /** Studies served from a copy past the cache TTL, oldest first. */
+  function staleLine() {
+    const stale = _studies.filter(({ status }) => status === 'stale');
+    if (!stale.length) return '';
+    const oldest = Math.min(
+      ...stale.map(({ fetchedAt }) => fetchedAt ?? Infinity),
+    );
+    return `${plural(stale.length, 'study', 'studies')} not refreshed since ${Number.isFinite(oldest) ? wildlifeAge(oldest, now()) : 'over an hour ago'}`;
+  }
+
   const failedLine = () =>
     _lastError && _lastUpdate
       ? `Refresh failed: ${wildlifeErrorReason(_lastError)}`
@@ -448,6 +458,7 @@ export function createWildlifeLayer({
             ? wildlifeErrorReason(_lastError)
             : 'Loading tracking data…',
       pendingLine(),
+      staleLine(),
       failedLine(),
       CAVEAT,
     ].filter(Boolean);
@@ -462,11 +473,16 @@ export function createWildlifeLayer({
     return [
       study.status === 'pending'
         ? `${study.label} · fetching from Movebank…`
-        : study.status === 'unavailable' && !list.length
-          ? 'Movebank did not return this study'
-          : !list.length
-            ? `${study.label} · ${noneShown()}`
-            : `${study.label} · ${plural(list.length, 'animal')} · select a row${pages > 1 ? ` · Page ${_page + 1} of ${pages}` : ''}`,
+        : study.status === 'withdrawn'
+          ? `${study.label} · no longer public on Movebank; its tracks were removed`
+          : study.status === 'unavailable' && !list.length
+            ? 'Movebank did not return this study'
+            : !list.length
+              ? `${study.label} · ${noneShown()}`
+              : `${study.label} · ${plural(list.length, 'animal')} · select a row${pages > 1 ? ` · Page ${_page + 1} of ${pages}` : ''}`,
+      study.status === 'stale' && Number.isFinite(study.fetchedAt)
+        ? `Not refreshed since ${wildlifeAge(study.fetchedAt, now())}`
+        : '',
       failedLine(),
       CAVEAT,
     ].filter(Boolean);
@@ -673,11 +689,13 @@ export function createWildlifeLayer({
               const state =
                 entry.status === 'pending'
                   ? 'loading'
-                  : latest.has(entry.id)
-                    ? `last fix ${wildlifeAge(latest.get(entry.id), now())}`
-                    : entry.status === 'unavailable'
-                      ? 'unavailable'
-                      : 'no public fixes';
+                  : entry.status === 'withdrawn'
+                    ? 'no longer public'
+                    : latest.has(entry.id)
+                      ? `last fix ${wildlifeAge(latest.get(entry.id), now())}${entry.status === 'stale' ? ' · not refreshed' : ''}`
+                      : entry.status === 'unavailable'
+                        ? 'unavailable'
+                        : 'no public fixes';
               return {
                 id: String(entry.id),
                 ordinal: index + 1,
@@ -766,7 +784,7 @@ export function createWildlifeLayer({
         count: _markers.size,
         lastUpdate: _lastUpdate,
         error: _lastError,
-        partial: _studies.some(({ status }) => status !== 'ok'),
+        partial: _studies.some(({ status }) => status !== 'fresh'),
       };
     },
 

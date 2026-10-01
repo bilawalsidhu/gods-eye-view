@@ -19,7 +19,7 @@ test('the snapshot reads the same-origin route and sanitizes it', async () => {
       return Response.json({
         fetchedAt: 1_700_000_000_000,
         studies: [
-          { id: STORKS, status: 'ok' },
+          { id: STORKS, status: 'fresh' },
           { id: 1, status: 'ok' },
         ],
         animals: [animal, { id: 'bad' }],
@@ -32,7 +32,7 @@ test('the snapshot reads the same-origin route and sanitizes it', async () => {
   assert.equal(snapshot.fetchedAt, 1_700_000_000_000);
   assert.deepEqual(
     snapshot.studies.map(({ id, status }) => [id, status]),
-    [[STORKS, 'ok']],
+    [[STORKS, 'fresh']],
   );
   assert.deepEqual(snapshot.animals, [animal]);
 });
