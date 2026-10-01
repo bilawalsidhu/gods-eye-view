@@ -42,6 +42,7 @@
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "vite build",
     "preview": "vite preview",
+    "start:hosted": "node server/production.js",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
@@ -61,6 +62,7 @@
     "satellite.js": "^6.0.2"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "prettier": "3.9.6",
     "puppeteer": "^25.10.0",
     "sharp": "^0.35.4",
@@ -251,5 +253,8 @@
     "./layers/transit/source": "./src/layers/transit/source.js",
     "./sources/transit-service": "./src/sources/transitService.js",
     "./sources/map-features": "./src/sources/overpassFeatures.js"
+  },
+  "optionalDependencies": {
+    "pg": "^8.23.1"
   }
 }

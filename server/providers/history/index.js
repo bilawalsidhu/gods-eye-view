@@ -305,3 +305,8 @@ export function historyProvider({ env = process.env } = {}) {
     configurePreviewServer: install,
   };
 }
+
+/** Flush buffered fixes and stop timers (server shutdown). */
+export async function stopHistoryRuntime() {
+  if (runtime) await runtime.stop();
+}
