@@ -14,9 +14,7 @@ test('default commands are schema-valid typed actions with unique ids', () => {
     DEFAULT_COMMAND_CATALOG.length,
   );
   assert.ok(
-    DEFAULT_COMMAND_CATALOG.every(
-      ({ action }) => action?.name && action?.args,
-    ),
+    DEFAULT_COMMAND_CATALOG.every(({ action }) => action?.name && action?.args),
   );
 });
 
@@ -73,9 +71,15 @@ test('catalog rejects actions or arguments that are not in the canonical schema'
 
 test('search ranks exact and label-prefix matches ahead of keyword-only matches', () => {
   const catalog = createCommandCatalog();
-  assert.equal(searchCommandCatalog(catalog, 'open cameras')[0].id, 'open-cameras');
+  assert.equal(
+    searchCommandCatalog(catalog, 'open cameras')[0].id,
+    'open-cameras',
+  );
   assert.equal(searchCommandCatalog(catalog, 'thermal')[0].id, 'style-thermal');
-  assert.equal(searchCommandCatalog(catalog, 'missions')[0].id, 'space-missions-context');
+  assert.equal(
+    searchCommandCatalog(catalog, 'missions')[0].id,
+    'space-missions-context',
+  );
 });
 
 test('multi-token search requires every token and stays deterministic', () => {
@@ -84,10 +88,7 @@ test('multi-token search requires every token and stays deterministic', () => {
     searchCommandCatalog(catalog, 'camera panel').map(({ id }) => id),
     ['open-cameras'],
   );
-  assert.deepEqual(
-    searchCommandCatalog(catalog, 'does not exist'),
-    [],
-  );
+  assert.deepEqual(searchCommandCatalog(catalog, 'does not exist'), []);
   assert.deepEqual(
     searchCommandCatalog(catalog, '', { limit: 2 }).map(({ id }) => id),
     ['open-data-layers', 'open-cameras'],
