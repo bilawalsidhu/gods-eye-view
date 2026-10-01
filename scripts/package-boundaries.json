@@ -1893,6 +1893,10 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/wildlife.js",
+      "src/layers/wildlife/index.js",
+      "src/layers/wildlife/source.js",
+      "src/layers/wildlife/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -2422,6 +2426,10 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/wildlife.js",
+      "src/layers/wildlife/index.js",
+      "src/layers/wildlife/source.js",
+      "src/layers/wildlife/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -2853,7 +2861,9 @@
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
-      "src/layers/submarineCables/bundledSource.js"
+      "src/layers/submarineCables/bundledSource.js",
+      "src/layers/wildlife/source.js",
+      "src/layers/wildlife/records.js"
     ],
     "external": []
   },
@@ -3063,6 +3073,26 @@
       "src/layers/perimeters/inciweb.js"
     ],
     "external": ["cesium"]
+  },
+  "wildlife": {
+    "exports": ["./layers/wildlife"],
+    "modules": [
+      "src/layers/wildlife/index.js",
+      "src/data/iconOrientation.js",
+      "src/layers/wildlife/records.js",
+      "src/sources/httpBody.js",
+      "src/layers/wildlife/source.js"
+    ],
+    "external": ["cesium"]
+  },
+  "wildlife-source": {
+    "exports": ["./layers/wildlife/source"],
+    "modules": [
+      "src/sources/httpBody.js",
+      "src/layers/wildlife/source.js",
+      "src/layers/wildlife/records.js"
+    ],
+    "external": []
   },
   "perimeters-source": {
     "exports": ["./layers/perimeters/source"],

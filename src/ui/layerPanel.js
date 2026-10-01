@@ -28,6 +28,7 @@ const PANEL_GROUPS = [
       'traffic',
       'transit',
       'bikeshare',
+      'wildlife',
     ],
   },
   {

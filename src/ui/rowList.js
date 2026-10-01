@@ -11,6 +11,15 @@ export function syncRowList(container, list) {
   const items = list?.items || [];
   set(container, 'hidden', items.length === 0);
   attribute(container, 'aria-label', list?.ariaLabel || '');
+  // Paged lists number from their first item, not from 1 on every page: the
+  // CSS counter and the <ol> start both follow the first ordinal.
+  const first = Number.isInteger(items[0]?.ordinal) ? items[0].ordinal : 1;
+  set(container, 'start', first);
+  if (container.style) {
+    const reset = first === 1 ? '' : `gev-step ${first - 1}`;
+    if (container.style.counterReset !== reset)
+      container.style.counterReset = reset;
+  }
 
   const stale = new Map();
   for (const node of [...container.children]) {

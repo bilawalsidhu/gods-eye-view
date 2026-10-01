@@ -160,6 +160,13 @@ export const DATA_CREDITS = [
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
+  {
+    key: 'wildlife',
+    html:
+      'Animal tracking data: ' +
+      '<a href="https://www.movebank.org/" target="_blank" rel="noopener">Movebank</a>' +
+      ' (movebank.org) studies by INBO and the Max Planck Institute of Animal Behavior, CC0',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
