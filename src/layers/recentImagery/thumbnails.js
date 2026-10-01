@@ -18,22 +18,29 @@ const EMPTY = Object.freeze({
 });
 
 /**
- * @param {{ fetchImpl?: typeof fetch, maxInFlight?: number, maxDecoded?: number, createObjectUrl?: (blob: Blob) => string, revokeObjectUrl?: (url: string) => void, size?: number }} [options]
+ * @param {{ fetchImpl?: typeof fetch, maxInFlight?: number, maxDecoded?: number, maxDecodedBytes?: number, createObjectUrl?: (blob: Blob) => string, revokeObjectUrl?: (url: string) => void, size?: number }} [options]
  */
 export function createThumbnailLoader({
   fetchImpl = globalThis.fetch?.bind(globalThis),
   maxInFlight = 3,
   maxDecoded = 16,
+  maxDecodedBytes,
   createObjectUrl = (blob) => URL.createObjectURL(blob),
   revokeObjectUrl = (url) => URL.revokeObjectURL(url),
   size = 256,
 } = {}) {
   const limit = Math.max(1, Math.trunc(maxInFlight) || 1);
   const resident = Math.max(1, Math.trunc(maxDecoded) || 1);
+  const decodedBytesPerImage = Math.max(1, Math.trunc(size) || 1) ** 2 * 4;
+  const decodedBudgetBytes =
+    Number.isFinite(maxDecodedBytes) && maxDecodedBytes > 0
+      ? Math.floor(maxDecodedBytes)
+      : resident * decodedBytesPerImage;
   const entries = new Map();
   const listeners = new Set();
   const queue = [];
   let inFlight = 0;
+  let decodedBytes = 0;
   let touchCounter = 0;
   let destroyed = false;
 
@@ -60,6 +67,8 @@ export function createThumbnailLoader({
       /* a revoked URL is already gone */
     }
     entry.objectUrl = null;
+    decodedBytes = Math.max(0, decodedBytes - (entry.decodedBytes || 0));
+    entry.decodedBytes = 0;
   }
 
   function evictDecoded(keep) {
@@ -68,10 +77,16 @@ export function createThumbnailLoader({
       .sort((a, b) => a.touched - b.touched);
     let count = decoded.length + (keep?.objectUrl ? 1 : 0);
     for (const entry of decoded) {
-      if (count <= resident) break;
+      if (count <= resident && decodedBytes <= decodedBudgetBytes) break;
       revokeImage(entry);
       notify(entry.key);
       count -= 1;
+    }
+    if (
+      keep?.objectUrl &&
+      (count > resident || decodedBytes > decodedBudgetBytes)
+    ) {
+      revokeImage(keep);
     }
   }
 
@@ -137,6 +152,8 @@ export function createThumbnailLoader({
       entry.acquisitionTime = acquisitionTime;
     }
     entry.objectUrl = objectUrl;
+    entry.decodedBytes = objectUrl ? decodedBytesPerImage : 0;
+    if (objectUrl) decodedBytes += entry.decodedBytes;
     touch(entry);
     if (objectUrl) evictDecoded(entry);
     notify(entry.key);
@@ -188,6 +205,7 @@ export function createThumbnailLoader({
         loading: false,
         controller: null,
         touched: 0,
+        decodedBytes: 0,
       };
       touch(entry);
       entries.set(key, entry);
@@ -257,6 +275,14 @@ export function createThumbnailLoader({
       if (typeof listener !== 'function') return () => {};
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+
+    memoryStats() {
+      return {
+        decodedBytes,
+        decodedBudgetBytes,
+        decodedBytesPerImage,
+      };
     },
 
     stats() {
