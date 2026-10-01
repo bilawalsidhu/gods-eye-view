@@ -1,5 +1,7 @@
 # Changelog
 
+- Coalesce identical concurrent terrain-height batches in the application request service. Callers cancel independently, and the shared transport is aborted only when its final waiter leaves; terrain freshness/cache semantics are otherwise unchanged.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
