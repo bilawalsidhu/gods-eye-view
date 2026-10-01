@@ -2,6 +2,7 @@ import { fetchGfsWind } from './wind/gfs.js';
 import { fetchIfsWind } from './wind/ifs.js';
 import { decodeWindGribMessage } from './wind/decode.js';
 import { weatherScalarMetadata, weatherScalarError } from './wind/grid.js';
+import { allowedMethods } from './common/methods.js';
 
 /** Serve bounded, single-flight, per-model/overlay forecast snapshots from fixed providers. */
 export function windProxy({
@@ -32,6 +33,7 @@ export function windProxy({
     res.writeHead(status, {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
+      ...(status === 405 ? { Allow: allowedMethods('GET') } : {}),
     });
     res.end(JSON.stringify(value));
   };

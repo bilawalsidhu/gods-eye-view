@@ -1,4 +1,5 @@
 import { readResponseTextCapped } from './common/http.js';
+import { allowedMethods } from './common/methods.js';
 import {
   isAllowedGbfsHost,
   isAllowedGbfsPath,
@@ -119,6 +120,7 @@ export function gbfsProxy() {
       try {
         if (req.method !== 'GET') {
           res.writeHead(405, {
+            Allow: allowedMethods('GET'),
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
           });

@@ -7,6 +7,7 @@ import {
   projectNearbyPlaces,
   projectTextSearchPlaces,
 } from '../../../src/data/placeProviderPayloads.js';
+import { allowedMethods } from '../common/methods.js';
 
 // Construct lazily after the standalone environment has loaded.
 // undefined = not built yet; null = unlimited; fn = active limiter
@@ -52,6 +53,7 @@ export function googlePlacesContextProxy({
     middlewares.use('/api/google/nearby-places', async (req, res) => {
       if (req.method !== 'GET') {
         res.statusCode = 405;
+        res.setHeader('Allow', allowedMethods('GET'));
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ error: 'Method not allowed', places: [] }));
         return;
@@ -163,6 +165,7 @@ export function googlePlacesContextProxy({
     middlewares.use('/api/google/text-search', async (req, res) => {
       if (req.method !== 'GET') {
         res.statusCode = 405;
+        res.setHeader('Allow', allowedMethods('GET'));
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ error: 'Method not allowed', places: [] }));
         return;

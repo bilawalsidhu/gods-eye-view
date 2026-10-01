@@ -279,6 +279,7 @@ test('requests within a second share one read of every feed', async () => {
   assert.equal(fetches, 2);
   const res = await call(handler, 'POST');
   assert.equal(res.status, 405);
+  assert.equal(res.headers.Allow, 'GET, HEAD');
 });
 
 test('a feed name is resolved, every address checked, and the connection pinned to it', async () => {

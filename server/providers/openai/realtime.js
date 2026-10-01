@@ -13,6 +13,7 @@ import {
 } from './constants.js';
 import { realtimeInstructions } from './instructions.js';
 import { GEV_REALTIME_TOOLS } from './tools.js';
+import { allowedMethods } from '../common/methods.js';
 
 function createRealtimeTokenHandler({
   annotationGuidance,
@@ -25,6 +26,7 @@ function createRealtimeTokenHandler({
     res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'GET' && req.method !== 'POST') {
       res.statusCode = 405;
+      res.setHeader('Allow', allowedMethods('GET', 'POST'));
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ error: 'Method not allowed' }));
       return;

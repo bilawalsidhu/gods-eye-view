@@ -3,6 +3,7 @@ import path from 'node:path';
 import { readRequestBody } from '../common/request.js';
 import { promises as fsp } from 'node:fs';
 import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
+import { allowedMethods } from '../common/methods.js';
 
 /** Cap on one request body. */
 const REALTIME_DEBUG_LOG_MAX_BYTES = 8 * 1024 * 1024;
@@ -63,6 +64,7 @@ function createDebugLogHandler({ sourceRoot = defaultSourceRoot } = {}) {
   return async (req, res) => {
     if (req.method !== 'POST') {
       res.statusCode = 405;
+      res.setHeader('Allow', allowedMethods('POST'));
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ error: 'Method not allowed' }));
       return;

@@ -1,5 +1,7 @@
 # Changelog
 
+- Every local route that answers `405 Method Not Allowed` now names the methods
+  it accepts in an `Allow` header (#809). Response bodies are unchanged.
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
