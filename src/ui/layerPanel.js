@@ -100,6 +100,7 @@ const PANEL_GROUPS = [
       'weather-satellite',
       'weather-lightning',
       'weather-cyclones',
+      'surface-temperature',
     ],
   },
   // Directions renders in the Utilities panel, beside Draw and Import, and

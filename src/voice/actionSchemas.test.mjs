@@ -59,7 +59,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // move_camera tilt takes an optional pitchDeg angle, described as
     // absolute with its -45 default, with steps sent as a direction.
     // show_street_level (map, source, photo) adds one tool.
-    '0c27f62062001e6a07241cd301c3d357f55e9b74f66cd2904d16590510337468',
+    // Surface temperature extends the manifest.
+    'c9c1c616d0ad2724f59a722458abdf2680c13cfad592a8561f65df2abe9b5fe2',
   );
 });
 
