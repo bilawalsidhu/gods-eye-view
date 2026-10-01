@@ -21,6 +21,7 @@ import {
   overpassNotConfigured,
 } from './overpass/transport.js';
 import { installRouteMiddleware } from './places/routes.js';
+import { allowedMethods } from './common/methods.js';
 
 /** @type {Map<string,Promise>} In-flight Overpass requests keyed by normalized query body. */
 const _overpassInFlight = new Map();
@@ -89,7 +90,10 @@ function overpassProxy({ routing = {} } = {}) {
           return;
         }
         if (req.method !== 'POST') {
-          res.writeHead(405, { 'Content-Type': 'application/json' });
+          res.writeHead(405, {
+            Allow: allowedMethods('POST'),
+            'Content-Type': 'application/json',
+          });
           res.end(JSON.stringify({ error: 'Method Not Allowed' }));
           return;
         }

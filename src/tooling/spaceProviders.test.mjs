@@ -137,7 +137,9 @@ for (const preview of [false, true])
       return Response.json({ results: [{ id: 'launch-fixture' }] });
     });
     const request = install(rocketLaunchesProxy(), preview);
-    assert.equal((await request('/api/launches', '/', 'POST')).status, 405);
+    const rejected = await request('/api/launches', '/', 'POST');
+    assert.equal(rejected.status, 405);
+    assert.equal(rejected.headers.Allow, 'GET');
     const first = await request('/api/launches');
     assert.equal(first.headers['X-GEV-Cache'], 'MISS');
     assert.doesNotMatch(first.body, /fixture-token/);

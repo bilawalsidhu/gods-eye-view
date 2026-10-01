@@ -4,6 +4,7 @@ import {
   readResponseTextCapped,
   coalesceProxyRequest,
 } from '../common/http.js';
+import { allowedMethods } from '../common/methods.js';
 import { launchLibraryRecentUrl } from '../../../src/data/spaceProviderRequests.js';
 
 export const LL2_CACHE_TTL_MS = 15 * 60_000;
@@ -62,6 +63,7 @@ export function rocketLaunchesProxy() {
       'Content-Type': 'application/json',
       'Cache-Control': status === 200 ? 'public, max-age=900' : 'no-store',
       'X-GEV-Cache': cacheState,
+      ...(status === 405 ? { Allow: allowedMethods('GET') } : {}),
     });
     res.end(body);
   }
