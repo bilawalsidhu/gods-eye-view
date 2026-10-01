@@ -3479,6 +3479,13 @@ silently demoting every later lookup for the session.
 - **The DENSE chip reports the dense LOAD, not the catalog param.** The param flips synchronously while the Starlink shell takes seconds to arrive over a chunked load, and CelesTrak 502s that feed regularly. So the chip reads `DENSE ···` (busy, disabled) while loading, ACTIVE only once dense points are actually on screen, and `DENSE ✕` with the reason on hover when the load fails — a failure also reverts `catalog` to `core`, drops any partial chunk, and leaves the chip clickable to retry. A load is judged by points added, not by HTTP status: a 200 carrying an empty body, a passed-through HTML error page, or only TLEs the core catalog already owns fails with the same revert semantics as a 502. Any explicit request for `core` clears a latched error even when the mode does not change, so a Space Missions restore of an already-core snapshot never leaves the user with a failure they did not cause. Because the load settles asynchronously, the layer pushes a re-render through the optional `setRowControlsListener()` hook; nothing else would repaint that row before the 5-minute catalog refresh, so the count and legend would otherwise sit stale.
 - **A dependency owner takes the row with it.** Space Missions borrows this layer for TLE lookup with `showPoints:false`; while points are hidden the layer returns empty row controls, so the legend never describes an empty sky and the chip cannot accept a write that the owner's restore would silently revert.
 - The detection-overlay record cache (`_detectionObjects`) is cleared with the catalog on every rebuild: it stamps id/class at creation only, and a rebuild can re-tag a satellite when a partial CelesTrak outage changes which group wins dedupe.
+- **CCTV hardware makers:** Austin's catalog names each camera's maker or product line
+  (`camera_mfg`: Wisenet, Advidia, Sarix, Spectra Enhanced, Axis), never its model. The Austin
+  pack serves it as `manufacturer` (`Hanwha Wisenet`, `Pelco Sarix`, …); the HUD shows
+  `HW <MAKER>` and the camera panel adds the label. A maker says nothing about the optics, so
+  the pose and FOV estimate are unchanged. Pelco Spectra, a PTZ-only line, is labelled `(PTZ)`:
+  its listed facing is at best a home position. Public camera state carries `hardwareLabel`
+  (`src/layers/cctv/hardware.js`).
 - **CCTV estimated bearings:** a camera whose pack marks `headingConfidence: 'low'` (the id-hash
   `fallbackHeadingFromId` bearing) shows `HDG n° (ESTIMATED)` in the HUD and draws its coverage
   wireframe dashed; colours, widths and active/idle emphasis are unchanged. A manual calibration

@@ -1,6 +1,7 @@
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
 import { ACTIVE_FRAME_REFRESH_MS, IDLE_FRAME_REFRESH_MS } from './policy.js';
 import { headingHudToken, isHeadingEstimated } from './headingConfidence.js';
+import { hardwareHudToken, hardwareLabel } from './hardware.js';
 
 export function createPresentation({
   state: layerState,
@@ -40,6 +41,8 @@ export function createPresentation({
       // is tagged so a hashed guess never reads as a surveyed facing (#639).
       headingHudToken(active.camera),
       `FOV ${Math.round(active.camera.fovDeg)}°`,
+      // Maker / product line when the pack publishes it (Austin camera_mfg).
+      hardwareHudToken(active.camera),
       `COVERAGE ${area.toFixed(2)}km²`,
       overlapCount > 0 ? `OVERLAP ${overlapCount} cams` : 'ISOLATED VIEW',
       `PROJ ${layerState._showProjection ? 'MONITOR' : 'OFF'}`,
@@ -102,6 +105,8 @@ export function createPresentation({
       sourceMessage: health?.message || '',
       sourceLabel: health?.label || camera.provider || '',
       credit: camera.credit || '',
+      // Hardware maker label ('' when the pack names none); see hardware.js.
+      hardwareLabel: hardwareLabel(camera),
       calibration: {
         ...parts.calibration.normalizeCalibration(camera.calibration),
       },
