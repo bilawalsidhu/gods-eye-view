@@ -1,6 +1,19 @@
 # God's Eye View Current State
 
-Updated: September 29, 2026
+Updated: October 1, 2026
+
+> **2026-10-01 — v0.10.4 idle-render fix** (measurement record in
+> `docs/PERFORMANCE.md`, 2026-10-01 audit; phase record in
+> `docs/PLAN.md` Phase 14). The bundled local-overlay publisher
+> (`src/data/localGeojson.js`, datacenters/dams) snapshots its published
+> cohort — entry identity plus Cartesian position — and skips
+> `setOverlayEntries` when nothing changed, so a parked camera with a
+> bundled layer enabled now settles to Cesium's tile-streaming baseline
+> instead of requesting a render every 450 ms walk. Live positions still
+> republish on any in-place tip move, membership change, or
+> hide-then-show. Measured on a parked camera with `local-datacenters`
+> on: 636 → 206 `scene.requestRender` calls / 20 s, 28 → 11 frames; the
+> remainder is Cesium's own tile streaming, identical across trees.
 
 > **2026-09-29 — v0.10.3 upstream-extraction behaviors** (full accounting
 > in `docs/PLAN.md` Phase 13). At boot, `src/atmosphereCompat.js` probes

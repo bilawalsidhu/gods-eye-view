@@ -1,7 +1,7 @@
 {
   "name": "gods-eye-view",
   "private": true,
-  "version": "0.10.3",
+  "version": "0.10.4",
   "description": "A real-time intelligence console for planet Earth \u2014 photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
   "type": "module",
   "license": "MIT",

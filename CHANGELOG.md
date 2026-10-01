@@ -5,6 +5,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+## [0.10.4] — 2026-10-01
+
 ### Fixed
 
 - **A parked camera with a bundled layer enabled no longer requests a
@@ -17,6 +19,13 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   baseline. Numbers and method in `docs/PERFORMANCE.md` (2026-10-01
   audit). (Extracted from upstream `b5568de`; the settle-wait half is
   N/A here — this tree bounds ground sampling with retry arms.)
+
+### Changed
+
+- The GitForge `security` job's aegis scan timeout rose from 10m to 30m:
+  the scan finishes in under a minute on a quiet host, and the old budget
+  produced a red gate with no finding behind it whenever the CI host was
+  heavily loaded (first seen 2026-10-01, run `e7b72bad`).
 
 ## [0.10.3] — 2026-09-29
 
