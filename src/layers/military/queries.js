@@ -1,4 +1,5 @@
 import { displayedKinematics } from '../../data/motionModel.js';
+import { t } from '../../i18n/index.js';
 import * as Cesium from 'cesium';
 import { isExplicitLayerStateOrigin } from '../../data/layerState.js';
 import { aircraftIncludedInNearby } from '../../data/aircraftNearbyPolicy.js';
@@ -54,7 +55,7 @@ export function createQueries({
    */
 
   function _formatAltitude(altitudeFt) {
-    if (!Number.isFinite(altitudeFt)) return 'Alt unknown';
+    if (!Number.isFinite(altitudeFt)) return t('layers.readout.altUnknown');
     return `${Math.round(altitudeFt)} ft`;
   }
 

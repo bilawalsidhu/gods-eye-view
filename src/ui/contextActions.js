@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import {
   settleUserFacingContextAction,
   contextModeWord,
@@ -5,8 +6,8 @@ import {
 
 export async function _runUserFacingContextAction(
   operation,
-  message = 'Context could not restore every layer; try again',
-  { falseIsFailure = true } = {},
+  message = t('cockpit.context.toastRestoreFailed'),
+  { falseIsFailure = true, localizedMessage = null } = {},
 ) {
   if (this.destroyed) return false;
   const notificationToken = Symbol('user-facing-context-action');
@@ -18,7 +19,7 @@ export async function _runUserFacingContextAction(
       onFailure: (error) => {
         if (this.destroyed) return;
         console.warn('[Context] user-facing transition failed', error);
-        this.showToast(message);
+        this.showToast(localizedMessage || message);
       },
     });
   } finally {
@@ -222,21 +223,25 @@ export function clearSelectedLayers() {
   const operation = managerOperation
     .then((result) => {
       if (result.targetIds.length === 0) {
-        this.showToast('No selected data layers');
+        this.showToast(t('layers.clear.toast.noneSelected'));
       } else if (result.notClearedIds.length > 0) {
         this.showToast(
-          `${result.notClearedIds.length} data layer${result.notClearedIds.length === 1 ? '' : 's'} could not be cleared`,
+          t('layers.clear.toast.notCleared', {
+            count: result.notClearedIds.length,
+          }),
         );
       } else {
         this.showToast(
-          `Cleared ${result.clearedIds.length} data layer${result.clearedIds.length === 1 ? '' : 's'}`,
+          t('layers.clear.toast.cleared', {
+            count: result.clearedIds.length,
+          }),
         );
       }
       return result;
     })
     .catch((error) => {
       console.warn('[Data] clear selected layers failed', error);
-      this.showToast('Selected data layers could not be cleared');
+      this.showToast(t('cockpit.actions.clearLayersFailedToast'));
       return {
         targetIds: [],
         items: [],

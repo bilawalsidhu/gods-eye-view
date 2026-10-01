@@ -5,6 +5,53 @@ import {
   DISTANCE_PREFILTER_MARGIN_M,
   ANCHOR_REFRESH_M,
 } from './policy.js';
+import { t } from '../../i18n/index.js';
+
+// installationFeedback.js composes its guidance inside the portable
+// node/browser graph (the server-side HUD summary reads the same module), so
+// its copy stays English there. getStats is the browser presentation
+// boundary: map the closed message vocabulary to the catalog, passing any
+// live provider error through verbatim (docs/TRANSLATORS.md).
+const INSTALLATION_FEEDBACK_KEYS = Object.freeze({
+  'Retrying mapped sites…': 'layers.installations.feedback.retrying',
+  'Fetching mapped sites…': 'layers.installations.feedback.fetching',
+  'Zoom in to search mapped installations':
+    'layers.installations.feedback.zoomIn',
+  'Showing cached mapped sites': 'layers.installations.feedback.cached',
+  'Mapped sites not loaded': 'layers.installations.feedback.notLoaded',
+  'Mapped sites loaded': 'layers.installations.feedback.loaded',
+  'Overpass rate-limited': 'layers.installations.feedback.reason.rateLimited',
+  'Overpass timed out': 'layers.installations.feedback.reason.timeout',
+  'Overpass could not complete the query':
+    'layers.installations.feedback.reason.queryFailed',
+  'Overpass temporarily unavailable':
+    'layers.installations.feedback.reason.unavailable',
+});
+
+const INSTALLATION_RETRY_IN_RE = /^(.*) — retrying in (\d+)s$/;
+const INSTALLATION_RETRY_PENDING_RE = /^(.*) — retry pending$/;
+
+function localizeInstallationFeedback(message) {
+  if (typeof message !== 'string' || !message) return message;
+  const key = INSTALLATION_FEEDBACK_KEYS[message];
+  if (key) return t(key);
+  const retryIn = message.match(INSTALLATION_RETRY_IN_RE);
+  if (retryIn) {
+    const reasonKey = INSTALLATION_FEEDBACK_KEYS[retryIn[1]];
+    return t('layers.installations.feedback.retryIn', {
+      reason: reasonKey ? t(reasonKey) : retryIn[1],
+      seconds: retryIn[2],
+    });
+  }
+  const pending = message.match(INSTALLATION_RETRY_PENDING_RE);
+  if (pending) {
+    const reasonKey = INSTALLATION_FEEDBACK_KEYS[pending[1]];
+    return t('layers.installations.feedback.retryPending', {
+      reason: reasonKey ? t(reasonKey) : pending[1],
+    });
+  }
+  return message;
+}
 
 export function createControls({ state: layerState, services, parts, source }) {
   const methods = {
@@ -196,13 +243,15 @@ export function createControls({ state: layerState, services, parts, source }) {
         retryAt: layerState.retryAt,
         retrying: layerState.loading && Boolean(layerState.failureReason),
         failureReason: layerState.failureReason,
-        statusMessage: installationFeedback({
-          ...layerState,
-          count: layerState.lastUpdate ? mappedCount : undefined,
-          retrying: layerState.loading && Boolean(layerState.failureReason),
-        }),
+        statusMessage: localizeInstallationFeedback(
+          installationFeedback({
+            ...layerState,
+            count: layerState.lastUpdate ? mappedCount : undefined,
+            retrying: layerState.loading && Boolean(layerState.failureReason),
+          }),
+        ),
         loadingLabel: layerState.loading
-          ? 'loading mapped installation context'
+          ? t('layers.installations.loading')
           : '',
         coverage: layerState.coverage,
         coverageLabel:

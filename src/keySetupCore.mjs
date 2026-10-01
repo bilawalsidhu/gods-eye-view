@@ -334,6 +334,19 @@ export function knownKeySetupEnvVars() {
 }
 
 /** Tooltip guidance for a control gated by one registry entry. */
+/**
+ * Env-var requirements for a registry entry, as machine values for
+ * presentation layers that localize the guidance sentence themselves
+ * (this module also runs in node-side key-setup builds, which stay English).
+ * @param {string} id Registry entry id.
+ * @returns {string|null} Joined env-var names, or null when nothing is required.
+ */
+export function keySetupRequirementEnvVars(id) {
+  const entry = KEY_SETUP_KEYS.find((candidate) => candidate.id === id);
+  if (!entry || entry.hidden) return null;
+  return entry.envVars.join(' + ');
+}
+
 export function keySetupRequirement(id) {
   const entry = KEY_SETUP_KEYS.find((candidate) => candidate.id === id);
   if (!entry || entry.hidden) return '';

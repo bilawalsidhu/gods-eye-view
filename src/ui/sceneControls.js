@@ -1,4 +1,5 @@
 /** Own Scene panel listeners and presentation through project reads and actions. */
+import { t } from '../i18n/index.js';
 import {
   sceneElements,
   renderSceneOptions,
@@ -57,7 +58,7 @@ export class SceneControls {
       if (!this.destroyed) elements.file.value = '';
     });
     if (!subscribe) {
-      this.updateStatus('Ready');
+      this.updateStatus(t('setup.scenes.statusReady'));
       this.setProgress(0);
       this.setButtons(false);
     }
@@ -123,7 +124,7 @@ export class SceneControls {
     const generation = ++this.actionGeneration;
     const failed = () => {
       if (!this.destroyed && generation === this.actionGeneration)
-        this.updateStatus('Scene action failed');
+        this.updateStatus(t('setup.scenes.status.actionFailed'));
     };
     try {
       const result = this.actions[action](...args);
@@ -160,7 +161,12 @@ export class SceneControls {
     if (this.destroyed) return;
     const scene = this.read().scenes.find((item) => item.id === sceneId);
     const shot = scene?.shots.find((item) => item.id === shotId);
-    if (shot && window.confirm(`Delete shot "${shot.title}"?`))
+    if (
+      shot &&
+      window.confirm(
+        t('setup.scenes.status.deleteShotConfirm', { shot: shot.title }),
+      )
+    )
       this.run('deleteShot', sceneId, shotId);
   }
 
