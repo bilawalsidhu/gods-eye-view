@@ -197,6 +197,7 @@
     "./layers/satellites": "./src/layers/satellites/index.js",
     "./layers/launches": "./src/layers/launches/index.js",
     "./layers/installations": "./src/layers/installations/index.js",
+    "./layers/temperature": "./src/layers/temperature/index.js",
     "./layers/awareness": "./src/layers/awareness/index.js",
     "./layers/traffic": "./src/layers/traffic/index.js",
     "./layers/bikeshare": "./src/layers/bikeshare/index.js",
@@ -315,6 +316,7 @@
     "./view": "./src/view/index.js",
     "./agent/world-packet": "./src/agent/worldPacket.js",
     "./layers/wildlife-sightings": "./src/layers/wildlifeSightings/index.js",
-    "./layers/wildlife-sightings/source": "./src/layers/wildlifeSightings/source.js"
+    "./layers/wildlife-sightings/source": "./src/layers/wildlifeSightings/source.js",
+    "./layers/temperature/source": "./src/layers/temperature/source.js"
   }
 }

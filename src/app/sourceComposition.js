@@ -34,6 +34,10 @@ export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
     ['military-installations'],
     ['getMappedSites', 'searchNearby'],
   ),
+  temperature: contract(
+    ['surface-temperature'],
+    ['resolveLatest', 'resolveYear', 'sample'],
+  ),
   satellites: contract(['satellites'], ['readGroup']),
   launches: contract(['rocket-launches'], ['getLaunches', 'getActiveTle']),
   alpr: contract(['alpr-cameras'], ['fetch']),

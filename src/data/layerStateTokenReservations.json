@@ -29,6 +29,7 @@
   ["shipwrecks", "01"],
   ["ski-pistes", "7"],
   ["street-level", "0"],
+  ["surface-temperature", "00"],
   ["telegeography-submarine-cables", "u"],
   ["traffic", "t"],
   ["transit", "j"],
