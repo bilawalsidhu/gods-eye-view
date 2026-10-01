@@ -2911,8 +2911,27 @@ Measured effect and method recorded in `docs/PERFORMANCE.md`
   trigger consumer holding a 2-day-old `running` row; documented
   workaround applied (restart `gitforge@ci` then `gitforge@runner`,
   ci first). Run `e7b72bad` (lint green at this record's writing) is the
-  validation run for commit `5890329`; its final verdict is recorded in
-  the v0.10.4 release record below.
+  validation run for commit `5890329`.
+- **CI validation under the 2026-10-01 infrastructure storm — final run
+  lineage.** Every red below is infrastructure (host load 78–186 and a
+  SQLite lock storm starved job writes); no test or lint assertion ever
+  failed. `e7b72bad`: security job infra-timeout at its then-600 s
+  budget under load ~100. `a9b09a6b` / `783e19c6`: queued then
+  superseded. `865a3c4f` + duplicate `3412a842`: lint watchdog-reconciled
+  timeouts (npm ci frozen mid-install past the 15 m budget); the
+  duplicate came from a double-delivered deferred-trigger outbox entry.
+  `d82fea68`: lint + security green, then test-node24 hit its 1800 s
+  budget mid-suite under load ~80–100. `c12d3892`: lint 45 m timeout at
+  the 186 load peak. `735a46c6`: lint executed cleanly but was fenced
+  failed by the completion-write/lease race (`durable lease was dead
+  while the job stayed mirrored as assigned`) — a false failure of a
+  proven tree (local battery all-green). **`120465b0` (commit `a3c720e`,
+  a superset of release commit `61ee976`'s tree): succeeded 6/6** —
+  strict lint + audit, Aegis secrets scan, allocation-gated units on
+  Node 24 AND Node 26, coverage, wasm+build+budgets — and validates the
+  tree. v0.10.4 shipped 2026-10-01 (deploy + 8/8 production render
+  verification recorded in the RUNBOOK verification entry of the same
+  date).
 
 ### Next steps (Phase 14 residuals)
 

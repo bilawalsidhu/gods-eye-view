@@ -327,6 +327,36 @@ built against a local dev server; run against the production origin the
 CDP round-trips are slower and the minutes-long interactive session is
 far more exposed to software-GL context loss on a contended box.
 
+### 2026-10-01 verification run (v0.10.4 deploy, production alias)
+
+Deployed from `main` at `a3c720e` — tree-identical to the release commit
+`61ee976` for build outputs (the delta is `.gitforce.yml` CI budgets and
+RUNBOOK docs rows only) — with `npx wrangler pages deploy dist
+--project-name globe --branch main` (deployment `f4472287`). GitForge run
+`120465b0` on that tree **succeeded 6/6** (strict lint + production
+audit, Aegis secrets scan, allocation-gated units on Node 24 AND Node 26,
+coverage, wasm+build+budgets). Local gate battery before the deploy:
+lint clean, full unit suite green including both serialized allocation
+probes, BUILD-GATE / BUNDLE-BUDGETS / AUDIT-GATE PASS
+(`LINT_OK TEST_OK BUILD_OK BUDGETS_OK AUDIT_OK`).
+
+This release's CI took seven runs across a host load storm (78–186) and
+a SQLite lock storm — full lineage in PLAN.md Phase 14; every red was
+infrastructure, zero assertion failures. The new storm-ops gotchas in
+the table below (fence false-failures, journal-first observation,
+never-restart-mid-run) were learned during those runs and are what made
+the deciding run observable.
+
+| Check | Result |
+| --- | --- |
+| `verify-prod-render.mjs` | **PASS, 8/8** — boot, 1600×900 canvas, camera 2500 m over target with tiles loaded, photoreal stream 214/216 → 200, CCTV 200, debug-log 204, regional-brief 200, no console errors |
+| `/api/openzenith/elevation` | 200 — 99 m Austin |
+| `/api/openzenith/reverse-geocode` | 200 (Smith School Road, Austin `display_name`) |
+| `x-gev-openzenith-cache` | present (`MISS` on the cold hit) |
+| `/api/cctv/sources` | 200 (Austin catalog) |
+| `POST /api/realtime/debug-log` | 204 |
+| `/api/celestrak/stations` | upstream fetch failed with no cache — the **documented CF-egress block** (same as every prior verification run), not a regression; the satellite layer degrades client-side as designed |
+
 ## Credentials & environment
 
 All keys are optional except `GOOGLE_MAPS_API_KEY`. See `.env.example` for the
