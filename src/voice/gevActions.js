@@ -39,6 +39,7 @@ import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
+import { getWorldPacket } from '../agent/worldPacket.js';
 
 const ALLOWED_STYLES = new Set([
   'normal',
@@ -2424,25 +2425,6 @@ function runManagedVoiceNavigation(
 }
 
 /** Gathers tracked/selected entities across layer families for read-back. */
-function collectTrackedEntities(dataManager) {
-  const tracked = [];
-  for (const family of TRACKABLE_FAMILIES) {
-    const module = dataManager.layers.get(family.layerId)?.module;
-    if (!module) continue;
-    try {
-      const info =
-        family.kind === 'vessel'
-          ? module.getSelectedInfo?.()
-          : module.getTrackedInfo?.();
-      if (info)
-        tracked.push({ kind: family.kind, layerId: family.layerId, ...info });
-    } catch {
-      // layer not ready
-    }
-  }
-  return tracked;
-}
-
 export async function getBasemapLabelContext(
   viewer,
   service = defaultGeospatial,
@@ -3073,53 +3055,12 @@ function getCurrentViewState(
   dataManager,
   sceneDirector = null,
 ) {
-  const cartographic = Cesium.Cartographic.fromCartesian(
-    viewer.camera.positionWC,
-  );
-  return {
-    ok: true,
-    action: 'get_current_view_state',
-    camera: {
-      latitude: Cesium.Math.toDegrees(cartographic.latitude),
-      longitude: Cesium.Math.toDegrees(cartographic.longitude),
-      heightM: cartographic.height,
-    },
-    style: styleManager.activeStyle || 'normal',
-    context:
-      typeof styleManager.getContextModeState === 'function'
-        ? {
-            ...withContextModeVocabulary(styleManager.getContextModeState()),
-            // The numbers on the operator's Contacts panel, so a window/count
-            // question can be answered from what they are looking at.
-            ...(activeContactsWindow(dataManager)
-              ? { contactsWindow: activeContactsWindow(dataManager) }
-              : {}),
-          }
-        : null,
-    cockpit:
-      typeof styleManager.getCockpitState === 'function'
-        ? styleManager.getCockpitState()
-        : null,
-    controls:
-      typeof styleManager.getControlState === 'function'
-        ? styleManager.getControlState()
-        : null,
-    scenePlayback: sceneDirector?.getPlaybackStatus?.() || null,
-    tracked: collectTrackedEntities(dataManager),
-    layers: dataManager.getAll().map((layer) => ({
-      id: layer.id,
-      name: layer.name,
-      enabled: layer.enabled,
-      count: layer.stats?.count || 0,
-      error: layer.stats?.error || null,
-      feedState: layerSnapshot(layer).feedState,
-      source: layerSnapshot(layer).source,
-      lastUpdate: layerSnapshot(layer).lastUpdate,
-    })),
-    feedProvenance: feedProvenanceEnvelope(
-      layerSnapshots(dataManager.getAll()).filter((layer) => layer.enabled),
-    ),
-  };
+  return getWorldPacket({
+    viewer,
+    styleManager,
+    dataManager,
+    sceneDirector,
+  });
 }
 
 async function getEntityContext(

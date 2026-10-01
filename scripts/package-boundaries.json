@@ -1851,6 +1851,7 @@
       "src/voice/commands.js",
       "src/voice/control.js",
       "src/voice/gevActions.js",
+      "src/agent/worldPacket.js",
       "src/voice/gevRealtime.js",
       "src/voice/layerSummary.js",
       "src/voice/realtimeBackend.js",
@@ -3072,5 +3073,17 @@
       "src/layers/perimeters/source.js"
     ],
     "external": []
+  },
+  "agent-world-packet": {
+    "exports": ["./agent/world-packet"],
+    "modules": [
+      "src/agent/worldPacket.js",
+      "src/data/layerSnapshot.js",
+      "src/data/feedState.js",
+      "src/contextModePolicy.js",
+      "src/loadingFeedback.js",
+      "src/data/installationFeedback.js"
+    ],
+    "external": ["cesium"]
   }
 }
