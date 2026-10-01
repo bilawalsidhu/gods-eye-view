@@ -1,5 +1,10 @@
 # Changelog
 
+- The first-run Environmental mission enables earthquakes, NASA FIRMS active
+  fires, and keyless NIFC wildfire perimeters. The tile names all three. Saying
+  "environmental mode", "earth watch", or "active events" enables the same
+  three layers. A missing FIRMS key still leaves earthquakes and perimeters on.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a

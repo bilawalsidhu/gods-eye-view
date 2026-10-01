@@ -31,6 +31,7 @@ const FILES = {
   keyboard: path.join(ROOT, 'src', 'ui', 'surfaceKeyboard.js'),
   module: path.join(ROOT, 'src', 'firstRunExperience.js'),
   html: path.join(ROOT, 'index.html'),
+  welcome: path.join(ROOT, 'src', 'ui', 'templates', 'welcome.html'),
   css: path.join(ROOT, 'style.css'),
   voiceInstructions: path.join(ROOT, 'server/providers/openai/instructions.js'),
   voiceTools: path.join(ROOT, 'server/providers/openai/tools.js'),
@@ -240,19 +241,19 @@ const MUTATIONS = [
   {
     defect: 'ENVIRONMENTAL drops the keyless earthquakes that carry it without a key',
     file: 'module',
-    from: "layerIds: Object.freeze(['earthquakes', 'local-firms']),",
+    from: "layerIds: Object.freeze(['earthquakes', 'local-firms', 'fire-perimeters']),",
     to: "layerIds: Object.freeze(['local-firms']),",
   },
   {
     defect: 'FIRMS is dropped again from the tile whose subcopy promises it',
     file: 'module',
-    from: "layerIds: Object.freeze(['earthquakes', 'local-firms']),",
+    from: "layerIds: Object.freeze(['earthquakes', 'local-firms', 'fire-perimeters']),",
     to: "layerIds: Object.freeze(['earthquakes']),",
   },
   {
     defect: 'the tile stops promising the fires it actually turns on',
-    file: 'html',
-    from: '<small>Live earthquakes and active fires, from USGS and NASA</small>',
+    file: 'welcome',
+    from: '<small>Live earthquakes, active fires, and wildfire perimeters, from USGS, NASA, and NIFC</small>',
     to: '<small>Live earthquakes worldwide, straight from USGS</small>',
   },
   {
