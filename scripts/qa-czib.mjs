@@ -11,8 +11,10 @@
  *         bulletin, draws every one of them from the bundled boundaries, and
  *         the legend counts sum to the bulletin count.
  *   (ii)  FIXTURE — Mali (whole), Pakistan (part), a five-country Gulf
- *         bulletin, an unknown country, a withdrawn bulletin and an invalid
- *         row: the invalid row is dropped, the withdrawn one is not drawn,
+ *         bulletin, an unknown country, a withdrawn bulletin, one EASA still
+ *         marks active but whose published end date has passed, and an
+ *         invalid row: the invalid row is dropped, the withdrawn and expired
+ *         ones are neither drawn nor counted (the expired one is named),
  *         the partial one is dashed, and the unknown country is named as
  *         not drawn.
  *   (iii) SELECT — a real mouse click inside Mali selects its bulletin and
@@ -234,7 +236,7 @@ const bulletin = (id, number, title, countries, extra = {}) => ({
   ...extra,
 });
 
-/** Four active bulletins, one withdrawn, one invalid. */
+/** Four active bulletins, one withdrawn, one expired, one invalid. */
 function fixturePayload() {
   return {
     fetchedAt: Date.now(),
@@ -256,6 +258,11 @@ function fixturePayload() {
       bulletin('11', 'CZIB-2099-01', 'Airspace of Atlantis', ['Atlantis']),
       bulletin('10', 'CZIB-2016-01R4', 'Airspace of Kenya', ['Kenya'], {
         status: 'withdrawn',
+      }),
+      // Still "active" in the export, but its end date is long past.
+      bulletin('9', 'CZIB-2019-05', 'Airspace of Libya', ['Libya'], {
+        validUntilMs: Date.UTC(2020, 0, 31),
+        validity: '31/01/2020, unless reviewed earlier.',
       }),
       // Invalid id: dropped by the client sanitizer.
       bulletin('x', 'CZIB-2026-99', 'Airspace of Nowhere', ['Chad']),
@@ -376,7 +383,7 @@ async function main() {
     const dom = await rowDom(page);
     const drawn = await drawnState(page);
     record(
-      'FIXTURE: 4 active bulletins listed; the withdrawn and invalid ones are not',
+      'FIXTURE: 4 active bulletins listed; the withdrawn, expired and invalid ones are not',
       f.stats.count === 4 && dom.leads.length === 4,
       `bulletins=${f.stats.count} leads=${JSON.stringify(dom.leads)}`,
     );
@@ -387,7 +394,8 @@ async function main() {
         drawn.byBulletin['13']?.parts >= 1 &&
         drawn.byBulletin['12']?.parts >= 5 &&
         !drawn.byBulletin['11'] &&
-        !drawn.byBulletin['10'],
+        !drawn.byBulletin['10'] &&
+        !drawn.byBulletin['9'],
       JSON.stringify(drawn.byBulletin),
     );
     record(
@@ -411,6 +419,12 @@ async function main() {
       'FIXTURE: the undrawn country and the airspace caveat are in the row',
       /Not drawn: Atlantis/.test(dom.info) &&
         /not the exact airspace/.test(dom.info),
+      dom.info,
+    );
+    record(
+      'FIXTURE: the expired bulletin is named as not shown, not counted',
+      /^4 active bulletins/.test(dom.info) &&
+        /Not shown: 1 bulletin past its published end date/.test(dom.info),
       dom.info,
     );
     await shoot(page, 'fixture');

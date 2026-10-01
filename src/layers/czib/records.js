@@ -196,6 +196,41 @@ export function normalizeCzibExport(payload, links = new Map()) {
   return [...byId.values()].sort(compareCzibBulletins);
 }
 
+const DAY_MS = 86_400_000;
+
+/**
+ * The instant a bulletin stops being in force, or null when EASA published
+ * no end date. `validUntilMs` is UTC midnight of the last valid day, and the
+ * day itself is valid, so the bulletin lapses at the following UTC midnight.
+ * "Unless reviewed earlier" cannot be known locally; the published date is
+ * only a safe upper bound.
+ */
+export function czibValidThroughMs(bulletin) {
+  return Number.isFinite(bulletin?.validUntilMs)
+    ? bulletin.validUntilMs + DAY_MS
+    : null;
+}
+
+/**
+ * The status a bulletin has at `nowMs`, the one rule the display and its
+ * counts share: 'active' (in force, end date in the future), 'unverified'
+ * (EASA marks it active but published no end date: kept, uncertainty
+ * shown), 'expired' (EASA still says active but the published end date has
+ * passed, as a cached copy across the boundary would) or 'withdrawn'.
+ */
+export function czibEffectiveStatus(bulletin, nowMs) {
+  if (bulletin?.status !== 'active') return 'withdrawn';
+  const through = czibValidThroughMs(bulletin);
+  if (through === null) return 'unverified';
+  return Number.isFinite(nowMs) && nowMs >= through ? 'expired' : 'active';
+}
+
+/** Whether a bulletin is drawn and counted as in force at `nowMs`. */
+export const isCzibInForce = (bulletin, nowMs) => {
+  const status = czibEffectiveStatus(bulletin, nowMs);
+  return status === 'active' || status === 'unverified';
+};
+
 const finiteOrNull = (value) => (Number.isFinite(value) ? value : null);
 
 /** A bulletin page URL is kept only below the EASA CZIB list. */

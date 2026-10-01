@@ -21,6 +21,17 @@ export const CZIB_FEED_URL =
   'https://www.easa.europa.eu/en/domains/air-operations/czibs/feed.xml';
 const MINUTE = 60_000;
 export const CZIB_TTL_MS = 60 * MINUTE;
+/**
+ * The oldest last-good copy served while EASA is unreachable. Bulletins are
+ * revised every few weeks and a new one can appear within a day of a
+ * crisis, so a cached copy hides withdrawals, revisions and new bulletins
+ * more likely the longer it is kept. Three days rides out a long-weekend
+ * outage of the EASA site while keeping that window short against the
+ * revision cycle; past it the route answers 502 rather than present old
+ * safety information as current. (Published end dates are enforced on the
+ * client, per bulletin, whatever the cache age.)
+ */
+export const CZIB_MAX_STALE_MS = 72 * 60 * MINUTE;
 /** Cooldown after a 429 when upstream sends no usable Retry-After. */
 const COOLDOWN_MS = 5 * MINUTE;
 /** Bounds for an upstream-supplied Retry-After. */
@@ -117,7 +128,8 @@ export function czibProxy({
       });
       return { value: await promise, stale: false };
     } catch (error) {
-      if (previous) return { value: previous, stale: true };
+      if (previous && now() - previous.fetchedAt <= CZIB_MAX_STALE_MS)
+        return { value: previous, stale: true };
       throw error;
     }
   }
@@ -147,7 +159,9 @@ export function czibProxy({
           fetchedAt: value.fetchedAt,
           bulletins: value.bulletins,
           ...(value.linksMissing ? { linksMissing: true } : {}),
-          ...(stale ? { stale: true } : {}),
+          ...(stale
+            ? { stale: true, staleAgeMs: Math.max(0, now() - value.fetchedAt) }
+            : {}),
         },
         stale,
       );

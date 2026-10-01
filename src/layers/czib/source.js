@@ -25,6 +25,13 @@ export function createCzibSource({
           ? payload.fetchedAt
           : null,
         stale: payload.stale === true,
+        // How old a stale copy was when served, by the proxy's own clock.
+        staleAgeMs:
+          payload.stale === true &&
+          Number.isFinite(payload.staleAgeMs) &&
+          payload.staleAgeMs >= 0
+            ? payload.staleAgeMs
+            : null,
       };
     },
   };

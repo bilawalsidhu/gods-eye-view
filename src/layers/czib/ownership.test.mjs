@@ -438,21 +438,140 @@ test('choosing a list row selects the bulletin, moves the camera and offers the 
   assert.equal(selected.polyline.width.getValue(), 1.5);
 });
 
-test('a bulletin without a page links to the EASA list; an expired one says so', async () => {
-  const lapsed = bulletin('7', 'Airspace of Mali', ['Mali'], {
+test('a bulletin without a page links to the EASA list', async () => {
+  const unnumbered = bulletin('7', 'Airspace of Mali', ['Mali'], {
     url: null,
     number: '',
-    validUntilMs: NOW - 2 * DAY,
   });
-  const { layer, opened } = harness(snapshot([lapsed]));
+  const { layer, opened } = harness(snapshot([unnumbered]));
   layer.enable();
   await layer.update();
   layer.setParams({ bulletinId: '7' });
   const controls = layer.getRowControls();
   assert.equal(controls.chips[0].label, 'EASA CZIBs ↗');
-  assert.match(controls.info, /Validity ended 27 Sep 2026; check EASA/);
+  assert.match(controls.info, /Valid until 29 Oct 2026, unless reviewed/);
   layer.setParams({ bulletin: true });
   assert.deepEqual(opened, [CZIB_LIST_URL]);
+});
+
+test('a bulletin EASA still marks active is not drawn or counted past its end date', async () => {
+  const lapsed = bulletin('7', 'Airspace of Kenya', ['Kenya'], {
+    validUntilMs: NOW - 2 * DAY,
+  });
+  const { layer, entities } = harness(snapshot([MALI, lapsed]));
+  layer.enable();
+  await layer.update();
+  assert.equal(layer.getStats().count, 1);
+  assert.deepEqual(
+    layer.getRowControls().list.items.map(({ id }) => id),
+    ['1'],
+  );
+  assert.equal(entities().length, 1);
+  assert.match(
+    layer.getRowControls().info,
+    /^1 active bulletin · 1 country named · Not shown: 1 bulletin past its published end date; check EASA for a revision/,
+  );
+  layer.setParams({ bulletinId: '7' });
+  assert.equal(layer.getDiagnostics().selectedId, null, 'not selectable');
+});
+
+test('a cached copy that crosses midnight past the end date stops being drawn', async () => {
+  // Fake clock: the bulletin's last valid day is today, UTC.
+  let clock = Date.UTC(2026, 8, 29, 22);
+  let fail = false;
+  const lastDay = bulletin('8', 'Airspace of Mali', ['Mali'], {
+    validUntilMs: Date.UTC(2026, 8, 29),
+  });
+  const { layer, entities, labels } = harness(
+    async () => {
+      // EASA is down, as in an outage across the validity boundary.
+      if (fail) throw new Error('EASA CZIB HTTP 502');
+      return {
+        bulletins: [lastDay, GULF],
+        linksMissing: false,
+        stale: false,
+      };
+    },
+    { now: () => clock },
+  );
+  layer.enable();
+  await layer.update();
+  layer.setParams({ bulletinId: '8' });
+  assert.equal(layer.getStats().count, 2);
+  assert.equal(entities().length, 4);
+  assert.match(layer.getRowControls().info, /Valid until 29 Sep 2026/);
+
+  fail = true;
+  clock = Date.UTC(2026, 8, 29, 23, 59);
+  assert.equal(await layer.update(), false);
+  assert.equal(layer.getStats().count, 2, 'still valid until midnight');
+
+  clock = Date.UTC(2026, 8, 30, 0, 1);
+  assert.equal(await layer.update(), false);
+  assert.equal(layer.getStats().count, 1);
+  assert.deepEqual(
+    layer.getRowControls().list.items.map(({ id }) => id),
+    ['2'],
+  );
+  assert.equal(entities().length, 3, 'only the Gulf countries stay drawn');
+  assert.deepEqual(
+    labels().map(([id]) => id),
+    ['2'],
+  );
+  assert.equal(layer.getDiagnostics().selectedId, null, 'selection cleared');
+  assert.deepEqual(
+    layer.getRowControls().legend.map(({ count }) => count),
+    [1, 0],
+  );
+  assert.match(
+    layer.getRowControls().info,
+    /^1 active bulletin · 2 countries named · Not shown: 1 bulletin past its published end date/,
+  );
+});
+
+test('a cached copy names its age', async () => {
+  let clock = NOW;
+  const { layer } = harness(
+    snapshot([MALI], { stale: true, staleAgeMs: 5 * 3_600_000 }),
+    { now: () => clock },
+  );
+  layer.enable();
+  await layer.update();
+  assert.match(
+    layer.getRowControls().info,
+    /Showing a cached copy from 5 h ago/,
+  );
+  clock = NOW + 2 * DAY;
+  assert.match(
+    layer.getRowControls().info,
+    /Showing a cached copy from 2 days ago/,
+  );
+});
+
+test('a bulletin without a published end date is kept and flagged', async () => {
+  const open = bulletin('9', 'Airspace of Mali', ['Mali'], {
+    validUntilMs: null,
+    validity: '',
+  });
+  const { layer, entities } = harness(snapshot([open, GULF]));
+  layer.enable();
+  await layer.update();
+  assert.equal(layer.getStats().count, 2);
+  assert.equal(entities().length, 4);
+  const items = layer.getRowControls().list.items;
+  assert.equal(
+    items.find(({ id }) => id === '9').text,
+    'Mali · 2026-09 · no end date',
+  );
+  assert.match(
+    layer.getRowControls().info,
+    /1 bulletin with no published end date/,
+  );
+  layer.setParams({ bulletinId: '9' });
+  assert.match(
+    layer.getRowControls().info,
+    /No end date published; check EASA that it still applies/,
+  );
 });
 
 test('focus honours reduced motion and does nothing without the shell', async () => {

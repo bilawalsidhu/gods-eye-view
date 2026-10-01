@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   CZIB_EXPORT_URL,
   CZIB_FEED_URL,
+  CZIB_MAX_STALE_MS,
   CZIB_TTL_MS,
   czibProxy,
   czibRetryCooldownMs,
@@ -161,7 +162,40 @@ test('an export failure serves the last good copy as stale, else 502', async () 
   assert.equal(res.headers['X-Data-Stale'], 'true');
   assert.equal(res.body.stale, true);
   assert.equal(res.body.fetchedAt, 0);
+  assert.equal(res.body.staleAgeMs, CZIB_TTL_MS + 1);
   assert.equal(res.body.bulletins.length, 2);
+});
+
+test('the last good copy is served for at most the maximum stale age', async () => {
+  let clock = 0;
+  let fail = false;
+  const request = install({
+    now: () => clock,
+    fetchImpl: upstream(null, () => {
+      if (fail) throw new Error('network');
+      return null;
+    }),
+  });
+  assert.equal(CZIB_MAX_STALE_MS, 72 * 3_600_000);
+  const fresh = await request();
+  assert.equal(fresh.body.stale, undefined);
+  assert.equal(fresh.body.staleAgeMs, undefined);
+  fail = true;
+  clock = CZIB_MAX_STALE_MS;
+  const edge = await request();
+  assert.equal(edge.status, 200);
+  assert.equal(edge.body.staleAgeMs, CZIB_MAX_STALE_MS);
+  clock = CZIB_MAX_STALE_MS + 1;
+  const old = await request();
+  assert.equal(old.status, 502);
+  assert.deepEqual(old.body, { error: 'czib_unavailable' });
+  assert.equal(old.headers['X-Data-Stale'], undefined);
+  // EASA back: a fresh copy is served again.
+  fail = false;
+  const back = await request();
+  assert.equal(back.status, 200);
+  assert.equal(back.body.fetchedAt, CZIB_MAX_STALE_MS + 1);
+  assert.equal(back.body.stale, undefined);
 });
 
 test('an upstream 429 starts a cooldown with no further upstream calls', async () => {

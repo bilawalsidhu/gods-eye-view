@@ -3,8 +3,11 @@ import test from 'node:test';
 import {
   CZIB_LIST_URL,
   czibAreaName,
+  czibEffectiveStatus,
   czibLink,
+  czibValidThroughMs,
   decodeEntities,
+  isCzibInForce,
   isPartialArea,
   normalizeCzibEntry,
   normalizeCzibExport,
@@ -259,4 +262,33 @@ test('records crossing the proxy are re-validated field by field', () => {
     ['20585'],
   );
   assert.equal(sanitizeCzibBulletins('no'), null);
+});
+
+test('the effective status applies the published end date as a hard expiry', () => {
+  const lastDay = Date.UTC(2026, 8, 30);
+  const record = { status: 'active', validUntilMs: lastDay };
+  // The last valid day is valid through its end, UTC.
+  assert.equal(czibValidThroughMs(record), Date.UTC(2026, 9, 1));
+  assert.equal(czibEffectiveStatus(record, lastDay - 1), 'active');
+  assert.equal(
+    czibEffectiveStatus(record, Date.UTC(2026, 8, 30, 23, 59)),
+    'active',
+  );
+  assert.equal(czibEffectiveStatus(record, Date.UTC(2026, 9, 1)), 'expired');
+  assert.equal(isCzibInForce(record, Date.UTC(2026, 8, 30, 12)), true);
+  assert.equal(isCzibInForce(record, Date.UTC(2026, 9, 1)), false);
+  // No published end date: kept, with the uncertainty named.
+  const open = { status: 'active', validUntilMs: null };
+  assert.equal(czibValidThroughMs(open), null);
+  assert.equal(czibEffectiveStatus(open, Date.UTC(2099, 0, 1)), 'unverified');
+  assert.equal(isCzibInForce(open, Date.UTC(2099, 0, 1)), true);
+  // Withdrawn stays withdrawn, whatever its dates.
+  for (const withdrawn of [
+    { status: 'withdrawn', validUntilMs: Date.UTC(2099, 0, 1) },
+    { status: 'withdrawn', validUntilMs: null },
+    null,
+  ]) {
+    assert.equal(czibEffectiveStatus(withdrawn, lastDay), 'withdrawn');
+    assert.equal(isCzibInForce(withdrawn, lastDay), false);
+  }
 });

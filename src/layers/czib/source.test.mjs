@@ -28,6 +28,7 @@ test('the source reads the same-origin proxy and passes its flags through', asyn
         bulletins: [bulletin, { id: 'bad' }],
         linksMissing: true,
         stale: true,
+        staleAgeMs: 7_200_000,
       });
     },
   });
@@ -40,6 +41,7 @@ test('the source reads the same-origin proxy and passes its flags through', asyn
     linksMissing: true,
     fetchedAt: 5,
     stale: true,
+    staleAgeMs: 7_200_000,
   });
 });
 
@@ -49,8 +51,25 @@ test('the source rejects failed, malformed and aborted reads', async () => {
     await createCzibSource({
       fetchImpl: reply({ bulletins: [], fetchedAt: 'x' }),
     }).getSnapshot(),
-    { bulletins: [], linksMissing: false, fetchedAt: null, stale: false },
+    {
+      bulletins: [],
+      linksMissing: false,
+      fetchedAt: null,
+      stale: false,
+      staleAgeMs: null,
+    },
   );
+  // An age only means something on a stale copy, and only when sane.
+  for (const body of [
+    { bulletins: [], stale: false, staleAgeMs: 5 },
+    { bulletins: [], stale: true, staleAgeMs: -1 },
+    { bulletins: [], stale: true, staleAgeMs: 'old' },
+  ])
+    assert.equal(
+      (await createCzibSource({ fetchImpl: reply(body) }).getSnapshot())
+        .staleAgeMs,
+      null,
+    );
   await assert.rejects(
     createCzibSource({
       fetchImpl: reply({ error: 'x' }, { status: 502 }),

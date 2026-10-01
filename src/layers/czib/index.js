@@ -1,5 +1,9 @@
 import * as Cesium from 'cesium';
-import { CZIB_LIST_URL } from './records.js';
+import {
+  CZIB_LIST_URL,
+  czibEffectiveStatus,
+  isCzibInForce,
+} from './records.js';
 export * from './records.js';
 export { createCzibSource } from './source.js';
 
@@ -12,7 +16,7 @@ const FILL_ALPHA = Object.freeze({ whole: 0.2, part: 0.03, selected: 0.36 });
 const STROKE_WIDTH = Object.freeze({ whole: 1.5, part: 2.5, selected: 3 });
 const LABEL_LIMIT = 32;
 const LABEL_MAX_CHARS = 40;
-const DAY_MS = 86_400_000;
+const HOUR_MS = 3_600_000;
 const MONTHS = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
 const DISCLAIMER =
   'EASA Conflict Zone Information Bulletins give information and recommendations to air operators about risks to civil flights. The shading marks the countries a bulletin names, not the exact airspace it covers; read the bulletin and the current NOTAMs before relying on it.';
@@ -23,6 +27,13 @@ const day = (ms) => {
   return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
 };
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+/** "40 min", "5 h" or "3 days": how old a cached copy is. */
+const age = (ms) =>
+  ms < HOUR_MS
+    ? `${Math.max(1, Math.round(ms / 60_000))} min`
+    : ms < 48 * HOUR_MS
+      ? `${Math.round(ms / HOUR_MS)} h`
+      : `${Math.round(ms / (24 * HOUR_MS))} days`;
 const clip = (text, max) =>
   text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 
@@ -66,8 +77,18 @@ export function createCzibLayer({
   let _dataSource = null;
   let _request = null;
   let _enabled = false;
-  /** Active bulletins with their resolved countries, newest revision first. */
+  /** Bulletins EASA marked active in the last good snapshot. */
+  let _bulletins = [];
+  /**
+   * Bulletins in force now (see `czibEffectiveStatus`) with their resolved
+   * countries, newest revision first. Re-derived from `_bulletins` on every
+   * update tick, failed or not, so a cached copy that outlives a published
+   * end date stops being drawn and counted.
+   */
   let _zones = [];
+  /** Marked active but past their published end date, so not drawn. */
+  let _expired = 0;
+  let _fetchedAt = null;
   let _linksMissing = false;
   let _outlinesFailed = false;
   let _signature = null;
@@ -321,8 +342,6 @@ export function createCzibLayer({
   }
 
   function detailLines({ bulletin, parts, unresolved }) {
-    const expired =
-      bulletin.validUntilMs !== null && now() >= bulletin.validUntilMs + DAY_MS;
     return [
       bulletin.title,
       bulletin.number,
@@ -332,11 +351,10 @@ export function createCzibLayer({
       bulletin.partial
         ? 'Covers part of the country; the bulletin defines the area'
         : '',
-      bulletin.validUntilMs === null
-        ? ''
-        : expired
-          ? `Validity ended ${day(bulletin.validUntilMs)}; check EASA for a revision`
-          : `Valid until ${day(bulletin.validUntilMs)}${/unless reviewed earlier/i.test(bulletin.validity) ? ', unless reviewed earlier' : ''}`,
+      // Expired bulletins are never zones, so only these two cases remain.
+      czibEffectiveStatus(bulletin, now()) === 'unverified'
+        ? 'No end date published; check EASA that it still applies'
+        : `Valid until ${day(bulletin.validUntilMs)}${/unless reviewed earlier/i.test(bulletin.validity) ? ', unless reviewed earlier' : ''}`,
       Number.isFinite(bulletin.revisedMs)
         ? `Revised ${day(bulletin.revisedMs)}`
         : '',
@@ -350,6 +368,9 @@ export function createCzibLayer({
   function summaryLines() {
     const named = new Set(_zones.flatMap(({ bulletin }) => bulletin.countries));
     const unresolved = [...new Set(_zones.flatMap((zone) => zone.unresolved))];
+    const unverified = _zones.filter(
+      ({ bulletin }) => czibEffectiveStatus(bulletin, now()) === 'unverified',
+    ).length;
     return [
       _zones.length
         ? `${plural(_zones.length, 'active bulletin')} · ${plural(named.size, 'country')} named`.replace(
@@ -366,11 +387,35 @@ export function createCzibLayer({
         : unresolved.length
           ? `Not drawn: ${unresolved.join(', ')}`
           : '',
+      unverified
+        ? `${plural(unverified, 'bulletin')} with no published end date`
+        : '',
+      _expired
+        ? `Not shown: ${plural(_expired, 'bulletin')} past ${_expired === 1 ? 'its' : 'their'} published end date; check EASA for a revision`
+        : '',
       _linksMissing ? 'Bulletin numbers unavailable this refresh' : '',
-      _stale ? 'Showing a cached copy' : '',
+      _stale
+        ? _fetchedAt !== null && now() >= _fetchedAt
+          ? `Showing a cached copy from ${age(now() - _fetchedAt)} ago`
+          : 'Showing a cached copy'
+        : '',
       _lastError && _zones.length ? `Last refresh failed: ${_lastError}` : '',
       CAVEAT,
     ].filter(Boolean);
+  }
+
+  /**
+   * Re-derive the drawn zones from the kept bulletins at the current clock,
+   * the single place the hard validity expiry is applied.
+   */
+  function reconcile() {
+    const nowMs = now();
+    const inForce = _bulletins.filter((entry) => isCzibInForce(entry, nowMs));
+    _expired = _bulletins.length - inForce.length;
+    _zones = inForce.map(zoneOf);
+    // Rebuild the polygons before a selection change republishes labels.
+    render();
+    if (_selectedId && !selected()) select(null);
   }
 
   const layer = {
@@ -434,15 +479,23 @@ export function createCzibLayer({
         const active = snapshot.bulletins.filter(
           (entry) => entry.status === 'active',
         );
-        const outlinesFailed = await resolveAll(active, request.signal);
+        // Expired bulletins are never drawn, so their outlines are not needed.
+        const outlinesFailed = await resolveAll(
+          active.filter((entry) => isCzibInForce(entry, now())),
+          request.signal,
+        );
         if (!current()) return false;
-        _zones = active.map(zoneOf);
+        _bulletins = active;
         _outlinesFailed = outlinesFailed;
         _linksMissing = snapshot.linksMissing === true;
-        // Rebuild the polygons before a selection change republishes labels.
-        render();
-        if (_selectedId && !selected()) select(null);
+        reconcile();
         _stale = snapshot.stale === true;
+        // Prefer the proxy's age of a cached copy: it carries no clock skew.
+        _fetchedAt = Number.isFinite(snapshot.staleAgeMs)
+          ? now() - snapshot.staleAgeMs
+          : Number.isFinite(snapshot.fetchedAt)
+            ? snapshot.fetchedAt
+            : null;
         _lastUpdate = now();
         _lastError = null;
         return true;
@@ -450,6 +503,8 @@ export function createCzibLayer({
         if (!current()) return false;
         console.warn('[Data:EASA CZIB] Fetch error:', e);
         _lastError = e?.message || 'EASA bulletins unavailable';
+        // The kept copy still ages: drop what lapsed since it was fetched.
+        reconcile();
         return false;
       } finally {
         if (_request === request) _request = null;
@@ -541,6 +596,9 @@ export function createCzibLayer({
               bulletin.countries.length > 1
                 ? `${bulletin.countries.length} countries`
                 : '',
+              czibEffectiveStatus(bulletin, now()) === 'unverified'
+                ? 'no end date'
+                : '',
             ]
               .filter(Boolean)
               .join(' · '),
@@ -585,7 +643,10 @@ export function createCzibLayer({
 
     destroy(viewer = _viewer) {
       layer.disable();
+      _bulletins = [];
       _zones = [];
+      _expired = 0;
+      _fetchedAt = null;
       _signature = null;
       _entityZones.clear();
       _drawn.clear();
