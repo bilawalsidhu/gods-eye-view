@@ -1,3 +1,4 @@
+import { queueObservation } from '../common/observations.js';
 import { isRecognizedAisEnvelope } from '../../../src/data/aisStreamAdapter.js';
 export const AISSTREAM_CACHE_MAX = 50000;
 export const AISSTREAM_STALE_MS = 30 * 60 * 1000;
@@ -82,6 +83,24 @@ export function ingestAisStreamEnvelope(envelope) {
     // trail spacing and dead reckoning depend on true fix epochs.
     last_position_epoch: aisEpochSeconds(metadata.time_utc ?? metadata.TimeUtc),
     _updatedAt: Date.now(),
+  });
+
+  queueObservation({
+    domain: 'sea',
+    id: mmsi,
+    t: aisEpochSeconds(metadata.time_utc ?? metadata.TimeUtc) * 1000,
+    lat,
+    lon,
+    alt: null,
+    speed: normalizedSpeedOverGround(message.Sog ?? message.SOG),
+    course: normalizedCourseOverGround(message.Cog ?? message.COG),
+    label: vesselNameFromAis(metadata, message, staticData) || null,
+    squawk: null,
+    onGround: null,
+    meta: {
+      imo: stringValue(message.ImoNumber ?? message.IMO ?? staticData.imo),
+      type: vesselTypeFromAis(message, staticData),
+    },
   });
 
   appendAisTrackSample(

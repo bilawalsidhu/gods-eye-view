@@ -1,3 +1,4 @@
+import { publishOpenSkyBody } from '../common/observations.js';
 import { normalizeAdsbLolPointResponse } from '../../../src/data/adsbLolFallback.js';
 import {
   coalesceProxyRequest,
@@ -281,6 +282,7 @@ async function fetchAdsbLolPointFallback(req) {
         while (_adsbLolPointCache.size > ADSBLOL_POINT_CACHE_MAX) {
           _adsbLolPointCache.delete(_adsbLolPointCache.keys().next().value);
         }
+        publishOpenSkyBody(record.body);
         return record;
       } finally {
         clearTimeout(timeoutId);
@@ -633,6 +635,7 @@ export function openSkyProxy() {
           );
           _openskyTtlMs = openskyAdaptiveTtlMs(remaining);
           _openskyCooldownUntil = 0;
+          publishOpenSkyBody(body);
         }
 
         res.writeHead(
