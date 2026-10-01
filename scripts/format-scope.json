@@ -770,6 +770,7 @@
   "src/layers/cctv/videoPlayback.test.mjs",
   "src/ui/cctvVideo.test.mjs",
   "src/ui/styles/weather.css",
+  "src/ui/styles/temperature.css",
   "src/layers/weather/index.js",
   "src/layers/weather/clock.js",
   "src/layers/weather/clock.test.mjs",

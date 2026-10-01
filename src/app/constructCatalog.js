@@ -16,6 +16,7 @@ import { createApplicationDirections } from './layers/directions.js';
 import { createApplicationRecentImagery } from './layers/recentImagery.js';
 import { createApplicationTransit } from './layers/transit.js';
 import { createApplicationInstallations } from './layers/militaryInstallations.js';
+import { createApplicationTemperature } from './layers/temperature.js';
 import { createApplicationSatellites } from './layers/satellites.js';
 import { createApplicationLaunches } from './layers/rocketLaunches.js';
 import { createApplicationAlpr } from './layers/alprCameras.js';
@@ -45,6 +46,7 @@ const SOURCE_METHODS = Object.freeze({
   ],
   bikeshare: ['getStations'],
   installations: ['getMappedSites', 'searchNearby'],
+  temperature: ['resolveLatest', 'resolveYear', 'sample'],
   satellites: ['readGroup'],
   launches: ['getLaunches', 'getActiveTle'],
   alpr: ['fetch'],
@@ -159,6 +161,7 @@ export function createApplicationCatalog({
         createApplicationRecentImagery(),
         vessels,
         installations,
+        createApplicationTemperature({ source: sources.temperature }),
         createApplicationAwareness({
           flights,
           military,

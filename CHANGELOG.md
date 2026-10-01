@@ -1,5 +1,22 @@
 # Changelog
 
+- Add a keyless Surface Temperature layer from NASA GIBS: MODIS Terra monthly
+  land-surface-temperature means played back a year at a time. Enabling it plays
+  the newest year; all of that year's months load at once and crossfade
+  continuously, each holding before it blends into the next, with the overlay's
+  total opacity kept constant through the blend. An on-map panel names the
+  month, carries the one play/pause control, and has a year scale from 2000 and
+  a month scale with a moving playhead: a year loads underneath the one on
+  screen and keeps the month, and a month glides to its frame. Unpublished
+  months drop out of a year instead of playing blank. The panel also carries
+  NASA's colour scale as one gradient bar, where a clicked reading shows as a
+  marker in its own colour that slides as the months change.
+
+- Read the surface temperature at a clicked point. The click samples the
+  published tile pixel and inverts NASA's own colour map, so the readout is the
+  product's value range rather than an estimate, with the quantisation, pixel
+  size and month stated. A reading stays pinned and re-reads each month.
+  Cloud, water and unretrieved pixels report no value instead of a temperature.
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a

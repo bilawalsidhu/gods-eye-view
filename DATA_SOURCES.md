@@ -38,6 +38,7 @@ How to read this:
 | **Overture Maps Foundation** | Military area names pack | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) | Overture Maps Foundation |
 | **TomTom Traffic API** (flow vector tiles)                            | Traffic roads and live congestion (optional, BYOK)                                                                     | [TomTom for Developers terms](https://developer.tomtom.com) (proprietary, your own key; free tier currently 200K tile requests/month — see [current pricing](https://docs.tomtom.com/pricing/))                                                                                                                                                       | "Traffic flow data © TomTom" — registered when live mode activates                                                                          |
 | **Photon** (komoot)                                                   | Keyless place search — the fallback when no Google Maps key is configured, or when Google declines the Geocoding request            | Service: free public instance, [fair use](https://photon.komoot.io) (no bulk/heavy use); underlying data: **ODbL 1.0**                                                                                                                                                                                                                                | "Photon (komoot)"                                                                                          |
+| **NASA GIBS** (Global Imagery Browse Services)                        | Surface-temperature playback: MODIS Terra land-surface temperature, monthly means | U.S. public domain / open access; no key, no registration. [GIBS citation guidance](https://nasa-gibs.github.io/gibs-api-docs/) | "NASA EOSDIS Global Imagery Browse Services (GIBS)" — carried on the imagery layer credit |
 | **Open-Meteo**                                                        | Current weather in the cockpit Local Info page and cockpit-local dynamic atmospheric effects                                        | [CC BY 4.0 data licence and adjacent-link attribution requirement](https://open-meteo.com/en/licence)                                                                                                                                                                                                                                                 | Linked "Weather data by Open-Meteo.com" beside the displayed local data                                                                     |
 | **Google News RSS**                                                   | Primary locality-matched headlines in the cockpit Regional News page                                                                | [Google News Terms of Service](https://www.google.com/intl/en_us/terms_google_news.html) restrict use to personal, noncommercial use; linked articles remain third-party publisher content and retain publisher terms                                                                                                                                 | "Google News RSS" plus each article's linked publisher/domain                                                                               |
 | **GDELT Project DOC 2.0**                                             | Fail-soft fallback for location-matched cockpit headlines                                                                           | [GDELT Terms of Use](https://www.gdeltproject.org/about.html#termsofuse): unrestricted academic/commercial/governmental dataset use, with citation and link required; linked articles retain publisher terms                                                                                                                                          | "GDELT Project" plus each article's linked publisher/domain                                                                                 |
@@ -158,6 +159,30 @@ Suomi-NPP) and MODIS NRT (Terra + Aqua), clamped to the trailing 24 h, cached 30
 transaction quota. Requires a free `FIRMS_MAP_KEY`
 (https://firms.modaps.eosdis.nasa.gov/api/map_key/); the layer is empty without it.
 The former bundled 2026-05-25 snapshot was removed 2026-07-16.
+
+### NASA GIBS surface temperature
+
+Tiles are fetched live from GIBS at runtime; nothing is stored in this repo.
+These properties are surfaced in the app rather than left to the reader:
+
+- **It is a monthly average, not a current reading.** Frames are
+  `MODIS_Terra_L3_Land_Surface_Temp_Monthly_Day` means, each labelled with its
+  month; the panel names the month on screen. A month fills the swath and cloud
+  gaps a single day leaves. GIBS publishes this product on the Level6 matrix set
+  only, so a pixel is about 2.4 km at the equator, and the readout states it.
+- **It is a clear-sky land retrieval.** Water and persistently cloudy areas
+  carry no value and render transparent; a gap is missing data, not a mild
+  temperature.
+- **The colour ramp is NASA's, baked into the tiles.** The client does not map
+  values to colours, so the scale is the published one rather than one invented
+  here.
+- **Click-to-read inverts that same published ramp.** Clicking a point reads the
+  pixel from the tile and looks its colour up in NASA's colour map document
+  (`colormaps/v1.0/MODIS_Land_Surface_Temp.xml`, `units="K"`, 252 stops), so the
+  reading is the product's own value range, not an estimate. It is reported as a
+  range because the product quantises into 0.6 K buckets, and the map's
+  catch-all end stops are reported as bounds rather than as ranges starting at
+  0.02 K.
 
 ### Natural Earth physical regions (`natural_earth/`)
 

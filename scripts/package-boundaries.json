@@ -652,6 +652,7 @@
       "src/ui/styles/first-run.css",
       "src/ui/styles/provider-settings.css",
       "src/ui/styles/weather.css",
+      "src/ui/styles/temperature.css",
       "src/ui/styles/recent-imagery.css"
     ],
     "external": []
@@ -1002,6 +1003,30 @@
       "src/data/infrastructureOverlayEntry.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
+  },
+  "temperature-layer": {
+    "exports": ["./layers/temperature"],
+    "modules": [
+      "src/layers/temperature/controls.js",
+      "src/layers/temperature/dates.js",
+      "src/layers/temperature/index.js",
+      "src/layers/temperature/ingestion.js",
+      "src/layers/temperature/lifecycle.js",
+      "src/layers/temperature/playback.js",
+      "src/layers/temperature/filmstrip.js",
+      "src/layers/temperature/indicator.js",
+      "src/layers/temperature/policy.js",
+      "src/layers/temperature/source.js",
+      "src/layers/temperature/state.js",
+      "src/maps/imagery.js",
+      "src/layers/temperature/scale.js",
+      "src/layers/temperature/colormap.js",
+      "src/layers/temperature/sampler.js",
+      "src/layers/temperature/sampling.js",
+      "src/layers/temperature/tiles.js",
+      "src/data/inputOwnership.js"
+    ],
+    "external": ["cesium"]
   },
   "awareness-layer": {
     "exports": ["./layers/awareness"],
@@ -2027,7 +2052,25 @@
       "src/sources/requestDeadline.js",
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
-      "src/data/infrastructureOverlayEntry.js"
+      "src/data/infrastructureOverlayEntry.js",
+      "src/app/layers/temperature.js",
+      "src/layers/temperature/controls.js",
+      "src/layers/temperature/dates.js",
+      "src/layers/temperature/index.js",
+      "src/layers/temperature/ingestion.js",
+      "src/layers/temperature/lifecycle.js",
+      "src/layers/temperature/playback.js",
+      "src/layers/temperature/filmstrip.js",
+      "src/layers/temperature/indicator.js",
+      "src/layers/temperature/policy.js",
+      "src/layers/temperature/source.js",
+      "src/layers/temperature/state.js",
+      "src/layers/temperature/probe.js",
+      "src/layers/temperature/scale.js",
+      "src/layers/temperature/colormap.js",
+      "src/layers/temperature/sampler.js",
+      "src/layers/temperature/sampling.js",
+      "src/layers/temperature/tiles.js"
     ],
     "external": [
       "hls.js",
@@ -2511,7 +2554,26 @@
       "src/sources/requestDeadline.js",
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
-      "src/data/infrastructureOverlayEntry.js"
+      "src/data/infrastructureOverlayEntry.js",
+      "src/app/layers/temperature.js",
+      "src/layers/temperature/controls.js",
+      "src/layers/temperature/dates.js",
+      "src/layers/temperature/index.js",
+      "src/layers/temperature/ingestion.js",
+      "src/layers/temperature/lifecycle.js",
+      "src/layers/temperature/playback.js",
+      "src/layers/temperature/filmstrip.js",
+      "src/layers/temperature/indicator.js",
+      "src/layers/temperature/policy.js",
+      "src/layers/temperature/source.js",
+      "src/layers/temperature/state.js",
+      "src/maps/imagery.js",
+      "src/layers/temperature/probe.js",
+      "src/layers/temperature/scale.js",
+      "src/layers/temperature/colormap.js",
+      "src/layers/temperature/sampler.js",
+      "src/layers/temperature/sampling.js",
+      "src/layers/temperature/tiles.js"
     ],
     "external": [
       "hls.js",
@@ -2809,6 +2871,15 @@
       "src/data/retryableLoad.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
+  },
+  "temperature-source": {
+    "exports": ["./layers/temperature/source"],
+    "modules": [
+      "src/layers/temperature/dates.js",
+      "src/layers/temperature/policy.js",
+      "src/layers/temperature/source.js"
+    ],
+    "external": []
   },
   "launches-source": {
     "exports": ["./layers/launches/source"],
