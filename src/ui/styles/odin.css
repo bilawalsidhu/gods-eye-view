@@ -1,0 +1,468 @@
+/* Odin's Eye skin: Tactical geometry with a green phosphor / steel cyberdeck
+   surface. The globe and its imagery remain under the Normal map preset. */
+:root[data-ui-brand='odin'] {
+  --cyber-red: #37f58a;
+  --cyber-red-bright: #8affb6;
+  --cyber-red-rgb: 55, 245, 138;
+  --cyber-red-bright-rgb: 138, 255, 182;
+  --cyber-active-rgb: 13, 66, 39;
+  --cyber-active-deep-rgb: 8, 45, 27;
+  --cyber-slate: #18251f;
+  --cyber-slate-raised: #293b32;
+  --cyber-grid: rgba(67, 255, 145, 0.075);
+  --cyber-telemetry-fill: rgba(4, 11, 8, 0.98);
+  --cyber-panel-surface: rgba(5, 13, 9, 0.96);
+  --cyber-panel-surface-detail:
+    linear-gradient(180deg, rgba(174, 200, 183, 0.12), transparent 8px),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 27px,
+      rgba(95, 158, 116, 0.035) 28px,
+      transparent 29px
+    ),
+    linear-gradient(135deg, rgba(35, 76, 48, 0.18), transparent 56%);
+  --cyber-panel-shadow:
+    0 0 0 1px rgba(177, 204, 185, 0.42) inset,
+    0 0 0 3px rgba(21, 35, 27, 0.9) inset,
+    3px 0 0 rgba(55, 245, 138, 0.35) inset,
+    0 12px 30px rgba(0, 0, 0, 0.55);
+  --glass-bg: var(--cyber-panel-surface);
+  --glass-border: rgba(151, 179, 159, 0.46);
+  --glass-border-hover: rgba(138, 255, 182, 0.9);
+  --accent: #c9f4d8;
+  --accent-dim: rgba(55, 245, 138, 0.22);
+  --accent-glow: rgba(55, 245, 138, 0.38);
+  --text-primary: #e8f4eb;
+  --text-secondary: rgba(217, 235, 222, 0.86);
+  --text-dim: rgba(172, 198, 179, 0.68);
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+:root[data-ui-brand='odin'] body {
+  background-color: #030705;
+}
+
+/* Decorative hardware sits above the globe and below every live control. */
+:root[data-ui-brand='odin'] #odin-hardware-frame {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  overflow: hidden;
+  background: url('/odin-hardware-frame.svg') center / 100% 100% no-repeat;
+  pointer-events: none;
+  --odin-ring-size: min(130vh, 62vw);
+  --odin-ring-radius: min(65vh, 31vw);
+}
+
+/* Continuous steel bulkheads fill the left and right spaces around the
+   circular viewport. The radial mask gives each panel the ring's exact edge. */
+:root[data-ui-brand='odin'] #odin-hardware-frame::before {
+  position: absolute;
+  inset: 7.3% 0 10.8%;
+  background:
+    radial-gradient(circle at 12px 12px, #d0dad2 0 1px, #455249 1.5px 3px, transparent 3.6px),
+    radial-gradient(circle at calc(100% - 12px) 12px, #d0dad2 0 1px, #455249 1.5px 3px, transparent 3.6px),
+    radial-gradient(circle at 12px calc(100% - 12px), #d0dad2 0 1px, #455249 1.5px 3px, transparent 3.6px),
+    radial-gradient(circle at calc(100% - 12px) calc(100% - 12px), #d0dad2 0 1px, #455249 1.5px 3px, transparent 3.6px),
+    repeating-linear-gradient(0deg, rgba(207, 220, 211, 0.05) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, transparent 0 6px, rgba(224, 235, 227, 0.025) 7px, transparent 8px),
+    linear-gradient(90deg, #566158 0, #252e28 1.2%, #141b16 5%, #202821 50%, #141b16 95%, #252e28 98.8%, #566158 100%),
+    linear-gradient(180deg, #151c17, #323c34 3%, #111713 7%, #202821 52%, #0d120f 95%, #536056 100%);
+  box-shadow:
+    inset 0 1px rgba(235, 244, 237, 0.34),
+    inset 0 -2px rgba(0, 0, 0, 0.94),
+    inset 0 0 0 1px rgba(3, 6, 4, 0.95),
+    inset 0 0 22px rgba(0, 0, 0, 0.54);
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent calc(var(--odin-ring-radius) + 7px), #000 calc(var(--odin-ring-radius) + 11px));
+  mask-image: radial-gradient(circle at 50% 50%, transparent calc(var(--odin-ring-radius) + 7px), #000 calc(var(--odin-ring-radius) + 11px));
+  content: '';
+  pointer-events: none;
+}
+
+:root[data-ui-brand='odin'] .odin-frame-connector {
+  position: absolute;
+  left: 0;
+  width: 100vw;
+  height: 20px;
+  pointer-events: none;
+}
+
+:root[data-ui-brand='odin'] .odin-frame-connector-upper { top: 22%; }
+:root[data-ui-brand='odin'] .odin-frame-connector-mid-upper { top: 40%; }
+:root[data-ui-brand='odin'] .odin-frame-connector-mid-lower { top: 62%; }
+:root[data-ui-brand='odin'] .odin-frame-connector-lower { top: 80%; }
+
+:root[data-ui-brand='odin'] .odin-frame-connector::before,
+:root[data-ui-brand='odin'] .odin-frame-connector::after {
+  position: absolute;
+  top: 0;
+  box-sizing: border-box;
+  height: 100%;
+  border: 1px solid rgba(154, 174, 160, 0.7);
+  background:
+    linear-gradient(180deg, rgba(195, 211, 199, 0.34), transparent 3px 15px, rgba(195, 211, 199, 0.24)),
+    repeating-linear-gradient(180deg, transparent 0 4px, rgba(139, 157, 145, 0.38) 5px 6px, #090e0a 7px 8px),
+    linear-gradient(90deg, #080c09, #29342c 16%, #111713 84%, #4e5b51);
+  box-shadow: 0 0 0 2px rgba(7, 11, 8, 0.96), 0 0 0 4px rgba(110, 127, 115, 0.56), inset 0 1px rgba(235, 243, 237, 0.32), inset 0 -2px #030504;
+  content: '';
+}
+
+:root[data-ui-brand='odin'] .odin-frame-connector::before {
+  left: 0;
+  width: max(var(--left-top, 0px), var(--left-bottom, 0px));
+  clip-path: polygon(0 0, var(--left-top, 0px) 0, var(--left-bottom, 0px) 100%, 0 100%);
+}
+
+:root[data-ui-brand='odin'] .odin-frame-connector::after {
+  right: 0;
+  width: max(var(--right-top, 0px), var(--right-bottom, 0px));
+  clip-path: polygon(calc(100% - var(--right-top, 0px)) 0, 100% 0, 100% 100%, calc(100% - var(--right-bottom, 0px)) 100%);
+}
+
+:root[data-ui-brand='odin'] #odin-hardware-frame::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--odin-ring-size);
+  aspect-ratio: 1;
+  --odin-ring-top-cut: max(0px, calc(var(--odin-ring-radius) - 50vh + 7.3vh));
+  --odin-ring-bottom-cut: max(0px, calc(var(--odin-ring-size) - (50vh + var(--odin-ring-radius) - 11.1vh)));
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent calc(100% - 4px), rgba(0, 0, 0, 0.72) calc(100% - 3px) calc(100% - 1px), transparent 100%),
+    radial-gradient(circle, transparent calc(100% - 10px), rgba(145, 162, 149, 0.72) calc(100% - 9px), rgba(10, 15, 11, 0.96) calc(100% - 7px), rgba(104, 120, 108, 0.9) calc(100% - 5px), rgba(2, 5, 3, 0.98) calc(100% - 3px), transparent calc(100% - 2px)),
+    radial-gradient(circle, transparent calc(100% - 21px), rgba(3, 8, 5, 0.92) calc(100% - 20px) calc(100% - 19px), rgba(144, 165, 149, 0.52) calc(100% - 18px), transparent calc(100% - 16px)),
+    radial-gradient(circle, transparent calc(100% - 27px), rgba(55, 245, 138, 0.42) calc(100% - 26px), transparent calc(100% - 25px));
+  box-shadow:
+    0 0 0 2px rgba(4, 8, 5, 0.92),
+    0 0 0 4px rgba(126, 143, 131, 0.7),
+    0 0 0 8px rgba(9, 14, 10, 0.94),
+    0 0 0 10px rgba(82, 98, 87, 0.52),
+    0 0 22px 9px rgba(0, 0, 0, 0.7),
+    inset 0 0 18px 4px rgba(0, 0, 0, 0.52);
+  clip-path: inset(var(--odin-ring-top-cut) 0 var(--odin-ring-bottom-cut));
+  content: '';
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+:root[data-ui-brand='odin'] #intel-hud {
+  z-index: 96;
+}
+
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-corner {
+  box-sizing: border-box;
+  max-width: min(380px, calc(50vw - 52px));
+  padding: 10px 14px;
+  border: 1px solid rgba(167, 187, 173, 0.74);
+  background:
+    linear-gradient(180deg, rgba(190, 208, 195, 0.2), transparent 7px),
+    repeating-linear-gradient(180deg, transparent 0 5px, rgba(144, 165, 150, 0.035) 6px, transparent 7px),
+    linear-gradient(135deg, rgba(39, 53, 43, 0.98), rgba(5, 9, 6, 0.98) 38%);
+  box-shadow: 0 0 0 2px #070b08, 0 0 0 4px rgba(117, 135, 122, 0.64), 0 1px 0 rgba(240, 247, 242, 0.28) inset, 0 -2px #020403 inset, 0 8px 20px rgba(0, 0, 0, 0.58);
+  overflow-wrap: anywhere;
+}
+
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-content {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-bracket {
+  display: none;
+}
+
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-top-left {
+  top: clamp(96px, 12vh, 136px);
+  left: 34px;
+  width: min(380px, calc(50vw - 52px));
+}
+
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-top-left .hud-summary-wrap,
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-top-left .hud-summary {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-top-left .hud-content {
+  font-size: 11px;
+  line-height: 1.25;
+  letter-spacing: 1.5px;
+}
+
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-top-left .hud-classification {
+  font-size: 10px;
+  line-height: 1.2;
+  letter-spacing: 1.8px;
+}
+
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-top-left .hud-system {
+  font-size: 11px;
+}
+
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-top-left .hud-mode {
+  font-size: 14px;
+  line-height: 1.15;
+}
+
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-top-left .hud-summary-wrap {
+  margin-top: 4px;
+}
+
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-top-right {
+  top: clamp(96px, 12vh, 136px);
+  right: 34px;
+  width: min(380px, calc(50vw - 52px));
+  justify-content: flex-end;
+  text-align: right;
+}
+
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-top-right .hud-content {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-bottom-left {
+  bottom: 2.4vh;
+  left: 30px;
+  width: min(350px, calc(50vw - 52px));
+}
+
+:root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-bottom-right {
+  bottom: 2.4vh;
+  right: 30px;
+  width: min(370px, calc(50vw - 52px));
+  justify-content: flex-end;
+  text-align: right;
+}
+
+/* Keep the live telemetry grid faint so it does not flatten the steelwork. */
+:root[data-ui-brand='odin'] body::after {
+  opacity: 0.09;
+}
+
+/* Brushed metal panel shells, with a fine inner lip and restrained edge
+   highlights. Keep the content layer clear and all controls interactive. */
+:root[data-ui-brand='odin']
+  :is(
+    .data-panel-inner,
+    .cctv-panel-inner,
+    .weather-panel-inner,
+    .recent-imagery-panel-inner,
+    .scene-panel-inner,
+    .global-context-panel-inner,
+    .radio-panel-inner,
+    .cyber-intel-panel-inner,
+    #pp-toggles:not(.collapsed),
+    #pp-toggles.collapsed > .pp-header-row,
+    #command-dock > #location-bar,
+    #command-dock > #control-panel,
+    .dock-tray-toggle,
+    .dock-popover,
+    .hud-telemetry-card,
+    #style-indicator
+  ) {
+  border-color: rgba(155, 174, 160, 0.7);
+  background-image:
+    linear-gradient(155deg, rgba(220, 235, 224, 0.12), transparent 12px),
+    linear-gradient(335deg, rgba(124, 145, 130, 0.1), transparent 16px),
+    repeating-linear-gradient(
+      178deg,
+      rgba(195, 213, 199, 0.025) 0 1px,
+      transparent 1px 4px
+    ),
+    var(--cyber-panel-surface-detail);
+  box-shadow:
+    0 0 0 1px rgba(2, 5, 3, 0.96),
+    0 0 0 2px rgba(143, 160, 147, 0.58),
+    0 0 0 4px rgba(14, 21, 16, 0.96),
+    0 1px 0 rgba(229, 241, 232, 0.26) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.86) inset,
+    0 11px 24px rgba(0, 0, 0, 0.48);
+}
+
+/* The primary panel edges get corner fasteners, drawn as tiny radial metal
+   heads in the shell background rather than extra DOM or click targets. */
+:root[data-ui-brand='odin']
+  :is(
+    .data-panel-inner,
+    .cctv-panel-inner,
+    .weather-panel-inner,
+    .recent-imagery-panel-inner,
+    .scene-panel-inner,
+    .global-context-panel-inner,
+    .radio-panel-inner,
+    .cyber-intel-panel-inner
+  ) {
+  background-image:
+    radial-gradient(circle at 15px 15px, #aab8ad 0 1px, #263229 1.5px 3px, transparent 3.5px),
+    radial-gradient(circle at calc(100% - 15px) 15px, #aab8ad 0 1px, #263229 1.5px 3px, transparent 3.5px),
+    radial-gradient(circle at 15px calc(100% - 15px), #aab8ad 0 1px, #263229 1.5px 3px, transparent 3.5px),
+    radial-gradient(circle at calc(100% - 15px) calc(100% - 15px), #aab8ad 0 1px, #263229 1.5px 3px, transparent 3.5px),
+    linear-gradient(155deg, rgba(220, 235, 224, 0.12), transparent 12px),
+    linear-gradient(335deg, rgba(124, 145, 130, 0.1), transparent 16px),
+    repeating-linear-gradient(178deg, rgba(195, 213, 199, 0.025) 0 1px, transparent 1px 4px),
+    var(--cyber-panel-surface-detail);
+}
+
+:root[data-ui-brand='odin'] .panel-header {
+  text-shadow: 0 1px 0 #000, 0 0 7px rgba(55, 245, 138, 0.2);
+}
+
+:root[data-ui-brand='odin'] :is(.panel-collapse-btn, .dock-tray-toggle, .style-btn) {
+  border-color: rgba(172, 191, 177, 0.76);
+  background-image:
+    linear-gradient(180deg, rgba(227, 240, 230, 0.2), transparent 46%),
+    linear-gradient(145deg, #2b382f, #0b100c 72%);
+  box-shadow:
+    0 1px 0 rgba(236, 247, 238, 0.3) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.9) inset,
+    0 2px 4px rgba(0, 0, 0, 0.7);
+}
+
+/* Narrow screens use a lighter lip so the bezel never crowds the map. */
+@media (max-width: 700px) {
+  :root[data-ui-brand='odin'] #odin-hardware-frame {
+    opacity: 0.74;
+  }
+
+  :root[data-ui-brand='odin'] #odin-hardware-frame::after {
+    width: min(96vw, 132vh);
+  }
+
+  :root[data-ui-brand='odin'] #odin-hardware-frame {
+    --odin-ring-size: min(96vw, 132vh);
+    --odin-ring-radius: min(48vw, 66vh);
+  }
+
+  :root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-corner {
+    max-width: calc(50vw - 36px);
+    padding: 7px 9px;
+    font-size: 9px;
+  }
+
+  :root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-top-left { left: 22px; }
+  :root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-top-right { right: 22px; }
+  :root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-bottom-left { left: 20px; }
+  :root[data-ui-brand='odin'] #intel-hud[data-variant='odin'] .hud-bottom-right { right: 20px; }
+
+  :root[data-ui-brand='odin'] .odin-frame-connector {
+    height: 16px;
+  }
+}
+
+:root[data-ui-brand='odin'] #title-bar h1,
+:root[data-ui-brand='odin'] #style-indicator {
+  color: #dfffea;
+  text-shadow: 0 0 12px rgba(55, 245, 138, 0.38);
+}
+
+:root[data-ui-brand='odin'] #title-bar h1 {
+  letter-spacing: 0.19em;
+}
+
+:root[data-ui-brand='odin'] #title-bar .subtitle,
+:root[data-ui-brand='odin'] #style-indicator .label,
+:root[data-ui-brand='odin'] #style-indicator .indicator-label {
+  color: var(--cyber-red-bright);
+}
+
+:root[data-ui-brand='odin'] #title-bar .title-logo {
+  filter: drop-shadow(0 0 9px rgba(55, 245, 138, 0.42));
+}
+
+/* Fit the top labels inside responsive plates instead of floating them over
+   the oversized decorative header rail. */
+:root[data-ui-brand='odin'] #title-bar {
+  top: 12px;
+  left: 28px;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(430px, calc(100vw - 220px));
+  padding: 5px 13px 7px;
+  border: 1px solid rgba(166, 185, 172, 0.8);
+  background:
+    linear-gradient(180deg, rgba(220, 233, 223, 0.22), transparent 7px),
+    repeating-linear-gradient(180deg, transparent 0 4px, rgba(160, 181, 166, 0.035) 5px, transparent 6px),
+    linear-gradient(145deg, #2d3930, #09100b 24%, #050906 82%, #59645c);
+  box-shadow: 0 0 0 3px #080c09, 0 0 0 5px rgba(122, 140, 127, 0.72), 0 1px rgba(240, 247, 242, 0.4) inset, 0 -2px #020403 inset, 0 5px 12px rgba(0, 0, 0, 0.5);
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+}
+
+:root[data-ui-brand='odin'] #title-bar h1 {
+  gap: 9px;
+  font-size: clamp(17px, 1.32vw, 25px);
+  letter-spacing: clamp(3px, 0.4vw, 7px);
+  line-height: 1.1;
+}
+
+:root[data-ui-brand='odin'] #title-bar .title-logo {
+  width: clamp(34px, 2.7vw, 50px);
+}
+
+:root[data-ui-brand='odin'] #title-bar .subtitle {
+  margin-top: 4px;
+  font-size: 9px;
+  letter-spacing: 3.6px;
+  line-height: 1.1;
+}
+
+:root[data-ui-brand='odin'] #style-indicator {
+  top: 12px;
+  right: 28px;
+  box-sizing: border-box;
+  min-width: 142px;
+  padding: 6px 10px 8px;
+  border: 1px solid rgba(166, 185, 172, 0.8);
+  background:
+    linear-gradient(180deg, rgba(220, 233, 223, 0.22), transparent 7px),
+    repeating-linear-gradient(180deg, transparent 0 4px, rgba(160, 181, 166, 0.035) 5px, transparent 6px),
+    linear-gradient(145deg, #2d3930, #09100b 24%, #050906 82%, #59645c);
+  box-shadow: 0 0 0 3px #080c09, 0 0 0 5px rgba(122, 140, 127, 0.72), 0 1px rgba(240, 247, 242, 0.4) inset, 0 -2px #020403 inset, 0 5px 12px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 700px) {
+  :root[data-ui-brand='odin'] #title-bar {
+    left: 20px;
+    max-width: calc(100vw - 128px);
+    padding: 4px 8px 6px;
+  }
+
+  :root[data-ui-brand='odin'] #style-indicator {
+    display: block;
+    top: 12px;
+    right: 18px;
+    min-width: 105px;
+    padding: 5px 7px 6px;
+  }
+}
+
+:root[data-ui-brand='odin'] .cyber-panel-body {
+  scrollbar-color: rgba(88, 238, 146, 0.58) rgba(5, 13, 9, 0.45);
+}
+
+:root[data-ui-brand='odin'] .cyber-sonar-control {
+  display: none !important;
+}
+
+:root[data-ui-brand='odin'] #intel-hud .hud-content {
+  text-shadow: 0 0 7px rgba(55, 245, 138, 0.28);
+}
+
+:root[data-ui-brand='odin'] #intel-hud .hud-corner,
+:root[data-ui-brand='odin'] #intel-hud .hud-edge {
+  color: #88ffb4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-ui-brand='odin'] *,
+  :root[data-ui-brand='odin'] *::before,
+  :root[data-ui-brand='odin'] *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

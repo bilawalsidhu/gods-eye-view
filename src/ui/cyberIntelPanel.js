@@ -48,6 +48,7 @@ export class CyberIntelPanel {
     this._kevVisibleCount = 25;
     this._kevResultsOpen = false;
     this._shodanResultsOpen = true;
+    this._shodanQueryDraft = '';
     this._otxResultsOpen = false;
     this._lastState = null;
   }
@@ -62,6 +63,13 @@ export class CyberIntelPanel {
       return;
     layer.setThreatIntelListener((state) => this.render(state));
     this._onBodyClick = (event) => {
+      const clearShodan = event.target?.closest?.('[data-shodan-clear]');
+      if (clearShodan) {
+        this._shodanQueryDraft =
+          this.body.querySelector('input[name="query"]')?.value || '';
+        layer.getThreatIntelState().onClearShodanAreaSearch?.();
+        return;
+      }
       if (event.target?.closest?.('[data-kev-more]')) {
         this._kevVisibleCount += 25;
         this.render(this._lastState);
@@ -157,6 +165,7 @@ export class CyberIntelPanel {
       if (form) {
         event.preventDefault();
         const query = form.querySelector('input[name="query"]')?.value?.trim();
+        this._shodanQueryDraft = query || '';
         void layer.getThreatIntelState().onShodanAreaSearch?.(query || '');
         return;
       }
@@ -337,7 +346,7 @@ export class CyberIntelPanel {
     input.maxLength = 120;
     input.placeholder = 'Port/Service/CVE';
     input.setAttribute('aria-label', 'Shodan search query');
-    input.value = areaSearch?.userQuery || '';
+    input.value = areaSearch?.userQuery ?? this._shodanQueryDraft;
     const submit = element(
       this.document,
       'button',
@@ -358,6 +367,18 @@ export class CyberIntelPanel {
         'Searches the current map area (up to 1,000 km) and returns up to 100 devices. Missing coordinates may use approximate IP geolocation.',
       ),
     );
+    if (areaSearch && !areaSearch.loading) {
+      const clear = element(
+        this.document,
+        'button',
+        'cyber-shodan-clear',
+        'Clear results',
+      );
+      clear.type = 'button';
+      clear.dataset.shodanClear = 'true';
+      clear.setAttribute('aria-label', 'Clear Shodan search results and map markers');
+      section.append(clear);
+    }
     if (areaSearch?.error)
       section.append(
         element(this.document, 'p', 'cyber-intel-empty', areaSearch.error),
@@ -1459,8 +1480,54 @@ export class CyberIntelPanel {
     return details;
   }
 
+  _captureSearchInputState() {
+    if (!this.body || !this.document.activeElement) return null;
+    const active = this.document.activeElement;
+    const inputs = [...(this.body.querySelectorAll?.('input, textarea') || [])];
+    const focusedInput = inputs.includes(active) ? active : null;
+    return {
+      focusedName: focusedInput?.name || null,
+      fields: inputs
+        .filter((input) => input.name)
+        .map((input) => ({
+          name: input.name,
+          value: input.value,
+          selectionStart: input === focusedInput ? input.selectionStart : null,
+          selectionEnd: input === focusedInput ? input.selectionEnd : null,
+        })),
+    };
+  }
+
+  _restoreSearchInputState(savedState) {
+    if (!savedState || !this.body) return;
+    const inputs = [...(this.body.querySelectorAll?.('input, textarea') || [])];
+    for (const field of savedState.fields) {
+      const input = inputs.find((candidate) => candidate.name === field.name);
+      if (input) input.value = field.value;
+    }
+    if (!savedState.focusedName) return;
+    const focused = inputs.find(
+      (candidate) => candidate.name === savedState.focusedName,
+    );
+    if (!focused) return;
+    focused.focus?.({ preventScroll: true });
+    const focusedField = savedState.fields.find(
+      (field) => field.name === savedState.focusedName,
+    );
+    if (
+      Number.isInteger(focusedField?.selectionStart) &&
+      typeof focused.setSelectionRange === 'function'
+    ) {
+      focused.setSelectionRange(
+        focusedField.selectionStart,
+        focusedField.selectionEnd,
+      );
+    }
+  }
+
   render(state) {
     if (!this.panel || !this.body) return;
+    const searchInputState = this._captureSearchInputState();
     const shodanResults = this.body.querySelector?.('[data-shodan-results]');
     const kevResults = this.body.querySelector?.('[data-kev-results]');
     const otxResults = this.body.querySelector?.('[data-otx-results]');
@@ -1585,6 +1652,7 @@ export class CyberIntelPanel {
           state.enrichmentMessage,
         ),
       );
+    this._restoreSearchInputState(searchInputState);
     if (becameEnabled && this.panel.classList.contains('collapsed'))
       this.panel
         .querySelector('[data-collapse-target="cyber-intel-panel"]')

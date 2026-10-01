@@ -9,7 +9,7 @@ import { applicationServices } from './services/application.js';
  * real-time at configurable cadences.
  *
  * The HUD auto-activates when a military-style shader (NVG, FLIR, CRT) is
- * selected and supports three layout variants: tactical, operator, minimal.
+ * selected and supports tactical, operator, minimal, Cyber, and Odin's Eye layouts.
  *
  * Color theming is driven by the active shader mode via CSS custom properties.
  */

@@ -38,7 +38,7 @@ export function layoutLeftPanelRail({
 
   const panels = [...stack.querySelectorAll(':scope > [data-panel-id]')];
   if (!panels.length) return;
-  if (!hud.visible || hud.variant !== 'tactical') {
+  if (!hud.visible || !['tactical', 'odin'].includes(hud.variant)) {
     for (const panel of panels.filter((item) =>
       item.classList.contains('layout-auto-collapsed'),
     )) {
@@ -237,7 +237,8 @@ export function layoutLeftPanelRail({
     ? panelStackAutoCollapseIndices({
         naturalHeights: naturalExpandedHeights,
         allocatedHeights: allocatedExpandedHeights,
-        collapseLaterPanels: shouldFocus && hud.variant === 'tactical',
+        collapseLaterPanels:
+          shouldFocus && ['tactical', 'odin'].includes(hud.variant),
       })
     : [];
   if (autoCollapseIndices.length) {

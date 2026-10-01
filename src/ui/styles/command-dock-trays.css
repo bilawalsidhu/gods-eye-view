@@ -458,6 +458,8 @@ body:not(.ui-clean-view):not(.recording-mode):has(
 
 #intel-hud[data-variant='tactical'] .hud-bottom-left,
 #intel-hud[data-variant='tactical'] .hud-bottom-right,
+#intel-hud[data-variant='odin'] .hud-bottom-left,
+#intel-hud[data-variant='odin'] .hud-bottom-right,
 #intel-hud[data-variant='operator'] .hud-bottom-left,
 #intel-hud[data-variant='operator'] .hud-bottom-right {
   bottom: calc(2vh + 6.5rem);

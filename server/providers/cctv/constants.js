@@ -132,6 +132,28 @@ export const ONTARIO_ANCHORS = [
   { lat: 42.9849, lon: -81.2453 }, // London, Ontario
   { lat: 42.3149, lon: -83.0364 }, // Windsor
 ];
+/** NY 511 requires an approved developer API key. Keep the key server-side. */
+export const NY511_CAMERAS_URL = 'https://511ny.org/api/v2/get/cameras';
+export const DEFAULT_NY511_MAX_SOURCES = 1200;
+export const NY511_ANCHORS = [
+  { lat: 40.7128, lon: -74.006 },
+  { lat: 42.6526, lon: -73.7562 },
+  { lat: 43.0481, lon: -76.1474 },
+  { lat: 43.1566, lon: -77.6088 },
+  { lat: 42.8864, lon: -78.8784 },
+];
+/** Iowa DOT's public ArcGIS camera layer, licensed CC BY 4.0. */
+export const IOWA_DOT_CAMERAS_QUERY_URL =
+  'https://services.arcgis.com/8lRhdTsQyJpO52F1/arcgis/rest/services/Traffic_Cameras_View/FeatureServer/0/query';
+export const DEFAULT_IOWA_DOT_MAX_SOURCES = 800;
+export const IOWA_DOT_SOURCE_CACHE_MS = 24 * 60 * 60 * 1000;
+export const IOWA_DOT_MAX_CATALOG_BYTES = 8 * 1024 * 1024;
+export const IOWA_DOT_ANCHORS = [
+  { lat: 41.5868, lon: -93.625 },
+  { lat: 41.9779, lon: -91.6656 },
+  { lat: 41.2565, lon: -95.9345 },
+  { lat: 42.499, lon: -96.4003 },
+];
 /** Fintraffic road weather cameras (Digitraffic): one keyless GeoJSON list
  * covering all of Finland. Each STATION carries N presets (fixed camera views)
  * that share the station position; one preset is one camera here. */

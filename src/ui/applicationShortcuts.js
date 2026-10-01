@@ -24,9 +24,11 @@ export function bindApplicationShortcuts({
   actions,
 }) {
   const onKeyDown = (event) => {
+    const activeElement = documentRef.activeElement;
     const isFormControl =
-      event.target?.matches?.('select, input, textarea') ||
-      event.target === searchInput;
+      event.target?.closest?.('select, input, textarea, [contenteditable]') ||
+      event.target === searchInput ||
+      activeElement?.matches?.('select, input, textarea, [contenteditable]');
     if (isFormControl && event.key !== 'Escape') return;
 
     if (STYLE_KEYS[event.key]) actions.setStyle(STYLE_KEYS[event.key]);

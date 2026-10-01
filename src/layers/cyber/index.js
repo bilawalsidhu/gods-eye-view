@@ -1214,6 +1214,12 @@ export function createCyberLayer({
       selectedShodan = null;
       notifyThreatIntel();
     },
+    clearShodanAreaSearch() {
+      shodanAreaSearch = null;
+      selectedShodan = null;
+      renderRadar();
+      notifyThreatIntel();
+    },
     clearMapSelection() {
       selectedShodan = null;
       selectedRadar = null;
@@ -1243,6 +1249,7 @@ export function createCyberLayer({
         onClearShodanSelection: () => layer.clearShodanSelection(),
         onClearMapSelection: () => layer.clearMapSelection(),
         onShodanAreaSearch: runShodanAreaSearch,
+        onClearShodanAreaSearch: () => layer.clearShodanAreaSearch(),
         nonGeographicProviders: [
           ...(dshieldEnabled
             ? [

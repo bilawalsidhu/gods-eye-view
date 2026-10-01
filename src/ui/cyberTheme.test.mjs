@@ -265,8 +265,14 @@ test('Cyber side panels share one width and one framed surface material', () => 
   );
 });
 
-test('Cyber is a canonical HUD layout with a safe Tactical fallback', () => {
-  assert.deepEqual(HUD_LAYOUTS, ['tactical', 'operator', 'minimal', 'cyber']);
+test('HUD layouts include Cyber and Odin with a safe Tactical fallback', () => {
+  assert.deepEqual(HUD_LAYOUTS, [
+    'tactical',
+    'operator',
+    'minimal',
+    'cyber',
+    'odin',
+  ]);
   assert.equal(normalizeHudLayout('CYBER'), 'cyber');
   assert.equal(normalizeHudLayout('unknown'), 'tactical');
 });
@@ -331,7 +337,7 @@ test('Cyber visual defaults update the style, thermal palette and render state',
   ]);
 });
 
-test('the Display selector, voice schema and final stylesheet expose Cyber', () => {
+test('the Display selector, voice schema and final stylesheet expose Cyber and Odin', () => {
   const display = read('./templates/display-controls.html');
   const stylesheet = read('../../style.css');
   const hud = read('../hud.js');
@@ -341,6 +347,7 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   const setHud = GEV_ACTION_SCHEMAS.find((schema) => schema.name === 'set_hud');
 
   assert.match(display, /<option value="cyber">Cyber<\/option>/);
+  assert.match(display, /<option value="odin">Odin's Eye<\/option>/);
   assert.match(display, /id="cyber-sonar-toggle"/);
   assert.match(
     display,
@@ -348,7 +355,10 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   );
   assert.match(display, /id="cyber-sonar-sector"/);
   assert.deepEqual(setHud.parameters.properties.layout.enum, HUD_LAYOUTS);
-  assert.match(stylesheet, /@import '\.\/src\/ui\/styles\/cyber\.css';\s*$/);
+  assert.match(
+    stylesheet,
+    /@import '\.\/src\/ui\/styles\/cyber\.css';\s*@import '\.\/src\/ui\/styles\/odin\.css';\s*$/,
+  );
   assert.match(cyberStyles, /:root\[data-ui-theme='cyber'\]/);
   assert.match(cyberStyles, /\.material-symbols-outlined/);
   assert.match(cyberStyles, /\.pp-label/);

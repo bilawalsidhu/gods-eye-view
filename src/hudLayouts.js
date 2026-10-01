@@ -47,17 +47,21 @@ export function cyberVisualDefaultsForHudTransition(
  * attribute lives on <html> so theme tokens are available to every UI surface.
  * @param {HTMLElement|{dataset?: Record<string, string>}|null|undefined} root
  * @param {unknown} layout
- * @returns {'cyber'|null}
+ * @returns {'cyber'|'odin'|null}
  */
 export function applyHudUiTheme(root, layout) {
   if (!root?.dataset) return null;
-  if (normalizeHudLayout(layout) === 'cyber') {
+  const normalized = normalizeHudLayout(layout);
+  if (normalized === 'cyber' || normalized === 'odin') {
     root.dataset.uiTheme = 'cyber';
-    applyCyberSonarThemePhase(root, true);
+    if (normalized === 'odin') root.dataset.uiBrand = 'odin';
+    else delete root.dataset.uiBrand;
+    applyCyberSonarThemePhase(root, normalized === 'cyber');
     syncRadioPanelPlacement(root.ownerDocument);
-    return 'cyber';
+    return normalized;
   }
   delete root.dataset.uiTheme;
+  delete root.dataset.uiBrand;
   applyCyberSonarThemePhase(root, false);
   syncRadioPanelPlacement(root.ownerDocument);
   return null;

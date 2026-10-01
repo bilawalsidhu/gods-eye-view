@@ -623,6 +623,12 @@ export class VisualSettings {
       { explicit: applyVisualDefaults },
     );
     if (visualDefaults) this._applyCyberVisualDefaults(visualDefaults);
+    if (applyVisualDefaults && nextVariant === 'odin') {
+      this.setStyle('normal', {
+        applyPreset: false,
+        revealParameters: false,
+      });
+    }
     this._syncCyberSonarControl();
     this._syncShareState();
     this._scheduleAdaptivePanelLayout({ settle: true });
@@ -733,7 +739,10 @@ export class VisualSettings {
 
     // Cyber is an explicit shell choice, independent of the imagery filter.
     // Scene/share restoration still applies its own HUD through _setHudVariant.
-    if (preset.hudVariant && this.hud.getVariant() !== 'cyber') {
+    if (
+      preset.hudVariant &&
+      !['cyber', 'odin'].includes(this.hud.getVariant())
+    ) {
       this._setHudVariant(preset.hudVariant);
     }
     if (typeof preset.hudVisible === 'boolean') {

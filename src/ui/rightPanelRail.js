@@ -50,7 +50,7 @@ export function layoutRightPanelRail({
   const panels = [...stack.children].filter(
     (panel) => panel.matches('[data-panel-id]') && !panel.hidden,
   );
-  if (!hud.visible || hud.variant !== 'tactical') {
+  if (!hud.visible || !['tactical', 'odin'].includes(hud.variant)) {
     for (const panel of panels.filter((item) =>
       item.classList.contains('layout-auto-collapsed'),
     )) {
@@ -248,13 +248,14 @@ export function layoutRightPanelRail({
   // Other HUD variants restore automatic collapse at the start of each pass.
   // Do not immediately collapse those panels again and schedule a loop.
   const autoCollapseIndices =
-    hud.visible && hud.variant === 'tactical'
+    hud.visible && ['tactical', 'odin'].includes(hud.variant)
       ? panelStackAutoCollapseIndices({
           naturalHeights: expandedPanels.map((panel) =>
             naturalHeights.get(panel),
           ),
           allocatedHeights: expandedHeights,
-          collapseLaterPanels: shouldFocus && hud.variant === 'tactical',
+          collapseLaterPanels:
+            shouldFocus && ['tactical', 'odin'].includes(hud.variant),
         })
       : [];
   if (!isCollapseRetry && autoCollapseIndices.length) {

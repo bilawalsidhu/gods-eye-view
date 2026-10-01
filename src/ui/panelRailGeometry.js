@@ -74,5 +74,5 @@ export function shouldHideCollapsedRightPanels({
   hudVariant,
   hasExpandedPanel,
 }) {
-  return hudVariant === 'tactical' && Boolean(hasExpandedPanel);
+  return ['tactical', 'odin'].includes(hudVariant) && Boolean(hasExpandedPanel);
 }

@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="steel" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#626e65"/>
+      <stop offset=".035" stop-color="#202721"/>
+      <stop offset=".11" stop-color="#465249"/>
+      <stop offset=".18" stop-color="#1a211c"/>
+      <stop offset=".52" stop-color="#313b33"/>
+      <stop offset=".76" stop-color="#141a16"/>
+      <stop offset=".91" stop-color="#414c44"/>
+      <stop offset="1" stop-color="#111713"/>
+    </linearGradient>
+    <linearGradient id="rail" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#4b574e"/>
+      <stop offset=".12" stop-color="#1d251f"/>
+      <stop offset=".28" stop-color="#2b342d"/>
+      <stop offset=".55" stop-color="#111713"/>
+      <stop offset=".83" stop-color="#252d27"/>
+      <stop offset="1" stop-color="#515d54"/>
+    </linearGradient>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#58645a"/>
+      <stop offset=".13" stop-color="#111713"/>
+      <stop offset=".8" stop-color="#080c09"/>
+      <stop offset="1" stop-color="#68746b"/>
+    </linearGradient>
+    <linearGradient id="bevel" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#d1dbd3" stop-opacity=".72"/>
+      <stop offset=".12" stop-color="#536056" stop-opacity=".88"/>
+      <stop offset=".48" stop-color="#0a0e0b"/>
+      <stop offset=".82" stop-color="#4d5b51"/>
+      <stop offset="1" stop-color="#bbc7bd" stop-opacity=".64"/>
+    </linearGradient>
+    <linearGradient id="slot" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#020403"/>
+      <stop offset=".5" stop-color="#080c09"/>
+      <stop offset="1" stop-color="#77847a" stop-opacity=".55"/>
+    </linearGradient>
+    <radialGradient id="bolt" cx="32%" cy="27%">
+      <stop stop-color="#d4ded6"/>
+      <stop offset=".2" stop-color="#738077"/>
+      <stop offset=".62" stop-color="#202822"/>
+      <stop offset="1" stop-color="#070a08"/>
+    </radialGradient>
+    <pattern id="brush" width="7" height="7" patternUnits="userSpaceOnUse">
+      <path d="M0 1.5H7M0 5H7" stroke="#d6e0d8" stroke-opacity=".055" stroke-width=".6"/>
+      <path d="M0 3H7" stroke="#000" stroke-opacity=".14" stroke-width=".7"/>
+    </pattern>
+    <g id="screw">
+      <circle r="8" fill="#080b09" stroke="#a6b1a8" stroke-opacity=".52" stroke-width="1.2"/>
+      <circle r="5.7" fill="url(#bolt)" stroke="#111713" stroke-width="1"/>
+      <path d="M-2.5-2.5 2.5 2.5M2.5-2.5-2.5 2.5" stroke="#111713" stroke-width="1.3"/>
+      <path d="M-3.1-3.2 0-4.1" stroke="#f0f5f1" stroke-opacity=".56" stroke-width=".8"/>
+    </g>
+    <g id="vent">
+      <rect width="148" height="38" rx="4" fill="#070a08" stroke="#77847a" stroke-opacity=".65"/>
+      <rect x="4" y="4" width="140" height="30" rx="2" fill="#111713" stroke="#020403"/>
+      <path d="M12 9h118M12 14h118M12 19h118M12 24h118M12 29h118" stroke="url(#slot)" stroke-width="3"/>
+      <path d="M12 9h118M12 19h118M12 29h118" stroke="#87948a" stroke-opacity=".2" stroke-width=".7"/>
+    </g>
+  </defs>
+
+  <!-- Full-width top and bottom chassis rails. The center stays transparent. -->
+  <path d="M0 0H1920V79H0Z" fill="url(#rail)"/>
+  <path d="M0 0H1920V7H0Z" fill="url(#steel)"/>
+  <path d="M0 71H1920V79H0Z" fill="url(#steel)"/>
+  <path d="M0 8H1920V69H0Z" fill="url(#brush)" opacity=".7"/>
+  <path d="M0 0H1920M0 78H1920" stroke="#c4d0c7" stroke-opacity=".58" stroke-width="1"/>
+  <path d="M0 5H1920M0 73H1920" stroke="#020403" stroke-width="2"/>
+
+
+  <path d="M0 960H1920V1080H0Z" fill="url(#rail)"/>
+  <path d="M0 960H1920V967H0Z" fill="url(#steel)"/>
+  <path d="M0 1072H1920V1080H0Z" fill="url(#steel)"/>
+  <path d="M0 968H1920V1071H0Z" fill="url(#brush)" opacity=".7"/>
+  <path d="M0 960H1920M0 1079H1920" stroke="#c4d0c7" stroke-opacity=".55"/>
+  <path d="M0 966H1920M0 1074H1920" stroke="#020403" stroke-width="2"/>
+
+  <!-- Side rails and machined corner blocks. -->
+  <path d="M0 78H27V960H0Z M1893 78H1920V960H1893Z" fill="url(#rail)"/>
+  <path d="M5 82H10V956H5Z M1910 82H1915V956H1910Z" fill="url(#steel)" opacity=".8"/>
+  <path d="M24 80V959M1896 80V959" stroke="#050806" stroke-width="3"/>
+  <path d="M0 79H28V107H0ZM1892 79H1920V107H1892ZM0 930H28V960H0ZM1892 930H1920V960H1892Z" fill="url(#steel)" stroke="#080c09" stroke-width="2"/>
+  <path d="M2 82H25V104H2ZM1895 82H1918V104H1895ZM2 933H25V956H2ZM1895 933H1918V956H1895Z" fill="url(#plate)" stroke="#96a399" stroke-opacity=".38"/>
+
+  <!-- Header and status instrument plates behind the live application labels. -->
+  <!-- Top instrument rack, vents, switch bays and status LEDs. -->
+  <use href="#vent" x="514" y="14"/>
+  <use href="#vent" x="1258" y="14"/>
+  <path d="M679 12H1239V67H679Z" fill="url(#plate)" stroke="#69766c" stroke-width="2"/>
+  <path d="M687 17H1231V62H687Z" fill="#080c09" stroke="#263129"/>
+  <path d="M694 20H1224V58H694Z" fill="url(#brush)" opacity=".5"/>
+  <path d="M706 59H1210" stroke="#829087" stroke-opacity=".48"/>
+  <g fill="#5fff91">
+    <rect x="658" y="20" width="8" height="4" rx="1"/><rect x="658" y="29" width="8" height="4" rx="1"/>
+    <rect x="1243" y="20" width="8" height="4" rx="1"/><rect x="1243" y="29" width="8" height="4" rx="1"/>
+    <rect x="460" y="17" width="5" height="4" rx="1"/><rect x="460" y="25" width="5" height="4" rx="1"/>
+    <rect x="1457" y="17" width="5" height="4" rx="1"/><rect x="1457" y="25" width="5" height="4" rx="1"/>
+  </g>
+  <g fill="#314038" stroke="#9aa79d" stroke-opacity=".48">
+    <rect x="642" y="17" width="24" height="27" rx="3"/><rect x="1250" y="17" width="24" height="27" rx="3"/>
+  </g>
+
+  <!-- Side vent stacks. -->
+  <g transform="rotate(90 14 390)"><use href="#vent" x="-60" y="371"/></g>
+  <g transform="rotate(90 1906 390)"><use href="#vent" x="1832" y="371"/></g>
+  <g transform="rotate(90 14 685)"><use href="#vent" x="-60" y="666"/></g>
+  <g transform="rotate(90 1906 685)"><use href="#vent" x="1832" y="666"/></g>
+
+  <!-- Segmented footer panels echo the concept's integrated instrument deck. -->
+  <g transform="translate(0 -43)">
+    <path d="M23 1011H353L369 1024V1061L354 1072H23L10 1060V1023Z" fill="url(#bevel)"/>
+    <path d="M30 1017H348L360 1027V1057L348 1066H30L18 1057V1027Z" fill="url(#plate)" stroke="#87958b" stroke-opacity=".5"/>
+    <path d="M380 1011H678L693 1024V1060L679 1072H380L367 1060V1024Z" fill="url(#bevel)"/>
+    <path d="M387 1017H673L685 1027V1057L673 1066H387L375 1057V1027Z" fill="url(#plate)" stroke="#87958b" stroke-opacity=".5"/>
+    <path d="M697 1011H864L878 1024V1060L864 1072H697L684 1060V1024Z" fill="url(#bevel)"/>
+    <path d="M704 1017H859L870 1027V1057L859 1066H704L692 1057V1027Z" fill="url(#plate)" stroke="#87958b" stroke-opacity=".5"/>
+    <path d="M1044 1011H1211L1225 1024V1060L1211 1072H1044L1031 1060V1024Z" fill="url(#bevel)"/>
+    <path d="M1051 1017H1206L1217 1027V1057L1206 1066H1051L1039 1057V1027Z" fill="url(#plate)" stroke="#87958b" stroke-opacity=".5"/>
+    <path d="M1230 1011H1539L1554 1024V1060L1540 1072H1230L1217 1060V1024Z" fill="url(#bevel)"/>
+    <path d="M1237 1017H1534L1546 1027V1057L1534 1066H1237L1225 1057V1027Z" fill="url(#plate)" stroke="#87958b" stroke-opacity=".5"/>
+    <path d="M1560 1011H1898L1911 1024V1060L1898 1072H1560L1547 1060V1024Z" fill="url(#bevel)"/>
+    <path d="M1567 1017H1892L1904 1027V1057L1892 1066H1567L1555 1057V1027Z" fill="url(#plate)" stroke="#87958b" stroke-opacity=".5"/>
+  </g>
+
+  <!-- Repeated fasteners along corners and service plates. -->
+  <g>
+    <use href="#screw" x="13" y="13"/><use href="#screw" x="490" y="13"/>
+    <use href="#screw" x="1429" y="13"/><use href="#screw" x="1907" y="13"/>
+    <use href="#screw" x="13" y="1067"/><use href="#screw" x="1907" y="1067"/>
+    <use href="#screw" x="14" y="83"/><use href="#screw" x="1906" y="83"/>
+    <use href="#screw" x="14" y="957"/><use href="#screw" x="1906" y="957"/>
+    <use href="#screw" x="159" y="970"/><use href="#screw" x="538" y="970"/>
+    <use href="#screw" x="779" y="970"/><use href="#screw" x="1130" y="970"/>
+    <use href="#screw" x="1384" y="970"/><use href="#screw" x="1732" y="970"/>
+  </g>
+</svg>

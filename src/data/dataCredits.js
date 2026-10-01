@@ -190,6 +190,26 @@ export const DATA_CREDITS = [
     html: 'CCTV live video (Delaware): <a href="https://deldot.gov/map/" target="_blank" rel="noopener">DelDOT — Delaware Department of Transportation</a>',
   },
   {
+    key: 'maryland-chart-cctv',
+    html: 'CCTV cameras (Maryland): <a href="https://www.chart.maryland.gov/DataFeeds/GetDataFeeds" target="_blank" rel="noopener">Maryland CHART / MDOT SHA</a>',
+  },
+  {
+    key: 'ctroads-cctv',
+    html: 'CCTV cameras (Connecticut): <a href="https://www.ctroads.org/" target="_blank" rel="noopener">CTroads / Connecticut DOT</a>',
+  },
+  {
+    key: '511ga-cctv',
+    html: 'CCTV cameras (Georgia): <a href="https://511ga.org/" target="_blank" rel="noopener">511GA / Georgia DOT</a>',
+  },
+  {
+    key: 'drivenc-cctv',
+    html: 'CCTV cameras (North Carolina): <a href="https://www.drivenc.gov/" target="_blank" rel="noopener">DriveNC / North Carolina DOT</a>',
+  },
+  {
+    key: 'new-england-511-cctv',
+    html: 'CCTV cameras (Maine and New Hampshire): <a href="https://www.newengland511.org/" target="_blank" rel="noopener">New England 511</a>; each state’s traveler information terms apply.',
+  },
+  {
     key: 'caltrans-cctv',
     html:
       'CCTV cameras &amp; frames (California): Caltrans — ' +

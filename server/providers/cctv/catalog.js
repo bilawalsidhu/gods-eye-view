@@ -19,6 +19,13 @@ import {
   loadCalgarySourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
 } from './sources.js';
+import {
+  loadMarylandChartSources,
+  loadConnecticut511Sources,
+  loadGeorgia511Sources,
+  loadDriveNCSources,
+  loadNewEngland511Sources,
+} from './sources-east-coast.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
 const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
@@ -91,6 +98,31 @@ const LIVE_PACKS = [
     name: 'deldot',
     enabled: () => envEnabled('CCTV_DELDOT_ENABLED'),
     load: loadDelDOTSourcesFromOpenData,
+  },
+  {
+    name: 'maryland-chart',
+    enabled: () => envEnabled('CCTV_MARYLAND_ENABLED'),
+    load: loadMarylandChartSources,
+  },
+  {
+    name: 'ctroads',
+    enabled: () => envEnabled('CCTV_CTROADS_ENABLED'),
+    load: loadConnecticut511Sources,
+  },
+  {
+    name: '511ga',
+    enabled: () => envEnabled('CCTV_511GA_ENABLED'),
+    load: loadGeorgia511Sources,
+  },
+  {
+    name: 'drivenc',
+    enabled: () => envEnabled('CCTV_DRIVENC_ENABLED'),
+    load: loadDriveNCSources,
+  },
+  {
+    name: 'new-england-511',
+    enabled: () => envEnabled('CCTV_NEW_ENGLAND_511_ENABLED'),
+    load: loadNewEngland511Sources,
   },
 ];
 /**

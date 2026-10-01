@@ -4,4 +4,5 @@ export const HUD_LAYOUTS = Object.freeze([
   'operator',
   'minimal',
   'cyber',
+  'odin',
 ]);

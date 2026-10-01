@@ -84,6 +84,10 @@
   color-scheme: dark;
   --cyber-red: #c45454;
   --cyber-red-bright: #e16666;
+  --cyber-red-rgb: 196, 84, 84;
+  --cyber-red-bright-rgb: 225, 102, 102;
+  --cyber-active-rgb: 64, 45, 46;
+  --cyber-active-deep-rgb: 60, 42, 43;
   --cyber-slate: #26343a;
   --cyber-slate-raised: #334a53;
   --cyber-grid: rgba(188, 211, 218, 0.1);
@@ -100,15 +104,15 @@
     transparent 48%
   );
   --cyber-panel-shadow:
-    3px 0 0 rgba(196, 84, 84, 0.2) inset,
+    3px 0 0 rgba(var(--cyber-red-rgb), 0.2) inset,
     -1px 0 0 rgba(226, 235, 236, 0.05) inset, 0 10px 28px rgba(0, 0, 0, 0.42);
   --bg-dark: #090d0f;
   --glass-bg: var(--cyber-panel-surface);
   --glass-border: rgba(206, 222, 226, 0.28);
-  --glass-border-hover: rgba(196, 84, 84, 0.82);
+  --glass-border-hover: rgba(var(--cyber-red-rgb), 0.82);
   --accent: #e9f0f1;
-  --accent-dim: rgba(196, 84, 84, 0.2);
-  --accent-glow: rgba(196, 84, 84, 0.34);
+  --accent-dim: rgba(var(--cyber-red-rgb), 0.2);
+  --accent-glow: rgba(var(--cyber-red-rgb), 0.34);
   --text-primary: #f2f5f4;
   --text-secondary: rgba(226, 235, 236, 0.82);
   --text-dim: rgba(180, 198, 202, 0.58);
@@ -277,7 +281,7 @@
   height: 1px;
   background: linear-gradient(
     90deg,
-    rgba(196, 84, 84, 0.62),
+    rgba(var(--cyber-red-rgb), 0.62),
     rgba(206, 222, 226, 0.08)
   );
 }
@@ -325,11 +329,11 @@
   left: 50%;
   width: 36px;
   height: 6px;
-  border-top: 1px solid rgba(225, 102, 102, 0.84);
+  border-top: 1px solid rgba(var(--cyber-red-bright-rgb), 0.84);
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(196, 84, 84, 0.22) 18% 82%,
+    rgba(var(--cyber-red-rgb), 0.22) 18% 82%,
     transparent
   );
   clip-path: polygon(0 0, 7px 100%, calc(100% - 7px) 100%, 100% 0);
@@ -413,10 +417,10 @@
   ) {
   border-color: var(--cyber-red);
   color: var(--text-primary);
-  background-color: rgba(64, 45, 46, 0.94);
+  background-color: rgba(var(--cyber-active-rgb), 0.94);
   box-shadow:
     3px 0 0 var(--cyber-red) inset,
-    0 0 12px rgba(196, 84, 84, 0.14);
+    0 0 12px rgba(var(--cyber-red-rgb), 0.14);
 }
 
 :root[data-ui-theme='cyber'] .pp-toggle-btn.active,
@@ -424,10 +428,10 @@
 :root[data-ui-theme='cyber'] .map-stack-chip.active {
   border-color: var(--cyber-red);
   color: var(--text-primary);
-  background: rgba(64, 45, 46, 0.94);
+  background: rgba(var(--cyber-active-rgb), 0.94);
   box-shadow:
     3px 0 0 var(--cyber-red) inset,
-    0 0 12px rgba(196, 84, 84, 0.14);
+    0 0 12px rgba(var(--cyber-red-rgb), 0.14);
 }
 
 :root[data-ui-theme='cyber'] .pp-mode-seg {
@@ -448,10 +452,10 @@
 :root[data-ui-theme='cyber'] #detection-toggle.panoptic,
 :root[data-ui-theme='cyber'] #detection-toggle.god {
   border-color: var(--cyber-red);
-  background: rgba(64, 45, 46, 0.94);
+  background: rgba(var(--cyber-active-rgb), 0.94);
   box-shadow:
     3px 0 0 var(--cyber-red) inset,
-    0 0 12px rgba(196, 84, 84, 0.14);
+    0 0 12px rgba(var(--cyber-red-rgb), 0.14);
 }
 
 :root[data-ui-theme='cyber']
@@ -731,7 +735,7 @@
   ) {
   border-color: var(--cyber-red-bright);
   color: var(--text-primary);
-  background-color: rgba(64, 45, 46, 0.94);
+  background-color: rgba(var(--cyber-active-rgb), 0.94);
 }
 
 :root[data-ui-theme='cyber']
@@ -747,7 +751,7 @@
 :root[data-ui-theme='cyber'] #title-bar h1,
 :root[data-ui-theme='cyber'] #style-indicator {
   color: #f5f7f6;
-  text-shadow: 2px 2px 0 rgba(196, 84, 84, 0.3);
+  text-shadow: 2px 2px 0 rgba(var(--cyber-red-rgb), 0.3);
 }
 
 :root[data-ui-theme='cyber'] #title-bar .subtitle,
@@ -757,7 +761,7 @@
 }
 
 :root[data-ui-theme='cyber'] #title-bar .title-logo {
-  filter: drop-shadow(0 0 10px rgba(196, 84, 84, 0.24));
+  filter: drop-shadow(0 0 10px rgba(var(--cyber-red-rgb), 0.24));
 }
 
 :root[data-ui-theme='cyber']
@@ -815,7 +819,7 @@
 :root[data-ui-theme='cyber'] #top-center-actions button:focus-visible,
 :root[data-ui-theme='cyber'] #top-center-actions button[aria-pressed='true'] {
   --cyber-action-edge: var(--cyber-red);
-  --cyber-action-fill: rgba(64, 45, 46, 0.94);
+  --cyber-action-fill: rgba(var(--cyber-active-rgb), 0.94);
   color: var(--cyber-red-bright);
   box-shadow: none;
 }
@@ -841,13 +845,13 @@
   background:
     linear-gradient(
       90deg,
-      rgba(196, 84, 84, 0.16),
+      rgba(var(--cyber-red-rgb), 0.16),
       transparent 18% 82%,
-      rgba(196, 84, 84, 0.16)
+      rgba(var(--cyber-red-rgb), 0.16)
     ),
     rgba(10, 15, 18, 0.96);
   box-shadow:
-    0 0 0 1px rgba(196, 84, 84, 0.62) inset,
+    0 0 0 1px rgba(var(--cyber-red-rgb), 0.62) inset,
     0 0 0 2px rgba(238, 243, 243, 0.035) inset;
   clip-path: polygon(
     12px 0,
@@ -872,7 +876,7 @@
   height: 0.22rem;
   background: repeating-linear-gradient(
     90deg,
-    rgba(196, 84, 84, 0.9) 0 2px,
+    rgba(var(--cyber-red-rgb), 0.9) 0 2px,
     transparent 2px 6px,
     rgba(226, 235, 236, 0.38) 6px 7px,
     transparent 7px 11px
@@ -889,15 +893,15 @@
     rgba(28, 39, 43, 0.92);
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.32) inset,
-    3px 0 0 rgba(196, 84, 84, 0.18) inset;
+    3px 0 0 rgba(var(--cyber-red-rgb), 0.18) inset;
 }
 
 :root[data-ui-theme='cyber'] #command-dock > #location-bar {
-  border-left-color: rgba(196, 84, 84, 0.68);
+  border-left-color: rgba(var(--cyber-red-rgb), 0.68);
 }
 
 :root[data-ui-theme='cyber'] #command-dock > #control-panel {
-  border-right-color: rgba(196, 84, 84, 0.68);
+  border-right-color: rgba(var(--cyber-red-rgb), 0.68);
 }
 
 :root[data-ui-theme='cyber'] #command-dock > #location-bar::after,
@@ -924,10 +928,10 @@
   --cyber-voice-wave: 105, 203, 209;
   --cyber-voice-peak: 226, 240, 240;
   --cyber-voice-alert: 196, 84, 84;
-  border-color: rgba(196, 84, 84, 0.58);
+  border-color: rgba(var(--cyber-red-rgb), 0.58);
   border-radius: 0;
   background:
-    linear-gradient(180deg, rgba(196, 84, 84, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(var(--cyber-red-rgb), 0.14), transparent 34%),
     repeating-linear-gradient(
       90deg,
       rgba(188, 211, 218, 0.035) 0 1px,
@@ -936,8 +940,8 @@
     rgba(38, 52, 58, 0.98);
   box-shadow:
     0 9px 22px rgba(0, 0, 0, 0.48),
-    3px 0 0 rgba(196, 84, 84, 0.72) inset,
-    -3px 0 0 rgba(196, 84, 84, 0.32) inset;
+    3px 0 0 rgba(var(--cyber-red-rgb), 0.72) inset,
+    -3px 0 0 rgba(var(--cyber-red-rgb), 0.32) inset;
   clip-path: polygon(
     12px 0,
     calc(100% - 12px) 0,
@@ -953,7 +957,7 @@
 :root[data-ui-theme='cyber'] #command-dock #gev-voice-button {
   border: 1px solid rgba(226, 235, 236, 0.24);
   background: rgba(8, 13, 15, 0.32);
-  box-shadow: 0 0 0 3px rgba(196, 84, 84, 0.08) inset;
+  box-shadow: 0 0 0 3px rgba(var(--cyber-red-rgb), 0.08) inset;
   clip-path: polygon(
     8px 0,
     100% 0,
@@ -966,12 +970,12 @@
 
 :root[data-ui-theme='cyber'] #command-dock .gev-mic-orbit {
   position: relative;
-  border-color: rgba(196, 84, 84, 0.58);
+  border-color: rgba(var(--cyber-red-rgb), 0.58);
   border-radius: 0;
-  background: rgba(196, 84, 84, 0.1);
+  background: rgba(var(--cyber-red-rgb), 0.1);
   box-shadow:
-    0 0 0 0.16rem rgba(196, 84, 84, 0.07),
-    0 0 0.7rem rgba(196, 84, 84, 0.12);
+    0 0 0 0.16rem rgba(var(--cyber-red-rgb), 0.07),
+    0 0 0.7rem rgba(var(--cyber-red-rgb), 0.12);
   transform: rotate(45deg) scale(0.8);
 }
 
@@ -1192,7 +1196,7 @@
 
 :root[data-ui-theme='cyber'] #command-dock .dock-popover-content {
   padding-top: 1.65rem;
-  border: 1px solid rgba(196, 84, 84, 0.62);
+  border: 1px solid rgba(var(--cyber-red-rgb), 0.62);
   border-radius: 0;
   background:
     linear-gradient(135deg, rgba(62, 86, 94, 0.22), transparent 46%),
@@ -1206,7 +1210,7 @@
     auto;
   box-shadow:
     0 1rem 2.6rem rgba(0, 0, 0, 0.64),
-    4px 0 0 rgba(196, 84, 84, 0.2) inset;
+    4px 0 0 rgba(var(--cyber-red-rgb), 0.2) inset;
   clip-path: var(--cyber-panel-frame);
 }
 
@@ -1214,7 +1218,7 @@
   position: absolute;
   top: 0.46rem;
   left: 0.7rem;
-  color: rgba(225, 102, 102, 0.78);
+  color: rgba(var(--cyber-red-bright-rgb), 0.78);
   font-size: 0.4rem;
   letter-spacing: 0.12rem;
   pointer-events: none;
@@ -1264,10 +1268,10 @@
 }
 
 :root[data-ui-theme='cyber'] #command-dock .style-btn.active {
-  border-color: rgba(225, 102, 102, 0.78);
+  border-color: rgba(var(--cyber-red-bright-rgb), 0.78);
   background:
-    linear-gradient(135deg, rgba(196, 84, 84, 0.42), transparent 72%),
-    rgba(60, 42, 43, 0.96);
+    linear-gradient(135deg, rgba(var(--cyber-red-rgb), 0.42), transparent 72%),
+    rgba(var(--cyber-active-deep-rgb), 0.96);
   box-shadow: 3px 0 0 var(--cyber-red) inset;
 }
 
@@ -1328,8 +1332,8 @@
 
 #intel-hud[data-variant='cyber'] {
   --hud-color: rgba(244, 247, 246, 0.94) !important;
-  --hud-glow: rgba(196, 84, 84, 0.24) !important;
-  --hud-border: rgba(196, 84, 84, 0.74) !important;
+  --hud-glow: rgba(var(--cyber-red-rgb), 0.24) !important;
+  --hud-border: rgba(var(--cyber-red-rgb), 0.74) !important;
 }
 
 #intel-hud[data-variant='cyber'] .hud-sonar {
@@ -1349,8 +1353,8 @@
   pointer-events: none;
   transform: translate(-50%, -50%);
   box-shadow:
-    0 0 0 1px rgba(196, 84, 84, 0.12),
-    inset 0 0 48px rgba(196, 84, 84, 0.035);
+    0 0 0 1px rgba(var(--cyber-red-rgb), 0.12),
+    inset 0 0 48px rgba(var(--cyber-red-rgb), 0.035);
 }
 
 :root[data-cyber-sonar='off'] #intel-hud[data-variant='cyber'] .hud-sonar {
@@ -1380,7 +1384,7 @@
     from 0deg,
     rgba(245, 250, 250, 0.3) 0deg,
     rgba(235, 116, 116, 0.14) 0.55deg,
-    rgba(196, 84, 84, 0.075) var(--cyber-sonar-sector-quarter, 6deg),
+    rgba(var(--cyber-red-rgb), 0.075) var(--cyber-sonar-sector-quarter, 6deg),
     rgba(150, 206, 215, 0.035) var(--cyber-sonar-sector-middle, 14.4deg),
     transparent var(--cyber-sonar-sector-width, 24deg) 360deg
   );
@@ -1424,7 +1428,7 @@
   background-color: rgba(14, 20, 23, 0.9);
   background-image: linear-gradient(
     90deg,
-    rgba(196, 84, 84, 0.12),
+    rgba(var(--cyber-red-rgb), 0.12),
     transparent 46%
   );
   box-shadow: 0 0 0 1px rgba(234, 240, 241, 0.06) inset;
@@ -1462,7 +1466,7 @@
   box-sizing: border-box;
   padding: 8px 11px;
   border: 0;
-  background: rgba(196, 84, 84, 0.72);
+  background: rgba(var(--cyber-red-rgb), 0.72);
   clip-path: var(--cyber-panel-frame);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
 }
@@ -1514,7 +1518,7 @@
     left: 54px;
     width: 300px;
     padding-left: 10px;
-    border-left: 1px solid rgba(196, 84, 84, 0.72);
+    border-left: 1px solid rgba(var(--cyber-red-rgb), 0.72);
   }
 
   :root[data-ui-theme='cyber']
@@ -1673,7 +1677,7 @@
       radial-gradient(
         circle at center,
         transparent 0 22px,
-        rgba(196, 84, 84, 0.18) 23px 24px,
+        rgba(var(--cyber-red-rgb), 0.18) 23px 24px,
         transparent 25px 45px,
         rgba(206, 222, 226, 0.1) 46px 47px,
         transparent 48px
@@ -1694,7 +1698,7 @@
     background: linear-gradient(
       90deg,
       transparent,
-      rgba(225, 102, 102, 0.5),
+      rgba(var(--cyber-red-bright-rgb), 0.5),
       transparent
     );
     content: '';
@@ -1744,7 +1748,7 @@
    readable; controls and source-backed telemetry remain at the perimeter. */
 :root[data-ui-theme='cyber'] body.cockpit-mode #cockpit-hud {
   --cockpit-accent: #69cbd1;
-  --cockpit-caution: #c45454;
+  --cockpit-caution: var(--cyber-red);
   --cockpit-side-panel-width: min(294px, 23vw);
   color: #e9f2f2;
   text-shadow: none;
@@ -1839,7 +1843,7 @@
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-frame-warning {
-  stroke: rgba(196, 84, 84, 0.65);
+  stroke: rgba(var(--cyber-red-rgb), 0.65);
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-frame-meter {
@@ -1898,7 +1902,7 @@
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-target-warning-dots {
-  stroke: rgba(196, 84, 84, 0.88);
+  stroke: rgba(var(--cyber-red-rgb), 0.88);
   stroke-width: 4;
   stroke-dasharray: 2 14;
 }
@@ -2164,9 +2168,9 @@
   body.cockpit-mode
   .cockpit-vision-controls
   .cockpit-vision-current {
-  border-color: rgba(196, 84, 84, 0.7);
-  background: rgba(196, 84, 84, 0.12);
-  box-shadow: inset 0 -2px 0 rgba(196, 84, 84, 0.82);
+  border-color: rgba(var(--cyber-red-rgb), 0.7);
+  background: rgba(var(--cyber-red-rgb), 0.12);
+  box-shadow: inset 0 -2px 0 rgba(var(--cyber-red-rgb), 0.82);
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-reticle {
@@ -2212,8 +2216,8 @@
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: rgba(196, 84, 84, 0.96);
-  box-shadow: 0 0 8px rgba(196, 84, 84, 0.8);
+  background: rgba(var(--cyber-red-rgb), 0.96);
+  box-shadow: 0 0 8px rgba(var(--cyber-red-rgb), 0.8);
 }
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-horizon-guide {
@@ -2236,7 +2240,7 @@
 
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-horizon-guide small {
   padding: 3px 8px;
-  border: 1px solid rgba(196, 84, 84, 0.62);
+  border: 1px solid rgba(var(--cyber-red-rgb), 0.62);
   color: #eef4f4;
   background: rgba(8, 22, 26, 0.58);
 }
@@ -2273,7 +2277,7 @@
   min-width: 104px;
   padding: 5px 10px 6px;
   border-top-color: rgba(105, 203, 209, 0.48);
-  border-bottom-color: rgba(196, 84, 84, 0.34);
+  border-bottom-color: rgba(var(--cyber-red-rgb), 0.34);
   background: linear-gradient(
     90deg,
     transparent,
@@ -2312,7 +2316,7 @@
   bottom: auto;
   max-height: min(44vh, 410px);
   border-color: rgba(105, 203, 209, 0.34);
-  border-top-color: rgba(196, 84, 84, 0.82);
+  border-top-color: rgba(var(--cyber-red-rgb), 0.82);
   border-radius: 0;
   background:
     linear-gradient(135deg, rgba(105, 203, 209, 0.07), transparent 38%),
@@ -2425,7 +2429,7 @@
   left: calc(50% - 25px);
   width: 50px;
   height: 6px;
-  background: rgba(196, 84, 84, 0.22);
+  background: rgba(var(--cyber-red-rgb), 0.22);
   pointer-events: none;
 }
 
@@ -2466,7 +2470,7 @@
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-utility-divider {
   background: linear-gradient(
     90deg,
-    rgba(196, 84, 84, 0.62),
+    rgba(var(--cyber-red-rgb), 0.62),
     rgba(206, 222, 226, 0.08)
   );
   box-shadow: none;
@@ -2541,11 +2545,11 @@
   left: 50%;
   width: 36px;
   height: 6px;
-  border-top: 1px solid rgba(225, 102, 102, 0.84);
+  border-top: 1px solid rgba(var(--cyber-red-bright-rgb), 0.84);
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(196, 84, 84, 0.22) 18% 82%,
+    rgba(var(--cyber-red-rgb), 0.22) 18% 82%,
     transparent
   );
   clip-path: polygon(0 0, 7px 100%, calc(100% - 7px) 100%, 100% 0);

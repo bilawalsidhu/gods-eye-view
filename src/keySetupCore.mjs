@@ -144,6 +144,30 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'free',
     testId: 'alienvault-otx',
   }),
+  Object.freeze({
+    id: 'ctroads-cameras',
+    title: 'CONNECTICUT · CTROADS',
+    unlocks: 'Connecticut DOT traffic camera catalog and images',
+    getUrl: 'https://www.ctroads.org/developers/doc',
+    envVars: Object.freeze(['CCTV_CTROADS_API_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: '511ga-cameras',
+    title: 'GEORGIA · 511GA',
+    unlocks: 'Georgia DOT traffic camera catalog and images',
+    getUrl: 'https://511ga.org/developers/doc',
+    envVars: Object.freeze(['CCTV_511GA_API_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'drivenc-cameras',
+    title: 'NORTH CAROLINA · DRIVENC',
+    unlocks: 'North Carolina DOT traffic camera catalog and images',
+    getUrl: 'https://www.drivenc.gov/developers/doc',
+    envVars: Object.freeze(['CCTV_DRIVENC_API_KEY']),
+    tier: 'free',
+  }),
 ]);
 
 /** Hostnames a Provider Settings request may arrive under or originate from. */

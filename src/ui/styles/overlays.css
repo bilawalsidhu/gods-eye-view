@@ -299,7 +299,9 @@
 }
 
 #intel-hud[data-variant='tactical'] .hud-top-bar,
-#intel-hud[data-variant='tactical'] .hud-bottom-bar {
+#intel-hud[data-variant='odin'] .hud-top-bar,
+#intel-hud[data-variant='tactical'] .hud-bottom-bar,
+#intel-hud[data-variant='odin'] .hud-bottom-bar {
   display: none;
 }
 
@@ -321,6 +323,8 @@
 
 #intel-hud[data-variant='tactical'] .hud-top-left,
 #intel-hud[data-variant='tactical'] .hud-top-right,
+#intel-hud[data-variant='odin'] .hud-top-left,
+#intel-hud[data-variant='odin'] .hud-top-right,
 #intel-hud[data-variant='operator'] .hud-top-left,
 #intel-hud[data-variant='operator'] .hud-top-right {
   top: max(14vh, 136px);

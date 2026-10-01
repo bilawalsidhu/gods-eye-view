@@ -497,6 +497,7 @@ export function isCyberSonarActive({
       false;
   return !!(
     root?.dataset?.uiTheme === 'cyber' &&
+    root?.dataset?.uiBrand !== 'odin' &&
     isCyberSonarEnabled(root) &&
     hud?.classList?.contains?.('active') &&
     !body?.classList?.contains?.('cockpit-mode') &&
@@ -513,6 +514,7 @@ export function isCyberMapThemeActive({
     hud = globalThis.document?.getElementById?.('intel-hud');
   return !!(
     root?.dataset?.uiTheme === 'cyber' &&
+    root?.dataset?.uiBrand !== 'odin' &&
     hud?.classList?.contains?.('active') &&
     !body?.classList?.contains?.('cockpit-mode')
   );

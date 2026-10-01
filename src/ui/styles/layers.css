@@ -778,6 +778,14 @@
   margin-top: 0;
   white-space: nowrap;
 }
+.cyber-shodan-clear {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+  padding: 5px 8px;
+  color: #9bb2bc;
+  font-size: 10px;
+}
 #right-context-rail
   #global-context-panel:not(.collapsed)
   .global-context-panel-inner {
