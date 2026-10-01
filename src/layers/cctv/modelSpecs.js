@@ -14,8 +14,8 @@
  *
  * Spec records are vendored verbatim from the CCTV Camera Database
  * (https://github.com/ch-bas/cctv-camera-database, CC0-1.0) — an open dataset
- * of 12,000+ camera models transcribed from manufacturer datasheets (84% with
- * FOV). This module vendors the records that the currently integrated public
+ * of 28,000+ camera models transcribed from manufacturer datasheets (75% with
+ * FOV, as of v2.26.0). This module vendors the records that the currently integrated public
  * catalogs publish hardware for — King County WA (Cohu, Bosch AUTODOME, Axis
  * Q6135-LE), plus the Bosch AUTODOME and Axis PTZ/multisensor models that
  * appear in Sarasota County FL and Sioux Falls SD open data; packs that
