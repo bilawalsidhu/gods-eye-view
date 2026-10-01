@@ -124,12 +124,18 @@ test('one upstream request serves concurrent callers, and the cache is reused', 
   let clock = 0;
   const proxy = magnetosphereProxy({
     now: () => clock,
-    fetchImpl: async () => {
-      calls += 1;
+    // Kp is fetched alongside the solar wind now, so count only the feed
+    // under test rather than every request the provider makes.
+    fetchImpl: async (url) => {
+      const kp = String(url).includes('planetary_k_index');
+      if (!kp) calls += 1;
       return {
         ok: true,
         headers: { get: () => null },
-        text: async () => JSON.stringify([HEADER, row()]),
+        text: async () =>
+          kp
+            ? JSON.stringify([{ time_tag: '2026-10-01T12:00:00', estimated_kp: 2.3 }])
+            : JSON.stringify([HEADER, row()]),
       };
     },
   });
@@ -171,12 +177,16 @@ test('an upstream failure degrades to a labelled stale answer, then to unavailab
   let mode = 'ok';
   const proxy = magnetosphereProxy({
     now: () => clock,
-    fetchImpl: async () => {
-      if (mode === 'fail') return { ok: false, status: 503 };
+    fetchImpl: async (url) => {
+      const kp = String(url).includes('planetary_k_index');
+      if (mode === 'fail' && !kp) return { ok: false, status: 503 };
       return {
         ok: true,
         headers: { get: () => null },
-        text: async () => JSON.stringify([HEADER, row()]),
+        text: async () =>
+          kp
+            ? JSON.stringify([{ time_tag: '2026-10-01T12:00:00', estimated_kp: 2.3 }])
+            : JSON.stringify([HEADER, row()]),
       };
     },
   });
@@ -210,4 +220,19 @@ test('an upstream failure degrades to a labelled stale answer, then to unavailab
   const gone = await run();
   assert.equal(gone.unavailable, true);
   assert.ok(gone.reason);
+});
+
+test('Kp takes the newest usable reading and refuses impossible ones', async () => {
+  const { latestKp } = await import('../../server/providers/magnetosphere.js');
+  assert.equal(
+    latestKp([
+      { time_tag: '2026-10-01T11:00:00', estimated_kp: 1.0 },
+      { time_tag: '2026-10-01T12:00:00', estimated_kp: 4.7 },
+    ]).kp,
+    4.7,
+  );
+  // A missing or absurd Kp must not become a number the model would trust.
+  assert.equal(latestKp([{ time_tag: 'x', estimated_kp: 99 }]), null);
+  assert.equal(latestKp([]), null);
+  assert.equal(latestKp(null), null);
 });

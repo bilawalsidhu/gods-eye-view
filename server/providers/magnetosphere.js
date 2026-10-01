@@ -20,6 +20,7 @@ import { describeMagnetopause } from '../../src/layers/magnetosphere/magnetopaus
 
 const SOLAR_WIND_URL =
   'https://services.swpc.noaa.gov/products/geospace/propagated-solar-wind-1-hour.json';
+const KP_URL = 'https://services.swpc.noaa.gov/json/planetary_k_index_1m.json';
 const MAX_BYTES = 512 * 1024;
 const CACHE_MS = 60_000;
 const STALE_LIMIT_MS = 6 * 3600_000;
@@ -89,8 +90,30 @@ export function latestSolarWind(payload) {
   throw invalid('no_complete_row');
 }
 
+/**
+ * Newest estimated Kp.
+ *
+ * T89 is parameterised by ground disturbance alone, so this is the only input
+ * its field needs. Returned as null rather than a guess when the feed is
+ * unusable: the layer treats a missing Kp as quiet and says so, which is very
+ * different from silently modelling a storm as calm.
+ */
+export function latestKp(payload) {
+  if (!Array.isArray(payload)) return null;
+  for (let i = payload.length - 1; i >= 0; i--) {
+    const row = payload[i];
+    const value = Number(row?.estimated_kp ?? row?.kp_index);
+    if (!Number.isFinite(value) || value < 0 || value > 9) continue;
+    return {
+      kp: value,
+      observedAt: row.time_tag ? `${row.time_tag}Z`.replace('ZZ', 'Z') : null,
+    };
+  }
+  return null;
+}
+
 /** Shape the client consumes. Keep it small and explicit. */
-export function describeState(sample, { stale = false } = {}) {
+export function describeState(sample, { stale = false, kp = null } = {}) {
   const magnetopause = describeMagnetopause(
     sample.densityPerCm3,
     sample.speedKmPerS,
@@ -101,6 +124,7 @@ export function describeState(sample, { stale = false } = {}) {
     schemaVersion: 1,
     product: 'swpc-propagated-solar-wind',
     solarWind: sample,
+    kp,
     magnetopause,
     stale,
     unavailable: false,
@@ -113,6 +137,27 @@ export function magnetosphereProxy({
 } = {}) {
   let cache = null;
   let inFlight = null;
+  let kpCache = null;
+
+  async function loadKp(signal) {
+    if (kpCache && now() - kpCache.fetchedAt < CACHE_MS) return kpCache.value;
+    try {
+      const response = await fetchImpl(KP_URL, { signal });
+      if (!response.ok) throw new Error(`kp_http_${response.status}`);
+      const { tooLarge, text } = await readCappedResponseText(
+        response,
+        MAX_BYTES,
+      );
+      if (tooLarge) throw invalid('kp_too_large');
+      const value = latestKp(JSON.parse(text));
+      kpCache = { value, fetchedAt: now() };
+      return value;
+    } catch {
+      // Kp is a refinement, not a prerequisite: the boundary and the field
+      // both stand without it. Keep the last good value if there is one.
+      return kpCache?.value ?? null;
+    }
+  }
 
   async function load(signal) {
     const response = await fetchImpl(SOLAR_WIND_URL, { signal });
@@ -168,7 +213,11 @@ export function magnetosphereProxy({
       if (req.url !== '/' && req.url !== '')
         return json(400, { error: 'invalid_magnetosphere_query' });
       try {
-        json(200, describeState(await acquire(controller.signal)));
+        const [sample, kp] = await Promise.all([
+          acquire(controller.signal),
+          loadKp(controller.signal),
+        ]);
+        json(200, describeState(sample, { kp }));
       } catch (error) {
         // A bounded last-good answer beats a blank boundary, but it is only
         // offered while it is still plausibly the current state, and it is
