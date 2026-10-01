@@ -20,6 +20,7 @@
   "src/data/infrastructure.js",
   "src/data/aircraftEmergency.js",
   "src/data/aircraftEmergency.test.mjs",
+  "src/data/aircraftEmergencyAnalyst.test.mjs",
   "scripts/qa-emergency-squawk.mjs",
   "src/data/infrastructure.test.mjs",
   "src/data/localGeojsonCore.js",

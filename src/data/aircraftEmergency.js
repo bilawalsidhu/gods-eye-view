@@ -64,6 +64,22 @@ export function aircraftEmergency({ squawk, emergency } = {}) {
 }
 
 /**
+ * How a summary may phrase the status without flattening it into an incident:
+ * quote the code when the Mode A squawk itself names the status, otherwise
+ * attribute it to the ADS-B emergency field.
+ * @param {{kind?: string, squawk?: string|null, source?: string}|null|undefined} status
+ * @returns {string|null} e.g. 'broadcasting squawk 7700 (general emergency)'
+ *   or 'ADS-B reports general emergency'; null when there is no status.
+ */
+export function emergencyBroadcastPhrase(status) {
+  if (!status || !Object.hasOwn(KINDS, status.kind)) return null;
+  const label = KINDS[status.kind].label.toLowerCase();
+  return status.source === 'squawk' && status.squawk
+    ? `broadcasting squawk ${status.squawk} (${label})`
+    : `ADS-B reports ${label}`;
+}
+
+/**
  * True when the aircraft is broadcasting an emergency (not a priority status).
  * @param {{severity?: string}|null|undefined} status
  * @returns {boolean}

@@ -8,7 +8,10 @@
   Minimum-fuel and lifeguard statuses are reported but not tinted. The status
   follows the latest poll instead of sticking, so a cleared code stops
   highlighting on the next refresh. The analyst and voice query engine can
-  filter by `squawk`, `emergency` and `emergencyKind`. No new source or
+  filter by `squawk`, `emergency`, `emergencyKind` and `emergencySource`
+  (whether the squawk or the ADS-B field named the status), and each result
+  says when the transponder was last heard, so answers read "broadcasting
+  squawk 7700" or "ADS-B reports general emergency". No new source or
   request: OpenSky already carries the squawk and adsb.lol carries both.
 
 - Public Overpass instances are no longer used by default. Street Traffic

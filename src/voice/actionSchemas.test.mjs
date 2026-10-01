@@ -28,9 +28,9 @@ test('the complete Realtime tool payload pins the additive analyst, satellite, L
   assert.equal(
     digest,
     // Re-derived for the additive `local-adsb` set_layer_visibility value,
-    // the Cyber HUD layout and the additive squawk/emergency analyst fields;
-    // the separate sonar tool is excluded above.
-    '908040cce104fd98584cd5f0516f24fa57568b37496b3de0d18da283e0d25dff',
+    // the Cyber HUD layout and the additive squawk/emergency/emergencySource
+    // analyst fields; the separate sonar tool is excluded above.
+    'ee095d30b86d6e43f443daa2ba1fee0c84f3c7e54dbadd94a4bbe409167b85d4',
   );
 });
 

@@ -74,6 +74,9 @@ test('flights analyst record: full record maps every contract field', () => {
     squawk: null,
     emergency: false,
     emergencyKind: null,
+    emergencySource: null,
+    emergencyBroadcast: null,
+    observedAtMs: null,
     routeOrigin: 'AUS',
     routeDestination: 'LAX',
   });

@@ -640,7 +640,12 @@ the same tint when a billboard is first created and when a tracked contact is
 released. While a broadcasting aircraft is tracked, the Cockpit aircraft-meta
 line reads `SQUAWK 7700 · GENERAL EMERGENCY` when the code names the status,
 else `ADS-B EMERGENCY · …` or `ADS-B PRIORITY · …`, in red. Analyst records and
-the voice query fields expose `squawk`, `emergency` (flag) and `emergencyKind`.
+the voice query fields expose `squawk`, `emergency` (flag), `emergencyKind` and
+`emergencySource` (`squawk` when the Mode A code names the status, `ads-b` for
+the readsb field), plus `emergencyBroadcast` (`broadcasting squawk 7700 (general
+emergency)` vs `ADS-B reports general emergency`) and `observedAtMs`, the epoch
+ms of the last transponder message. Voice results carry `observedAtMs` only for
+aircraft with a status.
 `scripts/qa-emergency-squawk.mjs` proves the tint, HUD line and clearing.
 
 ## Browser live-source observations

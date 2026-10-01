@@ -9,6 +9,7 @@ import {
   CONTACT_MATCH_TIER,
 } from '../../data/contactMatch.js';
 import { LANDED_ALT_MAX_FT, LANDED_SPEED_MAX_MPS } from './policy.js';
+import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
 
 export function createQueries({
   flightState,
@@ -160,7 +161,8 @@ export function createQueries({
    *   heading: number|null, verticalRateMps: number|null, onGround: boolean,
    *   military: boolean, aircraftClass: string|null, originCountry: null,
    *   operator: string|null, squawk: string|null, emergency: boolean,
-   *   emergencyKind: string|null, routeOrigin: null, routeDestination: null}}
+   *   emergencyKind: string|null, emergencySource: 'squawk'|'ads-b'|null,
+   *   emergencyBroadcast: string|null, observedAtMs: number|null, routeOrigin: null, routeDestination: null}}
    */
 
   function mapAnalystRecord(icao24, info) {
@@ -197,6 +199,14 @@ export function createQueries({
       // without the flag.
       emergency: info?.emergency?.severity === 'emergency',
       emergencyKind: text(info?.emergency?.kind),
+      // Provenance, so a summary can say "broadcasting squawk 7700" rather
+      // than "ADS-B reports general emergency" (or flatten both): 'squawk'
+      // when the Mode A code names the status, 'ads-b' for the readsb field.
+      emergencySource: text(info?.emergency?.source),
+      emergencyBroadcast: emergencyBroadcastPhrase(info?.emergency),
+      // Epoch ms of the last transponder message — when this squawk/status
+      // was heard (OpenSky time_contact; readsb snapshot time minus `seen`).
+      observedAtMs: num(info?.lastContactEpochMs),
       routeOrigin: null,
       routeDestination: null,
     };

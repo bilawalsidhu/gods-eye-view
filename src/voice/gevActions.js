@@ -4359,6 +4359,8 @@ async function runAnalystQuery(
       'onGround',
       'squawk',
       'emergencyKind',
+      'emergencySource',
+      'emergencyBroadcast',
       'distanceKm',
       'confidence',
       'place',
@@ -4371,6 +4373,10 @@ async function runAnalystQuery(
     ]) {
       if (r[k] !== null && r[k] !== undefined) compact[k] = r[k];
     }
+    // When the status was heard rides along only with a broadcast status, so
+    // ordinary results stay compact.
+    if (r.emergencyKind && Number.isFinite(r.observedAtMs))
+      compact.observedAtMs = r.observedAtMs;
     return compact;
   });
   // Warm-up honesty: a layer enabled seconds ago hasn't finished its first

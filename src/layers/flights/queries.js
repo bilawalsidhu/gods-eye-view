@@ -15,6 +15,7 @@ import {
   FOCUS_EVIDENCE_DEV,
   FLEET_DR_INTERVAL_MS,
 } from './policy.js';
+import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
 
 export function createQueries({
   flightState,
@@ -223,7 +224,8 @@ export function createQueries({
    *   heading: number|null, verticalRateMps: number|null, onGround: boolean,
    *   military: boolean, aircraftClass: string|null, originCountry: string|null,
    *   operator: string|null, squawk: string|null, emergency: boolean,
-   *   emergencyKind: string|null, routeOrigin: string|null,
+   *   emergencyKind: string|null, emergencySource: 'squawk'|'ads-b'|null,
+   *   emergencyBroadcast: string|null, observedAtMs: number|null, routeOrigin: string|null,
    *   routeDestination: string|null}}
    */
 
@@ -264,6 +266,14 @@ export function createQueries({
       // without the flag.
       emergency: info?.emergency?.severity === 'emergency',
       emergencyKind: text(info?.emergency?.kind),
+      // Provenance, so a summary can say "broadcasting squawk 7700" rather
+      // than "ADS-B reports general emergency" (or flatten both): 'squawk'
+      // when the Mode A code names the status, 'ads-b' for the readsb field.
+      emergencySource: text(info?.emergency?.source),
+      emergencyBroadcast: emergencyBroadcastPhrase(info?.emergency),
+      // Epoch ms of the last transponder message — when this squawk/status
+      // was heard (OpenSky time_contact; readsb snapshot time minus `seen`).
+      observedAtMs: num(info?.lastContactEpochMs),
       routeOrigin: routeOk ? text(info?.route?.origin?.code) : null,
       routeDestination: routeOk ? text(info?.route?.destination?.code) : null,
     };

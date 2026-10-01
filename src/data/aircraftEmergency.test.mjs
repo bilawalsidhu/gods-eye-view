@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   aircraftEmergency,
+  emergencyBroadcastPhrase,
   isEmergency,
   normalizeSquawk,
 } from './aircraftEmergency.js';
@@ -61,4 +62,23 @@ test('priority statuses are reported but are not emergencies', () => {
   );
   assert.equal(isEmergency(aircraftEmergency({ emergency: 'minfuel' })), false);
   assert.equal(isEmergency(null), false);
+});
+
+test('the broadcast phrase quotes a naming code, else attributes ADS-B', () => {
+  assert.equal(
+    emergencyBroadcastPhrase(aircraftEmergency({ squawk: '7700' })),
+    'broadcasting squawk 7700 (general emergency)',
+  );
+  assert.equal(
+    emergencyBroadcastPhrase(
+      aircraftEmergency({ squawk: '1200', emergency: 'general' }),
+    ),
+    'ADS-B reports general emergency',
+  );
+  assert.equal(
+    emergencyBroadcastPhrase(aircraftEmergency({ emergency: 'lifeguard' })),
+    'ADS-B reports lifeguard (medical priority)',
+  );
+  assert.equal(emergencyBroadcastPhrase(null), null);
+  assert.equal(emergencyBroadcastPhrase({ kind: 'reserved' }), null);
 });
