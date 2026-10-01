@@ -5,6 +5,19 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Fixed
+
+- **A parked camera with a bundled layer enabled no longer requests a
+  render every frame.** The datacenters/dams overlay publisher called
+  `setOverlayEntries` on every 450 ms preRender walk; each call rebuilt
+  the shared host's cohorts and invalidated the host, which requests a
+  render. Measured A/B (request-space census, parked camera,
+  `local-datacenters` on): 636 → 206 `scene.requestRender` calls / 20 s,
+  28 → 11 frames executed — the remainder is Cesium's own tile-streaming
+  baseline. Numbers and method in `docs/PERFORMANCE.md` (2026-10-01
+  audit). (Extracted from upstream `b5568de`; the settle-wait half is
+  N/A here — this tree bounds ground sampling with retry arms.)
+
 ## [0.10.3] — 2026-09-29
 
 Upstream-audit extraction release: 16 fixes and one CI hardening grafted

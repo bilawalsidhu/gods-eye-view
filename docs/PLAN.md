@@ -2867,3 +2867,60 @@ the shortest, least load-exposed window — passed twice today under
 load (66). A long interactive QA session is far more exposed to
 software-GL context loss on a contended box than the boot window; the
 product rows all hold same-window evidence.
+
+## Phase 14 — Performance pass: idle render-request elimination (2026-10-01)
+
+Driver: "improve the website performance, monitor and profile to determine
+areas of improvement and optimizations." Cycle shape: inventory the
+instruments and baselines → fresh upstream triage → code-level audit →
+one measured fix → close the documented open inch.
+
+### What ran
+
+| Instrument | Result |
+| --- | --- |
+| Upstream perf-commit scan (`main..upstream/main`, perf/fps/gpu/memory/render grep) | 28 candidates triaged; all already extracted except one — `b5568de` (idle republishing). `499e116`/`fa9af39`/`b456eb8`/`20a03aa`/`8702458` verified present by content in this tree (this tree lacks a `terrainHeights` service, so `fa9af39`'s LRU is N/A; `screenAnnotationRenderer`'s cache was already bounded). |
+| Request-space census (lab probe, `scene.requestRender` wrap, no pumps) | BEFORE 636 calls/20 s (28 frames) → AFTER 206 calls/20 s (11 frames) with `local-datacenters` enabled on a parked camera. Remaining calls stack-sampled to Cesium's own tile-streaming path — identical between trees. |
+| `scripts/profile-gpu-holds.mjs --json` | Completed end-to-end; JSON captured. Closes the 2026-09-23 open inch (live `resolutionScale` + resolved-policy readback): low-demand 30 fps at rest, camera 60 during orbit, `resolutionScale 1` at dpr 1, holds exactly as designed. |
+| Overlay/worldOverlay unit suites | 109/110; the single failure is the allocation probe's `spawnSync` ETIMEDOUT at box load 60+ (environment — the probe spawns a child node whose start budget cannot be met on a contended box; CI's runner is the authoritative rerun). |
+
+### The fix (commit 5890329)
+
+The bundled-layer publisher (`datacenters`/`dams`) republished an
+unchanged cohort on every 450 ms preRender walk; each republication
+rebuilt host cohorts and invalidated the overlay host, which requests a
+render. Publish now snapshots `{entry, x, y, z}` and skips identical
+publications; `hide()` drops the snapshot; emptying always publishes.
+Measured effect and method recorded in `docs/PERFORMANCE.md`
+(2026-10-01 section). Regression-pinned in `src/data/localGeojson.test.mjs`.
+
+### Honest limits
+
+- The census and gpu-holds run executed on a contended box (load 35-70,
+  CI jobs active). Both instruments' claimed signals (request counts,
+  holds, resolved policy, resolutionScale) are load-independent by
+  their design notes; absolute fps remains unrecorded and unclaimed.
+- The gpu-holds full-session CPU profile refresh (boot/storm/detection
+  top-10 tables) was NOT rerun this cycle — the 2026-09-10 tables stand
+  until a quiet-box rerun; the 2026-10-01 audit found no reason to
+  expect their rankings to have shifted (the three fixes they spawned
+  are verified live by the gpu-holds run).
+- GitForge CI trigger drop (2026-09-23) recurred and was repaired in
+  this cycle: `swarmone-docker` benched (`status='offline'` with a
+  current heartbeat — the known open heartbeat bug) plus a wedged
+  trigger consumer holding a 2-day-old `running` row; documented
+  workaround applied (restart `gitforge@ci` then `gitforge@runner`,
+  ci first). Run `e7b72bad` (lint green at this record's writing) is the
+  validation run for commit `5890329`; its final verdict is recorded in
+  the v0.10.4 release record below.
+
+### Next steps (Phase 14 residuals)
+
+1. Quiet-box rerun of `profile-runtime.mjs` to refresh the 2026-09-10
+   CPU self-time tables (no evidence of drift; hygiene, not a gap).
+2. Upstream's `9e71081` (stop relaying upstream/JS error text to the
+   client) is a hardening extraction candidate for the next quality
+   cycle — security, not performance, so it was not grafted here.
+3. The GitForge heartbeat bug (benched runner never restored to
+   `online`) remains open upstream in GitForge itself; the restart
+   workaround is the standing mitigation.

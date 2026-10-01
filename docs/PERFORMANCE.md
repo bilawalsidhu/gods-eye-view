@@ -335,8 +335,8 @@ proxies to the widget) and unit-pinned on the real write target. The live
 canvas readback (`?renderScale=0.75` → `scene.canvas.width` 1080) could not
 be captured: the audit box sat at load ~80 with 71 Chromium processes and
 CDP `Runtime.callFunctionOn` itself timed out. The probe now samples
-`resolutionScale` plus the live canvas dimensions, so a quiet-box
-`node scripts/profile-gpu-holds.mjs --json out.json` run closes that inch.
+`resolutionScale` plus the live canvas dimensions; the 2026-10-01 run
+below closed that inch.
 
 The remaining knobs were already sane: FXAA off by default, MSAA 2,
 `targetFrameRate` 60 cap (120 Hz ProMotion fix, 2026-08-05). The HUD
@@ -365,6 +365,77 @@ not address it (the bottleneck was never single-threaded JS compute — see
 "Software-rendered CPU profile" above, where the top self-time entries are
 Cesium's own render/tile work). The open WASM candidates remain the
 measured ones in this document; the audit adds none.
+
+## Idle render-request audit (2026-10-01)
+
+A pass over upstream's post-v0.10.3 perf-relevant commits (the tree was
+290 behind / 513+ ahead at audit time) found exactly one material defect
+class still un-extracted, and it was real here too. Everything else had
+landed in the Phase 13 extraction or was N/A by layout: `499e116`
+(hidden-entity release on toggle-off) — already in this tree's
+`localGeojson.js`; `fa9af39` (terrain-height cache LRU) — no
+`terrainHeights` service exists here, and this tree's only client height
+cache (`screenAnnotationRenderer.js`) was already soft/hard-bounded;
+`b456eb8` + `20a03aa` (atmosphere) — ported in `src/atmosphereCompat.js`;
+`8702458` (icon-font subset) — already subset here (330 KB → ~4 KB,
+`index.html`).
+
+### The defect: the bundled-layer publisher republished every walk
+
+`createLocalInfrastructureOverlayPublisher.publish()` called
+`setOverlayEntries()` unconditionally — and the preRender walk calls
+`publish()` on every rendered frame. Each call re-normalized every
+entry, rebuilt the host cohorts, and `invalidateHost()`-ed the overlay
+host, which clears its rect caches AND calls `scene.requestRender()`.
+So with any bundled layer (datacenters/dams) enabled, every rendered
+frame requested at least one more frame: on a parked camera the scene
+never settled, and under any continuous-render hold (flights, orbit,
+storm) every frame also paid a full host normalize+rebuild for a cohort
+that had not changed. (Upstream `b5568de`, same root cause, same fix
+shape; the cables layer already had its own change detection here, and
+the commit's other half — settle-waited ground sampling — is N/A: this
+tree grounds stems with bounded retry arms instead.)
+
+### Measured A/B (request-space census, parked camera, `local-datacenters` ON)
+
+`scene.requestRender` was wrapped on the live scene (method wrap, no
+`/src` import — the harness-import-mints-a-second-module trap); the
+probe counted calls for 20 s with no screenshot pumps, so counts are
+independent of BeginFrame availability:
+
+| Tree | requestRender calls / 20 s | frames executed | governor |
+|---|---|---|---|
+| v0.10.3 (`3cb9a61`) | **636** | 28 | idle, holds `[]` |
+| publish guard (`5890329`) | **206** | 11 | idle, holds `[]` |
+
+**3.1× fewer render requests, 2.5× fewer executed frames.** The
+remaining 206 calls/20 s are Cesium's own tile-streaming self-requests
+(stack samples: `di.render → b1t → scene.requestRender`, cesium bundle)
+and are identical between trees. Both trees end at `requestRenderMode`
+true with the governor idle — the fix removes the request storm, not a
+hold; on hardware with steady BeginFrames the storm translated into
+continuous walk-cadence rendering that never let the parked scene rest.
+Fix + unit pinning: unchanged-cohort replays are skipped, an in-place
+tip move republishes, membership changes republish, `hide()` drops the
+snapshot (next `show()` republishes from scratch), and emptying the
+cohort always reaches the host.
+
+### gpu-holds live verification (closes the 2026-09-23 open inch)
+
+`node scripts/profile-gpu-holds.mjs --json` completed end-to-end (the
+navigation budget is now 360 s after a third tightness bite at load
+~56). The box ran at load 35-70 with CI jobs active — the portable
+signals (holds, resolved policy, resolutionScale) are load-independent
+by the instrument's design note above. Resolved live on this tree:
+`policy: "low-demand"` with `targetFrameRate 30` at boot-idle,
+flights-idle, and rest-after-orbit; `policy: "camera"` at 60 during
+orbit; `resolutionScale 1` (correct at dpr 1); holds exactly as
+designed — `style-anim` from the CRT first-run default stage (documented
+above: perf captures run `setStyle('normal')`) plus `flights` once
+flights are enabled; FXAA off, MSAA 2. SwiftShader renders/s 7/6/5/4
+across the phases — not hardware numbers, recorded only as the
+request-mode/policy conformance signal. Heap 188 MB, 74 long tasks over
+the full session. No new cost knob anomaly; no new WASM candidate.
 
 ### WASM-candidate verdicts (2026-09-23, R6 measured — all three disqualified)
 
