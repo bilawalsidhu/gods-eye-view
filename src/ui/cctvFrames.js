@@ -1,3 +1,4 @@
+import { isPositionOnlySource } from '../sources/cctvTypes.js';
 export function _clearCctvFrame() {
   this._cctvFrameRequestToken += 1;
   if (this._cctvFramePreloader) {
@@ -88,6 +89,14 @@ export function _syncCctvSourceBadge(activeCamera, enabled) {
   if (!enabled || !activeCamera) {
     this._cctvSourceBadge.textContent = 'SOURCE · UNKNOWN';
     this._cctvSourceBadge.dataset.frameState = 'idle';
+    return;
+  }
+  // A position-only camera publishes no imagery at all, so the badge says so
+  // outright. The loading/unavailable states below describe a feed in trouble;
+  // this one is not in trouble, it was never a feed.
+  if (isPositionOnlySource(activeCamera)) {
+    this._cctvSourceBadge.textContent = 'NO PUBLIC FEED · POSITION ONLY';
+    this._cctvSourceBadge.dataset.frameState = 'position-only';
     return;
   }
   const hasDisplayedFrame =

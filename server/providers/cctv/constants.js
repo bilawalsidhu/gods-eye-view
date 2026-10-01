@@ -244,6 +244,35 @@ export const DELDOT_ANCHORS = [
   { lat: 39.1582, lon: -75.5244 }, // Dover (Kent)
   { lat: 38.6906, lon: -75.3877 }, // Georgetown (Sussex)
 ];
+/**
+ * City of Amsterdam "verkeersinformatiesystemen" (traffic information systems)
+ * asset register, filtered server-side to `objectSoort=Camera`.
+ *
+ * POSITION-ONLY PACK. Amsterdam publishes WHERE its public traffic and ANPR
+ * cameras stand, not what they see — there is no public frame for any row.
+ * The pack therefore declares `mediaAvailability: 'position-only'`, which the
+ * proxy honours by refusing the Street View / synthetic frame chain outright
+ * (see server/providers/cctv.js). A Street View still is context about the
+ * location, not evidence from the camera, and billing one per camera per
+ * refresh for a picture that never changes would be worse than useless.
+ */
+export const AMSTERDAM_CAMERA_ORIGIN = 'https://api.data.amsterdam.nl/';
+export const AMSTERDAM_CAMERA_URL = `${AMSTERDAM_CAMERA_ORIGIN}v1/verkeersinformatiesystemen/verkeersinformatiesystemen/`;
+/** The register holds ~390 cameras; one page covers it with room to grow. */
+export const AMSTERDAM_CAMERA_PAGE_SIZE = 1000;
+/** Hard stop on `_links.next` following, so a paging bug cannot loop forever. */
+export const AMSTERDAM_MAX_PAGES = 4;
+export const DEFAULT_AMSTERDAM_MAX_SOURCES = 250;
+/** Prioritization anchor: Dam square, the centre of the canal ring. */
+export const AMSTERDAM_ANCHORS = [{ lat: 52.373, lon: 4.8926 }];
+/**
+ * Orthometric metres (h = H + N; see src/data/geoid.js). The polder city sits
+ * within a metre or two of NAP, which is itself ~mean sea level. Prior only:
+ * the client's one-shot ground snap corrects it wherever a 3D-tile or terrain
+ * stack can be sampled. Shipping the ELLIPSOIDAL number (~45 m at this
+ * latitude) would bury every camera under the mesh.
+ */
+export const AMSTERDAM_GROUND_ELEVATION_M = 2;
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one

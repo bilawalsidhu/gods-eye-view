@@ -740,6 +740,50 @@ By default the 250 cameras nearest downtown Vancouver and Victoria load.
 The Open Government Licence – British Columbia attribution is registered in the
 Data attribution popover.
 
+## Amsterdam position-only CCTV source pack
+
+The CCTV catalog adds the City of Amsterdam's public traffic-information asset
+register, read keyless from
+`https://api.data.amsterdam.nl/v1/verkeersinformatiesystemen/verkeersinformatiesystemen/`
+filtered server-side to `objectSoort=Camera` (~390 rows: mast traffic cameras
+plus the travel-time, environmental-zone, S100-ring and mobile ANPR networks).
+Two request headers are load-bearing and both fail silently if dropped: the API
+answers 406 to a plain `application/json`, so `Accept: application/hal+json` is
+required, and the register is natively Rijksdriehoek (EPSG:28992), so
+`Accept-Crs: EPSG:4326` is required. The Amsterdam bounding box doubles as the
+datum guard behind that second header — if the negotiation ever breaks, every
+row fails the check and the pack empties rather than scattering cameras. An
+optional `AMSTERDAM_DATA_API_KEY` rides as `X-Api-Key` ahead of the platform's
+announced key requirement. Paging follows `_links.next` only while it stays on
+the official origin, bounded to four pages.
+
+This pack is **position-only**: Amsterdam publishes where its public cameras
+stand, not what they see, and no frame URL exists for any row. Sources carry
+`mediaAvailability: 'position-only'`, which is a new field on the normalized
+source, in `/api/cctv/sources`, and in the `/api/cctv/stream/:id` payload (where
+`frameUrl` and `mediaUrl` are both null). `/api/cctv/frame/:id` and
+`/api/cctv/media/:id` answer `409` with `X-CCTV-Source: position-only` for those
+cameras, *before* the upstream → Street View → synthetic fallback chain runs, and
+health records the state as its own `position-only` status rather than
+`degraded`. The client refuses the request symmetrically: the ambient card pacer
+never selects such a camera, the projection plane keeps a `NO PUBLIC FEED ·
+POSITION ONLY` placeholder, and the panel badge reads the same. The chain still
+answers an outage for every other pack, which is what it is for; the default for
+an undeclared or unrecognized value is `public`, so no existing pack changes
+behavior. The register publishes no bearing, so every row takes the headingless
+low-confidence RAW PRIOR pose (id-hash heading, −18° / 44° / 145 m / 8 m) and an
+orthometric 2 m ground prior matching the Caltrans/TfL convention.
+
+By default the 250 cameras nearest Dam square load.
+`CCTV_AMSTERDAM_MAX_SOURCES` sets the pack cap (8–600) and
+`CCTV_AMSTERDAM_ENABLED=0` turns the pack off. The Gemeente Amsterdam
+attribution is registered in the Data attribution popover.
+
+Live Rijkswaterstaat motorway cameras near Amsterdam are deliberately not used:
+their image host publishes `robots.txt: Disallow: /` and returns a 401
+placeholder without a `Referer` of the operator's own site, so reading them would
+mean forging a Referer to defeat hotlink protection.
+
 ## Location control ownership
 
 City/POI rows, search/reset bindings, location readouts and the orbit indicator

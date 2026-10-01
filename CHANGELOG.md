@@ -1,5 +1,19 @@
 # Changelog
 
+- Amsterdam's public traffic and ANPR camera register joins the CCTV layer as a
+  **position-only** pack: the city publishes where its cameras stand, not what
+  they see. Those rows are marked `position-only` end to end — `/api/cctv/sources`
+  carries the state, `/api/cctv/frame` and `/api/cctv/media` answer 409 for them,
+  and the layer never requests a frame. They deliberately do NOT fall through to
+  the Street View / synthetic placeholder chain that a camera which is merely
+  down still gets: an installation existing somewhere and a live frame being
+  unavailable are different facts, and a Street View still is context about the
+  location rather than evidence from the camera. The panel shows them as
+  "no public feed", and they contribute surveyed positions and viewshed coverage
+  like any other camera. Keyless, with an optional `AMSTERDAM_DATA_API_KEY` ahead
+  of the city's planned key requirement; disable with `CCTV_AMSTERDAM_ENABLED=0`.
+  Every other pack is unchanged and keeps the full fallback chain.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a

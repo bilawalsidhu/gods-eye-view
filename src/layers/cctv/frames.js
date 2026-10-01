@@ -1,3 +1,4 @@
+import { isPositionOnlySource } from '../../sources/cctvTypes.js';
 import {
   FRAME_SIGNATURE_W,
   FRAME_SIGNATURE_H,
@@ -188,8 +189,13 @@ export function createFrames({ state: layerState, services, parts, source }) {
 
     const label = String(camera?.name || 'CCTV');
     const city = String(camera?.city || 'GLOBAL');
+    // A position-only camera states WHY there is no picture, rather than
+    // reading as a feed that happens to be down. The installation is the
+    // observed fact here; the absent frame is not a fault.
     const status = String(
-      health?.message || health?.status || camera?.feedType || 'NO FEED',
+      isPositionOnlySource(camera)
+        ? 'NO PUBLIC FEED · POSITION ONLY'
+        : health?.message || health?.status || camera?.feedType || 'NO FEED',
     ).toUpperCase();
 
     ctx.strokeStyle = 'rgba(0, 220, 255, 0.24)';
@@ -217,6 +223,9 @@ export function createFrames({ state: layerState, services, parts, source }) {
   function refreshProjectionImage(record, force = false) {
     const runtime = record?.projection;
     if (!runtime || runtime.mode !== 'image' || !runtime.image) return;
+    // No public imagery exists for this installation, so the projection plane
+    // keeps its placeholder rather than requesting a frame the proxy refuses.
+    if (isPositionOnlySource(record.camera)) return;
     // Hidden-state gate (perf wave 2): no new frame fetch/decode for a canvas
     // nobody can see. The refresh interval re-fills naturally on return.
     if (typeof document !== 'undefined' && document.hidden && !force) return;

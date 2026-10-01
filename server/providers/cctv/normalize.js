@@ -1,8 +1,19 @@
 import {
   normalizeFeedType,
   isVideoFeedType,
+  normalizeMediaAvailability,
+  isPositionOnlySource,
+  MEDIA_AVAILABILITY_PUBLIC,
+  MEDIA_AVAILABILITY_POSITION_ONLY,
 } from '../../../src/sources/cctvTypes.js';
-export { normalizeFeedType, isVideoFeedType };
+export {
+  normalizeFeedType,
+  isVideoFeedType,
+  normalizeMediaAvailability,
+  isPositionOnlySource,
+  MEDIA_AVAILABILITY_PUBLIC,
+  MEDIA_AVAILABILITY_POSITION_ONLY,
+};
 import { directionToHeading } from '../../../src/data/directionText.js';
 import { haversineKm } from '../common/geo.js';
 /**
@@ -356,6 +367,26 @@ export function isLikelyNswCoordinate(lat, lon) {
   );
 }
 
+/**
+ * Amsterdam's municipal extent, with slack for the A10 ring.
+ *
+ * Doubles as the DATUM guard for the Amsterdam pack. The register stores
+ * geometry in Rijksdriehoek (EPSG:28992), whose values are metres in the
+ * six-figure range (e.g. [120997, 485841]); the loader negotiates WGS84 with
+ * an `Accept-Crs` header. If that negotiation ever stops working, every row
+ * fails this check and the pack empties rather than scattering cameras into
+ * the Gulf of Guinea.
+ */
+export function isLikelyAmsterdamCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 52.25 &&
+    lat <= 52.46 &&
+    lon >= 4.7 &&
+    lon <= 5.1
+  );
+}
+
 /** Calgary's municipal extent, with slack for the ring road. */
 export function isLikelyCalgaryCoordinate(lat, lon) {
   return (
@@ -510,6 +541,15 @@ export function normalizeSourceItem(item) {
       item.code || String(item.name || '').toUpperCase() || item.id || '',
     ),
     sourceKind: String(item.sourceKind || item.kind || 'configured'),
+    // Does the OPERATOR publish imagery for this camera at all? Default
+    // 'public': a missing frame is a fault, so the proxy's Street View /
+    // synthetic fallback chain is the right answer. A pack sets
+    // 'position-only' when the upstream register is a survey of camera
+    // POSITIONS with no public imagery behind it (Amsterdam). That is a
+    // permanent, documented state rather than an outage, and the proxy
+    // refuses the fallback chain for it: a Street View still is context about
+    // the location, not evidence from the camera.
+    mediaAvailability: normalizeMediaAvailability(item.mediaAvailability),
     // Optional CAL badge input (cctv-v2 design §3b/§9.2, additive-only per the
     // global constraints — nothing else in this file changes): hand-authored
     // file/env catalog entries may declare poseSource:'curated' so the panel

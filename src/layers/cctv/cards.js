@@ -1,3 +1,4 @@
+import { isPositionOnlySource } from '../../sources/cctvTypes.js';
 import {
   createFrameSlot,
   CCTV_OVERLAY_SOURCE_ID,
@@ -279,6 +280,9 @@ export function createCards({ state: layerState, services, parts, source }) {
   ) {
     if (typeof document !== 'undefined' && document.hidden && !userGesture)
       return;
+    // Refused even on an explicit user gesture: there is no public frame to
+    // ask for, so a manual retry would only re-earn the proxy's 409.
+    if (isPositionOnlySource(record.camera)) return;
     const now = Date.now();
     const cameraId = record.camera.id;
     layerState._cardFetchInFlightCount += 1;

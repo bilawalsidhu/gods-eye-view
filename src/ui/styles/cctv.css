@@ -349,6 +349,14 @@
   background: rgba(255, 72, 72, 0.11);
 }
 
+/* Not an error state: this camera's operator publishes no imagery at all.
+   Muted rather than red, so it does not read as a feed in trouble. */
+#cctv-source-badge[data-frame-state='position-only'] {
+  color: #b9c6d2;
+  border-color: rgba(150, 174, 196, 0.42);
+  background: rgba(150, 174, 196, 0.1);
+}
+
 .cctv-summary-label {
   font-family: var(--font-mono);
   font-size: 8px;

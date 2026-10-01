@@ -3,6 +3,9 @@ import {
   normalizeFeedType,
   isVideoFeedType,
   toFiniteNumber,
+  normalizeMediaAvailability,
+  isPositionOnlySource,
+  MEDIA_AVAILABILITY_POSITION_ONLY,
 } from './cctv/normalize.js';
 import {
   buildSyntheticCctvSvg,
@@ -23,6 +26,15 @@ export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
  * fallback chain (upstream -> Street View -> synthetic SVG), and health tracking.
+ *
+ * The fallback chain answers an OUTAGE: a camera that should have a frame and
+ * currently does not. A source that declares
+ * `mediaAvailability: 'position-only'` has no public imagery by design, so the
+ * chain is refused for it outright and both /frame and /media answer 409. A
+ * Street View still is context about where the camera stands, not evidence
+ * from the camera, and presenting one as a degraded feed would collapse two
+ * different facts: "an installation exists here" and "no public frame is
+ * available".
  *
  * Endpoints:
  *   GET /api/cctv/sources        — list all registered camera sources
@@ -68,17 +80,58 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   /** Build a JSON payload describing stream info (feedType, URLs) for a camera. */
   const buildStreamPayload = (source, cameraId) => {
     const feedType = normalizeFeedType(source?.feedType || 'image');
+    // A position-only record advertises NO media URLs at all. Handing out a
+    // frameUrl that is contractually a 409 would invite every client to
+    // discover the refusal the hard way, once per camera.
+    const positionOnly = isPositionOnlySource(source);
     return {
       id: cameraId,
       feedType,
-      mediaUrl: isVideoFeedType(feedType)
-        ? `/api/cctv/media/${encodeURIComponent(cameraId)}`
-        : null,
-      frameUrl: `/api/cctv/frame/${encodeURIComponent(cameraId)}`,
+      mediaUrl:
+        !positionOnly && isVideoFeedType(feedType)
+          ? `/api/cctv/media/${encodeURIComponent(cameraId)}`
+          : null,
+      frameUrl: positionOnly
+        ? null
+        : `/api/cctv/frame/${encodeURIComponent(cameraId)}`,
       provider: source?.provider || '',
-      sourceKind:
-        source?.sourceKind || (source?.url ? 'configured' : 'fallback'),
+      mediaAvailability: normalizeMediaAvailability(source?.mediaAvailability),
+      sourceKind: positionOnly
+        ? MEDIA_AVAILABILITY_POSITION_ONLY
+        : source?.sourceKind || (source?.url ? 'configured' : 'fallback'),
     };
+  };
+
+  /**
+   * Answer a media/frame request for a source that publishes no imagery.
+   *
+   * 409 rather than 404: the camera is registered and well known, it is the
+   * REQUEST that does not apply to it. Health records the state as its own
+   * kind so the panel can say "no public feed" instead of "degraded".
+   *
+   * @param {import('http').ServerResponse} res
+   * @param {string} cameraId
+   * @param {object|undefined} source
+   */
+  const refusePositionOnlyMedia = (res, cameraId, source) => {
+    setHealth(cameraId, {
+      status: MEDIA_AVAILABILITY_POSITION_ONLY,
+      sourceKind: MEDIA_AVAILABILITY_POSITION_ONLY,
+      label: source?.provider || 'Position-only register',
+      message: 'No public media published for this camera',
+    });
+    res.writeHead(409, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+      'X-CCTV-Source': MEDIA_AVAILABILITY_POSITION_ONLY,
+    });
+    res.end(
+      JSON.stringify({
+        error: 'No public media published for this camera',
+        mediaAvailability: MEDIA_AVAILABILITY_POSITION_ONLY,
+        provider: source?.provider || '',
+      }),
+    );
   };
 
   /**
@@ -161,6 +214,12 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               feedType: normalizeFeedType(source.feedType),
               sourceKind:
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
+              // Carried to the client so the layer can refuse the live-frame
+              // fallback for a position-only record instead of rendering a
+              // Street View still as if it were a degraded camera.
+              mediaAvailability: normalizeMediaAvailability(
+                source.mediaAvailability,
+              ),
               poseSource: source.poseSource,
               license: source.license,
               credit: source.credit || '',
@@ -210,6 +269,10 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           }
           const cameraId = decodeURIComponent(match[1]);
           const source = sourceById.get(cameraId);
+          if (isPositionOnlySource(source)) {
+            refusePositionOnlyMedia(res, cameraId, source);
+            return;
+          }
           const mediaUrl = source?.url || '';
           const feedType = normalizeFeedType(source?.feedType || 'image');
           const leaseId = url.searchParams.get('lease');
@@ -467,6 +530,15 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           decodeURIComponent(url.pathname.replace('/frame/', '').trim()) ||
           'camera';
         const source = sourceById.get(cameraId);
+        // Refused BEFORE the upstream/Street View/synthetic chain: for a
+        // position-only record there is nothing upstream to miss, so running
+        // the chain would bill a Street View request per camera per refresh
+        // for a picture that never changes, and return it as a "degraded"
+        // frame from a camera that never published one.
+        if (isPositionOnlySource(source)) {
+          refusePositionOnlyMedia(res, cameraId, source);
+          return;
+        }
         const label = url.searchParams.get('label') || source?.name || cameraId;
         const city = url.searchParams.get('city') || source?.city || '';
         const lat = Number(url.searchParams.get('lat') || source?.lat);

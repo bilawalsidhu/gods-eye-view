@@ -2,6 +2,7 @@ import * as Cesium from 'cesium';
 import { staticFrameRefreshMs } from '../../data/cctvLod.js';
 import { frameFetchDue, cardFetchPolicy } from '../../data/cctvCards.js';
 import { DEFAULT_CAMERA_CALIBRATION } from './policy.js';
+import { isPositionOnlySource } from '../../sources/cctvTypes.js';
 
 export function createModel({ state: layerState, services, parts, source }) {
   const { focusPassIsNeeded, getFocusTarget } = services.focus;
@@ -476,6 +477,11 @@ export function createModel({ state: layerState, services, parts, source }) {
     const consider = (id) => {
       const record = layerState._recordById.get(id);
       if (!record) return;
+      // A position-only camera publishes no imagery at all, so it never
+      // becomes a fetch candidate: no cold-fill slot, no staleness, no retry
+      // backoff. Left in the rotation it would burn a burst slot per tick on a
+      // request the proxy answers 409 by contract.
+      if (isPositionOnlySource(record.camera)) return;
       const slot = parts.cards.ensureCardFrameSlot(id);
       if (layerState._cardFetchPendingIds.has(id)) {
         // An in-flight first-frame fetch keeps cold-fill mode active without

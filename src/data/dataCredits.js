@@ -208,6 +208,12 @@ export const DATA_CREDITS = [
     html: 'CCTV live video (Delaware): <a href="https://deldot.gov/map/" target="_blank" rel="noopener">DelDOT — Delaware Department of Transportation</a>',
   },
   {
+    key: 'amsterdam-cctv',
+    html:
+      'Public camera register, positions only (Amsterdam): ' +
+      '<a href="https://api.data.amsterdam.nl/v1/verkeersinformatiesystemen/" target="_blank" rel="noopener">Gemeente Amsterdam</a>',
+  },
+  {
     key: 'caltrans-cctv',
     html:
       'CCTV cameras &amp; frames (California): Caltrans — ' +

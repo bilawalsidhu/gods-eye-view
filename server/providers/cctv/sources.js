@@ -59,6 +59,13 @@ import {
   DELDOT_CCTV_URL,
   DEFAULT_DELDOT_MAX_SOURCES,
   DELDOT_ANCHORS,
+  AMSTERDAM_CAMERA_ORIGIN,
+  AMSTERDAM_CAMERA_URL,
+  AMSTERDAM_CAMERA_PAGE_SIZE,
+  AMSTERDAM_MAX_PAGES,
+  DEFAULT_AMSTERDAM_MAX_SOURCES,
+  AMSTERDAM_ANCHORS,
+  AMSTERDAM_GROUND_ELEVATION_M,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -76,6 +83,8 @@ import {
   isLikelyTexasCoordinate,
   isLikelyNswCoordinate,
   isLikelyCalgaryCoordinate,
+  isLikelyAmsterdamCoordinate,
+  MEDIA_AVAILABILITY_POSITION_ONLY,
   cameraDisplayCode,
   rowArrayToObject,
   prioritizeSources,
@@ -1696,6 +1705,203 @@ export async function loadDelDOTSourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] DelDOT source download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/**
+ * Render the register's Dutch camera-type label in the app's language.
+ *
+ * Fails OPEN: an unrecognized type passes through verbatim rather than being
+ * dropped or blanked, so a new type the city introduces still gets a name.
+ * ("Mileuzone" reproduces an upstream typo for Milieuzone — matching the wire
+ * value is the point.)
+ *
+ * @param {string} type - `typeGedetailleerd` from the register.
+ * @returns {string} Display label, or '' when the field is empty.
+ */
+export function amsterdamCameraTypeLabel(type) {
+  const raw = String(type || '').trim();
+  if (!raw) return '';
+  const known = {
+    'TV camera': 'Traffic camera',
+    'ANPR camera Reistijd': 'ANPR — travel time',
+    'ANPR camera Mileuzone': 'ANPR — environmental zone',
+    'ANPR camera S100': 'ANPR — S100 ring',
+    'ANPR camera Verplaatsbaar': 'ANPR — mobile',
+    'ANPR camera Munt': 'ANPR — Munt',
+  };
+  return known[raw] || raw;
+}
+
+/**
+ * Normalize City of Amsterdam traffic-camera register rows into CCTV sources.
+ *
+ * Pure (no I/O) so the suite can pin the type mapping, the coordinate datum
+ * guard and the pose personality without touching the network.
+ *
+ * Rows are kept only with a Point geometry inside the Amsterdam bounding box
+ * and a non-empty `objectnummer` — the register's stable, unique asset number,
+ * which is far friendlier in a camera id than the row GUID.
+ *
+ * Every row is POSITION-ONLY: the register is a survey of installations, and
+ * no public imagery exists behind any of them. `mediaAvailability` carries
+ * that fact all the way to the client, which refuses the live-frame fallback
+ * rather than dressing a Street View still up as a degraded camera.
+ *
+ * The register carries no bearing for any camera, so every row takes the same
+ * headingless low-confidence pose personality as TfL: an id-hash fallback
+ * heading and the wider, shorter, lower prior. These are RAW PRIORS — the
+ * client's one-shot ground snap and manual calibration own the truth.
+ *
+ * @param {Array<object>} records - Raw `verkeersinformatiesystemen` rows.
+ * @returns {Array<object>} Normalized camera source objects.
+ */
+export function normalizeAmsterdamCameraRecords(records) {
+  const rows = Array.isArray(records) ? records : [];
+  const cameras = [];
+  const seen = new Set();
+
+  for (const record of rows) {
+    if (!record || typeof record !== 'object') continue;
+    if (String(record.objectSoort || '').trim() !== 'Camera') continue;
+
+    const geometry = record.geometrie;
+    if (!geometry || geometry.type !== 'Point') continue;
+    const coordinates = Array.isArray(geometry.coordinates)
+      ? geometry.coordinates
+      : [];
+    const lon = toFiniteNumber(coordinates[0]);
+    const lat = toFiniteNumber(coordinates[1]);
+    if (!isLikelyAmsterdamCoordinate(lat, lon)) continue;
+
+    const assetNumber = String(record.objectnummer || '').trim();
+    if (!assetNumber) continue;
+    const slug = assetNumber
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    if (!slug) continue;
+    const cameraId = `ams-${slug}`;
+    if (seen.has(cameraId)) continue;
+    seen.add(cameraId);
+
+    const street = String(record.standplaats || '').trim();
+    const typeLabel = amsterdamCameraTypeLabel(record.typeGedetailleerd);
+    let name;
+    if (street && typeLabel) name = `${street} (${typeLabel})`;
+    else if (street) name = street;
+    else name = `${typeLabel || 'Traffic camera'} ${assetNumber}`;
+
+    cameras.push({
+      id: cameraId,
+      name,
+      city: 'Amsterdam',
+      cityId: 'amsterdam',
+      provider: 'Gemeente Amsterdam',
+      lat,
+      lon,
+      // No bearing anywhere in the register → id-hash fallback, low-confidence
+      // personality (identical to every TfL camera).
+      headingDeg: fallbackHeadingFromId(cameraId),
+      headingConfidence: 'low',
+      pitchDeg: -18,
+      fovDeg: 44,
+      rangeM: 145,
+      mountHeightM: 8,
+      groundElevationM: AMSTERDAM_GROUND_ELEVATION_M,
+      feedType: 'image',
+      // No public imagery exists for ANY row. This is not an outage, so it is
+      // declared rather than left to the fallback chain to discover.
+      url: '',
+      snapshotUrl: '',
+      mediaAvailability: MEDIA_AVAILABILITY_POSITION_ONLY,
+      sourceKind: 'amsterdam-open-data',
+      license:
+        'Public camera register, Gemeente Amsterdam (positions only — no public frames)',
+    });
+  }
+
+  return cameras;
+}
+
+/**
+ * Fetch the City of Amsterdam public traffic-camera register.
+ * `CCTV_AMSTERDAM_ENABLED=0` disables the pack.
+ *
+ * Keyless today: an optional AMSTERDAM_DATA_API_KEY rides as `X-Api-Key`,
+ * because the DSO platform has announced that keys become mandatory on a date
+ * still to be set.
+ *
+ * Two wire details are load-bearing, and both fail SILENTLY without them:
+ *   - `Accept: application/hal+json` — DSO-API answers 406 to a plain
+ *     `application/json`, even with `_format=json` in the query.
+ *   - `Accept-Crs: EPSG:4326` — the register is natively Rijksdriehoek
+ *     (EPSG:28992). Without the header every row fails the coordinate guard
+ *     and the pack empties (see isLikelyAmsterdamCoordinate).
+ *
+ * Paging follows `_links.next`, pinned to the official origin and bounded by
+ * AMSTERDAM_MAX_PAGES.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadAmsterdamSourcesFromOpenData() {
+  const apiKey = String(process.env.AMSTERDAM_DATA_API_KEY || '').trim();
+  const headers = {
+    Accept: 'application/hal+json',
+    'Accept-Crs': 'EPSG:4326',
+    ...(apiKey ? { 'X-Api-Key': apiKey } : {}),
+  };
+
+  try {
+    const first = new URL(AMSTERDAM_CAMERA_URL);
+    first.searchParams.set('_format', 'json');
+    first.searchParams.set('_pageSize', String(AMSTERDAM_CAMERA_PAGE_SIZE));
+    first.searchParams.set('objectSoort', 'Camera');
+
+    const records = [];
+    let next = first.toString();
+    for (let page = 0; page < AMSTERDAM_MAX_PAGES && next; page++) {
+      const resp = await fetch(next, {
+        headers,
+        signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+        redirect: 'error',
+      });
+      if (!resp.ok) {
+        console.warn(
+          '[CCTV] Amsterdam camera register download failed:',
+          resp.status,
+        );
+        break;
+      }
+      const payload = await readResponseJsonCapped(resp, 4 * 1024 * 1024);
+      const rows = payload?._embedded?.verkeersinformatiesystemen;
+      if (!Array.isArray(rows) || !rows.length) break;
+      records.push(...rows);
+
+      // Official-host pin on the SERVER-supplied paging link (defense in depth
+      // — the same idiom the other packs apply to upstream-supplied URLs).
+      const nextHref = String(payload?._links?.next?.href || '');
+      next = nextHref.startsWith(AMSTERDAM_CAMERA_ORIGIN) ? nextHref : '';
+    }
+
+    const cameras = normalizeAmsterdamCameraRecords(records);
+    const maxRaw = Number(
+      process.env.CCTV_AMSTERDAM_MAX_SOURCES || DEFAULT_AMSTERDAM_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(600, Math.floor(maxRaw)))
+      : DEFAULT_AMSTERDAM_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, AMSTERDAM_ANCHORS);
+    console.log(
+      `[CCTV] Loaded Amsterdam camera register: ${cameras.length} cameras (using nearest ${prioritized.length}; positions only, no public frames)`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Amsterdam camera register download error:',
       error?.message || error,
     );
     return [];

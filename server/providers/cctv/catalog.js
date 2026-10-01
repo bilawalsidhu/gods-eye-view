@@ -18,6 +18,7 @@ import {
   loadNswSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
+  loadAmsterdamSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -91,6 +92,15 @@ const LIVE_PACKS = [
     name: 'deldot',
     enabled: () => envEnabled('CCTV_DELDOT_ENABLED'),
     load: loadDelDOTSourcesFromOpenData,
+  },
+  // Position-only: a register of where Amsterdam's public traffic and ANPR
+  // cameras stand, with no public imagery behind any row. The pack declares
+  // mediaAvailability:'position-only' and the proxy refuses the live-frame
+  // fallback chain for it.
+  {
+    name: 'amsterdam',
+    enabled: () => envEnabled('CCTV_AMSTERDAM_ENABLED'),
+    load: loadAmsterdamSourcesFromOpenData,
   },
 ];
 /**
