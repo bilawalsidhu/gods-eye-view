@@ -200,7 +200,8 @@ function actionSchemaByName(schemas) {
 }
 
 function normalizeKeywords(value) {
-  if (!Array.isArray(value)) throw new TypeError('Command keywords must be an array');
+  if (!Array.isArray(value))
+    throw new TypeError('Command keywords must be an array');
   const keywords = value.map((entry) => boundedText(entry, 80));
   if (keywords.some((entry) => !entry))
     throw new TypeError('Command keywords must be bounded text');
@@ -215,7 +216,9 @@ function normalizeCommandEntry(entry, schemaIndex) {
   const group = boundedText(entry.group, 80);
   const name = boundedText(entry.action?.name, 120);
   if (!id || !label || !group || !name)
-    throw new TypeError('Command id, label, group, and action name are required');
+    throw new TypeError(
+      'Command id, label, group, and action name are required',
+    );
   const schema = schemaIndex.get(name);
   if (!schema) throw new TypeError(`Unknown command action: ${name}`);
   const args = entry.action?.args ?? {};
@@ -280,13 +283,12 @@ function commandScore(command, query) {
 }
 
 /** Deterministic catalog search; no model call and no execution authority. */
-export function searchCommandCatalog(
-  catalog,
-  query,
-  { limit = 10 } = {},
-) {
+export function searchCommandCatalog(catalog, query, { limit = 10 } = {}) {
   const normalizedQuery = String(query ?? '').trim();
-  const boundedLimit = Math.max(1, Math.min(50, Math.floor(Number(limit) || 10)));
+  const boundedLimit = Math.max(
+    1,
+    Math.min(50, Math.floor(Number(limit) || 10)),
+  );
   const commands = Array.isArray(catalog) ? catalog : [];
   if (!normalizedQuery) return commands.slice(0, boundedLimit);
 
