@@ -3,8 +3,11 @@ import test from 'node:test';
 import {
   accumulateGnssObservations,
   binGnssCells,
+  GNSS_CLASSIFIER,
+  GNSS_PROVENANCE,
   gnssCellKey,
-  gnssInterferenceLevel,
+  gnssIntegrityLevel,
+  gnssProvenance,
   normalizeGnssAircraft,
 } from './records.js';
 
@@ -93,14 +96,86 @@ test('cell keys are stable half-degree bins, clamped at the poles and antimeridi
   assert.equal(gnssCellKey(-0.1, -0.1), '179:359');
 });
 
-test('interference level follows the gpsjam.org published cell formula and bands', () => {
-  assert.deepEqual(gnssInterferenceLevel(10, 0), { percent: 0, level: 'low' });
+test('integrity level follows the gpsjam.org published cell formula and bands', () => {
+  const nominal = {
+    percent: 0,
+    level: 'low',
+    state: 'nominal',
+    interpretation: null,
+  };
+  assert.deepEqual(gnssIntegrityLevel(10, 0), nominal);
   // One degraded aircraft is always discounted.
-  assert.deepEqual(gnssInterferenceLevel(10, 1), { percent: 0, level: 'low' });
-  assert.equal(gnssInterferenceLevel(50, 2).level, 'medium');
-  assert.equal(gnssInterferenceLevel(10, 2).level, 'medium');
-  assert.equal(gnssInterferenceLevel(10, 3).level, 'high');
-  assert.equal(gnssInterferenceLevel(0, 0).level, 'low');
+  assert.deepEqual(gnssIntegrityLevel(10, 1), nominal);
+  assert.equal(gnssIntegrityLevel(50, 2).level, 'medium');
+  assert.equal(gnssIntegrityLevel(10, 2).level, 'medium');
+  assert.equal(gnssIntegrityLevel(10, 3).level, 'high');
+  assert.equal(gnssIntegrityLevel(0, 0).level, 'low');
+});
+
+test('the primary state is a navigation-integrity anomaly; interference is only the secondary reading', () => {
+  for (const [total, bad] of [
+    [50, 2],
+    [10, 3],
+  ]) {
+    const { state, interpretation } = gnssIntegrityLevel(total, bad);
+    assert.equal(state, 'navigation-integrity-anomaly');
+    assert.equal(interpretation, 'suspected-gnss-interference');
+  }
+  const store = new Map();
+  accumulateGnssObservations(
+    store,
+    [
+      { hex: 'h1', lat: 10.1, lon: 10.1, degraded: true },
+      { hex: 'h2', lat: 10.2, lon: 10.2, degraded: true },
+      { hex: 'h3', lat: 10.3, lon: 10.3, degraded: false },
+    ],
+    0,
+  );
+  const [cell] = binGnssCells(store);
+  assert.equal(cell.level, 'high');
+  assert.equal(cell.state, 'navigation-integrity-anomaly');
+  assert.equal(cell.interpretation, 'suspected-gnss-interference');
+  for (const key of Object.keys(cell))
+    assert.doesNotMatch(key, /interference|jamming|spoof/i);
+});
+
+test('provenance separates the GEV classifier from the gpsjam aggregation and the GEV window', () => {
+  assert.deepEqual(GNSS_PROVENANCE.classifier, {
+    id: 'gev-nic-nacp-v1',
+    rule: 'gpsOkBefore set || NIC < 7 || NACp < 8',
+    basis: '14 CFR 91.227(c) ADS-B Out performance minima (US regulation)',
+    definedBy: 'GEV',
+    validated: false,
+  });
+  assert.equal(GNSS_PROVENANCE.classifier, GNSS_CLASSIFIER);
+  assert.deepEqual(GNSS_PROVENANCE.aggregation, {
+    id: 'gpsjam-cell-bands',
+    formula: '100 * max(0, bad - 1) / total',
+    bands: [0.02, 0.1],
+    source: 'https://gpsjam.org/faq',
+    definedBy: 'gpsjam.org',
+  });
+  assert.deepEqual(GNSS_PROVENANCE.window, {
+    minutes: 30,
+    scope: 'visited-view',
+    cellDeg: 0.5,
+    minAircraft: 3,
+    definedBy: 'GEV',
+  });
+  assert.equal(GNSS_PROVENANCE.state.id, 'navigation-integrity-anomaly');
+  assert.equal(
+    GNSS_PROVENANCE.interpretation.id,
+    'suspected-gnss-interference',
+  );
+  assert.equal(GNSS_PROVENANCE.interpretation.validated, false);
+  assert.ok(Object.isFrozen(GNSS_PROVENANCE));
+  assert.ok(Object.isFrozen(GNSS_PROVENANCE.aggregation.bands));
+  // The bands in provenance are the ones the level function applies.
+  const [medium, high] = GNSS_PROVENANCE.aggregation.bands;
+  assert.equal(gnssIntegrityLevel(100, 1 + 100 * medium).level, 'medium');
+  assert.equal(gnssIntegrityLevel(100, 1 + 100 * high).level, 'medium');
+  assert.equal(gnssIntegrityLevel(100, 2 + 100 * high).level, 'high');
+  assert.equal(gnssProvenance({ windowMs: 10 * 60_000 }).window.minutes, 10);
 });
 
 test('observations count each aircraft once per cell and expire after the window', () => {

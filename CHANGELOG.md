@@ -13,11 +13,18 @@
   largest cities) and `CCTV_VEGVESEN_VIDEO=0` keeps stills only. Attributed
   under NLOD 2.0.
 
-- GNSS Interference layer (Events group): ADS-B aircraft that report degraded
-  navigation accuracy (below the 14 CFR 91.227 ADS-B Out minima, NIC < 7 or
-  NACp < 8, or readsb's GPS-loss flag) are binned into 0.5° cells over a
-  rolling 30-minute window and scored with gpsjam.org's published formula and
-  bands. Keyless, worldwide wherever adsb.lol has receivers; reads
+- GNSS Integrity layer (Events group, share id `gnss-interference`): cells of
+  low navigation accuracy reported by ADS-B aircraft. The method is a GEV
+  threshold plus gpsjam.org aggregation, not "the gpsjam method": an aircraft
+  counts as low when it reports NIC < 7 or NACp < 8 (borrowed from the US
+  14 CFR 91.227 ADS-B Out minima, not a published interference classifier) or
+  readsb's GPS-loss flag; aircraft are binned into 0.5° cells over a
+  GEV-defined rolling 30-minute window around visited views and scored with
+  gpsjam.org's published formula and 2% / 10% bands. Medium and high cells
+  are navigation-integrity anomalies; suspected GNSS interference is a
+  secondary, unvalidated interpretation. The layer and the proxy expose
+  machine-readable provenance (`provenance`, `classifier: gev-nic-nacp-v1`).
+  Keyless, worldwide wherever adsb.lol has receivers; reads
   a capped 250 nm snapshot around the camera through `/api/gnss-integrity`,
   which returns integrity fields only and serves the last snapshot when the
   upstream fails.

@@ -1,4 +1,7 @@
-import { normalizeGnssAircraft } from '../../src/layers/gnss/records.js';
+import {
+  GNSS_CLASSIFIER,
+  normalizeGnssAircraft,
+} from '../../src/layers/gnss/records.js';
 import { adsbLolFallbackAnchor } from './aircraft/opensky.js';
 import { coalesceProxyRequest, readResponseJsonCapped } from './common/http.js';
 import { makeRateLimiter, clientKey } from './common/rate-limit.js';
@@ -91,6 +94,8 @@ export function gnssIntegrityProxy({
       fetchedAt: now(),
       anchor: { lat, lon },
       radiusNm: RADIUS_NM,
+      // `degraded` on each row is this classifier's verdict, not gpsjam's.
+      classifier: GNSS_CLASSIFIER.id,
       rows,
     };
   }

@@ -8,7 +8,11 @@ test('the source asks the same-origin proxy for the view anchor', async () => {
     fetchImpl: async (url, options) => {
       calls.push(url);
       assert.ok(options.signal instanceof AbortSignal);
-      return Response.json({ fetchedAt: 5, rows: [{ hex: 'abc123' }] });
+      return Response.json({
+        fetchedAt: 5,
+        classifier: 'gev-nic-nacp-v1',
+        rows: [{ hex: 'abc123' }],
+      });
     },
   });
   const snapshot = await source.getSnapshot(
@@ -20,6 +24,7 @@ test('the source asks the same-origin proxy for the view anchor', async () => {
     rows: [{ hex: 'abc123' }],
     fetchedAt: 5,
     stale: false,
+    classifier: 'gev-nic-nacp-v1',
   });
 });
 
@@ -30,6 +35,7 @@ test('the source reports stale proxy data and rejects bad input or responses', a
   }).getSnapshot({ latitude: 1, longitude: 2 });
   assert.equal(stale.stale, true);
   assert.equal(stale.fetchedAt, null);
+  assert.equal(stale.classifier, null);
 
   await assert.rejects(
     createAdsbGnssSource({ fetchImpl: reply({}) }).getSnapshot({}),

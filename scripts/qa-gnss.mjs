@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * qa-gnss.mjs — headless proof for the GNSS Interference layer.
+ * qa-gnss.mjs — headless proof for the GNSS Integrity layer
+ * (id `gnss-interference`): low navigation accuracy reported by ADS-B.
  *
  * Drives the REAL app in headless Chromium against a dev server (keyless).
  * The live section reads adsb.lol through `/api/gnss-integrity` (60 s server
@@ -16,6 +17,8 @@
  *         with 1 degraded is low (first bad discounted), a clean cell at sea
  *         is low, a 2-aircraft cell is withheld; `stale: true` reaches
  *         getStats. Every band is drawn and low is shown over land and sea.
+ *         The row reads as low navigation accuracy, and stats carry the
+ *         machine-readable provenance (GEV classifier, gpsjam bands, window).
  *   (iii) FAILURE — the route stubbed to 502: stats.error is set and the
  *         cells already on the globe are kept.
  *   (iv)  DISABLE — the layer's data source is hidden.
@@ -108,13 +111,19 @@ async function enableAndSettle(page, { timeoutS = 30, refresh = false } = {}) {
         if (stats.count > 0 || stats.error) break;
         await new Promise((r) => setTimeout(r, 1000));
       }
-      const legend = layer
-        .getRowControls()
-        .legend.map(({ label, count }) => ({ label, count }));
+      const rowControls = layer.getRowControls().legend;
+      const legend = rowControls.map(({ label, count }) => ({ label, count }));
+      const blurb = rowControls[0]?.blurb ?? '';
+      const rowName =
+        document.querySelector(`[data-layer-id="${id}"] .data-name`)
+          ?.textContent ?? '';
       const ds = window.__godsEyeView.viewer.dataSources.getByName(id)[0];
       return {
         stats,
         legend,
+        blurb,
+        rowName,
+        name: layer.name,
         entities: ds?.entities.values.length ?? -1,
         shown: ds?.show ?? null,
       };
@@ -217,7 +226,7 @@ function fixturePayload() {
 }
 
 async function main() {
-  console.log('\nGNSS Interference proof (qa-gnss)');
+  console.log('\nGNSS Integrity proof (qa-gnss)');
   console.log(`  App URL : ${APP_URL}\n`);
   try {
     const res = await fetch(APP_URL);
@@ -345,6 +354,32 @@ async function main() {
       'BANDS: 5/10 is high, 2/30 is medium, 1/3 and 0/4 are low',
       band('Over') === 1 && band('2') === 1 && band('Under') === 2,
       JSON.stringify(f.legend),
+    );
+    const prov = f.stats.provenance;
+    record(
+      'PROVENANCE: GEV classifier, gpsjam bands and visited-view window are machine-readable',
+      prov?.classifier?.id === 'gev-nic-nacp-v1' &&
+        prov.classifier.definedBy === 'GEV' &&
+        prov.classifier.validated === false &&
+        prov.aggregation?.source === 'https://gpsjam.org/faq' &&
+        JSON.stringify(prov.aggregation.bands) === '[0.02,0.1]' &&
+        prov.window?.minutes === 30 &&
+        prov.window.scope === 'visited-view' &&
+        prov.interpretation?.validated === false,
+      JSON.stringify(prov?.classifier),
+    );
+    record(
+      'WORDING: the row leads with low navigation accuracy, interference only as the hedged reading',
+      f.name === 'GNSS Integrity' &&
+        f.rowName.includes('GNSS Integrity') &&
+        !/interference/i.test(f.rowName) &&
+        f.legend.every(({ label }) => label.endsWith('low accuracy')) &&
+        f.blurb.startsWith(
+          'Share of ADS-B aircraft reporting low navigation accuracy',
+        ) &&
+        /GEV threshold/.test(f.blurb) &&
+        /Suspected jamming or spoofing is one possible cause/.test(f.blurb),
+      `name=${JSON.stringify(f.name)}`,
     );
     record(
       'BANDS: stale snapshot is reported',

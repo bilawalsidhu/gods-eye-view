@@ -24,7 +24,7 @@ import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
-import { createApplicationGnssInterference } from './layers/gnss.js';
+import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
@@ -149,7 +149,7 @@ export function createApplicationCatalog({
         createApplicationFirePerimeters({
           source: sources['fire-perimeters'],
         }),
-        createApplicationGnssInterference({
+        createApplicationGnssIntegrity({
           source: sources['gnss-interference'],
         }),
         createApplicationAlpr({ surface, source: sources.alpr }),
