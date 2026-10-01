@@ -3004,5 +3004,7 @@
   "Gemini access was refused. Check the API key and model access.": "Доступ к Gemini запрещён. Проверьте ключ API и доступ к модели.",
   "Gemini Live is unavailable for the configured model.": "Gemini Live недоступен для выбранной модели.",
   "Token request is too large": "Запрос токена слишком велик",
-  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON"
+  "Use an empty JSON token request": "Используйте запрос токена с пустым объектом JSON",
+  "HW {label}": "ОБОРУД. {label}",
+  "{maker} (PTZ)": "{maker} (PTZ)"
 }

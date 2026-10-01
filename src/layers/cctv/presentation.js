@@ -7,6 +7,10 @@ import {
   specFovCapabilityToken,
   isDatasheetFov,
 } from './modelSpecs.js';
+import { hardwareHudToken, hardwareLabel } from './hardware.js';
+
+/** A PTZ-only product line's label, e.g. "Pelco Spectra Enhanced (PTZ)". */
+const hardwarePtzLabel = (maker) => t('{maker} (PTZ)', { maker });
 
 export function createPresentation({
   state: layerState,
@@ -65,6 +69,12 @@ export function createPresentation({
       // current zoom, so it is shown beside the estimate, never as it.
       specFovCapabilityToken(active.camera, (span) =>
         t('SPEC FOV {span}° (CAPABILITY)', { span }),
+      ),
+      // Maker / product line when the pack publishes it (Austin camera_mfg).
+      hardwareHudToken(
+        active.camera,
+        (label) => t('HW {label}', { label }),
+        hardwarePtzLabel,
       ),
       t('COVERAGE {value}km²', { value: area.toFixed(2) }),
       overlapCount > 0
@@ -151,6 +161,8 @@ export function createPresentation({
       sourceMessage: health?.message || '',
       sourceLabel: health?.label || camera.provider || '',
       credit: camera.credit || '',
+      // Hardware maker label ('' when the pack names none); see hardware.js.
+      hardwareLabel: hardwareLabel(camera, hardwarePtzLabel),
       calibration: {
         ...parts.calibration.normalizeCalibration(camera.calibration),
       },

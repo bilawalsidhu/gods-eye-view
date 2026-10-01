@@ -4424,6 +4424,13 @@ silently demoting every later lookup for the session.
 - **A dependency owner takes the row with it.** Space Missions borrows this layer for TLE lookup with `showPoints:false`; while points are hidden the layer returns empty row controls, so the legend never describes an empty sky and the chip cannot accept a write that the owner's restore would silently revert.
 - The detection-overlay record cache (`_detectionObjects`) is cleared with the catalog on every rebuild: it stamps id/class at creation only, and a rebuild can re-tag a satellite when a partial CelesTrak outage changes which group wins dedupe.
 - **Catalog numbers above 99999** can be written in a TLE as Alpha-5: a letter A–Z, skipping I and O, for the first two digits, so `A0000` is 100000 and `Z9999` is 339999. CelesTrak's TLE feed carries no satellite above 99999 (that needs the OMM feed, #1191), so this is compatibility with Alpha-5 TLEs. `src/sources/tle.js` decodes the field through one shared helper: `noradIdFromSatnum()` for the satellites layer, which keys and deduplicates its catalog by that number, and `tleCatalogNumber()` for the satellite tools. Plain digits read as before (`noradIdFromSatnum()` accepts any length, as an OMM satrec carries the number unpadded); a malformed field — a sign, decimal point, hex, exponent, embedded space, stray or lowercase letter, or blank — is rejected rather than partly read, as `NaN` in the layer and `null` in the tools.
+- **CCTV hardware makers:** Austin's catalog names each camera's maker or product line
+  (`camera_mfg`: Wisenet, Advidia, Sarix, Spectra Enhanced, Axis), never its model. The Austin
+  pack serves it as `manufacturer` (`Hanwha Wisenet`, `Pelco Sarix`, …); the HUD shows
+  `HW <MAKER>` and the camera panel adds the label. A maker says nothing about the optics, so
+  the pose and FOV estimate are unchanged. Pelco Spectra, a PTZ-only line, is labelled `(PTZ)`:
+  its listed facing is at best a home position. Public camera state carries `hardwareLabel`
+  (`src/layers/cctv/hardware.js`).
 - **CCTV estimated bearings:** a camera whose pack marks `headingConfidence: 'low'` (the id-hash
   `fallbackHeadingFromId` bearing) shows `HDG n° (ESTIMATED)` in the HUD and draws its coverage
   wireframe dashed; colours, widths and active/idle emphasis are unchanged. A manual calibration
