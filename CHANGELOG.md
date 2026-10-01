@@ -1,5 +1,14 @@
 # Changelog
 
+- Disaster Alerts layer (Events group): current GDACS earthquake, tropical
+  cyclone, flood, volcano, drought and wildfire events, worldwide and keyless,
+  drawn at the event centre GDACS publishes and coloured by its green / orange
+  / red alert level. Red and orange events are labelled; the row lists events
+  most severe first, selects and flies to one, and links to the GDACS report.
+  `/api/gdacs` reads the six fixed GDACS feeds with a per-type cache, a shared
+  429 cooldown and the last good copy of each feed on failure, and returns
+  centroids only.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a

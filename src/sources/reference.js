@@ -1,6 +1,7 @@
 import { createUsgsEarthquakeSource } from '../layers/earthquakes/source.js';
 import { createWfigsPerimeterSource } from '../layers/perimeters/source.js';
 import { createBundledCableSource } from '../layers/submarineCables/bundledSource.js';
+import { createGdacsSource } from '../layers/gdacs/source.js';
 
 /** Construct the existing reference feeds independently of application setup. */
 export function createReferenceSources() {
@@ -8,5 +9,6 @@ export function createReferenceSources() {
     earthquakes: createUsgsEarthquakeSource(),
     'fire-perimeters': createWfigsPerimeterSource(),
     cables: createBundledCableSource(),
+    'gdacs-alerts': createGdacsSource(),
   };
 }

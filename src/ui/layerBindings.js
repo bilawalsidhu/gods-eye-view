@@ -9,6 +9,20 @@ import {
   routeWorldFocusRequest,
 } from '../worldFocus.js';
 import { registerNavigationAuthorityListener } from '../navigationPolicy.js';
+
+/**
+ * Layers that move the camera through the shell's explicit-navigation policy,
+ * each with the noun Cockpit's refusal toast names.
+ */
+const CAMERA_LAYERS = Object.freeze([
+  ['wind', 'weather'],
+  ['weather-radar', 'weather'],
+  ['weather-satellite', 'weather'],
+  ['weather-lightning', 'weather'],
+  ['weather-cyclones', 'weather'],
+  ['gdacs-alerts', 'disaster alert'],
+]);
+
 /** Own manager subscriptions and the camera-entry events that outlive controls. */
 export class LayerBindings {
   constructor({
@@ -33,7 +47,7 @@ export class LayerBindings {
     this._disposed = false;
     this._dataManager = null;
     this._directionsShellModule = null;
-    this._weatherShellModules = [];
+    this._cameraShellModules = [];
     this._cctvRequestFocusHandler = null;
     this._removeCctvRequestFocusListener = null;
     this._worldRequestFocusHandler = null;
@@ -117,25 +131,19 @@ export class LayerBindings {
     });
   }
 
-  _connectWeatherCamera() {
-    for (const layer of this._weatherShellModules)
+  _connectCameraLayers() {
+    for (const layer of this._cameraShellModules)
       layer.attachShellServices?.(null);
-    this._weatherShellModules = [];
-    for (const id of [
-      'wind',
-      'weather-radar',
-      'weather-satellite',
-      'weather-lightning',
-      'weather-cyclones',
-    ]) {
+    this._cameraShellModules = [];
+    for (const [id, noun] of CAMERA_LAYERS) {
       const layer = this._dataManager?.layers?.get(id)?.module;
       if (typeof layer?.attachShellServices !== 'function') continue;
       layer.attachShellServices({
         runNavigation: (navigate) =>
-          this.runImmediateNavigation('weather', navigate),
+          this.runImmediateNavigation(noun, navigate),
         imageryHost: this.services.imageryHost,
       });
-      this._weatherShellModules.push(layer);
+      this._cameraShellModules.push(layer);
     }
   }
 
@@ -235,7 +243,7 @@ export class LayerBindings {
     this._cctvControls.connect();
     this._radioControls.connect();
     this._connectDirectionsCamera();
-    this._connectWeatherCamera();
+    this._connectCameraLayers();
     if (!this._awarenessSelectedHandler) {
       this._awarenessSelectedHandler = (event) =>
         this._persistAwarenessSelection(event, false);
@@ -287,6 +295,6 @@ export class LayerBindings {
     this._directionsShellModule?.attachShellServices?.(null);
     this._directionsShellModule = null;
     this._dataManager = null;
-    this._connectWeatherCamera();
+    this._connectCameraLayers();
   }
 }
