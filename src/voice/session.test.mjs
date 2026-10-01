@@ -240,6 +240,7 @@ test('common button and annotation bindings work with an alternate adapter and c
     let removed = 0;
     let subscribed = null;
     let calls = 0;
+    let emitSession;
     const events = [];
     const ui = {
       button,
@@ -254,6 +255,8 @@ test('common button and annotation bindings work with an alternate adapter and c
       tierButton: {},
       costValue: {},
       helpDetail: {},
+      errorDetail: {},
+      errorHint: {},
     };
     const lifetime = new AbortController();
     const controls = createVoiceCommands({
@@ -272,6 +275,7 @@ test('common button and annotation bindings work with an alternate adapter and c
         },
       },
       createSession({ emit, runAction }) {
+        emitSession = emit;
         return {
           async start() {
             emit({ type: 'state', state: 'listening', detail: 'Ready' });
@@ -295,6 +299,22 @@ test('common button and annotation bindings work with an alternate adapter and c
     assert.equal(ui.helpDetail.textContent, 'Activate to toggle voice');
     assert.equal(ui.status.textContent, 'LISTENING');
     assert.equal(ui.detail.textContent, 'Ready');
+    emitSession({
+      type: 'state',
+      state: 'error',
+      detail: 'Gemini Live connection is expiring.',
+      recovery: 'Start voice again for a fresh token and a new conversation.',
+    });
+    assert.equal(
+      ui.errorHint.textContent,
+      'Start voice again for a fresh token and a new conversation.',
+    );
+    emitSession({ type: 'state', state: 'error', detail: 'Network failed' });
+    assert.equal(
+      ui.errorHint.textContent,
+      'Check microphone permission and network access, then try again.',
+    );
+    emitSession({ type: 'state', state: 'listening', detail: 'Ready' });
     subscribed({ status: 'resolved' });
     assert.deepEqual(events, [
       { type: 'map_annotation_outline', status: 'resolved' },

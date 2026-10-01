@@ -175,13 +175,15 @@ export class GeminiSessionController {
     );
   }
 
-  setStatus(status, detail) {
+  setStatus(status, detail, recovery) {
     this.status = status;
     if (status === 'listening' && this.input.pushToTalkMode)
       detail = this.input.pushToTalkKeyHeld
         ? 'Release Space to send'
         : 'Hold Space to talk';
-    this.emit({ type: 'state', state: status, detail });
+    const event = { type: 'state', state: status, detail };
+    if (recovery) event.recovery = recovery;
+    this.emit(event);
     this.input.updateVoiceButtonLabel();
     if (['idle', 'connecting', 'error'].includes(status))
       this.input.setVoiceSpeaker('idle');
@@ -401,7 +403,7 @@ export class GeminiSessionController {
       };
       socket.onerror = () => {
         const error = new Error(
-          'Gemini Live connection failed. Check network access and the API key.',
+          'Gemini Live connection failed. Check network access, then start voice again.',
         );
         if (!current()) return;
         if (!connected) reject(error);
@@ -410,15 +412,20 @@ export class GeminiSessionController {
       socket.onclose = () => {
         if (!current()) return;
         const error = new Error(
-          'Gemini Live session ended. Start voice again to reconnect.',
+          connected
+            ? 'Gemini Live connection ended. Start voice again for a new conversation.'
+            : 'Gemini Live could not start. Start voice again to request a fresh session.',
         );
+        error.recovery = connected
+          ? 'Start voice again for a fresh token and a new conversation.'
+          : 'Start voice again to request a fresh session credential.';
         if (!connected) reject(error);
         else this.fail(error);
       };
     });
   }
 
-  fail(error) {
+  fail(error, recovery = error?.recovery) {
     const detail =
       error?.name === 'NotAllowedError'
         ? 'Microphone permission was denied. Allow microphone access and try again.'
@@ -427,7 +434,7 @@ export class GeminiSessionController {
           : error?.message || 'Gemini voice could not start';
     this.lastError = detail;
     this.stop({ preserveStatus: true });
-    this.setStatus('error', detail);
+    this.setStatus('error', detail, recovery);
   }
 
   abortTools() {
@@ -459,15 +466,21 @@ export class GeminiSessionController {
 
   handleMessage(message, epoch = this.epoch) {
     if (!this.owns(epoch)) return;
-    if (message.error)
-      throw new Error(
-        'Gemini rejected the voice session. Check its model and API settings.',
+    if (message.error) {
+      this.fail(
+        new Error(
+          'Gemini rejected the voice session. Start voice again to request a fresh session.',
+        ),
+        'Start voice again for a fresh session credential. If it repeats, check Gemini model and API access.',
       );
+      return;
+    }
     if (message.goAway) {
       this.fail(
         new Error(
-          'Gemini session is expiring. Start voice again to reconnect.',
+          'Gemini Live connection is expiring. Start voice again for a new conversation.',
         ),
+        'Start voice again for a fresh token and a new conversation.',
       );
       return;
     }

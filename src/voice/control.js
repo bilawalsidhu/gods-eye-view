@@ -84,6 +84,7 @@ export function createVoiceControl({ reset = false } = {}) {
     detail: root.querySelector('#gev-voice-detail'),
     helpDetail: root.querySelector('.gev-voice-help-detail'),
     errorDetail: root.querySelector('#gev-voice-error-detail'),
+    errorHint: root.querySelector('.gev-voice-error-hint'),
     tierButton: root.querySelector('#gev-voice-tier'),
     costValue: root.querySelector('#gev-voice-cost-value'),
   };

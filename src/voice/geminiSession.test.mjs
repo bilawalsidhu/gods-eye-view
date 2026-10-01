@@ -76,6 +76,13 @@ function harness(overrides = {}) {
     message(value) {
       this.onmessage?.({ data: JSON.stringify(value) });
     }
+    error() {
+      this.onerror?.();
+    }
+    remoteClose() {
+      this.readyState = 3;
+      this.onclose?.();
+    }
     close() {
       this.readyState = 3;
       this.closed = true;
@@ -403,6 +410,157 @@ test('session waits for setup, captures PCM, plays all parts, emits transcripts 
   assert.equal(h.captures[0].closed, true);
   assert.equal(h.state.ducked, false);
   assert.equal(h.c.status, 'idle');
+});
+
+test('goAway tears down pending work and an explicit restart creates a fresh conversation', async () => {
+  const pending = deferred();
+  let issued = 0;
+  let pendingOptions;
+  const h = harness({
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        ...credential,
+        token: `auth_tokens/session-${++issued}`,
+      }),
+    }),
+    runAction: async (name, _args, options) => {
+      if (name === 'control_radio')
+        return {
+          ok: true,
+          action: 'control_radio',
+          radioAction: 'play',
+          radioPlaybackRequested: true,
+        };
+      pendingOptions = options;
+      return pending.promise;
+    },
+  });
+  await h.c.start();
+  const oldSocket = h.sockets[0];
+  const oldAudio = h.captures[0];
+  const oldCallbacks = oldAudio.callbacks;
+  oldSocket.message({
+    toolCall: {
+      functionCalls: [
+        { id: 'radio', name: 'control_radio', args: { action: 'play' } },
+        { id: 'pending', name: 'get_current_view_state', args: {} },
+      ],
+    },
+  });
+  await tick();
+  await tick();
+  assert.ok(h.c.radio.pendingRadioPlaybackResult);
+  assert.equal(h.c.pendingTools, 1);
+  oldSocket.message({
+    serverContent: {
+      modelTurn: { parts: [{ inlineData: { data: 'AAAA' } }] },
+    },
+  });
+  assert.equal(oldAudio.played.length, 1);
+  const sentBeforeExpiry = oldSocket.sent.length;
+
+  oldSocket.message({ goAway: { timeLeft: '5s' } });
+  assert.equal(h.c.status, 'error');
+  assert.equal(
+    h.c.lastError,
+    'Gemini Live connection is expiring. Start voice again for a new conversation.',
+  );
+  assert.equal(
+    h.events.at(-1).recovery,
+    'Start voice again for a fresh token and a new conversation.',
+  );
+  assert.equal(oldSocket.closed, true);
+  assert.equal(oldAudio.closed, true);
+  assert.equal(h.tracks[0].readyState, 'ended');
+  assert.equal(h.c.pendingTools, 0);
+  assert.equal(h.c.radio.pendingRadioPlaybackResult, null);
+  assert.equal(pendingOptions.signal.aborted, true);
+
+  oldCallbacks.onAudioStart();
+  oldCallbacks.onAudio({ data: 'AQAB', mimeType: 'audio/pcm;rate=16000' });
+  oldCallbacks.onAudioEnd();
+  oldCallbacks.onDrain();
+  oldCallbacks.onError(new Error('late retired audio'));
+  oldSocket.message({ serverContent: { turnComplete: true } });
+  oldSocket.error();
+  oldSocket.remoteClose();
+  pending.resolve({ ok: true });
+  await tick();
+  await tick();
+  assert.equal(oldSocket.sent.length, sentBeforeExpiry);
+  assert.equal(oldAudio.played.length, 1);
+  assert.equal(
+    oldSocket.sent.filter((entry) => entry.toolResponse).length,
+    1,
+    'only the completed Radio result was sent before expiry',
+  );
+  assert.equal(h.state.playing, 0);
+
+  await h.c.start();
+  assert.equal(issued, 2);
+  assert.equal(h.sockets.length, 2);
+  assert.equal(
+    new URL(h.sockets[1].url).searchParams.get('access_token'),
+    'auth_tokens/session-2',
+  );
+  assert.equal(h.c.status, 'listening');
+  assert.equal(h.c.completedTurns, 0);
+  assert.equal(h.captures[1].played.length, 0);
+  assert.equal(h.tracks[1].readyState, 'live');
+  h.c.stop();
+});
+
+test('pre-setup rejection or close releases startup and asks for a fresh session', async () => {
+  for (const terminal of ['rejected', 'closed']) {
+    const h = harness({ autoSetup: false });
+    const start = h.c.start();
+    await tick();
+    if (terminal === 'rejected')
+      h.sockets[0].message({ error: { message: 'credential rejected' } });
+    else h.sockets[0].remoteClose();
+    await start;
+    assert.equal(h.c.status, 'error', terminal);
+    assert.equal(h.tracks.length, 0, terminal);
+    assert.equal(h.captures[0].closed, true, terminal);
+    assert.equal(h.sockets[0].closed, true, terminal);
+    assert.match(h.c.lastError, /Start voice again/, terminal);
+    assert.match(h.events.at(-1).recovery, /fresh session/, terminal);
+    assert.equal(h.sockets.length, 1, 'no automatic retry');
+  }
+});
+
+test('network close after setup releases media and starts no replacement', async () => {
+  const h = harness();
+  await h.c.start();
+  h.sockets[0].remoteClose();
+  assert.equal(h.c.status, 'error');
+  assert.equal(
+    h.c.lastError,
+    'Gemini Live connection ended. Start voice again for a new conversation.',
+  );
+  assert.equal(h.tracks[0].readyState, 'ended');
+  assert.equal(h.captures[0].closed, true);
+  assert.equal(h.sockets.length, 1);
+  assert.doesNotMatch(h.events.at(-1).recovery, /microphone|API key/i);
+});
+
+test('OFF during unresolved setup blocks late setup, error and close callbacks', async () => {
+  const h = harness({ autoSetup: false });
+  const start = h.c.start();
+  await tick();
+  const socket = h.sockets[0];
+  h.c.stop();
+  const eventCount = h.events.length;
+  socket.message({ setupComplete: {} });
+  socket.message({ error: { message: 'late rejection' } });
+  socket.error();
+  socket.remoteClose();
+  await start;
+  assert.equal(h.c.status, 'idle');
+  assert.equal(h.tracks.length, 0);
+  assert.equal(h.captures[0].closed, true);
+  assert.equal(h.events.length, eventCount);
 });
 
 test('a disposed pending microphone is stopped and cannot update the replacement UI', async () => {

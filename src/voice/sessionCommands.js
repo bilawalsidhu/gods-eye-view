@@ -1,6 +1,9 @@
 import { createVoiceControl } from './control.js';
 import { createVoiceSession } from './session.js';
 
+const DEFAULT_ERROR_HINT =
+  'Check microphone permission and network access, then try again.';
+
 /** Bind common controls to a supplied voice-session adapter. */
 export function createVoiceCommands({
   runner,
@@ -66,6 +69,11 @@ export function createVoiceCommands({
         event.state === 'error'
           ? event.detail || 'Voice could not be started.'
           : '';
+    if (ui.errorHint)
+      ui.errorHint.textContent =
+        event.state === 'error' && event.recovery
+          ? event.recovery
+          : DEFAULT_ERROR_HINT;
     if (event.state === 'error') ui.root.classList?.remove('error-dismissed');
   });
   const annotationUnsubscribe = annotations?.onOutlineEvent?.((event) => {

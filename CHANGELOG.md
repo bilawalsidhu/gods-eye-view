@@ -24,7 +24,11 @@
   provider is mounted. A voice-started Radio handoff now carries a one-use
   resume lease: pausing or disabling that same Radio session restarts the prior
   voice mode, while manual Radio playback, ordinary voice stops, provider
-  changes, and teardown never auto-resume voice.
+  changes, and teardown never auto-resume voice. Gemini's 60-second new-session
+  window and configured 30-minute token expiry are separate from Google's
+  roughly 10-minute Live connection lifetime. On `goAway`, Gemini voice cleans
+  up locally and asks for an explicit restart, which mints a fresh token and
+  begins a new conversation; this version does not resume automatically.
 
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
