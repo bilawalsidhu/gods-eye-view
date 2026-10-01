@@ -1,5 +1,17 @@
 # Changelog
 
+- Add WSDOT highway cameras (Washington State) as a keyless CCTV source pack:
+  WSDOT's official Travel Center camera layer, with frames registered only on
+  WSDOT's own image host (partner-hosted cameras such as Oregon DOT and City of
+  Seattle are skipped). Cameras with a single `CompassDirection`, cardinal or
+  diagonal, get a high-confidence heading; `BW` (Bothways) cameras use the
+  shared id-hash fallback at low confidence. By default the 250 cameras nearest
+  Seattle and Spokane load; `CCTV_WSDOT_MAX_SOURCES` sets the cap and
+  `CCTV_WSDOT_ENABLED=0` turns the pack off. The default catalog cap
+  (`CCTV_MAX_SOURCES`) rises from 4,000 to 4,500: the per-pack defaults already
+  summed to 4,054 before WSDOT, so a default install was being trimmed. A test
+  now sums every pack's default and fails if they exceed the cap
+  (bassem chagra, #644).
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
@@ -324,6 +336,7 @@
 Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+
 - New Fire Perimeters layer (Events group): live NIFC WFIGS interagency
   wildfire incident perimeters as ground-clamped polygons with a
   containment-colored fire line, refreshed every 5 minutes from the public
