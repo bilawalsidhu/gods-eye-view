@@ -654,6 +654,34 @@ authentication. Large-response continuations remain process-local and require
 consistent tool-call routing. Two-process reproduction is covered locally;
 Windows/Claude Desktop Cowork confirmation remains outstanding (#927).
 
+## Magnetosphere — October 1, 2026
+
+A keyless `magnetosphere` layer draws Earth's magnetic field as filaments and
+the magnetopause as a live boundary cage.
+
+The field is IGRF-14 to degree 13, evaluated from a vendored public-domain
+coefficient table in `src/data/local_data/igrf/`. It is validated against an
+independent implementation across 105 points and three radii to better than
+0.001% of |B|. Field lines are traced in the browser with RK4, step growing
+with radius, and depend on the date rather than the solar wind — so they are
+computed once per enable and yield between lines to keep the frame alive.
+
+Only the solar wind crosses the network. `/api/magnetosphere` returns about 440
+bytes: SWPC's propagated speed, density and IMF, plus the Shue et al. (1998)
+magnetopause derived from them. It takes the newest *complete* row, because
+SWPC's tail is often a timestamp with null plasma values and reading that as
+current state would render missing data as a dead-calm solar wind.
+
+The layer is explicit about its limits. IGRF models the internal field, so the
+filaments are honest near Earth and increasingly schematic with altitude; the
+stretched magnetotail is not modelled. The boundary is an empirical fit, drawn
+as a cage rather than a shell, and reports when the solar wind is outside the
+range the fit was published for. It also reports when the boundary is
+compressed inside geosynchronous orbit at 6.6 Earth radii, which is the
+condition worth noticing.
+
+Share token `5`, enabled plus an opacity option.
+
 ## Tools and local MCP server — October 1, 2026
 
 Tool argument string lengths follow JSON Schema Unicode code-point counts, so supplementary characters count once rather than as two UTF-16 units.

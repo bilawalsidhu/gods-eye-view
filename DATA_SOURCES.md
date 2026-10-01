@@ -15,6 +15,8 @@ How to read this:
 
 | Source                                                                | Used for                                                                                                                            | License / terms                                                                                                                                                                                                                                                                                                                                       | Attribution                                                                                                                                 |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **NOAA SWPC propagated solar wind** (`services.swpc.noaa.gov/products/geospace/propagated-solar-wind-1-hour.json`) | Solar wind speed, density and IMF for Magnetosphere, already time-shifted from L1 to Earth. Keyless; ~6.6 KB, fetched through `/api/magnetosphere` with a 1-minute shared cache and a bounded stale fallback | U.S. public domain (NOAA federal data); [NOAA disclaimer](https://www.noaa.gov/disclaimer) | "NOAA Space Weather Prediction Center (SWPC)" (courtesy; no endorsement) |
+| **IAGA IGRF-14** (`ngdc.noaa.gov/IAGA/vmod/coeffs/igrf14coeffs.txt`) | Spherical-harmonic coefficients for Earth's internal magnetic field, to degree 13. **Vendored, not fetched**: the derived table ships in `src/data/local_data/igrf/`, so the field needs no network | Public domain; IAGA model distributed by NOAA NCEI as U.S. government work | "IAGA International Geomagnetic Reference Field (IGRF-14)" |
 | **NOAA GFS (wind)** (`noaa-gfs-bdp-pds.s3.amazonaws.com`) | Global 10 m wind, optional 2 m temperature and mean sea-level pressure for Wind. Keyless; latest 6-hourly 0.25° cycle, byte-range GRIB2 reads, cached for an hour | U.S. public domain (NOAA); keyless via NOAA Open Data on AWS | "NOAA Global Forecast System (GFS)" (courtesy; not an endorsement) |
 | **ECMWF IFS (wind)** (`data.ecmwf.int/forecasts`, ECMWF Open Data) | The alternative Wind model: 10 m wind, optional 2 m temperature and mean sea-level pressure. Keyless; latest 6-hourly 0.25° run, byte-range GRIB2 reads, cached for an hour | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) plus the [ECMWF Terms of Use](https://apps.ecmwf.int/datasets/licences/general/) | "This service is based on data and products of the European Centre for Medium-Range Weather Forecasts (ECMWF)", with the CC BY 4.0 link, the modification notice and ECMWF's liability disclaimer — shown in-app |
 | **NOAA nowCOAST observed weather** (`nowcoast.noaa.gov/geoserver/observations/{weather_radar,satellite}/ows`, WMS 1.1.1) | Rain radar (MRMS base reflectivity, contiguous US, about 4-minute updates) and Satellite clouds (GOES-19/18 Band 14 regional infrared, about 5-minute updates; global infrared mosaic, hourly). Keyless; layer metadata refreshed every 2 minutes, exact-time images cached for up to 24 hours | [NOAA disclaimer](https://oceanservice.noaa.gov/disclaimer.html) | "NOAA nowCOAST · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners" |
@@ -180,6 +182,28 @@ How to read this:
 | **OpenSeaMap** (`tiles.openseamap.org`) | Sea Marks layer: raster overlay of buoys, lighthouses and ports (#10) | Chart tiles CC BY-SA 2.0; data ODbL 1.0 via OpenStreetMap | "Sea marks © OpenSeaMap contributors (CC BY-SA 2.0) · Data © OpenStreetMap contributors (ODbL)" |
 | **OpenSnowMap** (`www.opensnowmap.org`) | Ski Pistes layer: raster overlay of ski runs and lifts (#10) | Tiles CC BY-SA; data ODbL 1.0 via OpenStreetMap; bulk tile download forbidden without prior agreement | "Ski pistes © www.opensnowmap.org (CC BY-SA) · Data © OpenStreetMap contributors (ODbL)" |
 | **OSRM on the FOSSGIS routing servers** (`routing.openstreetmap.de`) | Street-following routes for the Directions layer and voice route annotations, via `/api/route` | [FOSSGIS routing usage policy](https://routing.openstreetmap.de/about.html): "Display the required attribution and display a link to 'fix the map'", "Use a valid user agent and, if applicable, a correct referrer", "One request per second max", "No scraping, no heavy usage". The full policy is the German [FOSSGIS Nutzungsbedingungen](https://www.fossgis.de/arbeitsgruppen/osm-server/nutzungsbedingungen/); FOSSGIS also states that the server may be embedded in your own pages but "eine gewerbliche Nutzung ist nur mit Einschränkungen erlaubt" (commercial use only with restrictions). Route data derives from OpenStreetMap (ODbL 1.0) | "Routing: OSRM on the FOSSGIS servers" + a "fix the map" link — shown in the Data attribution popover |
+
+### Magnetosphere: what the field lines are and are not
+
+The filaments are **IGRF only** — the field generated inside the Earth. That is
+accurate near the surface and degrades with altitude as external magnetospheric
+currents take over. Past roughly 4-6 Earth radii the real field is stretched
+into a long tail that this model does not contain, so the outer filaments are
+increasingly schematic and the layer says so rather than letting a tidy closed
+arc imply otherwise. Modelling the tail properly means a Tsyganenko model,
+which is a separate piece of work.
+
+The magnetopause is **Shue et al. (1998)**, an empirical fit to spacecraft
+boundary crossings, driven by live solar wind dynamic pressure and IMF Bz. It
+is a model surface, not an observation, and it is drawn as a cage rather than a
+solid shell for that reason. When the solar wind falls outside the range the
+fit was published for, the layer reports that it is extrapolating instead of
+quietly continuing.
+
+The vendored coefficient table is derived from IAGA's published file by
+`scripts/build-igrf-coefficients.mjs`, which keeps the current epoch and its
+secular variation. Past the epoch's published span the layer keeps evaluating —
+a slightly stale field beats a blank globe — but reports that it is doing so.
 
 ### Local receiver input (not fetched from a service)
 
