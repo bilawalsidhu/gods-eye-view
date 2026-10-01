@@ -23,11 +23,30 @@ export const TRACE_END = Object.freeze({
   degenerate: 'degenerate', // field vanished; a null point, or a bad model
 });
 
-function unitField(coefficients, position) {
-  const b = fieldCartesian(coefficients, position);
-  const magnitude = Math.hypot(b.x, b.y, b.z);
+/**
+ * Unit field direction, internal plus whatever external field is supplied.
+ *
+ * `externalField` returns Earth-fixed nT for a position in km, or null. It is
+ * a parameter rather than an import because the internal field alone is a
+ * complete, useful answer — the tracer must not require a magnetospheric
+ * model to run, and the tests must be able to isolate one from the other.
+ */
+function unitField(coefficients, position, externalField) {
+  const internal = fieldCartesian(coefficients, position);
+  let bx = internal.x;
+  let by = internal.y;
+  let bz = internal.z;
+  if (externalField) {
+    const external = externalField(position);
+    if (external) {
+      bx += external.x;
+      by += external.y;
+      bz += external.z;
+    }
+  }
+  const magnitude = Math.hypot(bx, by, bz);
   if (!(magnitude > 0)) return null;
-  return { x: b.x / magnitude, y: b.y / magnitude, z: b.z / magnitude };
+  return { x: bx / magnitude, y: by / magnitude, z: bz / magnitude };
 }
 
 /**
@@ -41,6 +60,8 @@ function unitField(coefficients, position) {
  * @param {number} [options.maxStepScale=12] Cap on how far the step may grow.
  * @param {number} [options.maxRadiusKm] Stop beyond this geocentric radius.
  * @param {number} [options.maxSteps=4000] Budget.
+ * @param {(p:object)=>object|null} [options.externalField] Magnetospheric
+ *   field in Earth-fixed nT, added to the internal field at every stage.
  * @returns {{points:Array<{x,y,z}>, end:string}}
  */
 export function traceFieldLine(coefficients, start, options = {}) {
@@ -50,6 +71,7 @@ export function traceFieldLine(coefficients, start, options = {}) {
     maxRadiusKm = 20 * EARTH_RADIUS_KM,
     maxSteps = 4000,
     maxStepScale = 12,
+    externalField = null,
   } = options;
   const sign = Math.sign(direction || 1);
   // The field varies fastest where it is strongest. Scaling the step with
@@ -67,28 +89,28 @@ export function traceFieldLine(coefficients, start, options = {}) {
     const h = stepFor(Math.hypot(current.x, current.y, current.z));
     // Classic RK4 on dr/ds = B_hat(r). Each stage is a full field evaluation,
     // which is what makes tracing expensive and why this runs server-side.
-    const k1 = unitField(coefficients, current);
+    const k1 = unitField(coefficients, current, externalField);
     if (!k1) return { points, end: TRACE_END.degenerate };
     const p2 = {
       x: current.x + (h / 2) * k1.x,
       y: current.y + (h / 2) * k1.y,
       z: current.z + (h / 2) * k1.z,
     };
-    const k2 = unitField(coefficients, p2);
+    const k2 = unitField(coefficients, p2, externalField);
     if (!k2) return { points, end: TRACE_END.degenerate };
     const p3 = {
       x: current.x + (h / 2) * k2.x,
       y: current.y + (h / 2) * k2.y,
       z: current.z + (h / 2) * k2.z,
     };
-    const k3 = unitField(coefficients, p3);
+    const k3 = unitField(coefficients, p3, externalField);
     if (!k3) return { points, end: TRACE_END.degenerate };
     const p4 = {
       x: current.x + h * k3.x,
       y: current.y + h * k3.y,
       z: current.z + h * k3.z,
     };
-    const k4 = unitField(coefficients, p4);
+    const k4 = unitField(coefficients, p4, externalField);
     if (!k4) return { points, end: TRACE_END.degenerate };
 
     const next = {

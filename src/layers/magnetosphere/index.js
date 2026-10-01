@@ -19,6 +19,8 @@ import { coefficientsFor, decimalYear, IGRF_VALID_UNTIL } from './field.js';
 import { fieldLineSeeds } from './geometry.js';
 import { createMagnetosphereRendering } from './rendering.js';
 import { createMagnetosphereSource } from './source.js';
+import { externalFieldFor } from './gsm.js';
+import { t89, t89BandForKp } from './t89.js';
 import { shueParameters } from './magnetopause.js';
 import { EARTH_RADIUS_KM, traceFullLine } from './trace.js';
 
@@ -71,14 +73,22 @@ const OPACITY = Object.freeze({ light: 0.4, strong: 0.8 });
 export async function traceFilaments(
   coefficients,
   seeds,
-  { signal, yieldTo = () => new Promise((r) => setTimeout(r, 0)) } = {},
+  {
+    signal,
+    externalField = null,
+    yieldTo = () => new Promise((r) => setTimeout(r, 0)),
+  } = {},
 ) {
   const lines = [];
   for (const seed of seeds) {
     if (signal?.aborted) break;
     const { points } = traceFullLine(coefficients, seed.position, {
       stepKm: 150,
-      maxRadiusKm: 18 * EARTH_RADIUS_KM,
+      // With an external field the high-latitude lines open and run down the
+      // tail instead of closing, so the budget has to reach far enough to
+      // show that rather than clipping it into a false closed arc.
+      maxRadiusKm: (externalField ? 40 : 18) * EARTH_RADIUS_KM,
+      externalField,
     });
     if (points.length >= 2) lines.push({ seed, points });
     await yieldTo();
