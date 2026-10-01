@@ -81,7 +81,12 @@ jobs:
         run: npm run lint
       - name: Audit production dependencies
         run: npm run check:audit
-    timeout: 15m
+    # 15m covered eight quiet-box runs (~3 min each) but lost to the same
+    # 2026-10-01 load storm that benched the runner and locked the DB: npm ci
+    # alone froze mid-install for 50+ min with the container past budget
+    # (run 865a3c4f's lint). 30m matches the test budgets — contention should
+    # cost queue time, not the first stage of every chain.
+    timeout: 30m
 
   # No `npm ci` — the pattern scan reads the checkout as-is and needs only
   # the binary baked into the image. Version rides the step so a stale image
