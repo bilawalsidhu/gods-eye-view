@@ -58,9 +58,20 @@ test('carries the propagated arrival time, which is what the model needs', () =>
 });
 
 test('columns are resolved by name, so a reordered feed does not silently swap them', () => {
-  const swapped = ['density', 'speed', ...HEADER.filter((k) => k !== 'speed' && k !== 'density')];
-  const values = swapped.map((key) =>
-    ({ density: 9, speed: 600, time_tag: '2026-10-01T12:00:00Z', bz: -3, bt: 4 })[key] ?? 0,
+  const swapped = [
+    'density',
+    'speed',
+    ...HEADER.filter((k) => k !== 'speed' && k !== 'density'),
+  ];
+  const values = swapped.map(
+    (key) =>
+      ({
+        density: 9,
+        speed: 600,
+        time_tag: '2026-10-01T12:00:00Z',
+        bz: -3,
+        bt: 4,
+      })[key] ?? 0,
   );
   const sample = latestSolarWind([swapped, values]);
   assert.equal(sample.speedKmPerS, 600);
@@ -83,16 +94,27 @@ test('a feed with no usable row fails closed instead of inventing calm', () => {
     /no_complete_row/,
   );
   assert.throws(() => latestSolarWind([HEADER]), /shape/);
-  assert.throws(() => latestSolarWind([HEADER, row({ bz: 'x' })]), /invalid_solar_wind_data/);
+  assert.throws(
+    () => latestSolarWind([HEADER, row({ bz: 'x' })]),
+    /invalid_solar_wind_data/,
+  );
 });
 
 test('state carries the magnetopause and says when it is extrapolated', () => {
-  const calm = describeState(latestSolarWind([HEADER, row({ speed: 300, density: 2, bz: 1 })]));
+  const calm = describeState(
+    latestSolarWind([HEADER, row({ speed: 300, density: 2, bz: 1 })]),
+  );
   assert.ok(calm.magnetopause.standoffRe > 10);
   assert.equal(calm.magnetopause.insideGeosynchronous, false);
-  assert.equal(calm.magnetopause.extrapolatedBeyondFit, true, 'quiet wind is below the fitted range');
+  assert.equal(
+    calm.magnetopause.extrapolatedBeyondFit,
+    true,
+    'quiet wind is below the fitted range',
+  );
 
-  const storm = describeState(latestSolarWind([HEADER, row({ speed: 800, density: 30, bz: -20 })]));
+  const storm = describeState(
+    latestSolarWind([HEADER, row({ speed: 800, density: 30, bz: -20 })]),
+  );
   assert.ok(storm.magnetopause.standoffRe < 6.6);
   assert.equal(storm.magnetopause.insideGeosynchronous, true);
 });
@@ -165,7 +187,12 @@ test('an upstream failure degrades to a labelled stale answer, then to unavailab
           use(_path, handler) {
             handler(
               { method: 'GET', url: '/' },
-              { on() {}, removeListener() {}, setHeader() {}, end: (b) => resolve(JSON.parse(b)) },
+              {
+                on() {},
+                removeListener() {},
+                setHeader() {},
+                end: (b) => resolve(JSON.parse(b)),
+              },
             );
           },
         },

@@ -337,6 +337,12 @@ const OPTION_GROUPS = Object.freeze({
       },
     ),
   ]),
+  magnetosphere: Object.freeze([
+    enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
+      light: 'l',
+      strong: 's',
+    }),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
@@ -683,6 +689,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'w',
     disposition: 'enabled+options',
     optionOwner: 'local-firms',
+  }),
+  Object.freeze({
+    id: 'magnetosphere',
+    token: '00',
+    disposition: 'enabled+options',
+    optionOwner: 'magnetosphere',
   }),
   Object.freeze({
     id: 'military',
