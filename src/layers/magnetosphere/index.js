@@ -5,12 +5,18 @@
  * fetched. They depend on the date, not the solar wind, so they are traced
  * once per enable and then left alone. Only the boundary follows the feed.
  *
- * What this layer does NOT claim: IGRF models the field produced inside the
- * Earth. Out past a few Earth radii the external magnetospheric currents
- * dominate and the real field lines are stretched into a tail this model does
- * not have. The filaments are therefore honest near Earth and increasingly
- * schematic with distance, and the UI says so rather than letting a tidy
- * closed arc imply otherwise.
+ * IGRF alone models only the field produced inside the Earth, and past a few
+ * Earth radii the external magnetospheric currents dominate: without them the
+ * lines balloon out on the dayside and never form a tail. So once the feed
+ * arrives the filaments are re-traced with whichever Tsyganenko model the feed
+ * supports - T96 given the full solar wind state, T89 given only Kp. The first
+ * trace runs before any of that, from IGRF alone, so the layer paints
+ * immediately rather than waiting on the network; it is then replaced.
+ *
+ * When the feed supports neither model the filaments stay internal-only. They
+ * are honest near Earth and increasingly schematic with distance, and the UI
+ * says which model produced them rather than letting a tidy closed arc imply
+ * otherwise.
  *
  * @module layers/magnetosphere
  */
@@ -20,7 +26,7 @@ import { fieldLineSeeds } from './geometry.js';
 import { createMagnetosphereRendering } from './rendering.js';
 import { createMagnetosphereSource } from './source.js';
 import { externalFieldFor } from './gsm.js';
-import { t89, t89BandForKp } from './t89.js';
+import { selectExternalModel } from './external.js';
 import { shueParameters } from './magnetopause.js';
 import { EARTH_RADIUS_KM, traceFullLine } from './trace.js';
 
@@ -111,6 +117,10 @@ export function createMagnetosphereLayer({
   let lastFetch = 0;
   let listener = null;
   let tracing = null;
+  let coefficients = null;
+  let model = null;
+  let tracedKey = null;
+  let retracing = null;
   const notify = () => listener?.();
 
   function parameters() {
@@ -152,7 +162,7 @@ export function createMagnetosphereLayer({
       layer._cesium = cesium;
       rendering = createRendering({ viewer, cesium });
       const year = decimalYear(new Date(now()));
-      const coefficients = coefficientsFor(year);
+      coefficients = coefficientsFor(year);
       // Kept so the panel can say the model is being run past its published
       // secular-variation span rather than quietly drifting.
       layer.modelExtrapolated = coefficients.extrapolatedBeyondModel;
@@ -160,6 +170,49 @@ export function createMagnetosphereLayer({
       tracing = traceFilaments(coefficients, fieldLineSeeds(meridians));
       filaments = await tracing;
       tracing = null;
+    },
+
+    /**
+     * Re-trace with the external field once the feed names a usable model.
+     *
+     * Skipped when the field has not changed enough to move a line visibly -
+     * the selector's key is rounded for exactly that reason - because tracing
+     * every seed is seconds of arithmetic, not milliseconds.
+     *
+     * @param {AbortSignal} [signal] Aborts an in-progress trace.
+     * @returns {Promise<boolean>} Whether the filaments were replaced.
+     */
+    async retrace(signal) {
+      const next = selectExternalModel(state);
+      model = next;
+      const key = next ? next.key : 'internal';
+      if (key === tracedKey || !coefficients) return false;
+      // One trace at a time. A second refresh arriving mid-trace would other-
+      // wise race the first and the loser would overwrite the winner.
+      if (retracing) return false;
+      if (!sunDirection) return false;
+      const externalField = next
+        ? externalFieldFor({
+            coefficients,
+            sunDirection,
+            parameters: next.parameters,
+            evaluate: next.evaluate,
+            earthRadiusKm: EARTH_RADIUS_KM,
+          })
+        : null;
+      // A missing GSM frame means the Sun direction was degenerate; leave the
+      // existing filaments rather than replacing them with internal-only ones.
+      if (next && !externalField) return false;
+      retracing = traceFilaments(coefficients, fieldLineSeeds(meridians), {
+        signal,
+        externalField,
+      });
+      const traced = await retracing;
+      retracing = null;
+      if (signal?.aborted) return false;
+      filaments = traced;
+      tracedKey = key;
+      return true;
     },
 
     async enable(viewer, options = {}) {
@@ -189,8 +242,21 @@ export function createMagnetosphereLayer({
         // reported without taking the layer down with it.
         error = cause?.message || 'magnetosphere_unavailable';
       }
+      // Re-tracing is the expensive half of an update, so it happens after the
+      // boundary has already been redrawn from the new state.
       redraw();
       notify();
+      try {
+        if (await layer.retrace(options?.signal)) {
+          redraw();
+          notify();
+        }
+      } catch (cause) {
+        // A failed re-trace leaves the previous filaments in place, which is a
+        // worse model but not a blank globe.
+        error = cause?.message || 'magnetosphere_retrace_failed';
+        notify();
+      }
     },
 
     getStats() {
@@ -198,11 +264,21 @@ export function createMagnetosphereLayer({
       return {
         count: filaments.length,
         lastUpdate: state ? Date.parse(state.observedAt) || now() : null,
-        source: layer.source,
+        // Naming the external model in the row's own meta line is the only
+        // place a user sees which one drew the filaments, and the difference
+        // between T96, T89 and neither is visible in the shape of the tail.
+        source: model
+          ? `IGRF-14 · ${model.name.toUpperCase()}${model.extrapolated ? ' (extrapolated)' : ''} · NOAA SWPC solar wind`
+          : layer.source,
         error,
         stale: Boolean(state?.stale),
         standoffRe: pause ? Number(pause.r0.toFixed(2)) : null,
         insideGeosynchronous: Boolean(state?.insideGeosynchronous),
+        // Which external model the filaments on screen actually came from, so
+        // the panel can say rather than implying they are all equally good.
+        externalModel: model ? model.name : null,
+        externalModelLabel: model ? model.label : null,
+        externalModelExtrapolated: Boolean(model?.extrapolated),
       };
     },
 
@@ -230,6 +306,10 @@ export function createMagnetosphereLayer({
       filaments = [];
       state = null;
       listener = null;
+      coefficients = null;
+      model = null;
+      tracedKey = null;
+      retracing = null;
     },
   };
   return layer;

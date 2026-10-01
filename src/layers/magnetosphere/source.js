@@ -36,7 +36,12 @@ export function validateMagnetosphereState(value) {
     speedKmPerS: wind.speedKmPerS,
     densityPerCm3: wind.densityPerCm3,
     bzNT: wind.bzNT,
+    // By and Dst decide whether the client can run T96 rather than T89, so
+    // they are optional: null means "fall back", not "reject the response".
+    byNT: Number.isFinite(wind.byNT) ? wind.byNT : null,
     btNT: Number.isFinite(wind.btNT) ? wind.btNT : null,
+    dst: Number.isFinite(value.dst?.dst) ? value.dst.dst : null,
+    dstObservedAt: value.dst?.observedAt || null,
     standoffRe: pause.standoffRe,
     flaring: pause.flaring,
     dynamicPressureNPa: pause.dynamicPressureNPa,

@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   describeState,
+  latestDst,
+  latestKp,
   latestSolarWind,
   magnetosphereProxy,
 } from '../../server/providers/magnetosphere.js';
@@ -124,19 +126,22 @@ test('one upstream request serves concurrent callers, and the cache is reused', 
   let clock = 0;
   const proxy = magnetosphereProxy({
     now: () => clock,
-    // Kp is fetched alongside the solar wind now, so count only the feed
-    // under test rather than every request the provider makes.
+    // Kp and Dst are fetched alongside the solar wind, each with its own cache,
+    // so count only the feed under test rather than every request the provider
+    // makes.
     fetchImpl: async (url) => {
-      const kp = String(url).includes('planetary_k_index');
-      if (!kp) calls += 1;
-      return {
-        ok: true,
-        headers: { get: () => null },
-        text: async () =>
-          kp
-            ? JSON.stringify([{ time_tag: '2026-10-01T12:00:00', estimated_kp: 2.3 }])
-            : JSON.stringify([HEADER, row()]),
-      };
+      const text = String(url);
+      const kp = text.includes('planetary_k_index');
+      const dst = text.includes('kyoto-dst');
+      if (!kp && !dst) calls += 1;
+      let body = JSON.stringify([HEADER, row()]);
+      if (kp)
+        body = JSON.stringify([
+          { time_tag: '2026-10-01T12:00:00', estimated_kp: 2.3 },
+        ]);
+      if (dst)
+        body = JSON.stringify([{ time_tag: '2026-10-01T12:00:00', dst: -18 }]);
+      return { ok: true, headers: { get: () => null }, text: async () => body };
     },
   });
   const run = () =>
@@ -235,4 +240,84 @@ test('Kp takes the newest usable reading and refuses impossible ones', async () 
   assert.equal(latestKp([{ time_tag: 'x', estimated_kp: 99 }]), null);
   assert.equal(latestKp([]), null);
   assert.equal(latestKp(null), null);
+});
+
+test('By comes through for T96, and its absence is not fatal', () => {
+  // T96 needs the IMF By; T89 and the Shue boundary do not. A feed that omits
+  // it must still serve a usable state rather than failing the whole request.
+  assert.equal(latestSolarWind([HEADER, row({ by: -6.5 })]).byNT, -6.5);
+  assert.equal(latestSolarWind([HEADER, row({ by: null })]).byNT, null);
+  // A by far outside anything physical is a broken feed, same as bz.
+  assert.throws(() => latestSolarWind([HEADER, row({ by: 900 })]), /by_range/);
+  // And a feed with no by column at all still parses.
+  const noBy = HEADER.filter((name) => name !== 'by');
+  const trimmed = row();
+  const columns = HEADER.map((name, i) => [name, trimmed[i]]);
+  const reduced = noBy.map(
+    (name) => columns.find(([key]) => key === name)[1],
+  );
+  assert.equal(latestSolarWind([noBy, reduced]).byNT, null);
+});
+
+test('Dst takes the newest usable hourly value and stamps it UTC', () => {
+  assert.deepEqual(
+    latestDst([
+      { time_tag: '2026-10-01T18:00:00', dst: 5 },
+      { time_tag: '2026-10-01T19:00:00', dst: -42 },
+    ]),
+    { dst: -42, observedAt: '2026-10-01T19:00:00Z' },
+  );
+  // Positive Dst of a few tens of nT is ordinary quiet-time behaviour, not an
+  // error, so it must not be filtered out.
+  assert.equal(latestDst([{ time_tag: '2026-10-01T19:00:00', dst: 12 }]).dst, 12);
+  // Values past the record storm, nulls and junk are skipped, newest first.
+  assert.deepEqual(
+    latestDst([
+      { time_tag: '2026-10-01T17:00:00', dst: -30 },
+      { time_tag: '2026-10-01T18:00:00', dst: null },
+      { time_tag: '2026-10-01T19:00:00', dst: -5000 },
+    ]),
+    { dst: -30, observedAt: '2026-10-01T17:00:00Z' },
+  );
+  assert.equal(latestDst([]), null);
+  // Number(null) is 0, so a null reading would otherwise come back as a
+  // perfectly quiet 0 nT. It must be skipped instead.
+  assert.equal(latestDst([{ time_tag: '2026-10-01T19:00:00', dst: null }]), null);
+  assert.equal(latestDst([{ time_tag: '2026-10-01T19:00:00', dst: '' }]), null);
+  assert.equal(latestDst(null), null);
+  // An already-zoned stamp must not end up with two designators.
+  assert.equal(
+    latestDst([{ time_tag: '2026-10-01T19:00:00Z', dst: -7 }]).observedAt,
+    '2026-10-01T19:00:00Z',
+  );
+});
+
+test('state carries Dst through so the client can choose T96', () => {
+  const sample = latestSolarWind([HEADER, row({ by: 3 })]);
+  const state = describeState(sample, {
+    kp: { kp: 2.3 },
+    dst: { dst: -18, observedAt: '2026-10-01T12:00:00Z' },
+  });
+  assert.equal(state.dst.dst, -18);
+  assert.equal(state.solarWind.byNT, 3);
+  // Omitting them must give null, not undefined, so the JSON carries the key.
+  assert.equal(describeState(sample).dst, null);
+});
+
+test('a null index reading is skipped rather than read as zero', () => {
+  // Number(null) is 0. For Kp that would turn a dead feed into "perfectly
+  // quiet", which is the one failure mode this provider is written to avoid.
+  assert.equal(
+    latestKp([{ time_tag: '2026-10-01T12:00:00', estimated_kp: null, kp_index: null }]),
+    null,
+  );
+  assert.equal(
+    latestKp([{ time_tag: '2026-10-01T12:00:00', estimated_kp: '' }]),
+    null,
+  );
+  // A genuine zero still gets through.
+  assert.equal(
+    latestKp([{ time_tag: '2026-10-01T12:00:00', estimated_kp: 0 }]).kp,
+    0,
+  );
 });
