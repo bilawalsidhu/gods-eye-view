@@ -12,6 +12,81 @@
   summed to 4,054 before WSDOT, so a default install was being trimmed. A test
   now sums every pack's default and fails if they exceed the cap
   (bassem chagra, #644).
+- Public Overpass instances are no longer used by default. Street Traffic
+  roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
+  on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
+  TomTom key the default is Hybrid: TomTom roads with live flow, plus
+  OpenFreeMap roads TomTom does not cover, simulated. Without a key every
+  choice draws OpenFreeMap roads. TomTom mode shows only roads with flow; OSM
+  mode matches TomTom flow onto OpenFreeMap roads for congestion colors,
+  speeds and closures, and unmatched roads stay simulated. Road failures name
+  OpenFreeMap and retain HTTP status or timeout reasons separately from TomTom.
+  Flow coverage counts
+  rendered dots on roads with flow; mapped military areas come from OpenFreeMap and
+  follow settled camera changes with cached tiles and retained site entities.
+  Superseded requests preserve the next view’s pending load.
+  Tile and API transports can be injected independently; the optional Overpass
+  ALPR adapter remains available.
+  OSM-derived layers share one attribution entry and a persistent inline map credit,
+  including routing, Warendorf cameras, datacenters, dams and the Nepal locator.
+  Military areas use bundled Overture/OSM names; wide views show bounded,
+  decluttered named points that follow camera motion while Contacts holds a subject,
+  using the shared world-overlay host for wide-point and polygon titles. Polygons appear while names load; cancelled views
+  cannot publish late names, and stalled name downloads can retry. Merged groups
+  keep their identity and parent name when a pan hides the largest member. Late
+  names reconcile ids across zooms while retaining selection and marker ownership. Wide
+  named points remain visible until matching close polygons take over. Installation
+  titles share datacenter/dam card arbitration and keep incumbents while panning.
+  Selecting an installation replaces its label with one card; deselection restores it.
+  Selected footprints receive a translucent fill draped on the active map surface.
+  ALPR cameras come from an hourly OpenStreetMap extract (US and Canada). Features
+  without a replacement say they are unavailable; area and footprint
+  annotations check once whether an Overpass instance is configured and skip
+  the query when none is. Area annotations outline countries, states and provinces
+  (Natural Earth, including UK constituent countries) and US counties (US Census Bureau) from bundled data, with no
+  lookup. County names are disambiguated across countries by aliases, qualifiers
+  and geography. `OVERPASS_UPSTREAMS` sets an
+  Overpass instance you run or pay for. The cockpit regional brief resolves
+  regions from bundled Natural Earth data instead of Nominatim. Traffic starts on enable and paints
+  locally grounded roads incrementally, shares concurrent tile requests and
+  reuses validated heights across pans. Camera moves and arriving tiles retain
+  existing traffic dots on their roads; budget changes fade in/out incrementally,
+  height refinements ease vertically, and live flow changes color and speed in
+  place. The traffic footprint follows the reticle square at oblique angles, with
+  cached detailed near tiles and coarse distant roads. Failed detail tiles retain
+  coarse roads and retry at most three times. Road-pass deadlines also cancel
+  queued tile paints and terrain callbacks;
+  off-screen height corrections cannot hold loading open, and visible corrections
+  stay pixel-limited at canvas and camera-plane boundaries. Completed road snapshots replace
+  streamed previews without duplicating roads. Unresolved previews no longer delay or suppress detailed street roads.
+  Road admission excludes private, parking, walking and unknown traffic categories;
+  OpenStreetMap service ways and tunnels no longer receive surface vehicles.
+  Detail tiles load alongside previews, arrival bypasses the movement debounce,
+  and geographically validated rendered depth avoids repeated mesh redraws.
+  Traffic releases surface-frame listeners on disable/destroy and reuses unchanged
+  surface identities without frame-by-frame allocations.
+  Grounded dots respect building occlusion instead of drawing through roofs,
+  and the traffic status chip reports completion without a delayed text animation.
+  Short road chunks and local surface elevation keep the budget on visible
+  streets in elevated cities. Congestion and closures respect travel
+  direction. ALPR distinguishes unsupported coverage from empty results and
+  asks for zoom-in before exceeding its tile budget. Installation footprints
+  retain visible fragments without joining separate parcels across zooms or
+  across quantization gaps between different mapped identities. Keyless
+  terrain tiles retry HTTP 429 and transient gateway failures with bounded,
+  shared backoff. Operator-configured Overpass area and footprint queries
+  retain relation member geometry so their outlines remain available.
+  Contacts filters mapped installations to a true 100 km surface radius around
+  the current tracked subject,
+  including in Cockpit, instead of "?" or nothing. Search arrivals frame against the resolved
+  ground and lift the eye above the rendered surface, so Camp Mabry and Denver
+  no longer land underground (Milan Khanal, #118). Arrival corrections yield to
+  new camera owners and are cancelled on layer/app teardown. ALPR floor preparation
+  and marker placement share terrain requests, cancelled when the layer is disabled.
+  Map-source changes reposition every ALPR marker without replacing entities. ALPR loads
+  whole-city views from z9-z12 tiles, drops native ground wedges and clamping,
+  keeps frame time with ALPR on within a few percent of ALPR off, seats nearby
+  badges on the rendered surface and says when no loaded camera is on screen.
 
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
@@ -537,6 +612,7 @@ This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
 ## [Unreleased]
+
 
 - Add ECMWF IFS model selection to Wind (#464, thanks @beneduzi), with model-scoped forecast-step caches, cancellation of replaced requests, and separate issue/valid timestamps.
 
