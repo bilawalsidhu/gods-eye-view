@@ -94,14 +94,33 @@ export function createQueries({ state: layerState, services, parts, source }) {
    */
 
   function summarizeInstallationViewport(items, source) {
+    const coverage = source.stats?.coverage;
+    // getNearby measures these distances from the current subject, independent
+    // of the retained square used to fetch installation tiles.
+    const withinRadius =
+      coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)
+        ? items.filter(
+            (item) => (item.distanceM ?? item.distance) <= coverage.radiusM,
+          )
+        : items;
     const summary = parts.navigation.summarizeAwarenessCohortForNavigation(
-      items,
+      withinRadius,
       source,
     );
     if (summary.count === null)
       return source.stats?.statusMessage
         ? { ...summary, reason: source.stats.statusMessage }
         : summary;
+    // A subject window is its own bounded area: name it instead of the viewport.
+    if (coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)) {
+      const km = Math.round(coverage.radiusM / 1000);
+      return {
+        ...summary,
+        reason: summary.count
+          ? `mapped matches within ${km} km of the subject`
+          : `none mapped within ${km} km; not a complete 250 km survey`,
+      };
+    }
     return {
       ...summary,
       reason: summary.count
