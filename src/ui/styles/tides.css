@@ -1,0 +1,115 @@
+/* Coastal tides card: bottom-centre, above the command dock. */
+.tides-card {
+  position: fixed;
+  left: 50%;
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 40;
+  width: min(360px, calc(100vw - 32px));
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-top-color: rgba(98, 181, 255, 0.28);
+  border-radius: var(--panel-radius);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+.tides-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.tides-card__title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.tides-card__station {
+  color: var(--text-secondary);
+  text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tides-card__readout {
+  display: grid;
+  gap: 2px;
+}
+.tides-card__level {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.tides-card__trend,
+.tides-card__status {
+  color: var(--text-secondary);
+}
+.tides-card__when {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tides-card__time {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.tides-card__btn {
+  padding: 4px 10px;
+  border-radius: var(--btn-radius);
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+.tides-card__btn:hover {
+  border-color: var(--glass-border-hover);
+}
+.tides-card__btn[aria-pressed='true'] {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+.tides-card input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.tides-card__scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.tides-card__ctl {
+  display: grid;
+  gap: 2px;
+}
+.tides-card__ctl-row {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-secondary);
+}
+.tides-card__ctl-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.tides-card__select {
+  background: var(--menu-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 4px 6px;
+  font: inherit;
+}

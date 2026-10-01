@@ -24,6 +24,7 @@ import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
+import { createApplicationTides } from './layers/tides.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
@@ -54,6 +55,7 @@ const SOURCE_METHODS = Object.freeze({
   cyclones: ['getSnapshot'],
   earthquakes: ['getSnapshot'],
   'fire-perimeters': ['getSnapshot'],
+  tides: ['getPredictions'],
   cables: ['fetch'],
 });
 
@@ -147,6 +149,7 @@ export function createApplicationCatalog({
         createApplicationFirePerimeters({
           source: sources['fire-perimeters'],
         }),
+        createApplicationTides({ source: sources.tides }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         satellites,
         createApplicationLaunches({ source: sources.launches, satellites }),
