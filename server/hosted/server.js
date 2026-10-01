@@ -29,6 +29,35 @@ const DENIED_ROUTES = [
   '/api/local-receivers',
 ];
 
+/**
+ * Decide whether a state-changing request came from our own pages.
+ *
+ * Browsers set `Sec-Fetch-Site` on every request and scripts cannot forge
+ * it, so it is checked first. Otherwise the Origin header must match, and
+ * when a browser omits Origin the Referer's origin is used instead. A
+ * request carrying none of these is refused.
+ */
+export function isSameOriginWrite(req, env = {}, publicOrigin = null) {
+  const site = req.headers['sec-fetch-site'];
+  if (site) return site === 'same-origin';
+  const host =
+    req.headers['x-forwarded-host'] && env.GEV_TRUST_PROXY === '1'
+      ? req.headers['x-forwarded-host']
+      : req.headers.host;
+  const allowed = publicOrigin
+    ? [publicOrigin]
+    : [`https://${host}`, `http://${host}`];
+  let origin = req.headers.origin;
+  if (!origin && req.headers.referer) {
+    try {
+      origin = new URL(req.headers.referer).origin;
+    } catch {
+      origin = null;
+    }
+  }
+  return Boolean(origin) && allowed.includes(origin);
+}
+
 function securityHeaders(req, res, next) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -144,15 +173,7 @@ export function createHostedServer({
       return sendError(res, 404, 'not_available');
     // Writes must come from our own pages (cookies are SameSite=Lax too).
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-      const origin = req.headers.origin;
-      const host =
-        req.headers['x-forwarded-host'] && env.GEV_TRUST_PROXY === '1'
-          ? req.headers['x-forwarded-host']
-          : req.headers.host;
-      const allowed = publicOrigin
-        ? [publicOrigin]
-        : [`https://${host}`, `http://${host}`];
-      if (!origin || !allowed.includes(origin))
+      if (!isSameOriginWrite(req, env, publicOrigin))
         return sendError(res, 403, 'cross_origin_write');
     }
     const q = quotas.take(req.gevUser.id, full);

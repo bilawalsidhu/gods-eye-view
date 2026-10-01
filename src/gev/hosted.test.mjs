@@ -191,3 +191,16 @@ test('hosted server: login, gate, CSRF, quotas, denied routes, static', async ()
     server.close();
   }
 });
+
+test('same-origin write check: Sec-Fetch-Site, then Origin, then Referer', async () => {
+  const { isSameOriginWrite } = await import('../../server/hosted/server.js');
+  const req = (h) => ({ headers: { host: 'x.example', ...h } });
+  assert.equal(isSameOriginWrite(req({ 'sec-fetch-site': 'same-origin' })), true);
+  assert.equal(isSameOriginWrite(req({ 'sec-fetch-site': 'cross-site', origin: 'https://x.example' })), false);
+  assert.equal(isSameOriginWrite(req({ origin: 'https://x.example' })), true);
+  assert.equal(isSameOriginWrite(req({ origin: 'https://evil.example' })), false);
+  assert.equal(isSameOriginWrite(req({ referer: 'https://x.example/page' })), true);
+  assert.equal(isSameOriginWrite(req({ referer: 'https://evil.example/x.example' })), false);
+  assert.equal(isSameOriginWrite(req({})), false);
+  assert.equal(isSameOriginWrite(req({ origin: 'https://x.example' }), {}, 'https://trackoverhead.com'), false);
+});
