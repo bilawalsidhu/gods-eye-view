@@ -251,12 +251,27 @@ live layer.
 | `public/` asset, same origin | yes | The simple case. Nothing else needed. |
 | A service you run, same origin | yes | Reverse-proxy it to the app's origin. |
 | Third-party API, direct from browser | **usually not** | Blocked by CORS unless the provider explicitly allows it. |
-| Third-party API, via a project proxy | yes | But the proxy lives in a **tracked** file. |
+| Third-party API, via a project proxy | yes | But the proxy lives in **tracked** files. |
 
-Every upstream provider in this project is reached through a server-side proxy
-registered in `vite.config.js` — that is what makes CORS, caching, rate limits
-and key custody tractable. A **new** live upstream needs a proxy too, and
-adding one means editing `vite.config.js`, which is tracked.
+Every upstream provider in this project is reached through a server-side
+proxy — that is what makes CORS, caching, rate limits and key custody
+tractable. A **new** live upstream needs one too, and adding it means editing
+tracked files.
+
+Those providers live under `server/providers/`. Each is a module exporting a
+Vite plugin factory, and `server/providers/local.js` composes them in
+`localProviderPlugins()`, which `server/standalone/vite.config.js` supplies to
+the Vite config. The root `vite.config.js` is now only a compatibility
+re-export of those two:
+
+```js
+export { default } from './server/standalone/vite.config.js';
+export * from './server/providers/local.js';
+```
+
+**Do not add a provider there.** A new one is a `server/providers/<name>.js`
+module plus its entry in `localProviderPlugins()` — two tracked files rather
+than one, and neither of them the root config.
 
 **So the "no tracked file edits" property of user layers holds for static and
 same-origin data, and stops at a new third-party live upstream.** If you need
@@ -265,9 +280,12 @@ one, your options are, in increasing order of effort:
 1. Serve the data from `public/` and refresh it out of band.
 2. Run your own small service and expose it on the app's origin, so the layer
    fetches a same-origin path.
-3. Add a proxy to `vite.config.js` — accepting that this is a local patch you
-   will carry across upstream syncs, exactly like the two lines this feature
-   was built to eliminate.
+3. Write a provider under `server/providers/` and register it in
+   `localProviderPlugins()` — accepting that this is a local patch you will
+   carry across upstream syncs, exactly like the two lines this feature was
+   built to eliminate. Register both `configureServer` and
+   `configurePreviewServer` if you want it to survive `vite preview`; most
+   existing providers register only the former.
 
 One forward-looking caveat: there is currently **no `connect-src` policy**, so
 a direct third-party fetch that survives CORS will work today. Shipping a full
