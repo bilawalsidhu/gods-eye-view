@@ -24,11 +24,7 @@ const NESTED_CONTEXT_RESULT_FIELDS = Object.freeze([
   'contextRollback',
 ]);
 
-const NON_SEMANTIC_PACKET_KEYS = new Set([
-  'note',
-  'ageLabel',
-  'generatedAt',
-]);
+const NON_SEMANTIC_PACKET_KEYS = new Set(['note', 'ageLabel', 'generatedAt']);
 
 function semanticPacketValue(value) {
   if (Array.isArray(value)) return value.map(semanticPacketValue);
