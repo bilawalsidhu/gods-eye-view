@@ -17,7 +17,12 @@
  *         space clears; a row-list click selects and flies the camera there.
  *   (iv)  FAILURE — the route stubbed to 502: stats.error is set, the events
  *         already on the globe are kept and the row says the refresh failed.
- *   (v)   DISABLE — the layer's data source is hidden.
+ *   (v)   DISABLE — the layer's data source is hidden and a GDACS-owned
+ *         shared selection is released.
+ *
+ * Every selection and clear in (iii) and (v) is also checked on the shared
+ * `gev:entity-selected` / `gev:entity-selection-cleared` lane: one normalized
+ * record per selection, the centroid as a point, provenance and caveat.
  *
  * Visual proof saved to qa-shots/gdacs-*.png (gitignored).
  *
@@ -337,6 +342,17 @@ async function main() {
       const realFetch = window.fetch.bind(window);
       window.__gdacsQaMode = 'fixture';
       window.__gdacsOpened = [];
+      // The shared selection lane, as the rest of GEV hears it.
+      window.__gdacsLane = [];
+      for (const type of [
+        'gev:entity-selected',
+        'gev:entity-selection-cleared',
+      ])
+        window.addEventListener(type, (event) => {
+          if (event.detail?.layerId !== 'gdacs-alerts') return;
+          const { entity: _e, dataSource: _d, ...detail } = event.detail;
+          window.__gdacsLane.push({ type, detail });
+        });
       window.fetch = (input, init) => {
         const url = typeof input === 'string' ? input : input?.url || '';
         if (!url.includes('/api/gdacs')) return realFetch(input, init);
@@ -415,6 +431,8 @@ async function main() {
         return null;
       };
     });
+    const lane = () => page.evaluate(() => window.__gdacsLane.splice(0));
+    await lane();
     const point = await eventOnScreen(page, 'EQ-1003');
     if (point) await page.mouse.click(point.x, point.y);
     await sleep(500);
@@ -427,6 +445,28 @@ async function main() {
         clicked.activeItems.join() === 'EQ-1003' &&
         clicked.info.startsWith('M 5.4 off the east coast of Honshu'),
       `point=${JSON.stringify(point)} chips=${JSON.stringify(clicked.chips)} info=${JSON.stringify(clicked.info)}`,
+    );
+    const picked = await lane();
+    const [published] = picked;
+    record(
+      'SELECT: the globe pick publishes one normalized gev:entity-selected',
+      picked.length === 1 &&
+        published.type === 'gev:entity-selected' &&
+        published.detail.id === 'gdacs-alerts:EQ-1003' &&
+        published.detail.kind === 'disaster-alert' &&
+        published.detail.geometryKind === 'point' &&
+        published.detail.locationKind === 'centroid' &&
+        published.detail.caveat ===
+          'automatic estimate, not official warning' &&
+        published.detail.provenance?.source === 'GDACS' &&
+        published.detail.provenance?.reportUrl === REPORT &&
+        published.detail.provenance?.alertLevel === 'green' &&
+        published.detail.provenance?.eventType === 'EQ' &&
+        Number.isFinite(published.detail.provenance?.fetchedAt) &&
+        !/polygon|footprint|bbox|extent|affectedArea/i.test(
+          JSON.stringify(published.detail),
+        ),
+      JSON.stringify(picked),
     );
     await page.click(`[data-layer-id="${LAYER_ID}"] [data-chip-id="report"]`);
     await sleep(200);
@@ -448,6 +488,13 @@ async function main() {
         !cleared.chips.includes('report'),
       `space=${JSON.stringify(space)} chips=${JSON.stringify(cleared.chips)}`,
     );
+    const released = await lane();
+    record(
+      'SELECT: the clear is published once on gev:entity-selection-cleared',
+      released.length === 1 &&
+        released[0].type === 'gev:entity-selection-cleared',
+      JSON.stringify(released),
+    );
     await page.click(
       `[data-layer-id="${LAYER_ID}"] .data-row-list-item[data-list-item-id="TC-1001"]`,
     );
@@ -467,6 +514,15 @@ async function main() {
         Math.abs(camera.lat - 19) < 1 &&
         Math.abs(camera.height - 1_500_000) < 150_000,
       JSON.stringify(camera),
+    );
+    const rowLane = await lane();
+    record(
+      'SELECT: the list click publishes one gev:entity-selected',
+      rowLane.length === 1 &&
+        rowLane[0].type === 'gev:entity-selected' &&
+        rowLane[0].detail.id === 'gdacs-alerts:TC-1001' &&
+        rowLane[0].detail.geometryKind === 'point',
+      JSON.stringify(rowLane),
     );
     await shoot(page, 'focus');
 
@@ -492,11 +548,29 @@ async function main() {
 
     // ── (v) DISABLE ───────────────────────────────────────────────────────
     console.log('\n(v) DISABLE...');
+    await page.evaluate((id) => {
+      window.__gdacsQaMode = 'fixture';
+      window.__godsEyeView.dataManager.layers
+        .get(id)
+        .module.setParams({ eventId: 'TC-1001' });
+    }, LAYER_ID);
+    await lane();
     const shown = await page.evaluate(async (id) => {
       await window.__godsEyeView.dataManager.setEnabled(id, false);
       return window.__godsEyeView.viewer.dataSources.getByName(id)[0]?.show;
     }, LAYER_ID);
     record('DISABLE: data source hidden', shown === false, `show=${shown}`);
+    const disabled = await lane();
+    const shared = await page.evaluate(
+      () => window.__gevContextStore?.selectedEntityId ?? null,
+    );
+    record(
+      'DISABLE: the GDACS-owned shared selection is released',
+      disabled.length === 1 &&
+        disabled[0].type === 'gev:entity-selection-cleared' &&
+        shared === null,
+      `lane=${JSON.stringify(disabled)} selected=${JSON.stringify(shared)}`,
+    );
     record(
       'no uncaught browser errors',
       errors.length === 0,

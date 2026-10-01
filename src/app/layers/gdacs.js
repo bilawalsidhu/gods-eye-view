@@ -1,5 +1,6 @@
 import { createGdacsAlertsLayer } from '../../layers/gdacs/index.js';
 import * as picking from '../../data/pickRegistry.js';
+import * as context from '../../data/contextStore.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { overlayHost } from './overlayHost.js';
 
@@ -10,6 +11,7 @@ export function createApplicationGdacsAlerts(options) {
     picking,
     pointer: { isPointerFree },
     overlayHost,
+    context,
     ...options,
   });
 }
