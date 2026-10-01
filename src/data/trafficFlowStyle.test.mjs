@@ -88,7 +88,9 @@ test('flowDensityMult jamBoost: identical to base curve down to level 0.4', () =
 });
 
 test('flowDensityMult jamBoost: deep jams keep climbing to a 4.0 cap', () => {
-  assert.ok(Math.abs(flowDensityMult(0.3, { jamBoost: true }) - (1 / 0.3)) < 1e-12);
+  assert.ok(
+    Math.abs(flowDensityMult(0.3, { jamBoost: true }) - 1 / 0.3) < 1e-12,
+  );
   assert.equal(flowDensityMult(0.25, { jamBoost: true }), 4);
   assert.equal(flowDensityMult(0.1, { jamBoost: true }), 4);
   assert.equal(flowDensityMult(0, { jamBoost: true }), 4);

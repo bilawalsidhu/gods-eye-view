@@ -12,6 +12,9 @@ import { createTransitSource } from '../layers/transit/source.js';
 import { createTrafficSource } from '../layers/traffic/source.js';
 import { createBikeshareSource } from '../layers/bikeshare/source.js';
 import { createInstallationSource } from '../layers/installations/source.js';
+import { createTemperatureSource } from '../layers/temperature/source.js';
+import { probeTileWithImage } from '../layers/temperature/probe.js';
+import { createTemperatureSampler } from '../layers/temperature/sampler.js';
 import { createSatelliteSource } from '../layers/satellites/source.js';
 import { createLaunchSource } from '../layers/launches/source.js';
 import { createAlprTileSource } from '../layers/alpr/source.js';
@@ -55,6 +58,10 @@ export function createStandaloneLayerSources(
     transit: createTransitSource(),
     bikeshare: createBikeshareSource(),
     installations: createInstallationSource({ mapTiles: installationTiles }),
+    temperature: {
+      ...createTemperatureSource({ probeImpl: probeTileWithImage }),
+      ...createTemperatureSampler(),
+    },
     satellites: createSatelliteSource(),
     launches: createLaunchSource(),
     alpr: createAlprTileSource(),

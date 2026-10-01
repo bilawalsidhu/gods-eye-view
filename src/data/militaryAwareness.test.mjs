@@ -425,7 +425,7 @@ test('a dependency the user adopts stays on when Contacts turns off', async () =
     assert.deepEqual(
       released,
       AWARENESS_DEPENDENCIES.filter((layerId) => layerId !== 'flights').sort(),
-      'the adopted layer is the user\'s now; the rest are still released',
+      "the adopted layer is the user's now; the rest are still released",
     );
   } finally {
     runtime.restore();
