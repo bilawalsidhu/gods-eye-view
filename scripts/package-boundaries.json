@@ -1851,6 +1851,7 @@
       "src/voice/commands.js",
       "src/voice/control.js",
       "src/voice/gevActions.js",
+      "src/agent/worldPacket.js",
       "src/voice/gevRealtime.js",
       "src/voice/layerSummary.js",
       "src/voice/realtimeBackend.js",
