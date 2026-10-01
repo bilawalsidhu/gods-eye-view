@@ -14,8 +14,9 @@
  *         the globe: the far-side glyph is hidden, an eastbound animal's arrow
  *         points right with the camera looking north, a real click on a glyph
  *         names species, study, owner and last fix, the window chips change
- *         what is drawn, the DOI chip opens the dataset and a pending study
- *         is named.
+ *         what is drawn, the DOI chip opens the dataset, a pending study
+ *         is named, and a withdrawn study is listed as no longer public with
+ *         its animal never drawn.
  *   (iii) FAILURE — the route stubbed to 502: stats.error is set, the glyphs
  *         already on the globe are kept and the row says the refresh failed.
  *   (iv)  DISABLE — the data source is hidden and the selection released.
@@ -48,6 +49,8 @@ const LAYER_ID = 'wildlife';
 const GULLS = 1258895879;
 const STORKS = 21231406;
 const SPOONBILLS = 2313947453;
+/** Stubbed as withdrawn from Movebank: its animal must never be drawn. */
+const WITHDRAWN = 1609400843;
 const CURATED = 7;
 
 const results = [];
@@ -163,6 +166,12 @@ const rowDom = (page) =>
     const all = (selector) => [...(row?.querySelectorAll(selector) || [])];
     return {
       items: all('.data-row-list-item').map((node) => node.dataset.listItemId),
+      itemText: Object.fromEntries(
+        all('.data-row-list-item').map((node) => [
+          node.dataset.listItemId,
+          node.textContent.trim(),
+        ]),
+      ),
       activeItems: all('.data-row-list-item.active').map(
         (node) => node.dataset.listItemId,
       ),
@@ -257,12 +266,14 @@ function animal(
 function fixture() {
   return {
     studies: [
-      { id: GULLS, status: 'ok', fetchedAt: Date.now() },
-      { id: STORKS, status: 'ok', fetchedAt: Date.now() },
-      { id: SPOONBILLS, status: 'ok', fetchedAt: Date.now() },
+      { id: GULLS, status: 'fresh', fetchedAt: Date.now() },
+      { id: STORKS, status: 'fresh', fetchedAt: Date.now() },
+      { id: SPOONBILLS, status: 'fresh', fetchedAt: Date.now() },
       { id: 2298738353, status: 'pending', fetchedAt: null },
+      // Withdrawn: a (misbehaving) proxy still sending its animal.
+      { id: WITHDRAWN, status: 'withdrawn', fetchedAt: null },
       // Not curated: dropped by the client sanitizer.
-      { id: 16615296, status: 'ok', fetchedAt: Date.now() },
+      { id: 16615296, status: 'fresh', fetchedAt: Date.now() },
     ],
     animals: [
       // Eastbound along the Scheldt estuary.
@@ -276,6 +287,8 @@ function fixture() {
       animal(STORKS, 'AU057', 'Ciconia ciconia', 5, 8.4, 48.3, { fixes: 1 }),
       // The far side of the globe from a camera above Belgium.
       animal(GULLS, 'FAR', 'Larus argentatus', 2, -175, -40),
+      // Belongs to the withdrawn study: the client drops it (fail closed).
+      animal(WITHDRAWN, 'GONE', 'Larus argentatus', 1, 4.6, 51.4),
       // Outside the default one-year window.
       animal(SPOONBILLS, 'OLD', 'Platalea leucorodia', 400 * 24, 4.4, 51.2),
     ],
@@ -335,14 +348,14 @@ async function main() {
     // ── (i) LIVE ──────────────────────────────────────────────────────────
     console.log('(i) LIVE — curated Movebank studies through /api/wildlife...');
     const walk = await waitForWalk();
-    const ok = walk.body.studies.filter(({ status }) => status === 'ok');
+    const ok = walk.body.studies.filter(({ status }) => status === 'fresh');
     record(
       'LIVE: the proxy walked every curated study, most answered',
       walk.body.studies.length === CURATED &&
         walk.body.pending.length === 0 &&
         ok.length >= CURATED - 2 &&
         walk.body.animals.length > 100,
-      `after ${walk.seconds}s: ok=${ok.length}/${walk.body.studies.length} animals=${walk.body.animals.length} statuses=${JSON.stringify(walk.body.studies.map(({ id, status }) => [id, status]))}`,
+      `after ${walk.seconds}s: served=${ok.length}/${walk.body.studies.length} animals=${walk.body.animals.length} statuses=${JSON.stringify(walk.body.studies.map(({ id, status }) => [id, status]))}`,
     );
     const newest = Math.max(
       ...walk.body.animals.map(({ track }) => track.at(-1)[2]),
@@ -437,11 +450,18 @@ async function main() {
     await sleep(1500);
     const drawn = await glyphs(page);
     record(
-      'FIXTURE: 4 animals in the last year drawn, the old one and the uncurated study left off',
+      'FIXTURE: 4 animals in the last year drawn, the old one, the withdrawn study and the uncurated study left off',
       f.diagnostics.animals === 4 &&
         !('OLD' in drawn) &&
-        f.diagnostics.studies.length === 4,
+        !('GONE' in drawn) &&
+        f.diagnostics.studies.length === 5,
       `animals=${f.diagnostics.animals} glyphs=${Object.keys(drawn)} studies=${f.diagnostics.studies.length}`,
+    );
+    const listed = await rowDom(page);
+    record(
+      'FIXTURE: a withdrawn study is listed as no longer public, not as current',
+      /no longer public$/.test(listed.itemText[String(WITHDRAWN)] || ''),
+      JSON.stringify(listed.itemText[String(WITHDRAWN)]),
     );
     record(
       'FIXTURE: the far-side glyph is hidden, the near ones shown',

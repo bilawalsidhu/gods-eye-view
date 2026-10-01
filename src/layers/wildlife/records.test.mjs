@@ -189,7 +189,7 @@ test('the browser keeps only curated studies and well-formed animals', () => {
   const snapshot = sanitizeWildlifeSnapshot({
     studies: [
       { id: STORKS, status: 'ok', fetchedAt: 5 },
-      { id: STORKS, status: 'ok' },
+      { id: STORKS, status: 'fresh' },
       { id: 1, status: 'ok' },
       { id: 2298738353, status: 'bogus' },
       { id: 1609400843, status: 'pending' },
@@ -240,7 +240,7 @@ test('the browser keeps only curated studies and well-formed animals', () => {
       Boolean(doi),
     ]),
     [
-      [STORKS, 'ok', 5, true],
+      [STORKS, 'fresh', 5, true],
       [1609400843, 'pending', null, true],
     ],
   );
@@ -258,6 +258,31 @@ test('the browser keeps only curated studies and well-formed animals', () => {
   ]);
   assert.equal(sanitizeWildlifeSnapshot({ studies: [] }), null);
   assert.equal(sanitizeWildlifeSnapshot(null), null);
+});
+
+test('the browser draws animals only for fresh or stale studies', () => {
+  const GULLS = 1258895879;
+  const SPOONBILLS = 2313947453;
+  const ids = [STORKS, GULLS, SPOONBILLS, 1609400843, 2298738353];
+  const statuses = ['fresh', 'stale', 'withdrawn', 'unavailable', 'pending'];
+  const snapshot = sanitizeWildlifeSnapshot({
+    studies: ids.map((id, i) => ({ id, status: statuses[i], fetchedAt: 1 })),
+    animals: ids.map((study) => ({
+      id: `${study}:A`,
+      study,
+      name: 'A',
+      track: [[8, 48, 1]],
+    })),
+  });
+  assert.deepEqual(
+    snapshot.studies.map(({ id, status }) => [id, status]),
+    ids.map((id, i) => [id, statuses[i]]),
+  );
+  assert.deepEqual(
+    snapshot.animals.map(({ id }) => id),
+    [`${STORKS}:A`, `${GULLS}:A`],
+    'a proxy that sends coordinates for a withdrawn study is not trusted',
+  );
 });
 
 test('list leads and short names stay terse', () => {
