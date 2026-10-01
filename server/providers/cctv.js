@@ -1,3 +1,4 @@
+import { registerCameraCatalog, reportCameraHealth } from './common/cameraHooks.js';
 import { createCctvCatalog } from './cctv/catalog.js';
 import {
   normalizeFeedType,
@@ -35,6 +36,7 @@ export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
  */
 export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const getCctvSources = createCctvCatalog({ sourceRoot });
+  registerCameraCatalog(getCctvSources);
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
   /** Cap on health map entries to prevent unbounded growth. Sized to the
@@ -51,6 +53,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
       const oldest = health.keys().next().value;
       health.delete(oldest);
     }
+    reportCameraHealth(cameraId, patch);
     const prev = health.get(cameraId) || {};
     health.set(cameraId, {
       id: cameraId,

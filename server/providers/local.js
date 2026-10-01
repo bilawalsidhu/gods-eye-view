@@ -27,6 +27,7 @@ import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
 import { historyProvider } from './history/index.js';
 import { alertsProvider } from './alerts/index.js';
+import { camerasProvider } from './cameras/index.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -59,6 +60,7 @@ function localProviderPlugins() {
     firePerimetersProxy(),
     historyProvider(),
     alertsProvider(),
+    camerasProvider(),
     keySetupEndpoint(),
   ];
 }

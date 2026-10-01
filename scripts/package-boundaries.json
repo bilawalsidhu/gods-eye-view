@@ -155,6 +155,7 @@
     "exports": ["./server/providers/cctv"],
     "modules": [
       "server/providers/cctv.js",
+      "server/providers/common/cameraHooks.js",
       "server/providers/cctv/cap.js",
       "server/providers/cctv/groundHeights.js",
       "server/providers/cctv/catalog.js",
