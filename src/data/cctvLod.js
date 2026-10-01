@@ -38,6 +38,10 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   // collectionInterval, 600 s for every station sampled; polling faster only
   // re-fetches the same JPEG.
   fintraffic: 10 * 60 * 1000,
+  // Vancouver stills regenerate in place every ~10–15 min (the site pages
+  // carry a 300 s meta refresh), so the default 5-min ambient-card cadence
+  // is the honest fetch rate; kept explicit to document the decision.
+  'city of vancouver traffic cams': 5 * 60 * 1000,
 });
 
 /**

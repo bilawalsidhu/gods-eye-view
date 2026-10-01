@@ -398,6 +398,31 @@ export const CAMERA_SEEDS = [
     rangeM: 700,
     elevationM: 20,
   },
+
+  {
+    id: 'vancouver-canada-place-n',
+    cityId: 'vancouver',
+    poiIndex: 0,
+    label: 'Canada Place Waterfront',
+    offsetNorthM: 140,
+    offsetEastM: -60,
+    headingDeg: 205,
+    fovDeg: 70,
+    rangeM: 700,
+    elevationM: 28,
+  },
+  {
+    id: 'vancouver-city-hall-e',
+    cityId: 'vancouver',
+    poiIndex: 2,
+    label: 'City Hall East Lawn',
+    offsetNorthM: 90,
+    offsetEastM: 120,
+    headingDeg: 250,
+    fovDeg: 66,
+    rangeM: 640,
+    elevationM: 24,
+  },
 ];
 
 // ---------------------------------------------------------------------------

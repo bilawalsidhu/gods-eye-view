@@ -45,6 +45,10 @@ import {
   TARKTEE_ANCHORS,
   DEFAULT_WARENDORF_SOURCE_FILE,
   WARENDORF_IMAGE_ORIGINS,
+  DEFAULT_VANCOUVER_SOURCE_FILE,
+  VANCOUVER_IMAGE_ORIGIN,
+  DEFAULT_VANCOUVER_MAX_SOURCES,
+  VANCOUVER_CENTER,
   NSW_CAMERAS_URL,
   NSW_IMAGE_ORIGIN,
   DEFAULT_NSW_MAX_SOURCES,
@@ -1289,6 +1293,83 @@ export function loadWarendorfSourcesFromCatalog({
   }
   console.log('[CCTV] Loaded Warendorf camera sources:', cameras.length);
   return cameras;
+}
+
+/**
+ * Load Vancouver (Canada) traffic cameras from the curated catalog file.
+ *
+ * Frames are public JPEG stills on trafficcams.vancouver.ca; the catalog
+ * carries intersection-level coordinates and N/E/S/W headings derived from the
+ * City of Vancouver KML and per-intersection pages. Poses are treated as
+ * curated (the generator records headingConfidence='high'); only the official
+ * trafficcams origin is registered; the proxy fetches only registered URLs.
+ *
+ * @returns {Array<object>} Camera source objects.
+ */
+export function loadVancouverSourcesFromCatalog({
+  sourceRoot = process.cwd(),
+} = {}) {
+  const sourceFile =
+    process.env.CCTV_VANCOUVER_SOURCES_FILE || DEFAULT_VANCOUVER_SOURCE_FILE;
+  const resolved = path.isAbsolute(sourceFile)
+    ? sourceFile
+    : path.resolve(sourceRoot, sourceFile);
+  let rows = [];
+  try {
+    if (!fs.existsSync(resolved)) {
+      console.warn('[CCTV] Vancouver source file missing:', resolved);
+      return [];
+    }
+    const parsed = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+    rows = Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn(
+      '[CCTV] Vancouver source file read error:',
+      error?.message || error,
+    );
+    return [];
+  }
+  const cameras = [];
+  for (const item of rows) {
+    if (!item || typeof item !== 'object') continue;
+    const id = typeof item.id === 'string' ? item.id.trim() : '';
+    const url =
+      typeof item.url === 'string'
+        ? item.url.trim()
+        : typeof item.snapshotUrl === 'string'
+          ? item.snapshotUrl.trim()
+          : '';
+    if (!id || !url.startsWith(VANCOUVER_IMAGE_ORIGIN)) continue;
+    const lat = typeof item.lat === 'number' ? item.lat : NaN;
+    const lon = typeof item.lon === 'number' ? item.lon : NaN;
+    if (!isPlausibleLatLon(lat, lon)) continue;
+    cameras.push({
+      ...item,
+      id,
+      url,
+      snapshotUrl: url,
+      city: 'Vancouver',
+      cityId: 'vancouver',
+      provider: 'City of Vancouver Traffic Cams',
+      feedType: 'image',
+      sourceKind: 'vancouver-open-data',
+      poseSource: 'curated',
+    });
+  }
+  const unique = Array.from(
+    new Map(cameras.map((camera) => [camera.id, camera])).values(),
+  );
+  const maxRaw = Number(
+    process.env.CCTV_VANCOUVER_MAX_SOURCES || DEFAULT_VANCOUVER_MAX_SOURCES,
+  );
+  const maxCount = Number.isFinite(maxRaw)
+    ? Math.max(8, Math.min(1000, Math.floor(maxRaw)))
+    : DEFAULT_VANCOUVER_MAX_SOURCES;
+  const prioritized = prioritizeSources(unique, maxCount, [VANCOUVER_CENTER]);
+  console.log(
+    `[CCTV] Loaded Vancouver camera sources: ${unique.length} (using nearest ${prioritized.length})`,
+  );
+  return prioritized;
 }
 
 /**

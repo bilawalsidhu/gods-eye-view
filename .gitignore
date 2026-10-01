@@ -19,3 +19,13 @@ output/
 3d-models/
 pinokio/ENVIRONMENT
 pinokio/.installed
+pinokio/ENVIRONMENT
+
+# Local TTY-safe verification helpers (do not commit to VCS).
+# These exist only to run assertions in this non-TTY sandbox.
+.tty-shim.cjs
+tty-shim.cjs
+tty-run.cjs
+run-tests.mjs
+verify-cap.mjs
+

@@ -18,6 +18,7 @@ import {
   loadNswSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
+  loadVancouverSourcesFromCatalog,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -91,6 +92,11 @@ const LIVE_PACKS = [
     name: 'deldot',
     enabled: () => envEnabled('CCTV_DELDOT_ENABLED'),
     load: loadDelDOTSourcesFromOpenData,
+  },
+  {
+    name: 'vancouver',
+    enabled: () => envEnabled('CCTV_VANCOUVER_ENABLED'),
+    load: loadVancouverSourcesFromCatalog,
   },
 ];
 /**

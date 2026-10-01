@@ -1,5 +1,11 @@
 # Changelog
 
+- Register Vancouver as a LIVE_PACKS entry (gated by `CCTV_VANCOUVER_ENABLED`)
+  instead of routing it through the global `CCTV_SOURCES_FILE` override, so the
+  830-camera pack adds to the mesh instead of replacing Austin/Caltrans/TfL/
+  Ontario/etc. Vancouver loads by default; `CCTV_VANCOUVER_ENABLED=0` suppresses
+  Vancouver only while leaving peer regions intact.
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
