@@ -84,9 +84,9 @@ jobs:
     # 15m covered eight quiet-box runs (~3 min each) but lost to the same
     # 2026-10-01 load storm that benched the runner and locked the DB: npm ci
     # alone froze mid-install for 50+ min with the container past budget
-    # (run 865a3c4f's lint). 30m matches the test budgets — contention should
-    # cost queue time, not the first stage of every chain.
-    timeout: 30m
+    # (run 865a3c4f's lint). 45m matches the fleet-wide budget below —
+    # contention should cost queue time, not the first stage of every chain.
+    timeout: 45m
 
   # No `npm ci` — the pattern scan reads the checkout as-is and needs only
   # the binary baked into the image. Version rides the step so a stale image
@@ -95,16 +95,20 @@ jobs:
   # The 10m budget held for eight runs on a quiet box (the scan itself takes
   # well under a minute) but timed out 2026-10-01 under host load ~100
   # (docker exec + scan starved; run e7b72bad, job 5636c943, exit -1,
-  # `execution error: timeout`). 30m matches the other compute jobs so
-  # contention costs queue time, not a red gate with no finding behind it.
+  # `execution error: timeout`). 45m is the fleet-wide budget so contention
+  # costs queue time, not a red gate with no finding behind it.
   - name: security
     image: gev-ci-node:1
     needs: [lint]
     steps:
       - name: Aegis pattern scan (new secrets findings only)
         run: aegis --version && aegis scan --categories secrets --severity-threshold high --baseline .aegis-baseline.json .
-    timeout: 30m
+    timeout: 45m
 
+  # 30m lost to the storm tail 2026-10-01 (run d82fea68): the npm ci STEP
+  # finished exit-0 but the suite step hit the 1800 s budget mid-run under
+  # host load ~80-100 — ~13 min install + >23 min suite and still short.
+  # 45m covers both steps under contention; a quiet-box pass is ~15 min.
   - name: test-node24
     image: gev-ci-node:1
     needs: [lint]
@@ -113,7 +117,7 @@ jobs:
         run: npm ci
       - name: Unit suite on Node 24 (allocation budgets enforced)
         run: GEV_REQUIRE_ALLOCATION_GATE=1 npm test
-    timeout: 30m
+    timeout: 45m
 
   - name: test-node26
     image: gev-ci-node:1
@@ -123,7 +127,7 @@ jobs:
         run: npm ci
       - name: Unit suite on Node 26 (allocation budgets enforced)
         run: export PATH=/opt/node26/bin:$PATH && node --version && GEV_REQUIRE_ALLOCATION_GATE=1 npm test
-    timeout: 30m
+    timeout: 45m
 
   # Publishes the measured coverage number on every push (no threshold gate
   # — the Phase 3 stance in docs/PLAN.md: the number follows the tests).
@@ -135,7 +139,7 @@ jobs:
         run: npm ci
       - name: Coverage report
         run: npm run test:coverage
-    timeout: 30m
+    timeout: 45m
 
   # The FIRMS WASM renderer is regenerated before vite copies public/ into
   # dist so the shipped bundle keeps the WASM path (the app falls back to
