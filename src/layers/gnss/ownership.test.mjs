@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createGnssInterferenceLayer } from './index.js';
+import { createGnssIntegrityLayer } from './index.js';
 
 const row = (hex, lat, degraded) => ({
   hex,
@@ -29,7 +29,7 @@ function harness(
   };
   let clock = 1_000;
   const anchors = [];
-  const layer = createGnssInterferenceLayer({
+  const layer = createGnssIntegrityLayer({
     source: { getSnapshot },
     viewAnchor: () => {
       anchors.push(anchor);
@@ -49,7 +49,7 @@ function harness(
 }
 
 test('the layer requires a snapshot source and cannot be initialized twice', () => {
-  assert.throws(() => createGnssInterferenceLayer({}), TypeError);
+  assert.throws(() => createGnssIntegrityLayer({}), TypeError);
   const { layer } = harness(async () => ({ rows: [] }));
   assert.throws(() => layer.init({ dataSources: { add() {} } }), /already/);
 });
@@ -89,6 +89,46 @@ test('an enabled refresh bins the snapshot into coloured ground cells', async ()
   );
   assert.match(legend[0].blurb, /not a detection/);
   assert.match(legend[0].blurb, /fewer than 3 aircraft are not drawn/);
+});
+
+test('the visible layer leads with low navigation accuracy and exposes its provenance', async () => {
+  const { layer } = harness(async () => ({ rows: [], stale: false }));
+  assert.equal(layer.id, 'gnss-interference', 'the share-link id is unchanged');
+  assert.equal(layer.name, 'GNSS Integrity');
+  assert.doesNotMatch(layer.name, /interference|jamming/i);
+  const { legend } = layer.getRowControls();
+  assert.deepEqual(
+    legend.map(({ label }) => label),
+    ['Over 10% low accuracy', '2–10% low accuracy', 'Under 2% low accuracy'],
+  );
+  const { blurb } = legend[0];
+  assert.match(
+    blurb,
+    /^Share of ADS-B aircraft reporting low navigation accuracy/,
+  );
+  assert.match(blurb, /NIC < 7 or NACp < 8/);
+  assert.match(blurb, /GEV threshold/);
+  assert.match(blurb, /not a published interference test/);
+  assert.match(blurb, /gpsjam\.org's formula and 2% \/ 10% bands/);
+  assert.match(blurb, /navigation-integrity anomalies/);
+  // Interference appears only as the secondary, hedged reading.
+  assert.ok(
+    blurb.indexOf('navigation-integrity anomalies') <
+      blurb.indexOf('Suspected jamming or spoofing'),
+  );
+  assert.equal(layer.provenance.classifier.id, 'gev-nic-nacp-v1');
+  assert.equal(layer.provenance.classifier.definedBy, 'GEV');
+  assert.equal(layer.provenance.classifier.validated, false);
+  assert.equal(layer.provenance.aggregation.source, 'https://gpsjam.org/faq');
+  assert.deepEqual(layer.provenance.window, {
+    minutes: 30,
+    scope: 'visited-view',
+    cellDeg: 0.5,
+    minAircraft: 3,
+    definedBy: 'GEV',
+  });
+  assert.equal(layer.provenance.interpretation.validated, false);
+  assert.equal(layer.getStats().provenance, layer.provenance);
 });
 
 test('a failed refresh keeps the last cells and reports the error', async () => {

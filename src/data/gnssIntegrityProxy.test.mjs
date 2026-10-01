@@ -88,6 +88,7 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
       fetchedAt: 1234,
       anchor: { lat: 50, lon: 20 },
       radiusNm: 250,
+      classifier: 'gev-nic-nacp-v1',
       rows: [
         {
           hex: '4ca7b5',

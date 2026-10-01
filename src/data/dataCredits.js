@@ -104,7 +104,7 @@ export const DATA_CREDITS = [
   {
     key: 'adsblol',
     html:
-      'Military flights, aircraft traces, bounded regional flight fallback &amp; GNSS interference: ' +
+      'Military flights, aircraft traces, bounded regional flight fallback &amp; GNSS navigation integrity: ' +
       '<a href="https://adsb.lol" target="_blank" rel="noopener">adsb.lol</a> ' +
       '(ODbL 1.0)',
   },

@@ -31,6 +31,8 @@ export function createAdsbGnssSource({
           ? payload.fetchedAt
           : null,
         stale: payload.stale === true,
+        classifier:
+          typeof payload.classifier === 'string' ? payload.classifier : null,
       };
     },
   };

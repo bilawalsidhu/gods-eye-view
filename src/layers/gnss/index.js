@@ -2,9 +2,12 @@ import * as Cesium from 'cesium';
 import {
   GNSS_LEVEL_COLORS,
   GNSS_MIN_AIRCRAFT,
+  GNSS_NACP_THRESHOLD,
+  GNSS_NIC_THRESHOLD,
   GNSS_WINDOW_MS,
   accumulateGnssObservations,
   binGnssCells,
+  gnssProvenance,
 } from './records.js';
 export * from './records.js';
 export { createAdsbGnssSource } from './source.js';
@@ -12,9 +15,9 @@ export { createAdsbGnssSource } from './source.js';
 /** Low stays visible over land so coverage reads apart from no data. */
 const FILL_ALPHA = Object.freeze({ low: 0.3, medium: 0.42, high: 0.55 });
 const LEVEL_LABELS = Object.freeze({
-  low: 'Under 2% degraded',
-  medium: '2–10% degraded',
-  high: 'Over 10% degraded',
+  low: 'Under 2% low accuracy',
+  medium: '2–10% low accuracy',
+  high: 'Over 10% low accuracy',
 });
 
 /** Degrees at the centre of the current view, or null before the camera settles. */
@@ -34,18 +37,19 @@ export function defaultGnssViewAnchor(viewer) {
 }
 
 /**
- * Own one GNSS-interference display: rolling integrity observations around
- * the views the user visits, binned into cells coloured by the share of
- * aircraft reporting degraded navigation integrity.
+ * Own one GNSS navigation-integrity display: rolling integrity observations
+ * around the views the user visits, binned into cells coloured by the share
+ * of aircraft reporting low navigation accuracy. The layer id keeps its
+ * original `gnss-interference` spelling because share links depend on it.
  */
-export function createGnssInterferenceLayer({
+export function createGnssIntegrityLayer({
   source,
   viewAnchor = defaultGnssViewAnchor,
   now = () => Date.now(),
   windowMs = GNSS_WINDOW_MS,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
-    throw new TypeError('GNSS interference requires a snapshot source');
+    throw new TypeError('GNSS integrity layer requires a snapshot source');
   let _viewer = null;
   let _dataSource = null;
   let _request = null;
@@ -56,6 +60,7 @@ export function createGnssInterferenceLayer({
   let _lastError = null;
   let _stale = false;
   const _observations = new Map();
+  const provenance = gnssProvenance({ windowMs });
 
   function render() {
     // Only the id and band change what is drawn; counts alone do not.
@@ -91,14 +96,16 @@ export function createGnssInterferenceLayer({
 
   const layer = {
     id: 'gnss-interference',
-    name: 'GNSS Interference',
+    name: 'GNSS Integrity',
     icon: '📡',
     source: 'adsb.lol',
+    /** Where each part of the method comes from; see records.js. */
+    provenance,
     updateInterval: 60000,
 
     init(viewer) {
       if (_viewer)
-        throw new Error('GNSS interference layer is already initialized');
+        throw new Error('GNSS integrity layer is already initialized');
       _viewer = viewer;
       _dataSource = new Cesium.CustomDataSource('gnss-interference');
       _dataSource.show = false;
@@ -179,7 +186,7 @@ export function createGnssInterferenceLayer({
           count: _cells.filter((cell) => cell.level === level).length,
           ...(index === 0
             ? {
-                blurb: `Share of ADS-B aircraft reporting low navigation integrity (NIC/NACp) over the last 30 minutes, around the views you visit. Cells with fewer than ${GNSS_MIN_AIRCRAFT} aircraft are not drawn, so blank areas mean no data, not clean GNSS. An inference of jamming or spoofing, not a detection.`,
+                blurb: `Share of ADS-B aircraft reporting low navigation accuracy over the last ${provenance.window.minutes} minutes, around the views you visit. An aircraft counts when it reports NIC < ${GNSS_NIC_THRESHOLD} or NACp < ${GNSS_NACP_THRESHOLD} or GPS loss: a GEV threshold borrowed from US ADS-B Out minima, not a published interference test. Cells use gpsjam.org's formula and 2% / 10% bands. Cells with fewer than ${GNSS_MIN_AIRCRAFT} aircraft are not drawn, so blank areas mean no data, not clean GNSS. Medium and high cells are navigation-integrity anomalies. Suspected jamming or spoofing is one possible cause, not a detection: avionics faults also report low values.`,
               }
             : {}),
         })),
@@ -192,6 +199,7 @@ export function createGnssInterferenceLayer({
         lastUpdate: _lastUpdate,
         error: _lastError,
         stale: _stale,
+        provenance,
         // Load-bearing: without an explicit boolean, layerFeedState reads the
         // adsb.lol source name as a flights fallback (src/data/feedState.js).
         fallback: false,
