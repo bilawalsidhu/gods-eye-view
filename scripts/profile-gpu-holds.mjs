@@ -161,11 +161,12 @@ async function main() {
 
   // A loaded box (other sessions, dozens of Chromium processes) can take
   // minutes to reach domcontentloaded on this module graph; 60 s proved too
-  // tight during the 2026-09-23 audit, so navigate on a generous budget.
-  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 240_000 });
+  // tight during the 2026-09-23 audit and 240 s timed out under load ~56 on
+  // 2026-10-01, so navigate on a generous budget.
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 360_000 });
   await page.waitForFunction(
     () => window.__godsEyeView && window.__godsEyeView.viewer && window.__godsEyeView.dataManager,
-    { timeout: 240_000, polling: 200 },
+    { timeout: 360_000, polling: 200 },
   );
   report.appReady = await page.evaluate(() => ({
     styleId: window.__godsEyeView.styleManager?.currentStyleId
