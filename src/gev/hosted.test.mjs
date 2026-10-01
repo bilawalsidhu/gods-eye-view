@@ -38,10 +38,19 @@ test('access tokens must be long and well-formed', () => {
   assert.deepEqual(list.map((x) => [x.name, x.admin]), [['alice', true], ['bob', false]]);
 });
 
+test('single owner token from GEV_ACCESS_TOKEN', async () => {
+  const auth = createAuth({ GEV_AUTH_MODE: 'tokens', GEV_SESSION_SECRET: SECRET, GEV_ACCESS_TOKEN: TOKEN });
+  const ok = await auth.login({}, { token: TOKEN });
+  assert.equal(ok.user.name, 'owner');
+  assert.equal(ok.user.admin, true);
+  assert.equal(await auth.login({}, { token: 'nope' }), null);
+  assert.throws(() => createAuth({ GEV_AUTH_MODE: 'tokens', GEV_SESSION_SECRET: SECRET, GEV_ACCESS_TOKEN: 'short' }), /24/);
+});
+
 test('createAuth refuses weak or missing configuration', () => {
   assert.throws(() => createAuth({ GEV_AUTH_MODE: 'tokens', GEV_SESSION_SECRET: 'short' }), /32/);
   assert.throws(() => createAuth({ GEV_SESSION_SECRET: SECRET }), /GEV_AUTH_MODE/);
-  assert.throws(() => createAuth({ GEV_AUTH_MODE: 'tokens', GEV_SESSION_SECRET: SECRET }), /GEV_ACCESS_TOKENS/);
+  assert.throws(() => createAuth({ GEV_AUTH_MODE: 'tokens', GEV_SESSION_SECRET: SECRET }), /GEV_ACCESS_TOKEN/);
   assert.throws(() => createAuth({ GEV_AUTH_MODE: 'supabase', GEV_SESSION_SECRET: SECRET, SUPABASE_URL: 'http://x' }), /https/);
 });
 

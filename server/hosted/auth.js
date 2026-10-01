@@ -217,8 +217,20 @@ export function createAuth(env = process.env, { fetchImpl = fetch } = {}) {
   let page;
   if (mode === 'tokens') {
     const tokens = parseAccessTokens(env.GEV_ACCESS_TOKENS);
+    // A single owner token (what a host's "generate secret" button makes).
+    if (env.GEV_ACCESS_TOKEN) {
+      if (String(env.GEV_ACCESS_TOKEN).length < 24)
+        throw new Error('GEV_ACCESS_TOKEN must be at least 24 characters');
+      tokens.push({
+        name: 'owner',
+        token: String(env.GEV_ACCESS_TOKEN),
+        admin: true,
+      });
+    }
     if (!tokens.length)
-      throw new Error('GEV_AUTH_MODE=tokens needs GEV_ACCESS_TOKENS');
+      throw new Error(
+        'GEV_AUTH_MODE=tokens needs GEV_ACCESS_TOKEN or GEV_ACCESS_TOKENS',
+      );
     login = async (_req, body) => {
       const hit = checkAccessToken(tokens, String(body?.token || ''));
       return hit

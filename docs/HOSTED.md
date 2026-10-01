@@ -10,7 +10,8 @@ meant for you and people you invite, not open public access.
 | --- | --- |
 | `GEV_AUTH_MODE` | `tokens` or `supabase`; the server refuses to start without it |
 | `GEV_SESSION_SECRET` | 32+ random characters; signs the session cookie |
-| `GEV_ACCESS_TOKENS` | tokens mode: `alice:<24+ char token>:admin,bob:<token>` |
+| `GEV_ACCESS_TOKEN` | tokens mode: one owner token (24+ characters) |
+| `GEV_ACCESS_TOKENS` | tokens mode, several users: `alice:<24+ char token>:admin,bob:<token>` |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | supabase mode: project URL and publishable key |
 | `SUPABASE_JWT_SECRET` | supabase mode, legacy HS256 projects only; newer projects are verified through their JWKS |
 
@@ -38,6 +39,19 @@ at build time and must be referrer-restricted to your domain (SECURITY.md).
   devices), realtime debug log, and the alert simulator.
 - DelDOT live video defaults off (`CCTV_DELDOT_ENABLED=0`): its terms do not
   clearly allow redistribution.
+
+## Deploy on Render (fastest)
+
+`render.yaml` is a Render Blueprint. Open
+`https://render.com/deploy?repo=https://github.com/<you>/<repo>`, approve it,
+and leave the optional keys blank. Render generates `GEV_ACCESS_TOKEN` and
+`GEV_SESSION_SECRET`; copy the token from the service's Environment tab and
+paste it on the site's `/login` page.
+
+The free plan sleeps after idle time and has no persistent disk, so recorded
+history and alert rules reset on restart. Add `GEV_DATABASE_URL` (any
+Postgres, e.g. Supabase or Render Postgres) to keep them, and use a paid
+instance if the recorder should run around the clock.
 
 ## Deploy on Fly.io
 

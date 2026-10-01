@@ -1,0 +1,30 @@
+# One-click deploy: https://render.com/deploy?repo=https://github.com/jasontso2939/gods-eye
+# Render generates the login token and session secret; find the token under
+# the service's Environment tab (GEV_ACCESS_TOKEN) and paste it on /login.
+services:
+  - type: web
+    name: gods-eye
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: GEV_AUTH_MODE
+        value: tokens
+      - key: GEV_ACCESS_TOKEN
+        generateValue: true
+      - key: GEV_SESSION_SECRET
+        generateValue: true
+      - key: GEV_TRUST_PROXY
+        value: '1'
+      # Optional data keys; leave blank to start keyless.
+      - key: OPENSKY_CLIENT_ID
+        sync: false
+      - key: OPENSKY_CLIENT_SECRET
+        sync: false
+      - key: AISSTREAM_API_KEY
+        sync: false
+      # Optional: Postgres connection string so history survives restarts.
+      - key: GEV_DATABASE_URL
+        sync: false
