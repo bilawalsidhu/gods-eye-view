@@ -40,6 +40,7 @@ export function validateMagnetosphereState(value) {
     standoffRe: pause.standoffRe,
     flaring: pause.flaring,
     dynamicPressureNPa: pause.dynamicPressureNPa,
+    kp: Number.isFinite(value.kp?.kp) ? value.kp.kp : null,
     insideGeosynchronous: pause.insideGeosynchronous === true,
     extrapolatedBeyondFit: pause.extrapolatedBeyondFit === true,
   };
