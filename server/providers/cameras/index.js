@@ -1,6 +1,14 @@
 import { cameraCatalog, onCameraHealth } from '../common/cameraHooks.js';
 import { getStore } from '../store/index.js';
-import { sendJson, sendError, parseUrl, parseBbox, parseTime, route, badRequest } from '../common/json.js';
+import {
+  sendJson,
+  sendError,
+  parseUrl,
+  parseBbox,
+  parseTime,
+  route,
+  badRequest,
+} from '../common/json.js';
 import { coverageGrid } from '../../../src/sources/cameraCoverage.js';
 
 /**
@@ -18,16 +26,22 @@ import { coverageGrid } from '../../../src/sources/cameraCoverage.js';
 const SAMPLE_GAP_MS = 5 * 60_000;
 const MAX_BOX_DEG = 1.0;
 
-export function createCameraService({ getStore: storeOf = getStore, catalog = cameraCatalog, now = Date.now } = {}) {
+export function createCameraService({
+  getStore: storeOf = getStore,
+  catalog = cameraCatalog,
+  now = Date.now,
+} = {}) {
   const lastSampleAt = new Map();
   let pending = [];
 
   function record(sample) {
     const prev = lastSampleAt.get(sample.camera);
     // Always keep a state change; otherwise thin to one per gap.
-    if (prev && sample.t - prev.t < SAMPLE_GAP_MS && prev.ok === sample.ok) return;
+    if (prev && sample.t - prev.t < SAMPLE_GAP_MS && prev.ok === sample.ok)
+      return;
     lastSampleAt.set(sample.camera, { t: sample.t, ok: sample.ok });
-    if (lastSampleAt.size > 20_000) lastSampleAt.delete(lastSampleAt.keys().next().value);
+    if (lastSampleAt.size > 20_000)
+      lastSampleAt.delete(lastSampleAt.keys().next().value);
     pending.push(sample);
     if (pending.length > 10_000) pending.shift();
   }
@@ -46,14 +60,23 @@ export function createCameraService({ getStore: storeOf = getStore, catalog = ca
 
   const handler = route('cameras', async (req, res, next) => {
     const { path, params } = parseUrl(req);
-    if (req.method !== 'GET') return typeof next === 'function' ? next() : sendError(res, 405, 'method');
+    if (req.method !== 'GET')
+      return typeof next === 'function'
+        ? next()
+        : sendError(res, 405, 'method');
 
     if (path === '/coverage') {
       const bbox = parseBbox(params.get('bbox'));
       if (!bbox) badRequest('bbox=minLat,minLon,maxLat,maxLon required');
-      if (bbox.maxLat - bbox.minLat > MAX_BOX_DEG || bbox.maxLon - bbox.minLon > MAX_BOX_DEG)
+      if (
+        bbox.maxLat - bbox.minLat > MAX_BOX_DEG ||
+        bbox.maxLon - bbox.minLon > MAX_BOX_DEG
+      )
         badRequest(`bbox may span at most ${MAX_BOX_DEG} degree`);
-      const cell = Math.min(500, Math.max(10, Number(params.get('cell')) || 25));
+      const cell = Math.min(
+        500,
+        Math.max(10, Number(params.get('cell')) || 25),
+      );
       const cams = await catalog();
       const grid = coverageGrid(cams, bbox, {
         cellM: cell,
@@ -66,7 +89,12 @@ export function createCameraService({ getStore: storeOf = getStore, catalog = ca
       const to = parseTime(params.get('to'), now()) ?? now();
       const from = parseTime(params.get('from'), now()) ?? to - 86_400_000;
       const cams = await catalog();
-      const names = new Map(cams.map((c) => [String(c.id), { name: c.name, provider: c.provider, lat: c.lat, lon: c.lon }]));
+      const names = new Map(
+        cams.map((c) => [
+          String(c.id),
+          { name: c.name, provider: c.provider, lat: c.lat, lon: c.lon },
+        ]),
+      );
       const rows = await (await storeOf()).camUptime({ from, to });
       return sendJson(res, 200, {
         from,
@@ -82,12 +110,19 @@ export function createCameraService({ getStore: storeOf = getStore, catalog = ca
       if (!camera || camera.length > 128) badRequest('camera required');
       const to = parseTime(params.get('to'), now()) ?? now();
       const from = parseTime(params.get('from'), now()) ?? to - 7 * 86_400_000;
-      const bucketMs = Math.max(300_000, Number(params.get('bucket')) || 3_600_000);
-      const series = await (await storeOf()).camSeries({ camera, from, to, bucketMs });
+      const bucketMs = Math.max(
+        300_000,
+        Number(params.get('bucket')) || 3_600_000,
+      );
+      const series = await (
+        await storeOf()
+      ).camSeries({ camera, from, to, bucketMs });
       return sendJson(res, 200, { camera, from, to, bucketMs, series });
     }
 
-    return typeof next === 'function' ? next() : sendError(res, 404, 'not_found');
+    return typeof next === 'function'
+      ? next()
+      : sendError(res, 404, 'not_found');
   });
 
   return { handler, record, flush };
@@ -99,7 +134,13 @@ export function startCameraService() {
   if (service) return service;
   service = createCameraService();
   onCameraHealth((s) => service.record(s));
-  setInterval(() => service.flush().catch((e) => console.error('[cameras] flush:', e?.message)), 10_000).unref?.();
+  setInterval(
+    () =>
+      service
+        .flush()
+        .catch((e) => console.error('[cameras] flush:', e?.message)),
+    10_000,
+  ).unref?.();
   return service;
 }
 
@@ -108,5 +149,9 @@ export function camerasProvider({ env = process.env } = {}) {
     if (env.GEV_CAMERAS_ENABLED === '0') return;
     server.middlewares.use('/api/cameras', startCameraService().handler);
   };
-  return { name: 'gev-cameras', configureServer: install, configurePreviewServer: install };
+  return {
+    name: 'gev-cameras',
+    configureServer: install,
+    configurePreviewServer: install,
+  };
 }

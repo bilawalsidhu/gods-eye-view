@@ -38,7 +38,11 @@ export function createTleCache({ fetchImpl = fetch, now = Date.now } = {}) {
     try {
       const res = await fetchImpl(
         `https://celestrak.org/NORAD/elements/gp.php?CATNR=${id}&FORMAT=TLE`,
-        { signal: controller.signal, redirect: 'error', headers: { 'User-Agent': 'gods-eye-view-alerts/1.0' } },
+        {
+          signal: controller.signal,
+          redirect: 'error',
+          headers: { 'User-Agent': 'gods-eye-view-alerts/1.0' },
+        },
       );
       if (!res.ok) throw new Error(`status ${res.status}`);
       const text = (await res.text()).slice(0, TLE_MAX_BYTES);
@@ -58,7 +62,10 @@ export function createTleCache({ fetchImpl = fetch, now = Date.now } = {}) {
  * Next pass of a satellite over a point.
  * @returns {object|null} Pass with riseMs/setMs/maxElevDeg/visible.
  */
-export function nextPass(tle, { lat, lon, fromMs, minElevDeg = 10, horizonHours = 24 }) {
+export function nextPass(
+  tle,
+  { lat, lon, fromMs, minElevDeg = 10, horizonHours = 24 },
+) {
   if (!tle) return null;
   let satrec;
   try {

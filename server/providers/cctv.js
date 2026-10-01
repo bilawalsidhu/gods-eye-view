@@ -1,4 +1,7 @@
-import { registerCameraCatalog, reportCameraHealth } from './common/cameraHooks.js';
+import {
+  registerCameraCatalog,
+  reportCameraHealth,
+} from './common/cameraHooks.js';
 import { createCctvCatalog } from './cctv/catalog.js';
 import {
   normalizeFeedType,

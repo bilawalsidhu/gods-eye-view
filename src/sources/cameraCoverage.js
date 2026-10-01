@@ -14,7 +14,15 @@ const DEFAULT_FOV = 74;
 const DEFAULT_RANGE_M = 120;
 const DEFAULT_PITCH = -10;
 const MAX_CELLS = 400_000;
-const LOW_CONFIDENCE = new Set(['', 'low', 'fallback', 'hash', 'id-hash', 'guess', 'unknown']);
+const LOW_CONFIDENCE = new Set([
+  '',
+  'low',
+  'fallback',
+  'hash',
+  'id-hash',
+  'guess',
+  'unknown',
+]);
 
 const fin = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -23,10 +31,20 @@ const fin = (v) => typeof v === 'number' && Number.isFinite(v);
  * usable position. Cameras without a heading are reported as unoriented.
  */
 export function cameraFootprint(cam) {
-  if (!fin(cam?.lat) || !fin(cam?.lon) || (cam.lat === 0 && cam.lon === 0)) return null;
-  const fov = Math.max(8, Math.min(160, fin(cam.fovDeg) ? cam.fovDeg : DEFAULT_FOV));
-  const pitch = Math.max(-89, Math.min(30, fin(cam.pitchDeg) ? cam.pitchDeg : DEFAULT_PITCH));
-  const slant = fin(cam.rangeM) && cam.rangeM > 0 ? cam.rangeM : DEFAULT_RANGE_M / Math.cos(DEFAULT_PITCH * DEG);
+  if (!fin(cam?.lat) || !fin(cam?.lon) || (cam.lat === 0 && cam.lon === 0))
+    return null;
+  const fov = Math.max(
+    8,
+    Math.min(160, fin(cam.fovDeg) ? cam.fovDeg : DEFAULT_FOV),
+  );
+  const pitch = Math.max(
+    -89,
+    Math.min(30, fin(cam.pitchDeg) ? cam.pitchDeg : DEFAULT_PITCH),
+  );
+  const slant =
+    fin(cam.rangeM) && cam.rangeM > 0
+      ? cam.rangeM
+      : DEFAULT_RANGE_M / Math.cos(DEFAULT_PITCH * DEG);
   const rangeM = Math.max(20, Math.min(2000, slant * Math.cos(pitch * DEG)));
   const oriented = fin(cam.headingDeg);
   const confidence = String(cam.headingConfidence || '').toLowerCase();
@@ -60,8 +78,15 @@ function offset(lat, lon, bearingDeg, distM) {
   const b = bearingDeg * DEG;
   const la = lat * DEG;
   const ad = distM / EARTH_R;
-  const la2 = Math.asin(Math.sin(la) * Math.cos(ad) + Math.cos(la) * Math.sin(ad) * Math.cos(b));
-  const lo2 = lon * DEG + Math.atan2(Math.sin(b) * Math.sin(ad) * Math.cos(la), Math.cos(ad) - Math.sin(la) * Math.sin(la2));
+  const la2 = Math.asin(
+    Math.sin(la) * Math.cos(ad) + Math.cos(la) * Math.sin(ad) * Math.cos(b),
+  );
+  const lo2 =
+    lon * DEG +
+    Math.atan2(
+      Math.sin(b) * Math.sin(ad) * Math.cos(la),
+      Math.cos(ad) - Math.sin(la) * Math.sin(la2),
+    );
   return [lo2 / DEG, la2 / DEG];
 }
 
@@ -95,7 +120,11 @@ export function unrle(pairs, length) {
  * @param {{minLat:number,minLon:number,maxLat:number,maxLon:number}} bbox
  * @param {{cellM?: number, includeLowConfidence?: boolean}} [opts]
  */
-export function coverageGrid(cameras, bbox, { cellM = 25, includeLowConfidence = true } = {}) {
+export function coverageGrid(
+  cameras,
+  bbox,
+  { cellM = 25, includeLowConfidence = true } = {},
+) {
   const midLat = (bbox.minLat + bbox.maxLat) / 2;
   const mPerDegLat = (Math.PI * EARTH_R) / 180;
   const mPerDegLon = mPerDegLat * Math.cos(midLat * DEG);
@@ -119,8 +148,10 @@ export function coverageGrid(cameras, bbox, { cellM = 25, includeLowConfidence =
     // Keep cameras whose footprint can reach the box.
     const padLat = fp.rangeM / mPerDegLat;
     const padLon = fp.rangeM / mPerDegLon;
-    if (fp.lat < bbox.minLat - padLat || fp.lat > bbox.maxLat + padLat) continue;
-    if (fp.lon < bbox.minLon - padLon || fp.lon > bbox.maxLon + padLon) continue;
+    if (fp.lat < bbox.minLat - padLat || fp.lat > bbox.maxLat + padLat)
+      continue;
+    if (fp.lon < bbox.minLon - padLon || fp.lon > bbox.maxLon + padLon)
+      continue;
     summary.cameras++;
     if (!fp.oriented) {
       summary.unoriented++;
@@ -132,9 +163,15 @@ export function coverageGrid(cameras, bbox, { cellM = 25, includeLowConfidence =
     footprints.push(fp);
     if (fp.lowConfidence && !includeLowConfidence) continue;
     const r0 = Math.max(0, Math.floor((fp.lat - padLat - bbox.minLat) / dLat));
-    const r1 = Math.min(rows - 1, Math.floor((fp.lat + padLat - bbox.minLat) / dLat));
+    const r1 = Math.min(
+      rows - 1,
+      Math.floor((fp.lat + padLat - bbox.minLat) / dLat),
+    );
     const c0 = Math.max(0, Math.floor((fp.lon - padLon - bbox.minLon) / dLon));
-    const c1 = Math.min(cols - 1, Math.floor((fp.lon + padLon - bbox.minLon) / dLon));
+    const c1 = Math.min(
+      cols - 1,
+      Math.floor((fp.lon + padLon - bbox.minLon) / dLon),
+    );
     const half = fp.fovDeg / 2;
     const r2 = fp.rangeM * fp.rangeM;
     for (let r = r0; r <= r1; r++) {
@@ -154,7 +191,9 @@ export function coverageGrid(cameras, bbox, { cellM = 25, includeLowConfidence =
     }
   }
 
-  let covered = 0, multi = 0, maxOverlap = 0;
+  let covered = 0,
+    multi = 0,
+    maxOverlap = 0;
   for (const v of counts) {
     if (v) covered++;
     if (v > 1) multi++;
@@ -176,6 +215,9 @@ export function coverageGrid(cameras, bbox, { cellM = 25, includeLowConfidence =
       boxKm2: +(rows * cols * cellKm2).toFixed(4),
       maxOverlap,
     },
-    footprints: footprints.map((fp) => ({ ...fp, polygon: footprintPolygon(fp) })),
+    footprints: footprints.map((fp) => ({
+      ...fp,
+      polygon: footprintPolygon(fp),
+    })),
   };
 }

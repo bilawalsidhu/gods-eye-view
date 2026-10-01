@@ -103,7 +103,9 @@ export function startHistoryRuntime(env = process.env) {
     .then((rows) => {
       storedRegions = rows.map(validRegion).filter(Boolean);
     })
-    .catch((error) => console.error('[history] store unavailable:', error?.message));
+    .catch((error) =>
+      console.error('[history] store unavailable:', error?.message),
+    );
 
   runtime = {
     recorder,
@@ -131,8 +133,11 @@ function requireDomain(params) {
 }
 
 function requireId(params) {
-  const id = String(params.get('id') || '').trim().toLowerCase();
-  if (!/^[0-9a-z]{1,16}$/.test(id)) badRequest('id must be 1-16 letters or digits');
+  const id = String(params.get('id') || '')
+    .trim()
+    .toLowerCase();
+  if (!/^[0-9a-z]{1,16}$/.test(id))
+    badRequest('id must be 1-16 letters or digits');
   return id;
 }
 
@@ -169,9 +174,14 @@ export function historyHandler(rt = startHistoryRuntime()) {
         to,
         limit: params.get('limit'),
       });
-      const asset = (await store.asset(domain, id)) || { domain, id, label: null };
+      const asset = (await store.asset(domain, id)) || {
+        domain,
+        id,
+        label: null,
+      };
       const format = params.get('format') || 'json';
-      if (format === 'json') return sendJson(res, 200, { asset, from, to, fixes });
+      if (format === 'json')
+        return sendJson(res, 200, { asset, from, to, fixes });
       const body = renderExport(format, [{ asset, fixes }]);
       if (body === null) badRequest('format must be json, geojson, csv or kml');
       const type = EXPORT_TYPES[format];
@@ -261,9 +271,11 @@ export function historyHandler(rt = startHistoryRuntime()) {
         if (!canAdmin(req)) return sendError(res, 403, 'forbidden');
         const body = await readJson(req);
         const list = Array.isArray(body?.regions) ? body.regions : null;
-        if (!list || list.length > 50) badRequest('regions must be an array of at most 50');
+        if (!list || list.length > 50)
+          badRequest('regions must be an array of at most 50');
         const valid = list.map(validRegion);
-        if (valid.some((r) => !r)) badRequest('each region needs name and a valid box');
+        if (valid.some((r) => !r))
+          badRequest('each region needs name and a valid box');
         for (const old of await store.listRecords('region', SYSTEM_OWNER))
           await store.deleteRecord('region', SYSTEM_OWNER, old.id);
         for (const [i, r] of valid.entries())
@@ -282,7 +294,10 @@ export function historyProvider({ env = process.env } = {}) {
   const enabled = env.GEV_HISTORY_ENABLED !== '0';
   const install = (server) => {
     if (!enabled) return;
-    server.middlewares.use('/api/history', historyHandler(startHistoryRuntime(env)));
+    server.middlewares.use(
+      '/api/history',
+      historyHandler(startHistoryRuntime(env)),
+    );
   };
   return {
     name: 'gev-history',

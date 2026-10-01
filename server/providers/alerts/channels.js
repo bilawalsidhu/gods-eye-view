@@ -28,9 +28,12 @@ const fail = (msg) => {
 };
 
 export function validateChannel(input, env = process.env) {
-  const name = typeof input?.name === 'string' ? input.name.trim().slice(0, 80) : '';
+  const name =
+    typeof input?.name === 'string' ? input.name.trim().slice(0, 80) : '';
   if (!name) fail('channel needs a name');
-  const type = ['slack', 'discord', 'webhook'].includes(input?.type) ? input.type : fail('type must be slack, discord or webhook');
+  const type = ['slack', 'discord', 'webhook'].includes(input?.type)
+    ? input.type
+    : fail('type must be slack, discord or webhook');
   let url;
   try {
     url = new URL(String(input?.url || ''));
@@ -42,10 +45,13 @@ export function validateChannel(input, env = process.env) {
   if (url.port) fail('url may not set a port');
   const host = url.hostname.toLowerCase();
   const hosts = allowedHosts(type, env);
-  if (!hosts.length) fail('generic webhooks need GEV_WEBHOOK_HOSTS set by the operator');
+  if (!hosts.length)
+    fail('generic webhooks need GEV_WEBHOOK_HOSTS set by the operator');
   if (!hosts.includes(host)) fail(`host must be one of: ${hosts.join(', ')}`);
-  if (type === 'slack' && !url.pathname.startsWith('/services/')) fail('not a Slack incoming-webhook URL');
-  if (type === 'discord' && !url.pathname.startsWith('/api/webhooks/')) fail('not a Discord webhook URL');
+  if (type === 'slack' && !url.pathname.startsWith('/services/'))
+    fail('not a Slack incoming-webhook URL');
+  if (type === 'discord' && !url.pathname.startsWith('/api/webhooks/'))
+    fail('not a Discord webhook URL');
   return { name, type, url: url.toString() };
 }
 
@@ -63,7 +69,9 @@ export function maskChannel(c) {
 
 export function channelPayload(type, alert) {
   const when = new Date(alert.t).toISOString().replace('.000Z', 'Z');
-  const where = Number.isFinite(alert.lat) ? ` at ${alert.lat.toFixed(4)}, ${alert.lon.toFixed(4)}` : '';
+  const where = Number.isFinite(alert.lat)
+    ? ` at ${alert.lat.toFixed(4)}, ${alert.lon.toFixed(4)}`
+    : '';
   const text = `[${alert.severity.toUpperCase()}] ${alert.title}${where} (${when})`;
   if (type === 'slack') return { text };
   if (type === 'discord') return { content: text.slice(0, 1900) };
@@ -87,7 +95,11 @@ export function channelPayload(type, alert) {
  * Create a deliverer with a per-channel rate limit (default 30/minute).
  * @param {{fetchImpl?: typeof fetch, perMinute?: number, now?: () => number}} [o]
  */
-export function createDeliverer({ fetchImpl = fetch, perMinute = 30, now = Date.now } = {}) {
+export function createDeliverer({
+  fetchImpl = fetch,
+  perMinute = 30,
+  now = Date.now,
+} = {}) {
   const windows = new Map();
   const stats = { sent: 0, failed: 0, limited: 0 };
   async function deliver(channel, alert, env = process.env) {
@@ -115,7 +127,10 @@ export function createDeliverer({ fetchImpl = fetch, perMinute = 30, now = Date.
     try {
       const res = await fetchImpl(channel.url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'User-Agent': 'gods-eye-view-alerts/1.0' },
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'gods-eye-view-alerts/1.0',
+        },
         body: JSON.stringify(channelPayload(channel.type, alert)),
         redirect: 'error',
         signal: controller.signal,

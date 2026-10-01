@@ -15,7 +15,9 @@
 export async function sqliteDriver(file) {
   const { DatabaseSync } = await import('node:sqlite');
   const db = new DatabaseSync(file);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;');
+  db.exec(
+    'PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;',
+  );
   const cache = new Map();
   const prep = (sql) => {
     let s = cache.get(sql);
@@ -84,13 +86,15 @@ export function pgDriver(client) {
   let chain = Promise.resolve();
   return {
     dialect: 'postgres',
-    exec: async (sql) =>
-      client.exec ? client.exec(sql) : client.query(sql),
+    exec: async (sql) => (client.exec ? client.exec(sql) : client.query(sql)),
     ...base,
     async transaction(fn) {
       // A Pool hands out a dedicated client; a single client/PGlite is
       // serialized through the chain instead.
-      if (typeof client.connect === 'function' && client.totalCount !== undefined) {
+      if (
+        typeof client.connect === 'function' &&
+        client.totalCount !== undefined
+      ) {
         const c = await client.connect();
         try {
           await c.query('BEGIN');

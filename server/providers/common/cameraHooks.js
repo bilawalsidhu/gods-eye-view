@@ -39,8 +39,12 @@ export function reportCameraHealth(camera, patch) {
     camera: String(camera),
     t: Date.now(),
     ok: patch?.status === 'ok',
-    status: typeof patch?.status === 'string' ? patch.status.slice(0, 16) : null,
-    source: typeof patch?.sourceKind === 'string' ? patch.sourceKind.slice(0, 24) : null,
+    status:
+      typeof patch?.status === 'string' ? patch.status.slice(0, 16) : null,
+    source:
+      typeof patch?.sourceKind === 'string'
+        ? patch.sourceKind.slice(0, 24)
+        : null,
   };
   for (const fn of listeners) {
     try {

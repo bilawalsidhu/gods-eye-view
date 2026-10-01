@@ -3,7 +3,17 @@
  */
 
 const esc = (s) =>
-  String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]);
+  String(s ?? '').replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&apos;',
+      })[c],
+  );
 
 const csvCell = (v) => {
   if (v === null || v === undefined) return '';
@@ -62,9 +72,14 @@ export function tracksToCsv(groups) {
 export function tracksToKml(groups) {
   const placemarks = groups
     .map(({ asset, fixes }) => {
-      const whens = fixes.map((f) => `<when>${new Date(f.t).toISOString()}</when>`).join('');
+      const whens = fixes
+        .map((f) => `<when>${new Date(f.t).toISOString()}</when>`)
+        .join('');
       const coords = fixes
-        .map((f) => `<gx:coord>${f.lon} ${f.lat} ${Number.isFinite(f.alt) ? f.alt : 0}</gx:coord>`)
+        .map(
+          (f) =>
+            `<gx:coord>${f.lon} ${f.lat} ${Number.isFinite(f.alt) ? f.alt : 0}</gx:coord>`,
+        )
         .join('');
       return `<Placemark><name>${esc(asset.label || asset.id)}</name><description>${esc(`${asset.domain} ${asset.id}`)}</description><gx:Track><altitudeMode>absolute</altitudeMode>${whens}${coords}</gx:Track></Placemark>`;
     })

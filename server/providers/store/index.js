@@ -17,7 +17,8 @@ let opening = null;
 let testOverride = null;
 
 export function storeConfig(env = process.env, root = process.cwd()) {
-  if (env.GEV_DATABASE_URL) return { kind: 'postgres', url: env.GEV_DATABASE_URL };
+  if (env.GEV_DATABASE_URL)
+    return { kind: 'postgres', url: env.GEV_DATABASE_URL };
   const dir = path.resolve(root, env.GEV_DATA_DIR || '.gev-data');
   return { kind: 'sqlite', dir, file: path.join(dir, 'history.sqlite') };
 }

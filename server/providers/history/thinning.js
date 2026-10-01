@@ -42,7 +42,7 @@ export function distanceM(lat1, lon1, lat2, lon2) {
 
 /** Smallest absolute difference between two bearings, degrees. */
 export function bearingDelta(a, b) {
-  const d = Math.abs((((a - b) % 360) + 540) % 360 - 180);
+  const d = Math.abs(((((a - b) % 360) + 540) % 360) - 180);
   return d;
 }
 
@@ -136,7 +136,12 @@ export function validRegion(r) {
 /** @returns {boolean} Whether a point lies in any region. */
 export function inRegions(regions, lat, lon) {
   for (const r of regions) {
-    if (lat >= r.minLat && lat <= r.maxLat && lon >= r.minLon && lon <= r.maxLon)
+    if (
+      lat >= r.minLat &&
+      lat <= r.maxLat &&
+      lon >= r.minLon &&
+      lon <= r.maxLon
+    )
       return true;
   }
   return false;

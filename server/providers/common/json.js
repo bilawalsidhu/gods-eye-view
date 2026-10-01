@@ -43,7 +43,10 @@ export function requestOwner(req) {
 /** Path + URLSearchParams for a connect-style mounted request. */
 export function parseUrl(req) {
   const url = new URL(req.url || '/', 'http://local');
-  return { path: url.pathname.replace(/\/+$/, '') || '/', params: url.searchParams };
+  return {
+    path: url.pathname.replace(/\/+$/, '') || '/',
+    params: url.searchParams,
+  };
 }
 
 /** Parse "minLat,minLon,maxLat,maxLon" into a box, or null. */
@@ -82,10 +85,15 @@ export function route(name, handler) {
         res.end();
         return;
       }
-      if (error?.code === 'BODY_TOO_LARGE') return sendError(res, 413, 'body_too_large');
-      if (error?.code === 'BAD_JSON') return sendError(res, 400, 'invalid_json');
+      if (error?.code === 'BODY_TOO_LARGE')
+        return sendError(res, 413, 'body_too_large');
+      if (error?.code === 'BAD_JSON')
+        return sendError(res, 400, 'invalid_json');
       if (error?.code === 'BAD_REQUEST')
-        return sendJson(res, 400, { error: 'bad_request', detail: error.message });
+        return sendJson(res, 400, {
+          error: 'bad_request',
+          detail: error.message,
+        });
       console.error(`[${name}]`, error?.message || error);
       sendError(res, 500, 'internal_error');
     }
