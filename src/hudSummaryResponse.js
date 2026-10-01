@@ -110,3 +110,23 @@ export function hudSummaryMatchesProvenance(summary, provenance) {
     .split(/\W+/)
     .includes(String(state).toUpperCase());
 }
+
+/** Back-off after a HUD summary 429 when the server sends no usable Retry-After. */
+export const HUD_SUMMARY_RATE_LIMIT_BACKOFF_MS = 60_000;
+
+/**
+ * How long the HUD must wait before asking for another summary. Only a 429
+ * backs off: it honours a whole-seconds `Retry-After` (at least 1 s, at most
+ * 10 min), else waits {@link HUD_SUMMARY_RATE_LIMIT_BACKOFF_MS}. Any other
+ * status is 0.
+ *
+ * @param {number} status - HTTP status of the summary response.
+ * @param {{ get(name: string): string|null }|null|undefined} headers
+ * @returns {number} Milliseconds to wait; 0 means no back-off.
+ */
+export function hudSummaryRetryDelayMs(status, headers) {
+  if (status !== 429) return 0;
+  const raw = String(headers?.get?.('retry-after') ?? '').trim();
+  if (!/^\d+$/.test(raw)) return HUD_SUMMARY_RATE_LIMIT_BACKOFF_MS;
+  return Math.max(1, Math.min(Number(raw), 600)) * 1000;
+}

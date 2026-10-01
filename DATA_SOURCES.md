@@ -159,6 +159,23 @@ transaction quota. Requires a free `FIRMS_MAP_KEY`
 (https://firms.modaps.eosdis.nasa.gov/api/map_key/); the layer is empty without it.
 The former bundled 2026-05-25 snapshot was removed 2026-07-16.
 
+### Copernicus EFFIS burnt areas
+
+> Copyright (C) European Union, 1995-2025. Burnt-area data from the European Forest Fire Information System (EFFIS), Copernicus Emergency Management Service (https://forest-fire.emergency.copernicus.eu), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Changes: polygons are filtered for validity and restyled for display.
+
+The Wildfire Burnt Areas (EFFIS) layer is **fetched live at runtime**: the
+`/api/effis/burnt-areas` server-side proxy requests the past-week burnt-area
+polygons (`ms:modis.ba.poly.week`) from the EFFIS WFS and caches them for 1 hour
+in memory and in `.gev-cache/` (gitignored), serving the last good copy when the
+slow, occasionally failing upstream does not answer. No key is required and
+nothing is bundled. The snapshot is bounded server-side, so browsers never
+download a large extract: the WFS request is capped at 2,000 features (`COUNT`),
+the upstream body at 8 MiB, and the response carries a `truncated` flag when
+either limit cut the result. Per the [EFFIS data licence](https://forest-fire.emergency.copernicus.eu/about-effis/data-license)
+(which applies the Commission Decision of 12 December 2011 on the reuse of
+Commission documents), reuse needs credit and an indication of changes; logos
+and trade marks, and third-party content, are outside that reuse policy.
+
 ### Natural Earth physical regions (`natural_earth/`)
 
 Curated from the **Natural Earth 10m physical vectors** (https://www.naturalearthdata.com/ —

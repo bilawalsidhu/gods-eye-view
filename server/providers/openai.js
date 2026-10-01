@@ -18,11 +18,6 @@ function openAiRealtimeProxy({
     middlewares.use('/api/openai/hud-summary', handleHudSummary);
 
     middlewares.use(
-      '/api/realtime/debug-log',
-      createDebugLogHandler({ sourceRoot }),
-    );
-
-    middlewares.use(
       '/api/realtime/token',
       createRealtimeTokenHandler({ ...realtime, annotationGuidance }),
     );
@@ -31,6 +26,13 @@ function openAiRealtimeProxy({
   return {
     name: 'openai-realtime-proxy',
     configureServer(server) {
+      // The conversation debug sink writes request bodies to local disk. It is
+      // a development aid only: `vite preview` is the deployed production
+      // server, where an unauthenticated disk-writing route has no place.
+      server.middlewares.use(
+        '/api/realtime/debug-log',
+        createDebugLogHandler({ sourceRoot }),
+      );
       install(server.middlewares);
     },
     configurePreviewServer(server) {

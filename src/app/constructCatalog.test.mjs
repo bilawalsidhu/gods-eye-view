@@ -39,7 +39,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 29);
+  assert.equal(first.layers.length, 30);
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
   assert.deepEqual(
     first.metadata.find(({ id }) => id === 'local-adsb'),
@@ -60,6 +60,9 @@ test('catalogs construct distinct layers and classification from their supplied 
     );
   assert.ok(first.get('fire-perimeters'));
   assert.ok(first.get('transit'));
+  // T4: EFFIS burnt-areas is registered in the application catalog.
+  assert.ok(first.get('burnt-areas'), 'burnt-areas is registered');
+  assert.equal(typeof first.get('burnt-areas').update, 'function');
   const order = first.layers.map(({ id }) => id);
   assert.deepEqual(
     order.slice(order.indexOf('traffic'), order.indexOf('directions') + 1),
@@ -109,6 +112,18 @@ test('catalogs construct distinct layers and classification from their supplied 
   assert.equal(first.militaryRegistry.isMilitaryIcao('abc123'), false);
   assert.equal(callsB[0].aborted, false);
   assert.equal(second.militaryRegistry.isMilitaryIcao('def456'), true);
+});
+
+test('T4: burnt-areas is registered in the application catalog', async (t) => {
+  const lifetime = new AbortController();
+  t.after(() => lifetime.abort());
+  const catalog = createApplicationCatalog({
+    sources: createStandaloneLayerSources(),
+    signal: lifetime.signal,
+    surface: fixtureSurface(lifetime.signal),
+  });
+  assert.ok(catalog.get('burnt-areas'), 'burnt-areas is registered');
+  assert.equal(typeof catalog.get('burnt-areas').update, 'function');
 });
 
 test('invalid or already cancelled construction fails before classification can acquire', () => {

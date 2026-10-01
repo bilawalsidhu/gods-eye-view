@@ -1,0 +1,63 @@
+# Copy to terraform.tfvars (gitignored). Never commit terraform.tfvars.
+# No secret VALUE belongs in this file: provider keys live in the Key Vault
+# this config creates and are set out-of-band (see "Secrets" below), so they
+# never reach tfvars, plan output or Terraform state.
+
+# subscription_id = "<subscription-guid>"   # or export ARM_SUBSCRIPTION_ID
+
+# --- Secrets -----------------------------------------------------------
+# 1. `terraform apply` once (creates the vault; you get Key Vault Secrets
+#    Officer on it). Read the name: terraform output -raw key_vault_name
+# 2. Set only the keys you have. Secret name = app setting name, lower-case,
+#    `_` -> `-`. Every key is optional; the app degrades per provider.
+#
+#   KV=$(terraform output -raw key_vault_name)
+#   az keyvault secret set --vault-name "$KV" --name google-maps-api-key        --value "<GOOGLE_MAPS_API_KEY>"
+#   az keyvault secret set --vault-name "$KV" --name google-maps-server-api-key --value "<GOOGLE_MAPS_SERVER_API_KEY>"
+#   az keyvault secret set --vault-name "$KV" --name cesium-ion-token           --value "<CESIUM_ION_TOKEN>"
+#   az keyvault secret set --vault-name "$KV" --name openai-api-key             --value "<OPENAI_API_KEY>"
+#   az keyvault secret set --vault-name "$KV" --name opensky-client-id          --value "<OPENSKY_CLIENT_ID>"
+#   az keyvault secret set --vault-name "$KV" --name opensky-client-secret      --value "<OPENSKY_CLIENT_SECRET>"
+#   az keyvault secret set --vault-name "$KV" --name firms-map-key              --value "<FIRMS_MAP_KEY>"
+#   az keyvault secret set --vault-name "$KV" --name aisstream-api-key          --value "<AISSTREAM_API_KEY>"
+#   az keyvault secret set --vault-name "$KV" --name tomtom-api-key             --value "<TOMTOM_API_KEY>"
+#   az keyvault secret set --vault-name "$KV" --name ll2-api-token              --value "<LL2_API_TOKEN>"
+#
+#    (Prefer `--file <path>` or a prompt over --value so the key stays out of
+#    shell history.)
+# 3. List the names you set, then `terraform apply` again and restart the app.
+#    Only list names whose secret exists: an unresolved reference reaches the
+#    app as its literal "@Microsoft.KeyVault(...)" text, which the app treats
+#    as unset (that provider stays keyless) and logs a warning for.
+
+# key_vault_secrets = [
+#   "GOOGLE_MAPS_SERVER_API_KEY",
+#   "OPENAI_API_KEY",
+# ]
+
+# Browser keys (GOOGLE_MAPS_API_KEY, CESIUM_ION_TOKEN) are client-exposed by
+# design and are baked into the bundle at BUILD time (Vite `define`), so the
+# runtime app setting above only feeds server-side fallbacks. To ship them to
+# the browser, pass them to the image build (use restricted keys only):
+#   az acr build --registry <acr_name> --image gev:latest \
+#     --build-arg GOOGLE_MAPS_API_KEY=<restricted> --build-arg CESIUM_ION_TOKEN=<restricted> .
+
+# --- Abuse limits ------------------------------------------------------
+# Per-client-IP caps on the cost-bearing proxies; 0 = unlimited.
+# Defaults: 3 OpenAI voice token / 6 HUD summary (separate buckets) /
+# 60 Google (Places + CCTV Street View fallback, one shared budget).
+# ratelimit_openai_per_min = 3
+# ratelimit_hud_per_min    = 6
+# ratelimit_google_per_min = 60
+
+# IP allowlist (default: public). Any entry denies all other sources.
+# RECOMMENDED while Entra ID sign-in (Easy Auth) is not configured: without
+# it, anyone who finds the URL can spend the OpenAI and Google quotas, bounded
+# only by the per-IP limits above.
+# allowed_ip_ranges = ["203.0.113.7/32"]
+
+# Non-secret settings only.
+# app_settings_extra = {
+#   OPENSKY_AUTH_MODE = "anon"
+#   GEV_ALLOWED_HOSTS = "osint.example.org"   # custom domain(s), comma-separated
+# }

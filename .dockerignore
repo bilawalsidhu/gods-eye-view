@@ -1,0 +1,39 @@
+# ALLOWLIST: exclude everything, then re-include only what `npm ci`,
+# `npm run build` and `vite preview` read. Anything new the image needs must be
+# added here deliberately; local state (infra/, Terraform state/tfvars, .env,
+# .claude/, .worktrees/, caches) is never sent to the build context.
+*
+
+!package.json
+!package-lock.json
+!vite.config.js
+!index.html
+!style.css
+!build/
+!server/
+!src/
+!public/
+!config/
+# Imported at runtime by server/providers/places/google-key.js,
+# server/standalone/key-setup.js and server/standalone/vite.config.js;
+# nothing else under scripts/ is needed.
+!scripts/google-server-key.mjs
+!scripts/pinokio-environment.mjs
+!scripts/secret-env.mjs
+
+# Re-exclude anything sensitive or generated that could sit inside an allowed
+# directory (later rules win).
+**/.env
+**/.env.*
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+**/.terraform
+**/node_modules
+**/.gev-cache
+**/.gev-logs
+**/*.log
+**/*.test.mjs
+**/*.pem
+**/*.crt
+**/*.key

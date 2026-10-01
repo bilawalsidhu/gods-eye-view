@@ -23,12 +23,80 @@ export function makeOptInRateLimiter(envValue) {
   });
 }
 
+/** name -> { value, limiter } for envRateLimiter. */
+const envLimiters = new Map();
+
 /**
- * Client key for rate limiting. Uses the real socket peer address only — we do
- * NOT trust X-Forwarded-For (client-controlled; a rotating value would mint fresh
- * quota and grow the limiter map). This is a localhost dev proxy, so the socket
- * address is the real client.
+ * The shared opt-in limiter for one environment variable. Read on each call
+ * (never at import: `.env` is applied to process.env after providers load),
+ * and memoised per variable, so every route that names the same variable
+ * spends ONE per-IP budget. A changed value builds a fresh limiter.
+ *
+ * @param {string} name - Env var holding requests/min/IP.
+ * @param {string} [fallbackName] - Var whose value is used when `name` is unset.
+ * @returns {((key:string)=>boolean)|null} Limiter, or null when unlimited.
+ */
+export function envRateLimiter(name, fallbackName) {
+  const raw = process.env[name];
+  const value = String(
+    (raw === undefined || raw === '') && fallbackName
+      ? (process.env[fallbackName] ?? '')
+      : (raw ?? ''),
+  );
+  const cached = envLimiters.get(name);
+  if (cached && cached.value === value) return cached.limiter;
+  const limiter = makeOptInRateLimiter(value);
+  envLimiters.set(name, { value, limiter });
+  return limiter;
+}
+
+/**
+ * Whole seconds a refused client should wait, for a `Retry-After` header.
+ * Uses the limiter's own window when it can tell, else a constant.
+ *
+ * @param {((key:string)=>boolean)&{retryAfterMs?:(key:string)=>number}} limiter
+ * @param {string} key
+ * @returns {string}
+ */
+export function retryAfterSeconds(limiter, key) {
+  const ms = Number(limiter?.retryAfterMs?.(key));
+  return String(Number.isFinite(ms) && ms > 0 ? Math.ceil(ms / 1000) : 5);
+}
+
+/**
+ * Strip a port (and IPv6 brackets) from one X-Forwarded-For hop. App Service
+ * appends `ip:port` for IPv4 and `[ip]:port` for IPv6; a bare IPv6 address
+ * (several colons, no brackets) is returned unchanged.
+ */
+function hostOfForwardedHop(hop) {
+  const value = hop.trim();
+  if (value.startsWith('[')) {
+    const end = value.indexOf(']');
+    return end > 1 ? value.slice(1, end) : '';
+  }
+  const colons = value.split(':').length - 1;
+  return colons === 1 ? value.slice(0, value.indexOf(':')) : value;
+}
+
+/**
+ * Client key for rate limiting.
+ *
+ * Locally (dev server, `npm run preview`) the socket peer is the real client,
+ * and X-Forwarded-For is NOT trusted: it is client-controlled, so a rotating
+ * value would mint fresh quota and grow the limiter map.
+ *
+ * Behind Azure App Service (detected by WEBSITE_INSTANCE_ID, which the platform
+ * sets on every instance) the socket peer is the front end, so every caller
+ * would share one bucket. There the platform appends the real peer as the
+ * RIGHT-MOST X-Forwarded-For entry; only that hop is trusted, never the
+ * client-supplied entries to its left.
  */
 export function clientKey(req) {
-  return String(req.socket?.remoteAddress || 'local');
+  const socketKey = String(req.socket?.remoteAddress || 'local');
+  if (!process.env.WEBSITE_INSTANCE_ID) return socketKey;
+  const raw = req.headers?.['x-forwarded-for'];
+  const header = Array.isArray(raw) ? raw.join(',') : String(raw || '');
+  const hops = header.split(',').filter((hop) => hop.trim());
+  const last = hops.length ? hostOfForwardedHop(hops.at(-1)) : '';
+  return last || socketKey;
 }

@@ -4,7 +4,7 @@ const RATE_LIMITER_MAX_KEYS = 2000;
 export function makeRateLimiter({ windowMs, max, globalMax }) {
   const hits = new Map(); // key -> number[] (timestamps within window)
   let globalTimes = []; // all hits in window, for the global backstop
-  return function allow(key) {
+  function allow(key) {
     const now = Date.now();
     globalTimes = globalTimes.filter((t) => now - t < windowMs);
     if (globalMax && globalTimes.length >= globalMax) return false; // global backstop
@@ -27,5 +27,19 @@ export function makeRateLimiter({ windowMs, max, globalMax }) {
       }
     }
     return true;
+  }
+  /**
+   * Milliseconds until `key` (or the global backstop) frees a slot; 0 when a
+   * request would be admitted now. Read-only: it never records a hit.
+   */
+  allow.retryAfterMs = (key) => {
+    const now = Date.now();
+    const live = (times) => times.filter((t) => now - t < windowMs);
+    const freeAt = (times, cap) =>
+      times.length >= cap ? times[times.length - cap] + windowMs - now : 0;
+    const perKey = freeAt(live(hits.get(key) || []), max);
+    const global = globalMax ? freeAt(live(globalTimes), globalMax) : 0;
+    return Math.max(0, perKey, global);
   };
+  return allow;
 }

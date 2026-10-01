@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
+import { LAYER_STATE_REGISTRY } from './data/layerState.js';
 import {
   ENVIRONMENTAL_LABEL_CHOICE,
   EXCLUSIVE_SURFACE_CLASSES,
@@ -704,5 +705,23 @@ test('every layer a mission drives is already in the shipped set_layer_visibilit
   assert.ok(missionLayerIds.length > 0);
   for (const layerId of missionLayerIds) {
     assert.ok(allowedLayers.includes(layerId), `${layerId} must already be an allowed enum value`);
+  }
+});
+
+test('T1: the Environmental mission does not silently gain the EFFIS burnt-areas history layer', () => {
+  const layerIds = FIRST_RUN_MISSIONS.environmental.layerIds;
+  assert.deepEqual([...layerIds], ['earthquakes', 'local-firms']);
+  assert.equal(layerIds.includes('burnt-areas'), false);
+});
+
+test('T1: burnt-areas is its own registry layer, distinct from live FIRMS and fire perimeters', () => {
+  const byId = new Map(LAYER_STATE_REGISTRY.map((entry) => [entry.id, entry]));
+  const burnt = byId.get('burnt-areas');
+  assert.ok(burnt, 'burnt-areas must be a registered layer');
+  for (const liveId of ['local-firms', 'fire-perimeters']) {
+    const live = byId.get(liveId);
+    assert.ok(live, `${liveId} must stay registered`);
+    assert.notEqual(burnt, live);
+    assert.notEqual(burnt.token, live.token);
   }
 });

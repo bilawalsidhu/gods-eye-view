@@ -31,6 +31,37 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
   assert.equal(order.filter(({ id }) => id === 'transit').length, 1);
 });
 
+test('T5: panel presentation lists EFFIS burnt areas once in Events, after Earthquakes', () => {
+  const source = readFileSync(
+    new URL('./layerPanel.js', import.meta.url),
+    'utf8',
+  );
+  const declarations = source.slice(
+    source.indexOf('const PANEL_GROUPS ='),
+    source.indexOf('const PANEL_POSITIONS ='),
+  );
+  const order = JSON.parse(
+    runInNewContext(`${declarations}\nJSON.stringify(PANEL_ORDER)`),
+  );
+  assert.deepEqual(
+    order.filter(({ label }) => label === 'Events').map(({ id }) => id),
+    [
+      'rocket-launches',
+      'earthquakes',
+      'burnt-areas',
+      'local-firms',
+      'fire-perimeters',
+    ],
+  );
+  assert.equal(order.filter(({ id }) => id === 'burnt-areas').length, 1);
+  // No PANEL_LABELS override: the row shows the layer's own catalog name.
+  const labels = source.slice(
+    source.indexOf('const PANEL_LABELS ='),
+    source.indexOf('function panelLabel'),
+  );
+  assert.equal(labels.includes('burnt-areas'), false);
+});
+
 test('partial feed controls distinguish incomplete records from stale data and outages', async () => {
   const { LayerPanel, layerFeedState } = await import('./layerPanel.js');
   const classes = new Map();

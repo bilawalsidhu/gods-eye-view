@@ -2,7 +2,7 @@ import {
   HUD_SUMMARY_INSTRUCTIONS,
   keylessHudSummaryResponse,
 } from '../../../src/hudSummaryResponse.js';
-import { enforceOptInRateLimit, openAiRateLimiter } from './rate-limit.js';
+import { enforceOptInRateLimit, hudSummaryRateLimiter } from './rate-limit.js';
 import { readRequestBody } from '../common/request.js';
 import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
 
@@ -46,10 +46,11 @@ async function handleHudSummary(req, res) {
     return;
   }
 
-  // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). Keyless HUD
+  // Opt-in per-IP throttle (GEV_RATELIMIT_HUD_PER_MIN, its own bucket so
+  // HUD polling never spends the voice token's budget). Keyless HUD
   // fallback has no provider cost and resolves above without consuming a
   // paid-endpoint quota slot.
-  if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
+  if (!enforceOptInRateLimit(hudSummaryRateLimiter(), req, res)) return;
 
   try {
     const body = await readRequestBody(req, 64 * 1024);

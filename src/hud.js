@@ -28,6 +28,7 @@ import {
   hudSummaryMatchesProvenance,
   hudSummaryLayerContext,
   hudTelemetryProvenanceTag,
+  hudSummaryRetryDelayMs,
   isHudSummaryUnconfigured,
 } from './hudSummaryResponse.js';
 import {
@@ -127,6 +128,8 @@ export class IntelHUD {
     this._summaryRequest = null;
     this._lastSummarySignature = '';
     this._summaryRevision = 0;
+    // Epoch ms before which no summary request is sent (set by a 429).
+    this._summaryBackoffUntil = 0;
     // One-shot guards so the very first summary lands immediately instead of
     // waiting for the 15s interval tick: B) swap the "Awaiting telemetry..."
     // placeholder for the deterministic line as soon as metrics exist, then
@@ -701,6 +704,10 @@ export class IntelHUD {
       return;
     }
     if (!force && !this._summaryDirty) return;
+    // After a 429, neither the periodic tick nor a forced show()/settle may
+    // ask again before the server's Retry-After: the per-IP OpenAI budget is
+    // small, and retrying every tick only extends the lockout.
+    if (Date.now() < this._summaryBackoffUntil) return;
     if (this.summaryPolicy.canRequest?.() === false) return;
 
     const revision = this._summaryRevision;
@@ -745,6 +752,11 @@ export class IntelHUD {
         this._setSummaryText(fallbackText, animate);
         return;
       }
+      const backoffMs = hudSummaryRetryDelayMs(
+        response.status,
+        response.headers,
+      );
+      if (backoffMs > 0) this._summaryBackoffUntil = Date.now() + backoffMs;
       if (!response.ok || !data?.summary) {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }

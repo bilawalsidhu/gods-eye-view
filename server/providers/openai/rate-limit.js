@@ -1,19 +1,30 @@
-import { makeOptInRateLimiter, clientKey } from '../common/rate-limit.js';
+import {
+  envRateLimiter,
+  clientKey,
+  retryAfterSeconds,
+} from '../common/rate-limit.js';
 
-// Built LAZILY on first request, NOT at module load: `.env` values are applied to process.env later
-// (the plugin config hook calls loadEnv → process.env, AFTER this module is imported), so reading
-// process.env here at import time would always see them unset and silently stay unlimited even when
-// configured via .env. Building on first request (like the OPENAI_API_KEY reads) sees the loaded env;
-// the result is cached so the limiter's per-IP window state persists. `null` = unlimited (default).
-let _openAiRateLimiter;
+// Built LAZILY on each request, NOT at module load: `.env` values are applied
+// to process.env later (the plugin config hook calls loadEnv → process.env,
+// AFTER this module is imported). envRateLimiter memoises per variable, so the
+// per-IP window state persists. `null` = unlimited (default).
 
-/** OpenAI cost endpoints (realtime/token + hud-summary). Null = unlimited (default). */
-function openAiRateLimiter() {
-  if (_openAiRateLimiter === undefined)
-    _openAiRateLimiter = makeOptInRateLimiter(
-      process.env.GEV_RATELIMIT_OPENAI_PER_MIN,
-    );
-  return _openAiRateLimiter;
+/** Realtime token (voice). GEV_RATELIMIT_OPENAI_PER_MIN; null = unlimited. */
+function openAiTokenRateLimiter() {
+  return envRateLimiter('GEV_RATELIMIT_OPENAI_PER_MIN');
+}
+
+/**
+ * HUD summary. Its OWN bucket, so the HUD's background polling can never
+ * spend the voice token's budget. GEV_RATELIMIT_HUD_PER_MIN; when unset it
+ * takes GEV_RATELIMIT_OPENAI_PER_MIN's value (still a separate bucket), so
+ * an unset environment stays unlimited.
+ */
+function hudSummaryRateLimiter() {
+  return envRateLimiter(
+    'GEV_RATELIMIT_HUD_PER_MIN',
+    'GEV_RATELIMIT_OPENAI_PER_MIN',
+  );
 }
 
 /**
@@ -28,12 +39,13 @@ function openAiRateLimiter() {
  */
 function enforceOptInRateLimit(limiter, req, res) {
   if (!limiter) return true; // unlimited (default) — no behavior change
-  if (limiter(clientKey(req))) return true;
+  const key = clientKey(req);
+  if (limiter(key)) return true;
   res.statusCode = 429;
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Retry-After', '5');
+  res.setHeader('Retry-After', retryAfterSeconds(limiter, key));
   res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
   return false;
 }
 
-export { enforceOptInRateLimit, openAiRateLimiter };
+export { enforceOptInRateLimit, openAiTokenRateLimiter, hudSummaryRateLimiter };

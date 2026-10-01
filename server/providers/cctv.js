@@ -19,6 +19,8 @@ import {
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { createHlsPuller } from './cctv/stream.js';
 import { googleServerApiKey } from './places/google-key.js';
+import { clientKey } from './common/rate-limit.js';
+import { googleRateLimiter } from './common/google-rate-limit.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
@@ -43,6 +45,50 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const HEALTH_MAX_ENTRIES = CCTV_MAX_SOURCES_CEILING;
   /** Live HLS strategies (see ./cctv/stream.js). Shared across dev and preview. */
   const puller = createHlsPuller();
+  /**
+   * Optional Street View frames per registered camera. OFF by default:
+   * Google Maps Platform terms generally prohibit caching or storing Street
+   * View content, so an operator must confirm their terms allow it before
+   * setting GEV_STREETVIEW_CACHE_TTL_MS (> 0 enables it, in milliseconds).
+   * Bounded so a large catalog cannot hold every frame in memory.
+   */
+  const streetViewCache = new Map();
+  const STREET_VIEW_CACHE_MAX_ENTRIES = 256;
+  // Read on first use, after the standalone environment has loaded.
+  let streetViewCacheTtlMs;
+  const streetViewTtl = () => {
+    if (streetViewCacheTtlMs === undefined) {
+      const ttl = Number(process.env.GEV_STREETVIEW_CACHE_TTL_MS);
+      streetViewCacheTtlMs = Number.isFinite(ttl) && ttl > 0 ? ttl : 0;
+    }
+    return streetViewCacheTtlMs;
+  };
+  // The same per-IP Google budget the Places routes spend (one limiter for
+  // GEV_RATELIMIT_GOOGLE_PER_MIN), read on use after the env has loaded.
+  const allowStreetView = (req) => {
+    const limiter = googleRateLimiter();
+    return !limiter || limiter(clientKey(req));
+  };
+  const cachedStreetView = (cameraId) => {
+    const entry = streetViewCache.get(cameraId);
+    if (!entry) return null;
+    if (entry.expiresAt <= Date.now()) {
+      streetViewCache.delete(cameraId);
+      return null;
+    }
+    return entry.frame;
+  };
+  const cacheStreetView = (cameraId, frame) => {
+    const ttlMs = streetViewTtl();
+    if (!ttlMs) return;
+    streetViewCache.delete(cameraId);
+    if (streetViewCache.size >= STREET_VIEW_CACHE_MAX_ENTRIES)
+      streetViewCache.delete(streetViewCache.keys().next().value);
+    streetViewCache.set(cameraId, {
+      frame,
+      expiresAt: Date.now() + ttlMs,
+    });
+  };
 
   /** Update the health entry for a camera, evicting the oldest entry if at capacity. */
   const setHealth = (cameraId, patch) => {
@@ -320,12 +366,13 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           }
 
           if (!mediaUrl || !/^https?:\/\//i.test(mediaUrl)) {
-            setHealth(cameraId, {
-              status: 'degraded',
-              sourceKind: 'fallback',
-              label: source?.provider || 'No upstream URL',
-              message: 'No stream URL configured',
-            });
+            if (source)
+              setHealth(cameraId, {
+                status: 'degraded',
+                sourceKind: 'fallback',
+                label: source?.provider || 'No upstream URL',
+                message: 'No stream URL configured',
+              });
             res.writeHead(404, {
               'Content-Type': 'application/json',
               'Cache-Control': 'no-store',
@@ -467,15 +514,36 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           decodeURIComponent(url.pathname.replace('/frame/', '').trim()) ||
           'camera';
         const source = sourceById.get(cameraId);
-        const label = url.searchParams.get('label') || source?.name || cameraId;
-        const city = url.searchParams.get('city') || source?.city || '';
-        const lat = Number(url.searchParams.get('lat') || source?.lat);
-        const lon = Number(url.searchParams.get('lon') || source?.lon);
-        const heading = Number(
-          url.searchParams.get('heading') || source?.headingDeg,
-        );
-        const fov = Number(url.searchParams.get('fov') || source?.fovDeg);
-        const pitch = Number(url.searchParams.get('pitch') || source?.pitchDeg);
+        // Unknown ids (a camera dropped by a catalog refresh, a client
+        // CAMERA_SEEDS fallback) get the synthetic frame so the <img> still
+        // renders — but nothing else: no upstream fetch, no paid Street View
+        // call, no health entry (the map would otherwise grow per guess).
+        if (!source) {
+          res.writeHead(200, {
+            'Content-Type': 'image/svg+xml',
+            'Cache-Control': 'no-store',
+            'X-CCTV-Source': 'synthetic',
+          });
+          res.end(
+            buildSyntheticCctvSvg({
+              cameraId,
+              label: url.searchParams.get('label') || cameraId,
+              city: url.searchParams.get('city') || '',
+              status: 'CAMERA NOT IN CATALOG',
+            }),
+          );
+          return;
+        }
+        const label = url.searchParams.get('label') || source.name || cameraId;
+        const city = url.searchParams.get('city') || source.city || '';
+        // The Street View pose comes from the server catalog only. Query
+        // lat/lon/heading/fov/pitch are ignored: honouring them turned this
+        // route into an open proxy for the server's Google key.
+        const lat = Number(source.lat);
+        const lon = Number(source.lon);
+        const heading = Number(source.headingDeg);
+        const fov = Number(source.fovDeg);
+        const pitch = Number(source.pitchDeg);
 
         // Only use server-registered upstream URLs — never accept client-supplied URLs
         // (prevents SSRF via ?upstream= query parameter)
@@ -505,13 +573,19 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           return;
         }
 
-        const sv = await streetViewFallback({
-          lat,
-          lon,
-          heading,
-          fov,
-          pitch,
-        });
+        let sv = cachedStreetView(cameraId);
+        // Over the Google budget falls through to the synthetic frame below
+        // rather than a 429 the <img> would render as broken.
+        if (
+          !sv &&
+          googleServerApiKey() &&
+          Number.isFinite(lat) &&
+          Number.isFinite(lon) &&
+          allowStreetView(req)
+        ) {
+          sv = await streetViewFallback({ lat, lon, heading, fov, pitch });
+          if (sv?.ok) cacheStreetView(cameraId, sv);
+        }
         if (sv?.ok) {
           setHealth(cameraId, {
             status: 'degraded',

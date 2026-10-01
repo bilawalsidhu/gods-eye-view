@@ -339,6 +339,17 @@ test('OpenAI routes answer generically when the upstream or the request fails', 
   assert.equal(token.body.includes('fixture-upstream-secret'), false);
 });
 
+test('T2: the debug-log sink is a dev-server route only, absent from preview', (t) => {
+  const plugin = openAiRealtimeProxy({ sourceRoot: root(t) });
+  const dev = install(plugin);
+  const preview = install(plugin, true);
+  assert.ok(dev.has('/api/realtime/debug-log'));
+  assert.equal(preview.has('/api/realtime/debug-log'), false);
+  // The cost-bearing routes stay available in preview (the production server).
+  assert.ok(preview.has('/api/realtime/token'));
+  assert.ok(preview.has('/api/openai/hud-summary'));
+});
+
 test('the debug-log sink stays bounded, rate limited, and quiet about failures', async (t) => {
   const sourceRoot = root(t);
   const handler = install(openAiRealtimeProxy({ sourceRoot })).get(

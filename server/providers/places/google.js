@@ -2,24 +2,12 @@ import {
   googleServerApiKey,
   keylessGooglePlacesResponse,
 } from './google-key.js';
-import { makeOptInRateLimiter, clientKey } from '../common/rate-limit.js';
+import { clientKey, retryAfterSeconds } from '../common/rate-limit.js';
+import { googleRateLimiter } from '../common/google-rate-limit.js';
 import {
   projectNearbyPlaces,
   projectTextSearchPlaces,
 } from '../../../src/data/placeProviderPayloads.js';
-
-// Construct lazily after the standalone environment has loaded.
-// undefined = not built yet; null = unlimited; fn = active limiter
-let _googleRateLimiter;
-
-/** Google cost endpoint (nearby-places). Null = unlimited (default). */
-function googleRateLimiter() {
-  if (_googleRateLimiter === undefined)
-    _googleRateLimiter = makeOptInRateLimiter(
-      process.env.GEV_RATELIMIT_GOOGLE_PER_MIN,
-    );
-  return _googleRateLimiter;
-}
 
 /** Validate raw lat/lon presence and WGS84 bounds before consuming request quota. */
 export function validatePlacesCoordinates(searchParams) {
@@ -84,10 +72,11 @@ export function googlePlacesContextProxy({
       // Inlined (not the shared helper) so the 429 body keeps this endpoint's
       // `places: []` contract that the client expects on every error response.
       const _grl = googleRateLimiter();
-      if (_grl && !_grl(clientKey(req))) {
+      const _key = clientKey(req);
+      if (_grl && !_grl(_key)) {
         res.statusCode = 429;
         res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Retry-After', '5');
+        res.setHeader('Retry-After', retryAfterSeconds(_grl, _key));
         res.end(JSON.stringify({ error: 'Rate limit exceeded', places: [] }));
         return;
       }
@@ -204,10 +193,11 @@ export function googlePlacesContextProxy({
       // Inlined (like nearby-places) so the 429 body keeps the `places: []`
       // contract the client expects on every error response.
       const _grl = googleRateLimiter();
-      if (_grl && !_grl(clientKey(req))) {
+      const _key = clientKey(req);
+      if (_grl && !_grl(_key)) {
         res.statusCode = 429;
         res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Retry-After', '5');
+        res.setHeader('Retry-After', retryAfterSeconds(_grl, _key));
         res.end(JSON.stringify({ error: 'Rate limit exceeded', places: [] }));
         return;
       }
