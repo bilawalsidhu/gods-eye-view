@@ -222,6 +222,14 @@ export function createLocalInfrastructureOverlayPublisher({
   let visible = false;
   let published = false;
   let destroyed = false;
+  // Local entries have immutable metadata and a mutable Cartesian position.
+  // Snapshot coordinates: retaining only the entry reference would miss a
+  // stem tip moving in place. Republishing an unchanged cohort invalidates
+  // the host (`invalidateHost` clears its rect caches AND requests a render),
+  // so a parked camera would never reach idle: walk → setEntries →
+  // requestRender → walk … and every skipped frame still paid a full
+  // normalize+cohort rebuild inside the host.
+  let lastPublication = null;
   const sourceOptions = {
     cohortLimit: LOCAL_OVERLAY_COHORT_LIMIT,
     collisionCapacity: LOCAL_OVERLAY_COLLISION_CAPACITY,
@@ -236,7 +244,18 @@ export function createLocalInfrastructureOverlayPublisher({
     },
     publish(entries) {
       if (destroyed || !visible) return;
+      if (lastPublication && entries.length === lastPublication.length
+        && entries.every((entry, index) => {
+          const previous = lastPublication[index];
+          return entry === previous.entry
+            && entry.position?.x === previous.x
+            && entry.position?.y === previous.y
+            && entry.position?.z === previous.z;
+        })) return;
       host.setEntries(sourceId, entries, sourceOptions);
+      lastPublication = entries.map((entry) => ({
+        entry, x: entry.position?.x, y: entry.position?.y, z: entry.position?.z,
+      }));
       published = entries.length > 0;
     },
     hide() {
@@ -245,6 +264,8 @@ export function createLocalInfrastructureOverlayPublisher({
       if (visible) host.setVisible(sourceId, false);
       visible = false;
       published = false;
+      // A later show() must republish from scratch — the host was cleared.
+      lastPublication = null;
     },
     destroy() {
       if (destroyed) return;

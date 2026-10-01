@@ -326,6 +326,60 @@ test('local overlay publisher owns add/remove/visibility lifecycle and becomes i
   assert.deepEqual(calls[7], ['visible', 'local-datacenters', false]);
 });
 
+test('local overlay publisher skips republishing an unchanged cohort', () => {
+  // The preRender walk calls publish() on EVERY rendered frame. Each
+  // setEntries invalidates the overlay host, which requests a render, so an
+  // unconditional publish sustains an idle render loop on a parked camera.
+  // The publisher must detect "same entries, same tip positions" and stop.
+  const calls = [];
+  const publisher = createLocalInfrastructureOverlayPublisher({
+    sourceId: 'local-datacenters',
+    host: {
+      setVisible: () => {},
+      setEntries: (...args) => calls.push(['entries', ...args]),
+      clearSource: () => {},
+    },
+  });
+  const at = (lon, lat) => ({ x: lon, y: lat, z: 0 });
+  const dc1 = { id: 'dc-1', position: at(1, 2) };
+  const dc2 = { id: 'dc-2', position: at(3, 4) };
+
+  publisher.show();
+  publisher.publish([dc1, dc2]);
+  // Identical replay (same record identities, same tip positions): skipped —
+  // this is the per-frame steady state on a parked camera.
+  publisher.publish([dc1, dc2]);
+  // A stem tip moving IN PLACE (same record, new position) republishes even
+  // though identity and length are unchanged.
+  const moved = { id: 'dc-1', position: at(1.5, 2) };
+  publisher.publish([moved, dc2]);
+  // Membership change republishes.
+  publisher.publish([moved]);
+  // Returning to a previously published cohort republishes (not a history
+  // check — a one-deep snapshot only skips the immediately prior state).
+  publisher.publish([moved, dc2]);
+
+  assert.equal(calls.length, 4, `expected 4 publications, got ${calls.length}`);
+  assert.deepEqual(calls[0][2].map((entry) => entry.id), ['dc-1', 'dc-2']);
+  assert.deepEqual(calls[1][2].map((entry) => entry.id), ['dc-1', 'dc-2']);
+  assert.deepEqual(calls[2][2].map((entry) => entry.id), ['dc-1']);
+  assert.deepEqual(calls[3][2].map((entry) => entry.id), ['dc-1', 'dc-2']);
+
+  // hide() drops the snapshot so the next show() republishes from scratch
+  // even if the cohort is identical to the last pre-hide publication.
+  publisher.publish([moved, dc2]); // skipped (unchanged)
+  publisher.hide();
+  publisher.show();
+  publisher.publish([moved, dc2]);
+  assert.equal(calls.length, 5, 'post-hide republication was skipped');
+
+  // An empty publication always lands after a non-empty one (the host must
+  // be emptied), and an empty-then-empty replay is skipped like any other.
+  publisher.publish([]);
+  publisher.publish([]);
+  assert.equal(calls.length, 6, 'emptying the cohort must reach the host once');
+});
+
 test('real layer disable clears its published host entries and balances settle listeners', async () => {
   const env = await createRealLocalLayerHarness();
   env.preRender.raise();
