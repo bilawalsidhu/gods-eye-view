@@ -629,6 +629,8 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   together. While you are drawing, the draw tool owns the pointer and no layer
   selects what you click through (#235 — thanks @cora-fresh-labs).
 
+- **GDELT & NASA EONET OSINT Layer**: Real-time 3D global events and breaking news tracker featuring sentiment tone classification, dynamic reporting volume sizing, interactive tactical dispatch cards with sector fly-to, and analyst engine integration.
+
 ### Fixed
 
 - Keep traffic-road bounds crossing the antimeridian monotonic and inside the

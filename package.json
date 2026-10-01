@@ -107,6 +107,9 @@
     "./server/providers/cctv": {
       "node": "./server/providers/cctv.js"
     },
+    "./server/providers/gdelt": {
+      "node": "./server/providers/gdelt.js"
+    },
     "./server/providers/radio": {
       "node": "./server/providers/radio.js"
     },
@@ -156,6 +159,7 @@
     "./aircraft": "./src/layers/aircraft/index.js",
     "./layers/vessels": "./src/layers/vessels/index.js",
     "./layers/earthquakes": "./src/layers/earthquakes/index.js",
+    "./layers/gdelt": "./src/layers/gdelt/index.js",
     "./layers/recent-imagery": "./src/layers/recentImagery/index.js",
     "./layers/perimeters": "./src/layers/perimeters/index.js",
     "./sources/firms-csv": "./src/data/firmsCsv.js",
@@ -229,6 +233,7 @@
     "./layers/bikeshare/source": "./src/layers/bikeshare/source.js",
     "./layers/cctv/source": "./src/layers/cctv/source.js",
     "./layers/earthquakes/source": "./src/layers/earthquakes/source.js",
+    "./layers/gdelt/source": "./src/layers/gdelt/source.js",
     "./layers/perimeters/source": "./src/layers/perimeters/source.js",
     "./layers/firms/source": "./src/layers/firms/source.js",
     "./layers/installations/source": "./src/layers/installations/source.js",
