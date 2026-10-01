@@ -9,5 +9,8 @@ test('awareness proximity includes horizon-hidden loaded aircraft without changi
     modelRendering: false,
   };
   assert.equal(aircraftIncludedInNearby(horizonHidden), false);
-  assert.equal(aircraftIncludedInNearby({ ...horizonHidden, includeHidden: true }), true);
+  assert.equal(
+    aircraftIncludedInNearby({ ...horizonHidden, includeHidden: true }),
+    true,
+  );
 });

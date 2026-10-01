@@ -8,7 +8,10 @@ import { fileURLToPath } from 'node:url';
 
 import { getTrafficTimingDiagnostics } from './traffic.js';
 
-const SOURCE = readLayerSource(new URL('./traffic.js', import.meta.url), 'utf8').replace(/parts\.(?:model|timing)\./g, '');
+const SOURCE = readLayerSource(
+  new URL('./traffic.js', import.meta.url),
+  'utf8',
+).replace(/parts\.(?:model|timing)\./g, '');
 
 function functionBody(name) {
   const declaration = `function ${name}(`;
@@ -65,7 +68,7 @@ function functionBody(name) {
       i++;
       continue;
     }
-    if (char === '\'' || char === '"' || char === '`') {
+    if (char === "'" || char === '"' || char === '`') {
       quote = char;
       continue;
     }
@@ -88,9 +91,11 @@ function canonicalSemanticBody(body) {
 }
 
 function traceOnlyBlocks(body) {
-  return [...body.matchAll(
-    /\/\* TRACE_ONLY_BEGIN \*\/([\s\S]*?)\/\* TRACE_ONLY_END \*\//g,
-  )].map((match) => match[1]);
+  return [
+    ...body.matchAll(
+      /\/\* TRACE_ONLY_BEGIN \*\/([\s\S]*?)\/\* TRACE_ONLY_END \*\//g,
+    ),
+  ].map((match) => match[1]);
 }
 
 function eventChannel() {
@@ -120,7 +125,9 @@ test('traffic timing stays inert when the DEV flag is off under bare Node', () =
     uncorrelatedTracesDropped: 0,
   });
   assert.equal(
-    performance.getEntriesByType('mark').filter((entry) => entry.name.startsWith('traffic:')).length,
+    performance
+      .getEntriesByType('mark')
+      .filter((entry) => entry.name.startsWith('traffic:')).length,
     0,
   );
 });
@@ -145,7 +152,11 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
 
   const pendingDebounce = () => {
     const matches = [...timeouts].filter(([, timer]) => timer.delay === 320);
-    assert.equal(matches.length, 1, 'exactly one traffic debounce must be pending');
+    assert.equal(
+      matches.length,
+      1,
+      'exactly one traffic debounce must be pending',
+    );
     return matches[0];
   };
 
@@ -173,13 +184,18 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
       appType: 'custom',
       logLevel: 'silent',
       server: { middlewareMode: true },
-      plugins: [{
-        name: 'traffic-timing-test-hooks',
-        transform(code, id) {
-          if (!id.endsWith('/src/layers/traffic/index.js')) return null;
-          return code.replace('return Object.assign(', 'return Object.assign({ __trafficTimingTestHooks: { currentAnchor: () => state._trafficTimingCurrentAnchor } },');
+      plugins: [
+        {
+          name: 'traffic-timing-test-hooks',
+          transform(code, id) {
+            if (!id.endsWith('/src/layers/traffic/index.js')) return null;
+            return code.replace(
+              'return Object.assign(',
+              'return Object.assign({ __trafficTimingTestHooks: { currentAnchor: () => state._trafficTimingCurrentAnchor } },',
+            );
+          },
         },
-      }],
+      ],
     });
     const traffic = await server.ssrLoadModule('/src/data/traffic.js');
     trafficLayer = traffic.default;
@@ -189,9 +205,10 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
       ok: true,
       status: 200,
       headers: { get: () => null },
-      json: async () => (String(url).includes('/api/tomtom/status')
-        ? { hasKey: false }
-        : { elements: [] }),
+      json: async () =>
+        String(url).includes('/api/tomtom/status')
+          ? { hasKey: false }
+          : { elements: [] },
     });
     globalThis.setTimeout = (callback, delay) => {
       const id = ++timerId;
@@ -213,20 +230,24 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
       moveEnd,
       changed,
       percentageChanged: 0.5,
-      positionCartographic: { latitude: Math.PI / 6, longitude: 0, height: 5000 },
+      positionCartographic: {
+        latitude: Math.PI / 6,
+        longitude: 0,
+        height: 5000,
+      },
       computeViewRectangle() {
-        const west = longitude * Math.PI / 180;
+        const west = (longitude * Math.PI) / 180;
         return {
-          south: 30 * Math.PI / 180,
+          south: (30 * Math.PI) / 180,
           west,
-          north: 30.02 * Math.PI / 180,
-          east: west + 0.02 * Math.PI / 180,
+          north: (30.02 * Math.PI) / 180,
+          east: west + (0.02 * Math.PI) / 180,
         };
       },
     };
     const setLongitude = (next) => {
       longitude = next;
-      camera.positionCartographic.longitude = next * Math.PI / 180;
+      camera.positionCartographic.longitude = (next * Math.PI) / 180;
     };
     setLongitude(longitude);
     viewer = {
@@ -249,19 +270,29 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     });
     trafficLayer.enable(viewer);
     assert.equal(traffic.getTrafficTimingDiagnostics().marksInstalled, 1);
-    assert.equal(moveEnd.listenerCount(), 2, 'one timing listener plus the production arrival check');
+    assert.equal(
+      moveEnd.listenerCount(),
+      2,
+      'one timing listener plus the production arrival check',
+    );
     assert.equal(performance.getEntriesByName('traffic:stale:mark').length, 0);
-    assert.equal(performance.getEntriesByName('traffic:stale:measure').length, 0);
+    assert.equal(
+      performance.getEntriesByName('traffic:stale:measure').length,
+      0,
+    );
 
     // Real Cesium ordering: changed arms the 320 ms debounce, its load fires,
     // and moveEnd arrives only after cameraEventWaitTime (~500 ms).
     setLongitude(-97.72);
     changed.raise();
     const anchorA = traffic.default.__trafficTimingTestHooks.currentAnchor();
-    const anchorMarkA = performance.getEntriesByType('mark').find((entry) => (
-      entry.detail?.segment === 'last-camera-change'
-      && entry.detail?.interactionId === anchorA.interactionId
-    ));
+    const anchorMarkA = performance
+      .getEntriesByType('mark')
+      .find(
+        (entry) =>
+          entry.detail?.segment === 'last-camera-change' &&
+          entry.detail?.interactionId === anchorA.interactionId,
+      );
     assert.ok(anchorMarkA, 'the scheduling camera change must be marked');
     assert.equal(anchorMarkA.startTime, anchorA.timestamp);
     await runDebouncedLoad();
@@ -271,20 +302,32 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
       traceObjectsCreated: 1,
       uncorrelatedTracesDropped: 0,
     });
-    assert.equal(traffic.default.__trafficTimingTestHooks.currentAnchor(), null);
-    const fetchFromA = performance.getEntriesByType('measure').find((entry) => (
-      entry.detail?.segment === 'last-camera-change-to-fetch-start'
-      && entry.detail?.interactionId === anchorA.interactionId
-    ));
-    assert.ok(fetchFromA, 'the load must pair to A without waiting for moveEnd');
+    assert.equal(
+      traffic.default.__trafficTimingTestHooks.currentAnchor(),
+      null,
+    );
+    const fetchFromA = performance
+      .getEntriesByType('measure')
+      .find(
+        (entry) =>
+          entry.detail?.segment === 'last-camera-change-to-fetch-start' &&
+          entry.detail?.interactionId === anchorA.interactionId,
+      );
+    assert.ok(
+      fetchFromA,
+      'the load must pair to A without waiting for moveEnd',
+    );
     assert.equal(fetchFromA.startTime, anchorA.timestamp);
     assert.equal(fetchFromA.detail.cameraChangeTimestamp, anchorA.timestamp);
 
     moveEnd.raise();
-    const diagnosticMoveEnd = performance.getEntriesByType('mark').find((entry) => (
-      entry.detail?.segment === 'camera-move-end'
-    ));
-    assert.ok(diagnosticMoveEnd, 'the late moveEnd diagnostic mark must still be emitted');
+    const diagnosticMoveEnd = performance
+      .getEntriesByType('mark')
+      .find((entry) => entry.detail?.segment === 'camera-move-end');
+    assert.ok(
+      diagnosticMoveEnd,
+      'the late moveEnd diagnostic mark must still be emitted',
+    );
     assert.equal(diagnosticMoveEnd.detail.diagnosticOnly, true);
     assert.equal(diagnosticMoveEnd.detail.fetchWaitsForMoveEnd, false);
     assert.ok(
@@ -295,7 +338,7 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     // Re-arm B with C before B fires. clearTimeout cancels B in normal event-
     // loop ordering; invoking the saved callback models an already-queued race
     // and must count one drop without consuming C's current anchor.
-    setLongitude(-97.70);
+    setLongitude(-97.7);
     changed.raise();
     const anchorB = traffic.default.__trafficTimingTestHooks.currentAnchor();
     const [timerBId, timerB] = pendingDebounce();
@@ -303,7 +346,11 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     changed.raise();
     const anchorC = traffic.default.__trafficTimingTestHooks.currentAnchor();
     assert.notEqual(anchorC.interactionId, anchorB.interactionId);
-    assert.equal(timeouts.has(timerBId), false, 'the ordinary debounce path must cancel B');
+    assert.equal(
+      timeouts.has(timerBId),
+      false,
+      'the ordinary debounce path must cancel B',
+    );
     await timerB.callback();
     assert.equal(
       traffic.default.__trafficTimingTestHooks.currentAnchor().interactionId,
@@ -318,12 +365,19 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
       traceObjectsCreated: 2,
       uncorrelatedTracesDropped: 1,
     });
-    assert.ok(performance.getEntriesByType('measure').some((entry) => (
-      entry.detail?.interactionId === anchorC.interactionId
-    )));
-    assert.ok(performance.getEntriesByType('measure').every((entry) => (
-      entry.detail?.interactionId !== anchorB.interactionId
-    )), 'the canceled/stale B load must never emit a correlated trace');
+    assert.ok(
+      performance
+        .getEntriesByType('measure')
+        .some((entry) => entry.detail?.interactionId === anchorC.interactionId),
+    );
+    assert.ok(
+      performance
+        .getEntriesByType('measure')
+        .every(
+          (entry) => entry.detail?.interactionId !== anchorB.interactionId,
+        ),
+      'the canceled/stale B load must never emit a correlated trace',
+    );
   } finally {
     trafficLayer?.disable(viewer);
     await server?.close();
@@ -350,20 +404,29 @@ test('the timed parser stays source-equivalent to the production parser', () => 
   );
 
   const traceBlocks = traceOnlyBlocks(functionBody('parseRoadsTimed'));
-  assert.ok(traceBlocks.length > 0, 'parseRoadsTimed must retain explicit trace-only blocks');
+  assert.ok(
+    traceBlocks.length > 0,
+    'parseRoadsTimed must retain explicit trace-only blocks',
+  );
   const traceSource = traceBlocks.join('\n');
   // This is deliberately a reasonable lexical tripwire, not an AST proof: it
   // recognizes direct assignments and common mutator calls, but cannot prove
   // safety through aliases or computed properties. Source equivalence above
   // remains the independent operation-order backstop.
-  const assignedIdentifiers = [...traceSource.matchAll(
-    /\b([A-Za-z_$][\w$]*)\s*(?:\+\+|--|\+=|-=|\*=|\/=|%=|=(?!=|>))/g,
-  )].map((match) => match[1]);
-  const mutatedIdentifiers = [...traceSource.matchAll(
-    /\b([A-Za-z_$][\w$]*)\.(?:add|delete|clear|set|push|pop|shift|unshift|splice|sort|reverse|copyWithin|fill)\s*\(/g,
-  )].map((match) => match[1]);
-  const unsafeWrites = [...assignedIdentifiers, ...mutatedIdentifiers]
-    .filter((identifier) => identifier !== 'trace' && !identifier.startsWith('_trafficTiming'));
+  const assignedIdentifiers = [
+    ...traceSource.matchAll(
+      /\b([A-Za-z_$][\w$]*)\s*(?:\+\+|--|\+=|-=|\*=|\/=|%=|=(?!=|>))/g,
+    ),
+  ].map((match) => match[1]);
+  const mutatedIdentifiers = [
+    ...traceSource.matchAll(
+      /\b([A-Za-z_$][\w$]*)\.(?:add|delete|clear|set|push|pop|shift|unshift|splice|sort|reverse|copyWithin|fill)\s*\(/g,
+    ),
+  ].map((match) => match[1]);
+  const unsafeWrites = [...assignedIdentifiers, ...mutatedIdentifiers].filter(
+    (identifier) =>
+      identifier !== 'trace' && !identifier.startsWith('_trafficTiming'),
+  );
   assert.deepEqual(
     unsafeWrites,
     [],

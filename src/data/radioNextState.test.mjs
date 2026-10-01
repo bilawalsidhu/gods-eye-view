@@ -4,18 +4,24 @@ import test from 'node:test';
 import { radioLayer } from './radio.js';
 import { setLocale } from '../i18n/index.js';
 import { renderRadioState } from '../ui/radioPresentation.js';
-import { radioStationRow, withRadioLayer } from '../testSupport/radioLayerHarness.mjs';
+import {
+  radioStationRow,
+  withRadioLayer,
+} from '../testSupport/radioLayerHarness.mjs';
 
 const READY = 'Ready — playback starts only from your action';
 const ids = [1, 2, 3].map((n) => `00000000-0000-4000-8000-00000000009${n}`);
-const stations = ids.map((id, index) => radioStationRow({
-  id,
-  name: `Station ${'ABC'[index]}`,
-  lat: 30 + index,
-  lon: -97 - index,
-  streamUrl: `https://radio.example.com/${'abc'[index]}.mp3`,
-}));
-const withLayer = (failingUrls, body) => withRadioLayer({ stations, failingUrls }, body);
+const stations = ids.map((id, index) =>
+  radioStationRow({
+    id,
+    name: `Station ${'ABC'[index]}`,
+    lat: 30 + index,
+    lon: -97 - index,
+    streamUrl: `https://radio.example.com/${'abc'[index]}.mp3`,
+  }),
+);
+const withLayer = (failingUrls, body) =>
+  withRadioLayer({ stations, failingUrls }, body);
 const settle = () => new Promise((resolve) => setTimeout(resolve));
 
 // What the Radio panel and the Cockpit player show for a state.
@@ -49,19 +55,36 @@ function render(state) {
   }
 }
 
-const readyToPlay = { status: READY, error: false, button: 'PLAY', stopDisabled: true, cockpit: '▶' };
+const readyToPlay = {
+  status: READY,
+  error: false,
+  button: 'PLAY',
+  stopDisabled: true,
+  cockpit: '▶',
+};
 
 test('Next before Play only selects, and Play tries just that station', async () => {
   await withLayer([stations[1].streamUrl], async ({ playUrls }) => {
     radioLayer.selectStation(ids[0], { autoplay: false });
-    assert.equal(radioLayer.cycleStation(1, { stationIds: ids, autoplay: false, origin: 'user' }), true);
+    assert.equal(
+      radioLayer.cycleStation(1, {
+        stationIds: ids,
+        autoplay: false,
+        origin: 'user',
+      }),
+      true,
+    );
     await settle();
     assert.deepEqual(playUrls, []);
     assert.equal(radioLayer.getUIState().audioState, 'stopped');
     await radioLayer.togglePlayback({ origin: 'user' });
     await settle();
     const state = radioLayer.getUIState();
-    assert.deepEqual(playUrls, [stations[1].streamUrl], 'no fallback picked by the silent step');
+    assert.deepEqual(
+      playUrls,
+      [stations[1].streamUrl],
+      'no fallback picked by the silent step',
+    );
     assert.equal(state.selected?.id, ids[1]);
     assert.equal(state.audioState, 'error');
   });
@@ -73,7 +96,14 @@ test('Next after a failed stream leaves the new station ready to play, without t
     radioLayer.selectStation(ids[0], { autoplay: true, origin: 'user' });
     await settle();
     assert.equal(radioLayer.getUIState().audioState, 'error');
-    assert.equal(radioLayer.cycleStation(1, { stationIds: ids, autoplay: false, origin: 'user' }), true);
+    assert.equal(
+      radioLayer.cycleStation(1, {
+        stationIds: ids,
+        autoplay: false,
+        origin: 'user',
+      }),
+      true,
+    );
     const state = radioLayer.getUIState();
     assert.equal(state.selected?.id, ids[1]);
     assert.equal(state.audioState, 'stopped');
@@ -92,7 +122,11 @@ test('Next while paused releases the paused stream, and Play starts the new stat
     await settle();
     await radioLayer.togglePlayback({ origin: 'user' });
     assert.equal(radioLayer.getUIState().audioState, 'paused');
-    radioLayer.cycleStation(1, { stationIds: ids, autoplay: false, origin: 'user' });
+    radioLayer.cycleStation(1, {
+      stationIds: ids,
+      autoplay: false,
+      origin: 'user',
+    });
     const state = radioLayer.getUIState();
     assert.equal(state.selected?.id, ids[1]);
     assert.equal(state.audioState, 'stopped');
@@ -111,7 +145,11 @@ test('a catalog refresh after a paused Next cannot bring back Resume for an unna
     radioLayer.selectStation(ids[0], { autoplay: true, origin: 'user' });
     await settle();
     await radioLayer.togglePlayback({ origin: 'user' });
-    radioLayer.cycleStation(1, { stationIds: ids, autoplay: false, origin: 'user' });
+    radioLayer.cycleStation(1, {
+      stationIds: ids,
+      autoplay: false,
+      origin: 'user',
+    });
     catalog.rows = stations.filter(({ id }) => id !== ids[1]);
     catalog.generation = 2;
     await radioLayer.update();
@@ -149,7 +187,12 @@ test('a voice station request after a voice pause keeps the fallback of that req
 test('a cancelled voice step leaves no fallback for a later Play from the panel', async () => {
   await withLayer([stations[1].streamUrl], async ({ playUrls }) => {
     radioLayer.selectStation(ids[0], { autoplay: false });
-    radioLayer.cycleStation(1, { stationIds: ids, autoplay: false, fallback: true, origin: 'voice' });
+    radioLayer.cycleStation(1, {
+      stationIds: ids,
+      autoplay: false,
+      fallback: true,
+      origin: 'voice',
+    });
     // The handoff is cancelled (barge-in), so voice never starts playback.
     await settle();
     await radioLayer.togglePlayback({ origin: 'user' });
@@ -165,16 +208,34 @@ test('a cancelled voice step leaves no fallback for a later Play from the panel'
 test('only a user step to another station tells voice to drop its prepared playback', async () => {
   await withLayer([], async () => {
     const controls = [];
-    const unsubscribe = radioLayer.subscribePlaybackControls((event) => controls.push(event));
+    const unsubscribe = radioLayer.subscribePlaybackControls((event) =>
+      controls.push(event),
+    );
     try {
-      radioLayer.cycleStation(1, { stationIds: ids, autoplay: false, fallback: true, origin: 'voice' });
-      radioLayer.cycleStation(1, { stationIds: ids, autoplay: false, origin: 'user' });
-      radioLayer.cycleStation(1, { stationIds: [ids[1]], autoplay: false, origin: 'user' });
+      radioLayer.cycleStation(1, {
+        stationIds: ids,
+        autoplay: false,
+        fallback: true,
+        origin: 'voice',
+      });
+      radioLayer.cycleStation(1, {
+        stationIds: ids,
+        autoplay: false,
+        origin: 'user',
+      });
+      radioLayer.cycleStation(1, {
+        stationIds: [ids[1]],
+        autoplay: false,
+        origin: 'user',
+      });
     } finally {
       unsubscribe();
     }
     assert.equal(radioLayer.getUIState().selected?.id, ids[1]);
-    assert.deepEqual(controls.map(({ action, origin }) => [action, origin]), [['select', 'user']]);
+    assert.deepEqual(
+      controls.map(({ action, origin }) => [action, origin]),
+      [['select', 'user']],
+    );
   });
 });
 
@@ -187,25 +248,35 @@ test('an unavailable tuner release stops the paused stream once, and Play still 
     assert.equal(radioLayer.beginTuning(), true);
     radioLayer.previewTuningStation(ids[1], { rotate: false });
     // A directory refresh changes the station under the needle mid-drag.
-    catalog.rows = stations.map((row) => row.id === ids[1]
-      ? { ...row, streamUrl: 'https://radio.example.com/b2.mp3' }
-      : row);
+    catalog.rows = stations.map((row) =>
+      row.id === ids[1]
+        ? { ...row, streamUrl: 'https://radio.example.com/b2.mp3' }
+        : row,
+    );
     catalog.generation = 2;
     await radioLayer.update();
     const states = [];
     const controls = [];
     const unsubscribe = radioLayer.subscribe((state) => states.push(state));
-    const unsubscribeControls = radioLayer.subscribePlaybackControls((event) => controls.push(event));
+    const unsubscribeControls = radioLayer.subscribePlaybackControls((event) =>
+      controls.push(event),
+    );
     states.length = 0;
     try {
-      assert.equal(radioLayer.commitTuningStation(ids[1], { origin: 'user' }).reason, 'station-unavailable');
+      assert.equal(
+        radioLayer.commitTuningStation(ids[1], { origin: 'user' }).reason,
+        'station-unavailable',
+      );
     } finally {
       unsubscribe();
       unsubscribeControls();
     }
     assert.equal(states.length, 1);
     assert.equal(states[0].tuningUnavailableStationId, ids[1]);
-    assert.deepEqual(controls.map(({ action, origin }) => [action, origin]), [['stop', 'user']]);
+    assert.deepEqual(
+      controls.map(({ action, origin }) => [action, origin]),
+      [['stop', 'user']],
+    );
     const state = radioLayer.getUIState();
     assert.equal(state.selected, null);
     assert.equal(state.audioState, 'stopped');
@@ -252,7 +323,10 @@ test('a dial release plays only if a stream was active when the drag began', asy
     radioLayer.selectStation(ids[0], { autoplay: false });
     assert.equal(radioLayer.beginTuning(), true);
     radioLayer.previewTuningStation(ids[1], { rotate: false });
-    assert.equal(radioLayer.commitTuningStation(ids[1], { origin: 'user' }).ok, true);
+    assert.equal(
+      radioLayer.commitTuningStation(ids[1], { origin: 'user' }).ok,
+      true,
+    );
     await settle();
     let state = radioLayer.getUIState();
     assert.deepEqual(playUrls, []);
@@ -281,30 +355,62 @@ function withFakeAudioContext(body) {
   const node = () => ({ connect() {}, disconnect() {} });
   class FakeAudioContext {
     constructor() {
-      Object.assign(this, { state: 'suspended', sampleRate: 8000, currentTime: 0, destination: {} });
+      Object.assign(this, {
+        state: 'suspended',
+        sampleRate: 8000,
+        currentTime: 0,
+        destination: {},
+      });
       log.contexts.push(this);
     }
     resume() {
       if (this.state === 'running') return Promise.resolve();
-      return new Promise((resolve) => setTimeout(() => {
-        if (this.state !== 'closed') this.state = 'running';
-        resolve();
-      }, RESUME_MS));
+      return new Promise((resolve) =>
+        setTimeout(() => {
+          if (this.state !== 'closed') this.state = 'running';
+          resolve();
+        }, RESUME_MS),
+      );
     }
     suspend() {
       if (this.state === 'running') this.state = 'suspended';
       return Promise.resolve();
     }
-    close() { this.state = 'closed'; return Promise.resolve(); }
-    createBuffer(_channels, length) { return { getChannelData: () => new Float32Array(length) }; }
+    close() {
+      this.state = 'closed';
+      return Promise.resolve();
+    }
+    createBuffer(_channels, length) {
+      return { getChannelData: () => new Float32Array(length) };
+    }
     createBufferSource() {
-      const source = { ...node(), started: false, stopped: false, start() { this.started = true; }, stop() { this.stopped = true; } };
+      const source = {
+        ...node(),
+        started: false,
+        stopped: false,
+        start() {
+          this.started = true;
+        },
+        stop() {
+          this.stopped = true;
+        },
+      };
       log.sources.push(source);
       return source;
     }
-    createBiquadFilter() { return { ...node(), frequency: { value: 0 }, Q: { value: 0 } }; }
+    createBiquadFilter() {
+      return { ...node(), frequency: { value: 0 }, Q: { value: 0 } };
+    }
     createGain() {
-      return { ...node(), gain: { value: 0, cancelScheduledValues() {}, setValueAtTime() {}, linearRampToValueAtTime() {} } };
+      return {
+        ...node(),
+        gain: {
+          value: 0,
+          cancelScheduledValues() {},
+          setValueAtTime() {},
+          linearRampToValueAtTime() {},
+        },
+      };
     }
   }
   const original = globalThis.AudioContext;
@@ -321,12 +427,19 @@ test('a silent dial release stops the tuner noise and suspends its audio context
       radioLayer.selectStation(ids[0], { autoplay: false });
       assert.equal(radioLayer.beginTuning(), true);
       radioLayer.previewTuningStation(ids[1], { rotate: false });
-      assert.equal(radioLayer.commitTuningStation(ids[1], { origin: 'user' }).ok, true);
+      assert.equal(
+        radioLayer.commitTuningStation(ids[1], { origin: 'user' }).ok,
+        true,
+      );
       await sleep(RESUME_MS * 4);
       assert.deepEqual(playUrls, []);
       assert.equal(sources[0].started, true);
       assert.equal(sources[0].stopped, true, 'noise source still looping');
-      assert.equal(contexts[0].state, 'suspended', 'audio context still running');
+      assert.equal(
+        contexts[0].state,
+        'suspended',
+        'audio context still running',
+      );
     });
   });
 });
@@ -339,8 +452,16 @@ test('a second gesture before the first resume() settles keeps its noise graph',
       radioLayer.commitTuningStation(ids[0], { origin: 'user' });
       assert.equal(radioLayer.beginTuning(), true);
       await sleep(RESUME_MS * 4);
-      assert.equal(contexts[0].state, 'running', 'second gesture lost its context');
-      assert.equal(sources.at(-1).stopped, false, 'second gesture lost its source');
+      assert.equal(
+        contexts[0].state,
+        'running',
+        'second gesture lost its context',
+      );
+      assert.equal(
+        sources.at(-1).stopped,
+        false,
+        'second gesture lost its source',
+      );
       radioLayer.commitTuningStation(ids[1], { origin: 'user' });
       await sleep(RESUME_MS * 4);
       assert.equal(sources.at(-1).stopped, true);
@@ -388,30 +509,50 @@ test('a dial release while a stream is still connecting plays the new station', 
 });
 
 test('a silent user step drops the fallback a voice step left behind', async () => {
-  await withLayer(stations.map(({ streamUrl }) => streamUrl), async ({ playUrls }) => {
-    radioLayer.selectStation(ids[0], { autoplay: false });
-    // Voice steps to B and keeps C as its fallback; the user steps back to A.
-    radioLayer.cycleStation(1, { stationIds: ids, autoplay: false, fallback: true, origin: 'voice' });
-    radioLayer.cycleStation(-1, { stationIds: ids, autoplay: false, origin: 'user' });
-    await radioLayer.play({ origin: 'voice' });
-    await settle();
-    await settle();
-    assert.deepEqual(playUrls, [stations[0].streamUrl]);
-    assert.equal(radioLayer.getUIState().audioState, 'error');
-  });
+  await withLayer(
+    stations.map(({ streamUrl }) => streamUrl),
+    async ({ playUrls }) => {
+      radioLayer.selectStation(ids[0], { autoplay: false });
+      // Voice steps to B and keeps C as its fallback; the user steps back to A.
+      radioLayer.cycleStation(1, {
+        stationIds: ids,
+        autoplay: false,
+        fallback: true,
+        origin: 'voice',
+      });
+      radioLayer.cycleStation(-1, {
+        stationIds: ids,
+        autoplay: false,
+        origin: 'user',
+      });
+      await radioLayer.play({ origin: 'voice' });
+      await settle();
+      await settle();
+      assert.deepEqual(playUrls, [stations[0].streamUrl]);
+      assert.equal(radioLayer.getUIState().audioState, 'error');
+    },
+  );
 });
 
 test('a silent dial release drops the fallback a voice step left behind', async () => {
-  await withLayer(stations.map(({ streamUrl }) => streamUrl), async ({ playUrls }) => {
-    radioLayer.selectStation(ids[0], { autoplay: false });
-    radioLayer.cycleStation(1, { stationIds: ids, autoplay: false, fallback: true, origin: 'voice' });
-    assert.equal(radioLayer.beginTuning(), true);
-    radioLayer.previewTuningStation(ids[0], { rotate: false });
-    radioLayer.commitTuningStation(ids[0], { origin: 'user' });
-    await radioLayer.play({ origin: 'voice' });
-    await settle();
-    await settle();
-    assert.deepEqual(playUrls, [stations[0].streamUrl]);
-    assert.equal(radioLayer.getUIState().audioState, 'error');
-  });
+  await withLayer(
+    stations.map(({ streamUrl }) => streamUrl),
+    async ({ playUrls }) => {
+      radioLayer.selectStation(ids[0], { autoplay: false });
+      radioLayer.cycleStation(1, {
+        stationIds: ids,
+        autoplay: false,
+        fallback: true,
+        origin: 'voice',
+      });
+      assert.equal(radioLayer.beginTuning(), true);
+      radioLayer.previewTuningStation(ids[0], { rotate: false });
+      radioLayer.commitTuningStation(ids[0], { origin: 'user' });
+      await radioLayer.play({ origin: 'voice' });
+      await settle();
+      await settle();
+      assert.deepEqual(playUrls, [stations[0].streamUrl]);
+      assert.equal(radioLayer.getUIState().audioState, 'error');
+    },
+  );
 });

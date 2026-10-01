@@ -28,7 +28,10 @@ function makeRecord() {
 
 test('selected bikeshare entry preserves source copy and protected-lane policy', () => {
   const record = makeRecord();
-  const entry = createBikeshareSelectedOverlayEntry('austin-capmetro:3790', record);
+  const entry = createBikeshareSelectedOverlayEntry(
+    'austin-capmetro:3790',
+    record,
+  );
   assert.equal(entry.position, record.point.position);
   assert.equal(entry.title, 'Congress & 6th');
   assert.deepEqual(entry.details, [
@@ -58,9 +61,16 @@ test('real station select/clear path publishes one card and creates no native la
   try {
     _selectBikeshareStationForTest(key);
     assert.equal(record.point.show, false);
-    assert.equal(viewer.entities.values.length, 1, 'runtime guard requires a real selected entity');
+    assert.equal(
+      viewer.entities.values.length,
+      1,
+      'runtime guard requires a real selected entity',
+    );
     assert.equal(viewer.entities.values[0].label, undefined);
-    assert.ok(viewer.entities.values[0].point, 'selected point highlight remains native');
+    assert.ok(
+      viewer.entities.values[0].point,
+      'selected point highlight remains native',
+    );
 
     const publication = calls.find(([type]) => type === 'entries');
     assert.ok(publication);

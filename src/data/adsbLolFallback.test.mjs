@@ -6,20 +6,23 @@ import {
 } from './adsbLolFallback.js';
 
 test('normalizes adsb.lol units into an OpenSky-compatible state vector', () => {
-  const state = normalizeAdsbLolAircraftState({
-    hex: 'A1B2C3',
-    flight: 'UAL123 ',
-    lat: 30,
-    lon: -97,
-    alt_baro: 10000,
-    alt_geom: 10200,
-    gs: 200,
-    track: 90,
-    baro_rate: 600,
-    seen_pos: 2,
-    seen: 1,
-    category: 'A3',
-  }, 1000);
+  const state = normalizeAdsbLolAircraftState(
+    {
+      hex: 'A1B2C3',
+      flight: 'UAL123 ',
+      lat: 30,
+      lon: -97,
+      alt_baro: 10000,
+      alt_geom: 10200,
+      gs: 200,
+      track: 90,
+      baro_rate: 600,
+      seen_pos: 2,
+      seen: 1,
+      category: 'A3',
+    },
+    1000,
+  );
 
   assert.equal(state[0], 'a1b2c3');
   assert.equal(state[1], 'UAL123');

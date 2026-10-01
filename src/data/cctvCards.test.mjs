@@ -34,18 +34,24 @@ import {
 test('isCctvCardAnchorSafe protects the top HUD band for ambient cards', () => {
   assert.equal(isCctvCardAnchorSafe({ sy: 100, viewH: 1000 }), false);
   assert.equal(isCctvCardAnchorSafe({ sy: 150, viewH: 1000 }), true);
-  assert.equal(isCctvCardAnchorSafe({ sy: 100, viewH: 1000, pinned: true }), true);
+  assert.equal(
+    isCctvCardAnchorSafe({ sy: 100, viewH: 1000, pinned: true }),
+    true,
+  );
   assert.equal(isCctvCardAnchorSafe({ sy: NaN, viewH: 1000 }), false);
 });
 
 // ─── declutterCctvCards ──────────────────────────────────────────────────────
 
 test('declutterCctvCards: nearest-first greedy accept with min separation', () => {
-  const kept = declutterCctvCards([
-    { id: 'far', sx: 100, sy: 100, distanceKm: 5 },
-    { id: 'near', sx: 110, sy: 110, distanceKm: 1 },   // wins the overlap: nearer
-    { id: 'clear', sx: 400, sy: 400, distanceKm: 9 },
-  ], { minSepPx: 130 });
+  const kept = declutterCctvCards(
+    [
+      { id: 'far', sx: 100, sy: 100, distanceKm: 5 },
+      { id: 'near', sx: 110, sy: 110, distanceKm: 1 }, // wins the overlap: nearer
+      { id: 'clear', sx: 400, sy: 400, distanceKm: 9 },
+    ],
+    { minSepPx: 130 },
+  );
   assert.deepEqual(kept, ['near', 'clear']);
 });
 
@@ -56,21 +62,26 @@ test('declutterCctvCards: separation is radial (Euclidean), matching the vessel 
     { id: 'b', sx: 100, sy: 0, distanceKm: 2 },
   ];
   assert.deepEqual(declutterCctvCards(candidates, { minSepPx: 130 }), ['a']);
-  assert.deepEqual(declutterCctvCards(candidates, { minSepPx: 90 }), ['a', 'b']);
+  assert.deepEqual(declutterCctvCards(candidates, { minSepPx: 90 }), [
+    'a',
+    'b',
+  ]);
 });
 
 test('declutterCctvCards: respects the limit and drops malformed rows', () => {
-  const kept = declutterCctvCards([
-    { id: 'a', sx: 0, sy: 0, distanceKm: 1 },
-    { id: 'b', sx: 500, sy: 0, distanceKm: 2 },
-    { id: 'c', sx: 1000, sy: 0, distanceKm: 3 },
-    { id: '', sx: 200, sy: 200, distanceKm: 0 },
-    { id: 'nan', sx: NaN, sy: 0, distanceKm: 0 },
-    null,
-  ], { minSepPx: 130, limit: 2 });
+  const kept = declutterCctvCards(
+    [
+      { id: 'a', sx: 0, sy: 0, distanceKm: 1 },
+      { id: 'b', sx: 500, sy: 0, distanceKm: 2 },
+      { id: 'c', sx: 1000, sy: 0, distanceKm: 3 },
+      { id: '', sx: 200, sy: 200, distanceKm: 0 },
+      { id: 'nan', sx: NaN, sy: 0, distanceKm: 0 },
+      null,
+    ],
+    { minSepPx: 130, limit: 2 },
+  );
   assert.deepEqual(kept, ['a', 'b']);
 });
-
 
 test('thumbnail entry carries the exact shipped contract and stable frame-slot reference', () => {
   const frameSlot = createFrameSlot();
@@ -85,7 +96,11 @@ test('thumbnail entry carries the exact shipped contract and stable frame-slot r
   assert.equal(entry.collisionGroup, 'ambient-card');
   assert.equal(entry.paintLane, 'thumbnail');
   assert.equal(entry.interactive, true);
-  assert.equal(entry.image, frameSlot, 'host receives the source-owned stable slot by reference');
+  assert.equal(
+    entry.image,
+    frameSlot,
+    'host receives the source-owned stable slot by reference',
+  );
   assert.equal(entry.thumbnailWidth, 96);
   assert.equal(entry.thumbnailHeight, 54);
   assert.equal(entry.thumbnailPadX, 4);
@@ -105,7 +120,12 @@ test('thumbnail entry carries the exact shipped contract and stable frame-slot r
 });
 
 test('active CCTV thumbnail is protected while ambient and pinned policies stay distinct', () => {
-  const base = { id: 'cam-a', position: { x: 1, y: 2, z: 3 }, title: 'A', frameSlot: createFrameSlot() };
+  const base = {
+    id: 'cam-a',
+    position: { x: 1, y: 2, z: 3 },
+    title: 'A',
+    frameSlot: createFrameSlot(),
+  };
   const ambient = createCctvThumbnailOverlayEntry(base);
   const pinned = createCctvThumbnailOverlayEntry({ ...base, pinned: true });
   const active = createCctvThumbnailOverlayEntry({ ...base, active: true });
@@ -113,11 +133,16 @@ test('active CCTV thumbnail is protected while ambient and pinned policies stay 
   assert.equal(ambient.pinned, false);
   assert.equal(pinned.pinned, true);
   assert.equal(active.protected, true);
-  assert.ok(active.priority > pinned.priority && pinned.priority > ambient.priority);
+  assert.ok(
+    active.priority > pinned.priority && pinned.priority > ambient.priority,
+  );
 });
 
 test('CCTV card module cannot resurrect a canvas, projection, listener, or private hit store', () => {
-  const source = readFileSync(new URL('./cctvCards.js', import.meta.url), 'utf8');
+  const source = readFileSync(
+    new URL('./cctvCards.js', import.meta.url),
+    'utf8',
+  );
   const forbidden = [
     /createElement\(\s*['"]canvas['"]\s*\)/,
     /postRender\.addEventListener/,
@@ -133,18 +158,29 @@ test('CCTV card module cannot resurrect a canvas, projection, listener, or priva
 
 test('cardScaleForAltitude: full size and opacity at or below 1,800 m', () => {
   assert.deepEqual(cardScaleForAltitude(0), { scale: 1, alpha: 1 });
-  assert.deepEqual(cardScaleForAltitude(CCTV_CARD_SCALE_FULL_M), { scale: 1, alpha: 1 });
+  assert.deepEqual(cardScaleForAltitude(CCTV_CARD_SCALE_FULL_M), {
+    scale: 1,
+    alpha: 1,
+  });
   assert.deepEqual(cardScaleForAltitude(NaN), { scale: 1, alpha: 1 });
 });
 
 test('cardScaleForAltitude: hits the owner-decided waypoints', () => {
   const mid = cardScaleForAltitude(CCTV_CARD_SCALE_MID_M);
-  assert.ok(Math.abs(mid.scale - CCTV_CARD_SCALE_AT_MID) < 1e-9, 'scale ~0.45 at 6,000 m');
+  assert.ok(
+    Math.abs(mid.scale - CCTV_CARD_SCALE_AT_MID) < 1e-9,
+    'scale ~0.45 at 6,000 m',
+  );
   assert.equal(mid.alpha, 1);
   const fadeStart = cardScaleForAltitude(CCTV_CARD_FADE_START_M);
   assert.equal(fadeStart.alpha, 1, 'still opaque at 7,500 m');
-  assert.ok(fadeStart.scale < CCTV_CARD_SCALE_AT_MID, 'keeps shrinking slightly past 6,000 m');
-  const midFade = cardScaleForAltitude((CCTV_CARD_FADE_START_M + CCTV_CARD_FADE_END_M) / 2);
+  assert.ok(
+    fadeStart.scale < CCTV_CARD_SCALE_AT_MID,
+    'keeps shrinking slightly past 6,000 m',
+  );
+  const midFade = cardScaleForAltitude(
+    (CCTV_CARD_FADE_START_M + CCTV_CARD_FADE_END_M) / 2,
+  );
   assert.ok(Math.abs(midFade.alpha - 0.5) < 1e-9, 'linear fade midpoint');
 });
 
@@ -169,26 +205,60 @@ test('cardScaleForAltitude: scale and alpha are monotonic non-increasing', () =>
 
 test('cardFetchPolicy: cold fill bursts up to 4 in flight at 250 ms spacing', () => {
   assert.deepEqual(
-    cardFetchPolicy({ coldFill: true, inFlight: 0, sinceLastLaunchMs: CCTV_CARD_FETCH_BURST_SPACING_MS }),
-    { mode: 'burst', launch: true }
+    cardFetchPolicy({
+      coldFill: true,
+      inFlight: 0,
+      sinceLastLaunchMs: CCTV_CARD_FETCH_BURST_SPACING_MS,
+    }),
+    { mode: 'burst', launch: true },
   );
   assert.deepEqual(
-    cardFetchPolicy({ coldFill: true, inFlight: CCTV_CARD_FETCH_BURST_LIMIT - 1, sinceLastLaunchMs: 260 }),
-    { mode: 'burst', launch: true }
+    cardFetchPolicy({
+      coldFill: true,
+      inFlight: CCTV_CARD_FETCH_BURST_LIMIT - 1,
+      sinceLastLaunchMs: 260,
+    }),
+    { mode: 'burst', launch: true },
   );
   // Blocked at the concurrency cap and inside the launch spacing.
-  assert.equal(cardFetchPolicy({ coldFill: true, inFlight: CCTV_CARD_FETCH_BURST_LIMIT, sinceLastLaunchMs: 9_999 }).launch, false);
-  assert.equal(cardFetchPolicy({ coldFill: true, inFlight: 0, sinceLastLaunchMs: CCTV_CARD_FETCH_BURST_SPACING_MS - 1 }).launch, false);
+  assert.equal(
+    cardFetchPolicy({
+      coldFill: true,
+      inFlight: CCTV_CARD_FETCH_BURST_LIMIT,
+      sinceLastLaunchMs: 9_999,
+    }).launch,
+    false,
+  );
+  assert.equal(
+    cardFetchPolicy({
+      coldFill: true,
+      inFlight: 0,
+      sinceLastLaunchMs: CCTV_CARD_FETCH_BURST_SPACING_MS - 1,
+    }).launch,
+    false,
+  );
 });
 
 test('cardFetchPolicy: steady state keeps the 1-fetch/s single-flight gate', () => {
   assert.deepEqual(
-    cardFetchPolicy({ coldFill: false, inFlight: 0, sinceLastLaunchMs: CCTV_CARD_FETCH_STEADY_SPACING_MS }),
-    { mode: 'steady', launch: true }
+    cardFetchPolicy({
+      coldFill: false,
+      inFlight: 0,
+      sinceLastLaunchMs: CCTV_CARD_FETCH_STEADY_SPACING_MS,
+    }),
+    { mode: 'steady', launch: true },
   );
   // An in-flight fetch blocks the tick; so does the 1 s spacing.
-  assert.equal(cardFetchPolicy({ coldFill: false, inFlight: 1, sinceLastLaunchMs: 9_999 }).launch, false);
-  assert.equal(cardFetchPolicy({ coldFill: false, inFlight: 0, sinceLastLaunchMs: 999 }).launch, false);
+  assert.equal(
+    cardFetchPolicy({ coldFill: false, inFlight: 1, sinceLastLaunchMs: 9_999 })
+      .launch,
+    false,
+  );
+  assert.equal(
+    cardFetchPolicy({ coldFill: false, inFlight: 0, sinceLastLaunchMs: 999 })
+      .launch,
+    false,
+  );
   // First-ever launch (no prior fetch) is immediate.
   assert.equal(cardFetchPolicy({ coldFill: false, inFlight: 0 }).launch, true);
 });
@@ -198,11 +268,20 @@ test('cardFetchPolicy: steady state keeps the 1-fetch/s single-flight gate', () 
 test('applyFrameResult: success replaces the frame and stamps it', () => {
   const slot = createFrameSlot();
   const next = applyFrameResult(slot, { ok: true, frame: 'FRAME-1' }, 5_000);
-  assert.deepEqual(next, { frame: 'FRAME-1', stamp: 5_000, failCount: 0, lastAttemptAt: 5_000 });
+  assert.deepEqual(next, {
+    frame: 'FRAME-1',
+    stamp: 5_000,
+    failCount: 0,
+    lastAttemptAt: 5_000,
+  });
 });
 
 test('applyFrameResult: a FAILED fetch persists the drawn frame and stamp', () => {
-  const drawn = applyFrameResult(createFrameSlot(), { ok: true, frame: 'FRAME-1' }, 5_000);
+  const drawn = applyFrameResult(
+    createFrameSlot(),
+    { ok: true, frame: 'FRAME-1' },
+    5_000,
+  );
   const afterFail = applyFrameResult(drawn, { ok: false }, 65_000);
   // The owner's zero-flicker rule: the card keeps rendering FRAME-1.
   assert.equal(afterFail.frame, 'FRAME-1');
@@ -210,14 +289,22 @@ test('applyFrameResult: a FAILED fetch persists the drawn frame and stamp', () =
   assert.equal(afterFail.failCount, 1);
   assert.equal(afterFail.lastAttemptAt, 65_000);
   // A later success replaces it and clears the failure streak.
-  const recovered = applyFrameResult(afterFail, { ok: true, frame: 'FRAME-2' }, 130_000);
+  const recovered = applyFrameResult(
+    afterFail,
+    { ok: true, frame: 'FRAME-2' },
+    130_000,
+  );
   assert.equal(recovered.frame, 'FRAME-2');
   assert.equal(recovered.stamp, 130_000);
   assert.equal(recovered.failCount, 0);
 });
 
 test('applyFrameResult: an ok result without a frame counts as a failure', () => {
-  const drawn = applyFrameResult(createFrameSlot(), { ok: true, frame: 'FRAME-1' }, 5_000);
+  const drawn = applyFrameResult(
+    createFrameSlot(),
+    { ok: true, frame: 'FRAME-1' },
+    5_000,
+  );
   const next = applyFrameResult(drawn, { ok: true }, 9_000);
   assert.equal(next.frame, 'FRAME-1');
   assert.equal(next.failCount, 1);
@@ -238,7 +325,11 @@ test('frameFetchDue: an untouched slot is due immediately', () => {
 });
 
 test('frameFetchDue: a fresh frame is not due until its cadence elapses', () => {
-  const slot = applyFrameResult(createFrameSlot(), { ok: true, frame: 'F' }, 10_000);
+  const slot = applyFrameResult(
+    createFrameSlot(),
+    { ok: true, frame: 'F' },
+    10_000,
+  );
   assert.equal(frameFetchDue(slot, 300_000, 10_000 + 299_999), false);
   assert.equal(frameFetchDue(slot, 300_000, 10_000 + 300_000), true);
 });
@@ -276,8 +367,11 @@ test('planFrameCachePrune: spare slots kept newest-first up to the cap', () => {
   ];
   const drops = planFrameCachePrune(slots, ['live'], 3);
   assert.deepEqual(drops.sort(), ['spare-old']);
-  assert.deepEqual(planFrameCachePrune(slots, ['live'], 1).sort(),
-    ['spare-mid', 'spare-new', 'spare-old']);
+  assert.deepEqual(planFrameCachePrune(slots, ['live'], 1).sort(), [
+    'spare-mid',
+    'spare-new',
+    'spare-old',
+  ]);
 });
 
 test('planFrameCachePrune: default cap is the exported cache bound', () => {
@@ -288,5 +382,11 @@ test('planFrameCachePrune: default cap is the exported cache bound', () => {
   const drops = planFrameCachePrune(slots, []);
   assert.equal(drops.length, 5);
   // Oldest stamps go first.
-  assert.deepEqual(drops.sort(), ['cam-000', 'cam-001', 'cam-002', 'cam-003', 'cam-004']);
+  assert.deepEqual(drops.sort(), [
+    'cam-000',
+    'cam-001',
+    'cam-002',
+    'cam-003',
+    'cam-004',
+  ]);
 });

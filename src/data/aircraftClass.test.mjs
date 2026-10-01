@@ -1,7 +1,13 @@
 // src/data/aircraftClass.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyAircraft, CLASS_SCALE_2D, CLASS_SCALE_3D, CLASS_MODEL_URL, CLASS_MODEL_REAL } from './aircraftClass.js';
+import {
+  classifyAircraft,
+  CLASS_SCALE_2D,
+  CLASS_SCALE_3D,
+  CLASS_MODEL_URL,
+  CLASS_MODEL_REAL,
+} from './aircraftClass.js';
 
 test('type-code classification (military layer path)', () => {
   assert.equal(classifyAircraft({ typeCode: 'F16' }), 'fastjet');
@@ -49,16 +55,33 @@ test('typeCode outranks category; unknown → airliner', () => {
 });
 
 test('scale/url tables cover every class', () => {
-  for (const kind of ['light','glider','turboprop','airliner','widebody','quadjet','helicopter','fastjet','bizjet','uav']) {
+  for (const kind of [
+    'light',
+    'glider',
+    'turboprop',
+    'airliner',
+    'widebody',
+    'quadjet',
+    'helicopter',
+    'fastjet',
+    'bizjet',
+    'uav',
+  ]) {
     assert.ok(Number.isFinite(CLASS_SCALE_2D[kind]), kind);
-    assert.ok(CLASS_SCALE_3D[kind] >= 0.75 && CLASS_SCALE_3D[kind] <= 1.45, kind);
+    assert.ok(
+      CLASS_SCALE_3D[kind] >= 0.75 && CLASS_SCALE_3D[kind] <= 1.45,
+      kind,
+    );
     assert.ok(typeof CLASS_MODEL_URL[kind] === 'string', kind);
   }
 });
 
 test('CLASS_MODEL_REAL entries carry the fields the layers consume', () => {
   for (const [kind, spec] of Object.entries(CLASS_MODEL_REAL)) {
-    assert.ok(spec.url.startsWith('/models/') && spec.url.endsWith('.glb'), kind);
+    assert.ok(
+      spec.url.startsWith('/models/') && spec.url.endsWith('.glb'),
+      kind,
+    );
     assert.ok(spec.radiusM > 0 && spec.bellyM > 0, kind);
     // every real-model class must also exist in the classifier tables
     assert.ok(Number.isFinite(CLASS_SCALE_2D[kind]), kind);

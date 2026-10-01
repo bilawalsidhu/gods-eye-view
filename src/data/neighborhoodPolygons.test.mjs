@@ -6,13 +6,17 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { lookupNeighborhoodRing } from './neighborhoodPolygons.js';
 
-const FILE = new URL('./local_data/neighborhoods/san-francisco.json', import.meta.url);
+const FILE = new URL(
+  './local_data/neighborhoods/san-francisco.json',
+  import.meta.url,
+);
 
 // SF proper + Treasure Island; generous but excludes everything non-SF.
-const SF_BOUNDS = { west: -122.55, south: 37.70, east: -122.35, north: 37.84 };
+const SF_BOUNDS = { west: -122.55, south: 37.7, east: -122.35, north: 37.84 };
 
 function eachRing(geometry, fn) {
-  const polys = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+  const polys =
+    geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
   for (const poly of polys) for (const ring of poly) fn(ring);
 }
 
@@ -24,18 +28,27 @@ test('SF neighborhoods file parses with the expected DataSF shape', () => {
   assert.equal(fc.features.length, 41);
   for (const f of fc.features) {
     const name = f.properties && f.properties.name;
-    assert.ok(typeof name === 'string' && name.trim().length > 0,
-      `every feature has a non-empty properties.name (got ${JSON.stringify(name)})`);
-    assert.ok(f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'),
-      `${name}: geometry is Polygon|MultiPolygon`);
+    assert.ok(
+      typeof name === 'string' && name.trim().length > 0,
+      `every feature has a non-empty properties.name (got ${JSON.stringify(name)})`,
+    );
+    assert.ok(
+      f.geometry &&
+        (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'),
+      `${name}: geometry is Polygon|MultiPolygon`,
+    );
     eachRing(f.geometry, (ring) => {
       assert.ok(ring.length >= 4, `${name}: ring has >= 4 points`);
       const [f0, l0] = [ring[0], ring[ring.length - 1]];
       assert.ok(f0[0] === l0[0] && f0[1] === l0[1], `${name}: ring is closed`);
       for (const [lon, lat] of ring) {
-        assert.ok(lon >= SF_BOUNDS.west && lon <= SF_BOUNDS.east
-          && lat >= SF_BOUNDS.south && lat <= SF_BOUNDS.north,
-          `${name}: coordinate [${lon}, ${lat}] inside SF bounds`);
+        assert.ok(
+          lon >= SF_BOUNDS.west &&
+            lon <= SF_BOUNDS.east &&
+            lat >= SF_BOUNDS.south &&
+            lat <= SF_BOUNDS.north,
+          `${name}: coordinate [${lon}, ${lat}] inside SF bounds`,
+        );
       }
     });
   }
@@ -54,19 +67,29 @@ test('the five demo neighborhoods resolve to real polygons through the loader', 
     const hit = await lookupNeighborhoodRing(lat, lon, query);
     assert.ok(hit, `${query} must resolve`);
     assert.equal(hit.name, expected);
-    assert.ok(Array.isArray(hit.ring) && hit.ring.length >= 4,
-      `${query}: real ring, not a synthesized disc (got ${hit.ring && hit.ring.length} pts)`);
+    assert.ok(
+      Array.isArray(hit.ring) && hit.ring.length >= 4,
+      `${query}: real ring, not a synthesized disc (got ${hit.ring && hit.ring.length} pts)`,
+    );
     for (const [rlon, rlat] of hit.ring) {
-      assert.ok(rlon >= SF_BOUNDS.west && rlon <= SF_BOUNDS.east
-        && rlat >= SF_BOUNDS.south && rlat <= SF_BOUNDS.north,
-        `${query}: ring stays inside SF bounds`);
+      assert.ok(
+        rlon >= SF_BOUNDS.west &&
+          rlon <= SF_BOUNDS.east &&
+          rlat >= SF_BOUNDS.south &&
+          rlat <= SF_BOUNDS.north,
+        `${query}: ring stays inside SF bounds`,
+      );
     }
   }
 });
 
 test('name specificity: Presidio vs Presidio Heights, Mission vs Outer Mission', async () => {
   // "Presidio Heights" must NOT collapse onto the (larger) Presidio.
-  const heights = await lookupNeighborhoodRing(37.7886, -122.4531, 'Presidio Heights');
+  const heights = await lookupNeighborhoodRing(
+    37.7886,
+    -122.4531,
+    'Presidio Heights',
+  );
   assert.equal(heights?.name, 'Presidio Heights');
   // Bare "Mission" query must not match "Outer Mission"/"Mission Bay".
   const mission = await lookupNeighborhoodRing(37.7599, -122.4148, 'Mission');
@@ -75,20 +98,33 @@ test('name specificity: Presidio vs Presidio Heights, Mission vs Outer Mission',
 
 test('points outside covered cities / unmatched names return null', async () => {
   // Austin, TX — outside every bundled city bbox.
-  assert.equal(await lookupNeighborhoodRing(30.2672, -97.7431, 'Downtown'), null);
+  assert.equal(
+    await lookupNeighborhoodRing(30.2672, -97.7431, 'Downtown'),
+    null,
+  );
   // Inside SF but a name the dataset does not carry — no point-in-polygon fallback.
-  assert.equal(await lookupNeighborhoodRing(37.7793, -122.4193, 'Zilker Park'), null);
+  assert.equal(
+    await lookupNeighborhoodRing(37.7793, -122.4193, 'Zilker Park'),
+    null,
+  );
 });
 
 test('taxonomy aliases: old names reach the renamed DataSF polygon', async () => {
   // DataSF renamed "Financial District" → "Financial District/South Beach";
   // the word-subset matcher alone can never bridge that (P0-2 alias map).
-  const fidi = await lookupNeighborhoodRing(37.7946, -122.3999, 'Financial District');
+  const fidi = await lookupNeighborhoodRing(
+    37.7946,
+    -122.3999,
+    'Financial District',
+  );
   assert.equal(fidi?.name, 'Financial District/South Beach');
   // Colloquial "Downtown" (in SF) maps to the same polygon.
   const downtown = await lookupNeighborhoodRing(37.7946, -122.3999, 'Downtown');
   assert.equal(downtown?.name, 'Financial District/South Beach');
   // "Downtown/Civic Center" deliberately has NO alias — the taxonomy split it,
   // and a confident wrong polygon would block the live resolver ladder.
-  assert.equal(await lookupNeighborhoodRing(37.7793, -122.4193, 'Downtown/Civic Center'), null);
+  assert.equal(
+    await lookupNeighborhoodRing(37.7793, -122.4193, 'Downtown/Civic Center'),
+    null,
+  );
 });

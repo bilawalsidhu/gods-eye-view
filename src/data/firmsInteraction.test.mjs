@@ -5,7 +5,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { createFirmsHeatmapLayer, applyFirmsOverlayPolicy, buildCellCard } from './firmsHeatmap.js';
+import {
+  createFirmsHeatmapLayer,
+  applyFirmsOverlayPolicy,
+  buildCellCard,
+} from './firmsHeatmap.js';
 import { fireDetectionKey } from './firmsLabels.js';
 import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
 import { getSelectedEntityContext } from './contextStore.js';
@@ -43,8 +47,12 @@ function makeFire(overrides = {}) {
  * actionable card presents.
  */
 function harness({
-  fires = [makeFire()], picked = null, cardHit = null, cameraPosition = null,
-  withDataSource = false, feed = null,
+  fires = [makeFire()],
+  picked = null,
+  cardHit = null,
+  cameraPosition = null,
+  withDataSource = false,
+  feed = null,
 } = {}) {
   const hadWindow = Object.hasOwn(globalThis, 'window');
   const priorWindow = globalThis.window;
@@ -72,7 +80,13 @@ function harness({
       hitTest: () => (cardHit ? { sourceId: 'firms', entryId: cardHit } : null),
     },
     screenSpaceEventHandlerFactory: () => {
-      handler = { click: null, setInputAction(cb) { this.click = cb; }, destroy() {} };
+      handler = {
+        click: null,
+        setInputAction(cb) {
+          this.click = cb;
+        },
+        destroy() {},
+      };
       return handler;
     },
   });
@@ -92,7 +106,9 @@ function harness({
   layer._bindInteractionForTest(viewer, fires);
 
   const requests = [];
-  windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (e) => requests.push(e.detail));
+  windowTarget.addEventListener(WORLD_FOCUS_REQUEST_EVENT, (e) =>
+    requests.push(e.detail),
+  );
 
   return {
     layer,
@@ -112,10 +128,19 @@ function harness({
 
 test('fire detection key survives a refetch that renumbers the index', () => {
   const fire = makeFire();
-  assert.equal(fireDetectionKey(fire), fireDetectionKey({ ...fire, index: 999 }));
+  assert.equal(
+    fireDetectionKey(fire),
+    fireDetectionKey({ ...fire, index: 999 }),
+  );
   // Different pass over the same pixel is a different detection.
-  assert.notEqual(fireDetectionKey(fire), fireDetectionKey({ ...fire, acqMs: fire.acqMs + 1 }));
-  assert.notEqual(fireDetectionKey(fire), fireDetectionKey({ ...fire, lat: 31.0 }));
+  assert.notEqual(
+    fireDetectionKey(fire),
+    fireDetectionKey({ ...fire, acqMs: fire.acqMs + 1 }),
+  );
+  assert.notEqual(
+    fireDetectionKey(fire),
+    fireDetectionKey({ ...fire, lat: 31.0 }),
+  );
   assert.match(fireDetectionKey({}), /^firms:x:x:0:x$/);
 });
 
@@ -130,11 +155,20 @@ test('two satellites over the same pixel at the same time stay distinct', () => 
   assert.notEqual(fireDetectionKey(base), fireDetectionKey(suomi));
   assert.notEqual(fireDetectionKey(twin), fireDetectionKey(suomi));
   // Satellite naming variants normalize to one identity, not three.
-  assert.equal(fireDetectionKey(base), fireDetectionKey(makeFire({ satellite: 'NOAA-20' })));
-  assert.equal(fireDetectionKey(suomi), fireDetectionKey(makeFire({ satellite: 'Suomi NPP' })));
+  assert.equal(
+    fireDetectionKey(base),
+    fireDetectionKey(makeFire({ satellite: 'NOAA-20' })),
+  );
+  assert.equal(
+    fireDetectionKey(suomi),
+    fireDetectionKey(makeFire({ satellite: 'Suomi NPP' })),
+  );
   // A record with no satellite falls back to its sensor, not to a shared blank.
   const sensorOnly = makeFire({ satellite: '', sensor: 'MODIS' });
-  assert.notEqual(fireDetectionKey(sensorOnly), fireDetectionKey(makeFire({ satellite: '', sensor: 'VIIRS' })));
+  assert.notEqual(
+    fireDetectionKey(sensorOnly),
+    fireDetectionKey(makeFire({ satellite: '', sensor: 'VIIRS' })),
+  );
 });
 
 test('duplicate-coordinate detections get their own cards and focus targets', () => {
@@ -146,11 +180,21 @@ test('duplicate-coordinate detections get their own cards and focus targets', ()
     cardHit: `fire:${fireDetectionKey(n21)}`,
   });
   try {
-    const cardIds = h.published.filter((e) => e.id.startsWith('fire:')).map((e) => e.id);
-    assert.equal(new Set(cardIds).size, 2, 'co-located detections must not collapse to one card');
+    const cardIds = h.published
+      .filter((e) => e.id.startsWith('fire:'))
+      .map((e) => e.id);
+    assert.equal(
+      new Set(cardIds).size,
+      2,
+      'co-located detections must not collapse to one card',
+    );
     h.click();
     assert.equal(h.requests.length, 1);
-    assert.equal(h.requests[0].id, fireDetectionKey(n21), 'the clicked card wins, not its twin');
+    assert.equal(
+      h.requests[0].id,
+      fireDetectionKey(n21),
+      'the clicked card wins, not its twin',
+    );
   } finally {
     h.cleanup();
   }
@@ -161,7 +205,9 @@ test('selection restoration uses the same key the cards and focus use', () => {
   // detections from different satellites — the selection could come back on
   // the wrong record. Reachable only through the 30-minute refetch, so this is
   // a source contract; the key's own behavior is proven above.
-  const match = LAYER_SOURCE.match(/function findMatchingFire\(previous\) \{([\s\S]*?)\n  \}\n/);
+  const match = LAYER_SOURCE.match(
+    /function findMatchingFire\(previous\) \{([\s\S]*?)\n  \}\n/,
+  );
   assert.ok(match, 'findMatchingFire is missing');
   assert.match(match[1], /fireDetectionKey\(previous\)/);
   assert.match(match[1], /fireDetectionKey\(fire\) === key/);
@@ -174,7 +220,11 @@ test('painted detection cards are keyed by the stable detection key', () => {
     const card = h.published.find((entry) => entry.id.startsWith('fire:'));
     assert.ok(card, 'a detection card was painted');
     assert.equal(card.id, `fire:${fireDetectionKey(h.fires[0])}`);
-    assert.equal(card.interactive, true, 'a detection card must publish a hit rect');
+    assert.equal(
+      card.interactive,
+      true,
+      'a detection card must publish a hit rect',
+    );
     assert.match(card.accessibilityLabel, /^Focus fire detection /);
     assert.equal(card.activate(), true);
     assert.equal(h.requests.length, 1);
@@ -186,7 +236,16 @@ test('painted detection cards are keyed by the stable detection key', () => {
 
 test('an aggregated cell card is never actionable — it is not one fire', () => {
   const cell = buildCellCard(
-    { cell: { count: 14, maxFrp: 210, newestAcqMs: 0, latCell: 30, lonCell: -98 }, position: {} },
+    {
+      cell: {
+        count: 14,
+        maxFrp: 210,
+        newestAcqMs: 0,
+        latCell: 30,
+        lonCell: -98,
+      },
+      position: {},
+    },
     Date.now(),
   );
   assert.equal(applyFirmsOverlayPolicy(cell, 1e6).interactive, false);
@@ -195,10 +254,16 @@ test('an aggregated cell card is never actionable — it is not one fire', () =>
 test('far-side detections cannot consume the bounded ambient-card cohort', () => {
   const front = makeFire({ index: 1, lat: 30.51, lon: -98.21, frp: 100 });
   const rear = makeFire({ index: 2, lat: -30.51, lon: 81.79, frp: 1000 });
-  const cameraPosition = Cesium.Cartesian3.fromDegrees(front.lon, front.lat, 10_000_000);
+  const cameraPosition = Cesium.Cartesian3.fromDegrees(
+    front.lon,
+    front.lat,
+    10_000_000,
+  );
   const h = harness({ fires: [rear, front], cameraPosition });
   try {
-    const cardIds = h.published.filter((entry) => entry.id.startsWith('fire:')).map((entry) => entry.id);
+    const cardIds = h.published
+      .filter((entry) => entry.id.startsWith('fire:'))
+      .map((entry) => entry.id);
     assert.deepEqual(cardIds, [`fire:${fireDetectionKey(front)}`]);
   } finally {
     h.cleanup();
@@ -275,7 +340,11 @@ test('a click on neither sprite nor card clears without moving the camera', () =
 const SIBLING_PICKS = [
   ['flights', 'a1b2c3', { id: 'a1b2c3' }],
   ['flights', 'a1b2c3', { primitive: { id: 'a1b2c3' } }],
-  ['ais-live-vessels', '353136000', { id: { mmsi: '353136000', name: 'EVER GIVEN' } }],
+  [
+    'ais-live-vessels',
+    '353136000',
+    { id: { mmsi: '353136000', name: 'EVER GIVEN' } },
+  ],
   ['cctv', 'atx-cam-3', { id: { id: 'atx-cam-3', name: 'entity-like' } }],
   ['satellites', '25544', { id: 25544 }],
 ];
@@ -291,7 +360,11 @@ for (const [layerId, ownedId, picked] of SIBLING_PICKS) {
     });
     try {
       h.click();
-      assert.equal(h.requests.length, 0, `the ${layerId} layer is already acting on this click`);
+      assert.equal(
+        h.requests.length,
+        0,
+        `the ${layerId} layer is already acting on this click`,
+      );
     } finally {
       h.cleanup();
       unregisterPickOwner(layerId);
@@ -318,7 +391,11 @@ test('a refresh that drops the selected fire emits an eviction the readout can a
   // record first and the clear then fails its ownership guard silently.
   const kept = makeFire({ index: 0 });
   const dropped = makeFire({
-    index: 1, lat: 31.77, lon: -99.02, acqMs: 1_753_600_100_000, satellite: 'N20',
+    index: 1,
+    lat: 31.77,
+    lon: -99.02,
+    acqMs: 1_753_600_100_000,
+    satellite: 'N20',
   });
   const h = harness({
     fires: [dropped, kept],
@@ -326,12 +403,18 @@ test('a refresh that drops the selected fire emits an eviction the readout can a
     withDataSource: true,
   });
   const cleared = [];
-  h.windowTarget.addEventListener('gev:entity-selection-cleared', (e) => cleared.push(e.detail));
+  h.windowTarget.addEventListener('gev:entity-selection-cleared', (e) =>
+    cleared.push(e.detail),
+  );
   const priorFetch = globalThis.fetch;
 
   try {
     h.click();
-    assert.equal(h.requests.length, 1, 'the click must select the fire we are about to drop');
+    assert.equal(
+      h.requests.length,
+      1,
+      'the click must select the fire we are about to drop',
+    );
     assert.equal(h.requests[0].id, fireDetectionKey(dropped));
     assert.deepEqual(cleared, [], 'selecting must not clear anything yet');
 
@@ -342,18 +425,20 @@ test('a refresh that drops the selected fire emits an eviction the readout can a
       json: async () => ({
         fetchedAt: Date.now(),
         stale: false,
-        fires: [{
-          lat: kept.lat,
-          lon: kept.lon,
-          frp: kept.frp,
-          confidence: 'h',
-          brightness: 330,
-          daynight: 'D',
-          acqDate: '2025-07-27',
-          acqTime: '0412',
-          instrument: 'VIIRS',
-          satellite: kept.satellite,
-        }],
+        fires: [
+          {
+            lat: kept.lat,
+            lon: kept.lon,
+            frp: kept.frp,
+            confidence: 'h',
+            brightness: 330,
+            daynight: 'D',
+            acqDate: '2025-07-27',
+            acqTime: '0412',
+            instrument: 'VIIRS',
+            satellite: kept.satellite,
+          },
+        ],
       }),
     });
     await h.layer.update();
@@ -378,9 +463,17 @@ test('a refresh that drops the selected fire emits an eviction the readout can a
 
 test('disable cancels a pending source and a late response cannot repopulate the layer', async () => {
   let resolve, signal;
-  const h = harness({ withDataSource: true, feed: { getSnapshot(options) {
-    signal = options.signal; return new Promise(done => { resolve = done; });
-  } } });
+  const h = harness({
+    withDataSource: true,
+    feed: {
+      getSnapshot(options) {
+        signal = options.signal;
+        return new Promise((done) => {
+          resolve = done;
+        });
+      },
+    },
+  });
   try {
     const before = h.layer.getStats();
     const pending = h.layer.update();
@@ -391,7 +484,10 @@ test('disable cancels a pending source and a late response cannot repopulate the
     assert.equal(h.layer.getStats().count, before.count);
     assert.equal(h.layer.getStats().lastUpdate, before.lastUpdate);
     assert.equal(h.layer.getStats().loading, false);
-  } finally { h.layer.destroy(h.viewer); h.cleanup(); }
+  } finally {
+    h.layer.destroy(h.viewer);
+    h.cleanup();
+  }
 });
 
 test('the heatmap is preloaded under the markers before the first zoom-out', (t) => {
@@ -400,7 +496,9 @@ test('the heatmap is preloaded under the markers before the first zoom-out', (t)
   globalThis.document = {
     createElement: () => ({
       getContext: () => ({
-        createImageData: (w, hh) => ({ data: new Uint8ClampedArray(w * hh * 4) }),
+        createImageData: (w, hh) => ({
+          data: new Uint8ClampedArray(w * hh * 4),
+        }),
         putImageData() {},
         createRadialGradient: () => ({ addColorStop() {} }),
         fillRect() {},
@@ -413,7 +511,12 @@ test('the heatmap is preloaded under the markers before the first zoom-out', (t)
     cameraPosition: Cesium.Cartesian3.fromDegrees(-98, 30, 1_000_000),
   });
   h.viewer.camera = { positionCartographic: { height: 1_000_000 } };
-  h.viewer.scene.primitives = { add() {}, remove() {}, raiseToTop() {}, contains: () => true };
+  h.viewer.scene.primitives = {
+    add() {},
+    remove() {},
+    raiseToTop() {},
+    contains: () => true,
+  };
   h.viewer.scene.frameState = { mode: Cesium.SceneMode.SCENE3D };
   const added = [];
   try {
@@ -528,7 +631,11 @@ test('far zoom drapes one heatmap and the hand-off cross-fades it with the marke
     assert.equal(markers.get(0).color.alpha, 0.5);
     h.layer._renderLodForTest('regional');
     assert.equal(added[0].alpha, 0.5);
-    assert.equal(markers.get(1).color.alpha, 0.5, 'rebuilt markers get the fade');
+    assert.equal(
+      markers.get(1).color.alpha,
+      0.5,
+      'rebuilt markers get the fade',
+    );
 
     h.layer.disable();
     assert.equal(added[0].show, false, 'disable hides the heatmap');
