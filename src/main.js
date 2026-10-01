@@ -19,6 +19,14 @@ application.start().then(
         if (import.meta.env.DEV) window.__gevOps = ops;
       })
       .catch((error) => console.warn('Ops console unavailable:', error));
+    import('./gev/viewAngles/index.js')
+      .then(({ mountViewAngleControls }) => {
+        const angles = mountViewAngleControls({ viewer });
+        if (import.meta.env.DEV) window.__gevAngles = angles;
+      })
+      .catch((error) =>
+        console.warn('View angle controls unavailable:', error),
+      );
   },
   (error) => {
     console.error("God's Eye View initialization failed:", error);
