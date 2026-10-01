@@ -366,3 +366,41 @@ test('weather rail orders between CCTV and Context, resets positions, observes a
     f.restore();
   }
 });
+
+test('busy traffic completion is polled promptly without accelerating idle or global reads', (t) => {
+  const f = fixture();
+  let now = 500;
+  t.mock.method(performance, 'now', () => now);
+  try {
+    const owner = new ShellFeedback({ readLayers: () => [] });
+    let traffic = 0,
+      global = 0;
+    owner._updateTrafficSyncChip = () => traffic++;
+    owner._updateGlobalLoadingFeedback = () => global++;
+    owner._startTrafficChipTicker();
+    const tick = f.timers.get(owner._trafficChipTicker);
+    tick();
+    assert.equal(traffic, 1);
+    assert.equal(global, 1);
+    now = 600;
+    tick();
+    assert.equal(traffic, 1, 'idle polling remains bounded');
+    owner._trafficSyncFeedbackState.busy = true;
+    now = 700;
+    tick();
+    assert.equal(traffic, 2, 'busy completion is observed on a 100 ms tick');
+    assert.equal(global, 1, 'other loading feedback keeps its prior budget');
+    owner._trafficSyncFeedbackState.busy = false;
+    now = 800;
+    tick();
+    assert.equal(traffic, 2);
+    document.hidden = true;
+    now = 1300;
+    tick();
+    assert.equal(traffic, 2, 'hidden pages do no polling');
+    owner.destroy();
+    assert.equal(f.timers.size, 0);
+  } finally {
+    f.restore();
+  }
+});

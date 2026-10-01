@@ -19,9 +19,10 @@
  *   `import('./….json', { with: { type: 'json' } })`, used only under Node.
  * @returns {Promise<any>} The parsed JSON.
  */
-export async function loadBundledJson(url, importJson) {
+export async function loadBundledJson(url, importJson, { signal } = {}) {
   if (url.protocol === 'file:') return (await importJson()).default;
-  const response = await fetch(url);
+  signal?.throwIfAborted();
+  const response = await fetch(url, { signal });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} for ${url.pathname}`);
   }

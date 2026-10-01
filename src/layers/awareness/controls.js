@@ -29,6 +29,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (typeof params.passive !== 'boolean') return;
       const wasPassive = layerState.passive;
       layerState.passive = params.passive;
+      if (layerState.passive) services.installations?.setContextAnchor?.(null);
       if (layerState.enabled && wasPassive && !layerState.passive)
         parts.dependencies.activateOperationalContext();
     },
