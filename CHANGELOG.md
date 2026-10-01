@@ -1,5 +1,12 @@
 # Changelog
 
+- CCTV cameras with identified hardware show the model's datasheet specs. When a
+  source names a camera model found in the vendored CCTV Camera Database records
+  (CC0), the HUD meta line adds its resolution, night vision and PTZ capability.
+  A fixed single-lens model's horizontal FOV replaces the estimate
+  (`FOV n° (DATASHEET)`); a PTZ or varifocal range is what the lens can do, not
+  its current zoom, so those cameras keep the estimate and show
+  `SPEC FOV min–max° (CAPABILITY)` beside it (bassem chagra, #452).
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
@@ -324,6 +331,7 @@
 Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+
 - New Fire Perimeters layer (Events group): live NIFC WFIGS interagency
   wildfire incident perimeters as ground-clamped polygons with a
   containment-colored fire line, refreshed every 5 minutes from the public

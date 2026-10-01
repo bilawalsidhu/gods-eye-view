@@ -1,4 +1,36 @@
 import { CAMERA_SEEDS, SOURCE_ENDPOINT } from './policy.js';
+import {
+  lookupModelSpec,
+  horizontalFovRangeDeg,
+  fixedHorizontalFovDeg,
+} from './modelSpecs.js';
+
+/**
+ * Applies datasheet enrichment to a camera in place: when it names a known
+ * hardware `model`, the spec record is attached for the HUD and the
+ * datasheet's horizontal FOV range rides along as `specFovMinDeg`/
+ * `specFovMaxDeg`. Only fixed-lens hardware replaces the pose estimate: a
+ * PTZ/varifocal range says what the lens CAN do, not where it is zoomed now.
+ * Unknown models — the common case — change nothing.
+ * @param {Object} camera - Camera being built (mutated).
+ * @param {string} [modelName] - Hardware model from a source or seed.
+ * @param {(v:number,min:number,max:number)=>number} clamp - Pose clamp helper.
+ */
+function applyModelEnrichment(camera, modelName, clamp) {
+  const spec = modelName ? lookupModelSpec(modelName) : null;
+  if (!spec) return;
+  const range = horizontalFovRangeDeg(spec);
+  if (range) {
+    camera.specFovMinDeg = range.minDeg;
+    camera.specFovMaxDeg = range.maxDeg;
+  }
+  const fixedFov = fixedHorizontalFovDeg(spec);
+  if (fixedFov) {
+    camera.fovDeg = clamp(fixedFov, 20, 125);
+    camera.fovSource = 'datasheet';
+  }
+  camera.spec = spec;
+}
 
 export function createCatalog({ state: layerState, services, parts, source }) {
   const { CITY_POIS } = services.locations;
@@ -45,6 +77,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
           parts.model.clamp(seed.elevationM ?? 22, 8, 80),
         pitchDeg: parts.model.clamp(seed.pitchDeg ?? -17, -40, -4),
       };
+      applyModelEnrichment(camera, seed.model, parts.model.clamp);
       parts.model.ensureCameraPose(camera);
       catalog.push(camera);
     }
@@ -205,6 +238,11 @@ export function createCatalog({ state: layerState, services, parts, source }) {
             : null,
         poseSource,
       };
+      applyModelEnrichment(
+        camera,
+        source.model || seed?.model,
+        parts.model.clamp,
+      );
       parts.model.ensureCameraPose(camera);
       catalog.push(camera);
     }
