@@ -5,6 +5,8 @@
   instead of a blank tile. The icons are generated from `public/logo.svg` by
   `node scripts/generate-icons.mjs` and committed, so a plain `vite build` needs
   no image toolchain. The existing SVG favicon still serves the browser tab.
+  Manifest paths are relative to the manifest, so a build served under a path
+  prefix installs and launches inside that prefix.
 
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
