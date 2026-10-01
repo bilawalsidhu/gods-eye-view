@@ -36,17 +36,16 @@ function realtimeInstructions(
     'For "show/open/turn on" layer requests, enable the matching layer. For "hide/close/turn off", disable it.',
     // INSTRUCTION-ONLY mapping for the two globe-scale named views.
     //
-    // Both are BROADER than the first-run tiles on purpose. A person
-    // naming layers out loud has chosen them; a tile is a first
-    // impression handed to a stranger. So voice keeps fires in the
-    // environmental view and keeps infrastructure entirely, while the
-    // launcher's ENVIRONMENTAL tile is quakes-only and has no
-    // infrastructure tile at all. See src/firstRunExperience.js for why.
+    // Infrastructure stays broader than the first-run tiles on purpose.
+    // A person naming layers out loud has chosen them; a tile is a first
+    // impression handed to a stranger. The environmental named view matches
+    // the ENVIRONMENTAL tile: earthquakes, active fires, and wildfire
+    // perimeters. There is no infrastructure tile. See src/firstRunExperience.js.
     //
     // Fully expressible with tools that already exist, so
     // GEV_REALTIME_TOOLS is deliberately untouched — deleting this one
     // string is the whole rollback.
-    'NAMED VIEWS are shorthand for tool calls you already have — there is no "mode" tool for them. Treat ONLY these as the shorthand: "infrastructure mode" / "the infrastructure view" / "show me global infrastructure" means three set_layer_visibility calls (local-datacenters, local-dams, telegeography-submarine-cables) plus zoom_to_globe; "environmental mode" / "earth watch" / "active events", said as the name of a view, means set_layer_visibility for local-firms and earthquakes plus zoom_to_globe. Anything vaguer is NOT this shorthand — an open-ended question about the world or the news is an ordinary question: answer it, or use analyst_query over the layers already on. Never switch a whole view on to answer a question nobody asked to see. When you do run one, make every call before speaking, then give one confirmation naming the resulting state; if the fires layer comes back unavailable because no FIRMS key is configured, say so plainly — the earthquakes still loaded. "Live contacts" and "space missions" are NOT this pattern: they stay set_context_mode{mode:"contacts"} and set_context_mode{mode:"space-missions"}.',
+    'NAMED VIEWS are shorthand for tool calls you already have — there is no "mode" tool for them. Treat ONLY these as the shorthand: "infrastructure mode" / "the infrastructure view" / "show me global infrastructure" means three set_layer_visibility calls (local-datacenters, local-dams, telegeography-submarine-cables) plus zoom_to_globe; "environmental mode" / "earth watch" / "active events", said as the name of a view, means set_layer_visibility for earthquakes, local-firms, and fire-perimeters plus zoom_to_globe. Anything vaguer is NOT this shorthand — an open-ended question about the world or the news is an ordinary question: answer it, or use analyst_query over the layers already on. Never switch a whole view on to answer a question nobody asked to see. When you do run one, make every call before speaking, then give one confirmation naming the resulting state; if the fires layer comes back unavailable because no FIRMS key is configured, say so plainly — the earthquakes and wildfire perimeters still load. "Live contacts" and "space missions" are NOT this pattern: they stay set_context_mode{mode:"contacts"} and set_context_mode{mode:"space-missions"}.',
     'For visual filter requests, call set_visual_style with one of the allowed style IDs.',
     'Disambiguation table — basemap vs layer vs style: basemap switching requires an explicit stack name — "Bing aerial" means set_map_stack bing-aerial, "aerial with labels" means bing-labels, "OSM"/"road map" means osm, "Esri"/"Esri imagery" means esri-imagery, "Google 3D"/"photorealistic" means photoreal. Any mention of "satellite" or "satellites" ALWAYS means the satellites DATA LAYER via set_layer_visibility, never a basemap. "surveillance"/"night vision"/"thermal" are visual STYLES via set_visual_style.',
     'HUD requests ("hud on/off", "switch to operator/minimal/tactical/cyber layout") use set_hud. Detection requests ("detection on", "dense mode", "balanced mode", "sparse mode", "set density to 25", "use weighted allocation") use set_detection. Density snaps to 0/25/50/75/100 and derives Sparse/Balanced/Dense; panoptic is a legacy alias for Dense.',

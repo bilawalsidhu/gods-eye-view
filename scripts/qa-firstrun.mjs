@@ -115,7 +115,7 @@ const appState = (page) => page.evaluate(() => {
   const all = dm?.getAll?.() || [];
   for (const id of [
     'local-datacenters', 'local-dams', 'telegeography-submarine-cables',
-    'local-firms', 'earthquakes', 'flights', 'military', 'rocket-launches', 'satellites',
+    'local-firms', 'earthquakes', 'fire-perimeters', 'flights', 'military', 'rocket-launches', 'satellites',
   ]) {
     layers[id] = !!dm?.isEnabled?.(id);
     counts[id] = all.find((entry) => entry.id === id)?.stats?.count ?? null;
@@ -616,15 +616,16 @@ async function main() {
     await open(page, { query: "?welcome=1", errorSink: consoleErrors });
     before = await appState(page);
     await watchLoadingChip(page);
-    await pick(page, 'environmental', { settle: ['earthquakes', 'local-firms'] });
+    await pick(page, 'environmental', { settle: ['earthquakes', 'local-firms', 'fire-perimeters'] });
     state = await appState(page);
     record('ENVIRONMENTAL leaves the detection override untouched',
       state.detectionOverridden === false, `_detectionUserOverridden=${state.detectionOverridden}`);
     record('a mission never auto-suppresses itself', state.durable === null, `durable=${state.durable}`);
     record('a mission never writes the detection-allocation pref',
       state.allocation === before.allocation, `${before.allocation} → ${state.allocation}`);
-    record('ENVIRONMENTAL enables BOTH of its feeds', state.layers.earthquakes && state.layers['local-firms'],
-      `quakes=${state.layers.earthquakes} fires=${state.layers['local-firms']}`);
+    record('ENVIRONMENTAL enables its hazard feeds',
+      state.layers.earthquakes && state.layers['local-firms'] && state.layers['fire-perimeters'],
+      `quakes=${state.layers.earthquakes} fires=${state.layers['local-firms']} perimeters=${state.layers['fire-perimeters']}`);
     record('ENVIRONMENTAL loads real quake records', (state.counts.earthquakes ?? 0) > 0,
       `${state.counts.earthquakes} quakes`);
     record('ENVIRONMENTAL reaches the full-earth camera', state.heightKm !== null && state.heightKm > 12000,

@@ -1240,9 +1240,10 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 > (`pp-toggles`) now starts **collapsed** on a first run rather than expanded —
 > a stored collapse state still wins, as before.
 >
-> **The ENVIRONMENTAL tile is quakes AND fires** — live USGS earthquakes plus
-> NASA FIRMS active fires (`layerIds: ['earthquakes', 'local-firms']`), with the
-> tile subcopy naming both. **The launcher optimizes for the fully configured
+> **The ENVIRONMENTAL tile is quakes, fires, AND wildfire perimeters** — live USGS
+> earthquakes, NASA FIRMS active fires, and keyless NIFC/WFIGS perimeters
+> (`layerIds: ['earthquakes', 'local-firms', 'fire-perimeters']`), with the
+> tile subcopy naming all three. **The launcher optimizes for the fully configured
 > experience:** it does not trim what it offers down
 > to the lowest-configured install. The mission does not branch on whether a key
 > is present — everyone gets the same tile.
@@ -1305,7 +1306,7 @@ fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 > **Voice is instruction-only.** Both globe missions are expressible with
 > shipped tools (`set_layer_visibility`'s enum already carries
 > `local-datacenters`, `local-dams`, `telegeography-submarine-cables`,
-> `local-firms`, `earthquakes`; `zoom_to_globe` supplies the camera), so
+> `local-firms`, `earthquakes`, `fire-perimeters`; `zoom_to_globe` supplies the camera), so
 > `GEV_REALTIME_TOOLS` is **byte-identical to `main`** and pinned by sha256 in
 > the unit suite. One instruction paragraph in `vite.config.js` teaches the
 > phrase mapping; deleting it is the complete rollback.
