@@ -20,6 +20,10 @@ const LABEL_MAX_CHARS = 40;
 const DISCLAIMER =
   'GDACS alerts are automatic estimates of likely humanitarian impact. They do not replace official information or warnings from local or national disaster management authorities.';
 const CAVEAT = 'Automatic impact estimates, not official warnings';
+/** The caveat every published selection carries downstream. */
+export const GDACS_SELECTION_CAVEAT =
+  'automatic estimate, not official warning';
+const LAYER_NAME = 'Disaster Alerts';
 
 const utc = (ms) =>
   Number.isFinite(ms)
@@ -42,13 +46,62 @@ const clip = (text, max) =>
   text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 
 /**
+ * The normalized shared-context record for one selected GDACS event, as
+ * `gev:entity-selected` publishes it. The location is the event centroid
+ * GDACS reports: a single point, never the affected area, so the record
+ * carries no polygon, footprint or extent.
+ * @param {object} event Sanitized GDACS event record.
+ * @param {{fetchedAt?: number|null}} [provenance] Snapshot provenance.
+ * @returns {object} Context metadata for `registerEntityContext`.
+ */
+export function gdacsSelectionContext(event, { fetchedAt = null } = {}) {
+  const updatedAt = event.modifiedMs ?? event.toMs ?? event.fromMs ?? null;
+  return {
+    id: `${ENTITY_PREFIX}${event.id}`,
+    layerId: LAYER_ID,
+    layerName: LAYER_NAME,
+    kind: 'disaster-alert',
+    source: 'GDACS',
+    label: event.name,
+    latitude: event.lat,
+    longitude: event.lon,
+    geometryKind: 'point',
+    locationKind: 'centroid',
+    caveat: GDACS_SELECTION_CAVEAT,
+    provenance: {
+      source: 'GDACS',
+      reportUrl: event.reportUrl || null,
+      eventId: event.eventId,
+      episodeId: event.episodeId,
+      eventType: event.type,
+      alertLevel: event.level,
+      fetchedAt: Number.isFinite(fetchedAt) ? fetchedAt : null,
+      updatedAt,
+    },
+    properties: {
+      gdacsId: event.id,
+      eventType: GDACS_TYPE_NAMES[event.type] || event.type,
+      alertLevel: GDACS_LEVEL_NAMES[event.level] || event.level,
+      country: event.country || null,
+      severity: event.severity || null,
+      current: event.current === true,
+      reportUrl: event.reportUrl || null,
+      location: 'event centroid (point), not the affected area',
+      caveat: GDACS_SELECTION_CAVEAT,
+    },
+  };
+}
+
+/**
  * Own one GDACS alert display: the event centroids GDACS publishes for
  * earthquakes, tropical cyclones, floods, volcanoes, droughts and wildfires,
  * coloured by alert level and selectable from the globe or the row list.
  * Globe selection needs the application's `picking` registry and `pointer`
  * ownership; without them the row list still selects and focuses events.
  * Event names are world-overlay labels, drawn only when an `overlayHost` is
- * supplied.
+ * supplied. With the application `context` store the selected event is
+ * published on the shared `gev:entity-selected` lane and released through
+ * `gev:entity-selection-cleared` when GDACS still owns the selection.
  */
 export function createGdacsAlertsLayer({
   source,
@@ -60,6 +113,7 @@ export function createGdacsAlertsLayer({
   picking = null,
   pointer = null,
   overlayHost = null,
+  context = null,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('GDACS alerts require a snapshot source');
@@ -73,6 +127,7 @@ export function createGdacsAlertsLayer({
   let _signature = null;
   let _selectedId = null;
   let _lastUpdate = null;
+  let _fetchedAt = null;
   let _lastError = null;
   let _stale = false;
   let _listener = null;
@@ -222,7 +277,69 @@ export function createGdacsAlertsLayer({
     requestRender();
   }
 
-  function select(id) {
+  /**
+   * Publish the selected event into the shared context store, or release it.
+   * A sibling layer's selection is never cleared: the store only clears a
+   * record GDACS owns.
+   */
+  function publishContext(event, { evicted = false } = {}) {
+    if (!context) return;
+    try {
+      if (!event) {
+        context.clearSelectedEntityContextForLayer(LAYER_ID, { evicted });
+        context.removeEntityContextsForLayer(LAYER_ID);
+        return;
+      }
+      const metadata = gdacsSelectionContext(event, { fetchedAt: _fetchedAt });
+      const carrier = {
+        show: true,
+        // The point voice's visible-entity scan projects: the centroid.
+        __localBaseCartesian:
+          _markers.get(event.id)?.position ||
+          C.Cartesian3.fromDegrees(event.lon, event.lat, 0),
+      };
+      context.registerEntityContext(carrier, {
+        ...metadata,
+        dataSource: _dataSource,
+      });
+      context.selectEntityContext(carrier);
+      context.removeEntityContextsForLayer(LAYER_ID, {
+        retainIds: new Set([metadata.id]),
+      });
+    } catch (e) {
+      // The local selection still works without the shared store.
+      console.warn('[Data:GDACS] Selection context unavailable:', e);
+    }
+  }
+
+  function ownsContextSelection() {
+    if (!context) return true;
+    try {
+      const store = context.getContextStore();
+      return store.entities.get(store.selectedEntityId)?.layerId === LAYER_ID;
+    } catch {
+      return true;
+    }
+  }
+
+  /** Refresh the published record in place after a fetch, without reselecting. */
+  function refreshContext() {
+    const event = selected();
+    if (!context || !event) return;
+    try {
+      const metadata = gdacsSelectionContext(event, { fetchedAt: _fetchedAt });
+      const existing = context.getContextStore().entities.get(metadata.id);
+      if (existing?.layerId === LAYER_ID)
+        context.registerEntityContext(existing.entity, {
+          ...metadata,
+          dataSource: _dataSource,
+        });
+    } catch {
+      // store unavailable: nothing to refresh
+    }
+  }
+
+  function select(id, { evicted = false } = {}) {
     if (_selectedId !== id) ++_navigationGeneration;
     const previous = _selectedId;
     _selectedId = id;
@@ -231,7 +348,14 @@ export function createGdacsAlertsLayer({
       const event = marker && _events.find((entry) => entry.id === eventId);
       if (event) styleMarker(event, marker.entity);
     }
-    if (previous !== id) publishLabels();
+    if (previous !== id) {
+      publishLabels();
+      publishContext(selected(), { evicted });
+    } else if (id && !ownsContextSelection()) {
+      // Re-choosing the event after a sibling layer took the shared
+      // selection claims it back.
+      publishContext(selected());
+    }
     requestRender();
   }
 
@@ -320,7 +444,7 @@ export function createGdacsAlertsLayer({
 
   const layer = {
     id: LAYER_ID,
-    name: 'Disaster Alerts',
+    name: LAYER_NAME,
     icon: '⚠',
     source: 'GDACS',
     updateInterval: 600_000,
@@ -379,10 +503,14 @@ export function createGdacsAlertsLayer({
           return false;
         _events = snapshot.events;
         _missing = snapshot.missing || [];
+        _fetchedAt = Number.isFinite(snapshot.fetchedAt)
+          ? snapshot.fetchedAt
+          : now();
         // Rebuild the markers before a selection change republishes labels.
         render();
         if (_selectedId && !_events.some((event) => event.id === _selectedId))
-          select(null);
+          select(null, { evicted: true });
+        else refreshContext();
         _stale = snapshot.stale === true;
         _lastUpdate = now();
         _lastError = null;
@@ -516,6 +644,7 @@ export function createGdacsAlertsLayer({
       _listener = null;
       _runNavigation = null;
       _lastUpdate = null;
+      _fetchedAt = null;
       _lastError = null;
       _stale = false;
     },
