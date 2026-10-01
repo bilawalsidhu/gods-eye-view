@@ -27,9 +27,9 @@ test('the complete Realtime tool payload pins the additive analyst, satellite, L
     .digest('hex');
   assert.equal(
     digest,
-    // Re-derived for the provider-settings panel value and
-    // set_voice_provider tool. The separate sonar tool is excluded above.
-    '39bd9062a57d667bd6ea8a98650ea37d1a4fed2e78e1426000d55ffb776ee945',
+    // Re-derived for provider/voice settings, the inactivity-timeout tool,
+    // and the explicit voice-dropdown close behavior. Sonar stays excluded.
+    'b5055574e3a51556b7e2e35310e56ebd3e7d433ef57325a56d807c15db900e13',
   );
 });
 
@@ -92,6 +92,7 @@ test('all legacy action arguments are byte-identical after removing the delibera
         'next_satellite_pass',
         'set_cyber_sonar',
         'set_voice_provider',
+        'set_voice_inactivity_timeout',
       ].includes(tool.name),
   );
   const layers = legacy.find((tool) => tool.name === 'analyst_query').parameters
@@ -113,7 +114,9 @@ test('all legacy action arguments are byte-identical after removing the delibera
   );
   const panels = legacy.find((tool) => tool.name === 'set_panel_open')
     .parameters.properties.panelId;
-  panels.enum = panels.enum.filter((key) => key !== 'provider-settings');
+  panels.enum = panels.enum.filter(
+    (key) => !['provider-settings', 'voice-settings'].includes(key),
+  );
   for (const tool of legacy) {
     for (const value of Object.values(tool.parameters.properties)) {
       if (value.enum)

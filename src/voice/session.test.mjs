@@ -86,6 +86,7 @@ test('alternate protocol shares session events and action execution without Real
       'transcript',
       'action-call',
       'action-result',
+      'action-settled',
       'completion',
     ],
   );
@@ -237,6 +238,21 @@ test('common button and annotation bindings work with an alternate adapter and c
   try {
     const button = new EventTarget();
     button.setAttribute = () => {};
+    const voiceSettingsButton = new EventTarget();
+    voiceSettingsButton.attributes = {};
+    voiceSettingsButton.setAttribute = (name, value) => {
+      voiceSettingsButton.attributes[name] = String(value);
+    };
+    voiceSettingsButton.focus = () => {};
+    const voiceSettingsPanel = new EventTarget();
+    voiceSettingsPanel.hidden = true;
+    const inactivitySelect = new EventTarget();
+    inactivitySelect.value = '';
+    inactivitySelect.focus = () => {};
+    const inactivityCustomInput = new EventTarget();
+    inactivityCustomInput.value = '5';
+    inactivityCustomInput.setAttribute = () => {};
+    inactivityCustomInput.setCustomValidity = () => {};
     let removed = 0;
     let subscribed = null;
     let calls = 0;
@@ -257,6 +273,13 @@ test('common button and annotation bindings work with an alternate adapter and c
       helpDetail: {},
       errorDetail: {},
       errorHint: {},
+      voiceSettingsButton,
+      voiceSettingsPanel,
+      voiceSettingsClose: new EventTarget(),
+      inactivitySelect,
+      inactivityCustomRow: { hidden: true },
+      inactivityCustomInput,
+      inactivityNote: {},
     };
     const lifetime = new AbortController();
     const controls = createVoiceCommands({
@@ -299,6 +322,8 @@ test('common button and annotation bindings work with an alternate adapter and c
     assert.equal(ui.helpDetail.textContent, 'Activate to toggle voice');
     assert.equal(ui.status.textContent, 'LISTENING');
     assert.equal(ui.detail.textContent, 'Ready');
+    assert.equal(controls.setVoiceSettingsOpen(true), true);
+    assert.equal(voiceSettingsPanel.hidden, false);
     emitSession({
       type: 'state',
       state: 'error',
@@ -321,6 +346,8 @@ test('common button and annotation bindings work with an alternate adapter and c
     ]);
     button.dispatchEvent(new Event('click'));
     assert.equal(controls.state, 'idle');
+    assert.equal(voiceSettingsPanel.hidden, true);
+    assert.equal(voiceSettingsButton.attributes['aria-expanded'], 'false');
     lifetime.abort();
     assert.equal(subscribed, null);
     assert.equal(removed, 1);

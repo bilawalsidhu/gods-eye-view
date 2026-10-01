@@ -37,6 +37,7 @@ export function createProviderCommands(options, { bind, factories, storage }) {
     if (disposed || !Object.hasOwn(factories, next) || next === provider)
       return false;
     pendingProvider = null;
+    const voiceSettingsOpen = current?.ui?.voiceSettingsPanel?.hidden === false;
     current.session.destroy();
     provider = next;
     try {
@@ -44,7 +45,7 @@ export function createProviderCommands(options, { bind, factories, storage }) {
     } catch {
       /* Storage is optional. */
     }
-    mount();
+    mount({ voiceSettingsOpen });
     globalThis.document?.getElementById('gev-voice-provider')?.focus();
     return true;
   };
@@ -119,6 +120,12 @@ export function createProviderCommands(options, { bind, factories, storage }) {
     sendTextCommand: (text) => !disposed && current.session.sendText(text),
     sendText: (text) => !disposed && current.session.sendText(text),
     notifyMapEvent: (event) => !disposed && current.session.sendMapEvent(event),
+    setVoiceSettingsOpen: (open) =>
+      !disposed && current?.setVoiceSettingsOpen?.(open),
+    setVoiceInactivityMinutes: (minutes) =>
+      !disposed && current?.setVoiceInactivityMinutes?.(minutes),
+    getVoiceInactivityMinutes: () =>
+      !disposed ? current?.getVoiceInactivityMinutes?.() : undefined,
     setProvider: selectProvider,
     requestProviderChange,
   };
@@ -130,13 +137,15 @@ export function createProviderCommands(options, { bind, factories, storage }) {
       return typeof value === 'function' ? value.bind(current) : value;
     },
   });
-  function mount() {
+  function mount({ voiceSettingsOpen = false } = {}) {
     current = bind({
       ...options,
       resetExisting: false,
       provider,
       onProviderChange: selectProvider,
       onSessionEvent: handleSessionEvent,
+      storage: stored(),
+      voiceSettingsOpen,
       createSession: factories[provider],
     });
     window.__gevVoiceCommands = facade;

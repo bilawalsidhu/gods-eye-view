@@ -663,7 +663,11 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
   // release schema before formatting (the previous source-byte pin passed).
   const legacyTools = structuredClone(GEV_REALTIME_TOOLS).filter(
     (tool) =>
-      !['set_cyber_sonar', 'set_voice_provider'].includes(tool.name),
+      ![
+        'set_cyber_sonar',
+        'set_voice_provider',
+        'set_voice_inactivity_timeout',
+      ].includes(tool.name),
   );
   const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud').parameters.properties.layout;
   assert.deepEqual(hudLayout.enum, ['tactical', 'operator', 'minimal', 'cyber']);
@@ -673,7 +677,7 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
   panelTool.description = 'Open or close a GEV UI panel/dropdown.';
   const panelIds = panelTool.parameters.properties.panelId;
   panelIds.enum = panelIds.enum.filter(
-    (panelId) => panelId !== 'provider-settings',
+    (panelId) => !['provider-settings', 'voice-settings'].includes(panelId),
   );
   delete panelIds.description;
   const block = JSON.stringify(legacyTools);

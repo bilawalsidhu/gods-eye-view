@@ -5,11 +5,25 @@ import {
   readVoiceProvider,
 } from './providerCommands.js';
 import { createVoiceCommands as bind } from './sessionCommands.js';
+import { VOICE_INACTIVITY_STORAGE_KEY } from './inactivity.js';
+
+function element(properties = {}) {
+  const target = new EventTarget();
+  Object.assign(target, properties);
+  target.attributes = {};
+  target.setAttribute = (name, value) => {
+    target.attributes[name] = String(value);
+  };
+  target.focus = () => {};
+  return target;
+}
 
 function control() {
-  const button = new EventTarget();
+  const button = element();
   button.setAttribute = () => {};
-  const select = new EventTarget();
+  const select = element();
+  const customInput = element({ value: '5' });
+  customInput.setCustomValidity = () => {};
   return {
     root: {
       dataset: {},
@@ -19,6 +33,14 @@ function control() {
     },
     button,
     providerSelect: select,
+    voiceSettingsButton: element(),
+    voiceSettingsPanel: element({ hidden: true }),
+    voiceSettingsClose: element(),
+    inactivitySelect: element({ value: '' }),
+    inactivityCustomRow: { hidden: true },
+    inactivityCustomInput: customInput,
+    inactivityNote: {},
+    providerLimitNote: {},
     providerField: {
       remove() {
         this.removed = true;
@@ -42,11 +64,11 @@ function setup(
   const starts = [];
   const stops = [];
   const views = [];
+  const values = new Map();
+  if (value != null) values.set('gev.voice.provider', value);
   const storage = {
-    getItem: () => value,
-    setItem: (_key, next) => {
-      value = next;
-    },
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, next) => values.set(key, next),
   };
   const factories = Object.fromEntries(
     ['openai', 'gemini'].map((provider) => [
@@ -95,7 +117,8 @@ function setup(
     stops,
     views,
     lifetime,
-    stored: () => value,
+    stored: () => values.get('gev.voice.provider') ?? null,
+    storedValue: (key) => values.get(key) ?? null,
   };
 }
 
@@ -120,6 +143,11 @@ test('selector stops the active provider, persists the choice, and keeps one pub
   await original.start();
   assert.equal(original.status, 'listening');
   assert.equal(f.views[0].tierButton.hidden, false);
+  assert.equal(original.setVoiceSettingsOpen(true), true);
+  assert.equal(f.views[0].voiceSettingsPanel.hidden, false);
+  assert.equal(original.setVoiceInactivityMinutes(3), true);
+  assert.equal(f.views[0].inactivitySelect.value, '3');
+  assert.equal(f.storedValue(VOICE_INACTIVITY_STORAGE_KEY), '3');
   f.views[0].providerSelect.value = 'gemini';
   f.views[0].providerSelect.dispatchEvent(new Event('change'));
   assert.equal(window.__gevVoiceCommands, original);
@@ -128,6 +156,11 @@ test('selector stops the active provider, persists the choice, and keeps one pub
   assert.equal(f.views[0].root.removed, true);
   assert.equal(f.views[0].providerField.removed, true);
   assert.equal(f.views[1].tierButton.hidden, true);
+  assert.equal(f.views[1].voiceSettingsPanel.hidden, false);
+  assert.equal(
+    f.views[1].voiceSettingsButton.attributes['aria-expanded'],
+    'true',
+  );
   assert.equal(original.status, 'idle');
   assert.deepEqual(f.starts, ['openai']);
   await original.start();
@@ -256,4 +289,18 @@ test('a voice-requested provider change waits for completion, then remounts once
   assert.equal(f.views.length, 2);
   assert.equal(f.stored(), 'gemini');
   assert.deepEqual(f.stops, ['openai']);
+});
+
+test('provider replacement preserves the browser-local inactivity preference', (t) => {
+  const f = setup(t);
+  const first = f.views[0];
+  assert.equal(first.inactivitySelect.value, '5');
+  first.inactivitySelect.value = 'custom';
+  first.inactivitySelect.dispatchEvent(new Event('change'));
+  first.inactivityCustomInput.value = '12';
+  first.inactivityCustomInput.dispatchEvent(new Event('input'));
+  assert.equal(f.storedValue(VOICE_INACTIVITY_STORAGE_KEY), '12');
+  f.controls.setProvider('gemini');
+  assert.equal(f.views[1].inactivitySelect.value, 'custom');
+  assert.equal(f.views[1].inactivityCustomInput.value, '12');
 });

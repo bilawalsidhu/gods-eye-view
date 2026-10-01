@@ -1,31 +1,64 @@
-/* ------------------------------------------------------------------ *
- * Voice cost control — model-tier toggle + running session estimate.
- * Appended (not woven into the dock passes above) so the three existing
- * #gev-voice-control cascades stay untouched; these rules only add the
- * new .gev-voice-cost cluster inside the existing .gev-voice-heading row.
- * ------------------------------------------------------------------ */
-.gev-voice-cost {
+/* Voice cost controls live in Voice Settings so the visualizer stays legible. */
+.gev-voice-cost-settings {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.2rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(123, 189, 211, 0.22);
+}
+
+.gev-voice-cost-settings[hidden] {
+  display: none;
+}
+
+.gev-voice-settings-section-title {
+  color: rgba(190, 221, 230, 0.72);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+
+.gev-voice-cost-setting-row {
   display: flex;
   align-items: center;
-  gap: 0.22rem;
-  margin-left: auto; /* pin right; kicker + status keep their left cluster */
-  flex: 0 0 auto;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 38px;
+}
+
+.gev-voice-cost-setting-row > span {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.gev-voice-cost-setting-row strong {
+  color: var(--text-secondary);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.055em;
+}
+
+.gev-voice-cost-setting-row small {
+  color: var(--text-dim);
+  font-size: 0.57rem;
+  letter-spacing: 0.015em;
 }
 
 .gev-voice-tier-btn {
-  padding: 0 0.24rem;
-  height: 0.72rem;
-  min-width: 1.55rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 58px;
+  min-height: 30px;
+  padding: 5px 9px;
   background: rgba(0, 212, 255, 0.06);
   border: 1px solid rgba(0, 212, 255, 0.34);
-  border-radius: 0.18rem;
+  border-radius: 7px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 0.4rem;
-  letter-spacing: 0.045rem;
+  font-size: 0.61rem;
+  letter-spacing: 0.07em;
   line-height: 1;
   cursor: pointer;
   transition:
@@ -49,11 +82,14 @@
 }
 
 .gev-voice-cost-value {
-  color: var(--text-dim);
+  min-width: 58px;
+  color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 0.4rem;
-  letter-spacing: 0.02rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.025em;
   line-height: 1;
+  text-align: right;
   font-variant-numeric: tabular-nums;
   transition: color var(--transition-fast);
 }
@@ -67,60 +103,257 @@
   font-weight: 600;
 }
 
-/* The dock heading row is 0.8rem tall; keep the cluster inside it. */
-#command-dock .gev-voice-cost {
-  max-height: 0.8rem;
-}
-
-/* The dock collapses the kicker/readout when a tray is open — the cost
-   cluster follows the same rule so the row never overflows. */
-#command-dock.tray-open .gev-voice-cost {
-  display: none;
-}
-
 .gev-voice-tier-btn[hidden],
 .gev-voice-cost-value[hidden] {
   display: none;
 }
 
-/* Provider selection has its own row so the existing status/cost readout stays legible. */
-.gev-voice-provider-field {
+/* Voice owns placement and disclosure; panel-surfaces.css owns the shared frame. */
+.gev-voice-provider-field[data-panel-surface] {
   position: fixed;
   right: 36px;
   bottom: calc(36px + 4.4rem);
   z-index: 151;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  width: 214px;
-  min-height: 1.85rem;
-  padding: 0.2rem 0.45rem;
-  color: var(--text-secondary);
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 0.5rem;
-  backdrop-filter: blur(24px);
-  font: 0.58rem var(--font-mono);
+  width: min(240px, calc(100vw - 2rem));
+  max-height: min(72vh, 520px);
   box-sizing: border-box;
+  gap: 0;
+  padding: 6px;
 }
 .gev-voice-provider-field[hidden] {
+  display: none !important;
+}
+.gev-voice-provider-field[data-panel-surface]::before {
+  border-color: rgba(123, 189, 211, 0.28);
+  background-color: rgba(9, 18, 27, 0.88);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.46),
+    0 0 18px rgba(0, 212, 255, 0.06);
+}
+.gev-voice-provider-field .gev-voice-provider-header {
   display: none;
+  min-height: 0;
+  padding-bottom: 4px;
+}
+.gev-voice-provider-controls[data-panel-body] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  overflow: visible;
+}
+.gev-voice-provider-controls .panel-surface-control {
+  border-color: rgba(123, 189, 211, 0.28);
+  background: rgba(9, 18, 27, 0.92);
+  color: rgba(190, 221, 230, 0.82);
+  font-family: var(--font-mono);
+}
+.gev-voice-provider-controls
+  .panel-surface-control:hover:not(:disabled):not([aria-disabled='true']) {
+  border-color: rgba(0, 212, 255, 0.52);
+  background: rgba(0, 212, 255, 0.1);
+  color: var(--text-primary);
 }
 #gev-voice-provider {
   flex: 1;
   min-width: 0;
-  min-height: 1.45rem;
-  padding: 0.12rem 0.1rem;
-  color: var(--text-primary);
-  background: #10212a;
-  border: 1px solid var(--glass-border);
-  border-radius: 0.25rem;
-  font: 0.65rem var(--font-mono);
+  min-height: 34px;
+  padding-block: 5px;
+  font-size: 0.68rem;
   cursor: pointer;
 }
-#gev-voice-provider:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.gev-voice-settings-button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  font-size: 0.58rem;
+  white-space: nowrap;
+}
+.gev-voice-settings-icon {
+  color: rgba(190, 221, 230, 0.52);
+  font-family: 'Material Symbols Outlined';
+  font-size: 18px;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  font-feature-settings: 'liga';
+  transition: color var(--transition-fast);
+}
+.gev-voice-settings-button:hover .gev-voice-settings-icon,
+.gev-voice-settings-button:focus-visible .gev-voice-settings-icon,
+.gev-voice-settings-button[aria-expanded='true'] .gev-voice-settings-icon {
+  color: var(--accent);
+}
+.gev-voice-settings-button[aria-expanded='true'] {
+  border-color: rgba(0, 212, 255, 0.58);
+  background: rgba(0, 212, 255, 0.12);
+}
+.gev-voice-settings-label {
+  display: none;
+}
+
+.gev-voice-settings-panel {
+  left: 50%;
+  bottom: calc(100% + 0.5rem);
+  width: min(326px, calc(100vw - 1.25rem));
+  max-height: min(68vh, 520px);
+  transform: translateX(-50%);
+}
+.gev-voice-settings-panel[data-panel-popup]::before {
+  border-color: rgba(0, 212, 255, 0.36);
+  background-color: rgba(5, 13, 20, 0.97);
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.72),
+    0 0 24px rgba(0, 212, 255, 0.09);
+  backdrop-filter: blur(28px) saturate(1.2);
+  -webkit-backdrop-filter: blur(28px) saturate(1.2);
+}
+.gev-voice-settings-panel:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gev-voice-settings-panel > [data-panel-body] {
+  display: grid;
+  gap: 0.65rem;
+  max-height: min(54vh, 420px);
+}
+.gev-voice-settings-panel > [data-panel-header] {
+  min-height: 28px;
+  padding-bottom: 9px;
+}
+#gev-voice-settings-close {
+  min-height: 28px;
+  padding: 4px 8px;
+  color: var(--text-secondary);
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+}
+.gev-voice-settings-panel :is(label, legend) {
+  color: var(--text-secondary);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+}
+.gev-voice-inactivity-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.gev-voice-inactivity-fieldset legend {
+  margin-bottom: 0.48rem;
+  padding: 0;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.gev-voice-inactivity-chips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.38rem;
+}
+.gev-voice-inactivity-chip {
+  position: relative;
+  min-width: 0;
+  cursor: pointer;
+}
+.gev-voice-inactivity-chip input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.gev-voice-inactivity-chip span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 5px 6px;
+  border: 1px solid rgba(123, 189, 211, 0.24);
+  border-radius: 7px;
+  background: rgba(13, 28, 39, 0.78);
+  color: rgba(190, 221, 230, 0.78);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.035em;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+.gev-voice-inactivity-chip:hover span {
+  color: var(--text-primary);
+  border-color: rgba(0, 212, 255, 0.48);
+  background: rgba(0, 212, 255, 0.09);
+}
+.gev-voice-inactivity-chip input:checked + span {
+  color: var(--accent);
+  border-color: rgba(0, 212, 255, 0.68);
+  background: rgba(0, 212, 255, 0.14);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.08) inset;
+}
+.gev-voice-inactivity-chip input:focus-visible + span {
+  outline: 2px solid var(--text-primary);
+  outline-offset: -3px;
+}
+.gev-voice-inactivity-custom {
+  display: grid;
+  gap: 0.38rem;
+  padding: 0.62rem 0.7rem 0.5rem;
+  border: 1px solid rgba(123, 189, 211, 0.2);
+  border-radius: 8px;
+  background: rgba(13, 28, 39, 0.58);
+}
+.gev-voice-inactivity-custom[hidden] {
+  display: none;
+}
+.gev-voice-inactivity-custom-heading,
+.gev-voice-inactivity-range-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.gev-voice-inactivity-custom-heading output {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+#gev-voice-inactivity-custom {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+#gev-voice-inactivity-custom:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 3px;
+}
+.gev-voice-inactivity-range-scale {
+  color: var(--text-dim);
+  font-size: 0.55rem;
+  letter-spacing: 0.025em;
+}
+.gev-voice-settings-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.63rem;
+  line-height: 1.45;
+}
+.gev-voice-provider-limit-note {
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--glass-border);
 }
 #gev-voice-control[data-provider] .gev-voice-help-tray {
   bottom: calc(100% + 2.6rem);
@@ -134,26 +367,80 @@
   bottom: calc(100% + 1.25rem);
   left: 50%;
   z-index: 7;
-  width: var(--dock-voice-width);
+  width: min(240px, calc(100vw - 2rem));
   max-width: calc(100vw - 2rem);
-  min-height: 1.65rem;
-  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 8px);
+  transition:
+    opacity 160ms ease,
+    transform 180ms ease;
+}
+#command-dock > .gev-voice-provider-field::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: 1.25rem;
+}
+#command-dock:has(#gev-voice-control:hover) > .gev-voice-provider-field,
+#command-dock:has(#gev-voice-control:focus-within) > .gev-voice-provider-field,
+#command-dock > .gev-voice-provider-field:hover,
+#command-dock > .gev-voice-provider-field:focus-within,
+#command-dock
+  > .gev-voice-provider-field:has(.gev-voice-settings-panel:not([hidden])) {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+/* Error/help trays belong to the active Voice surface and must clear the
+   provider row when they occupy the same bottom-center lane. */
+#command-dock > #gev-voice-control {
+  z-index: 8;
+}
+#command-dock #gev-voice-control[data-status='listening'] .gev-voice-kicker {
+  display: none;
 }
 #command-dock #gev-voice-provider {
   width: 100%;
 }
 #command-dock #gev-voice-control[data-provider] .gev-voice-help-tray {
-  bottom: calc(100% + 3.25rem);
+  bottom: calc(100% + 3.75rem);
 }
 #command-dock.dock-has-pinned-tray
   #gev-voice-control[data-provider]
   .gev-voice-help-tray {
-  bottom: calc(100% + 4.25rem + var(--dock-pinned-stack-height));
+  bottom: calc(100% + 4.75rem + var(--dock-pinned-stack-height));
 }
 
 @media (max-width: 900px) {
   /* Compact wing labels must not paint or intercept clicks over the selector. */
   #command-dock:has(#gev-voice-control[data-provider]) .dock-tray-toggle {
     overflow: hidden;
+  }
+}
+
+@media (max-width: 420px), (max-height: 650px) {
+  .gev-voice-provider-field {
+    width: min(270px, calc(100vw - 1rem));
+    padding: 9px;
+    gap: 6px;
+  }
+  .gev-voice-provider-header {
+    display: none;
+  }
+  .gev-voice-settings-panel {
+    bottom: calc(100% + 0.3rem);
+    max-height: min(68vh, 390px, calc(100vh - 214px));
+  }
+  .gev-voice-settings-panel > [data-panel-body] {
+    max-height: min(50vh, 290px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #command-dock > .gev-voice-provider-field {
+    transition: none;
   }
 }

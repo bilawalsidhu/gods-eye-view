@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Add a shared-surface Voice Settings popup with a browser-local inactivity timeout, five-minute default, validated custom range, pending speech/tool protection, full cleanup on expiry and no share-link serialization. Both voice providers can open and close the popup and select presets, custom minutes, or None by voice; turning voice off from the mic control closes the popup. While listening, the voice control hides the redundant AI AGENT kicker and leaves the live LISTENING state visible.
+
+- Give the Cyber mic control a visible inset keyboard-focus frame and a brighter mic icon so Tab and Shift+Tab navigation remain clear inside its clipped chamfered button.
+
 - Add Gemini Live as a selectable voice provider alongside OpenAI, using the
   same map actions, click-to-talk and Space push-to-talk controls. Add a separate
   Gemini API key created in Google AI Studio in Provider Settings; the server keeps it

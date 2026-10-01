@@ -55,6 +55,7 @@ export class RealtimeInput {
     if (this.shortcutKeyDownHandler) return;
     this.shortcutKeyDownHandler = (event) => {
       if (!shouldHandlePushToTalkKeyDown(event)) return;
+      this.noteVoiceActivity?.({ kind: 'push-to-talk', active: true });
       if (event.repeat) {
         if (this.spaceKeyHeld && !this.pushToTalkHoldPreservesNative)
           event.preventDefault();
@@ -119,6 +120,7 @@ export class RealtimeInput {
     };
     this.shortcutKeyUpHandler = (event) => {
       if (!isPushToTalkKey(event)) return;
+      this.noteVoiceActivity?.({ kind: 'push-to-talk', active: false });
       const wasHoldingSpace = this.spaceKeyHeld;
       const preservedNativeActivation = this.pushToTalkHoldPreservesNative;
       this.spaceKeyHeld = false;
@@ -134,6 +136,7 @@ export class RealtimeInput {
       this.resetPushToTalkGesture();
     };
     this.shortcutBlurHandler = () => {
+      this.noteVoiceActivity?.({ kind: 'push-to-talk', active: false });
       this.spaceKeyHeld = false;
       this.cancelPushToTalkHold();
       this.releasePushToTalkKey();
@@ -368,6 +371,11 @@ export class RealtimeInput {
       keepVisualizerSpeaker,
     );
     this.ui.root.dataset.speaker = nextSpeaker;
+    this.noteVoiceActivity?.({
+      kind: 'speech-playback',
+      active: nextSpeaker !== 'idle',
+      speaker: nextSpeaker,
+    });
     if (shouldPauseRadioForVoice({ speaker: nextSpeaker }))
       this.pauseRadioForVoice();
   }

@@ -1,5 +1,9 @@
 import { createVoiceControl } from './control.js';
 import { createVoiceSession } from './session.js';
+import {
+  bindVoiceInactivitySettings,
+  createVoiceInactivityController,
+} from './inactivity.js';
 
 const DEFAULT_ERROR_HINT =
   'Check microphone permission and network access, then try again.';
@@ -19,6 +23,8 @@ export function createVoiceCommands({
   provider,
   onProviderChange,
   onSessionEvent,
+  storage,
+  voiceSettingsOpen = false,
 }) {
   if (resetExisting) window.__gevVoiceCommands?.stop?.({ removeUi: true });
   const ui = createControl({ reset: true });
@@ -39,6 +45,22 @@ export function createVoiceCommands({
   });
   const adapter = session.adapter;
   const capabilities = adapter.capabilities || {};
+  let settingsUnsubscribe;
+  const inactivity = createVoiceInactivityController({
+    session,
+    onExpire: () => settingsUnsubscribe?.setOpen?.(false),
+  });
+  const inactivityUnsubscribe = session.subscribe((event) =>
+    inactivity.handleEvent(event),
+  );
+  settingsUnsubscribe = bindVoiceInactivitySettings({
+    ui,
+    storage,
+    controller: inactivity,
+    initialOpen: voiceSettingsOpen,
+  });
+  if (ui.providerLimitNote)
+    ui.providerLimitNote.textContent = capabilities.advisoryLimit || '';
   const providerHandler = () => onProviderChange?.(ui.providerSelect.value);
   if (ui.providerField) ui.providerField.hidden = !onProviderChange;
   if (ui.providerSelect && onProviderChange) {
@@ -48,6 +70,7 @@ export function createVoiceCommands({
   }
   if (ui.tierButton) ui.tierButton.hidden = !capabilities.costControls;
   if (ui.costValue) ui.costValue.hidden = !capabilities.costControls;
+  if (ui.costSettings) ui.costSettings.hidden = !capabilities.costControls;
   if (!capabilities.pushToTalk) {
     ui.button.setAttribute('aria-label', 'Toggle voice control');
     if (ui.helpDetail) ui.helpDetail.textContent = 'Activate to toggle voice';
@@ -55,6 +78,13 @@ export function createVoiceCommands({
   // Retain the existing controller's inspection surface for browser tools.
   const controls = adapter.controller || session;
   controls.session = session;
+  controls.ui = ui;
+  controls.setVoiceSettingsOpen = (open) =>
+    settingsUnsubscribe.setOpen?.(open) ?? false;
+  controls.setVoiceInactivityMinutes = (minutes) =>
+    settingsUnsubscribe.setPreference?.(minutes) ?? false;
+  controls.getVoiceInactivityMinutes = () =>
+    settingsUnsubscribe.getPreference?.();
   const updateStatus = session.subscribe((event) => {
     onSessionEvent?.(event);
     if (event.type !== 'state') return;
@@ -81,8 +111,10 @@ export function createVoiceCommands({
   });
   const buttonHandler = () => {
     if (adapter.ignoreButtonClick?.()) return;
-    if (session.isActive()) session.stop();
-    else void session.start({ pushToTalk: false });
+    if (session.isActive()) {
+      settingsUnsubscribe.setOpen?.(false);
+      session.stop();
+    } else void session.start({ pushToTalk: false });
   };
   ui.button.addEventListener('click', buttonHandler);
   session.signal.addEventListener(
@@ -90,6 +122,9 @@ export function createVoiceCommands({
     () => {
       ui.button.removeEventListener('click', buttonHandler);
       ui.providerSelect?.removeEventListener('change', providerHandler);
+      settingsUnsubscribe();
+      inactivityUnsubscribe();
+      inactivity.destroy();
       annotationUnsubscribe?.();
       updateStatus();
       ui.providerField?.remove?.();
@@ -100,6 +135,9 @@ export function createVoiceCommands({
   if (session.disposed) {
     ui.button.removeEventListener('click', buttonHandler);
     ui.providerSelect?.removeEventListener('change', providerHandler);
+    settingsUnsubscribe();
+    inactivityUnsubscribe();
+    inactivity.destroy();
     annotationUnsubscribe?.();
     updateStatus();
     ui.providerField?.remove?.();

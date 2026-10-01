@@ -110,6 +110,13 @@ current owners. This contract does not add entries to named persistence, dock,
 Cockpit or share-state policies. Dispose listeners, observers and timers,
 dismiss open popups/dialogs and restore focus before removing a dynamic panel.
 
+The Voice provider surface is the first dock adopter. Its outer provider owner
+uses `data-panel-surface`; the provider row is its `data-panel-body`; Voice
+Settings is an outward `data-panel-popup` with its own header and scrolling
+body. Voice owns disclosure, focus return, timeout validation, local-only
+persistence, provider replacement and session cleanup. The shared contract
+only supplies the surface, controls, theme compatibility and concealment.
+
 ## Decoration, popups and visibility
 
 The shared surface reserves `::before` for its non-interactive background. The

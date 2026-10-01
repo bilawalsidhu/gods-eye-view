@@ -25,16 +25,17 @@ const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 function realtimeTools() { return GEV_REALTIME_TOOLS; }
 
-test('Realtime schema exposes the authoritative 31-tool inventory', () => {
+test('Realtime schema exposes the authoritative 32-tool inventory', () => {
   const tools = realtimeTools();
-  assert.equal(tools.length, 31);
+  assert.equal(tools.length, 32);
   const names = tools.map((tool) => tool.name);
-  assert.equal(new Set(names).size, 31, 'tool names are unique');
+  assert.equal(new Set(names).size, 32, 'tool names are unique');
   assert.ok(names.includes('set_context_mode'));
   assert.ok(names.includes('control_cockpit'));
   assert.ok(names.includes('select_nearest_aircraft'));
   assert.ok(names.includes('control_radio'));
   assert.ok(names.includes('set_voice_provider'));
+  assert.ok(names.includes('set_voice_inactivity_timeout'));
   assert.ok(names.includes('next_satellite_pass'));
   assert.ok(names.includes('next_iss_pass'));
   // Every tool closes its parameter object: an open schema lets the model
@@ -133,6 +134,21 @@ test('voice can open Provider Settings and switch between OpenAI and Gemini', ()
   assert.match(provider.description, /current response completes/);
 });
 
+test('voice can close the Voice Settings dropdown without stopping voice', () => {
+  const start = voice.indexOf(
+    "'For requests to open, show, reveal, or focus a menu/panel",
+  );
+  const text = voice.slice(start, voice.indexOf('\n', start));
+  assert.match(text, /"close\/hide the Voice Settings dropdown"/i);
+  assert.match(
+    text,
+    /set_panel_open\{panelId:"voice-settings",open:false\}/,
+  );
+  assert.match(text, /must not stop voice or change the inactivity preference/);
+  const panel = realtimeTools().find((tool) => tool.name === 'set_panel_open');
+  assert.match(panel.description, /Closing voice-settings leaves the active voice session/);
+});
+
 test('nearest-aircraft selection stays out of Contacts and Cockpit', () => {
   const start = voice.indexOf("'For a request to enable an aircraft layer and SELECT or FIND");
   assert.ok(start >= 0, 'nearest-aircraft selection routing instruction is missing');
@@ -200,7 +216,7 @@ test('the edited existing tools changed exactly as intended', () => {
   const panel = byName.get('set_panel_open');
   assert.deepEqual(
     panel.parameters.properties.panelId.enum,
-    ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'pp-toggles', 'global-context-panel', 'provider-settings'],
+    ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'pp-toggles', 'global-context-panel', 'provider-settings', 'voice-settings'],
   );
   assert.deepEqual(panel.parameters.required, ['panelId', 'open']);
 
@@ -231,6 +247,7 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'control_cockpit',
     'set_panel_open',
     'set_voice_provider',
+    'set_voice_inactivity_timeout',
     'get_current_view_state',
     'fly_to_location',
     'select_nearest_aircraft',

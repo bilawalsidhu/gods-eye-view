@@ -124,6 +124,8 @@ export class GeminiSessionController {
       readStatus: () => this.status,
       operations: {
         isActive: () => this.isActive(),
+        noteVoiceActivity: (activity) =>
+          this.emit({ type: 'activity', ...activity }),
         start: (settings) => this.start(settings),
         setStatus: (...args) => this.setStatus(...args),
         pauseRadioForVoice: () => this.radio.pauseRadioForVoice(),
@@ -886,7 +888,12 @@ export function createGeminiSession(options) {
   const controller = new GeminiSessionController(options);
   return {
     controller,
-    capabilities: { costControls: false, pushToTalk: true },
+    capabilities: {
+      costControls: false,
+      pushToTalk: true,
+      advisoryLimit:
+        'Gemini Live connections are limited to roughly 10 minutes. goAway.timeLeft is the authoritative warning before termination.',
+    },
     start: (settings) => controller.start(settings),
     stop: (settings) => controller.stop(settings),
     sendText: (text) => controller.sendTextCommand(text),

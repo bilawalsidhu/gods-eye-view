@@ -87,6 +87,8 @@ const PANEL_ALIASES = new Map([
   ['provider settings', 'provider-settings'],
   ['api keys', 'provider-settings'],
   ['keys', 'provider-settings'],
+  ['voice settings', 'voice-settings'],
+  ['voice preferences', 'voice-settings'],
 ]);
 
 const PANEL_IDS = new Set([
@@ -99,6 +101,7 @@ const PANEL_IDS = new Set([
   'scene-panel',
   'pp-toggles',
   'provider-settings',
+  'voice-settings',
 ]);
 const CONTEXT_MODE_ALIASES = new Map([
   ['off', 'off'],
@@ -725,6 +728,28 @@ export function createGevActionRunner({
         operation();
         return { ok: true, action: 'set_panel_open', panelId, open };
       }
+      if (panelId === 'voice-settings') {
+        const voice = readVoiceCommands?.();
+        if (!voice || typeof voice.setVoiceSettingsOpen !== 'function') {
+          return {
+            ok: false,
+            action: 'set_panel_open',
+            panelId,
+            open,
+            error: 'Voice Settings are unavailable',
+          };
+        }
+        const changed = voice.setVoiceSettingsOpen(open);
+        return {
+          ok: changed !== false,
+          action: 'set_panel_open',
+          panelId,
+          open,
+          ...(changed === false
+            ? { error: 'Voice Settings are unavailable' }
+            : {}),
+        };
+      }
       setPanelOpen(styleManager, panelId, open);
       return { ok: true, action: 'set_panel_open', panelId, open };
     }
@@ -755,6 +780,31 @@ export function createGevActionRunner({
         changed: Boolean(result?.changed),
         pending: Boolean(result?.pending),
         ...(result?.error ? { error: result.error } : {}),
+      };
+    }
+
+    if (name === 'set_voice_inactivity_timeout') {
+      const minutes = Number(args.minutes);
+      if (!Number.isInteger(minutes) || minutes < 0 || minutes > 60)
+        throw new Error('Voice inactivity timeout must be 0 to 60 minutes');
+      const voice = readVoiceCommands?.();
+      if (!voice || typeof voice.setVoiceInactivityMinutes !== 'function') {
+        return {
+          ok: false,
+          action: 'set_voice_inactivity_timeout',
+          minutes: minutes || null,
+          error: 'Voice inactivity timeout is unavailable',
+        };
+      }
+      const preference = minutes === 0 ? null : minutes;
+      const changed = voice.setVoiceInactivityMinutes(preference);
+      return {
+        ok: changed !== false,
+        action: 'set_voice_inactivity_timeout',
+        minutes: preference,
+        ...(changed === false
+          ? { error: 'Voice inactivity timeout is unavailable' }
+          : {}),
       };
     }
 
