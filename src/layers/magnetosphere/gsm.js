@@ -100,17 +100,29 @@ export function fromGsm(basis, v) {
 /**
  * An Earth-fixed external-field function for the tracer.
  *
- * Closes over the frame and the disturbance band so the per-step cost is one
+ * Closes over the frame and the model parameters so the per-step cost is one
  * rotation in, one model evaluation and one rotation out. Positions arrive in
- * kilometres because that is the tracer's unit; T89 wants Earth radii.
+ * kilometres because that is the tracer's unit; both models want Earth radii.
  *
- * Returns null beyond the model's stated validity (70 Re) rather than
- * extrapolating an empirical fit into a region it was never fitted for.
+ * `parameters` is whatever the chosen model takes as its first argument - a
+ * disturbance band for T89, an object of solar wind inputs for T96 - and is
+ * passed through untouched. Returns null beyond the model's stated validity
+ * (70 Re) rather than extrapolating an empirical fit into a region it was never
+ * fitted for.
+ *
+ * @param {object} options Model and frame.
+ * @param {object} options.coefficients IGRF coefficients, for the dipole axis.
+ * @param {object} options.sunDirection Earth-fixed unit vector toward the Sun.
+ * @param {*} options.parameters First argument for `evaluate`.
+ * @param {Function} options.evaluate t89 or t96.
+ * @param {number} options.earthRadiusKm Earth radius in km.
+ * @param {number} [options.maxRadiusRe] Outer limit of model validity, in Re.
+ * @returns {?(position: object) => ?object} Earth-fixed nT, or null.
  */
 export function externalFieldFor({
   coefficients,
   sunDirection,
-  band,
+  parameters,
   evaluate,
   earthRadiusKm,
   maxRadiusRe = 70,
@@ -124,7 +136,7 @@ export function externalFieldFor({
     if (!(radiusRe > 0) || radiusRe > maxRadiusRe) return null;
     const gsm = toGsm(basis, position);
     const b = evaluate(
-      band,
+      parameters,
       tilt,
       gsm.x / earthRadiusKm,
       gsm.y / earthRadiusKm,
