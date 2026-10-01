@@ -11,7 +11,7 @@ export const DEFAULT_AUSTIN_MAX_SOURCES = 250;
  * cap.js) so no region is silently dropped. Sized above the sum of the
  * default per-pack caps so a default install never trims.
  */
-export const DEFAULT_CCTV_MAX_SOURCES = 4000;
+export const DEFAULT_CCTV_MAX_SOURCES = 5000;
 /** Hard upper bound for CCTV_MAX_SOURCES; also sizes the health map. */
 export const CCTV_MAX_SOURCES_CEILING = 5000;
 /** Reference point for Austin camera prioritization (Congress & 6th). */
@@ -142,6 +142,23 @@ export const NY511_ANCHORS = [
   { lat: 43.1566, lon: -77.6088 },
   { lat: 42.8864, lon: -78.8784 },
 ];
+/** Approval-gated CARS-style API camera providers. */
+export const ALASKA_511_CAMERAS_URL =
+  'https://511.alaska.gov/api/v2/get/cameras';
+export const DEFAULT_ALASKA_511_MAX_SOURCES = 800;
+export const ALASKA_511_ANCHORS = [
+  { lat: 61.2181, lon: -149.9003 },
+  { lat: 64.8378, lon: -147.7164 },
+  { lat: 58.3019, lon: -134.4197 },
+];
+export const ARIZONA_511_CAMERAS_URL = 'https://az511.com/api/v2/get/cameras';
+export const DEFAULT_ARIZONA_511_MAX_SOURCES = 1000;
+export const ARIZONA_511_ANCHORS = [
+  { lat: 33.4484, lon: -112.074 },
+  { lat: 32.2226, lon: -110.9747 },
+  { lat: 35.1983, lon: -111.6513 },
+  { lat: 34.54, lon: -112.4685 },
+];
 /** Iowa DOT's public ArcGIS camera layer, licensed CC BY 4.0. */
 export const IOWA_DOT_CAMERAS_QUERY_URL =
   'https://services.arcgis.com/8lRhdTsQyJpO52F1/arcgis/rest/services/Traffic_Cameras_View/FeatureServer/0/query';
@@ -260,11 +277,39 @@ export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
 /** DelDOT CCTV: one keyless statewide JSON catalog; live video via RTMP-over-HTTP (rtmpt:80). */
 export const DELDOT_CCTV_URL = 'https://tmc.deldot.gov/json/videocamera.json';
-export const DEFAULT_DELDOT_MAX_SOURCES = 300;
+export const DEFAULT_DELDOT_MAX_SOURCES = 400;
 export const DELDOT_ANCHORS = [
   { lat: 39.7459, lon: -75.5466 }, // Wilmington (New Castle)
   { lat: 39.1582, lon: -75.5244 }, // Dover (Kent)
   { lat: 38.6906, lon: -75.3877 }, // Georgetown (Sussex)
+];
+/** State DOT camera APIs added in the Phase 4 bespoke-adapter pass. */
+export const OHGO_CAMERAS_URL = 'https://publicapi.ohgo.com/api/v1/cameras';
+export const DEFAULT_OHGO_MAX_SOURCES = 700;
+export const OHGO_ANCHORS = [
+  { lat: 39.9612, lon: -82.9988 }, // Columbus
+  { lat: 41.4993, lon: -81.6944 }, // Cleveland
+  { lat: 39.1031, lon: -84.512 }, // Cincinnati
+  { lat: 41.0814, lon: -81.519 }, // Akron
+];
+export const OREGON_TRIPCHECK_CCTV_URL =
+  'https://api.odot.state.or.us/tripcheck/Cctv/Inventory';
+export const DEFAULT_OREGON_TRIPCHECK_MAX_SOURCES = 500;
+export const OREGON_TRIPCHECK_CACHE_MS = 24 * 60 * 60 * 1000;
+export const OREGON_TRIPCHECK_ANCHORS = [
+  { lat: 45.5152, lon: -122.6784 }, // Portland
+  { lat: 44.0521, lon: -123.0868 }, // Eugene
+  { lat: 44.9429, lon: -123.0351 }, // Salem
+  { lat: 42.3265, lon: -122.8756 }, // Medford
+];
+export const WSDOT_CAMERAS_URL =
+  'https://wsdot.wa.gov/Traffic/api/HighwayCameras/HighwayCamerasREST.svc/GetCamerasAsJson';
+export const DEFAULT_WSDOT_MAX_SOURCES = 700;
+export const WASHINGTON_ANCHORS = [
+  { lat: 47.6062, lon: -122.3321 }, // Seattle
+  { lat: 47.2529, lon: -122.4443 }, // Tacoma
+  { lat: 47.6588, lon: -117.426 }, // Spokane
+  { lat: 46.2396, lon: -119.1006 }, // Tri-Cities
 ];
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;

@@ -116,6 +116,42 @@ export const DATA_CREDITS = [
       'country reference points from public-domain Natural Earth data; markers are not outage locations',
   },
   {
+    key: 'gdelt-conflict',
+    html:
+      'Geo-Political CAMEO conflict events: ' +
+      '<a href="https://www.gdeltproject.org/" target="_blank" rel="noopener">The GDELT Project</a> · automated event extraction and geolocation; check linked report context',
+  },
+  {
+    key: 'acled',
+    html:
+      'Geo-Political conflict event data: ' +
+      '<a href="https://acleddata.com/" target="_blank" rel="noopener">ACLED</a> · event classifications and coordinates can be revised; see source details',
+  },
+  {
+    key: 'ucdp',
+    html:
+      'Geo-Political armed-conflict history: ' +
+      '<a href="https://ucdp.uu.se/" target="_blank" rel="noopener">Uppsala Conflict Data Program (UCDP)</a> · versioned Georeferenced Event Dataset',
+  },
+  {
+    key: 'ucdp-candidate',
+    html:
+      'Geo-Political preliminary armed-conflict events: ' +
+      '<a href="https://ucdp.uu.se/" target="_blank" rel="noopener">Uppsala Conflict Data Program (UCDP)</a> · monthly candidate records may be revised or excluded from the final GED',
+  },
+  {
+    key: 'hapi-conflict',
+    html:
+      'Geo-Political monthly country-level conflict aggregates: ' +
+      '<a href="https://data.humdata.org/dataset/acled-conflict-events-data-series" target="_blank" rel="noopener">HDX HAPI / ACLED</a> · categories overlap; country markers use <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth public-domain reference points</a>, not incident locations',
+  },
+  {
+    key: 'reliefweb',
+    html:
+      'Geo-Political humanitarian reports: ' +
+      '<a href="https://reliefweb.int/" target="_blank" rel="noopener">ReliefWeb / OCHA</a> · report content remains attributed to original publishers',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +
@@ -228,6 +264,34 @@ export const DATA_CREDITS = [
       'CCTV cameras &amp; frames (Ontario): ' +
       '<a href="https://511on.ca/" target="_blank" rel="noopener">Ontario 511</a> ' +
       '(<a href="https://www.ontario.ca/page/open-government-licence-ontario" target="_blank" rel="noopener">Open Government Licence - Ontario</a>)',
+  },
+  {
+    key: 'iowa-dot-cctv',
+    html: 'CCTV cameras &amp; frames (Iowa): <a href="https://iowadot.gov/travel-tools/iowa-511/511-data-feeds" target="_blank" rel="noopener">Iowa DOT</a> camera dataset, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>',
+  },
+  {
+    key: 'ny511-cctv',
+    html: 'CCTV cameras &amp; frames (New York): <a href="https://511ny.org/" target="_blank" rel="noopener">Powered by 511NY</a>',
+  },
+  {
+    key: 'alaska-511-cctv',
+    html: 'CCTV cameras &amp; frames (Alaska): <a href="https://511.alaska.gov/" target="_blank" rel="noopener">Alaska 511 / Alaska DOT&amp;PF</a>',
+  },
+  {
+    key: 'arizona-511-cctv',
+    html: 'CCTV cameras &amp; frames (Arizona): <a href="https://az511.gov/" target="_blank" rel="noopener">Arizona DOT / AZ 511</a>',
+  },
+  {
+    key: 'ohgo-cctv',
+    html: 'CCTV cameras &amp; frames (Ohio): <a href="https://publicapi.ohgo.com/" target="_blank" rel="noopener">OHGO / Ohio Department of Transportation</a> (public-domain transportation data)',
+  },
+  {
+    key: 'oregon-tripcheck-cctv',
+    html: 'CCTV cameras &amp; frames (Oregon): <a href="https://www.tripcheck.com/" target="_blank" rel="noopener">Camera courtesy of ODOT / TripCheck</a>',
+  },
+  {
+    key: 'wsdot-cctv',
+    html: 'CCTV cameras &amp; frames (Washington): <a href="https://wsdot.wa.gov/traffic/api/" target="_blank" rel="noopener">Washington State Department of Transportation</a> · WSDOT-owned cameras only',
   },
   {
     key: 'fintraffic-cctv',

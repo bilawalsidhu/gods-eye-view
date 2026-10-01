@@ -168,6 +168,93 @@ export const KEY_SETUP_KEYS = Object.freeze([
     envVars: Object.freeze(['CCTV_DRIVENC_API_KEY']),
     tier: 'free',
   }),
+  Object.freeze({
+    id: '511ny',
+    title: '511 NEW YORK',
+    unlocks: 'New York State DOT traffic cameras',
+    getUrl: 'https://www.511ny.org/developers/resources',
+    envVars: Object.freeze(['CCTV_511NY_API_KEY']),
+    tier: 'free',
+    testId: '511ny',
+  }),
+  Object.freeze({
+    id: '511-alaska',
+    title: 'ALASKA 511',
+    unlocks: 'Alaska DOT&PF traffic cameras',
+    getUrl: 'https://511.alaska.gov/developers/doc',
+    envVars: Object.freeze(['CCTV_511_ALASKA_API_KEY']),
+    tier: 'free',
+    testId: '511-alaska',
+  }),
+  Object.freeze({
+    id: '511-arizona',
+    title: 'ARIZONA 511',
+    unlocks: 'Arizona DOT traffic cameras',
+    getUrl: 'https://az511.gov/developers/doc',
+    envVars: Object.freeze(['CCTV_511_ARIZONA_API_KEY']),
+    tier: 'free',
+    testId: '511-arizona',
+  }),
+  Object.freeze({
+    id: 'ohgo',
+    title: 'OHGO / OHIO DOT CAMERAS',
+    unlocks: 'Ohio DOT statewide traffic-camera snapshots',
+    getUrl: 'https://publicapi.ohgo.com/docs/v1/cameras',
+    envVars: Object.freeze(['CCTV_OHGO_API_KEY']),
+    tier: 'free',
+    testId: 'ohgo',
+  }),
+  Object.freeze({
+    id: 'tripcheck-oregon',
+    title: 'OREGON TRIPCHECK',
+    unlocks: 'Oregon DOT statewide traffic-camera snapshots',
+    getUrl: 'https://www.tripcheck.com/Pages/API',
+    envVars: Object.freeze(['CCTV_TRIPCHECK_API_KEY']),
+    tier: 'free',
+    testId: 'tripcheck-oregon',
+  }),
+  Object.freeze({
+    id: 'wsdot',
+    title: 'WASHINGTON WSDOT',
+    unlocks: 'WSDOT-owned statewide traffic-camera snapshots',
+    getUrl: 'https://wsdot.wa.gov/traffic/api/',
+    envVars: Object.freeze(['CCTV_WSDOT_ACCESS_CODE']),
+    tier: 'free',
+    testId: 'wsdot',
+  }),
+  Object.freeze({
+    id: 'ucdp',
+    title: 'UCDP API',
+    unlocks: 'Versioned georeferenced armed-conflict records in Geo-Political',
+    getUrl: 'https://ucdp.uu.se/apidocs/',
+    envVars: Object.freeze(['UCDP_API_TOKEN']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'hdx-hapi',
+    title: 'HDX HAPI — APPLICATION IDENTITY',
+    unlocks: 'ACLED-derived monthly country aggregates in Geo-Political',
+    getUrl: 'https://hdx-hapi.readthedocs.io/en/latest/getting-started/',
+    envVars: Object.freeze(['HAPI_APP_NAME', 'HAPI_CONTACT_EMAIL']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'acled',
+    title: 'ACLED',
+    unlocks:
+      'Recent coded conflict and political-violence events in Geo-Political',
+    getUrl: 'https://acleddata.com/user/register',
+    envVars: Object.freeze(['ACLED_USERNAME', 'ACLED_PASSWORD']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'reliefweb',
+    title: 'RELIEFWEB APP NAME',
+    unlocks: 'Humanitarian reports in Geo-Political after app-name approval',
+    getUrl: 'https://apidoc.reliefweb.int/',
+    envVars: Object.freeze(['RELIEFWEB_APPNAME']),
+    tier: 'free',
+  }),
 ]);
 
 /** Hostnames a Provider Settings request may arrive under or originate from. */
@@ -451,9 +538,9 @@ export function keySetupStatus(env = {}) {
 
 /**
  * Validate a POST body into a clean {ENV_VAR: value} map, or say exactly why
- * not. Values must be single-line printable ASCII with no spaces — every real
- * provider credential is — which is also what makes the raw `KEY=value` line
- * below safe to write without quoting rules. A `null` value means REMOVE:
+ * not. Provider credentials must be single-line printable ASCII without
+ * spaces. HAPI's application name is the one identity field allowed to contain
+ * safe spaces; the writer still emits a plain dotenv value. A `null` value means REMOVE:
  * the writer comments the assignment back out, returning the file to its
  * template state for that key.
  * @param {unknown} body Parsed JSON from the request.
@@ -491,10 +578,30 @@ export function validateKeySetupUpdates(body) {
         error: `${name} is longer than any real key (${KEY_SETUP_VALUE_LIMIT} max)`,
       };
     }
-    if (!/^[\x21-\x7e]+$/.test(value)) {
+    const allowSpaces = name === 'HAPI_APP_NAME';
+    if (!(allowSpaces ? /^[\x20-\x7e]+$/ : /^[\x21-\x7e]+$/).test(value)) {
       return {
         ok: false,
-        error: `${name} may only contain printable characters with no spaces`,
+        error: `${name} may only contain printable characters${allowSpaces ? '' : ' with no spaces'}`,
+      };
+    }
+    if (
+      name === 'HAPI_APP_NAME' &&
+      (value.length > 100 || !/^[A-Za-z0-9][A-Za-z0-9 ._'\-]*$/.test(value))
+    ) {
+      return {
+        ok: false,
+        error:
+          'HAPI_APP_NAME must be a short application name using letters, numbers, spaces, dots, underscores, or hyphens',
+      };
+    }
+    if (
+      name === 'HAPI_CONTACT_EMAIL' &&
+      (value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+    ) {
+      return {
+        ok: false,
+        error: 'HAPI_CONTACT_EMAIL must be a valid email address',
       };
     }
     // Reject the dotenv metacharacters that would round-trip WRONG when written
@@ -502,7 +609,9 @@ export function validateKeySetupUpdates(body) {
     // backtick are escapes) — so a saved value can never differ from what Node's
     // parseEnv and Vite's expansion read back. Real provider keys never contain
     // these; they are base64url / hex / JWT alphabets.
-    if (/[#"'$\\`]/.test(value)) {
+    const forbiddenDotenvCharacters =
+      name === 'HAPI_APP_NAME' ? /[#"$\\`]/ : /[#"'$\\`]/;
+    if (forbiddenDotenvCharacters.test(value)) {
       return {
         ok: false,
         error: `${name} contains a character that is not valid in a key (#, quotes, $, \\, or backtick)`,

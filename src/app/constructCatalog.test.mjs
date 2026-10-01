@@ -39,7 +39,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 30);
+  assert.equal(first.layers.length, 31);
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
   assert.deepEqual(
     first.metadata.find(({ id }) => id === 'local-adsb'),
@@ -47,6 +47,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     'the hardware-local layer is never serialized into links',
   );
   assert.ok(first.get('cyber'));
+  assert.ok(first.get('geopolitical'));
   assert.deepEqual(first.get('cyber').getParams(), {
     radarEnabled: true,
     dshieldEnabled: true,

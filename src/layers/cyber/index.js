@@ -5,6 +5,7 @@ const RADAR_SOURCE = 'cloudflare-radar';
 const DSHIELD_SOURCE = 'dshield';
 const KEV_SOURCE = 'cisa-kev';
 const IODA_SOURCE = 'ioda';
+const SHODAN_MARKER_DEPTH_BYPASS_METERS = 2_500;
 
 function escapeText(value) {
   return String(value ?? '').replace(
@@ -43,7 +44,7 @@ function radarFlowColor(cesium, fraction) {
   return fraction < 1 ? start : end;
 }
 
-function shodanDisplayLayout(matches, viewer) {
+function groupShodanByCoordinate(matches) {
   const groups = new Map();
   for (const match of matches) {
     if (!Number.isFinite(match.latitude) || !Number.isFinite(match.longitude))
@@ -53,56 +54,7 @@ function shodanDisplayLayout(matches, viewer) {
     group.push(match);
     groups.set(key, group);
   }
-  const canvas = viewer?.scene?.canvas;
-  const canvasHeight = canvas?.clientHeight || canvas?.height || 800;
-  const cameraHeight = viewer?.camera?.positionCartographic?.height;
-  const fovy = viewer?.camera?.frustum?.fovy;
-  const metersPerPixel =
-    Number.isFinite(cameraHeight) &&
-    cameraHeight > 0 &&
-    Number.isFinite(fovy) &&
-    fovy > 0 &&
-    canvasHeight > 0
-      ? (2 * cameraHeight * Math.tan(fovy / 2)) / canvasHeight
-      : 1;
-  const layout = new Map();
-  for (const group of groups.values()) {
-    group.sort((left, right) => left.ip.localeCompare(right.ip));
-    if (group.length === 1) {
-      layout.set(group[0].ip, {
-        latitude: group[0].latitude,
-        longitude: group[0].longitude,
-        visualOffsetMeters: 0,
-      });
-      continue;
-    }
-    const radiusMeters = Math.max(
-      10,
-      Math.min(
-        250,
-        (metersPerPixel * 18) / (2 * Math.sin(Math.PI / group.length)),
-      ),
-    );
-    const anchorLatitude = group[0].latitude;
-    const anchorLongitude = group[0].longitude;
-    const longitudeScale = Math.max(
-      0.05,
-      Math.cos((anchorLatitude * Math.PI) / 180),
-    );
-    group.forEach((match, index) => {
-      const angle = (2 * Math.PI * index) / group.length - Math.PI / 2;
-      const northMeters = Math.cos(angle) * radiusMeters;
-      const eastMeters = Math.sin(angle) * radiusMeters;
-      layout.set(match.ip, {
-        latitude: anchorLatitude + northMeters / 111_320,
-        longitude: anchorLongitude + eastMeters / (111_320 * longitudeScale),
-        visualOffsetMeters: radiusMeters,
-        anchorLatitude,
-        anchorLongitude,
-      });
-    });
-  }
-  return layout;
+  return groups;
 }
 
 function arcPositions(origin, target, cesium) {
@@ -164,7 +116,7 @@ export function createCyberLayer({
   let selectedRadar = null;
   let selectedIoda = null;
   let selectedShodan = null;
-  const shodanVisualOffsets = new Map();
+  let shodanGroups = new Map();
   const enrichmentResults = new Map();
   const enrichmentPending = new Set();
   const otxResults = new Map();
@@ -410,30 +362,73 @@ export function createCyberLayer({
     const shodanEntities = shodanDataSource?.entities;
     const currentShodan = new Set();
     const shodanMatches = shodanAreaSearch?.matches || [];
-    const displayLayout = shodanDisplayLayout(shodanMatches, viewer);
-    shodanVisualOffsets.clear();
-    for (const match of shodanMatches) {
-      if (!Number.isFinite(match.latitude) || !Number.isFinite(match.longitude))
+    shodanGroups = new Map();
+    const coordinateGroups = groupShodanByCoordinate(shodanMatches);
+    for (const [coordinate, group] of coordinateGroups) {
+      group.sort((left, right) => left.ip.localeCompare(right.ip));
+      if (group.length > 1) {
+        const id = `cyber-shodan-group:${encodeURIComponent(coordinate)}`;
+        currentShodan.add(id);
+        shodanGroups.set(id, group);
+        let entity = shodanEntities?.getById(id);
+        if (!entity) entity = shodanEntities?.add({ id });
+        if (!entity) continue;
+        entity.name = `Shodan devices · ${group.length} at shared location`;
+        entity.position = cesium.Cartesian3.fromDegrees(
+          group[0].longitude,
+          group[0].latitude,
+        );
+        entity.point = undefined;
+        entity.billboard = {
+          image: createCyberMarkerImage('shodan', '#ff42c8'),
+          width: 28,
+          height: 28,
+          heightReference: cesium.HeightReference.CLAMP_TO_GROUND,
+          // Avoid close-range terrain z-fighting while leaving distant globe
+          // occlusion intact (the far side is far beyond this threshold).
+          disableDepthTestDistance: SHODAN_MARKER_DEPTH_BYPASS_METERS,
+        };
+        entity.label = {
+          text: String(group.length),
+          font: 'bold 12px sans-serif',
+          fillColor: cesium.Color.WHITE,
+          outlineColor: cesium.Color.BLACK,
+          outlineWidth: 3,
+          pixelOffset: cesium.Cartesian2
+            ? new cesium.Cartesian2(0, -22)
+            : { x: 0, y: -22 },
+          style: cesium.LabelStyle?.FILL_AND_OUTLINE,
+          verticalOrigin: cesium.VerticalOrigin?.CENTER,
+          disableDepthTestDistance: SHODAN_MARKER_DEPTH_BYPASS_METERS,
+        };
+        entity.properties = {
+          provider: 'Shodan',
+          groupCount: group.length,
+          geographicPrecision: group[0].geographicPrecision,
+          geographicProvenance: group[0].geographicProvenance,
+          attribution: 'Shodan',
+        };
         continue;
+      }
+      const match = group[0];
       const id = `cyber-shodan:${match.ip}`;
       currentShodan.add(id);
-      const display = displayLayout.get(match.ip);
-      shodanVisualOffsets.set(match.ip, display?.visualOffsetMeters || 0);
       let entity = shodanEntities?.getById(id);
       if (!entity) entity = shodanEntities?.add({ id });
       if (!entity) continue;
       entity.name = `Shodan asset · ${match.ip}`;
       entity.position = cesium.Cartesian3.fromDegrees(
-        display?.longitude ?? match.longitude,
-        display?.latitude ?? match.latitude,
+        match.longitude,
+        match.latitude,
       );
       entity.point = undefined;
+      entity.label = undefined;
       entity.billboard = {
         image: createCyberMarkerImage('shodan', '#ffd34e'),
-        width: 27,
-        height: 27,
+        width: 20,
+        height: 20,
         heightReference: cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: 0,
+        disableDepthTestDistance: SHODAN_MARKER_DEPTH_BYPASS_METERS,
       };
       entity.properties = {
         provider: 'Shodan',
@@ -441,40 +436,16 @@ export function createCyberLayer({
         geographicPrecision: match.geographicPrecision,
         geographicMethod: match.geographicMethod,
         geographicProvenance: match.geographicProvenance,
-        visualOffsetMeters: display?.visualOffsetMeters || 0,
         attribution: match.attribution,
         kevMatches: (match.services || [])
           .flatMap((service) => service.vulnerabilities || [])
           .filter((cve) => kevByCve.has(cve.toUpperCase())).length,
       };
-      if (display?.visualOffsetMeters && display.anchorLatitude != null) {
-        const linkId = `cyber-shodan-link:${match.ip}`;
-        currentShodan.add(linkId);
-        let link = shodanEntities.getById(linkId);
-        if (!link) link = shodanEntities.add({ id: linkId });
-        if (link)
-          link.polyline = {
-            positions: [
-              cesium.Cartesian3.fromDegrees(
-                display.anchorLongitude,
-                display.anchorLatitude,
-              ),
-              cesium.Cartesian3.fromDegrees(
-                display.longitude,
-                display.latitude,
-              ),
-            ],
-            width: 1.5,
-            material: cesium.Color.GOLD.withAlpha(0.65),
-            // GroundPolylineGeometry accepts only GEODESIC or RHUMB arcs.
-            arcType: cesium.ArcType.GEODESIC,
-            clampToGround: true,
-          };
-      }
     }
     for (const entity of [...(shodanEntities?.values || [])])
       if (
         (String(entity.id).startsWith('cyber-shodan:') ||
+          String(entity.id).startsWith('cyber-shodan-group:') ||
           String(entity.id).startsWith('cyber-shodan-link:')) &&
         !currentShodan.has(entity.id)
       )
@@ -649,6 +620,39 @@ export function createCyberLayer({
     };
   }
 
+  function findShodanGroupSelection(entityId) {
+    if (!entityId?.startsWith?.('cyber-shodan-group:')) return null;
+    const devices = shodanGroups.get(entityId);
+    if (!devices?.length) return null;
+    const devicesWithKevMatches = devices.map((device) => {
+      const reportedCves = new Set(
+        (device.services || [])
+          .flatMap((service) => service.vulnerabilities || [])
+          .filter((cve) => /^CVE-\d{4}-\d{4,}$/i.test(cve)),
+      );
+      return {
+        ...device,
+        reportedCves: [...reportedCves],
+        kevCatalogAvailable: Boolean(kev),
+        kevMatches: [...reportedCves]
+          .map((cve) => kevByCve.get(cve.toUpperCase()))
+          .filter(Boolean),
+      };
+    });
+    return {
+      type: 'shodan-group',
+      devices: devicesWithKevMatches,
+      latitude: devicesWithKevMatches[0].latitude,
+      longitude: devicesWithKevMatches[0].longitude,
+      city: devicesWithKevMatches[0].city,
+      region: devicesWithKevMatches[0].region,
+      country: devicesWithKevMatches[0].country,
+      geographicProvenance: devicesWithKevMatches[0].geographicProvenance,
+      attribution: 'Shodan InternetDB / host intelligence',
+      fetchedAt: devicesWithKevMatches[0].fetchedAt,
+    };
+  }
+
   function findIodaSelection(entityId) {
     if (!iodaEnabled || !entityId?.startsWith?.('cyber-ioda:')) return null;
     const countryCode = entityId.slice('cyber-ioda:'.length);
@@ -812,19 +816,40 @@ export function createCyberLayer({
     if (enabled && generation === enrichmentGeneration) notifyThreatIntel();
   }
 
-  async function runShodanAreaSearch(query = '') {
+  async function runShodanAreaSearch(query = '', page = 1) {
     if (!enabled || typeof source.searchShodanArea !== 'function') return;
-    const area = viewportArea();
-    if (!area || area.radiusKm < 1 || area.radiusKm > 1000) {
-      shodanAreaSearch = {
-        error:
-          'Zoom in to an area with a radius of 1,000 km or less to search Shodan.',
+    let area;
+    let priorMatches = [];
+    if (page > 1) {
+      const prior = shodanAreaSearch;
+      if (
+        !prior ||
+        prior.loading ||
+        prior.error ||
+        page > (prior.pageLimit || 1) ||
+        page <= (prior.page || 1)
+      )
+        return;
+      area = {
+        latitude: prior.latitude,
+        longitude: prior.longitude,
+        radiusKm: prior.radiusKm,
       };
-      selectedShodan = null;
-      selectedRadar = null;
-      renderRadar();
-      notifyThreatIntel();
-      return;
+      query = prior.userQuery || '';
+      priorMatches = prior.matches || [];
+    } else {
+      area = viewportArea();
+      if (!area || area.radiusKm < 1 || area.radiusKm > 1000) {
+        shodanAreaSearch = {
+          error:
+            'Zoom in to an area with a radius of 1,000 km or less to search Shodan.',
+        };
+        selectedShodan = null;
+        selectedRadar = null;
+        renderRadar();
+        notifyThreatIntel();
+        return;
+      }
     }
     const generation = enrichmentGeneration;
     const controller = new AbortController();
@@ -832,20 +857,43 @@ export function createCyberLayer({
     enrichmentMessage = '';
     selectedShodan = null;
     selectedRadar = null;
-    shodanAreaSearch = { ...area, userQuery: query, loading: true };
+    shodanAreaSearch = {
+      ...(page > 1 ? shodanAreaSearch : {}),
+      ...area,
+      userQuery: query,
+      loading: true,
+      error: null,
+    };
     renderRadar();
     notifyThreatIntel();
     try {
       const result = await source.searchShodanArea(area, {
         signal: controller.signal,
         query,
+        page,
       });
       if (enabled && generation === enrichmentGeneration)
-        shodanAreaSearch = { ...result, ...area };
+        shodanAreaSearch = {
+          ...result,
+          ...area,
+          userQuery: query,
+          loading: false,
+          matches: [
+            ...new Map(
+              [...priorMatches, ...(result.matches || [])].map((match) => [
+                match.ip,
+                match,
+              ]),
+            ).values(),
+          ],
+        };
     } catch (error) {
       if (enabled && generation === enrichmentGeneration)
         shodanAreaSearch = {
+          ...shodanAreaSearch,
           ...area,
+          matches: priorMatches,
+          loading: false,
           error: error?.message || 'Shodan area search failed.',
         };
     } finally {
@@ -942,11 +990,11 @@ export function createCyberLayer({
         }
         const rawId = picked?.id;
         const entityId = typeof rawId === 'string' ? rawId : rawId?.id || null;
-        selectedShodan = findShodanSelection(entityId);
+        selectedShodan =
+          findShodanGroupSelection(entityId) || findShodanSelection(entityId);
         if (selectedShodan)
           selectedShodan = {
             ...selectedShodan,
-            visualOffsetMeters: shodanVisualOffsets.get(selectedShodan.ip) || 0,
             popupPosition: getPopupPosition(event.position),
           };
         selectedRadar = selectedShodan ? null : findRadarSelection(entityId);

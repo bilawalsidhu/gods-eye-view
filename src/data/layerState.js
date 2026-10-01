@@ -325,6 +325,7 @@ const OPTION_GROUPS = Object.freeze({
     booleanOption('dshieldEnabled', 'd', true),
     booleanOption('iodaEnabled', 'i', true),
   ]),
+  geopolitical: Object.freeze([]),
   wind: Object.freeze([
     enumOption('model', 'm', 'gfs', ['gfs', 'ifs'], { gfs: 'g', ifs: 'i' }),
     enumOption(
@@ -501,6 +502,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'f',
     disposition: 'enabled+options',
     optionOwner: 'flights',
+  }),
+  Object.freeze({
+    id: 'geopolitical',
+    token: '8',
+    disposition: 'enabled-only',
   }),
   Object.freeze({ id: 'local-dams', token: 'q', disposition: 'enabled-only' }),
   Object.freeze({

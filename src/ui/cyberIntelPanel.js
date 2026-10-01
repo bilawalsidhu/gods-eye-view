@@ -103,6 +103,19 @@ export class CyberIntelPanel {
         void layer.getThreatIntelState().onShodanSearch?.(query, page);
         return;
       }
+      const moreArea = event.target?.closest?.('[data-shodan-area-page]');
+      if (moreArea) {
+        if (
+          !globalThis.confirm?.(
+            'Loading another 100 Shodan results sends another search request and may use one query credit. Continue?',
+          )
+        )
+          return;
+        const page = Number(moreArea.dataset.shodanAreaPage);
+        const query = moreArea.dataset.query || '';
+        void layer.getThreatIntelState().onShodanAreaSearch?.(query, page);
+        return;
+      }
     };
     this._onPanelClick = (event) => {
       const button = event.target?.closest?.('[data-cyber-intel-expand]');
@@ -364,7 +377,7 @@ export class CyberIntelPanel {
         this.document,
         'p',
         'cyber-intel-provenance',
-        'Searches the current map area (up to 1,000 km) and returns up to 100 devices. Missing coordinates may use approximate IP geolocation.',
+        'Searches the current globe view (up to a 1,000 km radius). Shows 100 results per page, up to 300. Each additional page may use another query credit. Missing coordinates may use approximate IP geolocation.',
       ),
     );
     if (areaSearch && !areaSearch.loading) {
@@ -408,7 +421,7 @@ export class CyberIntelPanel {
           this.document,
           'p',
           'cyber-intel-provenance',
-          `${mappedCount}/${areaMatches.length} mapped. Shared approximate locations use display offsets; unresolved IPs stay off-map.`,
+          `${mappedCount}/${areaMatches.length} mapped. Identical locations share a pink group marker; unresolved IPs stay off-map.`,
         ),
       );
       for (const result of areaMatches) {
@@ -460,6 +473,23 @@ export class CyberIntelPanel {
               state.kevSnapshot,
             ),
           );
+      }
+      if (
+        !areaSearch.loading &&
+        !areaSearch.error &&
+        areaSearch.page < areaSearch.pageLimit &&
+        (areaSearch.total == null || areaMatches.length < areaSearch.total)
+      ) {
+        const more = element(
+          this.document,
+          'button',
+          '',
+          'Load next 100 results · 1 query credit',
+        );
+        more.type = 'button';
+        more.dataset.shodanAreaPage = String(areaSearch.page + 1);
+        more.dataset.query = areaSearch.userQuery || '';
+        section.append(more);
       }
       section.append(results);
     }
@@ -632,6 +662,8 @@ export class CyberIntelPanel {
       'aria-label',
       selection.type === 'shodan-asset'
         ? 'Selected Shodan device'
+        : selection.type === 'shodan-group'
+          ? `Selected group of ${selection.devices.length} Shodan devices`
         : selection.type === 'ioda-country'
           ? 'Selected IODA connectivity events'
           : selection.type === 'location'
@@ -647,6 +679,8 @@ export class CyberIntelPanel {
         '',
         selection.type === 'shodan-asset'
           ? 'SELECTED SHODAN DEVICE'
+          : selection.type === 'shodan-group'
+            ? `SHODAN DEVICE GROUP · ${selection.devices.length} DEVICES`
           : selection.type === 'ioda-country'
             ? 'SELECTED IODA CONNECTIVITY EVENTS'
             : selection.type === 'flow'
@@ -712,6 +746,7 @@ export class CyberIntelPanel {
     }
     if (
       selection.type === 'shodan-asset' ||
+      selection.type === 'shodan-group' ||
       selection.type === 'ioda-country' ||
       selection.type === 'location' ||
       selection.type === 'flow'
@@ -727,6 +762,8 @@ export class CyberIntelPanel {
         'aria-label',
         selection.type === 'ioda-country'
           ? 'Close IODA outage details'
+          : selection.type === 'shodan-group'
+            ? 'Close Shodan device group details'
           : selection.type === 'location'
             ? 'Close Radar location details'
             : selection.type === 'flow'
@@ -735,6 +772,93 @@ export class CyberIntelPanel {
       );
       close.dataset.closeCyberPopup = 'true';
       section.append(close);
+    }
+    if (selection.type === 'shodan-group') {
+      section.append(
+        element(
+          this.document,
+          'p',
+          'cyber-intel-provenance',
+          `These ${selection.devices.length} devices share the same reported map point (coordinates rounded to five decimals). The group marker is placed at that point; IP geolocation remains approximate.`,
+        ),
+      );
+      for (const device of selection.devices) {
+        const card = element(
+          this.document,
+          'article',
+          'cyber-shodan-group-device',
+        );
+        card.append(element(this.document, 'strong', '', device.ip));
+        card.append(
+          element(
+            this.document,
+            'p',
+            'cyber-intel-detail-row',
+            `Organization: ${device.organization || 'Unavailable'}`,
+          ),
+        );
+        card.append(
+          element(
+            this.document,
+            'p',
+            'cyber-intel-detail-row',
+            `Location: ${[device.city, device.region, device.country].filter(Boolean).join(', ') || 'Unavailable'}`,
+          ),
+        );
+        card.append(
+          element(
+            this.document,
+            'p',
+            'cyber-intel-detail-row',
+            `Services: ${(device.services || []).slice(0, 5).map((service) => `${service.port ?? '?'}${service.transport ? `/${service.transport}` : ''}${service.product ? ` · ${service.product}` : ''}`).join('; ') || 'None reported'}`,
+          ),
+        );
+        card.append(
+          element(
+            this.document,
+            'h4',
+            '',
+            `CISA KEV matches · ${device.kevMatches?.length || 0}`,
+          ),
+        );
+        if (device.kevMatches?.length) {
+          for (const match of device.kevMatches) {
+            card.append(
+              element(
+                this.document,
+                'p',
+                'cyber-intel-detail-row',
+                `${match.cveId} · ${match.vendor} ${match.product} · CISA due ${match.dueDate}`,
+              ),
+            );
+          }
+        } else {
+          card.append(
+            element(
+              this.document,
+              'p',
+              'cyber-intel-provenance',
+              !device.kevCatalogAvailable
+                ? 'CISA KEV catalog is unavailable.'
+                : device.reportedCves?.length
+                  ? 'No Shodan-reported CVE matches the current CISA KEV catalog.'
+                  : 'Shodan did not report CVE identifiers for this device.',
+            ),
+          );
+        }
+        const link = element(
+          this.document,
+          'a',
+          'cyber-shodan-host-link',
+          'Open this host on Shodan ↗',
+        );
+        link.href = `https://www.shodan.io/host/${encodeURIComponent(device.ip)}`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        card.append(link);
+        section.append(card);
+      }
+      return section;
     }
     const rows =
       selection.type === 'ioda-country'
@@ -946,16 +1070,6 @@ export class CyberIntelPanel {
           'Matches use explicit CVE identifiers reported by Shodan banners. They do not confirm the device remains vulnerable.',
         ),
       );
-      if (selection.visualOffsetMeters > 0) {
-        section.append(
-          element(
-            this.document,
-            'p',
-            'cyber-intel-provenance',
-            `This dot is offset about ${Math.round(selection.visualOffsetMeters)} m from a shared IP-location point for visibility only; the offset is not a measured device location.`,
-          ),
-        );
-      }
       const link = element(
         this.document,
         'a',
@@ -1445,6 +1559,22 @@ export class CyberIntelPanel {
       this.document.createTextNode('Server · searched Shodan device'),
     );
     legend.append(shodanRow);
+    const shodanGroupRow = element(
+      this.document,
+      'p',
+      'cyber-intel-legend-row',
+    );
+    const shodanGroupMarker = element(
+      this.document,
+      'span',
+      'cyber-legend-shodan-group',
+    );
+    setMarker(shodanGroupMarker, 'shodan', '#ff42c8');
+    shodanGroupRow.append(shodanGroupMarker);
+    shodanGroupRow.append(
+      this.document.createTextNode('Pink server · devices at shared coordinates'),
+    );
+    legend.append(shodanGroupRow);
     legend.append(
       this._renderLegendExplainer(
         'About Shodan',
@@ -1576,10 +1706,16 @@ export class CyberIntelPanel {
         'cyber-device-popup-radar',
         isRadarSelection,
       );
+      this.devicePopup.classList.toggle(
+        'cyber-device-popup-shodan-group',
+        state.selectedShodan?.type === 'shodan-group',
+      );
       this.devicePopup.setAttribute(
         'aria-label',
         isIodaSelection
           ? 'IODA outage details'
+          : state.selectedShodan?.type === 'shodan-group'
+            ? 'Shodan device group details'
           : isRadarLocation
             ? 'Radar location details'
             : isRadarFlow
@@ -1592,12 +1728,14 @@ export class CyberIntelPanel {
             ? { ...state.selectedIoda, type: 'ioda-country' }
             : isRadarSelection
               ? { ...state.selectedRadar }
-              : {
-                  ...state.selectedShodan,
-                  type: 'shodan-asset',
-                  otxResults: state.otxResults,
-                  otxPending: state.otxPending,
-                },
+              : state.selectedShodan?.type === 'shodan-group'
+                ? state.selectedShodan
+                : {
+                    ...state.selectedShodan,
+                    type: 'shodan-asset',
+                    otxResults: state.otxResults,
+                    otxPending: state.otxPending,
+                  },
         ),
       );
       const point = mapSelection.popupPosition;

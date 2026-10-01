@@ -201,7 +201,13 @@ export function createCyberSource({
       normalizeShodanSearchResult(
         await post(
           ENRICHMENT_URLS.shodanArea,
-          { latitude, longitude, radiusKm, query: options?.query || '' },
+          {
+            latitude,
+            longitude,
+            radiusKm,
+            query: options?.query || '',
+            page: options?.page || 1,
+          },
           options,
         ),
       ),

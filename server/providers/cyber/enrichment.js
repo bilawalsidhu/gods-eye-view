@@ -560,7 +560,7 @@ export function createCyberEnrichmentProviders({
     latitudeValue,
     longitudeValue,
     radiusValue,
-    { signal, query: queryValue = '' } = {},
+    { signal, query: queryValue = '', page = 1 } = {},
   ) {
     const latitude = Number(latitudeValue);
     const longitude = Number(longitudeValue);
@@ -590,7 +590,7 @@ export function createCyberEnrichmentProviders({
     ]
       .filter(Boolean)
       .join(' ');
-    const result = await searchShodan(query, 1, {
+    const result = await searchShodan(query, page, {
       signal,
       geolocateMissing: true,
     });

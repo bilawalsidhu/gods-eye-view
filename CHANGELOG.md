@@ -1,5 +1,48 @@
 # Changelog
 
+- Add Ohio OHGO, Oregon TripCheck and Washington WSDOT traffic-camera packs to
+  the existing CCTV catalog. Each has a separate credential entry and
+  connection test in Provider Settings, statewide bounds, catalog caps and
+  server-side pinned image hosts. TripCheck follows its daily inventory cadence;
+  the WSDOT pack excludes partner-owned cameras. North Carolina remains deferred
+  because its documented sample media URL points to a staging host.
+
+- Add Iowa DOT's public statewide roadway-camera catalog through the existing
+  CCTV source catalog, with daily catalog caching, pinned official media hosts,
+  and CC BY 4.0 attribution. Add an approval-gated 511NY provider whose API key
+  is configured and tested through POWER UP → Provider Settings; missing
+  credentials leave all other camera packs available.
+- Extend the secured 511/CARS camera adapter to Alaska and Arizona. Both use
+  independent Provider Settings credentials, API connection tests, source
+  namespaces, state bounds, catalog caps, and official-host media pinning.
+- Add toggleable HDX HAPI / ACLED monthly country aggregates, with server-side
+  app identity setup, bounded caching, category-overlap warnings, and explicit
+  country-reference markers instead of invented incident locations.
+- Aggregate ReliefWeb reports into one clickable country-reference marker per
+  country. The map popup lists that country's current reports and labels the
+  marker as report scope rather than an incident location.
+
+- Fix ReliefWeb report queries by sending `date.created` range filters as
+  second-precision ISO 8601 timestamps with explicit UTC offsets. The prior
+  millisecond `Z` timestamps and `now` value were rejected by the API and
+  surfaced as a generic provider-unavailable status.
+
+- Add an independent UCDP visibility toggle and current-map search. GDELT and
+  UCDP searches return up to 100 results inside a 3,000 km radius and switch to
+  global results for broader map views.
+
+- Fix UCDP GED visibility by querying its most recent populated date windows,
+  sorting records locally instead of treating arbitrary API page order as
+  chronological, and retaining up to 100 newest events from each provider in
+  the shared Geo-Political snapshot.
+
+- Add an independent Geo-Political layer with GDELT Project CAMEO event georeferences across all four event classes, an independent display toggle, and on-demand category searches for the current map area,
+  ACLED recent conflict events, versioned UCDP GED records, and ReliefWeb
+  humanitarian reports (enabled after the approved app name is configured).
+  Provider credentials use the existing local Provider Settings flow. Event
+  markers and map popups preserve source, time, and location precision; records
+  without source coordinates remain listed without invented map locations.
+
 - CCTV cameras whose bearing is a guess now say so. Packs mark bearings derived
   from a hash of the camera id as `headingConfidence: 'low'`, but nothing read the
   flag, so roughly 70% of a default catalog rendered like surveyed facings. The HUD
@@ -146,6 +189,7 @@
   dump1090/readsb `aircraft.json` documents.
 - Add `@jtarrio/webrtlsdr` and `@jtarrio/signals` (Apache-2.0); see
   `THIRD_PARTY_NOTICES.md`.
+
 # Unreleased — Cyber Phase 5 (IODA)
 
 - Add keyless, read-only IODA country-scoped connectivity outage events with a
@@ -306,6 +350,7 @@
 Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+
 - New Fire Perimeters layer (Events group): live NIFC WFIGS interagency
   wildfire incident perimeters as ground-clamped polygons with a
   containment-colored fire line, refreshed every 5 minutes from the public

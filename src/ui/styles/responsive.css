@@ -1,5 +1,15 @@
 /* ── Responsive ───────────────────────────────── */
 @media (max-width: 720px) {
+  #right-context-rail > #geopolitical-panel {
+    width: min(360px, calc(100vw - 32px));
+    max-height: min(62vh, 620px);
+  }
+
+  .geopolitical-map-popup {
+    width: min(340px, calc(100vw - 20px));
+    max-height: min(55vh, 440px);
+  }
+
   #cyber-threat-summary-panel:not([hidden]) {
     left: 16px;
     bottom: 2vh;

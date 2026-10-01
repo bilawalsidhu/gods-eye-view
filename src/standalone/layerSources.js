@@ -14,6 +14,7 @@ import { createLaunchSource } from '../layers/launches/source.js';
 import { createOverpassAlprSource } from '../layers/alpr/source.js';
 import { createWeatherSource } from '../layers/weather/source.js';
 import { createCyberSource } from '../layers/cyber/source.js';
+import { createGeopoliticalSource } from '../layers/geopolitical/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createWindSource } from '../layers/wind/source.js';
 import { createFirmsSource } from '../layers/firms/source.js';
@@ -42,6 +43,7 @@ export function createStandaloneLayerSources() {
     wind: createWindSource(),
     weather: createWeatherSource(),
     cyber: createCyberSource(),
+    geopolitical: createGeopoliticalSource(),
     cyclones: createCycloneSource(),
   };
 }

@@ -26,6 +26,15 @@ import { firePerimetersProxy } from './firePerimeters.js';
 import { cycloneProxy } from './cyclones.js';
 import { cyberProxy } from './cyber.js';
 import { windProxy } from './wind.js';
+import {
+  testAlaska511Connection,
+  testArizona511Connection,
+  testNy511Connection,
+  testOhgoConnection,
+  testOregonTripCheckConnection,
+  testWsdotConnection,
+} from './cctv/sources.js';
+import { geopoliticalProxy } from './geopolitical.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -54,10 +63,10 @@ function localProviderPlugins() {
     openAiRealtimeProxy(),
     googlePlacesContextProxy(),
     windProxy(),
+    geopoliticalProxy(),
     weatherProxy(),
     cycloneProxy(),
     firePerimetersProxy(),
-    keySetupEndpoint(),
     cyber,
     keySetupEndpoint({
       testProvider: (id) =>
@@ -69,7 +78,21 @@ function localProviderPlugins() {
               ? cyber.testGreyNoiseConnection()
               : id === 'alienvault-otx'
                 ? cyber.testOtxConnection()
-                : Promise.reject(new Error('unknown_test_provider')),
+                : id === '511ny'
+                  ? testNy511Connection()
+                  : id === '511-alaska'
+                    ? testAlaska511Connection()
+                    : id === '511-arizona'
+                      ? testArizona511Connection()
+                      : id === 'ohgo'
+                        ? testOhgoConnection()
+                        : id === 'tripcheck-oregon'
+                          ? testOregonTripCheckConnection()
+                          : id === 'wsdot'
+                            ? testWsdotConnection()
+                            : Promise.reject(
+                                new Error('unknown_test_provider'),
+                              ),
     }),
   ];
 }

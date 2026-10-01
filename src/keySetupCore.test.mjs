@@ -64,7 +64,11 @@ test('the status payload reports presence without any credential material', () =
     GREYNOISE_API_KEY: 'greynoise-fixture-secret',
     ALIENVAULT_OTX_API_KEY: 'otx-fixture-secret',
     CCTV_511NY_API_KEY: 'ny511-fixture-secret',
-    CCTV_511NY_API_KEY: 'ny511-fixture-secret',
+    CCTV_511_ALASKA_API_KEY: 'alaska-fixture-secret',
+    CCTV_511_ARIZONA_API_KEY: 'arizona-fixture-secret',
+    CCTV_OHGO_API_KEY: 'ohgo-fixture-secret',
+    CCTV_TRIPCHECK_API_KEY: 'tripcheck-fixture-secret',
+    CCTV_WSDOT_ACCESS_CODE: 'wsdot-fixture-secret',
     // Secret missing: the OpenSky pair must read as NOT set.
   };
   const status = keySetupStatus(env);
@@ -79,7 +83,11 @@ test('the status payload reports presence without any credential material', () =
     ['greynoise', 'greynoise', 'GREYNOISE_API_KEY'],
     ['alienvault-otx', 'alienvault-otx', 'ALIENVAULT_OTX_API_KEY'],
     ['511ny', '511ny', 'CCTV_511NY_API_KEY'],
-    ['511ny', '511ny', 'CCTV_511NY_API_KEY'],
+    ['511-alaska', '511-alaska', 'CCTV_511_ALASKA_API_KEY'],
+    ['511-arizona', '511-arizona', 'CCTV_511_ARIZONA_API_KEY'],
+    ['ohgo', 'ohgo', 'CCTV_OHGO_API_KEY'],
+    ['tripcheck-oregon', 'tripcheck-oregon', 'CCTV_TRIPCHECK_API_KEY'],
+    ['wsdot', 'wsdot', 'CCTV_WSDOT_ACCESS_CODE'],
   ]) {
     const key = status.keys.find((row) => row.id === id);
     assert.equal(key.set, true);
@@ -98,7 +106,12 @@ test('the status payload reports presence without any credential material', () =
   assert.ok(!serialized.includes('greynoise-fixture-secret'));
   assert.ok(!serialized.includes('otx-fixture-secret'));
   assert.ok(!serialized.includes('ny511-fixture-secret'));
-  assert.equal(status.setCount, 5);
+  assert.ok(!serialized.includes('alaska-fixture-secret'));
+  assert.ok(!serialized.includes('arizona-fixture-secret'));
+  assert.ok(!serialized.includes('ohgo-fixture-secret'));
+  assert.ok(!serialized.includes('tripcheck-fixture-secret'));
+  assert.ok(!serialized.includes('wsdot-fixture-secret'));
+  assert.equal(status.setCount, 10);
 });
 
 test('whitespace-only env values do not count as configured', () => {
@@ -132,9 +145,15 @@ test('Windows owner SID parsing reads only the structured user-SID CSV field', (
 test('validation accepts every registry env var and only those', () => {
   const known = knownKeySetupEnvVars();
   for (const name of known) {
-    const verdict = validateKeySetupUpdates({ [name]: 'valid-value-123' });
+    const value =
+      name === 'HAPI_CONTACT_EMAIL'
+        ? 'analyst@example.test'
+        : name === 'HAPI_APP_NAME'
+          ? 'Gods Eye View Test'
+          : 'valid-value-123';
+    const verdict = validateKeySetupUpdates({ [name]: value });
     assert.equal(verdict.ok, true, `${name} should validate`);
-    assert.equal(verdict.updates[name], 'valid-value-123');
+    assert.equal(verdict.updates[name], value);
   }
   assert.equal(validateKeySetupUpdates({ PATH: '/usr/bin' }).ok, false, 'PATH must be refused');
   assert.equal(validateKeySetupUpdates({ NODE_OPTIONS: '--x' }).ok, false, 'NODE_OPTIONS must be refused');

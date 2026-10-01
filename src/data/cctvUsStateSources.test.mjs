@@ -1,49 +1,90 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  loadAlaska511SourcesFromOpenData,
+  loadArizona511SourcesFromOpenData,
+  loadDelDOTSourcesFromOpenData,
   loadIowaDotSourcesFromOpenData,
+  testAlaska511Connection,
+  testArizona511Connection,
   loadNy511SourcesFromOpenData,
   testNy511Connection,
+  loadOhgoSourcesFromOpenData,
+  loadOregonTripCheckSourcesFromOpenData,
+  loadWsdotSourcesFromOpenData,
+  testOhgoConnection,
+  testOregonTripCheckConnection,
+  testWsdotConnection,
 } from '../../server/providers/cctv/sources.js';
 
-test('511NY uses its server credential, normalizes enabled camera views, and never returns the key', async () => {
+test('DelDOT keeps enabled camera locations when the live status reports unavailable', async () => {
+  const oldFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    Response.json({
+      videoCameras: [
+        {
+          id: 'DE-1',
+          title: 'I-95 near Wilmington',
+          county: 'New Castle',
+          lat: 39.74,
+          lon: -75.55,
+          enabled: true,
+          status: 'unavailable',
+          urls: { m3u8s: 'https://video.deldot.gov/live/DE-1/playlist.m3u8' },
+        },
+        {
+          id: 'DE-2',
+          title: 'Disabled camera',
+          lat: 39.7,
+          lon: -75.5,
+          enabled: false,
+          status: 'active',
+          urls: { m3u8s: 'https://video.deldot.gov/live/DE-2/playlist.m3u8' },
+        },
+        {
+          id: 'DE-3',
+          title: 'Legacy active camera',
+          lat: 39.6,
+          lon: -75.4,
+          status: 'active',
+          urls: { m3u8s: 'https://video.deldot.gov/live/DE-3/playlist.m3u8' },
+        },
+      ],
+    });
+  try {
+    const sources = await loadDelDOTSourcesFromOpenData();
+    assert.deepEqual(sources.map((source) => source.id), [
+      'deldot-de-1',
+      'deldot-de-3',
+    ]);
+  } finally {
+    globalThis.fetch = oldFetch;
+  }
+});
+
+test('511NY normalizes an enabled official camera view without returning the API key', async () => {
   const oldFetch = globalThis.fetch;
   const oldKey = process.env.CCTV_511NY_API_KEY;
-  process.env.CCTV_511NY_API_KEY = 'test-secret-never-return';
-  let requestedUrl;
+  process.env.CCTV_511NY_API_KEY = 'fixture-secret-not-for-response';
+  let requestUrl;
   globalThis.fetch = async (input, options) => {
-    requestedUrl = new URL(input);
+    requestUrl = new URL(input);
     assert.equal(options.redirect, 'error');
-    return new Response(
-      JSON.stringify([
-        {
-          Id: 42,
-          Roadway: 'I-87',
-          Direction: 'Northbound',
-          Location: 'Albany',
-          Latitude: 42.65,
-          Longitude: -73.75,
-          Views: [
-            {
-              Status: 'Enabled',
-              Url: 'https://511ny.org/map/Cctv/42?view=1',
-              Description: 'North camera',
-            },
-          ],
-        },
-      ]),
-      { status: 200, headers: { 'content-type': 'application/json' } },
-    );
+    return new Response(JSON.stringify([{
+      Id: 42, Roadway: 'I-87', Direction: 'Northbound', Location: 'Albany',
+      Latitude: 42.65, Longitude: -73.75,
+      Views: [{ Status: 'Enabled', Url: 'https://511ny.org/map/Cctv/42?view=1' }],
+    }]), { status: 200, headers: { 'content-type': 'application/json' } });
   };
   try {
     const sources = await loadNy511SourcesFromOpenData();
-    assert.equal(requestedUrl.origin, 'https://511ny.org');
-    assert.equal(requestedUrl.searchParams.get('key'), 'test-secret-never-return');
+    assert.equal(requestUrl.origin, 'https://511ny.org');
+    assert.equal(requestUrl.searchParams.get('key'), 'fixture-secret-not-for-response');
     assert.equal(sources.length, 1);
     assert.equal(sources[0].id, 'ny511-42');
     assert.equal(sources[0].provider, '511 New York');
     assert.equal(sources[0].url, 'https://511ny.org/map/Cctv/42');
-    assert.equal(JSON.stringify(sources).includes('test-secret-never-return'), false);
+    assert.equal(JSON.stringify(sources).includes('fixture-secret-not-for-response'), false);
     assert.match((await testNy511Connection()).message, /1 camera records/);
   } finally {
     globalThis.fetch = oldFetch;
@@ -52,13 +93,66 @@ test('511NY uses its server credential, normalizes enabled camera views, and nev
   }
 });
 
-test('511NY missing credentials isolate the provider without an upstream request', async () => {
+test('Alaska and Arizona share the 511 camera adapter with isolated keys and host allowlists', async () => {
+  const oldFetch = globalThis.fetch;
+  const oldAlaska = process.env.CCTV_511_ALASKA_API_KEY;
+  const oldArizona = process.env.CCTV_511_ARIZONA_API_KEY;
+  process.env.CCTV_511_ALASKA_API_KEY = 'alaska-fixture-secret';
+  process.env.CCTV_511_ARIZONA_API_KEY = 'arizona-fixture-secret';
+  const requests = [];
+  globalThis.fetch = async (input, options) => {
+    const url = new URL(input);
+    requests.push(url);
+    assert.equal(options.redirect, 'error');
+    if (url.hostname === '511.alaska.gov') {
+      assert.equal(url.searchParams.get('key'), 'alaska-fixture-secret');
+      return Response.json([{
+        Id: 7, Source: 'ADOT&PF', Roadway: 'Seward Highway',
+        Direction: 'North', Latitude: 60.929619, Longitude: -149.346632,
+        Location: 'Bird Point',
+        Views: [
+          { Id: 1, Url: 'https://511.alaska.gov/map/Cctv/1', Status: 'Disabled' },
+          { Id: 2, Url: 'https://511.alaska.gov/map/Cctv/2', Status: 'Enabled', Description: 'Both direction' },
+        ],
+      }]);
+    }
+    assert.equal(url.hostname, 'az511.com');
+    assert.equal(url.searchParams.get('key'), 'arizona-fixture-secret');
+    return Response.json([{
+      Id: 2056, Source: 'AZDOT', Roadway: 'SR-95', Direction: 'Unknown',
+      Latitude: 35.172449, Longitude: -114.566108,
+      Location: 'Laughlin Road',
+      Views: [{ Id: 960, Url: 'https://az511.com/map/Cctv/960', Status: 'Enabled' }],
+    }]);
+  };
+  try {
+    const alaska = await loadAlaska511SourcesFromOpenData();
+    const arizona = await loadArizona511SourcesFromOpenData();
+    assert.equal(alaska.length, 1);
+    assert.equal(alaska[0].id, 'ak511-7');
+    assert.equal(alaska[0].url, 'https://511.alaska.gov/map/Cctv/2');
+    assert.equal(alaska[0].provider, 'Alaska 511');
+    assert.equal(arizona.length, 1);
+    assert.equal(arizona[0].id, 'az511-2056');
+    assert.equal(arizona[0].url, 'https://az511.com/map/Cctv/960');
+    assert.equal(arizona[0].provider, 'Arizona 511');
+    assert.equal(requests.length, 2);
+    assert.match((await testAlaska511Connection()).message, /Alaska 511 connection succeeded/);
+    assert.match((await testArizona511Connection()).message, /AZ 511 connection succeeded/);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldAlaska === undefined) delete process.env.CCTV_511_ALASKA_API_KEY;
+    else process.env.CCTV_511_ALASKA_API_KEY = oldAlaska;
+    if (oldArizona === undefined) delete process.env.CCTV_511_ARIZONA_API_KEY;
+    else process.env.CCTV_511_ARIZONA_API_KEY = oldArizona;
+  }
+});
+
+test('511NY missing credentials do not call upstream and disable only that provider', async () => {
   const oldFetch = globalThis.fetch;
   const oldKey = process.env.CCTV_511NY_API_KEY;
   delete process.env.CCTV_511NY_API_KEY;
-  globalThis.fetch = async () => {
-    throw new Error('should not call upstream');
-  };
+  globalThis.fetch = async () => { throw new Error('unexpected upstream call'); };
   try {
     assert.deepEqual(await loadNy511SourcesFromOpenData(), []);
     await assert.rejects(testNy511Connection(), { code: 'missing_credentials' });
@@ -68,48 +162,32 @@ test('511NY missing credentials isolate the provider without an upstream request
   }
 });
 
-test('Iowa DOT filters roadway cameras, pins media hosts, and caches its daily catalog', async () => {
+test('Iowa DOT accepts only road cameras and pinned DOT media, with daily cache', async () => {
   const oldFetch = globalThis.fetch;
-  let fetchCount = 0;
+  let calls = 0;
   globalThis.fetch = async (input, options) => {
-    fetchCount += 1;
+    calls += 1;
     const url = new URL(input);
     assert.equal(options.redirect, 'error');
     assert.equal(url.searchParams.get('where'), "Type='Iowa DOT'");
     assert.equal(url.searchParams.get('outSR'), '4326');
-    return new Response(
-      JSON.stringify({
-        features: [
-          {
-            attributes: {
-              device_id: 'IA-101',
-              Desc_: 'I-80 at Exit 100',
-              Route: 'I-80',
-              Type: 'Iowa DOT',
-              latitude: 41.5,
-              longitude: -93.5,
-              ImageURL: 'https://atmsqf.iowadot.gov/camera/101.jpg',
-              VideoURL: 'https://video2.iowadot.gov/camera/101.m3u8',
-            },
-          },
-          {
-            attributes: {
-              device_id: 'IA-102',
-              Type: 'Rest Area/Parking',
-              latitude: 41.5,
-              longitude: -93.5,
-              ImageURL: 'https://attacker.invalid/camera.jpg',
-            },
-          },
-        ],
-      }),
-      { status: 200, headers: { 'content-type': 'application/json' } },
-    );
+    return new Response(JSON.stringify({ features: [
+      { attributes: {
+        device_id: 'IA-101', Desc_: 'I-80 at Exit 100', Route: 'I-80', Type: 'Iowa DOT',
+        latitude: 41.5, longitude: -93.5,
+        ImageURL: 'https://atmsqf.iowadot.gov/camera/101.jpg',
+        VideoURL: 'https://video2.iowadot.gov/camera/101.m3u8',
+      } },
+      { attributes: {
+        device_id: 'IA-102', Type: 'Rest Area/Parking', latitude: 41.5, longitude: -93.5,
+        ImageURL: 'https://attacker.invalid/camera.jpg',
+      } },
+    ] }), { status: 200, headers: { 'content-type': 'application/json' } });
   };
   try {
     const first = await loadIowaDotSourcesFromOpenData({ now: 2_000_000_000_000 });
     const second = await loadIowaDotSourcesFromOpenData({ now: 2_000_000_001_000 });
-    assert.equal(fetchCount, 1);
+    assert.equal(calls, 1);
     assert.equal(first.length, 1);
     assert.equal(second.length, 1);
     assert.equal(first[0].id, 'iowadot-IA-101');
@@ -119,5 +197,94 @@ test('Iowa DOT filters roadway cameras, pins media hosts, and caches its daily c
     assert.equal(first[0].license, 'Creative Commons Attribution 4.0 International (CC BY 4.0)');
   } finally {
     globalThis.fetch = oldFetch;
+  }
+});
+
+test('OHGO uses the authorization header and only registers validated Ohio snapshots', async () => {
+  const oldFetch = globalThis.fetch;
+  const oldKey = process.env.CCTV_OHGO_API_KEY;
+  process.env.CCTV_OHGO_API_KEY = 'ohgo-fixture-secret';
+  let seenUrl;
+  globalThis.fetch = async (input, options) => {
+    seenUrl = new URL(input);
+    assert.equal(options.headers.Authorization, 'APIKEY ohgo-fixture-secret');
+    assert.equal(options.redirect, 'error');
+    return Response.json({ results: [
+      { id: 'OH-1', latitude: 39.96, longitude: -83.0, location: 'I-70 Columbus', cameraViews: [{ direction: 'Eastbound', smallUrl: 'https://itscameras.dot.state.oh.us/images/CMH/OH-1.jpg', largeUrl: 'https://itscameras.dot.state.oh.us/images/CMH/OH-1-large.jpg', mainRoute: 'I-70' }] },
+      { id: 'OUT-OF-STATE', latitude: 40.7, longitude: -74, location: 'Outside Ohio', cameraViews: [{ smallUrl: 'https://api.ohgo.com/roadmarkers/cameras/x.jpg' }] },
+      { id: 'BAD-HOST', latitude: 39.96, longitude: -83, cameraViews: [{ smallUrl: 'https://attacker.invalid/oh.jpg' }] },
+    ] });
+  };
+  try {
+    const sources = await loadOhgoSourcesFromOpenData();
+    assert.equal(seenUrl.searchParams.get('page-all'), 'true');
+    assert.deepEqual(sources.map((source) => source.id), ['ohgo-OH-1']);
+    assert.equal(sources[0].url, 'https://itscameras.dot.state.oh.us/images/CMH/OH-1.jpg');
+    assert.equal(sources[0].provider, 'OHGO / Ohio DOT');
+    assert.doesNotMatch(JSON.stringify(sources), /ohgo-fixture-secret/);
+    assert.match((await testOhgoConnection()).message, /3 records; 3 with coordinates, 2 in Ohio, 1 with accepted image URLs; 1 map-ready/);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldKey === undefined) delete process.env.CCTV_OHGO_API_KEY;
+    else process.env.CCTV_OHGO_API_KEY = oldKey;
+  }
+});
+
+test('TripCheck uses its server-side subscription header and caches its 24-hour catalog', async () => {
+  const oldFetch = globalThis.fetch;
+  const oldKey = process.env.CCTV_TRIPCHECK_API_KEY;
+  process.env.CCTV_TRIPCHECK_API_KEY = 'tripcheck-fixture-secret';
+  let calls = 0;
+  globalThis.fetch = async (input, options) => {
+    calls += 1;
+    assert.equal(String(input), 'https://api.odot.state.or.us/tripcheck/Cctv/Inventory');
+    assert.equal(options.headers['Ocp-Apim-Subscription-Key'], 'tripcheck-fixture-secret');
+    return Response.json({ CCTVInventoryRequest: [
+      { 'device-id': 'OR-101', 'route-id': 'I-5', milepoint: 250, 'cctv-other': 'Wilsonville', latitude: 45.3, longitude: -122.77, 'cctv-url': 'http://www.tripcheck.com/roadcams/cams/or101.jpg' },
+      { 'device-id': 'OR-102', latitude: 45.3, longitude: -122.77, 'cctv-url': 'https://third-party.invalid/or102.jpg' },
+    ] });
+  };
+  try {
+    const sources = await loadOregonTripCheckSourcesFromOpenData({ now: 2_000_000_000_000 });
+    const cached = await loadOregonTripCheckSourcesFromOpenData({ now: 2_000_000_001_000 });
+    assert.equal(calls, 1);
+    assert.deepEqual(sources.map((source) => source.id), ['ortripcheck-OR-101']);
+    assert.equal(sources[0].url, 'https://www.tripcheck.com/roadcams/cams/or101.jpg');
+    assert.deepEqual(cached, sources);
+    assert.doesNotMatch(JSON.stringify(sources), /tripcheck-fixture-secret/);
+    assert.match((await testOregonTripCheckConnection()).message, /2 records; 2 with coordinates, 2 in Oregon, 1 with accepted image URLs; 1 map-ready/);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldKey === undefined) delete process.env.CCTV_TRIPCHECK_API_KEY;
+    else process.env.CCTV_TRIPCHECK_API_KEY = oldKey;
+  }
+});
+
+test('WSDOT key stays server-side, partner cameras and off-host images are excluded', async () => {
+  const oldFetch = globalThis.fetch;
+  const oldKey = process.env.CCTV_WSDOT_ACCESS_CODE;
+  process.env.CCTV_WSDOT_ACCESS_CODE = 'wsdot-fixture-secret';
+  globalThis.fetch = async (input, options) => {
+    const url = new URL(input);
+    assert.equal(url.protocol, 'https:');
+    assert.equal(url.searchParams.get('AccessCode'), 'wsdot-fixture-secret');
+    assert.equal(options.redirect, 'error');
+    return Response.json([
+      { CameraID: 21, IsActive: true, Title: 'I-5 Seattle', DisplayLatitude: 47.6, DisplayLongitude: -122.3, ImageURL: 'https://images.wsdot.wa.gov/seattle/21.jpg', CameraLocation: { Direction: 'North' } },
+      { CameraID: 22, IsActive: true, CameraOwner: 'Partner Agency', Title: 'Partner', DisplayLatitude: 47.6, DisplayLongitude: -122.3, ImageURL: 'https://images.wsdot.wa.gov/seattle/22.jpg' },
+      { CameraID: 23, IsActive: true, Title: 'Bad image host', DisplayLatitude: 47.6, DisplayLongitude: -122.3, ImageURL: 'https://attacker.invalid/camera.jpg' },
+    ]);
+  };
+  try {
+    const sources = await loadWsdotSourcesFromOpenData();
+    assert.deepEqual(sources.map((source) => source.id), ['wsdot-21']);
+    assert.equal(sources[0].provider, 'WSDOT');
+    assert.equal(sources[0].url, 'https://images.wsdot.wa.gov/seattle/21.jpg');
+    assert.doesNotMatch(JSON.stringify(sources), /wsdot-fixture-secret/);
+    assert.match((await testWsdotConnection()).message, /3 camera records/);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldKey === undefined) delete process.env.CCTV_WSDOT_ACCESS_CODE;
+    else process.env.CCTV_WSDOT_ACCESS_CODE = oldKey;
   }
 });

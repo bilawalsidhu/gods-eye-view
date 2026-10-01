@@ -850,11 +850,13 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
       );
       middlewares.use(
         '/api/cyber/enrich/shodan/area',
-        enrichmentHandler(({ latitude, longitude, radiusKm, query }, options) =>
-          enrichment.searchShodanArea(latitude, longitude, radiusKm, {
-            ...options,
-            query,
-          }),
+        enrichmentHandler(
+          ({ latitude, longitude, radiusKm, query, page }, options) =>
+            enrichment.searchShodanArea(latitude, longitude, radiusKm, {
+              ...options,
+              query,
+              page,
+            }),
         ),
       );
       middlewares.use(
@@ -897,11 +899,13 @@ export function cyberProxy({ fetchImpl = fetch, now = () => Date.now() } = {}) {
       );
       middlewares.use(
         '/api/cyber/enrich/shodan/area',
-        enrichmentHandler(({ latitude, longitude, radiusKm, query }, options) =>
-          enrichment.searchShodanArea(latitude, longitude, radiusKm, {
-            ...options,
-            query,
-          }),
+        enrichmentHandler(
+          ({ latitude, longitude, radiusKm, query, page }, options) =>
+            enrichment.searchShodanArea(latitude, longitude, radiusKm, {
+              ...options,
+              query,
+              page,
+            }),
         ),
       );
       middlewares.use(

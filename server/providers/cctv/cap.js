@@ -80,3 +80,51 @@ export function allocateSourceCap(packs, maxCount) {
     })),
   };
 }
+
+function distanceKm(a, b) {
+  const toRad = (degrees) => (degrees * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLon = toRad(b.lon - a.lon);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const haversine =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
+/** Select the nearest cameras to a geographic view focus, keeping last-pack-wins IDs. */
+export function allocateSourceCapNearView(packs, maxCount, focus) {
+  const owner = new Map();
+  packs.forEach((pack, packIndex) => {
+    for (const source of pack.sources) {
+      if (source?.id)
+        owner.set(source.id, { source, packIndex, pack: pack.name });
+    }
+  });
+  const ranked = Array.from(owner.values())
+    .map((entry) => ({
+      ...entry,
+      distance:
+        Number.isFinite(entry.source.lat) && Number.isFinite(entry.source.lon)
+          ? distanceKm(focus, { lat: entry.source.lat, lon: entry.source.lon })
+          : Number.POSITIVE_INFINITY,
+    }))
+    .sort((a, b) => a.distance - b.distance || a.packIndex - b.packIndex);
+  const limit = Math.min(ranked.length, Math.max(0, Math.floor(maxCount)));
+  const selected = ranked.slice(0, limit);
+  const keptByPack = new Map();
+  for (const item of selected) {
+    keptByPack.set(item.pack, (keptByPack.get(item.pack) || 0) + 1);
+  }
+  return {
+    sources: selected.map(({ source }) => source),
+    packs: packs.map((pack) => ({
+      name: pack.name,
+      offered: pack.sources.filter(
+        (source) => source?.id && owner.get(source.id)?.source === source,
+      ).length,
+      kept: keptByPack.get(pack.name) || 0,
+    })),
+  };
+}

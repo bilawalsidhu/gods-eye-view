@@ -15,6 +15,8 @@ body.recording-mode #cctv-panel,
 body.recording-mode #radio-panel,
 body.recording-mode #global-context-panel,
 body.recording-mode #cyber-intel-panel,
+body.recording-mode #geopolitical-panel,
+body.recording-mode #geopolitical-map-popup,
 body.recording-mode #gev-voice-control,
 body.recording-mode #scene-panel {
   opacity: 0 !important;
