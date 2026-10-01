@@ -7,12 +7,18 @@ export {
   ERROR_BACKOFF_INTERVAL,
 } from './recordPolicy.js';
 import * as Cesium from 'cesium';
+import { EMERGENCY_TINT_CSS } from '../../data/aircraftEmergency.js';
 
 export const FOCUS_EVIDENCE_DEV = import.meta.env?.DEV === true;
 
 /** Amber tint for known-military aircraft rendered by this layer (matches the military layer's icon color). */
 
 export const MIL_TINT = Cesium.Color.fromCssColorString('#FFB800');
+
+/** Red tint for aircraft broadcasting an emergency (7500/7600/7700 or ADS-B status). */
+
+export const EMERGENCY_TINT =
+  Cesium.Color.fromCssColorString(EMERGENCY_TINT_CSS);
 
 // --- Ground traffic (owner reversal 2026-07-03: "absolutely we should see planes
 // taxiing and landing") -----------------------------------------------------------

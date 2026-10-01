@@ -2147,6 +2147,12 @@
   color: rgba(205, 225, 226, 0.48);
 }
 
+:root[data-ui-theme='cyber']
+  body.cockpit-mode
+  .cockpit-aircraft-meta.emergency {
+  color: var(--cyber-red-bright);
+}
+
 :root[data-ui-theme='cyber'] body.cockpit-mode .cockpit-vision-controls {
   margin-top: 0;
   border-color: rgba(105, 203, 209, 0.38);

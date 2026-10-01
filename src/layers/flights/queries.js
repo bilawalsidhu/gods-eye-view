@@ -15,6 +15,7 @@ import {
   FOCUS_EVIDENCE_DEV,
   FLEET_DR_INTERVAL_MS,
 } from './policy.js';
+import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
 
 export function createQueries({
   flightState,
@@ -167,6 +168,9 @@ export function createQueries({
         flightState.records.missingPolls.get(icao24) ||
         flightState.feed._backoff,
       ),
+      // This poll's transponder broadcast (not sticky; see records.js).
+      squawk: info?.squawk ?? null,
+      emergency: info?.emergency ? { ...info.emergency } : null,
       airline: info?.airline ?? null,
       // CLASS label follows the TR-3B conversion so every downstream card
       // (cockpit, Contacts, analyst) agrees with the triangle on screen.
@@ -219,7 +223,10 @@ export function createQueries({
    *   lon: number|null, altitudeM: number|null, speedMps: number|null,
    *   heading: number|null, verticalRateMps: number|null, onGround: boolean,
    *   military: boolean, aircraftClass: string|null, originCountry: string|null,
-   *   operator: string|null, routeOrigin: string|null, routeDestination: string|null}}
+   *   operator: string|null, squawk: string|null, emergency: boolean,
+   *   emergencyKind: string|null, emergencySource: 'squawk'|'ads-b'|null,
+   *   emergencyBroadcast: string|null, observedAtMs: number|null, routeOrigin: string|null,
+   *   routeDestination: string|null}}
    */
 
   function mapAnalystRecord(
@@ -253,6 +260,20 @@ export function createQueries({
       aircraftClass: tr3bAircraftClass(icao24, text(info?.klass)),
       originCountry: text(info?.originCountry),
       operator: text(info?.airline),
+      squawk: text(info?.squawk),
+      // True while this poll broadcast an emergency (7500/7600/7700 or the
+      // ADS-B status); priority statuses (lifeguard, minfuel) report the kind
+      // without the flag.
+      emergency: info?.emergency?.severity === 'emergency',
+      emergencyKind: text(info?.emergency?.kind),
+      // Provenance, so a summary can say "broadcasting squawk 7700" rather
+      // than "ADS-B reports general emergency" (or flatten both): 'squawk'
+      // when the Mode A code names the status, 'ads-b' for the readsb field.
+      emergencySource: text(info?.emergency?.source),
+      emergencyBroadcast: emergencyBroadcastPhrase(info?.emergency),
+      // Epoch ms of the last transponder message — when this squawk/status
+      // was heard (OpenSky time_contact; readsb snapshot time minus `seen`).
+      observedAtMs: num(info?.lastContactEpochMs),
       routeOrigin: routeOk ? text(info?.route?.origin?.code) : null,
       routeDestination: routeOk ? text(info?.route?.destination?.code) : null,
     };

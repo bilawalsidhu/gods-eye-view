@@ -67,9 +67,32 @@ test('military analyst record: full record maps every contract field', () => {
     aircraftClass: 'widebody',
     originCountry: null,
     operator: 'United States Air Force',
+    squawk: null,
+    emergency: false,
+    emergencyKind: null,
+    emergencySource: null,
+    emergencyBroadcast: null,
+    observedAtMs: null,
     routeOrigin: null,
     routeDestination: null,
   });
+});
+
+test('military analyst record: emergency flag is only raised for emergency severity', () => {
+  const hijack = mapAnalystRecord('ae01ce', {
+    ...FULL_INFO,
+    squawk: '7500',
+    emergency: { kind: 'unlawful', severity: 'emergency', squawk: '7500' },
+  });
+  assert.equal(hijack.squawk, '7500');
+  assert.equal(hijack.emergency, true);
+  assert.equal(hijack.emergencyKind, 'unlawful');
+  const lifeguard = mapAnalystRecord('ae01ce', {
+    ...FULL_INFO,
+    emergency: { kind: 'lifeguard', severity: 'priority', squawk: null },
+  });
+  assert.equal(lifeguard.emergency, false);
+  assert.equal(lifeguard.emergencyKind, 'lifeguard');
 });
 
 test('military analyst record: military is ALWAYS true, routes/country always null', () => {

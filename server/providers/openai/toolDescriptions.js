@@ -555,7 +555,7 @@ export const ACTION_DESCRIPTIONS = {
         },
         filters: {
           description:
-            'Attribute predicates, ANDed. ALTITUDE IS METERS (40,000 ft = 12192). Fields: altitudeM, speedMps, military, onGround, aircraftClass, callsign, operator, routeOrigin, routeDestination, originCountry (flights); speedKts, shipType, destination (ships); frp, confidence (fires); magnitude, depthKm, place (earthquakes).',
+            'Attribute predicates, ANDed. ALTITUDE IS METERS (40,000 ft = 12192). Fields: altitudeM, speedMps, military, onGround, aircraftClass, callsign, operator, routeOrigin, routeDestination, originCountry, squawk, emergency (true while broadcasting 7500/7600/7700 or an ADS-B emergency), emergencyKind (general|unlawful|nordo|downed|minfuel|lifeguard), emergencySource (squawk = the Mode A code names it, ads-b = the ADS-B emergency field; narrate results with their emergencyBroadcast phrase, as what the aircraft broadcasts, not a confirmed incident) (flights); speedKts, shipType, destination (ships); frp, confidence (fires); magnitude, depthKm, place (earthquakes).',
           $position: 1,
         },
         sortBy: {
