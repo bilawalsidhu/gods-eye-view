@@ -133,6 +133,12 @@
     "modules": ["server/providers/firms.js", "src/data/firmsCsv.js"],
     "external": []
   },
+  "gdelt-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/gdelt"],
+    "modules": ["server/providers/gdelt.js"],
+    "external": []
+  },
   "gbfs-provider": {
     "runtime": "node",
     "exports": ["./server/providers/gbfs"],
@@ -2807,10 +2813,7 @@
   },
   "gdelt-source": {
     "exports": ["./layers/gdelt/source"],
-    "modules": [
-      "src/layers/gdelt/records.js",
-      "src/layers/gdelt/source.js"
-    ],
+    "modules": ["src/layers/gdelt/records.js", "src/layers/gdelt/source.js"],
     "external": []
   },
   "firms-source": {

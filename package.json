@@ -107,6 +107,9 @@
     "./server/providers/cctv": {
       "node": "./server/providers/cctv.js"
     },
+    "./server/providers/gdelt": {
+      "node": "./server/providers/gdelt.js"
+    },
     "./server/providers/radio": {
       "node": "./server/providers/radio.js"
     },

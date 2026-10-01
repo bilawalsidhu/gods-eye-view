@@ -3,7 +3,7 @@ import {
   GDELT_OVERLAY_SOURCE_ID,
   GDELT_OVERLAY_COHORT_LIMIT,
   GDELT_OVERLAY_COLLISION_CAPACITY,
-  toneColor,
+  GDELT_MARKER_COLOR,
   createGdeltOverlayEntry,
   selectGdeltOverlayCohort,
   mapAnalystRecord,
@@ -47,7 +47,7 @@ function ensureCardUi() {
   card.style.right = '32px';
   card.style.width = '380px';
   card.style.maxWidth = 'calc(100vw - 48px)';
-  card.style.background = 'rgba(10, 14, 22, 0.85)';
+  card.style.background = 'rgba(10, 14, 22, 0.88)';
   card.style.backdropFilter = 'blur(20px) saturate(180%)';
   card.style.webkitBackdropFilter = 'blur(20px) saturate(180%)';
   card.style.border = '1px solid rgba(0, 229, 255, 0.25)';
@@ -72,55 +72,60 @@ function showOsintCard(entity, viewer) {
   const p = entity.properties;
   const now = Cesium.JulianDate.now();
   const headline =
-    p?.headline?.getValue(now) || entity.name || 'Unknown Incident';
-  const count = p?.reportsCount?.getValue(now) || 1;
-  const tone = p?.tone?.getValue(now) || 0;
+    p?.headline?.getValue(now) || entity.name || 'Unknown Headline';
   const url = p?.url?.getValue(now) || '';
   const domain = p?.domain?.getValue(now) || '';
-  const color = toneColor(tone).toCssColorString();
+  const time = p?.time?.getValue(now) || '';
+  const tone = p?.tone?.getValue(now);
 
-  const toneLabel =
-    tone < -3
-      ? 'CRISIS SECTOR'
-      : tone < 2
-        ? 'ACTIVE MONITORING'
-        : 'DIPLOMATIC / STABLE';
+  const toneText =
+    typeof tone === 'number'
+      ? `${tone > 0 ? `+${tone.toFixed(1)}` : tone.toFixed(1)} (${tone < -1.5 ? 'Negative' : tone > 1.5 ? 'Positive' : 'Neutral'})`
+      : null;
 
   card.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
       <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(0, 229, 255, 0.1); border: 1px solid rgba(0, 229, 255, 0.25); padding: 4px 10px; border-radius: 9999px;">
-        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${color}; box-shadow: 0 0 6px ${color};"></span>
-        <span style="color: #00e5ff; font-weight: 700; font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase;">OSINT DISPATCH</span>
+        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #00e5ff; box-shadow: 0 0 6px #00e5ff;"></span>
+        <span style="color: #00e5ff; font-weight: 700; font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase;">HEADLINE (UNVERIFIED)</span>
       </div>
       <button id="osint-close-btn" style="width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #94a3b8; font-size: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s;">✕</button>
     </div>
 
-    <div style="font-size: 14px; font-weight: 600; line-height: 1.45; margin-bottom: 16px; color: #ffffff; letter-spacing: -0.1px;">
+    <div style="font-size: 14px; font-weight: 600; line-height: 1.45; margin-bottom: 14px; color: #ffffff;">
       ${headline}
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px;">
-      <div style="background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.07); padding: 10px 12px; border-radius: 12px;">
-        <span style="color: #64748b; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; display: block; margin-bottom: 2px;">STATUS</span>
-        <strong style="color: ${color}; font-size: 11px; font-weight: 700; letter-spacing: 0.3px;">${toneLabel}</strong>
+    <div style="background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.07); padding: 10px 12px; border-radius: 12px; margin-bottom: 14px; font-size: 11px;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+        <span style="color: #64748b;">Source:</span>
+        <strong style="color: #00e5ff;">${domain || 'Public Media'}</strong>
       </div>
-      <div style="background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.07); padding: 10px 12px; border-radius: 12px;">
-        <span style="color: #64748b; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; display: block; margin-bottom: 2px;">VOLUME</span>
-        <strong style="color: #f8fafc; font-size: 11px; font-weight: 700;">${count} Reports Filed</strong>
-      </div>
+      ${
+        time
+          ? `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+        <span style="color: #64748b;">Reported:</span>
+        <span style="color: #94a3b8;">${String(time).slice(0, 19).replace('T', ' ')}</span>
+      </div>`
+          : ''
+      }
+      ${
+        toneText
+          ? `
+      <div style="display: flex; justify-content: space-between;">
+        <span style="color: #64748b;">Reporting Tone:</span>
+        <strong style="color: #f1f5f9;">${toneText}</strong>
+      </div>`
+          : ''
+      }
     </div>
 
-    ${
-      domain
-        ? `
-      <div style="font-size: 11px; color: #94a3b8; margin-bottom: 16px; display: flex; align-items: center; gap: 6px;">
-        <span>Source:</span>
-        <span style="color: #00e5ff; font-weight: 600; background: rgba(0, 229, 255, 0.08); padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(0, 229, 255, 0.15);">${domain}</span>
-      </div>`
-        : ''
-    }
+    <div style="font-size: 10px; color: #94a3b8; font-style: italic; margin-bottom: 16px; border-left: 2px solid rgba(0, 229, 255, 0.4); padding-left: 8px;">
+      Headline report — not a verified incident.
+    </div>
 
-    <div style="display: flex; gap: 8px; margin-top: 6px;">
+    <div style="display: flex; gap: 8px;">
       <button id="osint-fly-btn" class="gev-pill-btn" style="flex: 1.2; background: #00e5ff; border: none; color: #040914; padding: 10px 14px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; border-radius: 9999px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 0 16px rgba(0, 229, 255, 0.35);">
         <span>FLY TO SECTOR</span>
       </button>
@@ -158,7 +163,7 @@ function hideOsintCard() {
   if (_activeCardElement) _activeCardElement.style.display = 'none';
 }
 
-/** Tactical GDELT Global OSINT & Breaking News Layer. */
+/** Unverified Global News & Headlines Layer. */
 export function createGdeltLayer({ source, overlayHost } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('GDELT layer requires a snapshot source');
@@ -171,14 +176,15 @@ export function createGdeltLayer({ source, overlayHost } = {}) {
   let _count = 0;
   let _lastUpdate = null;
   let _lastError = null;
+  let _lastStatus = 'unavailable';
   let _enabled = false;
 
   const layer = {
     id: 'gdelt-events',
-    name: 'Global OSINT / News (24h)',
-    icon: '📡',
-    source: 'GDELT 2.0 · GEO',
-    updateInterval: 120000,
+    name: 'Global News (Unverified)',
+    icon: '📰',
+    source: 'GDELT 15m Cache',
+    updateInterval: 15 * 60_000, // 15-minute cadence; does NOT refetch on camera move
 
     init(viewer) {
       if (_viewer) throw new Error('GDELT layer is already initialized');
@@ -189,6 +195,7 @@ export function createGdeltLayer({ source, overlayHost } = {}) {
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
+      _lastStatus = 'unavailable';
       _enabled = false;
       overlayHost.setVisible(GDELT_OVERLAY_SOURCE_ID, false);
 
@@ -240,35 +247,26 @@ export function createGdeltLayer({ source, overlayHost } = {}) {
       const request = new AbortController();
       _request = request;
       try {
-        const rows = await source.getSnapshot({ signal: request.signal });
+        const result = await source.getSnapshot({ signal: request.signal });
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
+
+        const rows = result.rows || [];
+        _lastStatus = result.status || 'ready';
+
+        // Retain existing entities if upstream is rate-limited or fails so the globe never clears
+        if (!rows.length && _count > 0) {
+          _lastError = 'Rate limited (retaining cached headlines)';
+          return true;
+        }
 
         const nextEntities = [];
         let count = 0;
         const overlayEntries = [];
 
-        rows.sort((a, b) => (b.count || 0) - (a.count || 0));
-
         for (const item of rows) {
           count++;
-          const {
-            stableId,
-            lon,
-            lat,
-            name,
-            count: reportsCount,
-            tone,
-            url,
-            domain,
-            shareimage,
-            time,
-          } = item;
-          const color = toneColor(tone);
-          const baseRadius = Math.min(
-            150_000,
-            Math.max(25_000, Math.sqrt(reportsCount) * 18_000),
-          );
+          const { stableId, lon, lat, name, url, domain, time, tone } = item;
           const position = Cesium.Cartesian3.fromDegrees(lon, lat);
 
           nextEntities.push(
@@ -277,24 +275,24 @@ export function createGdeltLayer({ source, overlayHost } = {}) {
               name: name,
               position,
               ellipse: {
-                semiMajorAxis: baseRadius,
-                semiMinorAxis: baseRadius,
+                semiMajorAxis: 35_000,
+                semiMinorAxis: 35_000,
                 material: new Cesium.ColorMaterialProperty(
-                  color.withAlpha(0.35),
+                  GDELT_MARKER_COLOR.withAlpha(0.35),
                 ),
                 outline: true,
-                outlineColor: color.withAlpha(0.9),
+                outlineColor: GDELT_MARKER_COLOR.withAlpha(0.9),
                 outlineWidth: 2,
                 heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
               },
               properties: {
                 stableId,
                 headline: name,
-                reportsCount,
-                tone,
                 url,
                 domain,
                 time,
+                tone: typeof tone === 'number' ? tone : null,
+                verified: false,
               },
             }),
           );
@@ -304,9 +302,6 @@ export function createGdeltLayer({ source, overlayHost } = {}) {
               id: String(stableId),
               position,
               name,
-              count: reportsCount,
-              tone,
-              accent: color.toCssColorString(),
             }),
           );
         }
@@ -328,14 +323,15 @@ export function createGdeltLayer({ source, overlayHost } = {}) {
 
         _count = count;
         _lastUpdate = Date.now();
-        _lastError = null;
-        console.log(`[Data:GDELT] Updated: ${_count} global OSINT events`);
+        _lastError = result.stale ? 'Serving stale cache (rate limited)' : null;
+        console.log(`[Data:GDELT] Updated: ${_count} headlines`);
         return true;
       } catch (e) {
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         console.warn('[Data:GDELT] Update notice:', e);
         _lastError = e?.message || null;
+        _lastStatus = 'unavailable';
         return true;
       } finally {
         if (_request === request) _request = null;
@@ -365,6 +361,7 @@ export function createGdeltLayer({ source, overlayHost } = {}) {
       _count = 0;
       _lastUpdate = null;
       _lastError = null;
+      _lastStatus = 'unavailable';
     },
 
     getAnalystRecords(maxCount = 200) {
@@ -390,11 +387,11 @@ export function createGdeltLayer({ source, overlayHost } = {}) {
             {
               id: p?.stableId?.getValue(now) ?? null,
               name: p?.headline?.getValue(now),
-              count: p?.reportsCount?.getValue(now),
-              tone: p?.tone?.getValue(now),
               url: p?.url?.getValue(now),
               domain: p?.domain?.getValue(now),
               time: p?.time?.getValue(now),
+              tone: p?.tone?.getValue(now),
+              verified: false,
               lat: carto ? Cesium.Math.toDegrees(carto.latitude) : null,
               lon: carto ? Cesium.Math.toDegrees(carto.longitude) : null,
             },
@@ -409,6 +406,7 @@ export function createGdeltLayer({ source, overlayHost } = {}) {
       return {
         count: _count,
         lastUpdate: _lastUpdate,
+        status: _lastStatus,
         error: _lastError,
       };
     },
