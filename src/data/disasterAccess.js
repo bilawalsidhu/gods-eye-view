@@ -86,7 +86,9 @@ export function evaluateDisasterRouteSupport(route, accessSegments = []) {
   const normalizedSegments = accessSegments
     .map(normalizeDisasterAccessSegment)
     .filter(Boolean);
-  const byId = new Map(normalizedSegments.map((segment) => [segment.id, segment]));
+  const byId = new Map(
+    normalizedSegments.map((segment) => [segment.id, segment]),
+  );
 
   if (segmentIds.length === 0) {
     return Object.freeze({
