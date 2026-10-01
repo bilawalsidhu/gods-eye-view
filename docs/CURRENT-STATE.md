@@ -659,26 +659,47 @@ Windows/Claude Desktop Cowork confirmation remains outstanding (#927).
 A keyless `magnetosphere` layer draws Earth's magnetic field as filaments and
 the magnetopause as a live boundary cage.
 
-The field is IGRF-14 to degree 13, evaluated from a vendored public-domain
-coefficient table in `src/data/local_data/igrf/`. It is validated against an
-independent implementation across 105 points and three radii to better than
-0.001% of |B|. Field lines are traced in the browser with RK4, step growing
-with radius, and depend on the date rather than the solar wind — so they are
-computed once per enable and yield between lines to keep the frame alive.
+The internal field is IGRF-14 to degree 13, evaluated from a vendored
+public-domain coefficient table in `src/data/local_data/igrf/`. It is validated
+against an independent implementation across 105 points and three radii to
+better than 0.001% of |B|. Field lines are traced in the browser with RK4, step
+growing with radius, yielding between lines to keep the frame alive.
 
-Only the solar wind crosses the network. `/api/magnetosphere` returns about 440
-bytes: SWPC's propagated speed, density and IMF, plus the Shue et al. (1998)
-magnetopause derived from them. It takes the newest *complete* row, because
-SWPC's tail is often a timestamp with null plasma values and reading that as
-current state would render missing data as a dead-calm solar wind.
+IGRF alone models only the field generated inside the Earth, so past a few Earth
+radii the trace adds an external field from a Tsyganenko model: **T96** when the
+feed carries dynamic pressure, Dst and the IMF By and Bz, **T89c** when only Kp
+is available, and neither — internal field only — when the feed carries neither.
+There is deliberately no fallback to a guessed storm state. Both models are
+transliterations of the MIT-licensed Python `geopack` translation, validated
+point by point against it: T89c across 420 points, T96 across 61,488 spanning
+seven solar wind states and six dipole tilts, agreeing to 9.7e-11 nT. Both stop
+at 70 Re, their stated limit of validity.
 
-The layer is explicit about its limits. IGRF models the internal field, so the
-filaments are honest near Earth and increasingly schematic with altitude; the
-stretched magnetotail is not modelled. The boundary is an empirical fit, drawn
-as a cage rather than a shell, and reports when the solar wind is outside the
-range the fit was published for. It also reports when the boundary is
-compressed inside geosynchronous orbit at 6.6 Earth radii, which is the
-condition worth noticing.
+The first trace runs from IGRF alone so the layer paints without waiting on the
+network; the filaments are then re-traced once the feed names a usable model,
+and again whenever the solar wind changes enough to move them. The row's meta
+line names the model that drew the lines on screen, and says when it is being
+run outside the range it was fitted within.
+
+Only the solar wind crosses the network. `/api/magnetosphere` returns a few
+hundred bytes: SWPC's propagated speed, density and IMF, Kp, Kyoto Dst, and the
+Shue et al. (1998) magnetopause derived from them. It takes the newest
+*complete* row, because SWPC's tail is often a timestamp with null plasma values
+and reading that as current state would render missing data as a dead-calm solar
+wind. Kp and Dst each have their own cache and fail soft: losing Dst costs T96,
+losing Kp costs T89, and neither touches the boundary.
+
+The boundary is an empirical fit, drawn as a cage rather than a shell, and
+reports when the solar wind is outside the range the fit was published for. It
+also reports when the boundary is compressed inside geosynchronous orbit at 6.6
+Earth radii, which is the condition worth noticing.
+
+`scripts/qa-magnetosphere.mjs` is the browser gate. It measures the drawn
+polylines rather than trusting the row label, because the one failure mode the
+unit tests cannot see is a layer that names an external model while the
+filaments were traced without one — which is how this layer shipped once. It
+also blocks the feed and asserts the opposite: still drawing, naming no model,
+and staying inside the internal budget.
 
 Share token `5`, enabled plus an opacity option.
 
