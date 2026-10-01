@@ -86,13 +86,19 @@ jobs:
   # No `npm ci` — the pattern scan reads the checkout as-is and needs only
   # the binary baked into the image. Version rides the step so a stale image
   # is visible in the log, not silent.
+  #
+  # The 10m budget held for eight runs on a quiet box (the scan itself takes
+  # well under a minute) but timed out 2026-10-01 under host load ~100
+  # (docker exec + scan starved; run e7b72bad, job 5636c943, exit -1,
+  # `execution error: timeout`). 30m matches the other compute jobs so
+  # contention costs queue time, not a red gate with no finding behind it.
   - name: security
     image: gev-ci-node:1
     needs: [lint]
     steps:
       - name: Aegis pattern scan (new secrets findings only)
         run: aegis --version && aegis scan --categories secrets --severity-threshold high --baseline .aegis-baseline.json .
-    timeout: 10m
+    timeout: 30m
 
   - name: test-node24
     image: gev-ci-node:1
