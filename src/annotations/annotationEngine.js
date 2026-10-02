@@ -971,6 +971,32 @@ export function createAnnotationEngine({
     syncAnnotationHold();
   }
 
+  /**
+   * Remove specific marks and leave the rest of the board alone. `clear()` is
+   * all-or-nothing, which is right for "wipe the board" and wrong for taking
+   * one imported file back off it. Unlike `clear()` this does not supersede
+   * in-flight work: an annotate() or outline upgrade for some OTHER mark keeps
+   * going, and one for a removed mark finds it gone and stops on its own.
+   * @param {string|string[]} ids Annotation ids; unknown ids are ignored.
+   * @returns {number} How many marks were removed.
+   */
+  function remove(ids) {
+    if (destroyed) return 0;
+    let removed = 0;
+    for (const id of Array.isArray(ids) ? ids : [ids]) {
+      const anno = annotations.get(id);
+      if (!anno) continue;
+      annotations.delete(id);
+      renderer.remove(anno);
+      removed += 1;
+    }
+    if (removed) {
+      renderer.sync(annotations);
+      syncAnnotationHold();
+    }
+    return removed;
+  }
+
   /** Begin a graceful fade-out of everything, then remove. */
   function fadeOutAll() {
     const now = performance.now();
@@ -1099,6 +1125,7 @@ export function createAnnotationEngine({
   const engine = {
     annotate,
     clear,
+    remove,
     destroy() {
       if (destroyed) return;
       destroyed = true;
