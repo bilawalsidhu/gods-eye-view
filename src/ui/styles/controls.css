@@ -881,7 +881,8 @@
 .draw-color-select {
   flex: 0 0 74px;
 }
-.draw-clear-btn {
+.draw-clear-btn,
+.draw-file-btn {
   flex: 0 0 auto;
   padding: 0 8px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -897,6 +898,50 @@
 }
 body.gev-drawing #cesiumContainer canvas {
   cursor: crosshair;
+}
+
+/* Imported files: one row each, under the Draw controls. */
+#draw-import-row {
+  flex-direction: column;
+  align-items: stretch;
+  row-gap: 4px;
+}
+.draw-import-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 132px;
+  overflow-y: auto;
+}
+.draw-import-list:empty,
+#draw-import-status:empty {
+  display: none;
+}
+.draw-import-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.draw-import-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.4px;
+  color: var(--text-primary);
+}
+.draw-import-item.is-hidden .draw-import-name {
+  color: var(--text-dim);
+  text-decoration: line-through;
+}
+.draw-import-item .draw-file-btn {
+  height: 20px;
 }
 
 /* Proximity / All segmented control under the 3D toggle */
