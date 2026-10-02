@@ -1,5 +1,13 @@
 # Changelog
 
+- Voice control can run on Google Gemini Live as well as OpenAI Realtime. Add a
+  free `GEMINI_API_KEY` from Google AI Studio (Provider Settings → GOOGLE
+  GEMINI) and click the provider chip on the voice control to switch; the
+  choice is remembered per browser. The key stays server-side behind a
+  single-use token with the model, instructions and tools locked. The
+  voice control names the microphone in use and says so when it hears nothing
+  from it. Cost display, push-to-talk and viewport screenshots remain
+  OpenAI-only.
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
