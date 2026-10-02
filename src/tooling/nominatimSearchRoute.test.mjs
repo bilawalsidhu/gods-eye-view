@@ -9,15 +9,25 @@
 // Run with: npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   fetchNominatimSearch,
   geocodeProxy,
   NOMINATIM_MAX_PENDING,
 } from '../../server/providers/regional/place.js';
 import { fetchRegionalJson } from '../../server/providers/regional/http.js';
+import { setSharedNominatimGate } from '../../server/providers/regional/nominatimGate.js';
 import { localProviderPlugins } from '../../server/providers/local.js';
 import { createPlaceSearch, createGoogleGeocoder } from '../search/index.js';
 import { createPhotonGeocoder } from '../keylessGeocoder.js';
+
+// Each case starts with a fresh shared gate: a pause after one case's
+// simulated outage must not decide the next case.
+test.beforeEach(() => setSharedNominatimGate(null));
+const storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-search-route-'));
+test.after(() => fs.rmSync(storageRoot, { recursive: true, force: true }));
 
 const HIT = [
   {
@@ -33,13 +43,16 @@ const HIT = [
 /** Mount the geocode route the way the dev server does. */
 let clientCounter = 0;
 
-function mountGeocode(
-  install = (server) => geocodeProxy().configureServer(server),
-) {
+function mountGeocode(install = null) {
   // A fresh client address per mount: the per-client rate limiter is module
   // state shared by every case in this file, and one case's burst must not
   // decide another case's outcome.
   clientCounter += 1;
+  if (!install)
+    install = (server) =>
+      geocodeProxy({
+        storageDir: path.join(storageRoot, `case-${clientCounter}`),
+      }).configureServer(server);
   const remoteAddress = `10.0.0.${clientCounter % 250}`;
   const routes = new Map();
   install({

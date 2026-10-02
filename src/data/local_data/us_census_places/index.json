@@ -1,0 +1,697 @@
+{
+ "meta": {
+  "title": "US Census Bureau cartographic boundary places",
+  "source": "cb_2025_us_place_500k",
+  "url": "https://www2.census.gov/geo/tiger/GENZ2025/shp/cb_2025_us_place_500k.zip",
+  "sha256": "ce0e4019ecd4123d03d53aaa936eed0459b82e3e14b89a3dcd4d5e8b3308627d",
+  "license": "Public domain (U.S. Government work, 17 U.S.C. § 105)",
+  "schema": "states[]: st (USPS), fips, name, count, bbox [w, s, e, n] (e > 180 across the antimeridian). <st>.json: st, state, fips, features[]: geoid, name (NAME), alt?[] (everyday names for formal records), full (NAMELSAD), lsad? (city, town, CDP, …), cdp? (census designated place), d? (decimals when not meta.decimals), polygons[][ring] (first ring outer, rest holes; each ring open and encoded as integers in 10^-d degrees, first vertex absolute then [dLon, dLat] deltas)",
+  "decimals": 4,
+  "curation": {
+   "toleranceFactor": 0.003,
+   "minToleranceDeg": 0.0005,
+   "maxToleranceDeg": 0.01,
+   "decimals": 4,
+   "minPartKm2": 1,
+   "minPartShare": 0.001,
+   "minHoleKm2": 1,
+   "minRingVertices": 3,
+   "maxRepairSteps": 8
+  },
+  "script": "scripts/build-census-places.mjs"
+ },
+ "states": [
+  {
+   "st": "AK",
+   "fips": "02",
+   "name": "Alaska",
+   "count": 355,
+   "bbox": [
+    172.9388,
+    51.8105,
+    229.9965,
+    71.3397
+   ]
+  },
+  {
+   "st": "AL",
+   "fips": "01",
+   "name": "Alabama",
+   "count": 594,
+   "bbox": [
+    -88.4442,
+    30.228,
+    -84.963,
+    34.9981
+   ]
+  },
+  {
+   "st": "AR",
+   "fips": "05",
+   "name": "Arkansas",
+   "count": 626,
+   "bbox": [
+    265.396,
+    33.0143,
+    270.2149,
+    36.4996
+   ]
+  },
+  {
+   "st": "AS",
+   "fips": "60",
+   "name": "American Samoa",
+   "count": 77,
+   "bbox": [
+    -171.0899,
+    -14.3737,
+    -169.4188,
+    -11.0469
+   ]
+  },
+  {
+   "st": "AZ",
+   "fips": "04",
+   "name": "Arizona",
+   "count": 467,
+   "bbox": [
+    -114.814,
+    31.3323,
+    -109.0453,
+    37.0014
+   ]
+  },
+  {
+   "st": "CA",
+   "fips": "06",
+   "name": "California",
+   "count": 1619,
+   "bbox": [
+    -124.2695,
+    32.5344,
+    -114.229,
+    41.9931
+   ]
+  },
+  {
+   "st": "CO",
+   "fips": "08",
+   "name": "Colorado",
+   "count": 482,
+   "bbox": [
+    250.9823,
+    37,
+    257.9219,
+    40.9969
+   ]
+  },
+  {
+   "st": "CT",
+   "fips": "09",
+   "name": "Connecticut",
+   "count": 215,
+   "bbox": [
+    286.3242,
+    40.9876,
+    288.1694,
+    42.0482
+   ]
+  },
+  {
+   "st": "DC",
+   "fips": "11",
+   "name": "District of Columbia",
+   "count": 1,
+   "bbox": [
+    -77.1198,
+    38.7916,
+    -76.9094,
+    38.9951
+   ]
+  },
+  {
+   "st": "DE",
+   "fips": "10",
+   "name": "Delaware",
+   "count": 79,
+   "bbox": [
+    284.2113,
+    38.4513,
+    284.9509,
+    39.8186
+   ]
+  },
+  {
+   "st": "FL",
+   "fips": "12",
+   "name": "Florida",
+   "count": 958,
+   "bbox": [
+    272.6406,
+    24.5445,
+    279.9686,
+    30.9994
+   ]
+  },
+  {
+   "st": "GA",
+   "fips": "13",
+   "name": "Georgia",
+   "count": 676,
+   "bbox": [
+    -85.5285,
+    30.5918,
+    -80.8404,
+    34.9959
+   ]
+  },
+  {
+   "st": "GU",
+   "fips": "66",
+   "name": "Guam",
+   "count": 57,
+   "bbox": [
+    144.6181,
+    13.2503,
+    144.9471,
+    13.5983
+   ]
+  },
+  {
+   "st": "HI",
+   "fips": "15",
+   "name": "Hawaii",
+   "count": 163,
+   "bbox": [
+    -159.7329,
+    19.0185,
+    -154.8768,
+    22.2326
+   ]
+  },
+  {
+   "st": "IA",
+   "fips": "19",
+   "name": "Iowa",
+   "count": 1026,
+   "bbox": [
+    263.3894,
+    40.3783,
+    269.8465,
+    43.5009
+   ]
+  },
+  {
+   "st": "ID",
+   "fips": "16",
+   "name": "Idaho",
+   "count": 236,
+   "bbox": [
+    -117.0466,
+    41.9989,
+    -111.081,
+    48.7353
+   ]
+  },
+  {
+   "st": "IL",
+   "fips": "17",
+   "name": "Illinois",
+   "count": 1461,
+   "bbox": [
+    -91.507,
+    36.9703,
+    -87.5222,
+    42.5084
+   ]
+  },
+  {
+   "st": "IN",
+   "fips": "18",
+   "name": "Indiana",
+   "count": 974,
+   "bbox": [
+    -87.9431,
+    37.8755,
+    -84.8057,
+    41.7605
+   ]
+  },
+  {
+   "st": "KS",
+   "fips": "20",
+   "name": "Kansas",
+   "count": 740,
+   "bbox": [
+    -102.0453,
+    36.9937,
+    -94.5884,
+    40.0022
+   ]
+  },
+  {
+   "st": "KY",
+   "fips": "21",
+   "name": "Kentucky",
+   "count": 555,
+   "bbox": [
+    270.7834,
+    36.5004,
+    277.8809,
+    39.1356
+   ]
+  },
+  {
+   "st": "LA",
+   "fips": "22",
+   "name": "Louisiana",
+   "count": 484,
+   "bbox": [
+    265.9828,
+    29.1669,
+    270.6509,
+    33.0193
+   ]
+  },
+  {
+   "st": "MA",
+   "fips": "25",
+   "name": "Massachusetts",
+   "count": 248,
+   "bbox": [
+    -73.3757,
+    41.244,
+    -69.9412,
+    42.8866
+   ]
+  },
+  {
+   "st": "MD",
+   "fips": "24",
+   "name": "Maryland",
+   "count": 536,
+   "bbox": [
+    -79.4837,
+    37.9535,
+    -75.0489,
+    39.723
+   ]
+  },
+  {
+   "st": "ME",
+   "fips": "23",
+   "name": "Maine",
+   "count": 155,
+   "bbox": [
+    -70.9968,
+    43.0731,
+    -66.98,
+    47.3602
+   ]
+  },
+  {
+   "st": "MI",
+   "fips": "26",
+   "name": "Michigan",
+   "count": 745,
+   "bbox": [
+    -90.1933,
+    41.7105,
+    -82.4135,
+    47.4782
+   ]
+  },
+  {
+   "st": "MN",
+   "fips": "27",
+   "name": "Minnesota",
+   "count": 916,
+   "bbox": [
+    262.7608,
+    43.4996,
+    269.6867,
+    49.3617
+   ]
+  },
+  {
+   "st": "MO",
+   "fips": "29",
+   "name": "Missouri",
+   "count": 1081,
+   "bbox": [
+    -95.6258,
+    36.0314,
+    -89.1628,
+    40.5805
+   ]
+  },
+  {
+   "st": "MP",
+   "fips": "69",
+   "name": "Commonwealth of the Northern Mariana Islands",
+   "count": 135,
+   "bbox": [
+    144.8864,
+    14.1106,
+    146.0645,
+    20.5532
+   ]
+  },
+  {
+   "st": "MS",
+   "fips": "28",
+   "name": "Mississippi",
+   "count": 427,
+   "bbox": [
+    268.571,
+    30.2088,
+    271.8279,
+    34.996
+   ]
+  },
+  {
+   "st": "MT",
+   "fips": "30",
+   "name": "Montana",
+   "count": 497,
+   "bbox": [
+    -116.0179,
+    44.5947,
+    -104.0417,
+    48.9995
+   ]
+  },
+  {
+   "st": "NC",
+   "fips": "37",
+   "name": "North Carolina",
+   "count": 776,
+   "bbox": [
+    -84.0447,
+    33.8423,
+    -75.4607,
+    36.5521
+   ]
+  },
+  {
+   "st": "ND",
+   "fips": "38",
+   "name": "North Dakota",
+   "count": 406,
+   "bbox": [
+    -104.0418,
+    45.9389,
+    -96.5934,
+    48.999
+   ]
+  },
+  {
+   "st": "NE",
+   "fips": "31",
+   "name": "Nebraska",
+   "count": 593,
+   "bbox": [
+    -104.0527,
+    40.0019,
+    -95.421,
+    42.9997
+   ]
+  },
+  {
+   "st": "NH",
+   "fips": "33",
+   "name": "New Hampshire",
+   "count": 100,
+   "bbox": [
+    287.4868,
+    42.7001,
+    289.272,
+    45.0016
+   ]
+  },
+  {
+   "st": "NJ",
+   "fips": "34",
+   "name": "New Jersey",
+   "count": 700,
+   "bbox": [
+    -75.5491,
+    38.9285,
+    -73.8936,
+    41.257
+   ]
+  },
+  {
+   "st": "NM",
+   "fips": "35",
+   "name": "New Mexico",
+   "count": 528,
+   "bbox": [
+    -109.0491,
+    31.7831,
+    -103.0436,
+    37
+   ]
+  },
+  {
+   "st": "NV",
+   "fips": "32",
+   "name": "Nevada",
+   "count": 138,
+   "bbox": [
+    -120.0065,
+    35.0965,
+    -114.0435,
+    41.9991
+   ]
+  },
+  {
+   "st": "NY",
+   "fips": "36",
+   "name": "New York",
+   "count": 1293,
+   "bbox": [
+    -79.7274,
+    40.4961,
+    -71.8565,
+    45.0108
+   ]
+  },
+  {
+   "st": "OH",
+   "fips": "39",
+   "name": "Ohio",
+   "count": 1265,
+   "bbox": [
+    -84.8202,
+    38.4032,
+    -80.5188,
+    41.9772
+   ]
+  },
+  {
+   "st": "OK",
+   "fips": "40",
+   "name": "Oklahoma",
+   "count": 846,
+   "bbox": [
+    -102.9838,
+    33.7658,
+    -94.4322,
+    36.9994
+   ]
+  },
+  {
+   "st": "OR",
+   "fips": "41",
+   "name": "Oregon",
+   "count": 426,
+   "bbox": [
+    235.4875,
+    41.9929,
+    243.0646,
+    46.2066
+   ]
+  },
+  {
+   "st": "PA",
+   "fips": "42",
+   "name": "Pennsylvania",
+   "count": 2003,
+   "bbox": [
+    279.4809,
+    39.72,
+    285.3105,
+    42.2258
+   ]
+  },
+  {
+   "st": "PR",
+   "fips": "72",
+   "name": "Puerto Rico",
+   "count": 292,
+   "bbox": [
+    -67.2579,
+    17.9507,
+    -65.2904,
+    18.5129
+   ]
+  },
+  {
+   "st": "RI",
+   "fips": "44",
+   "name": "Rhode Island",
+   "count": 36,
+   "bbox": [
+    -71.8628,
+    41.3063,
+    -71.176,
+    42.0178
+   ]
+  },
+  {
+   "st": "SC",
+   "fips": "45",
+   "name": "South Carolina",
+   "count": 475,
+   "bbox": [
+    276.722,
+    32.081,
+    281.4231,
+    35.1885
+   ]
+  },
+  {
+   "st": "SD",
+   "fips": "46",
+   "name": "South Dakota",
+   "count": 485,
+   "bbox": [
+    -103.9791,
+    42.48,
+    -96.4455,
+    45.9447
+   ]
+  },
+  {
+   "st": "TN",
+   "fips": "47",
+   "name": "Tennessee",
+   "count": 504,
+   "bbox": [
+    -90.1865,
+    34.983,
+    -81.79,
+    36.6525
+   ]
+  },
+  {
+   "st": "TX",
+   "fips": "48",
+   "name": "Texas",
+   "count": 1863,
+   "bbox": [
+    253.3641,
+    25.8403,
+    266.4339,
+    36.4997
+   ]
+  },
+  {
+   "st": "UT",
+   "fips": "49",
+   "name": "Utah",
+   "count": 334,
+   "bbox": [
+    245.9562,
+    36.9983,
+    250.8755,
+    42.0012
+   ]
+  },
+  {
+   "st": "VA",
+   "fips": "51",
+   "name": "Virginia",
+   "count": 700,
+   "bbox": [
+    -83.4623,
+    36.541,
+    -75.2527,
+    39.3248
+   ]
+  },
+  {
+   "st": "VI",
+   "fips": "78",
+   "name": "United States Virgin Islands",
+   "count": 10,
+   "bbox": [
+    -64.9841,
+    17.694,
+    -64.6957,
+    18.3573
+   ]
+  },
+  {
+   "st": "VT",
+   "fips": "50",
+   "name": "Vermont",
+   "count": 180,
+   "bbox": [
+    -73.3391,
+    42.7415,
+    -71.4646,
+    45.0136
+   ]
+  },
+  {
+   "st": "WA",
+   "fips": "53",
+   "name": "Washington",
+   "count": 639,
+   "bbox": [
+    -124.6462,
+    45.5558,
+    -117.0231,
+    49.0025
+   ]
+  },
+  {
+   "st": "WI",
+   "fips": "55",
+   "name": "Wisconsin",
+   "count": 808,
+   "bbox": [
+    -92.808,
+    42.4926,
+    -87.0485,
+    46.8857
+   ]
+  },
+  {
+   "st": "WV",
+   "fips": "54",
+   "name": "West Virginia",
+   "count": 439,
+   "bbox": [
+    277.3862,
+    37.2349,
+    282.2731,
+    40.6253
+   ]
+  },
+  {
+   "st": "WY",
+   "fips": "56",
+   "name": "Wyoming",
+   "count": 205,
+   "bbox": [
+    248.9533,
+    40.9954,
+    255.9468,
+    44.9795
+   ]
+  }
+ ]
+}

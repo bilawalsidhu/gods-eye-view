@@ -1,0 +1,2549 @@
+{
+ "meta": {
+  "title": "Who's On First neighbourhood, macrohood and microhood polygons",
+  "archives": {
+   "neighbourhood": {
+    "url": "https://data.geocode.earth/wof/dist/legacy/whosonfirst-data-neighbourhood-latest.tar.bz2",
+    "sha256": "8e5e413aacf2244e4e4167fbd9be860bc407ae6de8b733e47f13abe6d3d10455"
+   },
+   "macrohood": {
+    "url": "https://data.geocode.earth/wof/dist/legacy/whosonfirst-data-macrohood-latest.tar.bz2",
+    "sha256": "f5fbfabcb8229b83242dbd38530c27e61867e8b3b097e3393d9c841962a99679"
+   },
+   "microhood": {
+    "url": "https://data.geocode.earth/wof/dist/legacy/whosonfirst-data-microhood-latest.tar.bz2",
+    "sha256": "e8197fa576e8831be8f091ac7e219d29224d89404ab0c56d377339e42a8f29ac"
+   }
+  },
+  "sourcesRegistry": {
+   "url": "https://raw.githubusercontent.com/whosonfirst/whosonfirst-sources/e17af153c144fe6e08aa8db2607b4bf8aecd448d/data/sources-spec-latest.json",
+   "sha256": "d8a5dd873d26eee11583de4438185c046dec33848d5bde27047ca4bff44d9c39"
+  },
+  "license": "Per source; see sources and ATTRIBUTION.md",
+  "format": "neighborhood-polylines-v1",
+  "fields": [
+   "id",
+   "name",
+   "country",
+   "type",
+   "bbox",
+   "aliases",
+   "source",
+   "rings",
+   "label"
+  ],
+  "precision": 5,
+  "coordinateOrder": "lon,lat",
+  "toleranceM": 15,
+  "schema": "tiles[]: key, count, bbox [w, s, e, n] of its records. <key>.json: tile, features[] as fields: WOF id, name, ISO country, placetype, bbox, aliases[] (other-language names), geometry source key, rings (polygons, largest first, each [outer, ...holes]; each ring an encoded polyline string: zigzag varint deltas of lon then lat at 10^-precision degrees), label [lon, lat] (a point inside the largest polygon)",
+  "sources": {
+   "arg-caba": {
+    "name": "Ciudad Autonoma de Buenos Aires, Iniciativa de Datos Publicos y Transparencia",
+    "license": "CC BY",
+    "terms": "https://data.buenosaires.gob.ar/tyc",
+    "records": 48
+   },
+   "atldpcd": {
+    "name": "Atlanta Department of Planning and Community Development",
+    "license": "CC BY 4.0",
+    "terms": "https://www.arcgis.com/home/item.html?id=716f417a1990446389ef7fd2c381d09f",
+    "records": 130
+   },
+   "azavea": {
+    "name": "Azavea, Inc.",
+    "license": "CC BY 3.0 US",
+    "terms": "https://www.opendataphilly.org/dataset/philadelphia-neighborhoods",
+    "records": 157
+   },
+   "baltomoit": {
+    "name": "Baltimore Mayor's Office of Information Technology",
+    "license": "CC BY 3.0",
+    "terms": "https://data.baltimorecity.gov/Geographic/Baltimore-Study-Area/cdrh-gpzc/about",
+    "records": 85
+   },
+   "bra": {
+    "name": "Boston Redevelopment Authority",
+    "license": "CC0",
+    "terms": "https://data.cityofboston.gov/City-Services/Boston-Neighborhood-Shapefiles/af56-j7tb",
+    "records": 27
+   },
+   "burritojustice": {
+    "name": "Burrito Justice",
+    "license": "Public Domain",
+    "terms": "https://burritojustice.com/licensing/",
+    "records": 19
+   },
+   "camgov": {
+    "name": "City of Cambridge Geographic Information System Department",
+    "license": "CC BY",
+    "terms": "https://data.cambridgema.gov/download/tif9-pmiw/application/pdf",
+    "records": 7
+   },
+   "can-bbygov": {
+    "name": "City of Burnaby GIS Department",
+    "license": "Open Government Licence - British Columbia, v2.0",
+    "terms": "https://www.burnaby.ca/opendata/licence.html",
+    "records": 31
+   },
+   "can-calcai": {
+    "name": "City of Calgary, Corporate Analytics and Innovation",
+    "license": "Open Government Licence - City of Calgary",
+    "terms": "https://data.calgary.ca/stories/s/u45n-7awa",
+    "records": 151
+   },
+   "can-dnvgov": {
+    "name": "District of North Vancouver Government",
+    "license": "Open Government Licence - British Columbia, v2.0",
+    "terms": "http://geoweb.dnv.org/data/metadata.php?dataset=RegNeighbourhood",
+    "records": 37
+   },
+   "can-edmdsd": {
+    "name": "City of Edmonton Department of Sustainable Development",
+    "license": "Open Government Licence - Edmonton",
+    "terms": "https://www.edmonton.ca/city_government/documents/Web-version2.1-OpenDataAgreement.pdf",
+    "records": 332
+   },
+   "can-gatsudd": {
+    "name": "Gatineau Service de l'urbanisme et du developpement durable (SUDD)",
+    "license": "CC BY (equivalent)",
+    "terms": "http://www3.gatineau.ca/Infoterritoire/WebInterface/help/fr/Content/1_About/1_About_FR.htm",
+    "records": 74
+   },
+   "can-lvlsu": {
+    "name": "Laval Service de l'urbanisme",
+    "license": "CC BY",
+    "terms": "https://www.donneesquebec.ca/fr/licence/#cc-by",
+    "records": 3
+   },
+   "can-mtlsmvt": {
+    "name": "Montreal Service de la Mise en Valeur du Territoire",
+    "license": "CC BY 4.0",
+    "terms": "https://creativecommons.org/licenses/by/4.0/",
+    "records": 48
+   },
+   "can-nwds": {
+    "name": "City of New Westminster Development Services Department",
+    "license": "OGL - City of New Westminster",
+    "terms": "http://opendata.newwestcity.ca/licence",
+    "records": 9
+   },
+   "can-ons": {
+    "name": "Ottawa Neighbourhood Study (ONS)",
+    "license": "CC BY (equivalent)",
+    "terms": "http://neighbourhoodstudy.ca/ons-terms-of-use/",
+    "records": 36
+   },
+   "can-qcodp": {
+    "name": "Quebec City Open Data Portal",
+    "license": "CC BY 4.0",
+    "terms": "http://donnees.ville.quebec.qc.ca/licence.aspx",
+    "records": 27
+   },
+   "can-rodca": {
+    "name": "City of Regina Open Data - Community Associations",
+    "license": "Open Government Licence - City of Regina",
+    "terms": "http://www.regina.ca/residents/open-government/open-government-licence/",
+    "records": 12
+   },
+   "can-saskodp": {
+    "name": "City of Saskatoon Open Data Portal - Neighbourhood Areas",
+    "license": "CC0 (equivalent)",
+    "terms": "http://opendata-saskatoon.cloudapp.net/TermsOfUse/TermsOfUse",
+    "records": 54
+   },
+   "can-surgis": {
+    "name": "City of Surrey GIS Section",
+    "license": "OGL - City of Surrey",
+    "terms": "http://data.surrey.ca/pages/open-government-licence-surrey",
+    "records": 5
+   },
+   "can-wpgppd": {
+    "name": "City of Winnipeg Department of Planning, Property, and Development",
+    "license": "Open Government License - Winnipeg",
+    "terms": "https://data.winnipeg.ca/open-data-licence",
+    "records": 132
+   },
+   "canvec-hydro": {
+    "name": "Natural Resources Canada, CanVec Hydrographic Features",
+    "license": "Open Government Licence - Canada",
+    "terms": "http://open.canada.ca/en/open-government-licence-canada",
+    "records": 9
+   },
+   "cbsnl": {
+    "name": "Centraal Bureau voor de Statistiek",
+    "license": "CC BY 3.0",
+    "terms": "https://data.overheid.nl/data/dataset/wijk-en-buurtkaart-2016-versie-1",
+    "records": 12396
+   },
+   "denvercpd": {
+    "name": "Denver Department of Community Planning and Development",
+    "license": "CC BY 3.0",
+    "terms": "https://www.denvergov.org/opendata/termsofuse",
+    "records": 77
+   },
+   "esp-aytomad": {
+    "name": "Portal de datos abiertos del Ayuntamiento de Madrid",
+    "license": "CC0 (equivalent)",
+    "terms": "http://datos.madrid.es/egob/catalogo/aviso-legal",
+    "records": 150
+   },
+   "esp-cartobcn": {
+    "name": "CartoBCN",
+    "license": "CC BY",
+    "terms": "http://w133.bcn.cat/geoportal/descargas/en_gb_cond_us_carto.pdf",
+    "records": 83
+   },
+   "hkigis": {
+    "name": "Helsinki City Real Estate Department",
+    "license": "CC BY 4.0",
+    "terms": "http://www.hri.fi/dataset/paakaupunkiseudun-aluejakokartat",
+    "records": 358
+   },
+   "karmashapes": {
+    "name": "Karmashapes",
+    "license": "CC BY 4.0",
+    "terms": "https://creativecommons.org/licenses/by/4.0/",
+    "records": 24010
+   },
+   "kuogov": {
+    "name": "City of Kuopio",
+    "license": "CC BY 4.0",
+    "terms": "https://www.avoindata.fi/data/fi/dataset/kuopion-kaupunginosat",
+    "records": 47
+   },
+   "lacity": {
+    "name": "City of Los Angeles Neighborhood Councils (Certified)",
+    "license": "CC0",
+    "terms": "https://data.lacity.org/A-Well-Run-City/Neighborhood-Councils-Certified-/fu65-dz2f/about",
+    "records": 40
+   },
+   "meso": {
+    "name": "Mesoshapes",
+    "license": "CC BY",
+    "terms": "https://github.com/whosonfirst-data/whosonfirst-data/blob/master/LICENSE.md",
+    "records": 41
+   },
+   "mz": {
+    "name": "Metazen",
+    "license": "CC0",
+    "terms": "https://github.com/whosonfirst-data/whosonfirst-data/blob/master/LICENSE.md#license",
+    "records": 3461
+   },
+   "nolagis": {
+    "name": "City of New Orleans, Office of Information Technology and Innovation, Enterprise Information Team",
+    "license": "CC0",
+    "terms": "https://data.nola.gov/Geographic-Base-Layers/Neighborhoods/92zg-wzkq",
+    "records": 71
+   },
+   "nz-linz": {
+    "name": "Land Information New Zealand",
+    "license": "CC BY 4.0",
+    "terms": "https://www.linz.govt.nz/data/licensing-and-using-data/attributing-linz-data",
+    "records": 1586
+   },
+   "oakced": {
+    "name": "Oakland Community and Economic Development Department",
+    "license": "Public Domain",
+    "terms": "https://data.oaklandnet.com/Property/Oakland-Neighborhoods/7zky-kcq9/about",
+    "records": 119
+   },
+   "oulugov": {
+    "name": "City of Oulu",
+    "license": "CC BY 4.0",
+    "terms": "http://www.ouka.fi/oulu/oulu-tietoa/kayttoehdot",
+    "records": 106
+   },
+   "pedia": {
+    "name": "Pediacities",
+    "license": "ODC-By, v1.0",
+    "terms": "http://catalog.opendata.city/dataset/pediacities-nyc-neighborhoods/resource/91778048-3c58-449c-a3f9-365ed203e914",
+    "records": 254
+   },
+   "porbps": {
+    "name": "City of Portland Bureau of Planning and Sustainability",
+    "license": "Public Domain",
+    "terms": "https://www.arcgis.com/home/item.html?id=c11815647b3949faa20b16cf50ab214d",
+    "records": 101
+   },
+   "quattroshapes": {
+    "name": "Quattroshapes",
+    "license": "CC BY 2.0",
+    "terms": "https://github.com/foursquare/quattroshapes/blob/master/LICENSE.md",
+    "records": 5969
+   },
+   "santabar": {
+    "name": "The City of Santa Barbara",
+    "license": "Public Domain",
+    "terms": "https://www.santabarbaraca.gov/howdoi/get/webhelp/policy.asp",
+    "records": 32
+   },
+   "sdgis": {
+    "name": "SanGIS/SANDAG GIS Data Warehouse",
+    "license": "CC0",
+    "terms": "http://www.sangis.org/Legal_Notice.htm",
+    "records": 18
+   },
+   "seagv": {
+    "name": "Seattle City GIS Program",
+    "license": "Public Domain",
+    "terms": "https://data.seattle.gov/data-policy",
+    "records": 87
+   },
+   "sfgov": {
+    "name": "City of San Francisco",
+    "license": "PDDL 1.0",
+    "terms": "https://data.sfgov.org/terms-of-use",
+    "records": 96
+   },
+   "sg-sggov": {
+    "name": "Singapore Open Data Portal",
+    "license": "Singapore Open Data Licence v1",
+    "terms": "https://data.gov.sg/open-data-licence",
+    "records": 387
+   },
+   "sjp": {
+    "name": "San Jose Planning Department",
+    "license": "CC0",
+    "terms": "http://www.sanjoseca.gov/DocumentCenter/View/55954",
+    "records": 2
+   },
+   "tkugov": {
+    "name": "Turku City Government",
+    "license": "CC BY 4.0",
+    "terms": "http://www.lounaistieto.fi/blog/2015/08/18/turun-palvelualuejakotilastoalueet/",
+    "records": 129
+   },
+   "torsdfa": {
+    "name": "Toronto Social Development, Finance & Administration Department",
+    "license": "Open Government Licence - Ontario, v1.0",
+    "terms": "http://www1.toronto.ca/wps/portal/contentonly?vgnextoid=4a37e03bb8d1e310VgnVCM10000071d60f89RCRD",
+    "records": 83
+   },
+   "vanpds": {
+    "name": "Vancouver Planning and Development Services",
+    "license": "Open Government Licence - British Columbia, v2.0",
+    "terms": "http://vancouver.ca/your-government/open-data-catalogue.aspx#tab19099",
+    "records": 7
+   },
+   "wapo": {
+    "name": "Washington Post",
+    "license": "CC BY",
+    "terms": "http://opendatadc.org/dataset/neighborhood-boundaries-217-neighborhoods-washpost-justgrimes",
+    "records": 212
+   },
+   "whosonfirst": {
+    "name": "Who's On First",
+    "license": "CC0",
+    "terms": "https://github.com/whosonfirst-data/whosonfirst-data/blob/master/LICENSE.md",
+    "records": 6905
+   },
+   "woedb": {
+    "name": "WOE DB",
+    "license": "CC0",
+    "terms": "N/A",
+    "records": 1
+   },
+   "wof": {
+    "name": "Who's On First",
+    "license": "CC0",
+    "terms": "https://github.com/whosonfirst-data/whosonfirst-data/blob/master/LICENSE.md",
+    "records": 11
+   },
+   "zetashapes": {
+    "name": "Zetashapes",
+    "license": "Public Domain",
+    "terms": "http://www.zetashapes.com/license",
+    "records": 3276
+   },
+   "zolk": {
+    "name": "Zolk Chicago Neighborhoods Map",
+    "license": "CC BY 3.0 US",
+    "terms": "http://chicagomap.zolk.com/about.html",
+    "records": 207
+   }
+  },
+  "script": "scripts/build-wof-neighborhoods.py"
+ },
+ "tiles": [
+  {
+   "key": "0",
+   "count": 372,
+   "bbox": [
+    -70.79766,
+    -34.72678,
+    -43.04817,
+    -22.75352
+   ]
+  },
+  {
+   "key": "11",
+   "count": 224,
+   "bbox": [
+    166.45662,
+    -47.27984,
+    170.90463,
+    -45.09162
+   ]
+  },
+  {
+   "key": "12",
+   "count": 107,
+   "bbox": [
+    18.30722,
+    -34.3058,
+    18.73894,
+    -33.6755
+   ]
+  },
+  {
+   "key": "13110",
+   "count": 20,
+   "bbox": [
+    167.17633,
+    -44.99828,
+    168.59759,
+    -43.9652
+   ]
+  },
+  {
+   "key": "13111",
+   "count": 540,
+   "bbox": [
+    171.24465,
+    -44.38861,
+    176.92153,
+    -39.46332
+   ]
+  },
+  {
+   "key": "13113",
+   "count": 802,
+   "bbox": [
+    172.12043,
+    -39.25783,
+    178.41524,
+    -34.14691
+   ]
+  },
+  {
+   "key": "132",
+   "count": 695,
+   "bbox": [
+    106.551,
+    -7.35689,
+    112.84678,
+    -6.089
+   ]
+  },
+  {
+   "key": "200",
+   "count": 43,
+   "bbox": [
+    -157.96316,
+    21.25116,
+    -157.64724,
+    21.40724
+   ]
+  },
+  {
+   "key": "201",
+   "count": 227,
+   "bbox": [
+    -99.32366,
+    19.17927,
+    -98.9521,
+    19.59308
+   ]
+  },
+  {
+   "key": "2030",
+   "count": 76,
+   "bbox": [
+    -118.42056,
+    32.60468,
+    -116.54561,
+    33.78209
+   ]
+  },
+  {
+   "key": "20312",
+   "count": 118,
+   "bbox": [
+    -112.36666,
+    33.21923,
+    -111.86637,
+    33.74509
+   ]
+  },
+  {
+   "key": "203130",
+   "count": 203,
+   "bbox": [
+    -98.80526,
+    29.2318,
+    -95.52353,
+    30.53645
+   ]
+  },
+  {
+   "key": "203131",
+   "count": 220,
+   "bbox": [
+    -95.83024,
+    29.49734,
+    -89.98529,
+    30.63028
+   ]
+  },
+  {
+   "key": "203132",
+   "count": 232,
+   "bbox": [
+    -97.55021,
+    32.38337,
+    -96.58284,
+    33.04462
+   ]
+  },
+  {
+   "key": "203210",
+   "count": 325,
+   "bbox": [
+    -120.50844,
+    33.70365,
+    -118.11291,
+    34.95663
+   ]
+  },
+  {
+   "key": "203211",
+   "count": 128,
+   "bbox": [
+    -118.14444,
+    33.71728,
+    -114.91926,
+    36.47832
+   ]
+  },
+  {
+   "key": "20321201",
+   "count": 167,
+   "bbox": [
+    -122.1898,
+    36.94412,
+    -121.58614,
+    37.30313
+   ]
+  },
+  {
+   "key": "20321202",
+   "count": 182,
+   "bbox": [
+    -122.5149,
+    37.69407,
+    -122.35698,
+    37.8453
+   ]
+  },
+  {
+   "key": "20321203",
+   "count": 682,
+   "bbox": [
+    -122.34156,
+    37.25929,
+    -121.70636,
+    37.92413
+   ]
+  },
+  {
+   "key": "2032122",
+   "count": 62,
+   "bbox": [
+    -121.69377,
+    38.31305,
+    -121.30984,
+    38.7364
+   ]
+  },
+  {
+   "key": "20330",
+   "count": 2,
+   "bbox": [
+    -112.27339,
+    33.65893,
+    -111.9261,
+    33.90258
+   ]
+  },
+  {
+   "key": "20331",
+   "count": 165,
+   "bbox": [
+    -94.73916,
+    34.99485,
+    -89.97554,
+    39.45616
+   ]
+  },
+  {
+   "key": "20332",
+   "count": 340,
+   "bbox": [
+    -112.13821,
+    39.56071,
+    -104.59958,
+    40.85297
+   ]
+  },
+  {
+   "key": "20333",
+   "count": 140,
+   "bbox": [
+    -95.10289,
+    39.24349,
+    -92.98452,
+    45.02382
+   ]
+  },
+  {
+   "key": "21200",
+   "count": 226,
+   "bbox": [
+    -82.71884,
+    25.55401,
+    -80.11379,
+    28.14782
+   ]
+  },
+  {
+   "key": "21202",
+   "count": 404,
+   "bbox": [
+    -90.05867,
+    28.12046,
+    -81.09286,
+    33.75483
+   ]
+  },
+  {
+   "key": "212200",
+   "count": 211,
+   "bbox": [
+    -90.01114,
+    33.74542,
+    -84.3638,
+    36.35236
+   ]
+  },
+  {
+   "key": "212201",
+   "count": 224,
+   "bbox": [
+    -84.3847,
+    33.74512,
+    -78.73647,
+    35.93225
+   ]
+  },
+  {
+   "key": "212202",
+   "count": 116,
+   "bbox": [
+    -85.85015,
+    38.05845,
+    -84.34171,
+    39.23607
+   ]
+  },
+  {
+   "key": "212210",
+   "count": 120,
+   "bbox": [
+    -78.7651,
+    35.66272,
+    -78.51137,
+    35.98779
+   ]
+  },
+  {
+   "key": "212212",
+   "count": 555,
+   "bbox": [
+    -77.80886,
+    37.23637,
+    -76.32878,
+    39.372
+   ]
+  },
+  {
+   "key": "212220",
+   "count": 411,
+   "bbox": [
+    -87.94011,
+    39.54597,
+    -85.93738,
+    42.03093
+   ]
+  },
+  {
+   "key": "212221",
+   "count": 241,
+   "bbox": [
+    -83.86882,
+    39.83446,
+    -79.84742,
+    42.25107
+   ]
+  },
+  {
+   "key": "212222",
+   "count": 148,
+   "bbox": [
+    -89.62453,
+    42.88679,
+    -87.83816,
+    43.23966
+   ]
+  },
+  {
+   "key": "212223",
+   "count": 477,
+   "bbox": [
+    -83.98185,
+    42.13858,
+    -78.73159,
+    44.12027
+   ]
+  },
+  {
+   "key": "2122300",
+   "count": 6,
+   "bbox": [
+    -76.77736,
+    39.37197,
+    -76.49646,
+    39.721
+   ]
+  },
+  {
+   "key": "2122301",
+   "count": 541,
+   "bbox": [
+    -75.31667,
+    39.84878,
+    -73.67109,
+    40.79095
+   ]
+  },
+  {
+   "key": "2122303",
+   "count": 113,
+   "bbox": [
+    -73.99624,
+    40.76428,
+    -73.73478,
+    40.92804
+   ]
+  },
+  {
+   "key": "212231",
+   "count": 24,
+   "bbox": [
+    -71.4932,
+    41.76909,
+    -71.3399,
+    41.87261
+   ]
+  },
+  {
+   "key": "212232",
+   "count": 1,
+   "bbox": [
+    -75.80999,
+    44.97561,
+    -75.78624,
+    44.98577
+   ]
+  },
+  {
+   "key": "212233",
+   "count": 132,
+   "bbox": [
+    -71.19125,
+    42.22791,
+    -70.92278,
+    42.40629
+   ]
+  },
+  {
+   "key": "213",
+   "count": 445,
+   "bbox": [
+    -9.8565,
+    37.09996,
+    -0.14377,
+    44.91649
+   ]
+  },
+  {
+   "key": "221010",
+   "count": 330,
+   "bbox": [
+    -122.83675,
+    45.43254,
+    -122.20765,
+    47.77669
+   ]
+  },
+  {
+   "key": "221012",
+   "count": 308,
+   "bbox": [
+    -123.43316,
+    48.37727,
+    -122.61706,
+    49.41381
+   ]
+  },
+  {
+   "key": "221031",
+   "count": 345,
+   "bbox": [
+    -114.3158,
+    50.84282,
+    -113.3446,
+    53.4694
+   ]
+  },
+  {
+   "key": "221033",
+   "count": 465,
+   "bbox": [
+    -113.71388,
+    53.39572,
+    -113.24683,
+    53.71592
+   ]
+  },
+  {
+   "key": "2211",
+   "count": 375,
+   "bbox": [
+    -106.82496,
+    44.98885,
+    -93.03545,
+    52.23112
+   ]
+  },
+  {
+   "key": "2300100",
+   "count": 20,
+   "bbox": [
+    -76.35559,
+    45.08001,
+    -75.87256,
+    45.51661
+   ]
+  },
+  {
+   "key": "2300101",
+   "count": 465,
+   "bbox": [
+    -76.31305,
+    44.96177,
+    -73.33863,
+    45.71368
+   ]
+  },
+  {
+   "key": "230011",
+   "count": 62,
+   "bbox": [
+    -71.57769,
+    46.57301,
+    -70.99444,
+    46.98074
+   ]
+  },
+  {
+   "key": "23111",
+   "count": 379,
+   "bbox": [
+    -4.57543,
+    45.00666,
+    -0.01564,
+    49.71585
+   ]
+  },
+  {
+   "key": "231130",
+   "count": 44,
+   "bbox": [
+    -6.46172,
+    53.21741,
+    -6.10114,
+    53.44408
+   ]
+  },
+  {
+   "key": "23113111",
+   "count": 8,
+   "bbox": [
+    -0.37529,
+    51.25707,
+    -0.07237,
+    51.35311
+   ]
+  },
+  {
+   "key": "23113112",
+   "count": 86,
+   "bbox": [
+    -2.78679,
+    51.36007,
+    -2.4519,
+    51.5717
+   ]
+  },
+  {
+   "key": "2311311310",
+   "count": 23,
+   "bbox": [
+    -0.51384,
+    51.40217,
+    -0.337,
+    51.51027
+   ]
+  },
+  {
+   "key": "2311311311",
+   "count": 216,
+   "bbox": [
+    -0.3598,
+    51.31652,
+    0.22368,
+    51.55667
+   ]
+  },
+  {
+   "key": "2311311312",
+   "count": 29,
+   "bbox": [
+    -0.5291,
+    51.49506,
+    -0.34058,
+    51.63313
+   ]
+  },
+  {
+   "key": "2311311313",
+   "count": 253,
+   "bbox": [
+    -0.36255,
+    51.49353,
+    0.01578,
+    51.69163
+   ]
+  },
+  {
+   "key": "231131133",
+   "count": 3,
+   "bbox": [
+    -0.14832,
+    51.65722,
+    -0.03845,
+    51.72171
+   ]
+  },
+  {
+   "key": "2311312",
+   "count": 50,
+   "bbox": [
+    -3.01575,
+    53.31267,
+    -2.78877,
+    53.45472
+   ]
+  },
+  {
+   "key": "2311313",
+   "count": 124,
+   "bbox": [
+    -2.83704,
+    52.35051,
+    -1.27815,
+    53.45208
+   ]
+  },
+  {
+   "key": "231133",
+   "count": 290,
+   "bbox": [
+    -4.41277,
+    53.42107,
+    -1.36604,
+    56.02527
+   ]
+  },
+  {
+   "key": "300",
+   "count": 223,
+   "bbox": [
+    3.19917,
+    6.3925,
+    41.11085,
+    21.8954
+   ]
+  },
+  {
+   "key": "30112",
+   "count": 745,
+   "bbox": [
+    75.85895,
+    8.07729,
+    78.74632,
+    11.25086
+   ]
+  },
+  {
+   "key": "30113",
+   "count": 183,
+   "bbox": [
+    78.74231,
+    9.21326,
+    79.86337,
+    11.21097
+   ]
+  },
+  {
+   "key": "3013010",
+   "count": 90,
+   "bbox": [
+    74.92273,
+    11.26433,
+    75.9398,
+    12.64926
+   ]
+  },
+  {
+   "key": "3013011",
+   "count": 454,
+   "bbox": [
+    75.93495,
+    11.25032,
+    78.75225,
+    12.65546
+   ]
+  },
+  {
+   "key": "3013012",
+   "count": 118,
+   "bbox": [
+    74.54436,
+    12.65385,
+    75.90153,
+    13.97653
+   ]
+  },
+  {
+   "key": "3013013",
+   "count": 480,
+   "bbox": [
+    75.97214,
+    12.65681,
+    78.7482,
+    14.05495
+   ]
+  },
+  {
+   "key": "301303",
+   "count": 101,
+   "bbox": [
+    73.40871,
+    14.06354,
+    78.7482,
+    16.88168
+   ]
+  },
+  {
+   "key": "301310",
+   "count": 527,
+   "bbox": [
+    78.75117,
+    11.2514,
+    80.33445,
+    14.0484
+   ]
+  },
+  {
+   "key": "301312",
+   "count": 126,
+   "bbox": [
+    78.75225,
+    14.1897,
+    82.26969,
+    16.86685
+   ]
+  },
+  {
+   "key": "301320",
+   "count": 204,
+   "bbox": [
+    72.72338,
+    17.83919,
+    73.1217,
+    19.682
+   ]
+  },
+  {
+   "key": "301321",
+   "count": 447,
+   "bbox": [
+    73.13382,
+    16.89111,
+    78.69996,
+    19.68631
+   ]
+  },
+  {
+   "key": "301322",
+   "count": 135,
+   "bbox": [
+    69.65075,
+    19.7049,
+    73.1219,
+    22.49309
+   ]
+  },
+  {
+   "key": "301323",
+   "count": 165,
+   "bbox": [
+    73.13032,
+    19.68981,
+    78.71425,
+    22.46614
+   ]
+  },
+  {
+   "key": "301330",
+   "count": 230,
+   "bbox": [
+    78.75332,
+    16.8965,
+    84.28308,
+    19.61866
+   ]
+  },
+  {
+   "key": "301331",
+   "count": 53,
+   "bbox": [
+    84.38125,
+    18.62635,
+    85.40768,
+    19.68092
+   ]
+  },
+  {
+   "key": "301332",
+   "count": 221,
+   "bbox": [
+    78.93874,
+    19.69843,
+    84.37148,
+    22.48716
+   ]
+  },
+  {
+   "key": "3013330",
+   "count": 583,
+   "bbox": [
+    84.38172,
+    19.70975,
+    86.94299,
+    21.09576
+   ]
+  },
+  {
+   "key": "3013332",
+   "count": 266,
+   "bbox": [
+    84.41945,
+    21.09388,
+    87.18473,
+    22.49794
+   ]
+  },
+  {
+   "key": "30133330",
+   "count": 53,
+   "bbox": [
+    87.19362,
+    21.55983,
+    88.27106,
+    21.80155
+   ]
+  },
+  {
+   "key": "30133332",
+   "count": 835,
+   "bbox": [
+    87.19767,
+    21.79483,
+    88.59392,
+    22.50429
+   ]
+  },
+  {
+   "key": "30133333",
+   "count": 51,
+   "bbox": [
+    88.59365,
+    22.05543,
+    88.99196,
+    22.4966
+   ]
+  },
+  {
+   "key": "3021",
+   "count": 381,
+   "bbox": [
+    34.70405,
+    24.34432,
+    44.57039,
+    33.63027
+   ]
+  },
+  {
+   "key": "3022",
+   "count": 509,
+   "bbox": [
+    0.14164,
+    40.74766,
+    14.40484,
+    45.00079
+   ]
+  },
+  {
+   "key": "30230",
+   "count": 61,
+   "bbox": [
+    23.61335,
+    37.87594,
+    23.86407,
+    38.07755
+   ]
+  },
+  {
+   "key": "302321",
+   "count": 748,
+   "bbox": [
+    28.56831,
+    40.80266,
+    29.41899,
+    41.21139
+   ]
+  },
+  {
+   "key": "302322",
+   "count": 15,
+   "bbox": [
+    25.96992,
+    44.34331,
+    26.19866,
+    44.53589
+   ]
+  },
+  {
+   "key": "303000",
+   "count": 195,
+   "bbox": [
+    46.34681,
+    24.32117,
+    47.3244,
+    25.16768
+   ]
+  },
+  {
+   "key": "303001",
+   "count": 298,
+   "bbox": [
+    51.39775,
+    24.01375,
+    56.01813,
+    25.33432
+   ]
+  },
+  {
+   "key": "303002",
+   "count": 236,
+   "bbox": [
+    49.92554,
+    26.02958,
+    50.24484,
+    26.62947
+   ]
+  },
+  {
+   "key": "303003",
+   "count": 170,
+   "bbox": [
+    51.44429,
+    25.27691,
+    56.10088,
+    25.92759
+   ]
+  },
+  {
+   "key": "30301",
+   "count": 708,
+   "bbox": [
+    56.27357,
+    24.74644,
+    67.25853,
+    25.4223
+   ]
+  },
+  {
+   "key": "30302",
+   "count": 79,
+   "bbox": [
+    45.7023,
+    28.18475,
+    48.0303,
+    29.39344
+   ]
+  },
+  {
+   "key": "303100",
+   "count": 119,
+   "bbox": [
+    69.22534,
+    22.51923,
+    73.05809,
+    25.17187
+   ]
+  },
+  {
+   "key": "303101",
+   "count": 197,
+   "bbox": [
+    73.14137,
+    22.52247,
+    78.72772,
+    25.2953
+   ]
+  },
+  {
+   "key": "303102",
+   "count": 5,
+   "bbox": [
+    72.24584,
+    25.91136,
+    73.07157,
+    27.77033
+   ]
+  },
+  {
+   "key": "303103",
+   "count": 481,
+   "bbox": [
+    73.16724,
+    25.31874,
+    78.74389,
+    28.12796
+   ]
+  },
+  {
+   "key": "303110",
+   "count": 718,
+   "bbox": [
+    78.81962,
+    22.5098,
+    84.37606,
+    25.31362
+   ]
+  },
+  {
+   "key": "3031110",
+   "count": 269,
+   "bbox": [
+    84.38684,
+    22.50792,
+    87.17452,
+    23.90417
+   ]
+  },
+  {
+   "key": "303111100",
+   "count": 128,
+   "bbox": [
+    87.19695,
+    22.4974,
+    87.88973,
+    22.85258
+   ]
+  },
+  {
+   "key": "303111101",
+   "count": 660,
+   "bbox": [
+    87.89027,
+    22.49553,
+    88.595,
+    22.85125
+   ]
+  },
+  {
+   "key": "303111102",
+   "count": 32,
+   "bbox": [
+    87.25588,
+    22.85314,
+    87.88757,
+    23.2113
+   ]
+  },
+  {
+   "key": "303111103",
+   "count": 181,
+   "bbox": [
+    87.89674,
+    22.85017,
+    88.5888,
+    23.2051
+   ]
+  },
+  {
+   "key": "30311111",
+   "count": 244,
+   "bbox": [
+    88.59257,
+    22.49552,
+    88.9704,
+    23.20294
+   ]
+  },
+  {
+   "key": "30311112",
+   "count": 187,
+   "bbox": [
+    87.19016,
+    23.2051,
+    88.58934,
+    23.90659
+   ]
+  },
+  {
+   "key": "30311113",
+   "count": 42,
+   "bbox": [
+    88.59634,
+    23.20078,
+    88.97957,
+    23.46758
+   ]
+  },
+  {
+   "key": "3031112",
+   "count": 897,
+   "bbox": [
+    84.37902,
+    23.9074,
+    87.18689,
+    25.32117
+   ]
+  },
+  {
+   "key": "30311130",
+   "count": 325,
+   "bbox": [
+    87.19821,
+    23.90848,
+    88.60012,
+    24.60916
+   ]
+  },
+  {
+   "key": "30311131",
+   "count": 72,
+   "bbox": [
+    88.58098,
+    23.90578,
+    88.7451,
+    24.27769
+   ]
+  },
+  {
+   "key": "30311132",
+   "count": 288,
+   "bbox": [
+    87.19174,
+    24.6318,
+    88.48747,
+    25.31201
+   ]
+  },
+  {
+   "key": "30311133",
+   "count": 18,
+   "bbox": [
+    88.69094,
+    25.20259,
+    89.02619,
+    25.31308
+   ]
+  },
+  {
+   "key": "3031120",
+   "count": 276,
+   "bbox": [
+    78.75898,
+    25.3182,
+    81.56361,
+    26.70206
+   ]
+  },
+  {
+   "key": "30311210",
+   "count": 866,
+   "bbox": [
+    81.56065,
+    25.30742,
+    82.97011,
+    26.01539
+   ]
+  },
+  {
+   "key": "30311211",
+   "count": 707,
+   "bbox": [
+    82.97038,
+    25.31335,
+    84.37444,
+    26.01593
+   ]
+  },
+  {
+   "key": "30311212",
+   "count": 605,
+   "bbox": [
+    81.55526,
+    26.01485,
+    82.95959,
+    26.71823
+   ]
+  },
+  {
+   "key": "303112130",
+   "count": 339,
+   "bbox": [
+    82.97603,
+    26.01431,
+    83.66567,
+    26.366
+   ]
+  },
+  {
+   "key": "303112131",
+   "count": 304,
+   "bbox": [
+    83.67214,
+    26.02132,
+    84.37525,
+    26.36816
+   ]
+  },
+  {
+   "key": "303112132",
+   "count": 362,
+   "bbox": [
+    82.97199,
+    26.366,
+    83.6716,
+    26.72146
+   ]
+  },
+  {
+   "key": "303112133",
+   "count": 359,
+   "bbox": [
+    83.67106,
+    26.36573,
+    84.37579,
+    26.71984
+   ]
+  },
+  {
+   "key": "3031122",
+   "count": 336,
+   "bbox": [
+    78.74955,
+    26.72227,
+    81.5593,
+    28.11286
+   ]
+  },
+  {
+   "key": "30311230",
+   "count": 254,
+   "bbox": [
+    81.57412,
+    26.71931,
+    82.96472,
+    27.4173
+   ]
+  },
+  {
+   "key": "30311231",
+   "count": 888,
+   "bbox": [
+    82.97442,
+    26.71688,
+    84.37552,
+    27.42242
+   ]
+  },
+  {
+   "key": "30311232",
+   "count": 44,
+   "bbox": [
+    81.57224,
+    27.42296,
+    82.89141,
+    28.0207
+   ]
+  },
+  {
+   "key": "30311233",
+   "count": 23,
+   "bbox": [
+    83.04287,
+    27.42134,
+    83.69774,
+    27.46635
+   ]
+  },
+  {
+   "key": "30311300",
+   "count": 617,
+   "bbox": [
+    84.37008,
+    25.31174,
+    85.77824,
+    26.01593
+   ]
+  },
+  {
+   "key": "30311301",
+   "count": 651,
+   "bbox": [
+    85.80357,
+    25.3209,
+    87.18958,
+    26.01754
+   ]
+  },
+  {
+   "key": "303113020",
+   "count": 563,
+   "bbox": [
+    84.37336,
+    26.01673,
+    85.07135,
+    26.36869
+   ]
+  },
+  {
+   "key": "303113021",
+   "count": 139,
+   "bbox": [
+    85.0816,
+    26.03695,
+    85.77878,
+    26.37058
+   ]
+  },
+  {
+   "key": "303113022",
+   "count": 377,
+   "bbox": [
+    84.37552,
+    26.36546,
+    85.07378,
+    26.71984
+   ]
+  },
+  {
+   "key": "303113023",
+   "count": 141,
+   "bbox": [
+    85.08429,
+    26.36465,
+    85.7839,
+    26.71203
+   ]
+  },
+  {
+   "key": "30311303",
+   "count": 516,
+   "bbox": [
+    85.78013,
+    26.01512,
+    87.18743,
+    26.64358
+   ]
+  },
+  {
+   "key": "30311310",
+   "count": 794,
+   "bbox": [
+    87.1885,
+    25.31443,
+    88.53005,
+    26.01754
+   ]
+  },
+  {
+   "key": "30311311",
+   "count": 52,
+   "bbox": [
+    88.61172,
+    25.31874,
+    89.92738,
+    26.01431
+   ]
+  },
+  {
+   "key": "30311312",
+   "count": 465,
+   "bbox": [
+    87.19228,
+    26.01269,
+    88.59149,
+    26.71661
+   ]
+  },
+  {
+   "key": "30311313",
+   "count": 271,
+   "bbox": [
+    88.59769,
+    26.01458,
+    90.00365,
+    26.722
+   ]
+  },
+  {
+   "key": "3031132",
+   "count": 230,
+   "bbox": [
+    84.37444,
+    26.71634,
+    85.72111,
+    27.27878
+   ]
+  },
+  {
+   "key": "3031133",
+   "count": 30,
+   "bbox": [
+    88.14548,
+    26.72173,
+    89.14254,
+    26.91604
+   ]
+  },
+  {
+   "key": "303120",
+   "count": 1,
+   "bbox": [
+    72.73378,
+    28.83491,
+    72.74107,
+    28.84565
+   ]
+  },
+  {
+   "key": "3031210",
+   "count": 26,
+   "bbox": [
+    73.22356,
+    28.17431,
+    75.78269,
+    29.50345
+   ]
+  },
+  {
+   "key": "3031211",
+   "count": 424,
+   "bbox": [
+    76.34458,
+    28.12445,
+    78.74524,
+    29.52367
+   ]
+  },
+  {
+   "key": "3031212",
+   "count": 20,
+   "bbox": [
+    73.45506,
+    29.53418,
+    75.90881,
+    30.93393
+   ]
+  },
+  {
+   "key": "3031213",
+   "count": 278,
+   "bbox": [
+    75.9557,
+    29.54253,
+    78.66709,
+    30.93771
+   ]
+  },
+  {
+   "key": "303122",
+   "count": 213,
+   "bbox": [
+    72.90821,
+    33.46778,
+    73.14282,
+    33.74665
+   ]
+  },
+  {
+   "key": "303123",
+   "count": 306,
+   "bbox": [
+    73.10709,
+    30.9369,
+    76.63213,
+    33.60562
+   ]
+  },
+  {
+   "key": "30313",
+   "count": 247,
+   "bbox": [
+    78.75198,
+    28.12743,
+    81.18767,
+    30.23702
+   ]
+  },
+  {
+   "key": "3033",
+   "count": 60,
+   "bbox": [
+    71.46653,
+    33.96884,
+    71.62236,
+    34.03959
+   ]
+  },
+  {
+   "key": "310",
+   "count": 616,
+   "bbox": [
+    100.38581,
+    1.1587,
+    121.13152,
+    22.32705
+   ]
+  },
+  {
+   "key": "312000",
+   "count": 414,
+   "bbox": [
+    91.17325,
+    22.98411,
+    93.14973,
+    25.29314
+   ]
+  },
+  {
+   "key": "31200200",
+   "count": 26,
+   "bbox": [
+    89.9996,
+    25.60306,
+    91.29749,
+    26.01754
+   ]
+  },
+  {
+   "key": "31200201",
+   "count": 10,
+   "bbox": [
+    91.47212,
+    25.47936,
+    92.79857,
+    26.00838
+   ]
+  },
+  {
+   "key": "312002020",
+   "count": 151,
+   "bbox": [
+    90.0023,
+    25.99562,
+    90.70352,
+    26.36896
+   ]
+  },
+  {
+   "key": "312002021",
+   "count": 331,
+   "bbox": [
+    90.70137,
+    26.02078,
+    91.40906,
+    26.37112
+   ]
+  },
+  {
+   "key": "312002022",
+   "count": 40,
+   "bbox": [
+    90.00365,
+    26.37166,
+    90.70083,
+    26.66622
+   ]
+  },
+  {
+   "key": "312002023",
+   "count": 276,
+   "bbox": [
+    90.71376,
+    26.35926,
+    91.4069,
+    26.71446
+   ]
+  },
+  {
+   "key": "312002030",
+   "count": 196,
+   "bbox": [
+    91.40367,
+    26.02159,
+    92.11028,
+    26.37112
+   ]
+  },
+  {
+   "key": "312002031",
+   "count": 164,
+   "bbox": [
+    92.08441,
+    26.01754,
+    92.81313,
+    26.37166
+   ]
+  },
+  {
+   "key": "312002032",
+   "count": 223,
+   "bbox": [
+    91.40582,
+    26.36465,
+    92.11352,
+    26.71715
+   ]
+  },
+  {
+   "key": "312002033",
+   "count": 195,
+   "bbox": [
+    92.10948,
+    26.36357,
+    92.81798,
+    26.72416
+   ]
+  },
+  {
+   "key": "3120021",
+   "count": 282,
+   "bbox": [
+    92.8134,
+    25.33626,
+    94.46863,
+    26.72146
+   ]
+  },
+  {
+   "key": "3120022",
+   "count": 82,
+   "bbox": [
+    90.52539,
+    26.71607,
+    92.81259,
+    26.89987
+   ]
+  },
+  {
+   "key": "3120023",
+   "count": 666,
+   "bbox": [
+    92.81232,
+    26.71419,
+    95.61991,
+    27.83043
+   ]
+  },
+  {
+   "key": "312003",
+   "count": 15,
+   "bbox": [
+    95.62342,
+    27.27608,
+    95.87539,
+    27.64852
+   ]
+  },
+  {
+   "key": "3121010",
+   "count": 306,
+   "bbox": [
+    120.08979,
+    22.49495,
+    120.4284,
+    23.10236
+   ]
+  },
+  {
+   "key": "3121012",
+   "count": 127,
+   "bbox": [
+    120.54573,
+    24.0791,
+    120.94994,
+    24.8652
+   ]
+  },
+  {
+   "key": "3121013",
+   "count": 414,
+   "bbox": [
+    120.92694,
+    24.72935,
+    121.68633,
+    25.25221
+   ]
+  },
+  {
+   "key": "31212",
+   "count": 31,
+   "bbox": [
+    121.33125,
+    31.12055,
+    121.60393,
+    31.39881
+   ]
+  },
+  {
+   "key": "3123",
+   "count": 272,
+   "bbox": [
+    116.15669,
+    37.30999,
+    127.22893,
+    40.06495
+   ]
+  },
+  {
+   "key": "313",
+   "count": 7,
+   "bbox": [
+    135.43945,
+    34.6171,
+    139.86023,
+    35.66845
+   ]
+  },
+  {
+   "key": "320000",
+   "count": 169,
+   "bbox": [
+    0.00125,
+    45.08637,
+    5.60541,
+    47.80841
+   ]
+  },
+  {
+   "key": "320001",
+   "count": 248,
+   "bbox": [
+    5.63961,
+    44.98811,
+    9.29443,
+    47.73501
+   ]
+  },
+  {
+   "key": "320002",
+   "count": 493,
+   "bbox": [
+    0.01279,
+    47.80913,
+    5.62939,
+    50.5908
+   ]
+  },
+  {
+   "key": "320003",
+   "count": 88,
+   "bbox": [
+    5.68794,
+    47.80976,
+    9.30718,
+    50.20624
+   ]
+  },
+  {
+   "key": "32001",
+   "count": 430,
+   "bbox": [
+    11.33064,
+    45.35951,
+    19.29375,
+    50.18514
+   ]
+  },
+  {
+   "key": "3200200",
+   "count": 148,
+   "bbox": [
+    -0.02552,
+    50.62436,
+    2.55416,
+    51.68085
+   ]
+  },
+  {
+   "key": "32002010",
+   "count": 87,
+   "bbox": [
+    3.13484,
+    51.14695,
+    4.23471,
+    51.37646
+   ]
+  },
+  {
+   "key": "32002011",
+   "count": 108,
+   "bbox": [
+    4.21699,
+    50.75947,
+    5.68111,
+    51.34752
+   ]
+  },
+  {
+   "key": "32002012",
+   "count": 491,
+   "bbox": [
+    3.36636,
+    51.29066,
+    4.27742,
+    52.03827
+   ]
+  },
+  {
+   "key": "320020130",
+   "count": 398,
+   "bbox": [
+    4.19012,
+    51.35435,
+    5.011,
+    51.70585
+   ]
+  },
+  {
+   "key": "320020131",
+   "count": 675,
+   "bbox": [
+    4.8882,
+    51.2952,
+    5.65651,
+    51.69568
+   ]
+  },
+  {
+   "key": "3200201320",
+   "count": 243,
+   "bbox": [
+    4.19274,
+    51.65452,
+    4.62658,
+    51.87403
+   ]
+  },
+  {
+   "key": "3200201321",
+   "count": 367,
+   "bbox": [
+    4.54777,
+    51.66275,
+    4.93864,
+    51.86985
+   ]
+  },
+  {
+   "key": "3200201322",
+   "count": 586,
+   "bbox": [
+    4.18527,
+    51.84478,
+    4.58381,
+    52.06174
+   ]
+  },
+  {
+   "key": "3200201323",
+   "count": 316,
+   "bbox": [
+    4.54634,
+    51.83391,
+    4.93924,
+    52.04823
+   ]
+  },
+  {
+   "key": "320020133",
+   "count": 780,
+   "bbox": [
+    4.86038,
+    51.66375,
+    5.64873,
+    52.05676
+   ]
+  },
+  {
+   "key": "32002030",
+   "count": 6,
+   "bbox": [
+    4.15181,
+    52.02067,
+    4.24057,
+    52.079
+   ]
+  },
+  {
+   "key": "3200203100",
+   "count": 433,
+   "bbox": [
+    4.20412,
+    52.02523,
+    4.59818,
+    52.22241
+   ]
+  },
+  {
+   "key": "3200203101",
+   "count": 250,
+   "bbox": [
+    4.53369,
+    52.01324,
+    4.94583,
+    52.22856
+   ]
+  },
+  {
+   "key": "3200203102",
+   "count": 69,
+   "bbox": [
+    4.39543,
+    52.2002,
+    4.59051,
+    52.38518
+   ]
+  },
+  {
+   "key": "3200203103",
+   "count": 284,
+   "bbox": [
+    4.54228,
+    52.18243,
+    4.93743,
+    52.39196
+   ]
+  },
+  {
+   "key": "3200203110",
+   "count": 315,
+   "bbox": [
+    4.90134,
+    52.01566,
+    5.29712,
+    52.22499
+   ]
+  },
+  {
+   "key": "3200203111",
+   "count": 336,
+   "bbox": [
+    5.23681,
+    52.00835,
+    5.68052,
+    52.21917
+   ]
+  },
+  {
+   "key": "3200203112",
+   "count": 320,
+   "bbox": [
+    4.89522,
+    52.18578,
+    5.33298,
+    52.4175
+   ]
+  },
+  {
+   "key": "3200203113",
+   "count": 113,
+   "bbox": [
+    5.2317,
+    52.19724,
+    5.64345,
+    52.44266
+   ]
+  },
+  {
+   "key": "320020312",
+   "count": 531,
+   "bbox": [
+    4.52636,
+    52.36638,
+    4.94825,
+    52.75633
+   ]
+  },
+  {
+   "key": "320020313",
+   "count": 402,
+   "bbox": [
+    4.8748,
+    52.35096,
+    5.64372,
+    52.7472
+   ]
+  },
+  {
+   "key": "32002033",
+   "count": 298,
+   "bbox": [
+    4.65565,
+    52.71618,
+    6.39703,
+    53.53971
+   ]
+  },
+  {
+   "key": "32002100",
+   "count": 706,
+   "bbox": [
+    5.56605,
+    50.75037,
+    6.18072,
+    51.35388
+   ]
+  },
+  {
+   "key": "320021020",
+   "count": 412,
+   "bbox": [
+    5.58711,
+    51.31509,
+    6.22677,
+    51.69782
+   ]
+  },
+  {
+   "key": "320021022",
+   "count": 701,
+   "bbox": [
+    5.58088,
+    51.6659,
+    6.35964,
+    52.04162
+   ]
+  },
+  {
+   "key": "320021023",
+   "count": 107,
+   "bbox": [
+    6.30419,
+    51.82726,
+    6.79887,
+    52.04427
+   ]
+  },
+  {
+   "key": "320021200",
+   "count": 462,
+   "bbox": [
+    5.58601,
+    52.00135,
+    6.35754,
+    52.40844
+   ]
+  },
+  {
+   "key": "320021201",
+   "count": 515,
+   "bbox": [
+    6.29618,
+    52.00269,
+    7.07276,
+    52.40242
+   ]
+  },
+  {
+   "key": "320021202",
+   "count": 482,
+   "bbox": [
+    5.56542,
+    52.34979,
+    6.37596,
+    52.77305
+   ]
+  },
+  {
+   "key": "320021203",
+   "count": 307,
+   "bbox": [
+    6.30306,
+    52.35923,
+    7.0722,
+    52.7482
+   ]
+  },
+  {
+   "key": "32002121",
+   "count": 5,
+   "bbox": [
+    7.00579,
+    52.22505,
+    7.06579,
+    52.73348
+   ]
+  },
+  {
+   "key": "320021220",
+   "count": 259,
+   "bbox": [
+    5.59488,
+    52.70292,
+    6.38559,
+    53.0992
+   ]
+  },
+  {
+   "key": "320021221",
+   "count": 429,
+   "bbox": [
+    6.26602,
+    52.71242,
+    7.09274,
+    53.10756
+   ]
+  },
+  {
+   "key": "320021222",
+   "count": 360,
+   "bbox": [
+    5.60056,
+    53.06301,
+    6.36105,
+    53.41552
+   ]
+  },
+  {
+   "key": "320021223",
+   "count": 537,
+   "bbox": [
+    6.29931,
+    53.04363,
+    7.07969,
+    53.46601
+   ]
+  },
+  {
+   "key": "32002123",
+   "count": 105,
+   "bbox": [
+    6.96908,
+    52.73138,
+    7.2275,
+    53.33059
+   ]
+  },
+  {
+   "key": "3200213",
+   "count": 15,
+   "bbox": [
+    9.88593,
+    53.37169,
+    10.26299,
+    53.46732
+   ]
+  },
+  {
+   "key": "320023",
+   "count": 182,
+   "bbox": [
+    5.61205,
+    53.34359,
+    10.36187,
+    53.9644
+   ]
+  },
+  {
+   "key": "32003",
+   "count": 390,
+   "bbox": [
+    12.39082,
+    52.06529,
+    21.28777,
+    55.77267
+   ]
+  },
+  {
+   "key": "3201",
+   "count": 110,
+   "bbox": [
+    37.28034,
+    55.55748,
+    37.92107,
+    55.97304
+   ]
+  },
+  {
+   "key": "3202",
+   "count": 586,
+   "bbox": [
+    10.60554,
+    57.56625,
+    22.45816,
+    60.73729
+   ]
+  },
+  {
+   "key": "3203",
+   "count": 578,
+   "bbox": [
+    24.11849,
+    59.37498,
+    30.5053,
+    65.57271
+   ]
+  }
+ ]
+}

@@ -1,0 +1,43 @@
+{
+  "reviewedSources": {
+    "zs": {
+      "name": "Zetashapes",
+      "registryCommit": "e17af153c144fe6e08aa8db2607b4bf8aecd448d",
+      "registrySha256": "d8a5dd873d26eee11583de4438185c046dec33848d5bde27047ca4bff44d9c39",
+      "rawLicenseType": "Public domain",
+      "licenseTextSha256": "91757f96f74f6dfb4a7206486b78586da0d039e9611e224fc793c7167dcfe615",
+      "decision": "Approved from the pinned WOF registry text: no added restrictions beyond public-domain US TIGER/Line data and Flickr-derived data; retain both upstream credits."
+    }
+  },
+  "licenses": [
+    "Attribution 3.0 Unported",
+    "CC BY",
+    "CC BY (equivalent)",
+    "CC BY 2.0",
+    "CC BY 3.0",
+    "CC BY 3.0 US",
+    "CC BY 4.0",
+    "CC-BY",
+    "CC0",
+    "CC0 (equivalent)",
+    "CC0 1.0 Universal",
+    "ODC-By, v1.0",
+    "ODC-By v1.0",
+    "OGL - Canada",
+    "OGL - City of New Westminster",
+    "OGL - City of Surrey",
+    "Open Government Licence v3.0",
+    "Open Government Licence - British Columbia, v2.0",
+    "Open Government Licence - Canada",
+    "Open Government Licence - City of Calgary",
+    "Open Government Licence - City of Regina",
+    "Open Government Licence - Edmonton",
+    "Open Government Licence - Ontario, v1.0",
+    "Open Government License - British Columbia, v2.0",
+    "Open Government License - Winnipeg",
+    "PDDL 1.0",
+    "Public domain",
+    "Public Domain",
+    "Singapore Open Data Licence v1"
+  ]
+}

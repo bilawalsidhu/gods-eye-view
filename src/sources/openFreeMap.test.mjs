@@ -7,10 +7,37 @@ import {
   polygonCentroid,
   clipTileLine,
   createOpenFreeMapSource,
+  estimateOpenFreeMapProjectionBytes,
 } from './openFreeMap.js';
 import { createVectorTileSource } from './vectorTiles.js';
 const fixture = (name) =>
   readFileSync(new URL(`../data/fixtures/${name}`, import.meta.url));
+
+test('projected tile geometry has deterministic accounting and a coordinate cap', () => {
+  const small = {
+    streets: [
+      {
+        name: 'A',
+        coordinates: [
+          [0, 1],
+          [2, 3],
+        ],
+      },
+    ],
+  };
+  assert.equal(
+    estimateOpenFreeMapProjectionBytes(small),
+    estimateOpenFreeMapProjectionBytes(structuredClone(small)),
+  );
+  assert.ok(estimateOpenFreeMapProjectionBytes(small) > 4 * 8);
+  assert.throws(
+    () =>
+      estimateOpenFreeMapProjectionBytes({
+        coordinates: Array.from({ length: 250_001 }, () => [0, 0]),
+      }),
+    /coordinate limit/,
+  );
+});
 
 test('real z14 and z12 Austin tiles decode only drivable roads', () => {
   for (const [z, x, y, name] of [

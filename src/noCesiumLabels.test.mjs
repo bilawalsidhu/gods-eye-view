@@ -158,6 +158,18 @@ test('the guard catches label APIs and entity graphics, including aliases and mu
     assert.ok(cesiumLabels(source).length > 0, source);
 });
 
+test('Overpass-free outline modules construct no Cesium labels and import no Cesium', () => {
+  for (const file of [
+    'src/annotations/outlineRungs.js',
+    'src/sources/openFreeMapOutlines.js',
+    'src/sources/nominatimOutlines.js',
+  ]) {
+    const source = readFileSync(root + file, 'utf8');
+    assert.deepEqual(cesiumLabels(source), [], file);
+    assert.doesNotMatch(source, /from ['"]cesium['"]/, file);
+  }
+});
+
 test('schemas, UI label lookups, comments and strings are not Cesium labels', () => {
   for (const source of [
     '// LabelCollection\nconst help = "new Cesium.Label";',

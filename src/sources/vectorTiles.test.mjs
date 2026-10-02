@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createVectorTileSource } from './vectorTiles.js';
+import {
+  createSharedDecodedTileCache,
+  createVectorTileSource,
+} from './vectorTiles.js';
 const meta = { tiles: ['https://tiles.example/{z}/{x}/{y}.pbf'] };
 const box = { south: 30.267, north: 30.268, west: -97.744, east: -97.743 };
 const options = {
@@ -202,4 +205,239 @@ test('polygon-selected tiles keep nearest-first order and cached revisits issue 
     2,
     'over-budget selection is rejected before fetching',
   );
+});
+
+test('compatible consumers share bounded decoded ownership without sharing local lifetimes', async () => {
+  const sharedDecodedCache = createSharedDecodedTileCache({
+    maxEntries: 2,
+    maxCacheBytes: 100,
+  });
+  let decodes = 0,
+    requests = 0;
+  const common = {
+    ...options,
+    template: meta.tiles[0],
+    sharedDecodedCache,
+    decode: () => {
+      decodes++;
+      return { roads: ['road'], outlines: ['outline'] };
+    },
+    fetchImpl: async () => {
+      requests++;
+      return new Response(new Uint8Array([1, 2, 3]));
+    },
+  };
+  const roads = createVectorTileSource({
+    ...common,
+    selectDecoded: (value) => value.roads,
+  });
+  const outlines = createVectorTileSource({
+    ...common,
+    selectDecoded: (value) => value.outlines,
+  });
+  const tiles = [{ z: 14, x: 3743, y: 6745 }];
+  assert.deepEqual((await roads.fetchBounds(box, { zoom: 14, tiles })).tiles, [
+    ['road'],
+  ]);
+  roads.clear();
+  assert.deepEqual(
+    (await outlines.fetchBounds(box, { zoom: 14, tiles })).tiles,
+    [['outline']],
+  );
+  assert.equal(requests, 1);
+  assert.equal(decodes, 1);
+  assert.deepEqual(sharedDecodedCache.stats(), { entries: 1, bytes: 12 });
+});
+
+test('shared decoded tiles are isolated from consumer mutation', async () => {
+  const sharedDecodedCache = createSharedDecodedTileCache();
+  let decodes = 0,
+    requests = 0;
+  const common = {
+    ...options,
+    template: meta.tiles[0],
+    sharedDecodedCache,
+    decode: () => {
+      decodes++;
+      return { roads: [{ name: 'Congress Avenue', coordinates: [[-97, 30]] }] };
+    },
+    selectDecoded: (value) => value.roads,
+    fetchImpl: async () => {
+      requests++;
+      return new Response(new Uint8Array([1, 2, 3]));
+    },
+  };
+  const first = createVectorTileSource(common);
+  const second = createVectorTileSource(common);
+  const third = createVectorTileSource(common);
+  const tiles = [{ z: 14, x: 3743, y: 6745 }];
+  const firstResult = await first.fetchBounds(box, { zoom: 14, tiles });
+  firstResult.tiles[0][0].name = 'first mutation';
+  firstResult.tiles[0][0].coordinates[0][0] = 0;
+
+  const secondResult = await second.fetchBounds(box, { zoom: 14, tiles });
+  assert.equal(secondResult.tiles[0][0].name, 'Congress Avenue');
+  assert.equal(secondResult.tiles[0][0].coordinates[0][0], -97);
+  secondResult.tiles[0][0].name = 'second mutation';
+  secondResult.tiles[0][0].coordinates[0][0] = 1;
+
+  const thirdResult = await third.fetchBounds(box, { zoom: 14, tiles });
+  assert.equal(thirdResult.tiles[0][0].name, 'Congress Avenue');
+  assert.equal(thirdResult.tiles[0][0].coordinates[0][0], -97);
+  assert.equal(requests, 1);
+  assert.equal(decodes, 1);
+});
+
+test('one source isolates in-flight and completed cache results from consumer mutation', async () => {
+  const sharedDecodedCache = createSharedDecodedTileCache();
+  let decodes = 0,
+    requests = 0,
+    releaseResponse;
+  const responseReady = new Promise((resolve) => {
+    releaseResponse = resolve;
+  });
+  let requestStarted;
+  const started = new Promise((resolve) => {
+    requestStarted = resolve;
+  });
+  const source = createVectorTileSource({
+    ...options,
+    template: meta.tiles[0],
+    sharedDecodedCache,
+    decode: () => {
+      decodes++;
+      return { roads: [{ name: 'Congress Avenue', coordinates: [[-97, 30]] }] };
+    },
+    selectDecoded: (value) => value.roads,
+    fetchImpl: async () => {
+      requests++;
+      requestStarted();
+      await responseReady;
+      return new Response(new Uint8Array([1, 2, 3]));
+    },
+  });
+  const tiles = [{ z: 14, x: 3743, y: 6745 }];
+  const firstPending = source.fetchBounds(box, { zoom: 14, tiles });
+  await started;
+  const concurrentPending = source.fetchBounds(box, { zoom: 14, tiles });
+  releaseResponse();
+
+  const firstResult = await firstPending;
+  const concurrentResult = await concurrentPending;
+  firstResult.tiles[0][0].name = 'first mutation';
+  firstResult.tiles[0][0].coordinates[0][0] = 0;
+  assert.equal(concurrentResult.tiles[0][0].name, 'Congress Avenue');
+  assert.equal(concurrentResult.tiles[0][0].coordinates[0][0], -97);
+
+  concurrentResult.tiles[0][0].name = 'concurrent mutation';
+  concurrentResult.tiles[0][0].coordinates[0][0] = 1;
+  const cachedResult = await source.fetchBounds(box, { zoom: 14, tiles });
+  assert.equal(cachedResult.tiles[0][0].name, 'Congress Avenue');
+  assert.equal(cachedResult.tiles[0][0].coordinates[0][0], -97);
+  assert.equal(requests, 1);
+  assert.equal(decodes, 1);
+});
+
+test('compatible consumers share one in-flight fetch and survive one consumer clearing', async () => {
+  const sharedDecodedCache = createSharedDecodedTileCache();
+  let requests = 0,
+    decodes = 0,
+    releaseResponse;
+  const responseReady = new Promise((resolve) => {
+    releaseResponse = resolve;
+  });
+  let requestStarted;
+  const started = new Promise((resolve) => {
+    requestStarted = resolve;
+  });
+  const common = {
+    ...options,
+    template: meta.tiles[0],
+    sharedDecodedCache,
+    decode: () => {
+      decodes++;
+      return { roads: ['road'], outlines: ['outline'] };
+    },
+    fetchImpl: async () => {
+      requests++;
+      requestStarted();
+      await responseReady;
+      return new Response(new Uint8Array([1, 2, 3]));
+    },
+  };
+  const roads = createVectorTileSource({
+    ...common,
+    selectDecoded: (value) => value.roads,
+  });
+  const outlines = createVectorTileSource({
+    ...common,
+    selectDecoded: (value) => value.outlines,
+  });
+  const tiles = [{ z: 14, x: 3743, y: 6745 }];
+  const roadResult = roads.fetchBounds(box, { zoom: 14, tiles });
+  const roadRejected = assert.rejects(roadResult, { name: 'AbortError' });
+  await started;
+  const outlineResult = outlines.fetchBounds(box, { zoom: 14, tiles });
+  await new Promise((resolve) => setImmediate(resolve));
+  roads.clear();
+  releaseResponse();
+  await roadRejected;
+  assert.deepEqual((await outlineResult).tiles, [['outline']]);
+  assert.equal(requests, 1);
+  assert.equal(decodes, 1);
+});
+
+test('shared ownership recharges materialized projections and evicts over budget', () => {
+  const shared = createSharedDecodedTileCache({ maxCacheBytes: 100 });
+  let resize,
+    releases = 0;
+  const decoded = {
+    bindSharedCacheEntry(update) {
+      resize = update;
+    },
+    releaseSharedCacheEntry() {
+      releases++;
+    },
+  };
+  const entry = shared.set('tile', decoded, 12);
+  assert.deepEqual(shared.stats(), { entries: 1, bytes: 12 });
+  resize(80);
+  assert.deepEqual(shared.stats(), { entries: 1, bytes: 80 });
+  resize(101);
+  assert.deepEqual(shared.stats(), { entries: 0, bytes: 0 });
+  assert.equal(entry.size, 101, 'the returned entry retains its real size');
+  assert.equal(releases, 1, 'self-eviction releases decoded ownership once');
+  shared.clear();
+  assert.equal(releases, 1, 'clearing after eviction does not release twice');
+});
+
+test('shared clear releases entries and prevents a pending loader from refilling', async () => {
+  const shared = createSharedDecodedTileCache();
+  let releases = 0;
+  const decoded = {
+    releaseSharedCacheEntry() {
+      releases++;
+    },
+  };
+  shared.set('resident', decoded, 12);
+  shared.clear();
+  assert.deepEqual(shared.stats(), { entries: 0, bytes: 0 });
+  assert.equal(releases, 1);
+
+  let loaderStarted, resolveLoader;
+  const started = new Promise((resolve) => {
+    loaderStarted = resolve;
+  });
+  const loaderResult = new Promise((resolve) => {
+    resolveLoader = resolve;
+  });
+  const pending = shared.load('late', null, async () => {
+    loaderStarted();
+    return loaderResult;
+  });
+  await started;
+  resolveLoader({ value: {}, size: 16 });
+  shared.clear();
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.deepEqual(shared.stats(), { entries: 0, bytes: 0 });
 });

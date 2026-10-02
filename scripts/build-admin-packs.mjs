@@ -111,8 +111,8 @@ const cacheDir = path.resolve(
 );
 const only = args.includes('--only') ? args[args.indexOf('--only') + 1] : null;
 
-async function fetchPinned(name) {
-  const { url, sha256 } = SOURCES[name];
+export async function fetchPinned(name, source = SOURCES[name]) {
+  const { url, sha256 } = source;
   const file = path.join(cacheDir, path.basename(new URL(url).pathname));
   let bytes = await readFile(file).catch(() => null);
   if (!bytes) {
@@ -137,7 +137,7 @@ const EARTH_RADIUS_KM = 6371;
 const toRad = (d) => (d * Math.PI) / 180;
 
 /** Spherical ring area (km²); matches src/data/naturalEarthRegions.js. */
-function ringAreaKm2(ring) {
+export function ringAreaKm2(ring) {
   const n = ring.length;
   if (n < 3) return 0;
   let sum = 0;
@@ -151,7 +151,7 @@ function ringAreaKm2(ring) {
 }
 
 /** Signed planar (shoelace) area: positive counter-clockwise in lon/lat. */
-function signedArea(ring) {
+export function signedArea(ring) {
   let sum = 0;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++)
     sum += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
@@ -209,15 +209,16 @@ function douglasPeucker(points, tolerance) {
  * Simplify a closed ring to an OPEN rounded ring. The ring is split at its
  * farthest vertex from the start so Douglas-Peucker has two anchored halves
  * (a closed ring has no chord to measure against). Returns null when fewer
- * than four distinct vertices survive.
+ * than `minVertices` distinct vertices survive (four by default; a pack that
+ * keeps triangles passes three).
  */
-function simplifyRing(ring, tolerance, decimals) {
+function simplifyRing(ring, tolerance, decimals, minVertices = 4) {
   let open = ring.slice();
   const first = open[0];
   const last = open[open.length - 1];
   if (open.length > 1 && first[0] === last[0] && first[1] === last[1])
     open = open.slice(0, -1);
-  if (open.length < 4) return null;
+  if (open.length < minVertices) return null;
   let far = 1;
   let farDist = -1;
   for (let i = 1; i < open.length; i++) {
@@ -247,7 +248,7 @@ function simplifyRing(ring, tolerance, decimals) {
     out[0][1] === out[out.length - 1][1]
   )
     out.pop();
-  return out.length >= 4 ? out : null;
+  return out.length >= minVertices ? out : null;
 }
 
 /**
@@ -255,16 +256,17 @@ function simplifyRing(ring, tolerance, decimals) {
  * area floors (the largest part always stays), orient outers
  * counter-clockwise and holes clockwise, sort parts by area descending.
  */
-function simplifyPolygons(polygons, params, tolerance, decimals) {
+export function simplifyPolygons(polygons, params, tolerance, decimals) {
+  const minVertices = params.minRingVertices ?? 4;
   const parts = [];
   for (const poly of polygons) {
-    const outer = simplifyRing(poly[0], tolerance, decimals);
+    const outer = simplifyRing(poly[0], tolerance, decimals, minVertices);
     if (!outer) continue;
     const area = ringAreaKm2(outer);
     if (signedArea(outer) < 0) outer.reverse();
     const holes = [];
     for (const hole of poly.slice(1)) {
-      const ring = simplifyRing(hole, tolerance, decimals);
+      const ring = simplifyRing(hole, tolerance, decimals, minVertices);
       if (!ring || ringAreaKm2(ring) < params.minHoleKm2) continue;
       if (signedArea(ring) > 0) ring.reverse();
       holes.push(ring);
@@ -287,18 +289,22 @@ function simplifyPolygons(polygons, params, tolerance, decimals) {
  * and a fifth of the minimum tolerance, or failing that unsimplified at two
  * more decimals; the caller records `d`.
  */
-function simplifyUnit(polygons, params) {
+export function unitTolerance(polygons, params) {
   const sourceArea = polygons.reduce(
     (sum, poly) => sum + ringAreaKm2(poly[0]),
     0,
   );
-  const tolerance = Math.min(
+  return Math.min(
     params.maxToleranceDeg,
     Math.max(
       params.minToleranceDeg,
       (params.toleranceFactor * Math.sqrt(sourceArea)) / 111.32,
     ),
   );
+}
+
+export function simplifyUnit(polygons, params) {
+  const tolerance = unitTolerance(polygons, params);
   const coarse = simplifyPolygons(polygons, params, tolerance, params.decimals);
   if (coarse.length) return { polygons: coarse, decimals: params.decimals };
   const fine = simplifyPolygons(
@@ -334,7 +340,7 @@ function encodeRing(ring, decimals) {
   return out;
 }
 
-function encodeUnit({ polygons, decimals }) {
+export function encodeUnit({ polygons, decimals }) {
   return polygons.map((poly) => poly.map((ring) => encodeRing(ring, decimals)));
 }
 
@@ -362,7 +368,7 @@ function bboxOf(polygons) {
 // ── zip / shapefile / dbf ───────────────────────────────────────────────
 
 /** Read named entries from a zip archive (stored or deflated). */
-function unzip(buffer) {
+export function unzip(buffer) {
   let eocd = buffer.length - 22;
   while (eocd >= 0 && buffer.readUInt32LE(eocd) !== 0x06054b50) eocd--;
   if (eocd < 0) throw new Error('zip: end of central directory not found');
@@ -394,7 +400,7 @@ function unzip(buffer) {
 }
 
 /** Polygon records (shape type 5) as arrays of closed [lon, lat] rings. */
-function readShp(buffer) {
+export function readShp(buffer) {
   const shapes = [];
   let offset = 100;
   while (offset < buffer.length) {
@@ -431,7 +437,7 @@ function readShp(buffer) {
 }
 
 /** dBASE records as plain objects (character and numeric fields). */
-function readDbf(buffer) {
+export function readDbf(buffer) {
   const count = buffer.readUInt32LE(4);
   const headerLength = buffer.readUInt16LE(8);
   const recordLength = buffer.readUInt16LE(10);
@@ -458,7 +464,7 @@ function readDbf(buffer) {
 }
 
 /** Group shapefile rings into polygons: clockwise outers, holes assigned by containment. */
-function shpPolygons(rings) {
+export function shpPolygons(rings) {
   const outers = [];
   const holes = [];
   for (const ring of rings) {
@@ -475,7 +481,7 @@ function shpPolygons(rings) {
   return polygons;
 }
 
-function pointInRing(ring, x, y) {
+export function pointInRing(ring, x, y) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const [xi, yi] = ring[i];
@@ -742,18 +748,24 @@ async function writePack(relative, pack) {
   );
 }
 
-if (!only || only === 'countries')
-  await writePack(
-    'src/data/local_data/natural_earth/countries.json',
-    await buildCountries(),
-  );
-if (!only || only === 'admin1')
-  await writePack(
-    'src/data/local_data/natural_earth/states_provinces.json',
-    await buildAdmin1(),
-  );
-if (!only || only === 'counties')
-  await writePack(
-    'src/data/local_data/us_census_counties/counties.json',
-    await buildCounties(),
-  );
+const isMain =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  if (!only || only === 'countries')
+    await writePack(
+      'src/data/local_data/natural_earth/countries.json',
+      await buildCountries(),
+    );
+  if (!only || only === 'admin1')
+    await writePack(
+      'src/data/local_data/natural_earth/states_provinces.json',
+      await buildAdmin1(),
+    );
+  if (!only || only === 'counties')
+    await writePack(
+      'src/data/local_data/us_census_counties/counties.json',
+      await buildCounties(),
+    );
+}

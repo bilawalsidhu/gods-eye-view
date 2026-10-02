@@ -21,8 +21,13 @@ import { createReferenceSources } from '../sources/reference.js';
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
 
 /** Select standalone providers without starting their acquisition. */
-export function createStandaloneLayerSources() {
-  const mapTiles = createOpenFreeMapSource();
+export function createStandaloneLayerSources({
+  createMapTiles = createOpenFreeMapSource,
+} = {}) {
+  // Each subsystem owns its own request lifetime and local result cache. The
+  // sources still share the bounded decoded-tile owner inside OpenFreeMap.
+  const trafficTiles = createMapTiles();
+  const installationTiles = createMapTiles();
   return {
     ...createReferenceSources(),
     flights: createOpenSkySource(),
@@ -32,10 +37,10 @@ export function createStandaloneLayerSources() {
     }),
     cctv: createCctvSource(),
     radio: createRadioSource(),
-    traffic: createTrafficSource({ mapTiles }),
+    traffic: createTrafficSource({ mapTiles: trafficTiles }),
     transit: createTransitSource(),
     bikeshare: createBikeshareSource(),
-    installations: createInstallationSource({ mapTiles }),
+    installations: createInstallationSource({ mapTiles: installationTiles }),
     satellites: createSatelliteSource(),
     launches: createLaunchSource(),
     alpr: createAlprTileSource(),
