@@ -629,7 +629,7 @@ export class IntelHUD {
   /**
    * Build the one-line semantic summary string from the latest camera metrics.
    * Includes mode, observation band, nearest POI or lat/lon sector, region,
-   * altitude, view window dimensions, sun elevation, ONA, and local timezone.
+   * altitude, view window dimensions, sun elevation, ONA, and nautical time zone.
    * @returns {string} Formatted summary line for the HUD summary readout.
    */
   _composeSummary() {
@@ -642,9 +642,10 @@ export class IntelHUD {
     const nearest = this._nearestKnownPoint(m.latDeg, m.lonDeg);
     const band = this._viewBand(m.altM);
     const window = this._viewWindowKm(m.latDeg);
-    // Rough local timezone from longitude (15 deg per hour)
-    const utcOffset = Math.round(m.lonDeg / 15);
-    const localTag = `UTC${utcOffset >= 0 ? '+' : ''}${utcOffset}`;
+    // Nautical time zone from longitude (15 deg per hour). This is not the
+    // civil offset a place keeps, so it is not labelled as a UTC offset.
+    const nauticalZone = Math.round(m.lonDeg / 15);
+    const zoneTag = `ZONE${nauticalZone >= 0 ? '+' : ''}${nauticalZone}`;
     // Same MSL datum as the corner ALT readout — the two are on screen
     // together, so they must never disagree. The view band above deliberately
     // keeps the ellipsoidal height: its thresholds were tuned against it.
@@ -662,7 +663,7 @@ export class IntelHUD {
     const provenance = hudTelemetryProvenanceTag(
       this._dataManager?.getAll?.() || [],
     );
-    const line = `${modeLabel} ${band} ${localityTag} | ${region} | ALT ${altTag} | WINDOW ${winTag} | SUN ${m.sunEl.toFixed(0)}° | ONA ${m.ona.toFixed(0)}° | ${localTag}`;
+    const line = `${modeLabel} ${band} ${localityTag} | ${region} | ALT ${altTag} | WINDOW ${winTag} | SUN ${m.sunEl.toFixed(0)}° | ONA ${m.ona.toFixed(0)}° | ${zoneTag}`;
     return provenance ? `${line} | ${provenance}` : line;
   }
 
