@@ -9,7 +9,7 @@ import { createPresetGeocoder } from './presetGeocoder.js';
 
 /**
  * Coordinates and bundled names first — both answer offline and with no key —
- * then Google when configured, then keyless Photon, then the local Nominatim
+ * then the operator's SearXNG and Google when configured, then keyless Photon, then the local Nominatim
  * route as a last resort. Transport stays local to setup.
  *
  * `presets` is the caller's bundled place data. It is passed in rather than
@@ -40,6 +40,21 @@ export function createDefaultPlaceSearch({
       ...(selected
         ? [selected]
         : [
+            // The operator's own SearXNG route, when composition supplies one;
+            // an unconfigured route answers ZERO_RESULTS and the chain moves on.
+            ...(endpoints.searxng
+              ? [
+                  createGoogleGeocoder({
+                    request(query, { bias, signal }) {
+                      const params = new URLSearchParams({ q: query });
+                      if (bias) params.set('bounds', bias);
+                      return fetchImpl(`${endpoints.searxng}?${params}`, {
+                        signal,
+                      });
+                    },
+                  }),
+                ]
+              : []),
             createGoogleGeocoder({
               request(query, { bias, signal }) {
                 const key = resolveApiKey?.();

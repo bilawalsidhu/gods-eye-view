@@ -315,7 +315,7 @@ test('forward geocoding is composed once and consumers do not call a source dire
     assert.doesNotMatch(source, /geocodeKeyless|geocode\/json\?address/);
   }
   const standalone = fs.readFileSync(path.join(ROOT, 'src/standalone/placeSearch.js'), 'utf8');
-  assert.match(standalone, /createDefaultPlaceSearch as createStandalonePlaceSearch/);
+  assert.match(standalone, /return createDefaultPlaceSearch\(/);
   const setup = fs.readFileSync(path.join(ROOT, 'src/search/defaults.js'), 'utf8');
   assert.match(setup, /createGoogleGeocoder/);
   assert.match(setup, /createPhotonGeocoder/);

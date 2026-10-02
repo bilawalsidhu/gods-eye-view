@@ -3891,6 +3891,24 @@ is discarded rather than coerced. The portable `./search` export
 provides the service and adapters; it reads no environment or application state.
 Existing browser/server key setup is unchanged.
 
+**Own SearXNG instance (October 2026).** When the server has `SEARXNG_URL`
+(Provider Settings → SEARXNG, or the environment file), the standalone chain
+asks `/api/searxng/geocode` right after the two offline providers and before
+Google, and annotation/landmark text search asks `/api/searxng/text-search`
+before `/api/google/text-search`, falling back when SearXNG has no nearby hit.
+Both routes live in `server/providers/places/searxng.js`: the instance URL stays
+server-side (a pasted `/search` or `/preferences` page URL is reduced to its
+root), requests use the map category with `format=json`, refuse redirects, time
+out after eight seconds, cap bodies at 1 MB, share a 60/min per-client limit
+and cache answers for five minutes. Map results become Nominatim-shaped hits;
+geocoding prefers a hit inside the bias bounds, and text search keeps hits
+inside the radius in SearXNG relevance order. Without `SEARXNG_URL` both routes
+answer as an unconfigured capability and the chain continues unchanged. The
+instance must allow JSON output in `settings.yml`. Nearby-by-type context,
+reverse geocoding and installation search remain Google/Nominatim features.
+The reusable `./search` package adds the SearXNG step only when its caller
+supplies `endpoints.searxng` / `endpoints.searxngTextSearch`.
+
 Providers normalize coordinates, canonical name, label, place types and optional
 bounds. Camera framing, nearby landmark recovery and footprint selection remain
 in their consumers, including the Capitol identity/containment safeguards.

@@ -20,12 +20,15 @@ test('standalone geocoding falls back after Google connection, JSON and refusal 
   for (const fail of [() => { throw new Error('offline'); }, () => new Response('invalid json'), () => Response.json({ status: 'REQUEST_DENIED' })]) {
     const urls = [];
     const service = createStandalonePlaceSearch({ resolveApiKey: () => 'fixture', fetchImpl: async (url) => {
-      urls.push(url); return url.includes('maps.googleapis.com') ? fail() : hit();
+      urls.push(url);
+      if (url.startsWith('/api/searxng/')) return Response.json({ status: 'ZERO_RESULTS', results: [], configured: false });
+      return url.includes('maps.googleapis.com') ? fail() : hit();
     } });
     const result = await service.geocode('Hanoi');
     assert.equal(result.place.name, 'Hà Nội');
     assert.equal(result.fallbackUsed, true);
-    assert.equal(urls.length, 2);
+    assert.equal(urls.length, 3);
+    assert.match(urls[0], /^\/api\/searxng\/geocode\?/);
   }
 });
 
@@ -98,4 +101,37 @@ test('definitive misses expire while outage outcomes are never cached', async ()
 test('wrapped and nonnumeric Photon bounds are omitted', () => {
   assert.equal(photonExtentToBounds([170, 10, -170, -10]), null);
   assert.equal(photonExtentToBounds([null, 10, 20, -10]), null);
+});
+
+test('standalone geocoding answers from the SearXNG route before Google and Photon', async () => {
+  const urls = [];
+  const service = createStandalonePlaceSearch({ resolveApiKey: () => 'fixture', fetchImpl: async (url) => {
+    urls.push(url);
+    return Response.json({ status: 'OK', results: [{
+      geometry: { location: { lat: 52.3598, lng: 4.885 } },
+      formatted_address: 'Rijksmuseum, Amsterdam, Netherlands',
+      types: ['point_of_interest', 'establishment'],
+      address_components: [{ long_name: 'Rijksmuseum', types: ['point_of_interest', 'establishment'] }],
+    }] });
+  } });
+  const result = await service.geocode('Rijksmuseum');
+  assert.equal(result.place.name, 'Rijksmuseum');
+  assert.deepEqual(urls, ['/api/searxng/geocode?q=Rijksmuseum']);
+});
+
+test('standalone text search prefers SearXNG places and falls back to Google when it has none', async () => {
+  for (const [own, expected, calls] of [
+    [[{ name: 'Rijksmuseum', latitude: 52.36, longitude: 4.885 }], 'Rijksmuseum', 1],
+    [[], 'Google hit', 2],
+  ]) {
+    const urls = [];
+    const service = createStandalonePlaceSearch({ fetchImpl: async (url) => {
+      urls.push(url);
+      return Response.json({ places: url.startsWith('/api/searxng/') ? own : [{ name: 'Google hit', latitude: 52.36, longitude: 4.885 }] });
+    } });
+    const places = await service.textSearch('Rijksmuseum', { latitude: 52.36, longitude: 4.88 });
+    assert.equal(places[0].name, expected);
+    assert.equal(urls.length, calls);
+    assert.match(urls[0], /^\/api\/searxng\/text-search\?/);
+  }
 });

@@ -1,6 +1,12 @@
 /** Place-search and route middleware for Node development servers. */
 export { googlePlacesContextProxy } from './places/google.js';
 export {
+  searxngPlacesProxy,
+  searxngBaseUrl,
+  createSearxngSearch,
+  normalizeSearxngHit,
+} from './places/searxng.js';
+export {
   googleServerApiKey,
   keylessGooglePlacesResponse,
 } from './places/google-key.js';

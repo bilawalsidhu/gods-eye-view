@@ -1,5 +1,11 @@
 # Changelog
 
+- Place search can use your own SearXNG instance. Set `SEARXNG_URL` (Provider
+  Settings → SEARXNG or `.env`) and location search, voice fly-to and
+  annotation landmark lookup ask it first, before Google, Photon and
+  Nominatim; the instance URL never reaches the browser. The instance must
+  allow `format: json`. Without the setting nothing changes. `npm run doctor`
+  reports which search chain is active.
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
