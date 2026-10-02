@@ -3805,6 +3805,7 @@
       "src/data/openVesselPhoto.js",
       "src/layers/vessels/photos.js",
       "src/layers/aurora/rendering.js",
+      "src/layers/aurora/magneticLocalTime.js",
       "src/layers/aurora/source.js",
       "src/layers/aurora/index.js"
     ],
@@ -4524,6 +4525,7 @@
       "src/layers/vessels/photos.js",
       "src/data/openVesselPhoto.js",
       "src/layers/aurora/rendering.js",
+      "src/layers/aurora/magneticLocalTime.js",
       "src/layers/aurora/index.js"
     ],
     "external": [
