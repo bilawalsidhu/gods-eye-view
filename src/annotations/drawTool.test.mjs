@@ -127,7 +127,10 @@ test('the DISPLAY rail styles live in their current owner, not the shim', () => 
   }
 });
 
-test('nothing promises a GeoJSON export for drawn shapes', () => {
+test('the draw tool itself does not claim the GeoJSON export', () => {
+  // The board can be exported (DISPLAY ▸ Draw ▸ Export), but that belongs to
+  // pathExport.js / pathImportTool.js. The draw modules produce annotation
+  // specs and nothing else, and must not describe an export they do not own.
   for (const file of [
     'src/annotations/drawTool.js',
     'src/annotations/drawMode.js',
@@ -140,14 +143,10 @@ test('nothing promises a GeoJSON export for drawn shapes', () => {
   }
   for (const file of ['README.md', 'CHANGELOG.md', 'docs/CURRENT-STATE.md']) {
     const source = read(file);
-    const at = source.indexOf('DISPLAY ▸ **Draw**');
-    const start = at >= 0 ? at : source.indexOf('DISPLAY ▸ Draw');
-    assert.ok(start >= 0, `${file} should describe the Draw control`);
-    const section = source.slice(start, start + 1200);
-    assert.doesNotMatch(
-      section,
-      /GeoJSON/i,
-      `${file} still claims a GeoJSON export for drawn shapes`,
+    assert.ok(
+      source.includes('DISPLAY ▸ **Draw**') ||
+        source.includes('DISPLAY ▸ Draw'),
+      `${file} should describe the Draw control`,
     );
   }
 });
