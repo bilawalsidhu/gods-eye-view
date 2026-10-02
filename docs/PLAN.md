@@ -2943,3 +2943,111 @@ Measured effect and method recorded in `docs/PERFORMANCE.md`
 3. The GitForge heartbeat bug (benched runner never restored to
    `online`) remains open upstream in GitForge itself; the restart
    workaround is the standing mitigation.
+
+## Phase 15 — Performance deep dive: boot payload, per-frame walks, layer cost (2026-10-02, PLANNED)
+
+Goal: the next systematic performance campaign after Phase 14, targeted at
+the three cost centers the 2026-08→10 measurements still leave on the
+table: first-visit boot payload (one 5.9 MB chunk parses at boot),
+per-frame main-thread walks under continuous render holds, and per-layer
+activation/heap costs. Derived from a static deep dive (import graph,
+chunk map, per-frame listener inventory, timer inventory) over the
+measured baselines in docs/PERFORMANCE.md. Analysis ran on the contended
+box (load 40–57) — every candidate below is anchored on
+load-independent evidence (file/chunk facts, listener counts, and the
+existing hardware/software tables); phases that need quiet hardware say
+so.
+
+### Evidence base (static, load-independent)
+
+- **The app ships as ONE 5.9 MB chunk.** `dist/assets/index-*.js` is
+  5943.6 KiB of its 6144 KiB budget gate (96.7% full) and contains the
+  whole app + Cesium. `src/main.js` has 39 static imports and **zero
+  dynamic imports**: all 16 data layers, the voice stack
+  (`voice/gevRealtime.js` → WebRTC/OpenAI realtime), annotations,
+  `scenes/director.js`, `logoGaze.js`, `cockpitCloudEffects.js` are
+  boot-critical parse/eval. The in-tree counterexample proves the
+  pattern works and is budgeted: `src/data/geoid.js` lazily imports the
+  2.7 MB `egm96-universal` chunk on first use; `regions` (1.9 MB),
+  `marine` (618 KB), `san-francisco` (217 KB) are likewise lazy and
+  budgeted (`BUNDLE-BUDGETS` labels them "lazy").
+- **20 files attach preRender/postRender/preUpdate listeners**
+  (`src/celestialRing.js`, `orbit.js`, `worldOverlay.js`, 13 data
+  layers, tracked/cockpit/voice modules). Each runs per rendered frame
+  under any continuous hold; at the low-demand 30 fps policy a parked
+  camera still walks all of them 30×/s. The Phase 14 publish guard
+  proved this class pays real money (one walk republished cohorts
+  every frame — 636→206 requestRender/20 s).
+- **Layer cost table (M5 hardware, docs/PERFORMANCE.md)**: cold
+  activation CCTV 19.6 s (6× the next layer), rockets 3.6 s, radio
+  3.5 s; heap submarine cables 412 MB (2,629 polylines), datacenters
+  328 MB (4,362 points); motion fps gaps: AIS 12k vessels 22.1,
+  detection-100% 34.4, combined-operational 39.9, Snow 42.3, Noir 47,
+  FLIR 49.
+- **Idle residuals (2026-09-10 profile)**: HUD/telemetry timers at
+  250/500/60 ms; `scoreSatelliteNameMatch` was the largest non-Cesium
+  self-time entry during catalog load.
+- **Residual render requests at idle**: 206 `scene.requestRender`/20 s
+  (Phase 14 census) — Cesium's own tile-streaming self-requests, the
+  floor `applyTilesetCachePolicy` already shapes.
+
+### Ranked candidates
+
+| # | Candidate | Evidence | Expected effect | Measurable here? |
+|---|---|---|---|---|
+| 1 | Boot-path code splitting: dynamic `import()` at first-use seams (voice, annotations, scenes/director, logoGaze, cockpitCloudEffects; per-layer factories in DataLayerManager) | 39 static imports / 0 dynamic; 5.9 MB single chunk at 96.7% of budget | First-visit parse/eval off the critical path; headroom back under the chunk budget; per-layer chunks fetched on first enable | YES — chunk map + dev-server DCL/load + budget gate |
+| 2 | Per-frame walk census + cadence gating: count each preRender/postRender consumer per frame, throttle cadence-bound layers (radio, militaryAwareness, planets, rocketLaunches — data changes at minutes cadence) | 20 listener files; Phase 14 precedent | Main-thread headroom during motion/orbit (AIS 22 fps, combined-operational 39.9 fps gaps) | YES — request-census variant counting walks |
+| 3 | CCTV cold-activation breakdown (19.6 s): per-city fetch fan-out vs entity creation vs first paint | M5 activation table | Layer-enable latency | YES — phase timings in dev server |
+| 4 | Heap-heavy static layers → primitive collections (cables polylines, datacenters points) | 412 MB / 328 MB heap; FIRMS texture precedent (N primitives → 1) | Heap; mobile viability of "enable everything" presets | YES — heap in profile-runtime scenes |
+| 5 | Hardware-fps-gap paint work (detection Canvas2D brackets, style overlays Snow/Noir/FLIR) | M5 motion fps table | fps on real GPUs | NO — needs quiet hardware; prepare A/B probes |
+| 6 | Idle micro-costs: consolidate HUD/telemetry timers; index/debounce `scoreSatelliteNameMatch` | 2026-09-10 profile findings 4–5; 10 files with setInterval | Idle CPU/battery | PARTLY — longtask/idle% in profile-runtime |
+| 7 | Tile-streaming floor (206 req/20 s parked): Cesium cache/error-budget tuning | Phase 14 census floor | Smaller idle tail | RISKY (visual quality) — measure only |
+
+### Phases
+
+- **15A — Boot payload split (candidate 1).** Introduce first-use
+  dynamic imports at the six seams; convert `DataLayerManager.register`
+  callers to lazy factories returning `Promise<module>`; keep
+  registration metadata static so panels/HUD never await the module.
+  Extend `src/config/bundleBudgets.js` with per-chunk budgets for every
+  new async chunk; extend `apiEndpoints.test.mjs`-style inventory
+  thinking with an import-graph test that FAILS if a new heavy static
+  import appears in `main.js` (guard the seam). Gate: chunk map shows
+  the main chunk under a NEW lower budget; `verify-prod-render.mjs`
+  8/8 on dist; voice/annotation/director first-use latency measured
+  (budget ≤300 ms to first interaction on dev server); PWA precache
+  manifest still lists the offline shell (check:budgets covers it).
+- **15B — Per-frame walk census (candidate 2).** Extend the Phase 14
+  census probe to count preRender/postRender callback invocations per
+  frame per consumer (wrap the scene event, tag by stack). Gate: a
+  recorded census table; cadence-bound layers moved to interval-driven
+  invalidation where their walk does no per-frame work; no visual
+  change (screenshot A/B on the standard scenes).
+- **15C — Layer cost: activation + heap (candidates 3–4).** CCTV
+  per-phase instrumentation then parallelize/limit city fetches and
+  chunk entity creation via the existing `processChunked` pattern;
+  cables/datacenters converted to Cesium primitive collections with
+  the FIRMS A/B method (heap + fps + visual parity probes, `?flag=0`
+  fallback path like `firmsWasm=0`).
+- **15D — Hardware-gated paint work (candidate 5).** Requires a quiet
+  hardware-rendered box (same controls as the M5 capture: GPU string
+  recorded, dpr 1, 5 s motion / 5 s rest, live counts recorded). Prepare
+  the A/B probes now (detection bracket batching bench, style overlay
+  composite-cost probe) so the capture is turnkey. NOT executable on
+  this box; explicitly parked on hardware availability.
+- **15E — Idle micro-costs + tile floor (candidates 6–7).** Timer
+  consolidation into one scheduler with the same cadences;
+  `scoreSatelliteNameMatch` prefix-index or debounce. Tile floor:
+  measure only (maximumScreenSpaceError/cacheBytes A/B on the census,
+  ship nothing without a visual-parity check).
+
+### Honest limits
+
+- Static import/census numbers are facts; the *impact* estimates for
+  candidates 1/2 parse costs and walk costs are engineering judgment
+  until 15A/15B produce their before/after tables on this box.
+- Absolute fps claims stay out until the 15D hardware capture; this
+  box's SwiftShader numbers are request-mode/policy conformance
+  signals only (the standing PERFORMANCE.md rule).
+- Box load 40–57 during analysis; every instrument run this phase must
+  restate the load alongside its numbers.
