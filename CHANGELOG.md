@@ -1,5 +1,6 @@
 # Changelog
 
+- Bound the remaining upstream body reads (FIRMS, CelesTrak, adsb.lol, TomTom, OpenSky, adsbdb) with streaming size caps and shared deadlines; the adsb.lol military and OpenSky `states/all` polls gain deadlines of their own.
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a

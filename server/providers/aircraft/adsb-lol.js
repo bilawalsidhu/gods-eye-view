@@ -1,3 +1,5 @@
+import { readResponseTextCapped } from '../common/http.js';
+
 /**
  * Vite plugin: adsb.lol military aircraft proxy with 12 s response cache.
  *
@@ -25,6 +27,10 @@ export function adsbLolProxy() {
   let _cooldownStatus = 0;
   /** Response cache TTL (ms). */
   const CACHE_MS = 12000;
+  /** Upstream deadline (ms); the fetch previously had none and could hang a poll. */
+  const UPSTREAM_TIMEOUT_MS = 12000;
+  /** /v2/mil measures ~67 KB; a relayed error page is bounded by the same cap. */
+  const ADSBLOL_MIL_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
   /** Cooldown after a 429 when upstream sends no usable Retry-After (ms). */
   const RATE_LIMIT_COOLDOWN_MS = 30000;
   /** Cooldown after a 5xx (ms). */
@@ -94,11 +100,17 @@ export function adsbLolProxy() {
           );
           return;
         }
+        const signal = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
         const upstream = await fetch('https://api.adsb.lol/v2/mil', {
           headers: { 'User-Agent': 'gods-eye-view-adsblol-proxy/1.0' },
+          signal,
         });
         if (upstream.ok) {
-          const body = await upstream.text();
+          const body = await readResponseTextCapped(
+            upstream,
+            ADSBLOL_MIL_MAX_RESPONSE_BYTES,
+            signal,
+          );
           _cache = body;
           _cacheAt = Date.now();
           _cooldownUntil = 0;
@@ -125,7 +137,11 @@ export function adsbLolProxy() {
             return;
           }
         }
-        const body = await upstream.text();
+        const body = await readResponseTextCapped(
+          upstream,
+          ADSBLOL_MIL_MAX_RESPONSE_BYTES,
+          signal,
+        );
         serve(
           res,
           upstream.status,

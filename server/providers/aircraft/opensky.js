@@ -2,6 +2,7 @@ import { normalizeAdsbLolPointResponse } from '../../../src/data/adsbLolFallback
 import {
   coalesceProxyRequest,
   readResponseJsonCapped,
+  readResponseTextCapped,
 } from '../common/http.js';
 import { requiredFiniteQueryNumber } from '../common/query.js';
 // ---------------------------------------------------------------------------
@@ -72,6 +73,15 @@ const ADSBLOL_POINT_CACHE_MS = 12000;
 const ADSBLOL_POINT_CACHE_MAX = 80;
 const ADSBLOL_POINT_RADIUS_NM = 250;
 const ADSBLOL_POINT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+/** states/all?extended=1 measures ~0.8 MB anonymously; bounded, not budgeted. */
+const OPENSKY_STATES_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+/**
+ * Deadline for the whole states/all exchange: headers, the Basic-auth retry
+ * and the body. The fetch previously had none, so a hung upstream connection
+ * stalled the worldwide poll indefinitely; a miss here serves STALE like any
+ * other upstream failure.
+ */
+const OPENSKY_STATES_TIMEOUT_MS = 20000;
 // A 200 response can still contain an old OpenSky snapshot. Past this point
 // the viewport-scoped adsb.lol source is more honest and keeps local motion
 // current instead of coasting a stale worldwide frame indefinitely.
@@ -470,9 +480,10 @@ export function openSkyProxy() {
           }
         }
 
+        const signal = AbortSignal.timeout(OPENSKY_STATES_TIMEOUT_MS);
         let upstream = await fetch(
           'https://opensky-network.org/api/states/all?extended=1',
-          { headers },
+          { headers, signal },
         );
         // Auto-mode fallback: if OAuth was rejected, retry with Basic credentials
         if (
@@ -487,13 +498,17 @@ export function openSkyProxy() {
           };
           upstream = await fetch(
             'https://opensky-network.org/api/states/all?extended=1',
-            { headers: retryHeaders },
+            { headers: retryHeaders, signal },
           );
           usedMode = 'basic';
           reason = 'oauth_rejected_fallback_basic';
         }
 
-        let body = await upstream.text();
+        let body = await readResponseTextCapped(
+          upstream,
+          OPENSKY_STATES_MAX_RESPONSE_BYTES,
+          signal,
+        );
         const sourceEpochMs = upstream.ok ? openSkySourceEpochMs(body) : null;
         if (
           upstream.ok &&
