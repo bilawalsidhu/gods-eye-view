@@ -1,5 +1,9 @@
 import * as Cesium from 'cesium';
-import { createAuroraRendering, AURORA_COLORS } from './rendering.js';
+import {
+  createAuroraRendering,
+  AURORA_COLORS,
+  AURORA_TRANSITION_FPS,
+} from './rendering.js';
 
 const utc = (value) =>
   value ? `${value.slice(0, 16).replace('T', ' ')} UTC` : 'Unavailable';
@@ -9,6 +13,8 @@ export function createAuroraLayer({
   cesium = Cesium,
   createRendering = createAuroraRendering,
   eventTarget = globalThis.window,
+  setInterval: setIntervalImpl = globalThis.setInterval,
+  clearInterval: clearIntervalImpl = globalThis.clearInterval,
 } = {}) {
   if (typeof feed?.getSnapshot !== 'function')
     throw new TypeError('Aurora requires a snapshot source');
@@ -22,7 +28,36 @@ export function createAuroraLayer({
   let error = null;
   let opacity = 'strong';
   let listener = null;
+  let ticker = null;
   const notify = () => listener?.();
+
+  const stopTicker = () => {
+    if (ticker === null) return;
+    clearIntervalImpl(ticker);
+    ticker = null;
+  };
+  /**
+   * Drive an in-flight transition to completion.
+   *
+   * Only runs while one is in flight. The rest of the time the field is static
+   * and costs nothing, which matters because the blended raster is roughly
+   * 23 ms of main-thread work per frame.
+   */
+  const runTicker = () => {
+    stopTicker();
+    if (typeof setIntervalImpl !== 'function') {
+      // No timer available, as in a unit test. Settle immediately rather than
+      // leaving the oval frozen part-way between two forecasts.
+      rendering?.advance(Number.POSITIVE_INFINITY);
+      return;
+    }
+    ticker = setIntervalImpl(
+      () => {
+        if (!rendering?.advance()) stopTicker();
+      },
+      Math.round(1000 / AURORA_TRANSITION_FPS),
+    );
+  };
   const getHost = () =>
     imageryHost?.() ?? {
       collection: viewer?.imageryLayers ?? viewer?.scene?.imageryLayers,
@@ -55,6 +90,7 @@ export function createAuroraLayer({
     },
     disable() {
       enabled = false;
+      stopTicker();
       request?.abort();
       request = null;
       snapshot = null;
@@ -86,6 +122,7 @@ export function createAuroraLayer({
           snapshot = next;
           error = null;
           rendering.setField(next);
+          if (rendering.isTransitioning?.()) runTicker();
         }
         return true;
       } catch (cause) {
@@ -184,6 +221,7 @@ export function createAuroraLayer({
       };
     },
     destroy() {
+      stopTicker();
       layer.disable();
       eventTarget?.removeEventListener?.(
         'gev:map-stack-changed',
