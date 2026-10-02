@@ -7,6 +7,7 @@ import {
   KEY_SETUP_VALUE_LIMIT,
   commandCompletedSuccessfully,
   isKeySetupExternallyManaged,
+  keySetupRequestAuthority,
   keySetupStatus,
   keySetupRequirement,
   knownKeySetupEnvVars,
@@ -273,6 +274,26 @@ test('the admission gate refuses every non-local shape, one assertion per refusa
   const noJson = admitKeySetupRequest({ ...local, contentType: 'text/plain' });
   assert.equal(noJson.ok, false, 'non-JSON POST refused');
   assert.equal(noJson.status, 415);
+});
+
+test('the request authority comes from Host, or :authority over HTTP/2', async () => {
+  const { admitKeySetupRequest } = await import('./keySetupCore.mjs');
+  assert.equal(keySetupRequestAuthority({ host: 'localhost:4173' }), 'localhost:4173');
+  assert.equal(keySetupRequestAuthority({ ':authority': 'localhost:4173' }), 'localhost:4173');
+  assert.equal(keySetupRequestAuthority({ ':authority': 'localhost:4173', host: 'LOCALHOST:4173' }), 'localhost:4173');
+  assert.equal(keySetupRequestAuthority({ ':authority': 'evil.example', host: 'localhost:4173' }), '', 'conflicting authorities yield none');
+  assert.equal(keySetupRequestAuthority({}), '');
+  const overHttp2 = (headers) =>
+    admitKeySetupRequest({
+      method: 'GET',
+      remoteAddress: '127.0.0.1',
+      hostHeader: keySetupRequestAuthority(headers),
+      protocol: 'https:',
+      env: {},
+    }).ok;
+  assert.equal(overHttp2({ ':authority': 'localhost:4173' }), true, 'local HTTP/2 request is admitted');
+  assert.equal(overHttp2({ ':authority': '10.0.0.5:4173' }), false, 'LAN authority refused');
+  assert.equal(overHttp2({ ':authority': 'evil.example', host: 'localhost:4173' }), false, 'conflict refused');
 });
 
 test('a null value validates as a removal; an empty string still does not', () => {

@@ -1,5 +1,11 @@
 # Changelog
 
+- The dev server can serve HTTPS: set `HTTPS_CERT_FILE` and `HTTPS_KEY_FILE`
+  (for example from `mkcert`). Voice control then works when GEV is opened from
+  another machine on the LAN, because browsers only allow the microphone on
+  HTTPS or localhost. Provider Settings stays available on
+  `https://localhost` (its local-only check now reads the HTTP/2 `:authority`).
+  Without the settings nothing changes.
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a

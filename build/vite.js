@@ -9,6 +9,7 @@ export function createBrowserViteConfig({
   cesiumToken,
   host = 'localhost',
   port = 4173,
+  https,
   command,
 } = {}) {
   return {
@@ -31,12 +32,19 @@ export function createBrowserViteConfig({
     server: {
       host: host || 'localhost',
       port: parseInt(port, 10) || 4173,
+      ...(https ? { https } : {}),
       allowedHosts:
         host === '0.0.0.0' || host === '::'
           ? true
           : ['localhost', '127.0.0.1', '.local'],
       fs: {
-        deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/ENVIRONMENT'],
+        deny: [
+          '.env',
+          '.env.*',
+          '*.{crt,pem,key}',
+          '**/.git/**',
+          '**/ENVIRONMENT',
+        ],
       },
       // These headers protect the document containing Provider Settings.
       headers: {

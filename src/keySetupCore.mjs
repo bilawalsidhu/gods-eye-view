@@ -131,6 +131,19 @@ function localAuthority(hostHeader, protocol) {
   }
 }
 
+/**
+ * The authority a request was addressed to. HTTP/2 (which the dev server speaks
+ * once HTTPS is enabled) carries it in `:authority` instead of Host; a request
+ * naming two different authorities is refused by returning none.
+ */
+export function keySetupRequestAuthority(headers = {}) {
+  const authority = String(headers[':authority'] || '').trim();
+  const host = String(headers.host || '').trim();
+  if (authority && host && authority.toLowerCase() !== host.toLowerCase())
+    return '';
+  return authority || host;
+}
+
 /** True only for a subprocess that exited normally and successfully. */
 export function commandCompletedSuccessfully(result) {
   return !!result && !result.error && !result.signal && result.status === 0;

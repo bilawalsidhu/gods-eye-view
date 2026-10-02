@@ -2,6 +2,7 @@ import {
   knownKeySetupEnvVars,
   admitKeySetupRequest,
   isKeySetupExternallyManaged,
+  keySetupRequestAuthority,
   keySetupStatus,
   validateKeySetupUpdates,
   upsertDotenvValues,
@@ -138,7 +139,7 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
     admitKeySetupRequest({
       method: req.method,
       remoteAddress: req.socket?.remoteAddress,
-      hostHeader: req.headers?.host,
+      hostHeader: keySetupRequestAuthority(req.headers),
       protocol: req.socket?.encrypted ? 'https:' : 'http:',
       origin: req.headers?.origin,
       contentType: req.headers?.['content-type'],
