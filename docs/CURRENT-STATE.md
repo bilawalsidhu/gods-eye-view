@@ -916,6 +916,21 @@ services, local voice and standalone key setup. Importing them starts no network
 acquisition. Browser layer lifecycle, rendering and voice execution stay in their
 existing modules.
 
+## Optional HTTPS dev server
+
+`server/standalone/vite.config.js` reads `HTTPS_CERT_FILE` and `HTTPS_KEY_FILE`;
+when both are set it passes the PEM contents to `createBrowserViteConfig({ https })`,
+which sets `server.https` (preview inherits it). Setting only one fails at
+startup. The `fs.deny` list now also covers `*.key`. Vite itself skips its
+`allowedHosts` check on an HTTPS server and relies on certificate validation
+against DNS rebinding. Vite serves HTTPS over HTTP/2, which has no
+`Host` header, so the Provider Settings gate takes the request authority from
+`:authority` (`keySetupRequestAuthority`) and refuses a request whose `Host`
+and `:authority` disagree; it still answers only loopback sockets addressed by
+a local hostname. The purpose is voice control from another machine:
+`getUserMedia` requires a secure context, so `http://<lan-ip>:4173` cannot open
+the microphone while `https://<lan-ip>:4173` with a trusted certificate can.
+
 ## Local build preview
 
 After `npm run build`, `npm run preview` serves the built app with the same data
