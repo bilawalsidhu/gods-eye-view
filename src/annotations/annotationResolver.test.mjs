@@ -188,7 +188,15 @@ function installGoogleMocks(t, handler) {
     setTimeout: globalThis.setTimeout,
     clearTimeout: globalThis.clearTimeout,
   };
-  globalThis.fetch = handler;
+  // The standalone chain asks the local SearXNG route first; answer it as an
+  // unconfigured instance so these cases keep counting only Google traffic.
+  globalThis.fetch = async (url, ...rest) => {
+    if (String(url).startsWith('/api/searxng/geocode'))
+      return Response.json({ status: 'ZERO_RESULTS', results: [], configured: false });
+    if (String(url).startsWith('/api/searxng/'))
+      return Response.json({ places: [], configured: false });
+    return handler(url, ...rest);
+  };
   t.after(() => {
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;

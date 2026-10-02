@@ -34,6 +34,7 @@ export const CREDENTIALS = Object.freeze([
     )),
   },
   { name: 'LL2_API_TOKEN', label: 'Launch Library 2', keychain: [] },
+  { name: 'SEARXNG_URL', label: 'SearXNG place search', keychain: [] },
 ]);
 
 export function isConfiguredValue(value) {
@@ -182,6 +183,11 @@ export function buildCapabilitySummary(
     missions: configured('LL2_API_TOKEN')
       ? 'Launch Library 2 token allowance'
       : 'Launch Library 2 public access',
+    search: configured('SEARXNG_URL')
+      ? 'your SearXNG instance first, then the keyless chain'
+      : configured('GOOGLE_MAPS_API_KEY')
+        ? 'Google, then keyless Photon and Nominatim'
+        : 'keyless Photon and Nominatim',
   };
 }
 
@@ -237,6 +243,7 @@ export function formatSetupReport(report, { readyMessage } = {}) {
     `Fires:   ${report.capabilities.fires}`,
     `Traffic: ${report.capabilities.traffic}`,
     `Missions: ${report.capabilities.missions}`,
+    `Search:  ${report.capabilities.search}`,
     '',
     'Configured providers:',
     ...CREDENTIALS.map((spec) => {

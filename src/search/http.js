@@ -99,13 +99,17 @@ export function createHttpGeospatialProvider({
       );
     },
     async textSearch(query, { latitude, longitude, radiusM = 6000 }, options) {
-      return places(
-        await json(
-          urls.textSearch,
-          { q: query, lat: latitude, lon: longitude, radiusM },
-          options,
-        ),
-      );
+      const params = { q: query, lat: latitude, lon: longitude, radiusM };
+      if (urls.searxngTextSearch) {
+        const own = await json(urls.searxngTextSearch, params, options).catch(
+          () => {
+            options?.signal?.throwIfAborted();
+            return null;
+          },
+        );
+        if (places(own).length) return places(own);
+      }
+      return places(await json(urls.textSearch, params, options));
     },
     async nearby({ latitude, longitude, radiusM = 250 }, options) {
       return places(
