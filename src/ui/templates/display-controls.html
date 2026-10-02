@@ -144,7 +144,14 @@
           <option value="red">Red</option>
         </select>
         <button class="pp-mode-btn draw-clear-btn" id="draw-clear" type="button" title="Remove every mark from the board">Clear</button>
+        <button class="pp-mode-btn draw-file-btn" id="draw-import" type="button" title="Put a GPX, KML or GeoJSON file on the board">Import</button>
+        <button class="pp-mode-btn draw-file-btn" id="draw-export" type="button" title="Save the marks on the board as a GeoJSON file">Export</button>
+        <input type="file" id="draw-import-input" accept=".gpx,.kml,.geojson,.json" multiple hidden aria-hidden="true" tabindex="-1">
         <span class="draw-hint" id="draw-hint" aria-live="polite"></span>
+      </div>
+      <div class="pp-slider-row" id="draw-import-row">
+        <span class="draw-hint" id="draw-import-status" aria-live="polite"></span>
+        <ul class="draw-import-list" id="draw-import-list" aria-label="Imported files"></ul>
       </div>
     </div>
     <div class="pp-toggle-group">
