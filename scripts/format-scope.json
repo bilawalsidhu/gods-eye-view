@@ -864,5 +864,7 @@
   "src/layers/traffic/motion.test.mjs",
   "scripts/qa-journey-recorder.mjs",
   "scripts/qa-alpr-journey.mjs",
-  "scripts/qa-context-arrivals.mjs"
+  "scripts/qa-context-arrivals.mjs",
+  "scripts/assemble-changelog.mjs",
+  "src/tooling/changelogFragments.test.mjs"
 ]

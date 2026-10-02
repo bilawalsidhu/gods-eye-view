@@ -37,6 +37,8 @@
     "format:check": "node scripts/format.mjs --check",
     "layer-token:next": "node scripts/next-layer-state-token.mjs",
     "layer-token:check": "node scripts/check-layer-state-tokens.mjs",
+    "changelog": "node scripts/assemble-changelog.mjs --write",
+    "changelog:check": "node scripts/assemble-changelog.mjs --check",
     "dev": "vite",
     "dev:secure": "./scripts/dev-secure.sh",
     "opensky:import": "./scripts/opensky-import-client.sh",
