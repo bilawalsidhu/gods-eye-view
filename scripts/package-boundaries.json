@@ -5599,6 +5599,7 @@
       "src/layers/satellites/tiangongJoints.js",
       "src/layers/satellites/tiangongArticulation.js",
       "src/layers/aurora/rendering.js",
+      "src/layers/aurora/magneticLocalTime.js",
       "src/layers/aurora/source.js",
       "src/layers/aurora/index.js"
     ],
@@ -6458,6 +6459,7 @@
       "src/layers/satellites/tiangongArticulation.js",
       "src/layers/satellites/tiangongModel.js",
       "src/layers/aurora/rendering.js",
+      "src/layers/aurora/magneticLocalTime.js",
       "src/layers/aurora/index.js"
     ],
     "external": [
