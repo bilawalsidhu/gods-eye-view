@@ -260,11 +260,13 @@ check(
 historyProbe.clear();
 await mkdir(SHOTS, { recursive: true });
 
-const chromeExecutable = await resolveChromeExecutable(puppeteer);
+const chromeExecutable = await resolveChromeExecutable(puppeteer, {
+  required: true,
+});
 const browser = await puppeteer.launch({
   headless: false,
   protocolTimeout: 150000,
-  ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
+  executablePath: chromeExecutable,
   args: [
     '--no-sandbox',
     '--disable-background-timer-throttling',

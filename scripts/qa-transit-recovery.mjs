@@ -7,10 +7,12 @@ import { reduceTrailPixels } from '../src/layers/transit/qaMetrics.js';
 const base = process.env.QA_BASE_URL || 'http://localhost:4305';
 const shots = process.env.QA_SHOTS || 'qa-shots/transit-recovery';
 await mkdir(shots, { recursive: true });
-const chromeExecutable = await resolveChromeExecutable(puppeteer);
+const chromeExecutable = await resolveChromeExecutable(puppeteer, {
+  required: true,
+});
 const browser = await puppeteer.launch({
   headless: false,
-  ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
+  executablePath: chromeExecutable,
   args: [
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
