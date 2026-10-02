@@ -1265,6 +1265,10 @@
       "./voice/realtime-session"
     ],
     "modules": [
+      "src/voice/geminiSession.js",
+      "src/voice/geminiAudio.js",
+      "src/voice/geminiTools.js",
+      "src/voice/voiceProvider.js",
       "src/voice/realtimeController.js",
       "src/voice/realtimeBackend.js",
       "src/voice/control.js",
@@ -1309,6 +1313,10 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/voice/geminiSession.js",
+      "src/voice/geminiTools.js",
+      "src/voice/geminiAudio.js",
+      "src/voice/voiceProvider.js",
       "src/cyberSonarScene.js",
       "src/cyberSonar.js",
       "src/hudLayouts.js",
