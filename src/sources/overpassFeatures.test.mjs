@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createOverpassFeatureSource,
+  geometryOutputBox,
   FEATURE_SOURCE_METHODS,
 } from './overpassFeatures.js';
 import { normalizeOverpassFeatures } from './overpassFeaturesRecords.js';
@@ -189,4 +190,157 @@ test('annotation retries transient feature failures but caches definitive misses
   assert.equal(await anchor.resolveOutline(), null);
   assert.equal(await anchor.resolveOutline(), null);
   assert.equal(calls, 2);
+});
+
+// A multipolygon relation as Overpass prints it with `out geom`: the outer
+// boundary split across two ways, an inner ring, and a label node.
+const relationRing = [
+  { lat: 30, lon: -97 },
+  { lat: 30, lon: -96.994 },
+  { lat: 30.005, lon: -96.994 },
+  { lat: 30.005, lon: -97 },
+  { lat: 30, lon: -97 },
+];
+const relationFixture = (name, tags) => ({
+  type: 'relation',
+  id: 7,
+  bounds: { minlat: 30, minlon: -97, maxlat: 30.005, maxlon: -96.994 },
+  members: [
+    { type: 'way', ref: 71, role: 'outer', geometry: relationRing.slice(0, 3) },
+    { type: 'way', ref: 72, role: 'outer', geometry: relationRing.slice(2) },
+    {
+      type: 'way',
+      ref: 73,
+      role: 'inner',
+      geometry: relationRing.map((p) => ({ lat: p.lat + 0.001, lon: p.lon })),
+    },
+    { type: 'node', ref: 74, role: 'label', lat: 30.0025, lon: -96.997 },
+  ],
+  tags: { name, ...tags },
+});
+
+// Overpass leaves members out at `tags` verbosity, so `geom` has nothing to
+// attach to and a relation keeps only its bounds.
+const overpassPrinting = (element) => ({
+  query: async (text) =>
+    /\bout\s+tags\b/.test(text)
+      ? [
+          {
+            type: element.type,
+            id: element.id,
+            bounds: element.bounds,
+            tags: element.tags,
+          },
+        ]
+      : [element],
+});
+
+test('neighborhood and street-area lookups keep relation member geometry', async () => {
+  const calls = [];
+  const source = createOverpassFeatureSource({
+    boundarySource: {
+      query: async (text) => {
+        calls.push(text);
+        return overpassPrinting(
+          relationFixture('Fixture Quarter', { place: 'quarter' }),
+        ).query(text);
+      },
+    },
+  });
+  for (const method of ['getNeighborhoodAreas', 'getStreetAreas']) {
+    const [record] = await source[method]({ lat: 30.002, lon: -96.997 });
+    assert.deepEqual(record.coordinates, relationRing, method);
+  }
+  // Member geometry is printed only inside a box around the point.
+  assert.ok(
+    calls[0].endsWith(');out geom(29.9481,-97.05924,30.0559,-96.93476);'),
+  );
+  assert.ok(
+    calls[1].endsWith(');out geom(29.97505,-97.02812,30.02895,-96.96588);'),
+  );
+  for (const text of calls) assert.doesNotMatch(text, /\bout\s+tags\b/);
+});
+
+test('the geometry output box is a bounded square around the point', () => {
+  const box = geometryOutputBox(30, -97, 6000)
+    .slice(1, -1)
+    .split(',')
+    .map(Number);
+  const [south, west, north, east] = box;
+  assert.ok(Math.abs((north - south) * 111320 - 12000) < 2);
+  assert.ok(
+    Math.abs((east - west) * 111320 * Math.cos((30 * Math.PI) / 180) - 12000) <
+      2,
+  );
+  assert.equal(geometryOutputBox(89.99, 179.99, 6000).includes('90,180'), true);
+});
+
+test('annotations outline a neighborhood or street area mapped as a relation', async () => {
+  const ring = relationRing.map((p) => [p.lon, p.lat]);
+  const areas = (tags, name) => {
+    const source = createOverpassFeatureSource({
+      boundarySource: overpassPrinting(relationFixture(name, tags)),
+    });
+    return (point, options) =>
+      source[tags.place ? 'getNeighborhoodAreas' : 'getStreetAreas'](
+        point,
+        options,
+      );
+  };
+  const neighborhood = await createAnnotationResolver({
+    featureSource: featureSource({
+      getNeighborhoodAreas: areas(
+        { place: 'neighbourhood' },
+        'Fixture Heights',
+      ),
+    }),
+  }).resolveAnnotationTarget({
+    latitude: 30.002,
+    longitude: -96.997,
+    target: 'Fixture Heights',
+    entityKind: 'district',
+    footprint: true,
+  });
+  assert.equal(neighborhood.footprintKind, 'area');
+  assert.deepEqual(neighborhood.ring, ring);
+
+  const street = await createAnnotationResolver({
+    featureSource: featureSource({
+      getStreetAreas: areas(
+        { landuse: 'retail', type: 'multipolygon' },
+        'Fixture Street Market',
+      ),
+    }),
+  }).resolveAnnotationTarget({
+    latitude: 30.002,
+    longitude: -96.997,
+    target: 'Fixture Street',
+    entityKind: 'street',
+    footprint: true,
+  });
+  assert.equal(street.footprintKind, 'area');
+  assert.deepEqual(street.ring, ring);
+});
+
+test('focus footprints keep relation members and centers', async () => {
+  let query;
+  const element = relationFixture('Fixture Building', { building: 'yes' });
+  const source = createOverpassFeatureSource({
+    boundarySource: {
+      query: async (text) => {
+        query = text;
+        return overpassPrinting(element).query(text);
+      },
+    },
+  });
+  const [record] = await source.getFocusFootprints({
+    lat: 30.002,
+    lon: -96.997,
+  });
+  assert.deepEqual(
+    record.coordinates,
+    element.members.flatMap((member) => member.geometry || []),
+  );
+  assert.match(query, /out center geom\([-\d.,]+\);/);
+  assert.doesNotMatch(query, /out tags/);
 });
