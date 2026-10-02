@@ -1,5 +1,15 @@
 # Changelog
 
+- Import your own tracks onto the whiteboard and save the board. DISPLAY ▸ Draw
+  now has **Import** and **Export** beside Clear. Import reads GPX (tracks,
+  routes, waypoints), KML (LineString, Polygon, Point, `gx:Track`) and GeoJSON
+  in the browser; nothing is uploaded. Each file gets its own Hide/Show and
+  Remove, and imported marks drape, de-dup and clear like drawn ones. Long
+  tracks are simplified to 2,000 points, a file contributes at most 60 marks,
+  and anything skipped is reported with the reason. KMZ is refused with an
+  instruction to unzip it. Export writes the board as a GeoJSON file that
+  imports back unchanged. The annotation engine gains `remove(ids)` (#890).
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
