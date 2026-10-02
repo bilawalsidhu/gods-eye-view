@@ -1,5 +1,9 @@
 # Changelog
 
+- The deterministic HUD summary line labels its longitude-derived zone as
+  `ZONE+7` instead of `UTC+7`. The value is a nautical time zone, not the civil
+  offset a place keeps, so it no longer reads as local time (#775).
+
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
   on the layer row (TomTom / OSM / Hybrid) or with `?trafficRoads=`. With a
