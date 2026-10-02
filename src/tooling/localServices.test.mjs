@@ -21,6 +21,7 @@ import { openAiRealtimeProxy } from 'gods-eye-view/server/providers/openai';
 import { keySetupEndpoint } from 'gods-eye-view/server/standalone/key-setup';
 import { realtimeInstructions } from '../../server/providers/openai/instructions.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
+import { createDebugLogHandler } from '../../server/providers/openai/debug-log.js';
 
 function install(plugin, preview = false) {
   const routes = new Map();
@@ -195,6 +196,30 @@ test('Realtime handler preserves tools and default instructions, isolates suppli
   assert.equal(sent[0].session.instructions, sent[2].session.instructions);
 });
 
+test('caption transcription is on by default, reported to the client meter, and can be turned off', async (t) => {
+  env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
+  env(t, 'GEV_RATELIMIT_OPENAI_PER_MIN', undefined);
+  const sent = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    sent.push(JSON.parse(options.body));
+    return Response.json({ value: 'fixture-ephemeral' });
+  });
+  for (const [setting, expected] of [
+    [undefined, 'gpt-4o-mini-transcribe'],
+    ['off', 'off'],
+  ]) {
+    env(t, 'OPENAI_REALTIME_TRANSCRIBE_MODEL', setting);
+    const response = await request(
+      install(openAiRealtimeProxy()).get('/api/realtime/token'),
+    );
+    assert.equal(response.headers['x-gev-voice-transcribe-model'], expected);
+    assert.equal(
+      sent.at(-1).session.audio.input.transcription?.model ?? 'off',
+      expected,
+    );
+  }
+});
+
 test('debug logging resolves each supplied application directory independently', async (t) => {
   const first = root(t),
     second = root(t);
@@ -337,6 +362,40 @@ test('OpenAI routes answer generically when the upstream or the request fails', 
   assert.deepEqual(token.json(), { error: 'Failed to create Realtime token' });
   assert.equal(token.body.includes('api.openai.com'), false);
   assert.equal(token.body.includes('fixture-upstream-secret'), false);
+});
+
+test('the debug-log sink omits what people said unless content logging is enabled', async (t) => {
+  const record = {
+    event: 'server.event',
+    payload: {
+      type: 'conversation.item.input_audio_transcription.completed',
+      transcript: 'my home address is 12 Elm Street',
+      usage: { input_tokens: 40 },
+      nested: [{ type: 'input_text', text: 'call my sister' }],
+    },
+    span: { answer_text: 'Flying to Tokyo.', answer_words: 3 },
+  };
+  for (const includeContent of [false, true]) {
+    const sourceRoot = root(t);
+    const handler = createDebugLogHandler({ sourceRoot, includeContent });
+    const response = await request(handler, {
+      method: 'POST',
+      body: JSON.stringify(record),
+    });
+    assert.equal(response.status, 204);
+    const logged = readFileSync(
+      path.join(sourceRoot, '.gev-logs/realtime-conversations.jsonl'),
+      'utf8',
+    );
+    assert.equal(logged.includes('Elm Street'), includeContent);
+    assert.equal(logged.includes('call my sister'), includeContent);
+    assert.equal(logged.includes('Flying to Tokyo'), includeContent);
+    const parsed = JSON.parse(logged);
+    assert.equal(parsed.payload.usage.input_tokens, 40, 'numbers stay');
+    assert.equal(parsed.span.answer_words, 3);
+    if (!includeContent)
+      assert.equal(parsed.payload.transcript, '[omitted 32 chars]');
+  }
 });
 
 test('the debug-log sink stays bounded, rate limited, and quiet about failures', async (t) => {

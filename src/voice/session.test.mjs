@@ -346,3 +346,30 @@ test('late actions cannot run after stop and failed startup closes the adapter',
   assert.equal(stopped, 1);
   session.destroy();
 });
+
+test('action events carry the call id; progress after cancellation is dropped', async () => {
+  let report;
+  const f = fixture(async (name, args, options) => {
+    options.progress({ step: 'resolve', label: 'Zilker' });
+    report = options.progress;
+    return { ok: true };
+  });
+  const events = [];
+  f.session.subscribe((event) => events.push(event));
+  await f.session.start();
+  await f.hooks.runAction('annotate_map', {}, { callId: 'call_7' });
+  const actionEvents = events.filter(
+    (e) => e.type.startsWith('action-') || e.type === 'progress',
+  );
+  assert.deepEqual(
+    actionEvents.map((e) => [e.type, e.callId]),
+    [
+      ['action-call', 'call_7'],
+      ['progress', 'call_7'],
+      ['action-result', 'call_7'],
+    ],
+  );
+  f.hooks.emit({ type: 'interruption' });
+  report({ step: 'outline' });
+  assert.equal(events.filter((e) => e.type === 'progress').length, 1);
+});

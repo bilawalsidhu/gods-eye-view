@@ -23,7 +23,40 @@ const REALTIME_DEBUG_LOG_MAX_FILE_BYTES = 32 * 1024 * 1024;
  */
 const REALTIME_DEBUG_LOG_MAX_PER_MIN = 120;
 
-function createDebugLogHandler({ sourceRoot = defaultSourceRoot } = {}) {
+/**
+ * Fields that carry what people said or heard: transcripts, typed and spoken
+ * text, streamed deltas and the span's quoted replies. They are dropped from
+ * the persisted log unless content logging is explicitly enabled
+ * (GEV_VOICE_LOG_CONTENT=1), so timing and tool diagnostics never retain
+ * speech by default.
+ */
+const VOICE_CONTENT_FIELDS = new Set([
+  'transcript',
+  'text',
+  'delta',
+  'answer_text',
+  'preamble_text',
+]);
+
+/** Replace spoken or typed content with its length. */
+function omitVoiceContent(value, depth = 0) {
+  if (depth > 12 || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value))
+    return value.map((item) => omitVoiceContent(item, depth + 1));
+  const output = {};
+  for (const [key, item] of Object.entries(value)) {
+    output[key] =
+      VOICE_CONTENT_FIELDS.has(key) && typeof item === 'string'
+        ? `[omitted ${item.length} chars]`
+        : omitVoiceContent(item, depth + 1);
+  }
+  return output;
+}
+
+function createDebugLogHandler({
+  sourceRoot = defaultSourceRoot,
+  includeContent = process.env.GEV_VOICE_LOG_CONTENT === '1',
+} = {}) {
   const logDir = path.join(sourceRoot, '.gev-logs');
   const logFile = path.join(logDir, 'realtime-conversations.jsonl');
   const allow = makeRateLimiter({
@@ -79,7 +112,8 @@ function createDebugLogHandler({ sourceRoot = defaultSourceRoot } = {}) {
 
     try {
       const body = await readRequestBody(req, REALTIME_DEBUG_LOG_MAX_BYTES);
-      const record = JSON.parse(body || '{}');
+      const parsed = JSON.parse(body || '{}');
+      const record = includeContent ? parsed : omitVoiceContent(parsed);
       await append(
         `${JSON.stringify({
           loggedAt: new Date().toISOString(),
@@ -103,4 +137,4 @@ function createDebugLogHandler({ sourceRoot = defaultSourceRoot } = {}) {
   };
 }
 
-export { createDebugLogHandler };
+export { createDebugLogHandler, omitVoiceContent };

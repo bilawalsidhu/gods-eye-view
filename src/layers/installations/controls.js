@@ -162,6 +162,35 @@ export function createControls({ state: layerState, services, parts, source }) {
       return true;
     },
 
+    /**
+     * Snapshot loaded mapped installations as plain JSON-safe records for the analyst
+     * query engine. On demand only (once per spoken query); [] while the
+     * layer is off.
+     * @param {number} [maxCount=Infinity] Most records to return.
+     * @returns {Array<Object>} {id, name, class, kind, lat, lon}.
+     */
+    getAnalystRecords(maxCount = Infinity) {
+      if (!layerState.enabled) return [];
+      const result = [];
+      for (const record of layerState.records || []) {
+        if (result.length >= maxCount) break;
+        if (
+          !Number.isFinite(record.latitude) ||
+          !Number.isFinite(record.longitude)
+        )
+          continue;
+        result.push({
+          id: record.name || record.id,
+          name: record.name || null,
+          class: record.class || null,
+          kind: record.kind || null,
+          lat: record.latitude,
+          lon: record.longitude,
+        });
+      }
+      return result;
+    },
+
     getStats() {
       const namedMarkers = parts.namedMarkers?.stats();
       const subjectWindow =

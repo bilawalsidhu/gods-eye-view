@@ -23,6 +23,9 @@
  *   node scripts/qa-voice-routing.mjs                 # both layers, :4415
  *   node scripts/qa-voice-routing.mjs --layer routing --budget 120
  *   node scripts/qa-voice-routing.mjs --layer behavior --url http://localhost:4173
+ *   node scripts/qa-voice-routing.mjs --layer behavior --deixis-only --headful --shots qa-shots/point-and-ask
+ *   node scripts/qa-voice-routing.mjs --layer deixis --budget 12      # pointer_context routing (model turns)
+ *   node scripts/qa-voice-routing.mjs --layer deixis-live --url ...   # in-app text turns (model turns)
  *
  * House gotchas honored: camera.cancelFlight() before every teleport; puppeteer
  * suites must run sequentially with other harnesses (SwiftShader saturation);
@@ -34,6 +37,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import puppeteer from 'puppeteer';
+import { ROUTING_PHRASES } from './voice-bench/phrases.mjs';
+import { gradeCore, expectLabel } from './voice-bench/grade.mjs';
+import { countWords, findHedges } from '../src/voice/speechLint.js';
+import { buildPointerSnapshot, pointerContextItem } from '../src/voice/pointerContext.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -53,10 +60,13 @@ function getOpt(flag, fallback) {
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 }
 const APP_URL = getOpt('--url', 'http://localhost:4415');
-const LAYER = getOpt('--layer', 'all'); // routing | behavior | all
+const LAYER = getOpt('--layer', 'all'); // routing | behavior | all | deixis | deixis-live
 const TURN_BUDGET = Number(getOpt('--budget', '120'));
 const PHRASES_PER_SESSION = Number(getOpt('--batch', '6'));
 const ONLY = getOpt('--only', null); // substring filter on phrase text
+const DEIXIS_ONLY = process.argv.includes('--deixis-only'); // behavior: point-and-ask block only
+const HEADFUL = process.argv.includes('--headful'); // real GPU, visible window
+const SHOT_DIR = getOpt('--shots', null); // point-and-ask evidence screenshots
 
 // ── Reporting ───────────────────────────────────────────────
 let pass = 0, fail = 0, skip = 0;
@@ -75,114 +85,10 @@ function skipped(label, detail) {
 // LAYER 1 — ROUTING
 // ════════════════════════════════════════════════════════════
 
-/**
- * Phrase table. `expect` = tool name(s) the model must call (string, or array
- * meaning "all of these", or {oneOf:[...]} for documented acceptable variance).
- * `expectNone` pins conversational turns that must NOT call tools.
- * `args` = spot-check subset matched against the first matching call's args
- * (substring match for strings, exact for booleans/numbers).
- */
-const PHRASES = [
-  // — navigation & framing —
-  { phrase: 'Take me to Tokyo', expect: 'fly_to_location' },
-  { phrase: 'Fly to the Golden Gate Bridge', expect: 'fly_to_location' },
-  { phrase: 'Go to Sixth Street in Austin', expect: 'fly_to_location' },
-  { phrase: 'Show me the Alps from above', expect: { oneOf: ['fly_to_location', 'frame_overhead'] } },
-  { phrase: 'Zoom in a bit', expect: 'adjust_camera_zoom' },
-  { phrase: 'Zoom out a little', expect: 'adjust_camera_zoom' },
-  { phrase: 'Zoom out to a globe view', expect: 'zoom_to_globe' },
-  { phrase: 'Show me the whole earth', expect: 'zoom_to_globe' },
-  { phrase: 'Frame the aircraft near us from overhead', expect: 'frame_overhead' },
-
-  // — the satellites trap: data layer, never basemap —
-  { phrase: 'Show me the satellites', expect: { oneOf: ['set_layer_visibility', 'frame_overhead'] } },
-  { phrase: 'Turn off the satellites', expect: 'set_layer_visibility', args: { layerId: 'satellites' } },
-  { phrase: 'Switch to Bing aerial', expect: 'set_map_stack' },
-  { phrase: 'Switch the basemap to OSM', expect: 'set_map_stack' },
-
-  // — layers —
-  { phrase: 'Turn on the flights layer', expect: 'set_layer_visibility', args: { layerId: 'flights' } },
-  { phrase: 'Show me live vessels', expect: 'set_layer_visibility' },
-  { phrase: 'Turn on the fires layer', expect: 'set_layer_visibility' },
-  { phrase: 'Turn on street traffic', expect: 'set_layer_visibility', args: { layerId: 'traffic' } },
-  { phrase: 'Open the data layers menu', expect: 'show_data_layers_menu' },
-  { phrase: 'Show me the datacenter layers', expect: 'show_data_layers_menu' },
-  { phrase: 'Turn on the datacenters layer', expect: 'set_layer_visibility' },
-
-  // — visual styles & post-fx —
-  { phrase: 'Give me night vision', expect: 'set_visual_style' },
-  { phrase: 'Switch to thermal view', expect: 'set_visual_style' },
-  { phrase: 'Back to the normal look', expect: 'set_visual_style' },
-  { phrase: 'Turn on bloom', expect: 'set_post_processing' },
-  { phrase: 'Sharpen the image a touch', expect: 'set_post_processing' },
-
-  // — HUD / detection / panels —
-  { phrase: 'Turn the HUD off', expect: 'set_hud' },
-  { phrase: 'Switch to the tactical layout', expect: 'set_hud' },
-  { phrase: 'Turn on detection', expect: 'set_detection' },
-  { phrase: 'Set detection density to fifty percent', expect: 'set_detection' },
-
-  // — context questions —
-  { phrase: 'What am I looking at right now?', expect: 'get_entity_context' },
-  { phrase: 'What city is this below us?', expect: 'get_entity_context' },
-  { phrase: 'Is there anything interesting in view?', expect: 'get_entity_context' },
-
-  // — tracking —
-  // Context-free text turns may reasonably look before tracking; either
-  // routing is correct (production sessions always carry screen context).
-  { phrase: 'Track that plane', expect: { oneOf: ['track_entity', 'get_entity_context'] } },
-  { phrase: 'Follow the nearest aircraft', expect: { oneOf: ['track_entity', 'get_entity_context'] } },
-  { phrase: 'Stop tracking', expect: 'stop_tracking' },
-
-  // — CCTV / scenes / ISS —
-  { phrase: 'Show me the nearest traffic camera', expect: 'control_cctv' },
-  { phrase: 'Turn on the camera viewsheds', expect: 'control_cctv' },
-  { phrase: 'Play a news radio station near Austin', expect: 'control_radio', args: { action: 'select', category: 'news', locationId: 'austin' } },
-  { phrase: 'Turn on the radio', expect: 'control_radio', args: { action: 'play' } },
-  { phrase: 'Set the radio volume to thirty percent', expect: 'control_radio', args: { action: 'volume', volumePct: 30 } },
-  { phrase: 'Pause the radio', expect: 'control_radio', args: { action: 'pause' } },
-  { phrase: 'Stop the radio', expect: 'control_radio', args: { action: 'stop' } },
-  { phrase: 'When does the ISS pass over next?', expect: 'next_iss_pass' },
-
-  // — annotations —
-  { phrase: 'Annotate the Texas State Capitol and its grounds', expect: 'annotate_map' },
-  { phrase: 'Outline the state of Texas', expect: 'annotate_map' },
-  { phrase: 'Outline Lady Bird Lake', expect: 'annotate_map' },
-  { phrase: 'Draw the walking route from the Capitol to Zilker Park', expect: 'annotate_map' },
-  { phrase: 'How far is the Eiffel Tower from the Louvre?', expect: 'annotate_map' },
-  { phrase: 'Clear the map', expect: 'clear_annotations' },
-
-  // — multi-intent (assert ALL tools fire before speech) —
-  {
-    phrase: 'Switch to night vision and turn on the flights layer',
-    expect: ['set_visual_style', 'set_layer_visibility'],
-  },
-  {
-    phrase: 'Turn off the HUD and take me to Paris',
-    expect: ['set_hud', 'fly_to_location'],
-  },
-  {
-    phrase: 'Go to full planet view and then turn on the radio',
-    expect: ['zoom_to_globe', 'control_radio'],
-    argsByTool: { control_radio: { action: 'play' } },
-  },
-
-  // — camera verbs (tools #23/#24) —
-  { phrase: 'Orbit around this area slowly', expect: 'move_camera' },
-  { phrase: 'Pan left a bit', expect: 'move_camera' },
-  { phrase: 'Stop moving the camera', expect: 'move_camera' },
-  { phrase: 'Fly the route we just drew', expect: 'fly_route' },
-
-  // — analyst queries (tool #22) —
-  { phrase: 'How many flights are over Texas right now?', expect: 'analyst_query' },
-  { phrase: 'Which ships are headed to Oakland?', expect: 'analyst_query' },
-  { phrase: 'What is the biggest fire near Los Angeles?', expect: 'analyst_query' },
-  { phrase: 'Is anything flying above forty thousand feet?', expect: 'analyst_query' },
-
-  // — negative controls: conversation must NOT tool-call —
-  { phrase: 'How is your evening going?', expectNone: true },
-  { phrase: 'Tell me a fun fact about maps', expectNone: true },
-];
+// Phrase table + grading live in scripts/voice-bench/ (shared with the
+// provider-neutral benchmark, qa-voice-bench.mjs). See phrases.mjs for the
+// expect / oneOf / expectNone / args / argsByTool semantics.
+const PHRASES = ROUTING_PHRASES;
 
 /** Mint a session via the app's own endpoint. */
 async function mintSession() {
@@ -221,7 +127,14 @@ class RoutingSession {
     try { msg = JSON.parse(raw.toString()); } catch { return; }
     this.evidence.write(`${JSON.stringify({ at: new Date().toISOString(), dir: 'recv', type: msg.type, item: msg.item?.type, name: msg.item?.name ?? msg.name, error: msg.error?.message })}\n`);
     if (!this.pending) return;
+    if (msg.type === 'response.output_item.done' && msg.item?.type === 'message') {
+      // Speech stats only: text said before a call in the same response is a
+      // preamble; text after the last call is the spoken answer.
+      const text = (msg.item.content || []).map((part) => part?.text ?? part?.transcript ?? '').join(' ').trim();
+      if (text) this.pending.messages.push({ text, response: this.pending.continuations, callsBefore: this.pending.calls.length });
+    }
     if (msg.type === 'response.output_item.done' && msg.item?.type === 'function_call') {
+      this.pending.callResponses.push(this.pending.continuations);
       let parsed = {};
       try { parsed = JSON.parse(msg.item.arguments || '{}'); } catch { /* keep {} */ }
       this.pending.calls.push({ name: msg.item.name, args: parsed });
@@ -234,7 +147,7 @@ class RoutingSession {
         item: {
           type: 'function_call_output',
           call_id: msg.item.call_id,
-          output: JSON.stringify({ ok: true, note: 'qa-harness stub result' }),
+          output: JSON.stringify(this.stubResult || { ok: true, note: 'qa-harness stub result' }),
         },
       });
       this.pending.needContinuation = true;
@@ -249,6 +162,7 @@ class RoutingSession {
       const p = this.pending;
       this.pending = null;
       p.resolve(p.calls);
+      this.lastTurn = p;
     }
     if (msg.type === 'error') {
       // Log-and-continue: a per-turn API hiccup should surface as that turn's
@@ -262,10 +176,18 @@ class RoutingSession {
     this.ws.send(JSON.stringify(obj));
   }
 
+  /** An inert system item (the app's notifyMapEvent shape), e.g. pointer_context. */
+  sendSystemItem(payload) {
+    this.send({
+      type: 'conversation.item.create',
+      item: { type: 'message', role: 'system', content: [{ type: 'input_text', text: JSON.stringify(payload) }] },
+    });
+  }
+
   /** Send one user text turn; resolve with the list of tool calls it produced. */
   runTurn(text) {
     return new Promise((resolve) => {
-      this.pending = { calls: [], continuations: 0, needContinuation: false, errors: [], resolve };
+      this.pending = { calls: [], messages: [], callResponses: [], continuations: 0, needContinuation: false, errors: [], resolve };
       const timer = setTimeout(() => {
         if (this.pending) { const p = this.pending; this.pending = null; p.resolve(p.calls); }
       }, 45000);
@@ -280,14 +202,6 @@ class RoutingSession {
   }
 
   close() { try { this.ws?.close(); } catch { /* noop */ } }
-}
-
-function matchArgs(expected, actual) {
-  return Object.entries(expected).every(([k, v]) => {
-    const got = actual?.[k];
-    if (typeof v === 'string') return String(got ?? '').toLowerCase().includes(v.toLowerCase());
-    return got === v;
-  });
 }
 
 async function runRoutingLayer() {
@@ -324,43 +238,504 @@ async function runRoutingLayer() {
         report(false, `route: "${p.phrase}"`, `turn error: ${e.message}`);
         continue;
       }
-      const names = calls.map((c) => c.name);
-      if (p.expectNone) {
-        report(names.length === 0, `route: "${p.phrase}" → (no tool)`, names.length ? `unexpected calls: ${names.join(',')}` : 'clean conversational turn');
-        continue;
-      }
-      let ok; let detail = `called: ${names.join(',') || '(none)'}`;
-      if (Array.isArray(p.expect)) {
-        ok = p.expect.every((n) => names.includes(n));
-      } else if (p.expect && typeof p.expect === 'object' && p.expect.oneOf) {
-        ok = names.some((n) => p.expect.oneOf.includes(n));
-      } else {
-        ok = names.includes(p.expect);
-      }
-      if (ok && p.args) {
-        const call = calls.find((c) => (Array.isArray(p.expect) ? true : c.name === p.expect));
-        if (!matchArgs(p.args, call?.args)) { ok = false; detail += ` args mismatch: ${JSON.stringify(call?.args)}`; }
-      }
-      if (ok && p.argsByTool) {
-        for (const [toolName, expectedArgs] of Object.entries(p.argsByTool)) {
-          const call = calls.find((candidate) => candidate.name === toolName);
-          if (!call || !matchArgs(expectedArgs, call.args)) {
-            ok = false;
-            detail += ` ${toolName} args mismatch: ${JSON.stringify(call?.args)}`;
-          }
-        }
-      }
-      report(ok, `route: "${p.phrase}" → ${Array.isArray(p.expect) ? p.expect.join('+') : (p.expect.oneOf ? p.expect.oneOf.join('|') : p.expect)}`, detail);
+      recordSpeech(p.phrase, calls.map((c) => c.name), session.lastTurn);
+      const grade = gradeCore(p, calls);
+      report(grade.ok, `route: "${p.phrase}" → ${expectLabel(p)}`, grade.detail);
     }
     session.close();
   }
   evidence.end();
   console.log(`  routing turns used: ${turnsUsed}/${TURN_BUDGET}`);
+  summarizeSpeech(logDir);
+}
+
+// ════════════════════════════════════════════════════════════
+// LAYER 1b — DEIXIS ROUTING (costs model turns)
+// ════════════════════════════════════════════════════════════
+//
+// Point-and-ask phrases against the production instructions and tools. Each
+// scenario runs in its own fresh session: a pointer_context item built by the
+// app's own formatter lands first (exactly what the client sends at speech
+// start), then the user's words. Asserts the model passes the 'pointer'
+// sentinel (or referent:n) instead of guessing coordinates or names.
+
+const AIRCRAFT_POINTER = pointerContextItem(buildPointerSnapshot({
+  at: 'speech_start', x: 912, y: 388, width: 1500, height: 950,
+  pick: {
+    entity: { layerId: 'flights', id: 'a4f2c1', label: 'UPS793', kind: 'aircraft', lat: 30.3121, lon: -97.6013 },
+    ground: { lat: 30.3, lon: -97.6 },
+  },
+}));
+const GROUND_POINTER = pointerContextItem(buildPointerSnapshot({
+  at: 'speech_start', x: 640, y: 520, width: 1500, height: 950,
+  pick: { entity: null, ground: { lat: 30.2849, lon: -97.7341, heightM: 160 } },
+}));
+const FRAMED_STUB = {
+  ok: true,
+  action: 'frame_overhead',
+  layerId: 'flights',
+  count: 3,
+  say: 'Framed 3 aircraft within 150 km.',
+  display: { title: '3 aircraft in frame' },
+  referents: [
+    { n: 1, id: 'a11111', label: 'SWA1445', layerId: 'flights' },
+    { n: 2, id: 'a22222', label: 'UPS793', layerId: 'flights' },
+    { n: 3, id: 'a33333', label: 'AAL2231', layerId: 'flights' },
+  ],
+};
+
+const pointerArg = (value) => String(value || '').toLowerCase() === 'pointer';
+const DEIXIS_SCENARIOS = [
+  { pointer: AIRCRAFT_POINTER, phrase: 'Tell me about this', check: (c) => c.name === 'get_entity_context' && pointerArg(c.args.scope), want: 'get_entity_context{scope:pointer}' },
+  { pointer: AIRCRAFT_POINTER, phrase: "What's that plane?", check: (c) => c.name === 'get_entity_context' && pointerArg(c.args.scope), want: 'get_entity_context{scope:pointer}' },
+  { pointer: AIRCRAFT_POINTER, phrase: 'Track that one', check: (c) => c.name === 'track_entity' && (pointerArg(c.args.query) || /a4f2c1|ups793/i.test(c.args.query || '')), want: 'track_entity{query:pointer}' },
+  { pointer: GROUND_POINTER, phrase: 'How many flights are around here?', check: (c) => c.name === 'analyst_query' && pointerArg(c.args.scope?.kind), want: 'analyst_query{scope.kind:pointer}' },
+  { pointer: GROUND_POINTER, phrase: 'Take me there', check: (c) => c.name === 'fly_to_location' && pointerArg(c.args.query), want: 'fly_to_location{query:pointer}' },
+  { pointer: GROUND_POINTER, phrase: 'Drop a pin right here', check: (c) => c.name === 'annotate_map' && (c.args.annotations || []).some((a) => pointerArg(a.target)), want: 'annotate_map{target:pointer}' },
+  { pointer: GROUND_POINTER, phrase: 'What is this place?', check: (c) => c.name === 'get_entity_context' && pointerArg(c.args.scope), want: 'get_entity_context{scope:pointer}' },
+  // Open mic / typed turns: the model only learns that something is pointed at.
+  { pointer: { type: 'pointer_context', at: 'speech_start', pointing: 'aircraft' }, phrase: "What's that?", check: (c) => c.name === 'get_entity_context' && pointerArg(c.args.scope), want: 'get_entity_context{scope:pointer} (pointing:aircraft)' },
+  { pointer: { type: 'pointer_context', at: 'speech_start', pointing: 'ground' }, phrase: 'How many flights are around here?', check: (c) => c.name === 'analyst_query' && pointerArg(c.args.scope?.kind), want: 'analyst_query{scope.kind:pointer} (pointing:ground)' },
+  { pointer: { type: 'pointer_context', at: 'speech_start', pointing: 'aircraft' }, phrase: 'Follow that one', check: (c) => c.name === 'track_entity' && pointerArg(c.args.query), want: 'track_entity{query:pointer} (pointing:aircraft)' },
+  // A named place wins over the pointer.
+  { pointer: GROUND_POINTER, phrase: 'How many flights are over Texas right now?', check: (c) => c.name === 'analyst_query' && !pointerArg(c.args.scope?.kind), want: 'analyst_query not pointer (named place)' },
+  // No pointer_context: the model may still pass the sentinel (observed); the
+  // runner then falls back to scope auto, so only the tool choice is pinned.
+  { pointer: null, phrase: 'Tell me about this', check: (c) => c.name === 'get_entity_context', want: 'get_entity_context (runner falls back to auto)' },
+  // Referents: a numbered list, then "the second one".
+  { setup: { phrase: 'Frame the aircraft near us', stub: FRAMED_STUB }, pointer: null, phrase: 'Track the second one', check: (c) => c.name === 'track_entity' && (c.args.referent === 2 || /ups793|a22222/i.test(c.args.query || '')), want: 'track_entity{referent:2}' },
+];
+
+async function runDeixisRoutingLayer() {
+  console.log(`\nLAYER 1b — deixis routing (budget ${TURN_BUDGET} model turns)`);
+  const logDir = path.join(ROOT, '.gev-logs', 'qa-voice-routing');
+  fs.mkdirSync(logDir, { recursive: true });
+  const evidence = fs.createWriteStream(path.join(logDir, `deixis-${Date.now()}.jsonl`));
+  let turnsUsed = 0;
+  let referentUse = 0;
+  for (const scenario of DEIXIS_SCENARIOS) {
+    const where = !scenario.pointer ? 'no pointer' : scenario.pointer.pointing ? `pointing ${scenario.pointer.pointing}` : scenario.pointer.target ? scenario.pointer.target.label : 'ground';
+    const label = `deixis route: [${where}] "${scenario.phrase}" → ${scenario.want}`;
+    const cost = scenario.setup ? 2 : 1;
+    if (turnsUsed + cost > TURN_BUDGET) { skipped(label, 'turn budget exhausted'); continue; }
+    let session;
+    try {
+      const { value, model } = await mintSession();
+      session = new RoutingSession(value, model, evidence);
+      await session.connect();
+    } catch (e) {
+      report(false, label, `session setup failed: ${e.message}`);
+      continue;
+    }
+    try {
+      if (scenario.setup) {
+        turnsUsed += 1;
+        session.stubResult = scenario.setup.stub;
+        await session.runTurn(scenario.setup.phrase);
+        session.stubResult = null;
+      }
+      if (scenario.pointer) session.sendSystemItem(scenario.pointer);
+      turnsUsed += 1;
+      const calls = await session.runTurn(scenario.phrase);
+      const hit = calls.find(scenario.check);
+      if (hit?.args?.referent !== undefined) referentUse += 1;
+      report(Boolean(hit), label, `called: ${calls.map((c) => `${c.name}${JSON.stringify(c.args)}`).join(' ').slice(0, 220) || '(none)'}`);
+    } catch (e) {
+      report(false, label, `turn error: ${e.message}`);
+    } finally {
+      session.close();
+    }
+  }
+  evidence.end();
+  console.log(`  deixis routing turns used: ${turnsUsed}/${TURN_BUDGET}; referent:n used ${referentUse}x`);
+}
+
+// ════════════════════════════════════════════════════════════
+// LAYER 1c — DEIXIS LIVE (in-app text turns; costs model turns)
+// ════════════════════════════════════════════════════════════
+//
+// The whole loop in the real app: a synthetic pointer on the live canvas, a
+// real Realtime session (push-to-talk mode, so the fake microphone stays
+// muted), a typed turn, the model's tool call, the runner's resolution and
+// the tool result — observed through the session's own events.
+
+async function runDeixisLiveLayer() {
+  console.log('\nLAYER 1c — deixis live (in-app text turns)');
+  const browser = await puppeteer.launch({
+    headless: HEADFUL ? false : 'new',
+    ...(CHROME_EXECUTABLE ? { executablePath: CHROME_EXECUTABLE } : {}),
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      ...(HEADFUL ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
+      '--disable-dev-shm-usage',
+      '--disable-background-timer-throttling',
+      '--disable-renderer-backgrounding',
+      '--use-fake-device-for-media-stream',
+      '--use-fake-ui-for-media-stream',
+      '--autoplay-policy=no-user-gesture-required',
+      '--window-size=1500,950',
+    ],
+    protocolTimeout: 180000,
+  });
+  const appUrl = new URL(APP_URL);
+  appUrl.searchParams.set('welcome', '0');
+  await browser.defaultBrowserContext().overridePermissions(appUrl.origin, ['microphone']);
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1500, height: 950 });
+  const settle = (ms) => new Promise((r) => setTimeout(r, ms));
+  const run = (name, args) => page.evaluate(
+    (n, a) => Promise.resolve(window.__gevVoiceCommands.runner(n, a)).catch((e) => ({ ok: false, error: String(e?.message || e) })),
+    name, args,
+  );
+  let turnsUsed = 0;
+  try {
+    await page.goto(appUrl.href, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForFunction(() => window.__godsEyeView?.viewer && window.__gevVoiceCommands?.session, { timeout: 120000, polling: 250 });
+    await page.evaluate(() => window.__godsEyeView.viewer.camera.cancelFlight());
+    await run('fly_to_location', { query: 'Austin, Texas' });
+    await settle(9000);
+    await run('set_layer_visibility', { layerId: 'flights', enabled: true });
+    await settle(40000);
+    await run('frame_overhead', { target: 'flights' });
+    await settle(7000);
+    await page.evaluate(() => {
+      window.__qaEvents = [];
+      window.__gevVoiceCommands.session.subscribe((event) => {
+        window.__qaEvents.push({
+          type: event.type,
+          name: event.name || null,
+          state: event.state || null,
+          args: event.arguments || null,
+          result: event.result
+            ? { ok: event.result.ok, error: event.result.error || null, say: event.result.say ?? null, resolvedFrom: event.result.resolvedFrom || null, selectedId: event.result.selected?.id || null, scopeLabel: event.result.scopeLabel || null, label: event.result.label || null }
+            : null,
+          text: event.type === 'transcript' && event.final ? event.text : null,
+          role: event.role || null,
+        });
+      });
+      return window.__gevVoiceCommands.session.start({ pushToTalk: true });
+    });
+    await page.waitForFunction(() => window.__gevVoiceCommands.status === 'listening', { timeout: 45000, polling: 250 });
+
+    // The pointer moves and the text is sent in one step, as when someone
+    // points and types: typed turns count only a pointer moved in the last
+    // few seconds.
+    const turn = async (text, point = null) => {
+      turnsUsed += 1;
+      const from = await page.evaluate(() => window.__qaEvents.length);
+      await page.evaluate((t, p) => {
+        let at = p;
+        if (p?.aircraftId) {
+          // Aircraft move: project the contact's live position in this step.
+          const { viewer, dataManager } = window.__godsEyeView;
+          // The billboard position, which is what the pick hits.
+          const found = (dataManager.layers.get('flights')?.module?.getAllPositions?.(3000) || []).find((e) => e.id === p.aircraftId);
+          viewer.scene.render();
+          at = found?.position ? viewer.scene.cartesianToCanvasCoordinates(found.position) : null;
+        }
+        if (at) window.__gevVoiceCommands.pointer.moveTo(at.x, at.y);
+        window.__gevVoiceCommands.sendTextCommand(t);
+      }, text, point);
+      // Done when a reply completes after the last tool result (or no tool).
+      const deadline = Date.now() + 90000;
+      let events = [];
+      while (Date.now() < deadline) {
+        await settle(500);
+        events = await page.evaluate((i) => window.__qaEvents.slice(i), from);
+        const lastResult = events.map((e) => e.type).lastIndexOf('action-result');
+        const lastCall = events.map((e) => e.type).lastIndexOf('action-call');
+        const answered = events.some((e, i) => e.type === 'transcript' && e.role === 'assistant' && e.text && i > lastResult);
+        if (answered && lastResult >= lastCall) break;
+      }
+      return events;
+    };
+    const summarize = (events) => events.filter((e) => e.type === 'action-call' || e.type === 'action-result')
+      .map((e) => (e.type === 'action-call' ? `${e.name}${JSON.stringify(e.args)}` : `→${JSON.stringify(e.result)}`)).join(' ').slice(0, 320);
+
+    const aircraft = await findPickableAircraft(page);
+    if (!aircraft) {
+      skipped('deixis live: aircraft scenarios', 'no pickable aircraft on screen');
+    } else {
+      let events = await turn('Tell me about this', { aircraftId: aircraft.id });
+      let call = events.find((e) => e.type === 'action-call' && e.name === 'get_entity_context');
+      let result = events.find((e) => e.type === 'action-result' && e.name === 'get_entity_context');
+      report(
+        call?.args?.scope === 'pointer' && result?.result?.selectedId === aircraft.id,
+        `deixis live: [${aircraft.label}] "Tell me about this" → the pointed aircraft`,
+        summarize(events),
+      );
+      if (SHOT_DIR) {
+        const dir = path.resolve(ROOT, SHOT_DIR);
+        fs.mkdirSync(dir, { recursive: true });
+        await page.screenshot({ path: path.join(dir, 'live-tell-me-about-this.png') });
+      }
+      events = await turn('Track that one', { aircraftId: aircraft.id });
+      result = events.find((e) => e.type === 'action-result' && e.name === 'track_entity');
+      report(
+        // By the pointer, or by the name the previous answer just gave it.
+        result?.result?.ok === true && (result.result.resolvedFrom?.source === 'pointer' || result.result.label === aircraft.label),
+        `deixis live: [${aircraft.label}] "Track that one" → tracks it`,
+        summarize(events),
+      );
+      await run('stop_tracking', {});
+      await settle(3000);
+    }
+
+    const size = await page.evaluate(() => ({ w: window.__godsEyeView.viewer.scene.canvas.clientWidth, h: window.__godsEyeView.viewer.scene.canvas.clientHeight }));
+    const events = await turn('How many flights are around here?', { x: size.w * 0.3, y: size.h * 0.62 });
+    const result = events.find((e) => e.type === 'action-result' && e.name === 'analyst_query');
+    report(
+      result?.result?.resolvedFrom?.source === 'pointer' && /within/i.test(result?.result?.scopeLabel || ''),
+      'deixis live: [ground] "How many flights are around here?" → radius at the pointer',
+      summarize(events),
+    );
+  } catch (e) {
+    report(false, 'deixis live: layer crashed', String(e?.message || e).slice(0, 200));
+  } finally {
+    try { await page.evaluate(() => window.__gevVoiceCommands?.session?.stop()); } catch { /* closing */ }
+    await browser.close();
+    console.log(`  deixis live turns used: ${turnsUsed}`);
+  }
+}
+
+// Speech stats: informational, never pass/fail. Slow tools are the ones whose
+// latency justifies a spoken plan; instant ones should answer after the call.
+const SLOW_TOOLS = new Set(['annotate_map', 'fly_to_location', 'select_nearest_aircraft', 'analyst_query', 'fly_route', 'frame_overhead']);
+const speechTurns = [];
+function recordSpeech(phrase, names, turn) {
+  if (!turn) return;
+  const firstCallResponse = turn.callResponses.length ? Math.min(...turn.callResponses) : null;
+  const preamble = turn.messages
+    .filter((m) => firstCallResponse !== null && m.response === firstCallResponse && m.callsBefore === 0)
+    .map((m) => m.text).join(' ');
+  const answer = turn.messages
+    .filter((m) => !(firstCallResponse !== null && m.response === firstCallResponse && m.callsBefore === 0))
+    .map((m) => m.text).join(' ');
+  speechTurns.push({
+    phrase,
+    tools: names,
+    slow: names.some((n) => SLOW_TOOLS.has(n)),
+    preamble: preamble || null,
+    answer,
+    answerWords: countWords(answer),
+    preambleWords: countWords(preamble),
+    hedges: findHedges(`${preamble} ${answer}`),
+  });
+}
+function summarizeSpeech(logDir) {
+  const toolTurns = speechTurns.filter((t) => t.tools.length);
+  const slow = toolTurns.filter((t) => t.slow);
+  const instant = toolTurns.filter((t) => !t.slow);
+  const rate = (list) => (list.length ? `${list.filter((t) => t.preamble).length}/${list.length}` : '0/0');
+  const words = speechTurns.map((t) => t.answerWords).sort((a, b) => a - b);
+  const summary = {
+    turns: speechTurns.length,
+    preambleSlow: rate(slow),
+    preambleInstant: rate(instant),
+    answerWordsP50: words[Math.floor(words.length / 2)] ?? null,
+    answerWordsMax: words.at(-1) ?? null,
+    answerWordsTotal: words.reduce((a, b) => a + b, 0),
+    hedgeHits: speechTurns.reduce((sum, t) => sum + t.hedges.length, 0),
+    preambleWordsMax: Math.max(0, ...speechTurns.map((t) => t.preambleWords)),
+    spokenWordsTotal: speechTurns.reduce((sum, t) => sum + t.answerWords + t.preambleWords, 0),
+  };
+  fs.writeFileSync(path.join(logDir, `speech-${Date.now()}.json`), JSON.stringify({ summary, turns: speechTurns }, null, 2));
+  console.log(`  speech: preamble slow ${summary.preambleSlow}, instant ${summary.preambleInstant}; answer words p50 ${summary.answerWordsP50}, max ${summary.answerWordsMax}, total ${summary.answerWordsTotal}; preamble words max ${summary.preambleWordsMax}; all spoken words ${summary.spokenWordsTotal}; hedge hits ${summary.hedgeHits}`);
 }
 
 // ════════════════════════════════════════════════════════════
 // LAYER 2 — BEHAVIOR (runner-driven, no model)
 // ════════════════════════════════════════════════════════════
+
+/** An on-screen aircraft whose billboard really answers a pick, or null. */
+function findPickableAircraft(page) {
+  return page.evaluate(() => {
+    const { viewer, dataManager } = window.__godsEyeView;
+    const module = dataManager.layers.get('flights')?.module;
+    const canvas = viewer.scene.canvas;
+    const eye = viewer.camera.positionWC;
+    viewer.scene.render();
+    let picks = 0;
+    const candidates = [];
+    for (const entry of module?.getAllPositions?.(3000) || []) {
+      // Horizon test: far-side contacts still project onto the canvas.
+      const p = entry.position;
+      if (eye.x * p.x + eye.y * p.y + eye.z * p.z < 6356000 ** 2) continue;
+      const at = viewer.scene.cartesianToCanvasCoordinates(entry.position);
+      if (!at || at.x < 60 || at.y < 60 || at.x > canvas.clientWidth - 60 || at.y > canvas.clientHeight - 240) continue;
+      candidates.push({ entry, at, d: Math.hypot(at.x - canvas.clientWidth / 2, at.y - canvas.clientHeight * 0.45) });
+    }
+    // Nearest the middle first: clear of the dock and panels.
+    candidates.sort((a, b) => a.d - b.d);
+    for (const { entry, at } of candidates) {
+      if (++picks > 80) break;
+      const picked = viewer.scene.pick(at);
+      if (picked?.id === entry.id || picked?.primitive?.id === entry.id)
+        return { id: entry.id, label: entry.label, x: at.x, y: at.y };
+    }
+    return null;
+  });
+}
+
+/**
+ * Point-and-ask behavior (no model): place a synthetic pointer through the
+ * public tracker, start a turn the way speech start does, and drive the real
+ * runner with the 'pointer' sentinel and referent:n. The pick, reticle and
+ * card chip are the product's own.
+ */
+async function runDeixisBehavior(page, run, settle) {
+  const shot = async (name) => {
+    if (!SHOT_DIR) return;
+    // A backgrounded headful window freezes CSS animation timelines.
+    await page.bringToFront();
+    const dir = path.resolve(ROOT, SHOT_DIR);
+    fs.mkdirSync(dir, { recursive: true });
+    await page.screenshot({ path: path.join(dir, name) });
+  };
+  const beginAt = (x, y, said = null) => page.evaluate((px, py, text) => {
+    const voice = window.__gevVoiceCommands;
+    if (text) {
+      // What the session emits for a spoken turn: a new turn, then the caption.
+      voice.emitSessionEvent({ type: 'interruption', reason: 'user-speech' });
+      voice.emitSessionEvent({ type: 'transcript', role: 'user', text, final: true });
+    }
+    voice.pointer.moveTo(px, py);
+    // A Space hold: the explicit pointing gesture shows the reticle and chip.
+    voice.pointer.hold('keydown');
+    const snapshot = voice.beginPointerTurn('keydown');
+    voice.pointer.releaseHold();
+    const chip = document.getElementById('gev-voice-card-pointer');
+    const reticle = document.querySelector('.gev-pointer-reticle');
+    return {
+      snapshot,
+      chipVisible: Boolean(chip && !chip.hidden),
+      chipKind: document.getElementById('gev-voice-card-pointer-kind')?.textContent || '',
+      chipText: document.getElementById('gev-voice-card-pointer-text')?.textContent || '',
+      reticleVisible: Boolean(reticle && !reticle.hidden),
+    };
+  }, x, y, said);
+  const showResult = (name, result) => page.evaluate((n, res) => {
+    // The session publishes every runner result to the card this way.
+    window.__gevVoiceCommands.emitSessionEvent({ type: 'action-call', name: n, arguments: {} });
+    window.__gevVoiceCommands.emitSessionEvent({ type: 'action-result', name: n, result: res });
+  }, name, result);
+
+  // D1 — an aircraft under the pointer: find one whose billboard really picks.
+  const aircraft = await findPickableAircraft(page);
+  if (!aircraft) {
+    skipped('deixis: pointer on an aircraft', 'no pickable aircraft on screen right now');
+  } else {
+    const turn = await beginAt(aircraft.x, aircraft.y, 'Tell me about this');
+    report(
+      turn.snapshot?.entity?.id === aircraft.id && turn.chipVisible && turn.chipKind === 'THIS' && turn.reticleVisible,
+      'deixis: pointer on an aircraft resolves "this" with chip and reticle',
+      `entity=${turn.snapshot?.entity?.id}/${turn.snapshot?.entity?.label} expected=${aircraft.id} chip=${turn.chipKind}:${turn.chipText} reticle=${turn.reticleVisible}`,
+    );
+    await shot('aircraft-reticle-chip.png');
+    if (SHOT_DIR) {
+      const clip = { x: Math.max(0, aircraft.x - 90), y: Math.max(0, aircraft.y - 90), width: 180, height: 180 };
+      await page.screenshot({ path: path.join(path.resolve(ROOT, SHOT_DIR), 'aircraft-reticle-zoom.png'), clip });
+    }
+    const context = await run('get_entity_context', { scope: 'pointer' });
+    report(
+      context?.ok === true && context.scope === 'pointer' && context.selected?.id === aircraft.id && Boolean(context.identityLine),
+      'deixis: "tell me about this" describes the pointed aircraft',
+      `selected=${context?.selected?.id} identityLine=${JSON.stringify(context?.identityLine)}`,
+    );
+    await showResult('get_entity_context', context);
+    await page.evaluate((line) => window.__gevVoiceCommands.emitSessionEvent({ type: 'transcript', role: 'assistant', text: line, final: true }), context?.identityLine || '');
+    await settle(400);
+    await shot('result-card.png');
+    const tracked = await run('track_entity', { query: 'pointer' });
+    const trackedId = await page.evaluate(() => {
+      const info = window.__godsEyeView.dataManager.layers.get('flights')?.module?.getTrackedInfo?.();
+      return info?.icao24 || info?.id || null;
+    });
+    report(
+      tracked?.ok === true && tracked.resolvedFrom?.source === 'pointer' && (trackedId === aircraft.id || trackedId === null),
+      'deixis: "track that one" follows the pointed aircraft',
+      `ok=${tracked?.ok} label=${tracked?.label} trackedId=${trackedId} error=${tracked?.error || ''}`,
+    );
+    await run('stop_tracking', {});
+    await settle(2500);
+  }
+
+  // D2 — bare ground: the chip gives coordinates and "around here" is a radius.
+  const size = await page.evaluate(() => {
+    const canvas = window.__godsEyeView.viewer.scene.canvas;
+    return { w: canvas.clientWidth, h: canvas.clientHeight };
+  });
+  let groundTurn = null;
+  for (const [fx, fy] of [[0.3, 0.62], [0.7, 0.62], [0.5, 0.7], [0.2, 0.5]]) {
+    groundTurn = await beginAt(size.w * fx, size.h * fy, "What's here?");
+    if (groundTurn.snapshot?.target === 'ground') break;
+  }
+  report(
+    groundTurn?.snapshot?.target === 'ground' && groundTurn.chipKind === 'HERE' && /-?\d+\.\d\d, -?\d+\.\d\d/.test(groundTurn.chipText) && groundTurn.reticleVisible,
+    'deixis: pointer on bare ground resolves "here" to coordinates',
+    `target=${groundTurn?.snapshot?.target} chip=${groundTurn?.chipKind}:${groundTurn?.chipText} reticle=${groundTurn?.reticleVisible}`,
+  );
+  await shot('ground-reticle-chip.png');
+  // The 512 px crop a ground-only point sends the model (one retained image).
+  const captured = await page.evaluate((px) => window.__gevVoiceCommands._viewport.capturePointer(px), groundTurn?.snapshot?.screenPx || null);
+  const crop = captured?.dataUrl || null;
+  report(
+    typeof crop === 'string' && crop.startsWith('data:image/jpeg') && crop.length > 4000 && captured.rect?.w > 0,
+    'deixis: a ground point yields a 512 px crop with the ring',
+    `bytes~${crop ? Math.round((crop.length * 3) / 4 / 1024) : 0} KB rect=${JSON.stringify(captured?.rect)}`,
+  );
+  if (SHOT_DIR && crop) {
+    fs.writeFileSync(path.join(path.resolve(ROOT, SHOT_DIR), 'ground-crop.jpg'), Buffer.from(crop.split(',')[1], 'base64'));
+  }
+  const where = await run('get_entity_context', { scope: 'pointer' });
+  report(
+    where?.ok === true && where.scope === 'pointer' && Number.isFinite(where.pointer?.latitude ?? where.selected?.latitude),
+    'deixis: "what is here" reads context at the pointer, not the view centre',
+    `scope=${where?.scope} pointer=${JSON.stringify(where?.pointer)}`,
+  );
+  const around = await run('analyst_query', { layers: ['flights'], scope: { kind: 'pointer' } });
+  report(
+    around?.ok !== false && around?.resolvedFrom?.source === 'pointer' && /within/i.test(around?.scopeLabel || ''),
+    'deixis: "how many flights around here" counts a radius at the pointer',
+    `count=${around?.count} scope=${around?.scopeLabel} km=${around?.resolvedFrom?.km}`,
+  );
+  const pin = await run('annotate_map', { annotations: [{ type: 'pin', target: 'pointer', label: 'Here' }] });
+  report(pin?.ok === true && pin.drawn >= 1, 'deixis: "drop a pin here" marks the pointed spot', `drawn=${pin?.drawn} failed=${JSON.stringify(pin?.failedLabels)}`);
+
+  // D3 — referents: "track the second one" after a numbered list.
+  const framed = await run('frame_overhead', { target: 'flights' });
+  await settle(5000);
+  const refs = Array.isArray(framed?.referents) ? framed.referents : [];
+  if (refs.length < 2) {
+    skipped('deixis: "track the second one"', `only ${refs.length} referents in frame`);
+  } else {
+    const second = await run('track_entity', { query: 'the second one', referent: 2 });
+    report(
+      second?.ok === true && second.resolvedFrom?.source === 'referent' && second.label === refs[1].label,
+      'deixis: "track the second one" follows referent 2',
+      `label=${second?.label} expected=${refs[1].label}`,
+    );
+    await run('stop_tracking', {});
+    const missing = await run('track_entity', { query: 'x', referent: 40 });
+    report(missing?.ok === false && /no item 40/.test(missing?.error || ''), 'deixis: an out-of-range referent is a plain refusal', missing?.error);
+  }
+
+  // D4 — a stale pointer is never "this".
+  const stale = await page.evaluate(() => {
+    const voice = window.__gevVoiceCommands;
+    voice.pointer.element.dispatchEvent(new PointerEvent('pointerleave'));
+    const snapshot = voice.beginPointerTurn('text');
+    const chip = document.getElementById('gev-voice-card-pointer');
+    return { fresh: Boolean(snapshot?.fresh), chipHidden: Boolean(chip?.hidden) };
+  });
+  const refused = await run('track_entity', { query: 'pointer' });
+  report(
+    !stale.fresh && stale.chipHidden && refused?.ok === false && /Nothing is under the pointer/.test(refused?.error || ''),
+    'deixis: a pointer off the canvas is refused, not guessed',
+    `fresh=${stale.fresh} chipHidden=${stale.chipHidden} error=${refused?.error}`,
+  );
+}
 
 async function runBehaviorLayer() {
   console.log('\nLAYER 2 — behavior drives (runner(), no model)');
@@ -374,13 +749,12 @@ async function runBehaviorLayer() {
   }
 
   const browser = await puppeteer.launch({
-    headless: 'new',
+    headless: HEADFUL ? false : 'new',
     ...(CHROME_EXECUTABLE ? { executablePath: CHROME_EXECUTABLE } : {}),
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--use-gl=angle',
-      '--use-angle=swiftshader',
+      ...(HEADFUL ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
       '--disable-dev-shm-usage',
       '--disable-web-security',
       '--disable-background-timer-throttling',
@@ -392,9 +766,25 @@ async function runBehaviorLayer() {
   const page = await browser.newPage();
   await page.setViewport({ width: 1500, height: 950 });
   page.on('pageerror', (e) => console.log(`  [page error] ${String(e).slice(0, 140)}`));
+  // Voice must not reach Overpass unless an operator configured it: count
+  // Overpass queries through the app and any direct request to an Overpass
+  // host (the status probe is not a query).
+  const overpassRequests = [];
+  page.on('request', (request) => {
+    const target = new URL(request.url());
+    const viaApp = target.origin === new URL(APP_URL).origin
+      && target.pathname.startsWith('/api/overpass')
+      && target.pathname !== '/api/overpass/status';
+    if (viaApp || /overpass/i.test(target.hostname))
+      overpassRequests.push(`${request.method()} ${target.origin}${target.pathname}`);
+  });
 
   try {
-    await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    // The point-and-ask block skips the first-run launcher so its evidence
+    // screenshots show the map; the full run keeps the historical URL.
+    const behaviorUrl = new URL(APP_URL);
+    if (DEIXIS_ONLY) behaviorUrl.searchParams.set('welcome', '0');
+    await page.goto(behaviorUrl.href, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
       () => window.__godsEyeView?.viewer && window.__gevVoiceCommands?.runner && window.__gevAnnotations,
       { timeout: 120000, polling: 250 },
@@ -473,6 +863,18 @@ async function runBehaviorLayer() {
       'behavior: walking route Capitol→Zilker draws',
       `drawn=${r?.drawn} route=${JSON.stringify(routeItem)?.slice(0, 140)}`);
 
+    if (DEIXIS_ONLY) {
+      await run('set_layer_visibility', { layerId: 'flights', enabled: true });
+      await settle(45000);
+      await run('frame_overhead', { target: 'flights' });
+      await settle(7000);
+      await runDeixisBehavior(page, run, settle);
+      report(overpassRequests.length === 0,
+        'behavior: no Overpass request during the run',
+        overpassRequests.length ? overpassRequests.slice(0, 3).join(' | ') : 'none');
+      return;
+    }
+
     // (4) frame_overhead frames nearby entities of an ENABLED layer with a
     // cinematic oblique pull-back (NOT nadir — that is its design). Flights
     // render one poll interval behind live, so give the layer time to populate.
@@ -487,6 +889,9 @@ async function runBehaviorLayer() {
     } else {
       report(r?.ok === true, 'behavior: frame_overhead frames flights', `result=${JSON.stringify(r)?.slice(0, 140)}`);
     }
+
+    // (4-deixis) Point-and-ask with a synthetic pointer on the live canvas.
+    await runDeixisBehavior(page, run, settle);
 
     // (4a) Deterministic owner-transfer probes use the real product runner and
     // camera policy with synthetic target records only. This proves ordering
@@ -841,7 +1246,7 @@ async function runBehaviorLayer() {
     const nearRoute = Math.hypot(camNow.lat - 30.27, camNow.lon + 97.755) < 0.2;
     stopRes = await run('move_camera', { motion: 'stop' });
     report(r?.ok === true && (r?.distanceM ?? 0) > 2000 && (r?.distanceM ?? 0) < 12000 && nearRoute,
-      'behavior: fly_route dollies the drawn route', `distanceM=${r?.distanceM} waypoints=${r?.waypoints} cam=(${camNow.lat.toFixed(3)},${camNow.lon.toFixed(3)}) nearRoute=${nearRoute} stopHadMotion=${stopRes?.stopped}`);
+      'behavior: fly_route dollies the drawn route', `distanceM=${r?.distanceM} waypoints=${r?.waypoints} cam=(${camNow.lat.toFixed(3)},${camNow.lon.toFixed(3)}) nearRoute=${nearRoute} stopHadMotion=${stopRes?.stopped} err=${r?.error || ''}`);
 
     // (7) clear_annotations empties the board
     r = await run('clear_annotations', {});
@@ -1003,6 +1408,9 @@ async function runBehaviorLayer() {
     const shotDir = path.join(ROOT, 'qa-shots');
     fs.mkdirSync(shotDir, { recursive: true });
     await page.screenshot({ path: path.join(shotDir, 'voice-behavior-final.png') });
+    report(overpassRequests.length === 0,
+      'behavior: no Overpass request during the run',
+      overpassRequests.length ? overpassRequests.slice(0, 3).join(' | ') : 'none');
   } catch (e) {
     report(false, 'behavior: layer crashed', String(e?.message || e).slice(0, 200));
   } finally {
@@ -1017,6 +1425,8 @@ console.log(`  Layer   : ${LAYER}\n`);
 
 if (LAYER === 'behavior' || LAYER === 'all') await runBehaviorLayer();
 if (LAYER === 'routing' || LAYER === 'all') await runRoutingLayer();
+if (LAYER === 'deixis') await runDeixisRoutingLayer();
+if (LAYER === 'deixis-live') await runDeixisLiveLayer();
 
 console.log('\n────────────────────────────────────────────────────────────');
 console.log(`  RESULT: ${pass} passed, ${fail} failed, ${skip} skipped`);

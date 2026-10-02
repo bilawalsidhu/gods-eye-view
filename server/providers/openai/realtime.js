@@ -10,6 +10,7 @@ import {
   OPENAI_REALTIME_REASONING_DEFAULT,
   OPENAI_REALTIME_CONTEXT_TOKENS_DEFAULT,
   OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT,
+  OPENAI_REALTIME_TRANSCRIBE_MODEL_DEFAULT,
 } from './constants.js';
 import { realtimeInstructions } from './instructions.js';
 import { GEV_REALTIME_TOOLS } from './tools.js';
@@ -88,6 +89,14 @@ function createRealtimeTokenHandler({
           OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT,
       ),
     );
+    // User captions for the voice card. Billed separately from the session.
+    const transcribeModel =
+      process.env.OPENAI_REALTIME_TRANSCRIBE_MODEL ||
+      OPENAI_REALTIME_TRANSCRIBE_MODEL_DEFAULT;
+    const transcription =
+      transcribeModel.toLowerCase() === 'off'
+        ? {}
+        : { transcription: { model: transcribeModel } };
     const sessionConfig = {
       session: {
         type: 'realtime',
@@ -103,6 +112,7 @@ function createRealtimeTokenHandler({
         audio: {
           input: {
             noise_reduction: { type: 'near_field' },
+            ...transcription,
             turn_detection: {
               type: 'semantic_vad',
               eagerness: 'low',
@@ -138,6 +148,11 @@ function createRealtimeTokenHandler({
       // case where a bogus ?tier= was silently downgraded to standard.
       res.setHeader('X-GEV-Voice-Tier', tier);
       res.setHeader('X-GEV-Voice-Model', model);
+      // Captions are billed separately; the client meters them with this id.
+      res.setHeader(
+        'X-GEV-Voice-Transcribe-Model',
+        transcription.transcription ? transcribeModel : 'off',
+      );
       if (requestedTier && !isKnownVoiceTier(requestedTier)) {
         res.setHeader('X-GEV-Voice-Tier-Fallback', '1');
       }

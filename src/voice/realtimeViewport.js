@@ -2,6 +2,12 @@ import {
   shouldSendViewportImage,
   hasStructuredViewIdentity,
 } from './realtimeProtocol.js';
+import { cameraPoseKey } from './pointerContext.js';
+
+/** The live viewer's camera pose identity (Cesium-free read). */
+export function readViewerCameraKey() {
+  return cameraPoseKey(globalThis.window?.__godsEyeView?.viewer);
+}
 // Viewport-screenshot size guards (M13). The old code clamped WIDTH only, so a
 // tall portrait window produced an oversized capture whose dc.send could throw.
 // Cap total pixels (clamps both dimensions) and drop the image entirely if the
@@ -54,6 +60,107 @@ export async function captureViewportImage() {
       return null;
     }
     return dataUrl;
+  } catch {
+    return null;
+  }
+}
+
+/** Side of the point-and-ask crop, in CSS pixels, and its output size. */
+export const POINTER_CROP_SIZE = 512;
+/** A pointer snapshot older than this no longer matches the frame. */
+export const POINTER_CROP_MAX_AGE_MS = 20000;
+/** View scales where a crop shows buildings and terrain, not a smear. */
+export const POINTER_CROP_SCALES = new Set(['local', 'city']);
+
+/**
+ * Square source rectangle around a canvas point, clamped inside the canvas,
+ * in drawing-buffer pixels, plus where the point lands in the output image.
+ * Pure; exported for tests.
+ */
+export function pointerCropRect({
+  x,
+  y,
+  cssWidth,
+  cssHeight,
+  pixelWidth,
+  pixelHeight,
+  size = POINTER_CROP_SIZE,
+}) {
+  if (!cssWidth || !cssHeight || !pixelWidth || !pixelHeight) return null;
+  const side = Math.min(size, cssWidth, cssHeight);
+  const left = Math.min(Math.max(0, x - side / 2), cssWidth - side);
+  const top = Math.min(Math.max(0, y - side / 2), cssHeight - side);
+  const scaleX = pixelWidth / cssWidth;
+  const scaleY = pixelHeight / cssHeight;
+  const output = Math.round(Math.min(size, side * scaleX));
+  return {
+    sx: Math.round(left * scaleX),
+    sy: Math.round(top * scaleY),
+    sw: Math.round(side * scaleX),
+    sh: Math.round(side * scaleY),
+    output,
+    pointX: Math.round(((x - left) / side) * output),
+    pointY: Math.round(((y - top) / side) * output),
+  };
+}
+
+/**
+ * A 512 px crop of a freshly rendered frame around the pointer, with a ring
+ * at the exact spot, for "what is this building / this hill" on bare ground.
+ * The crop is the map canvas only.
+ * @param {{x: number, y: number}} screenPx Canvas CSS pixels.
+ * @returns {Promise<{dataUrl: string, rect: object}|null>} JPEG data URL and
+ *   the crop's normalized bounds in the full canvas, or null.
+ */
+export async function capturePointerCrop(screenPx) {
+  const viewer = window.__godsEyeView?.viewer;
+  const source = viewer?.scene?.canvas;
+  if (!source?.width || !source?.height || !screenPx) return null;
+  const fresh = await renderFreshCesiumFrame(viewer);
+  if (!fresh) return null;
+  const rect = pointerCropRect({
+    x: screenPx.x,
+    y: screenPx.y,
+    cssWidth: source.clientWidth || source.width,
+    cssHeight: source.clientHeight || source.height,
+    pixelWidth: source.width,
+    pixelHeight: source.height,
+  });
+  if (!rect) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = rect.output;
+  canvas.height = rect.output;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  try {
+    ctx.drawImage(
+      source,
+      rect.sx,
+      rect.sy,
+      rect.sw,
+      rect.sh,
+      0,
+      0,
+      rect.output,
+      rect.output,
+    );
+    if (isNearlyBlackFrame(ctx, rect.output, rect.output)) return null;
+    ctx.strokeStyle = 'rgba(0, 230, 255, 0.95)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(rect.pointX, rect.pointY, 16, 0, Math.PI * 2);
+    ctx.stroke();
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+    if (estimateDataUrlBytes(dataUrl) > VIEWPORT_MAX_ENCODED_BYTES) return null;
+    return {
+      dataUrl,
+      rect: {
+        x: rect.sx / source.width,
+        y: rect.sy / source.height,
+        w: rect.sw / source.width,
+        h: rect.sh / source.height,
+      },
+    };
   } catch {
     return null;
   }
@@ -168,9 +275,28 @@ export function isBenignViewportDeleteError(payload, pendingDeleteIds = null) {
 
 /** Own the one retained viewport image and bounded pending deletion identities. */
 export class RealtimeViewport {
-  constructor({ readChannel, operations, capture = captureViewportImage }) {
-    Object.assign(this, { readChannel, capture }, operations);
+  constructor({
+    readChannel,
+    readPointer = () => null,
+    operations,
+    capture = captureViewportImage,
+    capturePointer = capturePointerCrop,
+    readCameraKey = readViewerCameraKey,
+    now = () => Date.now(),
+  }) {
+    Object.assign(
+      this,
+      { readChannel, readPointer, capture, capturePointer, readCameraKey, now },
+      operations,
+    );
     this.generation = 0;
+    // Bumped by every capture request and every new user turn: only the
+    // newest request of the current turn may publish.
+    this.captureSeq = 0;
+    this.lastPointerCrop = null;
+    // What the retained image shows: `{kind:'viewport'|'crop', rect, cameraKey}`.
+    // Pixel targeting (screenX/screenY) is read against it.
+    this.retainedFrame = null;
     this.pendingViewportDeletes = new Set();
     this.lastViewportItemId = null;
   }
@@ -186,16 +312,72 @@ export class RealtimeViewport {
     )
       return false;
     const viewScale = result.scene?.basemap?.viewScale;
+    // Point-and-ask on bare ground: the crop around the pointer replaces the
+    // whole-frame screenshot, and is pulled only when nothing was named.
+    if (result.scope === 'pointer') {
+      if (result.selected || !result.pointer) return false;
+      return this.sendPointerCrop(this.readPointer(), { viewScale });
+    }
     if (!shouldSendViewportImage(viewScale)) return false;
     if (hasStructuredViewIdentity(result)) return false;
+    return this.sendRetainedImage(
+      () => this.capture(),
+      "Current God's Eye View viewport screenshot. Read any clearly visible street, building, and place labels in the image and combine them with the structured nearbyPlaces, streetLabels, and scene context. Do not invent labels that are not legible.",
+      'client.viewport_context',
+      { kind: 'viewport' },
+    );
+  }
+
+  /** A new user turn: captures still in flight from the last one are dropped. */
+  beginTurn() {
+    this.captureSeq++;
+  }
+
+  /**
+   * Push the crop around a ground pointer snapshot, once per snapshot, into
+   * the one retained image slot.
+   * @param {object|null} snapshot Fresh pointer snapshot on bare ground.
+   * @returns {Promise<boolean>}
+   */
+  async sendPointerCrop(snapshot, { viewScale } = {}) {
+    if (!snapshot?.fresh || snapshot.target !== 'ground' || !snapshot.screenPx)
+      return false;
+    // Too far out, the crop is a smear: every path shares this guard.
+    if (!POINTER_CROP_SCALES.has(viewScale)) return false;
+    if (snapshot === this.lastPointerCrop) return false;
+    if (this.now() - (snapshot.capturedAt || 0) > POINTER_CROP_MAX_AGE_MS)
+      return false;
+    // The snapshot's pixels only name its own camera pose.
+    const samePose = () =>
+      !snapshot.cameraKey || snapshot.cameraKey === this.readCameraKey();
+    if (!samePose()) return false;
+    this.lastPointerCrop = snapshot;
+    const sent = await this.sendRetainedImage(
+      () => this.capturePointer(snapshot.screenPx),
+      "Crop of the map around the user's pointer; the ring marks the exact spot they mean by this or here. Describe only what is clearly visible.",
+      'client.pointer_crop',
+      { kind: 'crop', valid: samePose },
+    );
+    if (!sent && this.lastPointerCrop === snapshot) this.lastPointerCrop = null;
+    return sent;
+  }
+
+  /** Capture one image and make it the single retained image in context. */
+  async sendRetainedImage(captureImage, text, label, frame = {}) {
+    if (!this.dc || this.dc.readyState !== 'open') return false;
     const generation = this.generation;
+    const request = ++this.captureSeq;
     const channel = this.dc;
-    const imageUrl = await this.capture();
+    const captured = await captureImage();
+    const imageUrl =
+      typeof captured === 'string' ? captured : captured?.dataUrl || null;
     if (
       !imageUrl ||
       generation !== this.generation ||
+      request !== this.captureSeq ||
       this.dc !== channel ||
-      channel.readyState !== 'open'
+      channel.readyState !== 'open' ||
+      (typeof frame.valid === 'function' && !frame.valid())
     )
       return false;
 
@@ -235,10 +417,7 @@ export class RealtimeViewport {
         type: 'message',
         role: 'user',
         content: [
-          {
-            type: 'input_text',
-            text: "Current God's Eye View viewport screenshot. Read any clearly visible street, building, and place labels in the image and combine them with the structured nearbyPlaces, streetLabels, and scene context. Do not invent labels that are not legible.",
-          },
+          { type: 'input_text', text },
           {
             type: 'input_image',
             image_url: imageUrl,
@@ -252,17 +431,24 @@ export class RealtimeViewport {
     // (it no longer throws — M13); we then leave lastViewportItemId pointing at
     // the item we just deleted as null and fall through so the caller still
     // issues queueResponseCreate WITHOUT the image, instead of stranding the turn.
-    const sent = this.sendRealtimeEvent(
-      contextEvent,
-      'client.viewport_context',
-    );
+    const sent = this.sendRealtimeEvent(contextEvent, label);
     this.lastViewportItemId = sent ? newItemId : null;
+    this.retainedFrame = sent
+      ? {
+          kind: frame.kind || 'viewport',
+          rect: captured?.rect || null,
+          cameraKey: this.readCameraKey(),
+        }
+      : null;
     return sent;
   }
 
   reset() {
     this.generation++;
+    this.captureSeq++;
     this.lastViewportItemId = null;
+    this.lastPointerCrop = null;
+    this.retainedFrame = null;
     this.pendingViewportDeletes.clear();
   }
 

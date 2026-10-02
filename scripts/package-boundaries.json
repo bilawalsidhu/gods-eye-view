@@ -282,6 +282,7 @@
       "src/data/installationFeedback.js",
       "src/voice/voiceCost.js",
       "src/voice/actionSchemas.js",
+      "src/voice/layerManifest.js",
       "server/providers/openai/toolDescriptions.js",
       "src/sources/rateLimit.js"
     ],
@@ -649,6 +650,7 @@
       "src/ui/styles/command-dock-trays.css",
       "src/ui/styles/command-dock-sliding.css",
       "src/ui/styles/voice-cost.css",
+      "src/ui/styles/voice-card.css",
       "src/ui/styles/first-run.css",
       "src/ui/styles/provider-settings.css",
       "src/ui/styles/weather.css",
@@ -1285,7 +1287,19 @@
       "src/voice/realtimeFacade.js",
       "src/voice/realtimeRadio.js",
       "src/voice/realtimeTurns.js",
-      "src/voice/realtimeConnection.js"
+      "src/voice/realtimeConnection.js",
+      "src/voice/turnMetrics.js",
+      "src/voice/speechLint.js",
+      "src/voice/voiceCard.js",
+      "src/voice/voiceCardPresentation.js",
+      "src/voice/resultDisplay.js",
+      "src/voice/referents.js",
+      "src/voice/layerManifest.js",
+      "src/voice/speech.js",
+      "src/voice/narration.js",
+      "src/voice/earcon.js",
+      "src/voice/pointerContext.js",
+      "src/voice/pointerReticle.js"
     ],
     "external": []
   },
@@ -1385,6 +1399,7 @@
       "src/data/aisLiveVessels.js",
       "src/data/alprCameras.js",
       "src/data/analystEngine.js",
+      "src/voice/layerManifest.js",
       "src/data/bikeshare.js",
       "src/data/cctv.js",
       "src/data/cctvCards.js",
@@ -1851,6 +1866,14 @@
       "src/voice/commands.js",
       "src/voice/control.js",
       "src/voice/gevActions.js",
+      "src/voice/speech.js",
+      "src/voice/earcon.js",
+      "src/voice/narration.js",
+      "src/voice/turnMetrics.js",
+      "src/voice/speechLint.js",
+      "src/voice/voiceCard.js",
+      "src/voice/voiceCardPresentation.js",
+      "src/voice/resultDisplay.js",
       "src/voice/gevRealtime.js",
       "src/voice/layerSummary.js",
       "src/voice/realtimeBackend.js",
@@ -2014,6 +2037,12 @@
       "src/maps/imageryHost.js",
       "src/ui/recentImagery.js",
       "src/ui/imageryBoxTool.js",
+      "src/voice/pointerContext.js",
+      "src/voice/pointerReticle.js",
+      "src/voice/deixis.js",
+      "src/voice/referents.js",
+      "src/voice/pointerPick.js",
+      "src/data/pickedContext.js",
       "src/layers/alpr/tileRecords.js",
       "src/sources/capability.js",
       "src/sources/openFreeMap.js",
@@ -2736,7 +2765,11 @@
   },
   "voice-action-schemas": {
     "exports": ["./voice/action-schemas"],
-    "modules": ["src/voice/actionSchemas.js", "src/hudLayoutPolicy.js"],
+    "modules": [
+      "src/voice/actionSchemas.js",
+      "src/voice/layerManifest.js",
+      "src/hudLayoutPolicy.js"
+    ],
     "external": []
   },
   "voice-session": {
@@ -2749,7 +2782,14 @@
     "modules": [
       "src/voice/sessionCommands.js",
       "src/voice/session.js",
-      "src/voice/control.js"
+      "src/voice/control.js",
+      "src/voice/voiceCard.js",
+      "src/voice/voiceCardPresentation.js",
+      "src/voice/resultDisplay.js",
+      "src/voice/referents.js",
+      "src/voice/layerManifest.js",
+      "src/voice/speech.js",
+      "src/voice/pointerReticle.js"
     ],
     "external": []
   },

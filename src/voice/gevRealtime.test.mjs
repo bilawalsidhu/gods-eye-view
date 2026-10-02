@@ -3678,6 +3678,50 @@ test('a genuinely different refused call still gets its own output', async () =>
   assert.deepEqual(outputs, ['call_one', 'call_two'], 'each distinct call is answered');
 });
 
+test('a claimed Space hold barges in on the assistant; a short tap never does', (t) => {
+  const f = createPushToTalkFixture(t);
+  const canvas = pushToTalkTarget({ tagName: 'CANVAS', id: 'world-overlay-canvas', tabIndex: 0 });
+  let bargeIns = 0;
+  f.controller._turns.bargeIn = () => {
+    bargeIns += 1;
+    return true;
+  };
+  // First hold starts the push-to-talk session; nothing to interrupt yet.
+  f.key('keydown', canvas);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  f.key('keyup', canvas);
+  assert.equal(bargeIns, 0);
+  // A short tap during the reply stays a tap.
+  f.key('keydown', canvas);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS - 1);
+  f.key('keyup', canvas);
+  assert.equal(bargeIns, 0);
+  // Only the 500 ms claim interrupts, and the microphone opens as before.
+  f.key('keydown', canvas);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.equal(bargeIns, 1);
+  assert.equal(f.microphone.enabled, true);
+  f.key('keyup', canvas);
+  // Radio's claim is read before Radio is paused, and a held handoff is
+  // never interrupted.
+  const order = [];
+  const input = f.controller._input;
+  input.mayClaimSpeaker = () => {
+    order.push('claim');
+    return false;
+  };
+  const pause = input.pauseRadioForVoice;
+  input.pauseRadioForVoice = (...args) => {
+    order.push('pause');
+    return pause(...args);
+  };
+  f.key('keydown', canvas);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.deepEqual(order.slice(0, 2), ['claim', 'pause']);
+  assert.equal(bargeIns, 1, 'no barge-in while Radio holds the speaker');
+  f.key('keyup', canvas);
+});
+
 const testPlaceSearch = () => createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ });
 function createGevActionRunner(options) { return createActionRunner({ placeSearch: testPlaceSearch(), ...options }); }
 function controlRadio(viewer, manager, args, options) { return runControlRadio(viewer, manager, args, { placeSearch: testPlaceSearch(), ...options }); }
