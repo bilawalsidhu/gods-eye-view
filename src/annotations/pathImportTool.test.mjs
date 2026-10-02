@@ -130,3 +130,28 @@ test('the pure modules import neither Cesium nor the DOM', () => {
       assert.ok(!source.includes(global), `${file} touches ${global}`);
   }
 });
+
+test('the import modules are registered for formatting and boundary checks', () => {
+  const formatScope = JSON.parse(read('scripts/format-scope.json'));
+  const boundaries = JSON.parse(read('scripts/package-boundaries.json'));
+  const owned = (file) =>
+    Object.values(boundaries).some((group) => group.modules?.includes(file));
+  for (const file of ['src/annotations/pathImportTool.js', ...PURE_MODULES]) {
+    assert.ok(owned(file), `${file} must be owned by a boundary group`);
+    // The engine's remove() has its own test file; pathImportTool has two.
+    const tests = file.endsWith('pathImportTool.js')
+      ? [
+          'src/annotations/pathImportTool.test.mjs',
+          'src/annotations/pathImportToolBehaviour.test.mjs',
+        ]
+      : [file.replace(/\.js$/, '.test.mjs')];
+    for (const testFile of tests)
+      assert.ok(
+        formatScope.includes(testFile),
+        `${testFile} must be in the formatting scope`,
+      );
+  }
+  assert.ok(
+    formatScope.includes('src/annotations/annotationEngineRemove.test.mjs'),
+  );
+});
