@@ -1,0 +1,100 @@
+/* ------------------------------------------------------------------ *
+ * On-device model settings. Loaded with the on-device provider and
+ * rendered inside the voice engine tray (voice-engine.css), sharing its
+ * headings and the shared .data-toggle-chip chips.
+ * ------------------------------------------------------------------ */
+#gev-voice-control .gev-voice-local-settings {
+  display: grid;
+  gap: 0.34rem;
+  padding-top: 0.34rem;
+  border-top: 1px solid rgba(54, 220, 255, 0.14);
+}
+
+#gev-voice-control .gev-voice-local-state {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.46rem;
+  letter-spacing: 0.06rem;
+  text-align: right;
+  text-overflow: ellipsis;
+}
+
+#gev-voice-control .gev-voice-local-state.error {
+  color: #ffb4bd;
+  white-space: normal;
+}
+
+#gev-voice-control .gev-voice-local-row {
+  display: grid;
+  grid-template-columns: 3.4rem 1fr;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+#gev-voice-control .gev-voice-local-notice {
+  margin: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.58rem;
+  line-height: 1.35;
+}
+
+#gev-voice-control .gev-voice-local-progress {
+  display: grid;
+  gap: 0.22rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.46rem;
+  letter-spacing: 0.05rem;
+}
+
+#gev-voice-control .gev-voice-local-progress[hidden],
+#gev-voice-control .gev-voice-local-note[hidden],
+#gev-voice-control .gev-voice-local-notice[hidden] {
+  display: none;
+}
+
+#gev-voice-control .gev-voice-local-bar {
+  height: 3px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+#gev-voice-control .gev-voice-local-bar > span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+  transition: width 200ms ease;
+}
+
+#gev-voice-control .gev-voice-local-storage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+#gev-voice-control .gev-voice-local-storage-note {
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+}
+
+#gev-voice-control .gev-voice-local-storage-note[hidden] {
+  display: none;
+}
+
+#gev-voice-control .gev-voice-local-note {
+  color: #ffc46b;
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #gev-voice-control .gev-voice-local-bar > span {
+    transition: none;
+  }
+}

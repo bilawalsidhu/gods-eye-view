@@ -43,6 +43,12 @@ test('module analysis parses dependencies and platform references without readin
     ['document', 'navigator'],
   );
   assert.throws(() => analyzeModule('import(name)'), /Computed/);
+  // Only the verified runtime loader may import a computed URL, and only
+  // dynamically; it adds nothing to the module graph.
+  assert.deepEqual(
+    analyzeModule('import(url)', { allowComputedImport: true }).imports,
+    [],
+  );
   assert.throws(() => analyzeModule("require('node:fs')"), /ES imports/);
 });
 

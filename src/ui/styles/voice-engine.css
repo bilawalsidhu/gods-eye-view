@@ -1,0 +1,142 @@
+/* ------------------------------------------------------------------ *
+ * Voice engine tray (Cloud / On-device) nested in #gev-voice-control.
+ * Shares the help tray's surface and the shared .data-toggle-chip chips.
+ * The on-device provider's model rows (local-voice.css) load with it.
+ * ------------------------------------------------------------------ */
+#gev-voice-control .gev-voice-engine-tray {
+  position: absolute;
+  bottom: calc(100% + 0.7rem);
+  left: 50%;
+  z-index: 8;
+  display: grid;
+  gap: 0.34rem;
+  box-sizing: border-box;
+  width: clamp(18rem, 27vw, 22rem);
+  max-width: calc(100vw - 2rem);
+  max-height: min(34rem, calc(100vh - 8rem));
+  overflow-y: auto;
+  padding: 0.62rem 0.72rem;
+  visibility: hidden;
+  opacity: 0;
+  color: rgba(223, 245, 250, 0.92);
+  background: rgba(7, 22, 31, 0.96);
+  border: 1px solid rgba(54, 220, 255, 0.34);
+  border-radius: 0.38rem;
+  box-shadow:
+    0 0.85rem 2rem rgba(0, 0, 0, 0.58),
+    0 0 1.2rem rgba(0, 212, 255, 0.08);
+  backdrop-filter: blur(24px) saturate(1.3);
+  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  pointer-events: none;
+  transform: translate(-50%, 0.65rem) scale(0.985);
+  transform-origin: bottom center;
+  transition:
+    opacity 160ms ease,
+    visibility 160ms ease,
+    transform 210ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+#gev-voice-control[data-voice-tray='open'] .gev-voice-engine-tray,
+#gev-voice-control[data-local-tray='open'] .gev-voice-engine-tray {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0) scale(1);
+}
+
+/* The tray and the voice card share one slot: an open tray takes it. */
+#gev-voice-control[data-voice-tray='open'] .gev-voice-help-tray,
+#gev-voice-control[data-voice-tray='open'] .gev-voice-card,
+#gev-voice-control[data-local-tray='open'] .gev-voice-help-tray,
+#gev-voice-control[data-local-tray='open'] .gev-voice-card {
+  display: none;
+}
+
+#command-dock.dock-has-pinned-tray .gev-voice-engine-tray {
+  bottom: calc(100% + 1.7rem + var(--dock-pinned-stack-height));
+}
+
+#gev-voice-control .gev-voice-engine-toggle.active {
+  color: var(--text-primary);
+  border-color: rgba(0, 212, 255, 0.6);
+  background: rgba(0, 212, 255, 0.12);
+}
+
+#gev-voice-control .gev-voice-local-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+#gev-voice-control .gev-voice-local-kicker,
+#gev-voice-control .gev-voice-local-label {
+  color: rgba(54, 220, 255, 0.72);
+  font-family: var(--font-mono);
+  font-size: 0.46rem;
+  font-weight: 600;
+  letter-spacing: 0.1rem;
+}
+
+#gev-voice-control .gev-voice-local-hint {
+  margin: 0;
+  color: var(--text-dim);
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  line-height: 1.35;
+}
+
+#gev-voice-control .gev-voice-local-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+#gev-voice-control .gev-voice-engine-device {
+  display: grid;
+  gap: 0.18rem;
+  padding-top: 0.34rem;
+  border-top: 1px solid rgba(54, 220, 255, 0.14);
+}
+
+#gev-voice-control .gev-voice-engine-fact {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.04rem;
+}
+
+#gev-voice-control .gev-voice-engine-guidance {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0.12rem 0 0;
+  padding-left: 0.9rem;
+  color: var(--text-dim);
+  font-family: var(--font-sans);
+  font-size: 0.58rem;
+  line-height: 1.3;
+}
+
+#gev-voice-control .gev-voice-engine-verdict {
+  margin: 0.1rem 0 0;
+  color: rgba(223, 245, 250, 0.92);
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  line-height: 1.35;
+}
+
+#gev-voice-control .gev-voice-engine-verdict.error {
+  color: #ffb4bd;
+}
+
+#gev-voice-control .gev-voice-engine-fact[hidden],
+#gev-voice-control .gev-voice-engine-verdict[hidden],
+#gev-voice-control .gev-voice-local-slot:empty {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #gev-voice-control .gev-voice-engine-tray {
+    transition: none;
+  }
+}

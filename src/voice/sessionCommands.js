@@ -2,6 +2,7 @@ import { createVoiceControl } from './control.js';
 import { createVoiceSession } from './session.js';
 import { VoiceCardControls } from './voiceCard.js';
 import { PointerReticle } from './pointerReticle.js';
+import { VoiceEngineControls } from './voiceEngineControls.js';
 
 function createDefaultReticle(pointer) {
   const element = pointer?.element;
@@ -28,9 +29,23 @@ export function createVoiceCommands({
   pointer = null,
   referents = null,
   createReticle = createDefaultReticle,
+  engineChoice = null,
+  createEngineControls = (options) => new VoiceEngineControls(options),
 }) {
   window.__gevVoiceCommands?.stop?.({ removeUi: true });
   const ui = createControl({ reset: true });
+  // Cloud / On-device choice; the on-device provider mounts its model
+  // settings in this tray.
+  const engineControls =
+    engineChoice && ui.root
+      ? createEngineControls({
+          root: ui.root,
+          engine: engineChoice.engine,
+          onSelect: engineChoice.select,
+          open: Boolean(engineChoice.openTray),
+        })
+      : null;
+  ui.engineControls = engineControls;
   const session = createVoiceSession({
     runner,
     signal,
@@ -80,6 +95,7 @@ export function createVoiceCommands({
     ? session.subscribe((event) => card.handle(event))
     : null;
   controls.voiceCard = card;
+  controls.engineControls = engineControls;
   // Point-and-ask: the reticle follows turn events; pointer and referents are
   // session-scoped, so a session that ends forgets both.
   const reticle = pointer ? createReticle(pointer) : null;
@@ -115,6 +131,7 @@ export function createVoiceCommands({
       updatePointer();
       reticle?.destroy();
       card?.destroy();
+      engineControls?.destroy();
       runner.dispose?.();
       ui.root.remove();
     },
@@ -128,6 +145,7 @@ export function createVoiceCommands({
     updatePointer();
     reticle?.destroy();
     card?.destroy();
+    engineControls?.destroy();
     runner.dispose?.();
     ui.root.remove();
   } else adapter.bindControls?.();

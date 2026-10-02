@@ -237,6 +237,8 @@ _Why cockpit mode exists: you're riding a real aircraft over real terrain — an
 
 > Voice needs an **OpenAI key**. Without one the entire app still runs — the mic button just reports voice is unavailable. The same key drives the **AI HUD summary**: a terse, five-word intelligence-style readout of the current view that regenerates as you move.
 
+> **No key? Run voice on this device.** Open the tray next to the mic and choose **ON-DEVICE**: Gemma 4, Moonshine and Kokoro run in the browser (WebGPU; current Chrome or Edge) after a one-time download, with no key and no per-use cost. The tray checks your hardware: 16 GB+ Apple Silicon works best with Gemma 4 12B (6 GB download); 8–16 GB with Gemma 4 E4B (3 GB). `?voice=local-web` is a shortcut.
+
 Click **GEV MIC**, grant the microphone, and just talk. This is more than a voice-controlled remote:
 
 - **🧠 It knows what it's looking at.** The agent pulls live scene context before answering — including coordinates, street names, active layers, and view scale. Ask _"what city is this?"_ mid-flight and it knows.

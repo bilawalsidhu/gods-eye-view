@@ -20,7 +20,7 @@ const radio = ['playback', 'interaction'].map(name =>
 ).join('\n').replace(/layerState\.|parts\.\w+\./g, '');
 const rocketLaunches = readLayerSource(new URL('./data/rocketLaunches.js', import.meta.url), 'utf8');
 const realtime = readRealtimeSource();
-const voice = ['./voice/actionSchemas.js', '../server/providers/openai/toolDescriptions.js', '../server/providers/openai/instructions.js'].map(file => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
+const voice = ['./voice/actionSchemas.js', './voice/actionDescriptions.js', '../server/providers/openai/instructions.js'].map(file => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 function realtimeTools() { return GEV_REALTIME_TOOLS; }

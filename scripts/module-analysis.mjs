@@ -15,8 +15,13 @@ const browserGlobals = new Set([
   'getComputedStyle',
 ]);
 
-/** Inspect literal module dependencies and browser-platform references without executing code. */
-export function analyzeModule(source) {
+/**
+ * Inspect literal module dependencies and browser-platform references without
+ * executing code. `allowComputedImport` admits dynamic imports of computed
+ * specifiers (left out of the graph) for the one loader that imports bytes it
+ * has already verified.
+ */
+export function analyzeModule(source, { allowComputedImport = false } = {}) {
   const imports = [];
   const browser = new Set();
   function walk(node, parent, field) {
@@ -30,11 +35,11 @@ export function analyzeModule(source) {
       ].includes(node.type) &&
       node.source
     ) {
-      if (node.source.type !== 'StringLiteral')
+      if (node.source.type === 'StringLiteral') imports.push(node.source.value);
+      else if (!(allowComputedImport && node.type === 'ImportExpression'))
         throw new Error(
           'Computed module imports are not allowed in runtime code',
         );
-      imports.push(node.source.value);
     }
     if (node.type === 'CallExpression' && node.callee?.name === 'require')
       throw new Error('Runtime modules must use ES imports');

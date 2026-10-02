@@ -27,7 +27,11 @@
   "vite-build": {
     "runtime": "node",
     "exports": ["./build/vite", "./build/html"],
-    "modules": ["build/vite.js", "build/application-html.js"],
+    "modules": [
+      "build/vite.js",
+      "build/application-html.js",
+      "build/onDeviceRuntime.js"
+    ],
     "external": ["vite-plugin-cesium"]
   },
   "live-providers": {
@@ -283,7 +287,7 @@
       "src/voice/voiceCost.js",
       "src/voice/actionSchemas.js",
       "src/voice/layerManifest.js",
-      "server/providers/openai/toolDescriptions.js",
+      "src/voice/actionDescriptions.js",
       "src/sources/rateLimit.js"
     ],
     "external": []
@@ -1299,7 +1303,12 @@
       "src/voice/narration.js",
       "src/voice/earcon.js",
       "src/voice/pointerContext.js",
-      "src/voice/pointerReticle.js"
+      "src/voice/pointerReticle.js",
+      "src/voice/voiceEngineControls.js",
+      "src/voice/voiceEnginePresentation.js",
+      "src/voice/local/modelCatalog.js",
+      "src/ui/chipGroup.js",
+      "src/ui/uiLifetime.js"
     ],
     "external": []
   },
@@ -2056,7 +2065,37 @@
       "src/sources/requestDeadline.js",
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
-      "src/data/infrastructureOverlayEntry.js"
+      "src/data/infrastructureOverlayEntry.js",
+      "src/voice/voiceEngine.js",
+      "src/voice/voiceEngineControls.js",
+      "src/voice/voiceEnginePresentation.js",
+      "src/voice/local/gemmaToolCalls.js",
+      "src/voice/local/localAudio.js",
+      "src/voice/local/localEngine.js",
+      "src/voice/local/localPrompt.js",
+      "src/voice/local/localVoiceControls.js",
+      "src/voice/local/localVoicePreferences.js",
+      "src/voice/local/localVoicePresentation.js",
+      "src/voice/local/localVoiceStore.js",
+      "src/voice/local/localWebSession.js",
+      "src/voice/local/modelCatalog.js",
+      "src/voice/local/replies.js",
+      "src/voice/local/speechText.js",
+      "src/voice/local/toolset.js",
+      "src/voice/local/workers/modelCache.js",
+      "src/voice/local/workers/runtimeAssets.js",
+      "src/voice/local/workers/phonemizerRuntime.js",
+      "src/voice/local/workerClient.js",
+      "src/voice/local/localWebProvider.js",
+      "src/voice/local/localWebFlag.js",
+      "src/voice/local/localRadio.js",
+      "src/voice/local/speechOutput.js",
+      "src/voice/local/streamTee.js",
+      "src/voice/local/sha256.js",
+      "src/voice/local/naturalVoiceSetting.js",
+      "src/ui/styles/local-voice.css",
+      "src/voice/actionDescriptions.js",
+      "src/voice/actionSchemas.js"
     ],
     "external": [
       "hls.js",
@@ -2789,7 +2828,12 @@
       "src/voice/referents.js",
       "src/voice/layerManifest.js",
       "src/voice/speech.js",
-      "src/voice/pointerReticle.js"
+      "src/voice/pointerReticle.js",
+      "src/voice/voiceEngineControls.js",
+      "src/voice/voiceEnginePresentation.js",
+      "src/voice/local/modelCatalog.js",
+      "src/ui/chipGroup.js",
+      "src/ui/uiLifetime.js"
     ],
     "external": []
   },

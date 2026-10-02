@@ -1,7 +1,4 @@
-import {
-  voiceLayerAliasHint,
-  voiceQueryFieldHint,
-} from '../../../src/voice/layerManifest.js';
+import { voiceLayerAliasHint, voiceQueryFieldHint } from './layerManifest.js';
 
 export const ACTION_DESCRIPTIONS = {
   fly_to_location: {

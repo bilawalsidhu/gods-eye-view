@@ -1,5 +1,9 @@
 import { applicationHtmlPlugin } from './application-html.js';
 import cesium from 'vite-plugin-cesium';
+import {
+  onDeviceRuntimePlugin,
+  phonemizerLoaderPath,
+} from './onDeviceRuntime.js';
 
 /** Build browser assets with explicit inputs; never load environment or providers. */
 export function createBrowserViteConfig({
@@ -9,10 +13,22 @@ export function createBrowserViteConfig({
   cesiumToken,
   host = 'localhost',
   port = 4173,
+  naturalVoice,
   command,
 } = {}) {
   return {
-    plugins: [cesium(), applicationHtmlPlugin(), ...plugins],
+    plugins: [
+      cesium(),
+      applicationHtmlPlugin(),
+      onDeviceRuntimePlugin(),
+      ...plugins,
+    ],
+    // Workers are bundled separately and need the on-device runtime too.
+    worker: { plugins: () => [onDeviceRuntimePlugin()] },
+    // Also applied while pre-bundling kokoro-js for the dev server.
+    resolve: {
+      alias: [{ find: /^phonemizer$/, replacement: phonemizerLoaderPath() }],
+    },
     ...(publicDir === undefined ? {} : { publicDir }),
     // A production build must not clean the dependency cache a running dev
     // server is still serving optimized module URLs from.
@@ -26,6 +42,9 @@ export function createBrowserViteConfig({
         '@jtarrio/signals/demod/modes.js',
         '@jtarrio/webrtlsdr/rtlsdr.js',
         'egm96-universal',
+        '@litert-lm/core',
+        '@huggingface/transformers',
+        'kokoro-js',
       ],
     },
     server: {
@@ -47,6 +66,9 @@ export function createBrowserViteConfig({
     define: {
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
+      // GEV_NATURAL_VOICE=off leaves natural (Kokoro) voice out of the
+      // on-device tier; replies use the browser's on-device voices or text.
+      'import.meta.env.GEV_NATURAL_VOICE': JSON.stringify(naturalVoice ?? ''),
     },
     build: { chunkSizeWarningLimit: 1500 },
   };

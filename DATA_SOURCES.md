@@ -100,6 +100,20 @@ The optional Local ADS-B layer and the broadcast-FM receiver use radio you recei
 - **Cockpit regional briefing.** `/api/regional-brief` rounds aircraft coordinates into 0.1° cache cells, caches results for five minutes, and resolves physical regions from bundled public-domain Natural Earth polygons without reverse-geocoding requests. Google News RSS is queried with the resolved locality/region first; GDELT is used only when that RSS query fails or is empty. Google's published Google News terms restrict that source to personal, noncommercial use, so commercial deployments must disable/replace it or obtain separate permission; GDELT permits commercial dataset use with citation. The Data attribution popover identifies the active headline sources; article links retain publisher attribution. Headlines are location-query matches, not verified incidents, risk rankings, or evidence that a location is safe. Empty, partial, stale, and unavailable source states remain distinct. Open-Meteo supplies current conditions independently of the news source. `WX OFF` disables cockpit weather rendering only; the Local Info briefing still fetches its source-backed weather values and displays the required linked Open-Meteo credit.
 - **Dynamic weather presentation.** While cockpit mode is active, `/api/weather-effects` requests current Open-Meteo observations for the aircraft/camera location, rounds coordinates into 0.1° cache cells, caches results for five minutes, and may retain a stale observation for up to 30 minutes during a transient outage. WMO condition code selects the visual family; observed cloud cover, precipitation, visibility, wind speed, and wind direction bound its strength and motion. Missing or expired weather renders no synthetic atmospheric effect, and normal globe view never renders the weather overlay.
 
+
+### On-device voice models (downloaded only when voice runs on this device)
+
+Downloaded by the browser from Hugging Face at pinned revisions and kept in its cache; not stored in this repo.
+
+| Model | Revision | License |
+| --- | --- | --- |
+| Gemma 4 E2B / E4B / 12B / 26B A4B web builds (`litert-community/gemma-4-*-it-litert-lm`) | per model in `src/voice/local/modelCatalog.js`, SHA-256 checked | Apache-2.0 |
+| Moonshine Base (`onnx-community/moonshine-base-ONNX`) | `b1e9b6aa` | MIT |
+| Whisper base.en / large-v3-turbo ONNX (`onnx-community/whisper-base.en`, `onnx-community/whisper-large-v3-turbo`) | `51eefc0a` / `360ebcde` | MIT |
+| Kokoro-82M and voice vectors (`onnx-community/Kokoro-82M-v1.0-ONNX`) | `1939ad2a` | Apache-2.0 |
+
+Natural voice's phonemizer is fetched the same way, from the public npm CDN (see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
+
 ---
 
 ## Bundled snapshots
