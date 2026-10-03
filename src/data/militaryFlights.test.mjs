@@ -603,3 +603,48 @@ test('two contacts matching at the same strength resolve deterministically', () 
   assert.equal(first, 'aef001', 'the stable key (lowest hex) wins, not the feed order');
   assert.equal(second, first, 'and the same query resolves the same way every time');
 });
+
+test('the military tracked descriptor publishes the reported vertical rate', () => {
+  // Shape parity with the civil layer's getTrackedInfo(). The two layers store
+  // the rate under different record keys (`verticalRateMps` here,
+  // `verticalRate` there), so `resolveTrackedAircraftInfo` only hands back one
+  // shape if BOTH descriptors map it — a consumer that reads the field off the
+  // civil seam and finds it missing on the military one would silently treat
+  // every military contact as level flight.
+  const seedRate = (verticalRateMps) =>
+    _setTrackedMilitaryRefreshStateForTest({
+      icao24: 'ae7f01',
+      entity: { gevLabelModel: { title: 'TEST', details: [] } },
+      billboard: {
+        position: Cesium.Cartesian3.fromDegrees(-97.0, 31.0, 8_000),
+        color: Cesium.Color.WHITE,
+        show: true,
+      },
+      billboardCollection: { show: true, remove() {} },
+      viewer: { camera: { positionCartographic: null }, scene: {} },
+      meta: {
+        callsign: 'RCH512',
+        rawLat: 31,
+        rawLon: -97,
+        altitudeFt: 26_000,
+        speedMps: 220,
+        track: 95,
+        onGround: false,
+        verticalRateMps,
+      },
+    });
+
+  seedRate(12.7);
+  assert.equal(militaryFlightsLayer.getTrackedInfo()?.verticalRateMps, 12.7);
+
+  // Absent is not level: a contact that has never transmitted a rate must read
+  // as null, not as a 0 m/s a phase classifier would call cruise.
+  for (const missing of [undefined, null, Number.NaN]) {
+    seedRate(missing);
+    assert.equal(
+      militaryFlightsLayer.getTrackedInfo()?.verticalRateMps,
+      null,
+      `vertical rate ${String(missing)} must publish as null`,
+    );
+  }
+});
