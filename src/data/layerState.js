@@ -46,10 +46,8 @@ const RADIO_FILTER_CODES = Object.freeze({
   music: 'm',
   other: 'o',
 });
-const RADIO_CODE_FILTERS = Object.freeze(
-  Object.fromEntries(
-    Object.entries(RADIO_FILTER_CODES).map(([key, value]) => [value, key]),
-  ),
+const RADIO_CODE_FILTERS = Object.fromEntries(
+  Object.entries(RADIO_FILTER_CODES).map(([key, value]) => [value, key]),
 );
 
 function normalizeBoolean(value) {

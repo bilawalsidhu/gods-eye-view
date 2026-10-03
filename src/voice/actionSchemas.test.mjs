@@ -25,6 +25,7 @@ test('the complete Realtime tool payload pins the additive analyst, satellite, L
       ),
     )
     .digest('hex');
+  // Re-pinned for the Pattern Watch layer enums.
   assert.equal(
     digest,
     // Re-derived for the additive `local-adsb` set_layer_visibility value and

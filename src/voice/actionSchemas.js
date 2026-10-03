@@ -175,6 +175,7 @@ const schemas = [
             'local-firms',
             'fire-perimeters',
             'alpr-cameras',
+            'flight-patterns',
           ],
         },
       },
