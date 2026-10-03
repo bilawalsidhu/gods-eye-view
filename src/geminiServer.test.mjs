@@ -421,7 +421,6 @@ test('real Vite dev and preview reject hostile hosts before the Gemini middlewar
   for (const mode of ['dev', 'preview']) {
     await t.test(mode, async (t) => {
       const root = await mkdtemp(path.join(tmpdir(), 'gev-gemini-vite-test-'));
-      t.after(() => rm(root, { recursive: true, force: true }));
       await mkdir(path.join(root, 'dist'));
       await writeFile(path.join(root, 'index.html'), '<p>isolated fixture</p>');
       await writeFile(
@@ -436,6 +435,8 @@ test('real Vite dev and preview reject hostile hosts before the Gemini middlewar
         envFile: false,
         root,
         logLevel: 'silent',
+        publicDir: false,
+        optimizeDeps: { noDiscovery: true, include: [] },
         // Deliberately put the provider first: enforce: pre must order the gate.
         plugins: [
           geminiLiveProxy({
@@ -454,63 +455,77 @@ test('real Vite dev and preview reject hostile hosts before the Gemini middlewar
           }),
           hostCheckPlugin(),
         ],
-        server: { host: '127.0.0.1', port: 0, allowedHosts, hmr: false },
+        server: {
+          host: '127.0.0.1',
+          port: 0,
+          allowedHosts,
+          hmr: false,
+          watch: null,
+        },
         preview: { host: '127.0.0.1', port: 0, allowedHosts },
       };
-      const server =
-        mode === 'dev' ? await createServer(config) : await preview(config);
-      t.after(() => server.close());
-      if (mode === 'dev') await server.listen();
-      const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
-      const request = (host, extraHeaders = {}) =>
-        new Promise((resolve, reject) => {
-          const req = http.request(
-            `${origin}/api/gemini/token`,
-            {
-              method: 'POST',
-              headers: {
-                Host: host,
-                Origin: `http://${host}`,
-                ...extraHeaders,
+      let server;
+      try {
+        server =
+          mode === 'dev' ? await createServer(config) : await preview(config);
+        if (mode === 'dev') await server.listen();
+        const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
+        const request = (host, extraHeaders = {}) =>
+          new Promise((resolve, reject) => {
+            const req = http.request(
+              `${origin}/api/gemini/token`,
+              {
+                method: 'POST',
+                headers: {
+                  Host: host,
+                  Origin: `http://${host}`,
+                  ...extraHeaders,
+                },
               },
-            },
-            (res) => {
-              const chunks = [];
-              res.on('data', (chunk) => chunks.push(chunk));
-              res.on('end', () =>
-                resolve({
-                  status: res.statusCode,
-                  body: Buffer.concat(chunks).toString(),
-                }),
-              );
-              res.on('error', reject);
-            },
-          );
-          req.on('error', reject);
-          req.end();
+              (res) => {
+                const chunks = [];
+                res.on('data', (chunk) => chunks.push(chunk));
+                res.on('end', () =>
+                  resolve({
+                    status: res.statusCode,
+                    body: Buffer.concat(chunks).toString(),
+                  }),
+                );
+                res.on('error', reject);
+              },
+            );
+            req.on('error', reject);
+            req.end();
+          });
+        for (const host of ['attacker.example:4173', 'arbitrary.local:4173']) {
+          const response = await request(host);
+          assert.equal(response.status, 403);
+          assert.match(response.body, /This host is not allowed/);
+        }
+        assert.equal(credentialReads, 0);
+        const sameSite = await request('gev.local:4173', {
+          'Sec-Fetch-Site': 'same-site',
         });
-      for (const host of ['attacker.example:4173', 'arbitrary.local:4173']) {
-        const response = await request(host);
-        assert.equal(response.status, 403);
-        assert.match(response.body, /This host is not allowed/);
+        assert.equal(sameSite.status, 403);
+        assert.equal(credentialReads, 0);
+        for (const host of [
+          'gev.local:4173',
+          '192.168.1.20:4173',
+          'demo.localhost:4173',
+        ]) {
+          const response = await request(host);
+          assert.equal(response.status, 503);
+          assert.match(response.body, /Add a Gemini API key/);
+        }
+        assert.equal(credentialReads, 3);
+        assert.equal(upstreamCalls, 0);
+      } finally {
+        try {
+          if (server) await server.close();
+        } finally {
+          await rm(root, { recursive: true, force: true });
+        }
       }
-      assert.equal(credentialReads, 0);
-      const sameSite = await request('gev.local:4173', {
-        'Sec-Fetch-Site': 'same-site',
-      });
-      assert.equal(sameSite.status, 403);
-      assert.equal(credentialReads, 0);
-      for (const host of [
-        'gev.local:4173',
-        '192.168.1.20:4173',
-        'demo.localhost:4173',
-      ]) {
-        const response = await request(host);
-        assert.equal(response.status, 503);
-        assert.match(response.body, /Add a Gemini API key/);
-      }
-      assert.equal(credentialReads, 3);
-      assert.equal(upstreamCalls, 0);
     });
   }
 });
