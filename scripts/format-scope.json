@@ -168,6 +168,7 @@
   "src/ui/panelRails.test.mjs",
   "src/panelStackLayout.js",
   "src/ui/applicationShortcuts.js",
+  "src/ui/attentionPolicy.test.mjs",
   "src/ui/styleParameters.js",
   "src/ui/visualInput.js",
   "src/ui/visualInput.test.mjs",
