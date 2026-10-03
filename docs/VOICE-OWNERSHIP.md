@@ -8,12 +8,22 @@ The session adapter, action runner and backend interfaces remain unchanged.
 | Owner | State and responsibility |
 | --- | --- |
 | `realtimeConnection.js` | Start generation, request cancellation, peer/data channel, acquired microphone stream and playback element |
+| `realtimeBackend.js` | Token and SDP requests, their separate transports, the abort/timeout scope around both, and client-secret expiry |
 | `realtimeTurns.js` | Active and superseded responses, pending confirmations, deduplicated calls and action cancellation |
 | `realtimeRadio.js` | Speaker ducking, prepared playback, stronger-action reservations and playback observers |
 | `realtimeInput.js` | Physical Space gesture, microphone mute, input/output meters and their frame/listener lifetime |
 | `realtimeCost.js` | Next-session preferences and the current session's model-bound meter |
 | `realtimeViewport.js` | One retained image, bounded deletion identities and capture generation |
 | `realtimeDiagnostics.js` | Bounded error history and sanitized optional diagnostics |
+
+The backend is replaceable per deployment: `realtimeController.js` accepts it as a
+`backend` option and falls back to `createRealtimeBackend()`. Its two method
+signatures live with [application construction](APPLICATION.md); what belongs here
+is the ownership. The connection is the backend's only consumer in the application.
+The resolved credential is opaque to the connection and is handed to `negotiate`
+whole. Client-secret expiry is refused inside the backend, not by the connection.
+`realtimeOwners.test.mjs` drives whole sessions through a substitute that
+implements only those two methods.
 
 Pure input policy, preferences and protocol-response policy have separate modules.
 Owners receive named readers, operations or focused collaborators. Cross-owner
