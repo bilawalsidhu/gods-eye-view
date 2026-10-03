@@ -185,9 +185,10 @@ export function reduceVoiceCard(state, event) {
         event,
         (step) => step.status === 'running',
         () => ({
+          // A question back ("which Punjab?") is an answer, not a failure.
           status: result.cancelled
             ? 'cancelled'
-            : result.ok
+            : result.ok || result.needsClarification
               ? 'done'
               : 'failed',
           detail: result.outlinePending ? 'Tracing outline' : '',
@@ -197,7 +198,7 @@ export function reduceVoiceCard(state, event) {
       // A result for a call this turn never showed is stale.
       if (next === state) return state;
       // One adapter decides what a result shows; a silent lookup or a
-      // refusal informs the model and leaves the card.
+      // refusal without a question informs the model and leaves the card.
       const shown = presentResult(event.name, result);
       if (!shown) return reveal(next);
       return reveal({

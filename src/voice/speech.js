@@ -18,14 +18,44 @@
  * returned unchanged.
  */
 
-import { analystHeadline } from './resultDisplay.js';
+import { voiceLayer } from './layerManifest.js';
 
 const LAYER_NOUNS = Object.freeze({
   flights: 'aircraft',
   military: 'military aircraft',
+  'local-adsb': 'aircraft',
   'ais-live-vessels': 'ships',
   satellites: 'satellites',
+  'rocket-launches': 'launches',
+  earthquakes: 'earthquakes',
+  'local-firms': 'fires',
+  'osm-places': 'places',
 });
+
+const AIRCRAFT_LAYERS = new Set(['flights', 'military', 'local-adsb']);
+const MAX_ANALYST_HEADLINE = 64;
+
+export function analystNounFor(layerKeys) {
+  const keys = [...new Set((layerKeys || []).filter(Boolean))];
+  if (keys.length > 1 && keys.every((key) => AIRCRAFT_LAYERS.has(key)))
+    return 'aircraft';
+  if (keys.length !== 1) return 'results';
+  const key = keys[0];
+  return LAYER_NOUNS[key] || voiceLayer(key)?.aliases?.[0] || 'results';
+}
+
+/** The count/scope headline shared by the analyst card and spoken answer. */
+export function analystHeadline(result) {
+  const keys = (result?.coverage?.layersQueried || []).map(
+    (layer) => layer.layerKey,
+  );
+  const count = Number(result?.count) || 0;
+  const floor = result?.complete === false ? 'At least ' : '';
+  return spokenLabel(
+    `${floor}${count.toLocaleString('en-US')} ${analystNounFor(keys)} ${result?.scopeLabel || ''}`,
+    MAX_ANALYST_HEADLINE,
+  );
+}
 
 /** Feed states that change what a spoken answer means. */
 const MATERIAL_FEED_TAGS = Object.freeze({
@@ -400,7 +430,10 @@ function annotateMap(result) {
 
 function analystQuery(result) {
   if (!result?.ok || result.cancelled) return null;
-  const headline = spokenLabel(analystHeadline(result), 96);
+  const headline = analystHeadline(result);
+  const provenance = feedTag(
+    result.feedState || result.feedProvenance?.overall,
+  );
   const unanswered = (Array.isArray(result.unanswered) ? result.unanswered : [])
     .map((layer) => spokenLabel(layer, 24))
     .filter(Boolean);
@@ -408,7 +441,17 @@ function analystQuery(result) {
     ? `Partial; ${listPhrase(unanswered.slice(0, 2))}${unanswered.length > 2 ? ` and ${unanswered.length - 2} more` : ''} not answered.`
     : 'Partial answer.';
   return {
-    say: `${sentence(headline)}${result.partial ? ` ${missing}` : ''}`,
+    say: [
+      sentence(headline),
+      provenance === 'feed unavailable'
+        ? 'Feed unavailable.'
+        : provenance
+          ? `Feed ${provenance}.`
+          : null,
+      result.partial ? missing : null,
+    ]
+      .filter(Boolean)
+      .join(' '),
   };
 }
 
@@ -494,6 +537,14 @@ export function planStepLabel(name, args = {}) {
       return 'Check view state';
     case 'frame_overhead':
       return `Frame ${spokenLabel(args.target || 'flights', 24)}`;
+    case 'resolve_area':
+      return args.around
+        ? `Area around ${displayName(args.query || 'landmark', 32)}`
+        : `${args.draw ? 'Outline' : 'Find'} ${displayName(args.query || 'area', 36)}`;
+    case 'find_imagery':
+      return 'Find recent imagery';
+    case 'osm_query':
+      return `Find ${spokenLabel(args.what || 'places', 32)}`;
     default:
       return spokenLabel(String(name || 'Action').replace(/_/g, ' '), 40);
   }
@@ -511,6 +562,12 @@ export function narrationLabel(name, args = {}) {
       return displayName(args.query || args.locationId || '', 32);
     case 'select_nearest_aircraft':
       return displayName(args.locationQuery || args.locationId || '', 32);
+    case 'resolve_area':
+      return displayName(args.query || '', 32);
+    case 'find_imagery':
+      return 'the imagery';
+    case 'osm_query':
+      return spokenLabel(args.what || '', 32);
     default:
       return '';
   }
@@ -525,6 +582,10 @@ const STEP_LABELS = Object.freeze({
   layer: 'Turning on layer',
   refresh: 'Loading aircraft',
   nearest: 'Picking nearest',
+  draw: 'Drawing outline',
+  catalog: 'Searching imagery catalog',
+  drape: 'Loading imagery',
+  osm: 'Searching OpenStreetMap',
 });
 
 /** On-screen label for a progress step. */
@@ -544,6 +605,16 @@ export function progressLine(step, label) {
       return place ? `Finding ${place} on the map.` : 'Finding those places.';
     case 'search':
       return place ? `Looking up ${place}.` : null;
+    case 'draw':
+      return place ? `Outlining ${place}.` : null;
+    case 'catalog':
+      return 'Searching the imagery catalog.';
+    case 'drape':
+      return 'Loading the image.';
+    case 'osm':
+      return place
+        ? `Searching OpenStreetMap for ${place}.`
+        : 'Searching OpenStreetMap.';
     case 'fly':
       return place ? `Heading to ${place}.` : null;
     case 'layer':

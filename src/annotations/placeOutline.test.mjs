@@ -301,6 +301,46 @@ test('a coarse bundled admin-1 city waits for a finer outline', async () => {
   assert.equal(direct.label, 'Paris');
 });
 
+test('deferred outlines preserve provider administrative identity metadata', async () => {
+  const overParis = viewerAt(48.8566, 2.3522, 40_000);
+  const ring = square(48.8566, 2.3522, 0.05);
+  const { resolve } = harness(PARIS_PLACE, {
+    outlineRungs: rungsAnswering({
+      ring,
+      kind: 'area',
+      heightM: null,
+      adminArea: 'Île-de-France',
+      adminLevel: 'admin1',
+    }),
+  });
+  const outline = await (await resolve('Paris', overParis)).resolveOutline();
+  assert.equal(outline.adminArea, 'Île-de-France');
+  assert.equal(outline.adminLevel, 'admin1');
+});
+
+test('an explicitly distant area keeps its deferred outline', async () => {
+  const kathmandu = {
+    lat: 27.7172,
+    lng: 85.324,
+    label: 'Kathmandu, Nepal',
+    name: 'Kathmandu',
+    types: ['locality', 'political'],
+  };
+  const ring = square(27.7172, 85.324, 0.05);
+  const { resolve } = harness(kathmandu, {
+    outlineRungs: rungsAnswering({ ring, kind: 'area', heightM: null }),
+  });
+  const resolved = await resolve('Kathmandu', SAN_FRANCISCO, {
+    allowDistant: true,
+  });
+  assert.equal(resolved.source, 'geocode');
+  assert.deepEqual(
+    (await resolved.resolveOutline()).ring,
+    ring,
+    'the deferred centroid gate honors the same explicit distance policy as the anchor',
+  );
+});
+
 test('detailed admin-1 units and admin asks keep the bundled shape', async () => {
   const { resolve } = harness(null, { outlineRungs: rungsAnswering(null) });
   for (const [name, lat, lon] of [

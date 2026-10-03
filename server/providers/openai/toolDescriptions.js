@@ -399,7 +399,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   annotate_map: {
     description:
-      'Mark places on the 3D map as you talk about them (see WHITEBOARD): pins, highlights, footprints and boundaries, arrows, routes and labels. Give place names (or explicit lat/lng); the app resolves real positions and outlines. Several places may go in one call.',
+      'Mark places on the 3D map as you talk about them (see WHITEBOARD): pins, highlights, footprints, arrows, routes and labels. Give place names (or explicit lat/lng); the app resolves real positions and outlines. Several places may go in one call.',
     $position: 1,
     parameters: {
       properties: {
@@ -541,9 +541,48 @@ export const ACTION_DESCRIPTIONS = {
       },
     },
   },
+  resolve_area: {
+    description:
+      'Named place → reusable areaId. draw=true outlines it ("outline Bagmati province"); around=true is "an area around <landmark>" — its enclosing mapped area, else a buffer marked approximate. Pass the areaId to analyst_query scope {kind:area}, find_imagery or osm_query. needsClarification: ask which, then call again with its candidateId. AREA_TIMEOUT: say you are still looking and retry once.',
+    $position: 1,
+    parameters: {
+      properties: {
+        query: {
+          description: 'The place as said, with any kind word.',
+          $position: 1,
+        },
+        level: {
+          description: 'Only when the user names the kind.',
+          $position: 1,
+        },
+        within: {
+          description: 'Country or state the user added.',
+          $position: 1,
+        },
+      },
+    },
+  },
+  find_imagery: {
+    description:
+      'Recent satellite imagery (Sentinel-2/Landsat 30 m, VIIRS daily; last 30 days): pins the best acquisition in the Recent Imagery panel. areaId from resolve_area; area=pointer for "this spot"; omit for the view. BOX_REFUSED: offer to zoom in. DISPLACED: the user changed the panel, leave it.',
+    $position: 1,
+    parameters: {
+      properties: {
+        maxCloudPct: {
+          description: '"cloud-free" → 10.',
+          $position: 1,
+        },
+      },
+    },
+  },
+  osm_query: {
+    description:
+      'OpenStreetMap places of one kind ("hospitals in Kathmandu"). areaId from resolve_area; omit for the view. Shows them in OSM Places with numbered referents; they become the last answer. countScope bounding-box means an approximate count. OSM_TIMEOUT: retry once.',
+    $position: 1,
+  },
   analyst_query: {
     description:
-      'Counts, lists, superlatives and attribute filters over records loaded by ENABLED layers — "how many flights over Texas", "biggest fire near LA", "ships headed to Oakland", "next rocket launch". complete:false means the count is a floor ("at least") and rankings cover the records examined; partial names unanswered layers. Items carry lat/lon for a follow-up fly_to_location. ok:false codes: LAYER_OFF (offer to enable), NOT_READY (loading), FOLLOW_UP_MISMATCH (ask again without followUp), UNKNOWN_FIELD/UNKNOWN_SCOPE/BAD_VALUE (retry with the allowed values).',
+      'Counts, lists, superlatives and attribute filters over records loaded by ENABLED layers — "how many flights over Texas", "biggest fire near LA", "ships headed to Oakland", "next rocket launch". complete:false means the count is a floor ("at least") and rankings cover the records examined; partial names unanswered layers. Items carry lat/lon for a follow-up fly_to_location. ok:false codes: LAYER_OFF (offer to enable), NOT_READY (loading), NEEDS_CLARIFICATION (ask which), FOLLOW_UP_MISMATCH (ask again without followUp), UNKNOWN_FIELD/UNKNOWN_SCOPE/BAD_VALUE (retry with the allowed values).',
     $position: 1,
     parameters: {
       properties: {
@@ -554,7 +593,7 @@ export const ACTION_DESCRIPTIONS = {
         },
         scope: {
           description:
-            'Always set it (see WHERE). view = a radius around the view centre ("in view", "nearby"); pointer = "around here/this" while pointing (radius at the cursor); region = "over Texas"; radius with center {lat, lon} = "near <place>"; anywhere = no place ("biggest anywhere", "today"). There is no drawn-area scope yet: say so rather than answering for the view.',
+            'Always set it (see WHERE). view = a radius around the view centre ("in view", "nearby"); pointer = "around here/this" while pointing (radius at the cursor); region = "over Texas"; radius with center {lat, lon} = "near <place>"; anywhere = no place ("biggest anywhere", "today"); area + areaId from resolve_area; drawn = "the area I drew"; annotation = "the area you outlined".',
           $position: 2,
           properties: {
             name: {

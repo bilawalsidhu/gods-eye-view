@@ -7,6 +7,7 @@ import {
   decodeRing,
   findAdminArea,
   findAdminAreaAt,
+  findAdminCandidates,
   normalizeAdminName,
   packLoads,
   parseAdminQuery,
@@ -247,6 +248,7 @@ test('geocoder-confirmed lookup: the named unit that contains the point', async 
     ),
     null,
   );
+  assert.deepEqual(await findAdminCandidates('Bagmati Province'), []);
   // A county the geocoder typed, named without the county word.
   const travis = await findAdminAreaAt(
     ['Travis', 'Travis County'],

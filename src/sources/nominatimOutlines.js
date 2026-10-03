@@ -124,6 +124,8 @@ export function createNominatimOutlineClient({
       const outline = {
         polygons,
         name: body.outline.name || null,
+        adminArea: body.outline.adminArea || null,
+        adminLevel: body.outline.adminLevel || null,
         class: body.outline.class || null,
         type: body.outline.type || null,
         osm: body.outline.osm || null,

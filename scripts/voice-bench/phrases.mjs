@@ -90,8 +90,11 @@ export const CORE_PHRASES = Object.freeze([
 
   // — annotations —
   { phrase: 'Annotate the Texas State Capitol and its grounds', expect: 'annotate_map', typedArgs: [where('annotate_map', (a) => (a.annotations || []).some((x) => x.type === 'area'))] },
-  { phrase: 'Outline the state of Texas', expect: 'annotate_map', typedArgs: [where('annotate_map', (a) => (a.annotations || []).some((x) => x.type === 'area'))] },
-  { phrase: 'Outline Lady Bird Lake', expect: 'annotate_map', typedArgs: [where('annotate_map', (a) => (a.annotations || []).some((x) => x.type === 'area'))] },
+  // A named boundary outlines through resolve_area (a reusable handle the
+  // user can count or search inside); annotate_map is for marks.
+  { phrase: 'Outline the state of Texas', expect: 'resolve_area', args: { draw: true }, typedArgs: [where('resolve_area', (a) => a.draw === true)] },
+  // A lake is a water footprint as much as a boundary: either tool draws it.
+  { phrase: 'Outline Lady Bird Lake', expect: { oneOf: ['annotate_map', 'resolve_area'] }, typedArgs: [(c) => c.name === 'resolve_area' || (c.name === 'annotate_map' && (c.args?.annotations || []).some((x) => x.type === 'area'))] },
   { phrase: 'Draw the walking route from the Capitol to Zilker Park', expect: 'annotate_map', typedArgs: [where('annotate_map', (a) => (a.annotations || []).some((x) => x.type === 'route' && (x.mode ?? 'walking') === 'walking'))] },
   { phrase: 'How far is the Eiffel Tower from the Louvre?', expect: 'annotate_map', typedArgs: [where('annotate_map', (a) => (a.annotations || []).some((x) => x.type === 'arrow'))] },
   { phrase: 'Clear the map', expect: 'clear_annotations' },
@@ -216,7 +219,7 @@ export const COVERAGE_PROBE = Object.freeze([
   },
   {
     id: 'recent-imagery',
-    v2: { supported: true, correct: [[call('set_layer_visibility', { layerId: 'recent-imagery', enabled: true })]] },
+    v2: { supported: true, correct: [[call('find_imagery')], [call('set_layer_visibility', { layerId: 'recent-imagery', enabled: true })]] },
     utterance: 'Show recent satellite imagery of this area',
     scene: 'Austin',
     expect: 'enable recent-imagery for current view (no tool today) — must NOT toggle satellites data layer or silently switch basemap',
@@ -247,13 +250,8 @@ export const COVERAGE_PROBE = Object.freeze([
   },
   {
     id: 'fires-in-drawn-area',
-    // There is no drawn-area scope yet; the prompt says to say so. Any count
-    // presented as inside the drawn area is a faked capability.
-    v2: {
-      supported: false,
-      correct: [],
-      hallucinated: [where('analyst_query', (a) => (a.layers || []).includes('local-firms'))],
-    },
+    // The drawn-area scope exists: a count must be scoped to it.
+    v2: { supported: true, correct: [[where('analyst_query', (a) => (a.layers || []).includes('local-firms') && ['drawn', 'annotation', 'area'].includes(a.scope?.kind))]] },
     utterance: 'Count the fires inside the area I drew',
     scene: 'Los Angeles, fires layer on, an area drawn around Angeles National Forest',
     expect: 'analyst_query local-firms scoped to the drawn polygon (no polygon scope today)',
@@ -545,14 +543,42 @@ export function dialogueResult(dialogue, toolName, turn) {
   return byTurn[turn] ?? null;
 }
 
-// ── New capabilities (point-and-ask, layer reach) ─────────────────────────
+// ── New capabilities (voice geometry, point-and-ask, layer reach) ─────────
 //
-// ROUTING_PHRASES is the qa-voice-routing table, so that harness runs exactly
-// its own table. The benchmark runs CAPABILITY_EXTRAS as the separate
-// `capability` suite so the core suite stays comparable across tool versions.
+// ROUTING_PHRASES is the qa-voice-routing table (core + geometry + place
+// search), so that harness runs exactly its own table. The benchmark runs
+// CAPABILITY_EXTRAS as the separate `capability` suite so the core suite
+// stays comparable across tool versions.
+
+/** Areas, drawn-area counts and imagery: offered in every session. */
+export const GEOMETRY_PHRASES = Object.freeze([
+  { phrase: 'Outline Bagmati province', expect: 'resolve_area', args: { query: 'bagmati', draw: true } },
+  { phrase: 'Outline Kathmandu district', expect: 'resolve_area', args: { query: 'kathmandu' } },
+  { phrase: 'Show me the border of Punjab', expect: 'resolve_area', args: { query: 'punjab' } },
+  { phrase: 'Draw an area around the Ferry Building in San Francisco', expect: 'resolve_area', args: { around: true } },
+  { phrase: 'Count the fires inside Bagmati province', expect: { oneOf: ['analyst_query', 'resolve_area'] } },
+  { phrase: 'How many flights are inside the area I drew?', expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => a.scope?.kind === 'drawn')] },
+  { phrase: 'How many ships are inside the area you just outlined?', expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => a.scope?.kind === 'annotation' || a.scope?.kind === 'area')] },
+  { phrase: 'Show me recent satellite imagery of this area', expect: 'find_imagery' },
+  { phrase: 'Find the latest cloud-free satellite image here', expect: 'find_imagery', typedArgs: [where('find_imagery', (a) => typeof a.maxCloudPct === 'number' && a.maxCloudPct <= 20)] },
+  { phrase: 'Get me recent imagery of Kathmandu', expect: { oneOf: ['find_imagery', 'resolve_area'] } },
+]);
+
+/**
+ * Bulk place search: osm_query is offered only when the server has an
+ * operator Overpass, so the routing harness skips these otherwise.
+ */
+export const OVERPASS_PHRASES = Object.freeze([
+  { phrase: 'Show me all the hospitals in Kathmandu', expect: { oneOf: ['resolve_area', 'osm_query'] }, requires: ['osm_query'] },
+  { phrase: 'Find the police stations in view', expect: 'osm_query', args: { what: 'police' }, requires: ['osm_query'] },
+]);
 
 /** The full qa-voice-routing table. */
-export const ROUTING_PHRASES = CORE_PHRASES;
+export const ROUTING_PHRASES = Object.freeze([
+  ...CORE_PHRASES,
+  ...GEOMETRY_PHRASES,
+  ...OVERPASS_PHRASES,
+]);
 
 // Pointer context items in the app's own format (src/voice/pointerContext.js
 // output), sent as an inert system item just before the user's words.
@@ -566,6 +592,7 @@ const GROUND_POINTER = {
   ground: { lat: 30.2849, lon: -97.7341 }, screen: { x: 0.427, y: 0.547 },
 };
 const isPointer = (v) => String(v || '').toLowerCase() === 'pointer';
+const bagmati = { ok: true, areaId: 'area-1', name: 'Bagmati Province', level: 'admin1', drawn: true, say: 'Bagmati Province — about 20,000 km²' };
 const flightsInView = {
   ok: true,
   count: 3,
@@ -590,6 +617,14 @@ export const CAPABILITY_EXTRAS = Object.freeze([
   { phrase: 'Turn on the weather radar', expect: 'set_layer_visibility', typedArgs: [where('set_layer_visibility', (a) => a.layerId === 'weather-radar' && a.enabled === true)] },
   { phrase: 'Are there any hurricanes right now?', expect: { oneOf: ['analyst_query', 'set_layer_visibility'] }, typedArgs: [(c) => (c.args?.layers || []).includes('weather-cyclones') || c.args?.layerId === 'weather-cyclones'] },
   { phrase: 'Which bus is closest to the middle of the screen?', expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('transit'))] },
+  { phrase: 'Show recent satellite imagery here', context: GROUND_POINTER, expect: { oneOf: ['find_imagery', 'set_layer_visibility'] }, typedArgs: [(c) => c.name === 'find_imagery' || (c.name === 'set_layer_visibility' && c.args?.layerId === 'recent-imagery')] },
+  {
+    id: 'bagmati-then-fires',
+    turns: ['Outline Bagmati province', 'Count the fires inside it'],
+    results: { resolve_area: [bagmati] },
+    first: { expect: 'resolve_area' },
+    second: { expect: 'analyst_query', typedArgs: [where('analyst_query', (a) => (a.layers || []).includes('local-firms') && a.scope?.kind === 'area' && a.scope?.areaId === 'area-1')] },
+  },
   {
     id: 'flights-then-second',
     turns: ['How many flights are in view?', 'Track the second one'],

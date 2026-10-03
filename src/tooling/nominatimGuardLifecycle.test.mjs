@@ -451,11 +451,29 @@ const boundary = (extra) => ({
 });
 
 test('administrative boundaries must be at the asked level', () => {
-  const county = boundary({ name: 'Travis County', addresstype: 'county', place_rank: 12 });
-  const city = boundary({ name: 'Austin', addresstype: 'city', place_rank: 16 });
-  const state = boundary({ name: 'Texas', addresstype: 'state', place_rank: 8 });
-  assert.equal(selectOutlineResult([state], { kind: 'city', query: 'Texas' }).outline, null);
-  assert.equal(selectOutlineResult([city], { kind: 'admin', query: 'Austin' }).outline, null);
+  const county = boundary({
+    name: 'Travis County',
+    addresstype: 'county',
+    place_rank: 12,
+  });
+  const city = boundary({
+    name: 'Austin',
+    addresstype: 'city',
+    place_rank: 16,
+  });
+  const state = boundary({
+    name: 'Texas',
+    addresstype: 'state',
+    place_rank: 8,
+  });
+  assert.equal(
+    selectOutlineResult([state], { kind: 'city', query: 'Texas' }).outline,
+    null,
+  );
+  assert.equal(
+    selectOutlineResult([city], { kind: 'admin', query: 'Austin' }).outline,
+    null,
+  );
   assert.equal(
     selectOutlineResult(
       [boundary({ name: 'Travis', addresstype: 'county', place_rank: 12 })],
@@ -470,12 +488,30 @@ test('administrative boundaries must be at the asked level', () => {
     ).outline,
     null,
   );
-  assert.equal(selectOutlineResult([state], { kind: 'neighborhood', query: 'Texas' }).outline, null);
-  assert.ok(selectOutlineResult([county], { kind: 'admin', query: 'Travis County' }).outline);
-  assert.ok(selectOutlineResult([boundary({ name: 'Somewhere', place_rank: 16 })], { kind: 'city', query: 'Somewhere' }).outline);
+  assert.equal(
+    selectOutlineResult([state], { kind: 'neighborhood', query: 'Texas' })
+      .outline,
+    null,
+  );
+  assert.ok(
+    selectOutlineResult([county], { kind: 'admin', query: 'Travis County' })
+      .outline,
+  );
+  assert.ok(
+    selectOutlineResult([boundary({ name: 'Somewhere', place_rank: 16 })], {
+      kind: 'city',
+      query: 'Somewhere',
+    }).outline,
+  );
   assert.ok(
     selectOutlineResult(
-      [boundary({ name: 'Somewhere', addresstype: 'locality', place_rank: 16 })],
+      [
+        boundary({
+          name: 'Somewhere',
+          addresstype: 'locality',
+          place_rank: 16,
+        }),
+      ],
       { kind: 'city', query: 'Somewhere' },
     ).outline,
   );
@@ -502,17 +538,21 @@ test('admin identity comes only from unambiguous evidence on the selected row', 
     ['County of Travis', 'county', 'admin2'],
     ['Kathmandu District', 'state_district', 'admin2'],
   ]) {
-    const { outline } = selectOutlineResult(
-      [boundary({ name, addresstype })],
-      { kind: 'admin', query: name },
-    );
+    const { outline } = selectOutlineResult([boundary({ name, addresstype })], {
+      kind: 'admin',
+      query: name,
+    });
     assert.equal(outline.adminArea, name);
     assert.equal(outline.adminLevel, adminLevel);
   }
 
   for (const row of [
     boundary({ name: 'Northern Region', addresstype: 'region', place_rank: 8 }),
-    boundary({ name: 'Central District', addresstype: 'district', place_rank: 10 }),
+    boundary({
+      name: 'Central District',
+      addresstype: 'district',
+      place_rank: 10,
+    }),
     boundary({ name: 'Mystery Province', place_rank: 8 }),
     boundary({ name: 'Example State', addresstype: 'county' }),
     boundary({ name: 'County of Example', addresstype: 'state' }),

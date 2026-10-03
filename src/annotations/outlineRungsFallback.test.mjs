@@ -104,6 +104,48 @@ test('"around the Capitol grounds" is still a grounds ask', async () => {
   assert.equal(lawn.outlineSource, 'openfreemap');
 });
 
+test('Nominatim administrative identity survives the outline rung', async () => {
+  const boundary = {
+    polygons: [
+      [
+        [
+          [84.4, 26.9],
+          [86.6, 26.9],
+          [86.6, 28.4],
+          [84.4, 28.4],
+          [84.4, 26.9],
+        ],
+      ],
+    ],
+    class: 'boundary',
+    type: 'administrative',
+    adminArea: 'Bagmati Province',
+    adminLevel: 'admin1',
+  };
+  const { rungs } = setup(boundary);
+  const result = await rungs.resolve(
+    ctx({
+      scope: 'state',
+      target: 'Bagmati Province',
+      matchName: 'Bagmati Province',
+      lat: 27.7,
+      lon: 85.3,
+      view: { lat: 27.7, lon: 85.3 },
+    }),
+    {
+      base: async () => UNAVAILABLE,
+      finish: (fp) => ({
+        ring: fp.ring,
+        footprintKind: fp.kind,
+        adminArea: fp.adminArea,
+        adminLevel: fp.adminLevel,
+      }),
+    },
+  );
+  assert.equal(result.adminArea, 'Bagmati Province');
+  assert.equal(result.adminLevel, 'admin1');
+});
+
 test('grounds are found around the named building when the anchor is off the lawn', async () => {
   // A place-search anchor ~250 m from the dome, outside the Capitol lawn.
   const offLawn = { lat: 30.27265, lon: -97.73925 };

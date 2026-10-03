@@ -920,6 +920,51 @@ test('Radio handoff waits for response.done so later multi-intent tools execute 
   ]);
 });
 
+test('Realtime gives analyst siblings one authority group and a newer response a new group', async () => {
+  const groups = [];
+  const ui = {
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
+    status: { textContent: '' },
+    detail: { textContent: '', title: '' },
+    errorDetail: { textContent: '' },
+  };
+  const controller = new GevRealtimeController({
+    ui,
+    runner: async (name, _args, options) => {
+      groups.push([name, options.authorityGroup]);
+      return { ok: true, action: name, count: 0, items: [] };
+    },
+  });
+  controller.debugLog = () => {};
+  controller.sendVisualContextIfUseful = async () => false;
+  controller.dc = { readyState: 'open', send() {}, close() {} };
+  const event = (payload) => ({ data: JSON.stringify(payload) });
+  for (const [responseId, callId] of [
+    ['response-1', 'analyst-a'],
+    ['response-1', 'analyst-b'],
+    ['response-2', 'analyst-c'],
+  ]) {
+    await controller.handleRealtimeEvent(
+      event({
+        type: 'response.function_call_arguments.done',
+        response_id: responseId,
+        call_id: callId,
+        name: 'analyst_query',
+        arguments: '{"layers":["flights"],"scope":{"kind":"anywhere"}}',
+      }),
+    );
+  }
+  assert.deepEqual(groups, [
+    ['analyst_query', 'response-1'],
+    ['analyst_query', 'response-1'],
+    ['analyst_query', 'response-2'],
+  ]);
+});
+
 test('Radio playback failure leaves voice connected and speaks a correction', async () => {
   const sent = [];
   const order = [];

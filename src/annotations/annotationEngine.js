@@ -259,6 +259,8 @@ export function createAnnotationEngine({
    * @param {boolean} [opts.clearPrevious]
    * @param {boolean} [opts.persist]  Keep until cleared (default true).
    * @param {boolean} [opts.flyTo]    Frame the first resolved annotation.
+   * @param {AbortSignal} [opts.signal] Caller lifetime for this mutation.
+   * @param {() => boolean} [opts.isCurrent] Whether the caller still owns the board mutation.
    * @returns {Promise<{ok, drawn, failed, ids, results}>}
    */
   async function annotate(requests, opts = {}) {
@@ -279,9 +281,15 @@ export function createAnnotationEngine({
     const persist = opts.persist !== false;
     // Per-call cancellation: bumped/aborted by any later clear() or destroy().
     const controller = new AbortController();
+    const abortFromCaller = () => controller.abort(opts.signal?.reason);
+    opts.signal?.addEventListener?.('abort', abortFromCaller, { once: true });
+    if (opts.signal?.aborted) abortFromCaller();
     retainController(controller);
     const myGen = generation;
-    const superseded = () => myGen !== generation || controller.signal.aborted;
+    const superseded = () =>
+      myGen !== generation ||
+      controller.signal.aborted ||
+      (typeof opts.isCurrent === 'function' && !opts.isCurrent());
 
     const results = [];
     const ids = [];
@@ -449,6 +457,7 @@ export function createAnnotationEngine({
         }
       }
     } finally {
+      opts.signal?.removeEventListener?.('abort', abortFromCaller);
       releaseController(controller);
     }
 
@@ -952,6 +961,18 @@ export function createAnnotationEngine({
       // Every part with its holes ([outer, ...holes][]), when the outline has
       // more than the main ring (Hawaii's islands, Berlin inside Brandenburg).
       polygons: resolved.polygons || null,
+      // A voice area handle's id: counting reads the handle's full geometry,
+      // never this drawing (see voice/areaActions.js).
+      areaId:
+        typeof spec?.areaId === 'string' ? spec.areaId.slice(0, 120) : null,
+      // Who made the outline: the draw tool, a voice area handle, or a voice
+      // annotation resolved from a name.
+      origin:
+        spec?.manual === true
+          ? spec.origin === 'area'
+            ? 'area'
+            : 'drawn'
+          : 'voice',
       footprintKind: resolved.footprintKind || null, // 'building' | 'area'
       buildingHeight: resolved.buildingHeight || null, // meters, for extruded volume
       synthesized: Boolean(resolved.synthesized), // approximate buffered area → dashed render
@@ -1128,6 +1149,12 @@ export function createAnnotationEngine({
     },
     fadeOutAll,
     count: () => annotations.size,
+    /**
+     * The board generation: advanced by every clear. A caller that resolves
+     * something before drawing captures it first and draws only while it is
+     * unchanged, so a clear during a slow lookup is never undone.
+     */
+    generation: () => generation,
     list: () => Array.from(annotations.values()),
 
     /**
@@ -1500,11 +1527,38 @@ function isManualSpec(spec, type) {
   if (!spec || spec.manual !== true) return false;
   if (type === 'route')
     return Array.isArray(spec.path) && spec.path.length >= 2;
-  if (type === 'area') return Array.isArray(spec.ring) && spec.ring.length >= 3;
+  if (type === 'area')
+    return (
+      (Array.isArray(spec.ring) && spec.ring.length >= 3) ||
+      (spec.origin === 'area' && Array.isArray(spec.polygons))
+    );
   return (
     Number.isFinite(Number(spec.latitude)) &&
     Number.isFinite(Number(spec.longitude))
   );
+}
+
+/**
+ * Parts of a voice area handle, `[[outer, ...holes], …]` of [lon, lat] pairs.
+ * Longitudes may run to ±540 (a part unwrapped across the antimeridian draws
+ * as one shape). Null when no part has a usable outer ring.
+ */
+function areaPolygons(list) {
+  const ringOf = (ring) =>
+    (Array.isArray(ring) ? ring : []).filter(
+      (p) =>
+        Array.isArray(p) &&
+        Number.isFinite(p[0]) &&
+        Number.isFinite(p[1]) &&
+        Math.abs(p[0]) <= 540 &&
+        Math.abs(p[1]) <= 90,
+    );
+  const polygons = (Array.isArray(list) ? list : [])
+    .slice(0, 64)
+    .map((rings) => (Array.isArray(rings) ? rings.map(ringOf) : []))
+    .filter((rings) => rings[0]?.length >= 3)
+    .map(([outer, ...holes]) => [outer, ...holes.filter((h) => h.length >= 3)]);
+  return polygons.length ? polygons : null;
 }
 
 /** [lon, lat] pairs or {lon, lat} objects → [lon, lat] pairs, invalid entries dropped. */
@@ -1553,7 +1607,9 @@ function resolveManualSpec(spec, type, viewer) {
     };
   }
   if (type === 'area') {
-    const ring = manualPairs(spec.ring);
+    const polygons =
+      spec.origin === 'area' ? areaPolygons(spec.polygons) : null;
+    const ring = polygons ? polygons[0][0] : manualPairs(spec.ring);
     if (ring.length < 3)
       throw new Error('a drawn area needs at least 3 points');
     // Averaged through ringCentroid, which unwraps longitudes first: a ring
@@ -1570,9 +1626,11 @@ function resolveManualSpec(spec, type, viewer) {
       lat,
       height: sampleGroundHeight(viewer, lon, lat),
       ring,
+      ...(polygons ? { polygons } : {}),
       footprintKind: 'area',
       buildingHeight: null,
-      synthesized: false,
+      // An approximate area (a buffer around a landmark) draws dashed.
+      synthesized: spec.approximate === true,
       source: 'manual',
     };
   }

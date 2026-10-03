@@ -281,6 +281,10 @@ test('shared decoded tiles are isolated from consumer mutation', async () => {
   secondResult.tiles[0][0].name = 'second mutation';
   secondResult.tiles[0][0].coordinates[0][0] = 1;
 
+  const secondCachedResult = await second.fetchBounds(box, { zoom: 14, tiles });
+  assert.equal(secondCachedResult.tiles[0][0].name, 'Congress Avenue');
+  assert.equal(secondCachedResult.tiles[0][0].coordinates[0][0], -97);
+
   const thirdResult = await third.fetchBounds(box, { zoom: 14, tiles });
   assert.equal(thirdResult.tiles[0][0].name, 'Congress Avenue');
   assert.equal(thirdResult.tiles[0][0].coordinates[0][0], -97);
@@ -334,6 +338,12 @@ test('one source isolates in-flight and completed cache results from consumer mu
   const cachedResult = await source.fetchBounds(box, { zoom: 14, tiles });
   assert.equal(cachedResult.tiles[0][0].name, 'Congress Avenue');
   assert.equal(cachedResult.tiles[0][0].coordinates[0][0], -97);
+
+  cachedResult.tiles[0][0].name = 'cached mutation';
+  cachedResult.tiles[0][0].coordinates[0][0] = 2;
+  const revisitedResult = await source.fetchBounds(box, { zoom: 14, tiles });
+  assert.equal(revisitedResult.tiles[0][0].name, 'Congress Avenue');
+  assert.equal(revisitedResult.tiles[0][0].coordinates[0][0], -97);
   assert.equal(requests, 1);
   assert.equal(decodes, 1);
 });

@@ -247,6 +247,8 @@ export function createOutlineRungs({
       synthesized: false,
       outlineSource: 'nominatim',
       outlineName: outline.name,
+      adminArea: outline.adminArea || null,
+      adminLevel: outline.adminLevel || null,
     };
   }
 

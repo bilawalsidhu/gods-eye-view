@@ -39,8 +39,13 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 29);
+  assert.equal(first.layers.length, 30);
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
+  assert.deepEqual(
+    first.metadata.find(({ id }) => id === 'osm-places'),
+    { id: 'osm-places', disposition: 'local-only' },
+    'voice search results never enter share links or stored state',
+  );
   assert.deepEqual(
     first.metadata.find(({ id }) => id === 'local-adsb'),
     { id: 'local-adsb', disposition: 'local-only' },

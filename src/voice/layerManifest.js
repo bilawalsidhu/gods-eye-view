@@ -349,6 +349,23 @@ const layers = [
     noQuery: 'cable records are not loaded for queries',
   },
   {
+    // Results of the last osm_query ("hospitals in Kathmandu").
+    id: 'osm-places',
+    aliases: ['osm places', 'map search results', 'search results'],
+    context: false,
+    query: {
+      fields: {
+        name: ['t'],
+        kind: ['t'],
+        operator: ['t'],
+        emergency: ['t'],
+        wheelchair: ['t'],
+        openingHours: ['t'],
+        city: ['t'],
+      },
+    },
+  },
+  {
     // Global Context owns this layer; voice reaches it through
     // set_context_mode, never a bare toggle.
     id: 'military-awareness',

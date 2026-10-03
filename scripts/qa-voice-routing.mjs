@@ -27,6 +27,7 @@
  *   node scripts/qa-voice-routing.mjs --layer deixis --budget 12      # pointer_context routing (model turns)
  *   node scripts/qa-voice-routing.mjs --layer deixis-live --url ...   # in-app text turns (model turns)
  *   node scripts/qa-voice-routing.mjs --layer behavior --behavior outlines   # bundled outlines only
+ *   node scripts/qa-voice-routing.mjs --layer behavior --behavior geometry   # areas, drawn counts, imagery
  *   node scripts/qa-voice-routing.mjs --layer behavior --outlines [--headful] [--shots qa-shots/pr2] [--only "Paris|Stanford"]
  *     # six-country outline table: rung, parts, cold/warm latency, Nominatim use
  *
@@ -70,7 +71,7 @@ const ONLY = getOpt('--only', null); // substring filter on phrase text
 const DEIXIS_ONLY = process.argv.includes('--deixis-only'); // behavior: point-and-ask block only
 const BEHAVIOR = process.argv.includes('--outlines')
   ? 'acceptance'
-  : getOpt('--behavior', 'all'); // all | outlines | acceptance
+  : getOpt('--behavior', 'all'); // all | outlines | acceptance | geometry
 const HEADFUL = process.argv.includes('--headful'); // real GPU, visible window
 const SHOT_DIR = getOpt('--shots', null); // evidence screenshots
 const SHOTS_DIR = SHOT_DIR;
@@ -105,7 +106,9 @@ async function mintSession() {
   const value = body?.value || body?.client_secret?.value;
   const model = body?.session?.model || 'gpt-realtime';
   if (!value) throw new Error(`token mint returned no client secret: ${JSON.stringify(body).slice(0, 160)}`);
-  return { value, model };
+  // The tools this server offered (osm_query only with an operator Overpass).
+  const tools = new Set((body?.session?.tools || []).map((tool) => tool?.name).filter(Boolean));
+  return { value, model, tools };
 }
 
 /** One Realtime WS session that can run several text turns sequentially. */
@@ -227,8 +230,10 @@ async function runRoutingLayer() {
     }
     const batch = list.slice(i, i + PHRASES_PER_SESSION);
     let session;
+    let offered = new Set();
     try {
-      const { value, model } = await mintSession();
+      const { value, model, tools } = await mintSession();
+      offered = tools;
       session = new RoutingSession(value, model, evidence);
       await session.connect();
     } catch (e) {
@@ -237,6 +242,11 @@ async function runRoutingLayer() {
     }
     for (const p of batch) {
       if (turnsUsed >= TURN_BUDGET) { skipped(`route: "${p.phrase}"`, 'turn budget exhausted'); continue; }
+      const missing = (p.requires || []).filter((name) => !offered.has(name));
+      if (missing.length) {
+        skipped(`route: "${p.phrase}"`, `${missing.join(', ')} not offered (no configured Overpass)`);
+        continue;
+      }
       turnsUsed += 1;
       let calls = [];
       try {
@@ -811,8 +821,7 @@ async function runBehaviorLayer() {
     // The point-and-ask block and the outline table skip the first-run
     // launcher so their evidence screenshots show the map.
     const behaviorUrl = new URL(APP_URL);
-    if (DEIXIS_ONLY || BEHAVIOR === 'acceptance')
-      behaviorUrl.searchParams.set('welcome', '0');
+    if (DEIXIS_ONLY || BEHAVIOR === 'acceptance' || BEHAVIOR === 'geometry') behaviorUrl.searchParams.set('welcome', '0');
     await page.goto(behaviorUrl.href, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
       () => window.__godsEyeView?.viewer && window.__gevVoiceCommands?.runner && window.__gevAnnotations,
@@ -839,6 +848,10 @@ async function runBehaviorLayer() {
     }
     if (BEHAVIOR === 'acceptance') {
       await runOutlineAcceptance({ page, run, settle, requests });
+      return;
+    }
+    if (BEHAVIOR === 'geometry') {
+      await runGeometryScenarios({ page, run, settle, overpassRequests });
       return;
     }
 
@@ -1518,6 +1531,8 @@ async function runBehaviorLayer() {
       `ok=${gated?.ok} error=${String(gated?.error || '').slice(0, 90)} active=${cockpitAfterGate}`);
 
     await runBundledOutlineScenarios({ page, run, settle, requests, resolverLog, packTimes });
+    // Voice geometry last: it moves the camera and turns layers off.
+    await runGeometryScenarios({ page, run, settle, overpassRequests });
 
     const shotDir = path.join(ROOT, 'qa-shots');
     fs.mkdirSync(shotDir, { recursive: true });
@@ -1655,6 +1670,193 @@ const OUTLINE_ASKS = [
   ['building', 'this building', 30.27472, -97.74035, 1200,
     { entityKind: 'building', latitude: 30.27472, longitude: -97.74035 }, 'building'],
 ].map(([group, target, lat, lon, height, extra = {}, shot = null]) => ({ group, target, lat, lon, height, extra, shot }));
+
+/**
+ * Voice geometry, runner-driven: reusable areas, drawn-area counts, a
+ * landmark area and recent imagery, all without a default Overpass request.
+ * Public Nominatim use is read from the server's daily count.
+ */
+async function runGeometryScenarios({ page, run, settle, overpassRequests }) {
+  const shotDir = path.join(ROOT, 'qa-shots', 'pr-geometry');
+  fs.mkdirSync(shotDir, { recursive: true });
+  const shot = (name) => page.screenshot({ path: path.join(shotDir, `${name}.png`) }).catch(() => {});
+  const nominatimStart = nominatimCount();
+  const overpassStart = overpassRequests.length;
+  const teleport = (lat, lon, height, pitch = -90) => page.evaluate(({ lat, lon, height, pitch }) => {
+    const { viewer } = window.__godsEyeView;
+    viewer.camera.cancelFlight();
+    viewer.camera.setView({
+      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+        longitude: (lon * Math.PI) / 180, latitude: (lat * Math.PI) / 180, height,
+      }),
+      orientation: { heading: 0, pitch: (pitch * Math.PI) / 180, roll: 0 },
+    });
+  }, { lat, lon, height, pitch });
+  const timings = {};
+
+  // (G1) "Outline Bagmati, then count fires inside it".
+  await teleport(27.7, 85.4, 400_000);
+  await settle(1500);
+  let t0 = Date.now();
+  const bagmati = await run('resolve_area', { query: 'Bagmati province', draw: true, flyTo: false });
+  timings.bagmatiMs = Date.now() - t0;
+  const bagmatiRefused = [
+    'AREA_IDENTITY_MISMATCH',
+    'AREA_IDENTITY_UNVERIFIED',
+  ].includes(bagmati?.code);
+  const bagmatiVerified =
+    bagmati?.ok === true &&
+    bagmati?.drawn === true &&
+    bagmati?.level === 'admin1' &&
+    bagmati?.name === 'Bagmati Province' &&
+    bagmati?.sourceIdentity === 'Bagmati Province';
+  report(
+    bagmatiVerified || bagmatiRefused,
+    'geometry: "outline Bagmati province" uses verified current identity or refuses honestly',
+    `areaId=${bagmati?.areaId} name=${bagmati?.name} sourceIdentity=${bagmati?.sourceIdentity} source=${bagmati?.source} km2=${bagmati?.areaKm2} ms=${timings.bagmatiMs} code=${bagmati?.code || ''} ${bagmati?.error || ''}`,
+  );
+  await settle(3000);
+  await shot('bagmati-outline');
+  t0 = Date.now();
+  let r = await run('resolve_area', { query: 'Bagmati province' });
+  report(
+    bagmatiVerified
+      ? r?.ok === true &&
+          r?.cached === true &&
+          r?.ms < 300 &&
+          r?.sourceIdentity === 'Bagmati Province'
+      : bagmatiRefused &&
+          r?.ok === false &&
+          r?.code === bagmati?.code &&
+          !r?.areaId,
+    'geometry: a repeated Bagmati request reuses only verified identity, never refused geometry',
+    `ok=${r?.ok} code=${r?.code || ''} areaId=${r?.areaId || ''} sourceIdentity=${r?.sourceIdentity || ''} cached=${r?.cached} ms=${r?.ms} roundTrip=${Date.now() - t0}`,
+  );
+  // A city no bundled pack holds: the guarded Nominatim outline route.
+  t0 = Date.now();
+  const kathmandu = await run('resolve_area', { query: 'Kathmandu', draw: true, flyTo: false });
+  timings.kathmanduMs = Date.now() - t0;
+  report(kathmandu?.ok === true && kathmandu?.drawn === true && kathmandu?.source === 'osm' && kathmandu?.areaKm2 > 10 && kathmandu?.areaKm2 < 2000,
+    'geometry: "outline Kathmandu" comes from the guarded Nominatim outline',
+    `areaId=${kathmandu?.areaId} source=${kathmandu?.source} km2=${kathmandu?.areaKm2} parts=${kathmandu?.parts} ms=${timings.kathmanduMs} err=${kathmandu?.code || ''} ${kathmandu?.error || ''}`);
+  await settle(2500);
+  await shot('kathmandu-outline');
+  r = await run('resolve_area', { query: 'Georgia' });
+  report(r?.ok === false && r?.needsClarification === true && (r?.candidates || []).length >= 2,
+    'geometry: an ambiguous area asks with candidates instead of guessing',
+    `candidates=${(r?.candidates || []).map((c) => `${c.name}/${c.level}/${c.country || ''}`).join(', ')}`,
+  );
+  if (bagmatiVerified) {
+    await run('set_layer_visibility', {
+      layerId: 'local-firms',
+      enabled: true,
+    });
+    let fires = null;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      fires = await run('analyst_query', {
+        layers: ['local-firms'],
+        scope: { kind: 'area', areaId: bagmati.areaId },
+      });
+      if (fires?.ok || !['NOT_READY', 'LAYER_OFF'].includes(fires?.code)) break;
+      await settle(4000);
+    }
+    if (fires?.code === 'FEED_UNAVAILABLE') {
+      skipped(
+        'geometry: "count fires inside it" counts inside the verified Bagmati area',
+        `fires feed unavailable: ${fires?.error}`,
+      );
+    } else {
+      report(
+        fires?.ok === true &&
+          Number.isFinite(fires?.count) &&
+          /Bagmati/i.test(fires?.scopeLabel || '') &&
+          fires?.coverage?.scope === `area:${bagmati.areaId}`,
+        'geometry: "count fires inside it" counts inside the verified Bagmati area',
+        `count=${fires?.count} scopeLabel="${fires?.scopeLabel}" scope=${fires?.coverage?.scope} err=${fires?.error || ''}`,
+      );
+    }
+    await run('set_layer_visibility', {
+      layerId: 'local-firms',
+      enabled: false,
+    });
+  } else {
+    skipped(
+      'geometry: fire count waits for a verified Bagmati area',
+      `boundary refused with ${bagmati?.code || 'unknown error'}`,
+    );
+  }
+
+  // (G2) "Count flights inside the area I drew": the draw tool's own spec.
+  await teleport(30.27, -97.74, 600_000);
+  await run('set_layer_visibility', { layerId: 'flights', enabled: true });
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    r = await run('analyst_query', { layers: ['flights'], scope: { kind: 'anywhere' } });
+    if (r?.ok && r.count > 0) break;
+    await settle(5000);
+  }
+  const drawnBox = [[-99, 29], [-96.5, 29], [-96.5, 31.5], [-99, 31.5], [-99, 29]];
+  await page.evaluate((ring) => window.__gevAnnotations.annotate([{ type: 'area', manual: true, ring, label: 'QA drawn box' }]), drawnBox);
+  r = await run('analyst_query', { layers: ['flights'], scope: { kind: 'drawn' } });
+  const loaded = await run('analyst_query', { layers: ['flights'], scope: { kind: 'anywhere' } });
+  report(r?.ok === true && r?.scopeLabel === 'inside QA drawn box' && Number.isFinite(r?.count) && r.count <= (loaded?.count ?? Infinity),
+    'geometry: "count flights inside the area I drew" counts inside the drawn outline',
+    `count=${r?.count} of ${loaded?.count} loaded scopeLabel="${r?.scopeLabel}" err=${r?.error || ''}`);
+  await settle(2500);
+  await shot('drawn-area-count');
+  // Thousands of aircraft starve a SwiftShader page; the landmark lookup
+  // below has a 10 s budget.
+  await run('set_layer_visibility', { layerId: 'flights', enabled: false });
+  await run('clear_annotations', {});
+
+  // (G3) "Draw an area around the Ferry Building": the enclosing mapped area
+  // (Nominatim grounds, then the OpenFreeMap area holding it), else an
+  // approximate buffer — either way a drawn, reusable area.
+  await teleport(37.7955, -122.3937, 2500, -60);
+  await settle(1500);
+  t0 = Date.now();
+  const ferry = await run('resolve_area', { query: 'Ferry Building, San Francisco', around: true, flyTo: false });
+  timings.ferryMs = Date.now() - t0;
+  const ferryNear = Array.isArray(ferry?.bbox) && Math.abs(ferry.bbox[1] - 37.795) < 0.05 && Math.abs(ferry.bbox[0] + 122.394) < 0.05;
+  report(ferry?.ok === true && ferry?.drawn === true && ferryNear && (ferry?.approximate === true || ['osm', 'openfreemap'].includes(ferry?.source)),
+    'geometry: "draw an area around the Ferry Building" draws a reusable landmark area',
+    `areaId=${ferry?.areaId} source=${ferry?.source} approximate=${ferry?.approximate} basis=${ferry?.display?.basis} km2=${ferry?.areaKm2} ms=${timings.ferryMs} err=${ferry?.error || ''}`);
+  await settle(3000);
+  await shot('ferry-building-area');
+
+  // (G4) "Find recent imagery of this area": the Recent Imagery catalog for
+  // that area, the best acquisition pinned through the layer itself.
+  t0 = Date.now();
+  r = await run('find_imagery', { areaId: ferry?.areaId || 'missing' });
+  timings.imageryMs = Date.now() - t0;
+  const pinned = await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('recent-imagery')?.module?.getSnapshot?.().pins?.a?.key || null);
+  if (r?.code === 'CATALOG_UNAVAILABLE' || r?.code === 'SEARCH_TIMEOUT') {
+    skipped('geometry: "find recent imagery of this area" pins the best acquisition', `catalog: ${r?.error}`);
+  } else {
+    report(r?.ok === true && (r?.count === 0 ? r?.shown === null : Boolean(r?.shown?.date) && String(pinned).endsWith(`:${r.shown.date}`)),
+      'geometry: "find recent imagery of this area" pins the best acquisition',
+      `count=${r?.count} shown=${JSON.stringify(r?.shown)} pinned=${pinned} ms=${timings.imageryMs} err=${r?.error || ''}`);
+  }
+  await settle(4000);
+  await shot('recent-imagery-area');
+  await run('set_layer_visibility', { layerId: 'recent-imagery', enabled: false });
+
+  // (G5) Bulk place search without an operator Overpass: a plain refusal.
+  const configured = await page.evaluate(() => fetch('/api/overpass/status').then((res) => res.json()).catch(() => null));
+  r = await run('osm_query', { what: 'hospitals' });
+  if (configured?.configured) {
+    skipped('geometry: place search without an operator Overpass is refused', 'this server has OVERPASS_UPSTREAMS');
+  } else {
+    report(r?.ok === false && r?.code === 'OVERPASS_NOT_CONFIGURED',
+      'geometry: place search without an operator Overpass is refused', `code=${r?.code} error=${r?.error}`);
+  }
+
+  const nominatimUsed = nominatimCount() - nominatimStart;
+  const overpass = overpassRequests.slice(overpassStart);
+  console.log(`  geometry timings: ${JSON.stringify(timings)}; public Nominatim requests: ${nominatimUsed}`);
+  report(overpass.length === 0, 'geometry: no Overpass request', overpass.slice(0, 3).join(' | ') || 'none');
+  report(nominatimUsed <= 15, 'geometry: public Nominatim requests within budget (15)', `used=${nominatimUsed}`);
+  await run('clear_annotations', {});
+}
 
 const NOMINATIM_STATE = path.join(ROOT, '.gev-cache', 'nominatim', 'state.json');
 function nominatimCount() {

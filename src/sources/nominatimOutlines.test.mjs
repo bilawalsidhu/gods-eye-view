@@ -29,14 +29,31 @@ test('an accepted outline comes back with its polygons and is remembered', async
   const { calls, lookup } = client(() =>
     reply(200, {
       status: 'OK',
-      outline: { name: 'Paris', class: 'boundary', type: 'administrative', polygons: [[ring]] },
+      outline: {
+        name: 'Bagmati Province',
+        adminArea: 'Bagmati Province',
+        adminLevel: 'admin1',
+        class: 'boundary',
+        type: 'administrative',
+        polygons: [[ring]],
+      },
     }),
   );
-  const ask = { query: 'Paris', kind: 'city', lat: 48.85, lon: 2.35 };
+  const ask = {
+    query: 'Bagmati Province',
+    kind: 'admin',
+    lat: 27.72,
+    lon: 85.32,
+  };
   const outline = await lookup(ask);
   assert.deepEqual(outline.polygons, [[ring]]);
   assert.equal(outline.class, 'boundary');
-  assert.match(calls[0], /^\/api\/geocode\/outline\?q=Paris&kind=city&lat=48\.850&lon=2\.350$/);
+  assert.equal(outline.adminArea, 'Bagmati Province');
+  assert.equal(outline.adminLevel, 'admin1');
+  assert.match(
+    calls[0],
+    /^\/api\/geocode\/outline\?q=Bagmati\+Province&kind=admin&lat=27\.720&lon=85\.320$/,
+  );
   await lookup(ask);
   assert.equal(calls.length, 1, 'one request per ask in a session');
 });

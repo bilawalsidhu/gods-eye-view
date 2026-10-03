@@ -17,7 +17,7 @@ import {
   call,
 } from '../../scripts/voice-bench/grade.mjs';
 import {
-  CORE_PHRASES, COVERAGE_PROBE, DIALOGUES, ROUTING_PHRASES, CAPABILITY_EXTRAS,
+  CORE_PHRASES, COVERAGE_PROBE, DIALOGUES, ROUTING_PHRASES, GEOMETRY_PHRASES, OVERPASS_PHRASES, CAPABILITY_EXTRAS,
   dialogueResult, coverageRubric,
 } from '../../scripts/voice-bench/phrases.mjs';
 import { stubResult } from '../../scripts/voice-bench/stub.mjs';
@@ -276,10 +276,11 @@ test('coverage v2 grades the same turn against the current tool surface', () => 
   assert.equal(COVERAGE_PROBE.every((c) => c.v2 && typeof c.v2.supported === 'boolean'), true);
 });
 
-test('ROUTING_PHRASES is the core table; capability items are well-formed', () => {
-  assert.equal(ROUTING_PHRASES, CORE_PHRASES);
+test('ROUTING_PHRASES is the core table plus geometry and place search; capability items are well-formed', () => {
+  assert.deepEqual(ROUTING_PHRASES, [...CORE_PHRASES, ...GEOMETRY_PHRASES, ...OVERPASS_PHRASES]);
+  assert.ok(OVERPASS_PHRASES.every((p) => p.requires?.includes('osm_query')), 'place search is gated');
   const names = new Set(GEV_REALTIME_TOOLS.map((t) => t.name));
-  for (const p of CAPABILITY_EXTRAS.filter((c) => !c.turns)) {
+  for (const p of [...GEOMETRY_PHRASES, ...OVERPASS_PHRASES, ...CAPABILITY_EXTRAS.filter((c) => !c.turns)]) {
     const expected = typeof p.expect === 'string' ? [p.expect] : p.expect.oneOf;
     for (const n of expected) assert.ok(names.has(n), `${p.phrase} expects unknown tool ${n}`);
   }
@@ -293,14 +294,12 @@ test('ROUTING_PHRASES is the core table; capability items are well-formed', () =
   assert.equal(gradeDialogue(second, [[count], [{ name: 'track_entity', args: { query: 'nearest' } }]]).ok, false);
 });
 
-test('coverage v2: a count for the removed drawn-area scope is never graded correct', () => {
+test('coverage v2: a drawn-area count must use the drawn scope, never the view', () => {
   const drawn = coverageRubric(coverage('fires-in-drawn-area'), 'v2');
-  for (const kind of ['view', 'drawn']) {
-    const verdict = gradeCoverage(drawn, [{ name: 'analyst_query', args: { layers: ['local-firms'], scope: { kind } } }], '12 fires inside the area you drew.');
-    assert.notEqual(verdict.verdict, 'correct');
-    assert.equal(verdict.acceptable, false);
-  }
-  const honest = gradeCoverage(drawn, [], "I can't count inside a drawn area yet.");
-  assert.equal(honest.verdict, 'honest-refusal');
-  assert.equal(honest.acceptable, true);
+  const scoped = (kind) => gradeCoverage(drawn, [{ name: 'analyst_query', args: { layers: ['local-firms'], scope: { kind } } }], '12 fires inside the area you drew.');
+  assert.equal(scoped('drawn').verdict, 'correct');
+  assert.notEqual(scoped('view').verdict, 'correct');
+  const bagmati = CAPABILITY_EXTRAS.find((c) => c.id === 'bagmati-then-fires');
+  const fires = { name: 'analyst_query', args: { layers: ['local-firms'], scope: { kind: 'area', areaId: 'area-1' } } };
+  assert.equal(gradeDialogue(bagmati, [[{ name: 'resolve_area', args: { query: 'Bagmati province' } }], [fires]]).ok, true);
 });

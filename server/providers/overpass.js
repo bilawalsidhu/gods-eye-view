@@ -21,6 +21,7 @@ import {
   overpassNotConfigured,
 } from './overpass/transport.js';
 import { installRouteMiddleware } from './places/routes.js';
+import { installOsmFeaturesRoute } from './overpass/osmFeaturesRoute.js';
 
 /** @type {Map<string,Promise>} In-flight Overpass requests keyed by normalized query body. */
 const _overpassInFlight = new Map();
@@ -232,6 +233,7 @@ function overpassProxy({ routing = {} } = {}) {
     });
 
     installRouteMiddleware(server.middlewares, routing);
+    installOsmFeaturesRoute(server.middlewares);
   };
   return {
     name: 'overpass-proxy',

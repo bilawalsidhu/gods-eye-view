@@ -397,6 +397,15 @@ export const WOF_CREDIT = {
     '<a href="https://github.com/bilawalsidhu/gods-eye-view/blob/main/src/data/local_data/wof_neighborhoods/ATTRIBUTION.md" target="_blank" rel="noopener">sources and licences</a>)',
 };
 
+/** Registered when a voice place search (a configured Overpass) first shows places. */
+export const OSM_PLACES_CREDIT = {
+  key: 'osm-places',
+  html:
+    'Places found by voice: ' +
+    '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
+    '(ODbL 1.0)',
+};
+
 /**
  * Per-feed transit credit, registered the first time that feed's vehicles
  * render (see `src/data/transitFeeds.js` for the license of each).

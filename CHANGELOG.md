@@ -2,13 +2,12 @@
 
 - The voice card shows analyst counts ("At least 250,000 aircraft …") with
   their scope, feed window and caveats, and marks partial answers. Analyst
-  speech uses the same deterministic headline, preserves lower bounds and says
-  when an answer is partial. Follow-ups retain unanswered-layer coverage, and
-  keep the original scope label when they narrow a remembered result.
-  Contacts-window answers read one immutable panel snapshot, mark a 20,000-row
-  layer cap as a lower bound, and commit that displayed cohort only after
-  cancellation checks pass. Concurrent analyst calls from one model response
-  remain independent; a stopped or replaced user turn still cancels them.
+  speech uses the same bounded, lossless headline, preserves lower bounds and says
+  when an answer is partial. Follow-ups retain unanswered-layer coverage,
+  displayed scope, and the loaded-data caveat; explicit rescoping replaces that
+  presentation. Contacts-window answers commit their displayed cohort only
+  after cancellation checks pass, and combined flight/military cohorts are
+  named aircraft rather than generic results.
 - Voice answers are shorter and fill slow work instead of going silent. Slow
   or multi-step requests may open with one short spoken plan; instant ones
   just happen. Tool results carry a code-built `say` line and a `display`
@@ -215,6 +214,32 @@
   `DATA_SOURCES.md`. The swipe is now shared with the Nepal scene
   (`src/ui/imagerySplit.js`, `src/maps/imageryComparison.js`), and
   `MapSourceController.subscribe()` reports every settled map switch.
+
+## Unreleased — voice geometry
+
+- `resolve_area` turns a named place into a reusable area and can outline
+  it. It uses the same outline sources as voice outlines: bundled Natural
+  Earth regions, countries, states and counties, US Census places and
+  neighborhoods, then the guarded Nominatim outline, then Overpass only when
+  `OVERPASS_UPSTREAMS` is set. Every part and hole is kept. A name several
+  countries or states share ("Georgia", "Punjab") is asked about unless the
+  view is inside one of them. Administrative geometry is stored only when its
+  source identity agrees with the requested unit; stale or unverified units
+  are refused instead of relabelled. Clarification IDs have a documented
+  bounded grammar and round-trip through the production tool schema.
+- "Draw an area around <landmark>" outlines the mapped area enclosing it,
+  or a 250 m buffer marked approximate.
+- `analyst_query` counts inside an area (`area`), the area you drew
+  (`drawn`) or an outline on the map (`annotation`); region counts include
+  every part and leave out holes.
+- `find_imagery` shows the best recent acquisition for an area, the view or
+  the spot under the pointer through the Recent Imagery panel, and stops if
+  you change the panel or turn the layer off while it searches.
+- `osm_query` ("hospitals in Kathmandu") lists places of one kind into a
+  session-only OSM Places layer. It is offered only when
+  `OVERPASS_UPSTREAMS` is set; public Nominatim is never used for it.
+  Turning OSM Places off while a search is pending cancels that action without
+  re-enabling the layer or committing stale results or follow-up memory.
 
 ## Unreleased — voice reaches every layer; honest analyst answers
 

@@ -9,6 +9,7 @@
  *   get_entity_context {scope:'pointer'} | {referent:n}
  *   analyst_query     {scope:{kind:'pointer', km?}}
  *   annotate_map      annotations[].target / toTarget / points[].target = 'pointer'
+ *   find_imagery      {area:'pointer'}
  *
  * The pointer is the current turn's snapshot (see pointerContext.js); the
  * referents are the latest result's numbered list (see referents.js).
@@ -259,6 +260,20 @@ function resolveAnnotate(args, { pointer }) {
   };
 }
 
+function resolveImagery(args, { pointer }) {
+  if (!isPointer(args.area)) return null;
+  const target = pointerTarget(pointer);
+  if (!target || !hasPosition(target)) return { error: NO_POINTER };
+  return {
+    args: {
+      ...withoutKeys(args, ['area']),
+      center: { lat: target.lat, lon: target.lon },
+      ...(target.label ? { centerLabel: target.label } : {}),
+    },
+    used: { source: 'pointer', label: target.label || null },
+  };
+}
+
 const SCREEN_PAIRS = [
   ['screenX', 'screenY'],
   ['toScreenX', 'toScreenY'],
@@ -326,6 +341,7 @@ const RESOLVERS = Object.freeze({
   get_entity_context: resolveContext,
   analyst_query: resolveAnalyst,
   annotate_map: resolveAnnotate,
+  find_imagery: resolveImagery,
 });
 
 /**

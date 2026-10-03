@@ -115,6 +115,8 @@ async function fetchOverpassPayload(
     readBody = readResponseTextCapped,
     simplify = simplifyOverpassPayloadBody,
     now = Date.now,
+    timeoutMs = OVERPASS_TIMEOUT_MS,
+    signal = null,
   } = {},
 ) {
   if (!endpoints.length) return overpassNotConfigured();
@@ -126,7 +128,10 @@ async function fetchOverpassPayload(
       continue;
     }
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const requestSignal = signal
+      ? AbortSignal.any([signal, controller.signal])
+      : controller.signal;
     try {
       const requestUrl = new URL(endpoint);
       const authorization =
@@ -147,7 +152,7 @@ async function fetchOverpassPayload(
           ...(authorization ? { Authorization: authorization } : {}),
         },
         body,
-        signal: controller.signal,
+        signal: requestSignal,
       });
       const responseBody = await readBody(upstream, maxResponseBytes);
       const rateLimited =
@@ -189,7 +194,12 @@ async function fetchOverpassPayload(
         endpoint: 'configured',
         rateLimited: false,
       };
-    } catch {
+    } catch (error) {
+      // A route whose last requester disconnected owns this cancellation. It
+      // is not evidence that the configured upstream is unhealthy, so do not
+      // put the endpoint on cooldown or translate the abort into a response
+      // that a now-gone client could cache.
+      if (signal?.aborted) throw signal.reason ?? error;
       const failures = (previous?.failures || 0) + 1;
       const delay = retryDelay(null, failures - 1, now());
       cooldowns.set(endpoint, { until: now() + delay, failures, status: 502 });

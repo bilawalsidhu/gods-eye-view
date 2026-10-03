@@ -4,8 +4,8 @@
  *
  * The registry mirrors what the voice card shows: a result replaces the list
  * when the card displays it with numbered rows (see resultDisplay.js, which
- * both the card and this registry read — analyst items included, in the
- * order the model reads them in the tool output).
+ * both the card and this registry read — analyst items and OSM places
+ * included, in the order the model reads them in the tool output).
  *
  * Session-scoped: the voice commands clear it when a session ends.
  */
@@ -76,7 +76,7 @@ export function createReferentRegistry({ max = MAX_DISPLAYED_REFERENTS } = {}) {
         return false;
       const shown = presentResult(name, result);
       const entries = shown?.referents || [];
-      // A new result set (a count) replaces the list even
+      // A new result set (a count, a place search) replaces the list even
       // when it is empty: "the second one" never reaches an older answer.
       if (!entries.length && !shown?.resultSet) return false;
       list = normalizeReferents(entries, max);

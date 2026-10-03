@@ -13,7 +13,8 @@ import {
   OPENAI_REALTIME_TRANSCRIBE_MODEL_DEFAULT,
 } from './constants.js';
 import { realtimeInstructions } from './instructions.js';
-import { GEV_REALTIME_TOOLS } from './tools.js';
+import { realtimeTools } from './tools.js';
+import { resolveOverpassUpstreams } from '../overpass/constants.js';
 
 function createRealtimeTokenHandler({
   annotationGuidance,
@@ -21,6 +22,8 @@ function createRealtimeTokenHandler({
   fetchImpl = (...args) => fetch(...args),
   resolveApiKey = () => process.env.OPENAI_API_KEY,
   models = {},
+  // osm_query is offered only when an operator configured Overpass.
+  overpassConfigured = () => resolveOverpassUpstreams().length > 0,
 } = {}) {
   return async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -97,6 +100,7 @@ function createRealtimeTokenHandler({
       transcribeModel.toLowerCase() === 'off'
         ? {}
         : { transcription: { model: transcribeModel } };
+    const overpass = overpassConfigured();
     const sessionConfig = {
       session: {
         type: 'realtime',
@@ -122,8 +126,8 @@ function createRealtimeTokenHandler({
           },
           output: { voice },
         },
-        instructions: realtimeInstructions(annotationGuidance),
-        tools: GEV_REALTIME_TOOLS,
+        instructions: realtimeInstructions(annotationGuidance, { overpass }),
+        tools: realtimeTools({ overpass }),
         tool_choice: 'auto',
       },
     };

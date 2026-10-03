@@ -19,7 +19,7 @@ The session adapter, action runner and backend interfaces remain unchanged.
 | `pointerContext.js` | Pointer position, dwell pick and the current turn's pointer snapshot (session-scoped) |
 | `referents.js` | Numbered items from the latest result for `referent:n` (session-scoped) |
 | `resultDisplay.js` | What the voice card shows for a result and which items it numbers (read by the card and `referents.js`) |
-| `gevActions.js` runner | Analyst follow-up memory (session: `resetConversation()` on stop, `dispose()` on removal) |
+| `gevActions.js` runner | Area handles (page lifetime); analyst follow-up memory (session: `resetConversation()` on stop, `dispose()` on removal) |
 
 Pure input policy, preferences and protocol-response policy have separate modules.
 Owners receive named readers, operations or focused collaborators. Cross-owner

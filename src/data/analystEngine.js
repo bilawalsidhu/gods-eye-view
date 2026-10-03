@@ -18,7 +18,11 @@
  *
  * Providers (injected — keeps the engine pure and node-testable):
  *   getRecords(layerKey) → Array<record>            (layer accessor snapshot)
- *   resolveRegionRing(name, signal?) → Promise<{ring, name}|{error:'region-timeout'}|null>
+ *   resolveRegionRing(name) → Promise<{name, geometry|ring, prepared?}
+ *     |{error:'region-timeout'}|{needsClarification, candidates}|null>
+ *     (geometry = MultiPolygon coordinates; islands and holes all count)
+ *   resolveAreaScope(scope) → Promise<{ok:true, area:{areaId, name, prepared,
+ *     source, approximate}}|{ok:false, code, error}>  (area/drawn/annotation)
  *   getViewContext() → {lat, lon, viewRadiusKm, bounds?}  (camera-derived)
  *
  * @module data/analystEngine
@@ -26,6 +30,7 @@
 
 import { feedProvenanceEnvelope } from './layerSnapshot.js';
 import { pointInRing } from './naturalEarthRegions.js';
+import { pointInPreparedArea, prepareArea } from './areaGeometry.js';
 import { VOICE_LAYER_MANIFEST, voiceLayer } from '../voice/layerManifest.js';
 
 /**
@@ -66,6 +71,9 @@ export const ANALYST_SCOPE_KINDS = Object.freeze([
   'region',
   'radius',
   'anywhere',
+  'area',
+  'drawn',
+  'annotation',
 ]);
 
 /**
@@ -149,9 +157,14 @@ export function applyFilter(records, filter, { time = false } = {}) {
   });
 }
 
-/** Scope records spatially. scope: {kind:'view'|'region'|'radius'|'anywhere', …}. */
+/** Scope records spatially. scope: {kind:'view'|'region'|'radius'|'anywhere'|'area', …}. */
 export function applyScope(records, scope, resolved) {
   if (!scope || scope.kind === 'anywhere') return records;
+  if (resolved?.prepared) {
+    return records.filter((r) =>
+      pointInPreparedArea(resolved.prepared, r.lat, r.lon),
+    );
+  }
   if (scope.kind === 'region' && resolved?.ring) {
     return records.filter(
       (r) =>
@@ -386,6 +399,24 @@ function normalizeSpec(spec, layerKeys) {
     if (kind === 'region' && !String(scope.name ?? '').trim())
       return {
         refusal: refusal('BAD_SCOPE', 'A region scope needs a place name.'),
+      };
+    if (
+      kind === 'area' &&
+      (typeof scope.areaId !== 'string' || !scope.areaId.trim())
+    )
+      return {
+        refusal: refusal(
+          'BAD_SCOPE',
+          'An area scope needs the areaId resolve_area returned.',
+        ),
+      };
+    if (
+      kind === 'annotation' &&
+      scope.id !== undefined &&
+      (typeof scope.id !== 'string' || !scope.id.trim())
+    )
+      return {
+        refusal: refusal('BAD_SCOPE', 'scope.id must be an annotation id.'),
       };
     if (scope.center !== undefined && scope.center !== null) {
       if (!validLat(scope.center.lat) || !validLon(scope.center.lon))
@@ -714,9 +745,8 @@ export function createAnalystEngine(providers) {
   /**
    * Run one query.
    * @param {object} spec Query arguments (see the analyst_query tool).
-   * @param {{isCurrent?: () => boolean, signal?: AbortSignal,
-   *   beforeCommit?: (result: object) => Promise<object|void>}} [options]
-   *   A query that is no longer current
+   * @param {{signal?: AbortSignal, isCurrent?: () => boolean, beforeCommit?: (result: object) =>
+   *   Promise<object|void>}} [options] A query that is no longer current
    *   (cancelled or superseded while awaiting a boundary or between scan
    *   slices) returns CANCELLED and never replaces the follow-up memory.
    *   `beforeCommit` lets a caller finish required async projection work and
@@ -726,7 +756,7 @@ export function createAnalystEngine(providers) {
    */
   async function query(
     spec = {},
-    { isCurrent = () => true, signal = undefined, beforeCommit = null } = {},
+    { signal = null, isCurrent = () => true, beforeCommit = null } = {},
   ) {
     const cancelled = () =>
       refusal('CANCELLED', 'This query was superseded.', { cancelled: true });
@@ -737,6 +767,7 @@ export function createAnalystEngine(providers) {
         { coverage: { layersQueried: [], scope: 'none' } },
       );
     const followUp = Boolean(spec.followUp);
+    const inheritsRememberedScope = followUp && spec.scope == null;
     // A follow-up re-filters the remembered set. Layers named explicitly
     // must be that set: "those hospitals" after an aircraft answer is a new
     // question, never a filter over the old aircraft.
@@ -879,20 +910,28 @@ export function createAnalystEngine(providers) {
     }
 
     // 2) Spatial scope
-    const rememberedScope =
-      followUp && !spec.scope ? lastResult.scopePresentation || null : null;
+    const rememberedPresentation = inheritsRememberedScope
+      ? lastResult.presentation || null
+      : null;
+    const rememberedCoverageNote =
+      rememberedPresentation?.coverageNote ||
+      (inheritsRememberedScope ? lastResult.coverage?.note : null);
     let resolvedScope = null;
-    let scopeNote = rememberedScope?.coverage || 'anywhere';
+    let scopeNote =
+      rememberedPresentation?.coverageScope ||
+      (inheritsRememberedScope ? lastResult.coverage?.scope : null) ||
+      'anywhere';
     // Human phrasing for the same scope, so every spoken count can name what it
     // measured ("8 in view", "about 30 within 250 km of Austin") instead of
     // arriving as a bare number that contradicts the panel.
-    let scopeLabel = rememberedScope?.label || 'anywhere in the loaded data';
-    let scopeDetail = rememberedScope?.detail || scopeLabel;
+    let scopeLabel =
+      rememberedPresentation?.scopeLabel || 'anywhere in the loaded data';
+    let scopeDetail = rememberedPresentation?.display?.scope || scopeLabel;
     // A follow-up re-filters a set that was already scoped, so it only narrows
     // further when a new scope is given.
     const scope = spec.scope || { kind: followUp ? 'anywhere' : 'view' };
     if (scope.kind === 'region') {
-      const region = await providers.resolveRegionRing(scope.name, signal);
+      const region = await providers.resolveRegionRing(scope.name, { signal });
       if (!isCurrent()) return cancelled();
       if (region?.error === 'region-timeout') {
         return {
@@ -902,7 +941,30 @@ export function createAnalystEngine(providers) {
           coverage: { layersQueried, scope: `region:${scope.name}:timeout` },
         };
       }
-      if (!region?.ring) {
+      if (region?.needsClarification) {
+        return refusal(
+          'NEEDS_CLARIFICATION',
+          region.error ||
+            `"${scope.name}" names more than one place — ask which one.`,
+          {
+            needsClarification: true,
+            query: scope.name,
+            candidates: region.candidates || [],
+            coverage: {
+              layersQueried,
+              scope: `region:${scope.name}:ambiguous`,
+            },
+          },
+        );
+      }
+      const prepared =
+        region?.prepared ||
+        (region?.geometry
+          ? prepareArea(region.geometry)
+          : region?.ring
+            ? prepareArea([[region.ring]])
+            : null);
+      if (!prepared) {
         return {
           ok: false,
           code: 'REGION_UNRESOLVED',
@@ -910,10 +972,38 @@ export function createAnalystEngine(providers) {
           coverage: { layersQueried, scope: `region:${scope.name}:unresolved` },
         };
       }
-      resolvedScope = region;
+      resolvedScope = { ...region, prepared };
       scopeNote = `region:${region.name}`;
       scopeLabel = `over ${region.name}`;
-      scopeDetail = scopeLabel;
+      const regionSource = region.sourceLabel || region.source;
+      scopeDetail = `${scopeLabel}${region.approximate ? ' (approximate outline)' : ''}${regionSource ? ` · ${regionSource}` : ''}`;
+    } else if (
+      scope.kind === 'area' ||
+      scope.kind === 'drawn' ||
+      scope.kind === 'annotation'
+    ) {
+      const found = providers.resolveAreaScope
+        ? await providers.resolveAreaScope(scope)
+        : {
+            ok: false,
+            code: 'AREA_UNAVAILABLE',
+            error: 'Area scopes are not available here.',
+          };
+      if (!isCurrent()) return cancelled();
+      if (!found?.ok || !found.area?.prepared) {
+        return refusal(
+          found?.code || 'AREA_UNKNOWN',
+          found?.error || 'That area is not available.',
+          { coverage: { layersQueried, scope: `${scope.kind}:unresolved` } },
+        );
+      }
+      const area = found.area;
+      resolvedScope = { prepared: area.prepared, name: area.name };
+      scopeNote = `area:${area.areaId || scope.kind}`;
+      scopeLabel = `inside ${area.name}`;
+      const sourceLabel = area.sourceLabel || area.source;
+      scopeDetail = `${scopeLabel}${area.approximate ? ' (approximate outline)' : ''}${sourceLabel ? ` · ${sourceLabel}` : ''}`;
+      if (area.areaId) resolvedScope.areaId = area.areaId;
     } else if (scope.kind === 'radius') {
       // An explicit center always wins. Otherwise, when Contacts is active its
       // SUBJECT is the centre the operator is actually reasoning about: the
@@ -958,25 +1048,21 @@ export function createAnalystEngine(providers) {
       scopeLabel = 'in view';
       scopeDetail = `within ${Math.round(view.viewRadiusKm)} km of the view centre`;
     }
-    const inScope =
-      scope.kind === 'region' && resolvedScope?.ring
+    const inScope = resolvedScope?.prepared
+      ? (row) => pointInPreparedArea(resolvedScope.prepared, row.lat, row.lon)
+      : (scope.kind === 'radius' || scope.kind === 'view') &&
+          resolvedScope?.center &&
+          Number.isFinite(resolvedScope.km)
         ? (row) =>
             Number.isFinite(row.lat) &&
             Number.isFinite(row.lon) &&
-            pointInRing(resolvedScope.ring, row.lat, row.lon)
-        : (scope.kind === 'radius' || scope.kind === 'view') &&
-            resolvedScope?.center &&
-            Number.isFinite(resolvedScope.km)
-          ? (row) =>
-              Number.isFinite(row.lat) &&
-              Number.isFinite(row.lon) &&
-              haversineKm(
-                resolvedScope.center.lat,
-                resolvedScope.center.lon,
-                row.lat,
-                row.lon,
-              ) <= resolvedScope.km
-          : null;
+            haversineKm(
+              resolvedScope.center.lat,
+              resolvedScope.center.lon,
+              row.lat,
+              row.lon,
+            ) <= resolvedScope.km
+        : null;
 
     // 3) Filter, count and rank in one pass, yielding between slices.
     const selection = await selectAnalystRows(groups, {
@@ -1043,14 +1129,24 @@ export function createAnalystEngine(providers) {
       // For on-screen text; the model speaks the count and scopeLabel only.
       display: {
         scope: scopeDetail,
-        ...(windows.length ? { window: windows.join('; ') } : {}),
-        ...(caveats.length ? { caveat: caveats.join('; ') } : {}),
+        ...(rememberedPresentation?.display?.window || windows.length
+          ? {
+              window:
+                rememberedPresentation?.display?.window || windows.join('; '),
+            }
+          : {}),
+        ...(rememberedPresentation?.display?.caveat || caveats.length
+          ? {
+              caveat:
+                rememberedPresentation?.display?.caveat || caveats.join('; '),
+            }
+          : {}),
       },
       coverage: {
         layersQueried,
         records: totals,
         scope: scopeNote,
-        ...(rememberedScope?.note ? { note: rememberedScope.note } : {}),
+        ...(rememberedCoverageNote ? { note: rememberedCoverageNote } : {}),
         ...(queriedSnapshots.length
           ? { feedProvenance: feedProvenanceEnvelope(queriedSnapshots) }
           : {}),
@@ -1060,35 +1156,84 @@ export function createAnalystEngine(providers) {
       // than implying a view-centred answer.
       ...(resolvedScope?.centeredOn
         ? { centeredOn: resolvedScope.centeredOn }
+        : rememberedPresentation?.centeredOn
+          ? { centeredOn: rememberedPresentation.centeredOn }
+          : {}),
+      ...(rememberedPresentation?.window
+        ? { window: structuredClone(rememberedPresentation.window) }
         : {}),
+      ...(resolvedScope?.areaId
+        ? { areaId: resolvedScope.areaId }
+        : rememberedPresentation?.areaId
+          ? { areaId: rememberedPresentation.areaId }
+          : {}),
     };
     const memoryOverride =
       typeof beforeCommit === 'function'
         ? (await beforeCommit(result)) || null
         : null;
     if (!isCurrent()) return cancelled();
-    const committedCoverage = memoryOverride?.coverage || result.coverage;
     lastResult = {
       matched: memoryOverride?.matched || selection.matched,
       layerKeys: [...(memoryOverride?.layerKeys || layers)],
-      coverage: committedCoverage,
+      coverage: memoryOverride?.coverage || result.coverage,
       unanswered: [
         ...(memoryOverride?.unanswered === undefined
           ? unanswered
           : memoryOverride.unanswered),
       ],
-      scopePresentation: {
-        label: memoryOverride?.scopeLabel || result.scopeLabel,
-        detail: memoryOverride?.scopeDetail || result.display.scope,
-        coverage: committedCoverage.scope,
-        note: committedCoverage.note || null,
-      },
+      presentation: structuredClone(
+        memoryOverride?.presentation || {
+          scopeLabel: result.scopeLabel,
+          display: result.display,
+          coverageScope: result.coverage?.scope,
+          ...(result.coverage?.note
+            ? { coverageNote: result.coverage.note }
+            : {}),
+          ...(result.centeredOn ? { centeredOn: result.centeredOn } : {}),
+          ...(result.window ? { window: result.window } : {}),
+          ...(result.areaId ? { areaId: result.areaId } : {}),
+        },
+      ),
     };
     return result;
   }
 
   return {
     query,
+    /**
+     * Make another tool's result set "the last answer" (osm_query's places),
+     * so a follow-up filters exactly what the user just heard about.
+     * @param {string} layerKey Queryable layer the rows belong to.
+     * @param {Array<object>} rows Records in that layer's analyst shape.
+     * @param {{scope?: string}} [options]
+     */
+    remember(layerKey, rows, { scope = 'handoff' } = {}) {
+      if (!ANALYST_LAYERS[layerKey] || !Array.isArray(rows)) return false;
+      lastResult = {
+        matched: [{ key: layerKey, rows: rows.slice() }],
+        layerKeys: [layerKey],
+        coverage: {
+          layersQueried: [
+            {
+              layerKey,
+              status: rows.length ? 'ok' : 'empty',
+              returned: rows.length,
+              total: rows.length,
+              truncated: false,
+            },
+          ],
+          records: {
+            returned: rows.length,
+            total: rows.length,
+            truncated: false,
+          },
+          scope,
+          followUp: false,
+        },
+      };
+      return true;
+    },
     reset() {
       lastResult = null;
     },

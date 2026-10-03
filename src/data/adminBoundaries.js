@@ -775,6 +775,35 @@ export async function findAdminArea(query, { near = null } = {}) {
 }
 
 /**
+ * Every prominent unit an ask's words could mean — countries, and states or
+ * provinces that would answer a bare name (see `stateCandidates`) — for a
+ * caller that asks the user which one ("Georgia", "Punjab") instead of
+ * letting the camera decide. Qualifiers narrow the list as in
+ * `findAdminArea`; minor units ("Kent", "Santa Barbara") are left out.
+ *
+ * @param {string} query
+ * @returns {Promise<AdminArea[]>} Largest first; empty when none.
+ */
+export async function findAdminCandidates(query) {
+  const parsed = parseAdminQuery(query);
+  if (!parsed?.name || parsed.kind === 'county') return [];
+  const prominent = ({ entry }) =>
+    entry.kind === 'country' ||
+    (entry.feature.rank ?? Infinity) <= BARE_NAME_MAX_RANK ||
+    Boolean(entry.feature.cityState);
+  const candidates = [
+    ...(await countryCandidates(parsed)),
+    ...(parsed.kind === 'country'
+      ? []
+      : await stateCandidates(parsed, { allowAmbiguous: true })),
+  ].filter(prominent);
+  const seen = new Set();
+  return rank(candidates, null)
+    .filter(({ entry }) => !seen.has(entry) && seen.add(entry))
+    .map((scored) => toResult(scored, candidates.length));
+}
+
+/**
  * Geocoder-confirmed lookup: the geocoder typed a country, state or
  * county, so the unit must carry one of `names` AND contain the geocoded
  * point. Ambiguity marks do not apply — the geocoder already chose.

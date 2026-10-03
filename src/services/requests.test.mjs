@@ -54,9 +54,24 @@ function probeTransport(status) {
   return { seen, fetchImpl };
 }
 const stalled = (init) => new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)));
+const stalledWithReferencedWait = (init) =>
+  new Promise((_, reject) => {
+    // AbortSignal.timeout() is intentionally unref'd in Node. Keep this one
+    // timeout test alive until the signal fires so an isolated test process
+    // cannot exit with a still-pending assertion.
+    const keepAlive = setTimeout(() => {}, 1000);
+    init.signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(keepAlive);
+        reject(init.signal.reason);
+      },
+      { once: true },
+    );
+  });
 
 test('a stalled capability probe times out and queries proceed; no re-probe during backoff', async () => {
-  const { seen, fetchImpl } = probeTransport(stalled);
+  const { seen, fetchImpl } = probeTransport(stalledWithReferencedWait);
   const services = createApplicationRequestServices({ fetchImpl, boundaryProbe: { timeoutMs: 20, retryMs: 60_000 } });
   const started = Date.now();
   assert.deepEqual(await services.boundaries.query('fixture'), []);

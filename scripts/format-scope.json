@@ -697,6 +697,8 @@
   "src/sources/protocols.test.mjs",
   "src/voice/actionSchemas.js",
   "src/voice/actionSchemas.test.mjs",
+  "src/voice/areaCandidateContract.js",
+  "src/voice/layerActionOwnership.js",
   "server/providers/openai/toolDescriptions.js",
   "src/voice/session.js",
   "src/voice/sessionCommands.js",

@@ -265,6 +265,87 @@ test('analyst: failed pre-commit work cannot replace follow-up memory', async ()
   assert.deepEqual(followUp.items.map((item) => item.id), ['SWA1']);
 });
 
+test('analyst: follow-ups preserve partial and unanswered coverage', async () => {
+  const eng = createAnalystEngine({
+    getRecords: (key) => (key === 'flights' ? FLIGHTS : []),
+    getLayerSnapshot: (key) => ({
+      enabled: key === 'flights',
+      feedState: key === 'flights' ? 'nominal' : 'off',
+    }),
+    getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
+  });
+  const first = await eng.query({
+    layers: ['flights', 'military'],
+    scope: { kind: 'anywhere' },
+  });
+  assert.equal(first.partial, true);
+  assert.deepEqual(first.unanswered, ['military']);
+
+  const followUp = await eng.query({ followUp: true, limit: 1 });
+  assert.equal(followUp.partial, true);
+  assert.deepEqual(followUp.unanswered, ['military']);
+  assert.deepEqual(
+    followUp.coverage.layersQueried.map(({ layerKey, status }) => [
+      layerKey,
+      status,
+    ]),
+    first.coverage.layersQueried.map(({ layerKey, status }) => [
+      layerKey,
+      status,
+    ]),
+  );
+});
+
+test('analyst: cancelled pre-commit work cannot replace follow-up memory', async () => {
+  const eng = makeEngine();
+  await eng.query({
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'id', op: 'eq', value: 'SWA1' }],
+  });
+  let current = true;
+  const stale = await eng.query(
+    { layers: ['local-firms'], scope: { kind: 'anywhere' } },
+    {
+      isCurrent: () => current,
+      beforeCommit: async () => {
+        current = false;
+      },
+    },
+  );
+  assert.equal(stale.code, 'CANCELLED');
+  const followUp = await eng.query({ followUp: true });
+  assert.deepEqual(
+    followUp.items.map((item) => item.id),
+    ['SWA1'],
+  );
+});
+
+test('analyst: failed pre-commit work cannot replace follow-up memory', async () => {
+  const eng = makeEngine();
+  await eng.query({
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'id', op: 'eq', value: 'SWA1' }],
+  });
+  await assert.rejects(
+    eng.query(
+      { layers: ['local-firms'], scope: { kind: 'anywhere' } },
+      {
+        beforeCommit: async () => {
+          throw new Error('projection failed');
+        },
+      },
+    ),
+    /projection failed/,
+  );
+  const followUp = await eng.query({ followUp: true });
+  assert.deepEqual(
+    followUp.items.map((item) => item.id),
+    ['SWA1'],
+  );
+});
+
 test('analyst: unresolved region is an honest failure, not empty success', async () => {
   const r = await makeEngine().query({ layers: ['flights'], scope: { kind: 'region', name: 'Atlantis' } });
   assert.equal(r.ok, false);
@@ -289,7 +370,7 @@ test('analyst: region lookup receives and obeys the owning action signal', async
   let receivedSignal = null;
   const eng = createAnalystEngine({
     getRecords: () => FLIGHTS,
-    resolveRegionRing: async (_name, signal) => {
+    resolveRegionRing: async (_name, { signal }) => {
       receivedSignal = signal;
       await new Promise((resolve) =>
         signal.addEventListener('abort', resolve, { once: true }),
@@ -417,7 +498,9 @@ test('unknown fields, operators, scopes and wrong-typed values are refused with 
   assert.equal(num.code, 'BAD_VALUE');
   const scope = await engine.query({ layers: ['flights'], scope: { kind: 'polygon' } });
   assert.equal(scope.code, 'UNKNOWN_SCOPE');
-  assert.deepEqual(scope.allowed, ['view', 'region', 'radius', 'anywhere']);
+  assert.deepEqual(scope.allowed, ['view', 'region', 'radius', 'anywhere', 'area', 'drawn', 'annotation']);
+  const noId = await engine.query({ layers: ['flights'], scope: { kind: 'area' } });
+  assert.equal(noId.code, 'BAD_SCOPE', 'an area scope needs its areaId');
   const sort = await engine.query({ layers: ['flights'], sortBy: 'loudness' });
   assert.equal(sort.code, 'UNKNOWN_FIELD');
   assert.equal(engine.hasMemory(), false, 'refusals never become follow-up memory');
@@ -659,4 +742,130 @@ test('analyst: a follow-up naming other layers than the last answer is refused',
   assert.equal(r.ok, false);
   assert.equal(r.code, 'FOLLOW_UP_MISMATCH');
   assert.equal(engine.hasMemory(), true, 'the earlier answer is still the last answer');
+});
+
+// ── Area handles: region multipolygons and the area / drawn / annotation scopes ──
+
+const box = (w, s, e, n) => [[w, s], [e, s], [e, n], [w, n], [w, s]];
+
+function makeAreaEngine(overrides = {}) {
+  return createAnalystEngine({
+    getRecords: (key) => ({ flights: FLIGHTS, 'local-firms': FIRES }[key] || []),
+    resolveRegionRing: async () => null,
+    getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
+    ...overrides,
+  });
+}
+
+test('analyst: a region counts every part of a multipolygon and skips its holes', async () => {
+  // Main part around Austin with a hole over the airport ground traffic, and a
+  // separate island over Oregon: the old largest-ring shortcut dropped N123.
+  const engine = makeAreaEngine({
+    resolveRegionRing: async () => ({
+      name: 'Archipelago',
+      geometry: [
+        [box(-100, 28, -94, 33), box(-97.7, 30.1, -97.6, 30.25)],
+        [box(-123, 44, -121, 46)],
+      ],
+      source: 'osm',
+    }),
+  });
+  const r = await engine.query({ layers: ['flights'], scope: { kind: 'region', name: 'Archipelago' }, limit: 10 });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.items.map((i) => i.id).sort(), ['N123', 'RCH01']);
+  assert.equal(r.count, 2, 'SWA1 and GND1 sit in the hole');
+  assert.match(r.display.scope, /over Archipelago · osm/);
+});
+
+test('analyst: an ambiguous region asks instead of counting', async () => {
+  const engine = makeAreaEngine({
+    resolveRegionRing: async () => ({
+      ok: false,
+      needsClarification: true,
+      candidates: [{ candidateId: 'osm:r1', name: 'Georgia', level: 'country' }],
+      error: '"Georgia" matches 2 places — ask which one.',
+    }),
+  });
+  const r = await engine.query({ layers: ['flights'], scope: { kind: 'region', name: 'Georgia' } });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'NEEDS_CLARIFICATION');
+  assert.equal(r.candidates.length, 1);
+  assert.equal(engine.hasMemory(), false);
+});
+
+test('analyst: region lookup receives the caller lifetime signal', async () => {
+  const controller = new AbortController();
+  let received;
+  const engine = makeAreaEngine({
+    resolveRegionRing: async (_name, options) => {
+      received = options?.signal;
+      return { error: 'region-timeout' };
+    },
+  });
+  const result = await engine.query(
+    {
+      layers: ['flights'],
+      scope: { kind: 'region', name: 'Signal Region' },
+    },
+    { signal: controller.signal },
+  );
+  assert.equal(received, controller.signal);
+  assert.equal(result.code, 'region-timeout');
+});
+
+test('analyst: an area scope counts inside the stored handle and names it', async () => {
+  const { prepareArea } = await import('./areaGeometry.js');
+  const prepared = prepareArea([[box(-99, 30, -97.5, 31)]]);
+  const seen = [];
+  const engine = makeAreaEngine({
+    resolveAreaScope: async (scope) => {
+      seen.push(scope);
+      if (scope.kind === 'area' && scope.areaId === 'osm:r42')
+        return { ok: true, area: { areaId: 'osm:r42', name: 'Hill Country', prepared, source: 'osm' } };
+      if (scope.kind === 'drawn')
+        return { ok: true, area: { areaId: 'anno:anno-7', name: 'the drawn area', prepared, source: 'drawn' } };
+      return { ok: false, code: 'AREA_UNKNOWN', error: 'No such area' };
+    },
+  });
+  const fires = await engine.query({ layers: ['local-firms'], scope: { kind: 'area', areaId: 'osm:r42' } });
+  assert.equal(fires.ok, true);
+  assert.equal(fires.count, 2);
+  assert.equal(fires.scopeLabel, 'inside Hill Country');
+  assert.equal(fires.areaId, 'osm:r42');
+  assert.equal(fires.coverage.scope, 'area:osm:r42');
+  const followUp = await engine.query({ followUp: true, limit: 1 });
+  assert.equal(followUp.scopeLabel, 'inside Hill Country');
+  assert.match(followUp.display.scope, /inside Hill Country/);
+  assert.equal(followUp.coverage.scope, 'area:osm:r42');
+  assert.equal(followUp.areaId, 'osm:r42');
+  const drawn = await engine.query({ layers: ['flights'], scope: { kind: 'drawn' } });
+  assert.equal(drawn.ok, true);
+  assert.equal(drawn.count, 2, 'SWA1 and GND1 sit inside the drawn box');
+  const missing = await engine.query({ layers: ['flights'], scope: { kind: 'area', areaId: 'osm:r0' } });
+  assert.equal(missing.ok, false);
+  assert.equal(missing.code, 'AREA_UNKNOWN');
+  assert.deepEqual(seen.map((s) => s.kind), ['area', 'drawn', 'area']);
+});
+
+test('analyst: an area scope superseded while resolving is cancelled and leaves no memory', async () => {
+  const { prepareArea } = await import('./areaGeometry.js');
+  let current = true;
+  const engine = makeAreaEngine({
+    resolveAreaScope: async () => {
+      current = false; // a newer turn arrived while the area was looked up
+      return { ok: true, area: { name: 'X', prepared: prepareArea([[box(-100, 28, -94, 33)]]) } };
+    },
+  });
+  const r = await engine.query(
+    { layers: ['flights'], scope: { kind: 'annotation' } },
+    { isCurrent: () => current },
+  );
+  assert.equal(r.code, 'CANCELLED');
+  assert.equal(engine.hasMemory(), false);
+});
+
+test('analyst: without an area provider the area scopes refuse plainly', async () => {
+  const r = await makeAreaEngine().query({ layers: ['flights'], scope: { kind: 'drawn' } });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'AREA_UNAVAILABLE');
 });

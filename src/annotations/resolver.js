@@ -558,6 +558,7 @@ export function createAnnotationResolver({
             buildingHeight: null,
             synthesized: false,
             naturalRegion: ne.name,
+            outlineSource: 'natural-earth',
             lat: neCentroid?.lat ?? lat,
             lon: neCentroid?.lon ?? lon,
             height: sampleGroundHeight(
@@ -793,6 +794,7 @@ export function createAnnotationResolver({
       if (
         fromGeocode &&
         !bypassNearViewGuards &&
+        !allowDistant &&
         gateDrift(centroid.lat, centroid.lon)
       )
         return null;
@@ -802,6 +804,8 @@ export function createAnnotationResolver({
         buildingHeight: fp.heightM,
         synthesized: Boolean(fp.synthesized),
         ...(Array.isArray(fp.polygons) ? { polygons: fp.polygons } : {}),
+        ...(fp.adminArea ? { adminArea: fp.adminArea } : {}),
+        ...(fp.adminLevel ? { adminLevel: fp.adminLevel } : {}),
         lat: centroid.lat,
         lon: centroid.lon,
         height: sampleGroundHeight(viewer, centroid.lon, centroid.lat),
@@ -1045,6 +1049,7 @@ export function createAnnotationResolver({
       buildingHeight: null,
       synthesized: false,
       adminArea: admin.name,
+      outlineSource: admin.source,
       lat,
       lon,
       height: sampleGroundHeight(viewer, lon, lat),
@@ -1095,6 +1100,7 @@ export function createAnnotationResolver({
       buildingHeight: null,
       label: admin.name,
       source: 'bundled',
+      outlineSource: admin.source,
       synthesized: false,
       outlineUnavailable: false,
       viewport: {

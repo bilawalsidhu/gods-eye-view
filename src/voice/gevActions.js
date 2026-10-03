@@ -46,6 +46,14 @@ import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
+import { createVoiceAreas } from './areaActions.js';
+import { findImagery } from './imageryActions.js';
+import { osmQuery } from './osmActions.js';
+import { createOsmFeatureSource } from '../sources/osmFeatures.js';
+import {
+  OSM_PLACES_CREDIT,
+  registerDynamicCredit,
+} from '../data/dataCredits.js';
 
 const ALLOWED_STYLES = new Set([
   'normal',
@@ -302,6 +310,8 @@ export function createGevActionRunner({
   searchNavigation = searchAndFlyTo,
   speechBuilders = null,
   deixis = null,
+  osmSearch = null,
+  areaOptions = null,
 }) {
   // Voice enable times and analyst follow-up memory belong to this runner.
   // Speech builders turn results into say/display envelopes; callers extend
@@ -311,13 +321,25 @@ export function createGevActionRunner({
     : SPEECH_BUILDERS;
   const _layerEnabledAt = new Map();
   let analystEngine;
-  const resolveRegionRing = (name, signal) =>
-    annotationResolver.resolveRegionRingForQuery(name, signal, placeSearch);
+  // Area handles live for this runner (the page): resolve_area, the
+  // analyst's region/area/drawn scopes, find_imagery and osm_query all read
+  // the same store.
+  const voiceAreas = createVoiceAreas({
+    viewer,
+    annotations,
+    placeSearch,
+    annotationResolver,
+    ...(areaOptions || {}),
+  });
+  const searchOsmFeatures = osmSearch || createOsmFeatureSource();
+  const resolveRegionRing = (name, options) =>
+    voiceAreas.resolveRegion(name, options);
   const ensureAnalystEngine = () =>
     (analystEngine ||= createAnalystEngine(
       analystProviders(viewer, dataManager, {
         placeSearch,
         resolveRegionRing,
+        resolveAreaScope: voiceAreas.resolveAreaScope,
         isWarming: (layerKey) => layerIsWarming(_layerEnabledAt, layerKey),
       }),
     ));
@@ -1007,6 +1029,61 @@ export function createGevActionRunner({
       return nextIssPass(viewer, dataManager, args);
     }
 
+    if (name === 'resolve_area') {
+      return voiceAreas.resolveAreaAction(args, {
+        signal: runOptions.signal,
+        isCurrent: current,
+        progress: reportProgress,
+      });
+    }
+
+    if (name === 'find_imagery') {
+      return findImagery(
+        {
+          dataManager,
+          viewer,
+          getArea: (areaId) => voiceAreas.store.get(areaId),
+          enableLayer: (enabled) =>
+            runGevAction(
+              'set_layer_visibility',
+              { layerId: 'recent-imagery', enabled },
+              runOptions,
+            ),
+          progress: reportProgress,
+        },
+        args,
+        { isCurrent: current, signal: runOptions.signal },
+      );
+    }
+
+    if (name === 'osm_query') {
+      return osmQuery(
+        {
+          dataManager,
+          getArea: (areaId) => voiceAreas.store.get(areaId),
+          viewBox: () => cameraViewBox(viewer),
+          enableLayer: (enabled) =>
+            runGevAction(
+              'set_layer_visibility',
+              { layerId: 'osm-places', enabled },
+              runOptions,
+            ),
+          search: searchOsmFeatures,
+          onCredit: () => registerDynamicCredit(viewer, OSM_PLACES_CREDIT),
+          // The listed places become the analyst's "last answer", so
+          // "which of those…" filters them and never an older set.
+          rememberResults: (rows) => {
+            if (!current()) return;
+            if (rows) ensureAnalystEngine().remember('osm-places', rows);
+            else analystEngine?.reset();
+          },
+          progress: reportProgress,
+        },
+        args,
+        { isCurrent: current, signal: runOptions.signal },
+      );
+    }
+
     if (name === 'analyst_query') {
       return runAnalystQuery(
         ensureAnalystEngine(),
@@ -1186,10 +1263,31 @@ export function createGevActionRunner({
 
     throw new Error(`Unknown GEV tool: ${name}`);
   };
-  // Lifetimes: the runner lives for the page; conversation state — the
+  // Lifetimes: the runner lives for the page (area handles included, so an
+  // outline stays countable across mic sessions); conversation state — the
   // analyst's follow-up memory and any write still in flight — lives for one
   // voice session and is dropped by resetConversation().
   let conversation = 0;
+  // Calls emitted by one assistant response are siblings rather than newer
+  // user intent. The new spatial actions share mutable surfaces (area board,
+  // imagery panel, OSM layer/follow-up memory), so serialize those siblings in
+  // event order just as analyst_query already was. A genuinely newer group or
+  // direct call still invalidates the older attempt.
+  const serializedSiblingActions = new Set([
+    'analyst_query',
+    'resolve_area',
+    'find_imagery',
+    'osm_query',
+  ]);
+  let serializedAttempt = 0;
+  let serializedSiblingGroup = null;
+  let serializedSiblingTail = Promise.resolve();
+  // Direct/programmatic callers do not necessarily arrive through
+  // createVoiceSession, so the runner must own the conversation lifetime of
+  // its serialized spatial workflows as well. Reset/dispose abort the real
+  // provider/catalog work, not just the eventual commit, while area handles
+  // remain owned by voiceAreas for the page lifetime.
+  let conversationAbort = new AbortController();
   let disposed = false;
   async function runVoiceAction(name, rawArgs = {}, callerOptions = {}) {
     if (disposed)
@@ -1200,56 +1298,113 @@ export function createGevActionRunner({
         error: 'Voice ended.',
       };
     const epoch = conversation;
+    let attempt = null;
+    let releaseSerializedSibling = null;
+    if (serializedSiblingActions.has(name)) {
+      const siblingGroup = callerOptions.authorityGroup || null;
+      if (siblingGroup) {
+        if (siblingGroup !== serializedSiblingGroup) {
+          serializedSiblingGroup = siblingGroup;
+          serializedSiblingTail = Promise.resolve();
+          serializedAttempt++;
+        }
+        attempt = serializedAttempt;
+        const predecessor = serializedSiblingTail;
+        const completion = new Promise((resolve) => {
+          releaseSerializedSibling = resolve;
+        });
+        serializedSiblingTail = predecessor.then(() => completion);
+        await predecessor;
+      } else {
+        serializedSiblingGroup = null;
+        serializedSiblingTail = Promise.resolve();
+        attempt = ++serializedAttempt;
+      }
+    }
+    const runnerSignal = serializedSiblingActions.has(name)
+      ? conversationAbort.signal
+      : null;
+    const signal = runnerSignal
+      ? callerOptions.signal
+        ? AbortSignal.any([runnerSignal, callerOptions.signal])
+        : runnerSignal
+      : callerOptions.signal;
     const runOptions = {
       ...callerOptions,
+      ...(signal ? { signal } : {}),
       isCurrent: () =>
+        !signal?.aborted &&
         epoch === conversation &&
+        (attempt === null || attempt === serializedAttempt) &&
         !disposed &&
         (typeof callerOptions.isCurrent !== 'function' ||
           callerOptions.isCurrent()),
     };
-    const input = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
-    // Point-and-ask: 'pointer' and referent:n become real targets here, from
-    // the turn's pointer snapshot and the latest numbered result.
-    const deictic = resolveDeicticArgs(name, input, {
-      pointer: deixis?.pointer?.activeSnapshot?.() || null,
-      referents: deixis?.referents || null,
-      imageFrame: deixis?.imageFrame?.() || null,
-      cameraKey: deixis?.cameraKey?.() || null,
-    });
-    if (deictic.error) {
-      return attachVoiceResult(
-        name,
-        { ok: false, action: name, error: deictic.error },
-        input,
-        builders,
-      );
-    }
-    const referentGeneration = deixis?.referents?.generation?.();
-    let result = await runGevAction(name, deictic.args, runOptions);
-    if (deictic.used && result && typeof result === 'object')
-      result = { ...result, resolvedFrom: deictic.used };
-    const out = attachVoiceResult(name, result, deictic.args, builders);
-    // Only an accepted, still-current result may become "the last list": a
-    // cancelled turn or one finishing after the session ended must not
-    // repopulate a cleared registry.
-    const stillCurrent =
-      !runOptions.signal?.aborted &&
-      (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
-    if (stillCurrent)
-      deixis?.referents?.recordResult?.(name, out, {
-        since: referentGeneration,
+    try {
+      const input = rawArgs && typeof rawArgs === 'object' ? rawArgs : {};
+      if (attempt !== null && !runOptions.isCurrent()) {
+        return attachVoiceResult(
+          name,
+          {
+            ok: false,
+            action: name,
+            code: 'CANCELLED',
+            cancelled: true,
+            error: 'This request was superseded.',
+          },
+          input,
+          builders,
+        );
+      }
+      // Point-and-ask: 'pointer' and referent:n become real targets here, from
+      // the turn's pointer snapshot and the latest numbered result.
+      const deictic = resolveDeicticArgs(name, input, {
+        pointer: deixis?.pointer?.activeSnapshot?.() || null,
+        referents: deixis?.referents || null,
+        imageFrame: deixis?.imageFrame?.() || null,
+        cameraKey: deixis?.cameraKey?.() || null,
       });
-    if (stillCurrent && deictic.used?.source === 'pointer')
-      deixis?.onPointerUsed?.();
-    return out;
+      if (deictic.error) {
+        return attachVoiceResult(
+          name,
+          { ok: false, action: name, error: deictic.error },
+          input,
+          builders,
+        );
+      }
+      const referentGeneration = deixis?.referents?.generation?.();
+      let result = await runGevAction(name, deictic.args, runOptions);
+      if (deictic.used && result && typeof result === 'object')
+        result = { ...result, resolvedFrom: deictic.used };
+      const out = attachVoiceResult(name, result, deictic.args, builders);
+      // Only an accepted, still-current result may become "the last list": a
+      // cancelled turn or one finishing after the session ended must not
+      // repopulate a cleared registry.
+      const stillCurrent =
+        !runOptions.signal?.aborted &&
+        (typeof runOptions.isCurrent !== 'function' || runOptions.isCurrent());
+      if (stillCurrent)
+        deixis?.referents?.recordResult?.(name, out, {
+          since: referentGeneration,
+        });
+      if (stillCurrent && deictic.used?.source === 'pointer')
+        deixis?.onPointerUsed?.();
+      return out;
+    } finally {
+      releaseSerializedSibling?.();
+    }
   }
   /**
    * A voice session ended: invalidate every write still in flight, then
-   * forget the analyst's "last answer".
+   * forget the analyst's "last answer". Area handles stay (page lifetime).
    */
   runVoiceAction.resetConversation = () => {
+    conversationAbort.abort();
+    conversationAbort = new AbortController();
     conversation++;
+    serializedAttempt++;
+    serializedSiblingGroup = null;
+    serializedSiblingTail = Promise.resolve();
     analystEngine?.reset();
   };
   /** Voice was removed: nothing may run or write again. */
@@ -1257,6 +1412,7 @@ export function createGevActionRunner({
     if (disposed) return;
     runVoiceAction.resetConversation();
     disposed = true;
+    voiceAreas.dispose();
   };
   return runVoiceAction;
 }
@@ -3662,8 +3818,14 @@ async function aircraftProximityWindowForQuery(
       layerKeys: wanted,
       coverage,
       unanswered: [...(result?.unanswered || [])],
-      scopeLabel: answer.scopeLabel,
-      scopeDetail: answer.display.scope,
+      presentation: {
+        scopeLabel: answer.scopeLabel,
+        display: answer.display,
+        coverageScope: coverage.scope,
+        coverageNote: coverage.note,
+        centeredOn: answer.window.centeredOn,
+        window: answer.window,
+      },
     },
   };
 }
@@ -4646,6 +4808,7 @@ function analystProviders(
         placeSearch,
       ),
     isWarming = () => false,
+    resolveAreaScope = null,
   } = {},
 ) {
   // Per-layer truncation seen by the last getRecords call.
@@ -4700,6 +4863,7 @@ function analystProviders(
       return note ? note.trim() : null;
     },
     resolveRegionRing,
+    ...(resolveAreaScope ? { resolveAreaScope } : {}),
     /**
      * The active Contacts subject, when there is one — the centre the operator
      * is reasoning about while Contacts is up. Null whenever Contacts is off,
@@ -4733,6 +4897,15 @@ function analystProviders(
       };
     },
   };
+}
+
+/** The camera's view rectangle as [west, south, east, north] degrees, or null. */
+function cameraViewBox(viewer) {
+  const rect = viewer?.camera?.computeViewRectangle?.();
+  if (!rect) return null;
+  return [rect.west, rect.south, rect.east, rect.north].map((radians) =>
+    Cesium.Math.toDegrees(radians),
+  );
 }
 
 /** Identity fields every compact analyst item keeps when present. */
@@ -4789,6 +4962,9 @@ const ANALYST_REFUSAL_FIELDS = Object.freeze([
   'layers',
   'layerStatus',
   'cancelled',
+  'needsClarification',
+  'candidates',
+  'query',
 ]);
 
 async function runAnalystQuery(
@@ -4797,7 +4973,7 @@ async function runAnalystQuery(
   args = {},
   _layerEnabledAt,
   isCurrent = () => true,
-  signal = undefined,
+  signal = null,
 ) {
   let entityWindow = null;
   const result = await analystEngine.query(
@@ -4811,8 +4987,8 @@ async function runAnalystQuery(
       followUp: Boolean(args.followUp),
     },
     {
-      isCurrent,
       signal,
+      isCurrent,
       beforeCommit: async (candidate) => {
         const projected = await aircraftProximityWindowForQuery(
           dataManager,
@@ -4832,8 +5008,8 @@ async function runAnalystQuery(
       code: result.code || null,
       error: result.error,
     };
-    // The engine's semantic fields pass through unchanged: a cancellation
-    // stays a cancellation.
+    // The engine's semantic fields pass through unchanged: a clarification
+    // keeps its candidates, a cancellation stays a cancellation.
     for (const key of ANALYST_REFUSAL_FIELDS)
       if (result[key] !== undefined) refusal[key] = result[key];
     if (result.coverage) refusal.coverage = result.coverage;
@@ -4861,7 +5037,7 @@ async function runAnalystQuery(
     (result.coverage?.layersQueried || []).some(
       (l) => voiceLayer(l.layerKey)?.query?.viewportLoaded,
     );
-  if (viewportScoped && result.coverage) {
+  if (viewportScoped && result.coverage && !result.coverage.note) {
     result.coverage.note = 'the flights layer loads by viewport';
   }
   // ENTITY-CENTRED NEARBY: answered by the SAME engine that fills the Contacts
@@ -4908,7 +5084,9 @@ async function runAnalystQuery(
     ...(result.partial
       ? { partial: true, unanswered: result.unanswered || [] }
       : {}),
+    ...(result.areaId ? { areaId: result.areaId } : {}),
     ...(result.centeredOn ? { centeredOn: result.centeredOn } : {}),
+    ...(result.window ? { window: result.window } : {}),
     // Every count names its scope in words; a bare number is what made two
     // honest answers look like a contradiction.
     scopeLabel: result.scopeLabel,

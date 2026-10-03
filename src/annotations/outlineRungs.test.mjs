@@ -26,6 +26,7 @@ import {
   createGateStateStore,
   createNominatimGate,
 } from '../../server/providers/regional/nominatimGate.js';
+import { createVoiceAreas } from '../voice/areaActions.js';
 
 const TILES = [6745, 6746].map((y) =>
   decodeOpenFreeMapOutlineTile(
@@ -315,12 +316,50 @@ const NOMINATIM_ROWS = {
   'Central Park': [
     { category: 'leisure', type: 'park', name: 'Central Park', lat: '40.78', lon: '-73.965', osm_type: 'relation', osm_id: 8, geojson: { type: 'Polygon', coordinates: [square(40.78, -73.965, 0.01)] } },
   ],
+  'Bagmati Province': [
+    {
+      category: 'boundary',
+      type: 'administrative',
+      addresstype: 'province',
+      name: 'Bagmati Province',
+      lat: '27.7',
+      lon: '85.3',
+      osm_type: 'relation',
+      osm_id: 12345,
+      geojson: { type: 'Polygon', coordinates: [square(27.7, 85.3, 0.4)] },
+    },
+  ],
 };
 
 const PLACES = {
-  Toulouse: { lat: 43.6, lng: 1.44, name: 'Toulouse', label: 'Toulouse, France', types: ['locality', 'political'] },
-  'Central Park': { lat: 40.78, lng: -73.965, name: 'Central Park', label: 'Central Park, New York', types: ['park'] },
-  'Congress Avenue': { lat: 30.268, lng: -97.7427, name: 'Congress Avenue', label: 'Congress Ave, Austin', types: ['route'] },
+  Toulouse: {
+    lat: 43.6,
+    lng: 1.44,
+    name: 'Toulouse',
+    label: 'Toulouse, France',
+    types: ['locality', 'political'],
+  },
+  'Central Park': {
+    lat: 40.78,
+    lng: -73.965,
+    name: 'Central Park',
+    label: 'Central Park, New York',
+    types: ['park'],
+  },
+  'Congress Avenue': {
+    lat: 30.268,
+    lng: -97.7427,
+    name: 'Congress Avenue',
+    label: 'Congress Ave, Austin',
+    types: ['route'],
+  },
+  'Bagmati Province': {
+    lat: 27.7,
+    lng: 85.3,
+    name: 'Bagmati Province',
+    label: 'Bagmati Province, Nepal',
+    types: ['administrative_area_level_1', 'political'],
+  },
 };
 
 const viewerAt = (lat, lon, height = 4000) => ({
@@ -376,7 +415,22 @@ test('default settings: outline, street and building asks send nothing to Overpa
   const park = await resolve(viewerAt(40.78, -73.965), { target: 'Central Park' });
   assert.equal(park.outline?.outlineSource, 'nominatim');
 
-  const street = await resolve(viewerAt(30.27, -97.742), { target: 'Congress Avenue' });
+  const areas = createVoiceAreas({
+    viewer: viewerAt(27.7, 85.3, 40_000),
+    annotationResolver: resolver,
+    placeSearch,
+  });
+  const verified = await areas.resolveAreaAction({
+    query: 'Bagmati Province',
+    level: 'admin1',
+  });
+  assert.equal(verified.ok, true);
+  assert.equal(verified.sourceIdentity, 'Bagmati Province');
+  assert.equal(areas.store.get(verified.areaId).meta.adminLevel, 'admin1');
+
+  const street = await resolve(viewerAt(30.27, -97.742), {
+    target: 'Congress Avenue',
+  });
   assert.equal(street.outline?.outlineSource, 'openfreemap');
 
   const building = await resolve(viewerAt(30.2747, -97.7403, 800), {
@@ -388,8 +442,16 @@ test('default settings: outline, street and building asks send nothing to Overpa
   assert.equal(building.outline?.footprintKind, 'building');
   assert.equal(building.outline?.outlineSource, 'openfreemap');
 
-  assert.ok(upstream.every((url) => url.startsWith('https://nominatim.openstreetmap.org/search?')));
-  assert.equal(upstream.length, 2, 'one upstream request per explicit ask that needed one');
+  assert.ok(
+    upstream.every((url) =>
+      url.startsWith('https://nominatim.openstreetmap.org/search?'),
+    ),
+  );
+  assert.equal(
+    upstream.length,
+    3,
+    'one upstream request per explicit ask that needed one',
+  );
   assert.ok(!upstream.some((url) => /overpass/i.test(url)));
   // The only Overpass traffic is the local capability probe, answered locally.
   assert.ok(
