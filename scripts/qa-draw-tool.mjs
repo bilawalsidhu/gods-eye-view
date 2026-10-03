@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const BASE_URL = process.env.QA_BASE_URL || 'http://localhost:4173';
 const SHOT_DIR = process.env.QA_SHOT_DIR || 'qa-shots/draw';
@@ -18,14 +19,10 @@ const VIEW = {
   pitch: -85,
 };
 
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
 const browser = await puppeteer.launch({
   headless: !HEADFUL,
-  ...(HEADFUL
-    ? {
-        executablePath:
-          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      }
-    : {}),
+  ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
   args: [
     '--no-sandbox',
     '--disable-background-timer-throttling',

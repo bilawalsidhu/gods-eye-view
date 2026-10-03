@@ -16,6 +16,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -41,13 +42,10 @@ const WEATHER = [
   'weather-cyclones',
 ];
 
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
 const browser = await puppeteer.launch({
   headless: flag('--headless') ? 'new' : false,
-  executablePath:
-    process.env.PUPPETEER_EXECUTABLE_PATH ||
-    ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find((p) =>
-      existsSync(p),
-    ),
+  ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
   protocolTimeout: 300_000,
   defaultViewport: null,
   args: [

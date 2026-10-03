@@ -53,6 +53,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, fallback) => {
@@ -134,14 +135,7 @@ const POSES = [
   },
 ];
 
-const CHROME_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Version-pinned Chrome-for-Testing over the auto-updating system Chrome:
-  // its software-GL behavior shifts across majors and has produced false
-  // negatives in this repo's harnesses before.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-].filter(Boolean);
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
 
 const results = [];
 function record(name, ok, detail) {
@@ -213,9 +207,7 @@ async function main() {
   }
 
   fs.mkdirSync(SHOT_DIR, { recursive: true });
-  const executablePath = CHROME_CANDIDATES.find((candidate) => {
-    try { return fs.existsSync(candidate); } catch { return false; }
-  });
+  const executablePath = chromeExecutable;
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
     ...(executablePath ? { executablePath } : {}),

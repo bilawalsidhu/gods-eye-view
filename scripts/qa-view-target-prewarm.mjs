@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const shotsDir = path.join(repoRoot, 'qa-shots', 'prewarm');
@@ -30,12 +31,7 @@ const label = process.env.QA_LABEL || 'after';
 const headful = process.argv.includes('--headful');
 fs.mkdirSync(shotsDir, { recursive: true });
 
-const chromeCandidates = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-].filter(Boolean);
-const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
+const executablePath = await resolveChromeExecutable(puppeteer);
 const browser = await puppeteer.launch({
   headless: headful ? false : 'new',
   ...(executablePath ? { executablePath } : {}),

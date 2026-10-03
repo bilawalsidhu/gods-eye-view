@@ -387,10 +387,11 @@ async function main() {
   try {
     if (pending.length) {
       const { default: puppeteer } = await import('puppeteer');
+      const { resolveChromeExecutable } = await import('./qa-browser.mjs');
+      const chromeExecutable = await resolveChromeExecutable(puppeteer);
       browser = await puppeteer.launch({
         headless: false,
-        executablePath:
-          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
         protocolTimeout: 600000,
         args: [
           '--no-sandbox',
