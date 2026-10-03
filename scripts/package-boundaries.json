@@ -354,6 +354,7 @@
     "modules": [
       "src/ui/visualInput.js",
       "src/ui/applicationShortcuts.js",
+      "src/ui/commandCatalog.js",
       "src/ui/styleParameters.js"
     ],
     "external": []
