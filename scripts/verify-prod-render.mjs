@@ -8,9 +8,18 @@
 //
 // Usage: node scripts/verify-prod-render.mjs [baseUrl]
 import puppeteer from 'puppeteer';
+import fs from 'node:fs';
 
 const BASE_URL = process.argv[2] || 'https://globe-52p.pages.dev';
-const CHROME = '/usr/lib/chromium/chromium';
+// The QA suites' convention (scripts/qa-a11y.mjs): Puppeteer's own Chrome for
+// Testing, overridable via env. The system /usr/lib/chromium auto-updates
+// under us and its newer protocol has left puppeteer's browser-level attach
+// (Target.setDiscoverTargets) hanging at launch.
+const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH
+  || (() => { try { return puppeteer.executablePath(); } catch { return null; } })();
+if (!executablePath || !fs.existsSync(executablePath)) {
+  throw new Error('Puppeteer Chrome for Testing is unavailable (set PUPPETEER_EXECUTABLE_PATH)');
+}
 
 const consoleErrors = [];
 const failures = [];
@@ -20,8 +29,13 @@ const tally = (ok, label, detail) => {
 };
 
 const browser = await puppeteer.launch({
-  executablePath: CHROME,
-  headless: true,
+  executablePath,
+  headless: 'new',
+  // A loaded host can take the browser itself over 30 s to print its WS
+  // endpoint, and the CDP handshake can lose the CPU scheduler's race long
+  // after — give the launch the same generosity the boot waits below get.
+  timeout: 180000,
+  protocolTimeout: 600000,
   args: [
     '--no-sandbox',
     '--disable-dev-shm-usage',
@@ -129,7 +143,14 @@ try {
     };
     return {
       cctv: await probe('/api/cctv/sources'),
-      debugLog: await probe('/api/realtime/debug-log', { method: 'POST' }),
+      // The endpoint's shape validation (both runtimes, Pages parity) rejects
+      // a bodyless POST with 400 "record must be a JSON object" — send the
+      // minimal valid record so this probes the real 204 write path.
+      debugLog: await probe('/api/realtime/debug-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      }),
       regionalBrief: await probe('/api/regional-brief?latitude=30.201&longitude=-97.705'),
     };
   });

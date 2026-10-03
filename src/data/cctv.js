@@ -3185,9 +3185,13 @@ function startCardFrameLoop() {
  * Hidden-state gate (perf wave 2): detach in-flight card frame decodes when
  * the document hides — a hidden canvas has no reader, and image decode is
  * the expensive half. New fetches are gated at fetchCardFrame; the steady
- * pacer refills naturally on return. Installed once at module scope.
+ * pacer refills naturally on return. Installed once at module scope. The
+ * guard checks the API, not just the global — since the Phase 15A seams this
+ * module also loads in non-browser realms (node unit tests reach it through
+ * the voice seam's gevActions graph), where a partial `document` stub may
+ * exist without event plumbing.
  */
-if (typeof document !== 'undefined') {
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) return;
     for (const { image, onLoad, onError } of _cardFetchImages) {

@@ -36,12 +36,8 @@ import localDataLayers from './data/localLayers.js';
 import { LAYER_STATE_REGISTRY } from './data/layerState.js';
 import { registerDataCredits } from './data/dataCredits.js';
 import { attachCreditDock } from './creditsDock.js';
-import { SceneDirector } from './scenes/director.js';
-import { initGevVoiceCommands } from './voice/gevRealtime.js';
 import { MapStackController } from './mapStackController.js';
-import { initAnnotations } from './annotations/index.js';
 import { initLogoGaze } from './logoGaze.js';
-import { initCockpitCloudEffects } from './cockpitCloudEffects.js';
 import {
   installRenderGovernor,
   getRenderGovernorDiagnostics,
@@ -54,7 +50,37 @@ import { applyTilesetCachePolicy } from './tilesetCachePolicy.js';
 import { applySceneRenderScale } from './sceneRenderScale.js';
 import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
 import { installScopeMask } from './scopeMask.js';
-import { initFirstRunExperience } from './firstRunExperience.js';
+
+// ── Boot payload seams (Phase 15A — docs/PLAN.md) ──────────────────────────
+// The five subsystems below are first-use features (voice, annotations,
+// cinematic scenes, cockpit clouds, the first-run overlay), yet before this
+// split their whole import graphs rode inside the single entry chunk — the
+// largest single parse/eval cost of every boot. Each is now an async chunk:
+// the fetch STARTS here, at entry evaluation, so it overlaps viewer
+// construction and the Google 3D Tiles download; each await sits at the
+// exact site where the subsystem was previously constructed, so the
+// construction ORDER — annotations before voice, scenes before voice, cloud
+// effects before the visibility handler — is unchanged and every object
+// exists before `__gev_viewer_ready` fires.
+//
+// The boundary is enforced, not aspirational: `src/main.importgraph.test.mjs`
+// fails the suite if any module statically imports `src/voice/`,
+// `src/scenes/`, or `src/annotations/` into this entry's graph again (the
+// boot-path back edges this split removed: hud.js → gevActions,
+// locations.js → annotationResolver). Consequences of the seam design:
+//   - If a seam chunk fails to LOAD, init() throws into its own catch and
+//     the loading screen reports it — the same loud failure a static import
+//     produced, now attributable to one seam.
+//   - The chunks are runtime-cached by the service worker (vite.config.js
+//     `gev-lazy-assets`), and every boot fetches them, so a second visit is
+//     instant and offline-after-first-load keeps voice.
+const seams = {
+  voice: import('./voice/gevRealtime.js'),
+  scenes: import('./scenes/director.js'),
+  annotations: import('./annotations/index.js'),
+  cockpit: import('./cockpitCloudEffects.js'),
+  firstRun: import('./firstRunExperience.js'),
+};
 
 initLogoGaze();
 
@@ -297,7 +323,12 @@ async function init() {
     // clouds use a separate, capped low-resolution GPU pass that never attaches
     // Cesium fog or post-process stages and is fully stopped in map mode.
     const weatherEffects = null;
-    const cockpitCloudEffects = initCockpitCloudEffects(viewer);
+    // Seam await (Phase 15A): resolves against the fetch started at entry
+    // evaluation. The optional-chained setSuspended() calls below tolerate the
+    // pre-await window where this binding is still null.
+    let cockpitCloudEffects = null;
+    const cockpitModule = await seams.cockpit;
+    cockpitCloudEffects = cockpitModule.initCockpitCloudEffects(viewer);
 
     // If no share link state, do default fly-to Austin
     if (!styleManager.hasShareState) {
@@ -363,10 +394,13 @@ async function init() {
     }
 
     // Initialize deterministic scene playback for social clip capture
-    const sceneDirector = new SceneDirector(viewer, styleManager, dataManager);
+    // (seam awaits, Phase 15A — chunks fetched at entry evaluation).
+    const scenesModule = await seams.scenes;
+    const sceneDirector = new scenesModule.SceneDirector(viewer, styleManager, dataManager);
 
     // Initialize the voice "whiteboard" annotation engine (world-space renderer)
-    const annotations = initAnnotations({ viewer, tileset });
+    const annotationsModule = await seams.annotations;
+    const annotations = annotationsModule.initAnnotations({ viewer, tileset });
 
     // Keep startup chrome truthful: a share is not restored until camera,
     // visual/map/panel lanes, and every requested layer have terminated.
@@ -381,10 +415,20 @@ async function init() {
       const revealFirstRun = () => {
         if (firstRunRevealed) return;
         firstRunRevealed = true;
-        // dataManager is passed explicitly: the globe missions enable bundled
-        // keyless layers through it, and reaching for styleManager._dataManager
-        // would make a private field part of this feature's contract.
-        initFirstRunExperience({ styleManager, dataManager });
+        // Seam await (Phase 15A). Soft-fail by design: the first-run overlay
+        // is a post-load nicety, and throwing here would turn a missed chunk
+        // into an unhandled rejection on the reveal path.
+        (async () => {
+          try {
+            const { initFirstRunExperience } = await seams.firstRun;
+            // dataManager is passed explicitly: the globe missions enable bundled
+            // keyless layers through it, and reaching for styleManager._dataManager
+            // would make a private field part of this feature's contract.
+            initFirstRunExperience({ styleManager, dataManager });
+          } catch (seamError) {
+            console.warn('[Init] first-run experience unavailable:', seamError);
+          }
+        })();
       };
       loadingScreen.addEventListener('transitionend', revealFirstRun, { once: true });
       setTimeout(revealFirstRun, 900);
@@ -450,7 +494,8 @@ async function init() {
         drainLogBuffer,
       },
     };
-    window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations });
+    const voiceModule = await seams.voice;
+    window.__godsEyeView.voiceCommands = voiceModule.initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations });
 
     // Signal that the React scaffold can now consume window.__godsEyeView
     window.dispatchEvent(new CustomEvent('__gev_viewer_ready'));

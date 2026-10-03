@@ -56,6 +56,14 @@ test('classification of the measured 2026-09-13 build artifacts', () => {
     ['assets/regions-RPMKg9pq.js', 'regions'],
     ['assets/marine-BJ61ZZ9E.js', 'marine'],
     ['assets/san-francisco-B-TUYeaR.js', 'san-francisco'],
+    // The Phase 15A seam chunks each carry a deliberate row: a removed row
+    // would drop the chunk onto the 512 KiB default ceiling instead of its
+    // reviewed budget.
+    ['assets/voice-c0I72W_Q.js', 'voice-seam'],
+    ['assets/annotations-8ewpohNJ.js', 'annotations-seam'],
+    ['assets/scenes-BYIcqdqj.js', 'scenes-seam'],
+    ['assets/cockpitCloudEffects-D7aQ0GFe.js', 'cockpit-seam'],
+    ['assets/firstRunExperience-BFpi_u0Z.js', 'first-run-seam'],
   ];
   for (const [file, id] of expect) {
     assert.equal(classifyBundleFile(file)?.id, id, `${file} classifies as ${id}`);

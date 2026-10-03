@@ -42,9 +42,12 @@ const _scratchProbe = new Cesium.Cartographic();
 // Regime tracking: mesh cells only apply while the photoreal (google-3d)
 // stack renders. main.js re-dispatches MapStackController.onChange as this
 // CustomEvent; the boot default is photoreal, matching groundFloor's initial
-// preference. Module-scope listener: the module only loads in the browser
-// bundle, and the subscription is idempotent for the app's lifetime.
-if (typeof window !== 'undefined') {
+// preference. Module-scope listener: the subscription is idempotent for the
+// app's lifetime. The guard checks the API, not just the global — since the
+// Phase 15A seams this module also loads in non-browser realms (node unit
+// tests reach it through the voice seam's geActions graph), where a partial
+// `window` stub may exist without event plumbing.
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   window.addEventListener('gev:map-stack-changed', (event) => {
     const activeId = event?.detail?.activeId;
     if (activeId) setMeshFloorPreferred(activeId === 'photoreal');

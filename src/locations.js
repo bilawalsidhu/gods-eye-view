@@ -1,7 +1,14 @@
 import * as Cesium from 'cesium';
 import { api } from './config/apiEndpoints.js';
-import { viewportBias, placesNearViewRecovery } from './annotations/annotationResolver.js';
 import { findNaturalRegion } from './data/naturalEarthRegions.js';
+
+// annotationResolver (and the whole `annotations/` chunk it anchors — Phase
+// 15A) is deliberately NOT a static import: a static edge from this boot-path
+// module would pin the annotations chunk (resolver, renderers, engine) into
+// the entry bundle for two viewport-bias helpers. The fetch still starts the
+// moment this module evaluates, so the first geocode never waits on the
+// network — only the one-off off-critical-path chunk evaluation.
+const annotationResolverReady = import('./annotations/annotationResolver.js');
 
 /**
  * Points of Interest per city.
@@ -457,6 +464,7 @@ async function flyNaturalRegionFallback(viewer, query, options) {
  *   Result shape on success, CANCELLED_SEARCH on veto, null on miss/failure.
  */
 async function flyKeylessGeocode(viewer, query, options) {
+  const { viewportBias } = await annotationResolverReady;
   const params = [`q=${encodeURIComponent(query)}`, 'limit=8'];
   const bias = viewportBias(viewer);
   if (bias) params.push(`viewbox=${encodeURIComponent(bias)}`);
@@ -584,6 +592,7 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
   // Viewport-biased geocode — the same bias annotationResolver's geocodePlace uses:
   // "Sixth Street" spoken over Austin must prefer the Sixth Street on screen, not a
   // same-named road in another city (or the wrong end of town — the W 6th vs E 6th bug).
+  const { viewportBias, placesNearViewRecovery } = await annotationResolverReady;
   let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
   const bias = viewportBias(viewer);
   if (bias) url += `&bounds=${bias}`;

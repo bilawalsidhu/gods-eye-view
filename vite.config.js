@@ -248,6 +248,44 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       chunkSizeWarningLimit: 1500,
+      rollupOptions: {
+        output: {
+          // Phase 15A boot-payload seams (docs/PLAN.md): the voice, scenes,
+          // and annotations directories are lazy subsystems whose only boot
+          // entry points are the dynamic `import()` seams in src/main.js
+          // (plus the two post-boot consumers, hud.js and locations.js, which
+          // dynamic-import their one helper each). Pinning each DIRECTORY to
+          // one named chunk does three things the default per-module naming
+          // cannot:
+          //   1. `src/annotations/index.js` would otherwise emit a chunk
+          //      literally named `index-*.js` — colliding with the precache
+          //      glob (`assets/index-*.js`) and the main-chunk budget row.
+          //   2. The chunk names are hash-stable words the budget table in
+          //      src/config/bundleBudgets.js can pin deliberate ceilings to.
+          //   3. The whole directory moves as a unit, so a future module
+          //      added inside it cannot silently re-enter the entry chunk.
+          // onlyExplicitManualChunks is REQUIRED with the function form:
+          // Rollup's default (false) absorbs each matched module's FULL
+          // static dependency closure into the manual chunk (first alias
+          // wins) — every seam module imports Cesium and the shared app
+          // modules, so the "lazy" chunks swallowed the entry closure and
+          // the interleaved claims produced a `Circular chunk` warning with
+          // boot's Cesium fetch parked behind a seam chunk. Explicit mode
+          // (the Rollup 5 default) puts exactly the matched modules in each
+          // named chunk; their shared dependencies stay in the entry chunk
+          // they already belong to, and seam chunks depend on it — one-way.
+          // The boundary itself is enforced by src/main.importgraph.test.mjs
+          // (no static import from the entry closure into these dirs, and
+          // no static edge between the pinned directories).
+          onlyExplicitManualChunks: true,
+          manualChunks: (id) => {
+            if (id.includes('/src/voice/')) return 'voice';
+            if (id.includes('/src/scenes/')) return 'scenes';
+            if (id.includes('/src/annotations/')) return 'annotations';
+            return undefined;
+          },
+        },
+      },
     },
   };
 });

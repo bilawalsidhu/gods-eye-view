@@ -19,7 +19,14 @@ import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
 import { ellipsoidalToMslDisplayM, ensureGeoidReady, geoidHeight } from './data/geoid.js';
-import { getBasemapLabelContext } from './voice/gevActions.js';
+
+// gevActions anchors the whole voice-tool graph (action runner, realtime
+// session config, voice cost model) — Phase 15A moved that graph behind the
+// `voice` async chunk, so the HUD's one basemap-label helper waits on that
+// chunk instead of a static edge pinning it back into the boot bundle. The
+// fetch starts when this module evaluates; the first summary only waits on
+// chunk evaluation, which runs off the boot critical path.
+const gevActionsReady = import('./voice/gevActions.js');
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -698,6 +705,7 @@ export class IntelHUD {
   }
 
   async _summaryContext() {
+    const { getBasemapLabelContext } = await gevActionsReady;
     const labels = await getBasemapLabelContext(this.viewer);
     const enabledLayers = this._dataManager?.getAll?.()
       ?.filter((layer) => layer.enabled)

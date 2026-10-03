@@ -18,7 +18,15 @@ import militaryAwarenessLayer, {
 import { initCameraVerbs, moveCamera, flyRoute, interruptCameraMotion, adjustOrbitRange } from '../cameraVerbs.js';
 import { cachedGroundFloor, warmGroundFloor } from '../data/groundFloor.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
-import { resolveRegionRingForQuery } from '../annotations/annotationResolver.js';
+// Region-ring resolution is the ONLY edge from the voice subsystem into the
+// annotations subsystem. It must stay lazy (imported on first call, below):
+// both directories are pinned to manual chunks (vite.config.js), and a
+// static edge here makes those two chunks mutually recursive — Rollup breaks
+// such a cycle by hoisting their shared imports (all of Cesium among them)
+// into one chunk, which the entry then loads statically, undoing the boot
+// split. The sole consumer (data/analystEngine.js) awaits this provider, so
+// a promise-returning wrapper is contract-identical.
+const regionRingResolverReady = import('../annotations/annotationResolver.js');
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
 
@@ -4181,7 +4189,10 @@ function analystProviders(viewer, dataManager, { recordLimitByLayer = null } = {
         ? (mod.getAnalystRecords(requestedLimit) || [])
         : (mod.getAnalystRecords() || []);
     },
-    resolveRegionRing: (name) => resolveRegionRingForQuery(name),
+    resolveRegionRing: async (name) => {
+      const { resolveRegionRingForQuery } = await regionRingResolverReady;
+      return resolveRegionRingForQuery(name);
+    },
     /**
      * The active Contacts subject, when there is one — the centre the operator
      * is reasoning about while Contacts is up. Null whenever Contacts is off,
