@@ -474,6 +474,17 @@ export class PanelChrome {
         syncShare,
       });
     }
+    // Parent ownership is an invariant even on a no-op disclosure request.
+    // A stale compact Radio disclosure is absolutely positioned outside the
+    // measured Context rail; clear it before returning from an already-open
+    // Context request so it cannot paint over the active Context body.
+    if (
+      !nextCollapsed &&
+      panelId === 'global-context-panel' &&
+      this._contextRadioDock?.classList.contains('disclosure-open')
+    ) {
+      this._setRadioDisclosure?.(false);
+    }
     if (
       panelEl.classList.contains('collapsed') === nextCollapsed &&
       !wasAutoCollapsed
@@ -501,13 +512,6 @@ export class PanelChrome {
       if (this._cockpitContextCollapsedForDataPanel) {
         this.cockpitView.setContextCollapsed(true);
       }
-    }
-    if (
-      !nextCollapsed &&
-      panelId === 'global-context-panel' &&
-      this._contextRadioDock?.classList.contains('disclosure-open')
-    ) {
-      this._setRadioDisclosure?.(false);
     }
     if (
       !nextCollapsed &&
