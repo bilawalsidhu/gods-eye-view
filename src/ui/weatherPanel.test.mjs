@@ -576,6 +576,65 @@ test('all five headers retain descriptor icons and disclosure state when opened 
   view.destroy();
 });
 
+test('weather alerts render as an Alerts card with selectable severity rows', () => {
+  const calls = [];
+  const f = fixture();
+  const view = createWeatherPanel({
+    ...f,
+    setLayerParams: (...args) => calls.push(args),
+  });
+  view.update([
+    {
+      id: 'weather-alerts',
+      icon: '!',
+      summary: {
+        label: 'Alerts · NOAA NWS',
+        coverage: 'United States',
+        detail: '2 active warnings',
+        status: null,
+        lines: [{ id: 'area', text: 'Example County' }],
+      },
+      legend: [
+        { label: 'Extreme', color: '#e33b35' },
+        { label: 'Severe', color: '#ed7d31' },
+      ],
+      list: {
+        ariaLabel: 'Active NOAA weather alerts',
+        items: [
+          {
+            id: 'urn:oid:alert-1',
+            ordinal: 1,
+            lead: 'Extreme',
+            text: 'Tornado Warning · Example County',
+            active: true,
+            params: { alertId: 'urn:oid:alert-1', focus: true },
+          },
+        ],
+      },
+    },
+  ]);
+  const article = card(f, 'weather-alerts');
+  assert.equal(
+    f.find(
+      (node) => node.className?.split(' ').includes('rail-card-title'),
+      article,
+    ).textContent,
+    'Alerts · NOAA NWS',
+  );
+  const list = article.children[1].children[0];
+  assert.equal(list.tagName, 'OL');
+  assert.equal(list.getAttribute('aria-label'), 'Active NOAA weather alerts');
+  list.querySelector('.data-row-list-item').click();
+  assert.deepEqual(calls, [
+    [
+      'weather-alerts',
+      { alertId: 'urn:oid:alert-1', focus: true },
+      { origin: 'user' },
+    ],
+  ]);
+  view.destroy();
+});
+
 test('a change of open card scrolls its header into view once; refreshes never move the body', () => {
   const f = fixture();
   const body = f.container;
