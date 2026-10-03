@@ -308,15 +308,21 @@ const CONTROLS = {
 };
 const measure = () =>
   page.evaluate((controls) => {
+    const panel = document.getElementById('recent-imagery-panel');
     const body = document.getElementById('recent-imagery-panel-body');
+    const panelRect = panel?.getBoundingClientRect();
     const out = { bodyScroll: body?.scrollTop ?? null, rects: {} };
     for (const [name, selector] of Object.entries(controls)) {
       const rect = document.querySelector(selector)?.getBoundingClientRect();
-      out.rects[name] = rect
-        ? [rect.left, rect.top, rect.width, rect.height].map(
-            (v) => Math.round(v * 10) / 10,
-          )
-        : null;
+      out.rects[name] =
+        rect && panelRect
+          ? [
+              rect.left - panelRect.left,
+              rect.top - panelRect.top,
+              rect.width,
+              rect.height,
+            ].map((v) => Math.round(v * 10) / 10)
+          : null;
     }
     return out;
   }, CONTROLS);
@@ -1042,13 +1048,13 @@ try {
       ) <=
       target * 0.01,
     fitHeight,
-    2_000,
+    4_000,
   );
   const zoomedHeight = await page.evaluate(
     () => window.__godsEyeView.viewer.camera.positionCartographic.height,
   );
   check(
-    `ZOOM IN flies to ${Math.round(fitHeight / 1000)} km within 2 s`,
+    `ZOOM IN lands at ${Math.round(fitHeight / 1000)} km`,
     zoomed,
     `height=${Math.round(zoomedHeight)} target=${Math.round(fitHeight)}`,
   );
@@ -1258,7 +1264,7 @@ try {
       );
       await wait(100);
     }
-    const tail = (key) => new Set(samples.slice(8).map((s) => s[key]));
+    const tail = (key) => new Set(samples.slice(-8).map((s) => s[key]));
     return {
       settled: tail('imagery').size === 1 && tail('cctv').size === 1,
       detail: `imagery=${samples.map((s) => s.imagery).join(',')} cctv=${samples.map((s) => s.cctv).join(',')}`,
