@@ -5,6 +5,10 @@ export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
 import { keySetupRequirement } from '../keySetupCore.mjs';
 import { createWeatherPanel } from './weatherPanel.js';
+// A hung layer enable must never wedge its toggle: bound the busy state and
+// re-sync the control from the layer's actual state. The enable keeps running
+// underneath; when it settles the click handler re-syncs again.
+const LAYER_TOGGLE_TIMEOUT_MS = 30_000;
 const FEED_STATE_LABELS = Object.freeze({
   nominal: 'ON',
   loading: 'LOADING',
@@ -253,6 +257,18 @@ export class LayerPanel {
           return;
         toggle.setAttribute('aria-disabled', 'true');
         toggle.setAttribute('aria-busy', 'true');
+        // Bound the busy state: if the enable never settles, release the
+        // control so a retry is possible. The late settle still re-syncs
+        // through the finally below.
+        const busyTimer = setTimeout(() => {
+          console.warn(
+            `[Data] ${layer.id} toggle timed out after ${LAYER_TOGGLE_TIMEOUT_MS}ms; re-syncing control`,
+          );
+          const current = this.getAll().find(({ id }) => id === layer.id);
+          if (!this._destroyed && current && this._generation === generation)
+            this._syncToggleButton(toggle, current);
+        }, LAYER_TOGGLE_TIMEOUT_MS);
+        busyTimer.unref?.();
         try {
           await this.setEnabled(layer.id, !this.isEnabled(layer.id), {
             origin: 'user',
@@ -260,6 +276,7 @@ export class LayerPanel {
         } catch (error) {
           console.warn(`[Data] ${layer.id} toggle error:`, error);
         } finally {
+          clearTimeout(busyTimer);
           const current = this.getAll().find(({ id }) => id === layer.id);
           if (!this._destroyed && current && this._generation === generation)
             this._syncToggleButton(toggle, current);

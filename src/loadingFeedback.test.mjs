@@ -268,6 +268,57 @@ test('surfaces cancellation and failure terminal states', () => {
   }).terminal, 'error');
 });
 
+test('a missing key is guidance, not breakage: KEY REQUIRED, not LOAD FAILED', () => {
+  const summary = aggregateLayerLoading([{
+    id: 'local-firms',
+    name: 'Active Fires',
+    enabled: true,
+    lifecycleState: 'enabled',
+    stats: { loading: true, keyRequired: true },
+  }]);
+  const pending = reduceLoadingFeedback(createLoadingFeedbackState(), summary, 0);
+  const visible = reduceLoadingFeedback(pending, summary, 200);
+  const terminal = reduceLoadingFeedback(visible, aggregateLayerLoading([]), 250);
+  assert.equal(terminal.terminal, 'key-required');
+  const presentation = presentLoadingFeedback(terminal, aggregateLayerLoading([{
+    id: 'local-firms',
+    name: 'Active Fires',
+    enabled: true,
+    lifecycleState: 'enabled',
+    stats: { keyRequired: true },
+  }]), 250);
+  assert.equal(presentation.label, 'KEY REQUIRED');
+  assert.match(presentation.detail, /Active Fires/);
+  assert.match(presentation.detail, /POWER UP/);
+});
+
+test('a real breakage still dominates a missing key in the same batch', () => {
+  const summary = aggregateLayerLoading([
+    {
+      id: 'local-firms',
+      name: 'Active Fires',
+      enabled: true,
+      lifecycleState: 'enabled',
+      stats: { loading: true, keyRequired: true },
+    },
+    {
+      id: 'earthquakes',
+      name: 'Earthquakes',
+      enabled: true,
+      lifecycleState: 'enabled',
+      stats: { loading: true, lastError: 'boom' },
+    },
+  ]);
+  const pending = reduceLoadingFeedback(createLoadingFeedbackState(), summary, 0);
+  const visible = reduceLoadingFeedback(pending, summary, 200);
+  const terminal = reduceLoadingFeedback(visible, aggregateLayerLoading([]), 250);
+  assert.equal(terminal.terminal, 'error');
+  assert.equal(
+    presentLoadingFeedback(terminal, aggregateLayerLoading([]), 250).label,
+    'LOAD FAILED',
+  );
+});
+
 test('surfaces manager-owned refresh failure and recovery through the shared banner', () => {
   const refreshing = aggregateLayerLoading([{
     id: 'satellites',
@@ -325,7 +376,7 @@ test('AIS first-connect grace expiry reports failure even without a terminal man
   assert.equal(presentLoadingFeedback(state, unavailable, 300).label, 'LOAD FAILED');
 });
 
-test('participant stats failure outranks a simultaneous visibility completion', () => {
+test('participant stats key requirement outranks a simultaneous visibility completion', () => {
   const enabling = aggregateLayerLoading([{
     id: 'ais-live-vessels',
     name: 'AIS Vessels',
@@ -346,7 +397,8 @@ test('participant stats failure outranks a simultaneous visibility completion', 
     type: 'visibility', layerId: 'ais-live-vessels', enabled: true,
   });
 
-  assert.equal(state.terminal, 'error');
+  // A missing key is guidance, not a failure: the terminal state names it.
+  assert.equal(state.terminal, 'key-required');
 });
 
 test('retains the worst terminal outcome until every concurrent load drains', () => {

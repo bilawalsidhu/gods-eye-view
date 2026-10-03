@@ -85,13 +85,18 @@ export function normalizeLayerLoading(layer = {}) {
 function terminalFromParticipantStats(summary, participantIds) {
   if (!participantIds?.length) return null;
   const participants = new Set(participantIds);
-  return summary.records.some(
+  const failed = summary.records.filter(
     (record) =>
       participants.has(record.id) &&
       (record.error || record.unavailable || record.keyRequired),
-  )
-    ? 'error'
-    : null;
+  );
+  if (!failed.length) return null;
+  // A missing key is guidance, not breakage: the batch is only an error when
+  // something actually failed. Otherwise the global chip would lie — e.g.
+  // the keyless environmental mission folding "NASA FIRMS needs a key" into
+  // "LOAD FAILED".
+  const broken = failed.some((record) => record.error || record.unavailable);
+  return broken ? 'error' : 'key-required';
 }
 
 /** Aggregate all manager layers without changing their lifecycle authority. */
@@ -281,7 +286,9 @@ function terminalFromEvent(event) {
 }
 
 function mergeTerminalOutcome(current, next) {
-  const severity = { complete: 1, cancelled: 2, error: 3 };
+  // A real breakage dominates a missing key: 'key-required' is guidance, so
+  // it must never overwrite an 'error' already in the batch.
+  const severity = { complete: 1, cancelled: 2, 'key-required': 3, error: 4 };
   if (!next) return current || null;
   if (!current || severity[next] > severity[current]) return next;
   return current;
@@ -348,7 +355,7 @@ export function reduceLoadingFeedback(previous, summary, nowMs, event = null) {
     if (!wasVisible && terminal === 'complete')
       return createLoadingFeedbackState();
     const dwell =
-      terminal === 'error'
+      terminal === 'error' || terminal === 'key-required'
         ? LOADING_FAILURE_DWELL_MS
         : LOADING_TERMINAL_DWELL_MS;
     return {
@@ -371,6 +378,16 @@ export function reduceLoadingFeedback(previous, summary, nowMs, event = null) {
 
   if (state.phase === 'terminal' && now < state.hideAt) return state;
   return createLoadingFeedbackState();
+}
+
+/** Name the layers waiting on keys, so the global chip guides instead of alarming. */
+function keyRequiredDetail(summary) {
+  const names = (summary.records || [])
+    .filter((record) => record.keyRequired)
+    .map((record) => record.label)
+    .filter(Boolean);
+  const who = names.length ? names.join(' · ') : 'One or more layers';
+  return `${who} — add a key in POWER UP`;
 }
 
 /** Build the user-facing status copy for the current loading state. */
@@ -423,6 +440,7 @@ export function presentLoadingFeedback(state, summary, nowMs) {
       complete: 'LOAD COMPLETE',
       cancelled: 'LOAD CANCELLED',
       error: 'LOAD FAILED',
+      'key-required': 'KEY REQUIRED',
     };
     const label =
       state.operation === 'disabling' && state.terminal === 'complete'
@@ -432,7 +450,12 @@ export function presentLoadingFeedback(state, summary, nowMs) {
             state.activeIds[0] === 'military-installations'
           ? 'MAPPED SITES LOADED'
           : labels[state.terminal] || 'LOAD COMPLETE';
-    return { state: state.terminal, label, detail: '' };
+    return {
+      state: state.terminal,
+      label,
+      detail:
+        state.terminal === 'key-required' ? keyRequiredDetail(summary) : '',
+    };
   }
   const active = summary.active;
   if (active.length === 1 && active[0].cameraRetry && !summary.disabling) {

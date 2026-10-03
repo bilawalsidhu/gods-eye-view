@@ -2,6 +2,52 @@
 
 ## [Unreleased]
 
+- Fix the dev server's default bind and add installable-app (PWA) support.
+  The Vite server now binds the IPv4 loopback (`127.0.0.1`) by default
+  instead of `localhost`, which can resolve to `::1` only and leave IPv4
+  clients with connection refused on launch; `HOST` still overrides it
+  (e.g. `0.0.0.0` for LAN sharing). The app also ships a web manifest,
+  app icons (including a maskable variant), and iOS home-screen meta tags,
+  so "Add to Home Screen" installs it as a standalone app.
+
+- Make the UI touch-first. The globe canvas now owns its gestures
+  (`touch-action: none`, so drags rotate and pinches zoom instead of
+  triggering pull-to-refresh), taps on controls fire without the tap delay
+  or double-tap zoom (`touch-action: manipulation`), HUD chrome no longer
+  selects or pops iOS callouts on long-press, and the standalone PWA keeps
+  the HUD inside the safe area (`viewport-fit=cover`).
+
+- Add a GUIDED TOUR tile to the first-run launcher. It runs the scripted
+  San Francisco flythrough (the same camera moves and annotations the voice
+  agent would produce) as a self-running narration — watchable end-to-end
+  with no mic and no API keys.
+
+- Share through the platform share sheet. The share button now uses
+  `navigator.share()` where the platform offers it (one-tap sharing on
+  iPad), falling back to the clipboard exactly as before; dismissing the
+  sheet is reported, never silently converted to a copy.
+
+- Tell the truth about missing keys. The global status chip gains a
+  KEY REQUIRED terminal state (amber, with the layer names and a pointer
+  to POWER UP) instead of folding "needs an API key" into LOAD FAILED. A
+  real breakage in the same batch still dominates.
+
+- Add a 2D map mode (DISPLAY panel, or the M key). The flat map is
+  dramatically lighter on weak GPUs — the escape hatch for older tablets.
+  Session-local on purpose: a performance preference, not a shareable view.
+
+- Wind layer now fails over between models. When the selected model is down
+  (observed: NOAA GFS outage), the layer tries the other model once
+  (ECMWF IFS) instead of going dark, and the UI names the serving model
+  with a "(fallback)" marker.
+
+- Layer toggles can no longer wedge. The busy state is bounded at 30s: if
+  an enable never settles, the control re-syncs from the layer's actual
+  state so a retry stays possible.
+
+- Satellites row gains an ISS chip that flies to and tracks the
+  International Space Station (NORAD 25544).
+
 - Tighten the local MCP server and embed mode. The panel's `panel_request`
   needs the key in its MCP server's panel page, and refuses Provider
   Settings, credential and model endpoints, `/mcp` and development server

@@ -58,6 +58,36 @@ test('switching models clears old data and ignores an abort-insensitive late sou
   );
   layer.destroy();
 });
+test('a down selected model fails over to the other model instead of going dark', async () => {
+  const requested = [];
+  const { layer, calls } = harness({
+    getSnapshot: async (args) => {
+      requested.push(args.model);
+      if (args.model === 'gfs') return { unavailable: true, model: 'gfs' };
+      return snapshot('ifs');
+    },
+  });
+  await layer.update();
+  assert.deepEqual(requested, ['gfs', 'ifs']);
+  assert.equal(calls.filter(([name]) => name === 'setField').length, 1);
+  assert.equal(layer.getStats().model, 'IFS');
+  assert.match(layer.getRowControls().info, /ECMWF IFS \(fallback\) forecast/);
+  layer.destroy();
+});
+test('when both models are down the layer reports unavailable, not a fallback', async () => {
+  const requested = [];
+  const { layer, calls } = harness({
+    getSnapshot: async (args) => {
+      requested.push(args.model);
+      return { unavailable: true, model: args.model };
+    },
+  });
+  await layer.update();
+  assert.deepEqual(requested, ['gfs', 'ifs']);
+  assert.equal(calls.filter(([name]) => name === 'setField').length, 0);
+  assert.match(layer.getRowControls().info, /Unavailable/);
+  layer.destroy();
+});
 test('external and owned cancellation both cancel source work; queued switches stop on disable', async () => {
   let signal;
   const { layer } = harness({
@@ -357,10 +387,10 @@ test('sample stays fixed across model, field and unit changes; dismissal and dis
   await new Promise(resolve => setImmediate(resolve));
   const resampled = layer.getRowControls().summary.reading;
   assert.equal(resampled.coordinates, captured.coordinates);
-  assert.equal(resampled.model, 'ECMWF');
+  assert.equal(resampled.model, 'ECMWF IFS');
   assert.equal(resampled.position, captured.position);
   assert.equal(samples, 1, 'model and field changes never sample the moved camera');
-  assert.match(layer.getRowControls().summary.result.lines.find(({ id }) => id === 'meta').text, /ECMWF · valid/);
+  assert.match(layer.getRowControls().summary.result.lines.find(({ id }) => id === 'meta').text, /ECMWF IFS · valid/);
   await layer.update();
   assert.equal(layer.getRowControls().summary.reading.coordinates, captured.coordinates);
   layer.setParams({ inspect: true });

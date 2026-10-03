@@ -504,19 +504,57 @@ export class ShareLinkManager {
     this._scheduleUpdate();
   }
 
+  /** Build the full share URL for the current view, or null when unavailable. */
+  _buildShareUrl({ nowMs = Date.now() } = {}) {
+    const params = this._buildHashParams();
+    if (!params) return null;
+    params.set(SHARE_CREATED_AT_PARAM, String(Math.floor(nowMs / 1000)));
+    const shareUrl = new URL(window.location.href);
+    shareUrl.hash = params.toString();
+    return shareUrl.href;
+  }
+
   /** Copy a current-state snapshot with a copy-time timestamp. Returns true on success. */
   async copyLink({ nowMs = Date.now() } = {}) {
-    const params = this._buildHashParams();
-    if (!params) return false;
-    params.set(SHARE_CREATED_AT_PARAM, String(Math.floor(nowMs / 1000)));
-    const copiedUrl = new URL(window.location.href);
-    copiedUrl.hash = params.toString();
+    const href = this._buildShareUrl({ nowMs });
+    if (!href) return false;
     try {
-      await navigator.clipboard.writeText(copiedUrl.href);
+      await navigator.clipboard.writeText(href);
       return true;
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Share the current view through the platform share sheet when available
+   * (iOS / Android / desktop browsers with Web Share), falling back to the
+   * clipboard. Resolves to 'shared', 'copied', or 'failed'.
+   */
+  async shareLink({ nowMs = Date.now() } = {}) {
+    const href = this._buildShareUrl({ nowMs });
+    if (!href) return 'failed';
+    // canShare with just a URL is the reliable capability probe; some
+    // browsers expose share() but reject without it.
+    const canNativeShare =
+      typeof navigator.share === 'function' &&
+      (typeof navigator.canShare !== 'function' ||
+        navigator.canShare({ url: href }));
+    if (canNativeShare) {
+      try {
+        await navigator.share({
+          title: "God's Eye View",
+          text: 'Look at this view',
+          url: href,
+        });
+        return 'shared';
+      } catch (error) {
+        // AbortError = the user dismissed the sheet: not a failure, and not
+        // a cue to fall back to the clipboard behind their back.
+        if (error?.name === 'AbortError') return 'dismissed';
+      }
+    }
+    return (await this.copyLink({ nowMs })) ? 'copied' : 'failed';
   }
 
   _scheduleUpdate() {

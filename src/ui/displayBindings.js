@@ -1,6 +1,7 @@
 import { createFrameRateMonitor } from './frameRateMonitor.js';
 import { bindApplicationShortcuts } from './visualInput.js';
 import { bindDisplayControls } from './displayControls.js';
+import { createGlobeModeController } from './globeMode.js';
 import { canonicalizeDensity } from '../data/detectionPolicy.js';
 
 /** Own keyboard/display event subscriptions; settings remain with their state owners. */
@@ -60,6 +61,13 @@ export class DisplayBindings {
       viewer: this.viewer,
       documentRef: document,
     });
+    // 2D map mode: the lighter-weight escape hatch for weak GPUs.
+    this._globeModeController?.destroy();
+    this._globeModeController = createGlobeModeController({
+      viewer: this.viewer,
+      button: this._globeModeBtn,
+      showToast: (message) => this._showToast(message),
+    });
     this._applicationShortcuts = bindApplicationShortcuts({
       documentRef: document,
       searchInput: this._locationSearch,
@@ -89,6 +97,7 @@ export class DisplayBindings {
           this._syncShareState();
         },
         toggleCctv: () => this._toggleCctvEnabled(),
+        toggleGlobeMode: () => this._globeModeController?.toggle(),
       },
     });
 
@@ -117,6 +126,7 @@ export class DisplayBindings {
         allocationButtons: this._detectionAllocationBtns,
         fadeSliders: [this._detectionFadeSlider, this._detectionOpacitySlider],
         celestialButton: this._celestialBtn,
+        globeModeButton: this._globeModeBtn,
         modelsButton: this._models3dBtn,
         modelModeButtons: this._models3dBtn ? this._models3dModeBtns : [],
       },
@@ -191,6 +201,7 @@ export class DisplayBindings {
             this.setCelestialRingEnabled(false);
           }
         },
+        toggleGlobeMode: () => this._globeModeController?.toggle(),
         toggleHud: () => {
           this.shareLinkManager?.claimRestoreLane?.('visual');
           this.hud.toggle();
@@ -224,6 +235,8 @@ export class DisplayBindings {
     this._applicationShortcuts = null;
     this._frameRateMonitor?.destroy();
     this._frameRateMonitor = null;
+    this._globeModeController?.destroy();
+    this._globeModeController = null;
     this._displayControls?.destroy();
     this._displayControls = null;
   }

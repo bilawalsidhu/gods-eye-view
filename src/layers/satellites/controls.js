@@ -519,6 +519,16 @@ export function createControls({ state: layerState, services, parts, source }) {
             title,
             params: { catalog: active ? 'core' : 'dense' },
           },
+          {
+            id: 'iss',
+            label: 'ISS',
+            title: 'Fly to and track the International Space Station',
+            // Stateless action: the row does not re-render on tracking
+            // changes, so this never claims an active state it cannot keep.
+            onClick: () => {
+              methods.trackById(ISS_NORAD, { origin: 'user' });
+            },
+          },
         ],
         legend: satelliteClassLegend(_classTally()),
       };

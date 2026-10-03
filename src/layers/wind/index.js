@@ -50,6 +50,13 @@ export function createWindLayer({
   let error = null;
   let loading = false;
   let model = 'gfs';
+  // The model actually serving the current manifest: tracks automatic
+  // failover (e.g. GFS down → ECMWF IFS) so the UI names what is drawn.
+  let manifestServingModel = 'gfs';
+  const servingModelLabel = () => {
+    const base = manifestServingModel === 'ifs' ? 'ECMWF IFS' : 'GFS';
+    return manifestServingModel === model ? base : `${base} (fallback)`;
+  };
   let overlay = 'none';
   let paused = false;
   let units = 'km/h';
@@ -66,7 +73,7 @@ export function createWindLayer({
       position,
       units,
       overlay,
-      model: model === 'ifs' ? 'ECMWF' : 'GFS',
+      model: servingModelLabel(),
       validTime:
         formatWindValidTime(manifest?.cycle?.validIso) || 'Unavailable',
       status: loading
@@ -151,14 +158,35 @@ export function createWindLayer({
       notify();
       try {
         signal?.throwIfAborted();
-        const snapshot = await feed.getSnapshot({
+        let snapshot = await feed.getSnapshot({
           signal: controller.signal,
           model,
           overlay: requestedScalar(),
         });
+        // The selected model can be down while the other is healthy
+        // (observed: NOAA GFS outage with ECMWF IFS fine). Fail over once
+        // rather than leaving the layer dark.
+        let servingModel = model;
+        if (
+          snapshot.unavailable &&
+          !controller.signal.aborted &&
+          request === controller
+        ) {
+          const fallbackModel = model === 'gfs' ? 'ifs' : 'gfs';
+          const fallbackSnapshot = await feed.getSnapshot({
+            signal: controller.signal,
+            model: fallbackModel,
+            overlay: requestedScalar(),
+          });
+          if (!fallbackSnapshot.unavailable) {
+            snapshot = fallbackSnapshot;
+            servingModel = fallbackModel;
+          }
+        }
         if (!enabled || controller.signal.aborted || request !== controller)
           return false;
         manifest = snapshot;
+        manifestServingModel = servingModel;
         error = null;
         if (sampledPosition) sample(sampledPosition);
         if (snapshot.unavailable) {
@@ -201,6 +229,7 @@ export function createWindLayer({
       if (params.inspect === false) hideInspection();
       if (modelChanged) {
         manifest = null;
+        manifestServingModel = model;
         error = null;
         rendering?.stop();
         rendering?.clear();
@@ -293,7 +322,7 @@ export function createWindLayer({
           coverage: 'Global · 1° grid',
           validTime: manifest?.cycle?.validIso,
           issuedTime: manifest?.cycle?.runIso,
-          detail: `${model === 'ifs' ? 'ECMWF IFS' : 'GFS'} forecast · ${valid || 'Unavailable'}`,
+          detail: `${servingModelLabel()} forecast · ${valid || 'Unavailable'}`,
           status: loading
             ? 'Loading forecast'
             : preparing
@@ -373,7 +402,7 @@ export function createWindLayer({
           (overlay === 'none' && !speedLegendVisible)
             ? []
             : legend,
-        info: `${model === 'ifs' ? 'ECMWF IFS' : 'GFS'} forecast · ${label} (${legendUnit})${historyStatus ? `\n${historyStatus}` : ''}\nValid: ${valid || 'Unavailable'}${loading ? ' · loading' : preparing ? ' · preparing' : ''}\nIssued: ${run || 'Unavailable'}${manifest?.stale ? ' · STALE' : ''}${error ? '\n' + error : ''}${scalarMissing ? '\nSelected field unavailable · wind remains visible' : ''}${imageryError && !scalarMissing ? '\n' + imageryError + ' · wind remains visible' : ''}`,
+        info: `${servingModelLabel()} forecast · ${label} (${legendUnit})${historyStatus ? `\n${historyStatus}` : ''}\nValid: ${valid || 'Unavailable'}${loading ? ' · loading' : preparing ? ' · preparing' : ''}\nIssued: ${run || 'Unavailable'}${manifest?.stale ? ' · STALE' : ''}${error ? '\n' + error : ''}${scalarMissing ? '\nSelected field unavailable · wind remains visible' : ''}${imageryError && !scalarMissing ? '\n' + imageryError + ' · wind remains visible' : ''}`,
         infoTitle:
           'Surface wind at 10 m. Approximately 1° global grid. Curves follow the 10 m wind field, lifted 12 km for visibility; display height is not weather altitude. View lighting is for readability. Animation shows flow through one fixed forecast; it does not advance time. Color fields drape the globe basemap or the active photorealistic 3D Tiles.',
       };
@@ -427,11 +456,11 @@ export function createWindLayer({
         ...windStats(manifest),
         countLabel: 'Forecast',
         loading: loading || Boolean(preparing),
-        model: model.toUpperCase(),
+        model: manifestServingModel.toUpperCase(),
         overlay,
         paused,
         stale: Boolean(manifest?.stale),
-        source: model === 'ifs' ? 'ECMWF IFS' : 'NOAA GFS',
+        source: manifestServingModel === 'ifs' ? 'ECMWF IFS' : 'NOAA GFS',
         validTime:
           formatWindValidTime(manifest?.cycle?.validIso) || 'Unavailable',
         error:

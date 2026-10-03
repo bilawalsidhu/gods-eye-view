@@ -89,6 +89,10 @@ export function environmentalLabel(choice = ENVIRONMENTAL_LABEL_CHOICE) {
 
 /** @type {Readonly<Record<string, object>>} */
 export const FIRST_RUN_MISSIONS = Object.freeze({
+  tour: Object.freeze({
+    kind: 'tour',
+    busyText: 'Starting guided tour…',
+  }),
   contacts: Object.freeze({
     kind: 'context',
     contextMode: 'contacts',
@@ -261,15 +265,37 @@ export function rememberFirstRunSessionDismissed(sessionStorageRef) {
  * @param {(mode: string) => Promise<object>} deps.setContextMode
  * @param {(layerId: string) => Promise<boolean>} deps.setLayerEnabled
  * @param {() => Promise<any>} deps.flyToGlobe
+ * @param {() => Promise<any>} [deps.startTour] Injectable tour starter; defaults
+ *   to the annotations engine's self-running narration.
  * @returns {Promise<{ok: boolean, choice: string, result?: object, failedLayerIds?: string[]}>}
  */
 export async function runFirstRunChoice(
   choice,
-  { setContextMode, setLayerEnabled, flyToGlobe },
+  { setContextMode, setLayerEnabled, flyToGlobe, startTour },
 ) {
   const mission = FIRST_RUN_MISSIONS[choice];
   if (!mission) return { ok: false, choice };
   if (mission.kind === 'none') return { ok: true, choice };
+  if (mission.kind === 'tour') {
+    // The scripted San Francisco flythrough doubles as the narrated first-run
+    // tour: the same camera moves and annotations the voice agent would
+    // produce, watchable end-to-end with no mic and no keys. Fire-and-forget:
+    // the tour sequences itself over ~30s, so the launcher closes now and a
+    // synchronous throw is what keeps it open for retry.
+    const engine = globalThis.__gevAnnotations;
+    const engineTour = engine?.tour;
+    if (!startTour && typeof engineTour !== 'function')
+      return { ok: false, choice };
+    try {
+      const pending = (startTour || (() => engineTour.call(engine)))();
+      // A rejection mid-tour must not surface as an unhandled rejection; the
+      // tour already guards its own teardown.
+      Promise.resolve(pending).catch(() => {});
+      return { ok: true, choice };
+    } catch {
+      return { ok: false, choice };
+    }
+  }
   if (mission.kind === 'context') {
     const result = await setContextMode(mission.contextMode);
     return { ok: Boolean(result?.ok), choice, result };

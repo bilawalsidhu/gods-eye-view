@@ -13,7 +13,14 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
     cesiumToken: 'ion-fixture',
   });
   assert.equal(config.plugins[2], plugin);
-  assert.equal(config.server.host, 'localhost');
+  // The default binds the IPv4 loopback explicitly: 'localhost' can resolve
+  // to ::1 only on some systems, leaving IPv4 clients with refused
+  // connections on launch.
+  assert.equal(config.server.host, '127.0.0.1');
+  assert.equal(
+    createBrowserViteConfig({ host: 'localhost' }).server.host,
+    '127.0.0.1',
+  );
   assert.equal(config.server.port, 4173);
   assert.deepEqual(config.server.allowedHosts, [
     'localhost',

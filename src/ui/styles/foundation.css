@@ -102,6 +102,81 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── Touch-first ──────────────────────────────
+   The globe is a full-screen gesture surface with HUD chrome floating above
+   it. Without explicit touch-action the browser hijacks gestures: pull to
+   refresh, scroll chaining, the tap delay, and double-tap zoom. */
+
+/* No pull-to-refresh or scroll chaining at the document level; scrollable
+   panels manage their own overflow. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+/* The globe canvas owns every gesture that starts on it (one-finger rotate,
+   pinch zoom, two-finger tilt). Cesium's widgets.css normally sets this, but
+   this app does not load it — the default toolbar is hidden. */
+#cesiumContainer,
+#cesiumContainer canvas {
+  touch-action: none;
+}
+
+/* Taps on controls fire immediately, with no double-tap zoom. */
+button,
+[role='button'],
+a,
+input,
+select,
+summary,
+label {
+  touch-action: manipulation;
+}
+
+/* No gray tap flash on iOS. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* HUD chrome is not text: long-press must neither select it nor pop the iOS
+   callout menu. */
+.hud-top-bar,
+.hud-bottom-bar,
+.hud-top-left,
+.hud-bottom-left,
+.hud-top-right,
+.hud-bottom-right,
+#title-bar,
+#top-center-actions,
+#command-dock {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Standalone PWA ("Add to Home Screen"): the viewport extends under the notch
+   and home indicator (see viewport-fit=cover in index.html); keep the HUD
+   inside the safe area. max() only ever pushes chrome inward, so the
+   browser-chrome layout is untouched. */
+@media (display-mode: standalone) {
+  #title-bar {
+    top: max(32px, env(safe-area-inset-top));
+    left: max(36px, env(safe-area-inset-left));
+  }
+
+  #top-center-actions {
+    top: max(32px, env(safe-area-inset-top));
+  }
+
+  .hud-top-bar {
+    top: max(70px, calc(env(safe-area-inset-top) + 38px));
+  }
+
+  .hud-bottom-bar {
+    bottom: max(110px, calc(env(safe-area-inset-bottom) + 76px));
+  }
+}
+
 /* ── Cesium Container ─────────────────────────── */
 #cesiumContainer {
   width: 100%;

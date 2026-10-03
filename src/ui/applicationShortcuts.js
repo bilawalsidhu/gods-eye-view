@@ -38,6 +38,7 @@ export function bindApplicationShortcuts({
     if (key === 'f') actions.toggleLayers();
     if (key === 'd') actions.cycleDetection();
     if (key === 'c') actions.toggleCctv();
+    if (key === 'm') actions.toggleGlobeMode?.();
   };
   documentRef.addEventListener('keydown', onKeyDown);
   return {

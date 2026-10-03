@@ -2,8 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>God's Eye View</title>
+  <meta name="description" content="A spy-satellite simulator in your browser — live open source spatial intelligence on a photorealistic 3D globe." />
+  <meta name="theme-color" content="#0a0a0f" />
+  <!-- PWA: manifest + icons so "Add to Home Screen" installs like a real app. -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="God's Eye" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="stylesheet" href="/style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -35,5 +44,15 @@
   <!-- gev:template hud-loading -->
 
   <script type="module" src="/src/main.js"></script>
+  <script type="module">
+    // Service worker: app-shell caching for the installed PWA. Production
+    // only — the dev server has no sw.js and live-reload must not be
+    // intercepted.
+    if ('serviceWorker' in navigator && import.meta.env.PROD) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
 </body>
 </html>

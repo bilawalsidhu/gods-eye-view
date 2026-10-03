@@ -408,7 +408,7 @@ test('the menu is the four owner-ordered missions', () => {
   // went is the one-click globe-scale dump. Restoring the tile needs the
   // globe-LOD declutter first.
   assert.deepEqual(Object.keys(FIRST_RUN_MISSIONS), [
-    'contacts', 'space-missions', 'environmental', 'explore',
+    'tour', 'contacts', 'space-missions', 'environmental', 'explore',
   ]);
   assert.equal(FIRST_RUN_MISSIONS.infrastructure, undefined,
     'the infrastructure mission must be gone, not dormant');
@@ -432,6 +432,40 @@ test('Environmental enables BOTH its feeds and pulls out to the globe', async ()
   assert.equal(outcome.ok, true);
   assert.deepEqual(spy.calls.layerIds, ['earthquakes', 'local-firms']);
   assert.equal(spy.calls.globeFlights, 1);
+});
+
+test('Guided tour starts the narration without awaiting it', async () => {
+  let started = 0;
+  const spy = missionSpy();
+  const outcome = await runFirstRunChoice('tour', {
+    ...spy.deps,
+    startTour: async () => {
+      started += 1;
+      // The real tour sequences itself over ~30s; the launcher must not wait.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return { ok: true };
+    },
+  });
+  assert.equal(outcome.ok, true);
+  assert.equal(started, 1);
+  // Fire-and-forget: nothing else runs for a tour.
+  assert.deepEqual(spy.calls.contextModes, []);
+  assert.deepEqual(spy.calls.layerIds, []);
+  assert.equal(spy.calls.globeFlights, 0);
+});
+
+test('Guided tour failure keeps the launcher open for retry', async () => {
+  const spy = missionSpy();
+  const outcome = await runFirstRunChoice('tour', {
+    ...spy.deps,
+    // A synchronous throw means the engine never started: keep the launcher
+    // open. (An async rejection mid-tour is fire-and-forget by design.)
+    startTour: () => {
+      throw new Error('no engine');
+    },
+  });
+  assert.equal(outcome.ok, false);
+  assert.equal(outcome.choice, 'tour');
 });
 
 test('the tile is the FULLY CONFIGURED experience: quakes and fires together', () => {
@@ -556,7 +590,7 @@ test('markup, startup ordering and accessibility remain pinned', () => {
   const css = readStylesheet(new URL('../style.css', import.meta.url));
 
   assert.match(html, /id="first-run-launcher" role="dialog"[^>]*aria-labelledby="first-run-title"[^>]*hidden/);
-  assert.equal((html.match(/data-first-run-choice=/g) || []).length, 4);
+  assert.equal((html.match(/data-first-run-choice=/g) || []).length, 5);
   assert.match(html, /data-first-run-status[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /<input type="checkbox" data-first-run-suppress \/>/);
   assert.match(html, /<strong data-first-run-environmental-title>/);
@@ -579,7 +613,7 @@ test('markup, startup ordering and accessibility remain pinned', () => {
 
   // Menu order is the owner's, read straight off the markup.
   const order = [...html.matchAll(/data-first-run-choice="([a-z-]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(order, ['contacts', 'space-missions', 'environmental', 'explore']);
+  assert.deepEqual(order, ['tour', 'contacts', 'space-missions', 'environmental', 'explore']);
   assert.doesNotMatch(html, /data-first-run-choice="infrastructure"/,
     'the removed tile must leave no markup behind');
 

@@ -1426,14 +1426,23 @@ export class StyleManager extends ShellFacade {
   // ── Share Button ─────────────────────────────
 
   /**
-   * Wires the share button click to copy the current share link to the clipboard.
+   * Wires the share button click to the platform share sheet when available,
+   * falling back to copying the link to the clipboard.
    * @returns {void}
    */
   _initShareButton() {
     this._lifetime.listen(this._shareBtn, 'click', async () => {
-      const success = await this.shareLinkManager.copyLink();
-      if (!this._disposed)
-        this._showToast(success ? 'Link copied!' : 'Copy failed');
+      const outcome = await this.shareLinkManager.shareLink();
+      if (this._disposed) return;
+      this._showToast(
+        outcome === 'shared'
+          ? 'Shared!'
+          : outcome === 'copied'
+            ? 'Link copied!'
+            : outcome === 'dismissed'
+              ? 'Share dismissed'
+              : 'Copy failed',
+      );
     });
   }
 

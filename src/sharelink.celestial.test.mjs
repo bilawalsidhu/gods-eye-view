@@ -305,6 +305,70 @@ test('clipboard rejection leaves both live URL and restore suppression untouched
   assert.equal(manager._initialRestorePending, true);
 });
 
+function installShare({ share, canShare } = {}) {
+  const calls = { shared: [], copied: [] };
+  const navigatorStub = {
+    clipboard: {
+      writeText: async (url) => {
+        calls.copied.push(url);
+      },
+    },
+  };
+  if (share) {
+    navigatorStub.share = async (data) => {
+      calls.shared.push(data);
+      return share(data);
+    };
+  }
+  if (canShare) navigatorStub.canShare = canShare;
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: navigatorStub,
+  });
+  return calls;
+}
+
+test('native share sheet is preferred when the platform offers it', async () => {
+  const calls = installShare({ share: async () => {} });
+  const manager = makeManager();
+  assert.equal(await manager.shareLink({ nowMs: 5_000_000 }), 'shared');
+  assert.equal(calls.shared.length, 1);
+  assert.equal(calls.shared[0].title, "God's Eye View");
+  assert.ok(new URL(calls.shared[0].url).hash.includes('at=5000'));
+  assert.equal(calls.copied.length, 0);
+});
+
+test('dismissing the share sheet is not a failure and never falls back silently', async () => {
+  const abort = new Error('dismissed');
+  abort.name = 'AbortError';
+  const calls = installShare({
+    share: async () => {
+      throw abort;
+    },
+  });
+  const manager = makeManager();
+  assert.equal(await manager.shareLink({ nowMs: 5_000_000 }), 'dismissed');
+  assert.equal(calls.copied.length, 0);
+});
+
+test('a share failure other than dismissal falls back to the clipboard', async () => {
+  const calls = installShare({
+    share: async () => {
+      throw new Error('no activity');
+    },
+  });
+  const manager = makeManager();
+  assert.equal(await manager.shareLink({ nowMs: 5_000_000 }), 'copied');
+  assert.equal(calls.copied.length, 1);
+});
+
+test('without Web Share the button copies exactly like before', async () => {
+  const calls = installShare();
+  const manager = makeManager();
+  assert.equal(await manager.shareLink({ nowMs: 5_000_000 }), 'copied');
+  assert.equal(calls.copied.length, 1);
+});
+
 test('legacy Panoptic and Sparse hashes migrate to canonical profiles', () => {
   const panoptic = makeManager('#lat=10&lon=20&dm=PANOPTIC&dd=0').parseInitialHash();
   assert.equal(panoptic.detectionMode, 'DENSE');

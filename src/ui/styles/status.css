@@ -157,6 +157,15 @@
 #global-loading-status[data-state='retry'] #global-loading-detail {
   color: #ffd488;
 }
+/* A missing key is guidance, not breakage: amber like retry/cancelled, and
+   the detail line stays visible to name the layers waiting on keys. */
+#global-loading-status[data-state='key-required'] {
+  border-color: rgba(255, 212, 136, 0.55);
+}
+#global-loading-status[data-state='key-required'] #global-loading-label,
+#global-loading-status[data-state='key-required'] #global-loading-detail {
+  color: #ffd488;
+}
 #global-loading-status[data-state='cancelled'] #global-loading-label,
 #global-loading-status[data-state='cancelled'] #global-loading-detail {
   color: #ffd488;

@@ -9,7 +9,7 @@ export function createBrowserViteConfig({
   publicDir,
   googleApiKey,
   cesiumToken,
-  host = 'localhost',
+  host = '127.0.0.1',
   port = 4173,
   command,
 } = {}) {
@@ -37,7 +37,12 @@ export function createBrowserViteConfig({
       ],
     },
     server: {
-      host: host || 'localhost',
+      // 'localhost' can resolve to ::1 only on some systems, leaving IPv4
+      // clients (including sandboxed browsers and `curl 127.0.0.1`) with
+      // connection refused on launch. Pin the default to the IPv4 loopback
+      // so http://localhost:4173 works everywhere; HOST still overrides
+      // (e.g. 0.0.0.0 for LAN sharing, which also widens allowedHosts).
+      host: host && host !== 'localhost' ? host : '127.0.0.1',
       port: parseInt(port, 10) || 4173,
       allowedHosts:
         host === '0.0.0.0' || host === '::'
