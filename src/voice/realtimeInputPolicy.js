@@ -142,6 +142,53 @@ export function resolveVoiceVisualizerSpeaker(
   return nextSpeaker === 'user' || nextSpeaker === 'ai' ? nextSpeaker : 'idle';
 }
 
+export const VOICE_PRESENTATION_STATES = Object.freeze([
+  'idle',
+  'connecting',
+  'ready',
+  'listening',
+  'working',
+  'executing',
+  'speaking',
+  'interrupted',
+  'error',
+]);
+
+/**
+ * Project existing voice/session owners into one truthful HUD presentation state.
+ *
+ * This deliberately does not equate `speaker === 'ai'` with audible speech:
+ * Realtime marks AI ownership at response creation, before output audio is
+ * necessarily playing.
+ *
+ * @param {object} input
+ * @param {string} [input.sessionState='idle'] Session/controller state.
+ * @param {'idle'|'user'|'ai'} [input.speaker='idle'] Current turn speaker owner.
+ * @param {boolean} [input.responseActive=false] A model response is in flight.
+ * @param {boolean} [input.actionActive=false] A typed GEV action is executing.
+ * @param {boolean} [input.outputAudible=false] Assistant output is measurably audible.
+ * @param {boolean} [input.interrupted=false] The current turn was interrupted.
+ * @returns {string} Presentation-only state.
+ */
+export function resolveVoicePresentationState({
+  sessionState = 'idle',
+  speaker = 'idle',
+  responseActive = false,
+  actionActive = false,
+  outputAudible = false,
+  interrupted = false,
+} = {}) {
+  if (sessionState === 'error') return 'error';
+  if (sessionState === 'idle') return 'idle';
+  if (sessionState === 'connecting') return 'connecting';
+  if (interrupted) return 'interrupted';
+  if (actionActive || sessionState === 'executing') return 'executing';
+  if (outputAudible) return 'speaking';
+  if (speaker === 'user') return 'listening';
+  if (responseActive) return 'working';
+  return 'ready';
+}
+
 /**
  * Resolves the in-app help tray copy for the current push-to-talk state.
  * @param {boolean} pushToTalkMode
