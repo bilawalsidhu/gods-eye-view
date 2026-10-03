@@ -463,3 +463,46 @@ the SGP4 verdict above, every standing WASM candidate is now closed with
 measurements: the app's JavaScript compute costs are microseconds against
 millisecond budgets, and the real cost centers are Cesium's own render/tile
 work and (pre-audit) frame submission volume. **No WASM candidate is open.**
+
+## Per-frame callback census (Phase 15B, 2026-10-03, same container)
+
+`scripts/profile-frame-census.mjs` is the repeatable instrument for the
+question Phase 14's request-census could only answer in aggregate: WHO
+runs on every rendered frame, and how many times. It wraps the live
+scene's four frame events in place (the installed @cesium/engine stores
+listeners in a `Map`, not an array) and counts callback invocations with
+per-frame raise counts as the denominator; owners are captured from the
+registration-time stack (a wrapper's call-time stack cannot contain the
+listener's own frame — it has not been entered yet).
+
+Counts from the 2026-10-03 capture (12 s phases, 1600×900 SwiftShader,
+host load 60–87; frame counts are load-bound, calls/frame ratios are
+exact; this run predates the attribution fix, so owners are function-
+name level — the committed instrument adds `/src/` owner columns):
+
+| Scene / phase | frames | preRender listeners | preRender calls/frame | postRender listeners | postRender calls/frame |
+|---|---:|---:|---:|---:|---:|
+| baseline parked | 7 | 1 | 1.00 | 5 | 3.00 |
+| baseline motion | 10 | 2 | 1.50 | 5 | 3.00 |
+| targets parked | 7 | 5 (1 never called) | 5.00 | 5 | 5.00 |
+| targets motion | 7 | 6 | 5.86 | 5 | 5.00 |
+
+Reading, honestly:
+- Baseline boot carries 8 pre-attached frame listeners; the 15B target
+  cohort (radio, military-awareness, planets, rocket-launches) adds 4
+  preRender consumers (one of which never fired in the parked phase —
+  the layer was mid-rollback, see the planets enable bug in
+  docs/PLAN.md Phase 15B). Each consumer runs exactly 1.00/frame — no
+  double-registration leaks.
+- The census motivated the two Phase 15B cadence moves (planets'
+  per-frame ConstantProperty churn ×8 entities → one 60 s interval;
+  rocket-launches' per-frame declutter walk → dirty-flag + quantized
+  pose gate with a 500 ms floor). Radio and military-awareness were
+  already cadence-bound and are unchanged. The durable per-layer
+  evidence for the rockets move is `getStats().declutterWalks /
+  declutterWalksSkipped`, asserted by `scripts/qa-frame-cadence.mjs`.
+- A full-boot outage on this box (~12:30–14:00 UTC-5: the renderer's
+  main thread blocked 10+ min under host load, four consecutive boot
+  failures after two clean morning runs) limited the capture to
+  function-name-level attribution. The instrument is committed and
+  reproduces the table with full attribution when the box boots.

@@ -1324,3 +1324,51 @@ test('mission panel payload table states PAYLOAD DATA UNAVAILABLE, never CLASSIF
   assert.doesNotMatch(source, /Undisclosed payload/);
   assert.match(source, /payloadRowCells\(payload\)/, 'renderMissionPanel renders through the pure helper');
 });
+
+test('missionDeclutterWalkDecision gates the per-frame entity walk on change, not on frame count', async () => {
+  const { missionDeclutterWalkDecision } = await import('./rocketLaunches.js');
+  // Explicit invalidation always walks.
+  assert.equal(missionDeclutterWalkDecision({ dirty: true, poseChanged: false, sinceWalkMs: 0 }), true);
+  // A quantized camera pose change always walks (horizon is camera-position driven).
+  assert.equal(missionDeclutterWalkDecision({ dirty: false, poseChanged: true, sinceWalkMs: 0 }), true);
+  // Parked camera, no mutations, floor not elapsed: the walk has no work.
+  assert.equal(missionDeclutterWalkDecision({ dirty: false, poseChanged: false, sinceWalkMs: 100 }), false);
+  // Parked camera, floor elapsed: the safety net bounds any missed flag.
+  assert.equal(missionDeclutterWalkDecision({ dirty: false, poseChanged: false, sinceWalkMs: 501 }), true);
+  assert.equal(
+    missionDeclutterWalkDecision({ dirty: false, poseChanged: false, sinceWalkMs: 500 }),
+    true,
+    'at exactly the floor the walk runs — staleness is bounded at one floor interval',
+  );
+  // A non-finite clock fails safe toward doing the work.
+  assert.equal(missionDeclutterWalkDecision({ dirty: false, poseChanged: false, sinceWalkMs: Number.NaN }), true);
+  // The default floor is the module's 500 ms safety net.
+  assert.equal(
+    missionDeclutterWalkDecision({ dirty: false, poseChanged: false, sinceWalkMs: 499 }),
+    false,
+  );
+});
+
+test('missionCameraPositionKey quantizes position, tolerates partial cameras', async () => {
+  const { missionCameraPositionKey } = await import('./rocketLaunches.js');
+  const C3 = Cesium.Cartesian3;
+  const a = C3.fromDegrees(-80.604, 28.608, 18_000_000);
+  // Stable within a ~10 m bin.
+  assert.equal(missionCameraPositionKey(a), missionCameraPositionKey(a));
+  // Crosses a bin for a material move — the horizon pass's actual trigger.
+  const moved = new C3(a.x + 500, a.y, a.z);
+  assert.notEqual(missionCameraPositionKey(a), missionCameraPositionKey(moved));
+  // Partial/absent cameras (headless stubs) yield null instead of throwing.
+  assert.equal(missionCameraPositionKey(undefined), null);
+  assert.equal(missionCameraPositionKey({ x: Number.NaN, y: 0, z: 0 }), null);
+  assert.equal(missionCameraPositionKey({ y: 0, z: 0 }), null);
+});
+
+test('getStats exposes the declutter-walk cadence counters', async () => {
+  const { default: layer } = await import('./rocketLaunches.js');
+  const stats = layer.getStats();
+  assert.equal(typeof stats.declutterWalks, 'number');
+  assert.equal(typeof stats.declutterWalksSkipped, 'number');
+  assert.ok(stats.declutterWalks >= 0);
+  assert.ok(stats.declutterWalksSkipped >= 0);
+});

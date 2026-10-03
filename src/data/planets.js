@@ -8,7 +8,7 @@
  */
 
 import * as Cesium from 'cesium';
-import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
+import { governorRequestRender } from '../renderGovernor.js';
 
 // ─── Orbital Elements (J2000 mean elements) ───────────────────────────────────
 
@@ -63,7 +63,7 @@ let _viewer = null;
 let _enabled = false;
 const _params = { showLabels: true };
 const _entities = new Map();   // planetId → Cesium.Entity
-let _preRenderRemover = null;
+let _refreshTimer = null;
 
 // ─── Orbital Mechanics ───────────────────────────────────────────────────────
 
@@ -222,7 +222,7 @@ function moonEcefPosition(time) {
 
 // ─── Layer Interface ─────────────────────────────────────────────────────────
 
-const REFRESH_MS = 60_000; // Update ephemeris every 60s
+const REFRESH_MS = 60_000; // Update ephemeris and entity positions every 60s
 
 let _lastEphemerisUpdate = 0;
 const _cachedPositions = new Map(); // planetId → Cesium.Cartesian3
@@ -230,36 +230,72 @@ const _cachedPositions = new Map(); // planetId → Cesium.Cartesian3
 /**
  * Refresh the cached per-planet ECEF positions, at most once per REFRESH_MS.
  * @param {Cesium.JulianDate} julianDate Current scene time.
- * @returns {void}
+ * @returns {boolean} Whether the cache actually refreshed this call.
  */
 function _updateEphemeris(julianDate) {
   const now = Cesium.JulianDate.toMilliseconds(julianDate);
-  if (now - _lastEphemerisUpdate < REFRESH_MS && _cachedPositions.size > 0) return;
+  if (now - _lastEphemerisUpdate < REFRESH_MS && _cachedPositions.size > 0) return false;
   _lastEphemerisUpdate = now;
 
   for (const [planetId] of PLANET_ELEMENTS) {
     const ecef = planetEcefPosition(planetId, julianDate);
     _cachedPositions.set(planetId, ecef);
   }
+  return true;
 }
 
 /**
- * Per-frame entity position update driven from scene.preRender.
+ * Push the cached positions onto the entities: the seven planets from the
+ * cache, the Moon recomputed at the same cadence. Assigning `entity.position`
+ * wraps the value in a fresh ConstantProperty and dirties the static geometry
+ * batch, so this must run at the REFRESH_MS cadence — NOT per frame (Phase
+ * 15B census: the per-frame writes rebuilt eight ellipsoids' geometry sixty
+ * times a second while moving them less than 0.002% of their display radius
+ * per minute).
+ * @param {Cesium.JulianDate} julianDate Current scene time.
  * @returns {void}
  */
-function _tick() {
-  if (!_enabled || !_viewer) return;
-  const time = _viewer.clock.currentTime;
-  _updateEphemeris(time);
-
-  // Update entity positions
+function _writePositions(julianDate) {
   for (const [planetId, entity] of _entities) {
     if (planetId === 'moon') {
-      entity.position = moonEcefPosition(time);
+      entity.position = moonEcefPosition(julianDate);
     } else {
       const pos = _cachedPositions.get(planetId);
       if (pos) entity.position = pos;
     }
+  }
+}
+
+/**
+ * Interval-driven update (Phase 15B): refresh the ephemeris, write positions,
+ * and request exactly one render. An interval, not a scene.preRender listener,
+ * because with the render governor parked there ARE no frames — a preRender
+ * listener would never fire to produce the frame that moves the planets.
+ * Visual parity at 60 s cadence: the Moon — the fastest mover here — covers
+ * ~61 km per minute against a 3,840 km display radius (<0.002%); planetary
+ * motion is orders slower still.
+ * @returns {void}
+ */
+function _update() {
+  if (!_enabled || !_viewer) return;
+  const time = _viewer.clock.currentTime;
+  _updateEphemeris(time);
+  _writePositions(time);
+  governorRequestRender('planets-ephemeris');
+}
+
+/** Start the refresh interval (idempotent) and run one immediate update. */
+function _startRefresh() {
+  if (_refreshTimer) return; // already armed — never re-arm or reset the phase
+  _refreshTimer = setInterval(_update, REFRESH_MS);
+  _update();
+}
+
+/** Stop the refresh interval. Safe to call from any state. */
+function _stopRefresh() {
+  if (_refreshTimer) {
+    clearInterval(_refreshTimer);
+    _refreshTimer = null;
   }
 }
 
@@ -279,6 +315,7 @@ const planetsLayer = {
     _entities.clear();
     _cachedPositions.clear();
     _lastEphemerisUpdate = 0;
+    _stopRefresh();
 
     // Create entity for each planet
     for (const planetId of PLANET_ELEMENTS.keys()) {
@@ -305,7 +342,14 @@ const planetsLayer = {
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           pixelOffset: new Cesium.Cartesian2(0, -20),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          translucencyByDistance: new Cesium.Interval(new Cesium.ConstantProperty(new Cesium.Cartesian2(1e9, 1.0)), new Cesium.ConstantProperty(new Cesium.Cartesian2(5e9, 0.3))),
+          // Must be a NearFarScalar. A Cesium.Interval here used to be
+          // accepted silently (its `far <= near` guard reads undefined <=
+          // undefined → false) and cloned into {near: undefined, far:
+          // undefined, ...} — NearFarScalar.interpolate then produced NaN
+          // translucency and the documented beyond-1e9-m label fade never
+          // happened. Verified against the installed Cesium Billboard
+          // constructor and LabelVisualizer path.
+          translucencyByDistance: new Cesium.NearFarScalar(1e9, 1.0, 5e9, 0.3),
         },
       });
 
@@ -333,33 +377,50 @@ const planetsLayer = {
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
         pixelOffset: new Cesium.Cartesian2(0, -16),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        translucencyByDistance: new Cesium.Interval(new Cesium.ConstantProperty(new Cesium.Cartesian2(1e9, 1.0)), new Cesium.ConstantProperty(new Cesium.Cartesian2(5e9, 0.3))),
+        // Same NearFarScalar requirement as the planet labels above.
+        translucencyByDistance: new Cesium.NearFarScalar(1e9, 1.0, 5e9, 0.3),
       },
     });
     _entities.set('moon', moonEntity);
 
-    // Pre-render listener for smooth animation
-    _preRenderRemover = viewer.scene.preRender.addEventListener(_tick);
+    // No preRender listener: updates are interval-driven (see _update). The
+    // layer's previous preRender `_tick` + `holdContinuousRender` pair kept
+    // the scene rendering continuously while enabled — repainting eight
+    // nearly-static ellipsoids at frame rate — for a body whose fastest
+    // visible motion is ~0.002%/minute.
 
     console.log('[Data:Planets] Initialized');
   },
 
-  enable(viewer) {
+  enable() {
     _enabled = true;
-    holdContinuousRender('planets');
 
     // Show entities
     for (const entity of _entities.values()) {
       entity.show = true;
     }
 
-    // Immediate ephemeris update
-    _updateEphemeris(viewer.clock.currentTime);
+    _startRefresh();
   },
 
-  disable(_viewer) {
+  /**
+   * Manager update contract: DataLayerManager calls `update(viewer, {signal})`
+   * once during the enable transaction and rolls the enable back if the call
+   * throws (manager.js enable path). Without this method the manager's
+   * `entry.module.update(...)` was a TypeError — every Planets enable through
+   * the manager (UI toggle included) failed and rolled back with the layer
+   * stuck OFF. `updateInterval: 0` keeps the manager's own poll loop from
+   * calling update again; the 60 s interval in _startRefresh drives motion.
+   * @returns {Promise<boolean>} Always true — motion is interval-driven.
+   */
+  async update() {
+    _update();
+    return true;
+  },
+
+  disable() {
     _enabled = false;
-    releaseContinuousRender('planets');
+    _stopRefresh();
 
     for (const entity of _entities.values()) {
       entity.show = false;
@@ -367,10 +428,7 @@ const planetsLayer = {
   },
 
   destroy(viewer) {
-    if (_preRenderRemover) {
-      _preRenderRemover();
-      _preRenderRemover = null;
-    }
+    _stopRefresh();
     for (const entity of _entities.values()) {
       viewer.entities.remove(entity);
     }

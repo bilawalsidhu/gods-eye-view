@@ -3041,6 +3041,139 @@ so.
   measure only (maximumScreenSpaceError/cacheBytes A/B on the census,
   ship nothing without a visual-parity check).
 
+### 15A record — boot payload split (DONE 2026-10-03, commit 9ddebc2)
+
+What landed: five first-use dynamic `import()` seams in `src/main.js`
+(voice, scenes, annotations, cockpit cloud effects, first-run) plus the
+two back-edge splits that would otherwise have defeated the seams
+(`hud.js` → `gevActions.js`, `locations.js` → `annotationResolver.js`).
+`vite.config.js` pins each seam directory to a named chunk with
+`output.onlyExplicitManualChunks`. `src/config/importGraph.js` (new,
+zero-dependency static import walker) + `src/main.importgraph.test.mjs`
+guard the boundary: the entry closure must never reach a seam directory,
+and pinned chunks must never reach each other. `bundleBudgets.js` gained
+a measured row per seam chunk.
+
+- **A lazy-factory DataLayerManager conversion was REJECTED on
+  measurement.** Prototyping showed the 16 layer modules' static graph
+  is only ~90 KB of the 5.9 MB entry — the layer code is not where the
+  weight is (Cesium is). Converting `register()` to async factories
+  would have bought a tenth of the win at the cost of making every
+  panel/HUD consumer await the module. The seams were cut where the
+  bytes actually are.
+- **`manualChunks` function-form gotcha (measured, cost one build
+  iteration):** without `onlyExplicitManualChunks`, Rollup absorbs each
+  matched module's full static dependency closure into the manual chunk
+  — the annotations pin hoisted ALL of Cesium into a 4.75 MB
+  `annotations` chunk and emitted a Circular-chunk warning. The pin only
+  groups what is explicitly listed; the guard test now pins this.
+- **Measured (build gate, this box):** entry chunk 6,086,202 →
+  **5,843,743 B**; seam chunks 124.5 / 65.5 / 26.2 / 13.6 / 7.2 kB;
+  precache shell 5,945.6 KiB against the 6.5 MB workbox cap;
+  BUNDLE-BUDGETS PASS; `verify-prod-render.mjs` 8/8 on the built dist;
+  lint clean; 4,061 unit tests pass.
+- **Honest entry math:** the entry delta (~236 KB) is far smaller than
+  the seam chunks' total because Cesium dominates the entry either way —
+  the win is that voice/annotations/scenes now parse off the boot path
+  and their growth is budgeted per chunk instead of invisible inside one
+  5.9 MB blob. First-visit latency claims stay qualitative on this box
+  (CPU-contended; the load caveat below applies).
+- 15D's "prepare A/B probes" item is unaffected; the import-graph test
+  is the permanent seam guard going forward.
+
+### 15B record — per-frame walk census + cadence moves (DONE 2026-10-03)
+
+Instrument: `scripts/profile-frame-census.mjs` — wraps the live scene's
+four frame events in place (the installed @cesium/engine stores listeners
+in a `Map<listener, Set<scope>>`, not an array) and counts callback
+invocations per rendered frame, with per-frame raise counts as the
+denominator. Attribution is captured at REGISTRATION time (the patched
+`addEventListener` records the registering stack's first `/src/` frame):
+a wrapper's call-time stack can never contain the listener's own frame —
+it has not been entered yet — so the first instrument version's
+call-time attribution was structurally impossible (it credited the probe
+itself, or fell through to "(cesium internal)").
+
+**Census table (2026-10-03 run, 12 s phases, 1600×900 SwiftShader under
+host load 60–87 — frame counts are load-bound; calls/frame ratios are
+exact):**
+
+| Scene / phase | frames | preRender listeners | preRender calls/frame | postRender listeners | postRender calls/frame |
+|---|---:|---:|---:|---:|---:|
+| baseline parked | 7 | 1 | 1.00 | 5 | 3.00 |
+| baseline motion | 10 | 2 | 1.50 | 5 | 3.00 |
+| targets parked | 7 | 5 (1 never called) | 5.00 | 5 | 5.00 |
+| targets motion | 7 | 6 | 5.86 | 5 | 5.00 |
+
+The motion-phase preRender delta is the scripted orbit driver itself.
+The baseline postRender "3.00/frame" is three same-named registrations
+(overlay-host lanes) plus two others — this run predates registration
+time attribution, so owners are function-name level only; the committed
+instrument reproduces this table with full `/src/` owner columns. A
+refresh run is scheduled (this box could not complete a full app boot
+between ~12:30 and 14:00 — four consecutive boot failures with the
+renderer's main thread blocked for 10+ min; two runs had succeeded the
+same morning).
+
+**Cadence verdicts (per module, Phase 15B cohort):**
+
+- **planets.js — CONVERTED to interval-driven.** Was: a per-frame
+  preRender `_tick` re-assigning cached positions onto all eight
+  ellipsoid entities (each assignment wraps a fresh ConstantProperty and
+  dirties the static geometry batch — 8 rebuilds per frame, 60×/s, to
+  move bodies <0.002% of display radius per minute), recomputing the
+  Moon's Simon1994+ICRF ephemeris per frame, and holding continuous
+  render permanently while enabled. Now: one 60 s `setInterval` writes
+  positions and requests exactly one render; the layer holds nothing.
+  Removed from `LOW_DEMAND_HOLD_OWNERS` accordingly.
+- **rocketLaunches.js — per-frame declutter walk GATED.** Was: an
+  unconditional entity horizon walk every frame inside
+  `updateMissionFrame`. Now gated by `missionDeclutterWalkDecision`:
+  dirty flags set at every mutation site (selection, replay stop, hover
+  changes, roster feed reconcile), a 10 m-binned quantized camera
+  position key (partial-stub cameras fail safe toward walking), and a
+  500 ms floor safety net. `getStats()` now publishes
+  `declutterWalks` / `declutterWalksSkipped`.
+- **radio.js — already cadence-bound, no change.** 250 ms interval tick
+  with camera-epsilon gating and per-station occluder walk.
+- **militaryAwareness.js — already exemplary, no change.** Quantized
+  camera-motion-signature pose hysteresis; 750 ms parked / 175 ms motion
+  refresh floor; 250 ms settle. The census confirms the pattern 15B
+  spreads is the one this module already used.
+
+**Two real product bugs the 15B work surfaced and fixed:**
+
+1. **Planets could never be enabled through the manager.**
+   DataLayerManager's enable transaction calls `module.update(viewer,
+   {signal})` unconditionally and rolls the enable back if it throws;
+   planets had no `update` method, so every enable (UI toggle included)
+   threw a TypeError and rolled back — silently, and because `init()`
+   never sets `show:false`, the entities rendered anyway while the
+   manager considered the layer OFF (one disable made it permanently
+   un-re-enableable). Fixed with an `async update()` (the layer's
+   `updateInterval: 0` keeps the manager's poll loop from double-driving;
+   the 60 s interval owns motion) + a contract test.
+2. **The planets label distance fade never worked.** A
+   `Cesium.Interval` passed as `translucencyByDistance` is accepted
+   silently — the Billboard constructor guard reads `far <= near` as
+   `undefined <= undefined` (false) — then `NearFarScalar.clone` stores
+   undefined fields and interpolation yields NaN translucency. The
+   documented beyond-1e9-m fade could not have fired. Fixed with
+   `new Cesium.NearFarScalar(1e9, 1.0, 5e9, 0.3)` on all eight labels,
+   pinned by four unit tests against the installed Cesium behavior.
+
+**Behavioral gate:** `scripts/qa-frame-cadence.mjs` replaces pixel A/B
+for this change set (the label-fade fix is a DELIBERATE visual change
+beyond 1e9 m, and 60 s position writes are sub-pixel by design). It
+asserts: 8 entities with non-zero positions after enable; no rendered
+label carries a NaN-field fade; the declutter walk tracks a camera move
+with no explicit invalidation; a parked camera holds the walk to the
+500 ms floor. Unit-level equivalents of all four assertions pass (the
+4070-test suite includes the planets/rocket/governor contract tests);
+the in-browser script itself was blocked from executing on
+2026-10-03 afternoon by the same boot outage that limited the census
+capture, and runs with the scheduled census refresh.
+
 ### Honest limits
 
 - Static import/census numbers are facts; the *impact* estimates for

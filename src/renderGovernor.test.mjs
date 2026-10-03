@@ -209,7 +209,9 @@ test('resolveGovernorTargetFrameRate is pure and pins the decision table', () =>
   // low-demand; camera-driven holders and unknown ids are baseline.
   assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['style-anim', 'flights'], cameraActive: false }), 30);
   assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['flights'], cameraActive: false }), 30);
-  assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['flights', 'military', 'satellites', 'traffic', 'planets', 'ais-vessels'], cameraActive: false }), 30);
+  // 'planets' left the set in Phase 15B — the layer holds nothing anymore;
+  // as an unknown id it would fail-safe to baseline, so it left this array too.
+  assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['flights', 'military', 'satellites', 'traffic', 'ais-vessels'], cameraActive: false }), 30);
   assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['flights', 'tracked-entity'], cameraActive: false }), 60);
   assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['cctv-projection'], cameraActive: false }), 60);
   assert.equal(resolveGovernorTargetFrameRate({ ...base, holds: ['not-a-known-owner'], cameraActive: false }), 60);

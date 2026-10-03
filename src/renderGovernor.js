@@ -70,10 +70,12 @@ export const LOW_DEMAND_HOLD_OWNERS = Object.freeze(new Set([
   'flights', // dead-reckoned fleet interpolation (JulianDate.now-based)
   'military', // same pipeline, military fork
   'satellites', // SGP4 propagation, wall-clock-positioned
-  'planets', // computed ephemeris
   'traffic', // elapsed-time route animation
   'ais-vessels', // dead-reckoned vessel interpolation
   'style-anim', // wall-clock-timed style shaders (the original member)
+  // 'planets' was removed in Phase 15B: the layer no longer holds continuous
+  // render at all — its updates are interval-driven and request one render
+  // per 60 s ephemeris refresh (see src/data/planets.js).
 ]));
 
 /** Owner id of the style loop's continuous-render hold (src/ui.js). */

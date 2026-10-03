@@ -73,6 +73,13 @@ const _animationStarts = new Map();
 const _satelliteTelemetry = new Map();
 let _lastPanelTelemetryMs = 0;
 let _lastMissionRingRotationMs = 0;
+/** Phase 15B declutter-walk cadence state (see missionDeclutterWalkDecision). */
+const MISSION_WALK_FLOOR_MS = 500;
+let _declutterWalkDirty = true;
+let _lastWalkPosKey = null;
+let _lastWalkMs = 0;
+let _declutterWalks = 0;
+let _declutterWalksSkipped = 0;
 let _activeTleText = null;
 let _activeTlePromise = null;
 let _activeTlePromiseToken = 0;
@@ -1250,6 +1257,7 @@ function setSelectedMission(launchId, isolate = true) {
   if (_missionZoomAnchorId && _missionZoomAnchorId !== launchId) stopMissionZoomAnchor();
   _selectedLaunchId = launchId;
   _explicitSelection = Boolean(launchId && isolate);
+  _declutterWalkDirty = true; // anchor visibility gates on the selection
   if (launchId) _animationStarts.set(launchId, Date.now());
   if (!launchId && _viewer) {
     stopMissionZoomAnchor();
@@ -2253,6 +2261,7 @@ function stopMissionReplay() {
   _replayPaused = false;
   _replayPausedAtMs = null;
   if (stoppedLaunchId) _animationStarts.set(stoppedLaunchId, Date.now());
+  _declutterWalkDirty = true;
   syncReplayButton();
   syncMissionOverlayEntries();
 }
@@ -2860,7 +2869,10 @@ function clearMissionRosterHover() {
   _missionRosterHoverTimer = null;
   const changed = _hoveredRosterLaunchId !== null;
   _hoveredRosterLaunchId = null;
-  if (changed) syncMissionOverlayEntries();
+  if (changed) {
+    _declutterWalkDirty = true; // the walk gates hover billboards on the pin
+    syncMissionOverlayEntries();
+  }
 }
 
 /**
@@ -2894,6 +2906,7 @@ function scheduleMissionRosterPreview(index) {
   if (!launch || _selectedLaunchId) return;
   if (_missionRosterHoverTimer) clearTimeout(_missionRosterHoverTimer);
   _hoveredRosterLaunchId = launch.id;
+  _declutterWalkDirty = true; // the walk gates hover billboards on the pin
   syncMissionOverlayEntries();
   _missionRosterHoverTimer = setTimeout(() => {
     _missionRosterHoverTimer = null;
@@ -3244,22 +3257,60 @@ function setGraphicVisibility(graphic, visible, time) {
 }
 
 /**
- * Per-frame declutter pass installed on preRender: refresh panel telemetry,
- * dress the replay vehicle overlay, refresh the selected mission's live event
- * label, and apply horizon visibility to each layer graphic. `entity.show`
- * stays reserved for mission-selection isolation; horizon state is applied to
- * the individual graphics so rear-side anchors remain reevaluable.
+ * Quantized camera-position key for the declutter walk gate. Position only —
+ * horizon visibility depends on where the camera IS, never where it points —
+ * quantized to the same ~10 m bins as iconOrientation.cameraPoseSignature.
+ * A partial camera (positionless stubs in headless realms) yields null, which
+ * fails the gate toward "changed" so the walk keeps running.
+ * @param {Cesium.Cartesian3|undefined} positionWC Camera world position.
+ * @returns {string|null} Quantized key, or null when the position is unusable.
  */
-function updateMissionFrame() {
-  if (!_enabled || !_viewer || !_dataSource?.show) {
-    hideReplayVehicleOverlay();
-    return;
+export function missionCameraPositionKey(positionWC) {
+  if (!positionWC
+    || !Number.isFinite(positionWC.x)
+    || !Number.isFinite(positionWC.y)
+    || !Number.isFinite(positionWC.z)) {
+    return null;
   }
-  updateMissionTelemetry();
-  const time = Cesium.JulianDate.now(_declutterTime);
-  _declutterOccluder.cameraPosition = _viewer.scene.camera.positionWC;
-  updateReplayVehicleOverlay(_declutterOccluder);
-  refreshSelectedMissionOverlayText();
+  return `${Math.round(positionWC.x / 10)}:${Math.round(positionWC.y / 10)}:${Math.round(positionWC.z / 10)}`;
+}
+
+/**
+ * Decide whether the declutter pass's entity horizon walk has work this frame.
+ *
+ * Horizon visibility is a function of the camera position alone (the occluder
+ * is rebuilt from `camera.positionWC` above), so between frames the walk's
+ * outcome can only change when (a) the quantized camera position key
+ * (`missionCameraPositionKey`) changed, (b) some mutation flagged the walk
+ * dirty (selection, roster hover pin, replay toggle, feed reconcile), or
+ * (c) the floor elapsed — a safety net that bounds the staleness of any
+ * missed flag to one floor interval rather than letting a stale graphic
+ * persist forever.
+ *
+ * @param {object} input Decision inputs.
+ * @param {boolean} input.dirty Whether a mutation explicitly invalidated the walk.
+ * @param {boolean} input.poseChanged Whether the quantized camera position changed.
+ * @param {number} input.sinceWalkMs Ms since the last completed walk.
+ * @param {number} [input.floorMs] Safety-net interval (default MISSION_WALK_FLOOR_MS).
+ * @returns {boolean} Whether the walk should run.
+ */
+export function missionDeclutterWalkDecision({ dirty, poseChanged, sinceWalkMs, floorMs = MISSION_WALK_FLOOR_MS } = {}) {
+  if (dirty || poseChanged) return true;
+  const since = Number(sinceWalkMs);
+  // A non-finite clock never blocks the walk — fail safe toward doing work.
+  if (!Number.isFinite(since)) return true;
+  return since >= floorMs;
+}
+
+/**
+ * Apply horizon visibility to every layer graphic: `entity.show` stays
+ * reserved for mission-selection isolation; horizon state lands on the
+ * individual graphics so rear-side anchors remain reevaluable as the camera
+ * moves. Runs only when the walk gate (above) says its inputs changed.
+ * @param {Cesium.JulianDate} time Scene time for graphic property reads.
+ * @returns {void}
+ */
+function walkMissionEntityVisibility(time) {
   for (const entity of _dataSource.entities.values) {
     if (!entity.show) continue;
     if (!entity.position) continue;
@@ -3275,9 +3326,6 @@ function updateMissionFrame() {
         id,
         _selectedLaunchId,
       );
-      // Keep entity.show reserved for mission-selection isolation. Horizon
-      // state is applied to the individual graphics below so a rear-side
-      // anchor remains eligible for reevaluation as the camera moves.
     }
     if (entity.point) {
       setGraphicVisibility(entity.point, horizonVisible, time);
@@ -3289,6 +3337,43 @@ function updateMissionFrame() {
         time,
       );
     }
+  }
+}
+
+/**
+ * Per-frame declutter pass installed on preRender: refresh panel telemetry,
+ * dress the replay vehicle overlay, refresh the selected mission's live event
+ * label, and apply horizon visibility to each layer graphic. Telemetry is
+ * self-throttled (250 ms), the replay overlay does per-frame work only while
+ * a replay is active, and the entity horizon walk is cadence-gated by
+ * `missionDeclutterWalkDecision` — it runs per frame while the camera moves
+ * (when its result visibly changes) and drops to the 500 ms floor when the
+ * scene is parked.
+ */
+function updateMissionFrame() {
+  if (!_enabled || !_viewer || !_dataSource?.show) {
+    hideReplayVehicleOverlay();
+    return;
+  }
+  updateMissionTelemetry();
+  const time = Cesium.JulianDate.now(_declutterTime);
+  _declutterOccluder.cameraPosition = _viewer.scene.camera.positionWC;
+  updateReplayVehicleOverlay(_declutterOccluder);
+  refreshSelectedMissionOverlayText();
+  const nowMs = performance.now();
+  const posKey = missionCameraPositionKey(_viewer.scene.camera?.positionWC);
+  if (missionDeclutterWalkDecision({
+    dirty: _declutterWalkDirty,
+    poseChanged: posKey !== _lastWalkPosKey,
+    sinceWalkMs: nowMs - _lastWalkMs,
+  })) {
+    _declutterWalkDirty = false;
+    _lastWalkPosKey = posKey;
+    _lastWalkMs = nowMs;
+    _declutterWalks += 1;
+    walkMissionEntityVisibility(time);
+  } else {
+    _declutterWalksSkipped += 1;
   }
 }
 
@@ -3945,6 +4030,7 @@ async function performMissionUpdate(token) {
     const activeTleText = _activeTleText;
     if (_replayCameraLaunchId) stopMissionReplay();
     _launches = launches;
+    _declutterWalkDirty = true; // the walked entity set was just rebuilt
     removeMissionOrbitPrimitives();
     _dataSource.entities.removeAll();
     _missionOverlayRecords.clear();
@@ -4154,7 +4240,18 @@ const rocketLaunchesLayer = {
     _dataManager = null;
   },
 
-  getStats() { return { count: _count, orbitMatches: _orbitMatches, lastUpdate: _lastUpdate, error: _lastError }; },
+  getStats() {
+    return {
+      count: _count,
+      orbitMatches: _orbitMatches,
+      lastUpdate: _lastUpdate,
+      error: _lastError,
+      // Phase 15B declutter-walk cadence counters (the census + budget tests
+      // read these to confirm the walk is gated, not gone).
+      declutterWalks: _declutterWalks,
+      declutterWalksSkipped: _declutterWalksSkipped,
+    };
+  },
   attachDataManager(dataManager) { _dataManager = dataManager; },
 };
 
