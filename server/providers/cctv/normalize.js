@@ -372,6 +372,36 @@ export function isLikelyFinlandCoordinate(lat, lon) {
   return lat >= 59.5 && lat <= 70.5 && lon >= 19 && lon <= 32;
 }
 
+/** Catalonia bounding box (mainland is roughly 40.5..42.9 N, 0.15..3.4 E). */
+export function isLikelyCataloniaCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 40.3 &&
+    lat <= 42.9 &&
+    lon >= 0.0 &&
+    lon <= 3.4
+  );
+}
+
+/**
+ * Decode decimal numeric HTML character references ("&#237;" -> "í"), the
+ * entity form the Catalonia feed uses for accented place names, plus the
+ * handful of named entities XML/HTML text commonly carries.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function decodeNumericEntities(text) {
+  return String(text || '')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
+}
+
 /**
  * Human label for one Fintraffic preset (camera view).
  *
