@@ -19,3 +19,7 @@ output/
 3d-models/
 pinokio/ENVIRONMENT
 pinokio/.installed
+
+# Operator-supplied layers — see docs/USER-LAYERS.md. Local layers stay out
+# of diffs and pull requests.
+src/userLayers/*.layer.js
