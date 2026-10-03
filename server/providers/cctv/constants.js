@@ -113,6 +113,25 @@ export const CALTRANS_ANCHORS = [
   { lat: 32.7157, lon: -117.1611 }, // San Diego
   { lat: 38.5816, lon: -121.4944 }, // Sacramento
 ];
+export const FLORIDA_CCTV_URL =
+  'https://services.arcgis.com/3wFbqsFPLeKqOlIK/arcgis/rest/services/FL511_Traffic_Cameras/FeatureServer/0/query';
+export const FLORIDA_IMAGE_HOSTS = [
+  'images-dis.divas.cloud',
+  'snapshots.divas.cloud',
+];
+export const DEFAULT_FLORIDA_MAX_SOURCES = 500;
+/** Byte cap per catalog page (2,000 rows, about 650 KiB measured). */
+export const FLORIDA_MAX_CATALOG_BYTES = 2 * 1024 * 1024;
+export const FLORIDA_ANCHORS = [
+  { lat: 25.7617, lon: -80.1918 }, // Miami
+  { lat: 28.5384, lon: -81.3789 }, // Orlando
+  { lat: 27.9506, lon: -82.4572 }, // Tampa
+  { lat: 30.3322, lon: -81.6557 }, // Jacksonville
+  { lat: 30.4383, lon: -84.2807 }, // Tallahassee
+  { lat: 26.1224, lon: -80.1373 }, // Fort Lauderdale
+  { lat: 26.7153, lon: -80.0534 }, // West Palm Beach
+  { lat: 30.4213, lon: -87.2169 }, // Pensacola (panhandle)
+];
 /** TfL JamCams: one keyless list endpoint; frames live on a public S3 bucket. */
 export const TFL_JAMCAM_URL = 'https://api.tfl.gov.uk/Place/Type/JamCam';
 export const TFL_IMAGE_ORIGIN =
