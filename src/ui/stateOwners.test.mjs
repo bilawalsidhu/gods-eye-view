@@ -106,6 +106,61 @@ test('share teardown settles its promise, removes gestures and rejects a retaine
   assert.equal(applies, 0);
 });
 
+test('invalid shared layer state surfaces only after initial restore settles', async (t) => {
+  const prior = {
+    window: globalThis.window,
+    document: globalThis.document,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+    cancelAnimationFrame: globalThis.cancelAnimationFrame,
+  };
+  let frameId = 0;
+  globalThis.window = new EventTarget();
+  globalThis.document = { getElementById: () => null };
+  globalThis.requestAnimationFrame = (callback) => {
+    const id = ++frameId;
+    queueMicrotask(() => callback(0));
+    return id;
+  };
+  globalThis.cancelAnimationFrame = () => {};
+  t.after(() => Object.assign(globalThis, prior));
+
+  const notices = [];
+  const owner = new ShareRestoration({
+    viewer: { canvas: new EventTarget() },
+    navigation: {
+      _beginDeferredNavigation: () => 1,
+      _stampNavigation() {},
+    },
+    syncShareState() {},
+    syncModels3d() {},
+    showStatus: (message) => notices.push(message),
+    feedback: {},
+    updateFeedback() {},
+  });
+  owner.attachLinks({
+    parseInitialHash: () => ({
+      latitude: 30,
+      longitude: -97,
+      layerStateInvalid: true,
+    }),
+  });
+
+  owner.start();
+  assert.deepEqual(notices, []);
+
+  owner._settleInitialShareRestore({
+    status: 'settled',
+    share: { camera: 'skipped' },
+    layers: [],
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.deepEqual(notices, ['Shared layer selection could not be restored']);
+  owner.destroy();
+});
+
 test('visual teardown restores owned fog and aircraft sensor state once', async (t) => {
   const { VisualSettings } = await import('./visualSettings.js');
   const priorDocument = globalThis.document;
