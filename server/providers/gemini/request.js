@@ -1,36 +1,48 @@
-import { isIP } from 'node:net';
+import { admitSameSiteRequest } from '../../../src/localRequestGate.mjs';
+import {
+  isAllowedHost,
+  resolveAllowedHosts,
+} from '../../../build/allowedHosts.js';
 
-/** Match the local app's authority, without trusting forwarding headers. */
-export function isGeminiRequestOriginAllowed(req, configuredHost = '') {
+/** Use the app's Host and request policies, with a required browser Origin. */
+export function isGeminiRequestOriginAllowed(
+  req,
+  configuredHost = '',
+  configuredAllowedHosts,
+) {
   const host = req.headers?.host;
   const origin = req.headers?.origin;
   if (
     typeof host !== 'string' ||
     typeof origin !== 'string' ||
     !host ||
-    /[\s/?#@\\]/.test(host) ||
-    req.headers?.['sec-fetch-site'] === 'cross-site'
+    /[\s/?#@\\]/.test(host)
+  )
+    return false;
+  const protocol = req.socket?.encrypted ? 'https:' : 'http:';
+  if (
+    !admitSameSiteRequest({
+      hostHeader: host,
+      protocol,
+      origin,
+      secFetchSite: req.headers?.['sec-fetch-site'],
+      proxyHeaders: req.headers || {},
+    }).ok
+  )
+    return false;
+  const boundHost = String(configuredHost || '')
+    .trim()
+    .toLowerCase();
+  if (
+    !isAllowedHost(host, resolveAllowedHosts(configuredAllowedHosts), [
+      boundHost,
+    ])
   )
     return false;
   try {
-    const authority = new URL(
-      `${req.socket?.encrypted ? 'https:' : 'http:'}//${host}`,
-    );
-    const hostname = authority.hostname.toLowerCase();
-    const boundHost = String(configuredHost || '')
-      .trim()
-      .toLowerCase();
-    const local =
-      ['localhost', '127.0.0.1', '[::1]'].includes(hostname) ||
-      hostname.endsWith('.local');
-    const wildcard = boundHost === '0.0.0.0' || boundHost === '::';
-    const admitted =
-      local ||
-      (!wildcard && boundHost !== '' && hostname === boundHost) ||
-      (wildcard && isIP(hostname.replace(/^\[|\]$/g, '')) !== 0);
+    const authority = new URL(`${protocol}//${host}`);
     const source = new URL(origin);
     return (
-      admitted &&
       source.origin === authority.origin &&
       source.username === '' &&
       source.password === '' &&

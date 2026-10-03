@@ -1,4 +1,4 @@
-import { clientKey, makeOptInRateLimiter } from '../common/rate-limit.js';
+import { clientKey, makeCostRateLimiter } from '../common/rate-limit.js';
 import { readResponseJsonCapped } from '../../../src/sources/httpBody.js';
 import {
   GEMINI_TOKEN_ENDPOINT,
@@ -17,11 +17,13 @@ const MINT_FAILURE = 'Gemini voice could not connect. Try again.';
 
 export function createGeminiTokenHandler({
   annotationGuidance,
+  tools,
   fetchImpl = (...args) => fetch(...args),
   resolveApiKey = () => process.env.GEMINI_API_KEY,
   resolveModel = () =>
     process.env.GEMINI_LIVE_MODEL || GEMINI_LIVE_MODEL_DEFAULT,
   resolveHost = () => process.env.HOST,
+  resolveAllowedHosts = () => process.env.GEV_ALLOWED_HOSTS,
   resolveRateLimit = () => process.env.GEV_RATELIMIT_GEMINI_PER_MIN ?? '30',
   now = Date.now,
   timeoutMs = 15_000,
@@ -47,7 +49,9 @@ export function createGeminiTokenHandler({
       res.setHeader('Allow', 'POST');
       return reply(405, 'Method not allowed');
     }
-    if (!isGeminiRequestOriginAllowed(req, resolveHost()))
+    if (
+      !isGeminiRequestOriginAllowed(req, resolveHost(), resolveAllowedHosts())
+    )
       return reply(403, 'Gemini voice requires a same-origin app request');
     const apiKey = String(resolveApiKey() || '').trim();
     if (!apiKey) return reply(503, 'Add a Gemini API key in Provider Settings');
@@ -55,7 +59,7 @@ export function createGeminiTokenHandler({
     if (!model)
       return reply(503, 'The Gemini Live model configuration is invalid');
     if (limiter === undefined)
-      limiter = makeOptInRateLimiter(resolveRateLimit());
+      limiter = makeCostRateLimiter(resolveRateLimit(), 30);
     if (limiter && !limiter(clientKey(req))) {
       res.setHeader('Retry-After', '60');
       return reply(
@@ -84,7 +88,11 @@ export function createGeminiTokenHandler({
     try {
       const inputMode = await readGeminiTokenRequest(req, lifetime.signal);
       lifetime.signal.throwIfAborted();
-      const config = createGeminiLiveConfig(annotationGuidance, inputMode);
+      const config = createGeminiLiveConfig(
+        annotationGuidance,
+        inputMode,
+        tools,
+      );
       const issuedAt = now();
       // REST uses bidiGenerateContentSetup. liveConnectConstraints is the SDK
       // input shape, converted before transport. With no fieldMask the complete

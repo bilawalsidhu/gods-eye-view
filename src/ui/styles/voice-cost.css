@@ -376,6 +376,14 @@
     opacity 160ms ease,
     transform 180ms ease;
 }
+/* Touch controls must be discoverable before activating the microphone. */
+@media (hover: none), (pointer: coarse) {
+  #command-dock > .gev-voice-provider-field {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, 0);
+  }
+}
 #command-dock > .gev-voice-provider-field::after {
   content: '';
   position: absolute;
@@ -421,6 +429,30 @@
   }
 }
 
+/* At narrow widths the provider row shares the attribution's horizontal lane.
+   Lift the transient row above the complete credit line, retaining its anchor. */
+@media (max-width: 900px) {
+  #command-dock > .gev-voice-provider-field {
+    bottom: calc(100% + 3.75rem);
+  }
+}
+@media (max-width: 720px) {
+  #command-dock > .gev-voice-provider-field {
+    bottom: calc(100% + 2vh + 3.25rem);
+  }
+}
+/* Notifications get a separate upper lane while voice preferences are open. */
+body:has(.gev-voice-settings-panel:not([hidden])) #toast {
+  top: 12px;
+  bottom: auto;
+  max-width: calc(100vw - 2rem);
+  box-sizing: border-box;
+}
+#command-dock:has(.gev-voice-settings-panel:not([hidden]))
+  .gev-voice-help-tray {
+  visibility: hidden;
+}
+
 @media (max-width: 420px), (max-height: 650px) {
   .gev-voice-provider-field {
     width: min(270px, calc(100vw - 1rem));
@@ -432,7 +464,7 @@
   }
   .gev-voice-settings-panel {
     bottom: calc(100% + 0.3rem);
-    max-height: min(68vh, 390px, calc(100vh - 214px));
+    max-height: min(68vh, 390px, max(120px, calc(100vh - 340px)));
   }
   .gev-voice-settings-panel > [data-panel-body] {
     max-height: min(50vh, 290px);

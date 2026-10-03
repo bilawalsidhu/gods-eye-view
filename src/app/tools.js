@@ -172,6 +172,8 @@ export function createApplicationTools({
     dataManager,
     sceneDirector,
     annotations,
+    showToast:
+      voice.showToast ?? ((message) => styleManager._showToast?.(message)),
   });
   defer(() => {
     voiceCommands.stop({ removeUi: true });

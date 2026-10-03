@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { once } from 'node:events';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { createServer, preview } from 'vite';
+import { hostCheckPlugin, resolveAllowedHosts } from '../build/allowedHosts.js';
 import { geminiLiveProxy } from '../server/providers/gemini.js';
 import { createGeminiTokenHandler } from '../server/providers/gemini/realtime.js';
 import {
@@ -10,6 +15,8 @@ import {
   createGeminiLiveConfig,
 } from '../server/providers/gemini/config.js';
 import { GEV_REALTIME_TOOLS } from '../server/providers/openai/tools.js';
+import { standaloneVoiceTools } from '../server/standalone/voiceTools.js';
+import { PROXY_SIGNALS } from './localRequestGate.mjs';
 
 const API_KEY = 'private-gemini-test-key-never-return';
 const TOKEN = 'auth_tokens/short-lived-test';
@@ -21,6 +28,7 @@ async function fixture(t, options = {}) {
     resolveApiKey: () => API_KEY,
     resolveModel: () => 'gemini-3.8-live',
     resolveHost: () => '',
+    resolveAllowedHosts: () => '',
     resolveRateLimit: () => '0',
     now: () => ISSUED_AT,
     fetchImpl: async (...args) => {
@@ -162,6 +170,40 @@ test('mint locks canonical action schemas and server instructions with no perman
   });
 });
 
+test('standalone mints lock the full voice query catalog in both credential and browser setup', async (t) => {
+  const tools = standaloneVoiceTools();
+  const declarations = tools.map(({ name, description, parameters }) => ({
+    name,
+    description,
+    parametersJsonSchema: parameters,
+    behavior: 'BLOCKING',
+  }));
+  for (const name of ['search_places', 'get_weather', 'get_wind', 'plan_route'])
+    assert.ok(
+      tools.some((tool) => tool.name === name),
+      name,
+    );
+  assert.ok(tools.length > GEV_REALTIME_TOOLS.length);
+  for (const inputMode of ['open-mic', 'push-to-talk']) {
+    const f = await fixture(t, { tools });
+    const response = await f.send({
+      body: JSON.stringify(inputMode === 'open-mic' ? {} : { inputMode }),
+    });
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.deepEqual(data.config.tools, [
+      { functionDeclarations: declarations },
+    ]);
+    const request = JSON.parse(f.calls[0][1].body);
+    assert.deepEqual(request.bidiGenerateContentSetup, {
+      model: 'models/gemini-3.8-live',
+      ...data.config,
+    });
+    assert.equal(request.fieldMask, undefined);
+    assert.equal(JSON.stringify(data).includes(API_KEY), false);
+  }
+});
+
 test('missing key and malformed model fail without an upstream request', async (t) => {
   const missing = await fixture(t, { resolveApiKey: () => '' });
   assert.equal((await missing.send()).status, 503);
@@ -265,7 +307,7 @@ test('same-origin local and explicitly bound hosts work without trusting forward
         headers: { Host: 'gev.local:4173', Origin: 'http://gev.local:4173' },
       })
     ).status,
-    200,
+    403,
   );
   assert.equal(
     (
@@ -281,16 +323,196 @@ test('same-origin local and explicitly bound hosts work without trusting forward
   );
 });
 
-test('rate cap keys on socket peer, not attacker-controlled forwarding headers', async (t) => {
+test('forwarded requests cannot mint or consume the real socket peer rate cap', async (t) => {
   const f = await fixture(t, { resolveRateLimit: () => '1' });
   assert.equal(
     (await f.send({ headers: { 'X-Forwarded-For': '10.1.1.1' } })).status,
-    200,
+    403,
   );
-  const response = await f.send({ headers: { 'X-Forwarded-For': '10.1.1.2' } });
+  assert.equal(
+    (await f.send({ headers: { 'X-Forwarded-For': '10.1.1.2' } })).status,
+    403,
+  );
+  assert.equal((await f.send()).status, 200);
+  const response = await f.send();
   assert.equal(response.status, 429);
   assert.equal(response.headers.get('retry-after'), '60');
   assert.equal(f.calls.length, 1);
+});
+
+test('all shared proxy signals and same-site cross-origin metadata fail before minting', async (t) => {
+  const f = await fixture(t, { resolveRateLimit: () => '1' });
+  for (const header of PROXY_SIGNALS) {
+    assert.equal(
+      (await f.sendRaw({ headers: { [header]: 'untrusted' } })).status,
+      403,
+      header,
+    );
+  }
+  assert.equal(
+    (await f.sendRaw({ headers: { 'Sec-Fetch-Site': 'same-site' } })).status,
+    403,
+  );
+  assert.equal(f.calls.length, 0);
+  assert.equal(
+    (await f.sendRaw({ headers: { 'Sec-Fetch-Site': 'same-origin' } })).status,
+    200,
+  );
+  assert.equal((await f.send()).status, 429);
+  assert.equal(f.calls.length, 1);
+});
+
+test('LAN binding, exact configured hosts, IPs, and localhost subdomains follow the app host policy', async (t) => {
+  const f = await fixture(t, {
+    resolveHost: () => '0.0.0.0',
+    resolveAllowedHosts: () => 'gev.local, demo.example',
+  });
+  for (const host of [
+    'gev.local:4173',
+    'demo.example:4173',
+    '192.168.1.20:4173',
+    '[::1]:4173',
+    'demo.localhost:4173',
+  ]) {
+    assert.equal(
+      (await f.sendRaw({ headers: { Host: host, Origin: `http://${host}` } }))
+        .status,
+      200,
+      host,
+    );
+  }
+  for (const host of ['arbitrary.local:4173', 'child.demo.example:4173']) {
+    assert.equal(
+      (await f.sendRaw({ headers: { Host: host, Origin: `http://${host}` } }))
+        .status,
+      403,
+      host,
+    );
+  }
+  assert.equal(f.calls.length, 5);
+});
+
+test('unset, blank, malformed and negative rate limits keep the 30-per-minute cap', async (t) => {
+  for (const value of [undefined, '', '  ', '3O', 'Infinity', '-1']) {
+    await t.test(String(value), async (t) => {
+      const f = await fixture(t, { resolveRateLimit: () => value });
+      for (let index = 0; index < 30; index++)
+        assert.equal((await f.send()).status, 200, `request ${index + 1}`);
+      const response = await f.send();
+      assert.equal(response.status, 429);
+      assert.equal(response.headers.get('retry-after'), '60');
+      assert.equal(f.calls.length, 30);
+    });
+  }
+});
+
+test('a positive fraction applies a real cap and only explicit zero disables it', async (t) => {
+  const fractional = await fixture(t, { resolveRateLimit: () => '0.5' });
+  assert.equal((await fractional.send()).status, 200);
+  assert.equal((await fractional.send()).status, 429);
+  assert.equal(fractional.calls.length, 1);
+  const unlimited = await fixture(t, { resolveRateLimit: () => '0' });
+  for (let index = 0; index < 31; index++)
+    assert.equal((await unlimited.send()).status, 200);
+  assert.equal(unlimited.calls.length, 31);
+});
+
+test('real Vite dev and preview reject hostile hosts before the Gemini middleware', async (t) => {
+  for (const mode of ['dev', 'preview']) {
+    await t.test(mode, async (t) => {
+      const root = await mkdtemp(path.join(tmpdir(), 'gev-gemini-vite-test-'));
+      t.after(() => rm(root, { recursive: true, force: true }));
+      await mkdir(path.join(root, 'dist'));
+      await writeFile(path.join(root, 'index.html'), '<p>isolated fixture</p>');
+      await writeFile(
+        path.join(root, 'dist/index.html'),
+        '<p>isolated fixture</p>',
+      );
+      let credentialReads = 0;
+      let upstreamCalls = 0;
+      const allowedHosts = resolveAllowedHosts('gev.local');
+      const config = {
+        configFile: false,
+        envFile: false,
+        root,
+        logLevel: 'silent',
+        // Deliberately put the provider first: enforce: pre must order the gate.
+        plugins: [
+          geminiLiveProxy({
+            realtime: {
+              resolveApiKey: () => {
+                credentialReads++;
+                return '';
+              },
+              resolveHost: () => '127.0.0.1',
+              resolveAllowedHosts: () => 'gev.local',
+              fetchImpl: async () => {
+                upstreamCalls++;
+                throw new Error('No upstream calls are permitted');
+              },
+            },
+          }),
+          hostCheckPlugin(),
+        ],
+        server: { host: '127.0.0.1', port: 0, allowedHosts, hmr: false },
+        preview: { host: '127.0.0.1', port: 0, allowedHosts },
+      };
+      const server =
+        mode === 'dev' ? await createServer(config) : await preview(config);
+      t.after(() => server.close());
+      if (mode === 'dev') await server.listen();
+      const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
+      const request = (host, extraHeaders = {}) =>
+        new Promise((resolve, reject) => {
+          const req = http.request(
+            `${origin}/api/gemini/token`,
+            {
+              method: 'POST',
+              headers: {
+                Host: host,
+                Origin: `http://${host}`,
+                ...extraHeaders,
+              },
+            },
+            (res) => {
+              const chunks = [];
+              res.on('data', (chunk) => chunks.push(chunk));
+              res.on('end', () =>
+                resolve({
+                  status: res.statusCode,
+                  body: Buffer.concat(chunks).toString(),
+                }),
+              );
+              res.on('error', reject);
+            },
+          );
+          req.on('error', reject);
+          req.end();
+        });
+      for (const host of ['attacker.example:4173', 'arbitrary.local:4173']) {
+        const response = await request(host);
+        assert.equal(response.status, 403);
+        assert.match(response.body, /This host is not allowed/);
+      }
+      assert.equal(credentialReads, 0);
+      const sameSite = await request('gev.local:4173', {
+        'Sec-Fetch-Site': 'same-site',
+      });
+      assert.equal(sameSite.status, 403);
+      assert.equal(credentialReads, 0);
+      for (const host of [
+        'gev.local:4173',
+        '192.168.1.20:4173',
+        'demo.localhost:4173',
+      ]) {
+        const response = await request(host);
+        assert.equal(response.status, 503);
+        assert.match(response.body, /Add a Gemini API key/);
+      }
+      assert.equal(credentialReads, 3);
+      assert.equal(upstreamCalls, 0);
+    });
+  }
 });
 
 test('client bodies cannot override model or locked settings and stay byte bounded', async (t) => {

@@ -91,6 +91,14 @@ test('alternate protocol shares session events and action execution without Real
     ],
   );
   assert.equal(f.sent.length, 2);
+  const actionEvents = events.filter((event) =>
+    event.type.startsWith('action-'),
+  );
+  assert.equal(typeof actionEvents[0].actionId, 'number');
+  assert.deepEqual(
+    actionEvents.map((event) => event.actionId),
+    Array(3).fill(actionEvents[0].actionId),
+  );
   unsubscribe();
   f.session.stop();
   assert.equal(f.session.state, 'idle');
@@ -143,6 +151,59 @@ test('caller cancellation and sibling actions preserve independent ownership', a
   first.resolve({ ok: true });
   await assert.rejects(pending, { name: 'AbortError' });
   f.session.destroy();
+});
+
+test('session action IDs remain unique across same-name calls, interruption and restart', async (t) => {
+  const pending = [];
+  const f = fixture(
+    (_name, _args, options) =>
+      new Promise((resolve) => pending.push({ resolve, options })),
+  );
+  t.after(() => f.session.destroy());
+  const events = [];
+  f.session.subscribe((event) => events.push(event));
+  await f.session.start();
+  const first = f.hooks.runAction('get_weather', {});
+  const sibling = f.hooks.runAction('get_weather', {});
+  pending[1].resolve({ ok: true, sibling: true });
+  await sibling;
+  f.hooks.emit({ type: 'interruption' });
+  const next = f.hooks.runAction('get_weather', {});
+  pending[0].resolve({ ok: true, stale: true });
+  await assert.rejects(first, { name: 'AbortError' });
+  pending[2].resolve({ ok: true, next: true });
+  await next;
+  f.session.stop();
+  await f.session.start();
+  const restarted = f.hooks.runAction('get_weather', {});
+  pending[3].resolve({ ok: true, restarted: true });
+  await restarted;
+  const calls = events.filter((event) => event.type === 'action-call');
+  assert.equal(calls.length, 4);
+  assert.equal(new Set(calls.map((event) => event.actionId)).size, 4);
+  assert.equal(
+    calls.every((event) => Number.isInteger(event.actionId)),
+    true,
+  );
+  for (const call of calls) {
+    const ownEvents = events.filter(
+      (event) => event.actionId === call.actionId,
+    );
+    assert.deepEqual(
+      ownEvents.map((event) => event.type),
+      [
+        'action-call',
+        ...(call === calls[0] ? [] : ['action-result']),
+        'action-settled',
+      ],
+    );
+  }
+  assert.equal(
+    pending[2].options.isCurrent(),
+    false,
+    'stop revoked the earlier generation',
+  );
+  assert.equal(pending[3].options.signal.aborted, false);
 });
 
 test('stale connect failure cannot stop a replacement session', async () => {
@@ -234,7 +295,7 @@ test('wire events project only normalized transcript, interruption and completio
 
 test('common button and annotation bindings work with an alternate adapter and clean up', async () => {
   const previous = globalThis.window;
-  globalThis.window = {};
+  globalThis.window = new EventTarget();
   try {
     const button = new EventTarget();
     button.setAttribute = () => {};
@@ -324,6 +385,21 @@ test('common button and annotation bindings work with an alternate adapter and c
     assert.equal(ui.detail.textContent, 'Ready');
     assert.equal(controls.setVoiceSettingsOpen(true), true);
     assert.equal(voiceSettingsPanel.hidden, false);
+    controls.setVoiceSettingsOpen(false);
+    assert.equal(controls.deferVoiceSettingsUntilCockpitExit(), true);
+    globalThis.window.dispatchEvent(
+      new CustomEvent('gev:cockpit-mode-changed', {
+        detail: { active: false },
+      }),
+    );
+    await Promise.resolve();
+    assert.equal(
+      voiceSettingsPanel.hidden,
+      false,
+      'a confirmed or manual Cockpit exit opens the pending panel',
+    );
+    controls.setVoiceSettingsOpen(false);
+    assert.equal(controls.deferVoiceSettingsUntilCockpitExit(), true);
     emitSession({
       type: 'state',
       state: 'error',
@@ -333,6 +409,17 @@ test('common button and annotation bindings work with an alternate adapter and c
     assert.equal(
       ui.errorHint.textContent,
       'Start voice again for a fresh token and a new conversation.',
+    );
+    globalThis.window.dispatchEvent(
+      new CustomEvent('gev:cockpit-mode-changed', {
+        detail: { active: false },
+      }),
+    );
+    await Promise.resolve();
+    assert.equal(
+      voiceSettingsPanel.hidden,
+      true,
+      'terminal voice state cancels the pending Cockpit exit intent',
     );
     emitSession({ type: 'state', state: 'error', detail: 'Network failed' });
     assert.equal(

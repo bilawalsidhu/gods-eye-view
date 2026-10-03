@@ -30,6 +30,8 @@ export function createProviderCommands(options, { bind, factories, storage }) {
       disposed = true;
       options.signal?.removeEventListener('abort', destroy);
     }
+    current?.cancelDeferredVoiceSettings?.();
+    current?.setVoiceSettingsOpen?.(false);
     current?.session.stop(settings);
   };
   const destroy = () => stop({ removeUi: true });

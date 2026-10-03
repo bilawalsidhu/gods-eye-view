@@ -103,7 +103,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   set_panel_open: {
     description:
-      'Open or close a GEV UI panel/dropdown. DISPLAY is pp-toggles; VISUAL PRESETS is control-panel; POWER UP / PROVIDER SETTINGS is provider-settings; VOICE SETTINGS, VOICE PREFERENCES, and the Voice Settings dropdown are voice-settings. Closing voice-settings leaves the active voice session and saved inactivity preference unchanged. Keep those surfaces distinct. While Cockpit is active, pp-toggles and radio-panel automatically target the Cockpit-specific Display and Radio controls.',
+      'Open or close a GEV UI panel/dropdown. DISPLAY is pp-toggles; VISUAL PRESETS is control-panel; POWER UP / PROVIDER SETTINGS is provider-settings; VOICE SETTINGS, VOICE PREFERENCES, and the Voice Settings dropdown are voice-settings. Closing voice-settings leaves the active voice session and saved inactivity preference unchanged. Keep those surfaces distinct. While Cockpit is active, pp-toggles and radio-panel automatically target the Cockpit-specific Display and Radio controls; opening voice-settings remains pending and opens only after a spoken-confirmed or manual Cockpit exit. Direct voice provider and inactivity-timeout commands remain available in Cockpit.',
     $position: 1,
     parameters: {
       properties: {

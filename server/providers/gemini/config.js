@@ -18,6 +18,7 @@ export function normalizeGeminiModel(value) {
 export function createGeminiLiveConfig(
   annotationGuidance,
   inputMode = 'open-mic',
+  tools = GEV_REALTIME_TOOLS,
 ) {
   if (!['open-mic', 'push-to-talk'].includes(inputMode))
     throw new Error('Invalid Gemini input mode');
@@ -28,7 +29,7 @@ export function createGeminiLiveConfig(
     },
     tools: [
       {
-        functionDeclarations: GEV_REALTIME_TOOLS.map(
+        functionDeclarations: tools.map(
           ({ name, description, parameters }) => ({
             name,
             description,

@@ -147,6 +147,9 @@ test('voice can close the Voice Settings dropdown without stopping voice', () =>
   assert.match(text, /must not stop voice or change the inactivity preference/);
   const panel = realtimeTools().find((tool) => tool.name === 'set_panel_open');
   assert.match(panel.description, /Closing voice-settings leaves the active voice session/);
+  assert.match(panel.description, /opening voice-settings remains pending/i);
+  assert.match(panel.description, /spoken-confirmed or manual Cockpit exit/i);
+  assert.match(panel.description, /Direct voice provider and inactivity-timeout commands remain available/);
 });
 
 test('nearest-aircraft selection stays out of Contacts and Cockpit', () => {
@@ -438,5 +441,5 @@ test('successful explicit user playback hands the speaker from voice to Radio', 
   assert.match(radioBindings, /togglePlayback\(\{ origin: 'user' \}\)/);
   assert.match(radioBindings, /cycleStation\(direction, \{[\s\S]*?origin: 'user'/);
   assert.match(radioBindings, /commitTuningStation\(station\.id, \{ origin: 'user' \}\)/);
-  assert.match(realtime, /event\.origin === 'user' &&\s*event\.action === 'play' &&\s*this\.isActive\(\)[\s\S]*?this\.stop\(\{ preserveRadioPlayback: true \}\)/);
+  assert.match(realtime, /event\.action === 'play' && this\.isActive\(\)[\s\S]*?this\.stop\(\{ preserveRadioPlayback: true \}\)/);
 });

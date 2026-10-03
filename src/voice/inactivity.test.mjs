@@ -4,7 +4,9 @@ import {
   DEFAULT_VOICE_INACTIVITY_MINUTES,
   VOICE_INACTIVITY_NONE_MESSAGE,
   VOICE_INACTIVITY_STORAGE_KEY,
+  VOICE_SETTINGS_COCKPIT_EXIT_MS,
   bindVoiceInactivitySettings,
+  createDeferredVoiceSettingsIntent,
   createVoiceInactivityController,
   parseVoiceInactivityMinutes,
   readVoiceInactivityMinutes,
@@ -61,6 +63,160 @@ function timerFixture(minutes = 5) {
   return { controller, session, stops, timers };
 }
 
+test('Cockpit Voice Settings intent opens after exit settles or expires after 20 seconds', async () => {
+  const timers = clock();
+  const events = new EventTarget();
+  const opened = [];
+  const expired = [];
+  const intent = createDeferredVoiceSettingsIntent({
+    eventTarget: events,
+    setTimer: timers.setTimer,
+    clearTimer: timers.clearTimer,
+    open: () => opened.push('open'),
+    onExpire: () => expired.push('expired'),
+  });
+
+  assert.equal(intent.timeoutMs, VOICE_SETTINGS_COCKPIT_EXIT_MS);
+  assert.equal(intent.schedule(), true);
+  assert.equal(intent.pending, true);
+  assert.equal(timers.latest()[1].ms, 20_000);
+  assert.equal(
+    intent.schedule(),
+    true,
+    'a newer request replaces the deadline',
+  );
+  assert.equal(timers.size, 1);
+  events.dispatchEvent(
+    new CustomEvent('gev:cockpit-mode-changed', {
+      detail: { active: true },
+    }),
+  );
+  assert.deepEqual(opened, []);
+  events.dispatchEvent(
+    new CustomEvent('gev:cockpit-mode-changed', {
+      detail: { active: false },
+    }),
+  );
+  assert.deepEqual(opened, [], 'Cockpit exit retains focus until it settles');
+  assert.equal(intent.pending, false);
+  assert.equal(timers.size, 0);
+  await Promise.resolve();
+  assert.deepEqual(opened, ['open']);
+
+  intent.schedule();
+  events.dispatchEvent(
+    new CustomEvent('gev:cockpit-mode-changed', {
+      detail: { active: false },
+    }),
+  );
+  intent.cancel();
+  await Promise.resolve();
+  assert.deepEqual(opened, ['open'], 'cancellation also owns a queued reveal');
+
+  intent.schedule();
+  const [deadline] = timers.latest();
+  timers.fire(deadline);
+  assert.deepEqual(expired, ['expired']);
+  assert.equal(intent.pending, false);
+
+  intent.schedule();
+  intent.destroy();
+  assert.equal(timers.size, 0);
+  events.dispatchEvent(
+    new CustomEvent('gev:cockpit-mode-changed', {
+      detail: { active: false },
+    }),
+  );
+  assert.deepEqual(opened, ['open']);
+  assert.equal(intent.schedule(), false);
+});
+
+function sessionTimerFixture(t) {
+  const timers = clock();
+  const pending = [];
+  const events = [];
+  let hooks;
+  const session = createVoiceSession({
+    runner: (_name, _args, options) =>
+      new Promise((resolve) => pending.push({ resolve, options })),
+    createAdapter(options) {
+      hooks = options;
+      return {
+        start: () => hooks.emit({ type: 'state', state: 'listening' }),
+        stop() {},
+        sendText() {},
+        sendMapEvent() {},
+      };
+    },
+  });
+  const controller = createVoiceInactivityController({
+    session,
+    minutes: 3,
+    setTimer: timers.setTimer,
+    clearTimer: timers.clearTimer,
+  });
+  session.subscribe((event) => {
+    events.push(event);
+    controller.handleEvent(event);
+  });
+  t.after(() => {
+    controller.destroy();
+    session.destroy();
+  });
+  return { session, hooks, pending, events, timers };
+}
+
+test('late settlement of an interrupted action cannot remove a newer action timer blocker', async (t) => {
+  const f = sessionTimerFixture(t);
+  await f.session.start();
+  const oldAction = f.hooks.runAction('get_weather', {});
+  assert.equal(f.timers.size, 0);
+  f.hooks.emit({ type: 'interruption', reason: 'user-speech' });
+  assert.equal(f.pending[0].options.signal.aborted, true);
+  assert.equal(f.timers.size, 1);
+  const newAction = f.hooks.runAction('get_weather', {});
+  assert.equal(f.timers.size, 0);
+  f.pending[0].resolve({ ok: true, old: true });
+  await assert.rejects(oldAction, { name: 'AbortError' });
+  assert.equal(
+    f.timers.size,
+    0,
+    'new action still owns the inactivity blocker',
+  );
+  assert.equal(f.pending[1].options.signal.aborted, false);
+  f.pending[1].resolve({ ok: true, new: true });
+  await newAction;
+  assert.equal(f.timers.size, 1);
+  assert.equal(f.timers.latest()[1].ms, 3 * 60_000);
+  const calls = f.events.filter((event) => event.type === 'action-call');
+  assert.equal(new Set(calls.map((event) => event.actionId)).size, 2);
+  const results = f.events.filter((event) => event.type === 'action-result');
+  assert.deepEqual(
+    results.map((event) => event.actionId),
+    [calls[1].actionId],
+  );
+});
+
+test('simultaneous same-name session actions each retain their own inactivity blocker', async (t) => {
+  const f = sessionTimerFixture(t);
+  await f.session.start();
+  const first = f.hooks.runAction('get_weather', { place: 'Oslo' });
+  const second = f.hooks.runAction('get_weather', { place: 'Austin' });
+  const calls = f.events.filter((event) => event.type === 'action-call');
+  assert.equal(calls.length, 2);
+  assert.notEqual(calls[0].actionId, calls[1].actionId);
+  assert.equal(f.timers.size, 0);
+  f.pending[0].resolve({ ok: true });
+  await first;
+  assert.equal(f.timers.size, 0);
+  assert.equal(f.pending[1].options.signal.aborted, false);
+  f.pending[1].resolve({ ok: true });
+  await second;
+  assert.equal(f.timers.size, 1);
+  f.timers.fire(f.timers.latest()[0]);
+  assert.equal(f.session.state, 'idle');
+});
+
 test('meaningful transcript activity replaces the inactivity deadline', () => {
   const f = timerFixture(5);
   const [firstId, first] = f.timers.latest();
@@ -105,9 +261,17 @@ test('speech playback, push-to-talk, and pending tools protect the session', () 
     active: false,
   });
   assert.equal(f.timers.size, 1);
-  f.controller.handleEvent({ type: 'action-call', name: 'fly_to_location' });
+  f.controller.handleEvent({
+    type: 'action-call',
+    actionId: 1,
+    name: 'fly_to_location',
+  });
   assert.equal(f.timers.size, 0);
-  f.controller.handleEvent({ type: 'action-settled', name: 'fly_to_location' });
+  f.controller.handleEvent({
+    type: 'action-settled',
+    actionId: 1,
+    name: 'fly_to_location',
+  });
   const [deadline] = f.timers.latest();
   f.timers.fire(deadline);
   assert.equal(f.stops.length, 1);

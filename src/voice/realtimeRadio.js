@@ -69,15 +69,17 @@ export class RealtimeRadio {
           (event.action === 'pause' || event.action === 'stop')
         ) {
           this.cancelRadioHandoff();
-          this.resumeVoiceAfterRadio(event.action);
+          this.resumeVoiceAfterRadio(event.action, event.attemptId);
         } else if (
           event.origin === 'user' &&
-          event.action === 'play' &&
-          this.isActive()
+          ['play', 'play-request', 'select', 'tune'].includes(event.action)
         ) {
-          // Explicit user playback has already reached `playing` under the voice
-          // hard mute. Hand the speaker to Radio without tearing its stream down.
-          this.stop({ preserveRadioPlayback: true });
+          // Any manual replacement revokes the old voice-owned playback lease.
+          this.radioVoiceResume = null;
+          this.radioVoiceResumeEpoch++;
+          if (event.action === 'play' && this.isActive()) {
+            this.stop({ preserveRadioPlayback: true });
+          }
         }
       }) || null;
     this.radioVisibilityRequestUnsubscribe =
@@ -389,10 +391,14 @@ export class RealtimeRadio {
   }
 
   /** Resume once after the same voice-owned Radio handoff is paused or disabled. */
-  resumeVoiceAfterRadio(reason) {
+  resumeVoiceAfterRadio(reason, attemptId) {
     const lease = this.radioVoiceResume;
     if (!lease) return false;
     this.radioVoiceResume = null;
+    if (attemptId !== undefined && attemptId !== lease.attemptId) {
+      this.radioVoiceResumeEpoch++;
+      return false;
+    }
     const resumeEpoch = ++this.radioVoiceResumeEpoch;
     void Promise.resolve()
       .then(() => {

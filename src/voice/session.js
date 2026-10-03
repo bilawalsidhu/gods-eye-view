@@ -2,8 +2,9 @@
  * Protocol-independent voice lifetime and action dispatch.
  * An adapter receives { emit, runAction, signal } and supplies start, stop,
  * sendText and sendMapEvent. It owns its microphone/connection and wire messages.
- * Events: state, transcript, action-call, action-result, action-settled,
- * interruption, completion.
+ * Events: state, stop, transcript, action-call, action-result, action-settled,
+ * interruption, completion. A stop event covers teardown paths that preserve
+ * the adapter's displayed status instead of publishing an idle state.
  */
 export function createVoiceSession({ createAdapter, runner, signal }) {
   if (typeof createAdapter !== 'function' || typeof runner !== 'function')
@@ -16,6 +17,7 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
   let disposed = false;
   let generation = 0;
   let startAttempt = 0;
+  let actionSequence = 0;
 
   function cancelActions() {
     generation++;
@@ -51,6 +53,7 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
     )
       throw abortError();
     const action = new AbortController();
+    const actionId = ++actionSequence;
     const epoch = generation;
     actions.add(action);
     const actionSignal = AbortSignal.any([
@@ -64,7 +67,7 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
       (!options.isCurrent || options.isCurrent());
     try {
       if (!isCurrent()) throw abortError();
-      emit({ type: 'action-call', name, arguments: args });
+      emit({ type: 'action-call', actionId, name, arguments: args });
       if (!isCurrent()) throw abortError();
       const result = await runner(name, args, {
         ...options,
@@ -72,11 +75,11 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
         isCurrent,
       });
       if (!isCurrent()) throw abortError();
-      emit({ type: 'action-result', name, result });
+      emit({ type: 'action-result', actionId, name, result });
       return result;
     } finally {
       actions.delete(action);
-      emit({ type: 'action-settled', name });
+      emit({ type: 'action-settled', actionId, name });
     }
   }
 
@@ -144,7 +147,9 @@ export function createVoiceSession({ createAdapter, runner, signal }) {
       try {
         adapter.stop(options);
       } finally {
-        if (!options.preserveStatus)
+        if (options.preserveStatus)
+          emit({ type: 'stop', preserveStatus: true });
+        else
           emit({
             type: 'state',
             state: 'idle',

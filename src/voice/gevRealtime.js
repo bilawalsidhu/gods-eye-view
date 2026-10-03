@@ -14,11 +14,19 @@ export function withToolCatalog(runner, loadCatalog) {
   if (typeof loadCatalog !== 'function') return runner;
   return async function runGevTool(name, args, options = {}) {
     if (ACTION_NAMES.has(name)) return runner(name, args, options);
+    const checkCurrent = () => {
+      options.signal?.throwIfAborted();
+      if (options.isCurrent && !options.isCurrent())
+        throw new DOMException('Voice query cancelled', 'AbortError');
+    };
+    checkCurrent();
     const catalog = await loadCatalog();
+    checkCurrent();
     if (!catalog?.get(name)) return runner(name, args, options);
     const result = await catalog.call(name, args ?? {}, {
       signal: options.signal,
     });
+    checkCurrent();
     return toFunctionOutput(name, result);
   };
 }

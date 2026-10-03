@@ -14,7 +14,9 @@ function element(properties = {}) {
   target.setAttribute = (name, value) => {
     target.attributes[name] = String(value);
   };
-  target.focus = () => {};
+  target.focus = () => {
+    target.focused = true;
+  };
   return target;
 }
 
@@ -58,7 +60,7 @@ function setup(
   { value = null, runner = async () => ({ ok: true }), deferredStart } = {},
 ) {
   const prior = globalThis.window;
-  globalThis.window = {};
+  globalThis.window = new EventTarget();
   const lifetime = new AbortController();
   const hooks = {};
   const starts = [];
@@ -303,4 +305,120 @@ test('provider replacement preserves the browser-local inactivity preference', (
   f.controls.setProvider('gemini');
   assert.equal(f.views[1].inactivitySelect.value, 'custom');
   assert.equal(f.views[1].inactivityCustomInput.value, '12');
+});
+
+test('both providers close voice settings through equivalent terminal routes', async (t) => {
+  for (const provider of ['openai', 'gemini']) {
+    for (const route of [
+      'public-stop',
+      'session-stop',
+      'session-preserve-status',
+      'preserve-status',
+      'button-stop',
+      'error',
+      'goAway',
+    ]) {
+      await t.test(`${provider}: ${route}`, async (t) => {
+        const f = setup(t, { value: provider });
+        await f.controls.start();
+        f.controls.setVoiceInactivityMinutes(12);
+        f.controls.setVoiceSettingsOpen(true);
+        assert.equal(f.controls.deferVoiceSettingsUntilCockpitExit(), true);
+        const view = f.views[0];
+        view.voiceSettingsPanel.ownerDocument = {
+          activeElement: view.inactivityCustomInput,
+        };
+        view.voiceSettingsPanel.contains = (candidate) =>
+          candidate === view.inactivityCustomInput;
+        if (route === 'public-stop') f.controls.stop();
+        if (route === 'session-stop') f.controls.session.stop();
+        if (route === 'session-preserve-status')
+          f.controls.session.stop({ preserveStatus: true });
+        if (route === 'preserve-status')
+          f.controls.stop({ preserveStatus: true });
+        if (route === 'button-stop')
+          view.button.dispatchEvent(new Event('click'));
+        if (route === 'error' || route === 'goAway') {
+          f.hooks[provider].emit({
+            type: 'state',
+            state: 'error',
+            detail: route,
+          });
+        }
+        globalThis.window.dispatchEvent(
+          new CustomEvent('gev:cockpit-mode-changed', {
+            detail: { active: false },
+          }),
+        );
+        await Promise.resolve();
+        assert.equal(view.voiceSettingsPanel.hidden, true);
+        assert.equal(
+          view.voiceSettingsButton.attributes['aria-expanded'],
+          'false',
+        );
+        assert.equal(view.voiceSettingsButton.focused, true);
+        assert.equal(f.storedValue(VOICE_INACTIVITY_STORAGE_KEY), '12');
+        if (!['preserve-status', 'session-preserve-status'].includes(route))
+          assert.equal(f.controls.isActive(), false);
+      });
+    }
+  }
+});
+
+test('terminal events close settings before a pending provider replacement remounts', async (t) => {
+  for (const provider of ['openai', 'gemini']) {
+    for (const route of ['public-stop', 'session-stop', 'error']) {
+      await t.test(`${provider}: ${route}`, async (t) => {
+        const f = setup(t, { value: provider });
+        await f.controls.start();
+        f.controls.setVoiceSettingsOpen(true);
+        const successor = provider === 'openai' ? 'gemini' : 'openai';
+        assert.equal(f.controls.requestProviderChange(successor).pending, true);
+        if (route === 'public-stop') f.controls.stop();
+        if (route === 'session-stop') f.controls.session.stop();
+        if (route === 'error')
+          f.hooks[provider].emit({ type: 'state', state: 'error' });
+        assert.equal(f.controls.provider, successor);
+        assert.equal(f.views.length, 2);
+        assert.equal(f.views[0].voiceSettingsPanel.hidden, true);
+        assert.equal(f.views[1].voiceSettingsPanel.hidden, true);
+        assert.equal(
+          f.views[1].voiceSettingsButton.attributes['aria-expanded'],
+          'false',
+        );
+      });
+    }
+  }
+});
+
+test('closing settings keeps voice active and disposed provider events cannot close its successor', async (t) => {
+  for (const provider of ['openai', 'gemini']) {
+    await t.test(provider, async (t) => {
+      const f = setup(t, { value: provider });
+      await f.controls.start();
+      f.controls.setVoiceSettingsOpen(true);
+      f.views[0].voiceSettingsClose.dispatchEvent(new Event('click'));
+      assert.equal(f.views[0].voiceSettingsPanel.hidden, true);
+      assert.equal(f.controls.isActive(), true);
+      assert.deepEqual(f.stops, []);
+      f.controls.setVoiceSettingsOpen(true);
+      const oldHooks = f.hooks[provider];
+      f.controls.setProvider(provider === 'openai' ? 'gemini' : 'openai');
+      await f.controls.start();
+      const view = f.views[1];
+      assert.equal(view.voiceSettingsPanel.hidden, false);
+      for (const event of [
+        { type: 'state', state: 'error' },
+        { type: 'state', state: 'idle' },
+        { type: 'completion', status: 'completed' },
+      ])
+        oldHooks.emit(event);
+      assert.equal(view.voiceSettingsPanel.hidden, false);
+      assert.equal(
+        view.voiceSettingsButton.attributes['aria-expanded'],
+        'true',
+      );
+      assert.equal(f.controls.state, 'listening');
+    });
+  }
 });

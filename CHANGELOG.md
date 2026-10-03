@@ -2,12 +2,12 @@
 
 ## [Unreleased]
 
-- Add a shared-surface Voice Settings popup with a browser-local inactivity timeout, five-minute default, validated custom range, pending speech/tool protection, full cleanup on expiry and no share-link serialization. Both voice providers can open and close the popup and select presets, custom minutes, or None by voice; turning voice off from the mic control closes the popup. While listening, the voice control hides the redundant AI AGENT kicker and leaves the live LISTENING state visible.
+- Add a shared-surface Voice Settings popup with a browser-local inactivity timeout, five-minute default, validated custom range, pending speech/tool protection, full cleanup on expiry and no share-link serialization. Both voice providers can open and close the popup and select presets, custom minutes, or None by voice. Cockpit keeps the popup hidden: Voice asks before exiting Cockpit, and a confirmed or manual exit opens the panel in the main view; an unanswered request expires with an accessible notice. Direct provider and timeout commands remain available. Turning voice off or encountering a terminal connection error closes the popup. Provider selection preserves an open popup and the selected timeout. Pending tool protection follows individual calls so a cancelled call cannot release a newer call's inactivity guard. While listening, the voice control hides the redundant AI AGENT kicker and leaves the live LISTENING state visible.
 
 - Give the Cyber mic control a visible inset keyboard-focus frame and a brighter mic icon so Tab and Shift+Tab navigation remain clear inside its clipped chamfered button.
 
 - Add Gemini Live as a selectable voice provider alongside OpenAI, using the
-  same map actions, click-to-talk and Space push-to-talk controls. Add a separate
+  same map actions and standalone query tools, click-to-talk and Space push-to-talk controls. Add a separate
   Gemini API key created in Google AI Studio in Provider Settings; the server keeps it
   private and issues a short-lived token for the browser. Gemini defaults to
   `gemini-3.8-live`, reports connection and quota failures, and releases audio
@@ -27,7 +27,7 @@
   an OpenAI/Gemini provider change; an active reply finishes before the new
   provider is mounted. A voice-started Radio handoff now carries a one-use
   resume lease: pausing or disabling that same Radio session restarts the prior
-  voice mode, while manual Radio playback, ordinary voice stops, provider
+  voice mode. Manual Radio selection, tuning or playback revokes that lease; ordinary voice stops, provider
   changes, and teardown never auto-resume voice. Gemini's 60-second new-session
   window and configured 30-minute token expiry are separate from Google's
   roughly 10-minute Live connection lifetime. On `goAway`, Gemini voice cleans
@@ -1543,4 +1543,3 @@ represent previously published GitHub Releases.
 ## [0.1.0] — 2026-02-09
 
 - Initial project version.
-

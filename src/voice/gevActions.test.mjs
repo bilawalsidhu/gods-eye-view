@@ -325,6 +325,13 @@ test('Voice Settings can be opened and closed through the shared panel action', 
     viewer,
     styleManager,
     readVoiceCommands: () => ({
+      deferVoiceSettingsUntilCockpitExit() {
+        calls.push(['defer']);
+        return true;
+      },
+      cancelDeferredVoiceSettings() {
+        calls.push(['cancel']);
+      },
       setVoiceSettingsOpen(open) {
         calls.push(open);
         return true;
@@ -356,7 +363,7 @@ test('Voice Settings can be opened and closed through the shared panel action', 
       open: false,
     },
   );
-  assert.deepEqual(calls, [true, false]);
+  assert.deepEqual(calls, [['cancel'], true, ['cancel'], false]);
 
   const unavailable = createActionRunner({
     viewer,
@@ -372,6 +379,76 @@ test('Voice Settings can be opened and closed through the shared panel action', 
     ).ok,
     false,
   );
+});
+
+test('Voice Settings stay closed in Cockpit and direct timeout changes remain available', async () => {
+  const calls = [];
+  const { viewer, styleManager } = createVoiceNavigationHarness();
+  styleManager.getCockpitState = () => ({ active: true });
+  const runner = createActionRunner({
+    viewer,
+    styleManager,
+    readVoiceCommands: () => ({
+      deferVoiceSettingsUntilCockpitExit() {
+        calls.push(['defer']);
+        return true;
+      },
+      cancelDeferredVoiceSettings() {
+        calls.push(['cancel']);
+      },
+      setVoiceSettingsOpen(open) {
+        calls.push(['panel', open]);
+        return true;
+      },
+      setVoiceInactivityMinutes(minutes) {
+        calls.push(['timeout', minutes]);
+        return true;
+      },
+    }),
+  });
+
+  assert.deepEqual(
+    await runner('set_panel_open', {
+      panelId: 'voice-settings',
+      open: true,
+    }),
+    {
+      ok: true,
+      action: 'set_panel_open',
+      panelId: 'voice-settings',
+      open: false,
+      requestedOpen: true,
+      requiresCockpitExit: true,
+      pending: true,
+      expiresInMs: 20_000,
+    },
+  );
+  assert.deepEqual(
+    await runner('set_panel_open', {
+      panelId: 'voice-settings',
+      open: false,
+    }),
+    {
+      ok: true,
+      action: 'set_panel_open',
+      panelId: 'voice-settings',
+      open: false,
+    },
+  );
+  assert.deepEqual(
+    await runner('set_voice_inactivity_timeout', { minutes: 5 }),
+    {
+      ok: true,
+      action: 'set_voice_inactivity_timeout',
+      minutes: 5,
+    },
+  );
+  assert.deepEqual(calls, [
+    ['defer'],
+    ['cancel'],
+    ['panel', false],
+    ['timeout', 5],
+  ]);
 });
 
 test('voice provider selection is delegated without replacing the running action', async () => {

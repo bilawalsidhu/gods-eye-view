@@ -29,7 +29,7 @@ test('the complete Realtime tool payload pins the additive analyst, satellite, L
     digest,
     // Re-derived for provider/voice settings, the inactivity-timeout tool,
     // and the explicit voice-dropdown close behavior. Sonar stays excluded.
-    'b5055574e3a51556b7e2e35310e56ebd3e7d433ef57325a56d807c15db900e13',
+    '2f2149bed14dddd8f34e6e77f90522c4dc91f4c56f18ee1e97832bb0512af6fd',
   );
 });
 

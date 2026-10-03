@@ -1,6 +1,7 @@
 export const VOICE_INACTIVITY_STORAGE_KEY =
   'godsEyeView.voice.inactivityMinutes';
 export const DEFAULT_VOICE_INACTIVITY_MINUTES = 5;
+export const VOICE_SETTINGS_COCKPIT_EXIT_MS = 20_000;
 export const VOICE_INACTIVITY_PRESETS = Object.freeze([3, 5, 10, 15]);
 export const VOICE_INACTIVITY_NONE_MESSAGE =
   'GEV will not stop voice because of inactivity. Provider session limits and disconnections still apply.';
@@ -59,6 +60,76 @@ export function voiceInactivityPauseMessage(minutes) {
 }
 
 /**
+ * Keep one bounded request to reveal Voice Settings after Cockpit exits.
+ * The owner is tied to the current voice-session lifetime so stale requests
+ * cannot open UI after a stop, provider change, or application teardown.
+ */
+export function createDeferredVoiceSettingsIntent({
+  open,
+  onExpire,
+  eventTarget = globalThis.window,
+  setTimer = globalThis.setTimeout,
+  clearTimer = globalThis.clearTimeout,
+  deferOpen = globalThis.queueMicrotask,
+  timeoutMs = VOICE_SETTINGS_COCKPIT_EXIT_MS,
+}) {
+  let timer = null;
+  let pending = false;
+  let destroyed = false;
+  let generation = 0;
+  const cancel = () => {
+    generation += 1;
+    if (timer !== null) clearTimer?.(timer);
+    timer = null;
+    pending = false;
+  };
+  const expire = () => {
+    if (!pending || destroyed) return;
+    timer = null;
+    pending = false;
+    onExpire?.();
+  };
+  const handleCockpit = (event) => {
+    if (!pending || destroyed || event?.detail?.active !== false) return;
+    if (timer !== null) clearTimer?.(timer);
+    timer = null;
+    pending = false;
+    const exitGeneration = ++generation;
+    const reveal = () => {
+      if (destroyed || generation !== exitGeneration) return;
+      open?.();
+    };
+    if (typeof deferOpen === 'function') deferOpen(reveal);
+    else Promise.resolve().then(reveal);
+  };
+  eventTarget?.addEventListener?.('gev:cockpit-mode-changed', handleCockpit);
+  return {
+    schedule() {
+      if (destroyed) return false;
+      cancel();
+      pending = true;
+      timer = setTimer?.(expire, timeoutMs) ?? null;
+      timer?.unref?.();
+      return true;
+    },
+    cancel,
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      cancel();
+      eventTarget?.removeEventListener?.(
+        'gev:cockpit-mode-changed',
+        handleCockpit,
+      );
+    },
+    get pending() {
+      return pending;
+    },
+    timeoutMs,
+  };
+}
+
+/**
  * Own the application-level inactivity timer. Provider close/warning events
  * stay authoritative; this owner only requests the normal complete stop path.
  */
@@ -73,7 +144,7 @@ export function createVoiceInactivityController({
   if (preference === undefined) preference = DEFAULT_VOICE_INACTIVITY_MINUTES;
   let timer = null;
   let connected = false;
-  let toolCount = 0;
+  const pendingTools = new Set();
   const blockers = new Set();
 
   const cancel = () => {
@@ -84,7 +155,7 @@ export function createVoiceInactivityController({
   const canArm = () =>
     connected &&
     preference !== null &&
-    toolCount === 0 &&
+    pendingTools.size === 0 &&
     blockers.size === 0 &&
     session.isActive();
   const arm = () => {
@@ -114,7 +185,7 @@ export function createVoiceInactivityController({
   };
   const clearActivity = () => {
     connected = false;
-    toolCount = 0;
+    pendingTools.clear();
     blockers.clear();
     cancel();
   };
@@ -135,17 +206,16 @@ export function createVoiceInactivityController({
       return;
     }
     if (event.type === 'action-call') {
-      toolCount++;
+      pendingTools.add(event.actionId);
       cancel();
       return;
     }
     if (event.type === 'action-settled') {
-      toolCount = Math.max(0, toolCount - 1);
-      activity();
+      if (pendingTools.delete(event.actionId)) activity();
       return;
     }
     if (event.type === 'interruption') {
-      toolCount = 0;
+      pendingTools.clear();
       activity();
       return;
     }

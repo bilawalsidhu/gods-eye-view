@@ -34,6 +34,26 @@ import {
   withToolCatalog,
 } from './gevRealtime.js';
 import { createVoiceCostTracker } from './voiceCost.js';
+import { responseInstructionForToolResult } from './realtimeProtocol.js';
+
+test('Cockpit Voice Settings refusal asks for an explicit exit without claiming success', () => {
+  const instruction = responseInstructionForToolResult({
+    ok: true,
+    action: 'set_panel_open',
+    panelId: 'voice-settings',
+    open: false,
+    requestedOpen: true,
+    requiresCockpitExit: true,
+    pending: true,
+    expiresInMs: 20_000,
+  });
+  assert.match(instruction, /Would you like me to exit Cockpit/);
+  assert.match(instruction, /do not exit Cockpit without an affirmative reply/i);
+  assert.match(instruction, /do not call set_panel_open again/);
+  assert.match(instruction, /If the user declines/);
+  assert.doesNotMatch(instruction, /20 seconds/);
+  assert.match(instruction, /do not claim that the panel opened/i);
+});
 
 test('push-to-talk recognizes Space by code or key', () => {
   assert.equal(PUSH_TO_TALK_HOLD_DELAY_MS, 500);

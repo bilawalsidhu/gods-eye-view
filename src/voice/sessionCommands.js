@@ -2,6 +2,7 @@ import { createVoiceControl } from './control.js';
 import { createVoiceSession } from './session.js';
 import {
   bindVoiceInactivitySettings,
+  createDeferredVoiceSettingsIntent,
   createVoiceInactivityController,
 } from './inactivity.js';
 
@@ -24,6 +25,7 @@ export function createVoiceCommands({
   onProviderChange,
   onSessionEvent,
   storage,
+  showToast,
   voiceSettingsOpen = false,
 }) {
   if (resetExisting) window.__gevVoiceCommands?.stop?.({ removeUi: true });
@@ -59,6 +61,13 @@ export function createVoiceCommands({
     controller: inactivity,
     initialOpen: voiceSettingsOpen,
   });
+  const deferredSettings = createDeferredVoiceSettingsIntent({
+    open: () => settingsUnsubscribe.setOpen?.(true),
+    onExpire: () =>
+      showToast?.(
+        'Voice Settings request expired — exit Cockpit and ask again.',
+      ),
+  });
   if (ui.providerLimitNote)
     ui.providerLimitNote.textContent = capabilities.advisoryLimit || '';
   const providerHandler = () => onProviderChange?.(ui.providerSelect.value);
@@ -81,11 +90,22 @@ export function createVoiceCommands({
   controls.ui = ui;
   controls.setVoiceSettingsOpen = (open) =>
     settingsUnsubscribe.setOpen?.(open) ?? false;
+  controls.deferVoiceSettingsUntilCockpitExit = () =>
+    deferredSettings.schedule();
+  controls.cancelDeferredVoiceSettings = () => deferredSettings.cancel();
   controls.setVoiceInactivityMinutes = (minutes) =>
     settingsUnsubscribe.setPreference?.(minutes) ?? false;
   controls.getVoiceInactivityMinutes = () =>
     settingsUnsubscribe.getPreference?.();
   const updateStatus = session.subscribe((event) => {
+    // Terminal disclosure closes before a pending replacement can remount it.
+    if (
+      event.type === 'stop' ||
+      (event.type === 'state' && ['idle', 'error'].includes(event.state))
+    ) {
+      deferredSettings.cancel();
+      settingsUnsubscribe.setOpen?.(false);
+    }
     onSessionEvent?.(event);
     if (event.type !== 'state') return;
     ui.root.dataset.status = event.state;
@@ -123,6 +143,7 @@ export function createVoiceCommands({
       ui.button.removeEventListener('click', buttonHandler);
       ui.providerSelect?.removeEventListener('change', providerHandler);
       settingsUnsubscribe();
+      deferredSettings.destroy();
       inactivityUnsubscribe();
       inactivity.destroy();
       annotationUnsubscribe?.();
@@ -136,6 +157,7 @@ export function createVoiceCommands({
     ui.button.removeEventListener('click', buttonHandler);
     ui.providerSelect?.removeEventListener('change', providerHandler);
     settingsUnsubscribe();
+    deferredSettings.destroy();
     inactivityUnsubscribe();
     inactivity.destroy();
     annotationUnsubscribe?.();

@@ -739,6 +739,26 @@ export function createGevActionRunner({
             error: 'Voice Settings are unavailable',
           };
         }
+        const cockpitActive =
+          styleManager?.getCockpitState?.()?.active === true ||
+          styleManager?.cockpitView?.active === true;
+        if (open && cockpitActive) {
+          const pending = voice.deferVoiceSettingsUntilCockpitExit?.() === true;
+          return {
+            ok: pending,
+            action: 'set_panel_open',
+            panelId,
+            open: false,
+            requestedOpen: true,
+            requiresCockpitExit: true,
+            pending,
+            expiresInMs: pending ? 20_000 : null,
+            ...(pending
+              ? {}
+              : { error: 'Exit Cockpit mode to open Voice Settings' }),
+          };
+        }
+        voice.cancelDeferredVoiceSettings?.();
         const changed = voice.setVoiceSettingsOpen(open);
         return {
           ok: changed !== false,
