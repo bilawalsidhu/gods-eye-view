@@ -11,6 +11,31 @@ export const VIEWPORT_MAX_PIXELS = 1200 * 900;
 // ~1.08 MP, matches the old 1200px-wide landscape budget
 export const VIEWPORT_MAX_ENCODED_BYTES = 200 * 1024;
 
+/**
+ * Explain whether the existing Realtime path should escalate structured entity
+ * context to a viewport image. This is instrumentation vocabulary only; it
+ * preserves the current send policy exactly.
+ */
+export function viewportContextDecision(result, { channelOpen = true } = {}) {
+  if (result?.action !== 'get_entity_context')
+    return { send: false, reason: 'not-entity-context' };
+  if (!channelOpen) return { send: false, reason: 'channel-closed' };
+  const viewScale = result.scene?.basemap?.viewScale ?? null;
+  if (!shouldSendViewportImage(viewScale))
+    return { send: false, reason: 'view-scale-not-local', viewScale };
+  if (hasStructuredViewIdentity(result))
+    return {
+      send: false,
+      reason: 'structured-identity-sufficient',
+      viewScale,
+    };
+  return {
+    send: true,
+    reason: 'structured-identity-missing',
+    viewScale,
+  };
+}
+
 export async function captureViewportImage() {
   const viewer = window.__godsEyeView?.viewer;
   const source =
@@ -179,25 +204,31 @@ export class RealtimeViewport {
   }
 
   async sendVisualContextIfUseful(result) {
-    if (
-      result?.action !== 'get_entity_context' ||
-      !this.dc ||
-      this.dc.readyState !== 'open'
-    )
-      return false;
-    const viewScale = result.scene?.basemap?.viewScale;
-    if (!shouldSendViewportImage(viewScale)) return false;
-    if (hasStructuredViewIdentity(result)) return false;
-    const generation = this.generation;
     const channel = this.dc;
+    const decision = viewportContextDecision(result, {
+      channelOpen: channel?.readyState === 'open',
+    });
+    this.debugLog?.('viewport_context.decision', decision);
+    if (!decision.send) return false;
+
+    const generation = this.generation;
     const imageUrl = await this.capture();
+    if (!imageUrl) {
+      this.debugLog?.('viewport_context.skipped', {
+        reason: 'capture-unavailable',
+      });
+      return false;
+    }
     if (
-      !imageUrl ||
       generation !== this.generation ||
       this.dc !== channel ||
       channel.readyState !== 'open'
-    )
+    ) {
+      this.debugLog?.('viewport_context.skipped', {
+        reason: 'session-changed-during-capture',
+      });
       return false;
+    }
 
     // Keep at most one viewport screenshot in context. Images are the single
     // most expensive item (re-billed every turn they linger), so we proactively
@@ -257,6 +288,10 @@ export class RealtimeViewport {
       'client.viewport_context',
     );
     this.lastViewportItemId = sent ? newItemId : null;
+    this.debugLog?.('viewport_context.result', {
+      sent,
+      reason: sent ? 'sent' : 'data-channel-send-failed',
+    });
     return sent;
   }
 
