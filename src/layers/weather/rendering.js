@@ -324,21 +324,26 @@ function createGlobeRendering({
           viewer.scene.requestRender();
           return;
         }
-        const tilingScheme = new cesium.GeographicTilingScheme(
-          global
-            ? {
-                rectangle,
-                numberOfLevelZeroTilesX: 2,
-                numberOfLevelZeroTilesY: 1,
-              }
-            : undefined,
-        );
+        const tilingScheme =
+          snapshot.tilingScheme === 'web-mercator'
+            ? new cesium.WebMercatorTilingScheme({ rectangle })
+            : new cesium.GeographicTilingScheme(
+                global
+                  ? {
+                      rectangle,
+                      numberOfLevelZeroTilesX: 2,
+                      numberOfLevelZeroTilesY: 1,
+                    }
+                  : undefined,
+              );
         const credit = new cesium.Credit(
           snapshot.product === 'lightning'
             ? 'NOAA/NWS lightning density · derived from Vaisala NLDN/GLD360'
-            : snapshot.product === 'radar'
-              ? 'NOAA nowCOAST · NWS/OAR MRMS'
-              : 'NOAA nowCOAST · NESDIS GOES / global satellite partners',
+            : snapshot.product === 'radar-global'
+              ? 'RainViewer · Global radar composite (rainviewer.com)'
+              : snapshot.product === 'radar'
+                ? 'NOAA nowCOAST · NWS/OAR MRMS'
+                : 'NOAA nowCOAST · NESDIS GOES / global satellite partners',
           false,
         );
         const provider = global
