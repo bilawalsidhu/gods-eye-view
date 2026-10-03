@@ -160,6 +160,14 @@ export const DATA_CREDITS = [
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
+  {
+    key: 'noaa-tides',
+    html:
+      'Tide predictions: ' +
+      '<a href="https://tidesandcurrents.noaa.gov/" target="_blank" rel="noopener">NOAA CO-OPS</a>' +
+      ' · Geoid heights: ' +
+      '<a href="https://geodesy.noaa.gov/GEOID/GEOID18/" target="_blank" rel="noopener">NOAA NGS GEOID18</a>',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {

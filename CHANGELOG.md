@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Coastal Tides (Weather group) draws an animated sea surface at NOAA's
+  predicted tide for the nearest supported station (Santa Cruz, San Francisco,
+  La Jolla). A card scrubs 12 hours back and 48 ahead, plays a day in under a
+  minute, adds wave runup or surge on top of the tide, and calibrates the
+  datum offset. Heights chain MLLW → NAVD88 (station datum sheet) → WGS84
+  ellipsoid (GEOID18), served keyless through `/api/tides`. Share-link token `0`.
+
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
 - Ship each bundled data pack once. The region, marine, admin-boundary,

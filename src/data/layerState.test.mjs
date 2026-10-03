@@ -199,8 +199,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 28);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 28);
+  assert.equal(REGISTERED_LAYER_IDS.length, 29);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 29);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -2641,4 +2641,11 @@ test('fire perimeters uses digit 2 without colliding with wind or recent imagery
     decodeLayerStateParams(new URLSearchParams(encode(decoded))),
     decoded,
   );
+});
+
+test('coastal tides takes digit 0 without colliding with recent imagery or fire perimeters', () => {
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=0.1.2'));
+  assert.deepEqual(decoded.enabledLayerIds, ['coastal-tides', 'fire-perimeters', 'recent-imagery']);
+  assert.equal(LAYER_STATE_REGISTRY.find(({ id }) => id === 'coastal-tides').token, '0');
+  assert.deepEqual(decodeLayerStateParams(new URLSearchParams(encode(decoded))), decoded);
 });
