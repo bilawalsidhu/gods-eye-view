@@ -21,9 +21,19 @@ export function assertNode24AllocationRuntime(version = process.versions.node) {
   return version;
 }
 
+/**
+ * Directories this runner searches for `*.test.mjs`, in stable order.
+ *
+ * `server/` belongs here because provider modules own tests of their own: a
+ * suite placed beside the module it covers must run, and `npm test` is the only
+ * thing CI invokes, so a directory missing from this list is a suite that never
+ * runs anywhere. `unitTestRunner.test.mjs` asserts the list covers every test
+ * file in the repository, so adding a tree without adding it here fails.
+ */
+export const UNIT_TEST_ROOTS = Object.freeze(['src', 'server']);
+
 /** Discover repository unit tests in stable path order. */
 export function discoverUnitTestFiles(root = process.cwd()) {
-  const sourceRoot = path.join(root, 'src');
   const files = [];
   const visit = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -34,7 +44,7 @@ export function discoverUnitTestFiles(root = process.cwd()) {
       }
     }
   };
-  visit(sourceRoot);
+  for (const testRoot of UNIT_TEST_ROOTS) visit(path.join(root, testRoot));
   return files.sort();
 }
 

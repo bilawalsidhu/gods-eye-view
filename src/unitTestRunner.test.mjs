@@ -1,13 +1,39 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   ALLOCATION_TEST_FILES,
+  UNIT_TEST_ROOTS,
   allocationTestArgs,
   assertNode24AllocationRuntime,
   buildUnitTestPlan,
+  discoverUnitTestFiles,
   isCalibratedAllocationRuntime,
 } from '../scripts/run-unit-tests.mjs';
+
+const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
+
+/** Every `*.test.mjs` a contributor could add, found without consulting the runner. */
+function testFilesOnDisk(root) {
+  // Build outputs and dependencies are not places a contributor writes a test,
+  // and walking them would be slow enough to matter. Everything else counts.
+  const skip = new Set(['node_modules', 'dist', 'build', 'public']);
+  const found = [];
+  const visit = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.name.startsWith('.') || skip.has(entry.name)) continue;
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(absolute);
+      else if (entry.isFile() && entry.name.endsWith('.test.mjs')) {
+        found.push(path.relative(root, absolute).split(path.sep).join('/'));
+      }
+    }
+  };
+  visit(root);
+  return found.sort();
+}
 
 test('unit runner serializes only GC-bracketed allocation microbenchmarks', () => {
   const ordinary = [
@@ -35,6 +61,29 @@ test('unit runner serializes only GC-bracketed allocation microbenchmarks', () =
     () => allocationTestArgs('src/data/radio.test.mjs'),
     /Not an allocation microbenchmark/,
   );
+});
+
+test('the runner discovers every test file in the repository', () => {
+  // `npm test` is the only suite CI runs, and it runs exactly what this
+  // function returns. A `*.test.mjs` outside the searched roots therefore never
+  // executes anywhere, while still reading — in review and to its author — like
+  // covered code. Compare the two sets rather than their sizes, so the failure
+  // names the files instead of only disagreeing about a count.
+  const discovered = discoverUnitTestFiles(repositoryRoot);
+  const onDisk = testFilesOnDisk(repositoryRoot);
+  const undiscovered = onDisk.filter((file) => !discovered.includes(file));
+  assert.deepEqual(
+    undiscovered,
+    [],
+    `test files the runner never executes: ${undiscovered.join(', ')}`,
+  );
+  assert.deepEqual(discovered, onDisk);
+  for (const file of discovered) {
+    assert.ok(
+      UNIT_TEST_ROOTS.some((root) => file.startsWith(`${root}/`)),
+      `${file} should sit under one of ${UNIT_TEST_ROOTS.join(', ')}`,
+    );
+  }
 });
 
 test('allocation runtime calibration is explicit and pinned to Node 24', () => {
