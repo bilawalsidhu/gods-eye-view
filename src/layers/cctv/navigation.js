@@ -8,21 +8,30 @@ export function createNavigation({
   source,
 }) {
   /**
-   * Finds the camera closest to the Cesium viewer's current position.
+   * Find the catalog camera nearest one WGS84 point.
+   * @param {number} lat Latitude in degrees.
+   * @param {number} lon Longitude in degrees.
    * @returns {string|null} Camera ID of the nearest camera, or null.
    */
-
-  function nearestCameraIdToViewer() {
-    const carto = layerState._viewer?.camera?.positionCartographic;
-    if (!carto || !layerState._records.length) return null;
-    const lat = Cesium.Math.toDegrees(carto.latitude);
-    const lon = Cesium.Math.toDegrees(carto.longitude);
+  function nearestCameraIdToPoint(lat, lon) {
+    const latitude = Number(lat);
+    const longitude = Number(lon);
+    if (
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180 ||
+      !layerState._records.length
+    )
+      return null;
 
     let best = null;
     for (const record of layerState._records) {
       const distKm = parts.model.haversineKm(
-        lat,
-        lon,
+        latitude,
+        longitude,
         record.camera.lat,
         record.camera.lon,
       );
@@ -31,6 +40,19 @@ export function createNavigation({
       }
     }
     return best?.id || null;
+  }
+
+  /**
+   * Finds the camera closest to the Cesium viewer's current position.
+   * @returns {string|null} Camera ID of the nearest camera, or null.
+   */
+  function nearestCameraIdToViewer() {
+    const carto = layerState._viewer?.camera?.positionCartographic;
+    if (!carto) return null;
+    return nearestCameraIdToPoint(
+      Cesium.Math.toDegrees(carto.latitude),
+      Cesium.Math.toDegrees(carto.longitude),
+    );
   }
 
   /**
@@ -148,6 +170,7 @@ export function createNavigation({
     return (((Math.floor(currentIdx) + delta) % total) + total) % total;
   }
   return {
+    nearestCameraIdToPoint,
     nearestCameraIdToViewer,
     focusCctvRecord,
     focusCamera,
