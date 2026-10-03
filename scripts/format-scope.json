@@ -691,6 +691,7 @@
   "src/sources/cctvTypes.js",
   "src/sources/protocols.test.mjs",
   "src/voice/actionSchemas.js",
+  "src/data/actionEpisodes.test.mjs",
   "src/voice/actionSchemas.test.mjs",
   "server/providers/openai/toolDescriptions.js",
   "src/voice/session.js",
