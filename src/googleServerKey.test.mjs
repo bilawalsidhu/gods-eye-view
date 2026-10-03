@@ -67,11 +67,19 @@ test('the Street View tool resolves per-variable overrides before preferring the
   }
 });
 
-test('both Places routes select the intended key and keep it out of responses', async (t) => {
+test('every Google route selects the intended key and keeps it out of responses', async (t) => {
   const original = { server: process.env.GOOGLE_MAPS_SERVER_API_KEY, browser: process.env.GOOGLE_MAPS_API_KEY, limit: process.env.GEV_RATELIMIT_GOOGLE_PER_MIN };
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url, options) => {
-    calls.push({ url, key: options.headers['X-Goog-Api-Key'] });
+    // Places sends the key as a header; Geocoding's web service takes it as a
+    // query parameter. Either way it must be the server key, and never the
+    // browser's copy of it.
+    calls.push({
+      url,
+      key:
+        options?.headers?.['X-Goog-Api-Key'] ??
+        new URL(String(url)).searchParams.get('key'),
+    });
     return Response.json({ places: [] });
   });
   try {
@@ -88,12 +96,12 @@ test('both Places routes select the intended key and keep it out of responses', 
       for (const install of ['configureServer', 'configurePreviewServer']) {
         const routes = new Map();
         googlePlacesContextProxy()[install]({ middlewares: { use: (name, handler) => routes.set(name, handler) } });
-        assert.equal(routes.size, 2);
+        assert.equal(routes.size, 4);
         for (const handler of routes.values()) {
           const before = calls.length;
           let body;
           const res = { setHeader() {}, end(value) { body = value; } };
-          await handler({ method: 'GET', url: '/?lat=30&lon=-97&q=capitol', headers: {}, socket: { remoteAddress: '127.0.0.1' } }, res);
+          await handler({ method: 'GET', url: '/?lat=30&lon=-97&q=capitol&address=capitol', headers: {}, socket: { remoteAddress: '127.0.0.1' } }, res);
           assert.equal(res.statusCode, 200);
           assert.ok(!body.includes('server-secret'));
           if (expected) {
