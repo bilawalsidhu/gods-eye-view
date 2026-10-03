@@ -55,6 +55,7 @@ const PANEL_GROUPS = [
       'weather-radar',
       'weather-satellite',
       'weather-lightning',
+      'weather-aurora',
       'weather-cyclones',
     ],
   },
@@ -366,6 +367,7 @@ export class LayerPanel {
               'weather-radar',
               'weather-satellite',
               'weather-lightning',
+              'weather-aurora',
               'weather-cyclones',
             ].includes(layer.id),
         )

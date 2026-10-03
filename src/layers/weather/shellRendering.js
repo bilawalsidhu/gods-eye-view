@@ -2,13 +2,20 @@ import { acquireWeatherImage } from './infraredImage.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
 
-/** Metres above the ellipsoid. Lower shells draw first, so lightning draws last. */
+/** Metres above the ellipsoid. Lower shells draw first, so aurora draws last. */
+// The troposphere products are stacked, not sited: a few hundred metres apart
+// is enough to order them and keep them off the terrain. Aurora is different —
+// it is emission in the thermosphere, not weather on the surface, and at 7 km
+// it read as painted on the ground. This entry is the FLOOR of the auroral
+// curtain, near the bottom of the E-region; the layer draws a stack rising
+// from here, and owns those altitudes itself (AURORA_SHELL_STACK).
 export const WEATHER_SHELL_HEIGHTS = Object.freeze({
   wind: 5_000,
   clouds: 5_500,
   'clouds-regional': 5_800,
   radar: 6_200,
   lightning: 6_600,
+  aurora: 95_000,
 });
 // Decoded canvases per renderer, full-extent and detail images alike: the shown
 // frame and the warmed next frame, each full-extent and detail (four 4096×2048
@@ -108,6 +115,10 @@ export function createShellSurface({
   cesium,
   rectangle,
   height,
+  // Half a degree keeps a troposphere shell flush with the terrain it covers.
+  // A caller stacking several shells far above the ground can afford a coarser
+  // mesh: the higher the surface, the less its facets show against the limb.
+  granularityDegrees = 0.5,
   onSettled = () => {},
 }) {
   registerMaterial(cesium);
@@ -138,7 +149,7 @@ export function createShellSurface({
       geometry: new cesium.RectangleGeometry({
         rectangle,
         height,
-        granularity: cesium.Math.toRadians(0.5),
+        granularity: cesium.Math.toRadians(granularityDegrees),
         vertexFormat: cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT,
       }),
     }),

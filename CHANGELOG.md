@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Slide the aurora forecast into place instead of snapping between generations. Each OVATION grid is a forecast for a future instant, so consecutive generations show the same oval turned a little further in magnetic local time rather than a different oval in the same place; cross-fading them as flat rasters dissolves one and reveals another beside it. The older field is now rotated about the geomagnetic dipole axis to a shared magnetic local time before blending, so the oval travels. The rotation is measured from the Sun's direction at each forecast time rather than assumed to be a uniform fifteen degrees an hour, which is only exact for a dipole parallel to the spin axis and this one is tilted about nine degrees. Nothing is invented: every frame is an interpolation between two published forecasts, and a republished identical forecast is now a no-op rather than a nine-shell rebuild.
+- Draw the aurora forecast as a stack of raised shells between 95 km and 320 km on every map source, rather than draping it on the surface or floating one sheet in the troposphere. Auroral emission occupies the thermosphere, and the vertical extent is what makes an oval read correctly against the limb; per-shell opacities composite to about what a single shell carried, and the stack totals fewer mesh cells than the one it replaced.
+- Add a global NOAA SWPC OVATION aurora probability layer covering both hemispheres. It renders the source 1° scalar grid through the existing Wind/weather raster and raised-shell patterns, polls on NOAA's roughly five-minute generation cadence through a shared bounded proxy, and labels the product throughout as a variable 30–90 minute FORECAST with separate valid and issue/input times and explicit visibility uncertainty.
+
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
 - Ship each bundled data pack once. The region, marine, admin-boundary,

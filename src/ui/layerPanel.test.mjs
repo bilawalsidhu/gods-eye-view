@@ -102,6 +102,7 @@ test('readout rows contain only toggles and metadata; ordinary rows retain contr
     'weather-radar',
     'weather-satellite',
     'weather-lightning',
+    'weather-aurora',
     'weather-cyclones',
     'other',
   ];

@@ -199,8 +199,11 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 28);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 28);
+  // 28 published layers plus weather-aurora. LEGACY_LAYER_STATE_TOKENS below
+  // is deliberately NOT extended: it is the frozen record of tokens already in
+  // the wild, and a new layer earns a fresh reservation instead.
+  assert.equal(REGISTERED_LAYER_IDS.length, 29);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 29);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -239,7 +242,10 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  assert.equal(nextLayerStateToken(), '0');
+  // Was '0' before this layer. weather-aurora took the digit the allocator
+  // was handing out, so the next contributor gets '3' — 1 and 2 are already
+  // published.
+  assert.equal(nextLayerStateToken(), '3');
   assert.equal(
     nextLayerStateToken({ ...LAYER_STATE_TOKEN_RESERVATIONS, alpha: '0', bravo: '3' }),
     '4',
@@ -298,7 +304,8 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   assert.equal(
     validateLayerStateAllocations(
       LAYER_STATE_TOKEN_RESERVATIONS,
-      { ...LAYER_STATE_TOKEN_RESERVATIONS, future: '0', next: '3' },
+      // 0, 1 and 2 are now taken, so a conforming pair starts at 3.
+      { ...LAYER_STATE_TOKEN_RESERVATIONS, future: '3', next: '4' },
     ),
     true,
   );
@@ -307,7 +314,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
       ...LAYER_STATE_TOKEN_RESERVATIONS,
       future: '00',
     }),
-    /next free token 0/,
+    /next free token 3/,
   );
   const beforeLastDigit = { ...digitsExhausted };
   delete beforeLastDigit['prior-9'];
@@ -2623,6 +2630,30 @@ test('the recent-imagery split is share-link only: never stored locally, and a s
   assert.equal(
     parseStoredLayerState(previous).options['recent-imagery'].split,
     50,
+  );
+});
+
+test('the aurora holds digit 0, which survives every falsy coercion on the way round', () => {
+  // '0' is the one token that is falsy under Number() and the only digit a
+  // truthiness check would silently drop, so it gets a round-trip of its own
+  // rather than riding on the shared registry assertions.
+  assert.equal(
+    LAYER_STATE_REGISTRY.find(({ id }) => id === 'weather-aurora').token,
+    '0',
+  );
+  const decoded = decodeLayerStateParams(
+    new URLSearchParams('v=2&l=0.k&lo=0.o.l'),
+  );
+  assert.deepEqual(decoded.enabledLayerIds, ['weather-aurora', 'wind']);
+  assert.deepEqual(decoded.options['weather-aurora'], { opacity: 'light' });
+  assert.deepEqual(
+    decodeLayerStateParams(new URLSearchParams(encode(decoded))),
+    decoded,
+  );
+  // Alone, with nothing after it to keep the field non-empty.
+  assert.deepEqual(
+    decodeLayerStateParams(new URLSearchParams('v=2&l=0')).enabledLayerIds,
+    ['weather-aurora'],
   );
 });
 

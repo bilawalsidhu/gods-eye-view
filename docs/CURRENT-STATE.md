@@ -14,6 +14,23 @@ new views from the page that frames it; framing is off unless
 `GEV_EMBED_FRAME_ANCESTORS` allows the framing page. MCP leads with the tools that find
 what to show. See [tools and the MCP server](TOOLS.md).
 
+## NOAA SWPC OVATION aurora forecast — September 25, 2026
+
+Weather includes a keyless `weather-aurora` layer sourced from NOAA SWPC's OVATION JSON product. The complete 360×181, 1° grid is rendered as a transparent scalar raster, retaining both northern and southern hemispheres.
+
+Unlike the troposphere products, the aurora is never draped on the surface. It is emission in the thermosphere, so every map source — globe imagery and photorealistic 3D Tiles alike — draws it as a stack of nine raised shells from 95 km to 320 km, each fainter than the one below. The per-shell alphas composite to roughly the opacity a single shell carried, so the oval seen from above is as bright as one sheet while gaining real vertical extent edge-on at the limb, which is most of why an auroral oval reads correctly on a sphere. Shell meshes coarsen with altitude, and the whole stack is fewer cells than the single 0.5° shell it replaced. The UI says FORECAST, identifies the variable 30–90 minute horizon, separates forecast-valid time from observation/input time, and warns that modeled viewing probability is not guaranteed visibility.
+
+The same-origin `/api/aurora` provider validates the fixed source and full grid, caps the roughly 925 KB body, coalesces callers, caches for the source's approximately five-minute generation cadence, and exposes a bounded stale last-good result explicitly as stale. Wildcard upstream CORS makes direct access possible, but the proxy prevents each tab from independently downloading a large unchanged generation.
+
+`MAX_ENABLED_LAYERS_CHARS` moves from 64 to 256 with the token grammar. These
+changes belong together because `N` two-character tokens encode as `3N-1`
+characters; widening validation alone could make an otherwise valid every-layer
+link exceed the old cap. The decoder returns `null` over the cap, and restoration
+then silently drops the whole layer payload rather than keeping a prefix. The new
+bound clears about 85 two-character tokens while remaining bounded well below
+practical URL limits. This fixes token capacity, not contention over registry
+edits; that remains open.
+
 ## Tools and local MCP server — October 1, 2026
 
 `gods-eye-view/tools` defines queries that answer questions from the app's data,
@@ -39,7 +56,6 @@ shared `area` argument (place name, bounding box, or point and radius) and cap
 lists at 25 rows by default. Voice offers the same queries next to its app
 actions: the session lists them, and the browser runs them through the same
 catalog, loaded on first use. See [tools and the MCP server](TOOLS.md).
-
 ## Cyber HUD — September 30, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice

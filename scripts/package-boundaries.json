@@ -2052,6 +2052,10 @@
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
+      "src/layers/aurora/rendering.js",
+      "src/layers/aurora/magneticLocalTime.js",
+      "src/layers/aurora/source.js",
+      "src/layers/aurora/index.js",
       "src/sources/infrastructureData.js",
       "src/tools/functions.js",
       "src/voice/actionSchemas.js",
@@ -2543,6 +2547,9 @@
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
+      "src/layers/aurora/rendering.js",
+      "src/layers/aurora/magneticLocalTime.js",
+      "src/layers/aurora/index.js",
       "src/sources/infrastructureData.js"
     ],
     "external": [

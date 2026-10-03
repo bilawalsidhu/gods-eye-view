@@ -22,6 +22,7 @@
   ["telegeography-submarine-cables", "u"],
   ["traffic", "t"],
   ["transit", "j"],
+  ["weather-aurora", "0"],
   ["weather-cyclones", "y"],
   ["weather-lightning", "l"],
   ["weather-radar", "v"],
