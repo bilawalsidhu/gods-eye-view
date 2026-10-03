@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Read satellite catalog numbers above 99999. A TLE writes them in Alpha-5,
+  a letter for the first two digits (`A0000` is 100000), which the satellites
+  layer converted to `NaN`: every such satellite shared one catalog entry and
+  all but the first were dropped as duplicates. The satellite tools read the
+  same field as no number, so such a satellite could not be found by it. The
+  layer and the tools now decode the field in `src/sources/tle.js`
+  (Honorius Neogy, #767, fixes #751).
+
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
 - Ship each bundled data pack once. The region, marine, admin-boundary,
