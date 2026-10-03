@@ -50,6 +50,11 @@ import {
   DEFAULT_NSW_MAX_SOURCES,
   SYDNEY_CENTER,
   NSW_MAX_VIEW_LABEL,
+  QLDTRAFFIC_WEBCAMS_URL,
+  QLDTRAFFIC_FLOODCAMS_URL,
+  QLDTRAFFIC_IMAGE_ORIGINS,
+  DEFAULT_QLDTRAFFIC_MAX_SOURCES,
+  QLDTRAFFIC_ANCHORS,
   DEFAULT_CALGARY_ROWS_URL,
   CALGARY_IMAGE_ORIGIN,
   DEFAULT_CALGARY_MAX_SOURCES,
@@ -75,6 +80,7 @@ import {
   isLikelyBcCoordinate,
   isLikelyTexasCoordinate,
   isLikelyNswCoordinate,
+  isLikelyQueenslandCoordinate,
   isLikelyCalgaryCoordinate,
   cameraDisplayCode,
   rowArrayToObject,
@@ -1396,6 +1402,163 @@ export async function loadNswSourcesFromOpenData() {
     return prioritized;
   } catch (error) {
     console.warn('[CCTV] NSW camera download error:', error?.message || error);
+    return [];
+  }
+}
+
+export function qldTrafficApiKey(env = process.env) {
+  return String(env.QLDTRAFFIC_API_KEY || '').trim();
+}
+
+export function qldTrafficApiUrl(baseUrl, apiKey) {
+  const url = new URL(baseUrl);
+  url.searchParams.set('apikey', apiKey);
+  return url.toString();
+}
+
+export function normalizeQldTrafficImageUrl(raw) {
+  const text = String(raw ?? '').trim();
+  if (!text) return null;
+  let parsed;
+  try {
+    parsed = new URL(text);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  parsed.protocol = 'https:';
+  return QLDTRAFFIC_IMAGE_ORIGINS.includes(parsed.origin)
+    ? parsed.toString()
+    : null;
+}
+
+/**
+ * One QLDtraffic webcam/floodcam GeoJSON feature -> one catalog source, or null.
+ *
+ * The API exposes camera stills as GeoJSON Point features. The frame URL is
+ * accepted only from official QLDtraffic image hosts and upgraded to HTTPS
+ * before the proxy ever sees it.
+ *
+ * @param {object} feature - GeoJSON feature from /v1/webcams or /v1/floodcams.
+ * @param {'webcam'|'floodcam'} kind
+ * @returns {?object}
+ */
+export function qldTrafficCameraToSource(feature, kind = 'webcam') {
+  const props = feature?.properties || {};
+  const rawId = String(props.id ?? feature?.id ?? '').trim();
+  if (!rawId) return null;
+  const coords = feature?.geometry?.coordinates;
+  const lon = typeof coords?.[0] === 'number' ? coords[0] : NaN;
+  const lat = typeof coords?.[1] === 'number' ? coords[1] : NaN;
+  if (!isLikelyQueenslandCoordinate(lat, lon)) return null;
+
+  const imageUrl = normalizeQldTrafficImageUrl(props.image_url);
+  if (!imageUrl) return null;
+
+  const cameraId = `qldtraffic-${kind}-${rawId}`;
+  const heading = directionToHeading(props.direction, true);
+  const hasHeading = Number.isFinite(heading);
+  const description = String(props.description || '').trim();
+  const locality = String(props.locality || '').trim();
+  const district = String(props.district || '').trim();
+  return {
+    id: cameraId,
+    name: description || `QLD Traffic ${rawId}`,
+    city: locality || district || 'Queensland',
+    cityId: 'qld',
+    provider: kind === 'floodcam' ? 'QLD Traffic Flood Cameras' : 'QLD Traffic',
+    lat,
+    lon,
+    headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+    headingConfidence: hasHeading ? 'high' : 'low',
+    pitchDeg: hasHeading ? -24 : -18,
+    fovDeg: hasHeading ? 56 : 44,
+    rangeM: hasHeading ? 210 : 145,
+    mountHeightM: hasHeading ? 10 : 8,
+    // Coastal Queensland dominates the default anchors; 3D-tile ground snap
+    // corrects this prior when available.
+    groundElevationM: 20,
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind:
+      kind === 'floodcam' ? 'qldtraffic-floodcam' : 'qldtraffic-webcam',
+    license:
+      'State of Queensland (Department of Transport and Main Roads), CC BY 4.0',
+    credit: 'State of Queensland (Department of Transport and Main Roads)',
+    code: cameraDisplayCode((description || rawId).toUpperCase()),
+  };
+}
+
+async function fetchQldTrafficCameraFeatures(baseUrl, apiKey) {
+  const resp = await fetch(qldTrafficApiUrl(baseUrl, apiKey), {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
+    },
+    redirect: 'manual',
+    signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+  });
+  if (resp.status >= 300 && resp.status < 400) {
+    console.warn(
+      '[CCTV] QLDtraffic catalog redirected; redirects are not followed',
+    );
+    return [];
+  }
+  if (!resp.ok) {
+    console.warn('[CCTV] QLDtraffic camera download failed:', resp.status);
+    return [];
+  }
+  const body = await resp.json();
+  return Array.isArray(body?.features) ? body.features : [];
+}
+
+/**
+ * Fetch QLDtraffic traffic and flood cameras. Requires QLDTRAFFIC_API_KEY; the
+ * key is server-side only and is sent as the documented `apikey` query param.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadQldTrafficSourcesFromOpenData() {
+  const apiKey = qldTrafficApiKey();
+  if (!apiKey) return [];
+  try {
+    const settled = await Promise.allSettled([
+      fetchQldTrafficCameraFeatures(QLDTRAFFIC_WEBCAMS_URL, apiKey).then(
+        (features) =>
+          features.map((feature) =>
+            qldTrafficCameraToSource(feature, 'webcam'),
+          ),
+      ),
+      fetchQldTrafficCameraFeatures(QLDTRAFFIC_FLOODCAMS_URL, apiKey).then(
+        (features) =>
+          features.map((feature) =>
+            qldTrafficCameraToSource(feature, 'floodcam'),
+          ),
+      ),
+    ]);
+    const cameras = settled.flatMap((result) =>
+      result.status === 'fulfilled' ? result.value.filter(Boolean) : [],
+    );
+    const unique = Array.from(
+      new Map(cameras.map((camera) => [camera.id, camera])).values(),
+    );
+    const maxRaw = Number(
+      process.env.CCTV_QLDTRAFFIC_MAX_SOURCES || DEFAULT_QLDTRAFFIC_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(900, Math.floor(maxRaw)))
+      : DEFAULT_QLDTRAFFIC_MAX_SOURCES;
+    const prioritized = prioritizeSources(unique, maxCount, QLDTRAFFIC_ANCHORS);
+    console.log(
+      `[CCTV] Loaded QLDtraffic camera sources: ${unique.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] QLDtraffic camera download error:',
+      error?.message || error,
+    );
     return [];
   }
 }
