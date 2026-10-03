@@ -100,6 +100,11 @@ export function hasStructuredViewIdentity(result) {
 }
 
 export function responseInstructionForToolResult(result) {
+  if (result?.requiresCockpitExit === true) {
+    return result.pending
+      ? 'Tell the user: “Voice Settings is available from the main view. Would you like me to exit Cockpit and open it for you?” Do not mention the expiry time, do not claim that the panel opened, and do not exit Cockpit without an affirmative reply. If the user agrees, call control_cockpit with action exit; the pending request will open Voice Settings after Cockpit exits, so do not call set_panel_open again. If the user declines, call set_panel_open with voice-settings and open false to cancel the pending request.'
+      : 'Tell the user to exit Cockpit and ask again to open Voice Settings. Do not claim that the panel opened, do not exit Cockpit automatically, and do not retry with another panel.';
+  }
   if (result?.action === 'control_radio' && result.radioPlaybackSuppressed) {
     if (result.audioState === 'paused') {
       return 'Briefly confirm the completed Radio action, then say that Radio remains paused as requested. Do not say the request was cancelled or that Radio is playing.';

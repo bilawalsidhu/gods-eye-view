@@ -14,7 +14,12 @@ export function createRealtimeSession({
   });
   return {
     controller,
-    capabilities: { costControls: true, pushToTalk: true },
+    capabilities: {
+      costControls: true,
+      pushToTalk: true,
+      advisoryLimit:
+        'OpenAI Realtime sessions can last up to 60 minutes. rate_limits.updated reports quota, and server idle_timeout_ms prompts rather than closes the session.',
+    },
     start: (settings) => controller.start(settings),
     stop: (settings) => controller.stop(settings),
     sendText: (text) => controller.sendTextCommand(text),

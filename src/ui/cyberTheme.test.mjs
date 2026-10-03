@@ -778,6 +778,108 @@ test('Cyber voice telemetry renders a live scan scope without replacing audio ow
     cyberStyles,
     /prefers-reduced-motion: reduce[\s\S]*?gev-voice-visualizer::after[\s\S]*?animation: none/,
   );
+  assert.match(
+    cyberStyles,
+    /#gev-voice-button:focus-visible\s*\{[\s\S]*?outline:\s*2px solid var\(--cyber-red-bright\) !important;[\s\S]*?outline-offset:\s*-3px;/,
+  );
+  assert.match(
+    cyberStyles,
+    /#gev-voice-button:focus-visible[\s\S]*?\.gev-mic-orbit\s*\{[\s\S]*?border-color:\s*var\(--cyber-red-bright\);[\s\S]*?background:\s*rgba\(196, 84, 84, 0\.24\);/,
+  );
+});
+
+test('Voice Settings opts into the shared surface without panel-specific theme frames', () => {
+  const control = readFileSync(
+    new URL('../voice/control.js', import.meta.url),
+    'utf8',
+  );
+  const voiceStyles = readFileSync(
+    new URL('./styles/voice-cost.css', import.meta.url),
+    'utf8',
+  );
+  const surfaces = readFileSync(
+    new URL('./styles/panel-surfaces.css', import.meta.url),
+    'utf8',
+  );
+  assert.match(control, /providerField\.setAttribute\('data-panel-surface'/);
+  assert.match(control, /data-panel-header/);
+  assert.match(control, /data-panel-body/);
+  assert.match(control, /data-panel-popup/);
+  assert.match(control, /panel-surface-control/);
+  assert.match(
+    control,
+    /id="gev-voice-settings-button"[^>]*aria-expanded="false"[^>]*aria-controls="gev-voice-settings-panel"/,
+  );
+  assert.match(
+    control,
+    /id="gev-voice-settings-button"[^>]*aria-label="Voice settings"/,
+  );
+  assert.match(control, /gev-voice-settings-icon[^>]*>settings<\/span>/);
+  assert.match(
+    control,
+    /class="gev-voice-inactivity-fieldset"[^>]*aria-describedby="gev-voice-inactivity-note gev-voice-provider-limit-note"/,
+  );
+  assert.match(
+    control,
+    /type="radio" name="gev-voice-inactivity" value="custom"/,
+  );
+  assert.match(
+    control,
+    /id="gev-voice-inactivity-custom" type="range" min="1" max="60"/,
+  );
+  assert.match(
+    control,
+    /id="gev-voice-inactivity-note"[^>]*aria-live="polite"/,
+  );
+  assert.doesNotMatch(voiceStyles, /data-ui-theme='cyber'|cockpit-mode/);
+  assert.match(
+    voiceStyles,
+    /\.gev-voice-inactivity-custom\[hidden\]\s*\{\s*display:\s*none;/,
+  );
+  assert.match(
+    voiceStyles,
+    /\.gev-voice-inactivity-chip input:focus-visible \+ span\s*\{[\s\S]*?outline:\s*2px solid var\(--text-primary\);/,
+  );
+  assert.match(
+    voiceStyles,
+    /\.gev-voice-settings-panel\[data-panel-popup\]::before\s*\{[\s\S]*?background-color:\s*rgba\(5, 13, 20, 0\.97\);/,
+  );
+  assert.match(
+    voiceStyles,
+    /\.gev-voice-settings-panel:not\(\[hidden\]\)\s*\{[\s\S]*?display:\s*flex;[\s\S]*?flex-direction:\s*column;/,
+  );
+  assert.match(
+    surfaces,
+    /body:is\(\.ui-clean-view, \.recording-mode\)[\s\S]*?\[data-panel-surface\]/,
+  );
+  assert.match(
+    surfaces,
+    /\.panel-surface-control:focus-visible\s*\{[\s\S]*?outline:\s*2px solid var\(--text-primary\);[\s\S]*?outline-offset:\s*-3px;/,
+  );
+  assert.match(
+    voiceStyles,
+    /\.gev-voice-provider-field \.gev-voice-provider-header\s*\{[\s\S]*?display:\s*none;/,
+  );
+  assert.match(
+    cyberStyles,
+    /:root\[data-ui-theme='cyber'\][\s\S]*?\.gev-voice-provider-field[\s\S]*?\.gev-voice-provider-header\s*\{\s*display:\s*flex;/,
+  );
+  assert.match(
+    voiceStyles,
+    /#command-dock > #gev-voice-control\s*\{\s*z-index:\s*8;/,
+  );
+  assert.match(
+    voiceStyles,
+    /#gev-voice-control\[data-status='listening'\][\s\S]*?\.gev-voice-kicker\s*\{\s*display:\s*none;/,
+  );
+  assert.match(
+    voiceStyles,
+    /#command-dock:has\(#gev-voice-control:hover\)[\s\S]*?opacity:\s*1;[\s\S]*?transform:\s*translate\(-50%, 0\);/,
+  );
+  assert.match(
+    voiceStyles,
+    /prefers-reduced-motion:\s*reduce[\s\S]*?#command-dock > \.gev-voice-provider-field[\s\S]*?transition:\s*none;/,
+  );
 });
 
 test('Cyber Cockpit Display uses the released briefing lane instead of the legacy viewport cap', () => {

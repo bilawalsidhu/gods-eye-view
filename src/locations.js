@@ -9,6 +9,7 @@ import {
 import { unavailablePlaceSearch } from './search/placeSearch.js';
 import { cancelCameraArrival } from './data/cameraArrival.js';
 import { guardCameraAboveGround } from './cameraGroundGuard.js';
+import { findNaturalRegion } from './data/naturalEarthRegions.js';
 
 /** Newest landmark arrival; an older post-arrival ground guard yields to it. */
 let arrivalGeneration = 0;
@@ -805,6 +806,46 @@ export function findPoiByName(query) {
 /** Distinguishes an authority veto from a genuine not-found result. */
 export const CANCELLED_SEARCH = Object.freeze({ cancelled: true });
 
+/** Build an exact, offline place result from one unambiguous Natural Earth feature. */
+function naturalRegionSearchPlace(region) {
+  const points = (region?.polygons || []).flat();
+  if (points.length < 3) return null;
+  const latitudes = points.map(([, lat]) => lat).filter(Number.isFinite);
+  const longitudes = points
+    .map(([lon]) => lon)
+    .filter(Number.isFinite)
+    .map((lon) => ((lon % 360) + 360) % 360)
+    .sort((a, b) => a - b);
+  if (latitudes.length < 3 || longitudes.length < 3) return null;
+  let gapIndex = longitudes.length - 1;
+  let largestGap = longitudes[0] + 360 - longitudes.at(-1);
+  for (let index = 0; index < longitudes.length - 1; index += 1) {
+    const gap = longitudes[index + 1] - longitudes[index];
+    if (gap > largestGap) {
+      largestGap = gap;
+      gapIndex = index;
+    }
+  }
+  const west360 = longitudes[(gapIndex + 1) % longitudes.length];
+  const east360 = longitudes[gapIndex];
+  const west = wrapLongitude(west360);
+  const east = wrapLongitude(east360);
+  const viewport = {
+    southwest: { lat: Math.min(...latitudes), lng: west },
+    northeast: { lat: Math.max(...latitudes), lng: east },
+  };
+  const metrics = viewportMetrics(viewport);
+  if (!metrics) return null;
+  return {
+    lat: metrics.centerLat,
+    lng: metrics.centerLng,
+    label: region.name,
+    types: ['natural_feature'],
+    viewport,
+    exact: true,
+  };
+}
+
 /**
  * Geocode a place name through the supplied service, then fly there at a scale
  * appropriate to the request. Countries and cities use their viewport by
@@ -817,10 +858,18 @@ export async function searchAndFlyTo(viewer, query, options = {}) {
     typeof options.beforeFly === 'function' ? options.beforeFly : null;
   const mayFly = () =>
     !signal?.aborted && (beforeFly === null || beforeFly() !== false);
-  const outcome = await placeSearch.geocode(query, {
-    bias: viewportBias(viewer),
-    signal,
-  });
+  const bundledNatural = await findNaturalRegion(query).catch(() => null);
+  signal?.throwIfAborted();
+  const bundledPlace =
+    bundledNatural?.candidates === 1
+      ? naturalRegionSearchPlace(bundledNatural)
+      : null;
+  const outcome = bundledPlace
+    ? { place: bundledPlace, fallbackUsed: false }
+    : await placeSearch.geocode(query, {
+        bias: viewportBias(viewer),
+        signal,
+      });
   signal?.throwIfAborted();
   const result = outcome.place;
   let lat = result?.lat;

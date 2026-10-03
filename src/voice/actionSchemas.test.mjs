@@ -15,7 +15,7 @@ const stable = (value) =>
         )
       : value;
 
-test('the complete Realtime tool payload pins the additive analyst, satellite, Local ADS-B and Cyber release', () => {
+test('the complete Realtime tool payload pins the additive analyst, satellite, Local ADS-B, Cyber and provider-control release', () => {
   const digest = createHash('sha256')
     .update(
       JSON.stringify(
@@ -27,9 +27,9 @@ test('the complete Realtime tool payload pins the additive analyst, satellite, L
     .digest('hex');
   assert.equal(
     digest,
-    // Re-derived for the additive `local-adsb` set_layer_visibility value and
-    // the Cyber HUD layout; the separate sonar tool is excluded above.
-    '590d537d93e132ac64ac5e211ad5bb9d7d1b1f22e2dd963dda5465fab4510a3b',
+    // Re-derived for provider/voice settings, the inactivity-timeout tool,
+    // and the explicit voice-dropdown close behavior. Sonar stays excluded.
+    '2f2149bed14dddd8f34e6e77f90522c4dc91f4c56f18ee1e97832bb0512af6fd',
   );
 });
 
@@ -87,7 +87,13 @@ test('metadata cannot add tools, fields, types or enum values', () => {
 
 test('all legacy action arguments are byte-identical after removing the deliberate additions', () => {
   const legacy = structuredClone(GEV_ACTION_SCHEMAS).filter(
-    (tool) => !['next_satellite_pass', 'set_cyber_sonar'].includes(tool.name),
+    (tool) =>
+      ![
+        'next_satellite_pass',
+        'set_cyber_sonar',
+        'set_voice_provider',
+        'set_voice_inactivity_timeout',
+      ].includes(tool.name),
   );
   const layers = legacy.find((tool) => tool.name === 'analyst_query').parameters
     .properties.layers.items;
@@ -105,6 +111,11 @@ test('all legacy action arguments are byte-identical after removing the delibera
     .parameters.properties.layerId;
   visibility.enum = visibility.enum.filter(
     (key) => !['local-adsb', 'fire-perimeters'].includes(key),
+  );
+  const panels = legacy.find((tool) => tool.name === 'set_panel_open')
+    .parameters.properties.panelId;
+  panels.enum = panels.enum.filter(
+    (key) => !['provider-settings', 'voice-settings'].includes(key),
   );
   for (const tool of legacy) {
     for (const value of Object.values(tool.parameters.properties)) {

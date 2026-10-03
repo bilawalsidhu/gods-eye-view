@@ -14,6 +14,11 @@
 # GOOGLE_MAPS_SERVER_API_KEY=
 # CESIUM_ION_TOKEN=
 # OPENAI_API_KEY=
+# Gemini voice uses a separate Gemini API key created in Google AI Studio,
+# separate from Google Maps: https://aistudio.google.com/apikey
+# Setup and security: https://ai.google.dev/gemini-api/docs/api-key
+# GEMINI_API_KEY=
+# GEMINI_LIVE_MODEL=gemini-3.8-live
 # AISSTREAM_API_KEY=
 # FIRMS_MAP_KEY=
 # TOMTOM_API_KEY=
@@ -29,4 +34,5 @@ PINOKIO_SHARE_VAR=__gev_sharing_disabled__
 
 # App-level guards, not billing caps. Provider-side budgets remain authoritative.
 GEV_RATELIMIT_OPENAI_PER_MIN=30
+GEV_RATELIMIT_GEMINI_PER_MIN=30
 GEV_RATELIMIT_GOOGLE_PER_MIN=120

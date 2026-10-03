@@ -102,8 +102,45 @@ export const ACTION_DESCRIPTIONS = {
     },
   },
   set_panel_open: {
-    description: 'Open or close a GEV UI panel/dropdown.',
+    description:
+      'Open or close a GEV UI panel/dropdown. DISPLAY is pp-toggles; VISUAL PRESETS is control-panel; POWER UP / PROVIDER SETTINGS is provider-settings; VOICE SETTINGS, VOICE PREFERENCES, and the Voice Settings dropdown are voice-settings. Closing voice-settings leaves the active voice session and saved inactivity preference unchanged. Keep those surfaces distinct. While Cockpit is active, pp-toggles and radio-panel automatically target the Cockpit-specific Display and Radio controls; opening voice-settings remains pending and opens only after a spoken-confirmed or manual Cockpit exit. Direct voice provider and inactivity-timeout commands remain available in Cockpit.',
     $position: 1,
+    parameters: {
+      properties: {
+        panelId: {
+          description:
+            'Use pp-toggles for DISPLAY. Use control-panel only for VISUAL PRESETS, visual styles, filters, map sources, or basemaps. Use provider-settings for POWER UP, Provider Settings, or API keys. Use voice-settings for Voice Settings, Voice Preferences, or its dropdown.',
+          $position: 1,
+        },
+      },
+    },
+  },
+  set_voice_provider: {
+    description:
+      'Change the selected voice provider between OpenAI and Gemini. If voice is active, the change is applied after the current response completes and the replacement provider remains off until the user starts voice again.',
+    $position: 1,
+    parameters: {
+      properties: {
+        provider: {
+          description: 'The voice provider to select.',
+          $position: 1,
+        },
+      },
+    },
+  },
+  set_voice_inactivity_timeout: {
+    description:
+      'Set the browser-local Voice inactivity timeout. Use any whole number from 1 to 60 minutes, including the preset values 3, 5, 10, and 15. Use 0 for None so GEV does not stop voice because of inactivity.',
+    $position: 1,
+    parameters: {
+      properties: {
+        minutes: {
+          description:
+            'Whole minutes from 1 to 60, or 0 to disable the inactivity timeout.',
+          $position: 1,
+        },
+      },
+    },
   },
   set_context_mode: {
     description:

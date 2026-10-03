@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+- Add a shared-surface Voice Settings popup with a browser-local inactivity timeout, five-minute default, validated custom range, pending speech/tool protection, full cleanup on expiry and no share-link serialization. Both voice providers can open and close the popup and select presets, custom minutes, or None by voice. Cockpit keeps the popup hidden: Voice asks before exiting Cockpit, and a confirmed or manual exit opens the panel in the main view; an unanswered request expires with an accessible notice. Direct provider and timeout commands remain available. Turning voice off or encountering a terminal connection error closes the popup. Provider selection preserves an open popup and the selected timeout. Pending tool protection follows individual calls so a cancelled call cannot release a newer call's inactivity guard. While listening, the voice control hides the redundant AI AGENT kicker and leaves the live LISTENING state visible.
+
+- Give the Cyber mic control a visible inset keyboard-focus frame and a brighter mic icon so Tab and Shift+Tab navigation remain clear inside its clipped chamfered button.
+
+- Add Gemini Live as a selectable voice provider alongside OpenAI, using the
+  same map actions and standalone query tools, click-to-talk and Space push-to-talk controls. Add a separate
+  Gemini API key created in Google AI Studio in Provider Settings; the server keeps it
+  private and issues a short-lived token for the browser. Gemini defaults to
+  `gemini-3.8-live`, reports connection and quota failures, and releases audio
+  and pending actions when stopped or switched. OpenAI retains its model tiers
+  and spend cap; Gemini uses the project's provider quotas without an in-app
+  spend meter or cap. AI HUD summaries continue to use OpenAI.
+  Gemini Space-started sessions use explicit speech start/end markers, with
+  the input mode locked into the server-issued token. Releasing Space flushes
+  buffered microphone audio before ending the turn; click-started sessions
+  retain automatic speech detection. Cancelling a Gemini tool revokes only
+  that call's Radio work; unrelated calls keep their prepared playback and
+  reservations. New user activity and explicit Radio stop still cancel the
+  previous handoff. Voice panel routing keeps the right-rail **Display**
+  controls separate from the bottom **Visual Presets** tray, and routes
+  **Display** and **Radio** to their cockpit-specific controls while Cockpit is
+  active. Voice can open or close **POWER UP / Provider Settings** and request
+  an OpenAI/Gemini provider change; an active reply finishes before the new
+  provider is mounted. A voice-started Radio handoff now carries a one-use
+  resume lease: pausing or disabling that same Radio session restarts the prior
+  voice mode. Manual Radio selection, tuning or playback revokes that lease; ordinary voice stops, provider
+  changes, and teardown never auto-resume voice. Gemini's 60-second new-session
+  window and configured 30-minute token expiry are separate from Google's
+  roughly 10-minute Live connection lifetime. On `goAway`, Gemini voice cleans
+  up locally and asks for an explicit restart, which mints a fresh token and
+  begins a new conversation; this version does not resume automatically.
+
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
 - Ship each bundled data pack once. The region, marine, admin-boundary,
@@ -1511,4 +1543,3 @@ represent previously published GitHub Releases.
 ## [0.1.0] — 2026-02-09
 
 - Initial project version.
-

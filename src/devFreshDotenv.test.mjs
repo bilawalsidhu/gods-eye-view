@@ -70,7 +70,7 @@ test('dev-fresh passes names-only boot provenance before resolving file fallback
   const dotenvResolution = source.indexOf('GOOGLE_MAPS_API_KEY_ENV="${GOOGLE_MAPS_API_KEY:-}"');
   assert.ok(capture >= 0 && capture < dotenvResolution, 'parent-shell provenance must be captured first');
   for (const name of [
-    'GOOGLE_MAPS_API_KEY', 'CESIUM_ION_TOKEN', 'OPENAI_API_KEY', 'AISSTREAM_API_KEY',
+    'GOOGLE_MAPS_API_KEY', 'CESIUM_ION_TOKEN', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'AISSTREAM_API_KEY',
     'FIRMS_MAP_KEY', 'TOMTOM_API_KEY', 'OPENSKY_CLIENT_ID',
     'OPENSKY_CLIENT_SECRET', 'LL2_API_TOKEN',
   ]) {
@@ -128,7 +128,56 @@ bashTest('the external-keys provenance block survives set -u keyless and joins n
   const keyless = await run('bash', ['-c', probe], { env: { PATH: process.env.PATH } });
   assert.equal(keyless.stdout, '');
   const keyed = await run('bash', ['-c', probe], {
-    env: { PATH: process.env.PATH, FIRMS_MAP_KEY: 'x', TOMTOM_API_KEY: 'y' },
+    env: { PATH: process.env.PATH, GEMINI_API_KEY: 'gemini-fixture', FIRMS_MAP_KEY: 'x', TOMTOM_API_KEY: 'y' },
   });
-  assert.equal(keyed.stdout, 'FIRMS_MAP_KEY,TOMTOM_API_KEY');
+  assert.equal(keyed.stdout, 'GEMINI_API_KEY,FIRMS_MAP_KEY,TOMTOM_API_KEY');
+});
+
+
+bashTest('dev-fresh keeps voice available when only a Gemini key is configured', async () => {
+  const script = await fs.readFile(new URL('../scripts/dev-fresh.sh', import.meta.url), 'utf8');
+  const start = script.indexOf('[[ -n "${OPENAI_API_KEY}" ]] && echo "OpenAI key');
+  const end = script.indexOf('[[ -n "${AISSTREAM_API_KEY}" ]] && echo', start);
+  assert.ok(start >= 0 && end > start, 'voice startup status block not found');
+  const block = script.slice(start, end);
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const run = promisify(execFile);
+  for (const [openai, gemini, available] of [
+    ['', '', false], ['openai-fixture', '', true], ['', 'gemini-fixture', true],
+  ]) {
+    const { stdout } = await run('bash', ['-c', `set -u\n${block}`], {
+      env: { PATH: process.env.PATH, OPENAI_API_KEY: openai, GEMINI_API_KEY: gemini },
+    });
+    if (available) {
+      assert.match(stdout, /Voice control: available/);
+      assert.doesNotMatch(stdout, /GEV MIC disabled/);
+    } else {
+      assert.match(stdout, /add an OpenAI or Gemini key/);
+    }
+    assert.doesNotMatch(stdout, /openai-fixture|gemini-fixture/);
+  }
+});
+
+bashTest('dev-fresh preserves exported Gemini key and model with independent dotenv fallbacks', async () => {
+  const script = await fs.readFile(new URL('../scripts/dev-fresh.sh', import.meta.url), 'utf8');
+  const assignments = script.split('\n').filter((line) => /^GEMINI_(API_KEY|LIVE_MODEL)=/.test(line));
+  assert.equal(assignments.length, 2);
+  assert.match(script, /put_env_if_set GEMINI_API_KEY "\$\{GEMINI_API_KEY\}"/);
+  assert.match(script, /put_env_if_set GEMINI_LIVE_MODEL "\$\{GEMINI_LIVE_MODEL\}"/);
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const run = promisify(execFile);
+  const probe = [
+    'set -u',
+    'read_dotenv_value() { printf "file-%s" "$1"; }',
+    ...assignments,
+    'printf "%s|%s" "$GEMINI_API_KEY" "$GEMINI_LIVE_MODEL"',
+  ].join('\n');
+  const inherited = await run('bash', ['-c', probe], {
+    env: { PATH: process.env.PATH, GEMINI_API_KEY: 'shell-key', GEMINI_LIVE_MODEL: 'shell-model' },
+  });
+  assert.equal(inherited.stdout, 'shell-key|shell-model');
+  const fallback = await run('bash', ['-c', probe], { env: { PATH: process.env.PATH } });
+  assert.equal(fallback.stdout, 'file-GEMINI_API_KEY|file-GEMINI_LIVE_MODEL');
 });

@@ -339,6 +339,9 @@ export function createAnalystEngine(providers) {
       coverage: {
         layersQueried,
         scope: scopeNote,
+        ...(scope.kind === 'region' && resolvedScope?.source
+          ? { scopeSource: resolvedScope.source }
+          : {}),
         ...(queriedSnapshots.length
           ? { feedProvenance: feedProvenanceEnvelope(queriedSnapshots) }
           : {}),

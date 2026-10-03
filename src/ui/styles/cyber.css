@@ -984,6 +984,117 @@
   right: 0.75rem;
 }
 
+/* The standard HUD uses a compact icon-only provider row. Cyber retains the
+   labeled console treatment and its wider Voice heading. */
+:root[data-ui-theme='cyber'] .gev-voice-provider-field,
+:root[data-ui-theme='cyber'] #command-dock > .gev-voice-provider-field {
+  width: min(300px, calc(100vw - 2rem));
+  gap: 10px;
+  padding: 12px;
+}
+
+:root[data-ui-theme='cyber']
+  .gev-voice-provider-field[data-panel-surface]::before {
+  border-color: var(--glass-border);
+  background-color: var(--glass-bg);
+  background-image: var(--panel-surface-detail);
+  box-shadow: var(--panel-surface-shadow);
+}
+
+:root[data-ui-theme='cyber']
+  .gev-voice-provider-field
+  .gev-voice-provider-header {
+  display: flex;
+}
+
+:root[data-ui-theme='cyber']
+  .gev-voice-provider-controls
+  .panel-surface-control {
+  border-color: var(--glass-border);
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+:root[data-ui-theme='cyber'] .gev-voice-provider-controls[data-panel-body] {
+  padding: 3px;
+}
+
+:root[data-ui-theme='cyber']
+  .gev-voice-provider-controls
+  .panel-surface-control:hover:not(:disabled):not([aria-disabled='true']) {
+  border-color: var(--glass-border-hover);
+  background: var(--accent-dim);
+  color: var(--text-primary);
+}
+
+:root[data-ui-theme='cyber'] .gev-voice-settings-button {
+  width: auto;
+  min-width: 0;
+  padding: 5px 8px;
+  aspect-ratio: auto;
+}
+
+:root[data-ui-theme='cyber'] .gev-voice-settings-icon {
+  display: none;
+  color: inherit;
+}
+
+:root[data-ui-theme='cyber'] .gev-voice-settings-label {
+  display: inline;
+}
+
+:root[data-ui-theme='cyber']
+  .gev-voice-settings-panel[data-panel-popup]::before {
+  border-color: rgba(196, 84, 84, 0.58);
+  background-color: rgba(24, 34, 38, 0.98);
+  background-image: var(--panel-surface-detail);
+  box-shadow: var(--panel-surface-shadow);
+}
+
+:root[data-ui-theme='cyber'] .gev-voice-inactivity-chip span,
+:root[data-ui-theme='cyber'] .gev-voice-inactivity-custom {
+  border-color: rgba(112, 145, 153, 0.34);
+  background: rgba(8, 13, 15, 0.42);
+}
+
+:root[data-ui-theme='cyber'] .gev-voice-inactivity-chip:hover span {
+  color: var(--text-primary);
+  border-color: rgba(196, 84, 84, 0.58);
+  background: rgba(196, 84, 84, 0.1);
+}
+
+:root[data-ui-theme='cyber'] .gev-voice-inactivity-chip input:checked + span {
+  color: var(--cyber-red-bright);
+  border-color: rgba(196, 84, 84, 0.72);
+  background: rgba(196, 84, 84, 0.16);
+  box-shadow: 3px 0 0 rgba(196, 84, 84, 0.52) inset;
+}
+
+:root[data-ui-theme='cyber']
+  :is(.gev-voice-inactivity-custom-heading output, .gev-voice-cost-value) {
+  color: var(--cyber-red-bright);
+}
+
+:root[data-ui-theme='cyber'] .gev-voice-cost-settings {
+  border-top-color: rgba(196, 84, 84, 0.34);
+}
+
+/* Cyber's labeled provider row is taller than the standard compact row. */
+:root[data-ui-theme='cyber']
+  #command-dock
+  #gev-voice-control[data-provider]
+  .gev-voice-help-tray {
+  bottom: calc(100% + 7.25rem);
+}
+
+:root[data-ui-theme='cyber']
+  #command-dock.dock-has-pinned-tray
+  #gev-voice-control[data-provider]
+  .gev-voice-help-tray {
+  bottom: calc(100% + 8.25rem + var(--dock-pinned-stack-height));
+}
+
 :root[data-ui-theme='cyber'] #command-dock > #gev-voice-control {
   --cyber-voice-wave: 105, 203, 209;
   --cyber-voice-peak: 226, 240, 240;
@@ -1043,6 +1154,36 @@
     0 100%,
     0 8px
   );
+}
+
+/* The button's chamfer clips the shared outer focus shadow, so keep the
+   keyboard cue inside the control and brighten the mic itself. */
+:root[data-ui-theme='cyber'] #command-dock #gev-voice-button:focus-visible {
+  outline: 2px solid var(--cyber-red-bright) !important;
+  outline-offset: -3px;
+  box-shadow:
+    0 0 0 3px rgba(196, 84, 84, 0.14) inset,
+    0 0 0.85rem rgba(196, 84, 84, 0.22);
+}
+
+:root[data-ui-theme='cyber']
+  #command-dock
+  #gev-voice-button:focus-visible
+  .gev-mic-orbit {
+  border-color: var(--cyber-red-bright);
+  background: rgba(196, 84, 84, 0.24);
+  box-shadow:
+    0 0 0 0.18rem rgba(196, 84, 84, 0.16),
+    0 0 1rem rgba(196, 84, 84, 0.44);
+}
+
+:root[data-ui-theme='cyber']
+  #command-dock
+  #gev-voice-button:focus-visible
+  .gev-mic-orbit
+  img {
+  filter: none;
+  opacity: 1;
 }
 
 :root[data-ui-theme='cyber'] #command-dock .gev-mic-orbit {

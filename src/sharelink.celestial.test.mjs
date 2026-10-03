@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { ShareLinkManager, decodeShareCreatedAtMs } from './sharelink.js';
 import { createDefaultLayerState } from './data/layerState.js';
+import { VOICE_INACTIVITY_STORAGE_KEY } from './voice/inactivity.js';
 
 const uiSource = readShellSource();
 
@@ -112,6 +113,18 @@ test('share-link serialization emits the current celestial state', () => {
   clearTimeout(manager._debounceTimer);
   manager._updateHash();
   assert.equal(new URLSearchParams(window.location.hash.slice(1)).get('cr'), '1');
+});
+
+test('voice inactivity stays browser-local and is excluded from share hashes', () => {
+  const manager = makeManager();
+  globalThis.localStorage = {
+    getItem: (key) => (key === VOICE_INACTIVITY_STORAGE_KEY ? '15' : null),
+  };
+  manager._updateHash();
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  assert.equal(params.has(VOICE_INACTIVITY_STORAGE_KEY), false);
+  assert.equal([...params.keys()].some((key) => /voice|inactivity/i.test(key)), false);
+  delete globalThis.localStorage;
 });
 
 test('generated links are v2 and include deterministic layers, options, style params, and panels', () => {

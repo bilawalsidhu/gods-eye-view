@@ -60,6 +60,7 @@ const PANEL_ALIASES = new Map([
   ['styles', 'control-panel'],
   ['filters', 'control-panel'],
   ['visual styles', 'control-panel'],
+  ['visual presets', 'control-panel'],
   ['cctv', 'cctv-panel'],
   ['cameras', 'cctv-panel'],
   ['radio', 'radio-panel'],
@@ -74,11 +75,20 @@ const PANEL_ALIASES = new Map([
   ['scene', 'scene-panel'],
   ['post processing', 'pp-toggles'],
   ['hud controls', 'pp-toggles'],
+  ['display', 'pp-toggles'],
+  ['display panel', 'pp-toggles'],
   ['map stack', 'control-panel'],
   ['stack', 'control-panel'],
   ['basemap', 'control-panel'],
   ['map sources', 'control-panel'],
   ['sources', 'control-panel'],
+  ['power up', 'provider-settings'],
+  ['powerup', 'provider-settings'],
+  ['provider settings', 'provider-settings'],
+  ['api keys', 'provider-settings'],
+  ['keys', 'provider-settings'],
+  ['voice settings', 'voice-settings'],
+  ['voice preferences', 'voice-settings'],
 ]);
 
 const PANEL_IDS = new Set([
@@ -90,6 +100,8 @@ const PANEL_IDS = new Set([
   'global-context-panel',
   'scene-panel',
   'pp-toggles',
+  'provider-settings',
+  'voice-settings',
 ]);
 const CONTEXT_MODE_ALIASES = new Map([
   ['off', 'off'],
@@ -335,6 +347,8 @@ export function createGevActionRunner({
   floorServices = defaultFloorServices,
   annotationResolver = defaultAnnotationResolver,
   searchNavigation = searchAndFlyTo,
+  readVoiceCommands = () => globalThis.window?.__gevVoiceCommands,
+  readKeySetup = () => globalThis.window?.__gevKeySetup,
 }) {
   // Voice enable times and analyst follow-up memory belong to this runner.
   const _layerEnabledAt = new Map();
@@ -699,8 +713,119 @@ export function createGevActionRunner({
           `Unknown panel: ${args.panelId || args.panel || 'missing'}`,
         );
       const open = args.open !== false;
+      if (panelId === 'provider-settings') {
+        const keySetup = readKeySetup?.();
+        const operation = open ? keySetup?.open : keySetup?.close;
+        if (typeof operation !== 'function') {
+          return {
+            ok: false,
+            action: 'set_panel_open',
+            panelId,
+            open,
+            error: 'Provider Settings are unavailable in this build',
+          };
+        }
+        operation();
+        return { ok: true, action: 'set_panel_open', panelId, open };
+      }
+      if (panelId === 'voice-settings') {
+        const voice = readVoiceCommands?.();
+        if (!voice || typeof voice.setVoiceSettingsOpen !== 'function') {
+          return {
+            ok: false,
+            action: 'set_panel_open',
+            panelId,
+            open,
+            error: 'Voice Settings are unavailable',
+          };
+        }
+        const cockpitActive =
+          styleManager?.getCockpitState?.()?.active === true ||
+          styleManager?.cockpitView?.active === true;
+        if (open && cockpitActive) {
+          const pending = voice.deferVoiceSettingsUntilCockpitExit?.() === true;
+          return {
+            ok: pending,
+            action: 'set_panel_open',
+            panelId,
+            open: false,
+            requestedOpen: true,
+            requiresCockpitExit: true,
+            pending,
+            expiresInMs: pending ? 20_000 : null,
+            ...(pending
+              ? {}
+              : { error: 'Exit Cockpit mode to open Voice Settings' }),
+          };
+        }
+        voice.cancelDeferredVoiceSettings?.();
+        const changed = voice.setVoiceSettingsOpen(open);
+        return {
+          ok: changed !== false,
+          action: 'set_panel_open',
+          panelId,
+          open,
+          ...(changed === false
+            ? { error: 'Voice Settings are unavailable' }
+            : {}),
+        };
+      }
       setPanelOpen(styleManager, panelId, open);
       return { ok: true, action: 'set_panel_open', panelId, open };
+    }
+
+    if (name === 'set_voice_provider') {
+      const provider = String(args.provider || '')
+        .trim()
+        .toLowerCase();
+      if (!['openai', 'gemini'].includes(provider))
+        throw new Error(
+          `Unknown voice provider: ${args.provider || 'missing'}`,
+        );
+      const voice = readVoiceCommands?.();
+      if (!voice || typeof voice.requestProviderChange !== 'function') {
+        return {
+          ok: false,
+          action: 'set_voice_provider',
+          provider,
+          error: 'Voice provider selection is unavailable',
+        };
+      }
+      const result = voice.requestProviderChange(provider);
+      return {
+        ok: result?.ok !== false,
+        action: 'set_voice_provider',
+        provider,
+        previousProvider: result?.previousProvider ?? voice.provider ?? null,
+        changed: Boolean(result?.changed),
+        pending: Boolean(result?.pending),
+        ...(result?.error ? { error: result.error } : {}),
+      };
+    }
+
+    if (name === 'set_voice_inactivity_timeout') {
+      const minutes = Number(args.minutes);
+      if (!Number.isInteger(minutes) || minutes < 0 || minutes > 60)
+        throw new Error('Voice inactivity timeout must be 0 to 60 minutes');
+      const voice = readVoiceCommands?.();
+      if (!voice || typeof voice.setVoiceInactivityMinutes !== 'function') {
+        return {
+          ok: false,
+          action: 'set_voice_inactivity_timeout',
+          minutes: minutes || null,
+          error: 'Voice inactivity timeout is unavailable',
+        };
+      }
+      const preference = minutes === 0 ? null : minutes;
+      const changed = voice.setVoiceInactivityMinutes(preference);
+      return {
+        ok: changed !== false,
+        action: 'set_voice_inactivity_timeout',
+        minutes: preference,
+        ...(changed === false
+          ? { error: 'Voice inactivity timeout is unavailable' }
+          : {}),
+      };
     }
 
     if (name === 'set_context_mode') {
@@ -2822,6 +2947,23 @@ function normalizeAircraftClassFilter(value) {
 }
 
 function setPanelOpen(styleManager, panelId, open) {
+  const cockpitPanel =
+    panelId === 'pp-toggles'
+      ? 'display'
+      : panelId === 'radio-panel'
+        ? 'radio'
+        : null;
+  const cockpitActive =
+    styleManager?.getCockpitState?.()?.active === true ||
+    styleManager?.cockpitView?.active === true;
+  if (
+    cockpitActive &&
+    cockpitPanel &&
+    typeof styleManager?._setCockpitDisclosure === 'function'
+  ) {
+    styleManager._setCockpitDisclosure(cockpitPanel, open);
+    return;
+  }
   if (styleManager && typeof styleManager.setPanelCollapsed === 'function') {
     styleManager.setPanelCollapsed(panelId, !open, { explicit: true });
   } else {
