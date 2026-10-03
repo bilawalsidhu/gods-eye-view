@@ -9,7 +9,9 @@
       "src/data/infrastructure.js",
       "src/data/localGeojsonCore.js",
       "src/data/localGeojsonLod.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/data/infrastructureOverlayEntry.js",
+      "src/sources/infrastructureData.js"
     ],
     "external": ["cesium"]
   },
@@ -26,7 +28,13 @@
   "vite-build": {
     "runtime": "node",
     "exports": ["./build/vite", "./build/html"],
-    "modules": ["build/vite.js", "build/application-html.js"],
+    "modules": [
+      "build/vite.js",
+      "build/application-html.js",
+      "build/allowedHosts.js",
+      "build/embed-framing.js",
+      "build/panel.js"
+    ],
     "external": ["vite-plugin-cesium"]
   },
   "live-providers": {
@@ -67,6 +75,8 @@
       "server/providers/common/http.js",
       "scripts/google-server-key.mjs",
       "src/data/placeProviderPayloads.js",
+      "server/providers/common/same-site.js",
+      "src/localRequestGate.mjs",
       "src/data/routeSteps.js",
       "src/sources/httpBody.js",
       "src/sources/rateLimit.js"
@@ -249,7 +259,12 @@
       "src/data/regionalModel.js",
       "src/nominatimGeocode.js",
       "src/sources/httpBody.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "src/data/local_data/natural_earth/marine.json",
+      "src/data/local_data/natural_earth/regions.json",
+      "src/data/naturalEarthRegions.js",
+      "src/data/bundledJson.js",
+      "src/data/retryableLoad.js"
     ],
     "external": []
   },
@@ -275,6 +290,8 @@
       "src/loadingFeedback.js",
       "src/data/installationFeedback.js",
       "src/voice/voiceCost.js",
+      "server/providers/common/same-site.js",
+      "src/localRequestGate.mjs",
       "src/voice/actionSchemas.js",
       "server/providers/openai/toolDescriptions.js",
       "src/sources/rateLimit.js"
@@ -289,6 +306,7 @@
       "server/providers/common/source-root.js",
       "server/standalone/key-setup.js",
       "src/keySetupCore.mjs",
+      "src/localRequestGate.mjs",
       "server/standalone/key-setup-hardening.mjs"
     ],
     "external": []
@@ -373,7 +391,8 @@
       "src/ui/mapSource.js",
       "src/ui/mapSourceControls.js",
       "src/mapStackChips.js",
-      "src/keySetupCore.mjs"
+      "src/keySetupCore.mjs",
+      "src/localRequestGate.mjs"
     ],
     "external": []
   },
@@ -392,6 +411,7 @@
       "src/loadingFeedback.js",
       "src/data/installationFeedback.js",
       "src/keySetupCore.mjs",
+      "src/localRequestGate.mjs",
       "src/data/feedState.js",
       "src/data/layerSnapshot.js"
     ],
@@ -507,10 +527,12 @@
       "src/data/detectionPolicy.js",
       "src/data/installationFeedback.js",
       "src/data/layerState.js",
+      "src/data/layerStateCoordinator.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/militaryAwarenessEngine.js",
       "src/data/scenePick.js",
       "src/keySetupCore.mjs",
+      "src/localRequestGate.mjs",
       "src/loadingFeedback.js",
       "src/locationStatus.js",
       "src/mapStackChips.js",
@@ -615,7 +637,8 @@
       "src/ui/shellFacade.js",
       "src/ui/localSdrControls.js",
       "src/layers/localAdsb/feedNames.js",
-      "src/ui/localSdrPresentation.js"
+      "src/ui/localSdrPresentation.js",
+      "src/data/cameraArrival.js"
     ],
     "external": ["cesium"]
   },
@@ -719,7 +742,8 @@
       "src/director/sharing/lifetime.js",
       "src/director/authoring.js",
       "src/scenes/sharing.js",
-      "src/ui/sceneSharing.js"
+      "src/ui/sceneSharing.js",
+      "src/data/cameraArrival.js"
     ],
     "external": ["cesium"]
   },
@@ -826,6 +850,7 @@
       "src/data/contactMatch.js",
       "src/data/iconOrientation.js",
       "src/data/layerState.js",
+      "src/data/layerStateCoordinator.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/modelVisualAnchor.js",
       "src/data/motionModel.js",
@@ -914,6 +939,7 @@
       "src/data/issPass.js",
       "src/data/satelliteClass.js",
       "src/data/satellitePass.js",
+      "src/sources/tle.js",
       "src/layers/satellites/catalog.js",
       "src/layers/satellites/controls.js",
       "src/layers/satellites/index.js",
@@ -963,6 +989,7 @@
   "installations-layer": {
     "exports": ["./layers/installations"],
     "modules": [
+      "src/data/cameraSensitivity.js",
       "src/data/installationFeedback.js",
       "src/data/militaryInstallationData.js",
       "src/layers/installations/controls.js",
@@ -976,9 +1003,23 @@
       "src/layers/installations/source.js",
       "src/layers/installations/state.js",
       "src/layers/installations/viewport.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/data/tomtomTiles.js",
+      "src/sources/capability.js",
+      "src/sources/httpBody.js",
+      "src/sources/openFreeMap.js",
+      "src/sources/militaryTileGeometry.js",
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js",
+      "src/data/militaryNames.js",
+      "src/sources/requestDeadline.js",
+      "src/data/local_data/osm_military_names/names.json",
+      "src/data/bundledJson.js",
+      "src/data/retryableLoad.js",
+      "src/layers/installations/namedMarkers.js",
+      "src/data/infrastructureOverlayEntry.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
   "awareness-layer": {
     "exports": ["./layers/awareness"],
@@ -1022,18 +1063,29 @@
       "src/layers/traffic/flow.js",
       "src/layers/traffic/flowDecode.js",
       "src/layers/traffic/flowSource.js",
+      "src/layers/traffic/footprint.js",
       "src/layers/traffic/index.js",
       "src/layers/traffic/ingestion.js",
+      "src/sources/requestDeadline.js",
       "src/layers/traffic/lifecycle.js",
       "src/layers/traffic/model.js",
       "src/layers/traffic/policy.js",
       "src/layers/traffic/rendering.js",
+      "src/layers/traffic/retention.js",
       "src/layers/traffic/source.js",
       "src/layers/traffic/state.js",
       "src/layers/traffic/style.js",
+      "src/layers/traffic/surface.js",
       "src/layers/traffic/timing.js",
       "src/layers/traffic/viewport.js",
-      "src/sources/overpassRoads.js"
+      "src/sources/overpassRoads.js",
+      "src/sources/capability.js",
+      "src/sources/httpBody.js",
+      "src/sources/openFreeMap.js",
+      "src/sources/militaryTileGeometry.js",
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js",
+      "src/layers/traffic/roadModes.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
@@ -1045,6 +1097,7 @@
       "src/layers/bikeshare/ingestion.js",
       "src/layers/bikeshare/lifecycle.js",
       "src/layers/bikeshare/model.js",
+      "src/sources/gbfsStations.js",
       "src/layers/bikeshare/policy.js",
       "src/layers/bikeshare/queries.js",
       "src/layers/bikeshare/registry.js",
@@ -1111,9 +1164,16 @@
       "src/layers/alpr/overlay.js",
       "src/layers/alpr/source.js",
       "src/data/inputOwnership.js",
-      "src/layers/alpr/records.js"
+      "src/layers/alpr/records.js",
+      "src/data/tomtomTiles.js",
+      "src/layers/alpr/tileRecords.js",
+      "src/sources/capability.js",
+      "src/sources/httpBody.js",
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js",
+      "src/layers/alpr/floors.js"
     ],
-    "external": ["cesium"]
+    "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
   "radio-layer": {
     "exports": ["./layers/radio"],
@@ -1208,7 +1268,9 @@
       "src/maps/imagery.js",
       "src/maps/registry.js",
       "src/maps/terrain.js",
+      "src/maps/terrainRetry.js",
       "src/keySetupCore.mjs",
+      "src/localRequestGate.mjs",
       "src/maps/imageryHost.js"
     ],
     "external": ["cesium"]
@@ -1322,6 +1384,7 @@
       "src/app/atmosphereCompat.js",
       "src/bloom.js",
       "src/camera.js",
+      "src/cameraGroundGuard.js",
       "src/cameraVerbs.js",
       "src/cctvFocusPolicy.js",
       "src/cctvFocusRequest.js",
@@ -1390,6 +1453,7 @@
       "src/data/issPass.js",
       "src/data/labelArbiter.js",
       "src/data/layerState.js",
+      "src/data/layerStateCoordinator.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/lifecycle.js",
       "src/data/localGeojson.js",
@@ -1410,6 +1474,10 @@
       "src/data/modelVisualAnchor.js",
       "src/data/motionModel.js",
       "src/data/naturalEarthRegions.js",
+      "src/data/adminBoundaries.js",
+      "src/data/local_data/natural_earth/states_provinces.json",
+      "src/data/local_data/natural_earth/countries.json",
+      "src/data/local_data/us_census_counties/counties.json",
       "src/data/neighborhoodPolygons.js",
       "src/data/pickRegistry.js",
       "src/data/radio.js",
@@ -1448,6 +1516,7 @@
       "src/hudSummaryResponse.js",
       "src/keySetup.js",
       "src/keySetupCore.mjs",
+      "src/localRequestGate.mjs",
       "src/keylessGeocoder.js",
       "src/layers/aircraft/classification.js",
       "src/layers/alpr/index.js",
@@ -1478,6 +1547,7 @@
       "src/layers/bikeshare/ingestion.js",
       "src/layers/bikeshare/lifecycle.js",
       "src/layers/bikeshare/model.js",
+      "src/sources/gbfsStations.js",
       "src/layers/bikeshare/policy.js",
       "src/layers/bikeshare/queries.js",
       "src/layers/bikeshare/registry.js",
@@ -1612,6 +1682,7 @@
       "src/layers/satellites/labels.js",
       "src/layers/satellites/lifecycle.js",
       "src/layers/satellites/orbits.js",
+      "src/sources/tle.js",
       "src/layers/satellites/records.js",
       "src/layers/satellites/policy.js",
       "src/layers/satellites/rendering.js",
@@ -1635,15 +1706,19 @@
       "src/layers/traffic/flow.js",
       "src/layers/traffic/flowDecode.js",
       "src/layers/traffic/flowSource.js",
+      "src/layers/traffic/footprint.js",
       "src/layers/traffic/index.js",
       "src/layers/traffic/ingestion.js",
+      "src/sources/requestDeadline.js",
       "src/layers/traffic/lifecycle.js",
       "src/layers/traffic/model.js",
       "src/layers/traffic/policy.js",
       "src/layers/traffic/rendering.js",
+      "src/layers/traffic/retention.js",
       "src/layers/traffic/source.js",
       "src/layers/traffic/state.js",
       "src/layers/traffic/style.js",
+      "src/layers/traffic/surface.js",
       "src/layers/traffic/timing.js",
       "src/layers/traffic/viewport.js",
       "src/layers/vessels/cards.js",
@@ -1675,6 +1750,7 @@
       "src/maps/imagery.js",
       "src/maps/registry.js",
       "src/maps/terrain.js",
+      "src/maps/terrainRetry.js",
       "src/navigationPolicy.js",
       "src/orbit.js",
       "src/overlays/worldOverlay.js",
@@ -1961,7 +2037,26 @@
       "src/layers/recentImagery/thumbnails.js",
       "src/maps/imageryHost.js",
       "src/ui/recentImagery.js",
-      "src/ui/imageryBoxTool.js"
+      "src/ui/imageryBoxTool.js",
+      "src/layers/alpr/tileRecords.js",
+      "src/sources/capability.js",
+      "src/sources/openFreeMap.js",
+      "src/sources/militaryTileGeometry.js",
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js",
+      "src/layers/traffic/roadModes.js",
+      "src/data/cameraArrival.js",
+      "src/layers/alpr/floors.js",
+      "src/data/militaryNames.js",
+      "src/sources/requestDeadline.js",
+      "src/data/local_data/osm_military_names/names.json",
+      "src/layers/installations/namedMarkers.js",
+      "src/data/infrastructureOverlayEntry.js",
+      "src/sources/infrastructureData.js",
+      "src/tools/functions.js",
+      "src/voice/actionSchemas.js",
+      "src/view/index.js",
+      "src/app/embed.js"
     ],
     "external": [
       "hls.js",
@@ -2067,6 +2162,10 @@
       "src/data/modelVisualAnchor.js",
       "src/data/motionModel.js",
       "src/data/naturalEarthRegions.js",
+      "src/data/adminBoundaries.js",
+      "src/data/local_data/natural_earth/states_provinces.json",
+      "src/data/local_data/natural_earth/countries.json",
+      "src/data/local_data/us_census_counties/counties.json",
       "src/data/neighborhoodPolygons.js",
       "src/data/pickRegistry.js",
       "src/data/radioCountry.js",
@@ -2119,6 +2218,7 @@
       "src/layers/bikeshare/ingestion.js",
       "src/layers/bikeshare/lifecycle.js",
       "src/layers/bikeshare/model.js",
+      "src/sources/gbfsStations.js",
       "src/layers/bikeshare/policy.js",
       "src/layers/bikeshare/queries.js",
       "src/layers/bikeshare/registry.js",
@@ -2253,6 +2353,7 @@
       "src/layers/satellites/labels.js",
       "src/layers/satellites/lifecycle.js",
       "src/layers/satellites/orbits.js",
+      "src/sources/tle.js",
       "src/layers/satellites/records.js",
       "src/layers/satellites/policy.js",
       "src/layers/satellites/rendering.js",
@@ -2275,15 +2376,19 @@
       "src/layers/traffic/flow.js",
       "src/layers/traffic/flowDecode.js",
       "src/layers/traffic/flowSource.js",
+      "src/layers/traffic/footprint.js",
       "src/layers/traffic/index.js",
       "src/layers/traffic/ingestion.js",
+      "src/sources/requestDeadline.js",
       "src/layers/traffic/lifecycle.js",
       "src/layers/traffic/model.js",
       "src/layers/traffic/policy.js",
       "src/layers/traffic/rendering.js",
+      "src/layers/traffic/retention.js",
       "src/layers/traffic/source.js",
       "src/layers/traffic/state.js",
       "src/layers/traffic/style.js",
+      "src/layers/traffic/surface.js",
       "src/layers/traffic/timing.js",
       "src/layers/traffic/viewport.js",
       "src/layers/vessels/cards.js",
@@ -2326,6 +2431,7 @@
       "src/layers/vessels/snapshotRenderer.js",
       "src/data/inputOwnership.js",
       "src/annotations/worldAnnotationRenderer.js",
+      "src/cameraGroundGuard.js",
       "src/cameraVerbs.js",
       "src/services/groundFloor.js",
       "src/data/routeSteps.js",
@@ -2422,7 +2528,22 @@
       "src/layers/recentImagery/catalog.js",
       "src/layers/recentImagery/rendering.js",
       "src/layers/recentImagery/thumbnails.js",
-      "src/maps/imageryHost.js"
+      "src/maps/imageryHost.js",
+      "src/layers/alpr/tileRecords.js",
+      "src/sources/capability.js",
+      "src/sources/openFreeMap.js",
+      "src/sources/militaryTileGeometry.js",
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js",
+      "src/layers/traffic/roadModes.js",
+      "src/data/cameraArrival.js",
+      "src/layers/alpr/floors.js",
+      "src/data/militaryNames.js",
+      "src/sources/requestDeadline.js",
+      "src/data/local_data/osm_military_names/names.json",
+      "src/layers/installations/namedMarkers.js",
+      "src/data/infrastructureOverlayEntry.js",
+      "src/sources/infrastructureData.js"
     ],
     "external": [
       "hls.js",
@@ -2449,6 +2570,10 @@
       "src/data/local_data/natural_earth/regions.json",
       "src/data/local_data/neighborhoods/san-francisco.json",
       "src/data/naturalEarthRegions.js",
+      "src/data/adminBoundaries.js",
+      "src/data/local_data/natural_earth/states_provinces.json",
+      "src/data/local_data/natural_earth/countries.json",
+      "src/data/local_data/us_census_counties/counties.json",
       "src/data/neighborhoodPolygons.js",
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js",
@@ -2456,6 +2581,7 @@
       "src/keylessGeocoder.js",
       "src/layers/firms/anchors.js",
       "src/locations.js",
+      "src/cameraGroundGuard.js",
       "src/search/defaults.js",
       "src/search/geospatial.js",
       "src/search/google.js",
@@ -2478,7 +2604,9 @@
       "src/sources/featureGeometry.js",
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
-      "src/sources/featureSource.js"
+      "src/sources/featureSource.js",
+      "src/sources/capability.js",
+      "src/data/cameraArrival.js"
     ],
     "external": [
       "cesium",
@@ -2491,7 +2619,7 @@
   },
   "layer-lifecycle": {
     "exports": ["./data/lifecycle"],
-    "modules": ["src/data/lifecycle.js"],
+    "modules": ["src/data/lifecycle.js", "src/data/cameraArrival.js"],
     "external": []
   },
   "ui-navigation": {
@@ -2499,7 +2627,8 @@
     "modules": [
       "src/navigationPolicy.js",
       "src/ui/navigationController.js",
-      "src/app/stateChannel.js"
+      "src/app/stateChannel.js",
+      "src/data/cameraArrival.js"
     ],
     "external": ["cesium"]
   },
@@ -2508,6 +2637,7 @@
     "modules": [
       "src/data/installationFeedback.js",
       "src/data/layerState.js",
+      "src/data/layerStateCoordinator.js",
       "src/data/layerStateTokenReservations.json",
       "src/loadingFeedback.js",
       "src/navigationPolicy.js",
@@ -2661,9 +2791,14 @@
     "modules": [
       "src/layers/alpr/policy.js",
       "src/layers/alpr/records.js",
-      "src/layers/alpr/source.js"
+      "src/layers/alpr/source.js",
+      "src/data/tomtomTiles.js",
+      "src/layers/alpr/tileRecords.js",
+      "src/sources/httpBody.js",
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js"
     ],
-    "external": []
+    "external": ["@mapbox/vector-tile", "pbf"]
   },
   "bikeshare-source": {
     "exports": ["./layers/bikeshare/source"],
@@ -2692,9 +2827,21 @@
     "exports": ["./layers/installations/source"],
     "modules": [
       "src/layers/installations/source.js",
-      "src/data/militaryInstallationData.js"
+      "src/data/militaryInstallationData.js",
+      "src/data/tomtomTiles.js",
+      "src/sources/capability.js",
+      "src/sources/httpBody.js",
+      "src/sources/openFreeMap.js",
+      "src/sources/militaryTileGeometry.js",
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js",
+      "src/data/militaryNames.js",
+      "src/sources/requestDeadline.js",
+      "src/data/local_data/osm_military_names/names.json",
+      "src/data/bundledJson.js",
+      "src/data/retryableLoad.js"
     ],
-    "external": []
+    "external": ["@mapbox/vector-tile", "pbf"]
   },
   "launches-source": {
     "exports": ["./layers/launches/source"],
@@ -2717,8 +2864,16 @@
       "src/data/tomtomTiles.js",
       "src/layers/traffic/flowDecode.js",
       "src/layers/traffic/flowSource.js",
+      "src/layers/traffic/footprint.js",
       "src/layers/traffic/source.js",
-      "src/sources/overpassRoads.js"
+      "src/sources/overpassRoads.js",
+      "src/sources/httpBody.js",
+      "src/sources/openFreeMap.js",
+      "src/sources/militaryTileGeometry.js",
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js",
+      "src/layers/traffic/roadModes.js",
+      "src/data/flowMatch.js"
     ],
     "external": ["@mapbox/vector-tile", "pbf"]
   },
@@ -2855,7 +3010,8 @@
       "src/sources/featureGeometry.js",
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
-      "src/sources/featureSource.js"
+      "src/sources/featureSource.js",
+      "src/sources/capability.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf"]
   },
@@ -2924,7 +3080,8 @@
       "src/sources/featureGeometry.js",
       "src/sources/overpassFeaturesRecords.js",
       "src/sources/overpassFeatures.js",
-      "src/sources/featureSource.js"
+      "src/sources/featureSource.js",
+      "src/sources/capability.js"
     ],
     "external": []
   },
@@ -2946,6 +3103,143 @@
       "src/layers/perimeters/records.js",
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js"
+    ],
+    "external": []
+  },
+  "tools": {
+    "exports": ["./tools"],
+    "modules": [
+      "src/tools/index.js",
+      "src/tools/catalog.js",
+      "src/tools/schema.js",
+      "src/tools/area.js",
+      "src/tools/results.js",
+      "src/tools/places.js",
+      "src/tools/queries/hazards.js",
+      "src/tools/queries/space.js",
+      "src/tools/queries/aviation.js",
+      "src/tools/queries/media.js",
+      "src/tools/queries/places.js",
+      "src/tools/queries/mobility.js",
+      "src/tools/queries/environment.js",
+      "src/tools/queries/brief.js",
+      "src/tools/queries/maritime.js",
+      "src/tools/queries/share.js",
+      "src/data/layerState.js",
+      "src/data/layerStateTokenReservations.json",
+      "src/sources/gbfsStations.js",
+      "src/sources/tle.js",
+      "src/data/satellitePass.js",
+      "src/tools/queries/atmosphere.js",
+      "src/layers/wind/inspection.js",
+      "src/layers/wind/model.js",
+      "src/layers/wind/fields.js",
+      "src/tools/queries/imagery.js",
+      "src/tools/queries/cables.js",
+      "src/tools/queries/surveillance.js",
+      "src/tools/queries/infrastructure.js",
+      "src/tools/queries/events.js",
+      "src/data/bhoteKoshiFloodPath.js",
+      "src/tools/functions.js",
+      "src/tools/surfaces.js",
+      "src/layers/transit/policy.js",
+      "src/data/transitFeeds.js",
+      "src/layers/transit/movement.js",
+      "src/data/contactPlayback.js",
+      "src/data/layerSnapshot.js",
+      "src/data/feedState.js",
+      "src/loadingFeedback.js",
+      "src/data/installationFeedback.js",
+      "src/view/index.js",
+      "src/tools/views.js",
+      "src/tools/globePanel.js",
+      "src/tools/queries/panelRequest.js"
+    ],
+    "external": ["satellite.js"]
+  },
+  "tools-mcp": {
+    "exports": ["./tools/mcp"],
+    "modules": [
+      "src/tools/mcp/index.js",
+      "src/tools/mcp/protocol.js",
+      "src/tools/mcp/http.js",
+      "src/tools/catalog.js",
+      "src/tools/schema.js"
+    ],
+    "external": []
+  },
+  "tools-services": {
+    "exports": ["./tools/services"],
+    "modules": [
+      "src/tools/services.js",
+      "src/layers/bikeshare/registry.js",
+      "src/layers/bikeshare/source.js",
+      "src/layers/cctv/source.js",
+      "src/layers/cctv/sourcePolicy.js",
+      "src/layers/cyclones/source.js",
+      "src/sources/httpBody.js",
+      "src/layers/earthquakes/source.js",
+      "src/layers/earthquakes/records.js",
+      "src/layers/firms/source.js",
+      "src/layers/installations/source.js",
+      "src/sources/requestDeadline.js",
+      "src/data/militaryNames.js",
+      "src/sources/militaryTileGeometry.js",
+      "src/data/bundledJson.js",
+      "src/data/retryableLoad.js",
+      "src/data/local_data/osm_military_names/names.json",
+      "src/sources/openFreeMap.js",
+      "src/sources/vectorTiles.js",
+      "src/sources/phaseTiming.js",
+      "src/data/tomtomTiles.js",
+      "src/sources/capability.js",
+      "src/data/militaryInstallationData.js",
+      "src/layers/launches/source.js",
+      "src/layers/perimeters/source.js",
+      "src/layers/radio/source.js",
+      "src/layers/radio/policy.js",
+      "src/layers/satellites/source.js",
+      "src/layers/traffic/source.js",
+      "src/layers/traffic/roadModes.js",
+      "src/data/flowMatch.js",
+      "src/layers/traffic/flowSource.js",
+      "src/layers/traffic/flowDecode.js",
+      "src/sources/overpassRoads.js",
+      "src/layers/transit/source.js",
+      "src/sources/transitHistory.js",
+      "src/services/requests.js",
+      "src/sources/overpassFeatures.js",
+      "src/sources/featureSource.js",
+      "src/sources/overpassFeaturesRecords.js",
+      "src/sources/featureGeometry.js",
+      "src/sources/live/standalone.js",
+      "src/sources/live/contract.js",
+      "src/sources/live/aircraft.js",
+      "src/sources/live/vessels.js",
+      "src/tools/places.js",
+      "src/tools/catalog.js",
+      "src/tools/schema.js",
+      "src/layers/weather/source.js",
+      "src/layers/wind/source.js",
+      "src/sources/windBody.js",
+      "src/layers/recentImagery/catalog.js",
+      "src/layers/recentImagery/model.js",
+      "src/layers/submarineCables/bundledSource.js",
+      "src/layers/alpr/source.js",
+      "src/layers/alpr/policy.js",
+      "src/layers/alpr/records.js",
+      "src/layers/alpr/tileRecords.js",
+      "src/sources/infrastructureData.js",
+      "src/sources/eventPacks.js"
+    ],
+    "external": ["@mapbox/vector-tile", "pbf"]
+  },
+  "view": {
+    "exports": ["./view"],
+    "modules": [
+      "src/view/index.js",
+      "src/data/layerState.js",
+      "src/data/layerStateTokenReservations.json"
     ],
     "external": []
   }
