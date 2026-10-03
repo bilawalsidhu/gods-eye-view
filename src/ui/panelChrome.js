@@ -14,6 +14,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'cctv-panel' },
   { id: 'weather-panel' },
   { id: 'recent-imagery-panel' },
+  { id: 'street-level-panel' },
   { id: 'radio-panel' },
   { id: 'scene-panel' },
   { id: 'global-context-panel' },
@@ -26,6 +27,7 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'cctv-panel',
   'weather-panel',
   'recent-imagery-panel',
+  'street-level-panel',
   'scene-panel',
   'pp-toggles',
   'global-context-panel',
@@ -61,6 +63,7 @@ export class PanelChrome {
       layoutRightPanels: () => this._layoutRightPanels(),
       syncCctvPanelViewport: () => this._syncCctvPanelViewport(),
       showToast: (message) => this._showToast(message),
+      onPanelResized: (panelId) => this._onPanelResized(panelId),
     });
     this._panelLayout = new PanelLayoutController({
       readHud: () => ({
@@ -144,6 +147,7 @@ export class PanelChrome {
     this._initCommandDockPins();
     this._initCommandDockTrayMetrics();
     this._maybeNotifyLayoutReset();
+    this._panelPosition._initPanelDrag();
   }
 
   _collapsePanelOnEscape(event, panelId) {
@@ -288,6 +292,7 @@ export class PanelChrome {
       'cctv-panel',
       'weather-panel',
       'recent-imagery-panel',
+      'street-level-panel',
       'global-context-panel',
     ].includes(panelEl?.id);
     const collapsed = panelEl.classList.contains('collapsed');
@@ -383,6 +388,15 @@ export class PanelChrome {
     this.shareLinkManager?.onPanelStateChange?.();
   }
 
+  /**
+   * Dock a floating portable panel back into its rail at its default size.
+   * @param {string} panelId
+   * @returns {boolean} Whether the panel was floating.
+   */
+  dockPanel(panelId) {
+    return this._panelPosition?.dockPanel?.(panelId) === true;
+  }
+
   setPanelCollapsed(
     panelId,
     collapsed,
@@ -416,6 +430,8 @@ export class PanelChrome {
         if (
           peer !== panelEl &&
           peer.matches('[data-panel-id]') &&
+          // A floating window is not part of the rail's accordion.
+          !peer.classList.contains('panel-floating') &&
           !peer.hidden
         ) {
           this.setPanelCollapsed(peer.id, true, {
@@ -543,6 +559,10 @@ export class PanelChrome {
       }
     }
     panelEl.classList.toggle('collapsed', nextCollapsed);
+    // Only a user's own collapse docks a floating window; cockpit entry,
+    // restores and accordion peers must not discard where they put it.
+    if (explicit && !restore)
+      this._panelPosition?.onPanelCollapsed?.(panelId, nextCollapsed);
     if (
       nextCollapsed &&
       this.cockpitView?.active &&

@@ -8,6 +8,11 @@
 @import './src/ui/styles/layers.css';
 @import './src/ui/styles/radio.css';
 @import './src/ui/styles/cctv.css';
+/* MapillaryJS's stylesheet is vendored (see its header) because the JS is
+   loaded lazily on first image open while its controls need styling as soon
+   as that first image lands; ~9 KB gzipped. */
+@import './src/ui/styles/mapillary-js.css';
+@import './src/ui/styles/street-level.css';
 @import './src/ui/styles/scenes.css';
 @import './src/ui/styles/bhote-koshi.css';
 @import './src/ui/styles/recent-imagery.css';

@@ -1474,10 +1474,10 @@ This is the current runtime/source-of-truth snapshot for the project.
 >     samples, `enabling` throughout, panel non-numeric) and across a failing
 >     one. Its `status: 'idle'` is not what saves it — the lifecycle is; the
 >     module has no `loading` status at all.
->   Any new dependency that can be slow must report `loading` and `lastUpdate`
->   honestly for the contract to hold, and must be pinned against the shape its
->   own module really returns — a fixture that invents a status the module cannot
->   emit guards nothing (that is exactly how a hole here survived a green suite).
+>     Any new dependency that can be slow must report `loading` and `lastUpdate`
+>     honestly for the contract to hold, and must be pinned against the shape its
+>     own module really returns — a fixture that invents a status the module cannot
+>     emit guards nothing (that is exactly how a hole here survived a green suite).
 > - **A held ground snap is dropped when measured ground contradicts it
 >   (2026-08-23):** the WARM hold described below answers on DISTANCE travelled,
 >   which is only a proxy for whether the value still describes the ground. A
@@ -2928,10 +2928,102 @@ its criteria cannot be silently ignored.
 | Dams ▰                 | OpenInfraMap/OSM extract (bundled)                                                                                                                                                              | `src/data/localLayers.js`                             | —                                                        | static                                                                            |
 | Submarine Cables ◠     | TeleGeography public map (bundled)                                                                                                                                                              | `src/data/telegeographySubmarineCables.js`            | —                                                        | static                                                                            |
 | FIRMS Active Fires ▲   | NASA FIRMS live (VIIRS ×3 NRT + MODIS NRT, trailing 24h)                                                                                                                                        | `src/data/firmsHeatmap.js`                            | `/api/firms` (`FIRMS_MAP_KEY`)                           | 10 min (proxy TTL 30 min)                                                         |
+| Street Level 📷        | Provider-neutral street-level imagery; Mapillary registered (vector tiles + Graph API + MapillaryJS)                                                                                     | `src/layers/streetLevel/` (core) + `src/layers/streetLevel/providers/mapillary/` via `src/app/layers/streetLevel.js` | `/api/mapillary/status`, `/api/mapillary/tiles/coverage/{z}/{x}/{y}` (`MAPILLARY_CLIENT_TOKEN`) | camera-driven (320 ms debounce, ≤9 coverage tiles, cached 24 h) |
 | Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
+
+Street Level lives in the right context rail next to CCTV as an ordinary
+collapsible panel (`#street-level-panel`, share token `0`, option owner
+`street-level`) and starts collapsed. It is modelled on the iD editor's photo
+overlay: one panel, a PROVIDERS chip per registered imagery provider, shared
+360°/flat and captured-since filters (stored as relative days so a link keeps
+its meaning), one viewer host, and one on-globe credit per active provider.
+Each source has one colour (`PROVIDER_COLORS` in
+`src/layers/streetLevel/policy.js`: Mapillary green `#05cb63`, Panoramax
+purple, Google Street View blue), used for its chip, coverage lines, overview
+points, image cones and its single legend swatch; 360° cones are rings, and
+the selected sequence is GEV cyan. Share options: `m` (Mapillary on/off), `p` (a/p/f panorama mode), `s`
+(since, days). Only Mapillary is registered in this build. Without
+`MAPILLARY_CLIENT_TOKEN` the header reads KEY REQUIRED, the Mapillary chip
+turns amber and the controls stay disabled; with it, coverage draws as
+ground-clamped sequence lines (z0–5 overview points from orbit, z11–14
+sequences below 60 km) and the proxy strips the unused `image` point layer
+from z14 tiles in transit (12 MB → ~80 KB). Concurrent requests for one tile
+share a single upstream fetch that owns its own abort controller: a request
+that is abandoned leaves at once without cancelling the others, and the fetch
+is cancelled only when its last waiter leaves.
+
+On Google 3D (`photoreal`) at street zoom the layer switches its surface mode
+from `draped` to `terrain` (`getUIState().surface`; in below 1,400 m above the
+ground, out above 1,800 m, so the mode does not flap). Draped ground polylines
+and clamped billboards land on the top of the photoreal mesh, so on a street
+under trees or an overpass the coverage appears to float at roof height. In
+terrain mode `src/layers/streetLevel/groundCast.js` places lines, cones and the
+position marker on the bare earth from the terrain service
+(`/api/terrain/heights`) plus 2 m, and the mesh hides whatever is behind
+buildings and trees. Heights are sampled on the ground-floor grid (0.001°,
+~111 m), shared with other layers' cache, and interpolated bilinearly; a z14
+tile needs at most a few hundred lookups, sent once per tile and aborted when
+the tile is dropped. A tile is drawn draped first and swapped for its cast
+lines when the heights arrive; a geoid fallback (terrain proxy down) counts as
+unknown and leaves the lines draped. The bare-earth grid cannot see a
+freeway in a trench, a steep street between grid corners or the road under a
+tree, so `src/layers/streetLevel/meshSampler.js` then samples the rendered
+Google 3D surface (`scene.sampleHeight`, overlays excluded) once per ~11 m
+cell within 900 m of the camera, nearest first, in idle time within a 6 ms
+budget, and `refineHeights` blends it in: mesh up to 3 m above bare earth is
+the road and is followed 1 m above it; a higher mesh (canopy, deck, roof) takes
+the road's offset from bare earth carried across from the road samples on
+either side; anything else stays bare earth + 2 m. Tiles touched by new
+samples are redrawn one per idle slice with the same no-blink swap. Roads on
+elevated decks are still drawn at ground level under the deck. Cones and the marker keep drawing over
+buildings so they stay clickable. Framing or following a photo also checks the
+sampled mesh height against the bare earth: `sampleHeight` can return values
+kilometres underground before the tiles under the photo have loaded, and such
+a sample is ignored.
+
+The panel has no separate ON/OFF or nearest-photo buttons. The header pill is
+the layer switch, and a provider chip is lit only while the layer is on: with
+one provider it is the layer switch too, and with several, darkening the last
+lit chip turns the layer off while leaving that provider switched on. The
+viewer sits first, under the header, with its tools (EXPAND, FIT/FILL, FOLLOW,
+close) in a bar above the image so the provider's own overlays stay clear;
+the settings follow. FOLLOW is offered only while the map stack is Google 3D
+(`photoreal`): the layer takes the application map stack controller through
+`attachMapStackController`, subscribes to stack switches, disables the button
+with a MAP SOURCE hint on other stacks, and stops following when the stack
+leaves Google 3D. SINCE is a stepped range input (any date, 10, 5, 3, 2 and
+1 years, 6, 3 and 1 months) whose readout names the cut-off date. The panel is
+portable (`street-level-panel` spec in `PanelPositionControls`, minimum
+320 × 280, `dockOnCollapse`): in a resized window the viewer takes the spare
+height and only `.sl-settings` scrolls, and a user's collapse, a header
+double-click or SHRINK after EXPAND docks it at its default size (cockpit
+entry, restores and the Cyber accordion never dock a floating window). At
+phone width (≤720 px) the rail is the band between mid-screen and the credit
+line, so the viewer's height is derived from that band instead of 16:10 and
+the whole photo and caption fit without scrolling.
+
+Street-level providers implement the contract documented in
+`src/layers/streetLevel/registry.js`: a definition (`id`, `name`, `label`,
+`requiresKeyId`, `pickPrefix`, `colors` (`{coverage}`, the source's one
+colour), `credit`, `capabilities`, `externalUrl`, `create`) whose `create(context)` returns an instance with
+`status`, `init`/`activate`/`deactivate`/`destroy`, `refreshCoverage`,
+`setFilter`, optional `setSurface`, `coverageStats`, `handlePick`, optional
+sequence selection,
+`nearestImage`, and a viewer adapter (`mount`/`open`/`close`/`unmount`/
+`resize`/`onPose`) that emits a provider-neutral pose. The core routes clicks
+by pick prefix, swaps viewer adapters in the one host, adds and removes each
+provider's Cesium credit, and fans the filter out to every provider. The
+context also carries `getSurface()` and `groundCaster` (bare-earth heights),
+so a provider can draw on the ground in terrain mode. Adding a
+provider: implement the definition, register it in
+`src/app/layers/streetLevel.js`, add its boolean option to the `street-level`
+group in `src/data/layerState.js` and its modules to
+`scripts/package-boundaries.json`; the chip, credit and legend follow. Once a
+keyless provider registers, `requiresKeyId` on the layer becomes null and the
+key gate moves to the chips, by design.
 
 Directions is a keyless front end to the routing the voice agent already
 uses. Its row chips are the whole interface: DRIVE / WALK / BIKE pick the
@@ -3753,10 +3845,10 @@ and unreachable upstream (502/504) separately from road geometry.
   block its siblings.
 - Layer tokens are permanent public compatibility identifiers. The reservation
   JSON ledger at `src/data/layerStateTokenReservations.json` pins all existing
-  one-character assignments (all letters plus `1` and
+  one-character assignments (all letters plus `0`, `1` and
   `2` on current `main`) even if a layer is later removed. New layers allocate
-  the remaining unreserved single-character digits first (`0`, then `3`
-  through `9` on current `main`), then the next unreserved two-character
+  the remaining unreserved single-character digits first (`3` through `9` on
+  current `main`), then the next unreserved two-character
   base-36 token (`00` through `zz`) after rebasing onto the merge-time `main`;
   the dot-delimited v2 codec accepts both widths without changing existing
   links or the schema version. The contributor
@@ -4361,8 +4453,8 @@ easier to meet (detection is now on more often), but does not create it.
   samples and constant elevation during E/N drag; one shared-floor resolution on
   release; late one-shot shared-cell work is permitted during viewshed idle. The
   A+B harness intentionally excludes citywide LOD assertions.
-- Panel positions have a versioned storage name, `godsEyeView.v8.panelPos.<panel-id>`, but the current rails lay panels out adaptively and write none. Collapsed state does persist for every panel at `godsEyeView.v6.panelCollapsed.<panel-id>` (`'0'` open, `'1'` closed, absent means the panel's own default).
-- Legacy draggable-panel position keys may remain in local storage for backward compatibility, but the map-mode right rail ignores them; collapsed states still persist at `godsEyeView.v6.panelCollapsed.<panel-id>`.
+- Panel positions have a versioned storage name, `godsEyeView.v8.panelPos.<panel-id>`. The rails lay docked panels out adaptively and write nothing for them; a portable panel (CCTV, Street Level) persists `{ left, top, width, height, floating: true }` under that key once a header drag lifts it out of the rail, and a header double-click removes the record again. Double presses are detected in the header's `pointerdown` handler (two presses within 400 ms and 6 px, no drag between), because that handler's `preventDefault()` suppresses the mouse events a native `dblclick` needs. A spec with `dockOnCollapse` (Street Level) also docks when collapsed while floating. The rail's startup move of panels into `#right-context-rail` leaves a restored floating window's geometry alone. Collapsed state does persist for every panel at `godsEyeView.v6.panelCollapsed.<panel-id>` (`'0'` open, `'1'` closed, absent means the panel's own default).
+- Legacy draggable-panel position keys may remain in local storage for backward compatibility, but the map-mode right rail ignores them unless they describe a portable panel's floating window; collapsed states still persist at `godsEyeView.v6.panelCollapsed.<panel-id>`.
 - Flight/military tracked entities cache dead-reckoned positions per frame to avoid callback desync flicker.
 - Aircraft 3D-model and tracking invariants are covered by `npm run test:track`; run this before touching `flights.js`, `militaryFlights.js`, `detection.js`, or `trackedReadout.js`.
 - Annotation resolver behavior is pinned by `src/annotations/annotationResolver.test.mjs`; re-run that suite before changing place-resolution scoring.

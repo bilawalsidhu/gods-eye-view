@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+- Rail panels can opt into a portable mode: dragging the CCTV or Street Level
+  panel by its header lifts it out of the right rail into a floating window
+  that resizes from any edge or corner, remembers its position and size across
+  reloads, and snaps back on a header double-click. A panel can also ask to
+  dock when it is collapsed while floating (Street Level does).
+
+- Street Level: a provider-neutral street-level imagery layer modelled on the iD editor's photo overlay. One panel in the right rail carries a chip per imagery provider, shared 360°/flat and captured-since filters, coverage drawn on the globe from orbit down to a single street, image cones per sequence, and one embedded viewer whose adapter follows the provider of the open image; each active provider credits its imagery on the globe, and share links carry the provider switches and the filter. Mapillary is the first provider (free client token; CC BY-SA 4.0 imagery); Google Street View, KartaView and Panoramax are next. The panel is kept simple: the viewer opens at the top so the photo needs no scrolling, the header pill and the provider chips switch the layer, and SINCE is a slider. FOLLOW (the globe camera following the street-level view) is available on the Google 3D map only.
+
+- Street Level draws each imagery source in one colour, everywhere it appears: its PROVIDERS chip, coverage lines, overview points, image cones and a single legend swatch. Mapillary is green (no more age dimming or magenta panoramas; 360° cones are rings, and the 360°/FLAT filter still separates them); Panoramax will be purple and Google Street View blue.
+
+- Street Level coverage no longer floats over trees and bridges on the Google 3D map. At street zoom, sequence lines, image cones and the position marker are placed on the bare earth from the terrain service (with a 2 m lift) instead of being draped on the top of the photoreal mesh, so buildings and tree canopies hide what is behind them; other maps and higher views keep draped lines. Opening a photo no longer flies the camera underground when the Google tiles under it have not loaded yet. Near the camera the placement is refined against the rendered Google 3D surface, so lines also follow freeways in trenches and steep streets, and stay on the road under trees.
+
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
 - Ship each bundled data pack once. The region, marine, admin-boundary,

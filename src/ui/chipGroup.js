@@ -28,6 +28,17 @@ export function syncChipGroup(container, chips = [], { before = null } = {}) {
       `data-toggle-chip chip-${state}${chip.active ? ' active' : ''}`,
     );
     set(button, 'textContent', chip.label);
+    // Optional per-chip colour (a Street Level source); CSS decides its use.
+    const color = chip.color || '';
+    if ((button.dataset.chipColor || '') !== color) {
+      if (color) {
+        button.style.setProperty('--chip-color', color);
+        button.dataset.chipColor = color;
+      } else {
+        button.style.removeProperty('--chip-color');
+        delete button.dataset.chipColor;
+      }
+    }
     set(button, 'title', chip.title || '');
     set(button, 'disabled', Boolean(chip.disabled));
     attribute(button, 'aria-pressed', String(Boolean(chip.active)));

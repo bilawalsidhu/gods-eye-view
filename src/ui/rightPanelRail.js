@@ -47,8 +47,11 @@ export function layoutRightPanelRail({
   // A collapse may schedule one follow-up, which only measures and allocates.
   const isCollapseRetry = pendingCollapseRetries.delete(stack);
 
+  // A panel lifted out of the rail (PanelPositionControls' portable mode)
+  // is a fixed window the rail neither measures nor allocates.
   const panels = [...stack.children].filter(
-    (panel) => panel.matches('[data-panel-id]') && !panel.hidden,
+    (panel) =>
+      panel.matches('[data-panel-id]:not(.panel-floating)') && !panel.hidden,
   );
   if (!hud.visible || hud.variant !== 'tactical') {
     for (const panel of panels.filter((item) =>
