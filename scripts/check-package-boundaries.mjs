@@ -89,6 +89,10 @@ export async function checkPackageBoundaries(root) {
     const seen = new Set();
     await build({
       root,
+      // Keep this gate out of a running dev server's dependency cache
+      // (node_modules/.vite): a build there re-optimizes dependencies and the
+      // dev server's workers then fail with 504 "Outdated Optimize Dep".
+      cacheDir: path.join(root, 'node_modules/.vite-boundaries'),
       configFile: false,
       envFile: false,
       publicDir: false,
@@ -115,7 +119,12 @@ export async function checkPackageBoundaries(root) {
         assetsInlineLimit: 0,
         rollupOptions: {
           input,
-          external: group.external,
+          // A declared dependency also owns its package subpath exports
+          // (for example `@jtarrio/webrtlsdr/rtlsdr.js`).
+          external: (id) =>
+            group.external.some(
+              (name) => id === name || id.startsWith(`${name}/`),
+            ),
           // Unused imports must still obey ownership; tree shaking is not a boundary.
           treeshake: false,
           preserveEntrySignatures: 'strict',

@@ -1,4 +1,7 @@
-import { keylessHudSummaryResponse } from '../../../src/hudSummaryResponse.js';
+import {
+  HUD_SUMMARY_INSTRUCTIONS,
+  keylessHudSummaryResponse,
+} from '../../../src/hudSummaryResponse.js';
 import { enforceOptInRateLimit, openAiRateLimiter } from './rate-limit.js';
 import { readRequestBody } from '../common/request.js';
 import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
@@ -61,13 +64,7 @@ async function handleHudSummary(req, res) {
         model:
           process.env.OPENAI_HUD_SUMMARY_MODEL ||
           OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
-        instructions: [
-          "Write one concise intelligence-HUD summary for God's Eye View.",
-          'Use only the supplied place, street, nearby-place, and enabled-layer text labels.',
-          'Prefer the clearest named place and include a relevant enabled layer only when useful.',
-          'Do not infer from coordinates or invent a place.',
-          'Output exactly five words with no title, punctuation, markdown, or introductory phrase.',
-        ].join(' '),
+        instructions: HUD_SUMMARY_INSTRUCTIONS,
         input: JSON.stringify(context),
         reasoning: { effort: 'minimal' },
         max_output_tokens: 100,

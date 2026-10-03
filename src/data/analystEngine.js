@@ -18,12 +18,13 @@
  *
  * Providers (injected — keeps the engine pure and node-testable):
  *   getRecords(layerKey) → Array<record>            (layer accessor snapshot)
- *   resolveRegionRing(name) → Promise<{ring, name}|null>  (NE pack / admin boundary)
+ *   resolveRegionRing(name) → Promise<{ring, name}|{error:'region-timeout'}|null>
  *   getViewContext() → {lat, lon, viewRadiusKm, bounds?}  (camera-derived)
  *
  * @module data/analystEngine
  */
 
+import { feedProvenanceEnvelope } from './layerSnapshot.js';
 import { pointInRing } from './naturalEarthRegions.js';
 
 /** Layers the engine understands, with the fields queries may reference. */
@@ -59,6 +60,26 @@ export const ANALYST_LAYERS = {
   earthquakes: {
     numeric: ['magnitude', 'depthKm'],
     text: ['place'],
+    flags: [],
+  },
+  satellites: {
+    numeric: ['altitudeM', 'speedMps'],
+    text: ['name', 'noradId', 'satelliteClass', 'group'],
+    flags: [],
+  },
+  'local-datacenters': {
+    numeric: [],
+    text: ['name', 'operator', 'capacity'],
+    flags: [],
+  },
+  'local-dams': {
+    numeric: [],
+    text: ['name', 'operator', 'river', 'output'],
+    flags: [],
+  },
+  'fire-perimeters': {
+    numeric: ['acres', 'containedPct', 'personnel', 'costToDate'],
+    text: ['name', 'state', 'county', 'cause', 'behavior', 'complexity'],
     flags: [],
   },
 };
@@ -163,12 +184,15 @@ export function createAnalystEngine(providers) {
     // 1) Source records
     let records;
     let layersQueried;
+    let queriedSnapshots;
     if (layers === null) {
       records = lastResult.items.slice();
       layersQueried = lastResult.coverage.layersQueried;
+      queriedSnapshots = lastResult.coverage.feedProvenance?.layers || [];
     } else {
       records = [];
       layersQueried = [];
+      queriedSnapshots = [];
       const unknown = layers.filter((k) => !ANALYST_LAYERS[k]);
       if (unknown.length) {
         return {
@@ -180,7 +204,22 @@ export function createAnalystEngine(providers) {
       for (const key of layers) {
         if (!ANALYST_LAYERS[key]) continue;
         const rows = providers.getRecords(key) || [];
-        layersQueried.push({ layerKey: key, records: rows.length });
+        const snapshot = providers.getLayerSnapshot?.(key);
+        if (snapshot) queriedSnapshots.push(snapshot);
+        layersQueried.push({
+          layerKey: key,
+          records: rows.length,
+          ...(snapshot
+            ? {
+                feedState: snapshot.feedState,
+                source: snapshot.source,
+                lastUpdate: snapshot.lastUpdate,
+                enabled: snapshot.enabled,
+                error: snapshot.error,
+              }
+            : {}),
+          ...providers.getRecordCoverage?.(key, rows),
+        });
         for (const row of rows) records.push({ layerKey: key, ...row });
       }
     }
@@ -195,6 +234,14 @@ export function createAnalystEngine(providers) {
     const scope = spec.scope || { kind: 'view' };
     if (scope.kind === 'region' && scope.name) {
       const region = await providers.resolveRegionRing(scope.name);
+      if (region?.error === 'region-timeout') {
+        return {
+          ok: false,
+          code: 'region-timeout',
+          error: `Looking up the boundary for "${scope.name}" is taking too long — ask again in a moment.`,
+          coverage: { layersQueried, scope: `region:${scope.name}:timeout` },
+        };
+      }
       if (!region?.ring) {
         return {
           ok: false,
@@ -292,8 +339,15 @@ export function createAnalystEngine(providers) {
       coverage: {
         layersQueried,
         scope: scopeNote,
+        ...(queriedSnapshots.length
+          ? { feedProvenance: feedProvenanceEnvelope(queriedSnapshots) }
+          : {}),
         followUp: Boolean(spec.followUp && lastResult),
-        note: 'client-side data only — answers cover what the enabled layers currently hold',
+        note: layersQueried.some(
+          (layer) => layer.basis === 'bounded-loaded-records',
+        )
+          ? 'Counts and ranks cover the bounded examined loaded records only; omitted records may change the nearest item or count. Satellite distance is ground distance, not slant range.'
+          : 'client-side data only — answers cover what the enabled layers currently hold',
       },
       // Surfaced so the narration can name the centre it measured from rather
       // than implying a view-centred answer.

@@ -20,6 +20,7 @@ function createRealtimeTokenHandler({
   fetchImpl = (...args) => fetch(...args),
   resolveApiKey = () => process.env.OPENAI_API_KEY,
   models = {},
+  tools = GEV_REALTIME_TOOLS,
 } = {}) {
   return async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -113,7 +114,7 @@ function createRealtimeTokenHandler({
           output: { voice },
         },
         instructions: realtimeInstructions(annotationGuidance),
-        tools: GEV_REALTIME_TOOLS,
+        tools,
         tool_choice: 'auto',
       },
     };

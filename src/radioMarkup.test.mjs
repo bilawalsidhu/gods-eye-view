@@ -25,15 +25,17 @@ const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 function realtimeTools() { return GEV_REALTIME_TOOLS; }
 
-test('Realtime schema exposes the authoritative 28-tool inventory', () => {
+test('Realtime schema exposes the authoritative 30-tool inventory', () => {
   const tools = realtimeTools();
-  assert.equal(tools.length, 28);
+  assert.equal(tools.length, 30);
   const names = tools.map((tool) => tool.name);
-  assert.equal(new Set(names).size, 28, 'tool names are unique');
+  assert.equal(new Set(names).size, 30, 'tool names are unique');
   assert.ok(names.includes('set_context_mode'));
   assert.ok(names.includes('control_cockpit'));
   assert.ok(names.includes('select_nearest_aircraft'));
   assert.ok(names.includes('control_radio'));
+  assert.ok(names.includes('next_satellite_pass'));
+  assert.ok(names.includes('next_iss_pass'));
   // Every tool closes its parameter object: an open schema lets the model
   // invent arguments the runner silently drops.
   for (const tool of tools) {
@@ -171,6 +173,7 @@ test('no unchanged Realtime tool definition drifts silently', () => {
   // in the mic-test brief which tools moved — the session cache busts on any
   // schema change.
   const TOUCHED = new Set([
+    'set_cyber_sonar',
     'set_context_mode',
     'control_cockpit',
     'set_panel_open',
@@ -178,21 +181,32 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'fly_to_location',
     'select_nearest_aircraft',
     'set_map_stack',
+    'analyst_query',
+    'next_iss_pass',
+    'next_satellite_pass',
+    // Local ADS-B adds one layer enum value and its common-name mapping.
+    'set_layer_visibility',
   ]);
   const unchanged = realtimeTools()
     .filter((tool) => !TOUCHED.has(tool.name))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  assert.equal(unchanged.length, 21);
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((tool) => structuredClone(tool))
+    .filter((tool) => tool.name !== 'set_cyber_sonar');
+  // Cyber adds one HUD choice and the sonar tool; retain the existing pin for every legacy field.
+  const hudLayout = unchanged.find((tool) => tool.name === 'set_hud').parameters.properties.layout;
+  assert.deepEqual(hudLayout.enum, ['tactical', 'operator', 'minimal', 'cyber']);
+  hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
+  assert.equal(unchanged.length, 18);
   const digest = createHash('sha256')
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
-  // ALPR intentionally extends the two layer enums; retain the complete pin.
-  assert.equal(digest, '6963175a0c9a76de', 'an unchanged Realtime tool definition drifted');
+  // Analyst additions and ISS wording correction are explicitly excluded above; all other tool definitions retain their pin.
+  assert.equal(digest, '91935845ef2598b1', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {
-  for (const id of ['cockpit-radio-volume', 'context-radio-mini-volume', 'radio-volume']) {
+  for (const id of ['cockpit-radio-volume', 'context-radio-mini-volume', 'radio-volume', 'sdr-volume']) {
     assert.match(
       html,
       new RegExp(`id="${id}"[^>]*class="gev-quantitative-slider"[^>]*type="range"`),
@@ -267,7 +281,10 @@ test('Radio is nested inside Context with separate disclosure and power controls
   assert.match(radioControlsSource, /classList\.remove\('radio-broadcasting'\)/);
   assert.match(radioBindings, /this\.radio\.getTunerStations\(750\)/);
   assert.match(radioBindings, /radioTunerPointerPosition\(/);
-  assert.doesNotMatch(css, /#right-context-rail\s*>\s*#radio-panel/);
+  // Only the Cyber skin promotes Radio to a peer panel. Other themes retain
+  // the embedded Context layout; theme round-trip behavior has separate tests.
+  const baseCss = css.replace(readFileSync(new URL('./ui/styles/cyber.css', import.meta.url), 'utf8'), '');
+  assert.doesNotMatch(baseCss, /#right-context-rail\s*>\s*#radio-panel/);
   assert.match(css, /#global-context-panel #radio-panel\.collapsed/);
   assert.doesNotMatch(css, /\.context-radio-dock\.active:hover \.context-radio-mini/);
   assert.doesNotMatch(css, /\.context-radio-dock\.active:focus-within \.context-radio-mini/);

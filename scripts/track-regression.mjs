@@ -88,6 +88,7 @@
  *   --source-base <path>  Browser module prefix (default /src)
  *   --url <url>        App URL (default http://localhost:4173)
  *   --headful          Show the browser (debugging)
+ *   --offline-imagery  Use bundled texture for known Esri/OSM tile images only
  *   --keep-open        Leave the browser open after the run (debugging)
  */
 
@@ -110,6 +111,7 @@ const SOURCE_BASE = getOpt('--source-base', '/src').replace(/\/$/, '');
 const APP_URL = getOpt('--url', 'http://localhost:4173');
 const APP_ORIGIN = new URL(APP_URL).origin;
 const HEADFUL = getFlag('--headful');
+const OFFLINE_IMAGERY = getFlag('--offline-imagery');
 const KEEP_OPEN = getFlag('--keep-open');
 
 const CHROME_EXECUTABLE_CANDIDATES = [
@@ -201,6 +203,15 @@ async function main() {
   console.log(`  App URL : ${APP_URL}`);
   console.log(`  Mode    : ${HEADFUL ? 'headful' : 'headless'}\n`);
 
+  // Tracking does not assert imagery geography. This optional fixture leaves
+  // provider metadata, terrain, models and every tracking assertion untouched.
+  // Read before launching so a missing bundled asset fails explicitly.
+  const offlineImageryTile = OFFLINE_IMAGERY
+    ? fs.readFileSync(new URL('../node_modules/cesium/Build/Cesium/Assets/Textures/NaturalEarthII/0/0/0.jpg', import.meta.url))
+    : null;
+  let offlineImageryRequests = 0;
+  if (OFFLINE_IMAGERY) console.log('  Imagery : bundled NaturalEarthII fixture (tile images only)');
+
   // Verify the dev server is up before launching a browser.
   try {
     const res = await fetch(APP_URL, { method: 'GET' });
@@ -256,6 +267,25 @@ async function main() {
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = new URL(request.url());
+      // Reuse the one existing interceptor; do not install competing handlers.
+      // Exact HTTPS origins and image paths only: metadata, feature queries,
+      // other providers, terrain and local/model resources continue normally.
+      const knownImageryTile = request.method() === 'GET' && (
+        (url.origin === 'https://services.arcgisonline.com'
+          && /^\/ArcGIS\/rest\/services\/World_Imagery\/MapServer\/tile\/\d+\/\d+\/\d+$/.test(url.pathname))
+        || (url.origin === 'https://tile.openstreetmap.org'
+          && /^\/\d+\/\d+\/\d+\.png$/.test(url.pathname))
+      );
+      if (OFFLINE_IMAGERY && knownImageryTile) {
+        offlineImageryRequests++;
+        request.respond({
+          status: 200,
+          contentType: 'image/jpeg',
+          headers: { 'Access-Control-Allow-Origin': '*' },
+          body: offlineImageryTile,
+        });
+        return;
+      }
       if (url.origin === APP_ORIGIN && url.pathname === '/api/openai/hud-summary') {
         request.respond({
           status: 200,
@@ -363,6 +393,19 @@ async function main() {
             status: 'connected',
             rows: [],
             lastMessageAt: null,
+          }));
+        }
+        // Contacts also enables mapped installations. This tracking harness
+        // does not test installation acquisition; a valid empty viewport keeps
+        // public Overpass outages out of aircraft/satellite tracking results.
+        // Preserve the real response shape and all console-error assertions.
+        if (isAppRequest && url.pathname === '/api/military-installations') {
+          return Promise.resolve(jsonResponse({
+            elements: [],
+            saturated: false,
+            elementCap: 700,
+            retrievedAt: new Date().toISOString(),
+            status: 'ready',
           }));
         }
         // CelesTrak TLE groups. Served from a fixed two-satellite catalog so
@@ -4082,6 +4125,7 @@ async function main() {
 
     finishAndExit();
   } finally {
+    if (OFFLINE_IMAGERY) console.log(`  Bundled imagery tiles served: ${offlineImageryRequests}`);
     if (!KEEP_OPEN) {
       await browser.close();
     } else {

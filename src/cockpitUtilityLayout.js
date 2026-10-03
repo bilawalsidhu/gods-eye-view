@@ -17,6 +17,11 @@
  * @param {number} [input.signalGap] Clearance above the briefing card.
  * @param {number} [input.minTopFloor] Absolute ceiling for the strip, in px.
  * @param {number} [input.minTopRatio] Viewport-relative ceiling, 0..1.
+ * @param {boolean} [input.signalCollapsed] Whether the briefing card is collapsed.
+ * @param {boolean} [input.utilityExpanded] Whether Display or Radio is expanded.
+ * @param {number} [input.bottomInset] Reserved viewport space below an expanded panel.
+ * @param {number} [input.signalHeight] Collapsed briefing header reserved below the utility.
+ * @param {boolean} [input.reserveViewportLane] Theme relocates the briefing below the expanded utility.
  * @returns {{ top: number, maxHeight: number }}
  */
 export function resolveCockpitUtilityAnchor({
@@ -29,13 +34,29 @@ export function resolveCockpitUtilityAnchor({
   signalGap = 8,
   minTopFloor = 96,
   minTopRatio = 0.12,
+  signalCollapsed = false,
+  utilityExpanded = false,
+  bottomInset = 80,
+  signalHeight = 0,
+  reserveViewportLane = false,
 }) {
   const viewport = Math.max(0, Number(viewportHeight) || 0);
   const minTop = Math.max(minTopFloor, viewport * minTopRatio);
   const anchoredTop = Math.max(minTop, (Number(recBottom) || 0) + recGap);
   const strip = Math.max(0, Number(stripHeight) || 0);
   const signal = Number(signalTop);
-  const lowerBound = Number.isFinite(signal) ? signal : viewport;
+  const expandedLaneBottom = Math.max(
+    0,
+    viewport -
+      Math.max(0, Number(bottomInset) || 0) -
+      Math.max(0, Number(signalHeight) || 0),
+  );
+  const lowerBound =
+    reserveViewportLane && signalCollapsed && utilityExpanded
+      ? expandedLaneBottom
+      : Number.isFinite(signal)
+        ? signal
+        : viewport;
   const clearedTop = lowerBound - signalGap - strip;
   const top = Math.max(minTop, Math.min(anchoredTop, clearedTop));
   const floor = Math.max(0, Number(collapsedHeight) || 0) || 50;
@@ -77,5 +98,27 @@ export function resolveCockpitUtilityLayout({
       minimumExpandedHeight,
       available - (primaryOnly ? 0 : spacing + collapsed),
     ),
+  };
+}
+
+/** Shared Cyber panel slot, with footer controls above the lower frame (83vh). */
+export function resolveCyberCockpitPanelLane({
+  viewportHeight,
+  top,
+  launcherHeight = 60,
+  signalHeight = 44,
+  contactHeight = 64,
+}) {
+  const gap = 8;
+  const footerHeight = Math.max(
+    contactHeight + gap,
+    launcherHeight + signalHeight + gap * 2,
+  );
+  const bottom = viewportHeight * 0.82;
+  const panelHeight = Math.max(120, bottom - top - footerHeight);
+  return {
+    panelHeight,
+    utilityHeight: panelHeight + gap + launcherHeight,
+    signalTop: top + panelHeight + launcherHeight + gap * 2,
   };
 }

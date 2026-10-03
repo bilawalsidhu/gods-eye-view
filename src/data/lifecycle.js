@@ -1,3 +1,5 @@
+import { cancelCameraArrival } from './cameraArrival.js';
+
 function cloneLayerParams(value) {
   if (Array.isArray(value)) return value.map(cloneLayerParams);
   if (value && typeof value === 'object') {
@@ -16,6 +18,8 @@ const VALID_LAYER_SERIALIZATION_DISPOSITIONS = new Set([
   'enabled-only',
   'enabled+options',
   'enabled+mirrored-options',
+  // Registered but never serialized (for example hardware-local layers).
+  'local-only',
 ]);
 
 function isAbortError(error) {
@@ -1072,6 +1076,7 @@ export class LayerLifecycle {
     const entry = this.layers.get(layerId);
     if (!entry) return { intentEpoch: null, promise: Promise.resolve() };
     const desiredState = Boolean(shouldEnable);
+    if (!desiredState) cancelCameraArrival(this.viewer);
     if (entry.destroying) {
       return {
         intentEpoch: null,
@@ -2093,6 +2098,7 @@ export class LayerLifecycle {
   async destroyLayer(layerId) {
     const entry = this.layers.get(layerId);
     if (!entry || entry.destroying) return false;
+    cancelCameraArrival(this.viewer);
     entry.destroying = true;
     this._invalidateRefresh(layerId, entry, 'layer-destroyed');
     // Teardown becomes authoritative before the first await. Advancing the
@@ -2300,6 +2306,14 @@ export class LayerLifecycle {
     if (typeof callback !== 'function') return () => {};
     this._activityListeners.add(callback);
     return () => this._activityListeners.delete(callback);
+  }
+
+  /**
+   * Ask presentation to repaint layer rows now, for data that lands outside
+   * the manager tick (Transit's proximity polls, Directions' route steps).
+   */
+  refreshLayerStats() {
+    this._publishActivity({ type: 'status' });
   }
 
   _publishActivity(change) {

@@ -135,7 +135,7 @@ export function applyVesselOverlayPolicy(
 ) {
   const selected = card?.selected === true;
   const rawGap = Number(card?.gapPx) || 10;
-  const gapPx = Math.max(12, rawGap + 8);
+  const gapPx = Math.max(selected ? 28 : 12, rawGap + 8);
   return {
     ...card,
     variant: selected ? 'selected' : 'card',
@@ -144,7 +144,8 @@ export function applyVesselOverlayPolicy(
     cardStyle: 'tactical',
     gapPx,
     leaderOffsetPx: Math.max(2, gapPx - 6),
-    verticalOnly: true,
+    // Selected detail cards may move beside the contact to clear solid panels.
+    verticalOnly: !selected,
     viewportMargin: 4,
     maxDistance: selected ? Number.POSITIVE_INFINITY : fadeDistance,
     distanceFadeStartRatio: 0.7,

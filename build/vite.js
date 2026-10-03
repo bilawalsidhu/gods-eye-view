@@ -1,5 +1,7 @@
 import { applicationHtmlPlugin } from './application-html.js';
 import cesium from 'vite-plugin-cesium';
+import { embedFramingPlugin } from './embed-framing.js';
+import { panelBuildPlugin } from './panel.js';
 
 /**
  * Content-Security-Policy for every document the dev/preview server serves.
@@ -43,10 +45,31 @@ export function createBrowserViteConfig({
   cesiumToken,
   host = 'localhost',
   port = 4173,
+  command,
 } = {}) {
   return {
-    plugins: [cesium(), applicationHtmlPlugin(), ...plugins],
+    plugins: [
+      cesium(),
+      applicationHtmlPlugin(),
+      ...plugins,
+      embedFramingPlugin(),
+      panelBuildPlugin(),
+    ],
     ...(publicDir === undefined ? {} : { publicDir }),
+    // A production build must not clean the dependency cache a running dev
+    // server is still serving optimized module URLs from.
+    ...(command === 'build' ? { cacheDir: 'node_modules/.vite-build' } : {}),
+    optimizeDeps: {
+      // First reached through the SDR worker or a dynamic import. Pre-bundle
+      // them at startup so first use cannot invalidate already-transformed
+      // URLs with Vite's "Outdated Optimize Dep" 504 response.
+      include: [
+        '@jtarrio/signals/demod/demodulator.js',
+        '@jtarrio/signals/demod/modes.js',
+        '@jtarrio/webrtlsdr/rtlsdr.js',
+        'egm96-universal',
+      ],
+    },
     server: {
       host: host || 'localhost',
       port: parseInt(port, 10) || 4173,
@@ -59,6 +82,8 @@ export function createBrowserViteConfig({
       },
       // These headers protect the document containing Provider Settings and
       // give the whole page a real Content-Security-Policy (BROWSER_CSP).
+      // Embed-mode documents are framable instead: embed-framing.js rewrites
+      // only the frame-ancestors directive and keeps the rest of the policy.
       headers: BROWSER_HEADERS,
     },
     // The preview server serves the same documents, so it carries the same

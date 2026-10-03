@@ -191,7 +191,7 @@ test('tracked entity publishes a protected host entry backed by the frame cache'
   }
 });
 
-test('selection lifecycle ignores vessels, accepts installations, and clears without stale cards', () => {
+test('selection lifecycle leaves installations to their own entry and retains ALPR cards', () => {
   const originalWindow = globalThis.window;
   const fakeWindow = new EventTarget();
   const changed = makeCesiumEvent();
@@ -215,8 +215,8 @@ test('selection lifecycle ignores vessels, accepts installations, and clears wit
     fakeWindow.dispatchEvent(new CustomEvent('gev:entity-selected', {
       detail: { layerId: 'military-installations', entity: installation },
     }));
-    assert.equal(getActiveTrackedReadoutId(), 'installations:fort-test');
-    assert.equal(recorder.calls.filter(({ op }) => op === 'set').at(-1).entries[0].title, 'FORT TEST');
+    assert.equal(getActiveTrackedReadoutId(), null);
+    assert.equal(recorder.calls.filter(({ op }) => op === 'set').length, setsBefore, 'installation selection cannot create a second overlay');
 
     // ALPR cameras are static context too: a click publishes the same card.
     const camera = {

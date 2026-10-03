@@ -24,9 +24,15 @@ test('Esri uses Re:Earth without keys and preserves ion terrain when configured'
     assert.equal(esri.terrain.id, 'keyless');
     assert.equal(esri.terrain.create, createKeylessTerrain);
     await esri.terrain.create();
-    assert.deepEqual(calls, [
+    // A Resource, not a bare URL: the retry policy rides on it (terrainRetry.js).
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0] instanceof Cesium.Resource);
+    assert.equal(
+      calls[0].url,
       'https://terrain.reearth.land/cesium-mesh/ellipsoid',
-    ]);
+    );
+    assert.equal(calls[0].retryAttempts, 3);
+    assert.equal(typeof calls[0].retryCallback, 'function');
     assert.equal(
       keyless.sources.find(({ descriptor }) => descriptor.id === 'photoreal')
         .available,
@@ -125,4 +131,33 @@ test('credentialed source factories reject an omitted token instead of consuming
     /explicit token/,
   );
   await assert.rejects(createWorldTerrain(' '), /explicit ion token/);
+});
+
+test('both Google 3D routes keep tiles drawing while draped imagery loads', async () => {
+  const { createGoogleDirectTileset, createGoogleIonTileset } =
+    await import('./google3d.js');
+  const calls = [];
+  const sdk = {
+    createGooglePhotorealistic3DTileset: async (...args) => {
+      calls.push(args);
+      return 'direct';
+    },
+    IonResource: { fromAssetId: async (id, options) => ({ id, ...options }) },
+    Cesium3DTileset: {
+      fromUrl: async (...args) => {
+        calls.push(args);
+        return 'ion';
+      },
+    },
+  };
+  assert.equal(await createGoogleDirectTileset(sdk, 'key'), 'direct');
+  assert.equal(await createGoogleIonTileset(sdk, 'token'), 'ion');
+  assert.deepEqual(calls[0], [
+    { key: 'key', onlyUsingWithGoogleGeocoder: true },
+    { asynchronouslyLoadImagery: true },
+  ]);
+  assert.equal(calls[1][0].id, 2275207);
+  assert.equal(calls[1][0].accessToken, 'token');
+  assert.equal(calls[1][1].asynchronouslyLoadImagery, true);
+  assert.equal(calls[1][1].enableCollision, true);
 });

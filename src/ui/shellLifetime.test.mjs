@@ -133,3 +133,23 @@ test('camera-entry listeners are removed before any asynchronous layer cleanup',
   owner.stop();
   assert.equal(changes, 1);
 });
+
+
+test('weather shell supplies live imagery hosts to wind and observations and releases them', (t) => {
+  const { owner } = bindings(t);
+  let host = { collection: {}, kind: 'tileset' };
+  owner.services.imageryHost = () => host;
+  const attached = new Map();
+  const ids = ['wind', 'weather-radar', 'weather-satellite', 'weather-lightning'];
+  owner.attachDataManager({
+    layers: new Map(ids.map(id => [id, { module: {
+      attachShellServices(services) { attached.set(id, services); },
+    } }])),
+    subscribe: () => () => {},
+  });
+  for (const id of ids) assert.equal(attached.get(id).imageryHost(), host);
+  host = { collection: null, kind: 'none' };
+  for (const id of ids) assert.equal(attached.get(id).imageryHost(), host);
+  owner.disconnect();
+  for (const id of ids) assert.equal(attached.get(id), null);
+});

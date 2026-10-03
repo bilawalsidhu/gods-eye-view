@@ -5,9 +5,15 @@
  * VIIRS header (confirmed live 2026-07-16):
  *   latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,
  *   instrument,confidence,version,bright_ti5,frp,daynight
+ * MODIS header:
+ *   latitude,longitude,brightness,scan,track,acq_date,acq_time,satellite,
+ *   instrument,confidence,version,bright_t31,frp,daynight
  *
  * Quirks this module owns:
- * - `confidence` is CATEGORICAL for VIIRS (`l`/`n`/`h`) — passed through raw.
+ * - `confidence` is CATEGORICAL for VIIRS (`l`/`n`/`h`) and numeric 0-100 for
+ *   MODIS — passed through raw.
+ * - Brightness maps from `bright_ti4`/`brightness`; the secondary band maps
+ *   from `bright_ti5`/`bright_t31`.
  * - `acq_time` is NOT zero-padded ("45" = 00:45 UTC) — kept as-is in records;
  *   {@link acquisitionMsUtc} does the padding.
  * - Upstream errors come back as HTML or plain text ("Invalid MAP_KEY"),

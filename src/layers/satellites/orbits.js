@@ -7,7 +7,8 @@ import {
   degreesLat,
   twoline2satrec,
 } from 'satellite.js';
-import { findNextIssPass } from '../../data/issPass.js';
+import { findNextSatellitePass } from '../../data/satellitePass.js';
+import { parseTleText } from '../../sources/tle.js';
 import { ORBIT_PATH_STEPS, ISS_NORAD } from './policy.js';
 
 export function createOrbits({ state: layerState, services, parts, source }) {
@@ -40,24 +41,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
   /**
    * Parse TLE text into array of { name, line1, line2 } objects.
    */
-
-  function parseTLE(text) {
-    const lines = text
-      .trim()
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
-    const result = [];
-    for (let i = 0; i < lines.length - 2; i += 3) {
-      const name = lines[i];
-      const line1 = lines[i + 1];
-      const line2 = lines[i + 2];
-      if (line1.startsWith('1 ') && line2.startsWith('2 ')) {
-        result.push({ name, line1, line2 });
-      }
-    }
-    return result;
-  }
+  const parseTLE = parseTleText;
 
   /**
    * Propagate satellite position at a given JS Date.
@@ -136,20 +120,96 @@ export function createOrbits({ state: layerState, services, parts, source }) {
   /**
    * Next ISS pass for an observer. Requires the catalog to have loaded (the
    * satellites layer enabled at least once this session).
-   * @returns {{status:'no-tle'}|{status:'none'}|{status:'ok', pass:{riseMs:number,setMs:number,maxElevDeg:number,maxElevMs:number,riseAzDeg:number}}}
+   * @param {Object} options
+   * @param {number} options.latDeg Observer latitude
+   * @param {number} options.lonDeg Observer longitude
+   * @param {number} [options.minElevDeg=10] Elevation that defines rise and set, in degrees
+   * @param {boolean} [options.requireVisible=false] Require a naked-eye-visible pass
+   * @returns {{status:'no-tle'}|{status:'none'}|{status:'ok', pass:{riseMs:number,setMs:number,maxElevDeg:number,maxElevMs:number,riseAzDeg:number,visible?:boolean,sunlit?:boolean,observerDark?:boolean}}}
    */
 
-  function getNextIssPass({ latDeg, lonDeg, minElevDeg = 10 }) {
-    const sat = layerState._catalog.get(ISS_NORAD);
+  function getNextIssPass({
+    latDeg,
+    lonDeg,
+    minElevDeg = 10,
+    requireVisible = false,
+    fromMs = Date.now(),
+  }) {
+    return getNextSatellitePass(ISS_NORAD, {
+      latDeg,
+      lonDeg,
+      minElevDeg,
+      requireVisible,
+      fromMs,
+    });
+  }
+
+  /**
+   * Next pass of any catalog satellite for an observer.
+   * @param {number} noradId NORAD satellite catalog ID
+   * @param {Object} options
+   * @param {number} options.latDeg Observer latitude
+   * @param {number} options.lonDeg Observer longitude
+   * @param {number} [options.minElevDeg=10] Elevation that defines rise and set, in degrees
+   * @param {boolean} [options.requireVisible=false] Require a naked-eye-visible pass
+   * @param {number} [options.fromMs=Date.now()] Search start time in UTC milliseconds
+   * @returns {{status:'no-tle'}|{status:'none'}|{status:'ok', pass:Object}}
+   */
+
+  function getNextSatellitePass(
+    noradId,
+    {
+      latDeg,
+      lonDeg,
+      minElevDeg = 10,
+      requireVisible = false,
+      fromMs = Date.now(),
+    },
+  ) {
+    const id = Number(noradId);
+    if (!Number.isSafeInteger(id) || id <= 0) return { status: 'no-tle' };
+    const sat = layerState._catalog.get(id);
     if (!sat || !sat.satrec) return { status: 'no-tle' };
-    const pass = findNextIssPass({
+    const pass = findNextSatellitePass({
       satrec: sat.satrec,
       latDeg,
       lonDeg,
-      fromMs: Date.now(),
+      fromMs,
       minElevDeg,
+      requireVisible,
     });
     return pass ? { status: 'ok', pass } : { status: 'none' };
+  }
+
+  /** Resolve only loaded catalog identities; ambiguous names never pick a first row. */
+  function resolveSatelliteForPass(query) {
+    const text = String(query ?? '').trim();
+    if (!text || text.length > 120) return { status: 'not-found' };
+    const exactId = /^\d+$/.test(text) ? Number(text) : null;
+    if (exactId !== null) {
+      const sat = layerState._catalog.get(exactId);
+      return sat?.satrec
+        ? { status: 'ok', noradId: exactId, name: sat.name }
+        : { status: 'not-found' };
+    }
+    const q = text.toLowerCase();
+    const rows = [...layerState._catalog].filter(([, sat]) => sat.satrec);
+    const exact = rows.filter(
+      ([, sat]) => String(sat.name).toLowerCase() === q,
+    );
+    const matches = exact.length
+      ? exact
+      : rows.filter(([, sat]) => String(sat.name).toLowerCase().includes(q));
+    if (!matches.length) return { status: 'not-found' };
+    if (matches.length > 1)
+      return {
+        status: 'ambiguous',
+        candidates: matches
+          .slice(0, 8)
+          .map(([noradId, sat]) => ({ noradId, name: sat.name })),
+        totalMatches: matches.length,
+      };
+    return { status: 'ok', noradId: matches[0][0], name: matches[0][1].name };
   }
 
   /**
@@ -316,6 +376,8 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     orbitalPeriodSeconds,
     computeOrbitPath,
     getNextIssPass,
+    getNextSatellitePass,
+    resolveSatelliteForPass,
     scoreSatelliteNameMatch,
     internationalDesignatorYear,
     lookupTleEntries,

@@ -45,7 +45,9 @@ export function trackBackfillProxies() {
       RESPONSE_CAP_BYTES,
     );
     let body;
+    let status = upstream.status;
     if (tooLarge) {
+      status = 502;
       body = JSON.stringify({ error: 'Upstream track response too large' });
     } else if (!upstream.ok) {
       // Sanitize upstream error surface; status code is signal enough
@@ -53,8 +55,10 @@ export function trackBackfillProxies() {
     } else {
       body = text;
     }
-    cachePut(key, { at: Date.now(), status: upstream.status, body });
-    res.statusCode = upstream.status;
+    // Cache the 502 like any upstream error: /tracks/all costs OpenSky
+    // credits, so a retry inside the window must not re-download the body.
+    cachePut(key, { at: Date.now(), status, body });
+    res.statusCode = status;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
     res.end(body);

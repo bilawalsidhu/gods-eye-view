@@ -25,6 +25,72 @@ import * as Cesium from 'cesium';
  * follows DATA_SOURCES.md (live sources, then bundled snapshots).
  * @type {{ key: string, html: string }[]}
  */
+export const OSM_CREDIT = {
+  key: 'openstreetmap',
+  html: 'Map and place data <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> (<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL</a>)',
+};
+export const OPENMAPTILES_CREDIT = {
+  key: 'openfreemap',
+  html: 'Vector tiles: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a>',
+};
+
+const osmDisplays = new WeakMap();
+
+function updateOsmDisplay(viewer, state) {
+  const osm = state.owners.size > 0;
+  let tiles = false;
+  for (const usesTiles of state.owners.values()) tiles ||= usesTiles;
+  for (const [key, visible] of [
+    ['osm', osm],
+    ['tiles', tiles],
+  ]) {
+    if (state[key].visible === visible) continue;
+    state[key].visible = visible;
+    viewer.creditDisplay[visible ? 'addStaticCredit' : 'removeStaticCredit'](
+      state[key].credit,
+    );
+    viewer.scene?.requestRender?.();
+  }
+}
+
+/** Keep one short inline credit while an OSM display owner has visible data. */
+export function showOsmCredit(viewer, owner, { openMapTiles = false } = {}) {
+  if (!viewer?.creditDisplay?.addStaticCredit || !owner) return false;
+  let state = osmDisplays.get(viewer);
+  if (!state) {
+    state = {
+      owners: new Map(),
+      osm: {
+        visible: false,
+        credit: new Cesium.Credit(
+          '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>',
+          true,
+        ),
+      },
+      tiles: {
+        visible: false,
+        credit: new Cesium.Credit(
+          '<a href="https://openmaptiles.org" target="_blank" rel="noopener">© OpenMapTiles</a>',
+          true,
+        ),
+      },
+    };
+    osmDisplays.set(viewer, state);
+  }
+  if (state.owners.get(owner) === openMapTiles) return false;
+  state.owners.set(owner, openMapTiles);
+  updateOsmDisplay(viewer, state);
+  return true;
+}
+
+/** Release only this owner's credit; other displayed OSM sources retain theirs. */
+export function hideOsmCredit(viewer, owner) {
+  const state = osmDisplays.get(viewer);
+  if (!state?.owners.delete(owner)) return false;
+  updateOsmDisplay(viewer, state);
+  return true;
+}
+
 export const DATA_CREDITS = [
   // ── Live sources ────────────────────────────────────────────────
   {
@@ -78,41 +144,31 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
-    key: 'overpass',
+    key: 'nasa-gibs',
     html:
-      'Road geometry (traffic): ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      '(ODbL 1.0)',
+      'Recent imagery: We acknowledge the use of imagery provided by services from ' +
+      "NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science " +
+      'Data and Information System (ESDIS). ' +
+      '<a href="https://gibs.earthdata.nasa.gov" target="_blank" rel="noopener">gibs.earthdata.nasa.gov</a> · ' +
+      '<a href="https://lpdaac.usgs.gov/products/hlss30v002/" target="_blank" rel="noopener">HLS product page</a>',
+  },
+  {
+    key: 'wfigs',
+    html:
+      'Wildfire perimeters: ' +
+      '<a href="https://data-nifc.opendata.arcgis.com/" target="_blank" rel="noopener">National Interagency Fire Center (WFIGS)</a>' +
+      ' · Incident information: ' +
+      '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
+  },
+  OSM_CREDIT,
+  OPENMAPTILES_CREDIT,
+  {
+    key: 'overture-military-names',
+    html: 'Military area names: <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps Foundation</a> (ODbL)',
   },
   {
     key: 'photon-geocoder',
-    html:
-      'Keyless place search: ' +
-      '<a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a> (komoot) over ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      '(ODbL 1.0)',
-  },
-  {
-    key: 'alpr-osm',
-    html:
-      'ALPR camera locations (automatic license plate readers): ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      '(<a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">ODbL 1.0</a>); ' +
-      'community mapping includes <a href="https://deflock.org" target="_blank" rel="noopener">DeFlock</a>',
-  },
-  {
-    key: 'military-installations-osm',
-    html:
-      'Mapped installation context: ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      '(ODbL 1.0; incomplete mapped context)',
-  },
-  {
-    key: 'cockpit-place-osm',
-    html:
-      'Cockpit place context and last-resort place search: ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      'via Nominatim (ODbL 1.0)',
+    html: 'Keyless place search: <a href="https://photon.komoot.io" target="_blank" rel="noopener">Photon</a> (komoot)',
   },
   {
     key: 'open-meteo',
@@ -146,6 +202,10 @@ export const DATA_CREDITS = [
     html:
       'CCTV cameras &amp; frames (Texas): ' +
       '<a href="https://its.txdot.gov/" target="_blank" rel="noopener">Texas Department of Transportation</a> (courtesy)',
+  },
+  {
+    key: 'deldot-cctv',
+    html: 'CCTV live video (Delaware): <a href="https://deldot.gov/map/" target="_blank" rel="noopener">DelDOT — Delaware Department of Transportation</a>',
   },
   {
     key: 'caltrans-cctv',
@@ -191,7 +251,6 @@ export const DATA_CREDITS = [
     html:
       'Routing (voice routes and Directions): OSRM on the FOSSGIS servers — ' +
       '<a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">routing.openstreetmap.de</a> · ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> (ODbL) · ' +
       '<a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">fix the map</a>',
   },
   {
@@ -212,20 +271,38 @@ export const DATA_CREDITS = [
       '<a href="https://terrain.reearth.land" target="_blank" rel="noopener">Re:Earth Terrain</a> / ' +
       'Mapterhorn (CC BY 4.0) / EGM2008 (NGA)',
   },
-  // ── Bundled snapshots ───────────────────────────────────────────
   {
-    key: 'datacenters',
-    html:
-      'Datacenters: ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      '(ODbL 1.0)',
+    key: 'weather-noaa',
+    html: 'Observed weather: <a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener">NOAA nowCOAST</a> · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners. <a href="https://oceanservice.noaa.gov/disclaimer.html" target="_blank" rel="noopener">Source disclaimer</a>.',
   },
   {
-    key: 'dams',
+    key: 'weather-cyclones',
+    html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
+  },
+  {
+    key: 'weather-lightning',
+    html: 'Lightning density: NOAA/NWS nowCOAST · derived from Vaisala NLDN/GLD360. <a href="https://ocean.weather.gov/lightning/lightning_pdd.php" target="_blank" rel="noopener">Public derived density product</a>, not raw detections.',
+  },
+  {
+    key: 'wind-gfs',
     html:
-      'Dams: ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-      '(ODbL 1.0) + Open Infrastructure Map',
+      'Wind: resampled NOAA Global Forecast System (GFS) 10 m wind via ' +
+      '<a href="https://registry.opendata.aws/noaa-gfs-bdp-pds/" target="_blank" rel="noopener">NOAA Open Data on AWS</a> ' +
+      '(U.S. public domain; forecast, not observations)',
+  },
+  {
+    key: 'ecmwf-ifs',
+    html:
+      'This service is based on data and products of the European Centre for Medium-Range Weather Forecasts (ECMWF). ' +
+      '<a href="https://www.ecmwf.int/en/forecasts/datasets/open-data" target="_blank" rel="noopener">ECMWF Open Data</a> · ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. ' +
+      'Modified: resampled 10 m IFS forecast vectors and animated display. ' +
+      'ECMWF does not accept any liability whatsoever for any error or omission in the data, their availability, or for any loss or damage arising from their use.',
+  },
+  // ── Bundled snapshots ───────────────────────────────────────────
+  {
+    key: 'dams',
+    html: 'Dams: Open Infrastructure Map',
   },
   {
     key: 'firms',
@@ -258,9 +335,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'warendorf-cctv',
-    html:
-      'Webcam (Warendorf): <a href="https://www.warendorf.de/" target="_blank" rel="noopener">Stadt Warendorf</a> (courtesy); ' +
-      'camera poses derived from OpenStreetMap geometry, © OpenStreetMap contributors (ODbL)',
+    html: 'Webcam (Warendorf): <a href="https://www.warendorf.de/" target="_blank" rel="noopener">Stadt Warendorf</a> (courtesy)',
   },
   {
     key: 'nsw-cctv',
@@ -293,13 +368,22 @@ export const TOMTOM_CREDIT = {
     '<a href="https://www.tomtom.com" target="_blank" rel="noopener">TomTom</a>',
 };
 
-/** Registered when the first Natural Earth region outline resolves (public
- * domain — no attribution required; credited as a courtesy). */
+/** Registered when the first Natural Earth region or state/province outline
+ * resolves (public domain — no attribution required; credited as a courtesy). */
 export const NATURAL_EARTH_CREDIT = {
   key: 'natural-earth',
   html:
-    'Physical region boundaries from ' +
+    'Country, state/province and physical region boundaries from ' +
     '<a href="https://www.naturalearthdata.com" target="_blank" rel="noopener">Natural Earth</a> (public domain)',
+};
+
+/** Registered when the first bundled US county outline resolves (public
+ * domain — credited as a courtesy). */
+export const US_CENSUS_CREDIT = {
+  key: 'us-census-counties',
+  html:
+    'US county boundaries from the ' +
+    '<a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">U.S. Census Bureau</a> (public domain)',
 };
 
 /**
@@ -337,10 +421,7 @@ export const BHOTE_KOSHI_CREDIT = {
 export const BHOTE_KOSHI_LOCATOR_CREDIT = {
   key: 'bhote-koshi-locator',
   html:
-    'Nepal administrative boundary and nearby-city locations: ' +
-    '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> ' +
-    '(ODbL 1.0); incident-place anchors use an owner-curated, source-verified geolocation union; ' +
-    'flood corridor derived from the ' +
+    'Flood corridor derived from the ' +
     '<a href="https://github.com/geo-pera/bhotekoshi-2026-reconstruction/blob/main/vectors/river_centerline.geojson" target="_blank" rel="noopener">GeoPera river centerline</a> ' +
     '(CC BY-NC 4.0)',
 };
