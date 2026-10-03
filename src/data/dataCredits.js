@@ -276,6 +276,10 @@ export const DATA_CREDITS = [
     html: 'Observed weather: <a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener">NOAA nowCOAST</a> · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners. <a href="https://oceanservice.noaa.gov/disclaimer.html" target="_blank" rel="noopener">Source disclaimer</a>.',
   },
   {
+    key: 'magnetosphere',
+    html: 'Magnetic field: <a href="https://www.ncei.noaa.gov/products/international-geomagnetic-reference-field" target="_blank" rel="noopener">IAGA IGRF-14</a> (public domain) &middot; solar wind: <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noopener">NOAA SWPC</a>, propagated to Earth. Magnetopause after Shue et al. (1998). Filaments are the internal field only; the stretched tail is not modelled.',
+  },
+  {
     key: 'weather-cyclones',
     html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
   },
