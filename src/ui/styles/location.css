@@ -269,6 +269,18 @@
   border-color: var(--glass-border-hover);
 }
 
+.my-location-btn.following,
+.my-location-btn[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.2);
+}
+
+.my-location-btn.searching {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 #location-search {
   width: 0;
   padding: 0;
