@@ -119,6 +119,7 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | **Natural Earth countries, states and provinces** (260 admin-0/map units + 4,587 admin-1 polygons)             | `natural_earth/`                  | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Made with Natural Earth" (courtesy credit — not legally required)          |
 | **US Census Bureau counties** (3,235 county polygons)                       | `us_census_counties/`             | **Public domain**                                                                                         | ✅ (no restrictions)                             | "U.S. Census Bureau" (courtesy — not legally required)                      |
 | **CCTV ground heights** (3,445 cameras)                                     | `cctv_ground_heights/`            | Precomputed camera placement heights, aligned to work with Google Photorealistic 3D Tiles (folder README) | —                                                | —                                                                           |
+| **GSHHG land/sea mask** (global 1/8° three-state raster, 1.04 MB)           | `gshhg_mask/`                     | **LGPL-3.0** (derived work; regeneration script committed)                                                | ✅ (attribution + LGPL terms on the data)        | "Wessel & Smith, GSHHG"                                                     |
 
 ### ⚠️ TeleGeography is bundled but NonCommercial
 
@@ -177,6 +178,22 @@ Natural Earth is **public domain** (no permission needed, no attribution legally
 https://www.naturalearthdata.com/about/terms-of-use/). We credit anyway: "Made with Natural
 Earth". Registration in the in-app `dataCredits.js` attribution list ships with the resolver
 wiring (see below).
+
+### GSHHG land/sea mask (`gshhg_mask/`)
+
+A global 1/8° three-state raster (water / land / coastal-mixed, 2 bits per cell,
+1,036,816 bytes) derived from **GSHHG v2.3.7** intermediate-resolution coastline
+polygons (Wessel & Smith — https://www.soest.hawaii.edu/pwessel/gshhg/, fetched
+2026-08-29; `gshhs_i.b` SHA-256 in the folder README). It is the synchronous
+water/land lookup for ocean layers: blanking land cells in current fields and
+gating ocean-point queries. Composition: L1 land, L2 lakes carved back to water,
+L3 islands-in-lakes land, L4 ponds water, L5 Antarctic ice front land, L6
+grounding line skipped. Regeneration is deterministic and committed:
+`node scripts/build-land-sea-mask.mjs path/to/gshhs_i.b`.
+
+GSHHG is distributed under the **LGPL**; this raster is a derived work of the
+data and keeps that license (see the carve-out in [LICENSE](LICENSE)). Credit:
+"Wessel & Smith, GSHHG", registered in `dataCredits.js`.
 
 ### DataSF Analysis Neighborhoods (`neighborhoods/`)
 
