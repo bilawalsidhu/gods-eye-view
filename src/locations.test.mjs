@@ -142,6 +142,23 @@ test('regionFramingPlan: Rocky-Mountains-scale viewport gets a capped oblique sw
   assert.ok(Math.abs(plan.centerLng - (-112)) < 0.01);
 });
 
+test('an unambiguous natural-region search flies from the bundled pack without geocoding', async () => {
+  const viewer = stubViewer();
+  let geocodes = 0;
+  const result = await searchAndFlyTo(viewer, 'the Alps', {
+    viewMode: 'overview',
+    placeSearch: {
+      async geocode() {
+        geocodes += 1;
+        throw new Error('bundled natural regions must not geocode');
+      },
+    },
+  });
+  assert.equal(geocodes, 0);
+  assert.equal(result.navigationMode, 'natural-region-swath');
+  assert.equal(viewer.flights.length, 1);
+});
+
 test('regionFramingPlan: E-W elongated region looks along the east axis', () => {
   // Alps-shaped box: ~2.3° lat, ~11° lon.
   const plan = regionFramingPlan({

@@ -22,12 +22,21 @@ test('marquee ranges resolve with sane areas (owner acceptance: Alps + Rockies)'
 });
 
 test('aliases and articles: "the Alps", "Rockies", "Sahara Desert", "Himalaya"', async () => {
-  assert.equal((await findNaturalRegion('the Alps'))?.name, 'Alps');
+  const alps = await findNaturalRegion('the Alps');
+  assert.equal(alps?.name, 'Alps');
+  assert.equal(alps?.candidates, 1, 'Alps is an unambiguous bundled name');
   assert.equal((await findNaturalRegion('Rockies'))?.name, 'Rocky Mountains');
   assert.equal((await findNaturalRegion('the Rockies'))?.name, 'Rocky Mountains');
   assert.equal((await findNaturalRegion('Sahara Desert'))?.name, 'Sahara');
   assert.equal((await findNaturalRegion('Himalaya'))?.name, 'Himalayas');
   assert.equal((await findNaturalRegion('  THE ALPS  '))?.name, 'Alps');
+});
+
+test('duplicate natural-region names report their candidate count', async () => {
+  assert.ok(
+    (await findNaturalRegion('Cordillera Oriental'))?.candidates > 1,
+    'Cordillera Oriental stays ambiguous without a containment anchor',
+  );
 });
 
 test('major deserts/ranges resolve with sane areas', async () => {
@@ -123,6 +132,15 @@ test('outline lookup: duplicate names disambiguate by anchor containment', async
   const us = await lookupNaturalRegionOutline('Sierra Nevada', 37.2, -119.0);
   assert.ok(us, 'US anchor must match a Sierra Nevada');
   assert.ok(pointInRing(us.ring, 37.2, -119.0), 'returned ring contains the US anchor');
+});
+
+test('outline lookup: overlapping duplicate candidates remain unresolved', async () => {
+  const overlap = await lookupNaturalRegionOutline(
+    'Canadian Shield',
+    45.6336,
+    -74.86493,
+  );
+  assert.equal(overlap, null, 'two containing entries must use the fallback');
 });
 
 test('outline lookup: anchor outside every ring → null (wrong-place guard)', async () => {

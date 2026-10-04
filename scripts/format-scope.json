@@ -697,6 +697,7 @@
   "server/providers/openai/toolDescriptions.js",
   "src/voice/session.js",
   "src/voice/sessionCommands.js",
+  "src/voice/inactivity.test.mjs",
   "src/voice/realtimeSession.js",
   "src/voice/realtimeEvents.js",
   "src/voice/session.test.mjs",

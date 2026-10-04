@@ -44,8 +44,25 @@ test('region ring: Natural Earth names resolve without a geocoder', async () => 
   for (const name of ['Gulf of Mexico', 'the Alps']) {
     const region = await resolveRegionRingForQuery(name);
     assert.ok(region?.ring?.length >= 3, `${name} resolves to a ring`);
+    assert.equal(region.source, 'natural-earth');
     assert.equal(region.error, undefined);
   }
+});
+
+test('region ring: duplicate Natural Earth names continue through place lookup', async () => {
+  const { resolveRegionRingForQuery } = createAnnotationResolver({
+    featureSource: featureSource(),
+  });
+  const geocoder = geocoderFor(null);
+  const region = await resolveRegionRingForQuery(
+    'Cordillera Oriental',
+    undefined,
+    geocoder,
+    { budgetMs: Infinity },
+  );
+
+  assert.equal(region, null);
+  assert.deepEqual(geocoder.calls, ['Cordillera Oriental']);
 });
 
 test('region ring: a slow admin-boundary lookup returns region-timeout within the budget', async () => {
@@ -116,6 +133,7 @@ test('region ring: bundled states and counties resolve without a geocoder', asyn
   ]) {
     const region = await resolveRegionRingForQuery(query, undefined, geocoder);
     assert.equal(region?.name, name, query);
+    assert.equal(region?.source, 'bundled-admin', query);
     assert.ok(region.ring.length >= 8, `${query} has a real ring`);
   }
   assert.deepEqual(geocoder.calls, [], 'no geocoding');

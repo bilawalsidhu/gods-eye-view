@@ -213,6 +213,7 @@ test('doctor describes the credential ladder without exposing values', () => {
     GOOGLE_MAPS_SERVER_API_KEY: { configured: false },
     CESIUM_ION_TOKEN: { configured: true, source: 'environment' },
     OPENAI_API_KEY: { configured: true, source: 'dotenv files' },
+    GEMINI_API_KEY: { configured: false },
     AISSTREAM_API_KEY: { configured: false },
     FIRMS_MAP_KEY: { configured: false },
     TOMTOM_API_KEY: { configured: false },
@@ -257,6 +258,7 @@ test('doctor sends Keychain-backed reports to dev-fresh and describes OpenSky as
     'GOOGLE_MAPS_SERVER_API_KEY',
     'CESIUM_ION_TOKEN',
     'OPENAI_API_KEY',
+    'GEMINI_API_KEY',
     'AISSTREAM_API_KEY',
     'FIRMS_MAP_KEY',
     'TOMTOM_API_KEY',
@@ -289,6 +291,7 @@ test('doctor never calls a dependency-missing setup ready', () => {
     'GOOGLE_MAPS_SERVER_API_KEY',
     'CESIUM_ION_TOKEN',
     'OPENAI_API_KEY',
+    'GEMINI_API_KEY',
     'AISSTREAM_API_KEY',
     'FIRMS_MAP_KEY',
     'TOMTOM_API_KEY',
@@ -307,4 +310,37 @@ test('doctor never calls a dependency-missing setup ready', () => {
   assert.match(output, /dependencies missing; run npm install/);
   assert.match(output, /Setup needs attention/);
   assert.doesNotMatch(output, /Ready\. Run/);
+});
+
+
+test('doctor accepts either voice provider but never treats a Maps key as voice', () => {
+  const configured = { configured: true };
+  assert.equal(buildCapabilitySummary({ OPENAI_API_KEY: configured }).voice, 'available');
+  assert.equal(buildCapabilitySummary({ GEMINI_API_KEY: configured }).voice, 'available');
+  assert.equal(buildCapabilitySummary({ OPENAI_API_KEY: configured, GEMINI_API_KEY: configured }).voice, 'available');
+  assert.equal(
+    buildCapabilitySummary({ GOOGLE_MAPS_API_KEY: configured }).voice,
+    'off until an OpenAI or Gemini key is added',
+  );
+});
+
+test('doctor resolves the separate Gemini key without consulting Keychain', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'gev-doctor-gemini-'));
+  try {
+    const spec = credential('GEMINI_API_KEY');
+    const keychainLookup = () => assert.fail('Gemini must not borrow a Keychain credential');
+    writeFileSync(path.join(root, '.env'), 'GOOGLE_MAPS_API_KEY=maps-fixture\n');
+    assert.deepEqual(resolveCredential(spec, { environment: {}, rootDir: root, keychainLookup }), {
+      configured: false, source: null,
+    });
+    writeFileSync(path.join(root, '.env'), 'GEMINI_API_KEY=gemini-fixture\n');
+    assert.deepEqual(resolveCredential(spec, { environment: {}, rootDir: root, keychainLookup }), {
+      configured: true, source: 'dotenv files',
+    });
+    assert.deepEqual(resolveCredential(spec, {
+      environment: { GEMINI_API_KEY: 'shell-fixture' }, rootDir: root, keychainLookup,
+    }), { configured: true, source: 'environment' });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

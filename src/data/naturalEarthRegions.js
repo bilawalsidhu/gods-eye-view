@@ -195,7 +195,7 @@ const loadIndex = createRetryableLoader(async () => {
   return index;
 });
 
-function toResult(entry) {
+function toResult(entry, candidates = 1) {
   return {
     name: entry.name,
     featurecla: entry.featurecla,
@@ -203,6 +203,7 @@ function toResult(entry) {
     polygons: entry.polygons,
     bboxDiagonalKm: entry.bboxDiagonalKm,
     areaKm2: entry.areaKm2,
+    candidates,
   };
 }
 
@@ -215,7 +216,8 @@ function toResult(entry) {
  * @param {string} query e.g. "the Alps", "Rockies", "Gulf of Mexico"
  * @returns {Promise<{name:string, featurecla:string, kind:'natural'|'marine',
  *   polygons:Array<Array<[number,number]>>, bboxDiagonalKm:number,
- *   areaKm2:number}|null>} largest-area match, or null when nothing matches.
+ *   areaKm2:number, candidates:number}|null>} largest-area match plus the
+ *   number of same-name entries, or null when nothing matches.
  */
 export async function findNaturalRegion(query) {
   const norm = normalizeName(query);
@@ -229,7 +231,7 @@ export async function findNaturalRegion(query) {
   for (const key of candidates) {
     if (!key) continue;
     const list = index.get(key);
-    if (list && list.length) return toResult(list[0]);
+    if (list && list.length) return toResult(list[0], list.length);
   }
   return null;
 }
@@ -276,11 +278,10 @@ export function pointInRing(ring, lat, lon) {
 /**
  * Resolve a natural-region OUTLINE ring for the annotation resolver's first
  * rung. Stricter than `findNaturalRegion`: walks ALL entries sharing the
- * matched name (duplicate names included — the US and Spanish "Sierra
- * Nevada" both exist upstream) and returns the single ring that CONTAINS the
- * geocoded anchor. Containment is simultaneously the disambiguator and the
- * wrong-place guard: when no ring contains the anchor this returns null and
- * the resolver's normal ladder continues unchanged.
+ * matched name (duplicate names included) and returns a ring only when exactly
+ * one indexed entry CONTAINS the geocoded anchor. Containment is simultaneously the
+ * disambiguator and the wrong-place guard: when no ring contains the anchor
+ * this returns null and the resolver's normal ladder continues unchanged.
  *
  * @param {string} query   The user's place ask (aliases/articles handled).
  * @param {number} lat     Geocoded anchor latitude.
@@ -298,24 +299,28 @@ export async function lookupNaturalRegionOutline(query, lat, lon) {
     ...suffixVariants(ALIASES[norm] || norm),
   ];
   const seen = new Set();
+  const containingEntries = new Map();
   for (const key of candidates) {
     if (!key || seen.has(key)) continue;
     seen.add(key);
     for (const entry of index.get(key) || []) {
-      for (const ring of entry.polygons) {
-        if (pointInRing(ring, lat, lon)) {
-          return {
-            name: entry.name,
-            kind: entry.kind,
-            featurecla: entry.featurecla,
-            ring,
-            areaKm2: entry.areaKm2,
-          };
-        }
-      }
+      if (containingEntries.has(entry)) continue;
+      const ring = entry.polygons.find((candidate) =>
+        pointInRing(candidate, lat, lon),
+      );
+      if (!ring) continue;
+      containingEntries.set(entry, ring);
     }
   }
-  return null;
+  if (containingEntries.size !== 1) return null;
+  const [[entry, ring]] = containingEntries;
+  return {
+    name: entry.name,
+    kind: entry.kind,
+    featurecla: entry.featurecla,
+    ring,
+    areaKm2: entry.areaKm2,
+  };
 }
 
 /** Resolve the smallest containing bundled physical region without a network geocoder. */

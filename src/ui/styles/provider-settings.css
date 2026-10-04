@@ -339,15 +339,14 @@
   line-height: 1.35;
 }
 
-/* The same exclusive surfaces that hide the launcher hide this surface —
-   nothing about key setup belongs in a recording, a cockpit, or a scene. */
+/* Keep the launcher out of exclusive surfaces. The dialog itself remains
+   available in Cockpit because voice can open Provider Settings there. */
 body.ui-clean-view #key-setup-chip,
 body.recording-mode #key-setup-chip,
 body.cockpit-mode #key-setup-chip,
 body.scene-playback-mode #key-setup-chip,
 body.ui-clean-view #key-setup,
 body.recording-mode #key-setup,
-body.cockpit-mode #key-setup,
 body.scene-playback-mode #key-setup {
   display: none;
 }

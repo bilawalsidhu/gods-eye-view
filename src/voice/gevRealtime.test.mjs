@@ -34,6 +34,26 @@ import {
   withToolCatalog,
 } from './gevRealtime.js';
 import { createVoiceCostTracker } from './voiceCost.js';
+import { responseInstructionForToolResult } from './realtimeProtocol.js';
+
+test('Cockpit Voice Settings refusal asks for an explicit exit without claiming success', () => {
+  const instruction = responseInstructionForToolResult({
+    ok: true,
+    action: 'set_panel_open',
+    panelId: 'voice-settings',
+    open: false,
+    requestedOpen: true,
+    requiresCockpitExit: true,
+    pending: true,
+    expiresInMs: 20_000,
+  });
+  assert.match(instruction, /Would you like me to exit Cockpit/);
+  assert.match(instruction, /do not exit Cockpit without an affirmative reply/i);
+  assert.match(instruction, /do not call set_panel_open again/);
+  assert.match(instruction, /If the user declines/);
+  assert.doesNotMatch(instruction, /20 seconds/);
+  assert.match(instruction, /do not claim that the panel opened/i);
+});
 
 test('push-to-talk recognizes Space by code or key', () => {
   assert.equal(PUSH_TO_TALK_HOLD_DELAY_MS, 500);
@@ -668,6 +688,198 @@ test('confirmed manual Radio playback closes active voice without stopping Radio
   assert.deepEqual(order, ['voice-stop', 'radio-fade-in']);
   assert.equal(controller.status, 'idle');
   assert.equal(controller.dc, null);
+});
+
+test('pausing a voice-started Radio handoff resumes that voice mode exactly once', async () => {
+  const order = [];
+  const starts = [];
+  let playbackControl = null;
+  const ui = {
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
+    status: { textContent: '' },
+    detail: { textContent: '', title: '' },
+    errorDetail: { textContent: '' },
+  };
+  const controller = new GevRealtimeController({
+    ui,
+    runner: async () => ({ ok: true }),
+    radioLayer: {
+      subscribePlaybackControls(listener) {
+        playbackControl = listener;
+        return () => {
+          playbackControl = null;
+        };
+      },
+      setVoiceDucked(ducked) {
+        order.push(ducked ? 'radio-muted' : 'radio-fade-in');
+      },
+      playForVoice: async () => true,
+      stopPlayback() {
+        order.push('radio-stop');
+      },
+    },
+  });
+  controller.debugLog = () => {};
+  controller.status = 'listening';
+  controller.pushToTalkMode = true;
+  controller.dc = {
+    readyState: 'open',
+    close() {
+      order.push('voice-stop');
+    },
+  };
+  controller.pendingRadioPlaybackResult = {
+    ok: true,
+    action: 'control_radio',
+    radioPlaybackRequested: true,
+  };
+
+  await controller.startPendingRadioHandoff();
+  controller.start = async (settings) => {
+    starts.push(settings);
+  };
+  playbackControl({ action: 'pause', origin: 'user' });
+  await new Promise((resolve) => setImmediate(resolve));
+  playbackControl({ action: 'stop', origin: 'user' });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(starts, [{ pushToTalk: true }]);
+  assert.equal(order.includes('voice-stop'), true);
+});
+
+test('an explicit voice stop cancels a Radio resume queued in the same turn', async () => {
+  const starts = [];
+  let playbackControl = null;
+  const controller = new GevRealtimeController({
+    ui: {
+      root: {
+        dataset: {},
+        classList: { remove() {} },
+        querySelectorAll: () => [],
+      },
+      status: { textContent: '' },
+      detail: { textContent: '', title: '' },
+      errorDetail: { textContent: '' },
+    },
+    runner: async () => ({ ok: true }),
+    radioLayer: {
+      subscribePlaybackControls(listener) {
+        playbackControl = listener;
+        return () => {};
+      },
+      setVoiceDucked() {},
+      playForVoice: async () => true,
+      stopPlayback() {},
+    },
+  });
+  controller.debugLog = () => {};
+  controller.status = 'listening';
+  controller.dc = { readyState: 'open', close() {} };
+  controller.pendingRadioPlaybackResult = {
+    ok: true,
+    action: 'control_radio',
+    radioPlaybackRequested: true,
+  };
+
+  await controller.startPendingRadioHandoff();
+  controller.start = async (settings) => starts.push(settings);
+  playbackControl({ action: 'pause', origin: 'user' });
+  controller.stop();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(starts, []);
+});
+
+test('disabling Radio resumes voice only when a voice-started handoff owns the lease', async () => {
+  const starts = [];
+  let visibilityRequest = null;
+  const ui = {
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
+    status: { textContent: '' },
+    detail: { textContent: '', title: '' },
+    errorDetail: { textContent: '' },
+  };
+  const controller = new GevRealtimeController({
+    ui,
+    runner: async () => ({ ok: true }),
+    radioLayer: {
+      subscribePlaybackControls: () => () => {},
+      setVoiceDucked() {},
+      playForVoice: async () => true,
+      stopPlayback() {},
+    },
+    dataManager: {
+      subscribeVisibilityRequests(listener) {
+        visibilityRequest = listener;
+        return () => {
+          visibilityRequest = null;
+        };
+      },
+      waitForLayerSettled: async () => {},
+      isEnabled: () => false,
+    },
+  });
+  controller.debugLog = () => {};
+  controller.status = 'listening';
+  controller.dc = { readyState: 'open', send() {}, close() {} };
+  controller.pendingRadioPlaybackResult = {
+    ok: true,
+    action: 'control_radio',
+    radioPlaybackRequested: true,
+  };
+
+  await controller.startPendingRadioHandoff();
+  controller.start = async (settings) => starts.push(settings);
+  visibilityRequest({ layerId: 'radio', enabled: false, origin: 'user' });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(starts, [{ pushToTalk: false }]);
+
+  visibilityRequest({ layerId: 'radio', enabled: false, origin: 'user' });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(starts.length, 1);
+});
+
+test('manual Radio takeover never arms automatic voice resume', async () => {
+  const starts = [];
+  let playbackControl = null;
+  const ui = {
+    root: {
+      dataset: {},
+      classList: { remove() {} },
+      querySelectorAll: () => [],
+    },
+    status: { textContent: '' },
+    detail: { textContent: '', title: '' },
+    errorDetail: { textContent: '' },
+  };
+  const controller = new GevRealtimeController({
+    ui,
+    runner: async () => ({ ok: true }),
+    radioLayer: {
+      subscribePlaybackControls(listener) {
+        playbackControl = listener;
+        return () => {};
+      },
+      setVoiceDucked() {},
+    },
+  });
+  controller.debugLog = () => {};
+  controller.status = 'listening';
+  controller.dc = { readyState: 'open', close() {} };
+  controller.start = async (settings) => starts.push(settings);
+
+  playbackControl({ action: 'play', origin: 'user' });
+  playbackControl({ action: 'pause', origin: 'user' });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(starts, []);
 });
 
 test('manual playback takeover survives stale voice preflight cleanup', async () => {

@@ -197,6 +197,8 @@ const schemas = [
             'scene-panel',
             'pp-toggles',
             'global-context-panel',
+            'provider-settings',
+            'voice-settings',
           ],
         },
         open: {
@@ -204,6 +206,35 @@ const schemas = [
         },
       },
       required: ['panelId', 'open'],
+    },
+  },
+  {
+    name: 'set_voice_provider',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        provider: {
+          type: 'string',
+          enum: ['openai', 'gemini'],
+        },
+      },
+      required: ['provider'],
+    },
+  },
+  {
+    name: 'set_voice_inactivity_timeout',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        minutes: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 60,
+        },
+      },
+      required: ['minutes'],
     },
   },
   {

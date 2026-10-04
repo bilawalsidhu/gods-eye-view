@@ -22,6 +22,7 @@ const PROVIDER_FIELDS = [
   'GOOGLE_MAPS_SERVER_API_KEY',
   'CESIUM_ION_TOKEN',
   'OPENAI_API_KEY',
+  'GEMINI_API_KEY',
   'AISSTREAM_API_KEY',
   'FIRMS_MAP_KEY',
   'TOMTOM_API_KEY',
@@ -42,6 +43,7 @@ test('the fresh template keeps provider credentials out of native Configure', ()
   assert.equal(configured.PINOKIO_SHARE_LOCAL, 'false');
   assert.equal(configured.PINOKIO_SHARE_VAR, '__gev_sharing_disabled__');
   assert.equal(configured.GEV_RATELIMIT_OPENAI_PER_MIN, '30');
+  assert.equal(configured.GEV_RATELIMIT_GEMINI_PER_MIN, '30');
   assert.equal(configured.GEV_RATELIMIT_GOOGLE_PER_MIN, '120');
   assert.match(source, /Do not enter credentials in Pinokio 8\.0\.40's native Configure panel/);
   assert.match(source, /trusted local text editor/);
@@ -222,6 +224,37 @@ test('server Google key follows app values, blanks and absence instead of inheri
       applyPinokioEnvironment({ environment, filepath });
       assert.equal(environment.GOOGLE_MAPS_SERVER_API_KEY, expected);
     }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
+test('Gemini app credentials and model override inherited values without borrowing Maps', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'gev-pinokio-gemini-'));
+  try {
+    const filepath = path.join(root, 'ENVIRONMENT');
+    for (const [source, expectedKey, expectedModel] of [
+      ['GEMINI_API_KEY=app-gemini\nGEMINI_LIVE_MODEL=gemini-model-fixture\n', 'app-gemini', 'gemini-model-fixture'],
+      ['GEMINI_API_KEY=\nGEMINI_LIVE_MODEL=\n', '', ''],
+      ['GOOGLE_MAPS_API_KEY=maps-only\n', '', ''],
+    ]) {
+      writeFileSync(filepath, source);
+      const environment = {
+        GEMINI_API_KEY: 'global-gemini',
+        GEMINI_LIVE_MODEL: 'global-model',
+        GEV_RATELIMIT_GEMINI_PER_MIN: '999',
+      };
+      applyPinokioEnvironment({ environment, filepath });
+      assert.equal(environment.GEMINI_API_KEY, expectedKey);
+      assert.equal(environment.GEMINI_LIVE_MODEL, expectedModel);
+      assert.equal(environment.GEV_RATELIMIT_GEMINI_PER_MIN, '30');
+      assert.equal(environment.OPENAI_API_KEY, '');
+    }
+    writeFileSync(filepath, 'GEV_RATELIMIT_GEMINI_PER_MIN=12\n');
+    const environment = {};
+    applyPinokioEnvironment({ environment, filepath });
+    assert.equal(environment.GEV_RATELIMIT_GEMINI_PER_MIN, '12');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
