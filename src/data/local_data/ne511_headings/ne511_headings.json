@@ -1,0 +1,2062 @@
+{
+  "schemaVersion": 1,
+  "provider": "openstreetmap-overpass",
+  "source": "https://www.openstreetmap.org/copyright",
+  "license": "ODbL 1.0",
+  "note": "Road-axis headings derived from OSM way geometry. See scripts/precompute-ne511-headings.mjs.",
+  "generatedAt": "2026-09-15T00:35:29.118Z",
+  "cameras": {
+    "ne511-121": {
+      "positionKey": "41.25935,-95.92467",
+      "status": "ok",
+      "axisDeg": 93.37,
+      "headingDeg": 93.37
+    },
+    "ne511-401": {
+      "positionKey": "41.26304,-95.94251",
+      "status": "ok",
+      "axisDeg": 92.09,
+      "headingDeg": 272.09
+    },
+    "ne511-145": {
+      "positionKey": "40.82363,-96.71162",
+      "status": "ok",
+      "axisDeg": 159.99,
+      "headingDeg": 339.99
+    },
+    "ne511-18": {
+      "positionKey": "41.11122,-100.76400",
+      "status": "ok",
+      "axisDeg": 179.54,
+      "headingDeg": 359.54
+    },
+    "ne511-15": {
+      "positionKey": "41.11499,-101.71509",
+      "status": "ok",
+      "axisDeg": 8.82,
+      "headingDeg": 8.82
+    },
+    "ne511-119": {
+      "positionKey": "41.25977,-95.95377",
+      "status": "ok",
+      "axisDeg": 0.08,
+      "headingDeg": 0.08
+    },
+    "ne511-135": {
+      "positionKey": "41.26419,-95.95216",
+      "status": "ok",
+      "axisDeg": 5.17,
+      "headingDeg": 5.17
+    },
+    "ne511-107": {
+      "positionKey": "40.83684,-96.71212",
+      "status": "ok",
+      "axisDeg": 180.46,
+      "headingDeg": 180.46
+    },
+    "ne511-110": {
+      "positionKey": "41.22958,-95.93318",
+      "status": "ok",
+      "axisDeg": 73.11,
+      "headingDeg": 73.11
+    },
+    "ne511-416": {
+      "positionKey": "41.23166,-95.91085",
+      "status": "ok",
+      "axisDeg": 85.12,
+      "headingDeg": 85.12
+    },
+    "ne511-149": {
+      "positionKey": "41.22606,-95.94697",
+      "status": "ok",
+      "axisDeg": 88.4,
+      "headingDeg": 88.4
+    },
+    "ne511-111": {
+      "positionKey": "41.22608,-95.95190",
+      "status": "ok",
+      "axisDeg": 103.98,
+      "headingDeg": 103.98
+    },
+    "ne511-112": {
+      "positionKey": "41.22726,-95.95573",
+      "status": "ok",
+      "axisDeg": 106.19,
+      "headingDeg": 286.19
+    },
+    "ne511-188": {
+      "positionKey": "40.78751,-96.73007",
+      "status": "ok",
+      "axisDeg": 310.61,
+      "headingDeg": 310.61
+    },
+    "ne511-19": {
+      "positionKey": "41.10516,-100.72589",
+      "status": "ok",
+      "axisDeg": 102.59,
+      "headingDeg": 282.59
+    },
+    "ne511-199": {
+      "positionKey": "40.80628,-96.75064",
+      "status": "ok",
+      "axisDeg": 332.86,
+      "headingDeg": 152.86
+    },
+    "ne511-10": {
+      "positionKey": "41.11281,-102.94872",
+      "status": "ok",
+      "axisDeg": 91.01,
+      "headingDeg": 271.01
+    },
+    "ne511-103": {
+      "positionKey": "40.84038,-96.73817",
+      "status": "ok",
+      "axisDeg": 37.12,
+      "headingDeg": 37.12
+    },
+    "ne511-104": {
+      "positionKey": "40.81753,-96.75626",
+      "status": "ok",
+      "axisDeg": 50.65,
+      "headingDeg": 230.65
+    },
+    "ne511-106": {
+      "positionKey": "40.85474,-96.71307",
+      "status": "ok",
+      "axisDeg": 167.16,
+      "headingDeg": 347.16
+    },
+    "ne511-237": {
+      "positionKey": "41.12587,-103.03072",
+      "status": "ok",
+      "axisDeg": 110.1,
+      "headingDeg": 110.1
+    },
+    "ne511-148": {
+      "positionKey": "41.22445,-95.97590",
+      "status": "ok",
+      "axisDeg": 75.5,
+      "headingDeg": 75.5
+    },
+    "ne511-126": {
+      "positionKey": "41.21238,-95.95049",
+      "status": "ok",
+      "axisDeg": 329.17,
+      "headingDeg": 329.17
+    },
+    "ne511-222": {
+      "positionKey": "40.77093,-96.72712",
+      "status": "ok",
+      "axisDeg": 359.43,
+      "headingDeg": 179.43
+    },
+    "ne511-224": {
+      "positionKey": "40.81564,-96.77046",
+      "status": "ok",
+      "axisDeg": 95.63,
+      "headingDeg": 95.63
+    },
+    "ne511-410": {
+      "positionKey": "41.22247,-95.99018",
+      "status": "ok",
+      "axisDeg": 89.82,
+      "headingDeg": 89.82
+    },
+    "ne511-138": {
+      "positionKey": "41.20098,-95.94695",
+      "status": "ok",
+      "axisDeg": 325.53,
+      "headingDeg": 145.53
+    },
+    "ne511-127": {
+      "positionKey": "41.19697,-95.94276",
+      "status": "ok",
+      "axisDeg": 321.21,
+      "headingDeg": 321.21
+    },
+    "ne511-144": {
+      "positionKey": "41.22360,-96.00448",
+      "status": "ok",
+      "axisDeg": 90.63,
+      "headingDeg": 90.63
+    },
+    "ne511-441": {
+      "positionKey": "40.74305,-96.71804",
+      "status": "ok",
+      "axisDeg": 335.71,
+      "headingDeg": 335.71
+    },
+    "ne511-60": {
+      "positionKey": "41.91425,-103.73977",
+      "status": "ok",
+      "axisDeg": 133.42,
+      "headingDeg": 133.42
+    },
+    "ne511-20": {
+      "positionKey": "41.09683,-100.67629",
+      "status": "ok",
+      "axisDeg": 101.65,
+      "headingDeg": 101.65
+    },
+    "ne511-105": {
+      "positionKey": "40.88648,-96.68159",
+      "status": "ok",
+      "axisDeg": 50.76,
+      "headingDeg": 50.76
+    },
+    "ne511-115": {
+      "positionKey": "41.22371,-96.02405",
+      "status": "ok",
+      "axisDeg": 90.34,
+      "headingDeg": 270.34
+    },
+    "ne511-134": {
+      "positionKey": "41.17648,-95.93959",
+      "status": "ok",
+      "axisDeg": 6.54,
+      "headingDeg": 186.54
+    },
+    "ne511-427": {
+      "positionKey": "41.15365,-103.08446",
+      "status": "ok",
+      "axisDeg": 126.36,
+      "headingDeg": 126.36
+    },
+    "ne511-436": {
+      "positionKey": "40.82087,-96.81795",
+      "status": "ok",
+      "axisDeg": 97.42,
+      "headingDeg": 97.42
+    },
+    "ne511-123": {
+      "positionKey": "41.22381,-96.04338",
+      "status": "ok",
+      "axisDeg": 90.32,
+      "headingDeg": 270.32
+    },
+    "ne511-284": {
+      "positionKey": "40.89672,-96.65975",
+      "status": "ok",
+      "axisDeg": 89.9,
+      "headingDeg": 269.9
+    },
+    "ne511-409": {
+      "positionKey": "41.34457,-95.96353",
+      "status": "ok",
+      "axisDeg": 82.18,
+      "headingDeg": 82.18
+    },
+    "ne511-272": {
+      "positionKey": "40.82137,-96.82248",
+      "status": "ok",
+      "axisDeg": 98.01,
+      "headingDeg": 98.01
+    },
+    "ne511-2": {
+      "positionKey": "40.89671,-96.64457",
+      "status": "ok",
+      "axisDeg": 89.34,
+      "headingDeg": 89.34
+    },
+    "ne511-143": {
+      "positionKey": "41.34697,-95.98197",
+      "status": "ok",
+      "axisDeg": 96.01,
+      "headingDeg": 96.01
+    },
+    "ne511-133": {
+      "positionKey": "41.15898,-95.93871",
+      "status": "ok",
+      "axisDeg": 359.42,
+      "headingDeg": 179.42
+    },
+    "ne511-131": {
+      "positionKey": "40.82561,-98.34039",
+      "status": "ok",
+      "axisDeg": 92.04,
+      "headingDeg": 92.04
+    },
+    "ne511-202": {
+      "positionKey": "41.22220,-96.06383",
+      "status": "ok",
+      "axisDeg": 89.98,
+      "headingDeg": 89.98
+    },
+    "ne511-122": {
+      "positionKey": "41.26504,-96.07593",
+      "status": "ok",
+      "axisDeg": 0.12,
+      "headingDeg": 0.12
+    },
+    "ne511-117": {
+      "positionKey": "41.26328,-96.07673",
+      "status": "ok",
+      "axisDeg": 91.57,
+      "headingDeg": 91.57
+    },
+    "ne511-147": {
+      "positionKey": "41.25436,-96.07789",
+      "status": "ok",
+      "axisDeg": 43.12,
+      "headingDeg": 223.12
+    },
+    "ne511-402": {
+      "positionKey": "41.34132,-96.02360",
+      "status": "ok",
+      "axisDeg": 66.85,
+      "headingDeg": 66.85
+    },
+    "ne511-252": {
+      "positionKey": "41.11783,-101.57637",
+      "status": "ok",
+      "axisDeg": 90.73,
+      "headingDeg": 90.73
+    },
+    "ne511-96": {
+      "positionKey": "40.82010,-98.37820",
+      "status": "ok",
+      "axisDeg": 77.97,
+      "headingDeg": 77.97
+    },
+    "ne511-108": {
+      "positionKey": "41.28568,-96.07557",
+      "status": "ok",
+      "axisDeg": 8.71,
+      "headingDeg": 8.71
+    },
+    "ne511-196": {
+      "positionKey": "40.82103,-98.29909",
+      "status": "ok",
+      "axisDeg": 90.1,
+      "headingDeg": 270.1
+    },
+    "ne511-273": {
+      "positionKey": "40.89686,-96.60540",
+      "status": "ok",
+      "axisDeg": 90.03,
+      "headingDeg": 270.03
+    },
+    "ne511-109": {
+      "positionKey": "41.30622,-96.07064",
+      "status": "ok",
+      "axisDeg": 1.71,
+      "headingDeg": 1.71
+    },
+    "ne511-171": {
+      "positionKey": "41.24140,-96.08572",
+      "status": "ok",
+      "axisDeg": 5.05,
+      "headingDeg": 185.05
+    },
+    "ne511-153": {
+      "positionKey": "41.22381,-96.08128",
+      "status": "ok",
+      "axisDeg": 101.73,
+      "headingDeg": 101.73
+    },
+    "ne511-404": {
+      "positionKey": "41.33283,-96.05008",
+      "status": "ok",
+      "axisDeg": 67.78,
+      "headingDeg": 67.78
+    },
+    "ne511-434": {
+      "positionKey": "41.13929,-95.96748",
+      "status": "ok",
+      "axisDeg": 105.97,
+      "headingDeg": 285.97
+    },
+    "ne511-211": {
+      "positionKey": "41.08374,-100.61543",
+      "status": "ok",
+      "axisDeg": 112.33,
+      "headingDeg": 292.33
+    },
+    "ne511-395": {
+      "positionKey": "41.22360,-96.08809",
+      "status": "ok",
+      "axisDeg": 57.31,
+      "headingDeg": 57.31
+    },
+    "ne511-230": {
+      "positionKey": "40.82014,-98.41686",
+      "status": "ok",
+      "axisDeg": 67.14,
+      "headingDeg": 67.14
+    },
+    "ne511-140": {
+      "positionKey": "41.32185,-96.06911",
+      "status": "ok",
+      "axisDeg": 27.21,
+      "headingDeg": 27.21
+    },
+    "ne511-408": {
+      "positionKey": "41.32262,-96.06855",
+      "status": "ok",
+      "axisDeg": 31.05,
+      "headingDeg": 31.05
+    },
+    "ne511-261": {
+      "positionKey": "40.82099,-98.26419",
+      "status": "ok",
+      "axisDeg": 89.85,
+      "headingDeg": 89.85
+    },
+    "ne511-114": {
+      "positionKey": "41.22284,-96.08938",
+      "status": "ok",
+      "axisDeg": 42.69,
+      "headingDeg": 222.69
+    },
+    "ne511-118": {
+      "positionKey": "41.26301,-96.09710",
+      "status": "ok",
+      "axisDeg": 89.32,
+      "headingDeg": 269.32
+    },
+    "ne511-236": {
+      "positionKey": "41.18045,-103.13342",
+      "status": "ok",
+      "axisDeg": 119.87,
+      "headingDeg": 299.87
+    },
+    "ne511-440": {
+      "positionKey": "41.14005,-95.98593",
+      "status": "ok",
+      "axisDeg": 88.62,
+      "headingDeg": 268.62
+    },
+    "ne511-83": {
+      "positionKey": "41.25000,-101.68304",
+      "status": "ok",
+      "axisDeg": 327.79,
+      "headingDeg": 327.79
+    },
+    "ne511-141": {
+      "positionKey": "41.21222,-96.09128",
+      "status": "ok",
+      "axisDeg": 20.63,
+      "headingDeg": 200.63
+    },
+    "ne511-438": {
+      "positionKey": "40.82010,-96.87207",
+      "status": "ok",
+      "axisDeg": 88.76,
+      "headingDeg": 268.76
+    },
+    "ne511-187": {
+      "positionKey": "40.89579,-96.56828",
+      "status": "ok",
+      "axisDeg": 116.01,
+      "headingDeg": 116.01
+    },
+    "ne511-99": {
+      "positionKey": "41.26305,-96.11240",
+      "status": "ok",
+      "axisDeg": 89.77,
+      "headingDeg": 89.77
+    },
+    "ne511-243": {
+      "positionKey": "41.07924,-101.88815",
+      "status": "ok",
+      "axisDeg": 80.26,
+      "headingDeg": 260.26
+    },
+    "ne511-432": {
+      "positionKey": "41.13736,-96.02387",
+      "status": "ok",
+      "axisDeg": 109.05,
+      "headingDeg": 289.05
+    },
+    "ne511-203": {
+      "positionKey": "41.11745,-95.93452",
+      "status": "ok",
+      "axisDeg": 351.85,
+      "headingDeg": 351.85
+    },
+    "ne511-201": {
+      "positionKey": "41.13992,-96.04347",
+      "status": "ok",
+      "axisDeg": 89.5,
+      "headingDeg": 269.5
+    },
+    "ne511-435": {
+      "positionKey": "40.82027,-96.89205",
+      "status": "ok",
+      "axisDeg": 90.78,
+      "headingDeg": 90.78
+    },
+    "ne511-97": {
+      "positionKey": "41.18529,-96.10865",
+      "status": "ok",
+      "axisDeg": 47.26,
+      "headingDeg": 47.26
+    },
+    "ne511-150": {
+      "positionKey": "41.26305,-96.13861",
+      "status": "ok",
+      "axisDeg": 89.51,
+      "headingDeg": 89.51
+    },
+    "ne511-411": {
+      "positionKey": "41.10100,-95.92929",
+      "status": "ok",
+      "axisDeg": 339.28,
+      "headingDeg": 339.28
+    },
+    "ne511-439": {
+      "positionKey": "40.82045,-96.91011",
+      "status": "ok",
+      "axisDeg": 90.9,
+      "headingDeg": 270.9
+    },
+    "ne511-170": {
+      "positionKey": "40.65385,-96.70538",
+      "status": "ok",
+      "axisDeg": 0.7,
+      "headingDeg": 0.7
+    },
+    "ne511-238": {
+      "positionKey": "41.11292,-102.76357",
+      "status": "ok",
+      "axisDeg": 89.88,
+      "headingDeg": 89.88
+    },
+    "ne511-151": {
+      "positionKey": "41.26297,-96.15801",
+      "status": "ok",
+      "axisDeg": 0.33,
+      "headingDeg": 180.33
+    },
+    "ne511-403": {
+      "positionKey": "41.14723,-96.10460",
+      "status": "ok",
+      "axisDeg": 89.17,
+      "headingDeg": 89.17
+    },
+    "ne511-274": {
+      "positionKey": "40.90524,-96.51471",
+      "status": "ok",
+      "axisDeg": 77.02,
+      "headingDeg": 77.02
+    },
+    "ne511-248": {
+      "positionKey": "40.79851,-98.49344",
+      "status": "ok",
+      "axisDeg": 70.59,
+      "headingDeg": 250.59
+    },
+    "ne511-271": {
+      "positionKey": "40.81390,-96.92946",
+      "status": "ok",
+      "axisDeg": 3.48,
+      "headingDeg": 183.48
+    },
+    "ne511-437": {
+      "positionKey": "40.82128,-96.93113",
+      "status": "ok",
+      "axisDeg": 94.72,
+      "headingDeg": 274.72
+    },
+    "ne511-393": {
+      "positionKey": "41.08214,-95.92801",
+      "status": "ok",
+      "axisDeg": 0.02,
+      "headingDeg": 180.02
+    },
+    "ne511-429": {
+      "positionKey": "41.14731,-96.11911",
+      "status": "ok",
+      "axisDeg": 90.3,
+      "headingDeg": 270.3
+    },
+    "ne511-431": {
+      "positionKey": "41.14731,-96.11911",
+      "status": "ok",
+      "axisDeg": 90.3,
+      "headingDeg": 90.3
+    },
+    "ne511-262": {
+      "positionKey": "40.82207,-98.15024",
+      "status": "ok",
+      "axisDeg": 89.82,
+      "headingDeg": 89.82
+    },
+    "ne511-251": {
+      "positionKey": "41.13707,-101.00230",
+      "status": "ok",
+      "axisDeg": 93.34,
+      "headingDeg": 93.34
+    },
+    "ne511-168": {
+      "positionKey": "40.71162,-96.50669",
+      "status": "ok",
+      "axisDeg": 89.6,
+      "headingDeg": 89.6
+    },
+    "ne511-124": {
+      "positionKey": "41.16190,-96.13868",
+      "status": "ok",
+      "axisDeg": 49.77,
+      "headingDeg": 49.77
+    },
+    "ne511-152": {
+      "positionKey": "41.26292,-96.17929",
+      "status": "ok",
+      "axisDeg": 90.01,
+      "headingDeg": 270.01
+    },
+    "ne511-394": {
+      "positionKey": "41.07351,-95.88747",
+      "status": "ok",
+      "axisDeg": 147.67,
+      "headingDeg": 327.67
+    },
+    "ne511-380": {
+      "positionKey": "41.16250,-101.00936",
+      "status": "ok",
+      "axisDeg": 90.36,
+      "headingDeg": 270.36
+    },
+    "ne511-382": {
+      "positionKey": "41.07848,-100.52300",
+      "status": "ok",
+      "axisDeg": 111.54,
+      "headingDeg": 111.54
+    },
+    "ne511-204": {
+      "positionKey": "41.14730,-96.13938",
+      "status": "ok",
+      "axisDeg": 88.06,
+      "headingDeg": 88.06
+    },
+    "ne511-275": {
+      "positionKey": "40.91222,-96.48361",
+      "status": "ok",
+      "axisDeg": 58.82,
+      "headingDeg": 58.82
+    },
+    "ne511-227": {
+      "positionKey": "41.05140,-100.52529",
+      "status": "ok",
+      "axisDeg": 99.51,
+      "headingDeg": 99.51
+    },
+    "ne511-433": {
+      "positionKey": "41.14702,-96.15649",
+      "status": "ok",
+      "axisDeg": 89.32,
+      "headingDeg": 269.32
+    },
+    "ne511-98": {
+      "positionKey": "41.14700,-96.15846",
+      "status": "ok",
+      "axisDeg": 33.67,
+      "headingDeg": 213.67
+    },
+    "ne511-430": {
+      "positionKey": "41.14700,-96.16058",
+      "status": "ok",
+      "axisDeg": 88.95,
+      "headingDeg": 268.95
+    },
+    "ne511-48": {
+      "positionKey": "41.01114,-96.64088",
+      "status": "ok",
+      "axisDeg": 2.07,
+      "headingDeg": 182.07
+    },
+    "ne511-428": {
+      "positionKey": "41.14699,-96.16212",
+      "status": "ok",
+      "axisDeg": 89.18,
+      "headingDeg": 89.18
+    },
+    "ne511-379": {
+      "positionKey": "40.91564,-100.75364",
+      "status": "ok",
+      "axisDeg": 180.2,
+      "headingDeg": 180.2
+    },
+    "ne511-407": {
+      "positionKey": "41.26288,-96.21560",
+      "status": "ok",
+      "axisDeg": 89.63,
+      "headingDeg": 269.63
+    },
+    "ne511-405": {
+      "positionKey": "41.14685,-96.18680",
+      "status": "ok",
+      "axisDeg": 88.9,
+      "headingDeg": 88.9
+    },
+    "ne511-1": {
+      "positionKey": "40.92796,-96.44925",
+      "status": "ok",
+      "axisDeg": 57.37,
+      "headingDeg": 57.37
+    },
+    "ne511-166": {
+      "positionKey": "41.26220,-96.23426",
+      "status": "ok",
+      "axisDeg": 21.22,
+      "headingDeg": 201.22
+    },
+    "ne511-406": {
+      "positionKey": "41.26210,-96.23430",
+      "status": "ok",
+      "axisDeg": 11.06,
+      "headingDeg": 191.06
+    },
+    "ne511-207": {
+      "positionKey": "40.82184,-98.06450",
+      "status": "ok",
+      "axisDeg": 89.99,
+      "headingDeg": 269.99
+    },
+    "ne511-420": {
+      "positionKey": "41.03473,-100.47200",
+      "status": "ok",
+      "axisDeg": 112.78,
+      "headingDeg": 292.78
+    },
+    "ne511-212": {
+      "positionKey": "40.71141,-96.40770",
+      "status": "ok",
+      "axisDeg": 103.37,
+      "headingDeg": 103.37
+    },
+    "ne511-247": {
+      "positionKey": "40.76294,-98.58719",
+      "status": "ok",
+      "axisDeg": 69.33,
+      "headingDeg": 69.33
+    },
+    "ne511-342": {
+      "positionKey": "41.11999,-96.21101",
+      "status": "ok",
+      "axisDeg": 63.91,
+      "headingDeg": 63.91
+    },
+    "ne511-167": {
+      "positionKey": "41.05802,-96.64022",
+      "status": "ok",
+      "axisDeg": 0.96,
+      "headingDeg": 180.96
+    },
+    "ne511-34": {
+      "positionKey": "41.39550,-102.97291",
+      "status": "ok",
+      "axisDeg": 0.37,
+      "headingDeg": 180.37
+    },
+    "ne511-276": {
+      "positionKey": "40.95046,-96.41795",
+      "status": "ok",
+      "axisDeg": 41.12,
+      "headingDeg": 41.12
+    },
+    "ne511-442": {
+      "positionKey": "41.00193,-95.90926",
+      "status": "ok",
+      "axisDeg": 4.9,
+      "headingDeg": 4.9
+    },
+    "ne511-178": {
+      "positionKey": "41.81651,-103.32825",
+      "status": "ok",
+      "axisDeg": 269.89,
+      "headingDeg": 269.89
+    },
+    "ne511-101": {
+      "positionKey": "40.82122,-97.04442",
+      "status": "ok",
+      "axisDeg": 93.42,
+      "headingDeg": 93.42
+    },
+    "ne511-208": {
+      "positionKey": "40.82183,-98.02436",
+      "status": "ok",
+      "axisDeg": 89.69,
+      "headingDeg": 269.69
+    },
+    "ne511-9": {
+      "positionKey": "41.20575,-103.31791",
+      "status": "ok",
+      "axisDeg": 96.17,
+      "headingDeg": 276.17
+    },
+    "ne511-11": {
+      "positionKey": "41.11354,-102.62914",
+      "status": "ok",
+      "axisDeg": 89.18,
+      "headingDeg": 89.18
+    },
+    "ne511-28": {
+      "positionKey": "41.29215,-96.29503",
+      "status": "ok",
+      "axisDeg": 141.91,
+      "headingDeg": 141.91
+    },
+    "ne511-16": {
+      "positionKey": "41.11086,-101.35678",
+      "status": "ok",
+      "axisDeg": 81.55,
+      "headingDeg": 261.55
+    },
+    "ne511-242": {
+      "positionKey": "41.04853,-102.07130",
+      "status": "ok",
+      "axisDeg": 68.14,
+      "headingDeg": 248.14
+    },
+    "ne511-209": {
+      "positionKey": "40.82194,-97.99615",
+      "status": "ok",
+      "axisDeg": 89.8,
+      "headingDeg": 89.8
+    },
+    "ne511-17": {
+      "positionKey": "41.13830,-101.14158",
+      "status": "ok",
+      "axisDeg": 91.16,
+      "headingDeg": 271.16
+    },
+    "ne511-283": {
+      "positionKey": "40.97149,-96.38826",
+      "status": "ok",
+      "axisDeg": 50.01,
+      "headingDeg": 230.01
+    },
+    "ne511-154": {
+      "positionKey": "41.09599,-96.25024",
+      "status": "ok",
+      "axisDeg": 56.99,
+      "headingDeg": 56.99
+    },
+    "ne511-158": {
+      "positionKey": "40.84120,-101.66503",
+      "status": "ok",
+      "axisDeg": 87.17,
+      "headingDeg": 267.17
+    },
+    "ne511-4": {
+      "positionKey": "41.09411,-96.25404",
+      "status": "ok",
+      "axisDeg": 56.49,
+      "headingDeg": 236.49
+    },
+    "ne511-89": {
+      "positionKey": "41.56823,-103.67665",
+      "status": "ok",
+      "axisDeg": 0.69,
+      "headingDeg": 0.69
+    },
+    "ne511-399": {
+      "positionKey": "41.23728,-102.09041",
+      "status": "ok",
+      "axisDeg": 295.81,
+      "headingDeg": 295.81
+    },
+    "ne511-218": {
+      "positionKey": "41.42990,-101.71605",
+      "status": "ok",
+      "axisDeg": 52.35,
+      "headingDeg": 232.35
+    },
+    "ne511-129": {
+      "positionKey": "40.82202,-97.10182",
+      "status": "ok",
+      "axisDeg": 90.51,
+      "headingDeg": 270.51
+    },
+    "ne511-137": {
+      "positionKey": "41.51948,-96.14569",
+      "status": "ok",
+      "axisDeg": 208.22,
+      "headingDeg": 28.22
+    },
+    "ne511-136": {
+      "positionKey": "41.08178,-96.27641",
+      "status": "ok",
+      "axisDeg": 40.21,
+      "headingDeg": 40.21
+    },
+    "ne511-383": {
+      "positionKey": "41.02647,-100.37350",
+      "status": "ok",
+      "axisDeg": 135.12,
+      "headingDeg": 315.12
+    },
+    "ne511-59": {
+      "positionKey": "42.00111,-104.04849",
+      "status": "ok",
+      "axisDeg": 300.13,
+      "headingDeg": 120.13
+    },
+    "ne511-277": {
+      "positionKey": "40.99153,-96.35629",
+      "status": "ok",
+      "axisDeg": 66.28,
+      "headingDeg": 246.28
+    },
+    "ne511-228": {
+      "positionKey": "41.00184,-100.37541",
+      "status": "ok",
+      "axisDeg": 116.65,
+      "headingDeg": 296.65
+    },
+    "ne511-246": {
+      "positionKey": "40.82187,-97.94027",
+      "status": "ok",
+      "axisDeg": 93.28,
+      "headingDeg": 273.28
+    },
+    "ne511-267": {
+      "positionKey": "41.63977,-103.98537",
+      "status": "ok",
+      "axisDeg": 89.08,
+      "headingDeg": 89.08
+    },
+    "ne511-341": {
+      "positionKey": "41.06150,-96.29358",
+      "status": "ok",
+      "axisDeg": 29.03,
+      "headingDeg": 29.03
+    },
+    "ne511-14": {
+      "positionKey": "41.02674,-102.15091",
+      "status": "ok",
+      "axisDeg": 68.36,
+      "headingDeg": 68.36
+    },
+    "ne511-88": {
+      "positionKey": "41.52500,-103.65815",
+      "status": "ok",
+      "axisDeg": 0.44,
+      "headingDeg": 0.44
+    },
+    "ne511-278": {
+      "positionKey": "41.00370,-96.31917",
+      "status": "ok",
+      "axisDeg": 65.82,
+      "headingDeg": 65.82
+    },
+    "ne511-47": {
+      "positionKey": "40.46516,-96.73382",
+      "status": "ok",
+      "axisDeg": 76.22,
+      "headingDeg": 76.22
+    },
+    "ne511-340": {
+      "positionKey": "41.03340,-96.29144",
+      "status": "ok",
+      "axisDeg": 13.85,
+      "headingDeg": 193.85
+    },
+    "ne511-21": {
+      "positionKey": "40.99332,-100.33572",
+      "status": "ok",
+      "axisDeg": 101.18,
+      "headingDeg": 101.18
+    },
+    "ne511-425": {
+      "positionKey": "41.13028,-101.23021",
+      "status": "ok",
+      "axisDeg": 55.68,
+      "headingDeg": 235.68
+    },
+    "ne511-62": {
+      "positionKey": "41.31101,-102.12551",
+      "status": "ok",
+      "axisDeg": 354.87,
+      "headingDeg": 354.87
+    },
+    "ne511-279": {
+      "positionKey": "41.01104,-96.30821",
+      "status": "ok",
+      "axisDeg": 30.35,
+      "headingDeg": 30.35
+    },
+    "ne511-3": {
+      "positionKey": "41.02337,-96.29983",
+      "status": "ok",
+      "axisDeg": 34.39,
+      "headingDeg": 214.39
+    },
+    "ne511-13": {
+      "positionKey": "41.03059,-102.18045",
+      "status": "ok",
+      "axisDeg": 101.87,
+      "headingDeg": 281.87
+    },
+    "ne511-263": {
+      "positionKey": "40.82097,-97.88318",
+      "status": "ok",
+      "axisDeg": 89.13,
+      "headingDeg": 269.13
+    },
+    "ne511-179": {
+      "positionKey": "40.72260,-98.74175",
+      "status": "ok",
+      "axisDeg": 90.66,
+      "headingDeg": 270.66
+    },
+    "ne511-381": {
+      "positionKey": "41.00231,-102.18987",
+      "status": "ok",
+      "axisDeg": 39.93,
+      "headingDeg": 219.93
+    },
+    "ne511-239": {
+      "positionKey": "41.08077,-102.47480",
+      "status": "ok",
+      "axisDeg": 116.68,
+      "headingDeg": 116.68
+    },
+    "ne511-58": {
+      "positionKey": "40.74011,-100.71957",
+      "status": "ok",
+      "axisDeg": 151.86,
+      "headingDeg": 151.86
+    },
+    "ne511-81": {
+      "positionKey": "40.91423,-96.17817",
+      "status": "ok",
+      "axisDeg": 179.9,
+      "headingDeg": 179.9
+    },
+    "ne511-282": {
+      "positionKey": "40.82232,-97.21621",
+      "status": "ok",
+      "axisDeg": 90.15,
+      "headingDeg": 90.15
+    },
+    "ne511-422": {
+      "positionKey": "41.81404,-103.14878",
+      "status": "ok",
+      "axisDeg": 26.77,
+      "headingDeg": 206.77
+    },
+    "ne511-245": {
+      "positionKey": "41.22082,-103.48980",
+      "status": "ok",
+      "axisDeg": 90.37,
+      "headingDeg": 270.37
+    },
+    "ne511-68": {
+      "positionKey": "42.25242,-103.78244",
+      "status": "ok",
+      "axisDeg": 11.53,
+      "headingDeg": 11.53
+    },
+    "ne511-301": {
+      "positionKey": "41.20602,-96.63600",
+      "status": "ok",
+      "axisDeg": 348.26,
+      "headingDeg": 348.26
+    },
+    "ne511-398": {
+      "positionKey": "41.52367,-100.85124",
+      "status": "ok",
+      "axisDeg": 270.83,
+      "headingDeg": 90.83
+    },
+    "ne511-264": {
+      "positionKey": "40.82101,-97.80706",
+      "status": "ok",
+      "axisDeg": 90,
+      "headingDeg": 270
+    },
+    "ne511-229": {
+      "positionKey": "40.67191,-96.17939",
+      "status": "ok",
+      "axisDeg": 100.44,
+      "headingDeg": 280.44
+    },
+    "ne511-162": {
+      "positionKey": "40.77328,-102.01989",
+      "status": "ok",
+      "axisDeg": 69.98,
+      "headingDeg": 69.98
+    },
+    "ne511-421": {
+      "positionKey": "40.95397,-100.25313",
+      "status": "ok",
+      "axisDeg": 116.49,
+      "headingDeg": 296.49
+    },
+    "ne511-302": {
+      "positionKey": "41.23462,-96.60058",
+      "status": "ok",
+      "axisDeg": 274.54,
+      "headingDeg": 274.54
+    },
+    "ne511-241": {
+      "positionKey": "40.70181,-98.84599",
+      "status": "ok",
+      "axisDeg": 67.45,
+      "headingDeg": 67.45
+    },
+    "ne511-270": {
+      "positionKey": "40.81315,-95.91207",
+      "status": "ok",
+      "axisDeg": 107.37,
+      "headingDeg": 287.37
+    },
+    "ne511-12": {
+      "positionKey": "41.04567,-102.29813",
+      "status": "ok",
+      "axisDeg": 94.18,
+      "headingDeg": 94.18
+    },
+    "ne511-281": {
+      "positionKey": "40.82191,-97.29197",
+      "status": "ok",
+      "axisDeg": 88.88,
+      "headingDeg": 88.88
+    },
+    "ne511-388": {
+      "positionKey": "41.06251,-100.17854",
+      "status": "ok",
+      "axisDeg": 327.31,
+      "headingDeg": 327.31
+    },
+    "ne511-70": {
+      "positionKey": "41.26301,-100.19681",
+      "status": "ok",
+      "axisDeg": 0.86,
+      "headingDeg": 0.86
+    },
+    "ne511-61": {
+      "positionKey": "41.56417,-102.75412",
+      "status": "ok",
+      "axisDeg": 292.56,
+      "headingDeg": 112.56
+    },
+    "ne511-93": {
+      "positionKey": "41.55313,-100.96312",
+      "status": "ok",
+      "axisDeg": 270.63,
+      "headingDeg": 90.63
+    },
+    "ne511-280": {
+      "positionKey": "40.82140,-97.34880",
+      "status": "ok",
+      "axisDeg": 89.95,
+      "headingDeg": 269.95
+    },
+    "ne511-77": {
+      "positionKey": "40.48081,-97.17915",
+      "status": "ok",
+      "axisDeg": 0.41,
+      "headingDeg": 180.41
+    },
+    "ne511-235": {
+      "positionKey": "41.22031,-103.62565",
+      "status": "ok",
+      "axisDeg": 82.27,
+      "headingDeg": 262.27
+    },
+    "ne511-244": {
+      "positionKey": "40.91430,-100.16692",
+      "status": "ok",
+      "axisDeg": 116.59,
+      "headingDeg": 116.59
+    },
+    "ne511-67": {
+      "positionKey": "40.71931,-101.15219",
+      "status": "ok",
+      "axisDeg": 180.25,
+      "headingDeg": 0.25
+    },
+    "ne511-265": {
+      "positionKey": "40.82125,-97.69291",
+      "status": "ok",
+      "axisDeg": 90.15,
+      "headingDeg": 270.15
+    },
+    "ne511-268": {
+      "positionKey": "41.20724,-97.12987",
+      "status": "ok",
+      "axisDeg": 183.67,
+      "headingDeg": 183.67
+    },
+    "ne511-219": {
+      "positionKey": "41.57014,-101.38169",
+      "status": "ok",
+      "axisDeg": 269.76,
+      "headingDeg": 89.76
+    },
+    "ne511-193": {
+      "positionKey": "40.68652,-98.95163",
+      "status": "ok",
+      "axisDeg": 67.82,
+      "headingDeg": 67.82
+    },
+    "ne511-234": {
+      "positionKey": "41.21625,-103.66361",
+      "status": "ok",
+      "axisDeg": 82.13,
+      "headingDeg": 82.13
+    },
+    "ne511-287": {
+      "positionKey": "41.96964,-102.97786",
+      "status": "ok",
+      "axisDeg": 38.06,
+      "headingDeg": 218.06
+    },
+    "ne511-339": {
+      "positionKey": "42.32329,-103.30679",
+      "status": "ok",
+      "axisDeg": 0.09,
+      "headingDeg": 180.09
+    },
+    "ne511-192": {
+      "positionKey": "41.41861,-102.37273",
+      "status": "ok",
+      "axisDeg": 284.32,
+      "headingDeg": 104.32
+    },
+    "ne511-232": {
+      "positionKey": "40.68038,-98.98595",
+      "status": "ok",
+      "axisDeg": 77.13,
+      "headingDeg": 257.13
+    },
+    "ne511-76": {
+      "positionKey": "40.42314,-98.05149",
+      "status": "ok",
+      "axisDeg": 0.31,
+      "headingDeg": 180.31
+    },
+    "ne511-198": {
+      "positionKey": "40.82112,-97.62501",
+      "status": "ok",
+      "axisDeg": 90.14,
+      "headingDeg": 90.14
+    },
+    "ne511-418": {
+      "positionKey": "41.00179,-103.68776",
+      "status": "ok",
+      "axisDeg": 359.77,
+      "headingDeg": 359.77
+    },
+    "ne511-8": {
+      "positionKey": "41.20490,-103.72143",
+      "status": "ok",
+      "axisDeg": 70.25,
+      "headingDeg": 250.25
+    },
+    "ne511-44": {
+      "positionKey": "41.78552,-96.22099",
+      "status": "ok",
+      "axisDeg": 354.95,
+      "headingDeg": 174.95
+    },
+    "ne511-6": {
+      "positionKey": "40.82110,-97.59767",
+      "status": "ok",
+      "axisDeg": 88.63,
+      "headingDeg": 88.63
+    },
+    "ne511-266": {
+      "positionKey": "40.82181,-97.46390",
+      "status": "ok",
+      "axisDeg": 89.97,
+      "headingDeg": 89.97
+    },
+    "ne511-384": {
+      "positionKey": "40.76878,-100.16264",
+      "status": "ok",
+      "axisDeg": 187.53,
+      "headingDeg": 187.53
+    },
+    "ne511-249": {
+      "positionKey": "40.66975,-99.02882",
+      "status": "ok",
+      "axisDeg": 89.65,
+      "headingDeg": 269.65
+    },
+    "ne511-177": {
+      "positionKey": "40.66974,-99.03189",
+      "status": "ok",
+      "axisDeg": 89.65,
+      "headingDeg": 89.65
+    },
+    "ne511-169": {
+      "positionKey": "40.66886,-95.89601",
+      "status": "ok",
+      "axisDeg": 334.46,
+      "headingDeg": 334.46
+    },
+    "ne511-206": {
+      "positionKey": "40.66969,-95.83145",
+      "status": "ok",
+      "axisDeg": 35.06,
+      "headingDeg": 215.06
+    },
+    "ne511-197": {
+      "positionKey": "40.82195,-97.56449",
+      "status": "ok",
+      "axisDeg": 90.29,
+      "headingDeg": 270.29
+    },
+    "ne511-286": {
+      "positionKey": "40.65405,-95.85182",
+      "status": "ok",
+      "axisDeg": 74.59,
+      "headingDeg": 74.59
+    },
+    "ne511-285": {
+      "positionKey": "40.65310,-95.85947",
+      "status": "ok",
+      "axisDeg": 86.34,
+      "headingDeg": 266.34
+    },
+    "ne511-426": {
+      "positionKey": "41.19178,-103.78703",
+      "status": "ok",
+      "axisDeg": 88.98,
+      "headingDeg": 88.98
+    },
+    "ne511-130": {
+      "positionKey": "40.66917,-99.08565",
+      "status": "ok",
+      "axisDeg": 89.94,
+      "headingDeg": 89.94
+    },
+    "ne511-217": {
+      "positionKey": "41.48025,-100.07892",
+      "status": "ok",
+      "axisDeg": 89.29,
+      "headingDeg": 89.29
+    },
+    "ne511-82": {
+      "positionKey": "41.55229,-98.17210",
+      "status": "ok",
+      "axisDeg": 67.77,
+      "headingDeg": 247.77
+    },
+    "ne511-186": {
+      "positionKey": "40.67023,-99.11971",
+      "status": "ok",
+      "axisDeg": 89.77,
+      "headingDeg": 89.77
+    },
+    "ne511-389": {
+      "positionKey": "41.27745,-99.92654",
+      "status": "ok",
+      "axisDeg": 272.7,
+      "headingDeg": 272.7
+    },
+    "ne511-156": {
+      "positionKey": "40.84344,-99.98575",
+      "status": "ok",
+      "axisDeg": 122.69,
+      "headingDeg": 302.69
+    },
+    "ne511-213": {
+      "positionKey": "40.19151,-96.97910",
+      "status": "ok",
+      "axisDeg": 249.38,
+      "headingDeg": 69.38
+    },
+    "ne511-174": {
+      "positionKey": "41.46684,-96.92169",
+      "status": "ok",
+      "axisDeg": 85.6,
+      "headingDeg": 265.6
+    },
+    "ne511-128": {
+      "positionKey": "41.77772,-100.52861",
+      "status": "ok",
+      "axisDeg": 321.05,
+      "headingDeg": 321.05
+    },
+    "ne511-50": {
+      "positionKey": "42.32169,-102.97473",
+      "status": "ok",
+      "axisDeg": 0.18,
+      "headingDeg": 0.18
+    },
+    "ne511-233": {
+      "positionKey": "41.19181,-103.89428",
+      "status": "ok",
+      "axisDeg": 89.51,
+      "headingDeg": 89.51
+    },
+    "ne511-73": {
+      "positionKey": "40.29188,-98.70868",
+      "status": "ok",
+      "axisDeg": 89.98,
+      "headingDeg": 89.98
+    },
+    "ne511-84": {
+      "positionKey": "41.82032,-101.75989",
+      "status": "ok",
+      "axisDeg": 352.58,
+      "headingDeg": 172.58
+    },
+    "ne511-290": {
+      "positionKey": "41.82371,-96.46667",
+      "status": "ok",
+      "axisDeg": 34.61,
+      "headingDeg": 214.61
+    },
+    "ne511-220": {
+      "positionKey": "40.74589,-99.99525",
+      "status": "ok",
+      "axisDeg": 358.93,
+      "headingDeg": 178.93
+    },
+    "ne511-43": {
+      "positionKey": "40.50884,-95.85759",
+      "status": "ok",
+      "axisDeg": 328.33,
+      "headingDeg": 328.33
+    },
+    "ne511-160": {
+      "positionKey": "40.43298,-101.51737",
+      "status": "ok",
+      "axisDeg": 139.84,
+      "headingDeg": 319.84
+    },
+    "ne511-25": {
+      "positionKey": "40.48404,-99.08467",
+      "status": "ok",
+      "axisDeg": 78.85,
+      "headingDeg": 258.85
+    },
+    "ne511-419": {
+      "positionKey": "40.81418,-99.90917",
+      "status": "ok",
+      "axisDeg": 117.8,
+      "headingDeg": 297.8
+    },
+    "ne511-415": {
+      "positionKey": "41.19737,-99.23052",
+      "status": "ok",
+      "axisDeg": 323.92,
+      "headingDeg": 143.92
+    },
+    "ne511-250": {
+      "positionKey": "40.67576,-99.25609",
+      "status": "ok",
+      "axisDeg": 97.41,
+      "headingDeg": 277.41
+    },
+    "ne511-159": {
+      "positionKey": "40.66296,-100.00078",
+      "status": "ok",
+      "axisDeg": 89.55,
+      "headingDeg": 89.55
+    },
+    "ne511-7": {
+      "positionKey": "41.18289,-104.04458",
+      "status": "ok",
+      "axisDeg": 76.12,
+      "headingDeg": 76.12
+    },
+    "ne511-94": {
+      "positionKey": "41.84164,-101.03669",
+      "status": "ok",
+      "axisDeg": 359.6,
+      "headingDeg": 359.6
+    },
+    "ne511-46": {
+      "positionKey": "40.04441,-96.65218",
+      "status": "ok",
+      "axisDeg": 359.39,
+      "headingDeg": 359.39
+    },
+    "ne511-221": {
+      "positionKey": "41.01776,-99.74963",
+      "status": "ok",
+      "axisDeg": 337.93,
+      "headingDeg": 157.93
+    },
+    "ne511-226": {
+      "positionKey": "40.77983,-99.84467",
+      "status": "ok",
+      "axisDeg": 125.47,
+      "headingDeg": 305.47
+    },
+    "ne511-26": {
+      "positionKey": "40.92855,-99.38836",
+      "status": "ok",
+      "axisDeg": 357.16,
+      "headingDeg": 357.16
+    },
+    "ne511-400": {
+      "positionKey": "41.43873,-97.36822",
+      "status": "ok",
+      "axisDeg": 90.13,
+      "headingDeg": 270.13
+    },
+    "ne511-86": {
+      "positionKey": "41.39491,-99.21125",
+      "status": "ok",
+      "axisDeg": 72.13,
+      "headingDeg": 252.13
+    },
+    "ne511-36": {
+      "positionKey": "42.68325,-103.70622",
+      "status": "ok",
+      "axisDeg": 295.45,
+      "headingDeg": 295.45
+    },
+    "ne511-5": {
+      "positionKey": "40.69004,-99.38478",
+      "status": "ok",
+      "axisDeg": 92.11,
+      "headingDeg": 272.11
+    },
+    "ne511-300": {
+      "positionKey": "42.06918,-102.58932",
+      "status": "ok",
+      "axisDeg": 268.74,
+      "headingDeg": 88.74
+    },
+    "ne511-397": {
+      "positionKey": "41.24794,-99.67429",
+      "status": "ok",
+      "axisDeg": 10.23,
+      "headingDeg": 190.23
+    },
+    "ne511-396": {
+      "positionKey": "41.66091,-99.91318",
+      "status": "ok",
+      "axisDeg": 323.62,
+      "headingDeg": 323.62
+    },
+    "ne511-30": {
+      "positionKey": "41.86073,-96.71088",
+      "status": "ok",
+      "axisDeg": 167.68,
+      "headingDeg": 167.68
+    },
+    "ne511-191": {
+      "positionKey": "42.69027,-103.89478",
+      "status": "ok",
+      "axisDeg": 82.43,
+      "headingDeg": 262.43
+    },
+    "ne511-297": {
+      "positionKey": "42.00228,-96.46313",
+      "status": "ok",
+      "axisDeg": 179.15,
+      "headingDeg": 359.15
+    },
+    "ne511-413": {
+      "positionKey": "41.94948,-100.43080",
+      "status": "ok",
+      "axisDeg": 133.06,
+      "headingDeg": 313.06
+    },
+    "ne511-390": {
+      "positionKey": "41.01078,-99.63094",
+      "status": "ok",
+      "axisDeg": 313.37,
+      "headingDeg": 313.37
+    },
+    "ne511-314": {
+      "positionKey": "41.94958,-100.43094",
+      "status": "ok",
+      "axisDeg": 133.06,
+      "headingDeg": 133.06
+    },
+    "ne511-22": {
+      "positionKey": "40.74168,-99.74072",
+      "status": "ok",
+      "axisDeg": 106.8,
+      "headingDeg": 286.8
+    },
+    "ne511-72": {
+      "positionKey": "41.83068,-100.10040",
+      "status": "ok",
+      "axisDeg": 341.59,
+      "headingDeg": 161.59
+    },
+    "ne511-189": {
+      "positionKey": "40.25617,-97.57645",
+      "status": "ok",
+      "axisDeg": 0.33,
+      "headingDeg": 180.33
+    },
+    "ne511-53": {
+      "positionKey": "41.47638,-97.44499",
+      "status": "ok",
+      "axisDeg": 309.64,
+      "headingDeg": 129.64
+    },
+    "ne511-315": {
+      "positionKey": "41.98077,-100.56504",
+      "status": "ok",
+      "axisDeg": 217.02,
+      "headingDeg": 217.02
+    },
+    "ne511-414": {
+      "positionKey": "41.98111,-100.56469",
+      "status": "ok",
+      "axisDeg": 217.02,
+      "headingDeg": 217.02
+    },
+    "ne511-31": {
+      "positionKey": "41.78389,-98.54701",
+      "status": "ok",
+      "axisDeg": 0.31,
+      "headingDeg": 180.31
+    },
+    "ne511-24": {
+      "positionKey": "40.23436,-100.88653",
+      "status": "ok",
+      "axisDeg": 90.21,
+      "headingDeg": 90.21
+    },
+    "ne511-164": {
+      "positionKey": "40.08933,-98.75812",
+      "status": "ok",
+      "axisDeg": 270.06,
+      "headingDeg": 90.06
+    },
+    "ne511-392": {
+      "positionKey": "42.03327,-100.82132",
+      "status": "ok",
+      "axisDeg": 102.78,
+      "headingDeg": 102.78
+    },
+    "ne511-391": {
+      "positionKey": "40.73647,-99.52293",
+      "status": "ok",
+      "axisDeg": 279.96,
+      "headingDeg": 99.96
+    },
+    "ne511-190": {
+      "positionKey": "42.04350,-101.75464",
+      "status": "ok",
+      "axisDeg": 10.17,
+      "headingDeg": 190.17
+    },
+    "ne511-298": {
+      "positionKey": "42.01881,-102.01830",
+      "status": "ok",
+      "axisDeg": 263.82,
+      "headingDeg": 263.82
+    },
+    "ne511-80": {
+      "positionKey": "42.44992,-102.69445",
+      "status": "ok",
+      "axisDeg": 0.7,
+      "headingDeg": 180.7
+    },
+    "ne511-225": {
+      "positionKey": "40.69103,-99.54026",
+      "status": "ok",
+      "axisDeg": 84.22,
+      "headingDeg": 264.22
+    },
+    "ne511-79": {
+      "positionKey": "41.71378,-97.05941",
+      "status": "ok",
+      "axisDeg": 1.22,
+      "headingDeg": 1.22
+    },
+    "ne511-215": {
+      "positionKey": "42.75623,-103.25652",
+      "status": "ok",
+      "axisDeg": 57.13,
+      "headingDeg": 57.13
+    },
+    "ne511-74": {
+      "positionKey": "41.85022,-98.08394",
+      "status": "ok",
+      "axisDeg": 358.89,
+      "headingDeg": 358.89
+    },
+    "ne511-305": {
+      "positionKey": "41.61320,-97.46514",
+      "status": "ok",
+      "axisDeg": 359.27,
+      "headingDeg": 179.27
+    },
+    "ne511-214": {
+      "positionKey": "42.71811,-103.01111",
+      "status": "ok",
+      "axisDeg": 358.11,
+      "headingDeg": 358.11
+    },
+    "ne511-304": {
+      "positionKey": "41.82903,-97.77508",
+      "status": "ok",
+      "axisDeg": 359.47,
+      "headingDeg": 359.47
+    },
+    "ne511-195": {
+      "positionKey": "40.09517,-97.61335",
+      "status": "ok",
+      "axisDeg": 3.84,
+      "headingDeg": 3.84
+    },
+    "ne511-216": {
+      "positionKey": "41.55287,-99.38546",
+      "status": "ok",
+      "axisDeg": 0.44,
+      "headingDeg": 180.44
+    },
+    "ne511-42": {
+      "positionKey": "40.05876,-95.82282",
+      "status": "ok",
+      "axisDeg": 0.7,
+      "headingDeg": 180.7
+    },
+    "ne511-443": {
+      "positionKey": "42.05853,-102.28164",
+      "status": "ok",
+      "axisDeg": 289.2,
+      "headingDeg": 109.2
+    },
+    "ne511-288": {
+      "positionKey": "41.78425,-99.11233",
+      "status": "ok",
+      "axisDeg": 119.23,
+      "headingDeg": 119.23
+    },
+    "ne511-424": {
+      "positionKey": "42.11929,-96.70983",
+      "status": "ok",
+      "axisDeg": 244.71,
+      "headingDeg": 244.71
+    },
+    "ne511-45": {
+      "positionKey": "42.23118,-96.47252",
+      "status": "ok",
+      "axisDeg": 183.49,
+      "headingDeg": 183.49
+    },
+    "ne511-92": {
+      "positionKey": "41.93179,-99.86054",
+      "status": "ok",
+      "axisDeg": 78,
+      "headingDeg": 258
+    },
+    "ne511-184": {
+      "positionKey": "42.40806,-102.44284",
+      "status": "ok",
+      "axisDeg": 4.07,
+      "headingDeg": 4.07
+    },
+    "ne511-210": {
+      "positionKey": "40.00865,-97.61047",
+      "status": "ok",
+      "axisDeg": 8.11,
+      "headingDeg": 8.11
+    },
+    "ne511-32": {
+      "positionKey": "41.98635,-98.54840",
+      "status": "ok",
+      "axisDeg": 337.89,
+      "headingDeg": 337.89
+    },
+    "ne511-37": {
+      "positionKey": "42.72551,-102.77086",
+      "status": "ok",
+      "axisDeg": 322.53,
+      "headingDeg": 142.53
+    },
+    "ne511-161": {
+      "positionKey": "40.13271,-99.36997",
+      "status": "ok",
+      "axisDeg": 90.08,
+      "headingDeg": 270.08
+    },
+    "ne511-205": {
+      "positionKey": "40.02178,-101.54510",
+      "status": "ok",
+      "axisDeg": 97.67,
+      "headingDeg": 97.67
+    },
+    "ne511-175": {
+      "positionKey": "42.01858,-97.02348",
+      "status": "ok",
+      "axisDeg": 270.49,
+      "headingDeg": 270.49
+    },
+    "ne511-41": {
+      "positionKey": "40.02876,-101.96740",
+      "status": "ok",
+      "axisDeg": 144.09,
+      "headingDeg": 144.09
+    },
+    "ne511-200": {
+      "positionKey": "40.01595,-100.57138",
+      "status": "ok",
+      "axisDeg": 355.13,
+      "headingDeg": 175.13
+    },
+    "ne511-163": {
+      "positionKey": "40.10390,-100.15536",
+      "status": "ok",
+      "axisDeg": 78.15,
+      "headingDeg": 78.15
+    },
+    "ne511-55": {
+      "positionKey": "41.83418,-97.44184",
+      "status": "ok",
+      "axisDeg": 12.08,
+      "headingDeg": 12.08
+    },
+    "ne511-90": {
+      "positionKey": "42.99996,-103.62118",
+      "status": "ok",
+      "axisDeg": 282.46,
+      "headingDeg": 102.46
+    },
+    "ne511-185": {
+      "positionKey": "41.75269,-99.37816",
+      "status": "ok",
+      "axisDeg": 1.48,
+      "headingDeg": 181.48
+    },
+    "ne511-378": {
+      "positionKey": "42.25514,-102.22509",
+      "status": "ok",
+      "axisDeg": 42.56,
+      "headingDeg": 222.56
+    },
+    "ne511-157": {
+      "positionKey": "40.30721,-99.63022",
+      "status": "ok",
+      "axisDeg": 92.25,
+      "headingDeg": 272.25
+    },
+    "ne511-52": {
+      "positionKey": "43.00086,-103.22416",
+      "status": "ok",
+      "axisDeg": 123.13,
+      "headingDeg": 123.13
+    },
+    "ne511-173": {
+      "positionKey": "42.29297,-96.72329",
+      "status": "ok",
+      "axisDeg": 270.02,
+      "headingDeg": 270.02
+    },
+    "ne511-38": {
+      "positionKey": "42.71525,-102.49657",
+      "status": "ok",
+      "axisDeg": 79.4,
+      "headingDeg": 79.4
+    },
+    "ne511-29": {
+      "positionKey": "42.02522,-97.60150",
+      "status": "ok",
+      "axisDeg": 90.69,
+      "headingDeg": 270.69
+    },
+    "ne511-23": {
+      "positionKey": "42.44901,-96.43653",
+      "status": "ok",
+      "axisDeg": 89.88,
+      "headingDeg": 269.88
+    },
+    "ne511-54": {
+      "positionKey": "42.37225,-100.54475",
+      "status": "ok",
+      "axisDeg": 7.79,
+      "headingDeg": 7.79
+    },
+    "ne511-417": {
+      "positionKey": "42.46246,-96.42673",
+      "status": "ok",
+      "axisDeg": 1.11,
+      "headingDeg": 1.11
+    },
+    "ne511-33": {
+      "positionKey": "42.20464,-98.65101",
+      "status": "ok",
+      "axisDeg": 359.94,
+      "headingDeg": 359.94
+    },
+    "ne511-176": {
+      "positionKey": "42.28110,-99.86684",
+      "status": "ok",
+      "axisDeg": 359.53,
+      "headingDeg": 359.53
+    },
+    "ne511-69": {
+      "positionKey": "42.23510,-97.17379",
+      "status": "ok",
+      "axisDeg": 359.86,
+      "headingDeg": 359.86
+    },
+    "ne511-95": {
+      "positionKey": "42.46752,-100.89663",
+      "status": "ok",
+      "axisDeg": 69.03,
+      "headingDeg": 249.03
+    },
+    "ne511-63": {
+      "positionKey": "42.20429,-98.97898",
+      "status": "ok",
+      "axisDeg": 38.18,
+      "headingDeg": 38.18
+    },
+    "ne511-85": {
+      "positionKey": "42.49492,-101.70578",
+      "status": "ok",
+      "axisDeg": 11.12,
+      "headingDeg": 191.12
+    },
+    "ne511-91": {
+      "positionKey": "42.96635,-102.55215",
+      "status": "ok",
+      "axisDeg": 2.09,
+      "headingDeg": 2.09
+    },
+    "ne511-291": {
+      "positionKey": "42.46698,-96.84403",
+      "status": "ok",
+      "axisDeg": 268.74,
+      "headingDeg": 88.74
+    },
+    "ne511-64": {
+      "positionKey": "42.54738,-96.70507",
+      "status": "ok",
+      "axisDeg": 340.37,
+      "headingDeg": 340.37
+    },
+    "ne511-183": {
+      "positionKey": "42.33842,-98.46214",
+      "status": "ok",
+      "axisDeg": 311.16,
+      "headingDeg": 131.16
+    },
+    "ne511-27": {
+      "positionKey": "42.22307,-99.52633",
+      "status": "ok",
+      "axisDeg": 359.59,
+      "headingDeg": 359.59
+    },
+    "ne511-35": {
+      "positionKey": "42.34701,-98.02908",
+      "status": "ok",
+      "axisDeg": 58.6,
+      "headingDeg": 58.6
+    },
+    "ne511-39": {
+      "positionKey": "42.79992,-102.07727",
+      "status": "ok",
+      "axisDeg": 90.36,
+      "headingDeg": 270.36
+    },
+    "ne511-181": {
+      "positionKey": "42.63829,-100.24571",
+      "status": "ok",
+      "axisDeg": 138.08,
+      "headingDeg": 318.08
+    },
+    "ne511-56": {
+      "positionKey": "42.36554,-97.42611",
+      "status": "ok",
+      "axisDeg": 5.7,
+      "headingDeg": 185.7
+    },
+    "ne511-289": {
+      "positionKey": "42.54731,-99.70165",
+      "status": "ok",
+      "axisDeg": 108.21,
+      "headingDeg": 288.21
+    },
+    "ne511-293": {
+      "positionKey": "42.46735,-97.42633",
+      "status": "ok",
+      "axisDeg": 358.38,
+      "headingDeg": 178.38
+    },
+    "ne511-75": {
+      "positionKey": "42.59270,-98.02616",
+      "status": "ok",
+      "axisDeg": 3.39,
+      "headingDeg": 3.39
+    },
+    "ne511-172": {
+      "positionKey": "42.70290,-97.09377",
+      "status": "ok",
+      "axisDeg": 124.34,
+      "headingDeg": 304.34
+    },
+    "ne511-295": {
+      "positionKey": "42.80735,-100.50422",
+      "status": "ok",
+      "axisDeg": 158.96,
+      "headingDeg": 158.96
+    },
+    "ne511-292": {
+      "positionKey": "42.61282,-97.42632",
+      "status": "ok",
+      "axisDeg": 0.1,
+      "headingDeg": 0.1
+    },
+    "ne511-40": {
+      "positionKey": "42.59387,-99.28465",
+      "status": "ok",
+      "axisDeg": 89.97,
+      "headingDeg": 89.97
+    },
+    "ne511-65": {
+      "positionKey": "42.86887,-100.10320",
+      "status": "ok",
+      "axisDeg": 295.2,
+      "headingDeg": 115.2
+    },
+    "ne511-182": {
+      "positionKey": "42.92777,-101.10469",
+      "status": "ok",
+      "axisDeg": 273.2,
+      "headingDeg": 273.2
+    },
+    "ne511-180": {
+      "positionKey": "42.99095,-100.57337",
+      "status": "ok",
+      "axisDeg": 0.26,
+      "headingDeg": 0.26
+    },
+    "ne511-423": {
+      "positionKey": "42.80708,-98.65097",
+      "status": "ok",
+      "axisDeg": 182.48,
+      "headingDeg": 182.48
+    },
+    "ne511-57": {
+      "positionKey": "42.84464,-97.40054",
+      "status": "ok",
+      "axisDeg": 309.46,
+      "headingDeg": 129.46
+    },
+    "ne511-142": {
+      "positionKey": "42.89794,-99.75098",
+      "status": "ok",
+      "axisDeg": 331.82,
+      "headingDeg": 151.82
+    },
+    "ne511-296": {
+      "positionKey": "42.84957,-98.65147",
+      "status": "ok",
+      "axisDeg": 330.45,
+      "headingDeg": 330.45
+    },
+    "ne511-294": {
+      "positionKey": "42.91546,-98.84080",
+      "status": "ok",
+      "axisDeg": 0.91,
+      "headingDeg": 180.91
+    },
+    "ne511-66": {
+      "positionKey": "42.91855,-99.33458",
+      "status": "ok",
+      "axisDeg": 115.35,
+      "headingDeg": 295.35
+    }
+  }
+}

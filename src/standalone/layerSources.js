@@ -5,6 +5,7 @@ import {
   createVesselSource,
 } from '../sources/live/standalone.js';
 import { createCctvSource } from '../layers/cctv/source.js';
+import { createMessageSignsSource } from '../layers/messageSigns/source.js';
 import { createRadioSource } from '../layers/radio/source.js';
 import { createTransitSource } from '../layers/transit/source.js';
 import { createTrafficSource } from '../layers/traffic/source.js';
@@ -34,6 +35,7 @@ export function createStandaloneLayerSources() {
       origin: () => globalThis.document?.baseURI ?? 'http://localhost',
     }),
     cctv: createCctvSource(),
+    messageSigns: createMessageSignsSource(),
     radio: createRadioSource(),
     traffic: createTrafficSource({ mapTiles }),
     transit: createTransitSource(),
