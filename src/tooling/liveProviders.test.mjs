@@ -139,6 +139,60 @@ test('OpenSky state and track routes share tokens, retain cache and use regional
   assert.equal(JSON.parse(fallback.body).states[0][0], 'abc123');
 });
 
+test('OpenSky global snapshot attempts are time-limited, retried once, then fall back', async (t) => {
+  environment(t, {
+    OPENSKY_CLIENT_ID: undefined,
+    OPENSKY_CLIENT_SECRET: undefined,
+    OPENSKY_AUTH_MODE: 'anon',
+    OPENSKY_USERNAME: undefined,
+    OPENSKY_PASSWORD: undefined,
+  });
+  t.mock.method(console, 'warn', () => {});
+  const timedOut = () =>
+    Promise.reject(
+      new DOMException(
+        'The operation was aborted due to timeout',
+        'TimeoutError',
+      ),
+    );
+  const load = async (respond) => {
+    const attempts = [];
+    t.mock.method(globalThis, 'fetch', async (url, options) => {
+      if (url.includes('/states/')) {
+        assert.ok(options.signal instanceof AbortSignal);
+        attempts.push(url);
+        return respond(attempts.length);
+      }
+      if (url.includes('/lat/'))
+        return Response.json({
+          now: Date.now() / 1000,
+          ac: [{ hex: 'abc123', lat: 30, lon: -97, alt_baro: 10000 }],
+        });
+      throw Error(`Unexpected URL: ${url}`);
+    });
+    const fresh = await import(
+      `../../server/providers/aircraft/opensky.js?timeout=${Math.random()}`
+    );
+    const response = await install(fresh.openSkyProxy())(
+      '/api/opensky',
+      '?lat=30&lon=-97',
+    );
+    return { response, attempts };
+  };
+  const recovered = await load((attempt) =>
+    attempt === 1
+      ? timedOut()
+      : Response.json({ time: Math.floor(Date.now() / 1000), states: [] }),
+  );
+  assert.equal(recovered.attempts.length, 2);
+  assert.equal(recovered.response.statusCode, 200);
+  assert.equal(recovered.response.headers['x-flight-source'], undefined);
+  const stalled = await load(() => timedOut());
+  assert.equal(stalled.attempts.length, 2);
+  assert.equal(stalled.response.statusCode, 200);
+  assert.equal(stalled.response.headers['x-flight-source'], 'adsb.lol');
+});
+
 test('military aircraft route preserves fresh cache and stale response after upstream failure', async (t) => {
   let now = Date.now();
   let calls = 0;

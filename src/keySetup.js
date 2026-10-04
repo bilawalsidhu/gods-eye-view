@@ -318,7 +318,11 @@ export async function initKeySetup({
               globalThis.location?.hash?.slice(1) || '',
             );
             if (next !== null)
-              globalThis.history?.replaceState?.(null, '', `#${next}`);
+              globalThis.history?.replaceState?.(
+                null,
+                '',
+                new URL(`#${next}`, globalThis.location.href).href,
+              );
           } catch {
             // Continuity is a nicety, never a blocker.
           }

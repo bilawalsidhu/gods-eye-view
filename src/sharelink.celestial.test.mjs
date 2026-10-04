@@ -34,8 +34,8 @@ function assertClaimsBefore(block, mutation, label) {
 function makeManager(hash = '') {
   globalThis.window = { location: { hash, href: `http://localhost/${hash}` } };
   globalThis.history = {
-    replaceState(_state, _title, nextHash) {
-      window.location.hash = nextHash;
+    replaceState(_state, _title, next) {
+      window.location.hash = new URL(next, window.location.href).hash;
     },
   };
   const viewer = {

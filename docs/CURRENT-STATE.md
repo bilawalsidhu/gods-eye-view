@@ -1,10 +1,51 @@
 # God's Eye View Current State
 
-## Cyber HUD — September 23, 2026
+## God's Eye View in conversations — October 2, 2026
+
+Tool answers that can be shown in God's Eye View include a view: camera, layers,
+style, map, marks and an aircraft or satellite to follow, written in the
+share-link format (`gods-eye-view/view`). `show_in_gods_eye_view` shows a view as live
+God's Eye View inside clients that display MCP Apps, and as a link everywhere.
+The panel runs the app's panel build (`npm run build:panel`, served at
+`/panel/`) and loads it, with its data, through the MCP server, so it works
+in Claude Desktop and in the Codex and ChatGPT desktop apps with a local
+server and no HTTPS. `?embed=1` shows the app as the globe alone and takes
+new views from the page that frames it; framing is off unless
+`GEV_EMBED_FRAME_ANCESTORS` allows the framing page. MCP leads with the tools that find
+what to show. See [tools and the MCP server](TOOLS.md).
+
+## Tools and local MCP server — October 1, 2026
+
+`gods-eye-view/tools` defines queries that answer questions from the app's data,
+and `gods-eye-view/tools/mcp` exposes a composed catalog over the Model Context
+Protocol. `npm run mcp` serves Core's tools over stdio to a local MCP client,
+reading from a running app's `/api` routes (default `http://localhost:4173`).
+The development and preview servers also serve the tools over HTTP at `/mcp`,
+accepting only direct local requests: a loopback host on the port reached,
+an `Origin` (when sent) from that same host, no proxy forwarding headers, and
+launcher sharing off.
+Queries cover earthquakes, active fires, recent launches, aircraft (in an
+area, by identifier, tracks, and type and route lookups), ships (in an area,
+by identifier, and tracks), satellites (next
+pass over a point, and those overhead now), public cameras (including a
+camera's current image), license plate reader cameras, radio stations, place search, routing, bike-share
+stations, transit vehicles, road traffic flow, weather, weather map images
+(radar, satellite, lightning), wind, the most recent satellite image of an
+area, submarine cables, datacenters and dams, the Bhote Koshi flood event pack, regional briefs, tropical cyclones, fire
+perimeters, terrain height, military installations and map features, plus a
+combined situation brief, military awareness around a point, the app's heads-up display caption, and a link that
+opens the app over an area. Tools reuse the layers' portable source factories, take a
+shared `area` argument (place name, bounding box, or point and radius) and cap
+lists at 25 rows by default. Voice offers the same queries next to its app
+actions: the session lists them, and the browser runs them through the same
+catalog, loaded on first use. See [tools and the MCP server](TOOLS.md).
+
+## Cyber HUD — September 30, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice
 action and shared visual state. An explicit first transition into Cyber selects
-FLIR with Ironbow 0.42; restored links and subsequent visual tuning remain
+FLIR with Ironbow 0.42. An explicit switch back to another HUD layout restores
+the visual preset used before Cyber; restored links and scenes remain
 authoritative. The skin uses shared red/slate panel treatments in map and cockpit,
 with compact 200px collapsed controls and wider expanded panels. Other HUD
 layouts retain their existing presentation.
@@ -16,6 +57,21 @@ launchers available. Display, CCTV and Context scroll their contents inside fixe
 headers and decorative frames. The narrow-screen rail remains scrollable to reach
 each panel. Radio retains the shared nested Context player and compact
 header disclosure, without relocating playback controls on theme changes.
+
+Voice help/error popups and Location/Visual Presets pins extend beyond their
+Cyber frames without being clipped: the shapes decorate non-interactive
+pseudo-elements. The lower-left telemetry card leaves room for attribution's
+full logo row. New panels can use the [shared surface contract](panel-surfaces.md)
+for theme tokens, rail input and a fixed header with a bounded scroll body.
+The contract is intentionally future-facing and opt-in; its first production
+adopter will land after this change. Existing owners still control disclosure,
+persistence and placement, while small-screen rail popup clipping and other
+integration limits remain documented in the contract.
+
+On desktop, Cyber raises the left rail so it clears the lower coordinate card.
+`layoutRightPanelRail` reads that rendered top as its measured `baseTop`, which
+keeps the right rail aligned. Cockpit retains its separate rail placement for
+its visor layout.
 
 Sonar has one contact-highlighting method. Native Cesium points, billboards and
 labels are treated in GPU draw commands without replacing their positions,
@@ -875,9 +931,20 @@ errors.
 ## Places and CCTV request bounds
 
 With a Google key configured, nearby and text search reject missing, blank,
-non-numeric and out-of-range coordinates before the opt-in limiter and upstream
+non-numeric and out-of-range coordinates before the per-IP limiter and upstream
 request. Text search also requires a nonblank query. Keyless requests retain
 their `configured: false` response.
+
+The cost-bearing proxies are throttled per client IP without configuration:
+`/api/realtime/token` and `/api/openai/hud-summary` share 30 requests per
+minute per IP, `/api/google/nearby-places` and `/api/google/text-search` share
+120 — the caps the Pinokio build already sets, so the packaged app is
+unaffected. `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` override
+those; exactly `0` disables the limiter, while a value that cannot be read as a
+number falls back to the default rather than to unlimited. Over-limit requests
+receive a sanitized `429` with `Retry-After: 5` and never reach the provider.
+The client key is the socket peer address only — a forwarded-for header is not
+trusted, so a proxied deployment shares one bucket per upstream hop.
 
 CCTV media waits at most 15 seconds for upstream response headers and returns
 504 on timeout. Its timer stops when headers arrive, so live bodies can continue
@@ -907,12 +974,11 @@ tiles use it alongside GTFS-Realtime. Caps are bounds, not budgets, sized well
 above measured payloads: FIRMS 64 MiB per satellite source, CelesTrak 16 MiB
 per group, OpenSky `states/all` 8 MiB, adsb.lol `/v2/mil` 8 MiB, TomTom tiles
 8 MiB and adsbdb lookups 1 MiB. Where a route already had a deadline (FIRMS
-60 s, CelesTrak 20 s, TomTom 15 s, adsbdb 8 s) that deadline now covers the
-body read as well as the headers. Two polls that had no deadline gain one: the
-adsb.lol military poll waits at most 12 seconds, and the OpenSky `states/all`
-exchange, including its Basic-auth retry, at most 20. A rejected or timed-out
-body is an upstream miss and follows each route's existing error and
-cached-data paths. FIRMS map-key status, the OpenSky token exchange and CCTV
+60 s, CelesTrak 20 s, TomTom 15 s, adsbdb 8 s, and each 10 s OpenSky
+`states/all` attempt) that deadline now covers the body read as well as the
+headers. The adsb.lol military poll, which had no deadline, now waits at most
+12 seconds. A rejected or timed-out body is an upstream miss and follows each
+route's existing error and cached-data paths. FIRMS map-key status, the OpenSky token exchange and CCTV
 media keep their current handling.
 
 ## Remaining local service modules
@@ -1963,11 +2029,12 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   registered for lifecycle and restoration but is not duplicated in Data Layers.
 >   Inside Cockpit, the focused summary card is titled Contact in both visible
 >   copy and its accessible control labels.
->   The top-center Cockpit vision cycle shows the inherited map preset name
->   (for example, `NOIR`) followed by CRT, NVG, FLIR, and NOIR. That inherited entry
->   leaves the selected map preset unchanged inside Cockpit. NONE is not offered
->   in the cycle; CRT, NVG, FLIR, and NOIR temporarily override that preset, while returning to it or exiting
->   Cockpit restores the captured map style and its exact shader intensities.
+>   The top-center Cockpit vision cycle is the fixed, duplicate-free sequence
+>   Normal, CRT, NVG, FLIR, Anime, Noir, and Snow. Entry selects the map preset
+>   already in use, so a FLIR map opens on the existing FLIR item while
+>   Normal remains available exactly once. NONE is not offered. Cockpit choices
+>   temporarily override the map preset, while Exit Cockpit and Reset both restore
+>   the captured map style and its exact shader intensities.
 >   Selecting a Cockpit vision treatment with configurable parameters opens
 >   Cockpit Display and reveals those parameters through the existing right-side
 >   accordion; an inherited parameterless Normal preset does not force it open.
@@ -3807,8 +3874,9 @@ and unreachable upstream (502/504) separately from road geometry.
   first, activates the Contacts sub-view, and returns the settled 250 km window.
   Its `aircraft` count is the exact civilian-plus-military total when both feeds
   can answer, or `unknown` when either component is unavailable.
-- Cockpit's top vision switch cycles five rendered looks: the inherited map
-  style, CRT, NVG, FLIR, and Noir. There is no empty `NONE` entry.
+- Cockpit's top vision switch cycles all seven map looks: Normal, CRT, NVG,
+  FLIR, Anime, Noir, and Snow. Entry selects the matching map style without adding
+  a duplicate carousel item. There is no empty `NONE` entry.
 
 ### Live AIS Vessels (June 2026)
 
@@ -4179,7 +4247,7 @@ are omitted rather than framing the wrong part of the globe.
 - **Cockpit left-panel clearance:** the Cockpit Contact card and peripheral HUD participate in the adaptive left accordion's live obstacle measurements, including live viewport-height changes. Expanding Layers or Scenes keeps the active panel in the available upper-left corridor with internal scrolling; it does not cover the Contact card, lower Cockpit controls, or Cesium credit line. Outside Cockpit the hidden card does not alter the normal corridor.
 - **Cockpit Context scope:** the 250 km radius applies to the air/sea proximity cohorts. Installation counts come only from the currently loaded viewport and are labeled `CURRENT VIEWPORT ONLY` in the cockpit as well as the normal Context panel; neither surface presents them as a complete 250 km installation survey.
 - **Cockpit camera anchor:** first-person mode does not write feed-boundary corrections directly into the camera. A cockpit-only inertial anchor advances from the selected aircraft's displayed course and speed, then converges toward the authoritative delayed track with correction capped below forward motion. The displayed kinematics are derived from the same consecutive fix segment as the rendered position, with raw feed speed/course used only as fallback; a transient zero/missing feed speed therefore cannot freeze a visibly moving aircraft after layer enable or a map/cockpit handoff. Rendered altitude continues to come from that interpolated track position. Late ADS-B fixes and short render stalls can remove drift without accelerating or reversing the view. Camera placement runs before scene update/culling at a bounded 20 Hz so a moving cockpit does not force Photoreal 3D Tiles to retraverse on every display frame; textual instruments update at 10 Hz and context/layout work at 4 Hz. Every far Cockpit contact pip shares one stable Cesium texture-atlas entry and skips unused screen-projected course calculations, while only in-range 2D aircraft silhouettes pay the screen-projected rotation cost; ambient glTF collections are hidden/retained rather than synchronously destroyed at cockpit entry, and context rails lay out only on explicit content/state changes and viewport resize. The deliberate 15/30-second layer interpolation delays and per-Cesium-frame position caches remain unchanged.
-- **Cockpit route, vision, and view controls:** visible on-screen `COCKPIT`, `RESET`, and `EXIT COCKPIT` controls replace reliance on the `C` shortcut. RESET uses the same canonical globe route as the map and voice actions, exits Cockpit, and releases its camera ownership rather than exposing the hidden map-style top action. When the tracked commercial flight has a plausible ADSBDB route, the top of the right briefing rail shows a compact `FROM → TO` airport strip and the visor shows a centered estimated-destination chevron with its relative bearing; absent or implausible route data hides the strip and cue rather than guessing. The cockpit-local vision control is an interactive `PREV / CURRENT / NEXT` carousel over the inherited map preset, `CRT`, `NVG`, `FLIR`, and `NOIR`; its previous/next actions wrap, and activating the current value advances to the next style. The inherited entry is named directly, such as `NOIR`, and retains that map shader. There is no empty `NONE` entry. CRT, NVG, FLIR, and NOIR temporarily activate the existing Cesium post-process stages, while returning to the inherited entry or exiting Cockpit restores the pre-entry visual style. The regional-news page uses a free Google News RSS locality query first, with the existing GDELT query retained only as a fail-soft fallback; linked headlines remain reporting, not verified incidents or risk intelligence.
+- **Cockpit route, vision, and view controls:** visible on-screen `COCKPIT`, `RESET`, and `EXIT COCKPIT` controls replace reliance on the `C` shortcut. RESET uses the same canonical globe route as the map and voice actions, exits Cockpit, and releases its camera ownership rather than exposing the hidden map-style top action. When the tracked commercial flight has a plausible ADSBDB route, the top of the right briefing rail shows a compact `FROM → TO` airport strip and the visor shows a centered estimated-destination chevron with its relative bearing; absent or implausible route data hides the strip and cue rather than guessing. The cockpit-local vision control is an interactive `PREV / CURRENT / NEXT` carousel over `NORMAL`, `CRT`, `NVG`, `FLIR`, `ANIME`, `NOIR`, and `SNOW`; its previous/next actions wrap, and activating the current value advances to the next style. Cockpit enters on the active map preset, so a Cyber FLIR map opens Cockpit on FLIR while Normal remains a distinct option instead of producing a second FLIR entry. Cockpit choices temporarily activate the existing Cesium post-process stages, while exiting Cockpit through either EXIT or RESET restores the pre-entry map style. The regional-news page uses a free Google News RSS locality query first, with the existing GDELT query retained only as a fail-soft fallback; linked headlines remain reporting, not verified incidents or risk intelligence.
 - **Cockpit weather status:** the earlier multi-canvas atmospheric compositor remains fail-closed and is not attached to the live viewer. Cockpit clouds are a separate transparent WebGL pass with a capped 520×320 framebuffer, 24 ray steps, three FBM octaves, and a 12 FPS ceiling. It defaults off and starts only when local storage explicitly contains the persisted `WX ON` opt-in (`'1'`). When opted in, observations refresh after five minutes or 25 km of aircraft movement, fail transparent when unavailable or clear, and stop on exit or disable. `WX OFF` governs atmospheric rendering only: the briefing still fetches source-backed Natural Earth region, headline, and Open-Meteo local-information data, aborting and replacing any in-flight request when the selected aircraft changes. No weather effect runs in map mode and no synthetic fallback is shown.
 - **Cockpit trail visibility:** entering cockpit hides the selected aircraft's trail body and head so they cannot cross the first-person view; exit restores them. This cockpit-only presentation change does not alter the normal map-mode invariant that aircraft trails render through terrain using their depth-fail material.
 - **Aircraft course slew:** civilian and military 3D models retain the 60°/s course limiter, but each rendered frame can consume at most 250 ms of accumulated slew time. A long tile/render stall therefore catches up over multiple visible frames instead of turning one delayed frame into a heading snap.

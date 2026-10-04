@@ -26,6 +26,41 @@ let _openskyCacheMeta = null;
 let _openskyCacheSourceEpochMs = null;
 /** TTL for the OpenSky response cache (ms). */
 const OPENSKY_CACHE_MS = 9000;
+/** Per-attempt limit for the global snapshot; it normally arrives in ~1.5 s. */
+const OPENSKY_ATTEMPT_TIMEOUT_MS = 10_000;
+const OPENSKY_STATES_URL =
+  'https://opensky-network.org/api/states/all?extended=1';
+/** states/all?extended=1 measures ~0.8 MB anonymously; bounded, not budgeted. */
+const OPENSKY_STATES_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Fetch and read the global snapshot, giving each attempt
+ * OPENSKY_ATTEMPT_TIMEOUT_MS and retrying once when an attempt times out or
+ * the connection fails. A second failure throws, which the proxy answers
+ * from its stale cache or the regional fallback.
+ * @param {Record<string, string>} headers Request headers.
+ * @returns {Promise<{upstream: Response, body: string}>}
+ */
+async function fetchOpenSkyStates(headers) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const signal = AbortSignal.timeout(OPENSKY_ATTEMPT_TIMEOUT_MS);
+      const upstream = await fetch(OPENSKY_STATES_URL, { headers, signal });
+      const body = await readResponseTextCapped(
+        upstream,
+        OPENSKY_STATES_MAX_RESPONSE_BYTES,
+        signal,
+      );
+      return { upstream, body };
+    } catch (error) {
+      if (attempt >= 2) throw error;
+      console.warn(
+        '[OpenSky] global snapshot attempt failed, retrying:',
+        error?.message || error,
+      );
+    }
+  }
+}
 // --- OpenSky credit governor (field-test fix 2026-07-06) -------------------
 // The global /states/all this proxy fetches costs 4 CREDITS per call against
 // OpenSky's ~4000/day authenticated budget — a day with the app open burned
@@ -73,15 +108,6 @@ const ADSBLOL_POINT_CACHE_MS = 12000;
 const ADSBLOL_POINT_CACHE_MAX = 80;
 const ADSBLOL_POINT_RADIUS_NM = 250;
 const ADSBLOL_POINT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
-/** states/all?extended=1 measures ~0.8 MB anonymously; bounded, not budgeted. */
-const OPENSKY_STATES_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
-/**
- * Deadline for the whole states/all exchange: headers, the Basic-auth retry
- * and the body. The fetch previously had none, so a hung upstream connection
- * stalled the worldwide poll indefinitely; a miss here serves STALE like any
- * other upstream failure.
- */
-const OPENSKY_STATES_TIMEOUT_MS = 20000;
 // A 200 response can still contain an old OpenSky snapshot. Past this point
 // the viewport-scoped adsb.lol source is more honest and keeps local motion
 // current instead of coasting a stale worldwide frame indefinitely.
@@ -117,6 +143,7 @@ export async function getOpenSkyToken() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          signal: AbortSignal.timeout(OPENSKY_ATTEMPT_TIMEOUT_MS),
           body: `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}`,
         },
       );
@@ -480,11 +507,7 @@ export function openSkyProxy() {
           }
         }
 
-        const signal = AbortSignal.timeout(OPENSKY_STATES_TIMEOUT_MS);
-        let upstream = await fetch(
-          'https://opensky-network.org/api/states/all?extended=1',
-          { headers, signal },
-        );
+        let { upstream, body } = await fetchOpenSkyStates(headers);
         // Auto-mode fallback: if OAuth was rejected, retry with Basic credentials
         if (
           (upstream.status === 401 || upstream.status === 403) &&
@@ -496,19 +519,11 @@ export function openSkyProxy() {
             Accept: 'application/json',
             Authorization: `Basic ${Buffer.from(`${basicUser}:${basicPass}`).toString('base64')}`,
           };
-          upstream = await fetch(
-            'https://opensky-network.org/api/states/all?extended=1',
-            { headers: retryHeaders, signal },
-          );
+          ({ upstream, body } = await fetchOpenSkyStates(retryHeaders));
           usedMode = 'basic';
           reason = 'oauth_rejected_fallback_basic';
         }
 
-        let body = await readResponseTextCapped(
-          upstream,
-          OPENSKY_STATES_MAX_RESPONSE_BYTES,
-          signal,
-        );
         const sourceEpochMs = upstream.ok ? openSkySourceEpochMs(body) : null;
         if (
           upstream.ok &&
