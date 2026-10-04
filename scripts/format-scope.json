@@ -719,6 +719,8 @@
   "server/providers/transit.js",
   "server/providers/transitHistory.js",
   "server/providers/transitHistory.test.mjs",
+  "src/data/enturVehicles.js",
+  "src/data/enturVehicles.test.mjs",
   "src/data/transitFeeds.js",
   "src/data/transitFeeds.test.mjs",
   "src/data/transitProxy.js",

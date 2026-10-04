@@ -26,6 +26,23 @@
  * node:test. No Cesium, no Node built-ins.
  */
 
+/**
+ * Entur Vehicles API query: every field `decodeEnturVehicles` reads, and
+ * nothing more. Lives here so the registry stays free of decoder imports.
+ */
+export const ENTUR_VEHICLES_QUERY = `{
+  vehicles {
+    vehicleId
+    mode
+    lastUpdatedEpochSecond
+    bearing
+    location { latitude longitude }
+    line { lineRef }
+    serviceJourney { id }
+    monitoredCall { stopPointRef }
+  }
+}`;
+
 /** Transit modes the layer colors. `routeMode` hints refine a feed's default. */
 export const TRANSIT_MODES = Object.freeze([
   'bus',
@@ -122,6 +139,8 @@ function metroTransitRouteMode(routeId) {
  *   id: string, name: string, operator: string, region: string,
  *   center: {lat: number, lon: number}, loadRadiusKm: number,
  *   url: string, headers?: Record<string, string>,
+ *   format?: 'entur-vehicles',
+ *   request?: {method: string, contentType: string, body: string},
  *   license: string, licenseUrl: string, attribution: string,
  *   defaultMode: string, routeMode?: (routeId: string|null) => string,
  * }>>}
@@ -233,11 +252,20 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     name: 'Entur',
     operator: 'Entur AS (Norwegian national transit data)',
     region: 'Norway',
-    // Circle chosen to hold Oslo, Bergen, Bodø and Tromsø while leaving
-    // Helsinki (≈820 km) out — a national feed must not poll from next door.
-    center: Object.freeze({ lat: 64.0, lon: 11.5 }),
-    loadRadiusKm: 720,
-    url: 'https://api.entur.io/realtime/v1/gtfs-rt/vehicle-positions',
+    // Circle centred off the coast so it holds Kristiansand (≈985 km) and
+    // Kirkenes (≈985 km) while leaving Helsinki (≈1,160 km) out past the
+    // range slack — a national feed must not poll from next door.
+    center: Object.freeze({ lat: 67.0, lon: 7.0 }),
+    loadRadiusKm: 1000,
+    // The v2 Vehicles API, not the v1 GTFS-RT feed: Skyss, Vestfold og
+    // Telemark, Innlandet and others publish their positions only here.
+    url: 'https://api.entur.io/realtime/v2/vehicles/graphql',
+    format: 'entur-vehicles',
+    request: Object.freeze({
+      method: 'POST',
+      contentType: 'application/json',
+      body: JSON.stringify({ query: ENTUR_VEHICLES_QUERY }),
+    }),
     headers: Object.freeze({ 'ET-Client-Name': 'gods-eye-view-transit' }),
     license: 'Norwegian Licence for Open Government Data (NLOD)',
     licenseUrl: 'https://developer.entur.org/pages-intro-authentication',
@@ -353,12 +381,30 @@ export function transitFeedsInRange(lat, lon, slackKm = 0) {
 }
 
 /**
- * Mode for a vehicle: the feed's route hint when it has one, else its default.
+ * A mode the feed itself reported for the vehicle (Entur's Vehicles API does),
+ * or null when it is absent or not one the layer knows.
+ * @param {unknown} reported
+ * @returns {string|null}
+ */
+function reportedTransitMode(reported) {
+  return typeof reported === 'string' &&
+    reported !== 'unknown' &&
+    TRANSIT_MODES.includes(reported)
+    ? reported
+    : null;
+}
+
+/**
+ * Mode for a vehicle: the mode the feed reported for it, else the feed's route
+ * hint, else its default.
  * @param {object} feed Registry entry.
  * @param {string|null} routeId GTFS route_id from the vehicle's trip.
+ * @param {string|null} [reported] Mode reported on the vehicle record.
  * @returns {string} One of TRANSIT_MODES.
  */
-export function transitModeFor(feed, routeId) {
+export function transitModeFor(feed, routeId, reported = null) {
+  const own = reportedTransitMode(reported);
+  if (own) return own;
   const hinted =
     typeof feed?.routeMode === 'function' ? feed.routeMode(routeId) : null;
   const mode =
@@ -373,9 +419,11 @@ export function transitModeFor(feed, routeId) {
  * not hold a defaulted vehicle to a bus's limits.
  * @param {object} feed Registry entry.
  * @param {string|null} routeId
+ * @param {string|null} [reported] Mode reported on the vehicle record.
  * @returns {boolean}
  */
-export function transitModeResolved(feed, routeId) {
+export function transitModeResolved(feed, routeId, reported = null) {
+  if (reportedTransitMode(reported)) return true;
   const hinted =
     typeof feed?.routeMode === 'function' ? feed.routeMode(routeId) : null;
   return (

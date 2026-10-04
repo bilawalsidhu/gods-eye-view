@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Show Norway's whole live transit fleet. The Entur feed now reads the
+  Vehicles GraphQL API (realtime v2) instead of the v1 GTFS-Realtime feed,
+  which lacks Skyss, Vestfold og Telemark, Innlandet and other operators —
+  roughly half again as many vehicles. Each vehicle's own reported mode
+  (bus, coach, tram, rail, ferry) sets its marker, and the coverage circle
+  now reaches from Kristiansand to Kirkenes while still leaving Helsinki to
+  HSL. Ruter does not publish to either open Entur feed.
+
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
 - Ship each bundled data pack once. The region, marine, admin-boundary,
