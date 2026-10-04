@@ -210,4 +210,7 @@ Optional performance acceleration via WebAssembly:
   ~0.3 ms/frame (round-robin design keeps it off the hot path) and never
   appears in the CPU self-time top-10; the 191.9 ms full 10.7k-satellite pass
   is a path the design never takes per frame. Numbers in
-  `docs/PERFORMANCE.md`. No WASM candidate is currently open.
+  `docs/PERFORMANCE.md`. No WASM candidate is currently open;
+  `docs/PLAN.md` Phase 16 owns the standing qualification pipeline
+  (shortlist + gates) and the next spike (detection-projection boundary
+  cost, 16B).

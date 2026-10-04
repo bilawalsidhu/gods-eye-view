@@ -3184,3 +3184,110 @@ capture, and runs with the scheduled census refresh.
   signals only (the standing PERFORMANCE.md rule).
 - Box load 40–57 during analysis; every instrument run this phase must
   restate the load alongside its numbers.
+
+## Phase 16 — WASM qualification pass: Rust where the data is flat (2026-10-03, PLANNED)
+
+Goal: turn this repo's two existing WASM data points — FIRMS (qualified,
+shipped, measured) and SGP4 (measured, rejected) — from one-off decisions
+into a standing qualification pipeline, and run one concrete spike through
+it. Born from the 2026-10-03 brainstorm "optimized shader + renderer +
+LoD in Rust, CSR-first as WASM": the Rust/WASM direction is right, and
+this phase says precisely WHERE it pays here and where it does not.
+
+### Non-goals (decided up front, with the reasons)
+
+- **Renderer replacement (Rust → wgpu/WGSL).** CesiumJS owns the WebGL
+  context, the 3D Tiles/terrain streaming, and the tile LoD scheduler —
+  the photoreal globe IS Cesium. Custom code enters the render pipeline
+  only at Cesium's seams (PostProcessStage GLSL, Material fabric GLSL,
+  entity properties — see below); a Rust render pipeline means
+  replacing Cesium and forfeiting the Google Photorealistic tile
+  streams the product is named for. A new product, not an optimization.
+- **An app-level LoD scheduler in Rust.** Geometry/tile LoD is the tile
+  engine's job; this app's LoD (FIRMS global/regional bands, detection
+  density profiles, billboard distance fades) is configuration, not
+  compute. A second scheduler would fight Cesium's cache.
+- **"WASM" as a loading strategy.** First-visit loading is parse/eval
+  order — solved by code splitting (15A landed it; the remaining boot
+  bulk is the 4.75 MB Cesium chunk, which Rust cannot shrink). The
+  WASM-side loading play is lazy `WebAssembly.instantiateStreaming` on
+  first use — the FIRMS loader already does this.
+
+### Qualification criteria (the FIRMS/SGP4 gate)
+
+A candidate is a WASM candidate only if ALL hold, each with a measured
+anchor:
+
+1. **Measured JS self-time on a hot path** (profiler row, not
+   intuition — SGP4 failed this: ~0.3 ms/frame steady state, absent
+   from the CPU self-time top-10).
+2. **Bulk math over typed arrays** — the JS↔WASM boundary must be
+   nearly free. FIRMS passed (`lons/lats/brights` in, one texture out);
+   candidates whose inputs live as Cesium entity/JS objects pay a
+   per-frame copy that usually exceeds the math.
+3. **An off-main-thread seam already exists** (worker) or the output is
+   a buffer/texture Cesium consumes directly.
+4. **A/B harness exists or is cheap** — the `?flag=0` fallback pattern
+   (`?firmsWasm=0` precedent) with visual parity probes.
+
+Every decision — qualified AND rejected — lands in docs/PERFORMANCE.md
+with its numbers, so the same candidate is never re-derived.
+
+### Shortlist (ranked; static evidence, load-independent)
+
+| # | Candidate | Data shape | Status | Path |
+|---|---|---|---|---|
+| 1 | Detection-projection math (`detectionProjection.worker.js`: horizon occlusion, 4×4 view-projection, reticle scaling) | typed arrays in, plain structs out | Worker owns it; not currently hot | **16A spike** — measures boundary cost for the "structs out" shape, the datum every future candidate needs |
+| 2 | AIS visibility bitmask (`aisVisibility.worker.js`) | typed arrays in, `Uint8Array` bitmask out | Worker owns it; built for the 12k-vessel pass | Re-open only if the 15D hardware capture shows the horizon pass hot |
+| 3 | SGP4 batch propagation | typed arrays | **Measured 2026-09-14: DOES NOT QUALIFY** (~0.3 ms/frame steady state; 191.9 ms full pass is a path the design never takes per frame) | Closed; re-open only if the round-robin cadence design changes |
+| 4 | LabelArbiter solve | JS objects (label rects) | O(n), 125 ms throttle, measured fine | No — fails criterion 2 |
+| 5 | FIRMS splat | typed arrays → texture | **Shipped** (37,437 detections → 1 entity; 14.8 ms regional / 42.6 ms global) | Widening (bigger raster, dpr scaling) only on the 15D hardware capture |
+| 6 | Image-space effects (night lights, heat shimmer, scanline compositing) | frame texture | NOT Rust — Cesium `PostProcessStage` takes GLSL strings | **16C** — qualify as paint work, hardware-gated like 15D |
+
+### Phases
+
+- **16A — WASM-candidate profiler pass.** Extend the Phase 15 profiler
+  tooling to rank per-frame bulk math by typed-array throughput per
+  consumer on the standard scenes (satellitesDense, max-load AIS,
+  detection 100%), producing the ranked table this phase's shortlist
+  currently backs with static reasoning. Rankings are valid on this
+  box; absolute ms restate load and stay SwiftShader-qualified per the
+  standing PERFORMANCE.md rule.
+- **16B — Boundary-cost spike (shortlist #1).** Port the
+  detection-projection math to Rust (`rust/` workspace, wasm-pack,
+  `npm run build:wasm` pattern) and call it from inside the existing
+  worker — the worker seam already amortizes transfer. A/B: JS vs WASM
+  per-batch ms WITH boundary included, allocation profile, and the
+  `?detectWasm=0` fallback exercised both ways. Ship only on a measured
+  win; a loss is recorded with numbers (the SGP4 template). New
+  artifact gets a BUNDLE-BUDGETS row and a `getStats()` self-report
+  (`renderer: 'js' | 'wasm'`, `wasmError`) mirroring
+  `firmsHeatTexture.js`.
+- **16C — PostProcessStage GLSL evaluation.** NOT Rust: the shader
+  seam Cesium actually offers. Prepare night-lights / heat-shimmer /
+  scanline A/B probes alongside 15D's paint-work probes; executed on
+  the quiet-hardware capture. Ship nothing without the visual-parity
+  check.
+- **16D — Decision record.** PERFORMANCE.md gets the complete ledger
+  row for whatever ran: qualified (with the win margin) or rejected
+  (with the numbers). The shortlist table above is updated in place.
+
+### Gates
+
+- No `.wasm` ships without: A/B numbers including boundary cost, the
+  `?flag=0` fallback tested both ways, a BUNDLE-BUDGETS row, and unit
+  tests pinning the fallback path (the FIRMS precedent, which keeps the
+  entity path as first paint AND the fallback).
+- Rejections are recorded with numbers (the SGP4 precedent).
+- This phase adds no new data layers and no production API surface —
+  a patch-class change under the release cadence policy.
+
+### Honest limits
+
+- Absolute timings on this box (SwiftShader, contended: load 45–90
+  during planning, SQLite storm in CI) cannot qualify paint-adjacent
+  work; 16B's ship/no-ship call and all of 16C wait for the 15D
+  quiet-hardware capture. 16A's rankings and the 16B boundary-cost
+  measurement are the deliverables this box CAN produce honestly.
+- The shortlist's "not currently hot" verdicts rest on the Phase 14/15
+  census and profiles; 16A re-measures before anything ships.
