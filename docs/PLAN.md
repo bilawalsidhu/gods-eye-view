@@ -2944,7 +2944,7 @@ Measured effect and method recorded in `docs/PERFORMANCE.md`
    `online`) remains open upstream in GitForge itself; the restart
    workaround is the standing mitigation.
 
-## Phase 15 — Performance deep dive: boot payload, per-frame walks, layer cost (2026-10-02, PLANNED)
+## Phase 15 — Performance deep dive: boot payload, per-frame walks, layer cost (2026-10-02, planned; 15A/15B DONE 2026-10-03, 15C–15E pending)
 
 Goal: the next systematic performance campaign after Phase 14, targeted at
 the three cost centers the 2026-08→10 measurements still leave on the

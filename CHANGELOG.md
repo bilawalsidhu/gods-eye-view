@@ -5,6 +5,45 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+## [0.10.5] — 2026-10-03
+
+Phase 15 performance release: boot payload split (PLAN.md 15A) and the
+per-frame cadence moves from the first measured frame census (15B).
+
+### Fixed
+
+- **The Planets layer could not be enabled through the Layers UI.** The
+  layer module never implemented the manager's `update(viewer, {signal})`
+  contract, so the enable transaction threw and silently rolled back on
+  every manager-driven enable — while its entities still rendered, and
+  one disable left the layer permanently un-re-enableable. (Present since
+  the layer's initial import.)
+- **Planet labels no longer ignore their distance fade.** The fade was
+  configured with a `Cesium.Interval`, which Cesium's billboard guard
+  silently rejects; the cloned `NearFarScalar` carried undefined fields
+  (NaN translucency). Labels now fade between 10⁹ and 5×10⁹ m as
+  documented.
+
+### Changed
+
+- **Boot payload split.** Voice, scenes, annotations, cockpit cloud
+  effects, and the first-run experience now load as deferred chunks on
+  first use instead of riding the initial entry bundle: entry
+  6,086,202 → 5,843,743 B with five seam chunks (124.5 / 65.5 / 26.2 /
+  13.6 / 7.2 kB) cached separately. A chunk-budget guard test pins the
+  seams (src/config/bundleBudgets.js).
+- **Rocket-launch mission dots declutter on a budget, not per frame.**
+  The mission declutter walk now runs behind dirty flags, a quantized
+  camera-position key (10 m bins), and a 500 ms floor; walk/skip
+  counters are exposed in layer stats. First measured frame census
+  (docs/PERFORMANCE.md): no per-frame consumer exceeds ~1 call/frame —
+  no double-registration leaks; the cadence cohort adds four preRender
+  consumers to the parked baseline.
+- New instruments: `scripts/profile-frame-census.mjs` (per-frame
+  callback census with registration-time attribution) and
+  `scripts/qa-frame-cadence.mjs` (behavioral gate for the cadence
+  moves).
+
 ## [0.10.4] — 2026-10-01
 
 ### Fixed
