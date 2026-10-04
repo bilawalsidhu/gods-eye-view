@@ -700,6 +700,26 @@ test('key setup writes only the supplied application root, retains request guard
   assert.equal(existsSync(path.join(untouched, '.env')), false);
 });
 
+test('GEV_STATE_DIR moves the key store out of the source tree and leaves it alone when unset', async (t) => {
+  const source = root(t),
+    state = root(t);
+  env(t, 'OPENAI_API_KEY', undefined);
+  env(t, 'GEV_STATE_DIR', state);
+  const handler = install(keySetupEndpoint({ sourceRoot: source })).get(
+    '/api/setup/keys',
+  );
+  const saved = await request(handler, {
+    method: 'POST',
+    body: JSON.stringify({ OPENAI_API_KEY: 'sk-fixture-only-not-a-real-key' }),
+  });
+  assert.equal(saved.status, 200);
+  assert.match(
+    readFileSync(path.join(state, '.env'), 'utf8'),
+    /OPENAI_API_KEY=sk-fixture-only-not-a-real-key/,
+  );
+  assert.equal(existsSync(path.join(source, '.env')), false);
+});
+
 test('Realtime service configuration selects compatible endpoint/model without forwarding request model IDs or keys', async () => {
   const handler = install(
     openAiRealtimeProxy({
