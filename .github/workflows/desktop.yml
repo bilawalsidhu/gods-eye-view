@@ -1,0 +1,113 @@
+name: Desktop
+
+# Builds the Windows application (installer + portable zip) on a Windows runner.
+# Nothing is installed or compiled on a developer machine: run this workflow from
+# the Actions tab, or push a tag named desktop-v<version> to also publish a release.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['desktop-v*']
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/desktop.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Desktop unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.14.0
+      - name: Run shell tests
+        working-directory: desktop
+        run: node --test lib/*.test.cjs
+
+  windows:
+    name: Windows x64
+    needs: test
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.14.0
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install build tooling
+        working-directory: desktop
+        run: npm ci
+
+      - name: Render icons
+        working-directory: desktop
+        run: npm run icons
+
+      - name: Stage application payload and Node runtime
+        working-directory: desktop
+        run: npm run stage
+
+      - name: Smoke-test the staged server
+        working-directory: desktop
+        run: node scripts/smoke.mjs
+
+      - name: Package
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --config electron-builder.yml --win --x64 --publish never
+
+      - name: Checksums
+        shell: pwsh
+        working-directory: desktop/dist
+        run: |
+          Get-ChildItem -File -Include *.exe,*.zip -Recurse |
+            ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } |
+            Set-Content SHA256SUMS.txt
+          Get-Content SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gods-eye-view-windows-x64
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.zip
+            desktop/dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: gods-eye-view-windows-x64
+          path: dist
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist/* \
+            --repo "${{ github.repository }}" \
+            --title "God's Eye View for Windows ${{ github.ref_name }}" \
+            --notes "Windows x64 installer and portable zip. Verify downloads against SHA256SUMS.txt."

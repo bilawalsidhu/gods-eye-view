@@ -1,0 +1,28 @@
+{
+  "name": "gods-eye-view-desktop",
+  "productName": "God's Eye View",
+  "version": "0.2.1",
+  "private": true,
+  "description": "Standalone desktop application for God's Eye View",
+  "author": {
+    "name": "Enzo Abyie",
+    "email": "abiyeenzo@gmail.com"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/bilawalsidhu/gods-eye-view#readme",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "icons": "node scripts/make-icons.mjs",
+    "stage": "node scripts/stage.mjs",
+    "test": "node --test lib/*.test.cjs",
+    "dist:win": "npm run icons && npm run stage && electron-builder --config electron-builder.yml --win --x64",
+    "dist:dir": "npm run icons && npm run stage && electron-builder --config electron-builder.yml --win --x64 --dir"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "resedit": "^2.0.3",
+    "sharp": "^0.35.4"
+  }
+}
