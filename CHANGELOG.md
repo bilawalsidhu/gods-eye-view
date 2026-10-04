@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Update the transitive `dompurify` dependency from 3.4.15 to 3.4.16 to clear
+  advisory GHSA-p98j-92pf-mc4p (DOM XSS through a node-removing `afterSanitize`
+  hook with `IN_PLACE`). `npm audit` now reports no vulnerabilities.
+
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
 - Ship each bundled data pack once. The region, marine, admin-boundary,
