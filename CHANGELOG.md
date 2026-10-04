@@ -29,6 +29,13 @@
   largest cities) and `CCTV_VEGVESEN_VIDEO=0` keeps stills only. Attributed
   under NLOD 2.0.
 
+- Import your own GeoJSON, KML, KMZ and GPX files (DISPLAY ▸ Import, or drop
+  them onto the globe). Each file is drawn on the ground in its own color with
+  a row to show, hide, fly to or remove it. Files stay in the browser for the
+  session, and KML/KMZ network links, remote icons, remote styles and balloon
+  HTML are left out so an imported file cannot make the page fetch anything.
+  The import half of #890.
+
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
 - Ship each bundled data pack once. The region, marine, admin-boundary,

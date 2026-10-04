@@ -147,6 +147,15 @@
         <span class="draw-hint" id="draw-hint" aria-live="polite"></span>
       </div>
     </div>
+    <div class="pp-toggle-group" id="geo-import-group">
+      <button class="pp-toggle-btn" id="geo-import-button" type="button" title="Show your own GeoJSON, KML, KMZ or GPX files on the globe (or drop them onto it). Files stay in this browser.">
+        <span class="pp-icon material-symbols-outlined" aria-hidden="true">upload_file</span>
+        <span class="pp-label">Import</span>
+      </button>
+      <input type="file" id="geo-import-input" accept=".geojson,.json,.kml,.kmz,.gpx" multiple hidden aria-label="Choose GeoJSON, KML, KMZ or GPX files">
+      <ul class="geo-import-list" id="geo-import-list" aria-label="Imported files"></ul>
+      <span class="draw-hint geo-import-hint" id="geo-import-hint" aria-live="polite"></span>
+    </div>
     <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="celestial-toggle" title="Celestial ring — reveal the full globe" aria-pressed="false">
         <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>
