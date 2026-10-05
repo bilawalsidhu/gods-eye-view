@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Add Norway's city bikes to the Bike Share layer: Oslo, Bergen and
+  Trondheim Bysykkel (Urban Sharing, ~440 stations). The feeds are keyless
+  GBFS on `gbfs.urbansharing.com`, which joins the proxy allowlist; the proxy
+  now sends the `Client-Identifier: gods-eye-view` header the operators ask
+  for. Attributed under NLOD 2.0. `get_bike_share` covers the three cities too.
+
 - Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
   list is one keyless GeoJSON request to the agency's OGC API view of its
   DATEX 3.1 CCTV table, so no DATEX account is needed. Every working camera

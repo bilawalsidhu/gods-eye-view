@@ -8,6 +8,7 @@ const GBFS_ALLOWED_HOSTS = new Set([
   'austin.publicbikesystem.net',
   'hon.publicbikesystem.net',
   'chat.publicbikesystem.net',
+  'gbfs.urbansharing.com',
 ]);
 
 /**

@@ -17,6 +17,7 @@ import { createModel } from './model.js';
 import { CITY_BY_ID } from './registry.js';
 
 const AUSTIN = CITY_BY_ID.get('austin-capmetro');
+const OSLO = CITY_BY_ID.get('oslo-bysykkel');
 
 const STATION_INFORMATION = {
   data: {
@@ -199,6 +200,49 @@ test('the proxy relays its cache policy and upstream host through the mounted ro
       assert.equal(
         response.headers.get('x-gbfs-upstream'),
         'austin.publicbikesystem.net',
+      );
+    },
+  );
+});
+
+test('the Norwegian city-bike systems are served through the mounted route', async () => {
+  for (const [id, systemId] of [
+    ['oslo-bysykkel', 'oslobysykkel.no'],
+    ['bergen-bysykkel', 'bergenbysykkel.no'],
+    ['trondheim-bysykkel', 'trondheimbysykkel.no'],
+  ]) {
+    const system = CITY_BY_ID.get(id);
+    assert.ok(system, `${id} is registered`);
+    assert.deepEqual(system.hosts, ['gbfs.urbansharing.com']);
+    assert.equal(
+      system.stationStatusUrl,
+      `https://gbfs.urbansharing.com/${systemId}/station_status.json`,
+    );
+  }
+
+  await withUpstream(
+    {
+      [OSLO.stationInformationUrl]: STATION_INFORMATION,
+      [OSLO.stationStatusUrl]: STATION_STATUS,
+    },
+    async (requested) => {
+      const source = createBikeshareSource({ fetchImpl: mountGbfsProxy() });
+      const info = await source.getStations(OSLO.stationInformationUrl);
+      const status = await source.getStations(OSLO.stationStatusUrl);
+      assert.deepEqual(requested, [
+        OSLO.stationInformationUrl,
+        OSLO.stationStatusUrl,
+      ]);
+      assert.equal(info.data.stations.length, 1);
+      assert.equal(status.data.stations.length, 1);
+
+      const response = await mountGbfsProxy()(
+        '/api/gbfs/' + encodeURIComponent(OSLO.stationStatusUrl),
+      );
+      assert.equal(response.status, 200);
+      assert.equal(
+        response.headers.get('x-gbfs-upstream'),
+        'gbfs.urbansharing.com',
       );
     },
   );

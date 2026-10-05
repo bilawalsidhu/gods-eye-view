@@ -429,6 +429,31 @@ test('bike share names the systems it did not search', async () => {
   );
 });
 
+test('bike share over Oslo searches Oslo Bysykkel only', async () => {
+  const requested = [];
+  const result = await composeCatalog({
+    tools: coreTools,
+    services: {
+      bikeshare: {
+        systems: GBFS_CITY_REGISTRY,
+        getStations: async (url) => {
+          requested.push(url);
+          return { data: { stations: [] } };
+        },
+      },
+    },
+  }).call('get_bike_share', {
+    area: { lat: 59.9139, lon: 10.7522, radius_km: 5 },
+  });
+  assert.deepEqual(result.data.systems, ['Oslo, Norway']);
+  assert.deepEqual(result.data.systems_not_searched, []);
+  assert.ok(
+    requested.every((url) =>
+      url.startsWith('https://gbfs.urbansharing.com/oslobysykkel.no/'),
+    ),
+  );
+});
+
 test('traffic counts only roads inside a radius area and reports missing tiles', async () => {
   const flow = (segments, partial = false) => ({
     getStatus: async () => ({ hasKey: true }),

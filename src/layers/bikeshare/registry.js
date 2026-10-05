@@ -23,6 +23,26 @@ function bcycleEntry({
     ...buildBcycleUrls(systemId),
   };
 }
+function urbanSharingEntry({
+  id,
+  city,
+  centerLat,
+  centerLon,
+  systemId,
+  provider,
+  loadRadiusKm = 100,
+}) {
+  return {
+    id,
+    city,
+    centerLat,
+    centerLon,
+    loadRadiusKm,
+    provider,
+    stationInformationUrl: `https://gbfs.urbansharing.com/${systemId}/station_information.json`,
+    stationStatusUrl: `https://gbfs.urbansharing.com/${systemId}/station_status.json`,
+  };
+}
 const RAW_GBFS_CITY_REGISTRY = [
   {
     id: 'nyc-citibike',
@@ -317,6 +337,30 @@ const RAW_GBFS_CITY_REGISTRY = [
     centerLat: 34.4208,
     centerLon: -119.6982,
     systemId: 'bcycle_santabarbara',
+  }),
+  urbanSharingEntry({
+    id: 'oslo-bysykkel',
+    city: 'Oslo, Norway',
+    centerLat: 59.9139,
+    centerLon: 10.7522,
+    systemId: 'oslobysykkel.no',
+    provider: 'Oslo Bysykkel',
+  }),
+  urbanSharingEntry({
+    id: 'bergen-bysykkel',
+    city: 'Bergen, Norway',
+    centerLat: 60.3913,
+    centerLon: 5.3221,
+    systemId: 'bergenbysykkel.no',
+    provider: 'Bergen Bysykkel',
+  }),
+  urbanSharingEntry({
+    id: 'trondheim-bysykkel',
+    city: 'Trondheim, Norway',
+    centerLat: 63.4305,
+    centerLon: 10.3951,
+    systemId: 'trondheimbysykkel.no',
+    provider: 'Trondheim Bysykkel',
   }),
 ];
 function normalizeRegistryEntry(entry) {
