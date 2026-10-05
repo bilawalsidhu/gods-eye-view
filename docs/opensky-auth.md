@@ -1,6 +1,6 @@
 # OpenSky Auth Setup
 
-God's Eye View uses explicit auth modes for `/api/opensky`:
+God's Eye View uses explicit auth modes for `/api/flights`:
 
 - `OPENSKY_AUTH_MODE=oauth` (default, recommended)
 - `OPENSKY_AUTH_MODE=auto` (OAuth first, then Basic fallback)
@@ -54,7 +54,7 @@ OPENSKY_AUTH_MODE=basic ./scripts/dev-fresh.sh
 Inspect proxy headers:
 
 ```bash
-curl -si http://localhost:4173/api/opensky | grep -iE 'HTTP/|X-OpenSky-Auth'
+curl -si http://localhost:4173/api/flights | grep -iE 'HTTP/|X-OpenSky-Auth'
 ```
 
 Useful reasons:

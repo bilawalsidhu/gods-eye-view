@@ -25,6 +25,36 @@ let _openskyCacheMeta = null;
 let _openskyCacheSourceEpochMs = null;
 /** TTL for the OpenSky response cache (ms). */
 const OPENSKY_CACHE_MS = 9000;
+/** Per-attempt limit for the global snapshot; it normally arrives in ~1.5 s. */
+const OPENSKY_ATTEMPT_TIMEOUT_MS = 10_000;
+const OPENSKY_STATES_URL =
+  'https://opensky-network.org/api/states/all?extended=1';
+
+/**
+ * Fetch and read the global snapshot, giving each attempt
+ * OPENSKY_ATTEMPT_TIMEOUT_MS and retrying once when an attempt times out or
+ * the connection fails. A second failure throws, which the proxy answers
+ * from its stale cache or the regional fallback.
+ * @param {Record<string, string>} headers Request headers.
+ * @returns {Promise<{upstream: Response, body: string}>}
+ */
+async function fetchOpenSkyStates(headers) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const upstream = await fetch(OPENSKY_STATES_URL, {
+        headers,
+        signal: AbortSignal.timeout(OPENSKY_ATTEMPT_TIMEOUT_MS),
+      });
+      return { upstream, body: await upstream.text() };
+    } catch (error) {
+      if (attempt >= 2) throw error;
+      console.warn(
+        '[OpenSky] global snapshot attempt failed, retrying:',
+        error?.message || error,
+      );
+    }
+  }
+}
 // --- OpenSky credit governor (field-test fix 2026-07-06) -------------------
 // The global /states/all this proxy fetches costs 4 CREDITS per call against
 // OpenSky's ~4000/day authenticated budget — a day with the app open burned
@@ -45,7 +75,7 @@ let _openskyCooldownUntil = 0;
  * Milliseconds left on the 429 cooldown, or 0 when upstream may be called.
  *
  * Read-only view of lever 2 above, exported so the OTHER routes that spend the
- * same daily credit budget can honor it. `/api/opensky-track` costs 4 credits
+ * same daily credit budget can honor it. `/api/flights/track` costs 4 credits
  * per call against this account just as `/states/all` does, so minting one
  * while this proxy is cooling would spend budget the account has already been
  * told it does not have. Only this module writes the cooldown.
@@ -122,6 +152,7 @@ export async function getOpenSkyToken() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          signal: AbortSignal.timeout(OPENSKY_ATTEMPT_TIMEOUT_MS),
           body: `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}`,
         },
       );
@@ -364,8 +395,12 @@ function openSkySourceIsStale(sourceEpochMs, now = Date.now()) {
  */
 export function openSkyProxy() {
   const installMiddleware = (server) => {
-    server.middlewares.use('/api/opensky', async (req, res) => {
+    server.middlewares.use('/api/flights', async (req, res, next) => {
       try {
+        // This mount also matches its /track route, served by its own handler.
+        if (new URL(req.url || '/', 'http://localhost').pathname !== '/')
+          return next();
+        res.setHeader('X-Feed-Source', 'OpenSky Network');
         const requestedMode = normalizeOpenSkyAuthMode(
           process.env.OPENSKY_AUTH_MODE,
         );
@@ -485,10 +520,7 @@ export function openSkyProxy() {
           }
         }
 
-        let upstream = await fetch(
-          'https://opensky-network.org/api/states/all?extended=1',
-          { headers },
-        );
+        let { upstream, body } = await fetchOpenSkyStates(headers);
         // Auto-mode fallback: if OAuth was rejected, retry with Basic credentials
         if (
           (upstream.status === 401 || upstream.status === 403) &&
@@ -500,15 +532,11 @@ export function openSkyProxy() {
             Accept: 'application/json',
             Authorization: `Basic ${Buffer.from(`${basicUser}:${basicPass}`).toString('base64')}`,
           };
-          upstream = await fetch(
-            'https://opensky-network.org/api/states/all?extended=1',
-            { headers: retryHeaders },
-          );
+          ({ upstream, body } = await fetchOpenSkyStates(retryHeaders));
           usedMode = 'basic';
           reason = 'oauth_rejected_fallback_basic';
         }
 
-        let body = await upstream.text();
         const sourceEpochMs = upstream.ok ? openSkySourceEpochMs(body) : null;
         if (
           upstream.ok &&

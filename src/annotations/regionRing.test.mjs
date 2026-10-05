@@ -10,19 +10,32 @@ function featureSource(overrides = {}) {
   return Object.assign(source, overrides);
 }
 
-const texasGeocode = {
+// A state-typed place outside every bundled boundary, so the admin-boundary
+// feature lookup (not the bundled packs) answers.
+const offPackGeocode = {
   async geocode() {
     return {
       place: {
-        lat: 31.0,
-        lng: -99.9,
-        label: 'Texas, USA',
-        name: 'Texas',
+        lat: 0.5,
+        lng: -150.5,
+        label: 'Atlantis',
+        name: 'Atlantis',
         types: ['administrative_area_level_1', 'political'],
       },
     };
   },
 };
+
+function geocoderFor(place) {
+  const calls = [];
+  return {
+    calls,
+    async geocode(query) {
+      calls.push(query);
+      return { place };
+    },
+  };
+}
 
 test('region ring: Natural Earth names resolve without a geocoder', async () => {
   const { resolveRegionRingForQuery } = createAnnotationResolver({
@@ -50,13 +63,13 @@ test('region ring: a slow admin-boundary lookup returns region-timeout within th
   });
   const started = Date.now();
   const region = await resolveRegionRingForQuery(
-    'Texas',
+    'Atlantis',
     undefined,
-    texasGeocode,
+    offPackGeocode,
     { budgetMs: 50 },
   );
   assert.deepEqual(region, {
-    name: 'Texas',
+    name: 'Atlantis',
     ring: null,
     error: 'region-timeout',
   });
@@ -77,10 +90,64 @@ test('region ring: an unbounded budget waits for the lookup', async () => {
     }),
   });
   const region = await resolveRegionRingForQuery(
-    'Texas',
+    'Atlantis',
     undefined,
-    texasGeocode,
+    offPackGeocode,
     { budgetMs: Infinity },
   );
   assert.equal(region, null);
+});
+
+test('region ring: bundled states and counties resolve without a geocoder', async () => {
+  const lookups = [];
+  const { resolveRegionRingForQuery } = createAnnotationResolver({
+    featureSource: featureSource({
+      getAdministrativeAreas: async () => {
+        lookups.push('admin');
+        return null;
+      },
+    }),
+  });
+  const geocoder = geocoderFor(null);
+  for (const [query, name] of [
+    ['Texas', 'Texas'],
+    ['Bavaria', 'Bavaria'],
+    ['Travis County, Texas', 'Travis County'],
+  ]) {
+    const region = await resolveRegionRingForQuery(query, undefined, geocoder);
+    assert.equal(region?.name, name, query);
+    assert.ok(region.ring.length >= 8, `${query} has a real ring`);
+  }
+  assert.deepEqual(geocoder.calls, [], 'no geocoding');
+  assert.deepEqual(lookups, [], 'no boundary lookups');
+});
+
+test('region ring: a geocoder-typed state resolves from the bundled pack', async () => {
+  const lookups = [];
+  const { resolveRegionRingForQuery } = createAnnotationResolver({
+    featureSource: featureSource({
+      getAdministrativeAreas: async () => {
+        lookups.push('admin');
+        return null;
+      },
+    }),
+  });
+  // "Georgia" alone is also a country, so the words don't settle it; the
+  // geocoder's state type and point inside the US state do.
+  const geocoder = geocoderFor({
+    lat: 32.16,
+    lng: -82.9,
+    label: 'Georgia, USA',
+    name: 'Georgia',
+    types: ['administrative_area_level_1', 'political'],
+  });
+  const region = await resolveRegionRingForQuery(
+    'Georgia',
+    undefined,
+    geocoder,
+  );
+  assert.equal(region?.name, 'Georgia');
+  assert.ok(region.ring.length >= 8);
+  assert.deepEqual(geocoder.calls, ['Georgia']);
+  assert.deepEqual(lookups, [], 'no boundary lookups');
 });
