@@ -287,6 +287,7 @@ export class PanelChrome {
       'pp-toggles',
       'cctv-panel',
       'weather-panel',
+      'cits-panel',
       'recent-imagery-panel',
       'global-context-panel',
     ].includes(panelEl?.id);

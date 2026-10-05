@@ -1,0 +1,142 @@
+/* C-ITS layer settings panel: same glass card as the Weather panel. */
+#right-context-rail > #cits-panel {
+  position: relative;
+  inset: auto;
+  flex: 0 0 auto;
+  width: 100%;
+  max-height: 100%;
+  pointer-events: auto;
+}
+#right-context-rail > #cits-panel:not(.collapsed) {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 1;
+  min-height: 0;
+}
+#right-context-rail #cits-panel.collapsed {
+  width: var(--right-display-collapsed-width);
+  margin-left: auto;
+}
+#right-context-rail #cits-panel.collapsed .cits-panel-inner {
+  height: 50px;
+  min-height: 50px;
+  box-sizing: border-box;
+}
+.cits-panel-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  max-height: 100%;
+  box-sizing: border-box;
+  padding: 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+#cits-panel .panel-glow {
+  position: absolute;
+  inset: -18px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 212, 255, 0.16) 0%,
+    transparent 65%
+  );
+  filter: blur(16px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+#cits-panel .panel-header {
+  flex: 0 0 auto;
+}
+#cits-panel-count {
+  color: var(--text-secondary);
+  font: 9px var(--font-mono);
+}
+#cits-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  max-height: calc(var(--right-stack-max-height, 50svh) - 64px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.46) transparent;
+  color: var(--text-dim);
+  font: 9px/1.45 var(--font-mono);
+  letter-spacing: 0.5px;
+}
+#cits-panel.collapsed #cits-panel-body,
+#cits-panel[hidden] {
+  display: none !important;
+}
+#cits-panel.collapsed .panel-title {
+  font-size: 8px;
+  letter-spacing: 1.8px;
+}
+.cits-section-title {
+  color: var(--text-secondary);
+  font-size: 8px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+}
+.cits-range {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  align-items: center;
+}
+.cits-range input[type='range'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: var(--accent-cyan, #00d4ff);
+}
+.cits-range output {
+  color: var(--text-primary, #e9ecef);
+}
+.cits-kinds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.cits-kind {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cits-kind[aria-pressed='false'] {
+  opacity: 0.45;
+}
+.cits-kind .cits-swatch {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.85);
+  flex: 0 0 auto;
+}
+.cits-kind .cits-kind-count {
+  margin-left: auto;
+  color: var(--text-primary, #e9ecef);
+}
+.cits-status {
+  color: var(--text-secondary);
+}
+.cits-reset {
+  align-self: flex-start;
+}
