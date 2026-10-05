@@ -17,6 +17,7 @@ import {
   MAX_IMPORTED_FILES,
   loadGeoFile,
 } from '../data/geoFileImport.js';
+import { flyToDataSource } from './flyToDataSource.js';
 
 // One color per file, in import order, from the whiteboard palette.
 const COLORS = ['#39d0ff', '#ffb547', '#5dff9f', '#ff6b6b', '#8be9ff'];
@@ -33,6 +34,7 @@ export function initGeoFileImport({
   viewer,
   load = loadGeoFile,
   document: doc = globalThis.document,
+  flyToSource = flyToDataSource,
 }) {
   const button = doc?.getElementById('geo-import-button');
   const input = doc?.getElementById('geo-import-input');
@@ -120,7 +122,9 @@ export function initGeoFileImport({
     const item = find(id);
     if (!item) return false;
     if (!item.visible) setVisible(id, true);
-    viewer.flyTo?.(item.dataSource, { duration: 1.5 });
+    // Not viewer.flyTo: it frames ground-clamped points underground until
+    // the destination's terrain has loaded (see ./flyToDataSource.js).
+    flyToSource(viewer, item.dataSource);
     return true;
   }
 

@@ -1959,6 +1959,7 @@
       "src/annotations/drawMode.js",
       "src/annotations/drawTool.js",
       "src/data/geoFileImport.js",
+      "src/ui/flyToDataSource.js",
       "src/ui/geoFileImport.js",
       "src/data/routeSteps.js",
       "src/layers/directions/index.js",
