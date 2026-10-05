@@ -10,7 +10,8 @@ const ACTION_LABELS = Object.freeze({
 });
 
 function requireText(value, name) {
-  if (typeof value !== 'string' || !value.trim()) throw new TypeError(`${name} is required.`);
+  if (typeof value !== 'string' || !value.trim())
+    throw new TypeError(`${name} is required.`);
   return value.trim();
 }
 
@@ -22,7 +23,8 @@ function requireHttpsUrl(value) {
   } catch {
     throw new TypeError('contactRoute must be an HTTPS URL.');
   }
-  if (url.protocol !== 'https:') throw new TypeError('contactRoute must be an HTTPS URL.');
+  if (url.protocol !== 'https:')
+    throw new TypeError('contactRoute must be an HTTPS URL.');
   return url.href;
 }
 
@@ -34,13 +36,15 @@ function requireCandidateUrl(candidate) {
   } catch {
     throw new TypeError('candidate.url must be an HTTPS URL.');
   }
-  if (url.protocol !== 'https:') throw new TypeError('candidate.url must be an HTTPS URL.');
+  if (url.protocol !== 'https:')
+    throw new TypeError('candidate.url must be an HTTPS URL.');
   return candidateUrl;
 }
 
 export function createFranceEuDraft(input = {}) {
   const action = requireText(input.action, 'action');
-  const actionLabel = ACTION_LABELS[action] ?? `demande relative à l'action « ${action} »`;
+  const actionLabel =
+    ACTION_LABELS[action] ?? `demande relative à l'action « ${action} »`;
   const controllerName = requireText(input.controllerName, 'controllerName');
   const contactRoute = requireHttpsUrl(input.contactRoute);
   const candidateUrl = requireCandidateUrl(input.candidate);
@@ -69,18 +73,45 @@ export function createFranceEuDraft(input = {}) {
 }
 
 export function approveDraft(draft, approval, caseRecord, nowMs) {
-  if (!draft || draft.status !== 'draft') return { ok: false, code: 'DRAFT_NOT_APPROVABLE', message: 'Only a draft can be approved.' };
-  if (!approval || typeof approval.actor !== 'string' || !approval.actor.trim()) {
-    return { ok: false, code: 'APPROVAL_REQUIRED', message: 'Approval requires an explicit actor.' };
+  if (!draft || draft.status !== 'draft')
+    return {
+      ok: false,
+      code: 'DRAFT_NOT_APPROVABLE',
+      message: 'Only a draft can be approved.',
+    };
+  if (
+    !approval ||
+    typeof approval.actor !== 'string' ||
+    !approval.actor.trim()
+  ) {
+    return {
+      ok: false,
+      code: 'APPROVAL_REQUIRED',
+      message: 'Approval requires an explicit actor.',
+    };
   }
-  if (!Number.isFinite(nowMs)) return { ok: false, code: 'APPROVAL_TIMESTAMP_REQUIRED', message: 'Approval requires an explicit timestamp.' };
+  if (!Number.isFinite(nowMs))
+    return {
+      ok: false,
+      code: 'APPROVAL_TIMESTAMP_REQUIRED',
+      message: 'Approval requires an explicit timestamp.',
+    };
   try {
     requireCandidateUrl(draft.candidate);
   } catch {
-    return { ok: false, code: 'CANDIDATE_URL_REQUIRED', message: 'Approval requires an exact HTTPS candidate URL.' };
+    return {
+      ok: false,
+      code: 'CANDIDATE_URL_REQUIRED',
+      message: 'Approval requires an exact HTTPS candidate URL.',
+    };
   }
 
-  const authorization = canCreateRequest(caseRecord, draft.candidate, draft.action, nowMs);
+  const authorization = canCreateRequest(
+    caseRecord,
+    draft.candidate,
+    draft.action,
+    nowMs,
+  );
   if (!authorization.ok) return authorization;
 
   return {

@@ -12,28 +12,113 @@ cd gods-eye-view
 nvm install 24.14.0
 nvm use 24.14.0
 npm install
-./scripts/dev-fresh.sh        # or: GOOGLE_MAPS_API_KEY="…" npm run dev
+npm run doctor
+./scripts/dev-fresh.sh        # or: npm run dev (keys are optional)
 ```
 
-You need a **Google Maps API key** with the Map Tiles API enabled (see the [README](README.md#-api-keys)). Most data layers work with no other accounts. On macOS the launcher pulls keys from the Keychain; on any platform you can pass them as env vars or use a `.env` (copy `.env.example`).
+No key is required to start: the app boots on keyless Esri World Imagery with
+keyless terrain, and OSM takes over automatically if Esri is unreachable.
+Google Maps provides direct photorealistic 3D and place search; Cesium ion
+provides ion-hosted Google 3D plus optional Bing/world-terrain stacks.
+On macOS the launcher pulls optional keys from
+the Keychain; on any platform you can pass them as env vars or use a `.env`.
+People who only want to run the app can instead install the repository directly
+through Pinokio; the terminal path above remains the contributor path.
 
 Open `http://localhost:4173`. Before sending a PR run `npm run build`, `npm test`, and `npm run test:track` (dev server must be up) — **all three must stay green.**
+
+## Checking a built app locally
+
+Run `npm run build` followed by `npm run preview`. Preview serves the built
+frontend and local data-provider APIs. Keep optional server credentials in the
+ignored `.env`; browser keys are embedded during the build, so rebuild after
+changing them. Provider Settings and `/api/setup/*` are development-only: edit
+configuration through the development app or environment file. Unknown API
+paths return JSON 404 responses. Vite preview is for checking a local build;
+it is not a production server.
+
+## Feature regression gates
+
+Those three are the baseline, not the whole story. Most features also have a
+dedicated headless gate under `scripts/qa-*.mjs` that drives the real app and
+asserts that feature's contract. **Run the gate covering whatever you touched**,
+and say which one you ran in the PR.
+
+Feature gates and a few supporting modules live under the same filename pattern:
+
+```bash
+ls scripts/qa-*.mjs            # gates and their supporting modules
+head -40 scripts/qa-radio.mjs  # what this runnable gate proves and how to run it
+```
+
+Runnable gate entrypoints document what they assert and how to invoke them.
+Most need a dev server; some also need a specific provider key or port. Follow
+the entrypoint's header rather than assuming every matching file accepts the
+same arguments. Only a couple (`qa:map-source-tray`, `qa:transit`) have an
+`npm run` alias.
+
+If you aren't sure which gate covers your change, search `docs/CURRENT-STATE.md`
+for the feature: it names the gate for many of them, and it's the authoritative
+runtime reference either way. `scripts/qa-l9-matrix.mjs` aggregates the broader
+release-candidate checks and selected harnesses; it does not replace the focused
+gate for the feature you changed.
+
+> **CI does not cover this for you.** The workflow runs the setup policy
+> checks, the formatting and package-boundary checks, the unit suite and the
+> production build, plus a Windows onboarding job. It runs neither
+> `npm run test:track` nor any `qa-*.mjs` gate — both need a live dev server
+> and a browser. Include the applicable local run in your PR's validation
+> evidence.
+
+## Share-link layer tokens
+
+Every shareable layer owns an immutable token in `LAYER_STATE_REGISTRY` and
+`src/data/layerStateTokenReservations.json`. Never change or reuse an existing
+token: published v2 links are authored state, and the reservation remains even
+if its layer is later removed.
+
+New layers first use the remaining unreserved single-character digits (`0`
+through `9`), then the two-character base-36 namespace (`00` through `zz`). On the
+current published ledger, `1` and `2` are already owned, so the next choices
+are `0`, `3` through `9`, then `00`. After rebasing onto the latest `main`, run
+`npm run layer-token:next -- <layer-id>`, add that result to both the permanent
+JSON reservation ledger and registry entry, and keep the exact registered-layer
+count assertion up to date. The token is assigned against the merge-time base, not
+claimed when a PR opens, so another merged layer may require rerunning the
+command after a rebase. Never repurpose a published or retired token.
+Run `npm run layer-token:check -- --base-ref origin/main` after the rebase;
+this checks that every published assignment remains reserved and that new
+assignments consume free digits before the two-character tokens, in order.
+Pull-request CI runs the same check against `main`.
+
+The helper reads the local ledger; it does not run during a rebase or edit files.
+If another PR publishes your provisional token first, keep every published
+registry entry and ledger reservation from the refreshed `main`. Temporarily
+remove only your still-unpublished layer's registry entry and ledger row so the
+local registry is valid again, then rerun `npm run layer-token:next -- <layer-id>`.
+For example, if PR A publishes `0` while PR B still provisionally uses `0`,
+PR B removes only its own provisional entry, reruns the helper, and receives
+`3`. Put `3` on PR B's registry entry and ledger row, update its pinned count
+and token tests, then rerun `npm run layer-token:check -- --base-ref origin/main`.
+An invalid duplicate ledger can fail during module import before the helper
+prints anything; never fix that by renaming or deleting PR A's published token.
 
 ## Good first contributions
 
 The highest-leverage places to jump in:
 
 - **🌆 Add a CCTV source pack.** Austin is the reference camera source. Adding another city means a clean public camera catalog with coordinates, attribution, and server-registered frame URLs (the proxy only fetches registered URLs — never client-supplied ones, see [SECURITY.md](SECURITY.md)). City packs are the best first lane.
-- **🛰️ Add or improve a data layer.** Each layer is one self-contained module in `src/data/<layer>.js` implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template.
-- **🎙️ Extend voice control.** Voice tools are declared server-side (`GEV_REALTIME_TOOLS` in `vite.config.js`) and executed client-side (`src/voice/gevActions.js`). Keep the tool surface tight and the responses honest (confirm only what actually happened).
+- **🛰️ Add or improve a data layer.** Layer factories live in `src/layers/<family>/`, with source, record, controller and renderer owners implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template.
+- **🎙️ Extend voice control.** Voice arguments are defined in `src/voice/actionSchemas.js`, with server-side descriptions in `server/providers/openai/tools.js` and client-side execution in `src/voice/gevActions.js`. Keep the tool surface tight and the responses honest (confirm only what actually happened).
 - **🎨 Add a visual style.** Styles are GLSL post-process shaders in `src/styles/`.
 - **🐛 Fix bugs / improve the first-run experience.** See [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
 
 ## Architecture in one minute
 
 - **No framework.** Vanilla JS + [CesiumJS](https://cesium.com/platform/cesiumjs/) + [Vite](https://vitejs.dev/).
-- **UI lives in `src/ui.js`** (panels, HUD, styles, the control facade). **Layer logic lives in `src/data/<layer>.js`.** Keep them separate.
-- **Secrets stay server-side.** Anything needing a private key goes through a Vite proxy in `vite.config.js`. The browser only ever sees the Google Maps key (which you restrict) and ephemeral tokens.
+- **Assembly lives in `src/app/`; standalone defaults live in `src/standalone/`.** UI controllers live in `src/ui/`, layer factories in `src/layers/`, portable sources in `src/sources/`, and application operations in `src/services/`. Existing `src/ui.js` and `src/data/<layer>.js` entries retain compatibility; new code belongs with its focused owner.
+- Sources acquire records; renderers own Cesium resources. Import `gods-eye-view/layers/<family>/source` when only a source factory is needed. Common voice controls consume the session interface; protocol adapters own connection details.
+- **Secrets stay server-side.** Anything needing a private key goes through a local proxy under `server/providers/`. The browser only ever sees the Google Maps key (which you restrict) and ephemeral tokens.
 - `docs/CURRENT-STATE.md` is the authoritative runtime reference — read it first.
 
 ## Coding style
@@ -43,13 +128,37 @@ The highest-leverage places to jump in:
 - Match the surrounding code — comment density, naming, and idiom.
 - Prefer small, reviewable commits. Conventional-commit-style prefixes (`feat:`, `fix:`, `perf:`, `docs:`) are appreciated but not required.
 
+## Formatting and reusable components
+
+Run `npm run format` before submitting changes, then `npm run format:check`
+and `npm run check:boundaries`. Runtime JavaScript under the owned roots in
+`scripts/format-runtime.json` is discovered automatically, including new files.
+Tests and other adopted files remain listed in `scripts/format-scope.json`.
+Git-ignored files and `.prettierignore` exclusions are not automatically adopted.
+Keep mechanical formatting separate from behavioral edits. CI checks formatting
+and package boundaries on Linux and Windows.
+
+Reusable package exports own their state and receive application operations
+through explicit callbacks. They must not import the standalone bootstrap or
+local Node services. Update `scripts/package-boundaries.json` and consumer tests
+when adding an export or expanding a component. See
+[formatting and component boundaries](docs/CODE-BOUNDARIES.md) for the current
+ownership and adoption process.
+
 ## Pull requests
 
 1. Branch off `main`.
-2. Keep `npm run build`, `npm test`, and `npm run test:track` green and avoid new console errors.
+2. Keep `npm run build`, `npm test`, and `npm run test:track` green and avoid new console errors, plus the [feature gate](#feature-regression-gates) for the area you touched.
 3. If you change runtime behavior, update `docs/CURRENT-STATE.md` and `CHANGELOG.md` in the same PR.
 4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution. **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
 5. Describe what you changed and how you verified it (screenshots welcome for anything visual).
+
+## Maintainers
+
+God's Eye View is maintained by [Bilawal Sidhu](https://github.com/bilawalsidhu)
+and [Sameh Khamis](https://github.com/samehkhamis) at
+[Halfpixel](https://halfpixel.ai). Either maintainer can review and merge
+contributions.
 
 ## Ground rules
 

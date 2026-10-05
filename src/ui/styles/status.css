@@ -1,0 +1,417 @@
+/* ── Top-center Globe Actions ────────────────── */
+#top-center-actions {
+  position: fixed;
+  top: 32px;
+  left: 50%;
+  z-index: 100;
+  display: flex;
+  gap: 8px;
+  transform: translateX(-50%);
+}
+
+#top-center-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    opacity var(--transition-fast),
+    transform var(--transition-fast);
+  outline: none;
+}
+
+#top-center-actions button:hover,
+#top-center-actions button:focus-visible {
+  border-color: var(--glass-border-hover);
+  background: rgba(255, 255, 255, 0.06);
+  transform: scale(1.1);
+}
+
+#top-center-actions button:active {
+  transform: scale(0.95);
+}
+
+#top-center-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+  transform: none;
+}
+
+#top-center-actions .material-symbols-outlined {
+  font-size: 18px;
+}
+
+#tilt-map-view[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 14px rgba(0, 212, 255, 0.18);
+}
+
+#north-up-view {
+  --camera-heading: 0deg;
+  position: relative;
+}
+
+.camera-compass-n {
+  position: absolute;
+  top: 2px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+#north-up-view .camera-compass-needle {
+  font-size: 17px;
+  transform: rotate(calc(-1 * var(--camera-heading)));
+  transition: transform var(--transition-fast);
+}
+
+#global-loading-status {
+  position: fixed;
+  top: 74px;
+  left: 50%;
+  z-index: 102;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(0, 212, 255, 0.24);
+  background: rgba(3, 10, 18, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: rgba(170, 252, 255, 0.92);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.35px;
+  text-transform: uppercase;
+  transform: translateX(-50%);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.34),
+    0 0 14px rgba(0, 212, 255, 0.08);
+  pointer-events: none;
+}
+#global-loading-status[hidden] {
+  display: none;
+}
+#global-loading-label {
+  color: rgba(184, 244, 255, 0.92);
+}
+#global-loading-detail {
+  min-width: 34px;
+  max-width: min(220px, 38vw);
+  overflow: hidden;
+  color: #00e1ff;
+  font-weight: 600;
+  letter-spacing: 1.6px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#global-loading-status:is(
+  [data-state='complete'],
+  [data-state='cancelled'],
+  [data-state='error']
+) {
+  justify-content: center;
+  text-align: center;
+}
+#global-loading-status:is(
+    [data-state='complete'],
+    [data-state='cancelled'],
+    [data-state='error']
+  )
+  #global-loading-detail {
+  display: none;
+}
+#global-loading-status[data-state='error'] {
+  border-color: rgba(255, 98, 82, 0.55);
+  color: #ff9b8e;
+}
+#global-loading-status[data-state='error'] #global-loading-label,
+#global-loading-status[data-state='error'] #global-loading-detail {
+  color: #ff9b8e;
+}
+#global-loading-status[data-state='cancelled'] {
+  color: #ffd488;
+}
+#global-loading-status[data-state='retry'] {
+  border-color: rgba(255, 212, 136, 0.55);
+}
+#global-loading-status[data-state='retry'] #global-loading-label,
+#global-loading-status[data-state='retry'] #global-loading-detail {
+  color: #ffd488;
+}
+#global-loading-status[data-state='cancelled'] #global-loading-label,
+#global-loading-status[data-state='cancelled'] #global-loading-detail {
+  color: #ffd488;
+}
+#global-loading-status[data-state='acquiring'] {
+  border-color: rgba(0, 212, 255, 0.42);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.34),
+    0 0 18px rgba(0, 212, 255, 0.12);
+}
+
+.share-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+#traffic-sync-chip,
+#cctv-sync-chip {
+  position: fixed;
+  top: 112px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 101;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(0, 212, 255, 0.24);
+  background: rgba(3, 10, 18, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: rgba(170, 252, 255, 0.92);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1.35px;
+  text-transform: uppercase;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.34),
+    0 0 14px rgba(0, 212, 255, 0.08);
+}
+
+/* Stacked below the traffic chip so both can show at once */
+#cctv-sync-chip {
+  top: 146px;
+}
+
+#traffic-sync-chip.visible,
+#cctv-sync-chip.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+#traffic-sync-label,
+#cctv-sync-label {
+  color: rgba(184, 244, 255, 0.92);
+}
+
+#traffic-sync-progress,
+#cctv-sync-progress {
+  color: #00e1ff;
+  font-weight: 600;
+  letter-spacing: 1.6px;
+  min-width: 34px;
+  text-align: right;
+}
+
+/* The settled traffic chip carries no progress number — the label's coverage
+   figure is the honest one. Collapse the empty slot so the chip closes up
+   instead of trailing a 34px stub and its flex gap. */
+#traffic-sync-progress:empty {
+  display: none;
+}
+
+/* ── Split-flap chip text ─────────────────────────────────────────
+   Per-character departure-board flip when a chip label changes.
+   Driven entirely by src/splitFlap.js, which rebuilds the label as
+   one span per character on the change and strips them again once
+   the cascade lands.
+
+   The DOM text is the truth and its node never moves. A chip label is
+   upgraded once into a permanent shell — a .gev-flap-text span holding
+   one long-lived Text node, plus an aria-hidden .gev-flap-cells
+   sibling — and from then on a label change is only `node.data = next`.
+   During a cascade the host takes .gev-flap-active, which clips the
+   real text out of view and lets the cells stand in for it. The cells
+   carry no text at all: both glyphs are generated content (::before =
+   outgoing, ::after = incoming), and generated content never reaches
+   textContent. That is what keeps QA pins and the traffic chip's own
+   `textContent !==` guard honest, and it lets the cells be rebuilt
+   freely while the aria-live region sees only one characterData
+   change per label update.
+
+   Motion matches the cockpit odometer roll (.cockpit-roll-token):
+   same cubic-bezier, same reduced-motion treatment. Only the
+   left-to-right stagger is new — that cascade is what makes it read
+   as a Solari board rather than a counter.
+   ------------------------------------------------------------------ */
+/* While the flaps play, the real text is clipped out of view but stays in
+   the DOM and in the accessibility tree — same clipped-but-present treatment
+   as .world-overlay-accessibility. It is never removed or reparented. */
+.gev-flap-host.gev-flap-active > .gev-flap-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+/* Permanent sibling: empty (and so zero-width) whenever no cascade is running. */
+.gev-flap-cells {
+  white-space: pre;
+}
+.gev-flap-cell {
+  display: inline-block;
+  /* Chip labels carry real spaces; a collapsed space would drop a column. */
+  white-space: pre;
+}
+/* The incoming glyph is in flow, so it — not any text node — is what gives
+   the column its natural width. EVERY column has one, including a column the
+   new string does not reach: that one carries a blank, so it holds its width
+   and its index for the whole cascade instead of collapsing. Collapsing would
+   stack the absolutely-positioned outgoing glyphs on one x and would let a
+   later glyph slide into an earlier column. */
+.gev-flap-cell::after {
+  content: attr(data-flap-next);
+  display: inline-block;
+  white-space: pre;
+}
+.gev-flap-cell.is-flapping {
+  position: relative;
+  /* Relative to the chip's own font size, so the foreshortening reads the
+     same on the 8px status chips as it would anywhere else. */
+  perspective: 4em;
+}
+.gev-flap-cell.is-flapping::before,
+.gev-flap-cell.is-flapping::after {
+  transform-origin: 50% 50%;
+  backface-visibility: hidden;
+}
+.gev-flap-cell.is-flapping::after {
+  animation: gev-flap-in var(--gev-flap-dur, 190ms)
+    cubic-bezier(0.2, 0.75, 0.25, 1) var(--gev-flap-delay, 0ms) both;
+}
+/* Out of flow, so the outgoing glyph overlays its own column without
+   affecting layout — one per column, each anchored to its own cell box. */
+.gev-flap-cell.is-flapping::before {
+  content: attr(data-flap-prev);
+  position: absolute;
+  top: 0;
+  left: 0;
+  white-space: pre;
+  animation: gev-flap-out var(--gev-flap-dur, 190ms)
+    cubic-bezier(0.2, 0.75, 0.25, 1) var(--gev-flap-delay, 0ms) both;
+}
+/* Length changes are eased, never snapped. A GROWING label reserves its new
+   columns the moment the cells go in, so splitFlap.js eases from the previous
+   on-screen width to the cascade width at the start. A SHRINKING one holds
+   every column for the whole cascade, so its ease runs at SETTLEMENT instead,
+   from the cascade width down to the natural width — one smooth transition
+   after the flaps have landed, rather than columns collapsing underneath
+   them. */
+.gev-flap-sizing {
+  display: inline-block;
+  transition: width var(--gev-flap-total, 500ms)
+    cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+/* The old leaf hinges down and away on the cell's midline. */
+@keyframes gev-flap-out {
+  0% {
+    transform: rotateX(0deg);
+    opacity: 1;
+  }
+  48% {
+    transform: rotateX(-88deg);
+    opacity: 0.5;
+  }
+  100% {
+    transform: rotateX(-90deg);
+    opacity: 0;
+  }
+}
+/* The new leaf waits for the old one to clear, then drops in and settles
+   with a single small overshoot — the mechanical clack. */
+@keyframes gev-flap-in {
+  0% {
+    transform: rotateX(90deg);
+    opacity: 0;
+  }
+  46% {
+    transform: rotateX(90deg);
+    opacity: 0;
+  }
+  78% {
+    transform: rotateX(-7deg);
+    opacity: 1;
+  }
+  100% {
+    transform: rotateX(0deg);
+    opacity: 1;
+  }
+}
+/* Matches the .cockpit-roll-track treatment: collapse the duration rather
+   than dropping the animation, so the final frame still lands the glyph.
+   src/splitFlap.js also checks the query and takes the instant path, so
+   this is the belt to that braces. */
+@media (prefers-reduced-motion: reduce) {
+  .gev-flap-cell.is-flapping::before,
+  .gev-flap-cell.is-flapping::after {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+  .gev-flap-sizing {
+    transition-duration: 1ms;
+  }
+}
+
+/* ── Toast Notification ──────────────────────── */
+#toast {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  z-index: 200;
+  padding: 10px 24px;
+  background: var(--glass-bg);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--accent);
+  text-transform: uppercase;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.3s ease,
+    visibility 0.3s ease,
+    transform 0.3s ease;
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
+}
+
+#toast.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}

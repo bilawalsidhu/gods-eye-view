@@ -134,6 +134,7 @@ test('tampering or a wrong passphrase locks every case method', async () => {
   await assert.rejects(tampered.loadCase('case-1'), (error) => error?.code === 'DECRYPTION_FAILED');
   await assertEveryCaseMethodIsLocked(tampered);
 
+  store.values.set('case-1', envelope);
   await writer.saveCase({ id: 'case-1', status: 'open' });
   const wrongPassphrase = createDemonForgeVault({ store, cryptoApi, clock: () => 1_700_000_000_000 });
   await wrongPassphrase.unlock('not-the-synthetic-passphrase');

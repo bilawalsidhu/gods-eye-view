@@ -92,7 +92,8 @@ test('self and non-self case kinds stay explicit and non-self mandates need proo
   const missingMandate = createCaseRecord({ kind: CASE_KIND.NON_SELF });
   const missingResult = evaluateCaseAuthorization(missingMandate, nowMs);
   assert.equal(missingResult.ok, false);
-  assert.equal(missingResult.code, 'mandate_missing');
+  assert.equal(missingResult.code, 'mandate_unverified');
+  assert.equal(evaluateCaseAuthorization({ kind: CASE_KIND.NON_SELF }, nowMs).code, 'mandate_missing');
 
   const unsignedCase = createCaseRecord({
     kind: CASE_KIND.NON_SELF,

@@ -13,14 +13,14 @@
  *
  * Usage:
  *   node scripts/qa-vessel-cards.mjs --tag new              # current code
- *   node scripts/qa-vessel-cards.mjs --tag old              # after swapping in the old layer file
+ *   node scripts/qa-vessel-cards.mjs --tag old              # from a checkout of the comparison revision
  *   node scripts/qa-vessel-cards.mjs --ports rotterdam      # subset
  *   node scripts/qa-vessel-cards.mjs --url http://localhost:4173
  *   node scripts/qa-vessel-cards.mjs --data synthetic       # deterministic test fixture
  *   node scripts/qa-vessel-cards.mjs --data synthetic --headful  # real-GPU capture
  *
- * A/B flow: run --tag new, `git show <old-rev>:src/data/aisLiveVessels.js >
- * src/data/aisLiveVessels.js`, run --tag old, then `git restore` the file.
+ * A/B flow: run each accepted revision from a separate checkout, using the
+ * same source configuration and camera fixtures with distinct --tag values.
  * Retained screenshots and same-basename JSON manifests land at
  * qa-shots/vessel-cards-<live-aisstream|synthetic-fixture>-<tag>-<port>.*.
  * The name and manifest both record the data source; the manifest also records
@@ -184,7 +184,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // tile-gated drain budget under SwiftShader on 2026-07-30 — six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
-  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  await puppeteer.executablePath().catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
@@ -253,6 +253,10 @@ async function main() {
 
       const page = await browser.newPage();
       await page.setViewport({ width: 1600, height: 900 });
+      await page.evaluateOnNewDocument(() => {
+        // This harness inspects cards, so keep first-run chrome out of the view.
+        localStorage.setItem('gev:first-run-mission:v1', 'suppressed');
+      });
       page.on('pageerror', (err) => console.error(`    [page-error] ${err.message}`));
 
       await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -319,7 +323,10 @@ async function main() {
           orientation: { heading: p.heading, pitch: p.pitch, roll: 0 },
         });
       }, port);
-      const resettled = settled ? true : await page
+      // A changed camera invalidates the previous settled result. Let the new
+      // view schedule its tiles before checking readiness again.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const resettled = await page
         .waitForFunction(() => {
           const gev = window.__godsEyeView;
           const ais = gev.dataManager.getAll().find((l) => l.id === 'ais-live-vessels');

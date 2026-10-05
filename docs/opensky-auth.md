@@ -1,6 +1,6 @@
 # OpenSky Auth Setup
 
-God's Eye View uses explicit auth modes for `/api/opensky`:
+God's Eye View uses explicit auth modes for `/api/flights`:
 
 - `OPENSKY_AUTH_MODE=oauth` (default, recommended)
 - `OPENSKY_AUTH_MODE=auto` (OAuth first, then Basic fallback)
@@ -14,8 +14,8 @@ Reference: OpenSky REST API docs recommend OAuth2 Client Credentials flow.
 Import credentials from JSON (`clientId`/`clientSecret` or `client_id`/`client_secret`) into Keychain:
 
 ```bash
-./scripts/opensky-import-client.sh /path/to/credentials.json
-# or: npm run opensky:import -- /path/to/credentials.json
+./scripts/opensky-import-client.sh ~/Downloads/credentials.json
+# or: npm run opensky:import -- ~/Downloads/credentials.json
 ```
 
 Then launch:
@@ -32,7 +32,7 @@ Expected startup lines:
 ## Optional: Launch With File (No Keychain Import)
 
 ```bash
-OPENSKY_CREDENTIALS_FILE=/path/to/credentials.json ./scripts/dev-fresh.sh
+OPENSKY_CREDENTIALS_FILE=~/Downloads/credentials.json ./scripts/dev-fresh.sh
 ```
 
 Launchers resolve OAuth creds in this order:
@@ -54,7 +54,7 @@ OPENSKY_AUTH_MODE=basic ./scripts/dev-fresh.sh
 Inspect proxy headers:
 
 ```bash
-curl -si http://localhost:4173/api/opensky | grep -iE 'HTTP/|X-OpenSky-Auth'
+curl -si http://localhost:4173/api/flights | grep -iE 'HTTP/|X-OpenSky-Auth'
 ```
 
 Useful reasons:

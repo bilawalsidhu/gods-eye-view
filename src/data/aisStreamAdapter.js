@@ -26,10 +26,12 @@ const DEFAULT_CLOCK = Object.freeze({
 });
 
 /** Upstream text that identifies a credential rejection. */
-const AUTH_TEXT = /(unauthoriz|unauthoris|forbidden|invalid\s*api[\s_-]*key|invalid\s*key|bad\s*api[\s_-]*key|authentic|api\s*key\s*(is\s*)?(invalid|required|missing|not\s*valid))/i;
+const AUTH_TEXT =
+  /(unauthoriz|unauthoris|forbidden|invalid\s*api[\s_-]*key|invalid\s*key|bad\s*api[\s_-]*key|authentic|api\s*key\s*(is\s*)?(invalid|required|missing|not\s*valid))/i;
 
 /** Upstream text that identifies a rate limit / connection cap. */
-const RATE_TEXT = /(rate[\s_-]*limit|too\s*many\s*(requests|connections)|quota\s*exceeded|429)/i;
+const RATE_TEXT =
+  /(rate[\s_-]*limit|too\s*many\s*(requests|connections)|quota\s*exceeded|429)/i;
 
 /**
  * Parse an HTTP `Retry-After` header into milliseconds.
@@ -61,7 +63,8 @@ export function parseRetryAfterMs(raw, nowMs = Date.now()) {
  */
 export function classifyAisFailure(input = {}) {
   const text = String(input.message || '').trim();
-  const fromHeader = () => parseRetryAfterMs(input.retryAfterHeader, input.nowMs);
+  const fromHeader = () =>
+    parseRetryAfterMs(input.retryAfterHeader, input.nowMs);
 
   let status = Number(input.httpStatus);
   if (!Number.isFinite(status)) {
@@ -72,7 +75,10 @@ export function classifyAisFailure(input = {}) {
   }
 
   if (status === 401 || status === 403) {
-    return { kind: 'auth', message: `AISStream rejected the API key (HTTP ${status})` };
+    return {
+      kind: 'auth',
+      message: `AISStream rejected the API key (HTTP ${status})`,
+    };
   }
   if (status === 429) {
     return {
@@ -82,10 +88,14 @@ export function classifyAisFailure(input = {}) {
     };
   }
   if (Number.isFinite(status) && status >= 400) {
-    return { kind: 'transport', message: `AISStream upgrade failed (HTTP ${status})` };
+    return {
+      kind: 'transport',
+      message: `AISStream upgrade failed (HTTP ${status})`,
+    };
   }
   if (AUTH_TEXT.test(text)) return { kind: 'auth', message: text };
-  if (RATE_TEXT.test(text)) return { kind: 'rate-limit', message: text, retryAfterMs: fromHeader() };
+  if (RATE_TEXT.test(text))
+    return { kind: 'rate-limit', message: text, retryAfterMs: fromHeader() };
   return { kind: 'transport', message: text || 'AISStream websocket error' };
 }
 
@@ -151,7 +161,8 @@ export function aisFrameByteLength(data) {
   if (typeof data === 'string') return data.length;
   if (data instanceof ArrayBuffer) return data.byteLength;
   if (ArrayBuffer.isView(data)) return data.byteLength;
-  if (Array.isArray(data)) return data.reduce((sum, part) => sum + aisFrameByteLength(part), 0);
+  if (Array.isArray(data))
+    return data.reduce((sum, part) => sum + aisFrameByteLength(part), 0);
   return 0;
 }
 
@@ -168,33 +179,35 @@ export function aisFrameByteLength(data) {
  *
  * If AISStream adds a type, add it here — do not infer it.
  */
-export const AIS_RECOGNIZED_MESSAGE_TYPES = Object.freeze(new Set([
-  'PositionReport',
-  'UnknownMessage',
-  'AddressedSafetyMessage',
-  'AddressedBinaryMessage',
-  'AidsToNavigationReport',
-  'AssignedModeCommand',
-  'BaseStationReport',
-  'BinaryAcknowledge',
-  'BinaryBroadcastMessage',
-  'ChannelManagement',
-  'CoordinatedUTCInquiry',
-  'DataLinkManagementMessage',
-  'DataLinkManagementMessageData',
-  'ExtendedClassBPositionReport',
-  'GroupAssignmentCommand',
-  'GnssBroadcastBinaryMessage',
-  'Interrogation',
-  'LongRangeAisBroadcastMessage',
-  'MultiSlotBinaryMessage',
-  'SafetyBroadcastMessage',
-  'ShipStaticData',
-  'SingleSlotBinaryMessage',
-  'StandardClassBPositionReport',
-  'StandardSearchAndRescueAircraftReport',
-  'StaticDataReport',
-]));
+export const AIS_RECOGNIZED_MESSAGE_TYPES = Object.freeze(
+  new Set([
+    'PositionReport',
+    'UnknownMessage',
+    'AddressedSafetyMessage',
+    'AddressedBinaryMessage',
+    'AidsToNavigationReport',
+    'AssignedModeCommand',
+    'BaseStationReport',
+    'BinaryAcknowledge',
+    'BinaryBroadcastMessage',
+    'ChannelManagement',
+    'CoordinatedUTCInquiry',
+    'DataLinkManagementMessage',
+    'DataLinkManagementMessageData',
+    'ExtendedClassBPositionReport',
+    'GroupAssignmentCommand',
+    'GnssBroadcastBinaryMessage',
+    'Interrogation',
+    'LongRangeAisBroadcastMessage',
+    'MultiSlotBinaryMessage',
+    'SafetyBroadcastMessage',
+    'ShipStaticData',
+    'SingleSlotBinaryMessage',
+    'StandardClassBPositionReport',
+    'StandardSearchAndRescueAircraftReport',
+    'StaticDataReport',
+  ]),
+);
 
 /**
  * Resolve an envelope's MMSI, or null.
@@ -221,9 +234,14 @@ export function aisEnvelopeMmsi(envelope, body = {}) {
  * @returns {boolean}
  */
 export function isRecognizedAisEnvelope(envelope) {
-  if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) return false;
+  if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope))
+    return false;
   const messageType = envelope.MessageType;
-  if (typeof messageType !== 'string' || !AIS_RECOGNIZED_MESSAGE_TYPES.has(messageType)) return false;
+  if (
+    typeof messageType !== 'string' ||
+    !AIS_RECOGNIZED_MESSAGE_TYPES.has(messageType)
+  )
+    return false;
   const body = envelope.Message?.[messageType];
   if (!body || typeof body !== 'object') return false;
   return aisEnvelopeMmsi(envelope, body) !== null;
@@ -281,7 +299,10 @@ export function createAisStreamAdapter(options) {
   /** (Re)build the state machine, preserving the generation namespace. */
   function setWatchdogOptions(watchdogOptions = {}) {
     if (watchdog) {
-      generationHighWater = Math.max(generationHighWater, watchdog.highWaterGeneration());
+      generationHighWater = Math.max(
+        generationHighWater,
+        watchdog.highWaterGeneration(),
+      );
     }
     watchdog = createAisWatchdog({
       ...watchdogOptions,
@@ -306,7 +327,9 @@ export function createAisStreamAdapter(options) {
     try {
       socket.terminate();
     } catch (error) {
-      warn(`[AISStream] terminate(${reason || 'unknown'}) failed: ${error?.message || error}`);
+      warn(
+        `[AISStream] terminate(${reason || 'unknown'}) failed: ${error?.message || error}`,
+      );
     }
   }
 
@@ -325,7 +348,8 @@ export function createAisStreamAdapter(options) {
    */
   function runActions(owner, actions) {
     for (const action of actions || []) {
-      if (action.type === 'terminate') terminateGeneration(action.generation, action.reason);
+      if (action.type === 'terminate')
+        terminateGeneration(action.generation, action.reason);
       else if (action.type === 'connect') openSocket(owner, action.generation);
     }
   }
@@ -349,11 +373,18 @@ export function createAisStreamAdapter(options) {
     try {
       socket = createSocket(resolveUrl());
     } catch (error) {
-      failGeneration(owner, generation, classifyAisFailure({ message: error?.message }));
+      failGeneration(
+        owner,
+        generation,
+        classifyAisFailure({ message: error?.message }),
+      );
       return;
     }
     if (!socket) {
-      failGeneration(owner, generation, { kind: 'transport', message: 'socket factory returned nothing' });
+      failGeneration(owner, generation, {
+        kind: 'transport',
+        message: 'socket factory returned nothing',
+      });
       return;
     }
     sockets.set(generation, socket);
@@ -386,7 +417,11 @@ export function createAisStreamAdapter(options) {
       try {
         socket.send(JSON.stringify(buildSubscription()));
       } catch (error) {
-        failGeneration(owner, generation, classifyAisFailure({ message: error?.message }));
+        failGeneration(
+          owner,
+          generation,
+          classifyAisFailure({ message: error?.message }),
+        );
       }
     });
 
@@ -408,7 +443,9 @@ export function createAisStreamAdapter(options) {
           return;
         }
         handleMessage(owner, generation, socket, data).catch((error) => {
-          warn(`[AISStream] message handling failed: ${error?.message || error}`);
+          warn(
+            `[AISStream] message handling failed: ${error?.message || error}`,
+          );
         });
       } catch (error) {
         // A frame that cannot even be decoded is a malformed frame: dropped,
@@ -427,7 +464,9 @@ export function createAisStreamAdapter(options) {
       });
       try {
         response?.destroy?.();
-      } catch { /* already gone */ }
+      } catch {
+        /* already gone */
+      }
       releaseSocketEntry(generation, socket);
       abort(socket, 'unexpected-response');
       failGeneration(owner, generation, detail);
@@ -440,10 +479,14 @@ export function createAisStreamAdapter(options) {
         abort(socket, 'orphan-error');
         return;
       }
-      failGeneration(owner, generation, classifyAisFailure({
-        message: error?.message || String(error || ''),
-        nowMs: clock.wall(),
-      }));
+      failGeneration(
+        owner,
+        generation,
+        classifyAisFailure({
+          message: error?.message || String(error || ''),
+          nowMs: clock.wall(),
+        }),
+      );
     });
 
     on('close', () => {
@@ -482,10 +525,14 @@ export function createAisStreamAdapter(options) {
     if (parsed.kind === 'error') {
       // An error envelope is the OPPOSITE of liveness. Classifying it keeps a
       // rejected key out of the fast ladder.
-      failGeneration(owner, generation, classifyAisFailure({
-        message: parsed.message,
-        nowMs: clock.wall(),
-      }));
+      failGeneration(
+        owner,
+        generation,
+        classifyAisFailure({
+          message: parsed.message,
+          nowMs: clock.wall(),
+        }),
+      );
       return;
     }
 
@@ -504,7 +551,10 @@ export function createAisStreamAdapter(options) {
   /** Tear down sockets and machine state, preserving the generation namespace. */
   function dispose() {
     if (watchdog) {
-      generationHighWater = Math.max(generationHighWater, watchdog.highWaterGeneration());
+      generationHighWater = Math.max(
+        generationHighWater,
+        watchdog.highWaterGeneration(),
+      );
       runActions(watchdog, watchdog.dispose());
     }
     for (const [generation, socket] of [...sockets]) {

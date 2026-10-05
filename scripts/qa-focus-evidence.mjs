@@ -34,7 +34,7 @@ const JSON_PATH = path.resolve(getOpt('--json', 'qa-shots/focus-evidence/report.
 const SCREENSHOTS_DIR = path.resolve(getOpt('--screenshots-dir', 'qa-shots/focus-evidence'));
 const HEADFUL = hasFlag('--headful');
 const SMOKE = hasFlag('--smoke');
-const MAP_STACK_IDS = Object.freeze(['photoreal', 'bing-aerial', 'bing-labels', 'osm']);
+const MAP_STACK_IDS = Object.freeze(['photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm']);
 const BASEMAP = getOpt('--basemap', 'photoreal');
 const VIEWPORT = Object.freeze({ width: 1440, height: 900 });
 const FRAME_COUNT = SMOKE ? 6 : 30;
@@ -268,11 +268,11 @@ async function installSyntheticFetches(page) {
     }));
     window.fetch = (input, init) => {
       const url = typeof input === 'string' ? input : input?.url || '';
-      if (url.includes('/api/opensky-track')) return json({ path: [] });
-      if (url.includes('/api/adsblol/trace')) return json({ timestamp: Date.now() / 1000, trace: [] });
-      if (url.includes('/api/opensky')) return json({ time: Math.floor(Date.now() / 1000), states: [] });
+      if (url.includes('/api/flights/track')) return json({ path: [] });
+      if (url.includes('/api/military/track')) return json({ timestamp: Date.now() / 1000, trace: [] });
+      if (url.includes('/api/flights')) return json({ time: Math.floor(Date.now() / 1000), states: [] });
       if (url.includes('/api/adsbdb/')) return json({ found: false });
-      if (url.includes('/api/ais-live')) return json({ status: 'open', rows: [] });
+      if (url.includes('/api/vessels')) return json({ status: 'open', rows: [] });
       return realFetch(input, init);
     };
   });

@@ -1,5 +1,5 @@
 // src/data/renderAltitude.js — pure priority-chain helper for aircraft render
-// altitude.
+// altitude (docs/plans/2026-07-05-entity-height-datum-fix.md Task 6).
 //
 // The globe needs ELLIPSOIDAL height (h = H + N). OpenSky's `geo_altitude`
 // (state-vector index 13) is already WGS84 geometric/ellipsoidal — the
@@ -26,7 +26,13 @@
  *   none of the above are usable — the caller applies its OWN existing sticky/default
  *   fallback (this helper never invents one, so it can't drift from the caller's policy).
  */
-export function pickRenderAltitudeM({ geoAltM, baroAltM, onGround, surfaceM, geoidN }) {
+export function pickRenderAltitudeM({
+  geoAltM,
+  baroAltM,
+  onGround,
+  surfaceM,
+  geoidN,
+}) {
   if (onGround && Number.isFinite(surfaceM)) {
     return surfaceM;
   }
@@ -78,7 +84,7 @@ export function reuseGroundedSurfaceM(currentM, previousM) {
  * contact's cells went cold, and this guess overwrote a height that had been
  * sitting correctly on the mesh — dropping it through the ground until the
  * proxy recovered. With `priorRenderM` present the caller's existing sticky
- * fallback holds that height instead, which is what product behavior requires for:
+ * fallback holds that height instead, which is what the owner asked for:
  * "hold the last known altitude until a fresh one comes in."
  *
  * @param {object} params
@@ -89,7 +95,12 @@ export function reuseGroundedSurfaceM(currentM, previousM) {
  * @param {number|null|undefined} params.geoidN - Geoid undulation N here.
  * @returns {number|null} The geoid guess, or null when it must not be used.
  */
-export function geoidSurfaceLastResortM({ geoAltM, baroAltM, priorRenderM, geoidN }) {
+export function geoidSurfaceLastResortM({
+  geoAltM,
+  baroAltM,
+  priorRenderM,
+  geoidN,
+}) {
   if (Number.isFinite(geoAltM) || Number.isFinite(baroAltM)) return null;
   if (Number.isFinite(priorRenderM)) return null;
   return Number.isFinite(geoidN) ? geoidN : null;

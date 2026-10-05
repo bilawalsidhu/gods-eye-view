@@ -24,6 +24,8 @@
  * Visual proof saved to qa-shots/ (gitignored).
  *
  * Run:  node scripts/qa-firms.mjs --url http://localhost:4420
+ * Add --fixtures for deterministic source/rendering proof without a key;
+ * that mode does not establish live-source acceptance.
  * Exits non-zero on any FAIL. Does not commit anything.
  */
 
@@ -43,6 +45,7 @@ const getOpt = (name, dflt) => {
 };
 const APP_URL = getOpt('--url', 'http://localhost:4420');
 const HEADFUL = argv.includes('--headful');
+const FIXTURES = argv.includes('--fixtures');
 
 const CHROME_EXECUTABLE_CANDIDATES = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -52,7 +55,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // tile-gated drain budget under SwiftShader on 2026-07-30 — six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
-  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  await puppeteer.executablePath().catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
@@ -157,7 +160,8 @@ async function bootAndEnable(page, { timeoutS = 45 } = {}) {
     () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
     { timeout: 60000 },
   );
-  await sleep(1500);
+  await sleep(5000);
+  await page.keyboard.press('Escape');
   return page.evaluate(async (tS) => {
     const dm = window.__godsEyeView.dataManager;
     await dm.setEnabled('local-firms', true);
@@ -208,8 +212,20 @@ function stalePayload() {
   };
 }
 
+/** Deterministic high-density source records for refactoring without a server key. */
+function freshFixturePayload() {
+  const template = stalePayload();
+  const fires = Array.from({ length: 1600 }, (_, i) => ({
+    ...template.fires[i % template.fires.length],
+    lat: 30.1 + (i % 40) * 0.008,
+    lon: -97.9 + Math.floor(i / 40) * 0.008,
+    frp: 5 + (i % 137),
+  }));
+  return { ...template, fetchedAt: Date.now(), stale: false, count: fires.length, fires };
+}
+
 async function main() {
-  console.log('\nLive NASA FIRMS Proof (qa-firms)');
+  console.log(FIXTURES ? '\nFIRMS fixture proof (no live-source acceptance)' : '\nLive NASA FIRMS Proof (qa-firms)');
   console.log(`  App URL : ${APP_URL}\n`);
 
   try {
@@ -221,7 +237,7 @@ async function main() {
   }
 
   const status = await fetch(`${APP_URL}/api/firms/status`).then((r) => r.json()).catch(() => null);
-  if (!status?.hasKey) {
+  if (!FIXTURES && !status?.hasKey) {
     console.error('\x1b[31mServer has no FIRMS key — run against the keyed dev server (:4420).\x1b[0m');
     process.exit(2);
   }
@@ -243,14 +259,40 @@ async function main() {
     const page = await browser.newPage();
     await page.setViewport({ width: 1440, height: 900 });
 
+    await page.setRequestInterception(true);
+    let interceptMode = FIXTURES ? 'fixture' : 'live';
+    const stableStalePayload = stalePayload();
+    page.on('request', (req) => {
+      const url = req.url();
+      if (interceptMode === 'live') { req.continue(); return; }
+      if (url.includes('/api/firms/status')) {
+        req.respond({
+          status: 200, contentType: 'application/json',
+          body: JSON.stringify(interceptMode === 'keyless'
+            ? { hasKey: false }
+            : { hasKey: true, lastFetch: Date.now() - 7200000, count: 3, stale: true, ttlMs: 1800000, transactions: null }),
+        });
+        return;
+      }
+      if (url.includes('/api/firms')) {
+        if (interceptMode === 'keyless') {
+          req.respond({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'no_key' }) });
+        } else {
+          req.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(interceptMode === 'fixture' ? freshFixturePayload() : stableStalePayload) });
+        }
+        return;
+      }
+      try { req.continue(); } catch { /* already handled */ }
+    });
+
     // ── (i) LIVE feed ────────────────────────────────────────────────────────
-    console.log('(i) LIVE — loading the fires layer through the cached proxy...');
+    console.log(FIXTURES ? '(i) FIXTURE — loading synthetic fires through the source adapter...' : '(i) LIVE — loading the fires layer through the cached proxy...');
     const live = await bootAndEnable(page);
     {
       const ok = live.count > 1000 && !live.error && String(live.loadingLabel || '').startsWith('LIVE');
-      record('LIVE: >1000 detections, no error, LIVE label', ok,
+      record(`${FIXTURES ? 'FIXTURE' : 'LIVE'}: >1000 detections, no error, LIVE label`, ok,
         `count=${live.count} error=${JSON.stringify(live.error)} label=${JSON.stringify(live.loadingLabel)}`);
-      record('LIVE: /api/firms/status has key + transaction telemetry',
+      if (!FIXTURES) record('LIVE: /api/firms/status has key + quota statistics',
         status.hasKey === true && (status.transactions === null || Number.isFinite(status.transactions?.used)),
         `transactions=${JSON.stringify(status.transactions)} count=${status.count}`);
       if (!ok) exitCode = 1;
@@ -299,29 +341,7 @@ async function main() {
 
     // ── (iii) KEYLESS (intercepted) ──────────────────────────────────────────
     console.log('\n(iii) KEYLESS — intercepted 503 no_key...');
-    await page.setRequestInterception(true);
-    let interceptMode = 'keyless';
-    page.on('request', (req) => {
-      const url = req.url();
-      if (url.includes('/api/firms/status')) {
-        req.respond({
-          status: 200, contentType: 'application/json',
-          body: JSON.stringify(interceptMode === 'keyless'
-            ? { hasKey: false }
-            : { hasKey: true, lastFetch: Date.now() - 7200000, count: 3, stale: true, ttlMs: 1800000, transactions: null }),
-        });
-        return;
-      }
-      if (url.includes('/api/firms')) {
-        if (interceptMode === 'keyless') {
-          req.respond({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'no_key' }) });
-        } else {
-          req.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(stalePayload()) });
-        }
-        return;
-      }
-      try { req.continue(); } catch { /* already handled */ }
-    });
+    interceptMode = 'keyless';
 
     const keyless = await bootAndEnable(page, { timeoutS: 20 });
     {
@@ -459,6 +479,26 @@ async function main() {
           + `request=${JSON.stringify(proof.request)} selected=${JSON.stringify(proof.selectedEntityId)} `
           + `selectedActions=${proof.selectedActionCount}`);
         if (!actionOk) exitCode = 1;
+        const refresh = await page.evaluate(async () => {
+          const layer = window.__godsEyeView.dataManager.layers.get('local-firms').module;
+          const before = layer.getSelectedInfo();
+          let selections = 0;
+          const count = () => { selections += 1; };
+          window.addEventListener('gev:entity-selected', count);
+          try {
+            await layer.update();
+            return { before, after: layer.getSelectedInfo(), selections,
+              contextId: window.__gevContextStore.selectedEntityId };
+          } finally {
+            window.removeEventListener('gev:entity-selected', count);
+          }
+        });
+        const refreshOk = Boolean(refresh.before?.id)
+          && refresh.after?.id === refresh.before.id
+          && refresh.contextId === refresh.before.id && refresh.selections === 0;
+        record('REFRESH: selected detection survives without another selection event', refreshOk,
+          JSON.stringify(refresh));
+        if (!refreshOk) exitCode = 1;
         await page.screenshot({ path: path.join(SHOTS_DIR, 'firms-synthetic-fire-action.png') });
       }
     }

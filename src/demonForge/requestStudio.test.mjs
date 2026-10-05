@@ -24,7 +24,7 @@ test('France/EU draft is manual, exact, and does not promise deletion', () => {
   assert.match(draft.body, /demande d'effacement/i);
   assert.match(draft.body, /https:\/\/example\.test\/profile/);
   assert.match(draft.body, /Synthetic Controller/);
-  assert.match(draft.body, /revue manuelle/i);
+  assert.match(draft.body, /valider manuellement/i);
   assert.match(draft.body, /brouillon/i);
   assert.doesNotMatch(draft.body, /promet la suppression complète/i);
   assert.equal('transport' in draft, false);

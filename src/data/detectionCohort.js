@@ -19,11 +19,14 @@ export function stableIdentityHash(layerId, sourceId) {
 
 /** Negative means a is a better deterministic contender than b. */
 export function compareCohortContenders(a, b) {
-  const priorityDelta = (Number(b?._cohortPriority) || 0) - (Number(a?._cohortPriority) || 0);
+  const priorityDelta =
+    (Number(b?._cohortPriority) || 0) - (Number(a?._cohortPriority) || 0);
   if (priorityDelta) return priorityDelta;
-  const bandDelta = (Number(b?._cohortBand) || 0) - (Number(a?._cohortBand) || 0);
+  const bandDelta =
+    (Number(b?._cohortBand) || 0) - (Number(a?._cohortBand) || 0);
   if (bandDelta) return bandDelta;
-  const hashDelta = (Number(a?._cohortHash) >>> 0) - (Number(b?._cohortHash) >>> 0);
+  const hashDelta =
+    (Number(a?._cohortHash) >>> 0) - (Number(b?._cohortHash) >>> 0);
   if (hashDelta) return hashDelta;
   return String(a?._cohortSourceId).localeCompare(String(b?._cohortSourceId));
 }
@@ -39,8 +42,14 @@ function isWorse(a, b) {
  */
 export class BoundedCohort {
   constructor(maxSize = DEFAULT_MAX_COHORT, hardMax = DEFAULT_MAX_COHORT) {
-    const ceiling = Math.max(1, Math.floor(Number(hardMax) || DEFAULT_MAX_COHORT));
-    this.maxSize = Math.max(1, Math.min(ceiling, Math.floor(Number(maxSize) || DEFAULT_MAX_COHORT)));
+    const ceiling = Math.max(
+      1,
+      Math.floor(Number(hardMax) || DEFAULT_MAX_COHORT),
+    );
+    this.maxSize = Math.max(
+      1,
+      Math.min(ceiling, Math.floor(Number(maxSize) || DEFAULT_MAX_COHORT)),
+    );
     this.incumbents = [];
     this.heap = [];
   }
@@ -62,11 +71,20 @@ export class BoundedCohort {
   }
 
   values(limit = this.maxSize) {
-    const cap = Math.max(0, Math.min(this.maxSize, Math.floor(Number(limit) || 0)));
-    const incumbents = this.incumbents.slice().sort(compareCohortContenders).slice(0, cap);
+    const cap = Math.max(
+      0,
+      Math.min(this.maxSize, Math.floor(Number(limit) || 0)),
+    );
+    const incumbents = this.incumbents
+      .slice()
+      .sort(compareCohortContenders)
+      .slice(0, cap);
     const remaining = Math.max(0, cap - incumbents.length);
     if (remaining === 0) return incumbents;
-    const contenders = this.heap.slice().sort(compareCohortContenders).slice(0, remaining);
+    const contenders = this.heap
+      .slice()
+      .sort(compareCohortContenders)
+      .slice(0, remaining);
     return incumbents.concat(contenders);
   }
 
@@ -75,7 +93,10 @@ export class BoundedCohort {
     while (current > 0) {
       const parent = Math.floor((current - 1) / 2);
       if (!isWorse(this.heap[current], this.heap[parent])) break;
-      [this.heap[current], this.heap[parent]] = [this.heap[parent], this.heap[current]];
+      [this.heap[current], this.heap[parent]] = [
+        this.heap[parent],
+        this.heap[current],
+      ];
       current = parent;
     }
   }
@@ -86,10 +107,18 @@ export class BoundedCohort {
       const left = current * 2 + 1;
       const right = left + 1;
       let worst = current;
-      if (left < this.heap.length && isWorse(this.heap[left], this.heap[worst])) worst = left;
-      if (right < this.heap.length && isWorse(this.heap[right], this.heap[worst])) worst = right;
+      if (left < this.heap.length && isWorse(this.heap[left], this.heap[worst]))
+        worst = left;
+      if (
+        right < this.heap.length &&
+        isWorse(this.heap[right], this.heap[worst])
+      )
+        worst = right;
       if (worst === current) return;
-      [this.heap[current], this.heap[worst]] = [this.heap[worst], this.heap[current]];
+      [this.heap[current], this.heap[worst]] = [
+        this.heap[worst],
+        this.heap[current],
+      ];
       current = worst;
     }
   }

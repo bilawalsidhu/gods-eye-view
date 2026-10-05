@@ -1,3 +1,6 @@
+import { createNamedMarkers } from '../layers/installations/namedMarkers.js';
+import { expandApplicationHtml } from '../../build/application-html.js';
+import { readStylesheet } from '../testSupport/readStylesheet.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -462,12 +465,12 @@ test('lifecycle is idempotent and teardown removes listeners, observers, and DOM
   assert.deepEqual(root.children, [canvas],
     'the overlay root carries only the shared card canvas');
   assert.doesNotMatch(
-    readFileSync(new URL('../../index.html', import.meta.url), 'utf8'),
+    expandApplicationHtml(readFileSync(new URL('../../index.html', import.meta.url), 'utf8')),
     /world-overlay-detection-surface/,
     'the surface is runtime host-owned, not static markup',
   );
   assert.match(
-    readFileSync(new URL('../../style.css', import.meta.url), 'utf8'),
+    readStylesheet(new URL('../../style.css', import.meta.url)),
     /#world-overlay-detection-surface,\n#world-overlay-canvas \{\n  position: absolute;\n  inset: 0;[\s\S]*?pointer-events: none;/,
     'both host surfaces share absolute positioning and pointer passthrough',
   );
@@ -484,7 +487,7 @@ test('lifecycle is idempotent and teardown removes listeners, observers, and DOM
 });
 
 /** The shipped stylesheet, read once — fixtures must stack as production does. */
-const SHIPPED_CSS = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
+const SHIPPED_CSS = readStylesheet(new URL('../../style.css', import.meta.url));
 
 /**
  * Position + z-index the SHIPPED stylesheet gives a selector. Fixtures are built
@@ -551,7 +554,7 @@ test('no ancestor isolates the detection surface, so `screen` reaches the scene'
   // builds and evaluates each node against the shipped stylesheet.
   const env = installMockEnvironment();
   initWorldOverlay(env.viewer);
-  const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
+  const css = readStylesheet(new URL('../../style.css', import.meta.url));
   const surface = env.document.getElementById('world-overlay-detection-surface');
   assert.ok(surface, 'the host owns a detection surface');
 
@@ -1297,6 +1300,8 @@ test('UI exclusions stay per-rect: overlapping chrome never merges into a boundi
 
   assert.equal(getWorldOverlayDiagnostics().paintedCount, 1);
   const painted = getOverlayPaintRect('ambient', 'CLEAR-OF-BOTH');
+  assert.ok(Number.isFinite(painted.anchorX));
+  assert.ok(Number.isFinite(painted.anchorY));
   assert.ok(painted, 'the entry published a paint rectangle');
   for (const [name, rect] of Object.entries(chrome)) {
     assert.equal(rectsIntersect(painted, inflatedRect(rect)), false,
@@ -1817,6 +1822,85 @@ test('CCTV host binding preserves the smoothstep scale and 0.45/0.35 fade curve'
   }
 });
 
+test('scene presentation samples once per frame and recovers after a callback failure', () => {
+  const env = installMockEnvironment({ width: 500, height: 400, dpr: 1 });
+  const alphas = [];
+  Object.defineProperty(env.ctx, 'globalAlpha', {
+    configurable: true,
+    get() { return alphas.at(-1) ?? 1; },
+    set(value) { alphas.push(value); },
+  });
+  initWorldOverlay(env.viewer);
+  const entry = createCctvThumbnailOverlayEntry({
+    id: 'scene-presentation', position: position(), title: 'SCENE',
+    frameSlot: { frame: { ready: true }, stamp: 1 }, active: true,
+  });
+  Object.assign(entry, {
+    horizonCull: false, maxDistance: Number.POSITIVE_INFINITY, edgeFade: 'none',
+    altitudeScale: null, altitudeFadeEnd: Number.POSITIVE_INFINITY,
+  });
+  let scale = 0.5;
+  let alpha = 0.8;
+  let leader = 0.5;
+  let content = 0.25;
+  let fail = false;
+  const sampled = { scale: 0, alpha: 0, leader: 0, content: 0 };
+  entry.presentationScale = () => { sampled.scale++; return scale; };
+  entry.sourceAlpha = () => {
+    sampled.alpha++;
+    if (fail) throw new Error('presentation unavailable');
+    return alpha;
+  };
+  entry.leaderProgress = () => { sampled.leader++; return leader; };
+  entry.contentAlpha = () => { sampled.content++; return content; };
+  const publish = () => setOverlayEntries('scene-presentation', [entry], {
+    cohortLimit: 1, collisionCapacity: 0,
+  });
+  const frame = () => {
+    env.ctx.calls.length = 0;
+    alphas.length = 0;
+    env.postRender.raise();
+  };
+  try {
+    publish();
+    frame();
+    assert.deepEqual(sampled, { scale: 1, alpha: 1, leader: 1, content: 1 });
+    assert.equal(env.ctx.calls.find(([name]) => name === 'scale')?.[1], 0.5);
+    assert.ok(Math.abs(alphas.at(-1) - 0.2) < 1e-12);
+    assert.ok(env.ctx.calls.some(([name]) => name === 'drawImage'));
+
+    fail = true;
+    assert.doesNotThrow(frame);
+    assert.equal(env.ctx.calls.some(([name]) => name === 'drawImage'), false);
+    assert.deepEqual(sampled, { scale: 2, alpha: 2, leader: 1, content: 1 });
+
+    fail = false;
+    scale = Number.NaN;
+    alpha = 2;
+    leader = Number.NaN;
+    content = 2;
+    frame();
+    assert.equal(env.ctx.calls.some(([name]) => name === 'scale'), false);
+    assert.equal(alphas.at(-1), 1);
+    assert.ok(env.ctx.calls.some(([name]) => name === 'drawImage'));
+
+    scale = 0;
+    frame();
+    assert.equal(env.ctx.calls.some(([name]) => name === 'drawImage'), false);
+
+    // Reusing the record for an ordinary card must not retain animated values.
+    Object.assign(entry, {
+      presentationScale: 1, sourceAlpha: 1, leaderProgress: 1, contentAlpha: 1,
+    });
+    publish();
+    frame();
+    assert.equal(alphas.at(-1), 1);
+    assert.ok(env.ctx.calls.some(([name]) => name === 'drawImage'));
+  } finally {
+    env.cleanup();
+  }
+});
+
 test('CCTV leader remains one CSS pixel at the 0.35 altitude scale point', () => {
   const env = installMockEnvironment({ width: 500, height: 400, dpr: 1 });
   env.viewer.camera.positionCartographic.height = 9500;
@@ -2139,4 +2223,77 @@ test('diagnostics facade preserves the complete binding shape', () => {
     'candidateIndexSize', 'entriesBySource', 'paintedBySource',
   ];
   assert.deepEqual(Object.keys(diagnostics).sort(), fields.sort());
+});
+
+
+test('installation titles share persistent card arbitration and retain a bounded Contacts cohort', (t) => {
+  const env = installMockEnvironment({ width: 1600, height: 1000 });
+  t.after(() => env.cleanup());
+  const scene = env.viewer.scene;
+  scene.canvas = env.viewer.canvas;
+  scene.preRender = new Cesium.Event();
+  scene.primitives = { add: (value) => value, remove() {} };
+  env.viewer.camera.changed = new Cesium.Event();
+  t.mock.method(Cesium.Cartesian3, 'fromDegrees', (lon, lat) => new Cesium.Cartesian3(lon, lat, 0));
+  t.mock.method(Cesium.EllipsoidalOccluder.prototype, 'isPointVisible', () => true);
+  t.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', (_scene, _point, scratch) => {
+    scratch.x = scratch.y = 100; return scratch;
+  });
+  const state = { enabled: true, viewer: env.viewer, contextAnchor: {} };
+  const markers = createNamedMarkers({ state,
+    services: { render: { governorRequestRender() {} } },
+    parts: { model: { colorFor: () => Cesium.Color.ORANGE }, rendering: { installationSurfaceHeightM: () => 0 } },
+    overlayHost: { setEntries: setOverlayEntries, clearSource: clearOverlaySource,
+      setVisible: setOverlaySourceVisible, getDiagnostics: getWorldOverlayDiagnostics },
+  });
+  initWorldOverlay(env.viewer);
+  markers.enable();
+  const records = Array.from({ length: 40 }, (_, i) => ({ id: `site:${i}`, name: `Base ${i}`,
+    namedArea: true, pointOnly: i % 2 === 0, areaM2: 1000 - i,
+    longitude: -0.8 + (i % 8) * 0.22, latitude: -0.7 + Math.floor(i / 8) * 0.32,
+  }));
+  // The smaller coincident title must lose to the larger installation.
+  records.push({ ...records[0], id: 'small', areaM2: 1 });
+  records[1].longitude = records[0].longitude + 0.03;
+  records[1].latitude = records[0].latitude;
+  markers.sync(records);
+  env.postRender.raise();
+  const source = 'military-installations';
+  env.advanceTime(250); env.postRender.raise();
+  assert.equal(markers.stats().labelsOnScreen, 24);
+  assert.ok(getOverlayPaintRect(source, 'site:0'));
+  assert.equal(getOverlayPaintRect(source, 'small'), null);
+  for (let i = 0; i < 30; i++) {
+    env.viewer.camera.viewMatrix[12] -= 0.003;
+    if (i > 15) env.viewer.camera.viewMatrix[0] = env.viewer.camera.viewMatrix[5] = 0.03;
+    scene.preRender.raiseEvent(); env.advanceTime(16); env.postRender.raise();
+    assert.ok(markers.stats().labelsOnScreen > 0 && markers.stats().labelsOnScreen <= 24);
+    // Incumbents persist through collisions during a pan, as for Data Centers.
+    if (i < 10) assert.ok(getOverlayPaintRect(source, 'site:0'));
+  }
+  state.enabled = false; markers.hide(); env.postRender.raise();
+  assert.equal(getWorldOverlayDiagnostics().entriesBySource[source], 0);
+  assert.equal(markers.stats().labelsOnScreen, 0);
+  state.enabled = true; markers.enable(); env.postRender.raise();
+  env.advanceTime(250); env.postRender.raise();
+  assert.ok(markers.stats().labelsOnScreen > 0);
+  markers.destroy(); env.postRender.raise();
+  assert.equal(getWorldOverlayDiagnostics().entriesBySource[source], 0);
+});
+
+
+test('promoting an ambient entry to selected paints it once with no fading duplicate', () => {
+  const env = installMockEnvironment();
+  try {
+    initWorldOverlay(env.viewer);
+    const entry = { id: 'site', position: position(), title: 'One site', variant: 'card', collisionGroup: 'ambient-card', horizonCull: false, edgeFade: false };
+    const paint = () => { env.ctx.calls.length = 0; env.postRender.raise(); return env.ctx.calls.filter(([op, text]) => op === 'fillText' && text === 'One site').length; };
+    setOverlayEntries('military-installations', [entry]); paint(); env.advanceTime(200);
+    assert.equal(paint(), 1);
+    setOverlayEntries('military-installations', [{ ...entry, variant: 'selected', selected: true }]);
+    assert.equal(paint(), 1, 'no ambient exit tail in the selected paint lane');
+    env.advanceTime(100); assert.equal(paint(), 1);
+    setOverlayEntries('military-installations', [entry]); paint(); env.advanceTime(200);
+    assert.equal(paint(), 1, 'deselect restores the ambient card without re-entry cooldown');
+  } finally { env.cleanup(); }
 });

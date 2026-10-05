@@ -28,10 +28,14 @@ const REQUEST_ACTIONS = new Set(Object.values(REQUEST_ACTION));
 
 function stringList(value, allowed = null) {
   if (!Array.isArray(value)) return [];
-  return [...new Set(value
-    .filter((entry) => typeof entry === 'string' && entry.trim())
-    .map((entry) => entry.trim())
-    .filter((entry) => !allowed || allowed.has(entry)))];
+  return [
+    ...new Set(
+      value
+        .filter((entry) => typeof entry === 'string' && entry.trim())
+        .map((entry) => entry.trim())
+        .filter((entry) => !allowed || allowed.has(entry)),
+    ),
+  ];
 }
 
 export function createCaseRecord(input = {}) {
@@ -41,7 +45,10 @@ export function createCaseRecord(input = {}) {
   const mandate = input.mandate || {};
   const candidate = input.candidate || {};
   const sourceCategories = stringList(mandate.sourceCategories);
-  const permittedActions = stringList(mandate.permittedActions, REQUEST_ACTIONS);
+  const permittedActions = stringList(
+    mandate.permittedActions,
+    REQUEST_ACTIONS,
+  );
 
   return {
     id: input.id ?? null,
@@ -55,7 +62,8 @@ export function createCaseRecord(input = {}) {
       revokedAtMs: mandate.revokedAtMs ?? null,
       proof: {
         signedAtMs: mandate.proof?.signedAtMs ?? mandate.signedAtMs ?? null,
-        validatedAtMs: mandate.proof?.validatedAtMs ?? mandate.validatedAtMs ?? null,
+        validatedAtMs:
+          mandate.proof?.validatedAtMs ?? mandate.validatedAtMs ?? null,
       },
     },
     candidate: {
@@ -63,10 +71,16 @@ export function createCaseRecord(input = {}) {
       sourceCategory: candidate.sourceCategory ?? null,
       confirmedAtMs: candidate.confirmedAtMs ?? null,
     },
-    candidates: Array.isArray(input.candidates) ? input.candidates.map((entry) => ({ ...entry })) : [],
+    candidates: Array.isArray(input.candidates)
+      ? input.candidates.map((entry) => ({ ...entry }))
+      : [],
     draft: input.draft ? { ...input.draft } : null,
-    ledger: Array.isArray(input.ledger) ? input.ledger.map((entry) => ({ ...entry })) : [],
-    workflow: Array.isArray(input.workflow) ? input.workflow.map((entry) => ({ ...entry })) : [],
+    ledger: Array.isArray(input.ledger)
+      ? input.ledger.map((entry) => ({ ...entry }))
+      : [],
+    workflow: Array.isArray(input.workflow)
+      ? input.workflow.map((entry) => ({ ...entry }))
+      : [],
     requests: Array.isArray(input.requests) ? [...input.requests] : [],
   };
 }

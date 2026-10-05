@@ -76,11 +76,11 @@ test('a healthy keyed layer reports live flow with its real coverage', () => {
   assert.deepEqual(idle, {
     mode: 'live',
     error: null,
-    loadingLabel: 'LIVE · TomTom flow · 87% cov',
+    loadingLabel: 'LIVE · Roads: OpenStreetMap · Flow: TomTom · 87% cov · Unmatched: simulated',
   });
   assert.equal(
     trafficFeedPresentation({ liveMode: true, fetching: true }).loadingLabel,
-    'syncing LIVE traffic flow',
+    'Syncing flow · Roads: OpenStreetMap · Flow: TomTom · Unmatched: simulated',
   );
 });
 
@@ -150,4 +150,20 @@ test('the shipped layer boots keyless-honest before any status check', () => {
   assert.equal(stats.error, null);
   assert.ok(!LIVE_CLAIM.test(stats.loadingLabel), `boot label implies live data: ${stats.loadingLabel}`);
   assert.equal(layerFeedState(stats), 'fallback');
+});
+
+test('traffic can be destroyed before its first enable and destroyed repeatedly', async () => {
+  const { default: traffic } = await import('./traffic.js');
+  const viewer = { camera: { changed: { removeEventListener() {} } } };
+  assert.doesNotThrow(() => traffic.destroy(viewer));
+  assert.doesNotThrow(() => traffic.destroy(viewer));
+  assert.equal(traffic.getStats().count, 0);
+});
+
+test('zero matched dots never claims live coverage', () => {
+  const feed = trafficFeedPresentation({ liveMode: true, coveragePct: 0 });
+  assert.equal(feed.mode, 'live');
+  assert.match(feed.loadingLabel, /^SIMULATED/);
+  assert.match(feed.loadingLabel, /TomTom \(no matches\)/);
+  assert.ok(!LIVE_CLAIM.test(feed.loadingLabel));
 });

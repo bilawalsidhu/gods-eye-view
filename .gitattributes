@@ -1,0 +1,20 @@
+# Check every text file out with LF on every platform.
+#
+# 44 unit test files read repository source with readFileSync and match it
+# against multi-line regexes (src/scenes/director.test.mjs,
+# src/cockpitMarkup.test.mjs, src/firstRunExperience.test.mjs, ...). Those
+# patterns anchor on \n, so under Git's default core.autocrlf=true on Windows
+# the sources check out with CRLF, every anchored pattern misses, and `npm test`
+# fails 25 checks on an unmodified clone. Normalizing here keeps the working
+# tree byte-identical on macOS, Linux, and Windows.
+* text=auto eol=lf
+
+# Shell launchers must stay LF to run at all.
+*.sh text eol=lf
+
+# Assets Git must never rewrite.
+*.gif binary
+*.png binary
+*.glb binary
+*.wav binary
+*.pbf binary

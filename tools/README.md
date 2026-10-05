@@ -4,6 +4,12 @@ CLI scripts for fetching, rendering, and reprojecting geospatial imagery. All to
 
 Output files go to `output/` by default (gitignored).
 
+When invoking these tools from a separate project, set `GEV_PROJECT_ROOT` to its
+absolute directory. Environment files, dependencies and relative output paths
+resolve there; bundled rendering HTML stays with the tool. The same setting is
+supported by `dev-fresh.sh`, `dev-secure.sh`, `opensky-import-client.sh` and the
+setup doctor. Without it, paths continue to resolve from this repository.
+
 ## Prerequisites
 
 - Node.js (via `mise`)

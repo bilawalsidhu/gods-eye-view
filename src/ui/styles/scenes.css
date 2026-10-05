@@ -1,0 +1,456 @@
+/* ── Scene Director Panel ───────────────────── */
+#scene-panel {
+  --panel-expanded-width: 360px;
+  position: fixed;
+  top: calc(var(--left-stack-top) + (var(--left-stack-gap) * 2));
+  left: var(--left-stack-x);
+  right: auto;
+  bottom: auto;
+  z-index: 100;
+  width: var(--panel-expanded-width);
+  max-height: calc(100vh - 24px);
+}
+
+#left-panel-stack > #data-panel,
+#left-panel-stack > #cctv-panel,
+#left-panel-stack > #global-context-panel,
+#left-panel-stack > #scene-panel {
+  position: relative;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  z-index: auto;
+  max-height: none;
+  flex: 0 0 auto;
+  min-height: 0;
+  pointer-events: auto;
+}
+
+#left-panel-stack > #data-panel {
+  order: 1;
+}
+
+#left-panel-stack > #cctv-panel {
+  order: 2;
+}
+
+#left-panel-stack > #scene-panel {
+  order: 4;
+}
+
+/*
+ * Runtime focus mode: the layout engine applies this only when the expanded
+ * panel's measured natural height plus sibling labels cannot fit inside the
+ * live HUD/attribution-safe corridor.
+ */
+#left-panel-stack.layout-focus > [data-panel-id].collapsed {
+  display: none;
+}
+
+#left-panel-stack > #data-panel:not(.collapsed),
+#left-panel-stack > #cctv-panel:not(.collapsed),
+#left-panel-stack > #scene-panel:not(.collapsed) {
+  box-sizing: border-box;
+  flex: 0 1 var(--left-panel-allocated-height, auto);
+  height: var(--left-panel-allocated-height, auto);
+  max-height: var(--left-panel-allocated-height, 100%);
+}
+
+/*
+ * When an expanded panel and its collapsed siblings fit together, preserve
+ * the canonical control order and center their combined stack at 50vh.
+ */
+#left-panel-stack.layout-tail
+  > :is(#data-panel, #cctv-panel, #scene-panel):not(.collapsed) {
+  box-sizing: border-box;
+  flex: 0 0 var(--left-panel-allocated-height);
+  height: var(--left-panel-allocated-height);
+  max-height: var(--left-panel-allocated-height);
+}
+
+#left-panel-stack > #data-panel:not(.collapsed) .data-panel-inner,
+#left-panel-stack > #cctv-panel:not(.collapsed) .cctv-panel-inner,
+#left-panel-stack > #scene-panel:not(.collapsed) .scene-panel-inner {
+  height: 100%;
+  max-height: 100%;
+}
+
+#left-panel-stack > #data-panel:not(.collapsed) .data-panel-inner {
+  overflow: hidden;
+}
+
+#left-panel-stack > #cctv-panel:not(.collapsed) .cctv-panel-inner,
+#left-panel-stack > #scene-panel:not(.collapsed) .scene-panel-inner {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+#left-panel-stack > [data-panel-id]:not(.collapsed) .panel-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: transparent;
+}
+
+#left-panel-stack > [data-panel-id]:not(.collapsed) .panel-divider {
+  background: linear-gradient(
+    90deg,
+    rgb(0 212 255 / 28%),
+    rgba(0, 212, 255, 0.18) 58%,
+    transparent
+  );
+  box-shadow: 0 0 7px rgba(0, 212, 255, 0.22);
+}
+
+#right-context-rail [data-panel-id]:not(.collapsed) .panel-divider {
+  background: linear-gradient(
+    90deg,
+    rgb(0 212 255 / 28%),
+    rgba(0, 212, 255, 0.18) 58%,
+    transparent
+  );
+  box-shadow: 0 0 7px rgba(0, 212, 255, 0.22);
+}
+
+#scene-panel .panel-glow {
+  position: absolute;
+  inset: -18px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 212, 255, 0.16) 0%,
+    transparent 65%
+  );
+  filter: blur(16px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.scene-panel-inner {
+  position: relative;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 24px);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.scene-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+#scene-select {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  color: var(--text-primary);
+  padding: 6px 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  outline: none;
+}
+
+.scene-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  padding: 6px 9px;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    opacity var(--transition-fast);
+  white-space: nowrap;
+  flex: 1;
+  min-width: 72px;
+}
+
+#scene-start-btn,
+#scene-stop-btn,
+#scene-next-btn {
+  flex: 1 1 0;
+}
+
+.scene-shot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 160px;
+  min-height: 96px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 2px 6px;
+  margin-bottom: 8px;
+}
+
+.scene-shot-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scene-shot-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+}
+
+.scene-shot-empty {
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 10px 8px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+}
+
+.scene-shot-row {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  padding: 7px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.scene-shot-row.active {
+  border-color: var(--accent);
+  background: rgba(0, 212, 255, 0.08);
+}
+
+.scene-shot-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.scene-shot-label {
+  min-width: 0;
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text-primary);
+}
+
+.scene-shot-rename {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-panel, #101820);
+  border: 1px solid var(--accent, #00d4ff);
+}
+
+.scene-shot-meta {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
+}
+
+.scene-shot-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.scene-shot-btn {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.8px;
+  padding: 4px 6px;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.scene-shot-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--glass-border-hover);
+}
+
+.scene-shot-btn.scene-shot-danger:hover {
+  color: #ff7e7e;
+  border-color: #ff7e7e;
+}
+
+.scene-btn:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(0, 212, 255, 0.14);
+}
+
+.scene-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.scene-btn-danger:hover:not(:disabled) {
+  color: #ff7272;
+  border-color: #ff7272;
+  background: rgba(255, 88, 88, 0.15);
+}
+
+.scene-progress {
+  margin-top: 8px;
+  width: 100%;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+#scene-progress-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 212, 255, 0.2),
+    rgba(0, 212, 255, 0.75)
+  );
+  color: #d5f7ff;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 6px;
+  transition: width 100ms linear;
+  text-shadow: 0 0 6px rgba(0, 212, 255, 0.6);
+}
+
+#scene-status {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
+#scene-runtime {
+  position: fixed;
+  top: 34px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 105;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 180ms ease,
+    visibility 180ms ease;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #bff4ff;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(0, 212, 255, 0.36);
+  border-radius: 999px;
+  padding: 6px 14px;
+  text-shadow: 0 0 8px rgba(0, 212, 255, 0.55);
+  pointer-events: none;
+}
+
+#scene-runtime.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+#control-panel.collapsed .button-grid,
+#data-panel.collapsed .data-toggle-list,
+#global-context-panel.collapsed #radio-panel,
+#global-context-panel.collapsed #military-awareness-panel,
+#global-context-panel.collapsed .global-context-actions,
+#global-context-panel.collapsed .global-context-modes,
+#global-context-panel.collapsed .context-mode-view,
+#global-context-panel.collapsed
+  > .global-context-panel-inner
+  > .context-mode-standby,
+#radio-panel.collapsed .radio-panel-inner > :not(.panel-header),
+#cctv-panel.collapsed .cctv-controls,
+#cctv-panel.collapsed .cctv-calibration-block,
+#cctv-panel.collapsed .cctv-frame-wrap,
+#cctv-panel.collapsed #cctv-source-badge,
+#cctv-panel.collapsed #cctv-meta,
+#cctv-panel.collapsed .cctv-summary-label,
+#cctv-panel.collapsed #cctv-summary,
+#scene-panel.collapsed .scene-controls,
+#scene-panel.collapsed .scene-shot-list,
+#scene-panel.collapsed .scene-progress,
+#scene-panel.collapsed #scene-status,
+#param-slider-panel.collapsed #param-sliders,
+#location-bar.collapsed .poi-row-container,
+#location-bar.collapsed .location-bar-divider,
+#location-bar.collapsed .location-city-row {
+  display: none !important;
+}
+
+#data-panel.collapsed,
+#cctv-panel.collapsed,
+#scene-panel.collapsed {
+  width: var(--left-collapsed-width);
+}
+
+#global-context-panel #radio-panel.collapsed {
+  width: 100%;
+}
+
+#data-panel.collapsed .panel-title,
+#cctv-panel.collapsed .panel-title,
+#radio-panel.collapsed .panel-title,
+#scene-panel.collapsed .panel-title {
+  font-size: 8px;
+  letter-spacing: 1.8px;
+}
+
+#control-panel.collapsed .panel-inner,
+#data-panel.collapsed .data-panel-inner,
+#cctv-panel.collapsed .cctv-panel-inner,
+#radio-panel.collapsed .radio-panel-inner,
+#scene-panel.collapsed .scene-panel-inner,
+#param-slider-panel.collapsed,
+#location-bar.collapsed .location-inner {
+  padding-bottom: 10px;
+}
+
+#control-panel.collapsed .panel-header,
+#data-panel.collapsed .panel-header,
+#cctv-panel.collapsed .panel-header,
+#radio-panel.collapsed .panel-header,
+#global-context-panel.collapsed .panel-header,
+#scene-panel.collapsed .panel-header,
+#param-slider-panel.collapsed .param-panel-header {
+  margin-bottom: 2px;
+}
+
+.director-sharing-dialog::backdrop {
+  background: rgba(0, 8, 14, 0.65);
+}

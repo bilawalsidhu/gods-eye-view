@@ -43,7 +43,11 @@ export function clampBloomIntensity(value) {
  * @returns {number} equivalent v2 intensity
  */
 export function legacyBloomToV2(value) {
-  const legacy = clamp(Math.round(Number(value) || 0), 0, LEGACY_BLOOM_INTENSITY_MAX);
+  const legacy = clamp(
+    Math.round(Number(value) || 0),
+    0,
+    LEGACY_BLOOM_INTENSITY_MAX,
+  );
   return clampBloomIntensity((LEGACY_BLOOM_INTENSITY_MAX - legacy) * 2);
 }
 
@@ -59,7 +63,10 @@ export function decodeBloomIntensity(value, version = 1) {
   if (!Number.isFinite(num)) return BLOOM_INTENSITY_DEFAULT;
 
   const normalizedVersion = Number(version);
-  if (Number.isFinite(normalizedVersion) && normalizedVersion >= BLOOM_SCALE_VERSION) {
+  if (
+    Number.isFinite(normalizedVersion) &&
+    normalizedVersion >= BLOOM_SCALE_VERSION
+  ) {
     return clampBloomIntensity(num);
   }
 

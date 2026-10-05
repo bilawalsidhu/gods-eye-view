@@ -5,9 +5,15 @@
  * VIIRS header (confirmed live 2026-07-16):
  *   latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,
  *   instrument,confidence,version,bright_ti5,frp,daynight
+ * MODIS header:
+ *   latitude,longitude,brightness,scan,track,acq_date,acq_time,satellite,
+ *   instrument,confidence,version,bright_t31,frp,daynight
  *
  * Quirks this module owns:
- * - `confidence` is CATEGORICAL for VIIRS (`l`/`n`/`h`) — passed through raw.
+ * - `confidence` is CATEGORICAL for VIIRS (`l`/`n`/`h`) and numeric 0-100 for
+ *   MODIS — passed through raw.
+ * - Brightness maps from `bright_ti4`/`brightness`; the secondary band maps
+ *   from `bright_ti5`/`bright_t31`.
  * - `acq_time` is NOT zero-padded ("45" = 00:45 UTC) — kept as-is in records;
  *   {@link acquisitionMsUtc} does the padding.
  * - Upstream errors come back as HTML or plain text ("Invalid MAP_KEY"),
@@ -17,7 +23,14 @@
  */
 
 /** Header fields that must all be present for a payload to count as FIRMS CSV. */
-const REQUIRED_HEADER_FIELDS = ['latitude', 'longitude', 'acq_date', 'acq_time', 'confidence', 'frp'];
+const REQUIRED_HEADER_FIELDS = [
+  'latitude',
+  'longitude',
+  'acq_date',
+  'acq_time',
+  'confidence',
+  'frp',
+];
 
 const HOUR_MS = 3600_000;
 /** Trailing window size for {@link filterTrailing24h}. */
@@ -36,8 +49,10 @@ export function isLikelyCsv(text) {
   if (typeof text !== 'string') return false;
   const trimmed = text.trimStart();
   if (!trimmed || trimmed[0] === '<') return false;
-  const headerLine = trimmed.slice(0, trimmed.indexOf('\n') === -1 ? undefined : trimmed.indexOf('\n'))
-    .trim().toLowerCase();
+  const headerLine = trimmed
+    .slice(0, trimmed.indexOf('\n') === -1 ? undefined : trimmed.indexOf('\n'))
+    .trim()
+    .toLowerCase();
   const fields = headerLine.split(',').map((f) => f.trim());
   return REQUIRED_HEADER_FIELDS.every((required) => fields.includes(required));
 }
@@ -62,8 +77,13 @@ export function parseFirmsCsv(text) {
   // Locate the header (first non-empty line) and build a column index so the
   // parser survives column reordering across FIRMS product versions.
   let headerIndex = 0;
-  while (headerIndex < lines.length && !lines[headerIndex].trim()) headerIndex += 1;
-  const header = lines[headerIndex].trim().toLowerCase().split(',').map((f) => f.trim());
+  while (headerIndex < lines.length && !lines[headerIndex].trim())
+    headerIndex += 1;
+  const header = lines[headerIndex]
+    .trim()
+    .toLowerCase()
+    .split(',')
+    .map((f) => f.trim());
   const col = new Map(header.map((name, i) => [name, i]));
   const iLat = col.get('latitude');
   const iLon = col.get('longitude');
@@ -114,7 +134,8 @@ export function parseFirmsCsv(text) {
  * @returns {number} Epoch ms, or NaN when unparseable.
  */
 export function acquisitionMsUtc(acqDate, acqTime) {
-  if (typeof acqDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(acqDate)) return NaN;
+  if (typeof acqDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(acqDate))
+    return NaN;
   const timeText = String(acqTime ?? '').trim();
   if (!/^\d{1,4}$/.test(timeText)) return NaN;
   const hhmm = timeText.padStart(4, '0');
@@ -123,7 +144,15 @@ export function acquisitionMsUtc(acqDate, acqTime) {
   const day = Number(acqDate.slice(8, 10));
   const hours = Number(hhmm.slice(0, 2));
   const minutes = Number(hhmm.slice(2, 4));
-  if (month < 1 || month > 12 || day < 1 || day > 31 || hours > 23 || minutes > 59) return NaN;
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    hours > 23 ||
+    minutes > 59
+  )
+    return NaN;
   return Date.UTC(year, month - 1, day, hours, minutes);
 }
 

@@ -14,7 +14,9 @@ export function allocatePanelStackHeights({
   availableHeight,
   minimumHeight = 96,
 }) {
-  const natural = naturalHeights.map((height) => Math.max(0, Number(height) || 0));
+  const natural = naturalHeights.map((height) =>
+    Math.max(0, Number(height) || 0),
+  );
   if (!natural.length) return [];
 
   const available = Math.max(0, Number(availableHeight) || 0);
@@ -31,10 +33,14 @@ export function allocatePanelStackHeights({
   }
 
   const remaining = available - baseTotal;
-  const unmet = natural.map((height, index) => Math.max(0, height - base[index]));
+  const unmet = natural.map((height, index) =>
+    Math.max(0, height - base[index]),
+  );
   const unmetTotal = unmet.reduce((sum, height) => sum + height, 0);
   if (unmetTotal <= 0) return base;
-  return base.map((height, index) => height + remaining * (unmet[index] / unmetTotal));
+  return base.map(
+    (height, index) => height + remaining * (unmet[index] / unmetTotal),
+  );
 }
 
 /**
@@ -125,7 +131,10 @@ export function resolvePanelStackCorridor({
     boundaryTop,
     Math.min(height, Number(obstacleSafeBottom) || 0),
   );
-  let top = Math.max(boundaryTop, Math.min(boundaryBottom, Number(safeTop) || 0));
+  let top = Math.max(
+    boundaryTop,
+    Math.min(boundaryBottom, Number(safeTop) || 0),
+  );
   let bottom = Math.max(top, Math.min(boundaryBottom, Number(safeBottom) || 0));
   const minimum = Math.max(0, Number(minimumHeight) || 0);
   const midpoint = height * 0.5;

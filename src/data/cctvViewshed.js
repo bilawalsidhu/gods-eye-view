@@ -2,7 +2,7 @@
  * @module cctvViewshed
  *
  * Viewshed presentation for the CCTV layer (design:
- * the CCTV viewshed geometry contract).
+ * docs/superpowers/specs/2026-07-05-cctv-viewshed-gizmo-design.md §3a/§3b).
  *
  * Two responsibilities, both pure of layer state:
  *  - Color identity: a stable per-camera hue (golden-angle spaced over the
@@ -30,7 +30,7 @@ const LINE_ALPHA_ACTIVE = 1.0;
  * Stable hue (degrees, [0, 360)) for a camera's position in the id-sorted
  * catalog. Golden-angle spacing keeps any local cluster of neighbor cameras
  * visually separated; id-sorting makes the assignment deterministic across
- * sessions for a stable catalog (design §3a, open question Q4).
+ * sessions for a stable catalog (design §3a, owner question Q4).
  * @param {number} index - Camera index in the id-sorted catalog.
  * @returns {number} Hue in degrees.
  */
@@ -46,7 +46,7 @@ export function cameraHue(index) {
  * @returns {{fill: Cesium.Color, fillActive: Cesium.Color, line: Cesium.Color, lineActive: Cesium.Color}}
  */
 export function viewshedColors(hueDeg) {
-  const hue = ((Number(hueDeg) % 360) + 360) % 360 / 360;
+  const hue = (((Number(hueDeg) % 360) + 360) % 360) / 360;
   return {
     fill: Cesium.Color.fromHsl(hue, 0.85, 0.6, FILL_ALPHA_IDLE),
     fillActive: Cesium.Color.fromHsl(hue, 0.85, 0.6, FILL_ALPHA_ACTIVE),
@@ -66,7 +66,13 @@ export function viewshedColors(hueDeg) {
  * @returns {{positions: Float64Array, indices: Uint16Array}}
  */
 export function frustumVolumeGeometryData(positions) {
-  const pts = [positions.mount, positions.tl, positions.tr, positions.br, positions.bl];
+  const pts = [
+    positions.mount,
+    positions.tl,
+    positions.tr,
+    positions.br,
+    positions.bl,
+  ];
   const flat = new Float64Array(15);
   pts.forEach((p, i) => {
     flat[i * 3] = p.x;
@@ -75,12 +81,7 @@ export function frustumVolumeGeometryData(positions) {
   });
   // apex=0, tl=1, tr=2, br=3, bl=4 — 4 side faces + far cap (2 triangles).
   const indices = new Uint16Array([
-    0, 1, 2,
-    0, 2, 3,
-    0, 3, 4,
-    0, 4, 1,
-    1, 2, 3,
-    1, 3, 4,
+    0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 1, 1, 2, 3, 1, 3, 4,
   ]);
   return { positions: flat, indices };
 }

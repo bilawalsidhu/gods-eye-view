@@ -11,7 +11,7 @@
  *   2. Free-form name/description text ("5TH ST / WEST AVE", "N LAMAR BLVD") is
  *      full of STREET names that merely contain a cardinal word. Reading a bare
  *      "West" there as a facing direction mis-orients the camera with false
- *      confidence (59 of ~1000 Austin cameras hit this — field review
+ *      confidence (59 of ~1000 Austin cameras hit this — owner adversarial review
  *      2026-07-04). There, only explicit travel forms ("WESTBOUND"/"WB") count —
  *      leave `allowBare=false` (the default).
  *
@@ -24,7 +24,9 @@
  * @returns {number} Heading in degrees [0..360), or NaN if unrecognized.
  */
 export function directionToHeading(value, allowBare = false) {
-  const text = String(value || '').trim().toUpperCase();
+  const text = String(value || '')
+    .trim()
+    .toUpperCase();
   if (!text) return NaN;
   // Explicit travel/intercardinal forms — safe on free-form text (a street
   // name almost never contains "NORTHBOUND" or a lone "NB" token).

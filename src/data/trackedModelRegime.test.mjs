@@ -1,11 +1,12 @@
+import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 // src/data/trackedModelRegime.test.mjs
 //
-// Zoom-driven 2D↔3D for the TRACKED contact (product invariant 2026-08-19).
+// Zoom-driven 2D↔3D for the TRACKED contact (owner directive 2026-08-19).
 //
 // Two things are pinned here, and both are behavioural rather than cosmetic:
 //
 //  1. The POLICY — thresholds and hysteresis — as pure math in
-//     trackedModelRegime.js. The enter ceiling is the playtested swap
+//     trackedModelRegime.js. The enter ceiling is the owner's playtested swap
 //     distance, deliberately much NEARER than the fleet ceiling, and the exit
 //     ceiling is deliberately higher than the enter ceiling. A regression that
 //     collapsed the two thresholds back into one would silently reintroduce
@@ -62,8 +63,8 @@ const WELL_INSIDE_M = TRACKED_MODEL_ENTER_ALT_M / 2;
 // 1. Policy: thresholds + hysteresis math
 // ---------------------------------------------------------------------------
 
-test('the tracked 3D takeover sits at the playtested swap distance', () => {
-  // Field test 2026-08-20: an earlier 1_000_000 m ceiling "pops to 3D far
+test('the tracked 3D takeover sits at the owner-playtested swap distance', () => {
+  // Owner playtest 2026-08-20: an earlier 1_000_000 m ceiling "pops to 3D far
   // too early" — 2D still reads correctly at ~600_000 m and the swap belongs at
   // ~150_000 m. These are the numbers the operator judged by eye, so they are
   // pinned literally rather than derived from anything.
@@ -75,7 +76,7 @@ test('the tracked 3D takeover sits at the playtested swap distance', () => {
 });
 
 test('the tracked contact swaps NEARER than the fleet — a recorded inversion, not a bug', () => {
-  // Consequence of the selected threshold, spelled out so it cannot be "tidied
+  // Consequence of the owner's number, spelled out so it cannot be "tidied
   // away": with the DISPLAY-rail 3D toggle ON, camera altitudes between the
   // tracked ceiling and the fleet ceiling draw surrounding contacts as models
   // while the SELECTED one is still a billboard. The fleet pass skips the
@@ -931,15 +932,15 @@ for (const fixture of LAYERS) {
 test('both layers gate the tracked-model load and record its failures', async () => {
   const { readFile } = await import('node:fs/promises');
   for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
-    assert.match(source, /!_trackedModel && !_trackedModelLoading && _trackedModelLoadAllowed\(\)/,
+    const source = readLayerSource(new URL(`./${name}`, import.meta.url));
+    assert.match(source, /!(?:flightState\.)?_trackedModel\s*&&\s*!(?:flightState\.)?_trackedModelLoading\s*&&\s*(?:parts\.\w+\.)?_trackedModelLoadAllowed\(\s*,?\s*\)/,
       `${name}: the driver asks permission before starting another tracked-model load`);
-    assert.match(source, /_noteTrackedModelLoadFailure\(trackedSpec\.url, err\)/,
+    assert.match(source, /(?:parts\.\w+\.)?_noteTrackedModelLoadFailure\(\s*trackedSpec\.url,\s*err,?\s*\)/,
       `${name}: a rejected load is recorded against this selection, not silently retried`);
     // The reset must be reachable from the real teardown, not only a test seam.
-    assert.match(source, /_releaseTrackedModel\(\);\n  _resetTrackedSelectionState\(\);/,
+    assert.match(source, /(?:parts\.\w+\.)?_releaseTrackedModel\(\s*,?\s*\);\n\s*(?:parts\.\w+\.)?_resetTrackedSelectionState\(\s*,?\s*\);/,
       `${name}: deselect clears the per-selection latches in the production path`);
-    assert.match(source, /_trackedIcao = icao24;\n  _resetTrackedSelectionState\(\);/,
+    assert.match(source, /(?:flightState\.)?_trackedIcao\s*=\s*icao24;\n\s*(?:parts\.\w+\.)?_resetTrackedSelectionState\(\s*,?\s*\);/,
       `${name}: selecting a contact starts from a clean per-selection state`);
   }
 });
@@ -947,16 +948,16 @@ test('both layers gate the tracked-model load and record its failures', async ()
 test('the tracked regime never consults the fleet models3d toggle', async () => {
   const { readFile } = await import('node:fs/promises');
   for (const name of ['flights.js', 'militaryFlights.js']) {
-    const source = await readFile(new URL(`./${name}`, import.meta.url), 'utf8');
-    const regime = /function _trackedModelRegimeActive\(\) \{[\s\S]*?\n\}/.exec(source)?.[0];
+    const source = readLayerSource(new URL(`./${name}`, import.meta.url));
+    const regime = /^([ \t]*)function _trackedModelRegimeActive\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     assert.ok(regime, `${name}: _trackedModelRegimeActive is defined`);
-    assert.doesNotMatch(regime, /_models3dEnabled|_modelRegimeActive\(\)/,
+    assert.doesNotMatch(regime, /(?:flightState\.)?_models3dEnabled|(?:parts\.\w+\.)?_modelRegimeActive\(\s*,?\s*\)/,
       `${name}: the tracked contact's handoff is default-on, not gated on the fleet toggle`);
     assert.match(regime, /trackedModelZoomActive\(/,
       `${name}: the tracked contact uses the shared hysteretic zoom policy`);
     // The FLEET must still obey the toggle — the budget decision stays the operator's.
-    const fleet = /function _modelRegimeActive\(\) \{[\s\S]*?\n\}/.exec(source)?.[0];
-    assert.match(fleet, /if \(!_models3dEnabled\) return false;/,
+    const fleet = /^([ \t]*)function _modelRegimeActive\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
+    assert.match(fleet, /if\s*\(\s*!(?:flightState\.)?_models3dEnabled,?\s*\)\s*return\s*false;/,
       `${name}: the fleet regime still obeys the DISPLAY-rail 3D toggle`);
   }
 });

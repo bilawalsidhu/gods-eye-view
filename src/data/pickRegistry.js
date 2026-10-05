@@ -32,7 +32,8 @@ export function resolvePickId(picked) {
     if (id === null || id === undefined) return undefined;
     if (typeof id === 'object') {
       // AIS vessel record (id object with .mmsi) or Cesium Entity (.id string)
-      if (typeof id.mmsi === 'string' || typeof id.mmsi === 'number') return id.mmsi;
+      if (typeof id.mmsi === 'string' || typeof id.mmsi === 'number')
+        return id.mmsi;
       if (typeof id.id === 'string' || typeof id.id === 'number') return id.id;
       return undefined;
     }
@@ -40,7 +41,7 @@ export function resolvePickId(picked) {
   };
   let id = unwrap(picked.id);
   if (id === undefined) id = unwrap(picked.primitive?.id);
-  return (typeof id === 'string' || typeof id === 'number') ? String(id) : null;
+  return typeof id === 'string' || typeof id === 'number' ? String(id) : null;
 }
 
 /**

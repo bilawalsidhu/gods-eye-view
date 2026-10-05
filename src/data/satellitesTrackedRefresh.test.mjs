@@ -162,7 +162,7 @@ test('selected satellite params survive delayed arrival and yield to newer expli
 
 test('a tracked docked cluster consolidates its companions onto one card', () => {
   // ISS and everything berthed to it are separate real tracks at one position,
-  // so their ambient labels stack underneath the tracked card. Product decision:
+  // so their ambient labels stack underneath the tracked card. Owner ruling:
   // consolidate them as secondary info on that card, and suppress only those
   // members — never unrelated satellites that merely happen to be nearby.
   const entity = { gevLabelModel: { title: 'OLD', details: ['? km'] } };

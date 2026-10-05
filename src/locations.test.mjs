@@ -1,3 +1,4 @@
+import { createStandalonePlaceSearch } from './standalone/placeSearch.js';
 // Camera-framing mode contract for fly_to_location (field test 8 + rootcause doc §3):
 // parks/lakes/campuses and streets are NOT precise POIs — flying to "Zilker Park" at
 // building range (250 m) lands on a random rooftop. Pure mapping tests, no network.
@@ -62,7 +63,7 @@ async function runSearch(viewer, options, { result = AUSTIN_RESULT, query = 'aus
     json: async () => ({ status: 'OK', results: [result] }),
   });
   try {
-    return await searchAndFlyTo(viewer, query, options);
+    return await searchAndFlyTo(viewer, query, { placeSearch: createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ }), ...options });
   } finally {
     globalThis.fetch = priorFetch;
     if (hadWindow) globalThis.window = priorWindow;
@@ -116,7 +117,7 @@ test('admin types win over area types when both present', () => {
   assert.equal(geocodeNavigationMode(['locality', 'park', 'political']), 'city-overview');
 });
 
-// Natural-region framing heuristic (field test 2026-07-23): "take me to the
+// Natural-region framing heuristic (owner field test 2026-07-23): "take me to the
 // Rocky Mountains" geocodes as natural_feature with a ~2,700 km viewport — framing
 // the whole box flies the camera to space. Region-scale viewports get a capped
 // oblique swath instead; ordinary parks/lakes keep full-viewport framing.
@@ -474,7 +475,7 @@ test('regionFramingPlan: invalid viewports return null', () => {
   assert.equal(regionFramingPlan({ southwest: { lat: NaN, lng: 0 }, northeast: { lat: 1, lng: 1 } }), null);
 });
 
-// Globe-view preset (field test 2026-07-23): "zoom out to a globe view" needs an
+// Globe-view preset (owner field test 2026-07-23): "zoom out to a globe view" needs an
 // ABSOLUTE full-earth framing — the relative zoom tool can never reach it. The preset
 // must sit inside the app's own 'global' view-scale band (>12,000 km camera height,
 // classifyViewScale in gevActions.js) and under the fly_to rangeM ceiling (20,000 km).
@@ -596,4 +597,51 @@ test('search without an authority hook preserves the existing caller contract', 
   const result = await runSearch(viewer, {});
   assert.equal(result.navigationMode, 'city-overview');
   assert.equal(viewer.flights.length, 1);
+});
+
+test('a precise search without an outline frames against the resolved ground, not sea level', async () => {
+  // Camp Mabry field report: with no detailed outline (no configured Overpass)
+  // framing used the 250 m landmark range from a sea-level target, and the eye
+  // landed about 1 m above the 171 m mesh. The ground service now anchors it.
+  const viewer = stubViewer();
+  const resolved = [];
+  const warmed = [];
+  const ground = {
+    async resolveGroundFloorCellsBounded(points) {
+      resolved.push(...points);
+    },
+    cachedGroundFloor: () => 171,
+    warmGroundFloor: (points) => warmed.push(...points),
+  };
+  const result = await runSearch(
+    viewer,
+    {
+      ground,
+      features: {
+        getFocusFootprints: async () => ({
+          unavailable: true,
+          retryable: false,
+          code: 'OVERPASS_NOT_CONFIGURED',
+        }),
+      },
+      recoverNearView: async () => null,
+    },
+    {
+      query: 'Camp Mabry',
+      result: {
+        formatted_address: 'Camp Mabry, Austin, TX',
+        types: ['point_of_interest', 'establishment'],
+        geometry: { location: { lat: 30.3125, lng: -97.765 } },
+      },
+    },
+  );
+  assert.equal(result.navigationMode, 'precise-place');
+  assert.equal(result.outlineUnavailable, true);
+  assert.equal(resolved.length, 1);
+  assert.equal(warmed.length, 1);
+  const flight = viewer.flights[0];
+  const target = Cesium.Cartographic.fromCartesian(flight.sphere.center);
+  assert.ok(Math.abs(target.height - (171 + 30)) < 0.5, `target ${target.height}`);
+  const eye = target.height + flight.offset.range * Math.sin(-flight.offset.pitch);
+  assert.ok(eye > 171 + 100, `eye ${eye} must clear the 171 m surface`);
 });

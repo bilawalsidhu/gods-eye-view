@@ -1,0 +1,117 @@
+// Overview pins follow the event pack through Devighat.
+// Charaudi remains a separate evidence shot, and none of these observation
+// locations extends the mapped flood path.
+export const INCIDENT_OVERVIEW_PLACES = Object.freeze(
+  [
+    [
+      'immediate-collapse-viewpoint',
+      'COLLAPSE VIEWPOINT',
+      28.3632333,
+      85.4423639,
+      2850,
+      'left',
+    ],
+    [
+      'debris-dammed-lake',
+      'DAMMED LAKE',
+      28.3346111,
+      85.4861389,
+      2750,
+      'right',
+    ],
+    [
+      'second-landslide',
+      'SECOND LANDSLIDE',
+      28.3379706,
+      85.4688823,
+      2750,
+      'left',
+    ],
+    [
+      'gyirong-border-gate',
+      'BORDER GATE',
+      28.2808338,
+      85.3780248,
+      1818,
+      'right',
+    ],
+    ['timure-cluster', 'TIMURE', 28.2519361, 85.3665833, 1689, 'left'],
+    [
+      'syabru-besi',
+      'SYABRU BESI',
+      28.1602583333333,
+      85.3325666666667,
+      1417,
+      'right',
+    ],
+    ['dhunche', 'DHUNCHE', 28.1131861111111, 85.2953305555556, 1300, 'left'],
+    [
+      'mailung-upper-trishuli',
+      'UPPER TRISHULI',
+      28.090925,
+      85.2322916666667,
+      950,
+      'right',
+    ],
+    [
+      'mailung-bazzar',
+      'MAILUNG',
+      28.0761666666667,
+      85.2125277777778,
+      800,
+      'left',
+    ],
+    [
+      'dandagaun',
+      'DANDAGAUN',
+      28.0751944444444,
+      85.2076944444444,
+      780,
+      'right-lower',
+    ],
+    [
+      'dandagaun-viewpoint',
+      'DANDAGAUN VIEWPOINT',
+      28.0354,
+      85.1894361111111,
+      700,
+      'right',
+    ],
+    [
+      'betrawati-bazaar',
+      'BETRAWATI',
+      27.9758992572246,
+      85.1835331689033,
+      600,
+      'left',
+    ],
+    [
+      'bhainse',
+      'BHAINSE',
+      27.9623111111111,
+      85.1739777777778,
+      500,
+      'right-lower',
+    ],
+    [
+      'bidur-trishuli-bridge',
+      'BIDUR BRIDGE',
+      27.920858,
+      85.148029,
+      510,
+      'left',
+    ],
+    [
+      'devighat-taadi-khola-bridge',
+      'DEVIGHAT BRIDGE',
+      27.8585278,
+      85.1090318,
+      350,
+      'right',
+    ],
+  ].map(([id, title, lat, lon, heightM, placement]) =>
+    Object.freeze({ id, title, lat, lon, heightM, placement }),
+  ),
+);
+
+export const INCIDENT_OVERVIEW_HOLD_SEC = 11;

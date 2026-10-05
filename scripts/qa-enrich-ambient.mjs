@@ -12,7 +12,7 @@
  * honoring the politeness bounds.
  *
  * Fetch shim (installed before app code, same pattern as qa-sprites-b5.mjs):
- *   - /api/opensky           → 12 straight-flying planes, category 0
+ *   - /api/flights           → 12 straight-flying planes, category 0
  *   - /api/adsbdb/type/:hex  → varied REAL type codes (C172, B744, DH8D, H60,
  *                              F16, GLID, B77W, A320, B738, PC12, R44) + one
  *                              found:false miss; responses are HELD until the
@@ -93,7 +93,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // tile-gated drain budget under SwiftShader on 2026-07-30 — six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
-  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  await puppeteer.executablePath().catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
@@ -260,14 +260,14 @@ async function main() {
           });
         }
         if (url.includes('/api/adsbdb/')) return Promise.resolve(jsonResponse({ found: false }));
-        if (url.includes('/api/opensky-track')) return Promise.resolve(jsonResponse({ path: [] }));
-        if (url.includes('/api/adsblol/trace')) {
+        if (url.includes('/api/flights/track')) return Promise.resolve(jsonResponse({ path: [] }));
+        if (url.includes('/api/military/track')) {
           return Promise.resolve(jsonResponse({ timestamp: Math.floor(nowSec), trace: [] }));
         }
-        if (url.includes('/api/adsblol/mil')) {
+        if (url.includes('/api/military')) {
           return Promise.resolve(jsonResponse({ msg: 'No error', now: Date.now(), ac: [] }));
         }
-        if (url.includes('/api/opensky')) {
+        if (url.includes('/api/flights')) {
           const states = S.planes.map((f) => {
             const s = S.stateAt(f, tRel);
             return [

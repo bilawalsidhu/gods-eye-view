@@ -232,18 +232,19 @@ test('close and lock invalidate awaited local file text before it can repopulate
 });
 
 test('Demon Forge opener is outside the Globe actions navigation landmark', async () => {
-  const html = await readFile(new URL('../../index.html', import.meta.url), 'utf8');
+  const shell = await readFile(new URL('../../index.html', import.meta.url), 'utf8');
+  const html = shell + await readFile(new URL('../ui/templates/scene-chrome.html', import.meta.url), 'utf8');
   const globeNav = html.match(/<nav id="top-center-actions"[\s\S]*?<\/nav>/u)?.[0];
   assert.ok(globeNav);
   assert.doesNotMatch(globeNav, /demon-forge-open/u);
-  assert.match(html, /<\/nav>\s*<button id="demon-forge-open"/u);
+  assert.match(shell, /<button id="demon-forge-open"/u);
 });
 
 test('Demon Forge opener is hidden by clean-view, cockpit, and recording modes', async () => {
-  const css = await readFile(new URL('../../style.css', import.meta.url), 'utf8');
+  const css = await readFile(new URL('./workspace.css', import.meta.url), 'utf8');
   assert.match(css, /body\.ui-clean-view #demon-forge-open,/u);
   assert.match(css, /body\.recording-mode #demon-forge-open,/u);
-  const cockpitHide = css.match(/body\.cockpit-mode :is\([\s\S]*?\) \{ display: none !important; \}/u)?.[0];
+  const cockpitHide = css.match(/body\.cockpit-mode #demon-forge-open \{ display: none !important; \}/u)?.[0];
   assert.ok(cockpitHide);
   assert.match(cockpitHide, /#demon-forge-open/u);
 });

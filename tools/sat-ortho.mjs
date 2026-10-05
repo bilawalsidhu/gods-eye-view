@@ -33,10 +33,11 @@
 import { readFileSync, mkdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { projectRoot } from '../scripts/project-root.mjs';
 import sharp from 'sharp';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const PROJECT_ROOT = resolve(__dirname, '..');
+const PROJECT_ROOT = projectRoot(import.meta.url);
 const TILE_SIZE = 256;
 const MAX_CONCURRENT = 8;
 

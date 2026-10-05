@@ -1,0 +1,232 @@
+import { isUnavailableCapability } from './capability.js';
+export {
+  FEATURE_SOURCE_METHODS,
+  requireFeatureSource,
+} from './featureSource.js';
+import { normalizeOverpassFeatures } from './overpassFeaturesRecords.js';
+
+function validPoint(lat, lon) {
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon) ||
+    Math.abs(lat) > 90 ||
+    Math.abs(lon) > 180
+  )
+    throw new TypeError('Valid feature coordinates are required');
+}
+
+/**
+ * Output box for `out geom(s,w,n,e)`: `out geom` prints every member of a
+ * matched relation, and one borough can run to tens of thousands of nodes.
+ * Geometry is printed only inside this box; a relation cut by it no longer
+ * closes and is rejected by ring stitching, so nothing partial is drawn.
+ * @param {number} lat
+ * @param {number} lon
+ * @param {number} halfSizeM - Half the box side in metres.
+ * @returns {string} `(south,west,north,east)` in degrees, 5 decimals.
+ */
+export function geometryOutputBox(lat, lon, halfSizeM) {
+  const dLat = halfSizeM / 111320;
+  const dLon =
+    halfSizeM / (111320 * Math.max(0.01, Math.cos((lat * Math.PI) / 180)));
+  const f = (value) => Number(value.toFixed(5));
+  return `(${f(Math.max(-90, lat - dLat))},${f(Math.max(-180, lon - dLon))},${f(Math.min(90, lat + dLat))},${f(Math.min(180, lon + dLon))})`;
+}
+
+/** Query bounded feature candidates; ranking and rendering belong to callers.
+ * Array = definitive response (possibly empty), null = retryable failure,
+ * {rateLimited, retryAfterMs} = admission delay; {unavailable, retryable:false} = no capability.
+ */
+export function createOverpassFeatureSource({
+  boundarySource,
+  signal: lifetime,
+} = {}) {
+  if (typeof boundarySource?.query !== 'function')
+    throw new TypeError('A boundary query transport is required');
+  let unavailable = null;
+  async function query(
+    text,
+    timeoutMs,
+    { signal, focus = false, relationsOnly = false } = {},
+  ) {
+    if (unavailable) return unavailable;
+    const controller = new AbortController();
+    const signals = [lifetime, signal, controller.signal].filter(Boolean);
+    const combined = AbortSignal.any(signals);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      combined.throwIfAborted();
+      const elements = await boundarySource.query(text, { signal: combined });
+      combined.throwIfAborted();
+      if (isUnavailableCapability(elements)) {
+        unavailable = {
+          unavailable: true,
+          code: elements.code || 'OVERPASS_NOT_CONFIGURED',
+          retryable: false,
+        };
+        return unavailable;
+      }
+      return Array.isArray(elements)
+        ? normalizeOverpassFeatures(
+            relationsOnly
+              ? elements.filter((element) => element.type === 'relation')
+              : elements,
+            { focus },
+          )
+        : elements;
+    } catch (error) {
+      if (isUnavailableCapability(error)) {
+        unavailable = {
+          unavailable: true,
+          code: error.code || 'OVERPASS_NOT_CONFIGURED',
+          retryable: false,
+        };
+        return unavailable;
+      }
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return {
+    getFocusFootprints({ lat, lon }, options = {}) {
+      validPoint(lat, lon);
+      return query(
+        `
+    [out:json][timeout:10];
+    (
+      way(around:180,${lat},${lon})["building"];
+      relation(around:180,${lat},${lon})["building"];
+      way(around:180,${lat},${lon})["man_made"];
+      relation(around:180,${lat},${lon})["man_made"];
+      way(around:180,${lat},${lon})["tourism"="attraction"];
+      relation(around:180,${lat},${lon})["tourism"="attraction"];
+    );
+    out center geom${geometryOutputBox(lat, lon, 1500)};
+  `,
+        6000,
+        { ...options, focus: true },
+      );
+    },
+    getAdministrativeAreas({ lat, lon }, options = {}) {
+      validPoint(lat, lon);
+      return query(
+        `[out:json][timeout:25];is_in(${lat},${lon})->.a;area.a["boundary"="administrative"]["admin_level"];out tags;`,
+        14000,
+        options,
+      );
+    },
+    getAreaGeometry(id, options = {}) {
+      if (!Number.isSafeInteger(id) || id <= 0)
+        throw new TypeError('Invalid feature geometry reference');
+      return query(
+        `[out:json][timeout:25];area(${id})->.x;rel(pivot.x);out geom;`,
+        28000,
+        { ...options, relationsOnly: true },
+      );
+    },
+    // Polygon lookups print with `out geom`, not `out tags geom`: at `tags`
+    // verbosity a relation carries no members, so it arrives with bounds and
+    // no outline and is dropped. The output box bounds member geometry (6 km
+    // for neighbourhoods, 3 km for street areas, 1.5 km for focus footprints).
+    getNeighborhoodAreas({ lat, lon }, options = {}) {
+      validPoint(lat, lon);
+      return query(
+        `[out:json][timeout:20];(` +
+          `way(around:1500,${lat},${lon})["place"~"neighbourhood|suburb|quarter|borough"]["name"];` +
+          `relation(around:1500,${lat},${lon})["place"~"neighbourhood|suburb|quarter|borough"]["name"];` +
+          `relation(around:1500,${lat},${lon})["boundary"="place"]["name"];` +
+          `);out geom${geometryOutputBox(lat, lon, 6000)};`,
+        14000,
+        options,
+      );
+    },
+    getStreetAreas({ lat, lon }, options = {}) {
+      validPoint(lat, lon);
+      return query(
+        `[out:json][timeout:20];(` +
+          `way(around:450,${lat},${lon})["place"~"quarter|neighbourhood|suburb|city_block"];` +
+          `relation(around:450,${lat},${lon})["place"~"quarter|neighbourhood|suburb"];` +
+          `way(around:450,${lat},${lon})["landuse"~"commercial|retail"]["name"];` +
+          `relation(around:450,${lat},${lon})["landuse"~"commercial|retail"]["name"]["type"="multipolygon"];` +
+          `);out geom${geometryOutputBox(lat, lon, 3000)};`,
+        14000,
+        options,
+      );
+    },
+    getStreetLines({ lat, lon }, options = {}) {
+      validPoint(lat, lon);
+      return query(
+        `[out:json][timeout:20];way(around:320,${lat},${lon})["highway"]["name"];out geom;`,
+        14000,
+        options,
+      );
+    },
+    getFootprints({ lat, lon }, options = {}) {
+      validPoint(lat, lon);
+      return query(
+        `
+    [out:json][timeout:25];
+    (
+      way(around:320,${lat},${lon})["building"];
+      relation(around:320,${lat},${lon})["building"];
+      way(around:1800,${lat},${lon})["landuse"];
+      relation(around:1800,${lat},${lon})["landuse"];
+      way(around:1800,${lat},${lon})["leisure"];
+      relation(around:1800,${lat},${lon})["leisure"];
+      way(around:1800,${lat},${lon})["aeroway"="aerodrome"];
+      relation(around:1800,${lat},${lon})["aeroway"="aerodrome"];
+      way(around:1800,${lat},${lon})["natural"="water"]["name"];
+      relation(around:1800,${lat},${lon})["natural"="water"]["name"]["type"="multipolygon"];
+      way(around:1200,${lat},${lon})["shop"="mall"];
+      relation(around:1200,${lat},${lon})["shop"="mall"];
+      way(around:800,${lat},${lon})["amenity"];
+      way(around:800,${lat},${lon})["tourism"];
+    );
+    out geom;
+  `,
+        12000,
+        options,
+      );
+    },
+    getEnclosingAreas({ lat, lon }, options = {}) {
+      validPoint(lat, lon);
+      return query(
+        `
+    [out:json][timeout:25];
+    (
+      way(around:${600},${lat},${lon})["leisure"]["name"];
+      relation(around:${600},${lat},${lon})["leisure"]["name"]["type"="multipolygon"];
+      way(around:${600},${lat},${lon})["landuse"]["name"];
+      relation(around:${600},${lat},${lon})["landuse"]["name"]["type"="multipolygon"];
+      way(around:${600},${lat},${lon})["boundary"]["name"];
+      relation(around:${600},${lat},${lon})["boundary"]["name"];
+      way(around:${600},${lat},${lon})["amenity"]["name"];
+      relation(around:${600},${lat},${lon})["amenity"]["name"]["type"="multipolygon"];
+      way(around:${600},${lat},${lon})["natural"="water"]["name"];
+      relation(around:${600},${lat},${lon})["natural"="water"]["name"]["type"="multipolygon"];
+    );
+    out geom;
+  `,
+        12000,
+        options,
+      );
+    },
+    getMonuments({ lat, lon }, options = {}) {
+      validPoint(lat, lon);
+      return query(
+        `
+        [out:json][timeout:20];
+        (
+          nwr(around:${2500},${lat},${lon})["historic"~"memorial|monument|statue|tomb"];
+          nwr(around:${2500},${lat},${lon})["tourism"="artwork"]["name"];
+          nwr(around:${2500},${lat},${lon})["memorial"]["name"];
+        );
+        out center tags;
+      `,
+        6000,
+        options,
+      );
+    },
+  };
+}

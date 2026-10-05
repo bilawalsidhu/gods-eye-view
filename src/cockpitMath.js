@@ -1,3 +1,5 @@
+export { resolveHudRailLayout } from './ui/panelRailGeometry.js';
+
 /** Normalize a heading into the [0, 360) range. */
 export function normalizeHeading(value) {
   if (!Number.isFinite(value)) return 0;
@@ -23,8 +25,13 @@ export function slewHeading(current, target, maxStepDeg) {
  * becoming a first-person surge or reversal while still removing drift.
  */
 export function cockpitAnchorCorrectionStep(distanceM, speedMps, dtSec) {
-  if (!Number.isFinite(distanceM) || distanceM <= 0
-    || !Number.isFinite(dtSec) || dtSec <= 0) return 0;
+  if (
+    !Number.isFinite(distanceM) ||
+    distanceM <= 0 ||
+    !Number.isFinite(dtSec) ||
+    dtSec <= 0
+  )
+    return 0;
   const dt = Math.min(0.1, dtSec);
   const speed = Number.isFinite(speedMps) ? Math.max(0, speedMps) : 0;
   const eased = distanceM * (1 - Math.exp(-1.25 * dt));
@@ -34,14 +41,21 @@ export function cockpitAnchorCorrectionStep(distanceM, speedMps, dtSec) {
 
 /** Return whether a throttled cockpit presentation update is due. */
 export function cockpitUiUpdateDue(nowMs, lastUpdateMs, intervalMs) {
-  if (!Number.isFinite(nowMs) || !Number.isFinite(intervalMs) || intervalMs < 0) return false;
-  if (!Number.isFinite(lastUpdateMs) || lastUpdateMs <= 0 || nowMs < lastUpdateMs) return true;
+  if (!Number.isFinite(nowMs) || !Number.isFinite(intervalMs) || intervalMs < 0)
+    return false;
+  if (
+    !Number.isFinite(lastUpdateMs) ||
+    lastUpdateMs <= 0 ||
+    nowMs < lastUpdateMs
+  )
+    return true;
   return nowMs - lastUpdateMs >= intervalMs;
 }
 
 /** Return whether the bounded rendered-surface acquisition window has elapsed. */
 export function cockpitSurfaceWaitExpired(nowMs, startedMs, timeoutMs = 5000) {
-  if (![nowMs, startedMs, timeoutMs].every(Number.isFinite) || timeoutMs < 0) return true;
+  if (![nowMs, startedMs, timeoutMs].every(Number.isFinite) || timeoutMs < 0)
+    return true;
   return nowMs - startedMs >= timeoutMs;
 }
 
@@ -49,7 +63,11 @@ export function cockpitSurfaceWaitExpired(nowMs, startedMs, timeoutMs = 5000) {
  * Keep the cockpit camera above the shared rendered-surface floor.
  * Unknown floors preserve the proposed camera height.
  */
-export function cockpitGroundSafeHeight(proposedHeightM, groundHeightM, clearanceM) {
+export function cockpitGroundSafeHeight(
+  proposedHeightM,
+  groundHeightM,
+  clearanceM,
+) {
   if (!Number.isFinite(proposedHeightM)) return proposedHeightM;
   if (!Number.isFinite(groundHeightM)) return proposedHeightM;
   const clearance = Number.isFinite(clearanceM) ? Math.max(0, clearanceM) : 0;
@@ -66,36 +84,51 @@ export function cockpitAltitudeDisplayFt(altitudeM, onGround) {
 }
 
 /** Format the cockpit Context scope without overstating installation coverage. */
-export function formatCockpitContextScope(subjectLabel, radiusM, installationCoverage = null) {
-  const normalizedLabel = typeof subjectLabel === 'string'
-    ? subjectLabel.trim() || '—'
-    : Number.isFinite(subjectLabel) ? String(subjectLabel) : '—';
-  const radiusKm = Number.isFinite(radiusM) && radiusM >= 0
-    ? String(Math.round(radiusM / 1000))
-    : '—';
-  const coverage = typeof installationCoverage === 'string'
-    ? installationCoverage.trim()
-    : '';
+export function formatCockpitContextScope(
+  subjectLabel,
+  radiusM,
+  installationCoverage = null,
+) {
+  const normalizedLabel =
+    typeof subjectLabel === 'string'
+      ? subjectLabel.trim() || '—'
+      : Number.isFinite(subjectLabel)
+        ? String(subjectLabel)
+        : '—';
+  const radiusKm =
+    Number.isFinite(radiusM) && radiusM >= 0
+      ? String(Math.round(radiusM / 1000))
+      : '—';
+  const coverage =
+    typeof installationCoverage === 'string' ? installationCoverage.trim() : '';
   const base = `${normalizedLabel} · ${radiusKm} KM AIR/SEA WINDOW`;
-  return coverage
-    ? `${base} · INSTALLATIONS ${coverage}`
-    : base;
+  return coverage ? `${base} · INSTALLATIONS ${coverage}` : base;
 }
 
 /** Return seven 30-degree compass divisions centered on a heading. */
 export function compassDivisions(heading) {
   const center = Math.round(normalizeHeading(heading) / 30) * 30;
-  return [-90, -60, -30, 0, 30, 60, 90].map((offset) => normalizeHeading(center + offset));
+  return [-90, -60, -30, 0, 30, 60, 90].map((offset) =>
+    normalizeHeading(center + offset),
+  );
 }
 
 /** Format a compass division as a cardinal/intercardinal label or degrees. */
 export function formatCompassDivision(heading) {
   const normalized = normalizeHeading(heading);
   const labels = new Map([
-    [0, 'N'], [45, 'NE'], [90, 'E'], [135, 'SE'],
-    [180, 'S'], [225, 'SW'], [270, 'W'], [315, 'NW'],
+    [0, 'N'],
+    [45, 'NE'],
+    [90, 'E'],
+    [135, 'SE'],
+    [180, 'S'],
+    [225, 'SW'],
+    [270, 'W'],
+    [315, 'NW'],
   ]);
-  return labels.get(normalized) || String(Math.round(normalized)).padStart(3, '0');
+  return (
+    labels.get(normalized) || String(Math.round(normalized)).padStart(3, '0')
+  );
 }
 
 /** Choose a readable altitude-tape interval for the current flight level. */
@@ -188,20 +221,22 @@ export function formatSpeedRulerTick(valueKt) {
 /** Return the initial great-circle bearing between two latitude/longitude points. */
 export function bearingBetweenCoordinates(fromLat, fromLon, toLat, toLon) {
   if (![fromLat, fromLon, toLat, toLon].every(Number.isFinite)) return null;
-  const φ1 = fromLat * Math.PI / 180;
-  const φ2 = toLat * Math.PI / 180;
-  const Δλ = (toLon - fromLon) * Math.PI / 180;
+  const φ1 = (fromLat * Math.PI) / 180;
+  const φ2 = (toLat * Math.PI) / 180;
+  const Δλ = ((toLon - fromLon) * Math.PI) / 180;
   const y = Math.sin(Δλ) * Math.cos(φ2);
-  const x = Math.cos(φ1) * Math.sin(φ2)
-    - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  const x =
+    Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
   if (Math.abs(x) < 1e-12 && Math.abs(y) < 1e-12) return null;
-  return normalizeHeading(Math.atan2(y, x) * 180 / Math.PI);
+  return normalizeHeading((Math.atan2(y, x) * 180) / Math.PI);
 }
 
 /** Return a target bearing relative to the current heading in the [-180, 180) range. */
 export function relativeBearing(bearing, heading) {
   if (!Number.isFinite(bearing) || !Number.isFinite(heading)) return null;
-  return ((normalizeHeading(bearing) - normalizeHeading(heading) + 540) % 360) - 180;
+  return (
+    ((normalizeHeading(bearing) - normalizeHeading(heading) + 540) % 360) - 180
+  );
 }
 
 /**
@@ -227,10 +262,13 @@ export function resolveTrackedAircraftInfo({
   if (civilian) candidates.push({ ...civilian, layerId: 'flights' });
   if (military) candidates.push({ ...military, layerId: 'military' });
   if (!candidates.length) return null;
-  const trackedKey = String(trackedId || '').trim().toLowerCase();
+  const trackedKey = String(trackedId || '')
+    .trim()
+    .toLowerCase();
   if (trackedKey) {
     const owner = candidates.find(
-      (candidate) => `${candidate.layerId}:${candidate.icao24}`.toLowerCase() === trackedKey,
+      (candidate) =>
+        `${candidate.layerId}:${candidate.icao24}`.toLowerCase() === trackedKey,
     );
     if (owner) return owner;
   }
@@ -251,7 +289,10 @@ export function resolveTrackedAircraftInfo({
  *   aircraftRelative: boolean, contactLost: boolean}}
  *   Panel visibility plus the per-field rendering rules for this frame.
  */
-export function resolveCockpitContextReadout({ snapshot = null, info = null } = {}) {
+export function resolveCockpitContextReadout({
+  snapshot = null,
+  info = null,
+} = {}) {
   if (!snapshot) {
     return {
       visible: false,
@@ -262,14 +303,15 @@ export function resolveCockpitContextReadout({ snapshot = null, info = null } = 
     };
   }
   const trackedId = info?.icao24 ?? info?.id;
-  const subjectMatchesTracked = snapshot.subject?.layerId === info?.layerId
-    && String(snapshot.subject?.id) === String(trackedId);
+  const subjectMatchesTracked =
+    snapshot.subject?.layerId === info?.layerId &&
+    String(snapshot.subject?.id) === String(trackedId);
   // `subjectPresent` is absent on snapshots built before the presence signal
   // existed; only an explicit `false` means the subject left its source.
   const contactLost = snapshot.subjectPresent === false;
   return {
     visible: true,
-    mode: contactLost ? 'lost' : (subjectMatchesTracked ? 'tracked' : 'foreign'),
+    mode: contactLost ? 'lost' : subjectMatchesTracked ? 'tracked' : 'foreign',
     subjectMatchesTracked,
     // The nose-relative arrow and BRG readout are measured in the tracked
     // aircraft's own frame; every other value in that row is measured from the
@@ -280,47 +322,5 @@ export function resolveCockpitContextReadout({ snapshot = null, info = null } = 
     // A lost contact holds its last-known values: recomputing them against a
     // frozen position would present stale geometry as a live reading.
     contactLost,
-  };
-}
-
-/**
- * Resolve a vertically centered panel slot inside a HUD rail while respecting
- * live rectangles that intersect that rail above or below the viewport center.
- */
-export function resolveHudRailLayout({
-  viewportHeight,
-  panelHeight,
-  laneLeft,
-  laneRight,
-  obstacles = [],
-  baseTop,
-  baseBottom,
-  gap = 12,
-  align = 'center',
-}) {
-  if (![viewportHeight, panelHeight, laneLeft, laneRight, baseTop, baseBottom]
-    .every(Number.isFinite) || viewportHeight <= 0 || laneRight <= laneLeft) return null;
-  const midpoint = viewportHeight * 0.5;
-  let safeTop = Math.max(0, baseTop);
-  let safeBottom = Math.min(viewportHeight, baseBottom);
-
-  for (const rect of obstacles) {
-    if (![rect?.left, rect?.right, rect?.top, rect?.bottom].every(Number.isFinite)) continue;
-    if (rect.right <= laneLeft || rect.left >= laneRight || rect.bottom <= rect.top) continue;
-    if (rect.bottom <= midpoint) safeTop = Math.max(safeTop, rect.bottom + gap);
-    else if (rect.top >= midpoint) safeBottom = Math.min(safeBottom, rect.top - gap);
-  }
-
-  safeBottom = Math.max(safeTop, safeBottom);
-  const availableHeight = Math.max(0, safeBottom - safeTop);
-  const renderedHeight = Math.min(Math.max(0, panelHeight), availableHeight);
-  return {
-    top: align === 'start'
-      ? safeTop
-      : safeTop + Math.max(0, (availableHeight - renderedHeight) * 0.5),
-    maxHeight: availableHeight,
-    safeTop,
-    safeBottom,
-    constrained: panelHeight > availableHeight,
   };
 }

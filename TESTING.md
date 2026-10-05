@@ -4,10 +4,10 @@
 > This is a **manual field-test scenario script** for the June-2026 whiteboard +
 > tracking work. The AUTOMATED gates live elsewhere: `npm test` (unit),
 > `npm run test:track` (tracking invariants), and the headless harnesses under
-> `scripts/qa-*.mjs` — see [docs/CURRENT-STATE.md](docs/CURRENT-STATE.md) for the full test surface.
+> `scripts/qa-*.mjs` — together these are the full automated test surface.
 
-This guide covers the hardened annotation and tracking behavior. Record a voice
-note + screenshots as you go; each scenario
+This guide covers the work hardened over **4 adversarial-review batches** on
+`feat/annotate-hybrid`. Record a voice note + screenshots as you go; each scenario
 lists what **✅ pass** looks like and (where it applies) the **❌ old bug** it replaces.
 
 ## Focus/horizon moving evidence
@@ -210,6 +210,18 @@ While recording, call out anything in these areas — this is the feedback I mos
   happened? Any command it misunderstood?
 - **Anything that looks wrong, janky, or surprising** — screenshot it; that's the gold.
 
+---
+
+## 6. Live video CCTV (HTTPS HLS) — soak, no mic
+
+> Requires the DelDOT pack (loads by default; `CCTV_DELDOT_ENABLED=0` disables it).
+
+1. Turn on **CCTV**, fly to Dover, DE, and activate **DE 1 @ Main Toll Plaza**. ✅ Within ~30 s the monitor plane and the panel preview both show moving video,.
+2. Leave it for **five minutes**. ✅ Continuous playback; at most a short hitch about once a minute (the agency restarts its stream on a timer). ❌ A freeze that does not recover, or the panel picture stopping while the plane keeps moving.
+3. Toggle **PROJECTION** off. ✅ The panel keeps playing; the plane and the active camera's cone hide.
+4. Switch to **DE 8 @ Saulsbury Rd**, then back. ✅ Each switch resumes within ~10 s with no stale frame from the previous camera.
+5. Optional: DevTools → Network, filter `media/`. ✅ Playlist responses carry `X-CCTV-Source: hls-pull`; segments return `video/mp2t`.
+
 ## If something looks off
 
 - **Grey globe / slow tiles:** wait a few seconds after a camera flight; photoreal streams in.
@@ -218,3 +230,27 @@ While recording, call out anything in these areas — this is the feedback I mos
 - **No planes:** OpenSky data may be momentarily sparse; scroll out or wait a poll cycle.
 - **No GEV MIC button / voice errors:** `OPENAI_API_KEY` didn't load — use the console API for
   the annotation tests and skip the voice-only ones (§2).
+
+
+## Browser harness renderers
+
+The first-run, view-target prewarm, cockpit-plates and floor-hold harnesses
+select Metal on macOS and SwiftShader on other platforms. Cockpit-plates also
+accepts `--swiftshader` on macOS; floor-hold retains `--angle=<backend>`.
+Floor-hold explicitly selects 2D aircraft mode because it measures billboard
+positions; the tracking suite covers the 3D handoff.
+Software runs validate their assertions but do not establish real-GPU visual
+correctness. Floor-hold retains both mesh and DEM checks: an unavailable mesh
+oracle fails the run even when the DEM check passes. Record the backend with
+any screenshots and run GPU visual checks separately when needed.
+
+FIRMS refactoring can be checked without a configured server key using
+`node scripts/qa-firms.mjs --url http://localhost:4173 --fixtures`. This explicit
+fixture mode exercises populated display, aggregation, cards, keyless and stale
+responses, and selection/camera handoff. It does not establish live-source
+acceptance; omit `--fixtures` with a configured FIRMS key for that check.
+
+Director authoring and sharing acceptance: `node scripts/qa-director-sharing.mjs`
+checks installed import previews, draft validation, file-bundle round trips,
+cancellation, resource ownership and narrow-screen controls. Run alongside the
+scene-controls, camera, pack, interaction and timing harnesses.

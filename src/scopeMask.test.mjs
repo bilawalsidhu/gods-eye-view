@@ -81,7 +81,7 @@ test('an omitted feather argument uses the module default, whatever it is', () =
   const keyholeR = 900 * 0.5 * KEYHOLE_OUTER_RADIUS;
   assert.ok(Math.abs((wider.outerR - wider.innerR)
     - keyholeR * (SCOPE_FEATHER_RATIO_DEFAULT + 0.4)) < 1e-9);
-  // The default's VALUE (hidden feather, product invariant 2026-08-22) is pinned
+  // The default's VALUE (hidden feather, owner directive 2026-08-22) is pinned
   // with the rest of the first-run batch in reasonableDefaults.test.mjs.
 });
 
@@ -201,11 +201,11 @@ test('destroy tears the DPR watch down (no redraw after teardown)', () => {
 //
 // 0.94 is right at TRUE full-globe altitude (faint stars survive in the
 // corners) and wrong everywhere else, where the same 6% bleed reads as smeared
-// geometry. Field band retune (2026-08-17): the fade STARTS at
+// geometry. Owner band retune (2026-08-17 field test): the fade STARTS at
 // ~10 Mm and is finished by ~7 Mm, so every working altitude is solid black.
-// FEATHER behavior is outside this terminus-band test and remains unchanged.
+// FEATHER is untouched (owner locked 35).
 
-test('the terminus band is the validated 10 Mm → 7 Mm fade', () => {
+test('the terminus band is the owner-approved 10 Mm → 7 Mm fade', () => {
   assert.equal(SCOPE_TERMINUS_FAR_M, 10_000_000, 'the relaxed corners start above 10 Mm');
   assert.equal(SCOPE_TERMINUS_NEAR_M, 7_000_000, 'and are gone by 7 Mm');
   assert.equal(scopeTerminusAlpha(10_500_000), SCOPE_OUTSIDE_ALPHA, 'full-globe view keeps its stars');
@@ -361,7 +361,7 @@ test('one quantum is the smallest step that can repaint', () => {
     'the quantum must be finer than the ramp it gates');
 });
 
-// ── SCOPE OFF must be the cheapest state (second review) ─────────────────────
+// ── SCOPE OFF must be the cheapest state (review round 2) ─────────────────────
 //
 // With sc=0 the mask paints nothing, but the camera listeners still sampled at
 // ~8 Hz through the altitude band and draw() performed the full backing-store

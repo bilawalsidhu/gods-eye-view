@@ -10,7 +10,7 @@
  * upstream failures so the run is deterministic and never depends on live
  * AISStream / CelesTrak availability:
  *
- *   (i)  AIS invalid key   — /api/ais-live is answered with
+ *   (i)  AIS invalid key   — /api/vessels is answered with
  *        {rows:[],status:'error',error:'invalid key'}. Assert the layer's
  *        getStats().error is set (feed down) — NOT a clean 'just now · 0'.
  *
@@ -70,7 +70,7 @@ const CHROME_EXECUTABLE_CANDIDATES = [
   // tile-gated drain budget under SwiftShader on 2026-07-30 — six
   // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
   // pinned browser beats the newest one for regression harnesses.
-  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  await puppeteer.executablePath().catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
@@ -193,10 +193,12 @@ async function main() {
     page.on('request', (req) => {
       const url = req.url();
       // (i) AIS invalid-key: the exact payload the spec calls for.
-      if (url.includes('/api/ais-live') && !url.includes('/track')) {
+      if (url.includes('/api/vessels') && !url.includes('/track')) {
         req.respond({
           status: 200,
           contentType: 'application/json',
+          // The bundled server names its vessel provider; attribution reads it.
+          headers: { 'X-Feed-Source': 'AISStream' },
           body: JSON.stringify({ rows: [], status: 'error', error: 'invalid key' }),
         });
         return;

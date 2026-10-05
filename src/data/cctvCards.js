@@ -1,7 +1,7 @@
 /**
  * @module cctvCards
  * @description Screen-space thumbnail cards for the citywide ambient CCTV
- * tier described in `docs/CURRENT-STATE.md`.
+ * tier (design: docs/superpowers/specs/2026-07-29-cctv-ambient-cards-design.md).
  * Replaces the rejected world-space static-plane ring with small canvas cards
  * anchored to each LOD-selected camera's screen position, showing its latest
  * paced static frame.
@@ -18,10 +18,10 @@
  * persistence, retry pacing, cache pruning) and supplies ready-to-draw stable
  * frame-slot references to the host.
  *
- * Zero-flicker contract (product requirement):
+ * Zero-flicker contract (owner requirement):
  * - An AMBIENT entry whose frame slot has no drawn frame yet (`stamp === 0`)
  *   renders NOTHING — no placeholder, no chip. The camera icon alone carries
- *   it. Sole documented exception (follow-up round 2, item B): a PINNED entry
+ *   it. Sole documented exception (owner round 2, item B): a PINNED entry
  *   (hover-summoned, `entry.pinned === true`) paints its chrome immediately —
  *   explicit user gesture wants instant feedback — with an empty thumb area
  *   until its fast-tracked frame lands.
@@ -48,7 +48,7 @@ export const CCTV_FRAME_CANVAS_W = 192;
 export const CCTV_FRAME_CANVAS_H = 108;
 /**
  * Min screen separation between accepted card anchors (greedy declutter).
- * Field test 2026-07-30: 130 read too sparse once the HUD safe-zone
+ * Owner field test 2026-07-30: 130 read too sparse once the HUD safe-zone
  * filter started dropping cards as well. 112 still exceeds the card box width
  * (104 px) so accepted boxes cannot overlap. This is THE density knob.
  */
@@ -59,8 +59,8 @@ export const CCTV_CARD_SAFE_TOP_MAX_PX = 150;
 /** Bounded thumbnail cache (frame slots kept beyond the live card set). */
 export const CCTV_FRAME_CACHE_MAX = 96;
 
-// ─── Altitude scaling (field test finding 5, 2026-07-29) ──────────────
-// Validated curve: cards are full size at street level, "start to get
+// ─── Altitude scaling (owner field-test finding 5, 2026-07-29) ──────────────
+// Owner-decided curve: cards are full size at street level, "start to get
 // smaller" from ~1,800 m, "scale down progressively" to ~0.45 by 6,000 m,
 // keep shrinking slightly and alpha-fade out across 7,500→9,500 m, and are
 // fully hidden above that ("just the icons" at the highest zooms).
@@ -71,7 +71,7 @@ export const CCTV_CARD_FADE_END_M = 9_500;
 export const CCTV_CARD_SCALE_AT_MID = 0.45;
 export const CCTV_CARD_SCALE_MIN = 0.35;
 
-// ─── Frame-fetch pacing (field test finding 3, 2026-07-29) ────────────
+// ─── Frame-fetch pacing (owner field-test finding 3, 2026-07-29) ────────────
 /** Steady-state global gate: one card-frame fetch per second. */
 export const CCTV_CARD_FETCH_STEADY_SPACING_MS = 1_000;
 /** Cold-fill burst spacing between fetch launches. */
@@ -110,8 +110,12 @@ export const CCTV_THUMBNAIL_ALTITUDE_SCALE = Object.freeze({
  */
 export function isCctvCardAnchorSafe({ sy, viewH, pinned = false } = {}) {
   if (pinned) return Number.isFinite(sy);
-  if (!Number.isFinite(sy) || !Number.isFinite(viewH) || viewH <= 0) return false;
-  const safeTop = Math.min(CCTV_CARD_SAFE_TOP_MAX_PX, viewH * CCTV_CARD_SAFE_TOP_RATIO);
+  if (!Number.isFinite(sy) || !Number.isFinite(viewH) || viewH <= 0)
+    return false;
+  const safeTop = Math.min(
+    CCTV_CARD_SAFE_TOP_MAX_PX,
+    viewH * CCTV_CARD_SAFE_TOP_RATIO,
+  );
   return sy >= safeTop;
 }
 
@@ -126,11 +130,24 @@ export function isCctvCardAnchorSafe({ sy, viewH, pinned = false } = {}) {
  * @param {number} [options.limit]
  * @returns {string[]} Accepted ids, nearest-first.
  */
-export function declutterCctvCards(candidates, { minSepPx = CCTV_CARD_MIN_SEP_PX, limit = Infinity } = {}) {
+export function declutterCctvCards(
+  candidates,
+  { minSepPx = CCTV_CARD_MIN_SEP_PX, limit = Infinity } = {},
+) {
   const valid = (Array.isArray(candidates) ? candidates : [])
-    .filter((c) => c && typeof c.id === 'string' && c.id
-      && Number.isFinite(c.sx) && Number.isFinite(c.sy))
-    .sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity) || a.id.localeCompare(b.id));
+    .filter(
+      (c) =>
+        c &&
+        typeof c.id === 'string' &&
+        c.id &&
+        Number.isFinite(c.sx) &&
+        Number.isFinite(c.sy),
+    )
+    .sort(
+      (a, b) =>
+        (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity) ||
+        a.id.localeCompare(b.id),
+    );
   const minSq = minSepPx * minSepPx;
   const accepted = [];
   const acceptedIds = [];
@@ -140,7 +157,10 @@ export function declutterCctvCards(candidates, { minSepPx = CCTV_CARD_MIN_SEP_PX
     for (let i = 0; i < accepted.length; i++) {
       const dx = candidate.sx - accepted[i].sx;
       const dy = candidate.sy - accepted[i].sy;
-      if (dx * dx + dy * dy < minSq) { clear = false; break; }
+      if (dx * dx + dy * dy < minSq) {
+        clear = false;
+        break;
+      }
     }
     if (!clear) continue;
     accepted.push(candidate);
@@ -150,7 +170,7 @@ export function declutterCctvCards(candidates, { minSepPx = CCTV_CARD_MIN_SEP_PX
 }
 
 /**
- * Altitude-driven card scale + opacity (field test finding 5,
+ * Altitude-driven card scale + opacity (owner field-test finding 5,
  * 2026-07-29 — curve constants above). Piecewise, monotonic non-increasing
  * in both channels:
  *   - ≤1,800 m: full size, fully opaque.
@@ -165,20 +185,31 @@ export function cardScaleForAltitude(cameraHeightM) {
   const h = Number.isFinite(cameraHeightM) ? Math.max(0, cameraHeightM) : 0;
   if (h <= CCTV_CARD_SCALE_FULL_M) return { scale: 1, alpha: 1 };
   if (h <= CCTV_CARD_SCALE_MID_M) {
-    const t = (h - CCTV_CARD_SCALE_FULL_M) / (CCTV_CARD_SCALE_MID_M - CCTV_CARD_SCALE_FULL_M);
+    const t =
+      (h - CCTV_CARD_SCALE_FULL_M) /
+      (CCTV_CARD_SCALE_MID_M - CCTV_CARD_SCALE_FULL_M);
     const s = t * t * (3 - 2 * t); // smoothstep — no visible kink at either end
     return { scale: 1 + (CCTV_CARD_SCALE_AT_MID - 1) * s, alpha: 1 };
   }
-  const t = Math.min(1, (h - CCTV_CARD_SCALE_MID_M) / (CCTV_CARD_FADE_END_M - CCTV_CARD_SCALE_MID_M));
-  const scale = CCTV_CARD_SCALE_AT_MID + (CCTV_CARD_SCALE_MIN - CCTV_CARD_SCALE_AT_MID) * t;
-  if (h >= CCTV_CARD_FADE_END_M) return { scale: CCTV_CARD_SCALE_MIN, alpha: 0 };
+  const t = Math.min(
+    1,
+    (h - CCTV_CARD_SCALE_MID_M) /
+      (CCTV_CARD_FADE_END_M - CCTV_CARD_SCALE_MID_M),
+  );
+  const scale =
+    CCTV_CARD_SCALE_AT_MID + (CCTV_CARD_SCALE_MIN - CCTV_CARD_SCALE_AT_MID) * t;
+  if (h >= CCTV_CARD_FADE_END_M)
+    return { scale: CCTV_CARD_SCALE_MIN, alpha: 0 };
   if (h <= CCTV_CARD_FADE_START_M) return { scale, alpha: 1 };
-  const alpha = 1 - (h - CCTV_CARD_FADE_START_M) / (CCTV_CARD_FADE_END_M - CCTV_CARD_FADE_START_M);
+  const alpha =
+    1 -
+    (h - CCTV_CARD_FADE_START_M) /
+      (CCTV_CARD_FADE_END_M - CCTV_CARD_FADE_START_M);
   return { scale, alpha };
 }
 
 /**
- * Cold-fill burst pacing policy (field test finding 3, 2026-07-29), as
+ * Cold-fill burst pacing policy (owner field-test finding 3, 2026-07-29), as
  * a pure decision so the pacer tick stays trivially testable. While any
  * selected card still lacks its FIRST frame (`coldFill`), up to
  * `CCTV_CARD_FETCH_BURST_LIMIT` fetches may be in flight with
@@ -192,17 +223,23 @@ export function cardScaleForAltitude(cameraHeightM) {
  * @param {number} [input.sinceLastLaunchMs] - Ms since the last fetch launch.
  * @returns {{mode:('burst'|'steady'), launch:boolean}}
  */
-export function cardFetchPolicy({ coldFill = false, inFlight = 0, sinceLastLaunchMs = Infinity } = {}) {
+export function cardFetchPolicy({
+  coldFill = false,
+  inFlight = 0,
+  sinceLastLaunchMs = Infinity,
+} = {}) {
   if (coldFill) {
     return {
       mode: 'burst',
-      launch: inFlight < CCTV_CARD_FETCH_BURST_LIMIT
-        && sinceLastLaunchMs >= CCTV_CARD_FETCH_BURST_SPACING_MS,
+      launch:
+        inFlight < CCTV_CARD_FETCH_BURST_LIMIT &&
+        sinceLastLaunchMs >= CCTV_CARD_FETCH_BURST_SPACING_MS,
     };
   }
   return {
     mode: 'steady',
-    launch: inFlight === 0 && sinceLastLaunchMs >= CCTV_CARD_FETCH_STEADY_SPACING_MS,
+    launch:
+      inFlight === 0 && sinceLastLaunchMs >= CCTV_CARD_FETCH_STEADY_SPACING_MS,
   };
 }
 
@@ -230,7 +267,12 @@ export function createFrameSlot() {
 export function applyFrameResult(prev, result, nowMs) {
   const base = prev || createFrameSlot();
   if (result?.ok && result.frame) {
-    return { frame: result.frame, stamp: nowMs, failCount: 0, lastAttemptAt: nowMs };
+    return {
+      frame: result.frame,
+      stamp: nowMs,
+      failCount: 0,
+      lastAttemptAt: nowMs,
+    };
   }
   return {
     frame: base.frame,
@@ -278,11 +320,17 @@ export function frameFetchDue(slot, refreshMs, nowMs) {
  * @param {number} [cap]
  * @returns {string[]} Ids to drop from the cache.
  */
-export function planFrameCachePrune(slots, keepIds, cap = CCTV_FRAME_CACHE_MAX) {
+export function planFrameCachePrune(
+  slots,
+  keepIds,
+  cap = CCTV_FRAME_CACHE_MAX,
+) {
   const keep = new Set(keepIds);
   const spare = (Array.isArray(slots) ? slots : [])
     .filter((slot) => slot && typeof slot.id === 'string' && !keep.has(slot.id))
-    .sort((a, b) => (b.stamp || 0) - (a.stamp || 0) || a.id.localeCompare(b.id));
+    .sort(
+      (a, b) => (b.stamp || 0) - (a.stamp || 0) || a.id.localeCompare(b.id),
+    );
   const capacity = Math.max(0, cap - keep.size);
   return spare.slice(capacity).map((slot) => slot.id);
 }

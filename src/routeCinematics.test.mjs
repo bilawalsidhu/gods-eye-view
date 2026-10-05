@@ -18,8 +18,11 @@ import {
   createRouteFlight,
   flyRoute,
   getActiveCameraMotion,
+  activeCameraMotionId,
   initCameraVerbs,
   interruptCameraMotion,
+  interruptCameraMotionIfActive,
+  moveCamera,
   prefersReducedMotion,
   routeAltitudeOffsetM,
   routeColdSeedFloorM,
@@ -999,4 +1002,79 @@ test('the 0.5 s duration floor is the one place the speed word is not the mean',
   // Anything long enough to see keeps the contract exactly.
   const normal = flightFrom(TWO_TURN_ROUTE);
   assert.ok(Math.abs((normal.totalM / normal.durationS) - CRUISE_M_S.normal) < 1e-9);
+});
+
+test('a flight can be stopped by its owner, and only while it is still theirs', () => {
+  // CLEAR in the Directions row must stop the flight IT started. By then the
+  // camera may belong to someone else — the user grabbed it, voice flew
+  // somewhere, a tracked aircraft took over — and stopping that would be a
+  // feature reaching across the app to cancel a stranger's motion.
+  const viewer = createTickableViewer();
+  initCameraVerbs(viewer.viewer, () => null);
+  const path = TWO_TURN_ROUTE.map(([lon, lat]) => ({ lon, lat, height: 0 }));
+
+  assert.equal(activeCameraMotionId(), 0, 'an idle camera has no motion id');
+  const first = flyRoute([{ type: 'route', label: 'mine', path }]);
+  assert.equal(first.ok, true);
+  assert.ok(first.motionId > 0, 'a started flight reports its id');
+  assert.equal(activeCameraMotionId(), first.motionId);
+  assert.equal(getActiveCameraMotion().motionId, first.motionId);
+
+  // Someone else replaces it. The first owner's cancel must now be inert.
+  const second = flyRoute([{ type: 'route', label: 'theirs', path }]);
+  assert.ok(second.motionId > first.motionId, 'ids are monotonic');
+  assert.equal(
+    interruptCameraMotionIfActive(first.motionId, 'stale-owner').wasActive,
+    false,
+  );
+  assert.equal(
+    activeCameraMotionId(),
+    second.motionId,
+    'the newer flight is still running',
+  );
+
+  // The current owner stops its own flight.
+  assert.equal(
+    interruptCameraMotionIfActive(second.motionId, 'owner-cancel').wasActive,
+    true,
+  );
+  assert.equal(activeCameraMotionId(), 0);
+  assert.equal(getActiveCameraMotion(), null);
+
+  // A second cancel, and a cancel with no id at all, stop nothing.
+  assert.equal(interruptCameraMotionIfActive(second.motionId).wasActive, false);
+  assert.equal(interruptCameraMotionIfActive(0).wasActive, false);
+  viewer.restore();
+});
+
+test('a new viewer lifetime drops the previous view-target getter', () => {
+  // The getter closes over the viewer it was built for. Re-initialising for a
+  // new viewer without one must not leave the old callback answering.
+  const first = createTickableViewer();
+  const target = Cesium.Cartesian3.fromDegrees(-97.76, 30.26, 0);
+  let asked = 0;
+  initCameraVerbs(first.viewer, () => { asked += 1; return target; });
+  const orbit = moveCamera({ motion: 'orbit', mode: 'continuous' });
+  assert.equal(orbit.ok, true);
+  assert.equal(orbit.armed, undefined, 'the installed getter supplied a target');
+  assert.ok(asked > 0);
+  interruptCameraMotion('test-cleanup');
+
+  // Same viewer, no getter: the installed one stays.
+  initCameraVerbs(first.viewer);
+  const again = moveCamera({ motion: 'orbit', mode: 'continuous' });
+  assert.equal(again.armed, undefined, 'the getter survives a call without one');
+  interruptCameraMotion('test-cleanup');
+  first.restore();
+
+  // New viewer, no getter: the old one is gone, so the orbit arms instead of
+  // capturing a target from a viewer that no longer exists.
+  const second = createTickableViewer();
+  initCameraVerbs(second.viewer);
+  const askedBefore = asked;
+  const armed = moveCamera({ motion: 'orbit', mode: 'continuous' });
+  assert.equal(armed.armed, 'waiting-for-arrival');
+  assert.equal(asked, askedBefore, 'the old getter was never called again');
+  interruptCameraMotion('test-cleanup');
+  second.restore();
 });

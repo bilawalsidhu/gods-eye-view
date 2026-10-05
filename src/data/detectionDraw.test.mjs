@@ -161,3 +161,34 @@ test('nearFarScale interpolates by distance and clamps to the near/far values', 
   const mid = nearFarScale((1000 + 8000000) / 2, 1000, 3.0, 8000000, 0.5);
   assert.ok(Math.abs(mid - 1.75) < 1e-6, `midpoint ~1.75, got ${mid}`);
 });
+
+
+test('transit brackets paint a 1.25 px mode stroke over 3.25 px dark backing', async () => {
+  const { paintTransitBracket } = await import('./detectionDraw.js');
+  const strokes = [];
+  const ctx = { stroke(path) { strokes.push([path, this.lineWidth, this.strokeStyle, this.globalAlpha]); } };
+  const path = {};
+  paintTransitBracket(ctx, path, '#FF4538', 0.75);
+  assert.deepEqual(strokes, [[path, 3.25, '#05080C', 0.75], [path, 1.25, '#FF4538', 0.75]]);
+});
+
+test('transit bracket backing and colour use source-over under every inherited sensor theme', async () => {
+  const {paintTransitBracket}=await import('./detectionDraw.js');
+  for(const theme of ['normal','thermal','surveillance','noir','retro']) {
+    const strokes=[];
+    const ctx={globalCompositeOperation:'screen',globalAlpha:0.3,stroke(p){strokes.push([this.globalCompositeOperation,this.lineWidth,this.strokeStyle]);},save(){this.saved=[this.globalCompositeOperation,this.globalAlpha];},restore(){[this.globalCompositeOperation,this.globalAlpha]=this.saved;}};
+    paintTransitBracket(ctx,{},'#FF4538',1);
+    assert.deepEqual(strokes,[['source-over',3.25,'#05080C'],['source-over',1.25,'#FF4538']],theme);
+    assert.equal(ctx.globalCompositeOperation,'screen');
+  }
+});
+
+test('transit bracket stroke centres have full pixel coverage at the failing fractional positions', async () => {
+  const {appendTransitBracket}=await import('./detectionDraw.js');
+  for(const sy of [305.076,490.54,279.56]) {
+    const points=[],sink={moveTo:(x,y)=>points.push([x,y]),lineTo:(x,y)=>points.push([x,y])};
+    appendTransitBracket(sink,759.016,sy,11,7);
+    assert.equal(points.length,12);
+    for(const [x,y] of points){assert.equal(x%1,0.5);assert.equal(y%1,0.5);}
+  }
+});

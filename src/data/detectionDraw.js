@@ -211,11 +211,14 @@ export function measureTrackLabel(primary, micro, charWidth) {
  */
 export function rectIntersectsAny(rect, obstacles, padding = 0) {
   if (!rect || !Array.isArray(obstacles)) return false;
-  return obstacles.some((obstacle) => obstacle
-    && rect.x < obstacle.x + obstacle.w + padding
-    && rect.x + rect.w + padding > obstacle.x
-    && rect.y < obstacle.y + obstacle.h + padding
-    && rect.y + rect.h + padding > obstacle.y);
+  return obstacles.some(
+    (obstacle) =>
+      obstacle &&
+      rect.x < obstacle.x + obstacle.w + padding &&
+      rect.x + rect.w + padding > obstacle.x &&
+      rect.y < obstacle.y + obstacle.h + padding &&
+      rect.y + rect.h + padding > obstacle.y,
+  );
 }
 
 /**
@@ -236,4 +239,29 @@ export function nearFarScale(distance, near, nearValue, far, farValue) {
   if (distance >= far) return farValue;
   const t = (distance - near) / (far - near);
   return nearValue + t * (farValue - nearValue);
+}
+
+/** Transit keeps literal mode colour on the normal-composite surface. */
+export function paintTransitBracket(ctx, path, color, alpha = 1) {
+  ctx.save?.();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = '#05080C';
+  ctx.lineWidth = 3.25;
+  ctx.stroke(path);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.25;
+  ctx.stroke(path);
+  ctx.restore?.();
+}
+
+/** Centre 1.25 px strokes on pixels, so their cores are fully covered. */
+export function appendTransitBracket(sink, sx, sy, halfW, halfH) {
+  appendCornerBracket(
+    sink,
+    Math.floor(sx) + 0.5,
+    Math.floor(sy) + 0.5,
+    Math.round(halfW),
+    Math.round(halfH),
+  );
 }

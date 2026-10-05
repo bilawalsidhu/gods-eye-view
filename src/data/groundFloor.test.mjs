@@ -597,7 +597,7 @@ test('neighborFloorM takes the apron, not the roof, at a structure edge', () => 
   reportMeshFloorCell(30.201, -97.66, 120); // the apron
   reportMeshFloorCell(30.199, -97.66, 205); // the terminal roof next door
   // A parked contact is on the apron; it is never on the roof. Leaning high
-  // here is what put planes in midair at gates during the field test.
+  // here is what put planes in midair at gates during the owner playtest.
   assert.equal(neighborFloorM({ lat: 30.2, lon: -97.66 }), 120);
 });
 

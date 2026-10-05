@@ -80,7 +80,8 @@ export const SCENE_SELECTION_PARAM_PATTERN =
  */
 export function stripSceneTrackingParams(params) {
   if (!params || typeof params !== 'object') return undefined;
-  if (!SCENE_TRACKING_PARAM_KEYS.some((key) => Object.hasOwn(params, key))) return params;
+  if (!SCENE_TRACKING_PARAM_KEYS.some((key) => Object.hasOwn(params, key)))
+    return params;
 
   const kept = {};
   for (const [key, value] of Object.entries(params)) {
@@ -122,10 +123,12 @@ export const SCENE_EXCLUSIVITY_PROBE_LAYER_ID = '__scene-exclusivity-probe__';
  */
 export function sceneRequiresContextModeExit(contextMode) {
   if (!contextMode) return false;
-  return contextLayerEnableBlockReason({
-    contextMode,
-    change: { layerId: SCENE_EXCLUSIVITY_PROBE_LAYER_ID, enabled: true },
-  }) !== null;
+  return (
+    contextLayerEnableBlockReason({
+      contextMode,
+      change: { layerId: SCENE_EXCLUSIVITY_PROBE_LAYER_ID, enabled: true },
+    }) !== null
+  );
 }
 
 /**
@@ -144,9 +147,12 @@ export function sceneRequiresContextModeExit(contextMode) {
  * @returns {Array<{ id: string, enabled: boolean, params: Object|undefined }>}
  */
 export function sceneLayerPlan(targetStates, registeredIds) {
-  const known = registeredIds instanceof Set
-    ? registeredIds
-    : (registeredIds ? new Set(registeredIds) : null);
+  const known =
+    registeredIds instanceof Set
+      ? registeredIds
+      : registeredIds
+        ? new Set(registeredIds)
+        : null;
 
   const plan = [];
   for (const [id, target] of Object.entries(targetStates || {})) {
@@ -154,7 +160,10 @@ export function sceneLayerPlan(targetStates, registeredIds) {
     plan.push({
       id,
       enabled: !!(target && target.enabled),
-      params: target && target.params ? stripSceneTrackingParams(target.params) : undefined,
+      params:
+        target && target.params
+          ? stripSceneTrackingParams(target.params)
+          : undefined,
     });
   }
   return plan;

@@ -6,17 +6,31 @@ import { createHybridAnnotationRenderer } from './hybridAnnotationRenderer.js';
  * for manual/dev use via `window.__gevAnnotations`.
  *
  * This module is the single swap point between annotation rendering strategies.
- * The HYBRID renderer uses world-space draping for
+ * This branch (Direction C) uses the HYBRID renderer: world-space draping for
  * footprints + screen-space SVG for callouts/rings/arrows. The engine, resolver,
- * and voice tool wiring are shared across rendering strategies.
+ * and voice tool wiring are identical to the other two branches.
  */
-export function initAnnotations({ viewer, tileset = null }) {
+export function initAnnotations({
+  viewer,
+  tileset = null,
+  placeSearch,
+  resolver,
+}) {
   // World-space footprint draping; clamped marks can use the photoreal tiles.
   if (tileset) {
-    try { tileset.enableCollision = true; } catch { /* older tileset */ }
+    try {
+      tileset.enableCollision = true;
+    } catch {
+      /* older tileset */
+    }
   }
   const renderer = createHybridAnnotationRenderer(viewer);
-  const engine = createAnnotationEngine({ viewer, renderer });
+  const engine = createAnnotationEngine({
+    viewer,
+    renderer,
+    placeSearch,
+    resolveTarget: resolver?.resolveAnnotationTarget,
+  });
   window.__gevAnnotations = engine;
   return engine;
 }

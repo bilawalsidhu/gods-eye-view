@@ -10,7 +10,7 @@
  * 0.72 / jam 0.49 — under NVG a jam renders DIMMER than free flow. CRT
  * keeps hue but its 5-px pixelation + dithering shred 4–6 px dots.
  *
- * Encoding per profile (validated behavior 2026-07-23 round 2: "just bright
+ * Encoding per profile (owner verdict 2026-07-23 round 2: "just bright
  * dots" — a luminance RAMP failed in the field because dim free-flow dots
  * read as dark holes on NVG-bright roads; classification is the detection
  * brackets' job via `trafficBucketTier`, presence is the dots' job):
@@ -36,9 +36,9 @@
 /** @const {Object<string,'mono'|'crt'>} Style name → non-normal profile. */
 const PROFILE_BY_STYLE = {
   surveillance: 'mono', // NVG — P43 phosphor × luma
-  thermal: 'mono',      // FLIR — grayscale/ironbow × luma
-  noir: 'mono',         // full desaturation
-  retro: 'crt',         // CRT — hue survives, small dots don't
+  thermal: 'mono', // FLIR — grayscale/ironbow × luma
+  noir: 'mono', // full desaturation
+  retro: 'crt', // CRT — hue survives, small dots don't
 };
 
 /**
@@ -49,13 +49,33 @@ const PROFILE_BY_STYLE = {
  */
 const DOT_STYLE = {
   mono: {
-    jam: { rgba: [255, 255, 255, 0.95], sizeDelta: 3, outline: { rgba: [0, 0, 0, 0.9], width: 2 } },
-    slow: { rgba: [255, 255, 255, 0.9], sizeDelta: 1, outline: { rgba: [0, 0, 0, 0.85], width: 1 } },
-    free: { rgba: [255, 255, 255, 0.85], sizeDelta: 0, outline: { rgba: [0, 0, 0, 0.8], width: 1 } },
+    jam: {
+      rgba: [255, 255, 255, 0.95],
+      sizeDelta: 3,
+      outline: { rgba: [0, 0, 0, 0.9], width: 2 },
+    },
+    slow: {
+      rgba: [255, 255, 255, 0.9],
+      sizeDelta: 1,
+      outline: { rgba: [0, 0, 0, 0.85], width: 1 },
+    },
+    free: {
+      rgba: [255, 255, 255, 0.85],
+      sizeDelta: 0,
+      outline: { rgba: [0, 0, 0, 0.8], width: 1 },
+    },
   },
   crt: {
-    jam: { rgba: [255, 59, 48, 0.95], sizeDelta: 3, outline: { rgba: [0, 0, 0, 0.9], width: 2 } },
-    slow: { rgba: [255, 179, 0, 0.92], sizeDelta: 2, outline: { rgba: [0, 0, 0, 0.85], width: 1 } },
+    jam: {
+      rgba: [255, 59, 48, 0.95],
+      sizeDelta: 3,
+      outline: { rgba: [0, 0, 0, 0.9], width: 2 },
+    },
+    slow: {
+      rgba: [255, 179, 0, 0.92],
+      sizeDelta: 2,
+      outline: { rgba: [0, 0, 0, 0.85], width: 1 },
+    },
     free: { rgba: [0, 255, 102, 0.9], sizeDelta: 1, outline: null },
   },
 };
@@ -123,7 +143,8 @@ export function presetDotOutline(styleName, bucket) {
  * @returns {string|null} Tier key, or null (no override → stock 'vehicle').
  */
 export function trafficBucketTier(bucket) {
-  if (bucket === 'free' || bucket === 'slow' || bucket === 'jam') return `veh_${bucket}`;
+  if (bucket === 'free' || bucket === 'slow' || bucket === 'jam')
+    return `veh_${bucket}`;
   if (bucket === 'sim') return 'veh_nodata';
   return null;
 }

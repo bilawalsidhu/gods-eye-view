@@ -39,7 +39,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const CHROME_CANDIDATES = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
-  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  await puppeteer.executablePath().catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
 ].filter(Boolean);
@@ -625,12 +625,27 @@ async function runBehaviorLayer() {
 
     // (4b) analyst engine end-to-end: count flights over Texas (region ring
     // via NE-pack/admin machinery), then a follow-up over the same set.
+    // A cold boundary lookup can exceed the resolver's budget; it answers
+    // region-timeout and keeps loading, so asking again must succeed.
+    let texasTimeouts = 0;
     r = await run('analyst_query', { layers: ['flights'], scope: { kind: 'region', name: 'Texas' }, limit: 5 });
+    while (r?.code === 'region-timeout' && texasTimeouts < 8) {
+      texasTimeouts += 1;
+      await settle(5000);
+      r = await run('analyst_query', { layers: ['flights'], scope: { kind: 'region', name: 'Texas' }, limit: 5 });
+    }
     report(r?.ok === true && Number.isFinite(r?.count) && r.count > 0 && String(r?.coverage?.scope || '').includes('Texas'),
-      'behavior: analyst counts flights over Texas', `count=${r?.count} scope=${r?.coverage?.scope} err=${r?.error || ''}`);
+      'behavior: analyst counts flights over Texas', `count=${r?.count} scope=${r?.coverage?.scope} timeouts=${texasTimeouts} err=${r?.error || ''}`);
     r = await run('analyst_query', { followUp: true, filters: [{ field: 'onGround', op: 'eq', value: false }], sortBy: 'altitudeM', limit: 3 });
     report(r?.ok === true && r?.coverage?.followUp === true,
       'behavior: analyst follow-up re-filters the remembered set', `count=${r?.count} followUp=${r?.coverage?.followUp}`);
+    // A marine region resolves from the bundled Natural Earth pack in the page,
+    // without the slower geocode fallback.
+    const gulfStarted = Date.now();
+    r = await run('analyst_query', { layers: ['flights'], scope: { kind: 'region', name: 'Gulf of Mexico' }, limit: 5 });
+    const gulfMs = Date.now() - gulfStarted;
+    report(r?.ok === true && String(r?.coverage?.scope || '').includes('Gulf of Mexico') && gulfMs < 3000,
+      'behavior: analyst resolves the Gulf of Mexico from the bundled pack', `scope=${r?.coverage?.scope} ms=${gulfMs} err=${r?.error || ''}`);
 
     // (5) zoom_to_globe is ABSOLUTE full-earth (>12,000 km band)
     r = await run('zoom_to_globe', {});
@@ -653,7 +668,7 @@ async function runBehaviorLayer() {
       'behavior: Alps overview uses capped swath, not whole-bbox space view',
       `navigationMode=${swathMode} alt=${Math.round(cam.altKm)}km (want swath / <900km)`);
 
-    // (6b) THE field finding: "outline the Alps" must draw the real
+    // (6b) THE owner field finding: "outline the Alps" must draw the real
     // range ring (Natural Earth first-rung, offline → resolves in seconds),
     // not a 60 km² meadow and not a stuck point. Camera is over the Alps
     // from (6), so the proximity gate and the containment guard both pass.

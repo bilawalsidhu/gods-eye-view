@@ -253,7 +253,7 @@ test('Contact panel hides only when there is no snapshot at all', () => {
 
 test('Contact panel survives NEXT onto a vessel or installation subject', () => {
   // The panel owns the NEXT button. Hiding it because the subject is not the
-  // tracked aircraft strands the operator with no way back (this was observed on
+  // tracked aircraft strands the operator with no way back (owner hit this on
   // camera: "click next... whole left panel disappears").
   for (const subject of [
     { layerId: 'ais-live-vessels', id: '353136000', label: 'MAERSK DETROIT' },

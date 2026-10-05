@@ -1,5 +1,5 @@
 // src/data/cctvViewshed.test.mjs — viewshed hue assignment + frustum volume
-// geometry documented in docs/CURRENT-STATE.md.
+// geometry (docs/superpowers/specs/2026-07-05-cctv-viewshed-gizmo-design.md §3a/§3b).
 //
 // Locks:
 //   - cameraHue is golden-angle spaced and deterministic (color identity is

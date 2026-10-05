@@ -1,5 +1,5 @@
 // src/data/cctvGizmo.test.mjs — pure drag math for the CCTV calibration gizmo
-// documented in docs/CURRENT-STATE.md.
+// (docs/superpowers/specs/2026-07-05-cctv-viewshed-gizmo-design.md §3c).
 //
 // Locks:
 //   - closestParamOnAxis returns the metre-parameter along the AXIS of the

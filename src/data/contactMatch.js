@@ -42,7 +42,9 @@ export const CONTACT_MATCH_TIER = Object.freeze({
  * @returns {string} Canonical form, or '' when there is nothing to compare.
  */
 export function canonicalizeContactId(value) {
-  return String(value ?? '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+  return String(value ?? '')
+    .replace(/[^a-z0-9]/gi, '')
+    .toUpperCase();
 }
 
 /**
@@ -57,16 +59,31 @@ export function canonicalizeContactId(value) {
  * @param {string} [params.registration] Contact's registration, if any.
  * @returns {number} A {@link CONTACT_MATCH_TIER} value; `NONE` when no match.
  */
-export function rankContactMatch({ query, hex = '', callsign = '', registration = '' }) {
-  const rawQuery = String(query ?? '').trim().toLowerCase();
+export function rankContactMatch({
+  query,
+  hex = '',
+  callsign = '',
+  registration = '',
+}) {
+  const rawQuery = String(query ?? '')
+    .trim()
+    .toLowerCase();
   if (!rawQuery) return CONTACT_MATCH_TIER.NONE;
 
-  if (String(hex ?? '').trim().toLowerCase() === rawQuery) return CONTACT_MATCH_TIER.HEX_EXACT;
+  if (
+    String(hex ?? '')
+      .trim()
+      .toLowerCase() === rawQuery
+  )
+    return CONTACT_MATCH_TIER.HEX_EXACT;
 
-  const callsignText = String(callsign ?? '').trim().toLowerCase();
+  const callsignText = String(callsign ?? '')
+    .trim()
+    .toLowerCase();
   // Callsigns carry no separators, so they compare raw — canonicalizing them
   // would silently widen the long-standing callsign contract.
-  if (callsignText && callsignText === rawQuery) return CONTACT_MATCH_TIER.CALLSIGN_EXACT;
+  if (callsignText && callsignText === rawQuery)
+    return CONTACT_MATCH_TIER.CALLSIGN_EXACT;
 
   const canonicalQuery = canonicalizeContactId(rawQuery);
   const canonicalRegistration = canonicalizeContactId(registration);
@@ -74,11 +91,13 @@ export function rankContactMatch({ query, hex = '', callsign = '', registration 
     return CONTACT_MATCH_TIER.REGISTRATION_EXACT;
   }
 
-  if (callsignText && callsignText.startsWith(rawQuery)) return CONTACT_MATCH_TIER.CALLSIGN_PREFIX;
+  if (callsignText && callsignText.startsWith(rawQuery))
+    return CONTACT_MATCH_TIER.CALLSIGN_PREFIX;
   if (canonicalQuery && canonicalRegistration.startsWith(canonicalQuery)) {
     return CONTACT_MATCH_TIER.REGISTRATION_PREFIX;
   }
-  if (callsignText && callsignText.includes(rawQuery)) return CONTACT_MATCH_TIER.CALLSIGN_SUBSTRING;
+  if (callsignText && callsignText.includes(rawQuery))
+    return CONTACT_MATCH_TIER.CALLSIGN_SUBSTRING;
   if (canonicalQuery && canonicalRegistration.includes(canonicalQuery)) {
     return CONTACT_MATCH_TIER.REGISTRATION_SUBSTRING;
   }
@@ -92,7 +111,7 @@ export function rankContactMatch({ query, hex = '', callsign = '', registration 
  * (`track_entity`) is a MUTATION fulfilling "follow that one" — returning an
  * ambiguity for the caller to resolve would cost a round-trip mid-demo, and
  * the model's observed response to a non-ok track result is to retry with
- * different guesses rather than to ask (field session 2026-08-21,
+ * different guesses rather than to ask (owner field session 2026-08-21,
  * 23:48). So the lookup always commits. What it owes the caller is STABILITY:
  * hex is unique and always present, so the same query resolves to the same
  * contact for as long as both are loaded, instead of flipping between polls

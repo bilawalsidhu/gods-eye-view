@@ -49,7 +49,7 @@ const has = (pattern) => pattern.test(source);
 
 /** SFO runway 28R touchdown area — the field report's coordinates. */
 const SFO = { latDeg: 37.616, lonDeg: -122.368 };
-/** The ellipsoidal camera height the screenshot reported. */
+/** The ellipsoidal camera height the owner's screenshot reported. */
 const SFO_ELLIPSOIDAL_M = -15;
 
 /**
@@ -108,7 +108,7 @@ test('hud.js corrects the camera height to MSL through the geoid module', () => 
     'the ~2.7 MB grid must be requested once, on demand — not at HUD construction',
   );
   assert.equal(
-    has(/\.catch\(\(\) => \{ \/\* readout falls back to the uncorrected height \*\/ \}\)/),
+    has(/\.catch\(\(\) => \{\s*\/\* readout falls back to the uncorrected height \*\/\s*\}\)/),
     true,
     'a failed geoid load must leave the readout uncorrected, not unhandled',
   );

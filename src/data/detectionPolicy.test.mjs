@@ -1,3 +1,4 @@
+import { expandApplicationHtml } from '../../build/application-html.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -18,13 +19,27 @@ import {
 } from './detectionPolicy.js';
 import { KEYHOLE_OUTSIDE_OPACITY_DEFAULT } from '../celestialRing.js';
 
-const indexHtml = fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+const indexHtml = expandApplicationHtml(fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8'));
 
 test('side aircraft brackets stay readable without changing zero-opacity intent', () => {
   assert.equal(detectionBracketAlpha('AIR', 0), 0);
   assert.equal(detectionBracketAlpha('AIR', 0.05), AIRCRAFT_BRACKET_ALPHA_FLOOR);
   assert.equal(detectionBracketAlpha('AIR', 1), 1);
   assert.equal(detectionBracketAlpha('SAT', 0.05), 0.05);
+});
+
+test('strict keyhole fading bypasses the aircraft floor for themed brackets', () => {
+  assert.equal(
+    detectionBracketAlpha(
+      'AIR',
+      0.01,
+      KEYHOLE_OUTSIDE_OPACITY_DEFAULT,
+      true,
+    ),
+    0.01,
+  );
+  assert.equal(detectionBracketAlpha('AIR', 0.42, 1, true), 0.42);
+  assert.equal(detectionBracketAlpha('AIR', 1, 0, true), 1);
 });
 
 test('the bracket floor anchor mirrors the real keyhole default it is calibrated to', () => {
@@ -36,7 +51,7 @@ test('the bracket floor anchor mirrors the real keyhole default it is calibrated
 
 test('the default OUTSIDE setting reproduces the approved 0.35 floor exactly', () => {
   // Byte-identical at the default, at every keyhole alpha, with the setting
-  // passed explicitly and with it omitted. This is the accepted look; only
+  // passed explicitly and with it omitted. The owner approved this look; only
   // the off-default range is allowed to change.
   assert.equal(aircraftBracketAlphaFloor(KEYHOLE_OUTSIDE_OPACITY_DEFAULT), AIRCRAFT_BRACKET_ALPHA_FLOOR);
   for (const alpha of [0.01, 0.05, 0.2, 0.34, 0.35, 0.36, 0.7, 1]) {

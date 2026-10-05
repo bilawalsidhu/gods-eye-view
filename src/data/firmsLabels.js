@@ -12,10 +12,14 @@ export const FIRMS_OVERLAY_SOURCE_ID = 'firms';
 export function fireDetectionKey(fire) {
   const lat = Number.isFinite(fire?.lat) ? fire.lat.toFixed(4) : 'x';
   const lon = Number.isFinite(fire?.lon) ? fire.lon.toFixed(4) : 'x';
-  const acq = Number.isFinite(fire?.acqMs) && fire.acqMs > 0 ? String(fire.acqMs) : '0';
-  const source = satelliteShortName(fire?.satellite)
-    || String(fire?.sensor || '').trim().toUpperCase()
-    || 'x';
+  const acq =
+    Number.isFinite(fire?.acqMs) && fire.acqMs > 0 ? String(fire.acqMs) : '0';
+  const source =
+    satelliteShortName(fire?.satellite) ||
+    String(fire?.sensor || '')
+      .trim()
+      .toUpperCase() ||
+    'x';
   return `firms:${lat}:${lon}:${acq}:${source}`;
 }
 
@@ -37,7 +41,9 @@ export function accentForSeverity(stopName) {
 
 /** Raw FIRMS satellite code → short display name (N = Suomi NPP). */
 export function satelliteShortName(satellite) {
-  const s = String(satellite || '').trim().toUpperCase();
+  const s = String(satellite || '')
+    .trim()
+    .toUpperCase();
   if (s === 'N20' || s === 'NOAA-20') return 'N20';
   if (s === 'N21' || s === 'NOAA-21') return 'N21';
   if (s === 'N' || s === 'NPP' || s === 'SUOMI NPP') return 'SNPP';

@@ -1,6 +1,6 @@
 // src/contactsDetectionPolicy.js — Contacts-scoped detection policy.
 //
-// Field test 2026-08-18: "when you click on Contacts, detections should just
+// Owner playtest 2026-08-18: "when you click on Contacts, detections should just
 // turn on, and they should stay on in Cockpit or in third-person tracking inside
 // Contacts or inside Cockpit, both… when I leave the Cockpit, detections go off"
 // — that last part being the bug.
@@ -75,11 +75,16 @@ export function contactsDetectionEnterPlan(current, restore) {
  * @returns {?{mode: string, densityPct: ?number}} State to replay, or null when
  *   there is nothing to do.
  */
-export function contactsDetectionExitPlan(restore, current, styleOwnsDetection = false) {
+export function contactsDetectionExitPlan(
+  restore,
+  current,
+  styleOwnsDetection = false,
+) {
   if (!restore || styleOwnsDetection) return null;
   const saved = normalizeDetectionState(restore);
   const now = normalizeDetectionState(current);
-  if (saved.mode === now.mode && saved.densityPct === now.densityPct) return null;
+  if (saved.mode === now.mode && saved.densityPct === now.densityPct)
+    return null;
   return saved;
 }
 
@@ -88,7 +93,7 @@ export function contactsDetectionExitPlan(restore, current, styleOwnsDetection =
  *
  * The engine is injected so this is the SAME code the UI runs and the tests
  * exercise, driven against the real `src/data/detection.js` in both. Turning on
- * applies the TACTICAL PRESET the military styles use — field test: "I want
+ * applies the TACTICAL PRESET the military styles use — owner playtest: "I want
  * that as the default. It should just happen" — rather than restoring whatever
  * profile the operator last left detection at.
  *
@@ -119,7 +124,11 @@ export function applyContactsDetection({
     if (plan.turnOn) applyPreset();
     return { restore: plan.restore, changed: plan.turnOn };
   }
-  const plan = contactsDetectionExitPlan(restore, getState(), styleOwnsDetection);
+  const plan = contactsDetectionExitPlan(
+    restore,
+    getState(),
+    styleOwnsDetection,
+  );
   if (plan) restoreState(plan);
   return { restore: null, changed: Boolean(plan) };
 }
@@ -145,7 +154,9 @@ export function shareableDetectionState({ owned, liveMode, liveDensityPct }) {
   if (!owned) return { mode: liveMode, densityPct: liveDensityPct };
   return {
     mode: owned.mode ?? liveMode,
-    densityPct: Number.isFinite(owned.densityPct) ? owned.densityPct : liveDensityPct,
+    densityPct: Number.isFinite(owned.densityPct)
+      ? owned.densityPct
+      : liveDensityPct,
   };
 }
 

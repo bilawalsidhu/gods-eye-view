@@ -1,0 +1,1633 @@
+{
+  "schemaVersion": 1,
+  "id": "bhote-koshi-2026",
+  "title": "Bhote Koshi Outburst Flood",
+  "observedDate": "2026-08-26",
+  "geolocationMap": {
+    "credit": "GeoGeorgeShadrach public geolocation map",
+    "sourceUrl": "https://x.com/geogeorgeology/status/2093632283442053371"
+  },
+  "imagery": {
+    "rectangle": {
+      "west": 85.295,
+      "south": 28.135,
+      "east": 85.379,
+      "north": 28.292
+    },
+    "before": {
+      "path": "pre.webp",
+      "observedAt": "2021-10-16",
+      "label": "2021 HISTORICAL REFERENCE · 16 OCT 2021",
+      "source": "Vantor WorldView-2 Open Data"
+    },
+    "after": {
+      "path": "post.webp",
+      "observedAt": "2026-08-27",
+      "label": "2026 POST-EVENT · 27 AUG 2026",
+      "source": "Vantor WorldView-3 Open Data"
+    }
+  },
+  "reconstruction": {
+    "elapsedSeconds": 4170,
+    "label": "SCHEMATIC DOWNSTREAM PROGRESSION, NOT MODELED ARRIVAL TIME",
+    "caveat": "2021 historical reference versus 2026 post-event imagery; changes are cumulative and include the July 2025 Rasuwagadhi flood. Schematic downstream progression, not modeled arrival time; not an official hazard model.",
+    "corridor": [
+      {
+        "chainageM": 23705,
+        "lon": 85.37877,
+        "lat": 28.27962,
+        "elevationM": 1818.4
+      },
+      {
+        "chainageM": 23863,
+        "lon": 85.37756,
+        "lat": 28.27879,
+        "elevationM": 1811.7
+      },
+      {
+        "chainageM": 24020,
+        "lon": 85.37665,
+        "lat": 28.2777,
+        "elevationM": 1796.5
+      },
+      {
+        "chainageM": 24140,
+        "lon": 85.37667,
+        "lat": 28.27661,
+        "elevationM": 1783.5
+      },
+      {
+        "chainageM": 24260,
+        "lon": 85.37669,
+        "lat": 28.27553,
+        "elevationM": 1777.4
+      },
+      {
+        "chainageM": 24392,
+        "lon": 85.37701,
+        "lat": 28.27445,
+        "elevationM": 1777.6
+      },
+      {
+        "chainageM": 24537,
+        "lon": 85.37641,
+        "lat": 28.27336,
+        "elevationM": 1779.8
+      },
+      {
+        "chainageM": 24682,
+        "lon": 85.37643,
+        "lat": 28.27228,
+        "elevationM": 1781.3
+      },
+      {
+        "chainageM": 24814,
+        "lon": 85.37614,
+        "lat": 28.27119,
+        "elevationM": 1780.2
+      },
+      {
+        "chainageM": 24934,
+        "lon": 85.37616,
+        "lat": 28.27011,
+        "elevationM": 1780.1
+      },
+      {
+        "chainageM": 25054,
+        "lon": 85.37617,
+        "lat": 28.26903,
+        "elevationM": 1779.5
+      },
+      {
+        "chainageM": 25212,
+        "lon": 85.37589,
+        "lat": 28.26794,
+        "elevationM": 1775.7
+      },
+      {
+        "chainageM": 25357,
+        "lon": 85.37529,
+        "lat": 28.26685,
+        "elevationM": 1759.9
+      },
+      {
+        "chainageM": 25526,
+        "lon": 85.37408,
+        "lat": 28.26575,
+        "elevationM": 1739.7
+      },
+      {
+        "chainageM": 25684,
+        "lon": 85.37318,
+        "lat": 28.26466,
+        "elevationM": 1745.1
+      },
+      {
+        "chainageM": 25853,
+        "lon": 85.37198,
+        "lat": 28.26356,
+        "elevationM": 1734
+      },
+      {
+        "chainageM": 25973,
+        "lon": 85.37199,
+        "lat": 28.26248,
+        "elevationM": 1725.5
+      },
+      {
+        "chainageM": 26143,
+        "lon": 85.37079,
+        "lat": 28.26138,
+        "elevationM": 1729.2
+      },
+      {
+        "chainageM": 26313,
+        "lon": 85.36958,
+        "lat": 28.26029,
+        "elevationM": 1726.2
+      },
+      {
+        "chainageM": 26470,
+        "lon": 85.36836,
+        "lat": 28.26,
+        "elevationM": 1700.8
+      },
+      {
+        "chainageM": 26640,
+        "lon": 85.36715,
+        "lat": 28.2589,
+        "elevationM": 1714
+      },
+      {
+        "chainageM": 26809,
+        "lon": 85.36656,
+        "lat": 28.25781,
+        "elevationM": 1714
+      },
+      {
+        "chainageM": 26954,
+        "lon": 85.36596,
+        "lat": 28.25672,
+        "elevationM": 1706.8
+      },
+      {
+        "chainageM": 27111,
+        "lon": 85.36506,
+        "lat": 28.25563,
+        "elevationM": 1692.9
+      },
+      {
+        "chainageM": 27244,
+        "lon": 85.36477,
+        "lat": 28.25454,
+        "elevationM": 1691.4
+      },
+      {
+        "chainageM": 27376,
+        "lon": 85.36449,
+        "lat": 28.25346,
+        "elevationM": 1691.9
+      },
+      {
+        "chainageM": 27521,
+        "lon": 85.36511,
+        "lat": 28.25238,
+        "elevationM": 1689.4
+      },
+      {
+        "chainageM": 27666,
+        "lon": 85.36452,
+        "lat": 28.25129,
+        "elevationM": 1674.4
+      },
+      {
+        "chainageM": 27798,
+        "lon": 85.36423,
+        "lat": 28.2502,
+        "elevationM": 1669.5
+      },
+      {
+        "chainageM": 27931,
+        "lon": 85.36455,
+        "lat": 28.24912,
+        "elevationM": 1676.8
+      },
+      {
+        "chainageM": 28088,
+        "lon": 85.36365,
+        "lat": 28.24803,
+        "elevationM": 1673.2
+      },
+      {
+        "chainageM": 28245,
+        "lon": 85.36275,
+        "lat": 28.24694,
+        "elevationM": 1672.1
+      },
+      {
+        "chainageM": 28415,
+        "lon": 85.36154,
+        "lat": 28.24584,
+        "elevationM": 1672.1
+      },
+      {
+        "chainageM": 28585,
+        "lon": 85.36034,
+        "lat": 28.24474,
+        "elevationM": 1673.6
+      },
+      {
+        "chainageM": 28755,
+        "lon": 85.35912,
+        "lat": 28.24419,
+        "elevationM": 1680.3
+      },
+      {
+        "chainageM": 28912,
+        "lon": 85.35822,
+        "lat": 28.24309,
+        "elevationM": 1662.8
+      },
+      {
+        "chainageM": 29057,
+        "lon": 85.35763,
+        "lat": 28.242,
+        "elevationM": 1645.5
+      },
+      {
+        "chainageM": 29189,
+        "lon": 85.35734,
+        "lat": 28.24092,
+        "elevationM": 1636.4
+      },
+      {
+        "chainageM": 29334,
+        "lon": 85.35797,
+        "lat": 28.23984,
+        "elevationM": 1645.3
+      },
+      {
+        "chainageM": 29466,
+        "lon": 85.35768,
+        "lat": 28.23875,
+        "elevationM": 1645.1
+      },
+      {
+        "chainageM": 29611,
+        "lon": 85.35769,
+        "lat": 28.23767,
+        "elevationM": 1640.9
+      },
+      {
+        "chainageM": 29731,
+        "lon": 85.35771,
+        "lat": 28.23659,
+        "elevationM": 1643.8
+      },
+      {
+        "chainageM": 29876,
+        "lon": 85.35834,
+        "lat": 28.23551,
+        "elevationM": 1642.5
+      },
+      {
+        "chainageM": 30021,
+        "lon": 85.35897,
+        "lat": 28.23444,
+        "elevationM": 1645.7
+      },
+      {
+        "chainageM": 30166,
+        "lon": 85.3596,
+        "lat": 28.23336,
+        "elevationM": 1644.8
+      },
+      {
+        "chainageM": 30311,
+        "lon": 85.36022,
+        "lat": 28.23229,
+        "elevationM": 1640.9
+      },
+      {
+        "chainageM": 30455,
+        "lon": 85.36024,
+        "lat": 28.2312,
+        "elevationM": 1640.7
+      },
+      {
+        "chainageM": 30588,
+        "lon": 85.36056,
+        "lat": 28.23012,
+        "elevationM": 1617.5
+      },
+      {
+        "chainageM": 30720,
+        "lon": 85.36088,
+        "lat": 28.22905,
+        "elevationM": 1619.7
+      },
+      {
+        "chainageM": 30853,
+        "lon": 85.36059,
+        "lat": 28.22796,
+        "elevationM": 1606.7
+      },
+      {
+        "chainageM": 30985,
+        "lon": 85.36092,
+        "lat": 28.22688,
+        "elevationM": 1605
+      },
+      {
+        "chainageM": 31105,
+        "lon": 85.36093,
+        "lat": 28.2258,
+        "elevationM": 1591.3
+      },
+      {
+        "chainageM": 31238,
+        "lon": 85.36126,
+        "lat": 28.22472,
+        "elevationM": 1587.9
+      },
+      {
+        "chainageM": 31370,
+        "lon": 85.36097,
+        "lat": 28.22363,
+        "elevationM": 1588.5
+      },
+      {
+        "chainageM": 31515,
+        "lon": 85.36037,
+        "lat": 28.22254,
+        "elevationM": 1585.7
+      },
+      {
+        "chainageM": 31685,
+        "lon": 85.35917,
+        "lat": 28.22144,
+        "elevationM": 1573.5
+      },
+      {
+        "chainageM": 31854,
+        "lon": 85.35796,
+        "lat": 28.22035,
+        "elevationM": 1590.1
+      },
+      {
+        "chainageM": 32012,
+        "lon": 85.35706,
+        "lat": 28.21925,
+        "elevationM": 1580.1
+      },
+      {
+        "chainageM": 32156,
+        "lon": 85.35647,
+        "lat": 28.21816,
+        "elevationM": 1574.3
+      },
+      {
+        "chainageM": 32314,
+        "lon": 85.35557,
+        "lat": 28.21707,
+        "elevationM": 1561.1
+      },
+      {
+        "chainageM": 32459,
+        "lon": 85.35497,
+        "lat": 28.21598,
+        "elevationM": 1558.2
+      },
+      {
+        "chainageM": 32591,
+        "lon": 85.35468,
+        "lat": 28.21489,
+        "elevationM": 1554.7
+      },
+      {
+        "chainageM": 32723,
+        "lon": 85.355,
+        "lat": 28.21381,
+        "elevationM": 1552.4
+      },
+      {
+        "chainageM": 32856,
+        "lon": 85.35471,
+        "lat": 28.21273,
+        "elevationM": 1548.3
+      },
+      {
+        "chainageM": 32988,
+        "lon": 85.35443,
+        "lat": 28.21164,
+        "elevationM": 1546.4
+      },
+      {
+        "chainageM": 33121,
+        "lon": 85.35414,
+        "lat": 28.21055,
+        "elevationM": 1542.7
+      },
+      {
+        "chainageM": 33241,
+        "lon": 85.35415,
+        "lat": 28.20947,
+        "elevationM": 1541.1
+      },
+      {
+        "chainageM": 33373,
+        "lon": 85.35448,
+        "lat": 28.20839,
+        "elevationM": 1539.9
+      },
+      {
+        "chainageM": 33506,
+        "lon": 85.3548,
+        "lat": 28.20731,
+        "elevationM": 1536.1
+      },
+      {
+        "chainageM": 33626,
+        "lon": 85.35481,
+        "lat": 28.20623,
+        "elevationM": 1534.7
+      },
+      {
+        "chainageM": 33770,
+        "lon": 85.35422,
+        "lat": 28.20514,
+        "elevationM": 1530.3
+      },
+      {
+        "chainageM": 33915,
+        "lon": 85.35363,
+        "lat": 28.20405,
+        "elevationM": 1526.4
+      },
+      {
+        "chainageM": 34060,
+        "lon": 85.35303,
+        "lat": 28.20296,
+        "elevationM": 1526.2
+      },
+      {
+        "chainageM": 34193,
+        "lon": 85.35274,
+        "lat": 28.20187,
+        "elevationM": 1522.2
+      },
+      {
+        "chainageM": 34313,
+        "lon": 85.35276,
+        "lat": 28.20079,
+        "elevationM": 1523.5
+      },
+      {
+        "chainageM": 34445,
+        "lon": 85.35247,
+        "lat": 28.1997,
+        "elevationM": 1514.7
+      },
+      {
+        "chainageM": 34577,
+        "lon": 85.35218,
+        "lat": 28.19862,
+        "elevationM": 1508
+      },
+      {
+        "chainageM": 34735,
+        "lon": 85.35128,
+        "lat": 28.19752,
+        "elevationM": 1504.4
+      },
+      {
+        "chainageM": 34892,
+        "lon": 85.35038,
+        "lat": 28.19643,
+        "elevationM": 1496.7
+      },
+      {
+        "chainageM": 35024,
+        "lon": 85.35009,
+        "lat": 28.19534,
+        "elevationM": 1495.1
+      },
+      {
+        "chainageM": 35157,
+        "lon": 85.3498,
+        "lat": 28.19426,
+        "elevationM": 1493.6
+      },
+      {
+        "chainageM": 35302,
+        "lon": 85.34921,
+        "lat": 28.19317,
+        "elevationM": 1488.9
+      },
+      {
+        "chainageM": 35434,
+        "lon": 85.34892,
+        "lat": 28.19208,
+        "elevationM": 1484
+      },
+      {
+        "chainageM": 35579,
+        "lon": 85.34832,
+        "lat": 28.19099,
+        "elevationM": 1482.6
+      },
+      {
+        "chainageM": 35724,
+        "lon": 85.34773,
+        "lat": 28.1899,
+        "elevationM": 1481
+      },
+      {
+        "chainageM": 35893,
+        "lon": 85.34652,
+        "lat": 28.1888,
+        "elevationM": 1477.6
+      },
+      {
+        "chainageM": 36038,
+        "lon": 85.34593,
+        "lat": 28.18771,
+        "elevationM": 1475.5
+      },
+      {
+        "chainageM": 36158,
+        "lon": 85.34595,
+        "lat": 28.18663,
+        "elevationM": 1473.2
+      },
+      {
+        "chainageM": 36316,
+        "lon": 85.34505,
+        "lat": 28.18553,
+        "elevationM": 1467.4
+      },
+      {
+        "chainageM": 36473,
+        "lon": 85.34415,
+        "lat": 28.18444,
+        "elevationM": 1465.5
+      },
+      {
+        "chainageM": 36618,
+        "lon": 85.34355,
+        "lat": 28.18335,
+        "elevationM": 1466.3
+      },
+      {
+        "chainageM": 36763,
+        "lon": 85.34296,
+        "lat": 28.18226,
+        "elevationM": 1467.9
+      },
+      {
+        "chainageM": 36907,
+        "lon": 85.34236,
+        "lat": 28.18117,
+        "elevationM": 1464.2
+      },
+      {
+        "chainageM": 37027,
+        "lon": 85.34238,
+        "lat": 28.18009,
+        "elevationM": 1463.6
+      },
+      {
+        "chainageM": 37160,
+        "lon": 85.3427,
+        "lat": 28.17901,
+        "elevationM": 1474.1
+      },
+      {
+        "chainageM": 37280,
+        "lon": 85.34272,
+        "lat": 28.17793,
+        "elevationM": 1465.8
+      },
+      {
+        "chainageM": 37400,
+        "lon": 85.34274,
+        "lat": 28.17684,
+        "elevationM": 1456.3
+      },
+      {
+        "chainageM": 37532,
+        "lon": 85.34245,
+        "lat": 28.17576,
+        "elevationM": 1445.9
+      },
+      {
+        "chainageM": 37665,
+        "lon": 85.34216,
+        "lat": 28.17467,
+        "elevationM": 1431.7
+      },
+      {
+        "chainageM": 37797,
+        "lon": 85.34248,
+        "lat": 28.17359,
+        "elevationM": 1443.6
+      },
+      {
+        "chainageM": 37942,
+        "lon": 85.34189,
+        "lat": 28.1725,
+        "elevationM": 1446.6
+      },
+      {
+        "chainageM": 38062,
+        "lon": 85.3419,
+        "lat": 28.17142,
+        "elevationM": 1437.8
+      },
+      {
+        "chainageM": 38182,
+        "lon": 85.34192,
+        "lat": 28.17033,
+        "elevationM": 1444.8
+      },
+      {
+        "chainageM": 38327,
+        "lon": 85.34255,
+        "lat": 28.16926,
+        "elevationM": 1450.6
+      },
+      {
+        "chainageM": 38447,
+        "lon": 85.34256,
+        "lat": 28.16818,
+        "elevationM": 1444
+      },
+      {
+        "chainageM": 38604,
+        "lon": 85.34289,
+        "lat": 28.1671,
+        "elevationM": 1442.5
+      },
+      {
+        "chainageM": 38737,
+        "lon": 85.3426,
+        "lat": 28.16601,
+        "elevationM": 1436.6
+      },
+      {
+        "chainageM": 38881,
+        "lon": 85.342,
+        "lat": 28.16492,
+        "elevationM": 1428.4
+      },
+      {
+        "chainageM": 39026,
+        "lon": 85.34079,
+        "lat": 28.16436,
+        "elevationM": 1418.8
+      },
+      {
+        "chainageM": 39171,
+        "lon": 85.33958,
+        "lat": 28.16381,
+        "elevationM": 1417.9
+      },
+      {
+        "chainageM": 39328,
+        "lon": 85.33837,
+        "lat": 28.16298,
+        "elevationM": 1417
+      },
+      {
+        "chainageM": 39486,
+        "lon": 85.33747,
+        "lat": 28.16189,
+        "elevationM": 1418.6
+      },
+      {
+        "chainageM": 39606,
+        "lon": 85.33748,
+        "lat": 28.1608,
+        "elevationM": 1405.8
+      },
+      {
+        "chainageM": 39751,
+        "lon": 85.33658,
+        "lat": 28.15998,
+        "elevationM": 1408.6
+      },
+      {
+        "chainageM": 39908,
+        "lon": 85.33537,
+        "lat": 28.15915,
+        "elevationM": 1402.1
+      },
+      {
+        "chainageM": 40053,
+        "lon": 85.33416,
+        "lat": 28.1586,
+        "elevationM": 1398.3
+      },
+      {
+        "chainageM": 40198,
+        "lon": 85.33295,
+        "lat": 28.15804,
+        "elevationM": 1396.2
+      },
+      {
+        "chainageM": 40342,
+        "lon": 85.33204,
+        "lat": 28.15722,
+        "elevationM": 1389.7
+      },
+      {
+        "chainageM": 40500,
+        "lon": 85.33083,
+        "lat": 28.15639,
+        "elevationM": 1387.9
+      },
+      {
+        "chainageM": 40657,
+        "lon": 85.32962,
+        "lat": 28.15556,
+        "elevationM": 1384.2
+      },
+      {
+        "chainageM": 40814,
+        "lon": 85.32872,
+        "lat": 28.15447,
+        "elevationM": 1385.5
+      },
+      {
+        "chainageM": 40972,
+        "lon": 85.32751,
+        "lat": 28.15364,
+        "elevationM": 1379.1
+      },
+      {
+        "chainageM": 41129,
+        "lon": 85.32662,
+        "lat": 28.15255,
+        "elevationM": 1376.3
+      },
+      {
+        "chainageM": 41286,
+        "lon": 85.32541,
+        "lat": 28.15172,
+        "elevationM": 1368.8
+      },
+      {
+        "chainageM": 41431,
+        "lon": 85.32419,
+        "lat": 28.15117,
+        "elevationM": 1365.4
+      },
+      {
+        "chainageM": 41576,
+        "lon": 85.32298,
+        "lat": 28.15061,
+        "elevationM": 1365.1
+      },
+      {
+        "chainageM": 41721,
+        "lon": 85.32177,
+        "lat": 28.15005,
+        "elevationM": 1364.6
+      },
+      {
+        "chainageM": 41878,
+        "lon": 85.32056,
+        "lat": 28.14923,
+        "elevationM": 1357.3
+      },
+      {
+        "chainageM": 42035,
+        "lon": 85.31935,
+        "lat": 28.1484,
+        "elevationM": 1359.7
+      },
+      {
+        "chainageM": 42168,
+        "lon": 85.31813,
+        "lat": 28.14811,
+        "elevationM": 1354.2
+      },
+      {
+        "chainageM": 42337,
+        "lon": 85.31693,
+        "lat": 28.14702,
+        "elevationM": 1357
+      },
+      {
+        "chainageM": 42482,
+        "lon": 85.31571,
+        "lat": 28.14646,
+        "elevationM": 1357
+      },
+      {
+        "chainageM": 42639,
+        "lon": 85.3145,
+        "lat": 28.14563,
+        "elevationM": 1342.2
+      },
+      {
+        "chainageM": 42809,
+        "lon": 85.3133,
+        "lat": 28.14453,
+        "elevationM": 1344.9
+      },
+      {
+        "chainageM": 42966,
+        "lon": 85.3124,
+        "lat": 28.14344,
+        "elevationM": 1358.7
+      },
+      {
+        "chainageM": 43099,
+        "lon": 85.31211,
+        "lat": 28.14235,
+        "elevationM": 1358.4
+      },
+      {
+        "chainageM": 43244,
+        "lon": 85.31089,
+        "lat": 28.14234,
+        "elevationM": 1336.9
+      },
+      {
+        "chainageM": 43376,
+        "lon": 85.30966,
+        "lat": 28.14259,
+        "elevationM": 1343
+      },
+      {
+        "chainageM": 43546,
+        "lon": 85.30846,
+        "lat": 28.1415,
+        "elevationM": 1331.3
+      },
+      {
+        "chainageM": 43716,
+        "lon": 85.30726,
+        "lat": 28.1404,
+        "elevationM": 1331.4
+      },
+      {
+        "chainageM": 43885,
+        "lon": 85.30605,
+        "lat": 28.1393,
+        "elevationM": 1324.1
+      },
+      {
+        "chainageM": 44055,
+        "lon": 85.30485,
+        "lat": 28.1382,
+        "elevationM": 1341.6
+      },
+      {
+        "chainageM": 44187,
+        "lon": 85.30456,
+        "lat": 28.13712,
+        "elevationM": 1339
+      },
+      {
+        "chainageM": 44332,
+        "lon": 85.30396,
+        "lat": 28.13603,
+        "elevationM": 1326.1
+      },
+      {
+        "chainageM": 44447,
+        "lon": 85.30337,
+        "lat": 28.13521,
+        "elevationM": 1323
+      }
+    ],
+    "storyFloodWindow": {
+      "start": 0.195,
+      "end": 0.39
+    }
+  },
+  "witnessAnchors": [
+    {
+      "id": "rasuwagadhi-geoconfirmed",
+      "title": "RASUWAGADHI · SOURCE GEOCONFIRMED",
+      "details": [
+        "28.279942 N · 85.377725 E",
+        "WITNESS VIDEO · OPEN ORIGINAL"
+      ],
+      "lat": 28.279942,
+      "lon": 85.377725,
+      "sourceUrl": "https://x.com/Indowatchosint/status/2092640554568007958",
+      "provenance": "Published as GeoConfirmed in the linked IndoWatchOSINT post; original video credited there.",
+      "elevationM": 1836.4
+    }
+  ],
+  "fieldReports": [
+    {
+      "label": "Rasuwagadhi witness video",
+      "status": "SOURCE GEOCONFIRMED · WORLD-PINNED",
+      "url": "https://x.com/Indowatchosint/status/2092640554568007958"
+    },
+    {
+      "label": "Bhote Koshi valley footage · Nirmal Prasai",
+      "status": "SOURCE CREDITED · LOCATION UNRESOLVED",
+      "url": "https://x.com/GlobalUpdates24/status/2092602195812470980"
+    },
+    {
+      "label": "Flood footage · Surajit",
+      "status": "SOURCE CREDITED · LOCATION UNRESOLVED",
+      "url": "https://x.com/BNODesk/status/2092568283098575057"
+    },
+    {
+      "label": "Compilation and casualty claims",
+      "status": "REFERENCE ONLY · CLAIMS UNVERIFIED",
+      "url": "https://x.com/Emeka2026/status/2093196357242662947"
+    }
+  ],
+  "viewpoints": {
+    "corridor": {
+      "lat": 28.207,
+      "lon": 85.3548,
+      "targetElevationM": 1536,
+      "rangeM": 8600,
+      "headingDeg": 344,
+      "pitchDeg": -39
+    },
+    "witness": {
+      "lat": 28.2775,
+      "lon": 85.374,
+      "targetElevationM": 1795,
+      "rangeM": 1700,
+      "headingDeg": 0,
+      "pitchDeg": -60,
+      "imagery": "before"
+    }
+  },
+  "evidenceSpine": [
+    {
+      "id": "immediate-collapse-viewpoint",
+      "sequence": 1,
+      "title": "Immediate collapse viewpoint",
+      "shortTitle": "Collapse viewpoint",
+      "summary": "Geolocated viewpoint toward the upper-valley collapse zone.",
+      "phase": "initiation",
+      "lat": 28.3632333,
+      "lon": 85.4423639,
+      "fallbackElevationM": 2850,
+      "imageryCoverage": "outside",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "viewpoint geolocated",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.youtube.com/watch?v=DbqRexFxv3k",
+        "posterUrl": "https://i.ytimg.com/vi/DbqRexFxv3k/hqdefault.jpg",
+        "platform": "YouTube",
+        "publisher": "YouTube source",
+        "width": 240,
+        "height": 422,
+        "orientation": "portrait",
+        "fit": "contain",
+        "clipInSec": 0,
+        "clipOutSec": 8.6,
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    },
+    {
+      "id": "debris-dammed-lake",
+      "sequence": 2,
+      "title": "Debris-dammed lake",
+      "shortTitle": "Dammed lake",
+      "summary": "Geolocated observation of impoundment above the border corridor.",
+      "phase": "damming",
+      "lat": 28.3346111,
+      "lon": 85.4861389,
+      "fallbackElevationM": 2750,
+      "imageryCoverage": "outside",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.065
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "geolocated",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.youtube.com/watch?v=HTwd724Hs2g",
+        "posterUrl": "https://i.ytimg.com/vi/HTwd724Hs2g/hqdefault.jpg",
+        "platform": "YouTube",
+        "publisher": "YouTube source",
+        "width": 480,
+        "height": 360,
+        "orientation": "landscape",
+        "fit": "cover",
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    },
+    {
+      "id": "second-landslide",
+      "sequence": 3,
+      "title": "Second landslide",
+      "shortTitle": "Second landslide",
+      "summary": "A short source-linked excerpt of the second upper-valley landslide.",
+      "phase": "secondary failure",
+      "lat": 28.3379706,
+      "lon": 85.4688823,
+      "fallbackElevationM": 2750,
+      "imageryCoverage": "outside",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.13
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "geolocated",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.youtube.com/watch?v=hfCz1z0u4pk",
+        "platform": "YouTube",
+        "publisher": "YouTube source",
+        "width": 240,
+        "height": 426,
+        "orientation": "portrait",
+        "fit": "contain",
+        "clipInSec": 0,
+        "clipOutSec": 9.3,
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    },
+    {
+      "id": "gyirong-border-gate",
+      "sequence": 4,
+      "title": "Gyirong border gate",
+      "shortTitle": "Border gate",
+      "summary": "Public footage geolocated at the Nepal-China border crossing.",
+      "phase": "border arrival",
+      "lat": 28.2808338,
+      "lon": 85.3780248,
+      "fallbackElevationM": 1818,
+      "imageryCoverage": "within",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.195
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "geolocated",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.youtube.com/watch?v=qlE51Eu0thk",
+        "posterUrl": "https://i.ytimg.com/vi/qlE51Eu0thk/hqdefault.jpg",
+        "platform": "YouTube",
+        "publisher": "YouTube source",
+        "width": 480,
+        "height": 360,
+        "orientation": "landscape",
+        "fit": "cover",
+        "clipInSec": 26,
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map; independently consistent with the linked GeoConfirmed witness",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    },
+    {
+      "id": "timure-cluster",
+      "sequence": 5,
+      "title": "Timure evidence cluster",
+      "shortTitle": "Timure",
+      "summary": "Five geolocated public viewpoints document the flood passage.",
+      "phase": "propagation",
+      "lat": 28.2519361,
+      "lon": 85.3665833,
+      "fallbackElevationM": 1689,
+      "imageryCoverage": "within",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.26
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "cluster",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.youtube.com/watch?v=gb8cGELvskA",
+        "posterUrl": "https://i.ytimg.com/vi/gb8cGELvskA/hqdefault.jpg",
+        "platform": "YouTube",
+        "publisher": "YouTube source",
+        "width": 240,
+        "height": 426,
+        "orientation": "portrait",
+        "fit": "cover",
+        "clipInSec": 0,
+        "clipOutSec": 10.1,
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      },
+      "corroboration": {
+        "kind": "multi-source geolocation cluster",
+        "sourceCount": 5,
+        "displayedSourceCount": 1,
+        "note": "Five distinct Timure placements are recorded in the public source map; this card opens one representative source."
+      }
+    },
+    {
+      "id": "syabru-besi",
+      "sequence": 6,
+      "title": "Syabru Besi",
+      "shortTitle": "Syabru Besi",
+      "summary": "A Facebook-sourced downstream viewpoint along the reconstructed corridor.",
+      "phase": "downstream passage",
+      "lat": 28.1602583333333,
+      "lon": 85.3325666666667,
+      "fallbackElevationM": 1417,
+      "imageryCoverage": "within",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.325
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "viewpoint geolocated",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.facebook.com/reel/1571491657757829",
+        "platform": "Facebook",
+        "publisher": "Facebook source",
+        "width": 240,
+        "height": 426,
+        "orientation": "portrait",
+        "fit": "contain",
+        "clipInSec": 0,
+        "clipOutSec": 10,
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map, record 19",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    },
+    {
+      "id": "dhunche",
+      "sequence": 7,
+      "title": "Dhunche",
+      "shortTitle": "Dhunche",
+      "summary": "Flood surge visible from a Dhunche hillside viewpoint.",
+      "phase": "downstream passage",
+      "lat": 28.1131861111111,
+      "lon": 85.2953305555556,
+      "fallbackElevationM": 1300,
+      "imageryCoverage": "outside",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.39
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "geolocated",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.youtube.com/watch?v=r5OYhYnBX6E",
+        "platform": "YouTube",
+        "publisher": "YouTube source",
+        "width": 240,
+        "height": 426,
+        "orientation": "portrait",
+        "fit": "contain",
+        "clipInSec": 0,
+        "clipOutSec": 14.43,
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    },
+    {
+      "id": "mailung-upper-trishuli",
+      "sequence": 8,
+      "title": "Mailung / Upper Trishuli bridge",
+      "shortTitle": "Upper Trishuli",
+      "summary": "A bridge-side view of the surge between Dhunche and Mailung Bazzar.",
+      "phase": "downstream passage",
+      "lat": 28.090925,
+      "lon": 85.2322916666667,
+      "fallbackElevationM": 950,
+      "imageryCoverage": "outside",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.455
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "geolocated",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.facebook.com/watch/?v=1291517609615680",
+        "platform": "Facebook",
+        "publisher": "Facebook source",
+        "width": 240,
+        "height": 426,
+        "orientation": "portrait",
+        "fit": "contain",
+        "clipInSec": 0,
+        "clipOutSec": 12,
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    },
+    {
+      "id": "mailung-bazzar",
+      "sequence": 9,
+      "title": "Mailung Bazzar, Dandaguan",
+      "shortTitle": "Mailung",
+      "summary": "A wave races along the Mailung Bazzar road corridor.",
+      "phase": "downstream passage",
+      "lat": 28.0761666666667,
+      "lon": 85.2125277777778,
+      "fallbackElevationM": 800,
+      "imageryCoverage": "outside",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.52
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "geolocated",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.youtube.com/watch?v=TREmjWjppII",
+        "embedEndAtSec": 7,
+        "platform": "YouTube",
+        "publisher": "YouTube source",
+        "width": 240,
+        "height": 426,
+        "orientation": "portrait",
+        "fit": "contain",
+        "clipInSec": 0,
+        "clipOutSec": 10,
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    },
+    {
+      "id": "dandagaun",
+      "sequence": 10,
+      "title": "Dandagaun, Rasuwa",
+      "shortTitle": "Dandagaun",
+      "summary": "A compact excerpt of the Dandagaun slope-collapse sequence.",
+      "phase": "downstream passage",
+      "lat": 28.0751944444444,
+      "lon": 85.2076944444444,
+      "fallbackElevationM": 780,
+      "imageryCoverage": "outside",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.585
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "geolocated",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.youtube.com/watch?v=neheV9j5SI0",
+        "platform": "YouTube",
+        "publisher": "YouTube source",
+        "width": 240,
+        "height": 426,
+        "orientation": "portrait",
+        "fit": "contain",
+        "clipInSec": 0,
+        "clipOutSec": 13.37,
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    },
+    {
+      "id": "dandagaun-viewpoint",
+      "sequence": 11,
+      "title": "Dandagaun viewpoint restaurant",
+      "shortTitle": "Dandagaun viewpoint",
+      "summary": "A wide valley view of the flash-flood surge from a restaurant.",
+      "phase": "downstream passage",
+      "lat": 28.0354,
+      "lon": 85.1894361111111,
+      "fallbackElevationM": 700,
+      "imageryCoverage": "outside",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.65
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "geolocated",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.youtube.com/watch?v=9mE8Zfj_o2I",
+        "platform": "YouTube",
+        "publisher": "YouTube source",
+        "width": 240,
+        "height": 426,
+        "orientation": "portrait",
+        "fit": "contain",
+        "clipInSec": 0,
+        "clipOutSec": 12,
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    },
+    {
+      "id": "betrawati-bazaar",
+      "sequence": 12,
+      "title": "Betrawati Bazaar",
+      "shortTitle": "Betrawati",
+      "summary": "A landscape view of the Betrawati flood surge.",
+      "phase": "downstream consequence",
+      "lat": 27.9758992572246,
+      "lon": 85.1835331689033,
+      "fallbackElevationM": 600,
+      "imageryCoverage": "outside",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.715
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "geolocated",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.youtube.com/watch?v=qjApXYPD2Ow",
+        "platform": "YouTube",
+        "publisher": "YouTube source",
+        "width": 426,
+        "height": 240,
+        "orientation": "landscape",
+        "fit": "cover",
+        "clipInSec": 0,
+        "clipOutSec": 10.44,
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    },
+    {
+      "id": "bhainse",
+      "sequence": 13,
+      "title": "Bhainse",
+      "shortTitle": "Bhainse",
+      "summary": "A source-linked clip placed at Bhainse in the public geolocation map.",
+      "phase": "downstream consequence",
+      "lat": 27.9623111111111,
+      "lon": 85.1739777777778,
+      "fallbackElevationM": 500,
+      "imageryCoverage": "outside",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.747
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "geolocated source-map placement",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.youtube.com/watch?v=nBbDsvYiUg8",
+        "platform": "YouTube",
+        "publisher": "YouTube source",
+        "width": 240,
+        "height": 426,
+        "orientation": "portrait",
+        "fit": "contain",
+        "clipInSec": 0,
+        "embedStartAtSec": 14,
+        "clipOutSec": 11.11,
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map, record 44 source 1",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    },
+    {
+      "id": "bidur-trishuli-bridge",
+      "sequence": 14,
+      "title": "Bidur - Trishuli bridge",
+      "shortTitle": "Bidur bridge",
+      "summary": "Geolocated downstream consequence well beyond the image comparison.",
+      "phase": "consequence",
+      "lat": 27.920858,
+      "lon": 85.148029,
+      "fallbackElevationM": 510,
+      "imageryCoverage": "outside",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.78
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "geolocated",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.youtube.com/watch?v=FE5HRRFhDQg",
+        "posterUrl": "https://i.ytimg.com/vi/FE5HRRFhDQg/hqdefault.jpg",
+        "platform": "YouTube",
+        "publisher": "YouTube source",
+        "width": 480,
+        "height": 360,
+        "orientation": "landscape",
+        "fit": "cover",
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    },
+    {
+      "id": "devighat-taadi-khola-bridge",
+      "sequence": 15,
+      "title": "Devighat / Taadi Khola Bridge",
+      "shortTitle": "Devighat bridge",
+      "summary": "A downstream river view at the Devighat bridge area.",
+      "phase": "downstream consequence",
+      "lat": 27.8585278,
+      "lon": 85.1090318,
+      "fallbackElevationM": 350,
+      "imageryCoverage": "outside",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.845
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "geolocated",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.youtube.com/watch?v=nG9um3ksbR4",
+        "platform": "YouTube",
+        "publisher": "YouTube source",
+        "width": 240,
+        "height": 426,
+        "orientation": "portrait",
+        "fit": "contain",
+        "clipInSec": 0,
+        "clipOutSec": 11.11,
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    },
+    {
+      "id": "charaudi",
+      "sequence": 16,
+      "title": "Charaudi",
+      "shortTitle": "Charaudi",
+      "summary": "Floodwater surges through the Charaudi built area.",
+      "phase": "downstream consequence",
+      "lat": 27.8032944444444,
+      "lon": 84.749375,
+      "fallbackElevationM": 300,
+      "imageryCoverage": "outside",
+      "trigger": {
+        "mode": "phase",
+        "storyProgress": 0.91
+      },
+      "timing": {
+        "capturedAt": null,
+        "note": "capture time unverified"
+      },
+      "confidence": {
+        "location": "geolocated",
+        "time": "unverified"
+      },
+      "media": {
+        "sourceUrl": "https://www.youtube.com/watch?v=55SrkQilcO8",
+        "platform": "YouTube",
+        "publisher": "YouTube source",
+        "width": 240,
+        "height": 426,
+        "orientation": "portrait",
+        "fit": "contain",
+        "clipInSec": 0,
+        "clipOutSec": 10,
+        "rightsStatus": "Linked original source; media is not redistributed."
+      },
+      "provenance": {
+        "via": "GeoGeorgeShadrach public geolocation map",
+        "viaUrl": "https://x.com/geogeorgeology/status/2093632283442053371",
+        "rights": "third-party link only; media not redistributed"
+      }
+    }
+  ]
+}

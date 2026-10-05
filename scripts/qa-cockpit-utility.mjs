@@ -13,14 +13,20 @@ fs.mkdirSync(shotsDir, { recursive: true });
 
 const chromeCandidates = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
-  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  await puppeteer.executablePath().catch(() => null),
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 ].filter(Boolean);
 const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
 const browser = await puppeteer.launch({
   headless: headful ? false : 'new',
   ...(executablePath ? { executablePath } : {}),
-  args: ['--use-angle=metal', '--enable-gpu', '--no-sandbox'],
+  // Metal is a macOS-only ANGLE backend; anywhere else it fails WebGL init.
+  args: [
+    ...(process.platform === 'darwin'
+      ? ['--use-angle=metal', '--enable-gpu']
+      : ['--use-gl=angle', '--use-angle=swiftshader']),
+    '--no-sandbox',
+  ],
 });
 const page = await browser.newPage();
 const failures = [];
@@ -36,7 +42,7 @@ page.on('pageerror', (error) => consoleErrors.push(error.message));
 page.on('response', (response) => {
   const url = new URL(response.url());
   const expectedOptionalTrackMiss = response.status() === 404
-    && url.pathname === '/api/opensky-track';
+    && url.pathname === '/api/flights/track';
   if (
     url.origin === new URL(appUrl).origin
     && response.status() >= 400
@@ -54,9 +60,55 @@ const check = (name, passed, detail) => {
 try {
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
   await page.setRequestInterception(true);
-  page.on('request', (request) => {
+  const routeQaRequest = (request) => {
     const url = new URL(request.url());
-    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/ais-live') {
+    // These scenarios exercise Context lifecycle and keyboard ownership, not
+    // live orbit accuracy. Reuse the tracking suite's fixed element sets so
+    // CelesTrak outages cannot invalidate an otherwise clean UI run.
+    if (url.origin === new URL(appUrl).origin
+      && ['/api/celestrak/active', '/api/celestrak/starlink'].includes(url.pathname)) {
+      const dense = url.pathname.endsWith('/starlink');
+      request.respond({
+        status: 200,
+        contentType: 'text/plain',
+        body: (dense ? [
+          'STARLINK-1007',
+          '1 44713U 19074A   24001.50000000  .00016717  00000-0  10270-3 0  9004',
+          '2 44713  53.0000 247.4627 0006703 130.5360 325.0288 15.06000000 12345',
+        ] : [
+          'ISS (ZARYA)',
+          '1 25544U 98067A   24001.50000000  .00016717  00000-0  10270-3 0  9004',
+          '2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.49814310 12345',
+        ]).join('\n') + '\n',
+      });
+      return;
+    }
+    // Space Missions is toggled by the Context cancellation checks below.
+    // Its catalog is unrelated to aircraft/Cockpit behavior; keep the network
+    // error gate meaningful without depending on Launch Library availability.
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/launches') {
+      request.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ results: [] }),
+      });
+      return;
+    }
+    // This harness verifies UI/lifecycle behavior, not DEM accuracy. Keep an
+    // unrelated upstream terrain outage out of the rendered interaction gate.
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/terrain/heights') {
+      const points = (url.searchParams.get('points') || '').split(';').filter(Boolean);
+      request.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ results: points.map((point) => {
+          const [lon, lat] = point.split(',').map(Number);
+          return { lon, lat, elevation: 0, geoid: 0, ellipsoid: 0 };
+        }) }),
+      });
+      return;
+    }
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/vessels') {
       request.respond({
         status: 200,
         contentType: 'application/json',
@@ -72,7 +124,7 @@ try {
       });
       return;
     }
-    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/adsblol/mil') {
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/military') {
       request.respond({
         status: 200,
         contentType: 'application/json',
@@ -80,7 +132,7 @@ try {
       });
       return;
     }
-    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/opensky-track') {
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/flights/track') {
       request.respond({
         status: 200,
         contentType: 'application/json',
@@ -111,7 +163,8 @@ try {
       return;
     }
     request.continue();
-  });
+  };
+  page.on('request', routeQaRequest);
   await page.goto(appUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 60_000 });
   await page.waitForFunction(
@@ -142,21 +195,21 @@ try {
     const toasts = [];
     styleManager._showToast = (message) => { toasts.push(String(message)); };
     try {
-      if (styleManager._contextMode) await styleManager._selectContextMode(null);
-      const contactsResult = await styleManager._selectContextMode('flights');
-      const missionResult = await styleManager._selectContextMode('space-missions');
+      if (styleManager._contextControls._contextMode) await styleManager._contextControls._selectContextMode(null);
+      const contactsResult = await styleManager._contextControls._selectContextMode('flights');
+      const missionResult = await styleManager._contextControls._selectContextMode('space-missions');
       const switched = {
         contactsResult,
         missionResult,
-        mode: styleManager._contextMode,
+        mode: styleManager._contextControls._contextMode,
         missionsEnabled: dataManager.isEnabled('rocket-launches'),
         toasts: [...toasts],
       };
-      const exitResult = await styleManager._selectContextMode(null);
+      const exitResult = await styleManager._contextControls._selectContextMode(null);
       return {
         ...switched,
         exitResult,
-        modeAfterExit: styleManager._contextMode,
+        modeAfterExit: styleManager._contextControls._contextMode,
         missionsOffAfterExit: !dataManager.isEffectivelyEnabled('rocket-launches'),
       };
     } finally {
@@ -239,16 +292,16 @@ try {
       const deadline = performance.now() + 5_000;
       while (performance.now() < deadline) {
         if (
-          styleManager._contextModeEntering === null
-          && styleManager._contextSessionSnapshot === null
+          styleManager._contextControls._contextModeEntering === null
+          && styleManager._contextControls._contextSessionSnapshot === null
           && dataManager.isEnabled(siblingId)
           && !dataManager.isEffectivelyEnabled('rocket-launches')
         ) break;
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
       timedOut = !(
-        styleManager._contextModeEntering === null
-        && styleManager._contextSessionSnapshot === null
+        styleManager._contextControls._contextModeEntering === null
+        && styleManager._contextControls._contextSessionSnapshot === null
         && dataManager.isEnabled(siblingId)
         && !dataManager.isEffectivelyEnabled('rocket-launches')
       );
@@ -256,8 +309,8 @@ try {
         exercised: true,
         transitionResult,
         timedOut,
-        entering: styleManager._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextSessionSnapshot),
+        entering: styleManager._contextControls._contextModeEntering,
+        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
         siblingRestored: dataManager.isEnabled(siblingId),
         missionEffective: dataManager.isEffectivelyEnabled('rocket-launches'),
         toasts,
@@ -340,7 +393,7 @@ try {
     rocketEntry.module.disable = async () => true;
     styleManager._showToast = (message) => { toasts.push(String(message)); };
     try {
-      const entry = styleManager._selectContextMode('space-missions');
+      const entry = styleManager._contextControls._selectContextMode('space-missions');
       await updateStarted;
       const replacement = dataManager.setEnabled('rocket-launches', true, { origin: 'programmatic' });
       releaseUpdate();
@@ -348,15 +401,15 @@ try {
       const committed = {
         entryResult,
         replacementResult,
-        mode: styleManager._contextMode,
-        entering: styleManager._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextSessionSnapshot),
+        mode: styleManager._contextControls._contextMode,
+        entering: styleManager._contextControls._contextModeEntering,
+        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
         siblingIsolated: !dataManager.isEffectivelyEnabled(siblingId),
         missionEnabled: dataManager.isEnabled('rocket-launches'),
         missionEffective: dataManager.isEffectivelyEnabled('rocket-launches'),
         toasts: [...toasts],
       };
-      const exitResult = await styleManager._selectContextMode(null);
+      const exitResult = await styleManager._contextControls._selectContextMode(null);
       return {
         exercised: true,
         ...committed,
@@ -440,7 +493,7 @@ try {
     styleManager._showToast = (message) => { toasts.push(String(message)); };
     try {
       const entry = styleManager._runUserFacingContextAction(
-        (notificationToken) => styleManager._selectContextMode(
+        (notificationToken) => styleManager._contextControls._selectContextMode(
           'space-missions',
           { notificationToken },
         ),
@@ -456,9 +509,9 @@ try {
         exercised: true,
         entryResult,
         offResult,
-        mode: styleManager._contextMode,
-        entering: styleManager._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextSessionSnapshot),
+        mode: styleManager._contextControls._contextMode,
+        entering: styleManager._contextControls._contextModeEntering,
+        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
         siblingRestored: dataManager.isEnabled(siblingId),
         missionEffective: dataManager.isEffectivelyEnabled('rocket-launches'),
         toasts,
@@ -525,35 +578,35 @@ try {
       await new Promise((resolve) => setTimeout(resolve, 80));
       const voiceState = {
         voiceOn,
-        mode: styleManager._contextMode,
-        entering: styleManager._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextSessionSnapshot),
+        mode: styleManager._contextControls._contextMode,
+        entering: styleManager._contextControls._contextModeEntering,
+        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
         siblingIsolated: !dataManager.isEffectivelyEnabled(siblingId),
       };
-      const snapshotBeforeOff = [...(styleManager._contextSessionSnapshot?.enabledLayerIds || [])];
+      const snapshotBeforeOff = [...(styleManager._contextControls._contextSessionSnapshot?.enabledLayerIds || [])];
       const voiceOff = await dataManager.setEnabled('rocket-launches', false, { origin: 'voice' });
-      const reactionCountAfterOff = styleManager._contextLayerReactionPromises.size;
+      const reactionCountAfterOff = styleManager._contextControls._contextLayerReactionPromises.size;
       await styleManager._waitForContextLayerSettlement();
       const restoredSiblingEntry = dataManager.layers.get(siblingId);
       const voiceExit = {
         voiceOff,
         snapshotBeforeOff,
         reactionCountAfterOff,
-        mode: styleManager._contextMode,
-        entering: styleManager._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextSessionSnapshot),
+        mode: styleManager._contextControls._contextMode,
+        entering: styleManager._contextControls._contextModeEntering,
+        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
         siblingRestored: dataManager.isEffectivelyEnabled(siblingId),
         siblingEnabled: restoredSiblingEntry?.enabled,
         siblingLifecycle: restoredSiblingEntry?.lifecycleState,
-        restoreActive: Boolean(styleManager._contextRestoreState),
+        restoreActive: Boolean(styleManager._contextControls._contextRestoreState),
       };
 
       await dataManager.setEnabled('rocket-launches', true, { origin: 'programmatic' });
       await new Promise((resolve) => setTimeout(resolve, 40));
       const internalState = {
-        mode: styleManager._contextMode,
-        entering: styleManager._contextModeEntering,
-        snapshotRetained: Boolean(styleManager._contextSessionSnapshot),
+        mode: styleManager._contextControls._contextMode,
+        entering: styleManager._contextControls._contextModeEntering,
+        snapshotRetained: Boolean(styleManager._contextControls._contextSessionSnapshot),
         missionEnabled: dataManager.isEffectivelyEnabled('rocket-launches'),
       };
       await dataManager.setEnabled('rocket-launches', false, { origin: 'programmatic' });
@@ -665,7 +718,7 @@ try {
       const blockerEntry = dataManager.layers.get(blockerId);
       blockerEntry.initialized = true;
       await dataManager.setEnabled(blockerId, true, { origin: 'programmatic' });
-      const transition = styleManager._selectContextMode('flights');
+      const transition = styleManager._contextControls._selectContextMode('flights');
       const disableStart = await settleWithin(disableStarted, gateTimeoutMs);
       if (!disableStart.settled) {
         releaseDisable();
@@ -683,7 +736,7 @@ try {
       styleManager.cockpitView.syncEntry();
       const entry = document.getElementById('cockpit-entry');
       const pending = {
-        changing: styleManager._contextModeChanging,
+        changing: styleManager._contextControls._contextModeChanging,
         entryHidden: Boolean(entry?.hidden),
         enterResult: styleManager.cockpitView.enter(),
         trackerPreserved: viewer.trackedEntity === trackedEntityBefore,
@@ -721,7 +774,7 @@ try {
       // probe must not poison the checks that run after it.
       releaseDisable();
       if (!deferCleanup && dataManager.layers.has(blockerId)) {
-        if (styleManager._contextSessionSnapshot) await styleManager._selectContextMode(null);
+        if (styleManager._contextControls._contextSessionSnapshot) await styleManager._contextControls._selectContextMode(null);
         await window.__gevQaUnregisterLayer(dataManager, blockerId);
         styleManager.cockpitView.syncEntry();
       }
@@ -768,146 +821,189 @@ try {
   //     was created to fix.
   // Holding the network reproduces the field exactly and the panel tracks it,
   // which is what gives these assertions teeth.
-  const deferredInstallationReadiness = await page.evaluate(async () => {
-    const { styleManager, dataManager } = window.__godsEyeView;
-    const entry = dataManager.layers.get('military-installations');
-    if (!entry?.module) return { exercised: false, reason: 'military-installations missing' };
-    const settleWithin = (promise, ms) => Promise.race([
-      promise.then(
-        (value) => ({ settled: true, value }),
-        (error) => ({ settled: true, value: `error: ${String(error?.message || error)}` }),
-      ),
-      new Promise((resolve) => { setTimeout(() => resolve({ settled: false, value: null }), ms); }),
-    ]);
-    const row = () => [...document.querySelectorAll('#military-awareness-panel .military-awareness-row')]
-      .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'Mapped installations');
-    const installationCount = () => row()?.querySelector('b')?.textContent?.trim() || null;
-    /** The REASON text, which is what tracks availability: the cohort engine
-     *  answers 'feed unavailable' / 'feed stale' when it refuses to count. */
-    const installationReason = () => row()?.querySelector('small')?.textContent?.trim() || null;
-
-    const realFetch = window.fetch;
-    let released = false;
-    let requestSeen = false;
-    let transition = null;
-    try {
-      await styleManager._selectContextMode(null);
-      await dataManager.setEnabled('military-installations', false, { origin: 'programmatic' });
-
-      // Hold the first Overpass request open, honouring the module's own
-      // AbortSignal so its camera-settle abort/refetch behaves as it does live.
-      window.fetch = (input, init) => {
-        const raw = typeof input === 'string' || input instanceof URL ? String(input) : input?.url;
-        let url = null;
-        try { url = new URL(raw, window.location.href); } catch { return realFetch(input, init); }
-        if (url.pathname !== '/api/military-installations') return realFetch(input, init);
-        requestSeen = true;
-        const signal = init?.signal;
-        return new Promise((resolve, reject) => {
-          let done = false;
-          const fail = () => {
-            if (done) return;
-            done = true;
-            const error = new Error('aborted');
-            error.name = 'AbortError';
-            reject(error);
-          };
-          if (signal) {
-            if (signal.aborted) return fail();
-            signal.addEventListener('abort', fail, { once: true });
-          }
-          const tick = () => {
-            if (done) return;
-            if (released) {
-              done = true;
-              resolve(new Response(
-                JSON.stringify({ elements: [], retrievedAt: new Date().toISOString() }),
-                { status: 200, headers: { 'Content-Type': 'application/json' } },
-              ));
-              return;
-            }
-            setTimeout(tick, 100);
-          };
-          tick();
+  // Earlier scenarios have already loaded installations. Use a fresh page so
+  // a legitimate retained snapshot cannot satisfy or invalidate a FIRST-fetch
+  // assertion when camera motion supersedes the manager's initial update.
+  const readinessPage = await browser.newPage();
+  let deferredInstallationReadiness;
+  try {
+    await readinessPage.setViewport({ width: 1440, height: 900 });
+    readinessPage.on('pageerror', (error) => consoleErrors.push(error.message));
+    await readinessPage.setRequestInterception(true);
+    readinessPage.on('request', (request) => {
+      const url = new URL(request.url());
+      if (url.origin === new URL(appUrl).origin && url.pathname === '/api/flights') {
+        const now = Math.floor(Date.now() / 1000);
+        request.respond({
+          status: 200, contentType: 'application/json',
+          body: JSON.stringify({ time: now, states: [
+            ['aaa051', 'QA051', 'Synthetic', now, now, -97.7431, 30.2672,
+              9000, false, 230, 90, 0, null, 9000, null, false, 0],
+          ] }),
         });
-      };
-
-      transition = styleManager._selectContextMode('flights');
-      // The activation promise stays PENDING while the first fetch is out, and
-      // the Contacts panel comes up behind it — that is what a deferred
-      // dependency is for. Verified live on :4272: the panel renders and reads
-      // a non-numeric count for the whole of a 17 s first fetch.
-      const started = await settleWithin((async () => {
-        for (let i = 0; i < 100 && !(requestSeen && row()); i++) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-        return requestSeen && Boolean(row());
-      })(), 12_000);
-      styleManager.cockpitView.syncEntry();
-      const pendingLifecycle = dataManager.getLayerLifecycleState('military-installations');
-      const pendingCount = installationCount();
-      const pendingReason = installationReason();
-
-      // THE WINDOW: first request outstanding, panel live. Sampled more than
-      // once — the field report was a panel sitting on a fabricated 0 for ~13 s,
-      // so a single lucky read is not evidence.
-      const fetchingCounts = [];
-      const fetchingReasons = [];
-      for (let i = 0; i < 6; i++) {
-        fetchingCounts.push(installationCount());
-        fetchingReasons.push(installationReason());
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        return;
       }
-
-      released = true;
-      const contacts = await settleWithin(transition, 20_000);
-      styleManager.cockpitView.syncEntry();
-      // Measured AFTER activation settles, not during it. The sibling pin above
-      // ("Contacts blocks early Cockpit entry, then adopts the already tracked
-      // flight after settlement") establishes that Contacts HIDES the entry
-      // while the transition is changing — that is the designed contract, and
-      // asserting the opposite (as this scenario used to) could never pass.
-      // What matters is that a slow dependency does not lock it away for good.
-      const cockpitAvailableAfterActivation = !document.getElementById('cockpit-entry')?.hidden;
-      const installed = await settleWithin((async () => {
-        while (dataManager.getLayerLifecycleState('military-installations')?.lifecycleState !== 'enabled') {
-          await new Promise((resolve) => setTimeout(resolve, 50));
-        }
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        return true;
-      })(), 20_000);
-      const answered = await settleWithin((async () => {
-        for (let i = 0; i < 60 && !/^\d+$/.test(String(installationCount())); i++) {
-          await new Promise((resolve) => setTimeout(resolve, 150));
-        }
-        return true;
-      })(), 12_000);
-
-      return {
-        exercised: true,
-        started,
-        contacts,
-        pendingLifecycle,
-        pendingCount,
-        pendingReason,
-        cockpitAvailableAfterActivation,
-        installed,
-        settledLifecycle: dataManager.getLayerLifecycleState('military-installations'),
-        fetchingCounts,
-        fetchingReasons,
-        answered,
-        settledCount: installationCount(),
-        settledReason: installationReason(),
-      };
-    } finally {
-      released = true;
-      window.fetch = realFetch;
-      if (transition) await settleWithin(transition, 20_000);
-      if (styleManager._contextMode !== 'flights') {
-        await settleWithin(styleManager._selectContextMode('flights'), 15_000);
+      routeQaRequest(request);
+    });
+    const readinessUrl = new URL(appUrl);
+    readinessUrl.searchParams.set('welcome', '0');
+    await readinessPage.goto(readinessUrl.href, { waitUntil: 'domcontentloaded' });
+    await readinessPage.waitForFunction(() => window.__godsEyeView?.dataManager
+      && document.getElementById('loading-screen')?.classList.contains('hidden'), { timeout: 60000 });
+    await readinessPage.evaluate(async () => {
+      const manager = window.__godsEyeView.dataManager;
+      await manager.setEnabled('flights', true, { origin: 'user' });
+      if (!manager.layers.get('flights').module.trackById('aaa051')) {
+        throw new Error('First-fetch fixture aircraft was not tracked');
       }
-    }
-  });
+      if (manager.layers.get('military-installations').module.getStats().lastUpdate != null) {
+        throw new Error('First-fetch fixture already has an installation snapshot');
+      }
+    });
+    deferredInstallationReadiness = await readinessPage.evaluate(async () => {
+      const { styleManager, dataManager } = window.__godsEyeView;
+      const entry = dataManager.layers.get('military-installations');
+      if (!entry?.module) return { exercised: false, reason: 'military-installations missing' };
+      const settleWithin = (promise, ms) => Promise.race([
+        promise.then(
+          (value) => ({ settled: true, value }),
+          (error) => ({ settled: true, value: `error: ${String(error?.message || error)}` }),
+        ),
+        new Promise((resolve) => { setTimeout(() => resolve({ settled: false, value: null }), ms); }),
+      ]);
+      const row = () => [...document.querySelectorAll('#military-awareness-panel .military-awareness-row')]
+        .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'Mapped installations');
+      const installationCount = () => row()?.querySelector('b')?.textContent?.trim() || null;
+      /** The REASON text, which is what tracks availability: the cohort engine
+       *  answers 'feed unavailable' / 'feed stale' when it refuses to count. */
+      const installationReason = () => row()?.querySelector('small')?.textContent?.trim() || null;
+
+      const realFetch = window.fetch;
+      let released = false;
+      let requestSeen = false;
+      let transition = null;
+      try {
+        await styleManager._contextControls._selectContextMode(null);
+        await dataManager.setEnabled('military-installations', false, { origin: 'programmatic' });
+
+        // Hold the first Overpass request open, honouring the module's own
+        // AbortSignal so its camera-settle abort/refetch behaves as it does live.
+        window.fetch = (input, init) => {
+          const raw = typeof input === 'string' || input instanceof URL ? String(input) : input?.url;
+          let url = null;
+          try { url = new URL(raw, window.location.href); } catch { return realFetch(input, init); }
+          if (url.pathname !== '/api/military-installations') return realFetch(input, init);
+          requestSeen = true;
+          const signal = init?.signal;
+          return new Promise((resolve, reject) => {
+            let done = false;
+            const fail = () => {
+              if (done) return;
+              done = true;
+              const error = new Error('aborted');
+              error.name = 'AbortError';
+              reject(error);
+            };
+            if (signal) {
+              if (signal.aborted) return fail();
+              signal.addEventListener('abort', fail, { once: true });
+            }
+            const tick = () => {
+              if (done) return;
+              if (released) {
+                done = true;
+                resolve(new Response(
+                  JSON.stringify({ elements: [], retrievedAt: new Date().toISOString() }),
+                  { status: 200, headers: { 'Content-Type': 'application/json' } },
+                ));
+                return;
+              }
+              setTimeout(tick, 100);
+            };
+            tick();
+          });
+        };
+
+        transition = styleManager._contextControls._selectContextMode('flights');
+        // The activation promise stays PENDING while the first fetch is out, and
+        // the Contacts panel comes up behind it — that is what a deferred
+        // dependency is for. Verified live on :4272: the panel renders and reads
+        // a non-numeric count for the whole of a 17 s first fetch.
+        const started = await settleWithin((async () => {
+          for (let i = 0; i < 100 && !(requestSeen && row()); i++) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+          return requestSeen && Boolean(row());
+        })(), 12_000);
+        styleManager.cockpitView.syncEntry();
+        const pendingLifecycle = dataManager.getLayerLifecycleState('military-installations');
+        const pendingCount = installationCount();
+        const pendingReason = installationReason();
+
+        // THE WINDOW: first request outstanding, panel live. Sampled more than
+        // once — the field report was a panel sitting on a fabricated 0 for ~13 s,
+        // so a single lucky read is not evidence.
+        const fetchingCounts = [];
+        const fetchingReasons = [];
+        for (let i = 0; i < 6; i++) {
+          fetchingCounts.push(installationCount());
+          fetchingReasons.push(installationReason());
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+
+        released = true;
+        const contacts = await settleWithin(transition, 20_000);
+        styleManager.cockpitView.syncEntry();
+        // Measured AFTER activation settles, not during it. The sibling pin above
+        // ("Contacts blocks early Cockpit entry, then adopts the already tracked
+        // flight after settlement") establishes that Contacts HIDES the entry
+        // while the transition is changing — that is the designed contract, and
+        // asserting the opposite (as this scenario used to) could never pass.
+        // What matters is that a slow dependency does not lock it away for good.
+        const cockpitAvailableAfterActivation = !document.getElementById('cockpit-entry')?.hidden;
+        const installed = await settleWithin((async () => {
+          while (dataManager.getLayerLifecycleState('military-installations')?.lifecycleState !== 'enabled') {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          return true;
+        })(), 20_000);
+        const answered = await settleWithin((async () => {
+          for (let i = 0; i < 60 && !/^\d+$/.test(String(installationCount())); i++) {
+            await new Promise((resolve) => setTimeout(resolve, 150));
+          }
+          return true;
+        })(), 12_000);
+
+        return {
+          exercised: true,
+          started,
+          contacts,
+          pendingLifecycle,
+          pendingCount,
+          pendingReason,
+          cockpitAvailableAfterActivation,
+          installed,
+          settledLifecycle: dataManager.getLayerLifecycleState('military-installations'),
+          fetchingCounts,
+          fetchingReasons,
+          answered,
+          settledCount: installationCount(),
+          settledReason: installationReason(),
+        };
+      } finally {
+        released = true;
+        window.fetch = realFetch;
+        if (transition) await settleWithin(transition, 20_000);
+        if (styleManager._contextControls._contextMode !== 'flights') {
+          await settleWithin(styleManager._contextControls._selectContextMode('flights'), 15_000);
+        }
+      }
+    });
+  } finally {
+    await readinessPage.close();
+    await page.bringToFront();
+  }
   // The panel has two truthful ways to say "nothing has answered yet" — the
   // cohort count renders `?`, and an UNKNOWN relationship renders as that word.
   // Which one is on screen depends on which panel surface is mounted, and the
@@ -916,6 +1012,11 @@ try {
   // assert numeric-vs-not, which is exactly the field report.
   const readsUnknown = (value) => typeof value === 'string' && value.length > 0 && !/^\d/.test(value);
   const readsNumber = (value) => typeof value === 'string' && /^\d+$/.test(value);
+  // Loading has explicit copy since the installations reliability update.
+  // Keep the numeric/count gates below: wording alone never proves readiness.
+  const readsPendingReason = (value) => (
+    /unavailable|stale|Mapped sites not loaded|Fetching mapped sites…/i.test(String(value))
+  );
   check(
     'mapped installations load behind Contacts without a false all-clear or a locked Cockpit',
     deferredInstallationReadiness.exercised
@@ -924,7 +1025,7 @@ try {
       && deferredInstallationReadiness.contacts.value === true
       && deferredInstallationReadiness.pendingLifecycle?.lifecycleState === 'enabling'
       && readsUnknown(deferredInstallationReadiness.pendingCount)
-      && /unavailable|stale/i.test(String(deferredInstallationReadiness.pendingReason))
+      && readsPendingReason(deferredInstallationReadiness.pendingReason)
       && deferredInstallationReadiness.cockpitAvailableAfterActivation
       && deferredInstallationReadiness.installed?.settled,
     JSON.stringify(deferredInstallationReadiness),
@@ -937,10 +1038,11 @@ try {
       && deferredInstallationReadiness.fetchingCounts.length > 0
       && deferredInstallationReadiness.fetchingCounts.every(readsUnknown)
       && Array.isArray(deferredInstallationReadiness.fetchingReasons)
-      && deferredInstallationReadiness.fetchingReasons.every((r) => /unavailable|stale/i.test(String(r))),
+      && deferredInstallationReadiness.fetchingReasons.every(readsPendingReason),
     JSON.stringify({
       settledLifecycle: deferredInstallationReadiness.settledLifecycle,
       fetchingCounts: deferredInstallationReadiness.fetchingCounts,
+      fetchingReasons: deferredInstallationReadiness.fetchingReasons,
     }),
   );
   check(
@@ -948,7 +1050,7 @@ try {
     deferredInstallationReadiness.exercised
       && deferredInstallationReadiness.answered?.settled
       && readsNumber(deferredInstallationReadiness.settledCount)
-      && !/unavailable|stale/i.test(String(deferredInstallationReadiness.settledReason)),
+      && !readsPendingReason(deferredInstallationReadiness.settledReason),
     JSON.stringify({
       answered: deferredInstallationReadiness.answered,
       settledCount: deferredInstallationReadiness.settledCount,
@@ -969,7 +1071,7 @@ try {
     return {
       before: before ? { layerId: before.layerId, id: before.id } : null,
       after: after ? { layerId: after.layerId, id: after.id } : null,
-      mode: styleManager._contextMode,
+      mode: styleManager._contextControls._contextMode,
       released,
       refocused,
       trackedId: trackedInfo?.icao24 || trackedInfo?.id || null,
@@ -1000,7 +1102,12 @@ try {
     );
     const zoomedRange = cameraRange();
     const refocused = awareness?.focusCurrent?.() === true;
-    await new Promise((resolve) => setTimeout(resolve, 180));
+    // The follow frame commits in Cesium preUpdate. A fixed 180ms delay can
+    // sample before that frame on a busy software renderer.
+    const frameDeadline = performance.now() + 5000;
+    while (cameraRange() >= 50_000 && performance.now() < frameDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
     const focusedRange = cameraRange();
     const after = awareness?.getContextSnapshot?.()?.subject || null;
     return {
@@ -1083,7 +1190,7 @@ try {
       && !firstCockpitContact.contextStandby,
     JSON.stringify(firstCockpitContact),
   );
-  // Field test 2026-08-18: "when you click on Contacts, detections should
+  // Owner playtest 2026-08-18: "when you click on Contacts, detections should
   // just turn on, and they should stay on in Cockpit or in third-person
   // tracking inside Contacts or inside Cockpit, both… when I leave the Cockpit,
   // detections go off" — that last part being the bug. Driven through the REAL
@@ -1110,9 +1217,9 @@ try {
     // Start from outside both, so activation is a real edge.
     cockpit.exit({ restoreTracking: true });
     await settle();
-    await styleManager._selectContextMode(null);
+    await styleManager._contextControls._selectContextMode(null);
     await settle(400);
-    const cleanupSnapshotCleared = styleManager._contextSessionSnapshot === null;
+    const cleanupSnapshotCleared = styleManager._contextControls._contextSessionSnapshot === null;
     const cleanupBlockerId = '__qa_slow_contacts_sibling__';
     const cleanupUnregistered = await window.__gevQaUnregisterLayer(
       window.__godsEyeView.dataManager,
@@ -1128,7 +1235,7 @@ try {
     const overriddenBeforeContacts = styleManager._detectionUserOverridden;
 
     // 1. Activating Contacts forces the tactical preset on.
-    const contactsOn = await styleManager._selectContextMode('flights');
+    const contactsOn = await styleManager._contextControls._selectContextMode('flights');
     await settle(400);
     const afterContactsOn = mode();
     const afterContactsOnDensity = density();
@@ -1158,7 +1265,7 @@ try {
     await settle();
 
     // 4. Deactivating Contacts restores the pre-Contacts state.
-    await styleManager._selectContextMode(null);
+    await styleManager._contextControls._selectContextMode(null);
     await settle(400);
     const afterContactsOff = mode();
     const afterContactsOffDensity = density();
@@ -1172,7 +1279,7 @@ try {
     await settle();
 
     // Leave the session exactly as the following checks expect it.
-    const restoredContacts = await styleManager._selectContextMode('flights');
+    const restoredContacts = await styleManager._contextControls._selectContextMode('flights');
     await settle(400);
     const restoredCockpit = await enterCockpit();
     styleManager._detectionUserOverridden = originalOverridden;
@@ -1252,8 +1359,8 @@ try {
         step,
         cockpitActive: cockpit.active,
         bodyCockpit: document.body.classList.contains('cockpit-mode'),
-        contextMode: styleManager._contextMode,
-        contextChanging: styleManager._contextModeChanging,
+        contextMode: styleManager._contextControls._contextMode,
+        contextChanging: styleManager._contextControls._contextModeChanging,
         subject: context?.subject ? `${context.subject.layerId}:${context.subject.id}` : null,
         tracked: tracker?.gevTrackedId || null,
         density: styleManager.getDetectionState().densityPct,
@@ -1339,12 +1446,25 @@ try {
     const { styleManager, dataManager, viewer } = window.__godsEyeView;
     const awareness = dataManager.layers.get('military-awareness')?.module;
     const entity = viewer.trackedEntity || styleManager.cockpitView.trackedEntity;
+    const nextFrame = () => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        remove();
+        reject(new Error('Cockpit camera ownership check did not render a frame'));
+      }, 5000);
+      const remove = viewer.scene.postRender.addEventListener(() => {
+        remove();
+        clearTimeout(timer);
+        resolve();
+      });
+    });
+    // Let revoked listeners retire before comparing ownership across exit.
+    await nextFrame();
     const listenersBeforeExit = viewer.scene.preUpdate.numberOfListeners;
     const exited = styleManager.cockpitView.exit() === true;
-    await new Promise((resolve) => setTimeout(resolve, 80));
+    await nextFrame();
     const listenersAfterExit = viewer.scene.preUpdate.numberOfListeners;
     const refocused = awareness?.focusCurrent?.() === true;
-    await new Promise((resolve) => setTimeout(resolve, 80));
+    await nextFrame();
     return {
       exited,
       refocused,
@@ -1452,6 +1572,10 @@ try {
     const cockpit = manager.cockpitView;
     const current = document.getElementById('cockpit-vision-current');
     const label = document.getElementById('cockpit-vision-current-label');
+    const settle = (ms = 900) => new Promise((resolve) => setTimeout(resolve, ms));
+    const intensities = () => Object.fromEntries(
+      Object.entries(manager.stages || {}).map(([name, stage]) => [name, stage.uniforms?.intensity]),
+    );
     const read = () => ({
       mode: current?.dataset.cockpitVision,
       label: label?.textContent?.trim(),
@@ -1462,62 +1586,106 @@ try {
       parametersCollapsed: document.getElementById('param-slider-panel')?.classList.contains('collapsed'),
       signalCollapsed: cockpit.signalCollapsed,
       focusRetained: document.activeElement === current,
+      activeStyle: manager.activeStyle,
+      intensities: intensities(),
     });
+    const reenter = async () => {
+      cockpit.exit({ restoreTracking: true });
+      await settle();
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        if (cockpit.enter() === true) return true;
+        await settle(200);
+      }
+      return false;
+    };
     manager._setCockpitDisclosure('display', false);
     manager._setCockpitDisclosure('radio', false);
     cockpit.setVisionMode('optical');
     current.focus({ preventScroll: true });
     const states = [read()];
-    for (let index = 0; index < 5; index += 1) {
+    for (let index = 0; index < 7; index += 1) {
       current.click();
       states.push(read());
     }
     const originalStyle = manager.activeStyle;
+    // A Noir map preset: Cockpit enters on Noir, Normal clears every shader
+    // without changing the map preset, and Exit Cockpit restores Noir.
+    cockpit.exit({ restoreTracking: true });
     manager.setStyle('noir');
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    await settle();
+    const enteredOnNoir = await reenter();
+    const entryNoir = read();
     cockpit.setVisionMode('optical');
-    const inheritedNoir = read();
-    cockpit.setVisionMode('noir');
-    const explicitNoir = read();
-    cockpit.setVisionMode('optical');
-    const restoredNoir = {
-      ...read(),
-      activeStyle: manager.activeStyle,
-      intensity: manager.stages.noir?.uniforms?.intensity,
-    };
+    const normalInsideNoir = read();
+    cockpit.setVisionMode('crt');
+    const cockpitOnlyCrt = read();
+    const exitedNoir = cockpit.exit({ restoreTracking: true }) === true;
+    await settle();
+    const restoredNoir = { ...read(), cockpitActive: cockpit.active };
     manager.setStyle(originalStyle);
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    await settle();
+    const reentered = await reenter();
     cockpit.setVisionMode('optical');
-    return { states, inheritedNoir, explicitNoir, restoredNoir };
+    return {
+      states,
+      enteredOnNoir,
+      entryNoir,
+      normalInsideNoir,
+      cockpitOnlyCrt,
+      exitedNoir,
+      restoredNoir,
+      reentered,
+    };
   });
+  const cycleModes = ['optical', 'crt', 'nvg', 'thermal', 'anime', 'noir', 'snow', 'optical'];
+  const cycleLabels = ['NORMAL', 'CRT', 'NVG', 'FLIR', 'ANIME', 'NOIR', 'SNOW', 'NORMAL'];
   check(
-    'Cockpit vision control exposes inherited, CRT, NVG, FLIR, and NOIR before wrapping',
-    JSON.stringify(visionCycle.states.map((state) => state.mode))
-      === JSON.stringify(['optical', 'crt', 'nvg', 'thermal', 'noir', 'optical'])
-      && visionCycle.states[4]?.label === 'NOIR'
-      && visionCycle.states[4]?.aria === 'Current cockpit vision style: Noir. Activate for next style.',
-    JSON.stringify(visionCycle),
+    'Cockpit vision control exposes Normal, CRT, NVG, FLIR, Anime, Noir and Snow before wrapping',
+    JSON.stringify(visionCycle.states.map((state) => state.mode)) === JSON.stringify(cycleModes)
+      && JSON.stringify(visionCycle.states.map((state) => state.label)) === JSON.stringify(cycleLabels)
+      && visionCycle.states[5]?.aria === 'Current cockpit vision style: Noir. Activate for next style.'
+      && visionCycle.states[7]?.aria === 'Current cockpit vision style: Normal. Activate for next style.',
+    JSON.stringify(visionCycle.states.map(({ mode, label, aria }) => ({ mode, label, aria }))),
   );
   check(
     'user vision changes open Display for every temporary treatment and retain selector focus',
-    visionCycle.states[1]?.mode === 'crt'
-      && visionCycle.states.slice(1, 5).every((state) => state.displayOpen === 'true')
-      && visionCycle.states.slice(1, 5).every((state) => state.radioOpen === 'false')
-      && visionCycle.states.slice(1, 5).every((state) => state.parametersActive)
-      && visionCycle.states.slice(1, 5).every((state) => !state.parametersCollapsed)
-      && visionCycle.states.slice(1, 5).every((state) => state.signalCollapsed)
+    visionCycle.states.slice(1, 7).every((state) => state.displayOpen === 'true')
+      && visionCycle.states.slice(1, 7).every((state) => state.radioOpen === 'false')
+      && visionCycle.states.slice(1, 7).every((state) => state.parametersActive)
+      && visionCycle.states.slice(1, 7).every((state) => !state.parametersCollapsed)
+      && visionCycle.states.slice(1, 7).every((state) => state.signalCollapsed)
       && visionCycle.states.every((state) => state.focusRetained),
     JSON.stringify(visionCycle.states),
   );
   check(
-    'inherited Noir and explicit Noir keep distinct ownership and restore the Noir map preset',
-    visionCycle.inheritedNoir?.mode === 'optical'
-      && visionCycle.inheritedNoir?.label === 'NOIR'
-      && visionCycle.explicitNoir?.mode === 'noir'
-      && visionCycle.explicitNoir?.label === 'NOIR'
-      && visionCycle.restoredNoir?.mode === 'optical'
+    'each Cockpit vision mode drives only its own shader and Normal clears them all',
+    visionCycle.states.slice(1, 7).every((state) => {
+      const target = {
+        crt: 'retro', nvg: 'surveillance', thermal: 'thermal', anime: 'anime', noir: 'noir', snow: 'snow',
+      }[state.mode];
+      return Object.entries(state.intensities).every(([name, value]) =>
+        name === target ? value > 0 : value === 0);
+    })
+      && Object.values(visionCycle.states[7].intensities).every((value) => value === 0),
+    JSON.stringify(visionCycle.states.map(({ mode, intensities }) => ({ mode, intensities }))),
+  );
+  check(
+    'Cockpit enters on the Noir map preset, Normal clears it, and Exit Cockpit restores it',
+    visionCycle.enteredOnNoir
+      && visionCycle.entryNoir?.mode === 'noir'
+      && visionCycle.entryNoir?.label === 'NOIR'
+      && visionCycle.normalInsideNoir?.mode === 'optical'
+      && visionCycle.normalInsideNoir?.label === 'NORMAL'
+      && visionCycle.normalInsideNoir?.activeStyle === 'noir'
+      && Object.values(visionCycle.normalInsideNoir?.intensities || {}).every((value) => value === 0)
+      && visionCycle.cockpitOnlyCrt?.mode === 'crt'
+      && visionCycle.cockpitOnlyCrt?.activeStyle === 'noir'
+      && visionCycle.exitedNoir
+      && !visionCycle.restoredNoir?.cockpitActive
       && visionCycle.restoredNoir?.activeStyle === 'noir'
-      && visionCycle.restoredNoir?.intensity === 1,
+      && visionCycle.restoredNoir?.intensities?.noir === 1
+      && visionCycle.restoredNoir?.intensities?.retro === 0
+      && visionCycle.reentered,
     JSON.stringify(visionCycle),
   );
   await page.evaluate(() => window.__godsEyeView.styleManager.cockpitView.setVisionMode('noir'));
@@ -1823,6 +1991,98 @@ try {
     }),
   );
 
+  // Cyber relocates its collapsed briefing header into the expanded utility
+  // lane. Exercise actual height changes without reload and measure both cards.
+  await page.evaluate(() => {
+    const manager = window.__godsEyeView.styleManager;
+    manager._setHudVariant('cyber');
+    manager.hud.setMode('on');
+    manager._setCockpitDisclosure('display', false);
+    manager._setCockpitDisclosure('radio', true);
+  });
+  const cyberRadioOrder = await page.evaluate(() => {
+    const manager = window.__godsEyeView.styleManager;
+    manager.cockpitView.syncSignalLayout();
+    const display = document
+      .getElementById('cockpit-display-toggle-btn')
+      .closest('.cockpit-utility-control');
+    const radio = document
+      .getElementById('cockpit-radio-toggle-btn')
+      .closest('.cockpit-utility-control');
+    const displayRect = display.getBoundingClientRect();
+    const radioRect = radio.getBoundingClientRect();
+    return {
+      display: displayRect.toJSON(),
+      radio: radioRect.toJSON(),
+      displayExpanded: display.classList.contains('is-expanded'),
+      radioExpanded: radio.classList.contains('is-expanded'),
+      gap: radioRect.top - displayRect.bottom,
+    };
+  });
+  check(
+    'Cyber expanding Radio preserves the authored Display-then-Radio order',
+    !cyberRadioOrder.displayExpanded
+      && cyberRadioOrder.radioExpanded
+      && cyberRadioOrder.display.height > 0
+      && cyberRadioOrder.radio.height > 0
+      && cyberRadioOrder.gap >= 7,
+    JSON.stringify(cyberRadioOrder),
+  );
+  await page.screenshot({ path: path.join(shotsDir, 'cyber-radio-order.png') });
+  await page.evaluate(() => {
+    const manager = window.__godsEyeView.styleManager;
+    manager._setCockpitDisclosure('radio', false);
+    manager._setCockpitDisclosure('display', true);
+  });
+  const cyberStyleStates = await page.evaluate(() => {
+    const manager = window.__godsEyeView.styleManager;
+    const states = [];
+    for (const style of ['normal', 'surveillance', 'thermal', 'retro']) {
+      document.querySelector(`.style-btn[data-style="${style}"]`).click();
+      states.push({
+        requestedStyle: style,
+        activeStyle: manager.activeStyle,
+        hud: manager.hud.getVariant(),
+        theme: document.documentElement.dataset.uiTheme,
+        selector: document.getElementById('hud-layout-select').value,
+        savedHud: manager.getVisualState().hud.variant,
+      });
+    }
+    return states;
+  });
+  check('Cockpit visual-style controls retain Cyber HUD, selector, shell and saved layout',
+    cyberStyleStates.every(state => state.activeStyle === state.requestedStyle
+      && state.hud === 'cyber' && state.theme === 'cyber'
+      && state.selector === 'cyber' && state.savedHud === 'cyber'),
+    JSON.stringify(cyberStyleStates));
+  for (const height of [987, 720, 640, 900]) {
+    await page.setViewport({ width: 1440, height, deviceScaleFactor: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const geometry = await page.evaluate(() => {
+      const signal = document.getElementById('cockpit-signal-stream');
+      const utility = document.getElementById('cockpit-utility-controls');
+      const expanded = utility.querySelector('.cockpit-utility-control.is-expanded');
+      const s = signal.getBoundingClientRect();
+      const u = expanded.getBoundingClientRect();
+      const toggle = document.getElementById('cockpit-signal-toggle');
+      const t = toggle.getBoundingClientRect();
+      const hit = document.elementFromPoint(t.x + t.width / 2, t.y + t.height / 2);
+      return { height: innerHeight, theme: document.documentElement.dataset.uiTheme,
+        collapsed: signal.dataset.collapsed, signal: s.toJSON(), utility: u.toJSON(),
+        reachable: Boolean(hit && toggle.contains(hit)),
+        contained: u.bottom <= s.top - 7 && s.bottom < innerHeight,
+      };
+    });
+    check(`Cyber collapsed Live Signals remains visible and reachable after resize to ${height}px`,
+      geometry.theme === 'cyber' && geometry.collapsed === 'true'
+        && geometry.signal.width > 0 && geometry.signal.height > 0
+        && geometry.reachable && geometry.contained, JSON.stringify(geometry));
+    if (height === 640 || height === 900) {
+      await page.screenshot({ path: path.join(shotsDir, `cyber-resize-${height}.png`) });
+    }
+  }
+  await page.evaluate(() => window.__godsEyeView.styleManager._setHudVariant('operator'));
+
   const signalTransition = await page.evaluate(() => {
     const manager = window.__godsEyeView.styleManager;
     const cockpit = manager.cockpitView;
@@ -1907,6 +2167,58 @@ try {
       && contextTransition.label === 'Collapse Contact panel',
     JSON.stringify(contextTransition),
   );
+  // Use the real connected DOM to catch focus loss caused by moving live rows.
+  const signalFocus = await page.evaluate(() => {
+    const cockpit = window.__godsEyeView.styleManager.cockpitView;
+    const originalItems = cockpit.signalItems;
+    const wasCollapsed = cockpit.signalCollapsed;
+    cockpit.setSignalCollapsed(false);
+    const item = (id) => ({ key: `qa-${id}`, tone: 'info', timestamp: Date.now(),
+      title: `QA ${id}`, detail: 'Keyboard refresh fixture', target: { layerId: 'flights', id } });
+    try {
+      cockpit.signalItems = [item('focus-a'), item('focus-b')];
+      cockpit.renderCockpitSignals();
+      const button = cockpit.signalList.querySelector('[data-signal-id="focus-a"]');
+      button.focus();
+      const acquired = document.activeElement === button;
+      cockpit.signalItems = [item('focus-c'), item('focus-b'), item('focus-a')];
+      cockpit.renderCockpitSignals();
+      const retained = document.activeElement === button && button.isConnected;
+      const order = [...cockpit.signalList.querySelectorAll('[data-signal-id]')].map((node) => node.dataset.signalId);
+      cockpit.signalItems = [item('focus-b')];
+      cockpit.renderCockpitSignals();
+      const continuation = cockpit.briefTabs[cockpit.briefPageIndex] || cockpit.signalToggle;
+      const continued = document.activeElement === continuation;
+      cockpit.signalItems = [item('focus-a'), item('focus-b')];
+      cockpit.renderCockpitSignals();
+      return { acquired, retained, order, continued, notReclaimed: document.activeElement === continuation };
+    } finally {
+      cockpit.signalItems = originalItems;
+      cockpit.renderCockpitSignals();
+      cockpit.setSignalCollapsed(wasCollapsed);
+    }
+  });
+  check('Cockpit live reorder retains the same connected focus owner',
+    signalFocus.acquired && signalFocus.retained
+      && JSON.stringify(signalFocus.order) === JSON.stringify(['focus-c', 'focus-b', 'focus-a']),
+    JSON.stringify(signalFocus));
+  check('a departed Cockpit contact continues at the footer without later reclaiming focus',
+    signalFocus.continued && signalFocus.notReclaimed, JSON.stringify(signalFocus));
+
+  // Real keyboard events also verify the nested lightbox does not exit Cockpit.
+  await page.focus('#cesium-credits .cesium-credit-expand-link');
+  await page.keyboard.press('Enter');
+  check('keyboard attribution opening focuses Close inside Cockpit', await page.evaluate(() => (
+    document.activeElement?.classList.contains('cesium-credit-lightbox-close')
+      && document.querySelector('.cesium-credit-expand-link').getAttribute('aria-expanded') === 'true'
+  )));
+  await page.screenshot({ path: path.join(shotsDir, 'keyboard-attribution.png') });
+  await page.keyboard.press('Escape');
+  check('attribution Escape restores focus and keeps Cockpit active', await page.evaluate(() => (
+    document.activeElement?.classList.contains('cesium-credit-expand-link')
+      && document.activeElement.getAttribute('aria-expanded') === 'false'
+      && window.__godsEyeView.styleManager.cockpitView.active
+  )));
   await page.screenshot({ path: path.join(shotsDir, 'restored-desktop.png') });
   check(
     'restored screenshot remains in a real Cockpit session',
@@ -1999,12 +2311,19 @@ try {
   );
 
   const resetResult = await page.evaluate(() => {
-    const manager = window.__godsEyeView.styleManager;
+    // Both the UI and compatibility facade delegate to this navigation owner.
+    const manager = window.__godsEyeView.styleManager._locationNavigation;
     const awareness = window.__godsEyeView.dataManager.layers.get('military-awareness')?.module;
+    const styleManager = window.__godsEyeView.styleManager;
+    const styleBefore = styleManager.activeStyle;
+    // A Cockpit-only choice that Reset must undo.
+    styleManager.cockpitView.setVisionMode('snow');
     window.__qaCockpitReset = {
       calls: 0,
       original: manager.resetToGlobeView,
       subjectId: awareness?.getContextSnapshot?.()?.subject?.id || null,
+      styleBefore,
+      snowDuringCockpit: styleManager.stages?.snow?.uniforms?.intensity,
     };
     manager.resetToGlobeView = function qaCountedCockpitReset(...args) {
       window.__qaCockpitReset.calls += 1;
@@ -2031,7 +2350,7 @@ try {
     const awareness = gev.dataManager.layers.get('military-awareness')?.module;
     const subjectId = awareness?.getContextSnapshot?.()?.subject?.id || null;
     const height = gev.viewer.camera.positionCartographic?.height;
-    gev.styleManager.resetToGlobeView = qa.original;
+    gev.styleManager._locationNavigation.resetToGlobeView = qa.original;
     delete window.__qaCockpitReset;
     return {
       calls: qa.calls,
@@ -2040,16 +2359,26 @@ try {
       resetHidden: document.getElementById('cockpit-reset-globe')?.hidden,
       height,
       subjectPreserved: Boolean(qa.subjectId && subjectId === qa.subjectId),
+      styleRestored: gev.styleManager.activeStyle === qa.styleBefore,
+      snowDuringCockpit: qa.snowDuringCockpit,
+      // Cockpit-time intensities are Cockpit's own, so check against the map preset.
+      visionRestored: Object.entries(gev.styleManager.stages || {}).every(([name, stage]) =>
+        name === gev.styleManager.activeStyle
+          ? stage.uniforms?.intensity > 0
+          : stage.uniforms?.intensity === 0),
     };
   });
   check(
-    'keyboard Cockpit Reset uses one canonical route and preserves Contact selection',
+    'keyboard Cockpit Reset uses one canonical route, preserves Contact selection and restores the map style',
     resetState.calls === 1
       && !resetState.cockpitActive
       && !resetState.trackedEntity
       && resetState.resetHidden
       && Math.abs(resetState.height - 18_000_000) < 150_000
-      && resetState.subjectPreserved,
+      && resetState.subjectPreserved
+      && resetState.snowDuringCockpit > 0
+      && resetState.styleRestored
+      && resetState.visionRestored,
     JSON.stringify(resetState),
   );
   check('runtime console remains clean', consoleErrors.length === 0 && localHttpErrors.length === 0,

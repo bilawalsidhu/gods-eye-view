@@ -16,9 +16,9 @@ import {
 
 test('preflight checks memory, in-flight, then disk before consuming limiter quota', async () => {
   const key = 'normalized query';
-  const fresh = { id: 'memory', cachedAt: 900 };
-  const joined = { id: 'inflight', cachedAt: 950 };
-  const disk = { id: 'disk', cachedAt: 975 };
+  const fresh = { id: 'memory', status: 200, cachedAt: 900 };
+  const joined = { id: 'inflight', status: 200, cachedAt: 950 };
+  const disk = { id: 'disk', status: 200, cachedAt: 975 };
   let diskReads = 0;
   let limiterCalls = 0;
   const allowUpstream = () => { limiterCalls += 1; return true; };
@@ -39,7 +39,7 @@ test('preflight checks memory, in-flight, then disk before consuming limiter quo
 
   const inFlightHit = await resolveOverpassPreflight({
     cacheKey: key,
-    memoryCache: new Map([[key, { id: 'stale', cachedAt: 0 }]]),
+    memoryCache: new Map([[key, { id: 'stale', status: 200, cachedAt: 0 }]]),
     inFlight: new Map([[key, Promise.resolve(joined)]]),
     readDisk: async () => { diskReads += 1; return disk; },
     allowUpstream,
@@ -82,6 +82,21 @@ test('preflight checks memory, in-flight, then disk before consuming limiter quo
     allowUpstream: () => false,
   });
   assert.equal(denied.source, 'RATE_LIMITED');
+});
+
+test('preflight treats cached refusals as misses without spending extra quota', async () => {
+  for (const invalid of [{ status: 406 }, { status: 200, runtimeError: true }]) {
+    let admissions = 0;
+    const result = await resolveOverpassPreflight({
+      cacheKey: 'refused',
+      memoryCache: new Map([['refused', { ...invalid, cachedAt: Date.now() }]]),
+      inFlight: new Map(),
+      readDisk: async () => ({ ...invalid, cachedAt: Date.now() }),
+      allowUpstream: () => { admissions++; return true; },
+    });
+    assert.equal(result.source, 'UPSTREAM');
+    assert.equal(admissions, 1);
+  }
 });
 
 /** Synthetic dense ring: N points on a circle with sub-tolerance jitter. */

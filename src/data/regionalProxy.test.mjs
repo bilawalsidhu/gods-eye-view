@@ -4,12 +4,25 @@ import createViteConfig, {
   adsbLolFallbackAnchor,
   coalesceProxyRequest,
   launchLibraryRequestHeaders,
+  keylessGooglePlacesResponse,
   LL2_CACHE_TTL_MS,
   readResponseJsonCapped,
   regionalBriefHasAnySource,
   validMilitaryInstallationBox,
   validRegionalPoint,
 } from '../../vite.config.js';
+
+test('missing Google place context is a quiet keyless capability, not a 503', () => {
+  assert.deepEqual(keylessGooglePlacesResponse(undefined), {
+    statusCode: 200,
+    payload: { configured: false, error: null, places: [] },
+  });
+  assert.deepEqual(keylessGooglePlacesResponse('   '), {
+    statusCode: 200,
+    payload: { configured: false, error: null, places: [] },
+  });
+  assert.equal(keylessGooglePlacesResponse('configured-key'), null);
+});
 
 test('regional proxy rejects absent and blank coordinates instead of coercing them to zero', () => {
   assert.equal(validRegionalPoint(new URLSearchParams('longitude=12.5')), null);

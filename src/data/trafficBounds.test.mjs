@@ -108,3 +108,19 @@ test('span clamp is idempotent on already-clamped bounds (loadRoadsForBounds re-
   const twice = clampBoundsAroundCenter(once, midpoint, 0.05);
   assert.deepEqual(twice, once);
 });
+
+test('span clamp keeps antimeridian bounds monotonic and request-safe', () => {
+  for (const centerLon of [179.99, -179.99]) {
+    const result = clampBoundsAroundCenter({
+      south: -0.02,
+      north: 0.02,
+      west: 179.98,
+      east: -179.98,
+    }, { lat: 0, lon: centerLon }, 0.05);
+
+    assert.ok(result.west >= -180 && result.east <= 180);
+    assert.ok(result.west <= result.east, `west/east not monotonic: ${result.west}, ${result.east}`);
+    assert.ok(Math.abs(result.east - result.west - 0.04) < 1e-12);
+    assert.ok(result.west <= centerLon && centerLon <= result.east);
+  }
+});

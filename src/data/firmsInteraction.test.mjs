@@ -9,11 +9,11 @@ import { createFirmsHeatmapLayer, applyFirmsOverlayPolicy, buildCellCard } from 
 import { fireDetectionKey } from './firmsLabels.js';
 import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
 import { WORLD_FOCUS_REQUEST_EVENT } from '../worldFocus.js';
-import fs from 'node:fs';
+import { readLayerSource } from '../testSupport/readLayerSource.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const LAYER_SOURCE = fs.readFileSync(
+const LAYER_SOURCE = readLayerSource(
   path.join(path.dirname(fileURLToPath(import.meta.url)), 'firmsHeatmap.js'),
   'utf8',
 );
@@ -40,7 +40,7 @@ function makeFire(overrides = {}) {
  */
 function harness({
   fires = [makeFire()], picked = null, cardHit = null, cameraPosition = null,
-  withDataSource = false,
+  withDataSource = false, feed = null,
 } = {}) {
   const hadWindow = Object.hasOwn(globalThis, 'window');
   const priorWindow = globalThis.window;
@@ -58,6 +58,7 @@ function harness({
   const published = [];
   let handler = null;
   const layer = createFirmsHeatmapLayer({
+    ...(feed ? { feed } : {}),
     id: 'firms-test',
     name: 'Fires',
     overlayHost: {
@@ -348,4 +349,22 @@ test('a refresh that drops the selected fire emits an eviction the readout can a
     else globalThis.fetch = priorFetch;
     h.cleanup();
   }
+});
+
+test('disable cancels a pending source and a late response cannot repopulate the layer', async () => {
+  let resolve, signal;
+  const h = harness({ withDataSource: true, feed: { getSnapshot(options) {
+    signal = options.signal; return new Promise(done => { resolve = done; });
+  } } });
+  try {
+    const before = h.layer.getStats();
+    const pending = h.layer.update();
+    h.layer.disable();
+    assert.equal(signal.aborted, true);
+    resolve({ fires: [], fetchedAt: Date.now() });
+    await pending;
+    assert.equal(h.layer.getStats().count, before.count);
+    assert.equal(h.layer.getStats().lastUpdate, before.lastUpdate);
+    assert.equal(h.layer.getStats().loading, false);
+  } finally { h.layer.destroy(h.viewer); h.cleanup(); }
 });

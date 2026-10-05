@@ -129,7 +129,7 @@ test('CCTV card module cannot resurrect a canvas, projection, listener, or priva
   for (const pattern of forbidden) assert.doesNotMatch(source, pattern);
 });
 
-// ─── cardScaleForAltitude — the validated altitude curve (finding 5) ────
+// ─── cardScaleForAltitude — the owner-decided altitude curve (finding 5) ────
 
 test('cardScaleForAltitude: full size and opacity at or below 1,800 m', () => {
   assert.deepEqual(cardScaleForAltitude(0), { scale: 1, alpha: 1 });
@@ -137,7 +137,7 @@ test('cardScaleForAltitude: full size and opacity at or below 1,800 m', () => {
   assert.deepEqual(cardScaleForAltitude(NaN), { scale: 1, alpha: 1 });
 });
 
-test('cardScaleForAltitude: hits the validated waypoints', () => {
+test('cardScaleForAltitude: hits the owner-decided waypoints', () => {
   const mid = cardScaleForAltitude(CCTV_CARD_SCALE_MID_M);
   assert.ok(Math.abs(mid.scale - CCTV_CARD_SCALE_AT_MID) < 1e-9, 'scale ~0.45 at 6,000 m');
   assert.equal(mid.alpha, 1);

@@ -359,7 +359,7 @@ test('hybrid outline upgrade preserves the screen group and adds world geometry'
   renderer.destroy();
 });
 
-// ── Partial-add rollback (second review) ─────────────────────────────────────
+// ── Partial-add rollback (review round 2) ─────────────────────────────────────
 //
 // The hybrid builds a mark across TWO sub-renderers. It used to record the
 // route only after both had run, so a throw in the second one left the first
