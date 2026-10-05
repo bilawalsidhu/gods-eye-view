@@ -9,15 +9,17 @@ import {
   MARKER_ICON_SIZE,
   SELECTED_MARKER_ICON_SIZE,
   CREDIT_DISPLAY_MS,
+  MARKER_FLOOR_LIFT_M,
+  MARKER_SCALE_BY_DISTANCE,
 } from './policy.js';
 import { boxContains } from './model.js';
+import { createAlprFloorResolver } from './floors.js';
 import { createAlprOverlay } from './overlay.js';
 import {
   MARKER_IMAGE,
   SELECTED_IMAGE,
   alprDisplayId,
   alprLabelDetails,
-  directionWedgePositions,
   validAlprGroundHeight,
 } from './visuals.js';
 
@@ -32,9 +34,198 @@ export function createAlprPresentation({ state, services, source }) {
   } = services.context;
 
   const { cachedGroundFloor } = services.groundFloor;
-  const overlay = createAlprOverlay({ state, services });
+  const overlay = createAlprOverlay({
+    state,
+    services,
+    onSurfaceChange: refreshMarkerPlacements,
+  });
   let visibleRecords = [];
   let selectionStartedAt = 0;
+  /** Markers still clamped while their floor cell resolves (id -> entity). */
+  const clampedMarkers = new Map();
+  let floorResolve = null;
+  const floors = createAlprFloorResolver(services.groundFloor);
+
+  /**
+   * Marker placement from the cached ground floor (validated mesh or DEM, the
+   * ellipsoidal datum every layer shares). Ground clamping on photoreal tiles
+   * re-samples every clamped marker whenever a tile streams in, which made a
+   * whole-city view stutter while zooming, so it is only the placeholder for
+   * a cell that has not resolved yet.
+   * @param {{latitude:number, longitude:number}} record Camera.
+   * @returns {{position: Cesium.Cartesian3, clamped: boolean}} Placement.
+   */
+  function markerPlacement(record) {
+    const floor = cachedGroundFloor(record.latitude, record.longitude);
+    const clamped = !validAlprGroundHeight(floor);
+    return {
+      clamped,
+      position: Cesium.Cartesian3.fromDegrees(
+        record.longitude,
+        record.latitude,
+        clamped ? 0 : floor + MARKER_FLOOR_LIFT_M,
+      ),
+    };
+  }
+
+  /** Records the current view would display (viewport box, nearest first when capped). */
+  function viewRecords(records) {
+    const box = viewportBox(state.viewer);
+    if (!box) return { box, visible: [], capped: false };
+    let visible = records.filter((record) =>
+      boxContains(box, {
+        south: record.latitude,
+        north: record.latitude,
+        west: record.longitude,
+        east: record.longitude,
+      }),
+    );
+    const capped = visible.length > MAX_RENDERED;
+    if (capped) {
+      const lat = (box.south + box.north) / 2;
+      const lon = (box.west + box.east) / 2;
+      const scale = Math.cos((lat * Math.PI) / 180);
+      const distance = (record) =>
+        (record.latitude - lat) ** 2 + ((record.longitude - lon) * scale) ** 2;
+      visible = visible
+        .map((record) => ({ record, d: distance(record) }))
+        .sort((a, b) => a.d - b.d)
+        .slice(0, MAX_RENDERED)
+        .map((item) => item.record);
+    }
+    return { box, visible, capped };
+  }
+
+  /**
+   * Resolve the floor cells of the records this view will display, waiting at
+   * most the ground service's bounded deadline. Never throws.
+   * @param {Array<object>} records Candidate records.
+   * @returns {Promise<void>}
+   */
+  async function prepareFloors(records) {
+    const resolve = services.groundFloor.resolveGroundFloorCells;
+    if (typeof resolve !== 'function') return;
+    const cold = viewRecords(records)
+      .visible.filter(
+        (record) =>
+          !validAlprGroundHeight(
+            cachedGroundFloor(record.latitude, record.longitude),
+          ),
+      )
+      .map((record) => ({ lat: record.latitude, lon: record.longitude }));
+    if (!cold.length) return;
+    try {
+      await floors.prepare(cold);
+    } catch {
+      /* markers fall back to clamping until their floors resolve */
+    }
+  }
+
+  /**
+   * Loaded cameras that project inside the canvas and in front of the globe.
+   * "Nearby" spans twice the camera-to-ground range, so a view can hold
+   * cameras while none is on screen; the row then says so rather than
+   * leaving the user to wait for markers. Runs once per render pass.
+   * @returns {number|null} Count, or null without a scene to project into.
+   */
+  function countOnScreen() {
+    const scene = state.viewer?.scene;
+    const canvas = scene?.canvas;
+    const width = canvas?.clientWidth || canvas?.width;
+    const height = canvas?.clientHeight || canvas?.height;
+    const camera = state.viewer?.camera;
+    if (!scene || !width || !height || !camera?.positionWC) return null;
+    const occluder = new Cesium.EllipsoidalOccluder(
+      Cesium.Ellipsoid.WGS84,
+      camera.positionWC,
+    );
+    let count = 0;
+    try {
+      for (const entity of state.dataSource.entities.values) {
+        const position = entity.position?.getValue?.(Cesium.JulianDate.now());
+        if (!position || !occluder.isPointVisible(position)) continue;
+        const point = Cesium.SceneTransforms.worldToWindowCoordinates(
+          scene,
+          position,
+        );
+        if (
+          point &&
+          point.x >= 0 &&
+          point.x <= width &&
+          point.y >= 0 &&
+          point.y <= height
+        )
+          count += 1;
+      }
+    } catch {
+      // A scene without a usable frame (startup, teardown) cannot answer.
+      return null;
+    }
+    return count;
+  }
+
+  /** Write a marker position, respecting the overlay's pick-target swap. */
+  function setMarkerPosition(entity, position, clamped) {
+    const heightReference = clamped
+      ? Cesium.HeightReference.CLAMP_TO_GROUND
+      : Cesium.HeightReference.NONE;
+    const saved = entity.gevAlprNativeAppearance;
+    if (saved) {
+      saved.position = position;
+      saved.heightReference = heightReference;
+    } else {
+      entity.position = position;
+      entity.billboard.heightReference = heightReference;
+    }
+    entity.gevAlprClamped = clamped;
+  }
+
+  /** Refresh all native placements, including the appearances held by the canvas. */
+  function refreshMarkerPlacements() {
+    if (!state.enabled || !state.dataSource) return;
+    clampedMarkers.clear();
+    for (const entity of state.dataSource.entities.values) {
+      const { position, clamped } = markerPlacement(entity.gevAlprRecord);
+      setMarkerPosition(entity, position, clamped);
+      if (clamped) clampedMarkers.set(entity.id, entity);
+    }
+    resolveClampedFloors();
+    governorRequestRender('alpr-surface');
+  }
+
+  /** Resolve floors for clamped markers once, then place them in place. */
+  function resolveClampedFloors() {
+    const resolve = services.groundFloor.resolveGroundFloorCells;
+    if (floorResolve || !clampedMarkers.size || typeof resolve !== 'function')
+      return;
+    const batch = [...clampedMarkers.values()];
+    const request = Promise.resolve(
+      floors.resolve(
+        batch.map((entity) => ({
+          lat: entity.gevAlprRecord.latitude,
+          lon: entity.gevAlprRecord.longitude,
+        })),
+      ),
+    )
+      .catch(() => {})
+      .then(() => {
+        if (floorResolve !== request) return;
+        floorResolve = null;
+        if (!state.enabled || !state.dataSource) return;
+        let moved = false;
+        for (const entity of batch) {
+          if (clampedMarkers.get(entity.id) !== entity) continue;
+          clampedMarkers.delete(entity.id);
+          const { position, clamped } = markerPlacement(entity.gevAlprRecord);
+          if (clamped) continue;
+          setMarkerPosition(entity, position, false);
+          moved = true;
+        }
+        if (moved) governorRequestRender('alpr-floor');
+        // Cells that never resolved stay clamped; later renders retry them.
+      });
+    floorResolve = request;
+  }
 
   function updateAppearance(entity, selected) {
     const color = Cesium.Color.fromCssColorString(
@@ -44,12 +235,6 @@ export function createAlprPresentation({ state, services, source }) {
     entity.billboard.width = entity.billboard.height = selected
       ? SELECTED_MARKER_ICON_SIZE
       : MARKER_ICON_SIZE;
-    if (entity.polyline) {
-      entity.polyline.width = selected ? 3 : 1.75;
-      entity.polyline.material = color.withAlpha(selected ? 0.98 : 0.82);
-    }
-    if (entity.polygon)
-      entity.polygon.material = color.withAlpha(selected ? 0.8 : 0.2);
     if (entity.gevLabelModel) {
       entity.gevLabelModel.accent = color.toCssColorString();
       entity.gevLabelModel.leaderAnimationStartedAt = selected
@@ -118,13 +303,18 @@ export function createAlprPresentation({ state, services, source }) {
   }
 
   function clearRendered() {
+    hideOnMapCredit();
+    floors.cancel();
+    floorResolve = null;
     overlay.clear();
     visibleRecords = [];
+    clampedMarkers.clear();
     if (state.dataSource?.entities) state.dataSource.entities.removeAll();
     removeEntityContextsForLayer(LAYER_ID);
   }
 
   function hideOnMapCredit() {
+    services.credits?.hideOsmCredit?.(state.viewer, LAYER_ID);
     clearTimeout(state.creditTimer);
     state.creditTimer = null;
     if (state.credit)
@@ -133,6 +323,14 @@ export function createAlprPresentation({ state, services, source }) {
   }
 
   function presentOnMapCredit() {
+    if (
+      state.enabled &&
+      source.attribution?.name === 'OpenStreetMap' &&
+      services.credits?.showOsmCredit
+    ) {
+      services.credits.showOsmCredit(state.viewer, LAYER_ID);
+      return;
+    }
     if (!state.enabled || state.creditPresented || !state.credit) return;
     state.creditPresented = true;
     state.viewer.creditDisplay?.addStaticCredit(state.credit);
@@ -142,19 +340,10 @@ export function createAlprPresentation({ state, services, source }) {
 
   function renderRecords() {
     const selectedContext = getSelectedEntityContext();
-    const box = viewportBox(state.viewer);
-    const visible = box
-      ? state.records
-          .filter((record) =>
-            boxContains(box, {
-              south: record.latitude,
-              north: record.latitude,
-              west: record.longitude,
-              east: record.longitude,
-            }),
-          )
-          .slice(0, MAX_RENDERED)
-      : [];
+    // Over the render cap, keep the cameras nearest the view centre and say
+    // coverage is limited rather than dropping an arbitrary subset.
+    const { visible, capped } = viewRecords(state.records);
+    state.renderSaturated = capped;
     visibleRecords = visible;
     // A refresh may retain its own selection, never reclaim one cleared or
     // replaced by an aircraft, another layer, or a voice action.
@@ -168,8 +357,14 @@ export function createAlprPresentation({ state, services, source }) {
     }
     governorRequestRender('alpr-render');
     const visibleIds = new Set(visible.map((record) => record.id));
+    let changed = false;
+    state.dataSource.entities.suspendEvents();
     for (const entity of [...state.dataSource.entities.values]) {
-      if (!visibleIds.has(entity.id)) state.dataSource.entities.remove(entity);
+      if (!visibleIds.has(entity.id)) {
+        state.dataSource.entities.remove(entity);
+        clampedMarkers.delete(entity.id);
+        changed = true;
+      }
     }
     removeEntityContextsForLayer(LAYER_ID, { retainIds: visibleIds });
     for (const record of visible) {
@@ -180,10 +375,11 @@ export function createAlprPresentation({ state, services, source }) {
       }
       const color = markerColor();
       const selected = record.id === state.selectedId;
-      const position = Cesium.Cartesian3.fromDegrees(
-        record.longitude,
-        record.latitude,
-      );
+      const { position, clamped } = markerPlacement(record);
+      // Direction wedges are painted by the overlay for the nearest cameras.
+      // Native ground-clamped wedges (a ground polyline plus a classification
+      // polygon per camera) cost ~40 ms per frame for 200 downtown cameras on
+      // photoreal tiles, so markers stay billboards only.
       const entityDef = {
         id: record.id,
         position,
@@ -191,38 +387,30 @@ export function createAlprPresentation({ state, services, source }) {
           image: selected ? SELECTED_IMAGE : MARKER_IMAGE,
           width: selected ? SELECTED_MARKER_ICON_SIZE : MARKER_ICON_SIZE,
           height: selected ? SELECTED_MARKER_ICON_SIZE : MARKER_ICON_SIZE,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          heightReference: clamped
+            ? Cesium.HeightReference.CLAMP_TO_GROUND
+            : Cesium.HeightReference.NONE,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(350, 1.15, 4_000_000, 0.48),
+          // City-wide views hold hundreds of badges; let them shrink.
+          scaleByDistance: new Cesium.NearFarScalar(
+            ...MARKER_SCALE_BY_DISTANCE,
+          ),
         },
       };
-      const wedge = directionWedgePositions(record);
-      if (wedge) {
-        entityDef.polyline = {
-          positions: [wedge[1], position, wedge[2]],
-          width: selected ? 3 : 1.75,
-          material: color.withAlpha(0.82),
-          clampToGround: true,
-        };
-        entityDef.polygon = {
-          hierarchy: wedge,
-          material: color.withAlpha(0.2),
-          height: 0,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          classificationType: Cesium.ClassificationType.BOTH,
-        };
-      }
       let entity = existing;
       // Keep the Cesium entity and its ground-clamping subscription while its
       // geometry is unchanged. Updating metadata must not rebuild the marker.
       const previous = entity?.gevAlprRecord;
-      if (!entity) entity = state.dataSource.entities.add(entityDef);
-      else {
+      if (!entity) {
+        entity = state.dataSource.entities.add(entityDef);
+        entity.gevAlprClamped = clamped;
+        changed = true;
+      } else {
         if (
           previous.latitude !== record.latitude ||
           previous.longitude !== record.longitude
         ) {
-          entity.position = position;
+          setMarkerPosition(entity, position, clamped);
           entity.gevAlprCanvasPosition = null;
           entity.gevAlprDisplayPosition = null;
         }
@@ -231,8 +419,6 @@ export function createAlprPresentation({ state, services, source }) {
           previous.longitude !== record.longitude ||
           previous.directionDeg !== record.directionDeg
         ) {
-          entity.polyline = entityDef.polyline;
-          entity.polygon = entityDef.polygon;
           entity.gevAlprCanvasPosition = null;
           entity.gevAlprWedge = null;
         }
@@ -281,6 +467,12 @@ export function createAlprPresentation({ state, services, source }) {
         },
       });
     }
+    state.dataSource.entities.resumeEvents();
+    if (changed) state.renderRevision += 1;
+    state.onScreen = countOnScreen();
+    for (const entity of state.dataSource.entities.values)
+      if (entity.gevAlprClamped) clampedMarkers.set(entity.id, entity);
+    resolveClampedFloors();
     const selectedEntity = state.selectedId
       ? state.dataSource.entities.getById(state.selectedId)
       : null;
@@ -288,9 +480,9 @@ export function createAlprPresentation({ state, services, source }) {
     updateSelectedAnchor();
     overlay.sync(visible);
     if (selectedEntity) services.overlays?.refreshReadout?.(selectedEntity);
-    // Start only when mapped data is actually displayed, not while an upstream
-    // request or a zoom-in prompt could consume the five-second introduction.
+    // Keep the on-map credit tied to displayed data, not loading or zoom prompts.
     if (visible.length) presentOnMapCredit();
+    else hideOnMapCredit();
   }
 
   function focusNearest() {
@@ -458,5 +650,6 @@ export function createAlprPresentation({ state, services, source }) {
     clearSelection,
     updateSelectedAnchor,
     installInteraction,
+    prepareFloors,
   };
 }

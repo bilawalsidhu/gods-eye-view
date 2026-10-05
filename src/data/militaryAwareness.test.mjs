@@ -476,7 +476,7 @@ test('pending mapped installations render as unknown instead of a false zero', a
 // the dependencies reach it by different routes:
 //
 //   - ais-live-vessels is its REACHABLE producer. enable()/update() both resolve
-//     as soon as the first /api/ais-live poll answers, so the manager's
+//     as soon as the first /api/vessels poll answers, so the manager's
 //     lifecycle settles to `enabled` — but until the server-side socket delivers
 //     a position, firstConnectPhase stays 'loading' and the module reports busy,
 //     no lastUpdate, count 0, and an UNDEFINED status, so the status list alone
@@ -1629,6 +1629,20 @@ test('installation summaries disclose viewport-scoped coverage', () => {
   } });
   assert.equal(retrying.count, null, 'retrying is not a claim of zero mapped sites');
   assert.equal(retrying.reason, 'Overpass temporarily unavailable — retrying in 30s');
+});
+
+test('installation summaries name a subject window instead of the viewport', () => {
+  const stats = { coverage: { kind: 'subject', radiusM: 100_000 } };
+  const empty = summarizeInstallationViewport([], { available: true, stale: false, stats });
+  assert.equal(empty.count, 0);
+  assert.match(empty.reason, /none mapped within 100 km/);
+  assert.match(empty.reason, /not a complete 250 km survey/);
+  const found = summarizeInstallationViewport(
+    [{ id: 'ofm:installation:1', label: 'Military area', distanceM: 1200 }],
+    { available: true, stale: false, stats },
+  );
+  assert.equal(found.count, 1);
+  assert.equal(found.reason, 'mapped matches within 100 km of the subject');
 });
 
 test('compact Context snapshots retain installation coverage', () => {
@@ -3058,5 +3072,29 @@ test('a moving camera refreshes Contacts more than once inside one parked interv
     restores.reverse().forEach((restore) => restore());
     runtime.restore();
     restoreCollections();
+  }
+});
+
+
+test('a selected installation card keeps every member name and escapes source text', () => {
+  const runtime = installAwarenessRuntime();
+  const restores = [];
+  try {
+    for (const layer of [aisLiveVesselsLayer, flightsLayer, militaryFlightsLayer, militaryInstallationsLayer])
+      replaceMethod(layer, 'getNearby', () => [], restores);
+    militaryAwarenessLayer.setParams({ passive: false });
+    runtime.dispatch('gev:entity-selected', {
+      layerId: 'military-installations', id: 'osm:military:w1', label: 'Parent base',
+      latitude: 31.13, longitude: -97.78,
+      properties: { memberNames: ['Area one', 'Area two', 'Area three', '<Area four>'] },
+    });
+    militaryAwarenessLayer.update();
+    const html = runtime.panel().innerHTML;
+    assert.match(html, /Named areas \(4\)/);
+    for (const name of ['Area one', 'Area two', 'Area three', '&lt;Area four&gt;']) assert.ok(html.includes(name));
+    assert.ok(!html.includes('<Area four>'));
+  } finally {
+    restores.reverse().forEach((restore) => restore());
+    runtime.restore();
   }
 });

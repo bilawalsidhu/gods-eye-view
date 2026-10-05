@@ -124,17 +124,9 @@ let _entries = null;
 const PACKS = {
   regions: {
     url: new URL('./local_data/natural_earth/regions.json', import.meta.url),
-    importJson: () =>
-      import('./local_data/natural_earth/regions.json', {
-        with: { type: 'json' },
-      }),
   },
   marine: {
     url: new URL('./local_data/natural_earth/marine.json', import.meta.url),
-    importJson: () =>
-      import('./local_data/natural_earth/marine.json', {
-        with: { type: 'json' },
-      }),
   },
 };
 
@@ -178,8 +170,8 @@ function buildEntries(pack, kind) {
  */
 const loadIndex = createRetryableLoader(async () => {
   const [regions, marine] = await Promise.all([
-    loadBundledJson(PACKS.regions.url, PACKS.regions.importJson),
-    loadBundledJson(PACKS.marine.url, PACKS.marine.importJson),
+    loadBundledJson(PACKS.regions.url),
+    loadBundledJson(PACKS.marine.url),
   ]);
   _entries = [
     ...buildEntries(regions, 'natural'),
@@ -324,4 +316,40 @@ export async function lookupNaturalRegionOutline(query, lat, lon) {
     }
   }
   return null;
+}
+
+/** Resolve the smallest containing bundled physical region without a network geocoder. */
+export async function naturalRegionAtPoint(latitude, longitude) {
+  if (
+    ![latitude, longitude].every(Number.isFinite) ||
+    Math.abs(latitude) > 90 ||
+    Math.abs(longitude) > 180
+  )
+    return null;
+  await loadIndex();
+  let best = null;
+  for (const entry of _entries) {
+    const [west, south, east, north] = entry.bbox;
+    if (
+      longitude < west ||
+      longitude > east ||
+      latitude < south ||
+      latitude > north
+    )
+      continue;
+    if (best && entry.areaKm2 >= best.areaKm2) continue;
+    if (entry.polygons.some((ring) => pointInRing(ring, latitude, longitude)))
+      best = entry;
+  }
+  return best
+    ? {
+        label: best.name,
+        locality: null,
+        region: best.name,
+        country: null,
+        countryCode: null,
+        source: 'Natural Earth',
+        kind: best.kind,
+      }
+    : null;
 }

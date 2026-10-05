@@ -19,3 +19,16 @@ test('first fetch, retry, cached data and success have distinct copy', () => {
   assert.equal(installationFeedback({ status: 'ready' }), 'Mapped sites loaded');
   assert.equal(installationFeedback({ stale: true }), 'Showing cached mapped sites');
 });
+test('a counted result names what was found and where', () => {
+  assert.equal(installationFeedback({ status: 'ready', count: 3 }), '3 mapped sites in view');
+  assert.equal(installationFeedback({ status: 'empty', count: 0 }), 'No mapped sites in view');
+  const coverage = { kind: 'subject', radiusM: 100_000 };
+  assert.equal(
+    installationFeedback({ status: 'ready', count: 1, coverage }),
+    '1 mapped site within 100 km of the contact',
+  );
+  assert.equal(
+    installationFeedback({ status: 'unavailable', failureReason: 'tiles_unavailable' }),
+    'Map tiles temporarily unavailable',
+  );
+});

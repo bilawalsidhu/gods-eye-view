@@ -1,0 +1,230 @@
+/* Shared structural hooks for panels admitted by the existing rail owners.
+   Specific legacy component rules retain priority; no panel IDs are registered
+   here. The rail itself remains pointer-transparent over the globe. */
+:is(#left-panel-stack, #right-context-rail)
+  > [data-panel-id]:has(> [data-panel-surface]) {
+  position: relative;
+  inset: auto;
+  flex: 0 0 auto;
+  min-height: 0;
+  pointer-events: auto;
+}
+
+#left-panel-stack
+  > [data-panel-id]:has(> [data-panel-surface]):not(.collapsed) {
+  flex: 0 1 var(--left-panel-allocated-height, auto);
+  height: var(--left-panel-allocated-height, auto);
+  max-height: var(--left-panel-allocated-height, 100%);
+}
+
+#left-panel-stack.layout-tail
+  > [data-panel-id]:has(> [data-panel-surface]):not(.collapsed) {
+  flex: 0 0 var(--left-panel-allocated-height);
+}
+
+#right-context-rail.layout-focus
+  > [data-panel-id]:has(> [data-panel-surface]):not(.collapsed) {
+  flex: 0 1 var(--right-panel-allocated-height);
+  height: var(--right-panel-allocated-height);
+  max-height: var(--right-panel-allocated-height);
+}
+
+/* Opt-in skin: the positioned surface can contain an outward popup. Only the
+   non-interactive decoration is clipped; only data-panel-body scrolls. */
+:root {
+  --panel-surface-font: var(--font-sans);
+  --panel-surface-detail: none;
+  --panel-surface-frame: none;
+  --panel-surface-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+  --panel-surface-title: var(--text-secondary);
+  --panel-surface-error: #ff9b8e;
+  --panel-surface-width: 300px;
+  --panel-surface-collapsed-width: var(--left-collapsed-width);
+}
+
+:root[data-ui-theme='cyber'] {
+  --panel-surface-font: var(--font-mono);
+  --panel-surface-detail: var(--cyber-panel-surface-detail);
+  --panel-surface-frame: var(--cyber-panel-frame);
+  --panel-surface-shadow: var(--cyber-panel-shadow);
+  --panel-surface-title: var(--cyber-red-bright);
+  --panel-surface-error: var(--cyber-red-bright);
+  --panel-surface-width: var(--cyber-panel-width);
+  --panel-surface-collapsed-width: var(--cyber-panel-collapsed-width);
+}
+
+:root[data-ui-theme='cyber']
+  #right-context-rail
+  > [data-panel-id]:has(> [data-panel-surface]) {
+  --panel-surface-width: var(--cyber-right-panel-width);
+}
+
+:is([data-panel-surface], [data-panel-popup]) {
+  isolation: isolate;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: var(--panel-radius);
+  background: none;
+  color: var(--text-primary);
+  font: 12px/1.5 var(--panel-surface-font);
+  overflow: visible;
+}
+
+[data-panel-surface]:not(dialog) {
+  position: relative;
+}
+
+:is([data-panel-surface], [data-panel-popup])::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border: 1px solid var(--glass-border);
+  border-radius: inherit;
+  background-color: var(--glass-bg);
+  background-image: var(--panel-surface-detail);
+  box-shadow: var(--panel-surface-shadow);
+  clip-path: var(--panel-surface-frame);
+  pointer-events: none;
+}
+
+/* A closed native dialog must retain the browser's display:none. */
+[data-panel-surface]:not([hidden]):not(dialog:not([open])) {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+:is(#left-panel-stack, #right-context-rail)
+  > [data-panel-id]:has(> [data-panel-surface]) {
+  width: min(100%, var(--panel-expanded-width, var(--panel-surface-width)));
+  background: none;
+  box-shadow: none;
+}
+
+:is(#left-panel-stack, #right-context-rail)
+  > [data-panel-id]
+  > [data-panel-surface] {
+  height: 100%;
+  max-height: 100%;
+}
+
+:is(#left-panel-stack, #right-context-rail)
+  > [data-panel-id].collapsed:has(> [data-panel-surface]) {
+  width: min(
+    100%,
+    var(--panel-collapsed-width, var(--panel-surface-collapsed-width))
+  );
+}
+
+#right-context-rail[data-rail-measuring]
+  > [data-panel-id]
+  > [data-panel-surface] {
+  height: auto;
+  max-height: none;
+}
+
+[data-panel-header] {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+  min-height: 30px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.panel-surface-title {
+  flex: 1;
+  min-width: 0;
+  color: var(--panel-surface-title);
+  font: 600 11px/1.4 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+[data-panel-body] {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border-hover) transparent;
+  /* Keep an inset focus ring inside the intentional scrolling boundary. */
+  padding: 3px;
+}
+
+.panel-surface-control {
+  min-width: 0;
+  min-height: 30px;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--btn-radius);
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  font: inherit;
+  accent-color: var(--accent);
+}
+
+button.panel-surface-control {
+  cursor: pointer;
+}
+
+.panel-surface-control:hover:not(:disabled):not([aria-disabled='true']) {
+  border-color: var(--glass-border-hover);
+  background: var(--accent-dim);
+}
+
+.panel-surface-control:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: -3px;
+}
+
+.panel-surface-control:is(:disabled, [aria-disabled='true']) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.panel-surface-error,
+.panel-surface-control[aria-invalid='true'] {
+  color: var(--panel-surface-error);
+  border-color: var(--panel-surface-error);
+}
+
+[data-panel-popup] {
+  position: absolute;
+  z-index: 5;
+  /* The owner supplies placement, width, collision handling and disclosure. */
+}
+
+[data-panel-surface].collapsed > :is([data-panel-body], [data-panel-popup]),
+[data-panel-id].collapsed
+  > [data-panel-surface]
+  > :is([data-panel-body], [data-panel-popup]),
+:is(#left-panel-stack, #right-context-rail)
+  > [data-panel-id]:has(> [data-panel-surface])[hidden],
+:is(
+  [data-panel-surface],
+  [data-panel-header],
+  [data-panel-body],
+  [data-panel-popup]
+)[hidden],
+dialog[data-panel-surface]:not([open]) {
+  display: none !important;
+}
+
+/* Conforming additions follow the same concealment policy as existing chrome.
+   Cockpit continues to own rail/dock placement and exclusions in cockpit.css. */
+body:is(.ui-clean-view, .recording-mode)
+  :is([data-panel-surface], [data-panel-popup]),
+body:is(.ui-clean-view, .recording-mode)
+  :is(#left-panel-stack, #right-context-rail)
+  > [data-panel-id]:has(> [data-panel-surface]) {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
