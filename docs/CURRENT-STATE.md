@@ -1049,6 +1049,10 @@ The Node-only `gods-eye-view/server/providers/space` export supplies factories;
 `sources/space` supplies fixed upstream URL builders with no I/O or environment
 access. Callers retain validation, transport and response policy.
 
+The shared TLE text parser skips incomplete named sets and resumes at the next
+complete set. A missing orbital line does not discard the later satellites in
+the catalog; satellite layers and next-pass tools use the same parser.
+
 ## Build configuration and local provider boundaries
 
 `vite.config.js` delegates to `server/standalone/vite.config.js`, which loads
