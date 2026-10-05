@@ -55,6 +55,11 @@ import {
   DEFAULT_CALGARY_MAX_SOURCES,
   CALGARY_DOWNTOWN,
   CALGARY_MAX_CATALOG_BYTES,
+  DEFAULT_TORONTO_ROWS_URL,
+  TORONTO_IMAGE_ORIGIN,
+  DEFAULT_TORONTO_MAX_SOURCES,
+  TORONTO_DOWNTOWN,
+  TORONTO_MAX_CATALOG_BYTES,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
   DELDOT_CCTV_URL,
   DEFAULT_DELDOT_MAX_SOURCES,
@@ -91,6 +96,7 @@ import {
   isLikelyCalgaryCoordinate,
   isLikelyNycCoordinate,
   isLikelyNorwayCoordinate,
+  isLikelyTorontoCoordinate,
   cameraDisplayCode,
   rowArrayToObject,
   prioritizeSources,
@@ -2013,6 +2019,247 @@ export async function loadNycSourcesFromOpenData() {
     return prioritized;
   } catch (error) {
     console.warn('[CCTV] NYC camera download error:', error?.message || error);
+    return [];
+  }
+}
+
+/**
+ * Upgrade a catalog frame URL to HTTPS and pin it to the City of Toronto host.
+ *
+ * Most rows ship `https://`; anything not on the official origin is refused
+ * rather than proxied, matching the origin pins in the Calgary, TfL, and
+ * Tarktee packs.
+ *
+ * @param {string|null|undefined} raw - Frame image URL from the dataset.
+ * @returns {?string} Pinned HTTPS URL, or null when unusable.
+ */
+export function normalizeTorontoImageUrl(raw) {
+  const text = String(raw ?? '').trim();
+  if (!text) return null;
+  let parsed;
+  try {
+    parsed = new URL(text);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  parsed.protocol = 'https:';
+  const upgraded = parsed.toString();
+  return upgraded.startsWith(TORONTO_IMAGE_ORIGIN) ? upgraded : null;
+}
+
+/**
+ * Stable camera id from a frame URL or record ID.
+ *
+ * The official frame URL ends in "loc<id>.jpg" (e.g. "loc8001.jpg"). Falls back
+ * to the dataset's numeric REC_ID.
+ *
+ * @param {string} imageUrl - Normalized Toronto frame URL.
+ * @param {object} [record] - Raw record for fallback.
+ * @returns {?string} Provider-stable id, or null when underivable.
+ */
+export function torontoCameraId(imageUrl, record) {
+  const text = String(imageUrl ?? '').trim();
+  if (text) {
+    let pathname;
+    try {
+      pathname = new URL(text).pathname;
+    } catch {
+      pathname = '';
+    }
+    const match = pathname.match(/loc(\d+)\.jpg$/i);
+    if (match) return `toronto-${match[1]}`;
+  }
+  const recId = record?.REC_ID ?? record?.rec_id ?? record?.id ?? record?._id;
+  if (recId != null && /^\d+$/.test(String(recId).trim())) {
+    return `toronto-${String(recId).trim()}`;
+  }
+  return null;
+}
+
+/**
+ * Label for one Toronto camera: arterial intersection (MAINROAD / CROSSROAD).
+ *
+ * @param {object} record - Raw row or GeoJSON properties.
+ * @param {string} cameraId - Derived stable id.
+ * @returns {string}
+ */
+export function torontoCameraName(record, cameraId) {
+  const main = String(
+    record?.MAINROAD ?? record?.mainroad ?? record?.main_road ?? '',
+  ).trim();
+  const cross = String(
+    record?.CROSSROAD ?? record?.crossroad ?? record?.cross_road ?? '',
+  ).trim();
+  if (main && cross) return `${main} / ${cross}`;
+  if (main) return main;
+  if (cross) return cross;
+  const location = String(record?.name ?? record?.location ?? '').trim();
+  if (location) return location;
+  return `Toronto Camera ${String(cameraId).replace(/^toronto-/, '')}`;
+}
+
+/**
+ * Extract geographic coordinates from a Toronto record.
+ *
+ * Supports CKAN datastore JSON geometry strings, parsed GeoJSON geometries,
+ * and direct latitude/longitude fields.
+ *
+ * @param {object} record - Raw row or GeoJSON feature.
+ * @returns {{lat:number, lon:number}}
+ */
+export function extractTorontoCoords(record) {
+  if (!record || typeof record !== 'object') return { lat: NaN, lon: NaN };
+  let geom = record.geometry;
+  if (typeof geom === 'string') {
+    try {
+      geom = JSON.parse(geom);
+    } catch {
+      geom = null;
+    }
+  }
+  let coords = geom?.coordinates;
+  if (Array.isArray(coords) && coords.length > 0) {
+    if (Array.isArray(coords[0])) {
+      coords = coords[0];
+    }
+    const lon = toFiniteNumber(coords[0], NaN);
+    const lat = toFiniteNumber(coords[1], NaN);
+    return { lat, lon };
+  }
+  const lat = toFiniteNumber(record.latitude ?? record.lat, NaN);
+  const lon = toFiniteNumber(record.longitude ?? record.lon, NaN);
+  return { lat, lon };
+}
+
+/**
+ * One Toronto Open Data record -> one catalog source, or null.
+ *
+ * Cameras are pan/tilt/zoom traffic intersection feeds; headings use the
+ * deterministic id-hash fallback at low confidence so operators can calibrate
+ * them via the in-app gizmo.
+ *
+ * @param {object} record - Raw row or GeoJSON feature.
+ * @returns {?object}
+ */
+export function torontoCameraToSource(record) {
+  if (!record || typeof record !== 'object') return null;
+  const flatRecord = record.properties
+    ? { ...record.properties, geometry: record.geometry }
+    : record;
+  const { lat, lon } = extractTorontoCoords(flatRecord);
+  if (!isLikelyTorontoCoordinate(lat, lon)) return null;
+
+  const rawUrl =
+    flatRecord.IMAGEURL ??
+    flatRecord.imageurl ??
+    flatRecord.imageUrl ??
+    flatRecord.url;
+  const imageUrl = normalizeTorontoImageUrl(rawUrl);
+  if (!imageUrl) return null;
+
+  const cameraId = torontoCameraId(imageUrl, flatRecord);
+  if (!cameraId) return null;
+
+  const name = torontoCameraName(flatRecord, cameraId);
+
+  return {
+    id: cameraId,
+    name,
+    city: 'Toronto',
+    cityId: 'toronto',
+    provider: 'City of Toronto',
+    lat,
+    lon,
+    headingDeg: fallbackHeadingFromId(cameraId),
+    headingConfidence: 'low',
+    pitchDeg: -18,
+    fovDeg: 44,
+    rangeM: 145,
+    mountHeightM: 8,
+    // Toronto elevation prior above Lake Ontario (~76m average).
+    groundElevationM: 76,
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'toronto-open-data',
+    license:
+      'Contains information provided by the City of Toronto under the City of Toronto Open Data Licence',
+    code: cameraDisplayCode(name.toUpperCase()),
+  };
+}
+
+/**
+ * Fetch City of Toronto traffic cameras from Open Data Toronto (CKAN datastore
+ * or GeoJSON), keyless. Frames are stills on opendata.toronto.ca.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadTorontoSourcesFromOpenData() {
+  try {
+    const endpoint =
+      process.env.CCTV_TORONTO_ROWS_URL || DEFAULT_TORONTO_ROWS_URL;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: 'application/json' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn(
+        '[CCTV] Toronto catalog redirected; redirects are not followed',
+      );
+      return discard();
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] Toronto camera download failed:', resp.status);
+      return discard();
+    }
+    const payload = await readResponseJsonCapped(
+      resp,
+      TORONTO_MAX_CATALOG_BYTES,
+    );
+    const rows = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.result?.records)
+        ? payload.result.records
+        : Array.isArray(payload?.features)
+          ? payload.features
+          : [];
+    if (!rows.length) return [];
+    const cameras = [];
+    const seen = new Set();
+    for (const record of rows) {
+      const camera = torontoCameraToSource(record);
+      if (!camera || seen.has(camera.id)) continue;
+      seen.add(camera.id);
+      cameras.push(camera);
+    }
+    const maxRaw = Number(
+      process.env.CCTV_TORONTO_MAX_SOURCES || DEFAULT_TORONTO_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(500, Math.floor(maxRaw)))
+      : DEFAULT_TORONTO_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, [
+      TORONTO_DOWNTOWN,
+    ]);
+    console.log(
+      `[CCTV] Loaded Toronto camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Toronto camera download error:',
+      error?.message || error,
+    );
     return [];
   }
 }

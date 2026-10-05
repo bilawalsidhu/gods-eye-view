@@ -389,6 +389,17 @@ export function isLikelyNorwayCoordinate(lat, lon) {
   );
 }
 
+/** Toronto's municipal extent (Etobicoke to Scarborough, Lake Ontario to Steeles). */
+export function isLikelyTorontoCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 43.58 &&
+    lat <= 43.86 &&
+    lon >= -79.65 &&
+    lon <= -79.1
+  );
+}
+
 export function isLikelyFinlandCoordinate(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
   return lat >= 59.5 && lat <= 70.5 && lon >= 19 && lon <= 32;

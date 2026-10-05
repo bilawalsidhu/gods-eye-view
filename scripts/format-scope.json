@@ -542,6 +542,7 @@
   "src/data/cctvCalgary.test.mjs",
   "src/data/cctvVegvesen.test.mjs",
   "src/data/cctvNyc.test.mjs",
+  "src/data/cctvToronto.test.mjs",
   "src/data/cctvNswSource.test.mjs",
   "src/data/cctvTxdotSource.test.mjs",
   "src/layers/cctv/source.test.mjs",

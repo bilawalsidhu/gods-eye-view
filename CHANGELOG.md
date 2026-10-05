@@ -146,7 +146,6 @@
   stale, moved-camera, invalid and oversized captures still fail closed.
 
 ## [Unreleased]
-
 - Flights and Military Flights highlight emergency transponder broadcasts in
   fleet billboards, 3D models and Cockpit contacts. Colors update when a status
   starts or clears. Emergency squawks outrank ADS-B priority statuses; GEV
@@ -274,6 +273,14 @@
   browser key had to be unrestricted for search to work at all. That key now
   needs only the Map Tiles API and the Maps JavaScript API (Street View). Keyless sessions and the Photon/Nominatim
   fallback order are unchanged.
+
+- Add City of Toronto traffic cameras as a keyless CCTV source pack:
+  the public CKAN traffic cameras dataset from open.toronto.ca, frames pinned to
+  opendata.toronto.ca and upgraded to HTTPS, with City of Toronto Open Data Licence
+  attribution. Pan/tilt/zoom arterial intersection cameras use the shared id-hash
+  fallback heading at low confidence for calibration with the in-app gizmo.
+  `CCTV_TORONTO_MAX_SOURCES` sets the cap (default 250) and `CCTV_TORONTO_ENABLED=0`
+  turns the pack off.
 
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 

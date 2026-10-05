@@ -255,6 +255,13 @@ export const DATA_CREDITS = [
       'distributed by Statens vegvesen',
   },
   {
+    key: 'toronto-cctv',
+    html:
+      'Traffic cameras (Toronto): contains information provided by the ' +
+      '<a href="https://open.toronto.ca/dataset/traffic-cameras/" target="_blank" rel="noopener">City of Toronto</a> under the ' +
+      '<a href="https://open.toronto.ca/open-data-licence/" target="_blank" rel="noopener">City of Toronto Open Data Licence</a>',
+  },
+  {
     key: 'nyc-cctv',
     html:
       'CCTV cameras &amp; frames (New York City, when enabled): ' +

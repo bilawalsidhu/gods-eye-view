@@ -305,6 +305,15 @@ export const DELDOT_ANCHORS = [
   { lat: 39.1582, lon: -75.5244 }, // Dover (Kent)
   { lat: 38.6906, lon: -75.3877 }, // Georgetown (Sussex)
 ];
+/** City of Toronto traffic cameras: keyless CKAN endpoint; frames are stills on opendata.toronto.ca. */
+export const DEFAULT_TORONTO_ROWS_URL =
+  'https://ckan0.cf.opendata.inter.prod-toronto.ca/api/3/action/datastore_search?resource_id=824d2986-2fe0-4513-bdfb-e37e2499e7a9&limit=500';
+export const TORONTO_IMAGE_ORIGIN = 'https://opendata.toronto.ca/';
+export const DEFAULT_TORONTO_MAX_SOURCES = 250;
+/** Nathan Phillips Square / City Hall: the prioritization anchor. */
+export const TORONTO_DOWNTOWN = { lat: 43.6532, lon: -79.3832 };
+/** Hard ceiling on the Toronto catalog body (~336 rows, ~140 KB). */
+export const TORONTO_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 /** Camera CATALOGS change rarely; 15 min keeps multi-megabyte upstream list refetches (Austin rows.json + 4 Caltrans districts + TfL + Ontario 511) infrequent. Frames are fetched per-request and are unaffected. */
 export const CCTV_SOURCE_CACHE_MS = 15 * 60 * 1000;
 /** Per-provider catalog-fetch timeout. Bounds the worst-case refresh so one
