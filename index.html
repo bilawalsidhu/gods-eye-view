@@ -99,6 +99,7 @@
       <section aria-labelledby="demon-forge-draft-title">
         <h3 id="demon-forge-draft-title">4 · DRAFT</h3>
         <form id="demon-forge-draft-form">
+          <label>Draft language <select id="demon-forge-draft-language"><option value="en">English</option><option value="fr">Français</option></select></label>
           <label>Action
             <select id="demon-forge-action" name="action">
               <option value="erasure">Erasure</option>
@@ -127,6 +128,33 @@
     </div>
   </aside>
 
+  <button id="area-open" type="button" aria-controls="area-dialog">INVESTIGATE AREA</button>
+  <aside id="area-dialog" class="demon-forge-dialog" role="dialog" aria-modal="true" aria-labelledby="area-title-heading" hidden>
+    <header class="demon-forge-header"><h2 id="area-title-heading" data-area-copy="title"></h2><button id="area-close" type="button" data-area-copy="close"></button></header>
+    <label>Language / Langue <select id="area-language"><option value="en">English</option><option value="fr">Français</option></select></label>
+    <p data-area-copy="intro"></p><p id="area-status" role="status" aria-live="polite"></p>
+    <div class="demon-forge-sections">
+      <section><label>Vault passphrase / Phrase secrète <input id="area-passphrase" type="password" autocomplete="off" /></label><button id="area-unlock" type="button" data-area-copy="unlock"></button>
+      <label>Cases / Dossiers <select id="area-cases"></select></label><button id="area-case-open" type="button" data-area-copy="open"></button></section>
+      <section><label>Title / Titre <input id="area-title" maxlength="200" /></label>
+      <label>Latitude <input id="area-lat" type="number" min="-90" max="90" step="any" /></label><label>Longitude <input id="area-lon" type="number" min="-180" max="180" step="any" /></label>
+      <label>Radius / Rayon (km) <input id="area-radius" type="number" value="10" min="0.1" max="100" step="0.1" /></label>
+      <button id="area-use" type="button" data-area-copy="use"></button><button id="area-create" type="button" data-area-copy="create"></button></section>
+      <section><h3 data-area-copy="source"></h3><p data-area-copy="period"></p>
+      <label><input type="checkbox" data-area-source value="earthquakes" checked /> USGS earthquakes / Séismes (24 h, M2.5+)</label>
+      <label><input type="checkbox" data-area-source value="dams" checked /> OSM dams / Barrages</label>
+      <label><input type="checkbox" data-area-source value="datacenters" checked /> OSM datacenters / Centres de données</label>
+      <label><input type="checkbox" data-area-source value="imagery" /> NASA recent imagery / Images récentes (metadata only / métadonnées conservées)</label>
+      <button id="area-query" type="button" data-area-copy="query"></button></section>
+      <section><label>Kind / Type <select id="area-kind"><option value="observation">Observation</option><option value="hypothesis">Hypothesis / Hypothèse</option><option value="contradiction">Contradiction</option><option value="note">Note</option><option value="manual-follow-up">Manual follow-up / Suivi manuel</option></select></label>
+      <label data-area-copy="note" for="area-note"></label><textarea id="area-note" maxlength="8000"></textarea>
+      <label>Confidence / Confiance <select id="area-confidence"><option value="unassessed">Unassessed / Non évaluée</option><option value="low">Low / Faible</option><option value="medium">Medium / Moyenne</option><option value="high">High / Élevée</option></select></label><p data-area-copy="confidence"></p>
+      <button id="area-save" type="button" data-area-copy="save"></button><ol id="area-history"></ol></section>
+      <section><label>Backup passphrase / Phrase de sauvegarde (12+ characters) <input id="area-backup-passphrase" type="password" autocomplete="off" /></label>
+      <button id="area-backup" type="button" data-area-copy="backup"></button><input id="area-restore-file" type="file" accept="application/json" aria-label="Encrypted backup / Sauvegarde chiffrée" /><button id="area-restore" type="button" data-area-copy="restore"></button>
+      <button id="area-remove" type="button" data-area-copy="remove"></button></section>
+    </div>
+  </aside>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

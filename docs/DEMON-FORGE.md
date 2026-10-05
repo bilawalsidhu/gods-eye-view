@@ -1,5 +1,9 @@
 # Demon Forge local case workspace
 
+The separate [area investigation workspace](AREA-INVESTIGATION.md) connects the
+observed globe center to existing public-source queries. Its vault and geographic
+query inputs are isolated from the privacy cases described below.
+
 Demon Forge is an optional workspace for reviewing an externally generated
 Social Analyzer report and preparing privacy-request drafts. Open **DEMON FORGE**
 from the standalone app. It does not search for people, run Social Analyzer,
@@ -23,7 +27,8 @@ MCP tools, or share links.
    an existing case to restore its encrypted workflow and ledger.
 
 The contact reference is unverified. Browser handoff stays disabled because this
-version has no verified source directory. France/EU-first draft wording is not
+version has no verified source directory. Drafts default to English and also offer
+French. France/EU-first draft wording is not
 legal advice; it makes no promise of deletion or successful delivery.
 
 ## Accepted report

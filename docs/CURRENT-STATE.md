@@ -2,6 +2,16 @@
 
 Updated: October 5, 2026
 
+**Area investigation:** `INVESTIGATE AREA` reads the Earth under the view center
+through a standalone facade. Explicit geographic queries reuse existing tools
+for USGS earthquakes, bundled OSM dams/datacenters and NASA recent imagery.
+Bounded source results, provenance, coverage and retrieval/source dates are kept
+in a separate encrypted vault. Evidence distinguishes observations, hypotheses,
+contradictions and manual follow-up. Close cancels queries and scrubs the UI.
+Encrypted backup restores to a new ID after authentication/history validation.
+No person search, arbitrary historical query, screenshot capture or personal case
+input to public queries is provided. See [area workflow](AREA-INVESTIGATION.md).
+
 > **Demon Forge boundary note:** the workspace is optional and local-first, imports only a user-selected Social Analyzer report that was generated outside the app, requires a signed mandate with explicit source categories and permitted actions for non-self cases, keeps evidence and workflow encrypted behind existing-case passphrase authentication, and persists workflow changes in an append-only ledger. Human confirmation is required before any request draft progresses, and there is no automatic request submission. No verified source directory ships in the current build, so browser handoff is disabled and the HTTPS contact field is only an unverified drafting reference. The first policy pack is France/EU-first, and the request text is not legal advice.
 
 ## God's Eye View in conversations — October 2, 2026

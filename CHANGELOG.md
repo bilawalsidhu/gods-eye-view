@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Extend Demon Forge with an independent encrypted area investigation workspace:
+  capture the observed globe center, query existing USGS/OSM/NASA tools, record
+  source provenance and evidence, and download/restore encrypted backups.
+  English/French area messages and English-default privacy drafts are available.
+  Personal case content is never passed to public-source queries.
+
 - Add Demon Forge, an optional local-first workspace for reviewing externally
   generated Social Analyzer reports and preparing privacy-request drafts.
   Cases use opaque IDs, encrypted local persistence and an append-only ledger;

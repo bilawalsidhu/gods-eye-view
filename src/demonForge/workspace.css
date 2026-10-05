@@ -1,5 +1,13 @@
 /* Demon Forge is an intentionally isolated local case surface. It sits above
    the globe chrome but has no visual or behavioral coupling to the map. */
+#area-open { position: fixed; top: 74px; right: 24px; z-index: 100; padding: 0.6rem; color: var(--text-primary); background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 8px; cursor: pointer; }
+body.ui-clean-view #area-open, body.recording-mode #area-open, body.cockpit-mode #area-open, body.embed-mode #area-open { display: none !important; }
+#area-dialog textarea { width: 100%; min-height: 5rem; background: var(--bg-dark); color: var(--text-primary); }
+#area-history pre { overflow-wrap: anywhere; }
+#area-dialog { font-size: 0.8rem; line-height: 1.45; }
+#area-dialog label:has([data-area-source]) { display: flex; align-items: center; gap: 0.6rem; padding: 0.35rem 0; }
+#area-dialog input[type="checkbox"] { width: 1rem; height: 1rem; min-height: 0; flex: 0 0 1rem; }
+#area-dialog a { color: #7edcef; }
 #demon-forge-open {
   position: fixed;
   top: 32px;

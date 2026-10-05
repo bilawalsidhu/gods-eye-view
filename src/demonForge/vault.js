@@ -16,7 +16,7 @@ function requestResult(request) {
   });
 }
 
-function createIndexedDbCaseStore() {
+function createIndexedDbCaseStore(databaseName = DATABASE_NAME) {
   let databasePromise;
 
   async function database() {
@@ -24,7 +24,7 @@ function createIndexedDbCaseStore() {
       if (!globalThis.indexedDB)
         throw new Error('IndexedDB is required for Demon Forge storage.');
       databasePromise = new Promise((resolve, reject) => {
-        const request = globalThis.indexedDB.open(DATABASE_NAME, 1);
+        const request = globalThis.indexedDB.open(databaseName, 1);
         request.onupgradeneeded = () => {
           if (!request.result.objectStoreNames.contains(STORE_NAME)) {
             request.result.createObjectStore(STORE_NAME);
@@ -101,7 +101,8 @@ function preservesAppendOnlyHistory(previousRecord, nextRecord) {
 }
 
 export function createDemonForgeVault({
-  store = createIndexedDbCaseStore(),
+  databaseName = DATABASE_NAME,
+  store = createIndexedDbCaseStore(databaseName),
   cryptoApi = globalThis.crypto,
   clock = Date.now,
 } = {}) {

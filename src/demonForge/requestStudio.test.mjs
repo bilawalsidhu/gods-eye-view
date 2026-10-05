@@ -19,7 +19,7 @@ function validCase(expiresAtMs = nowMs + 1_000) {
 }
 
 test('France/EU draft is manual, exact, and does not promise deletion', () => {
-  const draft = createFranceEuDraft({ action: 'erasure', controllerName: 'Synthetic Controller', contactRoute: 'https://controller.test/privacy', candidate });
+  const draft = createFranceEuDraft({ action: 'erasure', language: 'fr', controllerName: 'Synthetic Controller', contactRoute: 'https://controller.test/privacy', candidate });
 
   assert.match(draft.body, /demande d'effacement/i);
   assert.match(draft.body, /https:\/\/example\.test\/profile/);

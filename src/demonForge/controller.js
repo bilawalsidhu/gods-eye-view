@@ -651,6 +651,8 @@ export function initDemonForge({
     try {
       currentDraft = createFranceEuDraft({
         action,
+        language:
+          document.getElementById('demon-forge-draft-language')?.value || 'en',
         controllerName: fields.get('controllerName'),
         contactRoute: fields.get('contactRoute'),
         candidate: selectedCandidate,
