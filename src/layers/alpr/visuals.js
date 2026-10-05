@@ -1,6 +1,25 @@
 import * as Cesium from 'cesium';
 import { destinationPointDeg } from './model.js';
-import { DIRECTION_CONE_M, DIRECTION_CONE_HALF_ANGLE_DEG } from './policy.js';
+import {
+  DIRECTION_CONE_M,
+  DIRECTION_CONE_HALF_ANGLE_DEG,
+  MARKER_SCALE_BY_DISTANCE,
+} from './policy.js';
+
+/**
+ * Badge scale at a camera distance, matching Cesium's NearFarScalar for the
+ * native badges (linear between near and far, clamped outside).
+ * @param {number} distanceM Camera-to-marker distance.
+ * @returns {number} Scale factor.
+ */
+export function markerScale(distanceM) {
+  const [near, nearScale, far, farScale] = MARKER_SCALE_BY_DISTANCE;
+  if (!Number.isFinite(distanceM) || distanceM <= near) return nearScale;
+  if (distanceM >= far) return farScale;
+  return (
+    nearScale + ((distanceM - near) / (far - near)) * (farScale - nearScale)
+  );
+}
 
 // Camera artwork and visual treatment contributed by Manjunath (@manjunath22466).
 // Module-relative assets also resolve when the layer is consumed by another app.
@@ -48,8 +67,16 @@ export function alprLabelDetails(record, source) {
   return details;
 }
 
-/** Illustrative bearing wedge, not measured field of view or operating range. */
-export function directionWedgePositions(record, heightM = 0) {
+/**
+ * Illustrative bearing wedge, not measured field of view or operating range.
+ * @param {object} record Camera record.
+ * @param {number} [heightM] Apex height.
+ * @param {function(number, number): (number|null)} [heightAt] Optional height
+ *   for the two far corners (degrees lat, lon), so the wedge follows a slope
+ *   instead of floating level from the apex; falls back to the apex height.
+ * @returns {Array<Cesium.Cartesian3>|null} Apex, left and right corners.
+ */
+export function directionWedgePositions(record, heightM = 0, heightAt = null) {
   if (!Number.isFinite(record.directionDeg)) return null;
   const left = destinationPointDeg(
     record.latitude,
@@ -63,10 +90,18 @@ export function directionWedgePositions(record, heightM = 0) {
     record.directionDeg + DIRECTION_CONE_HALF_ANGLE_DEG,
     DIRECTION_CONE_M,
   );
+  const corner = (point) => {
+    const height = heightAt?.(point.latitude, point.longitude);
+    return Number.isFinite(height) ? height : heightM;
+  };
   return [
     Cesium.Cartesian3.fromDegrees(record.longitude, record.latitude, heightM),
-    Cesium.Cartesian3.fromDegrees(left.longitude, left.latitude, heightM),
-    Cesium.Cartesian3.fromDegrees(right.longitude, right.latitude, heightM),
+    Cesium.Cartesian3.fromDegrees(left.longitude, left.latitude, corner(left)),
+    Cesium.Cartesian3.fromDegrees(
+      right.longitude,
+      right.latitude,
+      corner(right),
+    ),
   ];
 }
 

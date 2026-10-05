@@ -253,19 +253,19 @@ async function main() {
       const url = new URL(request.url());
       if (url.origin !== APP_ORIGIN) return void request.continue();
       // Silence the live feeds: the injected field is the only population.
-      if (url.pathname === '/api/ais-live') {
+      if (url.pathname === '/api/vessels') {
         return void request.respond(stubJson({
           rows: [], source: 'QA', status: 'open', error: null, refreshing: false,
           newestPositionAt: null, lastMessageAt: null,
         }));
       }
-      if (url.pathname === '/api/adsblol/mil') {
+      if (url.pathname === '/api/military') {
         return void request.respond(stubJson({ msg: 'No error', now: Date.now(), ac: [] }));
       }
-      if (url.pathname === '/api/opensky') {
+      if (url.pathname === '/api/flights') {
         return void request.respond(stubJson({ time: Math.floor(Date.now() / 1000), states: [] }));
       }
-      if (url.pathname === '/api/opensky-track') {
+      if (url.pathname === '/api/flights/track') {
         return void request.respond(stubJson({ path: [] }));
       }
       if (url.pathname === '/api/openai/hud-summary') {

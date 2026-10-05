@@ -34,8 +34,8 @@ function assertClaimsBefore(block, mutation, label) {
 function makeManager(hash = '') {
   globalThis.window = { location: { hash, href: `http://localhost/${hash}` } };
   globalThis.history = {
-    replaceState(_state, _title, nextHash) {
-      window.location.hash = nextHash;
+    replaceState(_state, _title, next) {
+      window.location.hash = new URL(next, window.location.href).hash;
     },
   };
   const viewer = {
@@ -75,6 +75,23 @@ test('unknown-only v2 layer tokens are invalid, while historical l fields stay i
     const legacy = makeManager(hash).parseInitialHash();
     assert.equal(legacy.layerState, null);
     assert.equal(legacy.layerStateInvalid, false);
+  }
+});
+
+test('malformed v2 layer lists mark the whole incoming share payload invalid', () => {
+  for (const layers of ['.f', 'f.', 'f..c', 'f.f']) {
+    const parsed = makeManager(
+      `#v=2&lat=10&lon=20&l=${layers}`,
+    ).parseInitialHash();
+    assert.equal(parsed.layerState, null, `l=${layers}`);
+    assert.equal(parsed.layerStateInvalid, true, `l=${layers}`);
+  }
+  for (const layers of ['l=f&l=f', 'l=f&l=unknown', 'l=&l=f']) {
+    const parsed = makeManager(
+      `#v=2&lat=10&lon=20&${layers}`,
+    ).parseInitialHash();
+    assert.equal(parsed.layerState, null, layers);
+    assert.equal(parsed.layerStateInvalid, true, layers);
   }
 });
 

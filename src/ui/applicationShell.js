@@ -1359,6 +1359,8 @@ export class StyleManager extends ShellFacade {
    * @param {string} styleName - Target style ('normal'|'retro'|'surveillance'|'thermal'|'anime'|'noir'|'snow').
    * @param {object} [options]
    * @param {boolean} [options.applyPreset=true] - Whether to apply STYLE_PRESET_DEFAULTS for the new style.
+   * @param {boolean} [options.userInitiated=false] - Whether a direct user preset choice owns the Cyber exit style.
+   * @param {boolean} [options.preserveCyberRestore=false] - Whether an automatic style update keeps the Cyber entry snapshot.
    * @returns {void}
    */
   setStyle(
