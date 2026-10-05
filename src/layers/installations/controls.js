@@ -1,6 +1,10 @@
 import * as Cesium from 'cesium';
 import { installationFeedback } from '../../data/installationFeedback.js';
-import { LAYER_ID, DISTANCE_PREFILTER_MARGIN_M } from './policy.js';
+import {
+  LAYER_ID,
+  DISTANCE_PREFILTER_MARGIN_M,
+  ANCHOR_REFRESH_M,
+} from './policy.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const methods = {
@@ -16,10 +20,69 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     statsRefreshInterval: 1000,
 
+    visitNamedMarkers(visitor) {
+      parts.namedMarkers.visit(visitor);
+    },
+
     /** Request a one-shot Google Maps Places search around the current map view. */
     searchNearby() {
       layerState.googleSearchRequested = true;
       return parts.ingestion.loadInstallations();
+    },
+
+    /**
+     * Load sites around a Contacts subject instead of the camera viewport.
+     *
+     * A follow or Cockpit camera moves every frame, so `moveEnd` never fires and
+     * its view rectangle often reaches the horizon; a subject window is the
+     * only area that answers "what is near this contact". The window moves
+     * only after the subject travels ANCHOR_REFRESH_M, and cached tiles make
+     * that cheap. Passing null returns the layer to viewport loading.
+     * @param {Cesium.Cartesian3|{latitude:number, longitude:number}|null} position
+     *   Subject position.
+     * @returns {boolean} Whether a new load was scheduled.
+     */
+    setContextAnchor(position) {
+      let next = null;
+      if (position) {
+        if (
+          Number.isFinite(position.latitude) &&
+          Number.isFinite(position.longitude)
+        )
+          next = { latitude: position.latitude, longitude: position.longitude };
+        else {
+          const carto = Cesium.Cartographic.fromCartesian(position);
+          if (carto)
+            next = {
+              latitude: Cesium.Math.toDegrees(carto.latitude),
+              longitude: Cesium.Math.toDegrees(carto.longitude),
+            };
+        }
+      }
+      // Keep the live centre even when the coarse fetch anchor has not moved.
+      layerState.contextPosition = next
+        ? Cesium.Cartesian3.fromDegrees(next.longitude, next.latitude)
+        : null;
+      const previous = layerState.contextAnchor;
+      if (!next) {
+        if (!previous) return false;
+        layerState.contextAnchor = null;
+        parts.viewport.scheduleLoad();
+        return true;
+      }
+      if (
+        previous &&
+        parts.model.approximateSurfaceDistanceM(
+          Cesium.Math.toRadians(previous.latitude),
+          Cesium.Math.toRadians(previous.longitude),
+          next.latitude,
+          next.longitude,
+        ) < ANCHOR_REFRESH_M
+      )
+        return false;
+      layerState.contextAnchor = next;
+      parts.viewport.scheduleLoad();
+      return true;
     },
 
     getNearby(center, rangeM, maxCount = 50) {
@@ -100,8 +163,30 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     getStats() {
+      const namedMarkers = parts.namedMarkers?.stats();
+      const subjectWindow =
+        layerState.coverage?.kind === 'subject' &&
+        layerState.contextPosition &&
+        Number.isFinite(layerState.coverage.radiusM);
+      const mappedCount = subjectWindow
+        ? methods.getNearby(
+            layerState.contextPosition,
+            layerState.coverage.radiusM,
+            layerState.records.length || 1,
+          ).length
+        : layerState.wide && namedMarkers
+          ? namedMarkers.pointsOnScreen
+          : layerState.records.filter(
+              (record) => record.kind === 'installation',
+            ).length;
       return {
-        count: layerState.records.length,
+        count:
+          subjectWindow || layerState.wide
+            ? mappedCount
+            : layerState.records.length,
+        namedInView: layerState.namedInView || 0,
+        wide: Boolean(layerState.wide),
+        ...namedMarkers,
         lastUpdate: layerState.lastUpdate,
         stale: layerState.stale,
         saturated: layerState.saturated,
@@ -113,11 +198,17 @@ export function createControls({ state: layerState, services, parts, source }) {
         failureReason: layerState.failureReason,
         statusMessage: installationFeedback({
           ...layerState,
+          count: layerState.lastUpdate ? mappedCount : undefined,
           retrying: layerState.loading && Boolean(layerState.failureReason),
         }),
         loadingLabel: layerState.loading
           ? 'loading mapped installation context'
           : '',
+        coverage: layerState.coverage,
+        coverageLabel:
+          layerState.coverage?.kind === 'subject'
+            ? `WITHIN ${Math.round(layerState.coverage.radiusM / 1000)} KM`
+            : 'CURRENT VIEWPORT ONLY',
       };
     },
   };

@@ -1,14 +1,19 @@
 // This dataset is CC BY-NC-SA 3.0, not the project's MIT license.
 // Commercial users must remove it or obtain a TeleGeography license.
 // See DATA_SOURCES.md and the bundled dataset's source.json.
-const cableUrl = new URL(
-  '../../data/local_data/telegeography_submarine_cables/cable-geo.json',
-  import.meta.url,
-).href;
-const landingPointUrl = new URL(
-  '../../data/local_data/telegeography_submarine_cables/landing-point-geo.json',
-  import.meta.url,
-).href;
+// Resolved when read, so importing this module never needs a module URL.
+function cableUrl() {
+  return new URL(
+    '../../data/local_data/telegeography_submarine_cables/cable-geo.json',
+    import.meta.url,
+  ).href;
+}
+function landingPointUrl() {
+  return new URL(
+    '../../data/local_data/telegeography_submarine_cables/landing-point-geo.json',
+    import.meta.url,
+  ).href;
+}
 
 /** Supply GeoJSON collections without coupling the renderer to asset URLs. */
 export function createBundledCableSource({
@@ -33,8 +38,8 @@ export function createBundledCableSource({
     label: 'TeleGeography',
     async fetch(signal) {
       const [cables, landingPoints] = await Promise.all([
-        read(cableUrl, signal),
-        read(landingPointUrl, signal),
+        read(cableUrl(), signal),
+        read(landingPointUrl(), signal),
       ]);
       return { cables, landingPoints };
     },
