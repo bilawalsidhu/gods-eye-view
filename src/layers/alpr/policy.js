@@ -1,32 +1,36 @@
 /**
- * @file Community-mapped automatic license plate reader (ALPR) camera layer.
- *
- * Data source: OpenStreetMap contributors, including the DeFlock community
- * (`man_made=surveillance` + `surveillance:type=ALPR`) — see
- * https://wiki.openstreetmap.org/wiki/Tag:surveillance:type=ALPR and
- * https://deflock.org. OSM data remains ODbL 1.0, separate from the MIT code.
- * Fetched viewport-bounded through the existing generic
- * `/api/overpass` proxy (same one `traffic.js` and `militaryInstallations.js`
- * use) — no new server route needed for a single narrow tag pair.
- *
- * This is mapped surveillance infrastructure, not a live camera feed: no
- * plate records, no vendor accounts, nothing beyond what a contributor chose
- * to publish to OSM. Coverage and tag accuracy are not guaranteed.
- *
- * @module data/alprCameras
+ * Community-mapped OpenStreetMap ALPR locations, via hourly US/Canada detail
+ * tiles. OSM data remains ODbL, separate from the application code. These are
+ * mapped locations, not footage, plate records or evidence of current activity.
  */
 
 export const LAYER_ID = 'alpr-cameras';
 
 export const OVERPASS_URL = '/api/overpass';
 
-export const REQUEST_DEBOUNCE_MS = 500;
+export const REQUEST_DEBOUNCE_MS = 300;
 
-/** Keep public Overpass queries city-scale, never globe-wide. */
+/** Keep camera acquisition city-scale, never globe-wide. */
 export const MAX_VIEWPORT_DEGREES = 3;
 
-/** Overpass `out body N;` cap — also detects possibly truncated coverage. */
+/** Camera record cap; reaching it reports limited coverage. */
 export const QUERY_LIMIT = 1500;
+
+/**
+ * The extract carries full camera attributes from z9 (z0-8 are geometry-only
+ * heat tiles). Each view uses the finest zoom from z12 down to z9 that fits
+ * DETAIL_MAX_TILES, so a whole city loads from a few z9/z10 tiles and a
+ * neighbourhood from z12 (about 2 m position precision).
+ */
+export const DETAIL_MIN_ZOOM = 9;
+export const DETAIL_MAX_ZOOM = 12;
+export const DETAIL_MAX_TILES = 16;
+
+/** Decoded records kept per accepted tile coverage (memory bound, not a render cap). */
+export const SOURCE_RECORD_LIMIT = 6000;
+
+/** Best-precision coordinates remembered per camera across zoom changes. */
+export const PRECISION_CACHE_LIMIT = 20000;
 
 /** Render cap. Kept at or above QUERY_LIMIT on purpose: if it ever sat below
  * it, cameras between the two would be silently dropped while `saturated`
@@ -40,20 +44,37 @@ export const DIRECTION_CONE_HALF_ANGLE_DEG = 20;
 export const EARTH_MEAN_RADIUS_M = 6371008.8;
 
 /** Query boxes are snapped outward to this grid so nearby camera moves reuse
- * one Overpass request body (the shared proxy keys its cache and in-flight
- * dedupe by the exact body) instead of each becoming a distinct upstream fetch. */
+ * one accepted viewport snapshot rather than rebuilding records on every pan. */
 export const QUERY_SNAP_DEGREES = 0.05;
 
 /** A view still fully inside the last snapped query box reuses those records
- * for this long before asking Overpass again. */
+ * for this long before selecting tiles again. */
 export const QUERY_REUSE_MS = 10 * 60 * 1000;
 
 /** Vendor-neutral camera badge palette, with coral selection. */
 export const ALPR_COLOR = '#52d4ff';
 export const ALPR_SELECTED_COLOR = '#ff6474';
 export const MARKER_ICON_SIZE = 38;
+/** Badge scale by camera distance (near m, scale, far m, scale), shared by
+ * native badges and overlay glyphs so both shrink alike in city-wide views. */
+export const MARKER_SCALE_BY_DISTANCE = Object.freeze([
+  500, 1.15, 40_000, 0.45,
+]);
 export const SELECTED_MARKER_ICON_SIZE = 60;
 export const MAX_CANVAS_FRUSTUMS = 64;
+
+/** Metres a floor-placed marker sits above its resolved ground cell. */
+export const MARKER_FLOOR_LIFT_M = 1.5;
+
+/** Rendered-surface samples one overlay paint may take (each is a depth render). */
+export const ANCHOR_SAMPLES_PER_PAINT = 4;
+
+/** Accepted rendered-surface window around a floor cell (a cut or an embankment
+ * sits within it; a rooftop or an unstreamed tile usually does not). */
+export const SURFACE_BELOW_FLOOR_M = 30;
+/** Rendered-surface refinements per paint while the camera is still. */
+export const SURFACE_SAMPLES_PER_PAINT = 2;
+export const SURFACE_ABOVE_FLOOR_M = 40;
 
 /** OSM attribution may collapse after five seconds; full credit stays in Data attribution. */
 export const CREDIT_DISPLAY_MS = 5000;

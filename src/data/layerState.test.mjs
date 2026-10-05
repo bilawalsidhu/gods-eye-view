@@ -11,7 +11,6 @@ import {
   LAYER_STATE_STORAGE_KEY,
   LAYER_STATE_TOKEN_ALPHABET,
   LAYER_STATE_TOKEN_RESERVATIONS,
-  LayerStateCoordinator,
   REGISTERED_LAYER_IDS,
   SHARE_TRACKING_RESTORE_POLICIES,
   createDefaultLayerState,
@@ -24,6 +23,7 @@ import {
   validateLayerStateAllocations,
   validateLayerStateRegistry,
 } from './layerState.js';
+import { LayerStateCoordinator } from './layerStateCoordinator.js';
 import radioLayer from './radio.js';
 import { stampInitialShareGesture } from '../navigationPolicy.js';
 

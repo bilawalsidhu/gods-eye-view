@@ -227,13 +227,14 @@ test('routing middleware uses configured OSRM servers while retaining request bo
   assert.equal(calls, 1);
 });
 
-test('regional reverse geocoding uses the configured Nominatim endpoint and projection', async () => {
-  const lookup = createRegionalPlaceProvider({
-    endpoint: 'https://places.example/reverse',
-    requestJson: async (url) => {
-      assert.equal(new URL(url).origin, 'https://places.example');
-      return { address: { city: 'Town', country: 'Country' } };
-    },
+test('regional place lookup uses bundled Natural Earth with networking unavailable', async (t) => {
+  t.mock.method(globalThis, 'fetch', () => {
+    throw new Error('Network forbidden');
   });
-  assert.equal((await lookup(point)).locality, 'Town');
+  const lookup = createRegionalPlaceProvider();
+  assert.equal(
+    (await lookup({ latitude: 30.2672, longitude: -97.7431 })).region,
+    'Edwards Plateau',
+  );
+  assert.equal((await lookup({ latitude: 26, longitude: -90 })).kind, 'marine');
 });
