@@ -3,10 +3,15 @@
 ## [Unreleased]
 
 - Add Norway's city bikes to the Bike Share layer: Oslo, Bergen and
-  Trondheim Bysykkel (Urban Sharing, ~440 stations). The feeds are keyless
-  GBFS on `gbfs.urbansharing.com`, which joins the proxy allowlist; the proxy
-  now sends the `Client-Identifier: gods-eye-view` header the operators ask
-  for. Attributed under NLOD 2.0. `get_bike_share` covers the three cities too.
+  Trondheim Bysykkel (Urban Sharing), Kolumbus Bysykkel in Stavanger and
+  Farte Bysykkel in Skien/Porsgrunn (Entur Mobility), and Bysykkel
+  Lillestrøm (JCDecaux), about 760 stations in all. Every feed is keyless
+  GBFS. `gbfs.urbansharing.com`, `api.entur.io` and `api.cyclocity.fr` join
+  the proxy allowlist; the last two are kept to their GBFS paths. The proxy
+  now sends `Client-Identifier: gods-eye-view` on every request and
+  `ET-Client-Name: gods-eye-view-bikeshare` to Entur, as the operators ask,
+  and accepts Entur's extensionless feed paths. Attributed under NLOD and
+  Licence Ouverte. `get_bike_share` covers the six systems too.
 
 - Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
   list is one keyless GeoJSON request to the agency's OGC API view of its

@@ -3,6 +3,7 @@ import {
   isAllowedGbfsHost,
   isAllowedGbfsPath,
   gbfsCacheControl,
+  gbfsUpstreamHeaders,
 } from '../../src/data/gbfsSource.js';
 
 // ---------------------------------------------------------------------------
@@ -66,6 +67,7 @@ export async function fetchGbfsUpstream(
         // Urban Sharing (the Norwegian city-bike feeds) asks every client to
         // name itself in this header; other operators ignore it.
         'Client-Identifier': GBFS_CLIENT_IDENTIFIER,
+        ...gbfsUpstreamHeaders(new URL(url).hostname),
       },
       redirect: 'manual',
       signal: controller.signal,
@@ -187,7 +189,7 @@ export function gbfsProxy() {
           return;
         }
 
-        if (!isAllowedGbfsPath(upstreamUrl.pathname)) {
+        if (!isAllowedGbfsPath(upstreamUrl.pathname, upstreamUrl.hostname)) {
           res.writeHead(400, {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',

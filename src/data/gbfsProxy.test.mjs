@@ -72,6 +72,26 @@ test('GBFS upstream fetch names the app in the Client-Identifier header', async 
   assert.equal(observedHeaders['Client-Identifier'], GBFS_CLIENT_IDENTIFIER);
 });
 
+test('GBFS upstream fetch adds ET-Client-Name for Entur and only for Entur', async () => {
+  const headersFor = async (url) => {
+    let observed = null;
+    await fetchGbfsUpstream(url, {
+      fetchImpl: async (_url, options) => {
+        observed = options.headers;
+        return new Response(STATION_BODY, { status: 200 });
+      },
+    });
+    return observed;
+  };
+  const entur = await headersFor(
+    'https://api.entur.io/mobility/v2/gbfs/v2/kolumbusbysykkel/station_status',
+  );
+  assert.equal(entur['ET-Client-Name'], 'gods-eye-view-bikeshare');
+  assert.equal(entur['Client-Identifier'], GBFS_CLIENT_IDENTIFIER);
+  const lyft = await headersFor(STATION_URL);
+  assert.equal(lyft['ET-Client-Name'], undefined);
+});
+
 test('GBFS upstream fetch forwards a non-redirect error status for the middleware to relay', async () => {
   const result = await fetchGbfsUpstream(STATION_URL, {
     fetchImpl: async () => new Response(null, { status: 404 }),

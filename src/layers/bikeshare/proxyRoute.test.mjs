@@ -248,6 +248,58 @@ test('the Norwegian city-bike systems are served through the mounted route', asy
   );
 });
 
+test('every Norwegian city-bike system is registered and reachable through the mounted route', async () => {
+  const expected = {
+    'stavanger-kolumbus':
+      'https://api.entur.io/mobility/v2/gbfs/v2/kolumbusbysykkel/station_status',
+    'skien-farte':
+      'https://api.entur.io/mobility/v2/gbfs/v2/fartebysykkel/station_status',
+    'lillestrom-bysykkel':
+      'https://api.cyclocity.fr/contracts/lillestrom/gbfs/station_status.json',
+  };
+  const upstream = {};
+  for (const [id, statusUrl] of Object.entries(expected)) {
+    const system = CITY_BY_ID.get(id);
+    assert.ok(system, `${id} is registered`);
+    assert.equal(system.stationStatusUrl, statusUrl);
+    upstream[system.stationInformationUrl] = STATION_INFORMATION;
+    upstream[system.stationStatusUrl] = STATION_STATUS;
+  }
+
+  await withUpstream(upstream, async (requested) => {
+    const source = createBikeshareSource({ fetchImpl: mountGbfsProxy() });
+    for (const id of Object.keys(expected)) {
+      const system = CITY_BY_ID.get(id);
+      const info = await source.getStations(system.stationInformationUrl);
+      const status = await source.getStations(system.stationStatusUrl);
+      assert.equal(info.data.stations.length, 1, `${id} information`);
+      assert.equal(status.data.stations.length, 1, `${id} status`);
+    }
+    assert.equal(requested.length, 6);
+
+    // Entur's extensionless station_information keeps its 5-minute cache.
+    const kolumbus = CITY_BY_ID.get('stavanger-kolumbus');
+    const response = await mountGbfsProxy()(
+      '/api/gbfs/' + encodeURIComponent(kolumbus.stationInformationUrl),
+    );
+    assert.equal(response.headers.get('cache-control'), 'public, max-age=300');
+  });
+});
+
+test('the mounted route keeps multi-API hosts to their GBFS tree', async () => {
+  await withUpstream({}, async (requested) => {
+    const mounted = mountGbfsProxy();
+    for (const target of [
+      'https://api.entur.io/journey-planner/v3/station_status',
+      'https://api.cyclocity.fr/other/station_status.json',
+    ]) {
+      const response = await mounted('/api/gbfs/' + encodeURIComponent(target));
+      assert.equal(response.status, 400, target);
+    }
+    assert.deepEqual(requested, []);
+  });
+});
+
 test('the query-string shape the client used to send is refused by the mounted route', async () => {
   await withUpstream(
     { [AUSTIN.stationStatusUrl]: STATION_STATUS },
