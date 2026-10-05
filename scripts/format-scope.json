@@ -419,6 +419,8 @@
   "src/data/rocketLaunches.js",
   "src/layers/satellites/source.test.mjs",
   "src/layers/launches/source.test.mjs",
+  "src/layers/launches/model.test.mjs",
+  "src/layers/launches/policyHelpers.test.mjs",
   "src/layers/installations/lifecycle.js",
   "src/layers/installations/viewport.js",
   "src/layers/installations/controls.js",
