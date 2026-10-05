@@ -236,6 +236,30 @@ export const CALGARY_DOWNTOWN = { lat: 51.0461, lon: -114.0626 };
  * body cannot be buffered without limit. */
 export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
+/** Concello de Vigo open-data traffic cameras: one keyless ArcGIS
+ * FeatureServer for the whole city (~59 cameras); frames are stills on
+ * camaras.vigo.org, refreshed roughly every minute per the dataset
+ * description. Source / license record: https://datos-ckan.vigo.org/dataset/t-camaras
+ * (this dataset declares Open Data Commons Attribution License (ODC-BY),
+ * which governs over the portal's general CC BY 4.0 default). */
+export const VIGO_CAMERAS_URL =
+  'https://datos.vigo.org/arcgis/trafico/camaras-trafico/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson';
+/** The only origin Vigo camera frames may come from. The catalog publishes
+ * `http://` only; the host does not actually answer on plain HTTP (verified
+ * 2026-09-27 — the connection fails outright, it does not even redirect), so
+ * URLs are upgraded to HTTPS and then pinned to that origin before
+ * registration, the same pattern the Calgary pack uses. The host also
+ * answers with no `Content-Type` header at all, handled by the CCTV media
+ * proxy's magic-byte sniff fallback (see server/providers/cctv/media.js). */
+export const VIGO_IMAGE_ORIGIN = 'https://camaras.vigo.org/';
+export const DEFAULT_VIGO_MAX_SOURCES = 80;
+/** Praza do Rei / city centre: the prioritization anchor. */
+export const VIGO_CENTER = { lat: 42.2328, lon: -8.7226 };
+/** Hard ceiling on the Vigo catalog body. The whole city is ~59 rows and
+ * well under 100 KB; this only exists so an upstream that streams an
+ * unbounded body cannot be buffered without limit. */
+export const VIGO_MAX_CATALOG_BYTES = 2 * 1024 * 1024;
+
 /** DelDOT CCTV: one keyless statewide JSON catalog; live video via RTMP-over-HTTP (rtmpt:80). */
 export const DELDOT_CCTV_URL = 'https://tmc.deldot.gov/json/videocamera.json';
 export const DEFAULT_DELDOT_MAX_SOURCES = 300;
