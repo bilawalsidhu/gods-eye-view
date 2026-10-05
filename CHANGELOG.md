@@ -10,6 +10,17 @@
   now reaches from Kristiansand to Kirkenes while still leaving Helsinki to
   HSL. Ruter does not publish to either open Entur feed.
 
+- Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
+  list is one keyless GeoJSON request to the agency's OGC API view of its
+  DATEX 3.1 CCTV table, so no DATEX account is needed. Every working camera
+  loads (~850; faulty ones are dropped) under one "Norway" category, and the
+  ~135 working cameras that publish HLS play as live video through the existing in-memory
+  relay with the still as fallback. Frames and manifests are pinned to each
+  camera's own path on the agency hosts. `CCTV_VEGVESEN_ENABLED=0` disables
+  the pack, `CCTV_VEGVESEN_MAX_SOURCES` caps it (keeping cameras nearest the
+  largest cities) and `CCTV_VEGVESEN_VIDEO=0` keeps stills only. Attributed
+  under NLOD 2.0.
+
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
 - Ship each bundled data pack once. The region, marine, admin-boundary,
