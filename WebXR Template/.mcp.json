@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "blender": {
+      "type": "stdio",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "& (Join-Path $env:CLAUDE_PROJECT_DIR '.codex/start-blender-mcp.ps1')"
+      ]
+    }
+  }
+}

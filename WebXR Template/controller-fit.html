@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Controller hand fit</title></head>
+<body class="fit-page">
+ <canvas id="viewport"></canvas>
+ <main class="fit-panel">
+  <p class="eyebrow">DESKTOP CALIBRATION</p><h1>Controller hand fit</h1>
+  <p>The Quest Touch Plus controller is fixed at its runtime origin. Move only the virtual hand relative to it.</p>
+  <dl id="offset-readout" aria-live="polite"></dl>
+  <div class="actions"><button id="enter-mr" type="button">Enter MR</button><button id="copy-offsets" type="button">Copy offsets</button><button id="reset-fit" type="button">Reset</button></div>
+  <p class="hint">Drag to orbit · Scroll to zoom · Sliders use inches</p>
+ </main>
+ <div id="gui" aria-label="Controller hand position controls"></div><div id="toast" role="status"></div>
+ <script type="module" src="./src/controller-fit.js"></script>
+</body></html>

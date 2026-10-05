@@ -1,0 +1,8 @@
+# Project-local Blender MCP setup. Codex loads this only for a trusted project.
+[mcp_servers.blender]
+command = "powershell.exe"
+args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ".codex/start-blender-mcp.ps1"]
+cwd = "."
+startup_timeout_sec = 120
+tool_timeout_sec = 120
+enabled = true

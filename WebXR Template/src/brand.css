@@ -1,0 +1,11 @@
+:root {
+  --brand-background: #101b24;
+  --brand-surface: #203541;
+  --brand-text: #f1f8fa;
+  --brand-muted: #c7d8dc;
+  --brand-accent: #a7e2d4;
+  --brand-accent-text: #102b30;
+  --brand-border: #76959c;
+  --brand-font-body: "Trebuchet MS", sans-serif;
+  --brand-font-display: "Georgia", serif;
+}

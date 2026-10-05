@@ -1,0 +1,97 @@
+/* The desktop crosshair and its click-to-play panel. Brand tokens throughout, so an application
+   that swaps its identity pack gets a crosshair that belongs to the scene rather than a stock
+   white reticle. Both sit above the canvas and below the application's own chrome. */
+
+.desktop-reticle {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  pointer-events: none;
+  /* The glyph sits dead centre; the label and hint hang below it without moving it. */
+  grid-template-rows: 28px auto auto;
+}
+
+.desktop-reticle svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: var(--brand-text);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* A crosshair over a bright wall needs the outline; over a dark one the glow reads instead. */
+  filter: drop-shadow(0 0 2px rgb(0 0 0 / .65));
+  opacity: .85;
+  transition: opacity .12s ease, transform .12s ease;
+}
+
+/* One <g> per state, only the active one drawn. Swapping visibility rather than rebuilding the
+   markup keeps the crosshair from flickering as the ray crosses between two targets. */
+.desktop-reticle [data-glyph] { display: none; }
+.desktop-reticle[data-state="idle"] [data-glyph="idle"],
+.desktop-reticle[data-state="use"] [data-glyph="use"],
+.desktop-reticle[data-state="grab"] [data-glyph="grab"],
+.desktop-reticle[data-state="holding"] [data-glyph="holding"],
+.desktop-reticle[data-state="far"] [data-glyph="far"] { display: block; }
+
+.desktop-reticle[data-state="idle"] svg { opacity: .5; }
+.desktop-reticle[data-state="grab"] svg { stroke: var(--brand-accent); opacity: 1; transform: scale(1.06); }
+.desktop-reticle[data-state="holding"] svg { stroke: var(--brand-accent); opacity: 1; }
+.desktop-reticle[data-state="far"] svg { opacity: .38; }
+
+.desktop-reticle-label,
+.desktop-reticle-hint {
+  margin: 0;
+  text-align: center;
+  text-shadow: 0 1px 3px rgb(0 0 0 / .8);
+  min-height: 1em;
+}
+.desktop-reticle-label { font: 600 13px/1.3 var(--brand-font-body); color: var(--brand-text); }
+.desktop-reticle-hint { font: 700 10px/1.4 var(--brand-font-body); letter-spacing: .14em; text-transform: uppercase; color: var(--brand-muted); }
+/* Nothing under the crosshair means nothing to say: the label row collapses rather than leaving
+   a gap that makes the crosshair look off-centre. */
+.desktop-reticle[data-state="idle"] .desktop-reticle-label,
+.desktop-reticle[data-state="idle"] .desktop-reticle-hint { opacity: 0; }
+
+/* A prompt, not a door: it never takes pointer events, so the application's own panels and
+   buttons stay clickable behind it. The gesture pointer lock needs is a click on the scene. */
+.desktop-capture {
+  position: fixed;
+  left: 50%;
+  top: 62%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 26px;
+  max-width: min(42ch, 90vw);
+  text-align: center;
+  pointer-events: none;
+  color: var(--brand-text);
+  border: 1px solid color-mix(in srgb, var(--brand-border) 60%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--brand-background) 78%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.desktop-capture-title { font: 700 clamp(17px, 2.4vw, 23px)/1.15 var(--brand-font-display); letter-spacing: -.02em; }
+.desktop-capture-lines {
+  font: 700 10px/1.8 var(--brand-font-body);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--brand-muted);
+}
+
+/* A headset session owns the whole view; neither belongs over it. */
+body.xr-active .desktop-reticle,
+body.xr-active .desktop-capture { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-reticle svg { transition: none; }
+}

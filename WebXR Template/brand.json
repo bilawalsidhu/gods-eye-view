@@ -1,0 +1,23 @@
+{
+  "id": "neutral",
+  "name": "WebXR Starter",
+  "tagline": "IMMERSIVE LEARNING / XR FRAMEWORK",
+  "colors": {
+    "background": "#101b24",
+    "surface": "#203541",
+    "text": "#f1f8fa",
+    "muted": "#c7d8dc",
+    "accent": "#a7e2d4",
+    "accentText": "#102b30",
+    "border": "#76959c",
+    "sceneBackground": "#b7d5d0",
+    "sceneFloor": "#75948a",
+    "sceneWall": "#42635b",
+    "scenePedestal": "#26453d"
+  },
+  "fonts": {
+    "body": { "family": "Trebuchet MS" },
+    "display": { "family": "Georgia" }
+  },
+  "assets": { "logo": null, "favicon": null }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "webxr-template",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5174",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test",
+    "sync:xr-profiles": "node scripts/sync-xr-profiles.mjs",
+    "check:deploy": "node scripts/check-deployment.mjs"
+  },
+  "dependencies": {
+    "cannon-es": "0.20.0",
+    "three": "0.186.0"
+  },
+  "devDependencies": {
+    "@webxr-input-profiles/assets": "^1.0.20",
+    "vite": "^8.2.2"
+  }
+}
