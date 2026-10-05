@@ -1,5 +1,9 @@
 # Investigate the observed area
 
+Historical imagery and soil texture now have dedicated controls. See
+[dated imagery and soil estimates](AREA-SCIENCE.md) for coverage, units,
+uncertainties and the distinction between offline metadata and online imagery.
+
 Open **INVESTIGATE AREA** in the standalone globe. It reads the Earth under the
 center of the view without moving the camera or adding layers. Review or edit the
 coordinates and radius (0.1–100 km), unlock the separate local area vault and
@@ -22,8 +26,9 @@ Lists retain at most 25 rows per source plus matched total and truncation. Recor
 keep provenance, attribution, coverage, retrieval time, known source dates and
 missing/stale states. Inventory observation dates are unknown. An unavailable
 source or empty list does not prove absence. Queries follow existing area
-semantics and coverage; no arbitrary historical search is provided. The existing
-imagery query may fetch image bytes, which this workspace discards. There is no
+semantics and coverage. Dedicated annual Landsat controls are described in
+[the scientific-source guide](AREA-SCIENCE.md). The recent-imagery query may fetch
+image bytes, which this workspace discards. There is no
 paid place search, person search, corporate registry query, general web crawler,
 screenshot capture or automated identity matching in this slice.
 

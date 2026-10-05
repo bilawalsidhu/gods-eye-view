@@ -3,6 +3,7 @@ import cesium from 'vite-plugin-cesium';
 import { DEFAULT_ALLOWED_HOSTS, hostCheckPlugin } from './allowedHosts.js';
 import { embedFramingPlugin } from './embed-framing.js';
 import { panelBuildPlugin } from './panel.js';
+import { discoveryShellPlugin } from './discovery-shell.js';
 
 /**
  * Content-Security-Policy for every document the dev/preview server serves.
@@ -56,6 +57,7 @@ export function createBrowserViteConfig({
   port = 4173,
   allowedHosts = DEFAULT_ALLOWED_HOSTS,
   command,
+  discoveryPage = false,
 } = {}) {
   return {
     plugins: [
@@ -63,6 +65,7 @@ export function createBrowserViteConfig({
       hostCheckPlugin(),
       cesium(),
       applicationHtmlPlugin(),
+      ...(discoveryPage ? [discoveryShellPlugin()] : []),
       ...plugins,
       embedFramingPlugin(),
       panelBuildPlugin(),
@@ -105,6 +108,19 @@ export function createBrowserViteConfig({
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
     },
-    build: { chunkSizeWarningLimit: 1500 },
+    build: {
+      chunkSizeWarningLimit: 1500,
+      ...(discoveryPage
+        ? {
+            rollupOptions: {
+              input: {
+                globe: 'index.html',
+                discovery: 'discovery.html',
+                planet: 'planet.html',
+              },
+            },
+          }
+        : {}),
+    },
   };
 }

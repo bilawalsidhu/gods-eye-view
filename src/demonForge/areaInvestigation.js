@@ -1,5 +1,6 @@
 import { appendLedgerEvent, verifyLedger } from './ledger.js';
 import { deriveVaultKey, encryptJson, decryptJson } from './crypto.js';
+import { SOIL_SOURCE, HISTORY_SOURCE } from '../sources/areaScience.js';
 
 export const AREA_SOURCES = Object.freeze([
   {
@@ -34,6 +35,11 @@ export const AREA_SOURCES = Object.freeze([
   },
 ]);
 
+const EVIDENCE_SOURCES = [
+  ...AREA_SOURCES,
+  { id: 'soil', url: SOIL_SOURCE },
+  { id: 'history', url: HISTORY_SOURCE },
+];
 /** Validate the only information permitted to leave the local case workspace. */
 export function validateInvestigationArea(area) {
   if (
@@ -265,7 +271,7 @@ export async function decryptInvestigationBackup(
     )
       throw new TypeError('Invalid evidence history.');
     if (entry.snapshot) {
-      const source = AREA_SOURCES.find(
+      const source = EVIDENCE_SOURCES.find(
         (source) => source.id === entry.snapshot.sourceId,
       );
       if (
@@ -275,7 +281,7 @@ export async function decryptInvestigationBackup(
         entry.snapshot.retrievedAtMs < 0 ||
         entry.snapshot.retrievedAtMs > 8.64e15 ||
         !Array.isArray(entry.snapshot.rows) ||
-        entry.snapshot.rows.length > 25
+        entry.snapshot.rows.length > (source?.id === 'history' ? 50 : 25)
       )
         throw new TypeError('Invalid source snapshot.');
       validateInvestigationArea(entry.snapshot.area);

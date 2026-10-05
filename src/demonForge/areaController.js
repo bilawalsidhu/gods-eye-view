@@ -6,9 +6,23 @@ import {
   encryptInvestigationBackup,
   decryptInvestigationBackup,
 } from './areaInvestigation.js';
+import {
+  createAreaScienceSource,
+  historicalFrameUrl,
+  SOIL_SOURCE,
+  HISTORY_SOURCE,
+} from '../sources/areaScience.js';
 
 const COPY = {
   en: {
+    history: 'Historical imagery / timelapse',
+    soil: 'Soil texture estimates',
+    historyQuery: 'Find dated Landsat frames',
+    soilQuery: 'Query center-cell soil texture',
+    soilNote:
+      'Model estimates at the center (~250 m), not an area average or mineral analysis. Mean and 5th–95th quantiles; missing values stay unknown.',
+    historyNote:
+      'Dated ~30 m scenes, not reconstructed 3D or annual composites. Clouds, seasons and data gaps affect comparisons. Images load from Planetary Computer; backups retain metadata only.',
     title: 'INVESTIGATE THIS AREA',
     intro:
       'Public location queries only. Coordinates and radius are sent to existing providers when you run a query. Notes and case data stay encrypted locally. Source coverage is limited; retrieval time is not observation time.',
@@ -33,11 +47,19 @@ const COPY = {
     note: 'Evidence text',
     confidence: 'Confidence is an operator assessment, not a source score.',
     period:
-      'Sources use their stated coverage; arbitrary historical periods are not supported.',
+      'These sources use their stated coverage. Historical Landsat has separate controls below.',
     empty:
       'No rows returned within this source coverage. This is not proof of absence.',
   },
   fr: {
+    history: 'Images historiques / timelapse',
+    soil: 'Texture du sol estimée',
+    historyQuery: 'Rechercher les scènes Landsat datées',
+    soilQuery: 'Interroger la texture au centre',
+    soilNote:
+      'Prédiction au centre (~250 m), pas une moyenne de zone ni une analyse minérale. Moyenne et quantiles 5–95 % ; les valeurs absentes restent inconnues.',
+    historyNote:
+      'Scènes datées à ~30 m, pas de 3D reconstruite ni de composites annuels. Nuages, saisons et lacunes influencent la comparaison. Images depuis Planetary Computer ; sauvegarde des métadonnées uniquement.',
     title: 'ENQUÊTER SUR CETTE ZONE',
     intro:
       'Requêtes publiques sur les lieux uniquement. Les coordonnées et le rayon sont transmis aux fournisseurs existants lors de la requête. Les notes et dossiers restent chiffrés localement. La date de consultation ne remplace pas la date d’observation.',
@@ -63,7 +85,7 @@ const COPY = {
     confidence:
       'La confiance est une appréciation humaine, pas un score du fournisseur.',
     period:
-      'Les sources utilisent leur période annoncée ; pas de recherche historique arbitraire.',
+      'Ces sources utilisent leur période annoncée. Les archives Landsat ont leurs contrôles ci-dessous.',
     empty:
       'Aucun résultat dans la couverture de cette source. Cela ne prouve pas une absence.',
   },
@@ -77,9 +99,15 @@ export function initAreaWorkspace({
   loadCatalog,
   now = Date.now,
   createId = () => crypto.randomUUID(),
+  scienceSource,
 }) {
   const el = (id) => document.getElementById(`area-${id}`);
   const dialog = el('dialog');
+  const science = scienceSource ?? createAreaScienceSource({ now });
+  const mediaCleanup = [];
+  function clearMedia() {
+    mediaCleanup.splice(0).forEach((cleanup) => cleanup());
+  }
   let record = null,
     epoch = 0,
     controller = null,
@@ -117,6 +145,7 @@ export function initAreaWorkspace({
     el('radius').value = area.radius_km;
   }
   function render() {
+    clearMedia();
     el('history').replaceChildren();
     for (const entry of record?.workflow ?? []) {
       const item = document.createElement('li');
@@ -131,6 +160,8 @@ export function initAreaWorkspace({
             'https://earthquake.usgs.gov/',
             'https://www.openstreetmap.org/copyright',
             'https://hls.gsfc.nasa.gov/',
+            SOIL_SOURCE,
+            HISTORY_SOURCE,
           ].includes(entry.snapshot.sourceUrl)
         ) {
           link.href = entry.snapshot.sourceUrl;
@@ -171,11 +202,88 @@ export function initAreaWorkspace({
           .join('\n');
         details.textContent = snapshotText;
         item.append(details);
+        if (
+          snapshot.sourceId === 'history' &&
+          snapshot.bbox &&
+          snapshot.rows?.length
+        )
+          renderTimeline(item, snapshot);
+        if (snapshot.sourceId === 'soil') {
+          const explanation = document.createElement('p');
+          explanation.textContent = copy().soilNote;
+          item.append(explanation);
+        }
       }
       el('history').append(item);
     }
   }
+  function renderTimeline(parent, snapshot) {
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '0';
+    slider.max = String(snapshot.rows.length - 1);
+    slider.value = '0';
+    slider.setAttribute('aria-label', 'Historical frame / Image historique');
+    const label = document.createElement('p');
+    const image = document.createElement('img');
+    image.className = 'area-historical-image';
+    image.alt = 'Dated Landsat crop / Extrait Landsat daté';
+    image.referrerPolicy = 'no-referrer';
+    const play = document.createElement('button');
+    play.type = 'button';
+    play.textContent = 'Play / Pause';
+    let timer = null,
+      pending = false;
+    function show() {
+      const frame = snapshot.rows[Number(slider.value)];
+      const text = `${frame.year}: ${frame.status} · ${frame.observed_at ?? 'No scene / Pas de scène'} · ${frame.cloud_percent ?? '?'}% scene clouds / nuages`;
+      label.textContent = text;
+      image.removeAttribute('src');
+      image.hidden = true;
+      pending = false;
+      if (frame.status === 'available') {
+        try {
+          image.src = historicalFrameUrl(frame, snapshot.bbox);
+          image.hidden = false;
+          pending = true;
+        } catch {
+          label.textContent = 'Invalid frame / Image invalide';
+        }
+      }
+    }
+    image.onload = () => {
+      pending = false;
+    };
+    image.onerror = () => {
+      pending = false;
+      image.hidden = true;
+      label.textContent += ' · Image unavailable / Image indisponible';
+    };
+    slider.addEventListener('input', show);
+    play.addEventListener('click', () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      } else
+        timer = setInterval(() => {
+          if (pending) return;
+          slider.value = String(
+            (Number(slider.value) + 1) % snapshot.rows.length,
+          );
+          show();
+        }, 1500);
+    });
+    mediaCleanup.push(() => {
+      clearInterval(timer);
+      image.onload = null;
+      image.onerror = null;
+      image.removeAttribute('src');
+    });
+    parent.append(label, image, slider, play);
+    show();
+  }
   function scrub() {
+    clearMedia();
     record = null;
     controller?.abort();
     controller = null;
@@ -373,6 +481,50 @@ export function initAreaWorkspace({
       }
     }),
   );
+  async function scientificQuery(kind, current) {
+    if (!record) throw new Error('Case required.');
+    const area = readArea();
+    controller = new AbortController();
+    const timer = setTimeout(() => controller?.abort(), 180000);
+    try {
+      const snapshot =
+        kind === 'soil'
+          ? await science.soil(area, {
+              depth: el('soil-depth').value,
+              signal: controller.signal,
+            })
+          : await science.history(area, {
+              startYear: Number(el('start-year').value),
+              endYear: Number(el('end-year').value),
+              stepYears: Number(el('year-step').value),
+              maxCloud: Number(el('cloud-limit').value),
+              signal: controller.signal,
+              onProgress: (done, total) => {
+                current();
+                status(`${done}/${total} years / années`);
+              },
+            });
+      current();
+      await save(
+        appendInvestigationEntry(
+          record,
+          { kind: 'observation', text: snapshot.summary, snapshot },
+          now(),
+        ),
+        current,
+      );
+      status(copy().saved);
+    } finally {
+      clearTimeout(timer);
+      controller = null;
+    }
+  }
+  listen('soil-query', 'click', () =>
+    action((current) => scientificQuery('soil', current)),
+  );
+  listen('history-query', 'click', () =>
+    action((current) => scientificQuery('history', current)),
+  );
   listen('save', 'click', () =>
     action(async (current) => {
       if (!record) throw new Error('Case required.');
@@ -446,6 +598,7 @@ export function initAreaWorkspace({
     }),
   );
   translate();
+  el('end-year').value = new Date(now()).getUTCFullYear();
   return {
     open,
     close,

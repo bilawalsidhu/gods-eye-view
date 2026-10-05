@@ -146,6 +146,16 @@
       <label><input type="checkbox" data-area-source value="datacenters" checked /> OSM datacenters / Centres de données</label>
       <label><input type="checkbox" data-area-source value="imagery" /> NASA recent imagery / Images récentes (metadata only / métadonnées conservées)</label>
       <button id="area-query" type="button" data-area-copy="query"></button></section>
+      <section><h3 data-area-copy="history"></h3><p data-area-copy="historyNote"></p>
+        <label>From / Début <input id="area-start-year" type="number" min="1982" value="1990" /></label><label>To / Fin <input id="area-end-year" type="number" min="1982" /></label>
+        <label>Year step / Pas annuel <select id="area-year-step"><option value="5">5 years / ans</option><option value="1">1 year / an</option><option value="10">10 years / ans</option></select></label>
+        <label>Max scene cloud / Nuages max (%) <input id="area-cloud-limit" type="number" min="0" max="100" value="30" /></label>
+        <button id="area-history-query" type="button" data-area-copy="historyQuery"></button>
+      </section>
+      <section><h3 data-area-copy="soil"></h3><p data-area-copy="soilNote"></p>
+        <label>Depth / Profondeur <select id="area-soil-depth"><option value="0-5cm">0–5 cm</option><option value="5-15cm">5–15 cm</option><option value="15-30cm">15–30 cm</option><option value="30-60cm">30–60 cm</option><option value="60-100cm">60–100 cm</option><option value="100-200cm">100–200 cm</option></select></label>
+        <button id="area-soil-query" type="button" data-area-copy="soilQuery"></button>
+      </section>
       <section><label>Kind / Type <select id="area-kind"><option value="observation">Observation</option><option value="hypothesis">Hypothesis / Hypothèse</option><option value="contradiction">Contradiction</option><option value="note">Note</option><option value="manual-follow-up">Manual follow-up / Suivi manuel</option></select></label>
       <label data-area-copy="note" for="area-note"></label><textarea id="area-note" maxlength="8000"></textarea>
       <label>Confidence / Confiance <select id="area-confidence"><option value="unassessed">Unassessed / Non évaluée</option><option value="low">Low / Faible</option><option value="medium">Medium / Moyenne</option><option value="high">High / Élevée</option></select></label><p data-area-copy="confidence"></p>
@@ -156,5 +166,6 @@
     </div>
   </aside>
   <script type="module" src="/src/main.js"></script>
+  <!-- gev:template discovery -->
 </body>
 </html>

@@ -2,6 +2,9 @@ import { createStandaloneApplication } from './standalone/application.js';
 import { initDemonForge } from './demonForge/controller.js';
 import { createDemonForgeVault } from './demonForge/vault.js';
 import { describeError } from './standalone/errors.js';
+import { initDiscovery } from './discovery/controller.js';
+import { createDiscoveryBridge } from './standalone/discoveryBridge.js';
+import './discovery/discovery.css';
 import { initAreaWorkspace } from './demonForge/areaController.js';
 import {
   observedArea,
@@ -12,6 +15,13 @@ const application = createStandaloneApplication({
   googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,
   cesiumToken: import.meta.env.CESIUM_ION_TOKEN,
   allowQaRegistration: import.meta.env.DEV,
+});
+const discovery = initDiscovery({
+  document,
+  ...createDiscoveryBridge(application),
+});
+window.addEventListener('beforeunload', () => discovery.destroy(), {
+  once: true,
 });
 
 const demonForge = initDemonForge({ document, vault: createDemonForgeVault() });

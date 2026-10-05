@@ -8,6 +8,7 @@ body.ui-clean-view #area-open, body.recording-mode #area-open, body.cockpit-mode
 #area-dialog label:has([data-area-source]) { display: flex; align-items: center; gap: 0.6rem; padding: 0.35rem 0; }
 #area-dialog input[type="checkbox"] { width: 1rem; height: 1rem; min-height: 0; flex: 0 0 1rem; }
 #area-dialog a { color: #7edcef; }
+.area-historical-image { width: 100%; height: auto; max-height: 30rem; object-fit: contain; background: #05090c; }
 #demon-forge-open {
   position: fixed;
   top: 32px;

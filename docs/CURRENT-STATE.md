@@ -2,6 +2,46 @@
 
 Updated: October 5, 2026
 
+**Discovery routing:** local lookup now uses exact source IDs, a normalized index
+and a bounded session cache. Optional metadata-only diagnostics record lookup
+time and zero model/API calls; shadow recommendations never execute actions.
+Twelve authored fixtures match expected cards. A read-only real Parcimonia core
+probe retains strict locality and records 12/12 abstentions because the inspected
+prototype cannot guarantee local candidates. Jev/Laya/OpenJev transport contracts
+are prepared and tested with synthetic responses, disabled by default; no model
+execution or paid service is claimed. See [routing proof limits](DISCOVERY-ROUTING.md).
+
+**Planetary overviews:** Moon/Mars discovery cards now open the independent
+`/planet.html` page. A lightweight WebGL sphere uses bundled original NASA JPEGs,
+positive-east body coordinates and installed source-site markers. Its own offline
+worker caches only the page, local assets and maps. This is an approximate static
+overview with illustrative lighting, not raised topography, a current solar phase
+or mineral/soil inference. No Earth layers or private vaults are constructed.
+See [planetary implementation and map provenance](PLANETARY-OVERVIEWS.md).
+
+**Local learning journeys:** discovery now offers monuments, Moon/Mars sites and
+aircraft-family routes with source-reading quizzes. Steps select the installed
+card and its coordinate body. Last answers stay in a separate local study key,
+are excluded from public pack export/web requests, and can be reset. This is
+source-reading practice, not a mastery assessment or model-training result.
+
+**Public discovery library:** `DISCOVER` opens 15 bundled CC0 Wikidata cards with
+English/French text, source IDs/revisions and links. Local lookup is deterministic;
+geographic web lookup is explicit and optional. The separate `/discovery.html`
+build supports a narrowly scoped offline shell with no Cesium, map imagery or
+private API caching. Public packs and private case vaults remain separate. Earth
+navigation reuses the existing coordinate action; Moon/Mars use independent overview pages.
+See [discovery coverage and offline use](DISCOVERY.md).
+
+**Area science:** historical Landsat controls query yearly candidates from
+Collection 2 via Planetary Computer and play a fixed-area crop with acquisition
+dates/cloud metadata and gaps. SoilGrids WMS returns estimated center-cell
+sand/silt/clay percentages and 5th/95th quantiles by depth. Missing data is not
+replaced by inferred values. Metadata is encrypted locally; image bytes are
+online-only. These are individual ~30 m scenes and ~250 m static soil models,
+not reconstructed 3D, area-averaged samples or mineral assays. See
+[scientific-source boundaries](AREA-SCIENCE.md).
+
 **Area investigation:** `INVESTIGATE AREA` reads the Earth under the view center
 through a standalone facade. Explicit geographic queries reuse existing tools
 for USGS earthquakes, bundled OSM dams/datacenters and NASA recent imagery.
@@ -9,7 +49,7 @@ Bounded source results, provenance, coverage and retrieval/source dates are kept
 in a separate encrypted vault. Evidence distinguishes observations, hypotheses,
 contradictions and manual follow-up. Close cancels queries and scrubs the UI.
 Encrypted backup restores to a new ID after authentication/history validation.
-No person search, arbitrary historical query, screenshot capture or personal case
+No person search, screenshot capture or personal case
 input to public queries is provided. See [area workflow](AREA-INVESTIGATION.md).
 
 > **Demon Forge boundary note:** the workspace is optional and local-first, imports only a user-selected Social Analyzer report that was generated outside the app, requires a signed mandate with explicit source categories and permitted actions for non-self cases, keeps evidence and workflow encrypted behind existing-case passphrase authentication, and persists workflow changes in an append-only ledger. Human confirmation is required before any request draft progresses, and there is no automatic request submission. No verified source directory ships in the current build, so browser handoff is disabled and the HTTPS contact field is only an unverified drafting reference. The first policy pack is France/EU-first, and the request text is not legal advice.

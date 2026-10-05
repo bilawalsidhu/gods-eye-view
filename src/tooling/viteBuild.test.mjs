@@ -82,10 +82,11 @@ test('root config retains existing named exports and standalone provider order',
     assert.equal(compatibility[name], value, name);
   const config = standaloneConfig({ mode: 'test' });
   assert.deepEqual(
-    config.plugins.slice(3, -4).map((plugin) => plugin.name),
+    config.plugins.slice(4, -4).map((plugin) => plugin.name),
     providers.localProviderPlugins().map((plugin) => plugin.name),
   );
   assert.equal(config.plugins.at(-5).name, 'gev-key-setup');
+  assert.equal(config.plugins[3].name, 'standalone-discovery-shell');
   // The local MCP route follows every provider and precedes the API fallback.
   assert.equal(config.plugins.at(-4).name, 'local-mcp');
   assert.equal(config.plugins.at(-3).name, 'api-not-found');
