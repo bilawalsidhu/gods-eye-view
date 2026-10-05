@@ -2065,8 +2065,7 @@
       "src/layers/cits/index.js",
       "src/layers/cits/model.js",
       "src/layers/cits/source.js",
-      "src/layers/cits/brackets.js",
-      "src/layers/cits/panel.js"
+      "src/layers/cits/brackets.js"
     ],
     "external": [
       "hls.js",
@@ -2560,8 +2559,7 @@
       "src/layers/cits/index.js",
       "src/layers/cits/model.js",
       "src/layers/cits/source.js",
-      "src/layers/cits/brackets.js",
-      "src/layers/cits/panel.js"
+      "src/layers/cits/brackets.js"
     ],
     "external": [
       "hls.js",
@@ -3123,6 +3121,29 @@
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js"
     ],
+    "external": []
+  },
+  "cits": {
+    "exports": ["./layers/cits"],
+    "modules": [
+      "src/layers/cits/index.js",
+      "src/layers/cits/model.js",
+      "src/layers/cits/source.js",
+      "src/layers/cits/brackets.js",
+      "src/data/trafficPresetStyle.js",
+      "src/data/detectionDraw.js",
+      "src/overlays/worldOverlayTokens.js",
+      "src/sources/phaseTiming.js",
+      "src/layers/traffic/policy.js",
+      "src/layers/traffic/surface.js",
+      "src/renderGovernor.js",
+      "src/celestialRing.js"
+    ],
+    "external": ["cesium"]
+  },
+  "cits-source": {
+    "exports": ["./layers/cits/source"],
+    "modules": ["src/layers/cits/source.js"],
     "external": []
   },
   "tools": {

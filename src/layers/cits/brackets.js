@@ -10,7 +10,7 @@ import {
   DETECTION_STYLE,
   DETECTION_THEME_MAP,
 } from '../../overlays/worldOverlayTokens.js';
-import { citsSpeedBucket } from './model.js';
+import { citsFormatAge, citsSpeedBucket } from './model.js';
 
 /**
  * Always-on detection brackets for C-ITS trams.
@@ -48,25 +48,21 @@ export function citsBracketCard(record, now = Date.now()) {
     record.speedKmh != null ? `${Math.round(record.speedKmh)} km/h` : '– km/h',
   );
   if (record.heading != null) parts.push(`${Math.round(record.heading)}°`);
-  const age = now - Date.parse(record.lastSeen || '');
-  if (Number.isFinite(age))
-    parts.push(
-      age < 90_000
-        ? `${Math.max(0, Math.round(age / 1000))}s`
-        : `${Math.round(age / 60_000)}m`,
-    );
+  const age = citsFormatAge(now - Date.parse(record.lastSeen || ''));
+  if (age) parts.push(age);
   return { primary, secondary: parts.join(' · ') };
 }
 
 /**
  * Create the painter for one layer instance.
- * @param {{viewer:function():Cesium.Viewer|null, dots:function():Iterable<{point:Cesium.PointPrimitive, record:object}>, style:function():string}} deps
+ * @param {{viewer:function():Cesium.Viewer|null, dots:function():Iterable<{point:Cesium.PointPrimitive, record:object}>, style:function():string, maxDistance?:function():number, selectedRecord?:function():object|null}} deps
  */
 export function createCitsBracketPainter({
   viewer,
   dots,
   style,
   maxDistance = () => CITS_BRACKET_MAX_DISTANCE_M,
+  selectedRecord = () => null,
 }) {
   const scratch = new Cesium.Cartesian2();
   let charWidth = 0;
@@ -136,8 +132,12 @@ export function createCitsBracketPainter({
     const taken = [];
     const uiRects = frame.uiRects?.slice(0, frame.uiRectCount ?? 0) || [];
     let cards = 0;
+    // The selected tram's facts are on its selected card; a callout beside
+    // it would only repeat them underneath.
+    const selected = selectedRecord();
     for (const item of visible) {
       if (cards >= CITS_BRACKET_MAX_CARDS) break;
+      if (item.record === selected) continue;
       const { primary, secondary } = citsBracketCard(item.record, now);
       const card = measureLabelCard(primary, secondary, charWidth);
       const placements = [

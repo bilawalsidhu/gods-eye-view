@@ -970,17 +970,25 @@ vehicle is an anonymous dot (keyed per-process hash, kind, position, speed,
 report age) and is never selectable, bracketed or handed to detection. Vehicle
 tracks are neither returned nor kept. `CITS_OTM_FULL_STREAM=1` enables the
 `mode=full` mirror of `/ws_ext`; otherwise it answers 403 and the layer hides
-its bandwidth chips.
+its bandwidth chips. Errors are snake_case codes (`method_not_allowed`,
+`unknown_route`, `invalid_cits_query`, `rate_limited`, `full_stream_disabled`,
+`cits_unavailable`), and each client may make 240 requests a minute (2,400 in
+total) before a 429 with `Retry-After`.
 
 `src/layers/cits/` draws stations as Street Traffic-style point primitives on
 the rendered surface, interpolated between 1.5 s polls, with preset-aware
 colours; DENM corridors as ground glow lines; MAPEM lanes as one ground
 primitive whose per-instance colours follow SPaT phases. Trams get detection
 brackets and two-line cards on a world-overlay paint lane, independent of the
-global detection mode; bus and hazard labels use the overlay host. The right
-rail's C-ITS panel (`#cits-panel`) sets visibility ranges, dot size and shown
-kinds, stored per viewer in `localStorage`.
-
+global detection mode; bus and hazard labels use the overlay host. Clicking a
+tram, bus, traffic light, lane or hazard publishes one `selected` card on the
+`cits-selected` overlay source; an empty-space click clears it, a sibling
+layer's pick leaves it alone, and anonymous vehicles never get one. The layer
+row carries the controls: BRACKETS, stepped VEHICLE / LIGHT / LABEL / BRACKET
+RANGE and DOT SIZE chips, RESET, a colour legend and a kind list with live
+counts that switches kinds and signal lanes on and off. Settings are stored per
+viewer in `localStorage`. Zooming out past the tiled cover reports the
+`zoom-in` guidance status, not an error.
 
 ## GBFS upstream bounds
 
@@ -2957,6 +2965,7 @@ its criteria cannot be silently ignored.
 | FIRMS Active Fires ▲   | NASA FIRMS live (VIIRS ×3 NRT + MODIS NRT, trailing 24h)                                                                                                                                        | `src/data/firmsHeatmap.js`                            | `/api/firms` (`FIRMS_MAP_KEY`)                           | 10 min (proxy TTL 30 min)                                                         |
 | Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
+| C-ITS Live (V2X) 🚦 | OpenTrafficMap volunteer C-ITS receivers (keyless; anonymous dots for private vehicles) | `src/layers/cits/` via `src/app/layers/cits.js` | `/api/cits/state` + `/api/cits/intersections` (WebSocket relay) | 1.5 s poll of the in-memory mirror |
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
 

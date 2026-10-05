@@ -1,19 +1,29 @@
 #!/usr/bin/env node
 /**
- * Deterministic browser proof for the C-ITS (OpenTrafficMap) layer.
+ * qa-cits.mjs — headless proof for the C-ITS (OpenTrafficMap) layer.
  *
- * Intercepts `/api/cits/*` with a fixed Graz fixture — a tram, a bus, a
- * private car, a traffic light with a live phase, a DENM hazard and one MAPEM
- * intersection — so the run never contacts OpenTrafficMap. It proves that the
- * layer and its right-rail panel appear and disappear with the layer, that
- * every fixture station is drawn, that the private car stays an anonymous dot
- * (no card on click, never handed to detection) while the tram opens a card,
- * that the panel's kind switches filter the drawn stations, that the
- * high-bandwidth chips stay hidden unless the relay offers the full stream,
- * that polling stops on disable, and that the console stays clean.
- * Screenshots are written under the gitignored `qa-shots/cits/`.
+ * Drives the REAL app in headless Chromium. `/api/cits/*` is intercepted with
+ * a fixed Graz fixture — a tram, a bus, a private car, a traffic light with a
+ * live phase, a DENM hazard and one MAPEM intersection — so the run never
+ * contacts OpenTrafficMap.
  *
- * Run: node scripts/qa-cits.mjs --url http://localhost:4173
+ *   (i)   LIVE — the row controls appear with the layer; every fixture
+ *         station and the hazard are drawn; lanes load; the high-bandwidth
+ *         chips stay hidden without the operator opt-in.
+ *   (ii)  ANONYMOUS — the private car is never handed to detection, and a
+ *         click on it publishes no card.
+ *   (iii) CARDS — a click on the tram publishes exactly one `selected` card on
+ *         the `cits-selected` world-overlay source, painted with its line and
+ *         destination; an empty-space click clears it.
+ *   (iv)  CONTROLS — the row's kind list shows live counts, and its Cars
+ *         switch removes the car dot.
+ *   (v)   TEARDOWN — disable removes every dot, the card and the row
+ *         controls; polling stops; the console stays clean.
+ *
+ * Visual proof saved to qa-shots/cits/ (gitignored).
+ *
+ * Run:  node scripts/qa-cits.mjs --url http://localhost:4173
+ * Exits non-zero on any FAIL. Does not commit anything.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -236,10 +246,17 @@ async function main() {
     }, CENTER);
     await sleep(3000);
 
-    const panelBefore = await page.evaluate(
-      () => document.getElementById('cits-panel')?.hidden,
+    const rowControlsShown = () =>
+      page.evaluate(() => {
+        const node = document.querySelector(
+          '[data-layer-id="cits"] .data-toggle-controls',
+        );
+        return Boolean(node && !node.hidden);
+      });
+    check(
+      '(i) LIVE — row controls are hidden while the layer is off',
+      (await rowControlsShown()) === false,
     );
-    check('panel is hidden while the layer is off', panelBefore === true);
 
     await page.evaluate(() =>
       window.__godsEyeView.dataManager.setEnabled('cits', true, {
@@ -255,7 +272,7 @@ async function main() {
     await sleep(2500);
 
     const snapshot = () =>
-      page.evaluate(() => {
+      page.evaluate(async () => {
         const viewer = window.__godsEyeView.viewer;
         const dots = {};
         for (const collection of viewer.scene.primitives._primitives)
@@ -266,40 +283,78 @@ async function main() {
               );
         const layer =
           window.__godsEyeView.dataManager.layers.get('cits').module;
+        const { getOverlayPaintRect, getWorldOverlayDiagnostics } =
+          await import('/src/overlays/worldOverlay.js');
+        const diagnostics = getWorldOverlayDiagnostics();
+        // Paint rects are valid for one frame: read them right after a render.
+        const painted = await new Promise((resolve) => {
+          let frames = 0;
+          const remove = viewer.scene.postRender.addEventListener(() => {
+            const rect = getOverlayPaintRect(
+              'cits-selected',
+              'cits-card:00:30:e7:00:06:68',
+            );
+            if (rect || ++frames >= 10) {
+              remove();
+              resolve(rect);
+            } else viewer.scene.requestRender();
+          });
+          viewer.scene.requestRender();
+          setTimeout(() => {
+            remove();
+            resolve(null);
+          }, 3000);
+        });
+        const controls = document.querySelector(
+          '[data-layer-id="cits"] .data-toggle-controls',
+        );
         return {
           dots,
           stats: layer.getStats(),
           chips: layer.getRowControls().chips.map((chip) => chip.id),
           detectable: layer.getDetectableObjects().map((item) => item.id),
-          panelHidden: document.getElementById('cits-panel')?.hidden,
-          card: (() => {
-            const card = document.querySelector('.cits-card');
-            return card && !card.hidden ? card.innerText : null;
-          })(),
+          rowControls: Boolean(controls && !controls.hidden),
+          rowList: [
+            ...document.querySelectorAll(
+              '[data-layer-id="cits"] .data-row-list-item',
+            ),
+          ].map((node) => node.textContent),
+          selectedEntries: diagnostics.entriesBySource?.['cits-selected'] || 0,
+          card: painted?.entry
+            ? [painted.entry.title, ...(painted.entry.details || [])].join(
+                '\n',
+              )
+            : null,
         };
       });
 
     let state = await snapshot();
-    check('panel appears with the layer', state.panelHidden === false);
+    check('(i) LIVE — row controls appear with the layer', state.rowControls);
     check(
-      'every fixture station and the hazard are drawn',
+      '(i) LIVE — every fixture station and the hazard are drawn',
       Object.keys(state.dots).length === 5,
       `${Object.keys(state.dots).length} dots`,
     );
     check(
-      'intersection lanes are loaded',
+      '(i) LIVE — intersection lanes are loaded',
       state.stats.intersections === 1,
       `${state.stats.intersections}`,
     );
     check(
-      'high-bandwidth chips stay hidden without the operator opt-in',
+      '(i) LIVE — high-bandwidth chips stay hidden without the operator opt-in',
       !state.chips.some((id) => id.startsWith('bandwidth-')),
       state.chips.join(','),
     );
     check(
-      'the anonymous car is never handed to detection',
+      '(ii) ANONYMOUS — the car is never handed to detection',
       !state.detectable.some((id) => id.includes('anon-')),
       state.detectable.join(','),
+    );
+    check(
+      '(iv) CONTROLS — the kind list shows live counts',
+      state.rowList.some((text) => /^1\s*Trams$/.test(text)) &&
+        state.rowList.some((text) => /^1\s*Cars$/.test(text)),
+      state.rowList.join(' | '),
     );
     await page.screenshot({ path: path.join(SHOTS_DIR, 'cits-live.png') });
 
@@ -330,7 +385,7 @@ async function main() {
         { x: at.x, y: at.y },
       );
       await page.mouse.click(at.x, at.y);
-      await sleep(500);
+      await sleep(800);
       return picked;
     };
     const fixture = stateFixture().objects;
@@ -341,39 +396,63 @@ async function main() {
       id.includes('00:30:e7'),
     );
     const carPick = await clickStation(carRecord.lon, carRecord.lat, carId);
-    check('the click lands on the car dot', carPick === carId, `${carPick}`);
+    check(
+      '(ii) ANONYMOUS — the click lands on the car dot',
+      carPick === carId,
+      `${carPick}`,
+    );
     state = await snapshot();
-    check('clicking the anonymous car opens no card', state.card === null);
+    check(
+      '(ii) ANONYMOUS — clicking the car publishes no card',
+      state.selectedEntries === 0,
+      `${state.selectedEntries} selected entries`,
+    );
 
     await clickStation(tramRecord.lon, tramRecord.lat, tramId);
     state = await snapshot();
     check(
-      'clicking the tram opens its card',
-      /Line: 6/.test(state.card || '') && /St\. Peter/.test(state.card || ''),
+      '(iii) CARDS — clicking the tram publishes one selected card',
+      state.selectedEntries === 1,
+      `${state.selectedEntries} selected entries`,
+    );
+    check(
+      '(iii) CARDS — the painted card names the line and destination',
+      /^TRAM · 6 → St\. Peter/.test(state.card || ''),
       (state.card || '').replace(/\n/g, ' | '),
     );
     await page.screenshot({ path: path.join(SHOTS_DIR, 'cits-card.png') });
 
-    await page.evaluate(() => {
-      const button = [
-        ...document.querySelectorAll('#cits-panel .cits-kind'),
-      ].find((node) => /Cars/.test(node.textContent));
-      button?.click();
-    });
+    // Empty space: well away from every fixture station.
+    await page.mouse.click(120, 820);
+    await sleep(800);
+    state = await snapshot();
+    check(
+      '(iii) CARDS — an empty-space click clears the card',
+      state.selectedEntries === 0,
+      `${state.selectedEntries} selected entries`,
+    );
+
+    const toggleCars = () =>
+      page.evaluate(() => {
+        const button = [
+          ...document.querySelectorAll(
+            '[data-layer-id="cits"] .data-row-list-item',
+          ),
+        ].find((node) => /Cars$/.test(node.textContent));
+        button?.click();
+        return Boolean(button);
+      });
+    const clicked = await toggleCars();
     await sleep(2500);
     state = await snapshot();
     check(
-      'the Cars switch removes the car dot',
-      !Object.keys(state.dots).some((id) => id.includes('anon-0')) &&
+      '(iv) CONTROLS — the Cars switch removes the car dot',
+      clicked &&
+        !Object.keys(state.dots).some((id) => id.includes('anon-0')) &&
         Object.keys(state.dots).length === 4,
       `${Object.keys(state.dots).length} dots`,
     );
-    await page.evaluate(() => {
-      const button = [
-        ...document.querySelectorAll('#cits-panel .cits-kind'),
-      ].find((node) => /Cars/.test(node.textContent));
-      button?.click();
-    });
+    await toggleCars();
 
     await page.evaluate(() =>
       window.__godsEyeView.dataManager.setEnabled('cits', false, {
@@ -384,17 +463,19 @@ async function main() {
     const requestsAtDisable = citsRequests;
     state = await snapshot();
     check(
-      'disable removes every dot and hides the panel',
-      Object.keys(state.dots).length === 0 && state.panelHidden === true,
+      '(v) TEARDOWN — disable removes every dot, the card and the row controls',
+      Object.keys(state.dots).length === 0 &&
+        state.selectedEntries === 0 &&
+        state.rowControls === false,
     );
     await sleep(4000);
     check(
-      'polling stops after disable',
+      '(v) TEARDOWN — polling stops after disable',
       citsRequests === requestsAtDisable,
       `${citsRequests - requestsAtDisable} late request(s)`,
     );
     check(
-      'no console errors',
+      '(v) TEARDOWN — no console errors',
       consoleErrors.length === 0,
       consoleErrors.slice(0, 3).join(' | '),
     );

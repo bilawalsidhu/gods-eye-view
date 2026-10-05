@@ -184,40 +184,95 @@ export function citsObjectLabel(object) {
   return null;
 }
 
-/** Plain-text detail rows for the info card. */
-export function citsDetailRows(object, now = Date.now()) {
-  const rows = [['Type', citsKindLabel(object.kind)]];
-  if (object.name)
-    rows.push([object.kind === 'hazard' ? 'Event' : 'Name', object.name]);
-  if (object.line) rows.push(['Line', object.line]);
-  if (object.destination) rows.push(['Destination', object.destination]);
-  if (object.vehicleNumber) rows.push(['Vehicle no.', object.vehicleNumber]);
-  if (object.speedKmh != null)
-    rows.push(['Speed', `${Math.round(object.speedKmh)} km/h`]);
-  if (object.speedLimit != null)
-    rows.push(['Speed limit', `${object.speedLimit} km/h`]);
-  if (object.heading != null)
-    rows.push(['Heading', `${Math.round(object.heading)}°`]);
+/**
+ * Compact report age, as the perimeter cards write it but with seconds, since
+ * C-ITS stations report every second or so.
+ * @param {number} deltaMs - Age in milliseconds.
+ * @returns {string|null} `12s`, `4m`, `3h`, `2d`, or null when unknown.
+ */
+export function citsFormatAge(deltaMs) {
+  if (!Number.isFinite(deltaMs) || deltaMs < 0) return null;
+  if (deltaMs < 60_000) return `${Math.floor(deltaMs / 1000)}s`;
+  if (deltaMs < 3_600_000) return `${Math.floor(deltaMs / 60_000)}m`;
+  if (deltaMs < 86_400_000) return `${Math.floor(deltaMs / 3_600_000)}h`;
+  return `${Math.floor(deltaMs / 86_400_000)}d`;
+}
+
+/** Overlay source for the one click-selected station card. */
+export const CITS_SELECTED_OVERLAY_SOURCE_ID = 'cits-selected';
+const SELECTED_TITLE_CHARS = 32;
+const SELECTED_SIGNAL_GROUPS = 4;
+
+function boundTitle(text) {
+  return text.length > SELECTED_TITLE_CHARS
+    ? `${text.slice(0, SELECTED_TITLE_CHARS - 1)}…`
+    : text;
+}
+
+/**
+ * Build the overlay-host entry for the selected station. The caller supplies
+ * `position` (a getter, since vehicles glide between reports), so this model
+ * stays JSON-safe for tests.
+ * @param {Object} object - Station record from the relay (never anonymous).
+ * @param {number} [nowMs] - Current epoch milliseconds.
+ * @returns {Object} Overlay entry without `position`.
+ */
+export function buildCitsSelectedCard(object, nowMs = Date.now()) {
+  const kind =
+    object.kind === 'hazard'
+      ? 'HAZARD'
+      : citsKindLabel(object.kind).toUpperCase();
+  const subject =
+    object.kind === 'hazard'
+      ? object.name
+      : citsObjectLabel(object) || object.name;
+  const title = boundTitle(subject ? `${kind} · ${subject}` : kind);
+
+  const facts = [];
+  if (object.kind === 'hazard') facts.push('DENM warning');
+  if (object.vehicleNumber) facts.push(`vehicle ${object.vehicleNumber}`);
+  if (Number.isFinite(object.speedKmh))
+    facts.push(`${Math.round(object.speedKmh)} km/h`);
+  if (Number.isFinite(object.heading))
+    facts.push(`${Math.round(object.heading)}°`);
+  if (Number.isFinite(object.speedLimit))
+    facts.push(`limit ${object.speedLimit} km/h`);
+
+  const details = [];
+  if (facts.length) details.push(facts.join(' · '));
   if (Array.isArray(object.spat) && object.spat.length) {
-    const phases = object.spat
-      .map((group) => {
-        const info = citsSignalState(group.state);
-        return `${group.group}: ${info ? info.label : '–'}`;
-      })
-      .join(', ');
-    rows.push(['Signal groups', phases]);
+    const groups = object.spat.slice(0, SELECTED_SIGNAL_GROUPS).map((group) => {
+      const info = citsSignalState(group.state);
+      return `${group.group} ${info ? info.label : '–'}`;
+    });
+    const more = object.spat.length - SELECTED_SIGNAL_GROUPS;
+    details.push(
+      `signal ${groups.join(' · ')}${more > 0 ? ` · +${more} more` : ''}`,
+    );
   }
-  const age = now - Date.parse(object.lastSeen || '');
-  if (Number.isFinite(age)) {
-    let text;
-    if (age < 90_000) text = `${Math.max(0, Math.round(age / 1000))} s ago`;
-    else if (age < 5_400_000) text = `${Math.round(age / 60_000)} min ago`;
-    else if (age < 172_800_000) text = `${Math.round(age / 3_600_000)} h ago`;
-    else text = `${Math.round(age / 86_400_000)} days ago`;
-    rows.push(['Last heard', text]);
-  }
-  if (object.kind !== 'hazard') rows.push(['Station', object.id]);
-  return rows;
+  if (object.kind !== 'hazard') details.push(`station ${object.id}`);
+  const age = citsFormatAge(nowMs - Date.parse(object.lastSeen || ''));
+  const provenance = [
+    age ? `heard ${age} ago` : null,
+    'OpenTrafficMap receivers',
+  ].filter(Boolean);
+  if (object.stale) provenance.push('STALE');
+  details.push(provenance.join(' · '));
+
+  return {
+    id: `cits-card:${object.id}`,
+    variant: 'selected',
+    selected: true,
+    protected: true,
+    interactive: false,
+    title,
+    details,
+    accent: citsDotStyle(object).css,
+    priority: Number.MAX_SAFE_INTEGER,
+    gapPx: 15,
+    verticalOnly: true,
+    placement: 'above',
+  };
 }
 
 /** Kind groups the panel can switch on and off. */
@@ -255,54 +310,69 @@ export function citsKindGroup(kind) {
   return GROUP_BY_KIND.get(kind) || 'other';
 }
 
-/** Range sliders: camera distances in km, plus the dot size factor. */
+/**
+ * Row range chips: camera distances in km, plus the dot size factor. Each
+ * click steps to the next value and wraps, so the row needs no slider.
+ */
 export const CITS_RANGE_SETTINGS = Object.freeze([
   {
     id: 'vehicleRangeKm',
-    label: 'Vehicles visible to',
+    label: 'VEHICLE RANGE',
+    title: 'Vehicles and hazards stay visible to this camera distance',
     unit: 'km',
     min: 2,
     max: 400,
-    step: 1,
-    log: true,
+    steps: Object.freeze([5, 15, 30, 60, 120, 400]),
   },
   {
     id: 'fixedRangeKm',
-    label: 'Lights & RSUs visible to',
+    label: 'LIGHT RANGE',
+    title: 'Traffic lights, roadside units and trailers stay visible to',
     unit: 'km',
     min: 1,
     max: 400,
-    step: 1,
-    log: true,
+    steps: Object.freeze([2, 5, 10, 25, 50, 100]),
   },
   {
     id: 'labelRangeKm',
-    label: 'Labels to',
+    label: 'LABEL RANGE',
+    title: 'Line and hazard labels show to this camera distance',
     unit: 'km',
     min: 1,
     max: 60,
-    step: 1,
-    log: true,
+    steps: Object.freeze([2, 5, 10, 15, 30, 60]),
   },
   {
     id: 'bracketRangeKm',
-    label: 'Brackets to',
+    label: 'BRACKET RANGE',
+    title: 'Tram brackets and callouts show to this camera distance',
     unit: 'km',
     min: 1,
     max: 40,
-    step: 1,
-    log: true,
+    steps: Object.freeze([2, 4, 8, 15, 30]),
   },
   {
     id: 'dotScale',
-    label: 'Dot size',
+    label: 'DOT SIZE',
+    title: 'Station dot size',
     unit: '×',
     min: 0.5,
     max: 2.5,
-    step: 0.1,
-    log: false,
+    steps: Object.freeze([0.75, 1, 1.5, 2, 2.5]),
   },
 ]);
+
+/** Chip text for one range value: `60 km`, `1.5×`. */
+export function citsFormatRange(spec, value) {
+  return spec.unit === '×'
+    ? `${Number.isInteger(value) ? value.toFixed(1) : String(value)}×`
+    : `${value} ${spec.unit}`;
+}
+
+/** Next step after `value`, wrapping to the first. */
+export function citsNextRangeStep(spec, value) {
+  return spec.steps.find((step) => step > value + 1e-9) ?? spec.steps[0];
+}
 
 export const CITS_DEFAULT_SETTINGS = Object.freeze({
   vehicleRangeKm: 60,

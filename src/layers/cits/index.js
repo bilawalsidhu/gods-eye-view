@@ -6,7 +6,6 @@ import {
 } from '../../data/trafficPresetStyle.js';
 import { renderedRoadHeight } from '../traffic/surface.js';
 import { CITS_BRACKET_KINDS, createCitsBracketPainter } from './brackets.js';
-import { createCitsPanel } from './panel.js';
 import {
   CITS_BANDWIDTH_MODES,
   CITS_DOT_HEIGHT_OFFSET_M,
@@ -19,8 +18,14 @@ import {
   CITS_MIN_RADIUS_M,
   CITS_PICK_PREFIX,
   CITS_BUCKET_CSS,
+  CITS_KIND_GROUPS,
+  CITS_RANGE_SETTINGS,
+  CITS_SELECTED_OVERLAY_SOURCE_ID,
+  CITS_UNKNOWN_CSS,
+  buildCitsSelectedCard,
   citsBoundsAround,
-  citsDetailRows,
+  citsFormatRange,
+  citsNextRangeStep,
   citsDotStyle,
   citsHazardBucket,
   citsIsVehicle,
@@ -35,6 +40,12 @@ export const CITS_OVERLAY_SOURCE_ID = 'cits';
 const TILED_MAX_RADIUS_M = 35_000;
 const CITS_OVERLAY_COHORT_LIMIT = 80;
 const CITS_OVERLAY_COLLISION_CAPACITY = 40;
+/** The selected card is a one-entry source of its own, as in perimeters. */
+const SELECTED_CARD_HOST_OPTIONS = Object.freeze({
+  cohortLimit: 1,
+  collisionCapacity: 1,
+  moving: true,
+});
 const POLL_MS = 1500;
 /** Street Traffic's jam heat-line widths and alphas. */
 const HAZARD_JAM_WIDTH = 9;
@@ -66,6 +77,7 @@ export function createCitsLayer({
   source,
   overlayHost = null,
   picking = null,
+  pointer = null,
   render = null,
   screenSpaceEventHandlerFactory = null,
   overlayLanes = null,
@@ -83,8 +95,9 @@ export function createCitsLayer({
   let _enabled = false;
   let _request = null;
   let _clickHandler = null;
-  let _card = null;
   let _selectedId = null;
+  let _selectedCardKey = '';
+  let _controlsListener = null;
   let _status = 'idle';
   let _lastUpdate = null;
   let _lastError = null;
@@ -97,9 +110,9 @@ export function createCitsLayer({
   let _removePreRender = null;
   const SETTINGS_KEY = 'gev.cits.settings.v1';
   let _settings = loadSettings();
-  let _panel = null;
   let _groupCounts = {};
   let _overlayEntries = [];
+  let _lastRecords = null;
   let _counts = {};
   let _upstream = null;
   let _bracketsOn = true;
@@ -146,20 +159,15 @@ export function createCitsLayer({
     const groupsChanged = Object.keys(_settings.groups).some(
       (id) => _settings.groups[id] !== previous.groups[id],
     );
-    renderPanel();
+    notifyControls();
     _bracketLane?.requestPaint();
     _viewer?.scene.requestRender();
     if (groupsChanged && _enabled && !_request) void refresh();
   }
 
-  function renderPanel() {
-    _panel?.render(_settings, {
-      byGroup: _groupCounts,
-      intersections: _intersections.length,
-      mode: _mode,
-      status: _status,
-      upstream: _upstream,
-    });
+  /** Repaint the row controls without waiting for the next stats tick. */
+  function notifyControls() {
+    _controlsListener?.();
   }
 
   const ownsPick = (id) =>
@@ -362,6 +370,7 @@ export function createCitsLayer({
       dots: () => _dots.values(),
       style: () => _stylePreset,
       maxDistance: () => _settings.bracketRangeKm * 1000,
+      selectedRecord: () => selectedRecord(),
     });
     _bracketLane = overlayLanes.register('detection', painter, {
       id: 'cits-brackets',
@@ -570,8 +579,10 @@ export function createCitsLayer({
     {
       for (const record of records) {
         const group = record.kind === 'hazard' ? 'hazard' : 'obj';
-        const dot = _dots.get(`${CITS_PICK_PREFIX}${group}:${record.id}`);
-        if (!dot) continue;
+        const dotId = `${CITS_PICK_PREFIX}${group}:${record.id}`;
+        const dot = _dots.get(dotId);
+        // The selected station carries its name on the selected card.
+        if (!dot || dotId === _selectedId) continue;
         const distance = Cesium.Cartesian3.distance(camera, dot.point.position);
         if (distance > labelRange) continue;
         const title =
@@ -613,70 +624,97 @@ export function createCitsLayer({
     );
   }
 
-  // ─── Selection card ──────────────────────────────────────────────────────
-  function renderCard() {
-    if (!_card) return;
+  // ─── Selection card (world-overlay host) ─────────────────────────────────
+  function selectedRecord() {
     const record = _selectedId ? _dots.get(_selectedId)?.record : null;
+    return record && !record.anonymous ? record : null;
+  }
+
+  /** Publish (or drop) the one selected card; identical copy is not resent. */
+  function publishSelectedCard() {
+    if (!overlayHost) return;
+    const record = selectedRecord();
     if (!record) {
-      _card.hidden = true;
+      _selectedId = null;
+      if (!_selectedCardKey) return;
+      _selectedCardKey = '';
+      overlayHost.setEntries(
+        CITS_SELECTED_OVERLAY_SOURCE_ID,
+        [],
+        SELECTED_CARD_HOST_OPTIONS,
+      );
       return;
     }
-    _card.replaceChildren();
-    const title = documentRef.createElement('div');
-    title.textContent = 'C-ITS · OpenTrafficMap';
-    title.style.cssText =
-      'font-weight:600;margin-bottom:6px;letter-spacing:.04em;opacity:.8';
-    _card.append(title);
-    for (const [key, value] of citsDetailRows(record)) {
-      const row = documentRef.createElement('div');
-      const k = documentRef.createElement('span');
-      k.textContent = `${key}: `;
-      k.style.opacity = '0.7';
-      const v = documentRef.createElement('span');
-      v.textContent = String(value);
-      row.append(k, v);
-      _card.append(row);
+    const card = buildCitsSelectedCard(record, Date.now());
+    const key = JSON.stringify([
+      card.id,
+      card.title,
+      card.details,
+      card.accent,
+    ]);
+    if (key === _selectedCardKey) return;
+    _selectedCardKey = key;
+    const dotId = _selectedId;
+    overlayHost.setEntries(
+      CITS_SELECTED_OVERLAY_SOURCE_ID,
+      [
+        {
+          ...card,
+          // A getter: the host re-projects it each frame while the dot glides.
+          position: () => _dots.get(dotId)?.point.position,
+        },
+      ],
+      SELECTED_CARD_HOST_OPTIONS,
+    );
+  }
+
+  function select(id) {
+    if (id === _selectedId) return;
+    _selectedId = id;
+    publishSelectedCard();
+    // The selected station's ambient label steps aside for the card.
+    if (_lastRecords) publishLabels(_lastRecords);
+  }
+
+  /** Resolve a pick to one of our selectable station ids, or null. */
+  function selectableId(pickId) {
+    if (typeof pickId !== 'string') return null;
+    if (pickId.startsWith(`${CITS_PICK_PREFIX}lane:`)) {
+      const intersection = _laneIds.get(pickId)?.intersection;
+      return intersection ? `${CITS_PICK_PREFIX}obj:${intersection}` : null;
     }
-    _card.hidden = false;
+    // Anonymous vehicles are dots only: no card, no identity.
+    const dot = _dots.get(pickId);
+    return dot && !dot.record.anonymous ? pickId : null;
   }
 
   function installInteraction() {
-    if (!screenSpaceEventHandlerFactory || !documentRef || _clickHandler)
-      return;
-    _card = documentRef.createElement('div');
-    _card.className = 'cits-card';
-    _card.hidden = true;
-    _card.style.cssText =
-      'position:absolute;right:16px;bottom:96px;z-index:30;max-width:320px;' +
-      'padding:10px 12px;border-radius:8px;background:rgba(10,12,16,.88);' +
-      'color:#e9ecef;font:12px/1.5 system-ui,sans-serif;' +
-      'border:1px solid rgba(255,255,255,.15);pointer-events:none';
-    _viewer.container.append(_card);
+    if (!screenSpaceEventHandlerFactory || _clickHandler) return;
     picking?.registerPickOwner(layer.id, ownsPick);
     _clickHandler = screenSpaceEventHandlerFactory(_viewer);
     _clickHandler.setInputAction((click) => {
       if (!_enabled) return;
+      if (pointer && !pointer.isPointerFree()) return;
+      // A click on the selected card itself keeps the selection.
+      const cardHit = overlayHost?.hitTest?.(
+        click.position?.x,
+        click.position?.y,
+        { sourceId: CITS_SELECTED_OVERLAY_SOURCE_ID },
+      );
+      if (cardHit) return;
       const picked = _viewer.scene.pick(click.position);
       const pickId = picking
         ? picking.resolvePickId(picked)
         : (picked?.id ?? null);
-      // Anonymous vehicles are dots only: no card, no identity.
-      if (
-        typeof pickId === 'string' &&
-        _dots.has(pickId) &&
-        !_dots.get(pickId).record.anonymous
-      ) {
-        _selectedId = pickId;
-      } else if (
-        typeof pickId === 'string' &&
-        pickId.startsWith(`${CITS_PICK_PREFIX}lane:`)
-      ) {
-        const intersection = _laneIds.get(pickId)?.intersection;
-        _selectedId = `${CITS_PICK_PREFIX}obj:${intersection}`;
-      } else {
-        _selectedId = null;
+      const id = selectableId(pickId);
+      if (id) {
+        select(id);
+        return;
       }
-      renderCard();
+      // A sibling layer's pick (an aircraft, a camera) is not empty space:
+      // leave the selection alone and let that layer handle it.
+      if (pickId && picking?.isOwnedByOtherLayer(layer.id, pickId)) return;
+      select(null);
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
 
@@ -684,9 +722,9 @@ export function createCitsLayer({
     _clickHandler?.destroy();
     _clickHandler = null;
     picking?.unregisterPickOwner(layer.id);
-    _card?.remove();
-    _card = null;
     _selectedId = null;
+    _selectedCardKey = '';
+    overlayHost?.clearSource(CITS_SELECTED_OVERLAY_SOURCE_ID);
   }
 
   function clearScene() {
@@ -696,6 +734,7 @@ export function createCitsLayer({
     removeHazardPaths();
     _intersections = [];
     _overlayEntries = [];
+    _lastRecords = null;
     overlayHost?.clearSource(CITS_OVERLAY_SOURCE_ID);
     _counts = {};
     _mapsVersion = null;
@@ -707,6 +746,8 @@ export function createCitsLayer({
     if (!bounds) {
       _status = 'zoom-in';
       clearScene();
+      publishSelectedCard();
+      notifyControls();
       return true;
     }
     const request = new AbortController();
@@ -765,9 +806,10 @@ export function createCitsLayer({
         buildLanes(Array.isArray(maps.intersections) ? maps.intersections : []);
       }
       paintLanes();
+      _lastRecords = records;
       publishLabels(records);
-      renderCard();
-      renderPanel();
+      publishSelectedCard();
+      notifyControls();
       _lastUpdate = Date.now();
       _lastError = null;
       _viewer.scene.requestRender();
@@ -780,8 +822,14 @@ export function createCitsLayer({
         _mode = 'tiled';
         return false;
       }
-      console.warn('[Data:C-ITS] Fetch error:', error);
-      _lastError = error?.message || 'C-ITS relay unavailable';
+      console.warn('[Data:CITS] Fetch error:', error);
+      // Only the source's own short messages reach the row.
+      const message = String(error?.message || '');
+      _lastError = /^(C-ITS relay HTTP \d{3}|Malformed C-ITS payload)$/.test(
+        message,
+      )
+        ? message
+        : 'C-ITS relay unavailable';
       return false;
     } finally {
       if (_request === request) _request = null;
@@ -803,6 +851,8 @@ export function createCitsLayer({
       });
       _points.show = false;
       viewer.scene.primitives.add(_points);
+      overlayHost?.setVisible(CITS_OVERLAY_SOURCE_ID, false);
+      overlayHost?.setVisible(CITS_SELECTED_OVERLAY_SOURCE_ID, false);
       if (windowRef?.addEventListener) {
         _styleListener = (event) => {
           const next = event?.detail?.style || 'normal';
@@ -819,17 +869,12 @@ export function createCitsLayer({
       _status = 'loading';
       if (_points) _points.show = true;
       overlayHost?.setVisible(CITS_OVERLAY_SOURCE_ID, true);
+      overlayHost?.setVisible(CITS_SELECTED_OVERLAY_SOURCE_ID, true);
       _removePreRender = _viewer.scene.preRender.addEventListener(animate);
       render?.holdContinuousRender?.(RENDER_OWNER);
       installInteraction();
       installBrackets();
-      _panel ||= createCitsPanel({
-        documentRef,
-        onChange: (patch) => applySettings(patch),
-        onReset: () => applySettings({}, { reset: true }),
-      });
-      _panel.show();
-      renderPanel();
+      notifyControls();
     },
 
     disable() {
@@ -841,10 +886,10 @@ export function createCitsLayer({
       render?.releaseContinuousRender?.(RENDER_OWNER);
       removeInteraction();
       removeBrackets();
-      _panel?.hide();
       clearScene();
       if (_points) _points.show = false;
       overlayHost?.setVisible(CITS_OVERLAY_SOURCE_ID, false);
+      overlayHost?.setVisible(CITS_SELECTED_OVERLAY_SOURCE_ID, false);
       _status = 'idle';
       _viewer?.scene.requestRender();
     },
@@ -861,6 +906,7 @@ export function createCitsLayer({
       if (_styleListener)
         windowRef?.removeEventListener('gev:style-change', _styleListener);
       _styleListener = null;
+      _controlsListener = null;
       if (_points) {
         viewer?.scene.primitives.remove(_points);
         _points = null;
@@ -873,10 +919,13 @@ export function createCitsLayer({
     },
 
     setParams(params = {}) {
+      if (params.resetSettings === true) applySettings({}, { reset: true });
       if (params.settings && typeof params.settings === 'object')
         applySettings(params.settings);
       if (typeof params.brackets === 'boolean') {
         _bracketsOn = params.brackets;
+        if (_lastRecords) publishLabels(_lastRecords);
+        notifyControls();
         _bracketLane?.requestPaint();
         _viewer?.scene.requestRender();
       }
@@ -892,15 +941,16 @@ export function createCitsLayer({
     },
 
     /**
-     * Row chips: brackets, plus the bandwidth choice when the server operator
-     * has opted into the full stream (`CITS_OTM_FULL_STREAM=1`).
+     * Row controls: bandwidth (only when the server operator has opted into
+     * the full stream, `CITS_OTM_FULL_STREAM=1`), brackets, stepped
+     * visibility ranges and dot size, and a kind list with live counts.
      */
     getRowControls() {
       const bandwidth = _fullStreamAvailable
         ? [
             {
               id: 'bandwidth-tiled',
-              label: 'Tiled',
+              label: 'TILED',
               title:
                 'Only the map tiles around the view (/ws_tiled, ~100 KB/s)',
               active: _mode === 'tiled',
@@ -908,7 +958,7 @@ export function createCitsLayer({
             },
             {
               id: 'bandwidth-full',
-              label: 'High bandwidth',
+              label: 'HIGH BANDWIDTH',
               title:
                 'Every station OpenTrafficMap hears, at any zoom (/ws_ext, ~1 MB/s compressed)',
               active: _mode === 'full',
@@ -916,18 +966,76 @@ export function createCitsLayer({
             },
           ]
         : [];
+      const ranges = CITS_RANGE_SETTINGS.map((spec) => {
+        const value = _settings[spec.id];
+        return {
+          id: `range-${spec.id}`,
+          label: `${spec.label} · ${citsFormatRange(spec, value)}`,
+          title: `${spec.title} — click for the next step`,
+          params: { settings: { [spec.id]: citsNextRangeStep(spec, value) } },
+        };
+      });
+      const count = (value = 0) =>
+        value >= 1000 ? `${(value / 1000).toFixed(1)}K` : String(value);
       return {
         chips: [
           ...bandwidth,
           {
             id: 'brackets',
-            label: 'Brackets',
+            label: 'BRACKETS',
             title: 'Detection brackets and info cards on trams',
             active: _bracketsOn,
             params: { brackets: !_bracketsOn },
           },
+          ...ranges,
+          {
+            id: 'reset',
+            label: 'RESET',
+            title: 'Restore the default ranges, dot size and kinds',
+            params: { resetSettings: true },
+          },
         ],
+        legend: [
+          {
+            label: 'Moving or green',
+            color: CITS_BUCKET_CSS.free,
+            blurb:
+              'Colour shows reported speed for vehicles and the live signal phase for traffic lights and their lanes.',
+          },
+          { label: 'Slow, amber or roadworks', color: CITS_BUCKET_CSS.slow },
+          { label: 'Stopped, red or hazard', color: CITS_BUCKET_CSS.jam },
+          { label: 'No speed or phase', color: CITS_UNKNOWN_CSS },
+        ],
+        list: {
+          ariaLabel: 'C-ITS station kinds shown',
+          items: [
+            ...CITS_KIND_GROUPS.map((group) => {
+              const on = _settings.groups[group.id] !== false;
+              return {
+                id: `kind-${group.id}`,
+                lead: count(_groupCounts[group.id]),
+                text: group.label,
+                active: on,
+                params: { settings: { groups: { [group.id]: !on } } },
+              };
+            }),
+            {
+              id: 'kind-lanes',
+              lead: count(_intersections.length),
+              text: 'Signal lanes',
+              active: _settings.lanes,
+              params: { settings: { lanes: !_settings.lanes } },
+            },
+          ],
+        },
+        info: 'Private vehicles are anonymous dots: no card, no track.',
+        infoTitle:
+          'Live C-ITS broadcasts heard by OpenTrafficMap volunteer receivers. Coverage is wherever a receiver listens, not every road. Click a tram, bus, traffic light or hazard for its card; click empty map space to clear it.',
       };
+    },
+
+    setRowControlsListener(fn) {
+      _controlsListener = typeof fn === 'function' ? fn : null;
     },
 
     /** Vehicle positions for the detection overlay, as Street Traffic. */
@@ -971,11 +1079,16 @@ export function createCitsLayer({
         intersections: _intersections.length,
         status: _status,
         loading: _status === 'loading' || _status === 'connecting',
+        ...(_status === 'connecting'
+          ? { loadingLabel: 'Connecting to OpenTrafficMap…' }
+          : undefined),
+        // Guidance, not a fault: the prompt goes in `statusMessage`.
+        ...(_status === 'zoom-in'
+          ? { statusMessage: 'Zoom in to load C-ITS stations' }
+          : undefined),
         lastUpdate: _lastUpdate,
         upstream: _upstream,
-        error:
-          _lastError ||
-          (_status === 'zoom-in' ? 'Zoom in to load C-ITS stations' : null),
+        error: _lastError,
       };
     },
   };

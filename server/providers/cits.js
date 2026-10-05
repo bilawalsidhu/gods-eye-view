@@ -1,4 +1,5 @@
 import { gunzipSync } from 'node:zlib';
+import { clientKey, makeRateLimiter } from './common/rate-limit.js';
 import { sameSiteGated } from './common/same-site.js';
 import {
   CITS_STALE_AFTER_MS,
@@ -133,7 +134,7 @@ function createUpstreamSocket({
       open = true;
       failures = 0;
       lastError = null;
-      console.log(`[CITS] ${label} upstream connected`);
+      console.log(`[CITS Proxy] ${label} upstream connected`);
       onOpen();
     };
     next.onmessage = async (event) => {
@@ -166,7 +167,7 @@ function createUpstreamSocket({
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
     closeSocket();
-    console.log(`[CITS] ${label} upstream idle; socket closed`);
+    console.log(`[CITS Proxy] ${label} upstream idle; socket closed`);
   }
 
   return {
@@ -193,7 +194,8 @@ function createUpstreamSocket({
       connected: open,
       lastMessageAt,
       receivedBytes: bytes,
-      error: lastError,
+      // The detail stays server-side; clients only learn that it failed.
+      error: lastError ? 'upstream_unavailable' : null,
     }),
     dispose() {
       clearTimeout(reconnectTimer);
@@ -326,9 +328,12 @@ export function createCitsFullRelay({
 }
 
 function writeJson(res, status, body) {
+  if (res.destroyed) return;
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Cache-Control': 'no-store',
+    ...(status === 405 ? { Allow: 'GET' } : {}),
+    ...(status === 429 ? { 'Retry-After': '60' } : {}),
   });
   res.end(JSON.stringify(body));
 }
@@ -341,39 +346,55 @@ const EMPTY_RESPONSE = Object.freeze({
 });
 
 /**
+ * Per-client admission. Answers come from the in-memory mirror, but each
+ * request can retarget the shared upstream subscription. One tab polls state
+ * every 1.5 s (40/min) plus intersections on a geometry change, so the cap
+ * leaves room for a few tabs on one machine.
+ */
+const CITS_RATE_LIMIT = Object.freeze({
+  windowMs: 60_000,
+  max: 240,
+  globalMax: 2400,
+});
+
+/**
  * Handle `/api/cits/state` and `/api/cits/intersections`.
  * Both take `west,south,east,north` in degrees and an optional `mode=full`.
  */
-export function createCitsMiddleware({ tiled, full }) {
+export function createCitsMiddleware({
+  tiled,
+  full,
+  allow = makeRateLimiter(CITS_RATE_LIMIT),
+}) {
   return async (req, res) => {
     if (req.method !== 'GET') {
-      writeJson(res, 405, { error: 'Method Not Allowed' });
+      writeJson(res, 405, { error: 'method_not_allowed' });
       return;
     }
     if (!citsEnabled()) {
-      writeJson(res, 503, {
-        error: 'C-ITS relay disabled (CITS_OTM_ENABLED=0)',
-      });
+      writeJson(res, 503, { error: 'cits_unavailable' });
       return;
     }
     const url = new URL(req.url || '/', 'http://localhost');
     const route = url.pathname.replace(/\/+$/, '');
     if (route !== '/state' && route !== '/intersections') {
-      writeJson(res, 404, { error: 'Unknown C-ITS endpoint' });
+      writeJson(res, 404, { error: 'unknown_route' });
+      return;
+    }
+    if (!allow(clientKey(req))) {
+      writeJson(res, 429, { error: 'rate_limited' });
       return;
     }
     const box = validCitsBounds(Object.fromEntries(url.searchParams));
     if (!box) {
-      writeJson(res, 400, { error: 'west,south,east,north are required' });
+      writeJson(res, 400, { error: 'invalid_cits_query' });
       return;
     }
     const fullStream = Boolean(full) && citsFullStreamEnabled();
     const mode = url.searchParams.get('mode') === 'full' ? 'full' : 'tiled';
     if (mode === 'full' && !fullStream) {
-      writeJson(res, 403, {
-        error: 'High-bandwidth stream disabled (set CITS_OTM_FULL_STREAM=1)',
-        fullStream,
-      });
+      // The operator has not set CITS_OTM_FULL_STREAM=1.
+      writeJson(res, 403, { error: 'full_stream_disabled', fullStream });
       return;
     }
     let relay;
@@ -439,8 +460,8 @@ function guarded(handler) {
     try {
       await handler(req, res);
     } catch (error) {
-      console.error('[CITS]', error?.stack || error);
-      if (!res.headersSent) writeJson(res, 500, { error: 'C-ITS relay error' });
+      console.error('[CITS Proxy]', error?.stack || error);
+      if (!res.headersSent) writeJson(res, 500, { error: 'cits_unavailable' });
       else res.end();
     }
   };

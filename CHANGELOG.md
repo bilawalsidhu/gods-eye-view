@@ -7,11 +7,14 @@
   units, warning trailers, DENM hazard corridors, buses and trams, drawn in
   Street Traffic's dot style. Trams carry detection brackets with line,
   destination and speed. Private vehicles appear only as anonymous dots, with
-  no station address, card or track. A C-ITS panel in the right rail sets how
-  far vehicles, lights, labels and brackets stay visible and which kinds are
-  shown. The local `/api/cits` relay subscribes only the map tiles in view and
-  closes when idle; the operator can opt into the full stream with
-  `CITS_OTM_FULL_STREAM=1`.
+  no station address, card or track. Clicking a tram, bus, light or hazard
+  opens one selected card on the globe. Chips in the layer row set how far
+  vehicles, lights, labels and brackets stay visible, and a kind list with
+  live counts picks what is shown. Keyless; share token `0`; attribution
+  "OpenTrafficMap". The local `/api/cits` relay subscribes only the map tiles
+  in view, rate-limits each client and closes when idle; the operator can opt
+  into the full stream with `CITS_OTM_FULL_STREAM=1`, and
+  `CITS_OTM_ENABLED=0` turns the relay off.
 
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
