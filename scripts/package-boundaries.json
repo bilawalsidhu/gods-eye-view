@@ -2060,7 +2060,13 @@
       "src/tools/functions.js",
       "src/voice/actionSchemas.js",
       "src/view/index.js",
-      "src/app/embed.js"
+      "src/app/embed.js",
+      "src/app/layers/cits.js",
+      "src/layers/cits/index.js",
+      "src/layers/cits/model.js",
+      "src/layers/cits/source.js",
+      "src/layers/cits/brackets.js",
+      "src/layers/cits/panel.js"
     ],
     "external": [
       "hls.js",
@@ -2549,7 +2555,13 @@
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
-      "src/sources/infrastructureData.js"
+      "src/sources/infrastructureData.js",
+      "src/app/layers/cits.js",
+      "src/layers/cits/index.js",
+      "src/layers/cits/model.js",
+      "src/layers/cits/source.js",
+      "src/layers/cits/brackets.js",
+      "src/layers/cits/panel.js"
     ],
     "external": [
       "hls.js",

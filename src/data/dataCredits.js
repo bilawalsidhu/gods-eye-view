@@ -126,6 +126,13 @@ export const DATA_CREDITS = [
       '<a href="https://aisstream.io" target="_blank" rel="noopener">AISStream.io</a>',
   },
   {
+    key: 'opentrafficmap',
+    html:
+      'C-ITS stations, signal phases &amp; road hazards: ' +
+      '<a href="https://opentrafficmap.org" target="_blank" rel="noopener">OpenTrafficMap</a> ' +
+      '(volunteer C-ITS receivers)',
+  },
+  {
     key: 'celestrak',
     html:
       'Satellites (TLEs): CelesTrak ' +

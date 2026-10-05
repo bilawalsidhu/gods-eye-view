@@ -955,7 +955,32 @@ as a stalled upstream. Error responses are cancelled. Buffered snapshots have a
 16 MiB streaming cap; an oversized image remains an upstream miss and uses the
 normal fallback chain. The existing declared media size ceiling remains 64 MiB.
 
-## GBFS upstream bounds
+## C-ITS layer (OpenTrafficMap)
+
+`cits` (share token `0`) shows C-ITS stations relayed by OpenTrafficMap
+volunteer receivers. `server/providers/cits.js` owns the relay: one demand-driven
+socket per upstream mode, shared by every tab, with the protocol mirror and
+compaction in `server/providers/cits/`. The tiled socket subscribes the union of
+tiles requested in the last 10 s (zoom 9–14, at most 16) and refuses views that
+need coarser tiles with `status: 'zoom-in'`; a socket closes after 60 s without
+demand and reconnects with backoff. `/api/cits/state` returns stations, hazards
+and the intersection-geometry version; `/api/cits/intersections` returns lane
+polylines. Buses, trams, infrastructure and hazards carry details; every other
+vehicle is an anonymous dot (keyed per-process hash, kind, position, speed,
+report age) and is never selectable, bracketed or handed to detection. Vehicle
+tracks are neither returned nor kept. `CITS_OTM_FULL_STREAM=1` enables the
+`mode=full` mirror of `/ws_ext`; otherwise it answers 403 and the layer hides
+its bandwidth chips.
+
+`src/layers/cits/` draws stations as Street Traffic-style point primitives on
+the rendered surface, interpolated between 1.5 s polls, with preset-aware
+colours; DENM corridors as ground glow lines; MAPEM lanes as one ground
+primitive whose per-instance colours follow SPaT phases. Trams get detection
+brackets and two-line cards on a world-overlay paint lane, independent of the
+global detection mode; bus and hazard labels use the overlay host. The right
+rail's C-ITS panel (`#cits-panel`) sets visibility ranges, dot size and shown
+kinds, stored per viewer in `localStorage`.
+
 
 The station reader addresses the proxy as `/api/gbfs/<encoded feed URL>`; the
 feed address is read from the path, and a query-string form is refused with a 400. GBFS refuses upstream redirects and enforces its 5 MiB response cap while
