@@ -982,6 +982,8 @@ rail's C-ITS panel (`#cits-panel`) sets visibility ranges, dot size and shown
 kinds, stored per viewer in `localStorage`.
 
 
+## GBFS upstream bounds
+
 The station reader addresses the proxy as `/api/gbfs/<encoded feed URL>`; the
 feed address is read from the path, and a query-string form is refused with a 400. GBFS refuses upstream redirects and enforces its 5 MiB response cap while
 streaming. The 12-second deadline includes reading the body, and rejected or
