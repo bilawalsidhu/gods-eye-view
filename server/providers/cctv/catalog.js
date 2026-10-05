@@ -16,6 +16,7 @@ import {
   loadTarkteeSourcesFromDatex,
   loadWarendorfSourcesFromCatalog,
   loadNswSourcesFromOpenData,
+  loadQldTrafficSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
 } from './sources.js';
@@ -81,6 +82,13 @@ const LIVE_PACKS = [
     name: 'nsw',
     enabled: () => envEnabled('CCTV_NSW_ENABLED'),
     load: loadNswSourcesFromOpenData,
+  },
+  {
+    name: 'qldtraffic',
+    enabled: () =>
+      envEnabled('CCTV_QLDTRAFFIC_ENABLED') &&
+      String(process.env.QLDTRAFFIC_API_KEY || '').trim() !== '',
+    load: loadQldTrafficSourcesFromOpenData,
   },
   {
     name: 'calgary',

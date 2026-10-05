@@ -356,6 +356,17 @@ export function isLikelyNswCoordinate(lat, lon) {
   );
 }
 
+/** Queensland bounding box, with slack for Torres Strait and western highways. */
+export function isLikelyQueenslandCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= -29.6 &&
+    lat <= -9.0 &&
+    lon >= 137.5 &&
+    lon <= 154.5
+  );
+}
+
 /** Calgary's municipal extent, with slack for the ring road. */
 export function isLikelyCalgaryCoordinate(lat, lon) {
   return (
