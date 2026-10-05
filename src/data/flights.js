@@ -6,6 +6,7 @@ import {
   createOpenSkySource,
   createAeroApiSource,
 } from '../sources/live/standalone.js';
+import { createFlightSource } from '../sources/live/standalone.js';
 import * as militaryRegistry from './militaryRegistry.js';
 
 // Track-history fallback (issue #446): OpenSky /tracks first, FlightAware
@@ -13,6 +14,7 @@ import * as militaryRegistry from './militaryRegistry.js';
 const flightsLayer = createApplicationFlights({
   surface: defaultSurface,
   source: composeSource(createOpenSkySource(), createAeroApiSource()),
+  source: createFlightSource(),
   militaryRegistry,
 });
 export { TRACKED_MODEL_MAX_PX } from '../layers/flights/policy.js';

@@ -27,8 +27,11 @@ import { firePerimetersProxy } from './firePerimeters.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
 
-/** Construct the local provider plugins in their established order. */
-function localProviderPlugins() {
+/**
+ * Construct the local provider plugins in their established order.
+ * `realtime` configures the voice session token endpoint.
+ */
+function localProviderPlugins({ realtime } = {}) {
   return [
     openSkyProxy(),
     celestrakProxy(),
@@ -52,6 +55,7 @@ function localProviderPlugins() {
     trackBackfillProxies(),
     aeroApiProxy(),
     openAiRealtimeProxy(),
+    openAiRealtimeProxy({ realtime }),
     googlePlacesContextProxy(),
     windProxy(),
     weatherProxy(),

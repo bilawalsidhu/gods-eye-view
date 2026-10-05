@@ -655,7 +655,7 @@ export class ShellFacade {
     return this._visualSettings._syncIrBoost(...arguments);
   }
 
-  /** Keep Cockpit's inherited label and restore target aligned with the active map preset. */
+  /** Keep Cockpit's exit restore target aligned with the active map preset. */
   _syncCockpitInheritedStyle() {
     return this._visualSettings._syncCockpitInheritedStyle(...arguments);
   }

@@ -35,7 +35,7 @@ export function createQueries({ state: layerState, services, parts, source }) {
     //     setInstallationStatus is only ever called with
     //     loading/zoom-in/ready/stale/empty/unavailable.
     //   - ais-live-vessels is what the predicate below is FOR. Its enable() and
-    //     update() both resolve as soon as the first /api/ais-live poll answers,
+    //     update() both resolve as soon as the first /api/vessels poll answers,
     //     so the lifecycle settles to `enabled` — but until the server-side socket
     //     delivers a position, firstConnectPhase is 'loading' and getStats()
     //     reports loading: true, lastUpdate: null, count 0, and an UNDEFINED

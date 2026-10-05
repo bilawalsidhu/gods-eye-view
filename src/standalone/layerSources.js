@@ -4,6 +4,9 @@ import {
   createAdsbLolSource,
   createAeroApiSource,
   createAisStreamSource,
+  createFlightSource,
+  createMilitarySource,
+  createVesselSource,
 } from '../sources/live/standalone.js';
 import { composeSource } from '../sources/live/contract.js';
 import { createCctvSource } from '../layers/cctv/source.js';
@@ -31,6 +34,13 @@ export function createStandaloneLayerSources() {
     military: createAdsbLolSource(),
     vessels: createAisStreamSource({
       apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/ais-live',
+    flights: createFlightSource(),
+    military: createMilitarySource(),
+    vessels: createVesselSource({
+      apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/vessels',
+      // Resolved against the document's address, which a panel host may
+      // serve from its own scheme.
+      origin: () => globalThis.document?.baseURI ?? 'http://localhost',
     }),
     cctv: createCctvSource(),
     radio: createRadioSource(),

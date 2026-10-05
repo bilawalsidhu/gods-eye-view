@@ -19,4 +19,7 @@ export {
   createAdsbLolSource,
   createAeroApiSource,
   createAisStreamSource,
+  createFlightSource,
+  createMilitarySource,
+  createVesselSource,
 } from './standalone.js';

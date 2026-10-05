@@ -21,6 +21,7 @@ import { openAiRealtimeProxy } from 'gods-eye-view/server/providers/openai';
 import { keySetupEndpoint } from 'gods-eye-view/server/standalone/key-setup';
 import { realtimeInstructions } from '../../server/providers/openai/instructions.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
+import { standaloneVoiceTools } from '../../server/standalone/voiceTools.js';
 
 function install(plugin, preview = false) {
   const routes = new Map();
@@ -195,6 +196,40 @@ test('Realtime handler preserves tools and default instructions, isolates suppli
   assert.equal(sent[0].session.instructions, sent[2].session.instructions);
 });
 
+test('Realtime sessions carry supplied tools, and the standalone voice adds the catalog queries', async (t) => {
+  env(t, 'OPENAI_API_KEY', 'fixture-upstream-secret');
+  env(t, 'GEV_RATELIMIT_OPENAI_PER_MIN', undefined);
+  const sent = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    sent.push(JSON.parse(options.body));
+    return Response.json({ value: 'fixture-ephemeral' });
+  });
+  const tools = standaloneVoiceTools();
+  const response = await request(
+    install(openAiRealtimeProxy({ realtime: { tools } })).get(
+      '/api/realtime/token',
+    ),
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(sent.at(-1).session.tools, tools);
+  const names = tools.map((tool) => tool.name);
+  assert.equal(new Set(names).size, names.length);
+  assert.deepEqual(
+    tools.slice(0, GEV_REALTIME_TOOLS.length),
+    GEV_REALTIME_TOOLS,
+  );
+  assert.ok(names.includes('get_weather'));
+  assert.ok(names.includes('military_awareness'));
+  assert.ok(!names.includes('show_in_gods_eye_view'));
+  assert.ok(!names.includes('aircraft_in_area'));
+  assert.ok(!names.includes('get_weather_map'));
+  // The action of the same name answers satellite passes.
+  assert.equal(
+    tools.findLast((tool) => tool.name === 'next_satellite_pass'),
+    GEV_REALTIME_TOOLS.find((tool) => tool.name === 'next_satellite_pass'),
+  );
+});
+
 test('debug logging resolves each supplied application directory independently', async (t) => {
   const first = root(t),
     second = root(t);
@@ -356,8 +391,8 @@ test('the debug-log sink stays bounded, rate limited, and quiet about failures',
     error: 'Failed to write Realtime debug log',
   });
 
-  // The limiter is always on, unlike the opt-in one the cost-bearing routes
-  // share: 120/min per IP, far above what a voice session writes.
+  // This limiter has no opt-out, unlike the one the cost-bearing routes share:
+  // 120/min per IP, far above what a voice session writes.
   let limited = null;
   let accepted = 0;
   for (let n = 0; n < 130 && !limited; n += 1) {
@@ -378,6 +413,24 @@ test('the debug-log sink stays bounded, rate limited, and quiet about failures',
   assert.equal(lines.length, accepted);
   for (const line of lines) assert.doesNotThrow(() => JSON.parse(line));
   assert.ok(lines.every((line) => JSON.parse(line).loggedAt));
+});
+
+test('a debug-log record cannot supply its own timestamp', async (t) => {
+  const sourceRoot = root(t);
+  const handler = install(openAiRealtimeProxy({ sourceRoot })).get(
+    '/api/realtime/debug-log',
+  );
+  const before = Date.now();
+  const response = await request(handler, {
+    method: 'POST',
+    body: JSON.stringify({ loggedAt: '1999-01-01T00:00:00.000Z', note: 'x' }),
+  });
+  assert.equal(response.status, 204);
+  const file = path.join(sourceRoot, '.gev-logs/realtime-conversations.jsonl');
+  const [line] = readFileSync(file, 'utf8').split('\n').filter(Boolean);
+  const record = JSON.parse(line);
+  assert.equal(record.note, 'x');
+  assert.ok(Date.parse(record.loggedAt) >= before - 1000);
 });
 
 test('an oversized debug-log request receives the fixed error response', async (t) => {
@@ -433,4 +486,26 @@ test('the debug log rotates instead of growing without bound', async (t) => {
   // Unrotated, these records would be ~75 MB in one file.
   assert.ok(live + previous < 64 * 1024 * 1024);
   assert.ok(!existsSync(`${file}.2`), 'exactly one generation is retained');
+});
+
+test('the voice instructions name only tools the voice session offers', async () => {
+  const { coreTools } = await import('../tools/index.js');
+  const tools = new Set(standaloneVoiceTools().map((tool) => tool.name));
+  const known = new Set([
+    ...coreTools.map((tool) => tool.name),
+    ...GEV_REALTIME_TOOLS.map((tool) => tool.name),
+  ]);
+  const named = new Set(
+    realtimeInstructions().match(/\b[a-z]+(?:_[a-z]+)+\b/g),
+  );
+  const missing = [...named].filter(
+    (name) => known.has(name) && !tools.has(name),
+  );
+  assert.deepEqual(missing, []);
+});
+
+test('the voice instructions send vessels, however heard, to the ships layer', () => {
+  const text = realtimeInstructions();
+  assert.match(text, /"vessels" is easily heard as "visuals"/);
+  assert.match(text, /set_layer_visibility\{layerId:"ais-live-vessels"\}/);
 });
