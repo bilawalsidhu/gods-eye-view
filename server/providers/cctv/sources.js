@@ -65,6 +65,14 @@ import {
   DEFAULT_VEGVESEN_MAX_SOURCES,
   VEGVESEN_MAX_CATALOG_BYTES,
   NORWAY_ANCHORS,
+  KARTVERKET_HEIGHT_URL,
+  KARTVERKET_MAX_POINTS,
+  KARTVERKET_RETRY_POINTS,
+  KARTVERKET_CONCURRENCY,
+  KARTVERKET_LOOKUP_TIMEOUT_MS,
+  KARTVERKET_CATALOG_WAIT_MS,
+  KARTVERKET_MAX_RESPONSE_BYTES,
+  KARTVERKET_HEIGHT_RANGE_M,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -1779,14 +1787,11 @@ export function vegvesenCameraToSource(feature) {
     fovDeg: 44,
     rangeM: 145,
     mountHeightM: 8,
-    // KNOWN LIMITATION: the feed's coordinates are 2D, so this is one flat
-    // prior for the whole country, while cameras run from sea level to
-    // mountain passes near 1,000 m (Haukelifjell, Sjonfjellet, Rugeldalen).
-    // The point-height prior and the client's one-shot ground snap correct it
-    // where they resolve; on a stack where neither does (no 3D tiles), a pass
-    // camera stays hundreds of metres below the terrain, the same risk the
-    // Caltrans pack documents. A per-camera height (e.g. Kartverket's keyless
-    // point-height API) would remove it.
+    // The feed's coordinates are 2D. The loader replaces this flat prior with
+    // Kartverket's terrain height for each camera (applyVegvesenGroundHeights);
+    // it only survives when that lookup fails, and then a mountain-pass camera
+    // can sit below the terrain on a stack without 3D tiles, the same risk the
+    // Caltrans pack documents.
     groundElevationM: 150,
     feedType: videoUrl ? 'hls' : 'image',
     url: videoUrl || imageUrl,
@@ -1851,6 +1856,7 @@ export async function loadVegvesenSourcesFromOpenData() {
       ? Math.max(8, Math.min(1000, Math.floor(maxRaw)))
       : DEFAULT_VEGVESEN_MAX_SOURCES;
     const prioritized = prioritizeSources(cameras, maxCount, NORWAY_ANCHORS);
+    await applyVegvesenGroundHeights(prioritized);
     console.log(
       `[CCTV] Loaded Vegvesen camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
     );
@@ -1862,4 +1868,207 @@ export async function loadVegvesenSourcesFromOpenData() {
     );
     return [];
   }
+}
+
+/**
+ * Terrain heights already resolved, keyed by rounded position. Camera
+ * positions rarely change, so after the first catalog load a 15-minute refresh
+ * asks Kartverket only for new or moved cameras. Bounded well above the ~900
+ * cameras the pack can load.
+ */
+const kartverketHeightCache = new Map();
+const KARTVERKET_CACHE_LIMIT = 5000;
+/** The lookup in flight, so overlapping catalog loads never start a second. */
+let kartverketPending = null;
+
+/** Cache key for one position, at the ~0.1 m precision the request sends. */
+const kartverketKey = (lon, lat) => `${lon.toFixed(6)},${lat.toFixed(6)}`;
+
+/** Forget cached heights and any lookup in flight. Tests only. */
+export function clearKartverketHeightCache() {
+  kartverketHeightCache.clear();
+  kartverketPending = null;
+}
+
+/**
+ * Terrain heights above sea level (NN2000) from Kartverket's keyless
+ * point-height API, in batches of up to 50 points. Answers are matched back by
+ * the coordinates the API echoes, not by position in the list. Each answer is
+ * written to `into` as its batch lands, so a caller that stops waiting still
+ * keeps what has arrived. One deadline covers every request.
+ *
+ * Two quirks of the live API are handled here:
+ * - A large batch sometimes answers `z: null` for a point it resolves when
+ *   asked again (Valdresflye: null in a 50-point batch, 1,390.7 m alone), so
+ *   every point still missing after the first pass is retried once in batches
+ *   of KARTVERKET_RETRY_POINTS. A point still null then has no data.
+ * - Over water `/punkt` returns the depth of the sea floor (`dybdekurver`,
+ *   terrain `Havflate`; −547 m under Nordhordlandsbrua). A camera on a bridge
+ *   or quay stands over the water surface, so those answers count as 0 m.
+ *
+ * @param {Array<{lon:number, lat:number}>} points
+ * @param {{into?: Map<string, number>, timeoutMs?: number}} [options]
+ * @returns {Promise<Map<string, number>>} kartverketKey(lon, lat) → metres.
+ */
+export async function fetchKartverketHeights(
+  points,
+  { into = new Map(), timeoutMs = KARTVERKET_LOOKUP_TIMEOUT_MS } = {},
+) {
+  const unique = Array.from(
+    new Map(
+      (points || [])
+        .filter((p) => isLikelyNorwayCoordinate(p?.lat, p?.lon))
+        .map((p) => [kartverketKey(p.lon, p.lat), p]),
+    ).values(),
+  );
+  if (!unique.length) return into;
+  const signal = AbortSignal.timeout(timeoutMs);
+  const fetchBatch = async (batch) => {
+    const url = new URL(KARTVERKET_HEIGHT_URL);
+    url.searchParams.set(
+      'punkter',
+      JSON.stringify(
+        batch.map((p) => [Number(p.lon.toFixed(6)), Number(p.lat.toFixed(6))]),
+      ),
+    );
+    url.searchParams.set('koordsys', '4258');
+    const resp = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      redirect: 'error',
+      signal,
+    });
+    if (!resp.ok) {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    const payload = await readResponseJsonCapped(
+      resp,
+      KARTVERKET_MAX_RESPONSE_BYTES,
+    );
+    for (const point of Array.isArray(payload?.punkter)
+      ? payload.punkter
+      : []) {
+      // `z: null` means no answer for that point; Number(null) would read 0.
+      if (point?.z === null || point?.z === undefined || point?.z === '')
+        continue;
+      const x = toFiniteNumber(point?.x);
+      const y = toFiniteNumber(point?.y);
+      let z = toFiniteNumber(point?.z);
+      if (![x, y, z].every(Number.isFinite)) continue;
+      if (point?.datakilde === 'dybdekurver' || point?.terreng === 'Havflate')
+        z = 0;
+      if (
+        z < KARTVERKET_HEIGHT_RANGE_M.min ||
+        z > KARTVERKET_HEIGHT_RANGE_M.max
+      )
+        continue;
+      into.set(kartverketKey(x, y), z);
+    }
+  };
+  let failed = 0;
+  const runPass = async (list, size) => {
+    const batches = [];
+    for (let i = 0; i < list.length; i += size) {
+      batches.push(list.slice(i, i + size));
+    }
+    let next = 0;
+    const worker = async () => {
+      while (next < batches.length && !signal.aborted) {
+        const batch = batches[next++];
+        try {
+          await fetchBatch(batch);
+        } catch (error) {
+          failed += 1;
+          if (failed === 1) {
+            console.warn(
+              '[CCTV] Kartverket height lookup failed:',
+              error?.message || error,
+            );
+          }
+        }
+      }
+    };
+    await Promise.all(
+      Array.from(
+        { length: Math.min(KARTVERKET_CONCURRENCY, batches.length) },
+        worker,
+      ),
+    );
+  };
+  await runPass(unique, KARTVERKET_MAX_POINTS);
+  const missing = unique.filter((p) => !into.has(kartverketKey(p.lon, p.lat)));
+  if (missing.length && !signal.aborted) {
+    await runPass(missing, KARTVERKET_RETRY_POINTS);
+  }
+  return into;
+}
+
+/**
+ * Give each Vegvesen camera its own terrain height as the ground prior, in
+ * place. Waits at most `waitMs` for heights it does not have cached; a lookup
+ * still running then keeps filling the cache for the next catalog refresh.
+ * Cameras without a height keep the flat prior. Never throws: a failed lookup
+ * only means the old behavior. CCTV_VEGVESEN_HEIGHTS=0 turns it off.
+ *
+ * @param {Array<object>} cameras - Sources from vegvesenCameraToSource().
+ * @param {{waitMs?: number}} [options]
+ * @returns {Promise<number>} How many cameras got a terrain height.
+ */
+export async function applyVegvesenGroundHeights(
+  cameras,
+  { waitMs = KARTVERKET_CATALOG_WAIT_MS } = {},
+) {
+  if (String(process.env.CCTV_VEGVESEN_HEIGHTS || '1').trim() === '0') return 0;
+  const list = Array.isArray(cameras) ? cameras : [];
+  const missing = list.filter(
+    (c) => !kartverketHeightCache.has(kartverketKey(c.lon, c.lat)),
+  );
+  if (missing.length) {
+    if (!kartverketPending) {
+      if (
+        kartverketHeightCache.size + missing.length >
+        KARTVERKET_CACHE_LIMIT
+      ) {
+        kartverketHeightCache.clear();
+      }
+      kartverketPending = fetchKartverketHeights(missing, {
+        into: kartverketHeightCache,
+      })
+        .catch((error) => {
+          console.warn(
+            '[CCTV] Kartverket height lookup error:',
+            error?.message || error,
+          );
+        })
+        .finally(() => {
+          kartverketPending = null;
+        });
+    }
+    let timer;
+    await Promise.race([
+      kartverketPending,
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, waitMs);
+        timer.unref?.();
+      }),
+    ]);
+    clearTimeout(timer);
+  }
+  let applied = 0;
+  for (const camera of list) {
+    const z = kartverketHeightCache.get(kartverketKey(camera.lon, camera.lat));
+    if (!Number.isFinite(z)) continue;
+    camera.groundElevationM = Math.round(z * 10) / 10;
+    applied += 1;
+  }
+  if (list.length) {
+    console.log(
+      `[CCTV] Kartverket ground heights: ${applied}/${list.length} Vegvesen cameras`,
+    );
+  }
+  return applied;
 }

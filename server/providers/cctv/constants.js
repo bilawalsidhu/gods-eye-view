@@ -267,6 +267,30 @@ export const NORWAY_ANCHORS = [
   { lat: 69.6492, lon: 18.9553 }, // Tromsø
 ];
 
+/** Kartverket's keyless point-height API (CC BY 4.0): terrain height above
+ * sea level (NN2000) for up to 50 points per request, used as the Vegvesen
+ * cameras' ground prior because the camera feed's points are 2D. */
+export const KARTVERKET_HEIGHT_URL =
+  'https://ws.geonorge.no/hoydedata/v1/punkt';
+export const KARTVERKET_MAX_POINTS = 50;
+/** Batch size for the one retry of points a full batch answered null for. */
+export const KARTVERKET_RETRY_POINTS = 10;
+/** Batches in flight at once. The whole country is ~17 batches of ~2 s each
+ * (spread-out points are slow to resolve), so six keep a cold lookup ~6 s. */
+export const KARTVERKET_CONCURRENCY = 6;
+/** Deadline for one complete lookup, shared by every batch. */
+export const KARTVERKET_LOOKUP_TIMEOUT_MS = 30 * 1000;
+/** How long a catalog load waits for heights. Kept under the per-provider
+ * fetch timeout so this pack is never the catalog's slowest lane; a lookup
+ * still running after this keeps filling the cache, and the next refresh
+ * applies the rest. At app start, with every pack loading at once, a cold
+ * lookup takes ~10 s. */
+export const KARTVERKET_CATALOG_WAIT_MS = 12 * 1000;
+export const KARTVERKET_MAX_RESPONSE_BYTES = 256 * 1024;
+/** Plausible Norwegian terrain: below sea level only at the shore, and no road
+ * camera sits above ~1,500 m. Anything outside is treated as no answer. */
+export const KARTVERKET_HEIGHT_RANGE_M = Object.freeze({ min: -20, max: 2500 });
+
 /** DelDOT CCTV: one keyless statewide JSON catalog; live video via RTMP-over-HTTP (rtmpt:80). */
 export const DELDOT_CCTV_URL = 'https://tmc.deldot.gov/json/videocamera.json';
 export const DEFAULT_DELDOT_MAX_SOURCES = 300;
