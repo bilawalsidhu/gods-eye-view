@@ -470,7 +470,31 @@ export function prioritizeSources(cameras, maxCount, anchors) {
     return a.idx - b.idx;
   });
 
-  return scored.slice(0, cap).map((entry) => entry.camera);
+  const kept = scored.slice(0, cap).map((entry) => entry.camera);
+  // How many cameras the pack offered before trimming, and where, for
+  // coverage reports.
+  Object.defineProperty(kept, 'available', { value: list.length });
+  Object.defineProperty(kept, 'region', { value: cameraRegion(list) });
+  return kept;
+}
+
+/** The bounding box of cameras with coordinates, or null. */
+export function cameraRegion(cameras) {
+  let region = null;
+  for (const camera of cameras || []) {
+    const lat = Number(camera?.lat);
+    const lon = Number(camera?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    region = region
+      ? {
+          west: Math.min(region.west, lon),
+          south: Math.min(region.south, lat),
+          east: Math.max(region.east, lon),
+          north: Math.max(region.north, lat),
+        }
+      : { west: lon, south: lat, east: lon, north: lat };
+  }
+  return region;
 }
 
 /**

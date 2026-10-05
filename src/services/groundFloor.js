@@ -547,7 +547,10 @@ export function createGroundFloor({ terrain, signal }) {
     ]);
   }
 
-  async function resolveGroundFloorCells(points) {
+  async function resolveGroundFloorCells(
+    points,
+    { signal: consumerSignal } = {},
+  ) {
     if (!Array.isArray(points) || !points.length) return;
     const cells = new Map();
     for (const p of points) {
@@ -560,7 +563,9 @@ export function createGroundFloor({ terrain, signal }) {
     }
     if (!cells.size) return;
     try {
-      await resolveEllipsoidalGround([...cells.values()]);
+      await resolveEllipsoidalGround([...cells.values()], {
+        signal: consumerSignal,
+      });
     } catch {
       /* best-effort — unresolved cells simply don't clamp */
     }

@@ -203,7 +203,7 @@ test('flights poll refreshes tracked callsign/FL/kts and marks a missed poll STA
   const nowSec = Math.floor(Date.now() / 1000);
   let openskyPoll = 0;
   globalThis.fetch = async (url) => {
-    if (!String(url).startsWith('/api/opensky')) {
+    if (!String(url).startsWith('/api/flights')) {
       return { ok: true, status: 200, json: async () => ({ ac: [] }) };
     }
     const states = openskyPoll++ === 0
