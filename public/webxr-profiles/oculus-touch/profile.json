@@ -1,0 +1,328 @@
+{
+  "profileId": "oculus-touch",
+  "fallbackProfileIds": [
+    "generic-trigger-squeeze-thumbstick"
+  ],
+  "layouts": {
+    "left": {
+      "selectComponentId": "xr-standard-trigger",
+      "components": {
+        "xr-standard-trigger": {
+          "type": "trigger",
+          "gamepadIndices": {
+            "button": 0
+          },
+          "rootNodeName": "xr_standard_trigger",
+          "visualResponses": {
+            "xr_standard_trigger_pressed": {
+              "componentProperty": "button",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "xr_standard_trigger_pressed_value",
+              "minNodeName": "xr_standard_trigger_pressed_min",
+              "maxNodeName": "xr_standard_trigger_pressed_max"
+            }
+          }
+        },
+        "xr-standard-squeeze": {
+          "type": "squeeze",
+          "gamepadIndices": {
+            "button": 1
+          },
+          "rootNodeName": "xr_standard_squeeze",
+          "visualResponses": {
+            "xr_standard_squeeze_pressed": {
+              "componentProperty": "button",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "xr_standard_squeeze_pressed_value",
+              "minNodeName": "xr_standard_squeeze_pressed_min",
+              "maxNodeName": "xr_standard_squeeze_pressed_max"
+            }
+          }
+        },
+        "xr-standard-thumbstick": {
+          "type": "thumbstick",
+          "gamepadIndices": {
+            "button": 3,
+            "xAxis": 2,
+            "yAxis": 3
+          },
+          "rootNodeName": "xr_standard_thumbstick",
+          "visualResponses": {
+            "xr_standard_thumbstick_pressed": {
+              "componentProperty": "button",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "xr_standard_thumbstick_pressed_value",
+              "minNodeName": "xr_standard_thumbstick_pressed_min",
+              "maxNodeName": "xr_standard_thumbstick_pressed_max"
+            },
+            "xr_standard_thumbstick_xaxis_pressed": {
+              "componentProperty": "xAxis",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "xr_standard_thumbstick_xaxis_pressed_value",
+              "minNodeName": "xr_standard_thumbstick_xaxis_pressed_min",
+              "maxNodeName": "xr_standard_thumbstick_xaxis_pressed_max"
+            },
+            "xr_standard_thumbstick_yaxis_pressed": {
+              "componentProperty": "yAxis",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "xr_standard_thumbstick_yaxis_pressed_value",
+              "minNodeName": "xr_standard_thumbstick_yaxis_pressed_min",
+              "maxNodeName": "xr_standard_thumbstick_yaxis_pressed_max"
+            }
+          }
+        },
+        "x-button": {
+          "type": "button",
+          "gamepadIndices": {
+            "button": 4
+          },
+          "rootNodeName": "x_button",
+          "visualResponses": {
+            "x_button_pressed": {
+              "componentProperty": "button",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "x_button_pressed_value",
+              "minNodeName": "x_button_pressed_min",
+              "maxNodeName": "x_button_pressed_max"
+            }
+          }
+        },
+        "y-button": {
+          "type": "button",
+          "gamepadIndices": {
+            "button": 5
+          },
+          "rootNodeName": "y_button",
+          "visualResponses": {
+            "y_button_pressed": {
+              "componentProperty": "button",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "y_button_pressed_value",
+              "minNodeName": "y_button_pressed_min",
+              "maxNodeName": "y_button_pressed_max"
+            }
+          }
+        },
+        "thumbrest": {
+          "type": "button",
+          "gamepadIndices": {
+            "button": 6
+          },
+          "rootNodeName": "thumbrest",
+          "visualResponses": {
+            "thumbrest_pressed": {
+              "componentProperty": "button",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "thumbrest_pressed_value",
+              "minNodeName": "thumbrest_pressed_min",
+              "maxNodeName": "thumbrest_pressed_max"
+            }
+          }
+        }
+      },
+      "gamepadMapping": "xr-standard",
+      "rootNodeName": "oculus-touch-left",
+      "assetPath": "left.glb"
+    },
+    "right": {
+      "selectComponentId": "xr-standard-trigger",
+      "components": {
+        "xr-standard-trigger": {
+          "type": "trigger",
+          "gamepadIndices": {
+            "button": 0
+          },
+          "rootNodeName": "xr_standard_trigger",
+          "visualResponses": {
+            "xr_standard_trigger_pressed": {
+              "componentProperty": "button",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "xr_standard_trigger_pressed_value",
+              "minNodeName": "xr_standard_trigger_pressed_min",
+              "maxNodeName": "xr_standard_trigger_pressed_max"
+            }
+          }
+        },
+        "xr-standard-squeeze": {
+          "type": "squeeze",
+          "gamepadIndices": {
+            "button": 1
+          },
+          "rootNodeName": "xr_standard_squeeze",
+          "visualResponses": {
+            "xr_standard_squeeze_pressed": {
+              "componentProperty": "button",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "xr_standard_squeeze_pressed_value",
+              "minNodeName": "xr_standard_squeeze_pressed_min",
+              "maxNodeName": "xr_standard_squeeze_pressed_max"
+            }
+          }
+        },
+        "xr-standard-thumbstick": {
+          "type": "thumbstick",
+          "gamepadIndices": {
+            "button": 3,
+            "xAxis": 2,
+            "yAxis": 3
+          },
+          "rootNodeName": "xr_standard_thumbstick",
+          "visualResponses": {
+            "xr_standard_thumbstick_pressed": {
+              "componentProperty": "button",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "xr_standard_thumbstick_pressed_value",
+              "minNodeName": "xr_standard_thumbstick_pressed_min",
+              "maxNodeName": "xr_standard_thumbstick_pressed_max"
+            },
+            "xr_standard_thumbstick_xaxis_pressed": {
+              "componentProperty": "xAxis",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "xr_standard_thumbstick_xaxis_pressed_value",
+              "minNodeName": "xr_standard_thumbstick_xaxis_pressed_min",
+              "maxNodeName": "xr_standard_thumbstick_xaxis_pressed_max"
+            },
+            "xr_standard_thumbstick_yaxis_pressed": {
+              "componentProperty": "yAxis",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "xr_standard_thumbstick_yaxis_pressed_value",
+              "minNodeName": "xr_standard_thumbstick_yaxis_pressed_min",
+              "maxNodeName": "xr_standard_thumbstick_yaxis_pressed_max"
+            }
+          }
+        },
+        "a-button": {
+          "type": "button",
+          "gamepadIndices": {
+            "button": 4
+          },
+          "rootNodeName": "a_button",
+          "visualResponses": {
+            "a_button_pressed": {
+              "componentProperty": "button",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "a_button_pressed_value",
+              "minNodeName": "a_button_pressed_min",
+              "maxNodeName": "a_button_pressed_max"
+            }
+          }
+        },
+        "b-button": {
+          "type": "button",
+          "gamepadIndices": {
+            "button": 5
+          },
+          "rootNodeName": "b_button",
+          "visualResponses": {
+            "b_button_pressed": {
+              "componentProperty": "button",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "b_button_pressed_value",
+              "minNodeName": "b_button_pressed_min",
+              "maxNodeName": "b_button_pressed_max"
+            }
+          }
+        },
+        "thumbrest": {
+          "type": "button",
+          "gamepadIndices": {
+            "button": 6
+          },
+          "rootNodeName": "thumbrest",
+          "visualResponses": {
+            "thumbrest_pressed": {
+              "componentProperty": "button",
+              "states": [
+                "default",
+                "touched",
+                "pressed"
+              ],
+              "valueNodeProperty": "transform",
+              "valueNodeName": "thumbrest_pressed_value",
+              "minNodeName": "thumbrest_pressed_min",
+              "maxNodeName": "thumbrest_pressed_max"
+            }
+          }
+        }
+      },
+      "gamepadMapping": "xr-standard",
+      "rootNodeName": "oculus-touch-right",
+      "assetPath": "right.glb"
+    }
+  }
+}

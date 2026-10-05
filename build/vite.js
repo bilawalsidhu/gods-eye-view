@@ -80,6 +80,13 @@ export function createBrowserViteConfig({
         '@jtarrio/signals/demod/modes.js',
         '@jtarrio/webrtlsdr/rtlsdr.js',
         'egm96-universal',
+        'three',
+        'cannon-es',
+        'three/addons/loaders/GLTFLoader.js',
+        'three/addons/webxr/XRControllerModelFactory.js',
+        'three/addons/webxr/XRHandMeshModel.js',
+        'three/addons/utils/SkeletonUtils.js',
+        'three/addons/math/OBB.js',
       ],
     },
     server: {

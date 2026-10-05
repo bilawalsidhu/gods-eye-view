@@ -20,3 +20,6 @@ node_modules
 .vite
 .vite-*
 *.min.js
+
+# Byte-identical snapshot of the user-provided WebXR interaction template.
+src/xr/vendor/

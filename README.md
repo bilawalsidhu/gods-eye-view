@@ -40,6 +40,21 @@ _“pretty cool”_ — [Brendan Eich](https://x.com/BrendanEich/status/20945920
 
 ## 🌍 Why This Exists
 
+### WebXR spatial experience (`XR-Conversion`)
+
+This branch opens a native spatial Earth globe by default, with MR/VR entry,
+controller and hand interaction, movable in-world controls, contact inspection,
+and aircraft, vessel, earthquake and predicted station-orbit layers. The base
+map works without API keys. Open **Map console** or `?view=console` for the
+existing photorealistic map and detailed tools. Shared and embedded console
+links keep their original behavior.
+
+Run `npm run dev` for desktop preview. For LAN/headset access use
+`npm run dev:xr -- --cert /path/to/certificate.pem --key /path/to/private-key.pem`
+with a certificate trusted by the headset. See the [conversion plan and setup](docs/XR_CONVERSION.md)
+and [device acceptance checklist](docs/XR_ACCEPTANCE.md). Physical headset
+verification remains outstanding.
+
 God's Eye View brings public signals into one explorable globe. Track the world live. Talk to it. Break it. Extend it.
 
 Flight transponders, ship beacons, orbital elements, seismographs, and public cameras already tell us a lot about the world. God's Eye View puts them in the same place, so you can move between a global picture and an individual aircraft, ship, or street. It runs locally in your browser, with source code you can inspect and extend.

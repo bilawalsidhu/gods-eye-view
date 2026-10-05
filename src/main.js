@@ -1,17 +1,18 @@
-import { createStandaloneApplication } from './standalone/application.js';
-import { describeError } from './standalone/errors.js';
+import { isConsoleRoute } from './xr/routes.js';
 
-const application = createStandaloneApplication({
-  googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,
-  cesiumToken: import.meta.env.CESIUM_ION_TOKEN,
-  allowQaRegistration: import.meta.env.DEV,
-});
-
-application.start().catch((error) => {
-  console.error("God's Eye View initialization failed:", error);
-  const loaderStatus = document.querySelector('#loading-screen .loader-status');
-  loaderStatus.textContent = `Error: ${describeError(error)}`;
-  loaderStatus.style.color = '#ff4444';
-});
+// Load only the renderer used by this view. A headset never pays for Cesium.
+let application;
+const entry = isConsoleRoute(location.search, location.hash)
+  ? import('./standalone/main.js')
+  : import('./xr/main.js');
+entry
+  .then((module) => {
+    application = module.application;
+  })
+  .catch((error) => {
+    console.error('Application entry failed', error);
+    const status = document.querySelector('#loading-screen .loader-status');
+    if (status) status.textContent = `Unable to start: ${error.message}`;
+  });
 
 export { application };

@@ -26,6 +26,9 @@ function sourceFiles(directory = SRC_ROOT) {
   const files = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const absolute = path.join(directory, entry.name);
+    // The vendored WebXR toolkit paints its own canvas text and never asks
+    // Material Symbols for glyphs. Its panel type literals are not icons.
+    if (absolute === path.join(SRC_ROOT, 'xr', 'vendor')) continue;
     if (entry.isDirectory()) files.push(...sourceFiles(absolute));
     else if (
       entry.isFile() &&

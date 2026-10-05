@@ -1,0 +1,538 @@
+#spatial-app {
+  --mint: #7ee5ca;
+  --text: #e9f3f3;
+  --muted: #8ca4b2;
+  --line: #ffffff16;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #060e18;
+  color: var(--text);
+  font:
+    14px Inter,
+    Arial,
+    sans-serif;
+}
+#spatial-app * {
+  box-sizing: border-box;
+}
+#spatial-app button,
+#spatial-app select,
+#spatial-app a {
+  -webkit-tap-highlight-color: transparent;
+}
+#spatial-app button,
+#spatial-app select {
+  font: inherit;
+}
+#spatial-app button {
+  cursor: pointer;
+}
+#spatial-app button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+#spatial-app button:focus-visible,
+#spatial-app select:focus-visible,
+#spatial-app a:focus-visible,
+#spatial-canvas:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 4px;
+}
+#spatial-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.spatial-header {
+  position: absolute;
+  left: 32px;
+  right: 32px;
+  top: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+}
+.spatial-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+}
+.spatial-wordmark img {
+  width: 36px;
+  height: 36px;
+}
+.spatial-wordmark small {
+  display: block;
+  margin-top: 7px;
+  color: var(--mint);
+  font:
+    9px 'JetBrains Mono',
+    monospace;
+  letter-spacing: 2.4px;
+}
+.spatial-header-right {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.spatial-session {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 11px;
+}
+.spatial-session i,
+.spatial-footer i {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--mint);
+}
+.spatial-console-link {
+  color: var(--text);
+  font-size: 12px;
+  text-decoration: none;
+  border: 1px solid #ffffff2c;
+  border-radius: 7px;
+  padding: 10px 13px;
+}
+.spatial-intro {
+  position: absolute;
+  top: 132px;
+  left: 36px;
+  width: 282px;
+}
+.spatial-eyebrow {
+  color: var(--mint);
+  font:
+    10px 'JetBrains Mono',
+    monospace;
+  letter-spacing: 2px;
+}
+.spatial-intro h1 {
+  margin: 19px 0 17px;
+  font-size: clamp(36px, 3.4vw, 52px);
+  font-weight: 400;
+  letter-spacing: -2px;
+  line-height: 1.06;
+}
+.spatial-intro p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.8;
+  margin: 0 0 22px;
+  max-width: 270px;
+}
+.spatial-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+#spatial-app .spatial-primary {
+  padding: 13px 16px;
+  background: var(--mint);
+  color: #06221e;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  text-align: left;
+}
+#spatial-app select {
+  background: #101e2b;
+  color: #b9cbd3;
+  border: 1px solid #ffffff1c;
+  border-radius: 5px;
+  padding: 9px;
+  font-size: 11px;
+  width: 100%;
+}
+.spatial-intro p.spatial-support {
+  font-size: 10px;
+  margin-top: 10px;
+  line-height: 1.6;
+}
+.spatial-layer-panel {
+  position: absolute;
+  top: 470px;
+  left: 36px;
+  width: 282px;
+}
+.spatial-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.spatial-section-heading h2 {
+  font-size: 12px;
+  font-weight: 500;
+  margin: 0;
+}
+.spatial-section-heading > span {
+  color: var(--muted);
+  font: 9px monospace;
+}
+#spatial-app .spatial-layer {
+  width: 100%;
+  display: flex;
+  gap: 11px;
+  padding: 12px 0;
+  align-items: center;
+  border: none;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.spatial-layer > i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.spatial-layer > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.spatial-layer b {
+  font-size: 12px;
+  font-weight: 500;
+}
+.spatial-layer small {
+  display: block;
+  color: var(--muted);
+  font-size: 9px;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+.spatial-layer small.spatial-feed-status {
+  color: #b1c9d4;
+}
+.spatial-toggle {
+  width: 23px;
+  height: 13px;
+  background: #ffffff18;
+  border-radius: 8px;
+  flex: none;
+  position: relative;
+}
+.spatial-toggle::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6f8490;
+  transition: transform 0.15s;
+}
+.spatial-layer[aria-pressed='true'] .spatial-toggle {
+  background: #7ee5ca35;
+}
+.spatial-layer[aria-pressed='true'] .spatial-toggle::after {
+  background: var(--mint);
+  transform: translateX(10px);
+}
+.spatial-layer-note {
+  font-size: 9px;
+  color: #637d8c;
+  margin-top: 10px;
+}
+.spatial-inspector {
+  position: absolute;
+  top: 145px;
+  right: 36px;
+  width: 238px;
+  background: linear-gradient(135deg, #14232dd9, #091521e6);
+  border: 1px solid #ffffff19;
+  border-radius: 10px;
+  padding: 22px 20px;
+  max-height: calc(100% - 215px);
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.spatial-inspector h2 {
+  font-size: 21px;
+  font-weight: 400;
+  letter-spacing: -0.5px;
+  line-height: 1.25;
+  margin: 17px 0 12px;
+  overflow-wrap: anywhere;
+}
+.spatial-inspector p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.spatial-inspector p.spatial-coordinate {
+  color: var(--mint);
+  font:
+    9px 'JetBrains Mono',
+    monospace;
+  line-height: 1.8;
+}
+.spatial-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 23px 0;
+}
+.spatial-label {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 9px;
+}
+.spatial-button-pair {
+  display: flex;
+  gap: 7px;
+  margin-top: 9px;
+}
+#spatial-app .spatial-button-pair button,
+#spatial-app .spatial-reset {
+  background: #ffffff06;
+  color: #c7d9df;
+  border: 1px solid #ffffff1b;
+  border-radius: 5px;
+  padding: 10px 7px;
+  font-size: 10px;
+  flex: 1;
+}
+#spatial-app .spatial-reset {
+  display: block;
+  width: 100%;
+  margin-top: 9px;
+}
+#spatial-app button:hover:not(:disabled),
+.spatial-console-link:hover {
+  filter: brightness(1.15);
+  border-color: #7ee5ca60;
+}
+.spatial-help {
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 20px;
+}
+.spatial-help summary {
+  cursor: pointer;
+}
+.spatial-help p {
+  font-size: 10px;
+}
+.spatial-footer {
+  position: absolute;
+  bottom: 0;
+  left: 32px;
+  right: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-top: 1px solid var(--line);
+  padding: 17px 0;
+  font:
+    9px 'JetBrains Mono',
+    monospace;
+  color: #7793a1;
+}
+.spatial-footer i {
+  margin-right: 8px;
+}
+#spatial-status {
+  position: absolute;
+  bottom: 70px;
+  left: 50%;
+  transform: translate(-50%, 10px);
+  width: max-content;
+  max-width: min(520px, 90%);
+  background: #112735f2;
+  border: 1px solid #7ee5ca40;
+  border-radius: 7px;
+  padding: 12px 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #d8f3ed;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
+}
+#spatial-status.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.spatial-context-error {
+  position: absolute;
+  inset: 25%;
+  background: #142736;
+  padding: 30px;
+  border-radius: 12px;
+}
+.spatial-context-error a {
+  color: var(--mint);
+}
+.xr-active > :not(canvas) {
+  display: none;
+}
+@media (max-height: 760px) and (min-width: 981px) {
+  .spatial-intro {
+    top: 111px;
+  }
+  .spatial-intro h1 {
+    font-size: 36px;
+    margin: 12px 0;
+  }
+  .spatial-intro p {
+    margin-bottom: 13px;
+  }
+  .spatial-layer-panel {
+    top: 402px;
+  }
+  #spatial-app .spatial-layer {
+    padding: 8px 0;
+  }
+}
+@media (max-width: 980px) {
+  .spatial-intro {
+    width: 224px;
+    left: 24px;
+  }
+  .spatial-intro h1 {
+    font-size: 37px;
+  }
+  .spatial-layer-panel {
+    left: 24px;
+    width: 224px;
+  }
+  .spatial-inspector {
+    right: 24px;
+    width: 202px;
+    padding: 18px 14px;
+  }
+  .spatial-header {
+    left: 24px;
+    right: 24px;
+  }
+  .spatial-footer span:nth-child(2) {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  #spatial-app {
+    overflow-y: auto;
+  }
+  #spatial-canvas {
+    position: fixed;
+    height: 65vh;
+  }
+  .spatial-header {
+    top: 16px;
+    left: 16px;
+    right: 16px;
+    padding-bottom: 14px;
+  }
+  .spatial-wordmark {
+    font-size: 11px;
+    gap: 8px;
+  }
+  .spatial-wordmark small {
+    font-size: 7px;
+    letter-spacing: 1px;
+  }
+  .spatial-wordmark img {
+    width: 27px;
+  }
+  .spatial-session {
+    display: none;
+  }
+  .spatial-console-link {
+    font-size: 9px;
+    padding: 9px;
+  }
+  .spatial-intro {
+    top: 98px;
+    left: 20px;
+    width: calc(100% - 40px);
+    pointer-events: none;
+  }
+  .spatial-intro h1 {
+    font-size: 29px;
+    margin: 10px 0;
+  }
+  .spatial-intro h1 br {
+    display: none;
+  }
+  .spatial-intro > p:first-of-type {
+    display: none;
+  }
+  .spatial-entry {
+    flex-direction: row;
+    pointer-events: auto;
+    width: 100%;
+  }
+  #spatial-app .spatial-primary {
+    white-space: nowrap;
+    padding: 10px;
+    font-size: 10px;
+  }
+  #spatial-app .spatial-entry select {
+    width: auto;
+    min-width: 0;
+    flex: 1;
+  }
+  .spatial-support {
+    max-width: 100% !important;
+    font-size: 9px !important;
+  }
+  .spatial-layer-panel {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: auto;
+    margin: 64vh 20px 20px;
+    background: #08131eea;
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+  }
+  .spatial-inspector {
+    position: relative;
+    top: auto;
+    right: auto;
+    width: auto;
+    margin: 20px;
+    max-height: none;
+  }
+  .spatial-footer {
+    position: relative;
+    left: auto;
+    right: auto;
+    margin: 20px;
+    font-size: 8px;
+  }
+  #spatial-status {
+    position: fixed;
+    bottom: 24px;
+  }
+  .spatial-context-error {
+    inset: 30% 5%;
+  }
+}
