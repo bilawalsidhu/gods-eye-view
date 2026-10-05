@@ -77,9 +77,11 @@ export function canExecuteBinary(candidate, options = {}) {
       probeCache.set(cacheKey, true);
       return true;
     }
+    const timeout =
+      options.timeoutMs ?? (candidate.includes('/snap/') ? 10000 : 6000);
     const probe = spawnSyncImpl(candidate, ['--version'], {
       stdio: 'ignore',
-      timeout: 3000,
+      timeout,
     });
     const usable = probe.status === 0;
     probeCache.set(cacheKey, usable);

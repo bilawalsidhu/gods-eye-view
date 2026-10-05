@@ -37,8 +37,10 @@ describe('scripts/qa-browser.mjs (unified browser resolver #770)', () => {
     it('on posix: probes with --version and returns true when status === 0', () => {
       const fsImpl = { existsSync: () => true };
       let probedArgs = null;
-      const spawnSyncImpl = (bin, args) => {
+      let probedOptions = null;
+      const spawnSyncImpl = (bin, args, opts) => {
         probedArgs = { bin, args };
+        probedOptions = opts;
         return { status: 0 };
       };
       const usable = canExecuteBinary('/snap/bin/chromium', {
@@ -49,6 +51,7 @@ describe('scripts/qa-browser.mjs (unified browser resolver #770)', () => {
       assert.equal(usable, true);
       assert.equal(probedArgs.bin, '/snap/bin/chromium');
       assert.deepEqual(probedArgs.args, ['--version']);
+      assert.equal(probedOptions.timeout, 10000);
     });
 
     it('on posix: returns false when probe status !== 0 (e.g. arm64/x86_64 Exec format error)', () => {
