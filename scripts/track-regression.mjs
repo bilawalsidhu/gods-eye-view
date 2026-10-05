@@ -17,9 +17,9 @@
  * `fetch` shim in the page that intercepts the poll endpoints and returns
  * SYNTHETIC aircraft positioned near the camera, in the EXACT upstream payload
  * shapes the layers parse:
- *   - flights  → GET /api/opensky      → { states: [ <state-vector[]> ] }
- *   - military → GET /api/adsblol/mil  → { ac: [ <adsblol-aircraft{}> ] }
- *   - vessels  → GET /api/ais-live     → connected, zero-row snapshot
+ *   - flights  → GET /api/flights      → { states: [ <state-vector[]> ] }
+ *   - military → GET /api/military  → { ac: [ <adsblol-aircraft{}> ] }
+ *   - vessels  → GET /api/vessels     → connected, zero-row snapshot
  * The shim stays installed so the layers' setInterval pollers keep the
  * synthetic planes alive (under MISSING_POLL_LIMIT=3 so they're never pruned).
  *
@@ -343,7 +343,7 @@ async function main() {
         const url = new URL(requestUrl, window.location.href);
         const isAppRequest = url.origin === appOrigin;
         // OpenSky (commercial flights): { states: [ state-vector[] ] }
-        if (isAppRequest && url.pathname === '/api/opensky') {
+        if (isAppRequest && url.pathname === '/api/flights') {
           window.__SYNTH_HITS.opensky++;
           // A withheld contact models the ordinary case where the recipient's
           // first authoritative refresh does not yet carry the shared aircraft.
@@ -371,11 +371,11 @@ async function main() {
         // Trail backfill (fires on trackById). Stub with valid-but-empty
         // payloads so the deterministic run never 404s against the dev proxy.
         // flights: { path: [ [time, lat, lon, baroAlt, true_track, on_ground] ] }
-        if (isAppRequest && url.pathname === '/api/opensky-track') {
+        if (isAppRequest && url.pathname === '/api/flights/track') {
           return Promise.resolve(jsonResponse({ path: [] }));
         }
         // military: { timestamp: <epochSec>, trace: [ [secAfter, lat, lon, ...] ] }
-        if (isAppRequest && url.pathname === '/api/adsblol/trace') {
+        if (isAppRequest && url.pathname === '/api/military/track') {
           return Promise.resolve(jsonResponse({ timestamp: Math.floor(Date.now() / 1000), trace: [] }));
         }
         // adsbdb enrichment (fires for tracked/model-eligible planes): empty
@@ -388,7 +388,7 @@ async function main() {
         // Contacts enables the optional AIS source alongside aircraft. Keep
         // this tracking harness independent of local AIS credentials while
         // preserving the truthful "awaiting first message" lifecycle.
-        if (isAppRequest && url.pathname === '/api/ais-live') {
+        if (isAppRequest && url.pathname === '/api/vessels') {
           return Promise.resolve(jsonResponse({
             status: 'connected',
             rows: [],
@@ -450,7 +450,7 @@ async function main() {
           return Promise.resolve(jsonResponse({ places: [] }));
         }
         // adsb.lol military: { ac: [ aircraft{} ] }  (must come AFTER /trace check)
-        if (isAppRequest && url.pathname === '/api/adsblol/mil') {
+        if (isAppRequest && url.pathname === '/api/military') {
           window.__SYNTH_HITS.mil++;
           const ac = window.__SYNTH.military.map((m) => ({
             hex: m.hex,

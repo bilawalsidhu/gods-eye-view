@@ -476,7 +476,7 @@ test('pending mapped installations render as unknown instead of a false zero', a
 // the dependencies reach it by different routes:
 //
 //   - ais-live-vessels is its REACHABLE producer. enable()/update() both resolve
-//     as soon as the first /api/ais-live poll answers, so the manager's
+//     as soon as the first /api/vessels poll answers, so the manager's
 //     lifecycle settles to `enabled` — but until the server-side socket delivers
 //     a position, firstConnectPhase stays 'loading' and the module reports busy,
 //     no lastUpdate, count 0, and an UNDEFINED status, so the status list alone

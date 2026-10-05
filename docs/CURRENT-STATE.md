@@ -1,10 +1,51 @@
 # God's Eye View Current State
 
-## Cyber HUD — September 23, 2026
+## God's Eye View in conversations — October 2, 2026
+
+Tool answers that can be shown in God's Eye View include a view: camera, layers,
+style, map, marks and an aircraft or satellite to follow, written in the
+share-link format (`gods-eye-view/view`). `show_in_gods_eye_view` shows a view as live
+God's Eye View inside clients that display MCP Apps, and as a link everywhere.
+The panel runs the app's panel build (`npm run build:panel`, served at
+`/panel/`) and loads it, with its data, through the MCP server, so it works
+in Claude Desktop and in the Codex and ChatGPT desktop apps with a local
+server and no HTTPS. `?embed=1` shows the app as the globe alone and takes
+new views from the page that frames it; framing is off unless
+`GEV_EMBED_FRAME_ANCESTORS` allows the framing page. MCP leads with the tools that find
+what to show. See [tools and the MCP server](TOOLS.md).
+
+## Tools and local MCP server — October 1, 2026
+
+`gods-eye-view/tools` defines queries that answer questions from the app's data,
+and `gods-eye-view/tools/mcp` exposes a composed catalog over the Model Context
+Protocol. `npm run mcp` serves Core's tools over stdio to a local MCP client,
+reading from a running app's `/api` routes (default `http://localhost:4173`).
+The development and preview servers also serve the tools over HTTP at `/mcp`,
+accepting only direct local requests: a loopback host on the port reached,
+an `Origin` (when sent) from that same host, no proxy forwarding headers, and
+launcher sharing off.
+Queries cover earthquakes, active fires, recent launches, aircraft (in an
+area, by identifier, tracks, and type and route lookups), ships (in an area,
+by identifier, and tracks), satellites (next
+pass over a point, and those overhead now), public cameras (including a
+camera's current image), license plate reader cameras, radio stations, place search, routing, bike-share
+stations, transit vehicles, road traffic flow, weather, weather map images
+(radar, satellite, lightning), wind, the most recent satellite image of an
+area, submarine cables, datacenters and dams, the Bhote Koshi flood event pack, regional briefs, tropical cyclones, fire
+perimeters, terrain height, military installations and map features, plus a
+combined situation brief, military awareness around a point, the app's heads-up display caption, and a link that
+opens the app over an area. Tools reuse the layers' portable source factories, take a
+shared `area` argument (place name, bounding box, or point and radius) and cap
+lists at 25 rows by default. Voice offers the same queries next to its app
+actions: the session lists them, and the browser runs them through the same
+catalog, loaded on first use. See [tools and the MCP server](TOOLS.md).
+
+## Cyber HUD — September 30, 2026
 
 Display > HUD > Layout includes Cyber, also available through the HUD voice
 action and shared visual state. An explicit first transition into Cyber selects
-FLIR with Ironbow 0.42; restored links and subsequent visual tuning remain
+FLIR with Ironbow 0.42. An explicit switch back to another HUD layout restores
+the visual preset used before Cyber; restored links and scenes remain
 authoritative. The skin uses shared red/slate panel treatments in map and cockpit,
 with compact 200px collapsed controls and wider expanded panels. Other HUD
 layouts retain their existing presentation.
@@ -16,6 +57,21 @@ launchers available. Display, CCTV and Context scroll their contents inside fixe
 headers and decorative frames. The narrow-screen rail remains scrollable to reach
 each panel. Radio retains the shared nested Context player and compact
 header disclosure, without relocating playback controls on theme changes.
+
+Voice help/error popups and Location/Visual Presets pins extend beyond their
+Cyber frames without being clipped: the shapes decorate non-interactive
+pseudo-elements. The lower-left telemetry card leaves room for attribution's
+full logo row. New panels can use the [shared surface contract](panel-surfaces.md)
+for theme tokens, rail input and a fixed header with a bounded scroll body.
+The contract is intentionally future-facing and opt-in; its first production
+adopter will land after this change. Existing owners still control disclosure,
+persistence and placement, while small-screen rail popup clipping and other
+integration limits remain documented in the contract.
+
+On desktop, Cyber raises the left rail so it clears the lower coordinate card.
+`layoutRightPanelRail` reads that rendered top as its measured `baseTop`, which
+keeps the right rail aligned. Cockpit retains its separate rail placement for
+its visor layout.
 
 Sonar has one contact-highlighting method. Native Cesium points, billboards and
 labels are treated in GPU draw commands without replacing their positions,
@@ -875,9 +931,20 @@ errors.
 ## Places and CCTV request bounds
 
 With a Google key configured, nearby and text search reject missing, blank,
-non-numeric and out-of-range coordinates before the opt-in limiter and upstream
+non-numeric and out-of-range coordinates before the per-IP limiter and upstream
 request. Text search also requires a nonblank query. Keyless requests retain
 their `configured: false` response.
+
+The cost-bearing proxies are throttled per client IP without configuration:
+`/api/realtime/token` and `/api/openai/hud-summary` share 30 requests per
+minute per IP, `/api/google/nearby-places` and `/api/google/text-search` share
+120 — the caps the Pinokio build already sets, so the packaged app is
+unaffected. `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` override
+those; exactly `0` disables the limiter, while a value that cannot be read as a
+number falls back to the default rather than to unlimited. Over-limit requests
+receive a sanitized `429` with `Retry-After: 5` and never reach the provider.
+The client key is the socket peer address only — a forwarded-for header is not
+trusted, so a proxied deployment shares one bucket per upstream hop.
 
 CCTV media waits at most 15 seconds for upstream response headers and returns
 504 on timeout. Its timer stops when headers arrive, so live bodies can continue
@@ -1394,7 +1461,7 @@ This is the current runtime/source-of-truth snapshot for the project.
 >   dependency list rather than a fix for one layer, and the dependencies reach
 >   it by different routes:
 >   - **AIS vessels is its reachable producer.** `enable()`/`update()` both
->     resolve as soon as the first `/api/ais-live` poll answers, so the manager's
+>     resolve as soon as the first `/api/vessels` poll answers, so the manager's
 >     lifecycle settles to `enabled` — but until the server-side socket delivers
 >     a position, `firstConnectPhase` stays `'loading'` and `getStats()` reports
 >     `loading: true`, `lastUpdate: null`, count 0, and an UNDEFINED status.
@@ -1798,7 +1865,7 @@ isCurrent })` gates BOTH halves of the map-stack switch, which is its only
 >   the share payload; Radio restores only its allowlisted filter and volume.
 > - **AIS feed watchdog (2026-08-18):** feed liveness is judged by DATA, not
 >   socket state — AISStream can complete the handshake and then deliver
->   nothing forever. `/api/ais-live` reports `live | stale | reconnecting |
+>   nothing forever. `/api/vessels` reports `live | stale | reconnecting |
 down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   `silentForMs`, `reconnectAttempt` and `nextAttemptAt`. Silence is REPORTED
 >   at 120s and ACTED ON at 300s; recovery walks a 5s/15s/60s/300s ladder and
@@ -1943,11 +2010,12 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   registered for lifecycle and restoration but is not duplicated in Data Layers.
 >   Inside Cockpit, the focused summary card is titled Contact in both visible
 >   copy and its accessible control labels.
->   The top-center Cockpit vision cycle shows the inherited map preset name
->   (for example, `NOIR`) followed by CRT, NVG, FLIR, and NOIR. That inherited entry
->   leaves the selected map preset unchanged inside Cockpit. NONE is not offered
->   in the cycle; CRT, NVG, FLIR, and NOIR temporarily override that preset, while returning to it or exiting
->   Cockpit restores the captured map style and its exact shader intensities.
+>   The top-center Cockpit vision cycle is the fixed, duplicate-free sequence
+>   Normal, CRT, NVG, FLIR, Anime, Noir, and Snow. Entry selects the map preset
+>   already in use, so a FLIR map opens on the existing FLIR item while
+>   Normal remains available exactly once. NONE is not offered. Cockpit choices
+>   temporarily override the map preset, while Exit Cockpit and Reset both restore
+>   the captured map style and its exact shader intensities.
 >   Selecting a Cockpit vision treatment with configurable parameters opens
 >   Cockpit Display and reveals those parameters through the existing right-side
 >   accordion; an inherited parameterless Normal preset does not force it open.
@@ -2843,15 +2911,15 @@ its criteria cannot be silently ignored.
 
 | Layer                  | Source                                                                                                                                                                                          | File                                                  | Proxy                                                    | Update Interval                                                                   |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Live Flights ✈️        | OpenSky Network; bounded adsb.lol regional fallback                                                                                                                                             | `src/data/flights.js`                                 | `/api/opensky` (OAuth + fallback)                        | 30s                                                                               |
-| Military Flights 🎖️    | adsb.lol /v2/mil                                                                                                                                                                                | `src/data/militaryFlights.js`                         | `/api/adsblol/mil`                                       | 15s                                                                               |
-| Live AIS Vessels 🚢    | AISStream websocket                                                                                                                                                                             | `src/data/aisLiveVessels.js`                          | `/api/ais-live`                                          | 60s (+800ms visibility pass)                                                      |
+| Live Flights ✈️        | OpenSky Network; bounded adsb.lol regional fallback                                                                                                                                             | `src/data/flights.js`                                 | `/api/flights` (OAuth + fallback)                        | 30s                                                                               |
+| Military Flights 🎖️    | adsb.lol /v2/mil                                                                                                                                                                                | `src/data/militaryFlights.js`                         | `/api/military`                                       | 15s                                                                               |
+| Live AIS Vessels 🚢    | AISStream websocket                                                                                                                                                                             | `src/data/aisLiveVessels.js`                          | `/api/vessels`                                          | 60s (+800ms visibility pass)                                                      |
 | Mapped Installations ⌖ | OpenFreeMap military areas; optional configured Overpass names and Google Places search | `src/data/militaryInstallations.js` | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search` | viewport-driven; transient errors back off, missing capability switches to tiles |
 | Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
 | Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
 | Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
 | Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
-| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
 | Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
 | Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
 | Bikeshare 🚲           | GBFS (Lyft + BCycle)                                                                                                                                                                            | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
@@ -3575,7 +3643,7 @@ silently demoting every later lookup for the session.
   A selected mission renders its orbit as four repeating tactical sectors, each containing one prominent cyan dot followed by one hundred thin translucent dashes. The bright dots act as orbit anchors while the subdued dash field remains depth-tested against the globe and is shown only for the selected mission.
   Close selected-pad views add one static 500 m-radius cyan launch-zone ring with a low-opacity translucent fill over the sampled photoreal launch-site surface. The single scene primitive is created only for the visible selected site and is otherwise dormant. It appears during Focus, sufficiently close manual zoom, and the replay countdown, but is suppressed above 120 km camera altitude, beyond 180 km direct camera-to-pad range, for unselected missions, and whenever Space Missions is inactive. Focus establishes a launch-site-centered camera transform once; subsequent manual heading and pitch changes remain centered on that site without an automated per-frame correction. Surface mission markers and labels use an additional conservative globe-limb margin before the exact ellipsoid occluder boundary, preventing near-horizon visibility from alternating between frames.
 - **AIS vessels**: chevron symbology (naval cyan base, type tints), world-space headings, MMSI-keyed reconciliation (selection survives refreshes; pinned 3 refreshes with STALE marker when absent), detection-overlay integration (`type: 'SEA'`), contextStore registration for voice Q&A. Empty-space clicks, id-less photorealistic-tile picks, and Escape dismiss the vessel card/HUD/context and clear its trail; picks owned by another layer (including `gev-trail:*`) and raw vessel-record picks without a live MMSI key are no-ops for vessel selection. Click and key handlers detach while the layer is disabled and reinstall on enable. Selecting another vessel replaces the selection and trail, and reconciliation clears a trail if its owning vessel is evicted.
-- **Track trails**: server accumulates per-MMSI ring buffers (`/api/ais-live/track?mmsi=`, Float32+Uint32, 64 samples, 30s/25m thinning); aircraft backfill proxies `/api/opensky-track` (OAuth, own credit bucket) and `/api/adsblol/trace` (tar1090 readsb, ~24h history, ODbL — credit adsb.lol).
+- **Track trails**: server accumulates per-MMSI ring buffers (`/api/vessels/track?mmsi=`, Float32+Uint32, 64 samples, 30s/25m thinning); aircraft backfill proxies `/api/flights/track` (OAuth, own credit bucket) and `/api/military/track` (tar1090 readsb, ~24h history, ODbL — credit adsb.lol).
 - Shared `src/data/pickRegistry.js` stops the two flight layers' click handlers from fighting over the camera.
 
 ### Optional Overpass configuration
@@ -3787,13 +3855,14 @@ and unreachable upstream (502/504) separately from road geometry.
   first, activates the Contacts sub-view, and returns the settled 250 km window.
   Its `aircraft` count is the exact civilian-plus-military total when both feeds
   can answer, or `unknown` when either component is unavailable.
-- Cockpit's top vision switch cycles five rendered looks: the inherited map
-  style, CRT, NVG, FLIR, and Noir. There is no empty `NONE` entry.
+- Cockpit's top vision switch cycles all seven map looks: Normal, CRT, NVG,
+  FLIR, Anime, Noir, and Snow. Entry selects the matching map style without adding
+  a duplicate carousel item. There is no empty `NONE` entry.
 
 ### Live AIS Vessels (June 2026)
 
 - Server-side `ws` websocket to `wss://stream.aisstream.io/v0/stream` maintained by Vite middleware; `AISSTREAM_API_KEY` never reaches the browser (AISStream has no browser CORS). The `ws` package is used rather than Node's built-in WebSocket specifically because only it can hard-abort a wedged socket (see the watchdog note in the delta block at the top).
-- Browser polls same-origin `/api/ais-live` cache every 60s.
+- Browser polls same-origin `/api/vessels` cache every 60s.
 - The first enable in a session starts one 30-second client grace timer. Until
   an accepted vessel position arrives, `live`/`open`/`connecting` transport reports
   `LOADING`; the timer is not restarted by the 60-second poll. Expiry or a
@@ -4066,13 +4135,13 @@ are omitted rather than framing the wrong part of the globe.
 - Proxy error payloads are sanitized (no internal error details returned to clients).
 - That holds for the OpenAI and CCTV media paths too: `/api/openai/hud-summary` never relays OpenAI's own `error.message`, `/api/realtime/token` passes successful ephemeral-token responses through but answers with a fixed error when minting fails or upstream rejects the request, and a failed CCTV media fetch stores a fixed camera health `message` — `GET /api/cctv/health` serializes that field and the CCTV panel renders it as a status label, so it is a client surface as much as the response body is.
 - `OPENAI_API_KEY` is server-side only; the browser receives ephemeral Realtime client secrets from `/api/realtime/token`.
-- `AISSTREAM_API_KEY` is server-side only; the browser reads the same-origin `/api/ais-live` cache.
+- `AISSTREAM_API_KEY` is server-side only; the browser reads the same-origin `/api/vessels` cache.
 - `/api/google/nearby-places` keeps the Google key out of Places requests issued for voice scene context.
 - `/api/google/text-search` keeps the Google key server-side for view-biased Places recovery used by annotation resolution.
 - `/api/overpass` is bounded by body/response caps, per-client/global rate limits, concurrency limits, operator-configured upstreams, in-flight dedupe, cache bounds, and static validation that every selector is spatially bounded.
 - `/api/military-installations` uses an independent limiter with the same 90-per-client/300-global one-minute bounds, so viewport installation refreshes never consume `/api/overpass` annotation capacity.
 - `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors.
-- Track endpoints: `/api/ais-live/track?mmsi=` (server-accumulated ring buffers; sub-route handled before the rows snapshot), `/api/opensky-track?icao24=` (OAuth, 60s cache, sanitized errors, independent OpenSky credit bucket), `/api/adsblol/trace?hex=` (60s cache, 5MB cap, ODbL attribution required in UI).
+- Track endpoints: `/api/vessels/track?mmsi=` (server-accumulated ring buffers; sub-route handled before the rows snapshot), `/api/flights/track?icao24=` (OAuth, 60s cache, sanitized errors, independent OpenSky credit bucket), `/api/military/track?hex=` (60s cache, 5MB cap, ODbL attribution required in UI).
 - Realtime debug logs redact API keys, bearer tokens, client secrets, and image data URLs before writing to disk; request bodies are size-capped.
 - `/api/realtime/debug-log` enforces an always-on 120-per-client/400-global one-minute limiter (not the opt-in `GEV_RATELIMIT_OPENAI_PER_MIN` bucket the cost-bearing OpenAI routes share), appends asynchronously through a serialized queue, and rotates `realtime-conversations.jsonl` at 32 MB keeping one prior generation, so the sink is bounded at twice that regardless of session length. A malformed record answers 400 and a failed write 500, both with a fixed message.
 
@@ -4159,7 +4228,7 @@ are omitted rather than framing the wrong part of the globe.
 - **Cockpit left-panel clearance:** the Cockpit Contact card and peripheral HUD participate in the adaptive left accordion's live obstacle measurements, including live viewport-height changes. Expanding Layers or Scenes keeps the active panel in the available upper-left corridor with internal scrolling; it does not cover the Contact card, lower Cockpit controls, or Cesium credit line. Outside Cockpit the hidden card does not alter the normal corridor.
 - **Cockpit Context scope:** the 250 km radius applies to the air/sea proximity cohorts. Installation counts come only from the currently loaded viewport and are labeled `CURRENT VIEWPORT ONLY` in the cockpit as well as the normal Context panel; neither surface presents them as a complete 250 km installation survey.
 - **Cockpit camera anchor:** first-person mode does not write feed-boundary corrections directly into the camera. A cockpit-only inertial anchor advances from the selected aircraft's displayed course and speed, then converges toward the authoritative delayed track with correction capped below forward motion. The displayed kinematics are derived from the same consecutive fix segment as the rendered position, with raw feed speed/course used only as fallback; a transient zero/missing feed speed therefore cannot freeze a visibly moving aircraft after layer enable or a map/cockpit handoff. Rendered altitude continues to come from that interpolated track position. Late ADS-B fixes and short render stalls can remove drift without accelerating or reversing the view. Camera placement runs before scene update/culling at a bounded 20 Hz so a moving cockpit does not force Photoreal 3D Tiles to retraverse on every display frame; textual instruments update at 10 Hz and context/layout work at 4 Hz. Every far Cockpit contact pip shares one stable Cesium texture-atlas entry and skips unused screen-projected course calculations, while only in-range 2D aircraft silhouettes pay the screen-projected rotation cost; ambient glTF collections are hidden/retained rather than synchronously destroyed at cockpit entry, and context rails lay out only on explicit content/state changes and viewport resize. The deliberate 15/30-second layer interpolation delays and per-Cesium-frame position caches remain unchanged.
-- **Cockpit route, vision, and view controls:** visible on-screen `COCKPIT`, `RESET`, and `EXIT COCKPIT` controls replace reliance on the `C` shortcut. RESET uses the same canonical globe route as the map and voice actions, exits Cockpit, and releases its camera ownership rather than exposing the hidden map-style top action. When the tracked commercial flight has a plausible ADSBDB route, the top of the right briefing rail shows a compact `FROM → TO` airport strip and the visor shows a centered estimated-destination chevron with its relative bearing; absent or implausible route data hides the strip and cue rather than guessing. The cockpit-local vision control is an interactive `PREV / CURRENT / NEXT` carousel over the inherited map preset, `CRT`, `NVG`, `FLIR`, and `NOIR`; its previous/next actions wrap, and activating the current value advances to the next style. The inherited entry is named directly, such as `NOIR`, and retains that map shader. There is no empty `NONE` entry. CRT, NVG, FLIR, and NOIR temporarily activate the existing Cesium post-process stages, while returning to the inherited entry or exiting Cockpit restores the pre-entry visual style. The regional-news page uses a free Google News RSS locality query first, with the existing GDELT query retained only as a fail-soft fallback; linked headlines remain reporting, not verified incidents or risk intelligence.
+- **Cockpit route, vision, and view controls:** visible on-screen `COCKPIT`, `RESET`, and `EXIT COCKPIT` controls replace reliance on the `C` shortcut. RESET uses the same canonical globe route as the map and voice actions, exits Cockpit, and releases its camera ownership rather than exposing the hidden map-style top action. When the tracked commercial flight has a plausible ADSBDB route, the top of the right briefing rail shows a compact `FROM → TO` airport strip and the visor shows a centered estimated-destination chevron with its relative bearing; absent or implausible route data hides the strip and cue rather than guessing. The cockpit-local vision control is an interactive `PREV / CURRENT / NEXT` carousel over `NORMAL`, `CRT`, `NVG`, `FLIR`, `ANIME`, `NOIR`, and `SNOW`; its previous/next actions wrap, and activating the current value advances to the next style. Cockpit enters on the active map preset, so a Cyber FLIR map opens Cockpit on FLIR while Normal remains a distinct option instead of producing a second FLIR entry. Cockpit choices temporarily activate the existing Cesium post-process stages, while exiting Cockpit through either EXIT or RESET restores the pre-entry map style. The regional-news page uses a free Google News RSS locality query first, with the existing GDELT query retained only as a fail-soft fallback; linked headlines remain reporting, not verified incidents or risk intelligence.
 - **Cockpit weather status:** the earlier multi-canvas atmospheric compositor remains fail-closed and is not attached to the live viewer. Cockpit clouds are a separate transparent WebGL pass with a capped 520×320 framebuffer, 24 ray steps, three FBM octaves, and a 12 FPS ceiling. It defaults off and starts only when local storage explicitly contains the persisted `WX ON` opt-in (`'1'`). When opted in, observations refresh after five minutes or 25 km of aircraft movement, fail transparent when unavailable or clear, and stop on exit or disable. `WX OFF` governs atmospheric rendering only: the briefing still fetches source-backed Natural Earth region, headline, and Open-Meteo local-information data, aborting and replacing any in-flight request when the selected aircraft changes. No weather effect runs in map mode and no synthetic fallback is shown.
 - **Cockpit trail visibility:** entering cockpit hides the selected aircraft's trail body and head so they cannot cross the first-person view; exit restores them. This cockpit-only presentation change does not alter the normal map-mode invariant that aircraft trails render through terrain using their depth-fail material.
 - **Aircraft course slew:** civilian and military 3D models retain the 60°/s course limiter, but each rendered frame can consume at most 250 ms of accumulated slew time. A long tile/render stall therefore catches up over multiple visible frames instead of turning one delayed frame into a heading snap.

@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createOpenSkySource,
-  createAdsbLolSource,
-  createAisStreamSource,
+  createFlightSource,
+  createMilitarySource,
+  createVesselSource,
   normalizeReadsbAircraft,
   normalizeVesselObservation,
   openSkySnapshot,
@@ -133,7 +133,7 @@ test('construction is inert; adapters preserve routes, viewport query, cache epo
   const requests = [];
   const fetchImpl = async (url, init) => {
     requests.push({ url, init });
-    if (url.startsWith('/api/opensky?'))
+    if (url.startsWith('/api/flights?'))
       return response(
         { time: now / 1000, states: [aircraft] },
         {
@@ -141,27 +141,27 @@ test('construction is inert; adapters preserve routes, viewport query, cache epo
           'x-flight-coverage': '250 nm regional',
         },
       );
-    if (url.startsWith('/api/opensky-track'))
+    if (url.startsWith('/api/flights/track'))
       return response({ path: [[now / 1000 - 30, 30, -97, 1000, 45, false]] });
-    if (url === '/api/adsblol/mil')
+    if (url === '/api/military')
       return response(
         { ac: [{ hex: 'abc123', lat: 30, lon: -97, seen_pos: 15 }] },
-        { 'x-ads-b-cache-age-ms': '60000', 'x-ads-b-cache': 'STALE' },
+        { 'x-feed-age-ms': '60000', 'x-feed-cache': 'STALE' },
       );
     return response({
       timestamp: now / 1000 - 60,
       trace: [[10, 30, -97, 1000]],
     });
   };
-  const civil = createOpenSkySource({ fetchImpl, now: () => now });
-  const military = createAdsbLolSource({ fetchImpl, now: () => now });
+  const civil = createFlightSource({ fetchImpl, now: () => now });
+  const military = createMilitarySource({ fetchImpl, now: () => now });
   assert.equal(requests.length, 0);
   const signal = new AbortController().signal;
   const snapshot = await civil.getSnapshot(
     { latitude: 30.123456, longitude: -97 },
     { signal },
   );
-  assert.equal(requests[0].url, '/api/opensky?lat=30.1235&lon=-97.0000');
+  assert.equal(requests[0].url, '/api/flights?lat=30.1235&lon=-97.0000');
   assert.equal(requests[0].init.signal, signal);
   assert.equal(snapshot.source, 'adsb.lol');
   assert.equal(snapshot.coverage, '250 nm regional');
@@ -180,7 +180,7 @@ test('construction is inert; adapters preserve routes, viewport query, cache epo
 test('cancellation after slow body parsing rejects even with a transport that ignores abort', async () => {
   let release;
   const controller = new AbortController();
-  const source = createOpenSkySource({
+  const source = createFlightSource({
     fetchImpl: async () => ({
       ok: true,
       json: () =>
@@ -199,7 +199,7 @@ test('cancellation after slow body parsing rejects even with a transport that ig
 test('denials and outages never start another source and do not echo arbitrary response bodies', async () => {
   for (const status of [401, 403, 429, 502]) {
     let calls = 0;
-    const source = createOpenSkySource({
+    const source = createFlightSource({
       fetchImpl: async () => {
         calls++;
         return response({ error: 'sensitive upstream detail' }, {}, status);
@@ -216,12 +216,12 @@ test('denials and outages never start another source and do not echo arbitrary r
 });
 
 test('AIS reports limited received coverage and keeps connection state separate from positions', async () => {
-  const source = createAisStreamSource({
+  const source = createVesselSource({
     origin: () => 'http://example.test',
     fetchImpl: async (url) => {
       if (url.includes('/track?'))
         return response({ samples: [{ lat: 30, lon: -97, t: now / 1000 }] });
-      assert.equal(url, 'http://example.test/api/ais-live?maxRows=500');
+      assert.equal(url, 'http://example.test/api/vessels?maxRows=500');
       return response({
         status: 'reconnecting',
         refreshing: true,
@@ -249,7 +249,7 @@ test('AIS reports limited received coverage and keeps connection state separate 
 });
 
 test('a malformed vessel row cannot prevent admission of valid positions', async () => {
-  const source = createAisStreamSource({
+  const source = createVesselSource({
     fetchImpl: async () =>
       response({
         status: 'live',
@@ -273,7 +273,7 @@ test('out-of-range source epochs do not reach Date or globe time constructors', 
 });
 
 test('classification identities include positionless aircraft without admitting them to rendering', async () => {
-  const source = createAdsbLolSource({
+  const source = createMilitarySource({
     fetchImpl: async () =>
       response({
         ac: [
@@ -293,12 +293,12 @@ test('classification identities include positionless aircraft without admitting 
 });
 
 test('identity lookup validates its response and honors body-parse cancellation', async () => {
-  const malformed = createAdsbLolSource({
+  const malformed = createMilitarySource({
     fetchImpl: async () => response({ ac: [{}] }),
   });
   await assert.rejects(malformed.getIdentities(), /Malformed/);
   const abort = new AbortController();
-  const source = createAdsbLolSource({
+  const source = createMilitarySource({
     fetchImpl: async () => ({
       ok: true,
       status: 200,

@@ -80,10 +80,11 @@ function createDebugLogHandler({ sourceRoot = defaultSourceRoot } = {}) {
     try {
       const body = await readRequestBody(req, REALTIME_DEBUG_LOG_MAX_BYTES);
       const record = JSON.parse(body || '{}');
+      // The server's own timestamp comes last, so a record cannot supply one.
       await append(
         `${JSON.stringify({
-          loggedAt: new Date().toISOString(),
           ...record,
+          loggedAt: new Date().toISOString(),
         })}\n`,
       );
       res.statusCode = 204;
