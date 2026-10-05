@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Resolve Cesium's transitive DOMPurify to 3.4.16 (GHSA-p98j-92pf-mc4p).
+  The advisory needs `IN_PLACE` sanitizing with a node-removing
+  `afterSanitize` hook; Cesium's credit display calls plain `sanitize()`,
+  so the app was not exposed. Lockfile-only change.
+
 - Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
   list is one keyless GeoJSON request to the agency's OGC API view of its
   DATEX 3.1 CCTV table, so no DATEX account is needed. Every working camera
