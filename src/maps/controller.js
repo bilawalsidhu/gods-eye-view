@@ -19,7 +19,8 @@ export class MapSourceController {
       onChange = null,
       onError = null,
       requestRender = () => viewer?.scene?.requestRender?.(),
-      createImageryLayer = (provider) => new Cesium.ImageryLayer(provider),
+      createImageryLayer = (provider, options) =>
+        new Cesium.ImageryLayer(provider, options),
     },
   ) {
     this.viewer = viewer;
@@ -46,6 +47,8 @@ export class MapSourceController {
     this._lastError = null;
     this._imageryLayer = null;
     this._activeImageryProvider = null;
+    this._underlayLayer = null;
+    this._activeUnderlayProvider = null;
     this._removeImageryErrorListener = null;
     this._terrainMode = null;
     this._subscribers = new Set();
@@ -260,6 +263,9 @@ export class MapSourceController {
   async _activateGlobeStack(stack, gen) {
     const resolution = await this._getImageryProvider(stack);
     if (gen !== this._switchGen) return;
+    const source = this._sources.get(resolution.effectiveStackId);
+    const underlayProvider = await this._resolveUnderlay(source);
+    if (gen !== this._switchGen) return;
     // Scene shots reapply their map stack at every handoff. Keep the live
     // layer (and its loaded tiles) when the resolved provider is unchanged;
     // rebuilding it exposes the bare globe while imagery loads again.
@@ -268,11 +274,14 @@ export class MapSourceController {
       this._activeImageryProvider !== resolution.provider
     ) {
       this._removeImageryLayer();
-      this._imageryLayer = this._createImageryLayer(resolution.provider);
+      this._imageryLayer = this._createImageryLayer(
+        resolution.provider,
+        source?.layerOptions,
+      );
       this._activeImageryProvider = resolution.provider;
       this.viewer.imageryLayers.add(this._imageryLayer, 0);
     }
-    const source = this._sources.get(resolution.effectiveStackId);
+    this._syncUnderlay(underlayProvider);
     this._credits.show(source?.credit || null);
     // A repeated request still owns a new switch generation. Rebind its
     // failure listener so fallback remains live without accumulating listeners.
@@ -295,6 +304,40 @@ export class MapSourceController {
       this._terrainMode = terrain.id;
     }
     return resolution;
+  }
+
+  /**
+   * A source limited to some zoom levels (Sentinel-2 Latest) names another
+   * stack to draw beneath it, so the globe is never bare where it stops.
+   * The underlay reuses that stack's cached provider, fallbacks included;
+   * an underlay that cannot be built is skipped, never fatal.
+   */
+  async _resolveUnderlay(source) {
+    const id = source?.underlay?.id;
+    if (!id || id === source.descriptor?.id || !this.isStackAvailable(id))
+      return null;
+    try {
+      return (await this._getImageryProvider(this.getStack(id))).provider;
+    } catch (error) {
+      console.warn('[MapSourceController] underlay unavailable:', error);
+      return null;
+    }
+  }
+
+  _syncUnderlay(provider) {
+    if (provider && provider === this._activeUnderlayProvider) return;
+    this._removeUnderlayLayer();
+    if (!provider) return;
+    this._underlayLayer = this._createImageryLayer(provider);
+    this._activeUnderlayProvider = provider;
+    this.viewer.imageryLayers.add(this._underlayLayer, 0);
+  }
+
+  _removeUnderlayLayer() {
+    if (this._underlayLayer)
+      this.viewer.imageryLayers.remove(this._underlayLayer, true);
+    this._underlayLayer = null;
+    this._activeUnderlayProvider = null;
   }
 
   _cached(cache, id, create) {
@@ -385,6 +428,7 @@ export class MapSourceController {
       this.viewer.imageryLayers.remove(this._imageryLayer, true);
     this._imageryLayer = null;
     this._activeImageryProvider = null;
+    this._removeUnderlayLayer();
   }
   _dispose(value) {
     if (!value || this._disposed.has(value)) return;

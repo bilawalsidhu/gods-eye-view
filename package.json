@@ -102,6 +102,10 @@
     "./server/providers/firms": {
       "node": "./server/providers/firms.js"
     },
+    "./server/providers/sentinel2": {
+      "node": "./server/providers/sentinel2.js"
+    },
+    "./sources/sentinel2": "./src/data/sentinel2Tiles.js",
     "./server/providers/gbfs": {
       "node": "./server/providers/gbfs.js"
     },

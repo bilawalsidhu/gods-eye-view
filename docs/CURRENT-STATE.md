@@ -4802,6 +4802,46 @@ work and releases owned resources, including late factory results. Supplied 3D
 tilesets remain owned by the caller; tilesets created through the controller's
 factory are added to its viewer and removed on destruction.
 
+## Sentinel-2 Latest map source
+
+`sentinel2-latest` ("Sentinel-2 Latest", short label `S2`) is a sixth globe
+stack: the least-cloudy Copernicus Sentinel-2 L2A scene of the trailing 30 UTC
+days (≤20 % tile cloud cover, `mosaickingOrder: leastCC`), true colour
+B04/B03/B02, from the Copernicus Data Space Ecosystem Sentinel Hub Process API.
+
+- **Keys.** Provider Settings entry `sentinel-hub` (free tier) writes
+  `SENTINEL_HUB_CLIENT_ID` + `SENTINEL_HUB_CLIENT_SECRET`, both server-side.
+  At boot `src/app/scene.js` asks `/api/sentinel2/status` (in parallel with the
+  Google tiles; 3 s timeout) and passes only `hasKey === true` to
+  `createDefaultMapSources({ sentinelHubConfigured })`. Without it the chip is
+  shown, `aria-disabled`, with the `keySetupRequirement(sentinel-hub)` hint;
+  defaults, other stacks and share links behave as before, and no Copernicus
+  request is made.
+- **Server.** `server/providers/sentinel2.js` (`/api/sentinel2`): in-memory
+  client-credentials token (60 s refresh margin, single-flight, 30 s cooldown
+  after a failed mint, one re-mint on a 401); tiles z8–z14 only, memory LRU +
+  `.gev-cache/sentinel2/` for 48 h with serve-stale; scene dates per 0.1° cell
+  from the Catalog API, cached 6 h; a per-UTC-day request budget
+  (`SENTINEL_HUB_DAILY_REQUEST_BUDGET`, default 300 ≈ 9,300 / month against the
+  free 10,000). Fixed CDSE hosts, redirects refused, same-site gate, GET only.
+  Pure request shaping lives in `src/data/sentinel2Tiles.js`.
+- **Resolution.** The provider requests z8–z14 (z14 ≈ 9.6 m/px, the 10 m native
+  scale); the layer draws on terrain levels 7–14 (`SENTINEL2_LAYER_OPTIONS`).
+  The source declares `underlay: { id: esri-imagery }`, so the controller
+  keeps Esri beneath it: far views and close-ups past the native resolution
+  show Esri instead of stretched pixels. Three tile failures (quota, network)
+  fall back to Esri Satellite.
+- **Not live.** While active, `src/maps/sentinel2Scene.js` keeps an on-screen
+  credit with the acquisition date and cloud cover of the scene at screen
+  centre ("… · least-cloudy of the last 30 days · not live"), looked up after
+  the camera settles and skipped above 400 km. The Copernicus notice is the
+  stack credit and a `DATA_CREDITS` entry.
+- **Not covered.** No voice alias: `set_map_stack` does not list it. The
+  keyless Recent Imagery layer (NASA HLS, 30 m, per day) is unrelated.
+- Regression surface: `src/data/sentinel2Tiles.test.mjs`,
+  `src/tooling/sentinel2Provider.test.mjs`, `src/maps/sentinel2Sources.test.mjs`,
+  `src/maps/sentinel2Scene.test.mjs`, plus the chip and key-setup suites.
+
 ## Live CCTV integration candidate (#489)
 
 Daniel Slay's shared-decoder panel/projection feature is adapted to bounded

@@ -362,3 +362,31 @@ test('server Google key remains supported without appearing in setup or its miss
   assert.ok(!JSON.stringify(status).includes('GOOGLE_MAPS_SERVER_API_KEY'));
   assert.ok(!JSON.stringify(status).includes(secret));
 });
+
+test('Sentinel Hub is a free, server-side pair the panel can write', () => {
+  const entry = KEY_SETUP_KEYS.find((key) => key.id === 'sentinel-hub');
+  assert.deepEqual(entry.envVars, ['SENTINEL_HUB_CLIENT_ID', 'SENTINEL_HUB_CLIENT_SECRET']);
+  assert.equal(entry.tier, 'free');
+  assert.equal(Boolean(entry.clientExposed), false, 'the secret never reaches the browser');
+  assert.match(entry.getUrl, /^https:\/\/shapps\.dataspace\.copernicus\.eu\//);
+  assert.match(entry.unlocks, /Sentinel-2 Latest/);
+  assert.equal(
+    keySetupRequirement('sentinel-hub'),
+    'Needs SENTINEL_HUB_CLIENT_ID + SENTINEL_HUB_CLIENT_SECRET — add it in Provider Settings',
+  );
+  const half = keySetupStatus({ SENTINEL_HUB_CLIENT_ID: 'id' }).keys.find(
+    (key) => key.id === 'sentinel-hub',
+  );
+  assert.equal(half.set, false, 'both halves are needed');
+  const status = keySetupStatus({
+    SENTINEL_HUB_CLIENT_ID: 'id-value',
+    SENTINEL_HUB_CLIENT_SECRET: 'secret-value',
+  });
+  assert.equal(status.keys.find((key) => key.id === 'sentinel-hub').set, true);
+  assert.doesNotMatch(JSON.stringify(status), /secret-value|id-value/);
+  const saved = validateKeySetupUpdates({
+    SENTINEL_HUB_CLIENT_ID: 'sh-1234',
+    SENTINEL_HUB_CLIENT_SECRET: 'AbC-123_xyz',
+  });
+  assert.equal(saved.ok, true);
+});

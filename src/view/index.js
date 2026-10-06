@@ -36,6 +36,7 @@ export const VIEW_MAPS = Object.freeze([
   'bing-aerial',
   'bing-labels',
   'esri-imagery',
+  'sentinel2-latest',
   'osm',
 ]);
 

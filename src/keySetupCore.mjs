@@ -17,7 +17,7 @@ import { hasProxySignals } from './localRequestGate.mjs';
 /** Longest accepted key/token value. Real provider keys are all far shorter. */
 export const KEY_SETUP_VALUE_LIMIT = 512;
 
-/** Most env vars accepted in one save. The registry defines ten. */
+/** Most env vars accepted in one save. The registry defines twelve. */
 export const KEY_SETUP_UPDATE_LIMIT = 16;
 
 /** Header line written above keys the panel appends to a .env file. */
@@ -74,6 +74,19 @@ export const KEY_SETUP_KEYS = Object.freeze([
     unlocks: 'Live active-fire detections',
     getUrl: 'https://firms.modaps.eosdis.nasa.gov/api/map_key/',
     envVars: Object.freeze(['FIRMS_MAP_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'sentinel-hub',
+    title: 'COPERNICUS SENTINEL HUB',
+    unlocks:
+      'Sentinel-2 Latest map — 10 m cloud-free imagery, up to 30 days old (free OAuth client)',
+    getUrl:
+      'https://shapps.dataspace.copernicus.eu/dashboard/#/account/settings',
+    envVars: Object.freeze([
+      'SENTINEL_HUB_CLIENT_ID',
+      'SENTINEL_HUB_CLIENT_SECRET',
+    ]),
     tier: 'free',
   }),
   Object.freeze({

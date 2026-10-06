@@ -13,6 +13,8 @@ module.exports = {
           OPENAI_API_KEY: '{{env.OPENAI_API_KEY || ""}}',
           AISSTREAM_API_KEY: '{{env.AISSTREAM_API_KEY || ""}}',
           FIRMS_MAP_KEY: '{{env.FIRMS_MAP_KEY || ""}}',
+          SENTINEL_HUB_CLIENT_ID: '{{env.SENTINEL_HUB_CLIENT_ID || ""}}',
+          SENTINEL_HUB_CLIENT_SECRET: '{{env.SENTINEL_HUB_CLIENT_SECRET || ""}}',
           TOMTOM_API_KEY: '{{env.TOMTOM_API_KEY || ""}}',
           OPENSKY_CLIENT_ID: '{{env.OPENSKY_CLIENT_ID || ""}}',
           OPENSKY_CLIENT_SECRET: '{{env.OPENSKY_CLIENT_SECRET || ""}}',

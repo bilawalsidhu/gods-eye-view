@@ -18,6 +18,8 @@ export const CREDENTIALS = Object.freeze([
   { name: 'OPENAI_API_KEY', label: 'OpenAI voice', keychain: [['openai-api', 'api-key']] },
   { name: 'AISSTREAM_API_KEY', label: 'AISStream vessels', keychain: [['aisstream-api', 'api-key']] },
   { name: 'FIRMS_MAP_KEY', label: 'NASA FIRMS fires', keychain: [['firms-map', 'map-key']] },
+  { name: 'SENTINEL_HUB_CLIENT_ID', label: 'Sentinel Hub client ID', keychain: [] },
+  { name: 'SENTINEL_HUB_CLIENT_SECRET', label: 'Sentinel Hub client secret', keychain: [] },
   { name: 'TOMTOM_API_KEY', label: 'TomTom traffic', keychain: [['tomtom-api', 'api-key']] },
   {
     name: 'OPENSKY_CLIENT_ID',
@@ -179,6 +181,9 @@ export function buildCapabilitySummary(
     vessels: configured('AISSTREAM_API_KEY') ? 'live AISStream feed' : 'off until an AISStream key is added',
     fires: configured('FIRMS_MAP_KEY') ? 'live NASA FIRMS feed' : 'off until a FIRMS key is added',
     traffic: configured('TOMTOM_API_KEY') ? 'live TomTom flow' : 'built-in traffic simulation',
+    sentinel2: configured('SENTINEL_HUB_CLIENT_ID') && configured('SENTINEL_HUB_CLIENT_SECRET')
+      ? 'Sentinel-2 Latest map stack available'
+      : 'Sentinel-2 Latest locked until a Sentinel Hub OAuth client is added',
     missions: configured('LL2_API_TOKEN')
       ? 'Launch Library 2 token allowance'
       : 'Launch Library 2 public access',
@@ -236,6 +241,7 @@ export function formatSetupReport(report, { readyMessage } = {}) {
     `Vessels: ${report.capabilities.vessels}`,
     `Fires:   ${report.capabilities.fires}`,
     `Traffic: ${report.capabilities.traffic}`,
+    `Sentinel-2: ${report.capabilities.sentinel2}`,
     `Missions: ${report.capabilities.missions}`,
     '',
     'Configured providers:',

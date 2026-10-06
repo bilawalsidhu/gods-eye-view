@@ -58,6 +58,8 @@ KEY_SETUP_EXTERNAL_KEYS=()
 [[ -n "${OPENAI_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(OPENAI_API_KEY)
 [[ -n "${AISSTREAM_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(AISSTREAM_API_KEY)
 [[ -n "${FIRMS_MAP_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(FIRMS_MAP_KEY)
+[[ -n "${SENTINEL_HUB_CLIENT_ID:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(SENTINEL_HUB_CLIENT_ID)
+[[ -n "${SENTINEL_HUB_CLIENT_SECRET:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(SENTINEL_HUB_CLIENT_SECRET)
 [[ -n "${TOMTOM_API_KEY:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(TOMTOM_API_KEY)
 [[ -n "${OPENSKY_CLIENT_ID:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(OPENSKY_CLIENT_ID)
 [[ -n "${OPENSKY_CLIENT_SECRET:-}" ]] && KEY_SETUP_EXTERNAL_KEYS+=(OPENSKY_CLIENT_SECRET)
@@ -238,6 +240,8 @@ CESIUM_ION_TOKEN="${CESIUM_ION_TOKEN:-$(read_dotenv_value "CESIUM_ION_TOKEN")}"
 LL2_API_TOKEN="${LL2_API_TOKEN:-$(read_dotenv_value "LL2_API_TOKEN")}"
 TOMTOM_API_KEY="${TOMTOM_API_KEY:-$(read_dotenv_value "TOMTOM_API_KEY")}"
 FIRMS_MAP_KEY="${FIRMS_MAP_KEY:-$(read_dotenv_value "FIRMS_MAP_KEY")}"
+SENTINEL_HUB_CLIENT_ID="${SENTINEL_HUB_CLIENT_ID:-$(read_dotenv_value "SENTINEL_HUB_CLIENT_ID")}"
+SENTINEL_HUB_CLIENT_SECRET="${SENTINEL_HUB_CLIENT_SECRET:-$(read_dotenv_value "SENTINEL_HUB_CLIENT_SECRET")}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-$(read_keychain_secret "openai-api" "api-key")}"
 AISSTREAM_API_KEY="${AISSTREAM_API_KEY:-$(read_keychain_secret "aisstream-api" "api-key")}"
 CESIUM_ION_TOKEN="${CESIUM_ION_TOKEN:-$(read_keychain_secret "cesium-ion" "token")}"
@@ -359,6 +363,7 @@ fi
 [[ -n "${CESIUM_ION_TOKEN}" ]] && echo "Cesium ion token: configured — Google 3D, Bing, and world-terrain stacks available" || echo "Cesium ion token: not set"
 [[ -n "${TOMTOM_API_KEY}" ]] && echo "TomTom key (live traffic flow): configured" || echo "TomTom key (live traffic flow): not set — simulated traffic"
 [[ -n "${FIRMS_MAP_KEY}" ]] && echo "NASA FIRMS key (live fires): configured" || echo "NASA FIRMS key (live fires): not set — fires layer requires a key"
+[[ -n "${SENTINEL_HUB_CLIENT_ID}" && -n "${SENTINEL_HUB_CLIENT_SECRET}" ]] && echo "Sentinel Hub OAuth client (Sentinel-2 Latest map): configured" || echo "Sentinel Hub OAuth client (Sentinel-2 Latest map): not set — map stack locked"
 [[ -n "${LL2_API_TOKEN}" ]] && echo "Launch Library 2 token: configured" || echo "Launch Library 2 token: not set — using public access"
 
 # Build the dev server environment explicitly. A value that resolved to
@@ -419,6 +424,8 @@ put_env_if_set AISSTREAM_API_KEY "${AISSTREAM_API_KEY}"
 put_env_if_set CESIUM_ION_TOKEN "${CESIUM_ION_TOKEN}"
 put_env_if_set TOMTOM_API_KEY "${TOMTOM_API_KEY}"
 put_env_if_set FIRMS_MAP_KEY "${FIRMS_MAP_KEY}"
+put_env_if_set SENTINEL_HUB_CLIENT_ID "${SENTINEL_HUB_CLIENT_ID}"
+put_env_if_set SENTINEL_HUB_CLIENT_SECRET "${SENTINEL_HUB_CLIENT_SECRET}"
 put_env_if_set LL2_API_TOKEN "${LL2_API_TOKEN}"
 put_env GEV_LAUNCHER "dev-fresh"
 put_env GEV_KEY_SETUP_EXTERNAL_KEYS "${KEY_SETUP_EXTERNAL_KEYS_CSV}"

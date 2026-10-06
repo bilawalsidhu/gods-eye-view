@@ -8,6 +8,10 @@ import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
 import { loadPhotorealisticTileset } from '../mapStartup.js';
+import {
+  attachSentinel2SceneReadout,
+  fetchSentinelHubConfigured,
+} from '../maps/sentinel2Scene.js';
 import { initLogoGaze } from '../logoGaze.js';
 import {
   uninstallRenderGovernor,
@@ -63,6 +67,8 @@ export async function createApplicationScene({
     googleApiKey || googleTokens || cesiumToken
       ? 'Loading Google 3D Tiles...'
       : 'Loading the keyless globe...';
+  // Asked while the tiles load; only a boolean, never a credential.
+  const sentinelHubConfigured = fetchSentinelHubConfigured({ signal });
   const photoreal = await loadPhotorealisticTileset(Cesium, {
     googleApiKey,
     googleTokens,
@@ -102,6 +108,7 @@ export async function createApplicationScene({
     ...mapOptions,
     googleTileset: tileset,
     cesiumToken,
+    sentinelHubConfigured: await sentinelHubConfigured,
     initialStack: tileset ? 'photoreal' : 'esri-imagery',
     // Task 5 (height-datum fix): rebroadcast stack changes as a window
     // CustomEvent so data layers (CCTV per-regime ground resolution) can
@@ -116,6 +123,13 @@ export async function createApplicationScene({
     onError: (message) => console.warn('[MapStack]', message),
   });
   defer(() => mapStackController.destroy());
+  defer(
+    attachSentinel2SceneReadout({
+      viewer,
+      controller: mapStackController,
+      Cesium,
+    }),
+  );
   await mapStackController.setStack(tileset ? 'photoreal' : 'esri-imagery', {
     silent: true,
   });

@@ -5,15 +5,24 @@ import {
   createOsmImagery,
   createEsriImagery,
   createIonImagery,
+  createSentinel2Imagery,
   ESRI_ATTRIBUTION_HTML,
+  SENTINEL2_LAYER_OPTIONS,
 } from './imagery.js';
+import { sentinel2AttributionHtml } from '../data/sentinel2Tiles.js';
 import { createWorldTerrain, createKeylessTerrain } from './terrain.js';
 
-/** Select sources and setup guidance without putting provider branches in the controller. */
+/**
+ * Select sources and setup guidance without putting provider branches in the
+ * controller. `sentinelHubConfigured` comes from the server's
+ * /api/sentinel2/status (the credentials themselves never reach the browser);
+ * without it Sentinel-2 Latest is listed but locked, and nothing else changes.
+ */
 export function createDefaultMapSources({
   googleTileset = null,
   cesiumToken = '',
   googleApiKey = '',
+  sentinelHubConfigured = false,
 } = {}) {
   const ionToken = String(cesiumToken || '').trim();
   const hasIon = Boolean(ionToken);
@@ -43,6 +52,23 @@ export function createDefaultMapSources({
           available: Boolean(googleTileset),
           unavailableReason: photorealUnavailableReason(hasIon || hasGoogle),
           tileset: googleTileset,
+        };
+      if (descriptor.kind === 'sentinel2')
+        return {
+          ...common,
+          available: sentinelHubConfigured === true,
+          unavailableReason: keySetupRequirement('sentinel-hub'),
+          imagery: createSentinel2Imagery,
+          layerOptions: SENTINEL2_LAYER_OPTIONS,
+          underlay: { id: 'esri-imagery' },
+          terrain,
+          credit: sentinel2AttributionHtml(),
+          tileFailureFallback: {
+            id: 'esri-imagery',
+            threshold: 3,
+            message:
+              'Sentinel-2 tiles unavailable (daily free quota or network); using Esri Satellite',
+          },
         };
       const imagery =
         descriptor.kind === 'ion'

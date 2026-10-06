@@ -25,8 +25,13 @@ test('every live basemap is reachable by its own id — no enum value without a 
   // B1 regression: a stack added to MAP_STACKS (and the set_map_stack enum)
   // without a matching STACK_ALIASES entry resolves to null and throws
   // "Unknown map stack" at the controller — a broken voice command for a
-  // shipped basemap. Every live id must self-resolve.
-  for (const stack of MAP_STACKS) {
+  // shipped basemap. Every live id must self-resolve, except the stacks
+  // deliberately left out of voice control (Sentinel-2 Latest: keyed and
+  // quota-bound, selected from the Map Source row only).
+  const NOT_VOICE_SELECTABLE = new Set(['sentinel2-latest']);
+  const voiceStacks = MAP_STACKS.filter((s) => !NOT_VOICE_SELECTABLE.has(s.id));
+  for (const id of NOT_VOICE_SELECTABLE) assert.equal(normalizeStackId(id), null);
+  for (const stack of voiceStacks) {
     assert.equal(
       normalizeStackId(stack.id),
       stack.id,
@@ -40,8 +45,8 @@ test('every live basemap is reachable by its own id — no enum value without a 
   const enumIds = GEV_REALTIME_TOOLS.find(tool => tool.name === 'set_map_stack').parameters.properties.stack.enum;
   assert.deepEqual(
     [...enumIds].sort(),
-    MAP_STACKS.map((s) => s.id).sort(),
-    'the set_map_stack voice enum and MAP_STACKS must name exactly the same basemaps',
+    voiceStacks.map((s) => s.id).sort(),
+    'the set_map_stack voice enum and the voice-selectable MAP_STACKS must name exactly the same basemaps',
   );
 });
 

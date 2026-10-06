@@ -31,6 +31,13 @@ export const MAP_STACKS = [
     requiresIon: false,
   },
   {
+    id: 'sentinel2-latest',
+    label: 'Sentinel-2 Latest',
+    shortLabel: 'S2',
+    kind: 'sentinel2',
+    requiresIon: false,
+  },
+  {
     id: 'osm',
     label: 'OSM',
     shortLabel: 'OSM',

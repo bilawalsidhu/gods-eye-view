@@ -142,6 +142,25 @@
     "modules": ["server/providers/firms.js", "src/data/firmsCsv.js"],
     "external": []
   },
+  "sentinel2-provider": {
+    "runtime": "node",
+    "exports": ["./server/providers/sentinel2"],
+    "modules": [
+      "server/providers/sentinel2.js",
+      "server/providers/common/http.js",
+      "server/providers/common/same-site.js",
+      "src/data/sentinel2Tiles.js",
+      "src/data/tomtomTiles.js",
+      "src/localRequestGate.mjs",
+      "src/sources/httpBody.js"
+    ],
+    "external": []
+  },
+  "sentinel2-source": {
+    "exports": ["./sources/sentinel2"],
+    "modules": ["src/data/sentinel2Tiles.js"],
+    "external": []
+  },
   "gbfs-provider": {
     "runtime": "node",
     "exports": ["./server/providers/gbfs"],
@@ -1271,6 +1290,8 @@
       "src/maps/registry.js",
       "src/maps/terrain.js",
       "src/maps/terrainRetry.js",
+      "src/maps/sentinel2Scene.js",
+      "src/data/sentinel2Tiles.js",
       "src/keySetupCore.mjs",
       "src/localRequestGate.mjs",
       "src/maps/imageryHost.js"
@@ -1376,6 +1397,7 @@
       "src/app/layers/traffic.js",
       "src/app/operations.js",
       "src/app/scene.js",
+      "src/maps/sentinel2Scene.js",
       "src/sources/sourceSlot.js",
       "src/app/sources.js",
       "src/app/startupChrome.js",
@@ -1419,6 +1441,7 @@
       "src/data/contactMatch.js",
       "src/data/contextStore.js",
       "src/data/dataCredits.js",
+      "src/data/sentinel2Tiles.js",
       "src/data/wind.js",
       "src/layers/wind/index.js",
       "src/layers/wind/model.js",
@@ -2139,6 +2162,7 @@
       "src/data/contactMatch.js",
       "src/data/contextStore.js",
       "src/data/dataCredits.js",
+      "src/data/sentinel2Tiles.js",
       "src/data/detectionCohort.js",
       "src/data/detectionDraw.js",
       "src/data/detectionPolicy.js",
@@ -2571,6 +2595,7 @@
       "src/sources/sourceSlot.js",
       "src/app/surfaceServices.js",
       "src/data/dataCredits.js",
+      "src/data/sentinel2Tiles.js",
       "src/data/geoid.js",
       "src/data/local_data/natural_earth/marine.json",
       "src/data/local_data/natural_earth/regions.json",
@@ -2970,6 +2995,7 @@
       "src/data/contactPlayback.js",
       "src/data/contactTrailRenderer.js",
       "src/data/dataCredits.js",
+      "src/data/sentinel2Tiles.js",
       "src/data/detectionCohort.js",
       "src/data/detectionPolicy.js",
       "src/data/geoid.js",

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Add the "Sentinel-2 Latest" map source: the least-cloudy Copernicus
+  Sentinel-2 scene of the last 30 days at 10 m, through a free Copernicus Data
+  Space Ecosystem OAuth client (`SENTINEL_HUB_CLIENT_ID` /
+  `SENTINEL_HUB_CLIENT_SECRET`, added in Provider Settings). The secret and the
+  token stay on the local server, which proxies fixed-host tiles at z8–z14,
+  caches them for 48 hours and holds requests to a daily budget inside the free
+  quota. Esri shows beneath it at other zooms, and the credit line names the
+  acquisition date and says the imagery is not live. Without the key the
+  source is listed as locked and nothing else changes.
+
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
 - Ship each bundled data pack once. The region, marine, admin-boundary,

@@ -1,5 +1,7 @@
 import * as Cesium from 'cesium';
 
+import { sentinel2AttributionHtml } from './sentinel2Tiles.js';
+
 /**
  * Per-layer data attribution registered into Cesium's credit display.
  *
@@ -298,6 +300,14 @@ export const DATA_CREDITS = [
       '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. ' +
       'Modified: resampled 10 m IFS forecast vectors and animated display. ' +
       'ECMWF does not accept any liability whatsoever for any error or omission in the data, their availability, or for any loss or damage arising from their use.',
+  },
+  {
+    key: 'copernicus-sentinel2',
+    html:
+      'Sentinel-2 Latest map: ' +
+      sentinel2AttributionHtml() +
+      ' · least-cloudy L2A scene of the last 30 days, not live · ' +
+      '<a href="https://sentinels.copernicus.eu/documents/247904/690755/Sentinel_Data_Legal_Notice" target="_blank" rel="noopener">Sentinel data legal notice</a>',
   },
   // ── Bundled snapshots ───────────────────────────────────────────
   {
