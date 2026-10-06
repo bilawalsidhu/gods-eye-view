@@ -124,17 +124,9 @@ let _entries = null;
 const PACKS = {
   regions: {
     url: new URL('./local_data/natural_earth/regions.json', import.meta.url),
-    importJson: () =>
-      import('./local_data/natural_earth/regions.json', {
-        with: { type: 'json' },
-      }),
   },
   marine: {
     url: new URL('./local_data/natural_earth/marine.json', import.meta.url),
-    importJson: () =>
-      import('./local_data/natural_earth/marine.json', {
-        with: { type: 'json' },
-      }),
   },
 };
 
@@ -178,8 +170,8 @@ function buildEntries(pack, kind) {
  */
 const loadIndex = createRetryableLoader(async () => {
   const [regions, marine] = await Promise.all([
-    loadBundledJson(PACKS.regions.url, PACKS.regions.importJson),
-    loadBundledJson(PACKS.marine.url, PACKS.marine.importJson),
+    loadBundledJson(PACKS.regions.url),
+    loadBundledJson(PACKS.marine.url),
   ]);
   _entries = [
     ...buildEntries(regions, 'natural'),
