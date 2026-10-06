@@ -268,28 +268,37 @@ export const NORWAY_ANCHORS = [
 ];
 
 /** Kartverket's keyless point-height API (CC BY 4.0): terrain height above
- * sea level (NN2000) for up to 50 points per request, used as the Vegvesen
- * cameras' ground prior because the camera feed's points are 2D. */
+ * sea level (NN2000), used as the Vegvesen cameras' ground prior because the
+ * camera feed's points are 2D. */
 export const KARTVERKET_HEIGHT_URL =
   'https://ws.geonorge.no/hoydedata/v1/punkt';
-export const KARTVERKET_MAX_POINTS = 50;
-/** Batch size for the one retry of points a full batch answered null for. */
-export const KARTVERKET_RETRY_POINTS = 10;
-/** Batches in flight at once. The whole country is ~17 batches of ~2 s each
- * (spread-out points are slow to resolve), so six keep a cold lookup ~6 s. */
-export const KARTVERKET_CONCURRENCY = 6;
-/** Deadline for one complete lookup, shared by every batch. */
+/** Points per request. The API takes up to 50, but above ~20 it answers the
+ * extra points from contour lines (`hoydekurver`, metres to ~20 m off) or not
+ * at all; at 20 nearly every camera resolves from the 1 m terrain model. */
+export const KARTVERKET_MAX_POINTS = 20;
+/** Requests in flight at once. The whole country is ~36 requests of ~1-2 s,
+ * so a cold lookup takes ~6 s. */
+export const KARTVERKET_CONCURRENCY = 8;
+/** Deadline for one complete lookup, shared by every request. */
 export const KARTVERKET_LOOKUP_TIMEOUT_MS = 30 * 1000;
-/** How long a catalog load waits for heights. Kept under the per-provider
- * fetch timeout so this pack is never the catalog's slowest lane; a lookup
- * still running after this keeps filling the cache, and the next refresh
- * applies the rest. At app start, with every pack loading at once, a cold
- * lookup takes ~10 s. */
+/** The Vegvesen lane's budget, measured from the start of the loader (catalog
+ * fetch included), for waiting on heights. Under the 15 s per-provider fetch
+ * timeout so this pack is never the catalog's slowest lane. A lookup still
+ * running after it keeps filling the cache for the next refresh. */
 export const KARTVERKET_CATALOG_WAIT_MS = 12 * 1000;
+/** A point Kartverket has no height for (some ferry quays and bridges) is not
+ * asked about again for this long. */
+export const KARTVERKET_NULL_TTL_MS = 6 * 60 * 60 * 1000;
+/** After a 429, a 5xx or a network failure, no lookup starts for this long,
+ * or for the Retry-After the service sent, bounded to [1 min, 1 h]. */
+export const KARTVERKET_FAILURE_BACKOFF_MS = 10 * 60 * 1000;
+export const KARTVERKET_MAX_BACKOFF_MS = 60 * 60 * 1000;
 export const KARTVERKET_MAX_RESPONSE_BYTES = 256 * 1024;
 /** Plausible Norwegian terrain: below sea level only at the shore, and no road
- * camera sits above ~1,500 m. Anything outside is treated as no answer. */
+ * camera sits above ~1,500 m. Anything outside is treated as no height. */
 export const KARTVERKET_HEIGHT_RANGE_M = Object.freeze({ min: -20, max: 2500 });
+/** Same identity the other CCTV upstream requests send. */
+export const KARTVERKET_USER_AGENT = 'gods-eye-view-cctv-proxy/1.0';
 
 /** DelDOT CCTV: one keyless statewide JSON catalog; live video via RTMP-over-HTTP (rtmpt:80). */
 export const DELDOT_CCTV_URL = 'https://tmc.deldot.gov/json/videocamera.json';

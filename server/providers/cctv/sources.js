@@ -67,10 +67,13 @@ import {
   NORWAY_ANCHORS,
   KARTVERKET_HEIGHT_URL,
   KARTVERKET_MAX_POINTS,
-  KARTVERKET_RETRY_POINTS,
   KARTVERKET_CONCURRENCY,
   KARTVERKET_LOOKUP_TIMEOUT_MS,
   KARTVERKET_CATALOG_WAIT_MS,
+  KARTVERKET_NULL_TTL_MS,
+  KARTVERKET_FAILURE_BACKOFF_MS,
+  KARTVERKET_MAX_BACKOFF_MS,
+  KARTVERKET_USER_AGENT,
   KARTVERKET_MAX_RESPONSE_BYTES,
   KARTVERKET_HEIGHT_RANGE_M,
 } from './constants.js';
@@ -1811,6 +1814,7 @@ export function vegvesenCameraToSource(feature) {
  * @returns {Promise<Array<object>>} Normalized camera source objects.
  */
 export async function loadVegvesenSourcesFromOpenData() {
+  const startedAt = Date.now();
   try {
     const endpoint = process.env.CCTV_VEGVESEN_URL || DEFAULT_VEGVESEN_CCTV_URL;
     const resp = await fetch(endpoint, {
@@ -1856,7 +1860,12 @@ export async function loadVegvesenSourcesFromOpenData() {
       ? Math.max(8, Math.min(1000, Math.floor(maxRaw)))
       : DEFAULT_VEGVESEN_MAX_SOURCES;
     const prioritized = prioritizeSources(cameras, maxCount, NORWAY_ANCHORS);
-    await applyVegvesenGroundHeights(prioritized);
+    await applyVegvesenGroundHeights(prioritized, {
+      waitMs: Math.max(
+        0,
+        KARTVERKET_CATALOG_WAIT_MS - (Date.now() - startedAt),
+      ),
+    });
     console.log(
       `[CCTV] Loaded Vegvesen camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
     );
@@ -1871,49 +1880,79 @@ export async function loadVegvesenSourcesFromOpenData() {
 }
 
 /**
- * Terrain heights already resolved, keyed by rounded position. Camera
- * positions rarely change, so after the first catalog load a 15-minute refresh
- * asks Kartverket only for new or moved cameras. Bounded well above the ~900
- * cameras the pack can load.
+ * Kartverket answers by rounded position: `{z, expires}`, where z is metres or
+ * null for "no height there". Heights never expire (camera positions barely
+ * change); nulls expire after KARTVERKET_NULL_TTL_MS. The 15-minute catalog
+ * refresh therefore only asks about new or moved cameras. Bounded well above
+ * the ~900 cameras the pack can load.
  */
 const kartverketHeightCache = new Map();
 const KARTVERKET_CACHE_LIMIT = 5000;
 /** The lookup in flight, so overlapping catalog loads never start a second. */
 let kartverketPending = null;
+/** No lookup starts before this time (epoch ms) after a transport failure. */
+let kartverketBackoffUntil = 0;
 
 /** Cache key for one position, at the ~0.1 m precision the request sends. */
 const kartverketKey = (lon, lat) => `${lon.toFixed(6)},${lat.toFixed(6)}`;
 
-/** Forget cached heights and any lookup in flight. Tests only. */
+/** Forget cached heights, the backoff and any lookup in flight. Tests only. */
 export function clearKartverketHeightCache() {
   kartverketHeightCache.clear();
   kartverketPending = null;
+  kartverketBackoffUntil = 0;
+}
+
+/**
+ * How long to back off after a failed request: the Retry-After the service
+ * sent (seconds or an HTTP date), else the default, bounded to [1 min, 1 h].
+ *
+ * @param {?string} retryAfter - The Retry-After header, if any.
+ * @param {number} now - Epoch ms.
+ * @returns {number} Milliseconds.
+ */
+export function kartverketBackoffMs(retryAfter, now = Date.now()) {
+  let ms = KARTVERKET_FAILURE_BACKOFF_MS;
+  const text = String(retryAfter ?? '').trim();
+  if (/^\d+$/.test(text)) ms = Number(text) * 1000;
+  else if (text && Number.isFinite(Date.parse(text))) {
+    ms = Date.parse(text) - now;
+  }
+  return Math.max(60 * 1000, Math.min(KARTVERKET_MAX_BACKOFF_MS, ms));
 }
 
 /**
  * Terrain heights above sea level (NN2000) from Kartverket's keyless
- * point-height API, in batches of up to 50 points. Answers are matched back by
- * the coordinates the API echoes, not by position in the list. Each answer is
- * written to `into` as its batch lands, so a caller that stops waiting still
- * keeps what has arrived. One deadline covers every request.
+ * point-height API, KARTVERKET_MAX_POINTS points per request. Each answer is
+ * matched back by the coordinates the API echoes, and only for points that
+ * request asked about, then reported through `into.set(key, z)` as its
+ * request lands, so a caller that stops waiting keeps what has arrived. `z` is
+ * metres, or null when the API has no usable height there.
  *
- * Two quirks of the live API are handled here:
- * - A large batch sometimes answers `z: null` for a point it resolves when
- *   asked again (Valdresflye: null in a 50-point batch, 1,390.7 m alone), so
- *   every point still missing after the first pass is retried once in batches
- *   of KARTVERKET_RETRY_POINTS. A point still null then has no data.
- * - Over water `/punkt` returns the depth of the sea floor (`dybdekurver`,
- *   terrain `Havflate`; −547 m under Nordhordlandsbrua). A camera on a bridge
- *   or quay stands over the water surface, so those answers count as 0 m.
+ * Over water `/punkt` returns the depth of the sea floor (`datakilde:
+ * dybdekurver`, `terreng: Havflate`; −547 m under Nordhordlandsbrua). Either
+ * marker counts as 0 m, the water surface. For the ~14 bridge cameras that is
+ * below the deck, but far closer than the sea floor or a flat prior.
+ *
+ * The first transport failure (a non-200 answer, a network error or the
+ * shared deadline) stops the lookup: no further requests start, and the
+ * failure is returned so the caller can back off. Points in failed requests
+ * are not reported, so they are asked again after the backoff.
  *
  * @param {Array<{lon:number, lat:number}>} points
- * @param {{into?: Map<string, number>, timeoutMs?: number}} [options]
- * @returns {Promise<Map<string, number>>} kartverketKey(lon, lat) → metres.
+ * @param {{into?: {set: Function}, timeoutMs?: number}} [options]
+ * @returns {Promise<{heights: Map<string, ?number>, failure: ?{status: ?number, retryAfter: ?string}}>}
+ *   `heights` is `into` when it is a Map, else a Map of what was reported.
  */
 export async function fetchKartverketHeights(
   points,
   { into = new Map(), timeoutMs = KARTVERKET_LOOKUP_TIMEOUT_MS } = {},
 ) {
+  const heights = into instanceof Map ? into : new Map();
+  const report = (key, z) => {
+    if (heights !== into) heights.set(key, z);
+    into.set(key, z);
+  };
   const unique = Array.from(
     new Map(
       (points || [])
@@ -1921,9 +1960,15 @@ export async function fetchKartverketHeights(
         .map((p) => [kartverketKey(p.lon, p.lat), p]),
     ).values(),
   );
-  if (!unique.length) return into;
+  let failure = null;
+  if (!unique.length) return { heights, failure };
+  const batches = [];
+  for (let i = 0; i < unique.length; i += KARTVERKET_MAX_POINTS) {
+    batches.push(unique.slice(i, i + KARTVERKET_MAX_POINTS));
+  }
   const signal = AbortSignal.timeout(timeoutMs);
   const fetchBatch = async (batch) => {
+    const asked = new Set(batch.map((p) => kartverketKey(p.lon, p.lat)));
     const url = new URL(KARTVERKET_HEIGHT_URL);
     url.searchParams.set(
       'punkter',
@@ -1933,7 +1978,10 @@ export async function fetchKartverketHeights(
     );
     url.searchParams.set('koordsys', '4258');
     const resp = await fetch(url, {
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': KARTVERKET_USER_AGENT,
+      },
       redirect: 'error',
       signal,
     });
@@ -1943,7 +1991,10 @@ export async function fetchKartverketHeights(
       } catch {
         /* no-op */
       }
-      throw new Error(`HTTP ${resp.status}`);
+      const error = new Error(`HTTP ${resp.status}`);
+      error.status = resp.status;
+      error.retryAfter = resp.headers.get('retry-after');
+      throw error;
     }
     const payload = await readResponseJsonCapped(
       resp,
@@ -1952,102 +2003,120 @@ export async function fetchKartverketHeights(
     for (const point of Array.isArray(payload?.punkter)
       ? payload.punkter
       : []) {
-      // `z: null` means no answer for that point; Number(null) would read 0.
-      if (point?.z === null || point?.z === undefined || point?.z === '')
-        continue;
       const x = toFiniteNumber(point?.x);
       const y = toFiniteNumber(point?.y);
-      let z = toFiniteNumber(point?.z);
-      if (![x, y, z].every(Number.isFinite)) continue;
-      if (point?.datakilde === 'dybdekurver' || point?.terreng === 'Havflate')
-        z = 0;
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      const key = kartverketKey(x, y);
+      // Only the points this request asked about: an odd answer can neither
+      // grow the cache nor overwrite another camera.
+      if (!asked.has(key)) continue;
+      asked.delete(key);
+      // `z: null` means no height there; Number(null) would read 0.
+      const raw = point?.z;
+      let z =
+        raw === null || raw === undefined || raw === ''
+          ? NaN
+          : toFiniteNumber(raw);
       if (
-        z < KARTVERKET_HEIGHT_RANGE_M.min ||
-        z > KARTVERKET_HEIGHT_RANGE_M.max
-      )
-        continue;
-      into.set(kartverketKey(x, y), z);
+        Number.isFinite(z) &&
+        (point?.datakilde === 'dybdekurver' || point?.terreng === 'Havflate')
+      ) {
+        z = 0;
+      }
+      const usable =
+        Number.isFinite(z) &&
+        z >= KARTVERKET_HEIGHT_RANGE_M.min &&
+        z <= KARTVERKET_HEIGHT_RANGE_M.max;
+      report(key, usable ? z : null);
     }
   };
-  let failed = 0;
-  const runPass = async (list, size) => {
-    const batches = [];
-    for (let i = 0; i < list.length; i += size) {
-      batches.push(list.slice(i, i + size));
-    }
-    let next = 0;
-    const worker = async () => {
-      while (next < batches.length && !signal.aborted) {
-        const batch = batches[next++];
-        try {
-          await fetchBatch(batch);
-        } catch (error) {
-          failed += 1;
-          if (failed === 1) {
-            console.warn(
-              '[CCTV] Kartverket height lookup failed:',
-              error?.message || error,
-            );
-          }
+  let next = 0;
+  const worker = async () => {
+    while (next < batches.length && !failure) {
+      const batch = batches[next++];
+      try {
+        await fetchBatch(batch);
+      } catch (error) {
+        if (!failure) {
+          failure = {
+            status: Number.isFinite(error?.status) ? error.status : null,
+            retryAfter: error?.retryAfter ?? null,
+          };
+          console.warn(
+            '[CCTV] Kartverket height lookup failed:',
+            error?.message || error,
+          );
         }
       }
-    };
-    await Promise.all(
-      Array.from(
-        { length: Math.min(KARTVERKET_CONCURRENCY, batches.length) },
-        worker,
-      ),
-    );
+    }
   };
-  await runPass(unique, KARTVERKET_MAX_POINTS);
-  const missing = unique.filter((p) => !into.has(kartverketKey(p.lon, p.lat)));
-  if (missing.length && !signal.aborted) {
-    await runPass(missing, KARTVERKET_RETRY_POINTS);
-  }
-  return into;
+  await Promise.all(
+    Array.from(
+      { length: Math.min(KARTVERKET_CONCURRENCY, batches.length) },
+      worker,
+    ),
+  );
+  return { heights, failure };
 }
 
 /**
  * Give each Vegvesen camera its own terrain height as the ground prior, in
- * place. Waits at most `waitMs` for heights it does not have cached; a lookup
+ * place. Waits at most `waitMs` for positions it has no answer for; a lookup
  * still running then keeps filling the cache for the next catalog refresh.
- * Cameras without a height keep the flat prior. Never throws: a failed lookup
- * only means the old behavior. CCTV_VEGVESEN_HEIGHTS=0 turns it off.
+ * Cameras without a height keep the flat prior. After a transport failure no
+ * lookup starts until the backoff ends, so a failing Kartverket costs one
+ * attempt, not one per refresh. Never throws. CCTV_VEGVESEN_HEIGHTS=0 turns it
+ * off.
  *
  * @param {Array<object>} cameras - Sources from vegvesenCameraToSource().
- * @param {{waitMs?: number}} [options]
+ * @param {{waitMs?: number, now?: () => number}} [options]
  * @returns {Promise<number>} How many cameras got a terrain height.
  */
 export async function applyVegvesenGroundHeights(
   cameras,
-  { waitMs = KARTVERKET_CATALOG_WAIT_MS } = {},
+  { waitMs = KARTVERKET_CATALOG_WAIT_MS, now = Date.now } = {},
 ) {
   if (String(process.env.CCTV_VEGVESEN_HEIGHTS || '1').trim() === '0') return 0;
   const list = Array.isArray(cameras) ? cameras : [];
-  const missing = list.filter(
-    (c) => !kartverketHeightCache.has(kartverketKey(c.lon, c.lat)),
-  );
-  if (missing.length) {
-    if (!kartverketPending) {
-      if (
-        kartverketHeightCache.size + missing.length >
-        KARTVERKET_CACHE_LIMIT
-      ) {
-        kartverketHeightCache.clear();
-      }
-      kartverketPending = fetchKartverketHeights(missing, {
-        into: kartverketHeightCache,
-      })
-        .catch((error) => {
-          console.warn(
-            '[CCTV] Kartverket height lookup error:',
-            error?.message || error,
-          );
-        })
-        .finally(() => {
-          kartverketPending = null;
-        });
+  const startedAt = now();
+  const missing = list.filter((c) => {
+    const entry = kartverketHeightCache.get(kartverketKey(c.lon, c.lat));
+    return !entry || entry.expires <= startedAt;
+  });
+  if (
+    missing.length &&
+    !kartverketPending &&
+    startedAt >= kartverketBackoffUntil
+  ) {
+    if (kartverketHeightCache.size + missing.length > KARTVERKET_CACHE_LIMIT) {
+      kartverketHeightCache.clear();
     }
+    const sink = {
+      set: (key, z) =>
+        kartverketHeightCache.set(key, {
+          z,
+          expires: z === null ? now() + KARTVERKET_NULL_TTL_MS : Infinity,
+        }),
+    };
+    kartverketPending = fetchKartverketHeights(missing, { into: sink })
+      .then(({ failure }) => {
+        if (failure) {
+          kartverketBackoffUntil =
+            now() + kartverketBackoffMs(failure.retryAfter, now());
+        }
+      })
+      .catch((error) => {
+        kartverketBackoffUntil = now() + KARTVERKET_FAILURE_BACKOFF_MS;
+        console.warn(
+          '[CCTV] Kartverket height lookup error:',
+          error?.message || error,
+        );
+      })
+      .finally(() => {
+        kartverketPending = null;
+      });
+  }
+  if (missing.length && kartverketPending && waitMs > 0) {
     let timer;
     await Promise.race([
       kartverketPending,
@@ -2060,7 +2129,9 @@ export async function applyVegvesenGroundHeights(
   }
   let applied = 0;
   for (const camera of list) {
-    const z = kartverketHeightCache.get(kartverketKey(camera.lon, camera.lat));
+    const z = kartverketHeightCache.get(
+      kartverketKey(camera.lon, camera.lat),
+    )?.z;
     if (!Number.isFinite(z)) continue;
     camera.groundElevationM = Math.round(z * 10) / 10;
     applied += 1;
