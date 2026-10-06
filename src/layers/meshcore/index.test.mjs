@@ -3,16 +3,18 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import {
   MESHCORE_SELECTED_OVERLAY_SOURCE_OPTIONS,
-  _clearMeshcoreSelectionForTest,
-  _selectMeshcoreNodeForTest,
-  _setMeshcoreSelectionStateForTest,
+  createMeshcoreLayer,
   createMeshcoreSelectedOverlayEntry,
   getNodeUpdateStatus,
   statusToColor,
   typeToPixelSize,
-} from './meshcore.js';
+} from './index.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+function fakeSource(getSnapshot = async () => ({ nodes: [] })) {
+  return { getSnapshot };
+}
 
 function makeRecord(overrides = {}) {
   return {
@@ -33,6 +35,14 @@ function makeRecord(overrides = {}) {
     ...overrides,
   };
 }
+
+test('createMeshcoreLayer requires a snapshot source and an overlay host', () => {
+  assert.throws(() => createMeshcoreLayer({}), /snapshot source/);
+  assert.throws(
+    () => createMeshcoreLayer({ source: fakeSource() }),
+    /overlay host/,
+  );
+});
 
 test('getNodeUpdateStatus buckets by freshness, only for uploader-sourced nodes', () => {
   const now = Date.parse('2026-09-13T00:00:00.000Z');
@@ -132,42 +142,48 @@ test('real node select/clear path publishes one card and creates no native label
   };
   const record = makeRecord();
   const viewer = { entities: new Cesium.EntityCollection() };
-  _setMeshcoreSelectionStateForTest({
-    viewer,
-    key: record.id,
-    record,
-    overlayHost,
+  const layer = createMeshcoreLayer({ source: fakeSource(), overlayHost });
+
+  layer._setSelectionStateForTest({ viewer, key: record.id, record });
+  layer._selectForTest(record.id);
+  assert.equal(
+    record.point.show,
+    false,
+    'base point primitive is hidden while selected',
+  );
+  assert.equal(
+    viewer.entities.values.length,
+    1,
+    'runtime guard requires a real selected entity',
+  );
+  assert.equal(viewer.entities.values[0].label, undefined);
+  assert.ok(
+    viewer.entities.values[0].point,
+    'selected point highlight remains native',
+  );
+
+  const publication = calls.find(([type]) => type === 'entries');
+  assert.ok(publication);
+  assert.equal(publication[1], 'meshcore-selected');
+  assert.equal(publication[2].length, 1);
+  assert.equal(publication[2][0].position, record.point.position);
+  assert.deepEqual(publication[3], MESHCORE_SELECTED_OVERLAY_SOURCE_OPTIONS);
+
+  layer._clearSelectionForTest();
+  assert.equal(record.point.show, true);
+  assert.equal(viewer.entities.values.length, 0);
+  assert.deepEqual(calls.at(-1), ['clear', 'meshcore-selected']);
+});
+
+test('getStats and getRowControls report a sane default shape before any fetch', () => {
+  const layer = createMeshcoreLayer({
+    source: fakeSource(),
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  try {
-    _selectMeshcoreNodeForTest(record.id);
-    assert.equal(
-      record.point.show,
-      false,
-      'base point primitive is hidden while selected',
-    );
-    assert.equal(
-      viewer.entities.values.length,
-      1,
-      'runtime guard requires a real selected entity',
-    );
-    assert.equal(viewer.entities.values[0].label, undefined);
-    assert.ok(
-      viewer.entities.values[0].point,
-      'selected point highlight remains native',
-    );
-
-    const publication = calls.find(([type]) => type === 'entries');
-    assert.ok(publication);
-    assert.equal(publication[1], 'meshcore-selected');
-    assert.equal(publication[2].length, 1);
-    assert.equal(publication[2][0].position, record.point.position);
-    assert.deepEqual(publication[3], MESHCORE_SELECTED_OVERLAY_SOURCE_OPTIONS);
-
-    _clearMeshcoreSelectionForTest();
-    assert.equal(record.point.show, true);
-    assert.equal(viewer.entities.values.length, 0);
-    assert.deepEqual(calls.at(-1), ['clear', 'meshcore-selected']);
-  } finally {
-    _clearMeshcoreSelectionForTest();
-  }
+  assert.deepEqual(layer.getStats(), {
+    count: 0,
+    lastUpdate: null,
+    loading: false,
+  });
+  assert.deepEqual(layer.getRowControls(), { chips: [], legend: [] });
 });

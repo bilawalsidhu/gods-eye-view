@@ -901,5 +901,8 @@
   "src/data/meshcoreNodes.js",
   "src/data/meshcoreNodes.test.mjs",
   "src/layers/meshcore/index.js",
-  "src/layers/meshcore/index.test.mjs"
+  "src/layers/meshcore/index.test.mjs",
+  "src/layers/meshcore/source.js",
+  "src/layers/meshcore/source.test.mjs",
+  "src/app/layers/meshcore.js"
 ]
