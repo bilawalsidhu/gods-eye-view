@@ -1,5 +1,6 @@
 import {
   GNSS_CLASSIFIER,
+  GNSS_WINDOW_MS,
   normalizeGnssAircraft,
 } from '../../src/layers/gnss/records.js';
 import { adsbLolFallbackAnchor } from './aircraft/opensky.js';
@@ -115,7 +116,10 @@ export function gnssIntegrityProxy({
       });
       return { value: await promise, stale: false };
     } catch (error) {
-      if (previous) return { value: previous, stale: true };
+      // A stale answer keeps its original fetchedAt so the layer can age it;
+      // past the layer's window it is no evidence at all, so it is not served.
+      if (previous && now() - previous.fetchedAt <= GNSS_WINDOW_MS)
+        return { value: previous, stale: true };
       throw error;
     }
   }

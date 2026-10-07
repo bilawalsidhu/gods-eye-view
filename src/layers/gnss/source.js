@@ -25,11 +25,13 @@ export function createAdsbGnssSource({
       signal?.throwIfAborted();
       if (!Array.isArray(payload?.rows))
         throw new Error('Malformed GNSS integrity snapshot');
+      // The observation time dates every row in the rolling window; an
+      // undated snapshot could only be treated as new, so it is refused.
+      if (!Number.isFinite(payload.fetchedAt))
+        throw new Error('GNSS integrity snapshot has no observation time');
       return {
         rows: payload.rows,
-        fetchedAt: Number.isFinite(payload.fetchedAt)
-          ? payload.fetchedAt
-          : null,
+        fetchedAt: payload.fetchedAt,
         stale: payload.stale === true,
         classifier:
           typeof payload.classifier === 'string' ? payload.classifier : null,

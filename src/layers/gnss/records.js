@@ -21,6 +21,8 @@
 
 /** Direct 1090ES ADS-B only: MLAT, TIS-B and ADS-R positions are not self-reported. */
 const QUALIFYING_TYPES = new Set(['adsb_icao']);
+/** DO-260A (1) and DO-260B (2) define NIC and NACp; version 0 and unknown versions do not. */
+const QUALIFYING_VERSIONS = new Set([1, 2]);
 /** NIC below 7: containment radius of 0.2 NM or more (below the US 91.227 ADS-B Out minimum). GEV threshold. */
 export const GNSS_NIC_THRESHOLD = 7;
 /** NACp below 8: position uncertainty of 93 m or more (below the US 91.227 minimum). GEV threshold. */
@@ -113,14 +115,16 @@ export function normalizeGnssAircraft(payload) {
     const hex = typeof aircraft.hex === 'string' ? aircraft.hex : '';
     if (!HEX_PATTERN.test(hex) || seen.has(hex)) continue;
     if (!QUALIFYING_TYPES.has(aircraft.type)) continue;
-    if (!finite(aircraft.version) || aircraft.version < 1) continue;
+    if (!QUALIFYING_VERSIONS.has(aircraft.version)) continue;
     if (aircraft.alt_baro === 'ground' || !finite(aircraft.alt_baro)) continue;
     const { lat, lon, nic, nac_p: nacp } = aircraft;
     if (!finite(lat) || Math.abs(lat) > 90) continue;
     if (!finite(lon) || Math.abs(lon) > 180) continue;
     if (!finite(nic) || !finite(nacp)) continue;
-    if (finite(aircraft.seen_pos) && aircraft.seen_pos > MAX_POSITION_AGE_S)
-      continue;
+    // Only a position confirmed within the last minute is current evidence; a
+    // missing, invalid or negative age confirms nothing.
+    const age = aircraft.seen_pos;
+    if (!finite(age) || age < 0 || age > MAX_POSITION_AGE_S) continue;
     // readsb sets gpsOkBefore when an aircraft's integrity collapses and keeps
     // it for roughly 15 minutes after GPS recovers, so it can outlast the
     // current NIC/NACp; the rolling window treats that as recent evidence.
@@ -149,34 +153,72 @@ export function gnssCellKey(lat, lon, cellDeg = GNSS_CELL_DEG) {
 
 /**
  * Fold one snapshot into a rolling observation store. Each aircraft counts
- * once per cell per window; a degraded report in the window keeps it degraded
- * there, so an aircraft that loses GNSS mid-cell is not averaged away.
+ * once per cell per window. Presence and degraded evidence age separately: a
+ * degraded report keeps the aircraft degraded in that cell for one window
+ * after the report itself, however many healthy reports follow, so an
+ * aircraft that loses GNSS mid-cell is not averaged away and a recovered one
+ * is not held degraded forever.
  *
- * @param {Map<string, {cell: string, degraded: boolean, seenAt: number}>} store
+ * Every row is dated by when the snapshot was observed, not when it arrived:
+ * replaying a cached or stale snapshot never makes its evidence younger, and
+ * a snapshot older than the window adds nothing.
+ *
+ * @param {Map<string, {cell: string, seenAt: number, degradedAt: number|null}>} store
  * @param {ReturnType<typeof normalizeGnssAircraft>} rows
  * @param {number} nowMs
- * @param {{windowMs?: number, cellDeg?: number}} [options]
+ * @param {{windowMs?: number, cellDeg?: number, observedAt?: number}} [options]
+ *   `observedAt` is the snapshot's observation time (defaults to `nowMs`;
+ *   a future time is clamped to `nowMs`, a non-finite one adds nothing).
  * @returns {Map} The same store, pruned to the window.
  */
 export function accumulateGnssObservations(
   store,
   rows,
   nowMs,
-  { windowMs = GNSS_WINDOW_MS, cellDeg = GNSS_CELL_DEG } = {},
+  {
+    windowMs = GNSS_WINDOW_MS,
+    cellDeg = GNSS_CELL_DEG,
+    observedAt = nowMs,
+  } = {},
 ) {
-  for (const row of rows || []) {
-    if (!Number.isFinite(row?.lat) || !Number.isFinite(row?.lon)) continue;
-    const cell = gnssCellKey(row.lat, row.lon, cellDeg);
-    const key = `${row.hex}|${cell}`;
-    const previous = store.get(key);
-    store.set(key, {
-      cell,
-      degraded: row.degraded || (previous?.degraded ?? false),
-      seenAt: nowMs,
-    });
+  const at = Number.isFinite(observedAt) ? Math.min(observedAt, nowMs) : NaN;
+  if (Number.isFinite(at) && nowMs - at <= windowMs) {
+    for (const row of rows || []) {
+      if (!Number.isFinite(row?.lat) || !Number.isFinite(row?.lon)) continue;
+      const cell = gnssCellKey(row.lat, row.lon, cellDeg);
+      const key = `${row.hex}|${cell}`;
+      const previous = store.get(key);
+      const previousDegradedAt = previous?.degradedAt ?? null;
+      store.set(key, {
+        cell,
+        seenAt: Math.max(previous?.seenAt ?? at, at),
+        degradedAt: row.degraded
+          ? Math.max(previousDegradedAt ?? at, at)
+          : previousDegradedAt,
+      });
+    }
   }
+  return pruneGnssObservations(store, nowMs, { windowMs });
+}
+
+/**
+ * Drop observations older than the window and degraded evidence older than
+ * the window, without adding anything. Used when no fresh snapshot arrives.
+ *
+ * @param {Map<string, {cell: string, seenAt: number, degradedAt: number|null}>} store
+ * @param {number} nowMs
+ * @param {{windowMs?: number}} [options]
+ * @returns {Map} The same store.
+ */
+export function pruneGnssObservations(
+  store,
+  nowMs,
+  { windowMs = GNSS_WINDOW_MS } = {},
+) {
   for (const [key, entry] of store) {
     if (nowMs - entry.seenAt > windowMs) store.delete(key);
+    else if (entry.degradedAt != null && nowMs - entry.degradedAt > windowMs)
+      store.set(key, { ...entry, degradedAt: null });
   }
   return store;
 }
@@ -205,7 +247,9 @@ export function gnssIntegrityLevel(total, degraded) {
 }
 
 /**
- * Aggregate the observation store into displayable cells.
+ * Aggregate the observation store into displayable cells. Expects a store
+ * already pruned to the window by `accumulateGnssObservations` or
+ * `pruneGnssObservations`.
  *
  * @returns {{id: string, south: number, west: number, north: number, east: number, lat: number, lon: number, aircraft: number, degraded: number, percentDegraded: number, level: 'low'|'medium'|'high', state: string, interpretation: string|null}[]}
  */
@@ -214,10 +258,10 @@ export function binGnssCells(
   { cellDeg = GNSS_CELL_DEG, minAircraft = GNSS_MIN_AIRCRAFT } = {},
 ) {
   const tallies = new Map();
-  for (const { cell, degraded } of store.values()) {
+  for (const { cell, degradedAt } of store.values()) {
     const tally = tallies.get(cell) || { aircraft: 0, degraded: 0 };
     tally.aircraft += 1;
-    if (degraded) tally.degraded += 1;
+    if (degradedAt != null) tally.degraded += 1;
     tallies.set(cell, tally);
   }
   const cells = [];

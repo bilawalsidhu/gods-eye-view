@@ -141,10 +141,33 @@ test('an upstream failure serves the last snapshot as stale, else 502', async ()
   const stale = await request();
   assert.equal(stale.status, 200);
   assert.equal(stale.body.stale, true);
+  assert.equal(
+    stale.body.fetchedAt,
+    0,
+    'a stale answer keeps the time it was observed',
+  );
   assert.equal(stale.headers['X-Data-Stale'], 'true');
   const missing = await request('/?lat=-10&lon=-10');
   assert.equal(missing.status, 502);
   assert.deepEqual(missing.body, { error: 'gnss_integrity_unavailable' });
+});
+
+test('a stale snapshot older than the layer window is no longer served', async () => {
+  let clock = 0;
+  let fail = false;
+  const request = install({
+    now: () => clock,
+    fetchImpl: async () =>
+      fail ? new Response('down', { status: 503 }) : Response.json(snapshot),
+  });
+  await request();
+  fail = true;
+  clock = 30 * 60_000;
+  assert.equal((await request()).status, 200);
+  clock = 30 * 60_000 + 1;
+  const expired = await request();
+  assert.equal(expired.status, 502);
+  assert.deepEqual(expired.body, { error: 'gnss_integrity_unavailable' });
 });
 
 test('an upstream 429 starts a cooldown with no further upstream calls', async () => {

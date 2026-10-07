@@ -5,10 +5,12 @@ import {
   binGnssCells,
   GNSS_CLASSIFIER,
   GNSS_PROVENANCE,
+  GNSS_WINDOW_MS,
   gnssCellKey,
   gnssIntegrityLevel,
   gnssProvenance,
   normalizeGnssAircraft,
+  pruneGnssObservations,
 } from './records.js';
 
 const aircraft = (overrides = {}) => ({
@@ -36,10 +38,24 @@ test('normalization keeps only airborne self-reported ADS-B v1/v2 positions', ()
       aircraft({ hex: '000006', nic: undefined }),
       aircraft({ hex: '000007', lat: 95 }),
       aircraft({ hex: '000008', version: undefined }),
+      // Only DO-260A/B (versions 1 and 2) define NIC and NACp.
+      aircraft({ hex: '000009', version: 3 }),
+      aircraft({ hex: '00000a', version: '2' }),
+      aircraft({ hex: '00000b', version: 1.5 }),
+      // A position is current only when its age is known, finite and 0..60 s.
+      aircraft({ hex: '00000c', seen_pos: undefined }),
+      aircraft({ hex: '00000d', seen_pos: null }),
+      aircraft({ hex: '00000e', seen_pos: -0.5 }),
+      aircraft({ hex: '00000f', seen_pos: '1.2' }),
+      aircraft({ hex: '000010', seen_pos: Number.NaN }),
+      aircraft({ hex: '000011', seen_pos: 60.1 }),
       aircraft({ hex: 'not-hex' }),
       aircraft(),
       // A non-ICAO (`~`) address still self-reports over 1090ES ADS-B.
       aircraft({ hex: '~a1b2c3' }),
+      // Version 1, and both ends of the position-age range, qualify.
+      aircraft({ hex: 'b00001', version: 1, seen_pos: 0 }),
+      aircraft({ hex: 'b00002', seen_pos: 60 }),
       null,
     ],
   });
@@ -62,6 +78,15 @@ test('normalization keeps only airborne self-reported ADS-B v1/v2 positions', ()
       gpsLost: false,
       degraded: false,
     },
+    ...['b00001', 'b00002'].map((hex) => ({
+      hex,
+      lat: 50.1,
+      lon: 19.9,
+      nic: 8,
+      nacp: 10,
+      gpsLost: false,
+      degraded: false,
+    })),
   ]);
   assert.equal(normalizeGnssAircraft({}), null);
   assert.equal(normalizeGnssAircraft(null), null);
@@ -203,6 +228,134 @@ test('observations count each aircraft once per cell and expire after the window
   accumulateGnssObservations(store, [], 1200, { windowMs: 1000 });
   assert.equal(store.size, 1);
   assert.deepEqual(binGnssCells(store), []);
+});
+
+const MIN = 60_000;
+const report = (hex, degraded, lat = 50.1) => ({
+  hex,
+  lat,
+  lon: 20.1,
+  degraded,
+});
+const entry = (store, hex) =>
+  [...store].find(([key]) => key.startsWith(`${hex}|`))?.[1];
+
+test('degraded evidence expires one window after the degraded report, despite continuing healthy reports', () => {
+  const store = new Map();
+  accumulateGnssObservations(store, [report('a1', true)], 0);
+  // a1 keeps reporting healthy every minute in the same cell.
+  for (let minute = 1; minute <= 30; minute += 1)
+    accumulateGnssObservations(store, [report('a1', false)], minute * MIN);
+  assert.equal(entry(store, 'a1').seenAt, 30 * MIN);
+  assert.equal(
+    entry(store, 'a1').degradedAt,
+    0,
+    'healthy reports do not refresh the degraded evidence',
+  );
+  accumulateGnssObservations(store, [report('a1', false)], 31 * MIN);
+  assert.deepEqual(entry(store, 'a1'), {
+    cell: gnssCellKey(50.1, 20.1),
+    seenAt: 31 * MIN,
+    degradedAt: null,
+  });
+  // A new degraded report starts its own window.
+  accumulateGnssObservations(store, [report('a1', true)], 32 * MIN);
+  assert.equal(entry(store, 'a1').degradedAt, 32 * MIN);
+  accumulateGnssObservations(store, [report('a1', false)], 40 * MIN);
+  assert.equal(entry(store, 'a1').degradedAt, 32 * MIN);
+});
+
+test('a degraded cell turns healthy once its degraded evidence is older than the window', () => {
+  const store = new Map();
+  const healthy = [report('a2', false), report('a3', false)];
+  accumulateGnssObservations(
+    store,
+    [report('a1', true), report('b1', true), ...healthy],
+    0,
+  );
+  assert.equal(binGnssCells(store)[0].level, 'high');
+  for (let minute = 10; minute <= 30; minute += 10)
+    accumulateGnssObservations(
+      store,
+      [report('a1', false), report('b1', false), ...healthy],
+      minute * MIN,
+    );
+  assert.equal(binGnssCells(store)[0].degraded, 2);
+  accumulateGnssObservations(
+    store,
+    [report('a1', false), report('b1', false), ...healthy],
+    31 * MIN,
+  );
+  const [cell] = binGnssCells(store);
+  assert.equal(cell.aircraft, 4);
+  assert.equal(cell.degraded, 0);
+  assert.equal(cell.level, 'low');
+});
+
+test('an aircraft returning after the window starts fresh', () => {
+  const store = new Map();
+  accumulateGnssObservations(store, [report('a1', true)], 0);
+  // a1 leaves; nothing is heard from it for longer than the window.
+  accumulateGnssObservations(store, [], 31 * MIN);
+  assert.equal(store.size, 0);
+  accumulateGnssObservations(store, [report('a1', false)], 32 * MIN);
+  assert.deepEqual(entry(store, 'a1'), {
+    cell: gnssCellKey(50.1, 20.1),
+    seenAt: 32 * MIN,
+    degradedAt: null,
+  });
+  // Returning degraded dates the evidence from the new report.
+  accumulateGnssObservations(store, [report('a9', true)], 0);
+  accumulateGnssObservations(store, [], 31 * MIN);
+  accumulateGnssObservations(store, [report('a9', true)], 33 * MIN);
+  assert.equal(entry(store, 'a9').degradedAt, 33 * MIN);
+});
+
+test('rows are dated by the snapshot observation time, so a replay never restarts the window', () => {
+  const store = new Map();
+  const snapshot = [report('a1', true), report('a2', false)];
+  accumulateGnssObservations(store, snapshot, 0, { observedAt: 0 });
+  // The same snapshot replayed (cached or stale) 29 minutes later.
+  accumulateGnssObservations(store, snapshot, 29 * MIN, { observedAt: 0 });
+  assert.equal(entry(store, 'a1').seenAt, 0);
+  assert.equal(entry(store, 'a1').degradedAt, 0);
+  accumulateGnssObservations(store, snapshot, 31 * MIN, { observedAt: 0 });
+  assert.equal(store.size, 0, 'a replay older than the window adds nothing');
+
+  // An older replay never moves an entry's age backwards either.
+  accumulateGnssObservations(store, snapshot, 40 * MIN);
+  accumulateGnssObservations(store, [report('a2', true)], 41 * MIN, {
+    observedAt: 35 * MIN,
+  });
+  assert.equal(entry(store, 'a2').seenAt, 40 * MIN);
+  assert.equal(entry(store, 'a2').degradedAt, 35 * MIN);
+
+  // A future time is clamped to now; an undated snapshot adds nothing.
+  accumulateGnssObservations(store, [report('f1', true)], 50 * MIN, {
+    observedAt: 99 * MIN,
+  });
+  assert.equal(entry(store, 'f1').seenAt, 50 * MIN);
+  for (const observedAt of [null, Number.NaN])
+    accumulateGnssObservations(store, [report('u1', true)], 50 * MIN, {
+      observedAt,
+    });
+  assert.equal(entry(store, 'u1'), undefined);
+});
+
+test('pruning without new rows drops expired observations and expired degraded evidence', () => {
+  const store = new Map();
+  accumulateGnssObservations(store, [report('a1', true)], 0);
+  accumulateGnssObservations(store, [report('a1', false)], 20 * MIN);
+  accumulateGnssObservations(store, [report('a2', false)], 0);
+  assert.equal(pruneGnssObservations(store, 31 * MIN), store);
+  assert.deepEqual(
+    [...store.keys()].map((key) => key.split('|')[0]),
+    ['a1'],
+  );
+  assert.equal(entry(store, 'a1').degradedAt, null);
+  pruneGnssObservations(store, 51 * MIN);
+  assert.equal(store.size, 0);
+  assert.equal(GNSS_WINDOW_MS, 30 * MIN);
 });
 
 test('rows without finite coordinates never key a cell', () => {

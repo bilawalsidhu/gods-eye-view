@@ -14,8 +14,9 @@ const row = (hex, lat, degraded) => ({
 
 function harness(
   getSnapshot,
-  { anchor = { latitude: 50, longitude: 30 } } = {},
+  { anchor: initialAnchor = { latitude: 50, longitude: 30 } } = {},
 ) {
+  let anchor = initialAnchor;
   const sources = [];
   const viewer = {
     dataSources: {
@@ -45,8 +46,19 @@ function harness(
     advance(ms) {
       clock += ms;
     },
+    now: () => clock,
+    setAnchor(value) {
+      anchor = value;
+    },
   };
 }
+
+const MIN = 60_000;
+const threeHealthy = () => [
+  row('a1', 1.1, false),
+  row('a2', 1.2, false),
+  row('a3', 1.3, false),
+];
 
 test('the layer requires a snapshot source and cannot be initialized twice', () => {
   assert.throws(() => createGnssIntegrityLayer({}), TypeError);
@@ -204,6 +216,72 @@ test('no view anchor means no request, and destroy releases the data source', as
   layer.destroy();
   assert.equal(sources.length, 0);
   assert.equal(layer.getStats().count, 0);
+});
+
+test('a replayed stale snapshot keeps its observation age and expires on time', async () => {
+  // The proxy keeps answering with the snapshot it observed at t=1000.
+  const { layer, sources, advance } = harness(async () => ({
+    rows: threeHealthy(),
+    fetchedAt: 1_000,
+    stale: true,
+  }));
+  layer.enable();
+  assert.equal(await layer.update(), true);
+  assert.equal(layer.getStats().count, 1);
+  advance(29 * MIN);
+  assert.equal(await layer.update(), true);
+  assert.equal(layer.getStats().count, 1);
+  advance(2 * MIN);
+  assert.equal(
+    await layer.update(),
+    true,
+    'the replay is not an error, only no evidence',
+  );
+  assert.equal(
+    layer.getStats().count,
+    0,
+    'the replay did not restart the window',
+  );
+  assert.equal(sources[0].entities.values.length, 0);
+});
+
+test('cells expire during prolonged fetch failures', async () => {
+  let fail = false;
+  const { layer, sources, advance, now } = harness(async () => {
+    if (fail) throw new Error('adsb.lol HTTP 502');
+    return { rows: threeHealthy(), fetchedAt: now() };
+  });
+  layer.enable();
+  await layer.update();
+  fail = true;
+  advance(20 * MIN);
+  assert.equal(await layer.update(), false);
+  assert.equal(layer.getStats().count, 1, 'still inside the window');
+  advance(11 * MIN);
+  assert.equal(await layer.update(), false);
+  assert.equal(layer.getStats().count, 0);
+  assert.equal(sources[0].entities.values.length, 0);
+  assert.equal(layer.getStats().error, 'adsb.lol HTTP 502');
+});
+
+test('cells expire while no view anchor is available', async () => {
+  let calls = 0;
+  const { layer, sources, advance, now, setAnchor } = harness(async () => {
+    calls += 1;
+    return { rows: threeHealthy(), fetchedAt: now() };
+  });
+  layer.enable();
+  await layer.update();
+  setAnchor(null);
+  advance(20 * MIN);
+  assert.equal(await layer.update(), true);
+  assert.equal(layer.getStats().count, 1);
+  advance(11 * MIN);
+  assert.equal(await layer.update(), true);
+  assert.equal(calls, 1, 'no anchor means no request');
+  assert.equal(layer.getStats().count, 0);
+  assert.equal(sources[0].entities.values.length, 0);
+  assert.equal(layer.getStats().error, null);
 });
 
 const threeCells = () => ({

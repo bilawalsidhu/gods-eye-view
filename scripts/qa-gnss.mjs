@@ -10,8 +10,9 @@
  *
  *   (i)   LIVE — over Poland and the southern Baltic the layer settles with no error,
  *         one entity per cell and legend band counts that sum to the cell
- *         count; cells are required only when adsb.lol actually returned
- *         enough aircraft (live traffic varies by hour).
+ *         count; cells are required only when the returned rows, binned
+ *         with the layer's own rules, reach the per-cell minimum (live
+ *         traffic varies by hour).
  *   (ii)  BANDS (synthetic) — a 10-aircraft cell with 5 degraded is high,
  *         a 30-aircraft cell with 2 degraded is medium, a 3-aircraft cell
  *         with 1 degraded is low (first bad discounted), a clean cell at sea
@@ -22,12 +23,22 @@
  *   (iii) FAILURE — the route stubbed to 502: stats.error is set and the
  *         cells already on the globe are kept.
  *   (iv)  DISABLE — the layer's data source is hidden.
+ *   (v)   KEYBOARD — the row's toggle button, focused, turns the layer on
+ *         with Enter and off with Space, keeps focus and names its state.
+ *   (vi)  VIEWPORT — at a 390x844 phone viewport the open row and its legend
+ *         fit the panel width with no horizontal overflow.
+ *   (vii) AGE (synthetic) — a fresh page whose stubbed proxy replays the same
+ *         stale snapshot observed 31 minutes ago draws nothing and reports no
+ *         error; observed 29 minutes ago it draws its cells. The replay keeps
+ *         its observation time instead of restarting the 30-minute window.
  *
  * Screenshots wait until every cell's ground geometry is built and show the
  * open Data Layers row with its legend. Visual proof saved to
  * qa-shots/gnss-*.png (gitignored).
  *
  * Run:  node scripts/qa-gnss.mjs --url http://localhost:4173
+ *       (also against a built preview: npm run build && npm run preview,
+ *       then pass the preview URL)
  * Exits non-zero on any FAIL. Does not commit anything.
  */
 
@@ -35,6 +46,10 @@ import puppeteer from 'puppeteer';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  accumulateGnssObservations,
+  binGnssCells,
+} from '../src/layers/gnss/records.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -49,7 +64,6 @@ const APP_URL = getOpt('--url', 'http://localhost:4173');
 const HEADFUL = argv.includes('--headful');
 const LAYER_ID = 'gnss-interference';
 /** Live rows below this cannot reliably fill a 3-aircraft cell. */
-const LIVE_MIN_ROWS = 30;
 
 const results = [];
 function record(name, ok, detail) {
@@ -225,6 +239,70 @@ function fixturePayload() {
   };
 }
 
+/** Answer /api/gnss-integrity in-page from `fixturePayload()`. */
+async function stubRoute(page, { ageMs = 0 } = {}) {
+  await page.evaluateOnNewDocument(
+    (payload, age) => {
+      window.__gnssQaAgeMs = age;
+      const realFetch = window.fetch.bind(window);
+      window.__gnssQaMode = 'fixture';
+      window.fetch = (input, init) => {
+        const url = typeof input === 'string' ? input : input?.url || '';
+        if (!url.includes('/api/gnss-integrity')) return realFetch(input, init);
+        const ok = window.__gnssQaMode === 'fixture';
+        const body = ok
+          ? { ...payload, fetchedAt: Date.now() - (window.__gnssQaAgeMs || 0) }
+          : { error: 'gnss_integrity_unavailable' };
+        return Promise.resolve(
+          new Response(JSON.stringify(body), {
+            status: ok ? 200 : 502,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      };
+    },
+    fixturePayload(),
+    ageMs,
+  );
+}
+
+/** Toggle button of the GNSS row, as the panel draws it. */
+function toggleState(id) {
+  const button = document.querySelector(
+    `[data-layer-id="${id}"] .data-toggle-btn`,
+  );
+  const layer = window.__godsEyeView.dataManager.layers.get(id);
+  return {
+    focused: document.activeElement === button,
+    label: button?.getAttribute('aria-label') ?? '',
+    enabled: Boolean(layer?.enabled),
+    count: layer?.module.getStats().count ?? -1,
+  };
+}
+
+/** Press a key on the focused GNSS toggle and wait for the lifecycle to settle. */
+async function pressToggle(page, key, wantEnabled) {
+  await page.evaluate((id) => {
+    document.querySelector(`[data-layer-id="${id}"] .data-toggle-btn`)?.focus();
+  }, LAYER_ID);
+  await page.keyboard.press(key);
+  await page
+    .waitForFunction(
+      (id, want) => {
+        const layer = window.__godsEyeView.dataManager.layers.get(id);
+        return (
+          Boolean(layer?.enabled) === want &&
+          (!want || layer.module.getStats().count > 0)
+        );
+      },
+      { timeout: 30000, polling: 250 },
+      LAYER_ID,
+      wantEnabled,
+    )
+    .catch(() => {});
+  return page.evaluate(`(${toggleState})(${JSON.stringify(LAYER_ID)})`);
+}
+
 async function main() {
   console.log('\nGNSS Integrity proof (qa-gnss)');
   console.log(`  App URL : ${APP_URL}\n`);
@@ -272,31 +350,36 @@ async function main() {
     const liveBodies = [];
     live.on('response', (res) => {
       if (res.url().includes('/api/gnss-integrity') && res.ok())
-        liveBodies.push(res.json().then((body) => body.rows?.length ?? 0));
+        liveBodies.push(res.json().then((body) => body.rows ?? []));
     });
     await boot(live, { lon: 19.5, lat: 52.5, height: 1_100_000 });
     const l = await enableAndSettle(live);
     const legendTotal = l.legend.reduce((sum, { count }) => sum + count, 0);
-    const liveRows = Math.max(
-      0,
-      ...(await Promise.allSettled(liveBodies))
-        .filter((r) => r.status === 'fulfilled')
-        .map((r) => r.value),
-    );
+    // Bin what adsb.lol actually returned with the layer's own rules: live
+    // traffic varies by hour, so cells are required only when some cell
+    // really reached the minimum aircraft count.
+    const liveSnapshots = (await Promise.allSettled(liveBodies))
+      .filter((r) => r.status === 'fulfilled')
+      .map((r) => r.value);
+    const liveRows = liveSnapshots.reduce((sum, rows) => sum + rows.length, 0);
+    const expectedStore = new Map();
+    for (const rows of liveSnapshots)
+      accumulateGnssObservations(expectedStore, rows, Date.now());
+    const expectedCells = binGnssCells(expectedStore).length;
     record(
       'LIVE: no error, one entity per cell',
       !l.stats.error && l.entities === l.stats.count,
       `cells=${l.stats.count} entities=${l.entities} error=${JSON.stringify(l.stats.error)}`,
     );
-    if (liveRows >= LIVE_MIN_ROWS) {
+    if (expectedCells > 0) {
       record(
-        'LIVE: a busy snapshot yields cells',
+        'LIVE: a snapshot with a qualifying cell yields cells',
         l.stats.count > 0,
-        `rows=${liveRows} cells=${l.stats.count}`,
+        `rows=${liveRows} expected=${expectedCells} cells=${l.stats.count}`,
       );
     } else {
       console.log(
-        `  [info] only ${liveRows} live rows — cell count not asserted`,
+        `  [info] ${liveRows} live rows, no cell reaches the minimum — cell count not asserted`,
       );
     }
     record(
@@ -323,24 +406,7 @@ async function main() {
     // Stub the route in-page rather than with request interception: an
     // intercepted page stalls Cesium's geometry workers, so ground rectangles
     // never finish building and the screenshot would not show real behaviour.
-    await page.evaluateOnNewDocument((payload) => {
-      const realFetch = window.fetch.bind(window);
-      window.__gnssQaMode = 'fixture';
-      window.fetch = (input, init) => {
-        const url = typeof input === 'string' ? input : input?.url || '';
-        if (!url.includes('/api/gnss-integrity')) return realFetch(input, init);
-        const ok = window.__gnssQaMode === 'fixture';
-        const body = ok
-          ? { ...payload, fetchedAt: Date.now() }
-          : { error: 'gnss_integrity_unavailable' };
-        return Promise.resolve(
-          new Response(JSON.stringify(body), {
-            status: ok ? 200 : 502,
-            headers: { 'Content-Type': 'application/json' },
-          }),
-        );
-      };
-    }, fixturePayload());
+    await stubRoute(page);
     await boot(page, { lon: 18.6, lat: 54.6, height: 450_000 });
     const f = await enableAndSettle(page);
     const band = (prefix) =>
@@ -415,6 +481,100 @@ async function main() {
     }, LAYER_ID);
     record('DISABLE: data source hidden', shown === false, `show=${shown}`);
     await shoot(page, 'disabled');
+
+    // ── (v) KEYBOARD ──────────────────────────────────────────────────────
+    console.log('\n(v) KEYBOARD — the row toggle, from the keyboard...');
+    await page.evaluate(() => {
+      window.__gnssQaMode = 'fixture';
+    });
+    await showLayerRow(page);
+    const on = await pressToggle(page, 'Enter', true);
+    record(
+      'KEYBOARD: Enter on the focused toggle enables the layer and keeps focus',
+      on.enabled &&
+        on.focused &&
+        on.count === 4 &&
+        /^GNSS Integrity: /.test(on.label) &&
+        !/OFF$/.test(on.label),
+      JSON.stringify(on),
+    );
+    const off = await pressToggle(page, ' ', false);
+    record(
+      'KEYBOARD: Space on the focused toggle disables it and the label says OFF',
+      !off.enabled && off.focused && /^GNSS Integrity: OFF$/.test(off.label),
+      JSON.stringify(off),
+    );
+
+    // ── (vi) VIEWPORT ─────────────────────────────────────────────────────
+    console.log(
+      '\n(vi) VIEWPORT — the open row on a 390x844 phone viewport...',
+    );
+    await page.close();
+    // A fresh page: switching an open page to isMobile reloads it, which
+    // would measure a half-booted app instead of the open row.
+    const phone = await browser.newPage();
+    await phone.setViewport({ width: 390, height: 844, isMobile: true });
+    phone.on('pageerror', (e) => errors.push(e.message));
+    await stubRoute(phone);
+    await boot(phone, { lon: 18.6, lat: 54.6, height: 450_000 });
+    await showLayerRow(phone);
+    await pressToggle(phone, 'Enter', true);
+    await showLayerRow(phone);
+    const fit = await phone.evaluate((id) => {
+      const row = document.querySelector(`[data-layer-id="${id}"]`);
+      const legend = [...row.querySelectorAll('.data-toggle-legend-item')];
+      const rect = row.getBoundingClientRect();
+      return {
+        width: window.innerWidth,
+        rowLeft: Math.round(rect.left),
+        rowRight: Math.round(rect.right),
+        overflow: row.scrollWidth - row.clientWidth,
+        legendItems: legend.length,
+        legendInside: legend.every((item) => {
+          const r = item.getBoundingClientRect();
+          return (
+            r.width > 0 && r.left >= rect.left - 1 && r.right <= rect.right + 1
+          );
+        }),
+      };
+    }, LAYER_ID);
+    record(
+      'VIEWPORT: row and legend fit a 390 px viewport without horizontal overflow',
+      fit.rowLeft >= 0 &&
+        fit.rowRight <= fit.width &&
+        fit.overflow <= 0 &&
+        fit.legendItems === 3 &&
+        fit.legendInside,
+      JSON.stringify(fit),
+    );
+    await phone.screenshot({ path: path.join(SHOTS_DIR, 'gnss-phone.png') });
+    await phone.close();
+
+    // ── (vii) AGE ─────────────────────────────────────────────────────────
+    console.log(
+      '\n(vii) AGE — a replayed stale snapshot keeps its observation time...',
+    );
+    const aged = await browser.newPage();
+    await aged.setViewport({ width: 1440, height: 900 });
+    aged.on('pageerror', (e) => errors.push(e.message));
+    await stubRoute(aged, { ageMs: 31 * 60_000 });
+    await boot(aged, { lon: 18.6, lat: 54.6, height: 450_000 });
+    const old = await enableAndSettle(aged, { timeoutS: 5 });
+    record(
+      'AGE: a snapshot observed 31 min ago adds no cells and is not an error',
+      old.stats.count === 0 && old.entities === 0 && !old.stats.error,
+      `cells=${old.stats.count} entities=${old.entities} error=${JSON.stringify(old.stats.error)}`,
+    );
+    await aged.evaluate(() => {
+      window.__gnssQaAgeMs = 29 * 60_000;
+    });
+    const recent = await enableAndSettle(aged, { refresh: true });
+    record(
+      'AGE: the same snapshot observed 29 min ago is still inside the window',
+      recent.stats.count === 4 && recent.entities === 4,
+      `cells=${recent.stats.count} entities=${recent.entities}`,
+    );
+    await aged.close();
     record(
       'no uncaught browser errors',
       errors.length === 0,

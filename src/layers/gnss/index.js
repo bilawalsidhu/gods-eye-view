@@ -8,6 +8,7 @@ import {
   accumulateGnssObservations,
   binGnssCells,
   gnssProvenance,
+  pruneGnssObservations,
 } from './records.js';
 export * from './records.js';
 export { createAdsbGnssSource } from './source.js';
@@ -61,6 +62,13 @@ export function createGnssIntegrityLayer({
   let _stale = false;
   const _observations = new Map();
   const provenance = gnssProvenance({ windowMs });
+
+  /** Age the store without new evidence, so expired cells leave the globe. */
+  function expire() {
+    pruneGnssObservations(_observations, now(), { windowMs });
+    _cells = binGnssCells(_observations);
+    render();
+  }
 
   function render() {
     // Only the id and band change what is drawn; counts alone do not.
@@ -129,8 +137,11 @@ export function createGnssIntegrityLayer({
       const anchor = viewAnchor(_viewer);
       // No anchor yet (camera still settling) is not a failure: returning
       // false would make the manager reject the enable. The next interval
-      // retries.
-      if (!anchor) return true;
+      // retries; cells already drawn still age out of the window.
+      if (!anchor) {
+        expire();
+        return true;
+      }
       _request?.abort();
       const request = new AbortController();
       _request = request;
@@ -140,8 +151,11 @@ export function createGnssIntegrityLayer({
         });
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
+        // Date the rows by when the proxy observed them: a cached or stale
+        // replay keeps its original age instead of restarting the window.
         accumulateGnssObservations(_observations, snapshot.rows, now(), {
           windowMs,
+          observedAt: snapshot.fetchedAt,
         });
         _cells = binGnssCells(_observations);
         render();
@@ -154,6 +168,8 @@ export function createGnssIntegrityLayer({
           return false;
         console.warn('[Data:GNSS] Fetch error:', e);
         _lastError = e?.message || 'GNSS integrity source unavailable';
+        // Keep the last cells only while their evidence is inside the window.
+        expire();
         return false;
       } finally {
         if (_request === request) _request = null;

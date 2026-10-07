@@ -31,11 +31,19 @@ test('the source asks the same-origin proxy for the view anchor', async () => {
 test('the source reports stale proxy data and rejects bad input or responses', async () => {
   const reply = (body, init) => async () => Response.json(body, init);
   const stale = await createAdsbGnssSource({
-    fetchImpl: reply({ rows: [], stale: true }),
+    fetchImpl: reply({ rows: [], fetchedAt: 7, stale: true }),
   }).getSnapshot({ latitude: 1, longitude: 2 });
   assert.equal(stale.stale, true);
-  assert.equal(stale.fetchedAt, null);
+  assert.equal(stale.fetchedAt, 7, 'a stale reply keeps its observation time');
   assert.equal(stale.classifier, null);
+  // Without an observation time the rows could only be dated as new.
+  for (const fetchedAt of [undefined, null, '7'])
+    await assert.rejects(
+      createAdsbGnssSource({
+        fetchImpl: reply({ rows: [], fetchedAt }),
+      }).getSnapshot({ latitude: 1, longitude: 2 }),
+      /no observation time/,
+    );
 
   await assert.rejects(
     createAdsbGnssSource({ fetchImpl: reply({}) }).getSnapshot({}),
