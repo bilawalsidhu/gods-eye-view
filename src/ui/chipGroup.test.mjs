@@ -31,3 +31,24 @@ test('keyed chips retain focus, reflect state, reorder and remove without redund
   syncChipGroup(f.container, []);
   assert.deepEqual(f.container.children, [legend]);
 });
+
+test('a chip colour is set once, changed, and cleared through a CSS variable', () => {
+  const f = railFixture(() => {});
+  const calls = [];
+  syncChipGroup(f.container, [{ id: 'm', label: 'M' }]);
+  const chip = f.container.children[0];
+  chip.style.setProperty = (name, value) => calls.push(['set', name, value]);
+  chip.style.removeProperty = (name) => calls.push(['remove', name]);
+  syncChipGroup(f.container, [{ id: 'm', label: 'M' }]);
+  assert.deepEqual(calls, [], 'a chip without a colour never touches style');
+  syncChipGroup(f.container, [{ id: 'm', label: 'M', color: '#05cb63' }]);
+  syncChipGroup(f.container, [{ id: 'm', label: 'M', color: '#05cb63' }]);
+  syncChipGroup(f.container, [{ id: 'm', label: 'M', color: '#a66bff' }]);
+  syncChipGroup(f.container, [{ id: 'm', label: 'M' }]);
+  assert.deepEqual(calls, [
+    ['set', '--chip-color', '#05cb63'],
+    ['set', '--chip-color', '#a66bff'],
+    ['remove', '--chip-color'],
+  ]);
+  assert.equal(chip.dataset.chipColor, undefined);
+});

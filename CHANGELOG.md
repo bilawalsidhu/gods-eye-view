@@ -10,7 +10,23 @@
   construction, is drawn in amber: site, 2,750 m runway and terminal, with
   Avinor's planned 2029 opening. `scripts/build-airports-norway.py` rebuilds
   or `--verify`s the file from a pinned Geofabrik extract. Voice and the
-  analyst know the layer as `local-airports`; its share-link token is `0`.
+  analyst know the layer as `local-airports`; its share-link token is `3`.
+- Street Level: a street-level imagery layer modelled on the iD editor's photo
+  overlay, with Mapillary as its first provider (free client token, CC BY-SA 4.0
+  imagery). One right-rail panel holds a chip per provider, shared 360°/flat and
+  captured-since filters, and an embedded viewer with EXPAND, FIT/FILL and
+  FOLLOW (Google 3D only). Coverage lines and image cones are drawn from orbit
+  down to a single street; on Google 3D they sit on the bare earth, refined
+  against the rendered mesh near the camera, so trees and buildings hide them.
+  Share links carry the provider switches, the filters and the panel's collapsed
+  state. A server proxy caches Mapillary coverage tiles (24 h, 1 GiB on disk),
+  refuses cross-site requests, rate-limits per IP and backs off when Mapillary
+  rejects the token or rate-limits.
+
+- The CCTV and Street Level panels are portable: drag the header to float the
+  panel, resize it from any edge or corner, and double-click the header to dock
+  it again. The position persists across reloads.
+
 - Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
   list is one keyless GeoJSON request to the agency's OGC API view of its
   DATEX 3.1 CCTV table, so no DATEX account is needed. Every working camera

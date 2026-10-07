@@ -410,6 +410,18 @@ const OPTION_GROUPS = Object.freeze({
     ),
     booleanOption('viirs', 'v', false),
   ]),
+  'street-level': Object.freeze([
+    // One switch per registered imagery provider (src/app/layers/streetLevel.js).
+    booleanOption('mapillary', 'm', true),
+    enumOption('pano', 'p', 'all', ['all', 'pano', 'flat'], {
+      all: 'a',
+      pano: 'p',
+      flat: 'f',
+    }),
+    // Relative days, so a link means the same next year. The max matches
+    // MAX_SINCE_DAYS in streetLevel/policy.js (pinned by layerState.test).
+    boundedIntegerOption('sinceDays', 's', 0, { min: 0, max: 36500 }),
+  ]),
   radio: Object.freeze([
     Object.freeze({
       key: 'filter',
@@ -587,7 +599,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   }),
   Object.freeze({
     id: 'local-airports',
-    token: '0',
+    token: '3',
     disposition: 'enabled-only',
   }),
   Object.freeze({ id: 'local-dams', token: 'q', disposition: 'enabled-only' }),
@@ -635,6 +647,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 's',
     disposition: 'enabled+options',
     optionOwner: 'satellites',
+  }),
+  Object.freeze({
+    id: 'street-level',
+    token: '0',
+    disposition: 'enabled+options',
+    optionOwner: 'street-level',
   }),
   Object.freeze({
     id: 'telegeography-submarine-cables',
