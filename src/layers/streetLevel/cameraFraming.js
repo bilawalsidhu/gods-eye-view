@@ -1,8 +1,5 @@
 import * as Cesium from 'cesium';
-
-/** Plausible ellipsoidal land heights: Dead Sea to Everest, with geoid slack. */
-const SURFACE_MIN_M = -500;
-const SURFACE_MAX_M = 9000;
+import { plausibleSurfaceHeight, sampledSurfaceHeight } from './view.js';
 
 /** Fly the globe camera once to frame a photo after it opens. */
 export function createCameraFraming({ state }) {
@@ -34,19 +31,10 @@ export function createCameraFraming({ state }) {
   function groundHeightAt(lon, lat, fallback) {
     const scene = state.viewer?.scene;
     const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-    const plausible = (height) =>
-      Number.isFinite(height) &&
-      height >= SURFACE_MIN_M &&
-      height <= SURFACE_MAX_M;
-    let height = null;
-    try {
-      if (scene?.sampleHeightSupported) height = scene.sampleHeight(carto);
-    } catch {
-      /* not sampleable yet */
-    }
-    if (!plausible(height)) height = scene?.globe?.getHeight?.(carto);
-    if (!plausible(height)) height = fallback;
-    return plausible(height) ? height : 0;
+    let height = sampledSurfaceHeight(scene, carto);
+    if (height === null) height = scene?.globe?.getHeight?.(carto);
+    if (!plausibleSurfaceHeight(height)) height = fallback;
+    return plausibleSurfaceHeight(height) ? height : 0;
   }
 
   /**

@@ -10,16 +10,43 @@ export function metresBetween(a, b) {
   );
 }
 
+/** Whether a height (m) is plausible ellipsoidal land: Dead Sea to Everest, with geoid slack. */
+export function plausibleSurfaceHeight(height) {
+  return Number.isFinite(height) && height >= -500 && height <= 9000;
+}
+
 /**
- * Ellipsoidal height (m) of the globe terrain under the camera; null where
- * the globe is hidden (Google 3D) or not yet loaded.
+ * Height (m) of the rendered surface, 3D tiles included, at `carto`; null
+ * when unsampleable or implausible (`sampleHeight` reads kilometres
+ * underground before tiles load).
+ */
+export function sampledSurfaceHeight(scene, carto) {
+  let height = null;
+  try {
+    if (scene?.sampleHeightSupported) height = scene.sampleHeight(carto);
+  } catch {
+    /* not sampleable yet */
+  }
+  return plausibleSurfaceHeight(height) ? height : null;
+}
+
+/**
+ * Ellipsoidal height (m) of the ground under the camera, or null. The globe
+ * answers where shown; Google 3D hides it, so the rendered surface does
+ * (roofs count: a building's height at most). A sample above the camera is
+ * ignored: a raised ground would put the camera underground.
  */
 export function groundUnderCamera(viewer) {
   const carto = viewer?.camera?.positionCartographic;
-  const globe = viewer?.scene?.globe;
-  if (!carto || !globe || globe.show === false) return null;
-  const ground = globe.getHeight?.(carto);
-  return Number.isFinite(ground) ? ground : null;
+  const scene = viewer?.scene;
+  if (!carto || !scene) return null;
+  const globe = scene.globe;
+  if (globe && globe.show !== false) {
+    const ground = globe.getHeight?.(carto);
+    if (Number.isFinite(ground)) return ground;
+  }
+  const sampled = sampledSurfaceHeight(scene, carto);
+  return sampled !== null && sampled < carto.height ? sampled : null;
 }
 
 /** The ellipsoid `height` metres above `ellipsoid` (the ground at that height). */
@@ -147,6 +174,41 @@ export function cameraNadir(viewer) {
   return {
     lon: Cesium.Math.toDegrees(carto.longitude),
     lat: Cesium.Math.toDegrees(carto.latitude),
+  };
+}
+
+/**
+ * Where coverage tiles are ranked from: halfway between the ground under the
+ * camera and the ground at the centre of the screen, so a tilted view loads
+ * what it looks at as well as what is near. The nadir when the centre ray
+ * misses the ground within `maxRange`. Options as `visibleBbox`.
+ */
+export function viewFocus(
+  viewer,
+  { groundHeight = null, maxRange = null } = {},
+) {
+  const nadir = cameraNadir(viewer);
+  const scene = viewer?.scene;
+  const width = scene?.canvas?.clientWidth || scene?.canvas?.width || 0;
+  const height = scene?.canvas?.clientHeight || scene?.canvas?.height || 0;
+  if (!nadir || !width || !height) return nadir;
+  const hit = groundHit(
+    viewer.camera,
+    new Cesium.Cartesian2(width / 2, height / 2),
+    raisedEllipsoid(
+      scene.globe?.ellipsoid || Cesium.Ellipsoid.WGS84,
+      groundHeight,
+    ),
+    maxRange,
+  );
+  if (!hit) return nadir;
+  const ahead = {
+    lon: Cesium.Math.toDegrees(hit.longitude),
+    lat: Cesium.Math.toDegrees(hit.latitude),
+  };
+  return {
+    lon: wrapLon(nadir.lon + wrapLon(ahead.lon - nadir.lon) / 2),
+    lat: (nadir.lat + ahead.lat) / 2,
   };
 }
 

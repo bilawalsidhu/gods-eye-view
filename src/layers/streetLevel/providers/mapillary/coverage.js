@@ -2,7 +2,7 @@ import * as Cesium from 'cesium';
 import { decodeCoverageTile } from './decode.js';
 import { passesImageryFilter, resolveFilter } from '../../filter.js';
 import { isActive } from '../../state.js';
-import { cameraNadir, groundUnderCamera, visibleBbox } from '../../view.js';
+import { groundUnderCamera, viewFocus, visibleBbox } from '../../view.js';
 import { coverageZoomForHeight, tilesForBbox } from '../../tileMath.js';
 import {
   COLORS,
@@ -318,19 +318,20 @@ export function createCoverage({ state, source }) {
     if (zoom == null) return { hint: ZOOM_IN_HINT };
     // Rays meet the ground where it really is (1,600 m up in Denver) and stop
     // short of the horizon, which would stretch the box to the world.
-    const bbox = visibleBbox(viewer, {
+    const ranged = {
       groundHeight: ground,
       maxRange: Math.max(
         SEQUENCE_VIEW_RANGE_MIN_M,
         height * SEQUENCE_VIEW_RANGE_PER_HEIGHT,
       ),
-    });
+    };
+    const bbox = visibleBbox(viewer, ranged);
     if (!bbox) return { hint: NO_GROUND_HINT };
-    // Ranked from the ground under the camera: a tilted view's box centre
-    // can sit kilometres ahead of anything near.
+    // Ranked from between the camera's ground point and the screen centre's:
+    // a tilted view's box centre can sit kilometres past both.
     const { tiles } = tilesForBbox(bbox, zoom, {
       limit: COVERAGE_MAX_TILES,
-      from: cameraNadir(viewer),
+      from: viewFocus(viewer, ranged),
     });
     return { zoom, tiles };
   }

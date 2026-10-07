@@ -7,8 +7,10 @@ import {
   groundUnderCamera,
   metresBetween,
   viewCentre,
+  viewFocus,
   visibleBbox,
 } from './view.js';
+import { latToTileY, lonToTileX, tilesForBbox } from './tileMath.js';
 import { rayCamera } from '../../testSupport/streetLevelFakes.mjs';
 
 const RAD = Math.PI / 180;
@@ -44,6 +46,26 @@ test('a hidden globe (Google 3D) or a missing sample gives no ground', () => {
     null,
   );
   assert.equal(groundUnderCamera({}), null);
+});
+
+/** The Denver viewer with Google 3D: no globe, a sampleable rendered surface. */
+function google3d(sample) {
+  const view = viewer({ globeShown: false, globeHeight: 0 });
+  view.scene.sampleHeightSupported = true;
+  view.scene.sampleHeight = () => sample;
+  return view;
+}
+
+test('on Google 3D the rendered surface answers the ground under the camera', () => {
+  assert.equal(groundUnderCamera(google3d(1612)), 1612);
+});
+
+test('an implausible or above-camera surface sample gives no ground', () => {
+  // Before tiles stream in, sampleHeight can read kilometres underground.
+  assert.equal(groundUnderCamera(google3d(-14_886)), null);
+  // A roof above the camera (1,900 m) would put the camera underground.
+  assert.equal(groundUnderCamera(google3d(1950)), null);
+  assert.equal(groundUnderCamera(google3d(undefined)), null);
 });
 
 /** A camera whose screen rays land on a grid of lon/lat points. */
@@ -126,6 +148,50 @@ test('a tilted street view over high ground boxes the streets it looks at, not t
   assert.ok(
     Math.abs(nadir.lat - 39.74) < 1e-9 && Math.abs(nadir.lon + 104.99) < 1e-9,
   );
+});
+
+test('a tilted view from 3 km loads the tile at the centre of the screen', () => {
+  // 3 km up, 70° from straight down: the screen centre meets the ground
+  // 8.2 km ahead, past the 3 × 3 z13 tiles around the camera's ground point.
+  const lon = -121.49;
+  const lat = 38.58;
+  const view = pinhole({ lon, lat, ground: 10, agl: 3000, pitch: -20 });
+  const ranged = { groundHeight: 10, maxRange: 30_000 };
+  const bbox = visibleBbox(view, ranged);
+  const ahead = lat + 3000 / Math.tan((20 * Math.PI) / 180) / 110_540;
+  const centreTile = `${lonToTileX(lon, 13)}/${latToTileY(ahead, 13)}`;
+  const chosen = (from) =>
+    tilesForBbox(bbox, 13, { limit: 9, from }).tiles.map(
+      (tile) => `${tile.x}/${tile.y}`,
+    );
+  assert.ok(
+    !chosen(cameraNadir(view)).includes(centreTile),
+    'ranked from the nadir alone, the screen centre is left out',
+  );
+  const focus = viewFocus(view, ranged);
+  assert.ok(focus.lat > lat && focus.lat < ahead, 'between camera and centre');
+  assert.ok(chosen(focus).includes(centreTile), 'the screen centre is loaded');
+  // The bottom edge of the screen (50° down) meets the ground 2.5 km ahead.
+  const nearest = lat + 3000 / Math.tan((50 * Math.PI) / 180) / 110_540;
+  assert.ok(
+    chosen(focus).includes(`${lonToTileX(lon, 13)}/${latToTileY(nearest, 13)}`),
+    'and so is the nearest ground in view',
+  );
+});
+
+test('looking straight down or at the sky, the focus is the ground under the camera', () => {
+  const lon = -121.49;
+  const lat = 38.58;
+  const down = viewFocus(
+    pinhole({ lon, lat, ground: 10, agl: 500, pitch: -90 }),
+    { groundHeight: 10, maxRange: 5000 },
+  );
+  assert.ok(Math.abs(down.lat - lat) < 1e-4 && Math.abs(down.lon - lon) < 1e-4);
+  const sky = viewFocus(pinhole({ lon, lat, ground: 10, agl: 2, pitch: 60 }), {
+    groundHeight: 10,
+    maxRange: 2500,
+  });
+  assert.ok(Math.abs(sky.lat - lat) < 1e-9 && Math.abs(sky.lon - lon) < 1e-9);
 });
 
 test('looking at the horizon from eye height boxes the near ground, not the horizon', () => {
