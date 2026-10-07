@@ -43,6 +43,10 @@ export function createFirmsState({ services, config }) {
 
   layerState._firesByFrp = [];
 
+  /** Proxy validator for the snapshot `_fires` was built from, with that set. */
+
+  layerState._snapshot = null;
+
   layerState._count = 0;
 
   layerState._cellCount = 0;

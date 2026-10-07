@@ -1,5 +1,12 @@
 # Changelog
 
+- Active Fires no longer re-downloads the worldwide snapshot (~40 MB, ~200k
+  detections) on every 10-minute poll. `/api/firms` sends an `ETag` naming its
+  cached snapshot and answers a matching `If-None-Match` with an empty `304`;
+  the layer then keeps its records and drops only detections that aged past
+  24 hours. Unchanged polls fell from 258–293 ms (with ~150 ms of main-thread
+  long tasks) to 4–72 ms in Chrome. Tool callers still get the full snapshot.
+
 - MCP setup examples use the app's default port, `4173`. Thanks to
   [Huanyi Xie](https://github.com/xiehuanyi) (#934) and
   [shirunjies8-png](https://github.com/shirunjies8-png) (#959) for the same fix.
