@@ -17,7 +17,10 @@ import {
   isUnavailableCapability,
   sourceResponseError,
 } from '../../sources/capability.js';
-import { normalizeMilitaryInstallations } from '../../data/militaryInstallationData.js';
+import {
+  humanizeInstallationClass,
+  normalizeMilitaryInstallations,
+} from '../../data/militaryInstallationData.js';
 
 /** Preserve legacy cache admission even when the explicit saturation flag is absent. */
 export function installationResponseSaturated(payload) {
@@ -87,6 +90,51 @@ export function installationAnchorBox(anchor) {
       return { ...box, radiusM: Math.round(radiusM) };
   }
   return null;
+}
+
+const inBox = (r, box) =>
+  r.longitude >= box.west &&
+  r.longitude <= box.east &&
+  r.latitude >= box.south &&
+  r.latitude <= box.north;
+
+/** Named sites with no mapped area, which no tile or Overpass answer carries. */
+function standaloneNamedSites(names, box) {
+  return (names?.records || []).filter((r) => r.standalone && inBox(r, box));
+}
+
+/**
+ * Apply Wikidata-cited supplement names to live Overpass records that are
+ * still unnamed, and add the supplement's standalone sites in view. A name
+ * OpenStreetMap has since gained always wins.
+ */
+export function withNamedSupplement(records, names, box, retrievedAt) {
+  if (!names) return records;
+  const cite = (sources) =>
+    sources
+      .filter((source) => source.name === 'Wikidata')
+      .map((source) => ({ ...source, retrievedAt }));
+  return [
+    ...records.map((record) => {
+      const [, type, id] = String(record.id).split(':');
+      const named = names.byId.get(`${type?.[0]}${id}`);
+      const wikidata = cite(named?.sources || []);
+      return wikidata.length &&
+        record.name === humanizeInstallationClass(record.class)
+        ? {
+            ...record,
+            name: named.name,
+            class: named.class,
+            sources: [...record.sources, ...wikidata],
+          }
+        : record;
+    }),
+    ...standaloneNamedSites(names, box).map((record) => ({
+      ...record,
+      retrievedAt,
+      sources: cite(record.sources),
+    })),
+  ];
 }
 
 /** Read mapped installations and explicit nearby-place searches through fixed endpoints. */
@@ -159,11 +207,13 @@ export function createInstallationSource({
         .flatMap((tile) => tile.military)
         .map((record) => nameMilitaryFragment(record, names));
       const retrievedAt = new Date().toISOString();
+      // Tiles carry only mapped areas; a named site with none would vanish
+      // on zooming in, so its own position joins the close view.
       return {
-        records: mergeMilitaryFragments(
-          fragments.slice(0, 2048),
-          installationIds,
-        ).map((record) => ({
+        records: [
+          ...mergeMilitaryFragments(fragments.slice(0, 2048), installationIds),
+          ...standaloneNamedSites(names, box),
+        ].map((record) => ({
           ...militaryNameInView(record, box),
           retrievedAt,
           sources: record.sources.map((source) => ({ ...source, retrievedAt })),
@@ -238,11 +288,14 @@ export function createInstallationSource({
         );
       if (!Array.isArray(body?.elements))
         throw new Error('Malformed installation snapshot');
+      const retrievedAt = body.retrievedAt || new Date().toISOString();
+      const mapped = normalizeMilitaryInstallations(body, retrievedAt);
+      // The supplement only enriches; a names failure keeps the live answer.
+      const names = await waitForSignal(loadNames(), signal).catch(() => null);
+      signal?.throwIfAborted();
       return {
-        ...normalizeMilitaryInstallations(
-          body,
-          body.retrievedAt || new Date().toISOString(),
-        ),
+        ...mapped,
+        records: withNamedSupplement(mapped.records, names, box, retrievedAt),
         status: body.status,
         saturated: installationResponseSaturated(body),
       };
