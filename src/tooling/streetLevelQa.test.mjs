@@ -29,7 +29,6 @@ test('the harness expects exactly the providers the app registers, in order', ()
   // Any method a provider asks its source for is a no-op: only ids matter.
   const source = new Proxy({}, { get: () => () => {} });
   const layer = createApplicationStreetLevel({
-    surface: null,
     sources: { mapillary: source },
   });
   assert.deepEqual([...EXPECTED_PROVIDERS], [...layer.providerIds]);
@@ -330,13 +329,9 @@ test('evidence never carries a Mapillary token', () => {
 });
 
 test('--strict accepts only the documented skips', () => {
-  assert.deepEqual(
-    [...STRICT_ALLOWED_SKIPS],
-    ['no Google 3D', 'fixtures only'],
-  );
+  assert.deepEqual([...STRICT_ALLOWED_SKIPS], ['fixtures only']);
   assert.deepEqual(
     strictViolations([
-      { reason: 'no Google 3D', label: 'terrain' },
       { reason: 'fixtures only', label: 'keyless page' },
       { reason: 'no Mapillary key', label: 'the keyed steps' },
     ]),

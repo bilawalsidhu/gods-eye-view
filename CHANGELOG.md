@@ -7,8 +7,8 @@
   imagery). One right-rail panel holds an ON/OFF pill, shared 360°/flat and
   captured-since filters, a legend, and an embedded viewer with full-screen
   EXPAND and FIT/FILL. Coverage lines and image cones are drawn from orbit
-  down to a single street; on Google 3D they sit on the bare earth, refined
-  against the rendered mesh near the camera, so trees and buildings hide them.
+  down to a single street, draped on the terrain and on Google 3D tiles;
+  opening a photo frames it with one camera flight.
   Share links carry the provider switches, the filters and the panel's collapsed
   state. A server proxy caches Mapillary coverage tiles (24 h, 1 GiB on disk),
   refuses cross-site requests, rate-limits per IP and backs off when Mapillary

@@ -21,29 +21,15 @@ export function whenIdle(task, timeout) {
 }
 
 /**
- * Ellipsoidal height (m) of the surface under the camera: globe terrain, or
- * `groundAt` where Google 3D hides the globe; null without a sample.
- * @param {object} viewer
- * @param {{groundAt?: (lon: number, lat: number) => number|null}} [options]
+ * Ellipsoidal height (m) of the globe terrain under the camera; null where
+ * the globe is hidden (Google 3D) or not yet loaded.
  */
-export function groundUnderCamera(viewer, { groundAt } = {}) {
+export function groundUnderCamera(viewer) {
   const carto = viewer?.camera?.positionCartographic;
-  if (!carto) return null;
-  const globe = viewer.scene?.globe;
-  let ground = globe?.show === false ? null : globe?.getHeight?.(carto);
-  if (!Number.isFinite(ground))
-    ground = groundAt?.(
-      Cesium.Math.toDegrees(carto.longitude),
-      Cesium.Math.toDegrees(carto.latitude),
-    );
+  const globe = viewer?.scene?.globe;
+  if (!carto || !globe || globe.show === false) return null;
+  const ground = globe.getHeight?.(carto);
   return Number.isFinite(ground) ? ground : null;
-}
-
-/** Camera height (m) above the ground under it (options as `groundUnderCamera`). */
-export function cameraHeightAboveGround(viewer, options = {}) {
-  const carto = viewer?.camera?.positionCartographic;
-  if (!carto) return null;
-  return carto.height - (groundUnderCamera(viewer, options) ?? 0);
 }
 
 /** The ellipsoid `height` metres above `ellipsoid` (the ground at that height). */
@@ -77,9 +63,9 @@ function groundHit(camera, point, ellipsoid, maxRange) {
 /**
  * Visible [west, south, east, north] degrees, or null. Only screen rays that
  * hit count, so a horizon cannot inflate the box to the world.
- * `groundHeight` raises the ellipsoid to the ground (Google 3D hides the
- * globe), `maxRange` (m) drops near-horizon hits, and `nearRange` (m) always
- * includes the ground around the camera.
+ * `groundHeight` raises the ellipsoid to the ground, `maxRange` (m) drops
+ * near-horizon hits, and `nearRange` (m) always includes the ground around
+ * the camera.
  */
 export function visibleBbox(
   viewer,

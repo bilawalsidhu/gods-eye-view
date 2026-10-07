@@ -7,10 +7,7 @@ import {
   metresBetween,
   viewFocus,
   visibleBbox,
-  whenIdle,
 } from '../../view.js';
-import { densifyLine, MESH_DENSIFY_DEG } from '../../groundCast.js';
-import { MESH_SAMPLE_RADIUS_M } from '../../meshSampler.js';
 import {
   coverageZoomForHeight,
   overviewZoomForHeight,
@@ -33,12 +30,6 @@ import {
   SEQUENCE_VIEW_RANGE_PER_HEIGHT,
 } from './policy.js';
 
-/** Draped lines stay at most this long while a tile's cast lines build. */
-export const SWAP_MAX_WAIT_MS = 4000;
-/** Tiles touched by new mesh samples are redrawn at most this often. */
-const REMESH_INTERVAL_MS = 1500;
-/** Gap between redrawing one dirty tile and the next. */
-const REMESH_STAGGER_MS = 120;
 /** Old-zoom tiles are kept at most this long after a zoom change. */
 const STALE_TILE_MAX_MS = 6000;
 /** Sequences per primitive: smaller batches build, and show, sooner. */
@@ -77,27 +68,8 @@ export function sequenceIdFromPick(pickId) {
 }
 
 /**
- * Whether any point of `box` ({west, south, east, north}) is within the mesh
- * sampler's range of `centre`, the ground point under the camera.
- */
-export function meshBoxInRange(box, centre) {
-  // Move the camera's longitude to the box's side of the date line first:
-  // clamping 179.999 into a box at -179.99 would pick its far edge.
-  const lon =
-    centre.lon +
-    360 * Math.round(((box.west + box.east) / 2 - centre.lon) / 360);
-  const nearest = {
-    lon: Math.min(box.east, Math.max(box.west, lon)),
-    lat: Math.min(box.north, Math.max(box.south, centre.lat)),
-  };
-  return metresBetween(centre, nearest) <= MESH_SAMPLE_RADIUS_M;
-}
-
-/**
  * Camera-driven coverage: overview points (z0–5) from orbit, sequence lines
- * (z11–14) near the ground. In terrain surface mode a tile is drawn draped
- * first, then swapped for lines cast to the bare earth (draped lines would
- * land on roofs), so coverage never waits on terrain heights.
+ * (z11–14) near the ground, draped on terrain and 3D tiles alike.
  */
 export function createCoverage({ state, source }) {
   const { render } = state.services;
@@ -120,13 +92,6 @@ export function createCoverage({ state, source }) {
     return state.context.getFilter();
   }
 
-  function terrainMode() {
-    return (
-      state.context.getSurface?.() === 'terrain' &&
-      Boolean(state.context.groundCaster)
-    );
-  }
-
   /**
    * A tile's sequences, filtered then capped: capping first could leave a
    * dense tile of newer flat captures with no 360° lines at all.
@@ -142,46 +107,31 @@ export function createCoverage({ state, source }) {
   }
 
   /**
-   * Batched primitives for a tile's sequence parts: cast polylines where
-   * terrain heights are cached, draped ground lines otherwise. Each batch
-   * records the selection its colours were built with.
+   * Batched draped primitives for a tile's sequence parts. Each batch records
+   * the selection its colours were built with.
    */
   function buildSequencePrimitives(sequences) {
-    const ground = terrainMode() ? state.context.groundCaster : null;
-    const meshAt = ground ? state.context.meshSampler?.meshAt : undefined;
     const selectedId = state.sequence.selectedId ?? null;
-    const draped = [];
-    const cast = [];
+    const instances = [];
     for (const sequence of sequences) {
       const color = Cesium.ColorGeometryInstanceAttribute.fromColor(
         sequenceColor({ selected: sequence.id === selectedId }),
       );
       const ids = partIds(sequence);
       sequence.parts.forEach((coordinates, index) => {
-        const flat = ground?.castLine(coordinates, { meshAt });
         let positions;
         try {
-          positions = flat
-            ? Cesium.Cartesian3.fromDegreesArrayHeights(flat)
-            : Cesium.Cartesian3.fromDegreesArray(coordinates.flat());
+          positions = Cesium.Cartesian3.fromDegreesArray(coordinates.flat());
         } catch {
           return;
         }
         if (positions.length < 2) return;
-        const geometry = flat
-          ? new Cesium.PolylineGeometry({
-              positions,
-              width: COVERAGE_LINE_WIDTH_PX,
-              vertexFormat: Cesium.PolylineColorAppearance.VERTEX_FORMAT,
-              arcType: Cesium.ArcType.NONE,
-            })
-          : new Cesium.GroundPolylineGeometry({
-              positions,
-              width: COVERAGE_LINE_WIDTH_PX,
-            });
-        (flat ? cast : draped).push(
+        instances.push(
           new Cesium.GeometryInstance({
-            geometry,
+            geometry: new Cesium.GroundPolylineGeometry({
+              positions,
+              width: COVERAGE_LINE_WIDTH_PX,
+            }),
             id: ids[index],
             attributes: { color },
           }),
@@ -189,212 +139,19 @@ export function createCoverage({ state, source }) {
       });
     }
     const primitives = [];
-    for (let i = 0; i < draped.length; i += SEQUENCE_PRIMITIVE_BATCH)
+    for (let i = 0; i < instances.length; i += SEQUENCE_PRIMITIVE_BATCH)
       primitives.push({
-        onGround: true,
         selectedId,
         primitive: new Cesium.GroundPolylinePrimitive({
-          geometryInstances: draped.slice(i, i + SEQUENCE_PRIMITIVE_BATCH),
+          geometryInstances: instances.slice(i, i + SEQUENCE_PRIMITIVE_BATCH),
           appearance: new Cesium.PolylineColorAppearance(),
+          // Drapes on the globe and on 3D tiles (Google 3D) alike.
           classificationType: Cesium.ClassificationType.BOTH,
           asynchronous: true,
           allowPicking: true,
         }),
       });
-    for (let i = 0; i < cast.length; i += SEQUENCE_PRIMITIVE_BATCH)
-      primitives.push({
-        onGround: false,
-        selectedId,
-        primitive: new Cesium.Primitive({
-          geometryInstances: cast.slice(i, i + SEQUENCE_PRIMITIVE_BATCH),
-          appearance: new Cesium.PolylineColorAppearance({ translucent: true }),
-          asynchronous: true,
-          allowPicking: true,
-        }),
-      });
-    return { primitives, draped, cast: cast.length };
-  }
-
-  /**
-   * Fetch the terrain heights a tile's lines need, then redraw it cast.
-   * `castRequested` stops the redraw from casting again at once; a refresh
-   * `retry`s a tile whose lines are still draped (a failed or partial cast),
-   * and it is redrawn only when more of its lines can be cast.
-   */
-  function castTile(entry, { retry = false } = {}) {
-    if ((entry.castRequested && !retry) || entry.castAbort || !terrainMode())
-      return;
-    entry.castRequested = true;
-    entry.castAbort = new AbortController();
-    const { signal } = entry.castAbort;
-    const lines = [...entry.sequences.values()].flatMap(
-      (sequence) => sequence.parts,
-    );
-    const caster = state.context.groundCaster;
-    caster.prepareLines(lines, { signal }).then(() => {
-      if (entry.castAbort?.signal === signal) entry.castAbort = null;
-      const attached = [...state.coverage.tiles.values()].includes(entry);
-      if (signal.aborted || !attached || !terrainMode()) return;
-      // Nothing new to cast: keep what is drawn until the next refresh.
-      // Counted like buildSequencePrimitives: a cast line needs two points.
-      const castable = lines.filter(
-        (coords) => caster.castLine(coords)?.length >= 6,
-      ).length;
-      if (castable <= (entry.castLines || 0)) {
-        entry.castRequested = (entry.castLines || 0) > 0;
-        return;
-      }
-      // A remesh may have cleared the flag while this was in flight.
-      entry.castRequested = true;
-      redrawTile(entry);
-      requestMesh(entry);
-    });
-  }
-
-  /** Rebuild a tile's lines; the old ones stay up until the new are ready. */
-  function redrawTile(entry) {
-    const previous = entry.primitives;
-    entry.primitives = [];
-    attachPrimitive(entry);
-    removeWhenReady(entry, previous);
-  }
-
-  /** Lon/lat under the camera, where mesh range is measured from. */
-  function meshCentre() {
-    const carto = state.viewer?.camera?.positionCartographic;
-    if (!carto) return null;
-    return {
-      lon: Cesium.Math.toDegrees(carto.longitude),
-      lat: Cesium.Math.toDegrees(carto.latitude),
-    };
-  }
-
-  /**
-   * A tile's drawn lines with bounding boxes, built once per filter; mesh
-   * points are densified the first time a line is in range.
-   */
-  function meshParts(entry) {
-    if (entry.meshParts) return entry.meshParts;
-    entry.meshParts = [];
-    for (const sequence of entry.sequences.values())
-      for (const part of sequence.parts) {
-        const box = {
-          west: Infinity,
-          south: Infinity,
-          east: -Infinity,
-          north: -Infinity,
-        };
-        for (const [lon, lat] of part) {
-          if (lon < box.west) box.west = lon;
-          if (lon > box.east) box.east = lon;
-          if (lat < box.south) box.south = lat;
-          if (lat > box.north) box.north = lat;
-        }
-        entry.meshParts.push({ part, box, points: null });
-      }
-    return entry.meshParts;
-  }
-
-  /**
-   * Ask for mesh samples under a cast tile's lines within the sampler's range
-   * of the camera; the rest are asked for when a camera move brings them in.
-   */
-  function requestMesh(entry) {
-    const sampler = state.context.meshSampler;
-    if (!sampler || entry.kind !== 'sequence' || !terrainMode()) return;
-    const centre = meshCentre();
-    if (!centre || !entry.bounds || !meshBoxInRange(entry.bounds, centre))
-      return;
-    const points = [];
-    for (const line of meshParts(entry)) {
-      if (!meshBoxInRange(line.box, centre)) continue;
-      line.points ||= densifyLine(line.part, MESH_DENSIFY_DEG);
-      for (const point of line.points) points.push(point);
-    }
-    if (points.length) sampler.request(points);
-  }
-
-  /** Redraw the tiles new mesh samples fall in, throttled. */
-  function onMeshSampled(batch) {
-    if (!terrainMode() || !state.context.isActive()) return;
-    for (const entry of state.coverage.tiles.values()) {
-      if (entry.kind !== 'sequence' || !entry.bounds) continue;
-      const { west, south, east, north } = entry.bounds;
-      if (
-        batch.some(
-          ([lon, lat]) =>
-            lon >= west && lon <= east && lat >= south && lat <= north,
-        )
-      )
-        state.coverage.remeshDirty.add(entry);
-    }
-    if (!state.coverage.remeshDirty.size || state.coverage.remeshTimer) return;
-    const wait = Math.max(
-      0,
-      REMESH_INTERVAL_MS - (Date.now() - (state.coverage.remeshAt || 0)),
-    );
-    state.coverage.remeshTimer = setTimeout(remesh, wait);
-  }
-
-  /** Redraw one dirty tile per idle slice, so a burst of samples never stalls a frame. */
-  function remesh() {
-    state.coverage.remeshTimer = null;
-    state.coverage.remeshAt = Date.now();
-    if (!terrainMode() || !state.context.isActive()) {
-      state.coverage.remeshDirty.clear();
-      return;
-    }
-    const attached = new Set(state.coverage.tiles.values());
-    const [entry] = state.coverage.remeshDirty;
-    if (!entry) return;
-    state.coverage.remeshDirty.delete(entry);
-    if (attached.has(entry)) {
-      redrawTile(entry);
-      requestRender();
-    }
-    if (state.coverage.remeshDirty.size)
-      state.coverage.remeshTimer = setTimeout(
-        () => whenIdle(remesh, 500),
-        REMESH_STAGGER_MS,
-      );
-  }
-
-  state.coverage.remeshDirty = new Set();
-  state.context.meshSampler?.onSampled(onMeshSampled);
-
-  /**
-   * Remove a tile's previous primitives once all its current ones are ready
-   * (or after a few seconds); detaching the tile removes them at once.
-   */
-  function removeWhenReady(entry, old) {
-    const scene = state.viewer?.scene;
-    finishSwap(entry);
-    if (!scene?.postRender) {
-      removePrimitives(old);
-      return;
-    }
-    const fresh = entry.primitives;
-    const started = Date.now();
-    const stop = scene.postRender.addEventListener(() => {
-      const ready = fresh.every(
-        ({ primitive }) => primitive.ready || primitive.isDestroyed?.(),
-      );
-      if (!ready && Date.now() - started < SWAP_MAX_WAIT_MS) {
-        requestRender();
-        return;
-      }
-      finishSwap(entry);
-      requestRender();
-    });
-    entry.swap = { old, stop };
-    requestRender();
-  }
-
-  function finishSwap(entry) {
-    if (!entry.swap) return;
-    entry.swap.stop();
-    removePrimitives(entry.swap.old);
-    entry.swap = null;
+    return primitives;
   }
 
   function buildOverviewCollection(points) {
@@ -442,17 +199,10 @@ export function createCoverage({ state, source }) {
       // Lookup, picking and counts follow what is drawn, not the whole tile.
       const sequences = drawnSequences(entry);
       entry.sequences = new Map(sequences.map((s) => [s.id, s]));
-      const { primitives, draped, cast } = buildSequencePrimitives(sequences);
-      entry.primitives = primitives;
+      entry.primitives = buildSequencePrimitives(sequences);
       entry.count = sequences.length;
-      for (const { primitive, onGround } of primitives)
-        (onGround ? scene.groundPrimitives : scene.primitives).add(primitive);
-      // Fewer lines cast than last time: the caster has dropped heights this
-      // tile used (a full cache), so it must be cast again.
-      if (cast < (entry.castLines || 0)) entry.castRequested = false;
-      entry.castLines = cast;
-      entry.drapedLines = draped.length;
-      if (draped.length) castTile(entry);
+      for (const { primitive } of entry.primitives)
+        scene.groundPrimitives.add(primitive);
       watchSelection();
     } else {
       const { collection, points } = buildOverviewCollection(entry.points);
@@ -465,23 +215,15 @@ export function createCoverage({ state, source }) {
     }
   }
 
-  function removePrimitives(list) {
+  function detachPrimitive(entry) {
     const scene = state.viewer?.scene;
-    for (const { primitive, onGround } of list || []) {
+    for (const { primitive } of entry.primitives || []) {
       try {
-        (onGround ? scene?.groundPrimitives : scene?.primitives)?.remove(
-          primitive,
-        );
+        scene?.groundPrimitives?.remove(primitive);
       } catch {
         /* already gone */
       }
     }
-  }
-
-  function detachPrimitive(entry) {
-    const scene = state.viewer?.scene;
-    finishSwap(entry);
-    removePrimitives(entry.primitives);
     entry.primitives = [];
     if (entry.primitive) {
       try {
@@ -494,16 +236,9 @@ export function createCoverage({ state, source }) {
     }
   }
 
-  /** Stop a tile's pending terrain lookup (tile dropped or retired). */
-  function cancelCast(entry) {
-    entry.castAbort?.abort();
-    entry.castAbort = null;
-  }
-
   function removeTile(key) {
     const entry = state.coverage.tiles.get(key);
     if (!entry) return;
-    cancelCast(entry);
     detachPrimitive(entry);
     state.coverage.tiles.delete(key);
   }
@@ -630,7 +365,6 @@ export function createCoverage({ state, source }) {
       controller.abort();
     state.coverage.pending.clear();
     for (const [key, entry] of state.coverage.tiles) {
-      cancelCast(entry);
       const previous = state.coverage.stale.get(key);
       if (previous) detachPrimitive(previous);
       state.coverage.stale.set(key, entry);
@@ -659,9 +393,7 @@ export function createCoverage({ state, source }) {
     if (!viewer || !state.context.isActive() || state.keyRequired) return;
     if (state.statusKnown === false) return;
     if (state.keyRejected || state.coverage.holdUntil > Date.now()) return;
-    const ground = groundUnderCamera(viewer, {
-      groundAt: state.context.groundCaster?.groundAt,
-    });
+    const ground = groundUnderCamera(viewer);
     const cameraHeight = viewer.camera?.positionCartographic?.height;
     const height = Number.isFinite(cameraHeight)
       ? cameraHeight - (ground ?? 0)
@@ -671,7 +403,7 @@ export function createCoverage({ state, source }) {
     const zoom = sequenceZoom ?? overviewZoom;
     const kind = sequenceZoom ? 'sequence' : 'overview';
     // At street zooms the rays meet the ground where it really is (1,600 m up
-    // in Denver; Google 3D hides the globe) and stop short of the horizon.
+    // in Denver) and stop short of the horizon.
     const ranged =
       kind === 'sequence'
         ? {
@@ -723,13 +455,6 @@ export function createCoverage({ state, source }) {
       }
     for (const tile of tiles) loadTile(tile, kind);
     if (!state.coverage.pending.size) purgeStale();
-    // The camera moved: cells that were out of the sampler's range may not be,
-    // and lines left draped by a failed, partial or dropped cast get another try.
-    if (terrainMode())
-      for (const entry of state.coverage.tiles.values()) {
-        if (entry.castRequested) requestMesh(entry);
-        if (entry.drapedLines) castTile(entry, { retry: true });
-      }
     notify();
   }
 
@@ -767,9 +492,6 @@ export function createCoverage({ state, source }) {
     purgeStale();
     state.coverage.zoom = null;
     state.coverage.kind = null;
-    clearTimeout(state.coverage.remeshTimer);
-    state.coverage.remeshTimer = null;
-    state.coverage.remeshDirty.clear();
     stopSelectionWatch();
     horizon.stop();
     requestRender();
@@ -779,24 +501,11 @@ export function createCoverage({ state, source }) {
   function rebuild() {
     purgeStale();
     for (const entry of state.coverage.tiles.values()) {
-      cancelCast(entry);
-      entry.castRequested = false;
-      entry.meshParts = null;
       detachPrimitive(entry);
       attachPrimitive(entry);
     }
     requestRender();
     notify();
-  }
-
-  /**
-   * Redraw tiles draped or cast for the new surface mode, then re-pick the
-   * zoom, since the ground height under the camera may have changed.
-   */
-  function setSurface() {
-    if (!state.context.isActive()) return;
-    rebuild();
-    refresh();
   }
 
   /** Recolour every part of a sequence in one ready primitive. */
@@ -821,18 +530,12 @@ export function createCoverage({ state, source }) {
     return [...state.coverage.tiles.values(), ...state.coverage.stale.values()];
   }
 
-  /** A tile's primitives on the globe: its own, and the ones a swap still shows. */
-  function drawnRecords(entry) {
-    const records = entry.primitives || [];
-    return entry.swap ? [...records, ...entry.swap.old] : records;
-  }
-
   /** Recolour one sequence, every part of it, in place (selection highlight). */
   function recolorSequence(id, selected) {
     for (const entry of drawnEntries()) {
       const sequence = entry.sequences.get(id);
       if (!sequence) continue;
-      for (const record of drawnRecords(entry)) {
+      for (const record of entry.primitives || []) {
         // Still building: `syncSelection` catches it up once it is ready.
         if (!record.primitive.ready) continue;
         recolorInstances(record.primitive, sequence, selected);
@@ -874,9 +577,6 @@ export function createCoverage({ state, source }) {
           if (!record.primitive.ready) building = true;
           else if (syncSelection(entry, record)) changed = true;
         }
-        // Lines a swap still shows were ready (or never show): catch up only.
-        for (const record of entry.swap?.old || [])
-          if (syncSelection(entry, record)) changed = true;
       }
       if (changed) requestRender();
       if (!building) stopSelectionWatch();
@@ -910,7 +610,6 @@ export function createCoverage({ state, source }) {
     clear,
     resetErrors,
     rebuild,
-    setSurface,
     recolorSequence,
     sequenceCount,
   };

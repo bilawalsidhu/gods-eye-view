@@ -32,7 +32,7 @@ const { createMapillaryViewer } =
 
 /**
  * A viewer host over `adapter`. `marker` records where the position marker
- * was put (null once cleared), `followed` counts camera-follow updates and
+ * was put (null once cleared), `framing` counts framing calls and
  * `selected` every sequence the provider was asked to select.
  */
 function harness(adapter) {
@@ -40,7 +40,7 @@ function harness(adapter) {
     enabled: true,
     notify() {},
     providers: new Map(),
-    street: { host: {}, renderMode: 'letterbox', follow: false },
+    street: { host: {}, renderMode: 'letterbox' },
   };
   const def = { id: 'mapillary', name: 'Mapillary', label: 'MAPILLARY' };
   const selected = [];
@@ -56,25 +56,22 @@ function harness(adapter) {
   state.providers.set('mapillary', { def, instance });
   const framing = { begun: 0, started: 0, cancelled: 0 };
   const marker = [];
-  const followed = { count: 0 };
   const parts = {
     marker: {
       set: (position, bearing) =>
         marker.push(position && { position, bearing }),
       clear: () => marker.push(null),
     },
-    follow: {
-      followCamera: () => followed.count++,
-      beginFraming: () => ({ generation: ++framing.begun }),
-      lookAtPosition: (ticket) => ticket && framing.started++,
-      cancelFraming: () => framing.cancelled++,
+    framing: {
+      begin: () => ({ generation: ++framing.begun }),
+      frame: (ticket) => ticket && framing.started++,
+      cancel: () => framing.cancelled++,
     },
   };
   return {
     state,
     framing,
     marker,
-    followed,
     selected,
     /** Esc on the map: the provider drops its selected sequence. */
     clearSequence() {
@@ -258,24 +255,21 @@ test('switching the layer off and on during a cold first open keeps the shared v
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-test('every pose the viewer reports moves the marker and the followed camera', async () => {
+test('every pose the viewer reports moves the marker; only the open frames the camera', async () => {
   const adapter = fakeAdapter();
-  const { state, host, marker, followed } = harness(adapter);
+  const { host, marker, framing } = harness(adapter);
   await host.open('mapillary', 'a');
   assert.deepEqual(marker, [{ position: { lon: 1, lat: 2 }, bearing: 90 }]);
-  assert.equal(followed.count, 1);
-  // The user walks on, with FOLLOW on: the globe camera goes along.
-  state.street.follow = true;
+  // The user walks on: the marker goes along, the globe camera stays.
   adapter.emitPose('b', { position: { lon: 3, lat: 4 }, bearing: 180 });
   assert.deepEqual(marker.at(-1), {
     position: { lon: 3, lat: 4 },
     bearing: 180,
   });
-  assert.equal(followed.count, 2);
   // Looking around in place is a pose too.
   adapter.emitPose('b', { position: { lon: 3, lat: 4 }, bearing: 270 });
   assert.equal(marker.at(-1).bearing, 270);
-  assert.equal(followed.count, 3);
+  assert.deepEqual([framing.begun, framing.started], [1, 1]);
 });
 
 test('a pose on another sequence selects it, but not while the image still loads', async () => {
@@ -562,7 +556,7 @@ test('back-to-back Mapillary opens download only the newer image', async () => {
 test('a photo asks for the camera when it starts opening and frames with that ticket once loaded', async () => {
   const openGate = deferred();
   const adapter = fakeAdapter({ openGate });
-  const { state, host, framing } = harness(adapter);
+  const { host, framing } = harness(adapter);
   const opening = host.open('mapillary', 'a');
   assert.equal(framing.begun, 1, 'claimed before the download');
   await settle();
@@ -570,9 +564,4 @@ test('a photo asks for the camera when it starts opening and frames with that ti
   openGate.resolve();
   assert.equal(await opening, true);
   assert.equal(framing.started, 1);
-
-  // FOLLOW owns the camera already: an open neither claims nor frames.
-  state.street.follow = true;
-  assert.equal(await host.open('mapillary', 'b'), true);
-  assert.deepEqual([framing.begun, framing.started], [1, 1]);
 });

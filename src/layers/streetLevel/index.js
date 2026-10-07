@@ -1,6 +1,6 @@
 import { createState } from './state.js';
 import { createMarker } from './marker.js';
-import { createCameraFollow } from './cameraFollow.js';
+import { createCameraFraming } from './cameraFraming.js';
 import { createCredits } from './credits.js';
 import { createPickRouter } from './pickRouter.js';
 import { createSelection } from './selection.js';
@@ -9,14 +9,8 @@ import { requiresKeyIdFor, validateProviders } from './registry.js';
 import { normalizeFilter, resolveFilter, sameFilter } from './filter.js';
 import { decodeParams, encodeParams } from './params.js';
 import { composeUIState, summarizeCoverage } from './uiState.js';
-import { cameraHeightAboveGround, viewCentre, whenIdle } from './view.js';
-import { createGroundCaster, nextSurfaceMode } from './groundCast.js';
-import { createMeshSampler } from './meshSampler.js';
-
-/** Above this camera height the ground under the camera is not worth fetching. */
-const SURFACE_WARM_BELOW_M = 6000;
+import { viewCentre, whenIdle } from './view.js';
 import {
-  FOLLOW_MAP_STACK_ID,
   NEAREST_RADIUS_M,
   POSITION_PICK_ID,
   STREET_LEVEL_LAYER_ID,
@@ -37,22 +31,9 @@ export function createStreetLevelLayer({
   const state = createState({ services });
   const parts = {};
   const context = { state, parts };
-  parts.groundCaster = services.terrain?.resolveEllipsoidalGround
-    ? createGroundCaster({ terrain: services.terrain })
-    : null;
-  // Mesh samples follow the application's rules: a real bare-earth prior,
-  // its mesh window, and a tileset that has finished streaming.
-  parts.meshSampler = parts.groundCaster
-    ? createMeshSampler({
-        getViewer: () => state.viewer,
-        groundAt: parts.groundCaster.groundAt,
-        withinPrior: services.ground?.meshFloorSampleWithinPrior ?? null,
-        tilesReady: services.meshFloor?.visibleTilesetLoaded ?? null,
-      })
-    : null;
   parts.credits = createCredits();
   parts.marker = createMarker(context);
-  parts.follow = createCameraFollow(context);
+  parts.framing = createCameraFraming(context);
   parts.router = createPickRouter(() => state.providers.values(), {
     positionId: POSITION_PICK_ID,
   });
@@ -90,9 +71,6 @@ export function createStreetLevelLayer({
       services: state.services,
       getFilter: () => resolveFilter(state.filter),
       isActive: () => state.enabled && entry.on,
-      groundCaster: parts.groundCaster,
-      meshSampler: parts.meshSampler,
-      getSurface: () => state.surface,
       notify,
       actions: {
         openImage: (imageId) => openImage(entry.def.id, imageId),
@@ -126,85 +104,6 @@ export function createStreetLevelLayer({
     };
     entry.instance = def.create(providerContext(entry));
     state.providers.set(def.id, entry);
-  }
-
-  let mapStack = null;
-  let unsubscribeMapStack = null;
-
-  /** Follow is offered only on the Google 3D stack; leaving it stops following. */
-  function syncFollowAvailability() {
-    const available = mapStack?.getActiveId?.() === FOLLOW_MAP_STACK_ID;
-    if (available === state.street.followAvailable) return;
-    state.street.followAvailable = available;
-    if (!available && state.street.follow) parts.follow.setFollow(false);
-    notify();
-  }
-
-  /**
-   * Camera height above bare earth, for the surface mode. A cold grid cell is
-   * fetched once and the mode rechecked when it lands.
-   */
-  function cameraHeightForSurface() {
-    const carto = state.viewer?.camera?.positionCartographic;
-    if (!carto) return null;
-    const caster = parts.groundCaster;
-    const height = cameraHeightAboveGround(state.viewer, {
-      groundAt: caster.groundAt,
-    });
-    const lon = (carto.longitude * 180) / Math.PI;
-    const lat = (carto.latitude * 180) / Math.PI;
-    if (caster.groundAt(lon, lat) === null && height < SURFACE_WARM_BELOW_M)
-      caster.prepare([[lon, lat]]).then((ready) => {
-        if (ready) scheduleSurfaceSync();
-      });
-    return height;
-  }
-
-  /** Cast overlays to bare earth on Google 3D at street zoom; drape them elsewhere. */
-  function syncSurface() {
-    const available = Boolean(parts.groundCaster) && state.enabled;
-    const photoreal = mapStack?.getActiveId?.() === FOLLOW_MAP_STACK_ID;
-    const mode = nextSurfaceMode(state.surface, {
-      available,
-      photoreal,
-      heightM: available && photoreal ? cameraHeightForSurface() : null,
-    });
-    if (mode === state.surface) return;
-    state.surface = mode;
-    parts.meshSampler?.setEnabled(mode === 'terrain');
-    parts.marker.setSurface(mode);
-    for (const entry of state.providers.values())
-      entry.instance.setSurface?.(mode);
-    notify();
-  }
-
-  let surfaceTimer = null;
-  function scheduleSurfaceSync() {
-    clearTimeout(surfaceTimer);
-    surfaceTimer = setTimeout(syncSurface, 150);
-  }
-
-  let removeSurfaceListeners = null;
-  function watchSurface(viewer) {
-    removeSurfaceListeners?.();
-    const camera = viewer?.camera;
-    if (!camera?.changed || !camera?.moveEnd) {
-      removeSurfaceListeners = null;
-      return;
-    }
-    const removeChanged = camera.changed.addEventListener(scheduleSurfaceSync);
-    const removeEnd = camera.moveEnd.addEventListener(scheduleSurfaceSync);
-    removeSurfaceListeners = () => {
-      removeChanged();
-      removeEnd();
-    };
-  }
-
-  function unwatchSurface() {
-    removeSurfaceListeners?.();
-    removeSurfaceListeners = null;
-    clearTimeout(surfaceTimer);
-    surfaceTimer = null;
   }
 
   const activeEntries = () =>
@@ -319,7 +218,6 @@ export function createStreetLevelLayer({
       providers: providerSnapshots(),
       street,
       sequence: sequenceSnapshot(),
-      surface: state.surface,
     });
   }
 
@@ -354,18 +252,14 @@ export function createStreetLevelLayer({
       parts.marker.setVisible(true);
       parts.selection.install(viewer);
       for (const entry of activeEntries()) activate(entry);
-      watchSurface(viewer);
-      syncSurface();
       notify();
     },
 
     disable() {
       state.enabled = false;
       abortNearest();
-      unwatchSurface();
       parts.viewerHost.unmount();
       for (const entry of state.providers.values()) entry.instance.deactivate();
-      syncSurface();
       parts.credits.hideAll(state.viewer);
       parts.selection.uninstall();
       parts.marker.setVisible(false);
@@ -381,11 +275,7 @@ export function createStreetLevelLayer({
       for (const entry of state.providers.values())
         entry.instance.destroy(viewer);
       parts.marker.destroy(viewer);
-      parts.meshSampler?.destroy();
-      parts.follow.destroy();
-      unsubscribeMapStack?.();
-      unsubscribeMapStack = null;
-      mapStack = null;
+      parts.framing.attachNavigation(null);
       state.listeners.clear();
       state.viewer = null;
       state.initialized = false;
@@ -414,27 +304,12 @@ export function createStreetLevelLayer({
     },
 
     /**
-     * The application's camera authority: `run(noun, move)`, the deferred
-     * `begin(noun)` / `reassert(generation)` pair and
-     * `subscribeHandoff(listener)`. FOLLOW claims the camera with `run`; a
-     * photo claims it when opening starts and frames only if it still owns
-     * it once loaded. FOLLOW stops when another feature takes the camera.
+     * The application's camera authority, the deferred `begin(noun)` /
+     * `reassert(generation)` pair: a photo claims the camera when opening
+     * starts and frames only if it still owns it once loaded.
      */
     attachNavigation(navigation) {
-      parts.follow.attachNavigation(navigation);
-    },
-
-    /** The application map stack; FOLLOW is available only on Google 3D. */
-    attachMapStackController(controller) {
-      unsubscribeMapStack?.();
-      mapStack = controller || null;
-      unsubscribeMapStack =
-        mapStack?.subscribe?.(() => {
-          syncFollowAvailability();
-          syncSurface();
-        }) || null;
-      syncFollowAvailability();
-      syncSurface();
+      parts.framing.attachNavigation(navigation);
     },
 
     /** Share-link and stored state: provider switches plus the filter. */
@@ -523,7 +398,6 @@ export function createStreetLevelLayer({
       parts.clearSequences();
     },
     setViewerRenderMode: (mode) => parts.viewerHost.setRenderMode(mode),
-    setFollow: (enabled) => parts.follow.setFollow(enabled),
     resizeViewer: () => parts.viewerHost.resize(),
     selectSequence(
       sequenceId,

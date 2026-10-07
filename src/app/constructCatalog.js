@@ -152,7 +152,6 @@ export function createApplicationCatalog({
         }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         createApplicationStreetLevel({
-          surface,
           sources: { mapillary: sources.mapillary },
         }),
         satellites,

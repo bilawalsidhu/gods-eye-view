@@ -938,13 +938,11 @@ export class StyleManager extends ShellFacade {
     this._streetLevelControls?.destroy();
     this._streetLevelControls = null;
     if (!this._streetLevelPanel || !streetLevelLayer) return;
-    // Photo framing and FOLLOW release tracking like any explicit flight.
+    // Photo framing yields to newer navigation and releases tracking like
+    // any deferred flight.
     streetLevelLayer.attachNavigation?.({
-      run: (noun, move) => this._runExplicitNavigation(noun, move),
       begin: (noun) => this._beginDeferredNavigation(noun),
       reassert: (generation) => this._reassertNavigationHandoff(generation),
-      subscribeHandoff: (listener) =>
-        this._navigation.subscribeCameraHandoff(listener),
     });
     this._streetLevelControls = new StreetLevelControls({
       root: this._streetLevelPanel,

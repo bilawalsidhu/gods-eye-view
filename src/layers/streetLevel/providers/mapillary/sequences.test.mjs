@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
-import { MESH_CELL_DEG } from '../../meshSampler.js';
 import { createSequences } from './sequences.js';
 
 // The cone glyphs draw on a canvas; Node has none, so any drawing is a no-op.
@@ -66,9 +65,6 @@ function setup() {
     context: {
       notify() {},
       getFilter: () => ({ pano: 'all', sinceMs: null }),
-      getSurface: () => 'draped',
-      groundCaster: null,
-      meshSampler: null,
       actions: { reportError: (message) => errors.push(message) },
     },
     sequence: {
@@ -173,112 +169,17 @@ test('clearSelection cancels the lookup and uncolours the sequence', async () =>
   assert.deepEqual(drawn(), [], 'the late answer draws nothing');
 });
 
-/**
- * Terrain mode with bare earth at 10 m, a mesh sampler the test drives, and
- * cones that log every change made to them.
- */
-function terrainSetup() {
-  const context = setup();
-  const { state } = context;
-  const mesh = new Map();
-  const cell = (lon, lat) =>
-    `${Math.round(lon / MESH_CELL_DEG)},${Math.round(lat / MESH_CELL_DEG)}`;
-  let announce = null;
-  state.context.getSurface = () => 'terrain';
-  state.context.groundCaster = {
-    groundAt: () => 10,
-    prepare: async () => true,
-  };
-  state.context.meshSampler = {
-    request() {},
-    meshAt: (lon, lat) => mesh.get(cell(lon, lat)),
-    onSampled: (listener) => {
-      announce = listener;
-      return () => (announce = null);
-    },
-  };
-  const changes = [];
-  const items = [];
-  state.sequence.collection = {
-    items,
-    show: true,
-    add(options) {
-      changes.push(['add', options.id]);
-      const cone = new Proxy(options, {
-        set(target, key, value) {
-          changes.push([key, target.id]);
-          target[key] = value;
-          return true;
-        },
-      });
-      items.push(cone);
-      return cone;
-    },
-    removeAll() {
-      changes.push(['removeAll']);
-      items.length = 0;
-    },
-  };
-  // Created again, so it listens to this sampler.
-  const sequences = createSequences({
-    state,
-    source: context.source,
-    parts: { coverage: { recolorSequence() {} } },
-  });
-  /** Sample the mesh under a point, then announce it as the sampler does. */
-  function sample(lon, lat, height) {
-    const centre = [
-      Math.round(lon / MESH_CELL_DEG) * MESH_CELL_DEG,
-      Math.round(lat / MESH_CELL_DEG) * MESH_CELL_DEG,
-    ];
-    mesh.set(cell(lon, lat), height);
-    announce([centre]);
+test('cones are clamped to the ground and turned to their compass angle', async () => {
+  const { state, source, sequences } = setup();
+  sequences.select('A');
+  source.last('A').resolve(records('A', 2));
+  await settle();
+  const items = state.sequence.collection.items;
+  assert.equal(items.length, 2);
+  for (const cone of items) {
+    assert.equal(cone.heightReference, Cesium.HeightReference.CLAMP_TO_GROUND);
+    assert.equal(cone.rotation, -Cesium.Math.toRadians(90));
   }
-  const heightOf = (cone) =>
-    Cesium.Cartographic.fromCartesian(cone.position).height;
-  return { ...context, sequences, changes, items, sample, heightOf };
-}
-
-test('a mesh sample away from the selected sequence changes no cone', async () => {
-  const { source, sequences, changes, items, sample } = terrainSetup();
-  sequences.select('A');
-  source.last('A').resolve(records('A', 3));
-  await settle();
-  assert.equal(items.length, 3);
-  changes.length = 0;
-  sample(-121.3, 38.7, 12); // a street elsewhere in the tile
-  assert.deepEqual(changes, [], 'nothing rebuilt or moved');
-});
-
-test('a mesh sample under a cone moves that cone in place, and no other', async () => {
-  const { source, sequences, changes, items, sample, heightOf } =
-    terrainSetup();
-  sequences.select('A');
-  source.last('A').resolve(records('A', 3));
-  await settle();
-  const before = items.map(heightOf);
-  changes.length = 0;
-  // The road under the second image is 2.5 m above the bare earth.
-  sample(-121.489, 38.58, 12.5);
-  assert.ok(
-    changes.every(([, id]) => id === 'mly:img:A-1'),
-    `only A-1 changed: ${JSON.stringify(changes)}`,
-  );
-  assert.ok(
-    changes.some(([key]) => key === 'position'),
-    'A-1 moved',
-  );
-  assert.equal(
-    changes.some(([key]) => key === 'removeAll' || key === 'add'),
-    false,
-    'the collection is not rebuilt',
-  );
-  const after = items.map(heightOf);
-  assert.ok(
-    Math.abs(after[1] - 13.5) < 0.01,
-    `A-1 stands on the road (${after[1]})`,
-  );
-  assert.deepEqual([after[0], after[2]], [before[0], before[2]]);
 });
 
 test('cones behind the globe are hidden, and show again from the other side', async () => {

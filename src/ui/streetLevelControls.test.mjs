@@ -394,7 +394,6 @@ function uiState({
       imageId: open ? 'img-1' : null,
       error: null,
     },
-    surface: 'draped',
   };
 }
 

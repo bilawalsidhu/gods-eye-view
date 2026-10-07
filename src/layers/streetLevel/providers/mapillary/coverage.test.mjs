@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
-import {
-  SWAP_MAX_WAIT_MS,
-  createCoverage,
-  meshBoxInRange,
-} from './coverage.js';
+import { createCoverage } from './coverage.js';
 import { encodeCoverageTile } from './coverageFixture.mjs';
 import { rayCamera } from '../../../../testSupport/streetLevelFakes.mjs';
 import {
@@ -13,7 +9,6 @@ import {
   COVERAGE_MAX_SEQUENCES,
   COVERAGE_MAX_TILES,
 } from './policy.js';
-import { createGroundCaster } from '../../groundCast.js';
 import { lonToTileX, latToTileY, tileBounds } from '../../tileMath.js';
 
 const RAD = Math.PI / 180;
@@ -108,11 +103,7 @@ function deferredSource() {
   };
 }
 
-function setup({
-  surface = 'draped',
-  groundCaster = null,
-  meshSampler = null,
-} = {}) {
+function setup() {
   const centre = tileCentre(-121.4944, 38.5816);
   const viewer = fakeViewer({ lon: centre.lon, lat: centre.lat, height: 900 });
   const source = deferredSource();
@@ -125,9 +116,6 @@ function setup({
       getFilter: () => state.context.filter,
       isActive: () => true,
       notify() {},
-      getSurface: () => surface,
-      groundCaster,
-      meshSampler,
     },
     coverage: {
       zoom: null,
@@ -207,67 +195,19 @@ test('a superseded tile request cannot strand lines on the globe', async () => {
   assert.equal(onGlobe(), 0);
 });
 
-test('in terrain mode a tile draws draped, then swaps to cast lines without a blank frame', async () => {
-  let heightsReady = false;
-  const groundCaster = {
-    prepareLines: async () => {
-      heightsReady = true;
-      return true;
-    },
-    castLine: (coords) =>
-      heightsReady ? coords.flatMap(([lon, lat]) => [lon, lat, 30]) : null,
-  };
-  const { viewer, source, coverage, bytes, onGlobe } = setup({
-    surface: 'terrain',
-    groundCaster,
-  });
+test('sequence lines are draped on the globe and on 3D tiles alike', async () => {
+  const { viewer, source, coverage, bytes } = setup();
   coverage.refresh();
   source.calls[0].resolve(bytes);
-  await settle();
   await settle();
   const { groundPrimitives, primitives } = viewer.scene;
-  // Both are on the globe while the cast lines build: no blink.
-  assert.equal(groundPrimitives.items.size, 1, 'draped lines kept');
-  assert.equal(primitives.items.size, 1, 'cast lines added');
-  assert.ok(
-    [...primitives.items][0] instanceof Cesium.Primitive,
-    'cast lines are plain polylines at terrain height',
-  );
-  // Leaving mid-swap removes both sets, not just the new one.
+  assert.equal(primitives.items.size, 0);
+  assert.equal(groundPrimitives.items.size, 1);
+  const [line] = groundPrimitives.items;
+  assert.ok(line instanceof Cesium.GroundPolylinePrimitive);
+  assert.equal(line.classificationType, Cesium.ClassificationType.BOTH);
   coverage.clear();
-  assert.equal(onGlobe(), 0);
-  assert.equal(viewer.postRender.size, 0, 'the swap listener is gone');
-});
-
-test('a tile whose lines cannot be cast is not rebuilt for nothing', async () => {
-  let prepares = 0;
-  const groundCaster = {
-    prepareLines: async () => {
-      prepares++;
-      return false; // terrain proxy down, or tile too big
-    },
-    castLine: () => null,
-  };
-  const { viewer, source, coverage, bytes } = setup({
-    surface: 'terrain',
-    groundCaster,
-  });
-  const added = [];
-  const add = viewer.scene.groundPrimitives.add.bind(
-    viewer.scene.groundPrimitives,
-  );
-  viewer.scene.groundPrimitives.add = (primitive) => {
-    added.push(primitive);
-    return add(primitive);
-  };
-  coverage.refresh();
-  source.calls[0].resolve(bytes);
-  await settle();
-  await settle();
-  assert.equal(prepares, 1);
-  assert.equal(added.length, 1, 'drawn once, draped; no second draped build');
-  assert.equal(viewer.scene.primitives.items.size, 0);
-  coverage.clear();
+  assert.equal(groundPrimitives.items.size, 0);
 });
 
 test('panning off a tile that is still loading stops counting it as loading', async () => {
@@ -389,89 +329,6 @@ test('overview points behind the horizon are hidden, not drawn through the globe
   assert.equal(far.show, true);
   coverage.clear();
   assert.equal(viewer.preRender.size, 0, 'the cull listener is gone');
-});
-
-test('a cast tile whose heights were evicted is cast again, not left draped', async () => {
-  const terrain = {
-    calls: 0,
-    async resolveEllipsoidalGround(coords) {
-      this.calls++;
-      return coords.map(() => ({ ellipsoid: 20, source: 'reearth' }));
-    },
-  };
-  // Room for one tile's corners at a time.
-  const groundCaster = createGroundCaster({
-    terrain,
-    maxCorners: 16,
-    cacheMax: 20,
-  });
-  let sampled = null;
-  const meshSampler = {
-    onSampled: (listener) => (sampled = listener),
-    request() {},
-    meshAt: () => undefined,
-  };
-  const { source, state, coverage, bytes, centre } = setup({
-    surface: 'terrain',
-    groundCaster,
-    meshSampler,
-  });
-  const isCast = () => {
-    const [entry] = state.coverage.tiles.values();
-    return (
-      entry.primitives.length > 0 &&
-      entry.primitives.every(({ onGround }) => !onGround)
-    );
-  };
-  coverage.refresh();
-  source.calls[0].resolve(bytes);
-  await settle();
-  await settle();
-  assert.ok(isCast(), 'cast once the heights are in');
-  // Another region fills the cache and evicts this tile's corners...
-  await groundCaster.prepare([[centre.lon + 0.05, centre.lat + 0.05]]);
-  assert.equal(groundCaster.groundAt(centre.lon - 0.001, centre.lat), null);
-  // ...then mesh samples redraw the tile, which can only drape now.
-  sampled([[centre.lon, centre.lat]]);
-  await new Promise((resolve) => setTimeout(resolve, 5));
-  coverage.refresh();
-  await settle();
-  await settle();
-  assert.ok(isCast(), 'the tile is cast again');
-  coverage.clear();
-});
-
-test('a tile left draped by a failed terrain lookup is cast on the next refresh', async () => {
-  let up = false;
-  let prepares = 0;
-  let heightsReady = false;
-  const groundCaster = {
-    prepareLines: async () => {
-      prepares++;
-      heightsReady = up;
-      return up;
-    },
-    castLine: (coords) =>
-      heightsReady ? coords.flatMap(([lon, lat]) => [lon, lat, 30]) : null,
-  };
-  const { viewer, source, coverage, bytes } = setup({
-    surface: 'terrain',
-    groundCaster,
-  });
-  coverage.refresh();
-  source.calls[0].resolve(bytes);
-  await settle();
-  await settle();
-  assert.equal(prepares, 1);
-  assert.equal(viewer.scene.primitives.items.size, 0, 'draped');
-  await settle();
-  assert.equal(prepares, 1, 'no retry loop while the proxy is down');
-  up = true; // the proxy is back
-  coverage.refresh();
-  await settle();
-  assert.equal(prepares, 2, 'the next refresh tries again');
-  assert.equal(viewer.scene.primitives.items.size, 1, 'cast lines added');
-  coverage.clear();
 });
 
 test('the per-tile cap applies after the imagery filter, so a dense tile keeps its 360° lines', async () => {
@@ -598,54 +455,6 @@ test('a sequence that crosses a tile edge is counted once', async () => {
   coverage.clear();
 });
 
-/** A terrain-mode tile mid-swap, with a cast primitive the test readies. */
-async function midSwap() {
-  // Drawn draped first; castLine only answers once the heights are in.
-  let heightsReady = false;
-  const groundCaster = {
-    prepareLines: async () => (heightsReady = true),
-    castLine: (coords) =>
-      heightsReady ? coords.flatMap(([lon, lat]) => [lon, lat, 30]) : null,
-  };
-  const context = setup({ surface: 'terrain', groundCaster });
-  context.coverage.refresh();
-  context.source.calls[0].resolve(context.bytes);
-  await settle();
-  await settle();
-  const { groundPrimitives, primitives } = context.viewer.scene;
-  assert.equal(groundPrimitives.items.size, 1, 'draped lines kept');
-  assert.equal(primitives.items.size, 1, 'cast lines building');
-  const [cast] = primitives.items;
-  const control = { ready: false };
-  Object.defineProperty(cast, 'ready', { get: () => control.ready });
-  return { ...context, control };
-}
-
-test('the draped lines go once the cast lines are ready', async () => {
-  const { viewer, coverage, control } = await midSwap();
-  frame(viewer.postRender);
-  assert.equal(viewer.scene.groundPrimitives.items.size, 1, 'still building');
-  control.ready = true;
-  frame(viewer.postRender);
-  assert.equal(viewer.scene.groundPrimitives.items.size, 0, 'draped removed');
-  assert.equal(viewer.scene.primitives.items.size, 1, 'cast lines stay');
-  assert.equal(viewer.postRender.size, 0, 'nothing left watching');
-  coverage.clear();
-});
-
-test('the draped lines go after the wait even if the cast lines never get ready', async (t) => {
-  t.mock.timers.enable({ apis: ['Date'] });
-  const { viewer, coverage } = await midSwap();
-  t.mock.timers.tick(SWAP_MAX_WAIT_MS - 1);
-  frame(viewer.postRender);
-  assert.equal(viewer.scene.groundPrimitives.items.size, 1, 'still waiting');
-  t.mock.timers.tick(2);
-  frame(viewer.postRender);
-  assert.equal(viewer.scene.groundPrimitives.items.size, 0, 'draped removed');
-  assert.equal(viewer.scene.primitives.items.size, 1);
-  coverage.clear();
-});
-
 /** A camera over a 100×100 canvas with a 60°×40° view (see rayCamera). */
 function tiltedCamera({ lon, lat, height, heading, pitch }) {
   return rayCamera({
@@ -663,7 +472,7 @@ function tiltedCamera({ lon, lat, height, heading, pitch }) {
 
 /**
  * Denver: 300 m above a street 1,600 m up, at a z14 tile centre, looking east
- * at ground `aheadM` metres out. Only the bare-earth caster knows the ground.
+ * at ground `aheadM` metres out; the globe terrain knows the ground.
  */
 function denverStreetView(aheadM) {
   const z = 14;
@@ -674,7 +483,12 @@ function denverStreetView(aheadM) {
   const lat = (tile.south + tile.north) / 2;
   const ground = 1600;
   const above = 300;
-  const context = setup({ groundCaster: { groundAt: () => ground } });
+  const context = setup();
+  context.viewer.scene.globe = {
+    show: true,
+    ellipsoid: Cesium.Ellipsoid.WGS84,
+    getHeight: () => ground,
+  };
   const tileWidthM = (tile.east - tile.west) * 111_320 * Math.cos(lat * RAD);
   context.viewer.camera = tiltedCamera({
     lon,
@@ -780,66 +594,6 @@ test('a selection made while the old zoom is still building is applied once it i
   assert.equal(viewer.postRender.size, 0, 'the selection watch is gone');
 });
 
-test('only lines within the mesh sampler range of the camera are asked for', async () => {
-  let heightsReady = false;
-  const groundCaster = {
-    prepareLines: async () => (heightsReady = true),
-    castLine: (coords) =>
-      heightsReady ? coords.flatMap(([lon, lat]) => [lon, lat, 30]) : null,
-  };
-  const requested = [];
-  const meshSampler = {
-    onSampled() {},
-    request: (points) => requested.push(...points),
-    meshAt: () => undefined,
-  };
-  const { source, coverage, centre } = setup({
-    surface: 'terrain',
-    groundCaster,
-    meshSampler,
-  });
-  const { east, north } = tileBounds(centre.tile.x, centre.tile.y, 14);
-  coverage.refresh();
-  source.calls[0].resolve(
-    encodeCoverageTile(centre.tile, {
-      sequences: [
-        {
-          id: 'here',
-          parts: [
-            [
-              [centre.lon - 0.001, centre.lat],
-              [centre.lon + 0.001, centre.lat],
-            ],
-          ],
-        },
-        // ~1.1 km from the camera, in the tile's north-east corner.
-        {
-          id: 'corner',
-          parts: [
-            [
-              [east - 0.002, north - 0.002],
-              [east - 0.0005, north - 0.0005],
-            ],
-          ],
-        },
-      ],
-    }),
-  );
-  await settle();
-  await settle();
-  assert.ok(requested.length > 0, 'the near line is asked for');
-  const farthest = Math.max(
-    ...requested.map(([lon, lat]) =>
-      Math.hypot(
-        (lon - centre.lon) * 111_320 * Math.cos(centre.lat * RAD),
-        (lat - centre.lat) * 110_540,
-      ),
-    ),
-  );
-  assert.ok(farthest < 200, `nothing from the corner (${farthest} m)`);
-  coverage.clear();
-});
-
 test('the old zoom goes as soon as the new zoom has loaded, not after the stale wait', async () => {
   const { viewer, source, state, coverage, bytes } = setup();
   coverage.refresh();
@@ -894,19 +648,6 @@ test('a rate limit holds every refresh inside its wait, not only the first', asy
   coverage.resetErrors();
 });
 
-test('a line across the date line from the camera is in mesh range', () => {
-  // A z14 tile's width of lines just past -180, the camera 111 m short of it.
-  const camera = { lon: 179.999, lat: 0 };
-  const east = { west: -180, east: -179.978, south: -0.001, north: 0.001 };
-  assert.equal(meshBoxInRange(east, camera), true);
-  // The mirror case, from the other side.
-  const west = { west: 179.978, east: 180, south: -0.001, north: 0.001 };
-  assert.equal(meshBoxInRange(west, { lon: -179.999, lat: 0 }), true);
-  // ~2.2 km away across the line: out of range either way.
-  const far = { west: -179.99, east: -179.97, south: -0.001, north: 0.001 };
-  assert.equal(meshBoxInRange(far, camera), false);
-});
-
 test('a tile that fails before the terrain table loads is reported at once, never unhandled', async () => {
   const { source, state, coverage, tileKey } = setup();
   let terrainLoaded;
@@ -929,61 +670,4 @@ test('a tile that fails before the terrain table loads is reported at once, neve
     await settle();
     process.off('unhandledRejection', onUnhandled);
   }
-});
-
-test('lines a partial terrain lookup left draped are cast once the terrain recovers', async () => {
-  // Two lines: the west one's heights arrive, the east one's fail at first.
-  let eastUp = false;
-  let prepares = 0;
-  const groundCaster = {
-    prepareLines: async () => {
-      prepares++;
-      return eastUp;
-    },
-    castLine: (coords) =>
-      coords[0][0] < centreLon || eastUp
-        ? coords.flatMap(([lon, lat]) => [lon, lat, 30])
-        : null,
-  };
-  const { state, source, coverage, centre } = setup({
-    surface: 'terrain',
-    groundCaster,
-  });
-  const centreLon = centre.lon;
-  const line = (from, to) => [
-    [
-      [from, centre.lat],
-      [to, centre.lat],
-    ],
-  ];
-  coverage.refresh();
-  source.calls[0].resolve(
-    encodeCoverageTile(centre.tile, {
-      sequences: [
-        { id: 'west', parts: line(centre.lon - 0.002, centre.lon - 0.001) },
-        { id: 'east', parts: line(centre.lon + 0.001, centre.lon + 0.002) },
-      ],
-    }),
-  );
-  await settle();
-  await settle();
-  const [entry] = state.coverage.tiles.values();
-  assert.equal(prepares, 1);
-  assert.deepEqual([entry.castLines, entry.drapedLines], [1, 1], 'partial');
-  await settle();
-  assert.equal(prepares, 1, 'no retry loop while the lookup fails');
-
-  // A refresh while still failing asks again but rebuilds nothing.
-  const drawn = entry.primitives;
-  coverage.refresh();
-  await settle();
-  assert.equal(prepares, 2);
-  assert.equal(entry.primitives, drawn, 'no rebuild without new heights');
-
-  eastUp = true; // the terrain proxy recovers
-  coverage.refresh();
-  await settle();
-  assert.equal(prepares, 3, 'the next refresh tries the draped line again');
-  assert.deepEqual([entry.castLines, entry.drapedLines], [2, 0], 'all cast');
-  coverage.clear();
 });

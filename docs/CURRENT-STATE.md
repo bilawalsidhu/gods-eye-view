@@ -2952,33 +2952,23 @@ sequence lines below 60 km; the proxy strips the unused `image` layer from z14
 tiles (12 MB → ~80 KB) and shares one upstream fetch between concurrent
 requests for a tile.
 
-On Google 3D (`photoreal`) at street zoom (in below 1,400 m above ground, out
-above 1,800 m) the surface mode switches from `draped` to `terrain`: draped
-lines land on roofs and tree tops, so `groundCast.js` instead places lines,
-cones and the marker 2 m above the bare earth from `/api/terrain/heights`, and
-the mesh hides what is behind buildings and trees. A tile is drawn draped until
-its heights arrive; a geoid fallback leaves it draped. Within 900 m of the
-camera, `meshSampler.js` samples the rendered surface (`scene.sampleHeight`,
-~11 m cells, nearest first, 6 ms idle budget) so lines also follow trenches,
-steep streets and roads under trees. It uses the mesh floor's rules (the
-visible tileset has finished streaming, a real bare-earth prior, the shared
-mesh window) and probes a cell again once the camera is half as far from it,
-down to 40 m, so coarse early samples are replaced as finer tiles load. A
-failed probe keeps the last good sample and distance and is retried after the
-miss cooldown. Roads on elevated decks are still drawn at
-ground level. Framing a photo ignores mesh samples far below the bare earth
-(unloaded tiles).
+Sequence lines are `GroundPolylinePrimitive`s with
+`ClassificationType.BOTH`, so they drape on the terrain globe and on Google 3D
+tiles alike (on 3D tiles they can land on roofs and tree tops). Cones and the
+photo marker are billboards clamped to the ground; they skip the depth test, so
+a horizon cull hides the ones behind the globe. Roads on elevated decks are
+drawn at ground level.
 
 The header pill is the only layer switch; switching on also turns back on a
 provider a share link or tool switched off. The viewer sits under the header
 with EXPAND, FIT/FILL and close above the image. EXPAND is the browser's
 Fullscreen API on the viewer element, which stays in the panel (Esc or SHRINK
-leaves; the button is hidden where the API is missing). There is no FOLLOW
-button; the layer's `setFollow` has no panel control. Camera moves go through
-the application's navigation (`attachNavigation`), which releases aircraft and
-satellite tracking and is refused in the cockpit; a photo takes a deferred
-ticket when it starts opening and frames only if nothing newer took the camera
-while it loaded. SINCE is a stepped slider whose readout names the
+leaves; the button is hidden where the API is missing). Opening a photo flies
+the globe camera once to frame it; there is no camera follow. The flight goes
+through the application's deferred navigation (`attachNavigation`: `begin` /
+`reassert`), which releases aircraft and satellite tracking and is refused in
+the cockpit; a photo takes its ticket when it starts opening and frames only
+if nothing newer took the camera while it loaded. SINCE is a stepped slider whose readout names the
 cut-off date. At phone width (≤720 px) the viewer height is derived from the
 rail band so the whole photo fits.
 

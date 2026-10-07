@@ -143,12 +143,6 @@ export function createMapillaryProvider({ source }) {
           parts.sequences.rerender();
         },
 
-        /** Core surface mode changed: redraw lines and cones draped or cast. */
-        setSurface() {
-          parts.coverage.setSurface();
-          parts.sequences.rerender();
-        },
-
         coverageStats() {
           return {
             count: parts.coverage.sequenceCount(),

@@ -2,12 +2,11 @@ import { FILTER_DEFAULT } from './policy.js';
 
 /**
  * The per-image fields of `state.street` with no image open; closing resets
- * exactly these (host, render mode and follow availability outlive an image).
+ * exactly these (host and render mode outlive an image).
  */
 export function freshStreet() {
   return {
     open: false,
-    follow: false,
     providerId: null,
     providerName: null,
     providerLabel: null,
@@ -43,15 +42,10 @@ export function createState({ services }) {
 
     street: {
       host: null,
-      /** Whether the active map stack allows following (Google 3D only). */
-      followAvailable: false,
       /** 'letterbox' shows the whole image; 'fill' crops it to the frame. */
       renderMode: 'letterbox',
       ...freshStreet(),
     },
-
-    /** 'terrain' on Google 3D at street zoom (overlays on the bare earth), else 'draped'. */
-    surface: 'draped',
 
     marker: { collection: null, billboard: null },
     clickHandler: null,

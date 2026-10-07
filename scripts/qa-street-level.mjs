@@ -45,14 +45,11 @@ export const VIEWPORTS = Object.freeze([
 export const EXPECTED_PROVIDERS = Object.freeze(['mapillary']);
 
 /**
- * Skips no setup can avoid: CI forks have no Google key, and live runs cannot
- * stage fixture-only cases. `no Mapillary key` is not accepted: CI's dummy
- * token runs the keyed flow, so a keyless strict run means that wiring broke.
+ * Skips no setup can avoid: live runs cannot stage fixture-only cases.
+ * `no Mapillary key` is not accepted: CI's dummy token runs the keyed flow,
+ * so a keyless strict run means that wiring broke.
  */
-export const STRICT_ALLOWED_SKIPS = Object.freeze([
-  'no Google 3D',
-  'fixtures only',
-]);
+export const STRICT_ALLOWED_SKIPS = Object.freeze(['fixtures only']);
 
 export function strictViolations(skips) {
   return skips.filter((skip) => !STRICT_ALLOWED_SKIPS.includes(skip.reason));
@@ -767,12 +764,6 @@ async function main() {
           page.evaluate(() =>
             window.__godsEyeView.mapStackController.getActiveId(),
           ),
-        photoreal: () =>
-          page.evaluate(() =>
-            window.__godsEyeView.mapStackController.isStackAvailable(
-              'photoreal',
-            ),
-          ),
         set: async (id) => {
           await page.evaluate(
             (stackId) =>
@@ -1041,7 +1032,6 @@ async function main() {
           const original = await stacks.active();
           // Draped lines on flat imagery: the line is where it is drawn.
           await stacks.set('esri-imagery');
-          await uiUntil((u) => u.surface === 'draped');
           await waitForCoverage(page);
           const target = fixtures ? PHOTO_SEQUENCE_ID : null;
           const along = Array.from({ length: 9 }, (_, i) => [
@@ -1293,49 +1283,6 @@ async function main() {
             `the camera never reached the photo (${Math.round(result.height)} m up)`,
           );
           assert.equal((await ui()).street.open, false);
-        },
-      );
-      await step(
-        'coverage sits on the bare earth on Google 3D and drapes elsewhere',
-        async ({ skip }) => {
-          const surface = () =>
-            page.evaluate(() => {
-              const u = window.__godsEyeView.dataManager.layers
-                .get('street-level')
-                .module.getUIState();
-              return { surface: u.surface, count: u.coverage.count };
-            });
-          const original = await stacks.active();
-          await stacks.set('esri-imagery');
-          await page.waitForFunction(
-            () =>
-              window.__godsEyeView.dataManager.layers
-                .get('street-level')
-                .module.getUIState().surface === 'draped',
-            { timeout: 10_000 },
-          );
-          const coverageLoaded = () =>
-            waitForCoverage(page, { timeout: 60_000 });
-          await coverageLoaded();
-          assert.equal((await surface()).surface, 'draped', 'draped on Esri');
-          if (await stacks.photoreal()) {
-            await stacks.set('photoreal');
-            await page.waitForFunction(
-              () =>
-                window.__godsEyeView.dataManager.layers
-                  .get('street-level')
-                  .module.getUIState().surface === 'terrain',
-              { timeout: 15_000 },
-            );
-            await coverageLoaded();
-            assert.equal((await surface()).surface, 'terrain');
-          } else {
-            console.log(
-              '  (Google 3D unavailable here: only the draped path ran)',
-            );
-            skip('no Google 3D');
-          }
-          await stacks.set(original);
         },
       );
       await step(

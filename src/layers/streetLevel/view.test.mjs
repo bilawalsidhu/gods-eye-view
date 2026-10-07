@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import {
-  cameraHeightAboveGround,
   createHorizonCull,
+  groundUnderCamera,
   metresBetween,
   viewCentre,
   viewFocus,
@@ -28,28 +28,22 @@ function viewer({ globeShown, globeHeight }) {
 
 test('a shown globe answers the ground under the camera', () => {
   assert.equal(
-    cameraHeightAboveGround(viewer({ globeShown: true, globeHeight: 1600 })),
-    300,
+    groundUnderCamera(viewer({ globeShown: true, globeHeight: 1600 })),
+    1600,
   );
 });
 
-test('a hidden globe (Google 3D) falls back to the bare-earth height', () => {
-  const calls = [];
-  const groundAt = (lon, lat) => {
-    calls.push([+lon.toFixed(2), +lat.toFixed(2)]);
-    return 1600;
-  };
+test('a hidden globe (Google 3D) or a missing sample gives no ground', () => {
   // A hidden globe's getHeight is ignored even when it returns a number.
-  const hidden = viewer({ globeShown: false, globeHeight: 0 });
-  assert.equal(cameraHeightAboveGround(hidden, { groundAt }), 300);
-  assert.deepEqual(calls, [[-104.99, 39.74]]);
-});
-
-test('with no ground sample the ellipsoidal height is used', () => {
-  const hidden = viewer({ globeShown: false, globeHeight: 0 });
-  assert.equal(cameraHeightAboveGround(hidden), 1900);
-  assert.equal(cameraHeightAboveGround(hidden, { groundAt: () => null }), 1900);
-  assert.equal(cameraHeightAboveGround({}), null);
+  assert.equal(
+    groundUnderCamera(viewer({ globeShown: false, globeHeight: 0 })),
+    null,
+  );
+  assert.equal(
+    groundUnderCamera(viewer({ globeShown: true, globeHeight: undefined })),
+    null,
+  );
+  assert.equal(groundUnderCamera({}), null);
 });
 
 /** A camera whose screen rays land on a grid of lon/lat points. */
@@ -285,7 +279,7 @@ function cullFrom(camera, points) {
 }
 
 test('cones and the marker stay visible on ground below the WGS84 ellipsoid', () => {
-  // NYC in FOLLOW: eye 2.4 m above ground at -22 m, a cone 10 m away.
+  // NYC at street level: eye 2.4 m above ground at -22 m, a cone 10 m away.
   assert.deepEqual(
     cullFrom([-74.006, 40.7128, -19.6], [[-74.006, 40.71289, -22]]),
     [true],

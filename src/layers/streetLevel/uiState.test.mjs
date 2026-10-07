@@ -137,15 +137,3 @@ test('a rejected key gates like a missing one and is named as rejected', () => {
     false,
   );
 });
-
-test('the surface mode defaults to draped and passes through', () => {
-  assert.equal(
-    composeUIState({ ...base, providers: [provider()] }).surface,
-    'draped',
-  );
-  assert.equal(
-    composeUIState({ ...base, providers: [provider()], surface: 'terrain' })
-      .surface,
-    'terrain',
-  );
-});

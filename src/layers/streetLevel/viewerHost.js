@@ -2,7 +2,7 @@ import { freshStreet } from './state.js';
 
 /**
  * Owns the panel's viewer element and the provider adapter mounted in it.
- * Adapter poses update `state.street`, the marker and the follow camera.
+ * Adapter poses update `state.street` and the marker.
  */
 export function createViewerHost({ state, parts }) {
   /** @type {{id: string, adapter: object, unsubscribe: () => void}|null} */
@@ -38,7 +38,6 @@ export function createViewerHost({ state, parts }) {
       externalUrl: pose.externalUrl || null,
     });
     parts.marker.set(state.street.position, state.street.bearing);
-    parts.follow.followCamera();
     // Select the sequence only once the image is on screen, so its lookup
     // never competes with the image download.
     if (!state.street.loading && state.street.sequenceId !== previousSequence)
@@ -101,7 +100,7 @@ export function createViewerHost({ state, parts }) {
   }
 
   /** Open an image: true once its first pose is in, false if it failed or was overtaken. */
-  async function open(providerId, imageId, { frame = true } = {}) {
+  async function open(providerId, imageId) {
     const entry = providerEntry(providerId);
     if (!entry || !imageId) return false;
     if (!state.street.host) {
@@ -114,8 +113,7 @@ export function createViewerHost({ state, parts }) {
     const seq = ++openSeq;
     const current = () => seq === openSeq;
     // Claimed now, honoured after loading only if nothing newer took the camera.
-    const ticket =
-      frame && !state.street.follow ? parts.follow.beginFraming() : null;
+    const ticket = parts.framing.begin();
     Object.assign(state.street, {
       loading: true,
       error: null,
@@ -130,7 +128,7 @@ export function createViewerHost({ state, parts }) {
       if (!current()) return false;
       await adapter.open(String(imageId));
       if (!current()) return false;
-      if (ticket && !state.street.follow) parts.follow.lookAtPosition(ticket);
+      if (ticket) parts.framing.frame(ticket);
     } catch (error) {
       if (current())
         state.street.error = error?.message || 'Image could not be opened';
@@ -146,7 +144,7 @@ export function createViewerHost({ state, parts }) {
   /** Close the image and stop any framing flight; the adapter stays warm. */
   function close() {
     openSeq++;
-    parts.follow.cancelFraming();
+    parts.framing.cancel();
     active?.adapter.close();
     Object.assign(state.street, freshStreet());
     parts.marker.clear();
