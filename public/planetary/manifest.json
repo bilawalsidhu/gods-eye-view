@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "note": "Original low-resolution NASA overview textures; no pixel edits. Spherical visualization, not quantitative surface analysis.",
+  "assets": [
+    {
+      "id": "moon",
+      "url": "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_2k.jpg",
+      "page": "https://svs.gsfc.nasa.gov/4720/",
+      "credit": "NASA/GSFC/SVS, Ernie Wright; LRO/LROC/LOLA teams",
+      "policy": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
+      "path": "/planetary/moon.jpg",
+      "bytes": 457942,
+      "sha256": "f7130a1822681fa7512d7dcfd40db8c10b9ba4f06777910348698260ed7a2170",
+      "width": 2048,
+      "height": 1024,
+      "retrievedAt": "2026-10-05"
+    },
+    {
+      "id": "mars",
+      "url": "https://assets.science.nasa.gov/content/dam/science/cds/3d/resources/image/mars/Mars.jpg",
+      "page": "https://science.nasa.gov/3d-resources/mars/",
+      "credit": "Courtesy NASA/JPL-Caltech; Viking images processed at USGS",
+      "policy": "https://www.jpl.nasa.gov/jpl-image-use-policy/",
+      "path": "/planetary/mars.jpg",
+      "bytes": 972896,
+      "sha256": "12ec6bf02ebd42a246edc778cb2ce8c595b4d9f0892badf0bfff8abb2303c780",
+      "width": 1440,
+      "height": 720,
+      "retrievedAt": "2026-10-05"
+    }
+  ]
+}

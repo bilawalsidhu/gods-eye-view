@@ -1,0 +1,168 @@
+/* Demon Forge is an intentionally isolated local case surface. It sits above
+   the globe chrome but has no visual or behavioral coupling to the map. */
+#area-open { position: fixed; top: 74px; right: 24px; z-index: 100; padding: 0.6rem; color: var(--text-primary); background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 8px; cursor: pointer; }
+body.ui-clean-view #area-open, body.recording-mode #area-open, body.cockpit-mode #area-open, body.embed-mode #area-open { display: none !important; }
+#area-dialog textarea { width: 100%; min-height: 5rem; background: var(--bg-dark); color: var(--text-primary); }
+#area-history pre { overflow-wrap: anywhere; }
+#area-dialog { font-size: 0.8rem; line-height: 1.45; }
+#area-dialog label:has([data-area-source]) { display: flex; align-items: center; gap: 0.6rem; padding: 0.35rem 0; }
+#area-dialog input[type="checkbox"] { width: 1rem; height: 1rem; min-height: 0; flex: 0 0 1rem; }
+#area-dialog a { color: #7edcef; }
+.area-historical-image { width: 100%; height: auto; max-height: 30rem; object-fit: contain; background: #05090c; }
+#demon-forge-open {
+  position: fixed;
+  top: 32px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: 36px;
+  min-width: 7.7rem;
+  padding: 0 0.75rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08rem;
+  transition: all var(--transition-fast);
+  outline: none;
+}
+
+#demon-forge-open:hover,
+#demon-forge-open:focus-visible {
+  border-color: var(--glass-border-hover);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.demon-forge-dialog {
+  position: fixed;
+  inset: 4.5rem 1.25rem 1.25rem auto;
+  z-index: 1200;
+  width: min(42rem, calc(100vw - 2.5rem));
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid rgba(255, 115, 79, 0.55);
+  border-radius: 0.9rem;
+  background: rgba(8, 12, 18, 0.97);
+  color: var(--text-primary);
+  box-shadow: 0 1.5rem 5rem rgba(0, 0, 0, 0.68), inset 0 0 2rem rgba(255, 81, 47, 0.05);
+  font-family: var(--font-mono);
+}
+
+.demon-forge-dialog[hidden] { display: none; }
+
+.demon-forge-header,
+.demon-forge-approval-row,
+.demon-forge-review-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.demon-forge-header h2 {
+  margin: 0.2rem 0 0;
+  color: #ff9b7b;
+  font-size: 1.35rem;
+  letter-spacing: 0.16rem;
+}
+
+.demon-forge-kicker,
+.demon-forge-dialog h3 {
+  color: rgba(255, 174, 147, 0.72);
+  font-size: 0.65rem;
+  letter-spacing: 0.1rem;
+}
+
+#demon-forge-description {
+  color: rgba(230, 240, 243, 0.78);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.demon-forge-status,
+.demon-forge-inline-status {
+  min-height: 1rem;
+  color: #7edcef;
+  font-size: 0.7rem;
+}
+
+.demon-forge-sections {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.demon-forge-sections section {
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 0.55rem;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.demon-forge-dialog form,
+.demon-forge-dialog label {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.demon-forge-dialog form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.demon-forge-dialog label { color: rgba(219, 234, 238, 0.74); font-size: 0.68rem; }
+
+.demon-forge-dialog input,
+.demon-forge-dialog select,
+.demon-forge-dialog button {
+  min-height: 2rem;
+  border: 1px solid rgba(126, 220, 239, 0.28);
+  border-radius: 0.35rem;
+  background: rgba(7, 17, 24, 0.9);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.demon-forge-dialog input,
+.demon-forge-dialog select { padding: 0 0.55rem; }
+.demon-forge-dialog button { padding: 0.35rem 0.65rem; cursor: pointer; }
+.demon-forge-dialog button:hover,
+.demon-forge-dialog button:focus-visible { border-color: #7edcef; outline: none; }
+.demon-forge-dialog button:disabled { cursor: not-allowed; opacity: 0.38; }
+
+.demon-forge-review-list,
+.demon-forge-ledger-output {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.7rem;
+}
+
+.demon-forge-personal-text {
+  min-height: 4rem;
+  max-height: 14rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: rgba(230, 240, 243, 0.86);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 680px) {
+  .demon-forge-dialog { inset: 4.5rem 0.5rem 0.5rem; width: auto; }
+  .demon-forge-dialog form { grid-template-columns: 1fr; }
+  .demon-forge-approval-row { align-items: stretch; flex-direction: column; }
+  #demon-forge-open { right: 8px; min-width: 2.4rem; max-width: 4.8rem; font-size: 0.48rem; }
+}
+
+
+body.ui-clean-view #demon-forge-open,
+body.recording-mode #demon-forge-open,
+body.cockpit-mode #demon-forge-open { display: none !important; }

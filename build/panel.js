@@ -26,6 +26,9 @@ export function panelBuildConfig(config) {
       cssCodeSplit: false,
       rollupOptions: {
         ...config.build?.rollupOptions,
+        // Inline panel output has one document; the standalone offline library
+        // is a separate multi-page build entry.
+        input: 'index.html',
         output: { inlineDynamicImports: true },
       },
     },

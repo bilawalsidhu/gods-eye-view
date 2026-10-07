@@ -34,6 +34,138 @@
 
   <!-- gev:template hud-loading -->
 
+  <button id="demon-forge-open" type="button" aria-controls="demon-forge-dialog" aria-expanded="false" title="Open the local Demon Forge workspace">
+    DEMON FORGE
+  </button>
+
+  <aside id="demon-forge-dialog" class="demon-forge-dialog" role="dialog" aria-modal="true" aria-labelledby="demon-forge-title" aria-describedby="demon-forge-description" tabindex="-1" hidden>
+    <header class="demon-forge-header">
+      <div>
+        <span class="demon-forge-kicker">ISOLATED LOCAL WORKSPACE</span>
+        <h2 id="demon-forge-title">DEMON FORGE</h2>
+      </div>
+      <button id="demon-forge-close" type="button" aria-label="Close and lock Demon Forge">CLOSE</button>
+    </header>
+    <p id="demon-forge-description">Local case workspace. No search or request is sent automatically.</p>
+    <p id="demon-forge-status" class="demon-forge-status" role="status" aria-live="polite">Workspace locked.</p>
+
+    <div class="demon-forge-sections">
+      <section aria-labelledby="demon-forge-authorization-title">
+        <h3 id="demon-forge-authorization-title">1 · AUTHORIZATION</h3>
+        <form id="demon-forge-unlock-form">
+          <label>Vault passphrase <input id="demon-forge-passphrase" name="passphrase" type="password" required autocomplete="current-password" /></label>
+          <button type="submit">AUTHENTICATE LOCAL VAULT</button>
+          <button id="demon-forge-lock" type="button">LOCK &amp; CLEAR</button>
+        </form>
+        <form id="demon-forge-case-form">
+          <label>Existing encrypted cases
+            <select id="demon-forge-existing-cases" aria-label="Existing encrypted cases"></select>
+          </label>
+          <button id="demon-forge-case-open" type="button" disabled>OPEN EXISTING CASE</button>
+          <label>Active opaque case ID <input id="demon-forge-case-id" readonly autocomplete="off" /></label>
+          <label>Local title <input id="demon-forge-case-title" autocomplete="off" /></label>
+          <label>Protected-person relationship
+            <select id="demon-forge-case-kind">
+              <option value="self">Self</option>
+              <option value="non_self">Signed mandate</option>
+            </select>
+          </label>
+          <label>Mandate signed at <input id="demon-forge-mandate-signed-at" type="datetime-local" /></label>
+          <label>Mandate validated at <input id="demon-forge-mandate-validated-at" type="datetime-local" /></label>
+          <label>Mandate expires at <input id="demon-forge-mandate-expires-at" type="datetime-local" /></label>
+          <label>Allowed source category
+            <select id="demon-forge-mandate-source-category">
+              <option value="social-profile">Social profile</option>
+            </select>
+          </label>
+          <label>Permitted actions (comma-separated) <input id="demon-forge-mandate-actions" value="erasure,correction,objection,account_closure,deindexing" autocomplete="off" /></label>
+          <button id="demon-forge-case-create" type="button">CREATE AUTHORIZED CASE</button>
+        </form>
+      </section>
+
+      <section aria-labelledby="demon-forge-import-title">
+        <h3 id="demon-forge-import-title">2 · IMPORT</h3>
+        <label>Local Social Analyzer JSON
+          <input id="demon-forge-import-file" type="file" accept="application/json" />
+        </label>
+        <p id="demon-forge-import-status" class="demon-forge-inline-status" aria-live="polite"></p>
+      </section>
+
+      <section aria-labelledby="demon-forge-review-title">
+        <h3 id="demon-forge-review-title">3 · REVIEW</h3>
+        <ul id="demon-forge-review-list" class="demon-forge-review-list"></ul>
+      </section>
+
+      <section aria-labelledby="demon-forge-draft-title">
+        <h3 id="demon-forge-draft-title">4 · DRAFT</h3>
+        <form id="demon-forge-draft-form">
+          <label>Draft language <select id="demon-forge-draft-language"><option value="en">English</option><option value="fr">Français</option></select></label>
+          <label>Action
+            <select id="demon-forge-action" name="action">
+              <option value="erasure">Erasure</option>
+              <option value="correction">Correction</option>
+              <option value="objection">Objection</option>
+              <option value="account_closure">Account closure</option>
+              <option value="deindexing">Deindexing</option>
+            </select>
+          </label>
+          <label>Controller name <input id="demon-forge-controller-name" name="controllerName" required /></label>
+          <label>HTTPS contact reference (unverified) <input id="demon-forge-contact-route" name="contactRoute" type="url" inputmode="url" required /></label>
+          <button type="submit">CREATE LOCAL DRAFT</button>
+        </form>
+        <pre id="demon-forge-draft-output" class="demon-forge-personal-text"></pre>
+        <div class="demon-forge-approval-row">
+          <label>Approver <input id="demon-forge-approval-actor" autocomplete="off" /></label>
+          <button id="demon-forge-approve" type="button" disabled>APPROVE DRAFT</button>
+          <button id="demon-forge-official-route" type="button" disabled>HANDOFF UNAVAILABLE — ROUTE UNVERIFIED</button>
+        </div>
+      </section>
+
+      <section aria-labelledby="demon-forge-ledger-title">
+        <h3 id="demon-forge-ledger-title">5 · LEDGER</h3>
+        <ol id="demon-forge-ledger-output" class="demon-forge-ledger-output"></ol>
+      </section>
+    </div>
+  </aside>
+
+  <button id="area-open" type="button" aria-controls="area-dialog">INVESTIGATE AREA</button>
+  <aside id="area-dialog" class="demon-forge-dialog" role="dialog" aria-modal="true" aria-labelledby="area-title-heading" hidden>
+    <header class="demon-forge-header"><h2 id="area-title-heading" data-area-copy="title"></h2><button id="area-close" type="button" data-area-copy="close"></button></header>
+    <label>Language / Langue <select id="area-language"><option value="en">English</option><option value="fr">Français</option></select></label>
+    <p data-area-copy="intro"></p><p id="area-status" role="status" aria-live="polite"></p>
+    <div class="demon-forge-sections">
+      <section><label>Vault passphrase / Phrase secrète <input id="area-passphrase" type="password" autocomplete="off" /></label><button id="area-unlock" type="button" data-area-copy="unlock"></button>
+      <label>Cases / Dossiers <select id="area-cases"></select></label><button id="area-case-open" type="button" data-area-copy="open"></button></section>
+      <section><label>Title / Titre <input id="area-title" maxlength="200" /></label>
+      <label>Latitude <input id="area-lat" type="number" min="-90" max="90" step="any" /></label><label>Longitude <input id="area-lon" type="number" min="-180" max="180" step="any" /></label>
+      <label>Radius / Rayon (km) <input id="area-radius" type="number" value="10" min="0.1" max="100" step="0.1" /></label>
+      <button id="area-use" type="button" data-area-copy="use"></button><button id="area-create" type="button" data-area-copy="create"></button></section>
+      <section><h3 data-area-copy="source"></h3><p data-area-copy="period"></p>
+      <label><input type="checkbox" data-area-source value="earthquakes" checked /> USGS earthquakes / Séismes (24 h, M2.5+)</label>
+      <label><input type="checkbox" data-area-source value="dams" checked /> OSM dams / Barrages</label>
+      <label><input type="checkbox" data-area-source value="datacenters" checked /> OSM datacenters / Centres de données</label>
+      <label><input type="checkbox" data-area-source value="imagery" /> NASA recent imagery / Images récentes (metadata only / métadonnées conservées)</label>
+      <button id="area-query" type="button" data-area-copy="query"></button></section>
+      <section><h3 data-area-copy="history"></h3><p data-area-copy="historyNote"></p>
+        <label>From / Début <input id="area-start-year" type="number" min="1982" value="1990" /></label><label>To / Fin <input id="area-end-year" type="number" min="1982" /></label>
+        <label>Year step / Pas annuel <select id="area-year-step"><option value="5">5 years / ans</option><option value="1">1 year / an</option><option value="10">10 years / ans</option></select></label>
+        <label>Max scene cloud / Nuages max (%) <input id="area-cloud-limit" type="number" min="0" max="100" value="30" /></label>
+        <button id="area-history-query" type="button" data-area-copy="historyQuery"></button>
+      </section>
+      <section><h3 data-area-copy="soil"></h3><p data-area-copy="soilNote"></p>
+        <label>Depth / Profondeur <select id="area-soil-depth"><option value="0-5cm">0–5 cm</option><option value="5-15cm">5–15 cm</option><option value="15-30cm">15–30 cm</option><option value="30-60cm">30–60 cm</option><option value="60-100cm">60–100 cm</option><option value="100-200cm">100–200 cm</option></select></label>
+        <button id="area-soil-query" type="button" data-area-copy="soilQuery"></button>
+      </section>
+      <section><label>Kind / Type <select id="area-kind"><option value="observation">Observation</option><option value="hypothesis">Hypothesis / Hypothèse</option><option value="contradiction">Contradiction</option><option value="note">Note</option><option value="manual-follow-up">Manual follow-up / Suivi manuel</option></select></label>
+      <label data-area-copy="note" for="area-note"></label><textarea id="area-note" maxlength="8000"></textarea>
+      <label>Confidence / Confiance <select id="area-confidence"><option value="unassessed">Unassessed / Non évaluée</option><option value="low">Low / Faible</option><option value="medium">Medium / Moyenne</option><option value="high">High / Élevée</option></select></label><p data-area-copy="confidence"></p>
+      <button id="area-save" type="button" data-area-copy="save"></button><ol id="area-history"></ol></section>
+      <section><label>Backup passphrase / Phrase de sauvegarde (12+ characters) <input id="area-backup-passphrase" type="password" autocomplete="off" /></label>
+      <button id="area-backup" type="button" data-area-copy="backup"></button><input id="area-restore-file" type="file" accept="application/json" aria-label="Encrypted backup / Sauvegarde chiffrée" /><button id="area-restore" type="button" data-area-copy="restore"></button>
+      <button id="area-remove" type="button" data-area-copy="remove"></button></section>
+    </div>
+  </aside>
   <script type="module" src="/src/main.js"></script>
+  <!-- gev:template discovery -->
 </body>
 </html>

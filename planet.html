@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>God's Eye View — Planetary atlas</title></head><body>
+ <main class="planet-layout"><section class="planet-view"><canvas id="planet-canvas" aria-label="Spherical planetary map" tabindex="0"></canvas><div id="planet-markers" class="planet-markers"></div><div class="planet-credit"><span id="planet-credit"></span> · <a id="planet-source" target="_blank" rel="noopener noreferrer" data-planet-copy="source"></a></div></section>
+ <aside class="planet-controls"><p class="planet-kicker">GOD'S EYE VIEW · MOON / MARS</p><h1 data-planet-copy="title"></h1><p data-planet-copy="intro"></p><p id="planet-status" role="status" aria-live="polite"></p>
+ <label>Language / Langue<select id="planet-language"><option value="en">English</option><option value="fr">Français</option></select></label><label>Body / Astre<select id="planet-body"><option value="moon">Moon / Lune</option><option value="mars">Mars</option></select></label>
+ <p id="planet-facts" class="planet-note"></p><p id="planet-map-note" class="planet-note"></p><button id="planet-overview" type="button" data-planet-copy="overview"></button>
+ <label>Sites / Lieux<select id="planet-sites"><option value="">—</option></select></label><h2 id="planet-card-title"></h2><p id="planet-description"></p><nav id="planet-links" aria-label="Site sources"></nav>
+ <label>Latitude<input id="planet-lat" type="number" min="-89" max="89" step="any"/></label><label>Longitude east / Est<input id="planet-lon" type="number" min="-360" max="360" step="any"/></label><button id="planet-focus" type="button" data-planet-copy="focus"></button>
+ <button id="planet-offline" type="button" data-planet-copy="offline"></button><a href="/discovery.html">Discovery library / Bibliothèque</a>
+ </aside></main><script type="module" src="/src/discovery/planet.js"></script>
+ </body></html>

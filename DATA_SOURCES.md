@@ -336,4 +336,44 @@ NOAA density imagery with the raw GLM product.
 
 ## In-app attribution
 
+### Independent planetary overview maps
+
+The original low-resolution Moon/Mars JPEGs in `public/planetary/` come from
+[NASA SVS CGI Moon Kit](https://svs.gsfc.nasa.gov/4720/) and
+[NASA Mars 3D image texture](https://science.nasa.gov/3d-resources/mars/).
+Credits are displayed on each view: NASA/GSFC/SVS, Ernie Wright and the
+LRO/LROC/LOLA teams for the Moon; Courtesy NASA/JPL-Caltech, Viking images processed
+at USGS for Mars. Preserve NASA/JPL media usage guidance and source captions;
+the MIT code license does not relicense the original images. No NASA/JPL logo or
+endorsement is used. Exact source URLs, retrieval date, dimensions and SHA-256
+hashes are recorded in the bundled manifest. These processed visual maps are not
+used for quantitative surface/mineral analysis. No Google imagery is cached.
+
+### Public discovery cards
+
+The small discovery starter contains CC0 structured labels/descriptions/claims
+and English/French article links from [Wikidata](https://www.wikidata.org/wiki/Help:Data_access).
+Every card records its QID, retrieved snapshot date and source revision. The
+editorial selection is not a global ranking. No Wikipedia article prose or
+Wikimedia media is bundled. Optional geographic lookup resolves at most ten
+Wikipedia page identifiers to Wikidata entities; biographies are excluded. The
+offline shell includes only local page/code/style assets and these public cards.
+Wikidata attribution is visible on cards and in the globe credit popover.
+
+### Area investigation science sources
+
+- **Historical Landsat Collection 2:** USGS scenes discovered through the public
+  [Planetary Computer catalogue](https://planetarycomputer.microsoft.com/docs/)
+  and fixed-provider image crops. Acquisition dates, scene-wide cloud percentage,
+  scene IDs and coverage limits accompany every sequence. USGS Landsat imagery is
+  public-domain data; retain USGS/provider attribution. No Google imagery is
+  cached, exported or analysed. Case backups retain metadata, not image pixels.
+- **ISRIC SoilGrids 2.0:** modeled ~250 m center-cell soil texture, six depth
+  intervals, mass percentages converted from g/kg and 5th/95th prediction
+  quantiles. Source attribution: ISRIC – World Soil Information, SoilGrids 2.0,
+  CC BY 4.0. Requests use fixed WMS property/statistic endpoints on
+  [maps.isric.org](https://maps.isric.org/); missing cells remain unknown. This
+  model is neither an area average nor a laboratory/mineral analysis. See
+  [properties, units and uncertainty](https://docs.isric.org/globaldata/soilgrids/SoilGrids_faqs_01.html).
+
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.

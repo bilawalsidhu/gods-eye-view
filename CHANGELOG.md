@@ -2,6 +2,42 @@
 
 ## [Unreleased]
 
+- Add exact-source/index/cache discovery lookup and opt-in metadata-only routing
+  observations. A read-only Parcimonia shadow probe preserves local constraints;
+  optional Jev/Laya/OpenJev transport contracts remain disabled and never auto-act.
+
+- Add independent Moon/Mars spherical overview pages with original small NASA
+  textures, body-specific site markers, coordinate picking and dedicated offline
+  caching. No terrestrial feeds, detailed elevation or mineral inference is used.
+
+- Add three local discovery learning journeys with previous/next steps and
+  snapshot-grounded quizzes. Study progress is separate from public card packs,
+  resets locally and is invalidated when the source revision/question changes.
+
+- Add a source-linked discovery library with 15 bilingual Earth/Moon/Mars cards,
+  local search, explicit geographic web lookup and public pack import/export.
+  A separate lightweight discovery page supports offline installation; planetary
+  cards stay separate from the Earth globe and vehicle cards describe families.
+
+- Add dated Landsat crop playback with year/cadence/cloud controls and explicit
+  missing frames, plus ISRIC SoilGrids center-cell texture percentages by depth
+  with prediction quantiles. Scientific metadata stays in encrypted area cases;
+  online image pixels are not included in case backups.
+
+- Extend Demon Forge with an independent encrypted area investigation workspace:
+  capture the observed globe center, query existing USGS/OSM/NASA tools, record
+  source provenance and evidence, and download/restore encrypted backups.
+  English/French area messages and English-default privacy drafts are available.
+  Personal case content is never passed to public-source queries.
+
+- Add Demon Forge, an optional local-first workspace for reviewing externally
+  generated Social Analyzer reports and preparing privacy-request drafts.
+  Cases use opaque IDs, encrypted local persistence and an append-only ledger;
+  non-self cases require a signed mandate with explicit source and action scope.
+  There is no automatic request submission. Browser handoff is disabled because
+  no verified source directory ships yet. France/EU-first draft text is not legal
+  advice. See [the local workflow](docs/DEMON-FORGE.md).
+
 - Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
   list is one keyless GeoJSON request to the agency's OGC API view of its
   DATEX 3.1 CCTV table, so no DATEX account is needed. Every working camera
@@ -1522,4 +1558,3 @@ represent previously published GitHub Releases.
 ## [0.1.0] — 2026-02-09
 
 - Initial project version.
-

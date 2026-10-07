@@ -92,6 +92,22 @@ export function hideOsmCredit(viewer, owner) {
 }
 
 export const DATA_CREDITS = [
+  {
+    key: 'planetary-overviews',
+    html: 'Independent planetary overviews: <a href="https://svs.gsfc.nasa.gov/4720/" target="_blank" rel="noopener">NASA/GSFC/SVS lunar color map</a> (Ernie Wright, LRO/LROC/LOLA teams) and <a href="https://science.nasa.gov/3d-resources/mars/" target="_blank" rel="noopener">NASA/JPL-Caltech Mars texture</a> (Viking images processed at USGS); credits and source-use guidance accompany the local maps',
+  },
+  {
+    key: 'discovery-wikidata',
+    html: 'Public discovery cards: structured data from <a href="https://www.wikidata.org" target="_blank" rel="noopener">Wikidata</a> (<a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">CC0</a>); source revisions and snapshot dates accompany each card',
+  },
+  {
+    key: 'area-landsat',
+    html: 'Historical area imagery: <a href="https://www.usgs.gov/landsat-missions/landsat-collection-2" target="_blank" rel="noopener">USGS Landsat Collection 2</a> (public domain), via Microsoft Planetary Computer',
+  },
+  {
+    key: 'area-soilgrids',
+    html: 'Soil texture predictions: <a href="https://www.isric.org/explore/soilgrids" target="_blank" rel="noopener">ISRIC – World Soil Information, SoilGrids 2.0</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)',
+  },
   // ── Live sources ────────────────────────────────────────────────
   {
     key: 'opensky',

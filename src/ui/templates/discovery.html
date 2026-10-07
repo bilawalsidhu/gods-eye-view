@@ -1,0 +1,30 @@
+  <button id="discovery-open" type="button" aria-controls="discovery-dialog" data-discovery-copy="open">DISCOVER</button>
+  <aside id="discovery-dialog" class="discovery-dialog" role="dialog" aria-modal="true" aria-labelledby="discovery-title" hidden>
+    <header class="discovery-header"><div><span class="discovery-kicker">GOD'S EYE VIEW · PUBLIC KNOWLEDGE</span><h2 id="discovery-title" data-discovery-copy="title"></h2></div><button id="discovery-close" type="button" data-discovery-copy="close"></button></header>
+    <p class="discovery-intro" data-discovery-copy="intro"></p>
+    <div class="discovery-toolbar">
+      <label>Language / Langue<select id="discovery-language"><option value="en">English</option><option value="fr">Français</option></select></label>
+      <label><span data-discovery-copy="body"></span><select id="discovery-body"><option value="earth">Earth / Terre</option><option value="moon">Moon / Lune</option><option value="mars">Mars</option></select></label>
+      <label><span data-discovery-copy="kind"></span><select id="discovery-kind"><option value="all">All / Tout</option><option value="place">Places / Lieux</option><option value="landmark">Monuments</option><option value="landform">Landforms / Reliefs</option><option value="vehicle-type">Vehicle types / Types de véhicules</option><option value="planetary-feature">Planetary features / Sites planétaires</option><option value="mission-site">Mission sites / Sites de missions</option></select></label>
+      <label class="discovery-search"><span data-discovery-copy="search"></span><input id="discovery-query" type="search" maxlength="200" autocomplete="off" /></label>
+    </div>
+    <p class="discovery-note" data-discovery-copy="world"></p>
+    <details class="discovery-options discovery-journeys"><summary data-discovery-copy="learn"></summary>
+      <div class="discovery-toolbar"><label><span data-discovery-copy="learn"></span><select id="discovery-journey"><option value=""></option><option value="monuments"></option><option value="other-worlds"></option><option value="aircraft-families"></option></select></label></div>
+      <p id="discovery-journey-description"></p><p id="discovery-journey-progress" class="discovery-count"></p>
+      <div class="discovery-actions"><button id="discovery-previous" type="button" data-discovery-copy="previous"></button><button id="discovery-next" type="button" data-discovery-copy="next"></button><button id="discovery-reset-learning" type="button" data-discovery-copy="resetLearning"></button></div>
+      <div id="discovery-quiz"></div>
+    </details>
+    <details class="discovery-options"><summary>Nearby &amp; sources / Proximité et sources</summary>
+      <div class="discovery-toolbar"><label>Latitude<input id="discovery-lat" type="number" min="-90" max="90" step="any" /></label><label>Longitude<input id="discovery-lon" type="number" min="-180" max="180" step="any" /></label><label><span data-discovery-copy="radius"></span><input id="discovery-radius" type="number" min="0.1" max="25000" step="0.1" value="10" /></label></div>
+      <div class="discovery-actions"><button id="discovery-nearby" type="button" data-discovery-copy="nearby"></button><button id="discovery-filter-coordinates" type="button" data-discovery-copy="filterCoordinates"></button><button id="discovery-clear" type="button" data-discovery-copy="clear"></button><button id="discovery-selected" type="button" data-discovery-copy="selected"></button></div>
+      <label class="discovery-consent"><input id="discovery-allow-web" type="checkbox" /><span data-discovery-copy="consent"></span></label><button id="discovery-web" type="button" data-discovery-copy="web"></button>
+    </details>
+    <p id="discovery-status" role="status" aria-live="polite"></p><p id="discovery-count" class="discovery-count"></p><p id="discovery-selection" class="discovery-note"></p>
+    <details class="discovery-options"><summary data-discovery-copy="routing"></summary>
+      <label class="discovery-consent"><input id="discovery-observe-routing" type="checkbox"/><span data-discovery-copy="observeRouting"></span></label><p class="discovery-note" data-discovery-copy="routingNote"></p>
+      <pre id="discovery-routing-summary" class="discovery-note" aria-live="polite"></pre><div class="discovery-actions"><button id="discovery-export-routing" type="button" data-discovery-copy="exportRouting"></button><button id="discovery-clear-routing" type="button" data-discovery-copy="clearRouting"></button></div>
+    </details>
+    <div id="discovery-list" class="discovery-list"></div>
+    <footer class="discovery-footer"><button id="discovery-export" type="button" data-discovery-copy="export"></button><label class="discovery-import"><span data-discovery-copy="import"></span><input id="discovery-import-file" type="file" accept="application/json" /></label><button id="discovery-reset" type="button" data-discovery-copy="reset"></button><button id="discovery-offline" type="button" data-discovery-copy="offline"></button><a href="/discovery.html">Offline page / Page hors ligne</a></footer>
+  </aside>
