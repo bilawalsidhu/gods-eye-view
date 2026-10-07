@@ -2928,10 +2928,78 @@ its criteria cannot be silently ignored.
 | Dams ▰                 | OpenInfraMap/OSM extract (bundled)                                                                                                                                                              | `src/data/localLayers.js`                             | —                                                        | static                                                                            |
 | Submarine Cables ◠     | TeleGeography public map (bundled)                                                                                                                                                              | `src/data/telegeographySubmarineCables.js`            | —                                                        | static                                                                            |
 | FIRMS Active Fires ▲   | NASA FIRMS live (VIIRS ×3 NRT + MODIS NRT, trailing 24h)                                                                                                                                        | `src/data/firmsHeatmap.js`                            | `/api/firms` (`FIRMS_MAP_KEY`)                           | 10 min (proxy TTL 30 min)                                                         |
+| Street Level 📷 | Street-level imagery; Mapillary is the first provider (vector tiles, Graph API, MapillaryJS) | `src/layers/streetLevel/` via `src/app/layers/streetLevel.js` | `/api/mapillary/status`, `/api/mapillary/tiles/coverage/{z}/{x}/{y}` (`MAPILLARY_CLIENT_TOKEN`) | camera-driven (320 ms debounce, ≤9 tiles, cached 24 h) |
 | Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
+
+Street Level is a collapsible right-rail panel (`#street-level-panel`, layer
+token `0`, option owner `street-level`, panel `ui` token `t`) that starts
+collapsed. It opens itself only when the user, voice or a tool switches the
+layer on or a photo opens, never on a restore, and those opens are not stored.
+Like the iD editor's photo overlay, it has one chip per registered provider,
+shared 360°/flat and captured-since filters (relative days, so a link keeps its
+meaning), one viewer host and one on-globe credit per active provider. Each
+provider draws in one colour (`PROVIDER_COLORS` in
+`src/layers/streetLevel/policy.js`); 360° cones are rings and the selected
+sequence is GEV cyan. Share options: `m` (Mapillary), `p` (`a`/`p`/`f`
+panoramas), `s` (since, days). Only Mapillary is registered. Without
+`MAPILLARY_CLIENT_TOKEN` the panel reads KEY REQUIRED and the controls are
+disabled. With it, coverage draws as z0–5 overview points from orbit and z11–14
+sequence lines below 60 km; the proxy strips the unused `image` layer from z14
+tiles (12 MB → ~80 KB) and shares one upstream fetch between concurrent
+requests for a tile.
+
+On Google 3D (`photoreal`) at street zoom (in below 1,400 m above ground, out
+above 1,800 m) the surface mode switches from `draped` to `terrain`: draped
+lines land on roofs and tree tops, so `groundCast.js` instead places lines,
+cones and the marker 2 m above the bare earth from `/api/terrain/heights`, and
+the mesh hides what is behind buildings and trees. A tile is drawn draped until
+its heights arrive; a geoid fallback leaves it draped. Within 900 m of the
+camera, `meshSampler.js` samples the rendered surface (`scene.sampleHeight`,
+~11 m cells, nearest first, 6 ms idle budget) so lines also follow trenches,
+steep streets and roads under trees. It uses the mesh floor's rules (the
+visible tileset has finished streaming, a real bare-earth prior, the shared
+mesh window) and probes a cell again once the camera is half as far from it,
+down to 40 m, so coarse early samples are replaced as finer tiles load. A
+failed probe keeps the last good sample and distance and is retried after the
+miss cooldown. Roads on elevated decks are still drawn at
+ground level. Framing a photo ignores mesh samples far below the bare earth
+(unloaded tiles).
+
+The header pill is the layer switch. With one provider its chip is a layer
+switch too; with several, darkening the last lit chip turns the layer off. The
+viewer sits under the header with EXPAND, FIT/FILL, FOLLOW and close above the
+image. FOLLOW needs the Google 3D map stack (`attachMapStackController`) and
+stops when the stack changes. Camera moves go through the application's
+navigation (`attachNavigation`), which releases aircraft and satellite tracking
+and is refused in the cockpit: turning FOLLOW on claims the camera at once, and
+FOLLOW stops when another feature takes it; a photo takes a deferred ticket
+when it starts opening and frames only if nothing newer took the camera while
+it loaded. SINCE is a stepped slider whose readout names the
+cut-off date. The panel is portable (`street-level-panel` spec, minimum
+320 × 280, `dockOnCollapse`): a floating window gives spare height to the
+viewer, and collapsing it, double-clicking the header or SHRINK after EXPAND
+docks it. At phone width (≤720 px) the viewer height is derived from the rail
+band so the whole photo fits.
+
+Providers implement the contract in `src/layers/streetLevel/registry.js`. The
+core routes clicks by pick prefix, swaps viewer adapters in the one host,
+manages each provider's credit and fans the filter out to every provider. To
+add a provider: implement the definition, register it in
+`src/app/layers/streetLevel.js`, add its boolean option to the `street-level`
+group in `src/data/layerState.js` and its modules to
+`scripts/package-boundaries.json`. Once a keyless provider registers, the
+layer's `requiresKeyId` becomes null and the key gate moves to the chips.
+
+Street Level has two browser gates. `npm run qa:street-level -- --url <server>`
+runs against real Mapillary and needs `MAPILLARY_CLIENT_TOKEN`. `npm run
+qa:street-level:fixtures -- --url <server>` answers every Mapillary request
+from fixtures (`providers/mapillary/coverageFixture.mjs`,
+`scripts/fixtures/street-level/`), so it needs no network and covers the whole
+photo flow. CI runs the fixture gate and `qa:panel-resize`
+against a production build served by `vite preview` with a dummy token.
 
 Directions is a keyless front end to the routing the voice agent already
 uses. Its row chips are the whole interface: DRIVE / WALK / BIKE pick the
@@ -3753,10 +3821,10 @@ and unreachable upstream (502/504) separately from road geometry.
   block its siblings.
 - Layer tokens are permanent public compatibility identifiers. The reservation
   JSON ledger at `src/data/layerStateTokenReservations.json` pins all existing
-  one-character assignments (all letters plus `1` and
+  one-character assignments (all letters plus `0`, `1` and
   `2` on current `main`) even if a layer is later removed. New layers allocate
-  the remaining unreserved single-character digits first (`0`, then `3`
-  through `9` on current `main`), then the next unreserved two-character
+  the remaining unreserved single-character digits first (`3` through `9` on
+  current `main`), then the next unreserved two-character
   base-36 token (`00` through `zz`) after rebasing onto the merge-time `main`;
   the dot-delimited v2 codec accepts both widths without changing existing
   links or the schema version. The contributor
@@ -4361,8 +4429,8 @@ easier to meet (detection is now on more often), but does not create it.
   samples and constant elevation during E/N drag; one shared-floor resolution on
   release; late one-shot shared-cell work is permitted during viewshed idle. The
   A+B harness intentionally excludes citywide LOD assertions.
-- Panel positions have a versioned storage name, `godsEyeView.v8.panelPos.<panel-id>`, but the current rails lay panels out adaptively and write none. Collapsed state does persist for every panel at `godsEyeView.v6.panelCollapsed.<panel-id>` (`'0'` open, `'1'` closed, absent means the panel's own default).
-- Legacy draggable-panel position keys may remain in local storage for backward compatibility, but the map-mode right rail ignores them; collapsed states still persist at `godsEyeView.v6.panelCollapsed.<panel-id>`.
+- Panel positions have a versioned storage name, `godsEyeView.v8.panelPos.<panel-id>`. Docked panels store nothing; a portable panel (CCTV, Street Level) stores `{ left, top, width, height, floating: true }` once a header drag lifts it out of the rail, and a header double-click removes it. Double presses are detected in the header's `pointerdown` handler, because its `preventDefault()` suppresses native `dblclick`. Collapsed state persists for every panel at `godsEyeView.v6.panelCollapsed.<panel-id>` (`'0'` open, `'1'` closed, absent means the panel's own default).
+- Legacy draggable-panel position keys may remain in local storage for backward compatibility, but the map-mode right rail ignores them unless they describe a portable panel's floating window; collapsed states still persist at `godsEyeView.v6.panelCollapsed.<panel-id>`.
 - Flight/military tracked entities cache dead-reckoned positions per frame to avoid callback desync flicker.
 - Aircraft 3D-model and tracking invariants are covered by `npm run test:track`; run this before touching `flights.js`, `militaryFlights.js`, `detection.js`, or `trackedReadout.js`.
 - Annotation resolver behavior is pinned by `src/annotations/annotationResolver.test.mjs`; re-run that suite before changing place-resolution scoring.

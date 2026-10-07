@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+- Street Level: a street-level imagery layer modelled on the iD editor's photo
+  overlay, with Mapillary as its first provider (free client token, CC BY-SA 4.0
+  imagery). One right-rail panel holds a chip per provider, shared 360°/flat and
+  captured-since filters, and an embedded viewer with EXPAND, FIT/FILL and
+  FOLLOW (Google 3D only). Coverage lines and image cones are drawn from orbit
+  down to a single street; on Google 3D they sit on the bare earth, refined
+  against the rendered mesh near the camera, so trees and buildings hide them.
+  Share links carry the provider switches, the filters and the panel's collapsed
+  state. A server proxy caches Mapillary coverage tiles (24 h, 1 GiB on disk),
+  refuses cross-site requests, rate-limits per IP and backs off when Mapillary
+  rejects the token or rate-limits.
+
+- The CCTV and Street Level panels are portable: drag the header to float the
+  panel, resize it from any edge or corner, and double-click the header to dock
+  it again. The position persists across reloads.
+
 - Give each Statens vegvesen camera its own ground height from Kartverket's
   keyless point-height API (CC BY 4.0) instead of one flat 150 m prior, so
   mountain-pass cameras no longer sit hundreds of metres below the terrain

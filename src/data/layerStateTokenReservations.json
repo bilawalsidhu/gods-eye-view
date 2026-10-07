@@ -19,6 +19,7 @@
   ["recent-imagery", "1"],
   ["rocket-launches", "x"],
   ["satellites", "s"],
+  ["street-level", "0"],
   ["telegeography-submarine-cables", "u"],
   ["traffic", "t"],
   ["transit", "j"],
