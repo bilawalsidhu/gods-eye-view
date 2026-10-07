@@ -202,7 +202,9 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .digest('hex')
     .slice(0, 16);
   // Analyst additions and ISS wording correction are explicitly excluded above; all other tool definitions retain their pin.
-  assert.equal(digest, '91935845ef2598b1', 'an unchanged Realtime tool definition drifted');
+  // Re-derived for the additive `local-airports` value in the
+  // show_data_layers_menu and get_entity_context layer enums.
+  assert.equal(digest, '483948d48f15454e', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {

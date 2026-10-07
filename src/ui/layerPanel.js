@@ -42,6 +42,7 @@ const PANEL_GROUPS = [
       'local-datacenters',
       'telegeography-submarine-cables',
       'local-dams',
+      'local-airports',
     ],
   },
   {

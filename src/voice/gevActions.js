@@ -214,6 +214,8 @@ const LAYER_ALIASES = new Map([
   ['data centers', 'local-datacenters'],
   ['data centres', 'local-datacenters'],
   ['dams', 'local-dams'],
+  ['airports', 'local-airports'],
+  ['airfields', 'local-airports'],
   ['submarine cables', 'telegeography-submarine-cables'],
   ['cables', 'telegeography-submarine-cables'],
   ['telegeography', 'telegeography-submarine-cables'],
@@ -4181,6 +4183,7 @@ function cleanText(value) {
 function layerTitle(layerId) {
   if (layerId === 'local-datacenters') return 'Datacenter';
   if (layerId === 'local-dams') return 'Dam';
+  if (layerId === 'local-airports') return 'Airport';
   if (layerId === 'telegeography-submarine-cables') return 'Submarine Cable';
   if (layerId === 'local-firms') return 'Active Fire';
   return layerId || 'Entity';
@@ -4256,7 +4259,14 @@ function analystProviders(
       });
     },
     getRecordCoverage(layerKey, rows) {
-      if (!['satellites', 'local-datacenters', 'local-dams'].includes(layerKey))
+      if (
+        ![
+          'satellites',
+          'local-datacenters',
+          'local-dams',
+          'local-airports',
+        ].includes(layerKey)
+      )
         return null;
       const module = dataManager.layers.get(layerKey)?.module;
       const loaded = module?.getStats?.().count;

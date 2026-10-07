@@ -86,6 +86,33 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
     if (river && river.toLocaleLowerCase() !== title.toLocaleLowerCase()) {
       details.push(clampCardLine(river));
     }
+  } else if (layerId === 'local-airports') {
+    const codes = [tags.icao, tags.iata, tags.operator]
+      .map(cleanLabel)
+      .filter(Boolean)
+      .join(' · ');
+    if (codes) details.push(clampCardLine(codes));
+    const status = cleanLabel(tags.status);
+    const kind = cleanLabel(tags['aerodrome:type']);
+    if (status)
+      details.push(
+        clampCardLine(
+          [
+            status[0].toLocaleUpperCase() + status.slice(1),
+            cleanLabel(tags.opening) && `opens ${cleanLabel(tags.opening)}`,
+            cleanLabel(tags.runway_length) &&
+              `runway ${cleanLabel(tags.runway_length)}`,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        ),
+      );
+    else if (kind)
+      details.push(
+        clampCardLine(
+          kind[0].toLocaleUpperCase() + kind.slice(1).replace('/', ' / '),
+        ),
+      );
   }
 
   return { title, details };
@@ -642,6 +669,29 @@ export function createLocalGeoJsonLayer(
               for (let i = 0; i < entities.length; i++) {
                 const feature = entities[i];
                 feature.__localLayerId = id; // Tag it so our click handler knows it belongs to this layer
+                // A feature may restyle itself (simplestyle `stroke`), e.g. a
+                // site still under construction.
+                const ownStroke = cleanLabel(
+                  feature.properties?.stroke?.getValue?.(),
+                );
+                const featureColor = ownStroke
+                  ? Cesium.Color.fromCssColorString(ownStroke)
+                  : baseColor;
+                // A drawn part of a site (a runway, a terminal) has no stem or
+                // card: the site's own feature carries them.
+                const role = feature.properties?.role?.getValue?.();
+                if (role) {
+                  if (feature.polygon) {
+                    feature.polygon.outline = true;
+                    feature.polygon.outlineColor = featureColor;
+                    // Surfaces read solid; a whole site stays a light wash.
+                    feature.polygon.material = featureColor.withAlpha(
+                      role === 'site' ? 0.15 : 0.55,
+                    );
+                  }
+                  _count -= 1;
+                  continue;
+                }
 
                 let pos = feature.position?.getValue(Cesium.JulianDate.now());
 
@@ -649,7 +699,7 @@ export function createLocalGeoJsonLayer(
                   // It's a polygon or line
                   if (feature.polygon) {
                     feature.polygon.outline = true;
-                    feature.polygon.outlineColor = baseColor;
+                    feature.polygon.outlineColor = featureColor;
 
                     // Calculate center point for the stem
                     const hierarchy = feature.polygon.hierarchy?.getValue(
@@ -716,11 +766,11 @@ export function createLocalGeoJsonLayer(
                 feature.polyline = new Cesium.PolylineGraphics({
                   positions: stemPositionBuffers[0],
                   width: 3.5,
-                  material: new Cesium.ColorMaterialProperty(baseColor),
+                  material: new Cesium.ColorMaterialProperty(featureColor),
                 });
                 feature.point = new Cesium.PointGraphics({
                   pixelSize: 10,
-                  color: baseColor,
+                  color: featureColor,
                   outlineColor: Cesium.Color.BLACK,
                   outlineWidth: 2,
                   // Never depth-cull the anchor against the photoreal mesh —
@@ -749,7 +799,7 @@ export function createLocalGeoJsonLayer(
                         position: tip,
                         properties,
                         priority,
-                        accent: color,
+                        accent: ownStroke || color,
                       })
                     : null,
                 });
@@ -1244,6 +1294,8 @@ function labelPriorityFromProperties(props, layerId) {
   if (props.output || tags['plant:output:electricity']) score += 120;
   if (layerId === 'local-dams') score += 80;
   if (layerId === 'local-datacenters') score += 60;
+  // Scheduled airports (with an IATA code) outrank club airfields.
+  if (layerId === 'local-airports' && cleanLabel(tags.iata)) score += 400;
   return score;
 }
 

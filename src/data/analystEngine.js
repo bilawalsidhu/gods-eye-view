@@ -77,6 +77,11 @@ export const ANALYST_LAYERS = {
     text: ['name', 'operator', 'river', 'output'],
     flags: [],
   },
+  'local-airports': {
+    numeric: [],
+    text: ['name', 'operator', 'icao', 'iata', 'kind', 'status'],
+    flags: [],
+  },
   'fire-perimeters': {
     numeric: ['acres', 'containedPct', 'personnel', 'costToDate'],
     text: ['name', 'state', 'county', 'cause', 'behavior', 'complexity'],
