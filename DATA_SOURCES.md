@@ -15,6 +15,10 @@ How to read this:
 
 | Source                                                                | Used for                                                                                                                            | License / terms                                                                                                                                                                                                                                                                                                                                       | Attribution                                                                                                                                 |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **NOAA SWPC propagated solar wind** (`services.swpc.noaa.gov/products/geospace/propagated-solar-wind-1-hour.json`) | Solar wind speed, density and IMF for Magnetosphere, already time-shifted from L1 to Earth. Keyless; ~6.6 KB, fetched through `/api/magnetosphere` with a 1-minute shared cache and a bounded stale fallback | U.S. public domain (NOAA federal data); [NOAA disclaimer](https://www.noaa.gov/disclaimer) | "NOAA Space Weather Prediction Center (SWPC)" (courtesy; no endorsement) |
+| **NOAA SWPC planetary K index** (`services.swpc.noaa.gov/json/planetary_k_index_1m.json`) | Estimated Kp, the only input the T89 external field model needs. Keyless, fetched alongside the solar wind through `/api/magnetosphere` with its own 1-minute cache; losing it costs T89 and nothing else | U.S. public domain (NOAA federal data); [NOAA disclaimer](https://www.noaa.gov/disclaimer) | "NOAA Space Weather Prediction Center (SWPC)" (courtesy; no endorsement) |
+| **Kyoto Dst via NOAA SWPC** (`services.swpc.noaa.gov/products/kyoto-dst.json`) | Hourly Dst, the ring-current input T96 needs. Keyless, fetched alongside the solar wind with its own 1-minute cache; without it the layer drops from T96 to T89 rather than guessing | Provisional index from the World Data Center for Geomagnetism, Kyoto, relayed as U.S. federal data; [WDC Kyoto terms](https://wdc.kugi.kyoto-u.ac.jp/dstdir/dst2/onDstindex.html) ask that the index be cited | "Dst index: WDC for Geomagnetism, Kyoto, via NOAA SWPC" |
+| **IAGA IGRF-14** (`ngdc.noaa.gov/IAGA/vmod/coeffs/igrf14coeffs.txt`) | Spherical-harmonic coefficients for Earth's internal magnetic field, to degree 13. **Vendored, not fetched**: the derived table ships in `src/data/local_data/igrf/`, so the field needs no network | Public domain; IAGA model distributed by NOAA NCEI as U.S. government work | "IAGA International Geomagnetic Reference Field (IGRF-14)" |
 | **NOAA GFS (wind)** (`noaa-gfs-bdp-pds.s3.amazonaws.com`) | Global 10 m wind, optional 2 m temperature and mean sea-level pressure for Wind. Keyless; latest 6-hourly 0.25° cycle, byte-range GRIB2 reads, cached for an hour | U.S. public domain (NOAA); keyless via NOAA Open Data on AWS | "NOAA Global Forecast System (GFS)" (courtesy; not an endorsement) |
 | **ECMWF IFS (wind)** (`data.ecmwf.int/forecasts`, ECMWF Open Data) | The alternative Wind model: 10 m wind, optional 2 m temperature and mean sea-level pressure. Keyless; latest 6-hourly 0.25° run, byte-range GRIB2 reads, cached for an hour | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) plus the [ECMWF Terms of Use](https://apps.ecmwf.int/datasets/licences/general/) | "This service is based on data and products of the European Centre for Medium-Range Weather Forecasts (ECMWF)", with the CC BY 4.0 link, the modification notice and ECMWF's liability disclaimer — shown in-app |
 | **NOAA nowCOAST observed weather** (`nowcoast.noaa.gov/geoserver/observations/{weather_radar,satellite}/ows`, WMS 1.1.1) | Rain radar (MRMS base reflectivity, contiguous US, about 4-minute updates) and Satellite clouds (GOES-19/18 Band 14 regional infrared, about 5-minute updates; global infrared mosaic, hourly). Keyless; layer metadata refreshed every 2 minutes, exact-time images cached for up to 24 hours | [NOAA disclaimer](https://oceanservice.noaa.gov/disclaimer.html) | "NOAA nowCOAST · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners" |
@@ -67,6 +71,46 @@ How to read this:
 | **Radio Browser**                                                     | Geolocated internet-radio station directory and station-level tags                                                                  | Public-domain directory data under PDDL 1.0; individual broadcaster stream terms apply                                                                                                                                                                                                                                                                | "Radio Browser" plus a link to the selected broadcaster                                                                                     |
 | **Re:Earth Terrain** (Mapterhorn)                                     | Terrain (keyless globe stacks — OSM etc. — + `/api/terrain/heights` ellipsoidal-height lookups)                                     | Terrain mesh: CC BY 4.0; geoid: EGM2008 (NGA, public domain)                                                                                                                                                                                                                                                                                          | "Terrain (keyless globe stacks): Re:Earth Terrain / Mapterhorn (CC BY 4.0) / EGM2008 (NGA)"                                                 |
 | **OSRM on the FOSSGIS routing servers** (`routing.openstreetmap.de`) | Street-following routes for the Directions layer and voice route annotations, via `/api/route` | [FOSSGIS routing usage policy](https://routing.openstreetmap.de/about.html): "Display the required attribution and display a link to 'fix the map'", "Use a valid user agent and, if applicable, a correct referrer", "One request per second max", "No scraping, no heavy usage". The full policy is the German [FOSSGIS Nutzungsbedingungen](https://www.fossgis.de/arbeitsgruppen/osm-server/nutzungsbedingungen/); FOSSGIS also states that the server may be embedded in your own pages but "eine gewerbliche Nutzung ist nur mit Einschränkungen erlaubt" (commercial use only with restrictions). Route data derives from OpenStreetMap (ODbL 1.0) | "Routing: OSRM on the FOSSGIS servers" + a "fix the map" link — shown in the Data attribution popover |
+
+### Magnetosphere: what the field lines are and are not
+
+The internal field is **IGRF-14**, accurate near the surface and degrading with
+altitude as external magnetospheric currents take over. Past roughly 4-6 Earth
+radii those currents dominate, so the filaments add an external field from a
+**Tsyganenko model** — whichever one the live feed supports:
+
+- **T96** given solar wind dynamic pressure, Dst and the IMF By and Bz. This is
+  the better model: it has an explicit magnetopause and an interconnection
+  field, so southward IMF erodes the dayside the way it really does.
+- **T89c** given only Kp. Seven discrete disturbance bands, no boundary and no
+  IMF, but it needs one number, so it still works when the IMF or Dst feed is
+  down.
+- **Neither**, when the feed supports neither. The filaments are then internal
+  only, which is visibly wrong past a few Earth radii. The layer reports which
+  model produced the lines on screen rather than implying they are all equally
+  good, and it never substitutes a guessed storm state — a magnetosphere
+  modelled as calm during a storm looks entirely plausible and is entirely
+  false.
+
+Both are **empirical fits**, not physics: they reproduce the average field
+measured by spacecraft for a given level of disturbance, and outside the
+parameter range they were fitted within the layer reports that it is
+extrapolating. Both are run only out to 70 Earth radii, their stated limit of
+validity. The field lines are recomputed when the solar wind changes enough to
+move them, which is a few seconds of arithmetic done a line at a time so the
+globe keeps drawing.
+
+The magnetopause is **Shue et al. (1998)**, an empirical fit to spacecraft
+boundary crossings, driven by live solar wind dynamic pressure and IMF Bz. It
+is a model surface, not an observation, and it is drawn as a cage rather than a
+solid shell for that reason. When the solar wind falls outside the range the
+fit was published for, the layer reports that it is extrapolating instead of
+quietly continuing.
+
+The vendored coefficient table is derived from IAGA's published file by
+`scripts/build-igrf-coefficients.mjs`, which keeps the current epoch and its
+secular variation. Past the epoch's published span the layer keeps evaluating —
+a slightly stale field beats a blank globe — but reports that it is doing so.
 
 ### Local receiver input (not fetched from a service)
 

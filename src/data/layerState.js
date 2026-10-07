@@ -296,6 +296,12 @@ function imageryPinOption(key, token) {
 }
 
 const OPTION_GROUPS = Object.freeze({
+  magnetosphere: Object.freeze([
+    enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
+      light: 'l',
+      strong: 's',
+    }),
+  ]),
   traffic: Object.freeze([
     enumOption('roadMode', 'r', null, ['tomtom', 'osm', 'hybrid'], {
       tomtom: 't',
@@ -604,6 +610,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled-only',
   }),
   Object.freeze({ id: 'local-firms', token: 'w', disposition: 'enabled-only' }),
+  Object.freeze({
+    id: 'magnetosphere',
+    token: '3',
+    disposition: 'enabled+options',
+    optionOwner: 'magnetosphere',
+  }),
   Object.freeze({
     id: 'military',
     token: 'm',
