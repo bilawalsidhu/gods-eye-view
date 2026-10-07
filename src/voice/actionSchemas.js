@@ -1,6 +1,16 @@
 import { HUD_LAYOUTS } from '../hudLayoutPolicy.js';
 
 // Canonical action arguments. Descriptive wording is supplied separately.
+import {
+  VOICE_CONTEXT_LAYER_IDS,
+  VOICE_QUERY_LAYER_IDS,
+  VOICE_TOGGLE_LAYER_IDS,
+} from './layerManifest.js';
+
+// Layer enums come from the voice layer manifest so every shipped layer is
+// reachable; the manifest test keeps it in step with the layer catalog.
+const toggleLayerIds = () => [...VOICE_TOGGLE_LAYER_IDS];
+
 const schemas = [
   {
     name: 'fly_to_location',
@@ -45,6 +55,9 @@ const schemas = [
         },
         waitForArrival: {
           type: 'boolean',
+        },
+        referent: {
+          type: 'integer',
         },
       },
     },
@@ -124,26 +137,7 @@ const schemas = [
       properties: {
         layerId: {
           type: 'string',
-          enum: [
-            'flights',
-            'military',
-            'earthquakes',
-            'satellites',
-            'rocket-launches',
-            'traffic',
-            'cctv',
-            'radio',
-            'bikeshare',
-            'ais-live-vessels',
-            'local-datacenters',
-            'local-dams',
-            'local-airports',
-            'telegeography-submarine-cables',
-            'local-firms',
-            'fire-perimeters',
-            'alpr-cameras',
-            'local-adsb',
-          ],
+          enum: toggleLayerIds(),
         },
         enabled: {
           type: 'boolean',
@@ -160,24 +154,7 @@ const schemas = [
       properties: {
         layerId: {
           type: 'string',
-          enum: [
-            'flights',
-            'military',
-            'earthquakes',
-            'satellites',
-            'traffic',
-            'cctv',
-            'radio',
-            'bikeshare',
-            'ais-live-vessels',
-            'local-datacenters',
-            'local-dams',
-            'local-airports',
-            'telegeography-submarine-cables',
-            'local-firms',
-            'fire-perimeters',
-            'alpr-cameras',
-          ],
+          enum: toggleLayerIds(),
         },
       },
     },
@@ -199,6 +176,8 @@ const schemas = [
             'scene-panel',
             'pp-toggles',
             'global-context-panel',
+            'weather-panel',
+            'recent-imagery-panel',
           ],
         },
         open: {
@@ -278,17 +257,14 @@ const schemas = [
       properties: {
         scope: {
           type: 'string',
-          enum: ['auto', 'selected', 'in_view'],
+          enum: ['auto', 'selected', 'in_view', 'pointer'],
+        },
+        referent: {
+          type: 'integer',
         },
         layerId: {
           type: 'string',
-          enum: [
-            'local-datacenters',
-            'local-dams',
-            'local-airports',
-            'telegeography-submarine-cables',
-            'local-firms',
-          ],
+          enum: [...VOICE_CONTEXT_LAYER_IDS],
         },
         limit: {
           type: 'number',
@@ -551,12 +527,21 @@ const schemas = [
       properties: {
         query: {
           type: 'string',
+          minLength: 1,
+          pattern: '\\S',
         },
         layerId: {
           type: 'string',
         },
+        referent: {
+          type: 'integer',
+          enum: [-1, 1, 2, 3, 4, 5],
+        },
       },
-      required: ['query'],
+      anyOf: [
+        { type: 'object', required: ['query'] },
+        { type: 'object', required: ['referent'] },
+      ],
     },
   },
   {
@@ -788,18 +773,7 @@ const schemas = [
           type: 'array',
           items: {
             type: 'string',
-            enum: [
-              'flights',
-              'military',
-              'ais-live-vessels',
-              'local-firms',
-              'earthquakes',
-              'satellites',
-              'local-datacenters',
-              'local-dams',
-              'local-airports',
-              'fire-perimeters',
-            ],
+            enum: [...VOICE_QUERY_LAYER_IDS],
           },
         },
         scope: {
@@ -808,7 +782,7 @@ const schemas = [
           properties: {
             kind: {
               type: 'string',
-              enum: ['view', 'region', 'radius', 'anywhere'],
+              enum: ['view', 'region', 'radius', 'anywhere', 'pointer'],
             },
             name: {
               type: 'string',
@@ -822,11 +796,16 @@ const schemas = [
               properties: {
                 lat: {
                   type: 'number',
+                  minimum: -90,
+                  maximum: 90,
                 },
                 lon: {
                   type: 'number',
+                  minimum: -180,
+                  maximum: 180,
                 },
               },
+              required: ['lat', 'lon'],
             },
           },
         },
@@ -922,11 +901,19 @@ export function createActionTools(descriptions = {}) {
     if (!schemas.some((schema) => schema.name === name))
       throw new TypeError('Unknown action description: ' + name);
   }
-  return schemas.map((schema) => ({
-    type: 'function',
-    ...describe(schema, descriptions[schema.name] || {}),
-  }));
+  return schemas.map((schema) => {
+    const tool = {
+      type: 'function',
+      ...describe(schema, descriptions[schema.name] || {}),
+    };
+    // Function-calling APIs reject anyOf/oneOf/allOf at the top level of
+    // parameters; the runner and benchmark validate those rules themselves.
+    for (const key of TOP_LEVEL_COMBINATORS) delete tool.parameters?.[key];
+    return tool;
+  });
 }
+
+const TOP_LEVEL_COMBINATORS = ['anyOf', 'oneOf', 'allOf'];
 
 function describe(schema, metadata, allowDescription = true) {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata))

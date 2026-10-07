@@ -20,7 +20,7 @@ const radio = ['playback', 'interaction'].map(name =>
 ).join('\n').replace(/layerState\.|parts\.\w+\./g, '');
 const rocketLaunches = readLayerSource(new URL('./data/rocketLaunches.js', import.meta.url), 'utf8');
 const realtime = readRealtimeSource();
-const voice = readFileSync(new URL('./voice/actionSchemas.js', import.meta.url), 'utf8') + '\n' + ['toolDescriptions', 'instructions'].map(name => readFileSync(new URL(`../server/providers/openai/${name}.js`, import.meta.url), 'utf8')).join('\n');
+const voice = ['./voice/actionSchemas.js', '../server/providers/openai/toolDescriptions.js', '../server/providers/openai/instructions.js'].map(file => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 
 function realtimeTools() { return GEV_REALTIME_TOOLS; }
@@ -67,7 +67,13 @@ test('the counting contract is stated in the Realtime instructions', () => {
   assert.match(text, /scopeLabel/, 'rule 3 names its mechanism');
   assert.match(text, /never a bare number/, 'rule 3 is stated as a prohibition too');
   assert.match(text, /VERBATIM/, 'rule 4: no estimating');
-  assert.match(text, /flights layer loads where you look/, 'rule 5: the loaded-data caveat');
+  // Rule 5, the loaded-data caveat, is now one word inside the spoken scope
+  // ("37 loaded flights over Texas"); the longer note stays on screen.
+  const analyst = voice.slice(
+    voice.indexOf("'For ANALYTICAL questions"),
+    voice.indexOf('\n', voice.indexOf("'For ANALYTICAL questions")),
+  );
+  assert.match(analyst, /"37 loaded flights over Texas"/, 'rule 5: loaded scope stays audible');
 });
 
 test('Context panel opening stays distinct from Contacts activation', () => {
@@ -147,7 +153,7 @@ test('the edited existing tools changed exactly as intended', () => {
   const panel = byName.get('set_panel_open');
   assert.deepEqual(
     panel.parameters.properties.panelId.enum,
-    ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'pp-toggles', 'global-context-panel'],
+    ['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'scene-panel', 'pp-toggles', 'global-context-panel', 'weather-panel', 'recent-imagery-panel'],
   );
   assert.deepEqual(panel.parameters.required, ['panelId', 'open']);
 
@@ -186,6 +192,13 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     'next_satellite_pass',
     // Local ADS-B adds one layer enum value and its common-name mapping.
     'set_layer_visibility',
+    // Layer enums generated from the voice layer manifest, and the corrected
+    // track_entity layer hint.
+    'show_data_layers_menu',
+    'get_entity_context',
+    'track_entity',
+    // Point-and-ask: 'pointer' sentinels and referent arguments.
+    'annotate_map',
   ]);
   const unchanged = realtimeTools()
     .filter((tool) => !TOUCHED.has(tool.name))
@@ -196,15 +209,13 @@ test('no unchanged Realtime tool definition drifts silently', () => {
   const hudLayout = unchanged.find((tool) => tool.name === 'set_hud').parameters.properties.layout;
   assert.deepEqual(hudLayout.enum, ['tactical', 'operator', 'minimal', 'cyber']);
   hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
-  assert.equal(unchanged.length, 18);
+  assert.equal(unchanged.length, 14);
   const digest = createHash('sha256')
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
   // Analyst additions and ISS wording correction are explicitly excluded above; all other tool definitions retain their pin.
-  // Re-derived for the additive `local-airports` value in the
-  // show_data_layers_menu and get_entity_context layer enums.
-  assert.equal(digest, '483948d48f15454e', 'an unchanged Realtime tool definition drifted');
+  assert.equal(digest, '25d1b902ecaa22fb', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {
@@ -298,7 +309,11 @@ test('panel collapse is presentation-only and Radio exposes explicit voice playb
   const method = ui.slice(start, ui.indexOf('toggleCleanView(forceEnabled)', start));
   assert.doesNotMatch(method, /stopRadio|stopPlayback|setEnabled\('radio'/);
   assert.match(voice, /'radio-panel'/);
-  assert.match(voice, /'radio'/);
+  assert.ok(
+    realtimeTools()
+      .find((tool) => tool.name === 'set_layer_visibility')
+      .parameters.properties.layerId.enum.includes('radio'),
+  );
   assert.match(voice, /name:\s*'control_radio'/);
   assert.deepEqual(realtimeTools().find(tool => tool.name === 'control_radio').parameters.properties.action.enum, ['enable', 'disable', 'play', 'resume', 'pause', 'stop', 'next', 'previous', 'volume', 'select', 'status']);
   const enableMethod = radioBindings;
