@@ -30,6 +30,9 @@ class FakeClassList {
   }
 }
 
+// The one focused element across every fake document (tests run one at a time).
+const focus = { active: null };
+
 class FakeElement {
   constructor(tagName = 'div', id = '') {
     this.tagName = tagName.toUpperCase();
@@ -91,6 +94,32 @@ class FakeElement {
     this.clicks += 1;
     this.emit('click');
   }
+  focus() {
+    focus.active = this;
+  }
+  contains(el) {
+    for (let at = el; at; at = at.parent) if (at === this) return true;
+    return false;
+  }
+  *walk() {
+    for (const kid of this.children) {
+      yield kid;
+      yield* kid.walk();
+    }
+  }
+  querySelectorAll(selector) {
+    if (selector !== '[data-import-id]') throw new Error(`fake: ${selector}`);
+    return [...this.walk()].filter((el) => el.dataset.importId);
+  }
+  querySelector(selector) {
+    const exact = /^button\[data-action="([a-z]+)"\]$/.exec(selector);
+    for (const el of this.walk()) {
+      if (el.tagName !== 'BUTTON') continue;
+      if (selector === 'button' || (exact && el.dataset.action === exact[1]))
+        return el;
+    }
+    return null;
+  }
   closest(selector) {
     for (let el = this; el; el = el.parent) {
       if (
@@ -105,7 +134,8 @@ class FakeElement {
   }
 }
 
-function setup({ load } = {}) {
+function setup({ load, navigation, flyToSource } = {}) {
+  focus.active = null;
   const els = {
     'geo-import-button': new FakeElement('button', 'geo-import-button'),
     'geo-import-input': new FakeElement('input', 'geo-import-input'),
@@ -116,6 +146,9 @@ function setup({ load } = {}) {
     body: new FakeElement('body'),
     getElementById: (id) => els[id] ?? null,
     createElement: (tag) => new FakeElement(tag),
+    get activeElement() {
+      return focus.active;
+    },
   };
   const added = [];
   const removed = [];
@@ -155,6 +188,8 @@ function setup({ load } = {}) {
     viewer,
     load: load || defaultLoad,
     document,
+    ...(navigation ? { navigation } : {}),
+    ...(flyToSource ? { flyToSource } : {}),
   });
   return {
     tool,
@@ -362,6 +397,8 @@ test('a file that finishes loading after destroy is released, not added', async 
     },
   });
   const pending = t.tool.importFiles([file('late.kml')]);
+  // Imports are queued: let the batch start loading before destroy lands.
+  await new Promise((r) => setImmediate(r));
   t.tool.destroy();
   release();
   await pending;
@@ -377,10 +414,13 @@ test('the application composition wires the import and owns its teardown', () =>
   const drawAt = tools.indexOf(
     'const drawTool = initDrawTool({ viewer, annotations });',
   );
-  const importAt = tools.indexOf(
-    'const geoFileImport = initGeoFileImport({ viewer });',
-  );
+  const importAt = tools.indexOf('const geoFileImport = initGeoFileImport({');
   assert.ok(importAt > drawAt && drawAt >= 0);
+  // Fly-to goes through the application shell's navigation policy.
+  assert.match(
+    tools.slice(importAt, importAt + 200),
+    /navigation: styleManager/,
+  );
   assert.ok(tools.indexOf('defer(() => geoFileImport?.destroy());') > importAt);
   const markup = fs.readFileSync(
     new URL('./templates/display-controls.html', import.meta.url),
@@ -396,4 +436,154 @@ test('the application composition wires the import and owns its teardown', () =>
       markup.includes(`id="${id}"`),
       `${id} missing from the DISPLAY template`,
     );
+});
+
+test('two imports at once never pass the file cap: batches run one after another', async () => {
+  const t = setup();
+  const first = t.tool.importFiles(
+    Array.from({ length: 8 }, (_, i) => file(`a${i}.geojson`)),
+  );
+  const second = t.tool.importFiles(
+    Array.from({ length: 8 }, (_, i) => file(`b${i}.geojson`)),
+  );
+  const [a, b] = await Promise.all([first, second]);
+  assert.equal(t.tool.list().length, MAX_IMPORTED_FILES);
+  assert.equal(a.filter((o) => o.ok).length, 8);
+  assert.equal(b.filter((o) => o.ok).length, MAX_IMPORTED_FILES - 8);
+  assert.equal(b.filter((o) => !o.ok).length, 16 - MAX_IMPORTED_FILES);
+  // The second batch's loads started only after the first batch finished.
+  assert.deepEqual(
+    t.loads.map((l) => l.file.name.slice(0, 1)).join(''),
+    'a'.repeat(8) + 'b'.repeat(MAX_IMPORTED_FILES - 8),
+  );
+});
+
+function navigationDouble({ immediate = true, reassert = true } = {}) {
+  const calls = [];
+  let generation = 0;
+  return {
+    calls,
+    runImmediateNavigation(noun, navigate) {
+      calls.push(['immediate', noun]);
+      return immediate ? navigate(++generation) : false;
+    },
+    beginDeferredLocationNavigation() {
+      calls.push(['begin']);
+      return ++generation;
+    },
+    reassertDeferredLocationNavigation(g) {
+      calls.push(['reassert', g]);
+      return reassert;
+    },
+  };
+}
+
+test('Fly to is an immediate navigation that Cockpit can refuse', async () => {
+  const flown = [];
+  const nav = navigationDouble({ immediate: false });
+  const t = setup({ navigation: nav, flyToSource: (v, ds) => flown.push(ds) });
+  // Batch auto-fly is deferred: stamped at the start, re-asserted before flying.
+  await t.tool.importFiles([file('a.geojson')]);
+  assert.deepEqual(nav.calls, [['begin'], ['reassert', 1]]);
+  assert.equal(flown.length, 1);
+  // The button goes through the immediate route; refused, nothing flies.
+  const id = t.tool.list()[0].id;
+  assert.equal(t.tool.flyTo(id), false);
+  assert.deepEqual(nav.calls.at(-1), ['immediate', 'file']);
+  assert.equal(flown.length, 1);
+  const nav2 = navigationDouble();
+  const t2 = setup({
+    navigation: nav2,
+    flyToSource: (v, ds) => flown.push(ds),
+  });
+  await t2.tool.importFiles([file('b.geojson')]);
+  assert.equal(t2.tool.flyTo(t2.tool.list()[0].id), true);
+  assert.equal(flown.length, 3);
+});
+
+test('a slow import does not fly once something newer took the camera', async () => {
+  let release;
+  const gate = new Promise((r) => (release = r));
+  const flown = [];
+  const nav = navigationDouble({ reassert: false });
+  const t = setup({
+    navigation: nav,
+    flyToSource: (v, ds) => flown.push(ds),
+    load: async (f) => {
+      await gate;
+      return {
+        dataSource: {},
+        name: f.name,
+        format: 'geojson',
+        entityCount: 1,
+        removed: 0,
+        revoke() {},
+      };
+    },
+  });
+  const pending = t.tool.importFiles([file('slow.geojson')]);
+  release();
+  const [out] = await pending;
+  assert.equal(out.ok, true);
+  assert.deepEqual(nav.calls, [['begin'], ['reassert', 1]]);
+  assert.equal(flown.length, 0);
+});
+
+test('a refused deferred stamp (Cockpit) imports without flying', async () => {
+  const flown = [];
+  const nav = navigationDouble();
+  nav.beginDeferredLocationNavigation = () => false;
+  nav.reassertDeferredLocationNavigation = () => {
+    throw new Error('must not re-assert a refused stamp');
+  };
+  const t = setup({ navigation: nav, flyToSource: (v, ds) => flown.push(ds) });
+  const [out] = await t.tool.importFiles([file('a.geojson')]);
+  assert.equal(out.ok, true);
+  assert.equal(flown.length, 0);
+});
+
+test('keyboard focus stays on the control after hide, show and remove', async () => {
+  const t = setup();
+  await t.tool.importFiles([file('a.geojson'), file('b.geojson')]);
+  // Clicks reach the list's delegated listener, as they bubble in a page.
+  const press = (btn) =>
+    t.els['geo-import-list'].emit('click', { target: btn });
+  const [first] = rows(t.els);
+  action(first, 'toggle').focus();
+  press(action(first, 'toggle'));
+  // The list was rebuilt; focus is on the NEW toggle of the same row.
+  const again = rows(t.els)[0];
+  assert.notEqual(again, first);
+  assert.equal(t.document.activeElement, action(again, 'toggle'));
+  assert.equal(action(again, 'toggle').getAttribute('aria-pressed'), 'false');
+  press(action(again, 'toggle'));
+  assert.equal(t.document.activeElement, action(rows(t.els)[0], 'toggle'));
+  // Remove the first row: focus moves to the same control on the next row.
+  action(rows(t.els)[0], 'remove').focus();
+  press(action(rows(t.els)[0], 'remove'));
+  assert.equal(rows(t.els).length, 1);
+  assert.equal(t.document.activeElement, action(rows(t.els)[0], 'remove'));
+  // Remove the last row: focus goes back to the Import button.
+  press(action(rows(t.els)[0], 'remove'));
+  assert.equal(t.document.activeElement, t.els['geo-import-button']);
+});
+
+test('KML and KMZ rows say they keep their own styles instead of showing a color', async () => {
+  const t = setup({
+    load: async (f) => ({
+      dataSource: {},
+      name: f.name,
+      format: f.name.endsWith('.kml') ? 'kml' : 'gpx',
+      entityCount: 2,
+      removed: 0,
+      revoke() {},
+    }),
+  });
+  await t.tool.importFiles([file('a.kml'), file('b.gpx')]);
+  const [kml, gpx] = rows(t.els);
+  assert.ok(kml.children[0].classList.contains('own-styles'));
+  assert.equal(kml.children[0].style.background, undefined);
+  assert.match(kml.children[1].title, /drawn with its own styles/);
+  assert.ok(!gpx.children[0].classList.contains('own-styles'));
+  assert.ok(gpx.children[0].style.background);
 });

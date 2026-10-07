@@ -57,3 +57,20 @@ test('the camera frames the footprint at the surface, never a buried center', ()
   );
   assert.equal(calls.at(-1), 'viewer.flyTo');
 });
+
+test('a very long track is framed without spreading it into a call', () => {
+  // 400k vertices: `push(...line)` throws RangeError (too many arguments)
+  // well below this; the walk keeps a bounded sample and both ends.
+  const n = 400_000;
+  const line = new Array(n);
+  for (let i = 0; i < n; i++)
+    line[i] = Cesium.Cartesian3.fromDegrees(-120 + (i / n) * 2, 40);
+  const ds = new Cesium.CustomDataSource('long');
+  ds.entities.add({ polyline: { positions: line } });
+  ds.entities.add({ position: Cesium.Cartesian3.fromDegrees(-110, 41) });
+  const points = dataSourcePoints(ds);
+  assert.ok(points.length <= 5002, `${points.length} points kept`);
+  const lons = points.map(([lon]) => lon);
+  assert.ok(Math.min(...lons) < -119.99 && Math.max(...lons) > -110.01);
+  assert.ok(lons.some((lon) => Math.abs(lon - -118.000005) < 0.01));
+});

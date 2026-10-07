@@ -30,11 +30,15 @@
   under NLOD 2.0.
 
 - Import your own GeoJSON, KML, KMZ and GPX files (DISPLAY ▸ Import, or drop
-  them onto the globe). Each file is drawn on the ground in its own color with
-  a row to show, hide, fly to or remove it. Files stay in the browser for the
-  session, and KML/KMZ network links, remote icons, remote styles and balloon
-  HTML are left out so an imported file cannot make the page fetch anything.
-  The import half of #890.
+  them onto the globe). GeoJSON and GPX files are drawn on the ground in the
+  color shown on their row; KML and KMZ keep the styles written in them. Each
+  file gets a row to show, hide, fly to or remove it. Files stay in the
+  browser for the session. An import cannot make the page fetch anything (KML
+  network links, remote icons and styles are left out), keeps only plain-text
+  names from the file (no descriptions, balloons or native labels), never
+  moves the app's clock (dated tracks draw for all time), and keeps GPX track
+  segments apart. Size limits are checked before anything is built. The import
+  half of #890.
 
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 

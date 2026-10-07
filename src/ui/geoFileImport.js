@@ -8,6 +8,14 @@
  * is accepted and what is stripped from KML before Cesium reads it.
  *
  * Imported files last for the page session: a reload starts empty.
+ *
+ * Imports run one batch at a time (a second pick or drop waits for the
+ * first), so the file cap is checked against what is really on the globe.
+ * Fly-to goes through the app's navigation policy (`navigation`, the
+ * application shell): the button is an immediate navigation, and the fly
+ * after an import is a deferred one, stamped when the import starts and
+ * re-asserted just before flying, so a camera move, Cockpit or any newer
+ * navigation in between wins over a slow file.
  * `destroy()` removes every imported data source, revokes every blob URL and
  * gives back every listener and the `window.__gevGeoImport` handle.
  */
@@ -35,6 +43,7 @@ export function initGeoFileImport({
   load = loadGeoFile,
   document: doc = globalThis.document,
   flyToSource = flyToDataSource,
+  navigation = null,
 }) {
   const button = doc?.getElementById('geo-import-button');
   const input = doc?.getElementById('geo-import-input');
@@ -44,6 +53,7 @@ export function initGeoFileImport({
 
   const imports = [];
   const listeners = [];
+  let queue = Promise.resolve();
   let seq = 0;
   let colorAt = 0;
   let destroyed = false;
@@ -59,20 +69,46 @@ export function initGeoFileImport({
   };
   const render = () => viewer.scene?.requestRender?.();
 
-  function renderList() {
+  /** Which row button has focus, so a re-render can give it back. */
+  function focusedAction() {
+    const active = doc.activeElement;
+    if (!active || !listEl.contains?.(active)) return null;
+    const row = active.closest?.('[data-import-id]');
+    return row
+      ? { id: row.dataset.importId, action: active.dataset?.action }
+      : null;
+  }
+
+  function restoreFocus(was) {
+    if (!was) return;
+    const rows = [...listEl.querySelectorAll('[data-import-id]')];
+    let row = rows.find((r) => r.dataset.importId === was.id);
+    // The row is gone (removed): the next row's same control, else the
+    // previous row's, else the Import button.
+    if (!row && was.index != null)
+      row = rows[Math.min(was.index, rows.length - 1)];
+    const target =
+      row?.querySelector?.(`button[data-action="${was.action}"]`) ||
+      (row ? row.querySelector?.('button') : button);
+    target?.focus?.();
+  }
+
+  function renderList(keep = focusedAction()) {
     listEl.replaceChildren(
       ...imports.map((item) => {
         const row = doc.createElement('li');
         row.className = 'geo-import-row';
         row.dataset.importId = item.id;
         const swatch = doc.createElement('span');
-        swatch.className = 'geo-import-swatch';
-        swatch.style.background = item.color;
+        // KML and KMZ draw with their own styles; their swatch says so
+        // instead of claiming a color the globe does not show.
+        swatch.className = `geo-import-swatch${item.ownStyles ? ' own-styles' : ''}`;
+        if (!item.ownStyles) swatch.style.background = item.color;
         const name = doc.createElement('span');
         name.className = 'geo-import-name';
         // textContent, never markup: the name comes from the file system.
         name.textContent = item.name;
-        name.title = `${item.name} — ${item.format.toUpperCase()}, ${item.entityCount.toLocaleString()} feature${item.entityCount === 1 ? '' : 's'}`;
+        name.title = `${item.name} — ${item.format.toUpperCase()}, ${item.entityCount.toLocaleString()} feature${item.entityCount === 1 ? '' : 's'}${item.ownStyles ? ', drawn with its own styles' : ''}`;
         const actions = [
           [
             item.visible ? 'visibility' : 'visibility_off',
@@ -102,6 +138,7 @@ export function initGeoFileImport({
       }),
     );
     listEl.classList.toggle('visible', imports.length > 0);
+    restoreFocus(keep);
   }
 
   const find = (id) => imports.find((item) => item.id === id) || null;
@@ -117,25 +154,52 @@ export function initGeoFileImport({
     return true;
   }
 
-  /** Fly the camera to one imported file. */
+  // Not viewer.flyTo: it frames ground-clamped points underground until the
+  // destination's terrain has loaded (see ./flyToDataSource.js).
+  const fly = (item) => {
+    if (!item.visible) setVisible(item.id, true);
+    flyToSource(viewer, item.dataSource);
+    return true;
+  };
+
+  /**
+   * Fly the camera to one imported file: an immediate navigation, so Cockpit
+   * can refuse it and the current follow/track owner is released first.
+   */
   function flyTo(id) {
     const item = find(id);
     if (!item) return false;
-    if (!item.visible) setVisible(id, true);
-    // Not viewer.flyTo: it frames ground-clamped points underground until
-    // the destination's terrain has loaded (see ./flyToDataSource.js).
-    flyToSource(viewer, item.dataSource);
-    return true;
+    if (typeof navigation?.runImmediateNavigation === 'function')
+      return (
+        navigation.runImmediateNavigation('file', () => fly(item)) !== false
+      );
+    return fly(item);
   }
+
+  /** Stamp a deferred fly for an import batch; false when refused. */
+  const beginAutoFly = () =>
+    typeof navigation?.beginDeferredLocationNavigation === 'function'
+      ? navigation.beginDeferredLocationNavigation()
+      : null;
+  /** Re-assert the stamp right before flying; false when superseded. */
+  const autoFlyStillOwns = (generation) => {
+    if (generation === false) return false;
+    if (generation === null) return true;
+    return typeof navigation?.reassertDeferredLocationNavigation === 'function'
+      ? navigation.reassertDeferredLocationNavigation(generation) === true
+      : true;
+  };
 
   /** Remove one imported file from the globe and the list. */
   function remove(id) {
     const at = imports.findIndex((item) => item.id === id);
     if (at < 0) return false;
+    const keep = focusedAction();
+    if (keep) keep.index = at;
     const [item] = imports.splice(at, 1);
     viewer.dataSources?.remove?.(item.dataSource, true);
     item.revoke?.();
-    renderList();
+    renderList(keep);
     render();
     return true;
   }
@@ -146,9 +210,19 @@ export function initGeoFileImport({
    * @returns {Promise<Array<{name: string, ok: boolean, id?: string,
    *   removed?: number, error?: string}>>}
    */
-  async function importFiles(files) {
-    const outcomes = [];
+  function importFiles(files) {
     const list = [...(files || [])];
+    const run = queue.then(() => importBatch(list));
+    queue = run.catch(() => {});
+    return run;
+  }
+
+  async function importBatch(list) {
+    const outcomes = [];
+    if (destroyed || !list.length) return outcomes;
+    // Stamped now, re-asserted before the fly: whatever navigation happens
+    // while the files load (a drag, a search, Cockpit) supersedes this one.
+    const generation = beginAutoFly();
     for (const file of list) {
       if (destroyed) break;
       const fileName = String(file?.name || 'file');
@@ -186,6 +260,7 @@ export function initGeoFileImport({
         id: `import-${seq}`,
         name: loaded.name || fileName,
         format: loaded.format,
+        ownStyles: loaded.format === 'kml' || loaded.format === 'kmz',
         entityCount: loaded.entityCount,
         removed: loaded.removed || 0,
         color,
@@ -208,8 +283,13 @@ export function initGeoFileImport({
         id: item.id,
         removed: item.removed,
       });
-      // Fly to the first file of a batch that lands, so a drop shows its result.
-      if (outcomes.filter((o) => o.ok).length === 1) flyTo(item.id);
+      // Fly to the first file of a batch that lands, so a drop shows its
+      // result, unless something else took the camera meanwhile.
+      if (
+        outcomes.filter((o) => o.ok).length === 1 &&
+        autoFlyStillOwns(generation)
+      )
+        fly(item);
     }
     if (!destroyed) setHint(summarize(outcomes));
     return outcomes;

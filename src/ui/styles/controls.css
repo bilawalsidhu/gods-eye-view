@@ -1031,6 +1031,16 @@ body.gev-drawing #cesiumContainer canvas {
   height: 8px;
   border-radius: 2px;
 }
+/* KML/KMZ draw with the styles written in the file, so the swatch shows a
+   hatch instead of a color the globe does not use. */
+.geo-import-swatch.own-styles {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--text-dim) 0 1px,
+    transparent 1px 3px
+  );
+  box-shadow: inset 0 0 0 1px var(--text-dim);
+}
 .geo-import-name {
   flex: 1 1 auto;
   min-width: 0;

@@ -12,27 +12,47 @@ import { guardCameraAboveGround } from '../cameraGroundGuard.js';
 
 const MAX_POINTS = 5000;
 
-/** Longitude/latitude pairs of every entity's position, line and polygon. */
+/**
+ * Longitude/latitude pairs of every entity's position, line and polygon,
+ * thinned to at most `MAX_POINTS`. Long tracks are walked by index, never
+ * spread into a call, so a file with hundreds of thousands of vertices cannot
+ * overflow the stack; only the kept points are converted.
+ */
 export function dataSourcePoints(dataSource, time = Cesium.JulianDate.now()) {
-  const cartesians = [];
+  const parts = [];
+  let total = 0;
   for (const entity of dataSource?.entities?.values ?? []) {
     const at = entity.position?.getValue?.(time);
-    if (at) cartesians.push(at);
+    if (at) {
+      parts.push([at]);
+      total += 1;
+    }
     const line = entity.polyline?.positions?.getValue?.(time);
-    if (Array.isArray(line)) cartesians.push(...line);
-    const hierarchy = entity.polygon?.hierarchy?.getValue?.(time);
-    if (Array.isArray(hierarchy?.positions))
-      cartesians.push(...hierarchy.positions);
+    if (Array.isArray(line) && line.length) {
+      parts.push(line);
+      total += line.length;
+    }
+    const ring = entity.polygon?.hierarchy?.getValue?.(time)?.positions;
+    if (Array.isArray(ring) && ring.length) {
+      parts.push(ring);
+      total += ring.length;
+    }
   }
-  const stride = Math.max(1, Math.ceil(cartesians.length / MAX_POINTS));
+  const stride = Math.max(1, Math.ceil(total / MAX_POINTS));
   const points = [];
-  for (let i = 0; i < cartesians.length; i += stride) {
-    const carto = Cesium.Cartographic.fromCartesian(cartesians[i]);
-    if (!carto) continue;
-    points.push([
-      Cesium.Math.toDegrees(carto.longitude),
-      Cesium.Math.toDegrees(carto.latitude),
-    ]);
+  let index = 0;
+  for (const part of parts) {
+    // Keep every stride-th vertex across all parts, plus each part's ends so
+    // a short line is never skipped entirely.
+    for (let i = 0; i < part.length; i++, index++) {
+      if (index % stride !== 0 && i !== 0 && i !== part.length - 1) continue;
+      const carto = Cesium.Cartographic.fromCartesian(part[i]);
+      if (!carto) continue;
+      points.push([
+        Cesium.Math.toDegrees(carto.longitude),
+        Cesium.Math.toDegrees(carto.latitude),
+      ]);
+    }
   }
   return points;
 }

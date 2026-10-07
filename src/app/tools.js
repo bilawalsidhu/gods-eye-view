@@ -60,7 +60,10 @@ export function createApplicationTools({
   // DISPLAY ▸ Import: the person's own GeoJSON/KML/KMZ/GPX files, each its
   // own data source. They live for the page session, so the application
   // lifetime removes them and the drop listeners on the viewer container.
-  const geoFileImport = initGeoFileImport({ viewer });
+  const geoFileImport = initGeoFileImport({
+    viewer,
+    navigation: styleManager,
+  });
   defer(() => geoFileImport?.destroy());
   // DATA ▸ Recent Imagery: the box tool claims the pointer like Draw and the
   // panel lives on the right rail, so both belong to the application
