@@ -29,6 +29,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const argv = process.argv.slice(2);
 const getOpt = (name, fallback) => {
@@ -153,19 +154,8 @@ const SCENES = [
   },
 ];
 
-const CHROME_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Pin puppeteer's Chrome-for-Testing: system Chrome auto-updates underneath
-  // the harnesses and its software-GL behaviour shifts across majors.
-  await puppeteer.executablePath().catch(() => null),
-].filter(Boolean);
-
-function findChrome() {
-  for (const candidate of CHROME_CANDIDATES) {
-    try { if (fs.existsSync(candidate)) return candidate; } catch { /* fall through */ }
-  }
-  return null;
-}
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
+const findChrome = () => chromeExecutable;
 
 /** Decode a base64 PNG inside the page and return luminance statistics. */
 async function measureShot(page, base64) {

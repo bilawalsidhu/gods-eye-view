@@ -29,6 +29,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 import { tilesForBounds } from '../src/data/tomtomTiles.js';
 import { trafficDetailBounds } from '../src/layers/traffic/source.js';
 
@@ -55,12 +56,11 @@ const profile = args.includes('--profile');
 const coverage = args.includes('--coverage');
 const shots = path.resolve('qa-shots');
 await fs.mkdir(shots, { recursive: true });
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
 const browser = await puppeteer.launch({
   headless: !args.includes('--headful'),
   protocolTimeout: 300_000,
-  ...(process.env.PUPPETEER_EXECUTABLE_PATH
-    ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
-    : {}),
+  ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
   args: [
     '--no-sandbox',
     '--disable-setuid-sandbox',

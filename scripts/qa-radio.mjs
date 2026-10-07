@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -32,15 +33,7 @@ const RADIO_URL = new URL(APP_URL);
 RADIO_URL.searchParams.set('welcome', '0');
 const HEADFUL = args.includes('--headful');
 
-const chromeCandidates = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
-const chrome = chromeCandidates.find((candidate) => {
-  try { return fs.existsSync(candidate); } catch { return false; }
-});
+const chrome = await resolveChromeExecutable(puppeteer);
 
 const tags = [
   'news', 'talk', 'weather,emergency', 'public safety,scanner',

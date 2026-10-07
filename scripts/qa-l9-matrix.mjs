@@ -37,6 +37,7 @@
  * Exit codes: 0 = no FAILs · 1 = at least one FAIL · 2 = target unreachable.
  */
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -1205,7 +1206,7 @@ async function runBrowserGroup(record) {
   const emit = (id, res, ms) => { if (ids.includes(id)) record(CHECKS.find((c) => c.id === id), res, ms); };
   const only = (id) => ids.includes(id);
 
-  const exe = await puppeteer.executablePath().catch(() => null);
+  const exe = await resolveChromeExecutable(puppeteer);
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
     ...(exe ? { executablePath: exe } : {}),

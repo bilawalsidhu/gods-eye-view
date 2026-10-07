@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pushToTalk = process.argv.includes('--push-to-talk');
@@ -33,9 +34,10 @@ if (fixtureSha256 !== expectedFixtureSha256) {
 }
 
 const appOrigin = new URL(appUrl).origin;
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
 const browser = await puppeteer.launch({
   headless: 'new',
-  executablePath: await puppeteer.executablePath(),
+  ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
   args: [
     '--no-sandbox',
     '--disable-setuid-sandbox',

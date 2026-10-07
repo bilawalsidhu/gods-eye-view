@@ -20,6 +20,7 @@ import puppeteer from 'puppeteer';
 import { existsSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -32,19 +33,8 @@ const APP_ORIGIN = new URL(APP_URL).origin;
 const SHOT_DIR = resolve(__dirname, '..', 'qa-shots', 'b12');
 mkdirSync(SHOT_DIR, { recursive: true });
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
-
-function findChromeExecutable() {
-  return CHROME_EXECUTABLE_CANDIDATES.find((candidate) => {
-    try { return existsSync(candidate); } catch { return false; }
-  }) || null;
-}
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
+const findChromeExecutable = () => chromeExecutable;
 
 let passed = 0;
 let failed = 0;

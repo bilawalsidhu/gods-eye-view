@@ -82,6 +82,7 @@ import {
   computeFrustumGeometry,
   FRUSTUM_GROUND_CLEARANCE_M,
 } from '../src/data/cctv.js';
+import { resolveChromeExecutable } from './qa-browser.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -100,30 +101,8 @@ const APP_URL = CCTV_URL.href;
 const HEADFUL = getFlag('--headful');
 const SHOTS_DIR = path.join(REPO_ROOT, 'qa-shots', 'cctv-v2');
 
-const CHROME_EXECUTABLE_CANDIDATES = [
-  process.env.PUPPETEER_EXECUTABLE_PATH,
-  // Prefer puppeteer's version-pinned Chrome-for-Testing over the system
-  // Chrome: /Applications auto-updates underneath the harnesses, and its
-  // software-GL behavior shifts across majors (system Chrome 150 blew the
-  // tile-gated drain budget under SwiftShader on 2026-07-30 — six
-  // false-negative qa-cctv-v2 runs against a healthy build). A deterministic
-  // pinned browser beats the newest one for regression harnesses.
-  await puppeteer.executablePath().catch(() => null),
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-].filter(Boolean);
-
-function findChromeExecutable() {
-  for (const candidate of CHROME_EXECUTABLE_CANDIDATES) {
-    try {
-      if (fs.existsSync(candidate)) return candidate;
-    } catch {
-      /* ignore */
-    }
-  }
-  return null;
-}
+const chromeExecutable = await resolveChromeExecutable(puppeteer);
+const findChromeExecutable = () => chromeExecutable;
 
 const results = [];
 function record(name, ok, detail) {
