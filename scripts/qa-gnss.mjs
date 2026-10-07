@@ -250,7 +250,11 @@ async function stubRoute(page, { ageMs = 0 } = {}) {
         if (!url.includes('/api/gnss-integrity')) return realFetch(input, init);
         const ok = window.__gnssQaMode === 'fixture';
         const body = ok
-          ? { ...payload, fetchedAt: Date.now() - (window.__gnssQaAgeMs || 0) }
+          ? {
+              ...payload,
+              fetchedAt: Date.now() - (window.__gnssQaAgeMs || 0),
+              ageMs: window.__gnssQaAgeMs || 0,
+            }
           : { error: 'gnss_integrity_unavailable' };
         return Promise.resolve(
           new Response(JSON.stringify(body), {

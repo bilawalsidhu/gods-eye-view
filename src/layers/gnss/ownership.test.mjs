@@ -31,7 +31,13 @@ function harness(
   let clock = 1_000;
   const anchors = [];
   const layer = createGnssIntegrityLayer({
-    source: { getSnapshot },
+    // The real source refuses an undated snapshot; stubs default to a fresh one.
+    source: {
+      async getSnapshot(...args) {
+        const snapshot = await getSnapshot(...args);
+        return { ageMs: 0, ...snapshot };
+      },
+    },
     viewAnchor: () => {
       anchors.push(anchor);
       return anchor;
@@ -220,9 +226,9 @@ test('no view anchor means no request, and destroy releases the data source', as
 
 test('a replayed stale snapshot keeps its observation age and expires on time', async () => {
   // The proxy keeps answering with the snapshot it observed at t=1000.
-  const { layer, sources, advance } = harness(async () => ({
+  const { layer, sources, advance, now } = harness(async () => ({
     rows: threeHealthy(),
-    fetchedAt: 1_000,
+    ageMs: now() - 1_000,
     stale: true,
   }));
   layer.enable();
@@ -247,9 +253,9 @@ test('a replayed stale snapshot keeps its observation age and expires on time', 
 
 test('cells expire during prolonged fetch failures', async () => {
   let fail = false;
-  const { layer, sources, advance, now } = harness(async () => {
+  const { layer, sources, advance } = harness(async () => {
     if (fail) throw new Error('adsb.lol HTTP 502');
-    return { rows: threeHealthy(), fetchedAt: now() };
+    return { rows: threeHealthy() };
   });
   layer.enable();
   await layer.update();
@@ -266,9 +272,9 @@ test('cells expire during prolonged fetch failures', async () => {
 
 test('cells expire while no view anchor is available', async () => {
   let calls = 0;
-  const { layer, sources, advance, now, setAnchor } = harness(async () => {
+  const { layer, sources, advance, setAnchor } = harness(async () => {
     calls += 1;
-    return { rows: threeHealthy(), fetchedAt: now() };
+    return { rows: threeHealthy() };
   });
   layer.enable();
   await layer.update();
@@ -285,9 +291,8 @@ test('cells expire while no view anchor is available', async () => {
 });
 
 test('re-enabling after a long disable does not show cells past the window', async () => {
-  const { layer, sources, advance, now } = harness(async () => ({
+  const { layer, sources, advance } = harness(async () => ({
     rows: threeHealthy(),
-    fetchedAt: now(),
   }));
   layer.enable();
   await layer.update();

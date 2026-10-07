@@ -27,7 +27,8 @@
   Keyless, worldwide wherever adsb.lol has receivers; reads
   a capped 250 nm snapshot around the camera through `/api/gnss-integrity`,
   which returns integrity fields only and serves the last snapshot (with its
-  original observation time, for at most 30 minutes) when the upstream fails.
+  original observation time and `ageMs`, for at most 30 minutes) when the
+  upstream fails.
   Only ADS-B versions 1 and 2 with a known position age of 0-60 s count. A
   degraded report keeps an aircraft degraded for 30 minutes after that report,
   not after its latest healthy one; replayed snapshots keep their age, and

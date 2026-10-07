@@ -145,7 +145,10 @@ export function gnssIntegrityProxy({
     if (!allow(clientKey(req))) return json(429, { error: 'rate_limited' });
     try {
       const { value, stale } = await acquire(anchor);
-      json(200, stale ? { ...value, stale: true } : value, stale);
+      // ageMs is measured on this server's clock, so the browser can date
+      // the rows without comparing its clock to ours.
+      const ageMs = Math.max(0, now() - value.fetchedAt);
+      json(200, { ...value, ageMs, ...(stale ? { stale: true } : {}) }, stale);
     } catch (error) {
       if (error.status === 429) {
         // Tell the browser how long the shared upstream cooldown has left.

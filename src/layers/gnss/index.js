@@ -157,9 +157,11 @@ export function createGnssIntegrityLayer({
           return false;
         // Date the rows by when the proxy observed them: a cached or stale
         // replay keeps its original age instead of restarting the window.
-        accumulateGnssObservations(_observations, snapshot.rows, now(), {
+        // The proxy reports that age, so client and server clocks never mix.
+        const at = now();
+        accumulateGnssObservations(_observations, snapshot.rows, at, {
           windowMs,
-          observedAt: snapshot.fetchedAt,
+          observedAt: at - snapshot.ageMs,
         });
         _cells = binGnssCells(_observations);
         render();

@@ -86,6 +86,7 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     assert.deepEqual(calls, ['https://api.adsb.lol/v2/lat/50/lon/20/dist/250']);
     assert.deepEqual(res.body, {
       fetchedAt: 1234,
+      ageMs: 0,
       anchor: { lat: 50, lon: 20 },
       radiusNm: 250,
       classifier: 'gev-nic-nacp-v1',
@@ -118,8 +119,14 @@ test('snapshots are cached per anchor and concurrent reads share one upstream ca
   await Promise.all([request(), request('/?lat=50.3&lon=20.2')]);
   assert.equal(calls, 1);
   clock = 59_000;
-  await request();
+  const cached = await request();
   assert.equal(calls, 1);
+  assert.equal(cached.body.fetchedAt, 0);
+  assert.equal(
+    cached.body.ageMs,
+    59_000,
+    'a cached answer reports its age on the server clock',
+  );
   clock = 61_000;
   await request();
   assert.equal(calls, 2);
@@ -146,6 +153,7 @@ test('an upstream failure serves the last snapshot as stale, else 502', async ()
     0,
     'a stale answer keeps the time it was observed',
   );
+  assert.equal(stale.body.ageMs, 120_000);
   assert.equal(stale.headers['X-Data-Stale'], 'true');
   const missing = await request('/?lat=-10&lon=-10');
   assert.equal(missing.status, 502);
