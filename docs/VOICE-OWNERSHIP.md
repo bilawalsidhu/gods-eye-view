@@ -14,6 +14,12 @@ The session adapter, action runner and backend interfaces remain unchanged.
 | `realtimeCost.js` | Next-session preferences and the current session's model-bound meter |
 | `realtimeViewport.js` | One retained image, bounded deletion identities and capture generation |
 | `realtimeDiagnostics.js` | Bounded error history and sanitized optional diagnostics |
+| `turnMetrics.js` | Per-turn latency and speech spans written to the debug log |
+| `narration.js` | Progress lines and the earcon while tools run; spoken through the turns owner |
+| `pointerContext.js` | Pointer position, dwell pick and the current turn's pointer snapshot (session-scoped) |
+| `referents.js` | Numbered items from the latest result for `referent:n` (session-scoped) |
+| `resultDisplay.js` | What the voice card shows for a result and which items it numbers (read by the card and `referents.js`) |
+| `gevActions.js` runner | Analyst follow-up memory (session: `resetConversation()` on stop, `dispose()` on removal) |
 
 Pure input policy, preferences and protocol-response policy have separate modules.
 Owners receive named readers, operations or focused collaborators. Cross-owner
@@ -29,7 +35,7 @@ Action and post-capture continuations retain their conversation identity before
 publishing output, queueing a response or changing status.
 
 Behavioral invariants remain in force: a 500 ms Space hold claims push-to-talk;
-short control taps and text entry remain native; a click-started session stays
+short control taps and text entry remain native; a claimed hold while the assistant speaks interrupts it (never during a Radio handoff); a click-started session stays
 open-mic. Every accepted or refused tool call receives its terminal output once.
 New typed input supersedes old intent. Radio waits for the spoken confirmation and
 verified muted playback. A live cost meter stays bound to its negotiated model,
