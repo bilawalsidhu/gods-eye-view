@@ -25,7 +25,7 @@ import { redact } from '../../scripts/qa-browserEvidence.mjs';
 globalThis.requestAnimationFrame ??= (callback) =>
   setTimeout(() => callback(Date.now()), 0);
 
-test('the harness expects exactly the providers the app registers, in chip order', () => {
+test('the harness expects exactly the providers the app registers, in order', () => {
   // Any method a provider asks its source for is a no-op: only ids matter.
   const source = new Proxy({}, { get: () => () => {} });
   const layer = createApplicationStreetLevel({

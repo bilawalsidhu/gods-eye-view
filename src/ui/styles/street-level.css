@@ -1,8 +1,6 @@
 /* ── Street Level panel ─────────────────────────────────────────
-   The rail owns position and width (layers.css). The expanded viewer is
-   re-parented to <body>, so it carries the tokens too. */
-#street-level-panel,
-.sl-viewer-wrap {
+   The rail owns position and width (layers.css). */
+#street-level-panel {
   --sl-green: #05cb63;
   --sl-text: 0.62rem;
   --sl-text-small: 0.6rem;
@@ -130,56 +128,6 @@ button.sl-status:focus-visible {
   flex-direction: column;
   gap: 8px;
   min-height: 0;
-}
-
-/* ── Providers ───────────────────────────────────────────────────────────── */
-.sl-providers {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.sl-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-/* `--chip-color` comes from the provider. */
-.sl-chips .data-toggle-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.sl-chips .data-toggle-chip::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--chip-color, currentColor);
-  opacity: 0.45;
-  flex: none;
-}
-
-.sl-chips .data-toggle-chip.active {
-  color: var(--chip-color, var(--accent));
-  border-color: var(--chip-color, var(--accent));
-  background: color-mix(
-    in srgb,
-    var(--chip-color, var(--accent)) 14%,
-    transparent
-  );
-}
-
-.sl-chips .data-toggle-chip.active::before {
-  opacity: 1;
-}
-
-.sl-chips .data-toggle-chip.chip-error {
-  color: #ffb300;
-  border-color: rgba(255, 179, 0, 0.55);
 }
 
 /* ── Errors ──────────────────────────────────────────────────────────────── */
@@ -383,6 +331,10 @@ button.sl-status:focus-visible {
   gap: 4px;
 }
 
+.sl-viewer-tools .scene-btn[hidden] {
+  display: none;
+}
+
 .sl-viewer-tools .sl-seg {
   background: rgba(10, 10, 15, 0.75);
 }
@@ -475,63 +427,19 @@ button.sl-status:focus-visible {
   display: none;
 }
 
-/* ── Expanded viewer ─────────────────────────────────────────────────────── */
-/* Re-parented to <body>: the panel's backdrop-filter would contain a fixed
-   child. z-index sits above panels (≤139), below the voice pill (150). */
-.sl-viewer-wrap-expanded {
-  position: fixed;
-  left: 4vw;
-  right: 4vw;
-  top: 5vh;
-  bottom: 9vh;
-  z-index: 141;
-  display: flex;
-  flex-direction: column;
-  font-family: var(--font-mono);
-  border-color: rgba(0, 212, 255, 0.55);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7);
-  outline: none;
+/* ── Full screen (EXPAND) ────────────────────────────────────────────────── */
+/* The browser lifts the viewer into the top layer; the photo takes the rest. */
+.sl-viewer-wrap:fullscreen {
+  border: 0;
+  border-radius: 0;
 }
 
-.sl-viewer-wrap-expanded .sl-viewer-stage {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.sl-viewer-wrap-expanded .sl-viewer {
+.sl-viewer-wrap:fullscreen .sl-viewer-stage,
+.sl-viewer-wrap:fullscreen .sl-viewer {
   flex: 1 1 auto;
   height: auto;
   min-height: 0;
   aspect-ratio: auto;
-}
-
-.sl-viewer-wrap-expanded .sl-image-meta {
-  font-size: 0.66rem;
-  padding: 10px 14px;
-}
-
-.sl-viewer-wrap-expanded .sl-viewer-bar {
-  padding: 8px 10px;
-}
-
-.sl-viewer-wrap-expanded .sl-viewer-tools .scene-btn {
-  padding: 8px 14px;
-  font-size: 0.7rem;
-  letter-spacing: 0.12em;
-  color: var(--text-primary);
-  border-color: rgba(0, 212, 255, 0.6);
-  background: rgba(10, 10, 15, 0.82);
-}
-
-.sl-viewer-wrap-expanded #sl-viewer-expand::after {
-  content: ' · ESC';
-  color: var(--text-secondary);
-}
-
-.sl-viewer-wrap-expanded .sl-viewer-x {
-  width: 34px;
-  height: 34px;
-  font-size: 1.3rem;
 }
 
 /* ── Short viewports ─────────────────────────────────────────────────────── */

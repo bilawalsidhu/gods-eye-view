@@ -996,9 +996,7 @@ body.ui-clean-view #data-panel,
 body.ui-clean-view #cctv-panel,
 body.ui-clean-view #radio-panel,
 body.ui-clean-view #global-context-panel,
-body.ui-clean-view #scene-panel,
-/* The expanded viewer lives on <body>, outside every panel. */
-body.ui-clean-view .sl-viewer-wrap-expanded {
+body.ui-clean-view #scene-panel {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;

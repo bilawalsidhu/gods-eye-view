@@ -4,9 +4,9 @@
 
 - Street Level: a street-level imagery layer modelled on the iD editor's photo
   overlay, with Mapillary as its first provider (free client token, CC BY-SA 4.0
-  imagery). One right-rail panel holds a chip per provider, shared 360°/flat and
-  captured-since filters, and an embedded viewer with EXPAND, FIT/FILL and
-  FOLLOW (Google 3D only). Coverage lines and image cones are drawn from orbit
+  imagery). One right-rail panel holds an ON/OFF pill, shared 360°/flat and
+  captured-since filters, a legend, and an embedded viewer with full-screen
+  EXPAND and FIT/FILL. Coverage lines and image cones are drawn from orbit
   down to a single street; on Google 3D they sit on the bare earth, refined
   against the rendered mesh near the camera, so trees and buildings hide them.
   Share links carry the provider switches, the filters and the panel's collapsed

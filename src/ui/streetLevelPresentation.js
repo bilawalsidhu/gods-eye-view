@@ -67,35 +67,13 @@ function presentStatus(state) {
     : { text: 'OFF', tone: '', pressed, title };
 }
 
-/** A chip is lit only while the layer and its provider are both on. */
-function presentProviders(state) {
-  const enabled = state.enabled === true;
-  return (state.providers || []).map((provider) => {
-    const keyRequired = provider.keyRequired === true;
-    const on = enabled && provider.on === true;
-    let title = `${provider.name} imagery ${on ? 'on' : 'off'}`;
-    if (provider.keyRejected && provider.error)
-      title = `${provider.name}: ${provider.error}`;
-    else if (keyRequired && provider.requiresKeyId)
-      title = `${provider.name}: ${keySetupRequirement(provider.requiresKeyId)}`;
-    else if (provider.error) title = `${provider.name}: ${provider.error}`;
-    return {
-      id: provider.id,
-      label: provider.label,
-      color: provider.color || null,
-      title,
-      active: on,
-      disabled: false,
-      state: keyRequired
-        ? 'error'
-        : on && provider.loading
-          ? 'loading'
-          : on
-            ? 'active'
-            : 'idle',
-      busy: on && provider.loading === true,
-    };
-  });
+/** How to add the missing key, for the provider that needs one. */
+function keyHint(state) {
+  const provider = (state.providers || []).find(
+    (entry) => entry.keyRequired === true && entry.requiresKeyId,
+  );
+  const requirement = provider && keySetupRequirement(provider.requiresKeyId);
+  return requirement ? `${provider.name}: ${requirement}` : null;
 }
 
 function presentViewer(state) {
@@ -113,19 +91,11 @@ function presentViewer(state) {
     captionRight: right.join(' · '),
     link: street.externalUrl || null,
     linkLabel: street.providerLabel ? `${street.providerLabel} ↗` : '',
-    follow: {
-      pressed: street.follow === true,
-      disabled: street.open !== true || street.followAvailable !== true,
-      title:
-        street.followAvailable === true
-          ? 'Camera follows view: move the globe camera wherever the street-level view looks'
-          : 'Camera follow needs the Google 3D map: choose Google 3D under MAP SOURCE',
-    },
   };
 }
 
 function presentMeta(state) {
-  if (!state.enabled) return 'Switch a provider on to draw its coverage.';
+  if (!state.enabled) return 'Switch Street Level on to draw its coverage.';
   if (state.sequence.selectedId)
     return state.sequence.loading
       ? 'Loading this sequence…'
@@ -137,26 +107,20 @@ function presentMeta(state) {
 
 /** @param {{now?: number}} [options] Clock for the SINCE readout. */
 export function presentStreetLevelPanel(state, { now = Date.now() } = {}) {
-  const enabled = state.enabled === true;
-  const keyRequired = state.keyRequired === true;
   const filter = state.filter || { pano: 'all', sinceDays: 0 };
-  // A missing key is already shown by the status and chip tooltip; only a
-  // rejected key keeps its error line, since that message names the fix.
-  const keyMissing = keyRequired && state.keyRejected !== true;
+  // A missing key says how to add it; a rejected key's own error names the fix.
+  const keyMissing = state.keyRequired === true && state.keyRejected !== true;
   return {
-    enabled,
-    keyRequired,
+    enabled: state.enabled === true,
     status: presentStatus(state),
-    controlsDisabled: keyRequired,
-    providers: presentProviders(state),
+    controlsDisabled: state.keyRequired === true,
     error: keyMissing
-      ? null
+      ? keyHint(state)
       : state.street.error || state.coverage.error || null,
     filter: { pano: filter.pano, sinceDays: Number(filter.sinceDays) || 0 },
     since: presentSince(filter.sinceDays, now),
     legend: state.legend || [],
     viewer: presentViewer(state),
     meta: presentMeta(state),
-    wantsOpen: state.street.open === true,
   };
 }

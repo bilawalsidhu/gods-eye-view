@@ -66,12 +66,7 @@ test('the panel is registered with panel chrome, cockpit entry and the right rai
 
 test('panel styles stay inside GEV conventions: no !important, no fixed panel', () => {
   assert.equal((panelCss.match(/!important/g) || []).length, 0);
-  const fixed = panelCss
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('}')
-    .filter((block) => /position:\s*fixed/.test(block))
-    .map((block) => block.slice(0, block.indexOf('{')).trim());
-  assert.deepEqual(fixed, ['.sl-viewer-wrap-expanded']);
+  assert.doesNotMatch(panelCss, /position:\s*fixed/);
 });
 
 test('the keyless state gates the controls rather than leaving dead buttons', () => {
@@ -81,13 +76,14 @@ test('the keyless state gates the controls rather than leaving dead buttons', ()
     /sl-keyless|sl-query|sl-results|data-sl-suggestion/,
   );
   assert.match(html, /<fieldset id="sl-controls"/);
-  assert.match(html, /<div id="sl-provider-chips" class="sl-chips"><\/div>/);
-  // The gate holds the filters only, so the chips' key tooltip stays reachable.
+  // The gate holds the filters; the error line above it says how to add the key.
   const gate = html.slice(
     html.indexOf('<fieldset id="sl-controls"'),
     html.indexOf('</fieldset>', html.indexOf('<fieldset id="sl-controls"')),
   );
-  assert.doesNotMatch(gate, /sl-provider-chips/);
+  assert.ok(
+    html.indexOf('id="sl-error"') < html.indexOf('<fieldset id="sl-controls"'),
+  );
   assert.match(gate, /data-sl-pano="all"/);
   assert.match(gate, /id="sl-since"/);
   assert.match(
@@ -109,26 +105,13 @@ test('the keyless state gates the controls rather than leaving dead buttons', ()
   );
 });
 
-test('the expanded viewer is a modal dialog that restores focus', () => {
-  assert.match(controls, /setAttribute\('role', 'dialog'\)/);
-  assert.match(controls, /setAttribute\('aria-modal', 'true'\)/);
-  assert.match(controls, /_expandReturnFocus/);
-  // A real modal: the rest of the application is inert while it is shown.
-  assert.match(controls, /node\.inert = true/);
-  assert.match(controls, /node\.inert = false/);
-});
-
 test('labels say what the buttons do', () => {
-  for (const label of [
-    'aria-label="Camera follows view"',
-    'PROVIDERS',
-    'SINCE',
-  ])
+  for (const label of ['>EXPAND<', '>FIT<', '>FILL<', 'SINCE'])
     assert.ok(html.includes(label), label);
-  // The provider chips are the on/off switch; no separate buttons.
+  // The header pill is the only on/off switch: no provider chips, no FOLLOW.
   assert.doesNotMatch(
     html,
-    /OPEN NEAREST PHOTO|STREET LEVEL OFF|sl-enable-btn|sl-look-btn|LOOK HERE|STREET COCKPIT|>FRAME<|ZOOM TO RESULTS|ASK IN PLAIN ENGLISH/,
+    /sl-provider-chips|sl-follow-btn|OPEN NEAREST PHOTO|STREET LEVEL OFF|sl-enable-btn|sl-look-btn|LOOK HERE|STREET COCKPIT|>FRAME<|ZOOM TO RESULTS|ASK IN PLAIN ENGLISH/,
   );
 });
 
@@ -137,14 +120,14 @@ test('on phones the viewer is sized from the rail band, not its aspect ratio', (
     panelCss,
     /@media \(max-width: 720px\) \{\s*\.sl-viewer \{[^}]*height: clamp\(/,
   );
-  // The expanded viewer must not inherit the phone height.
+  // The full-screen viewer must not inherit the phone height.
   assert.match(
     panelCss,
-    /\.sl-viewer-wrap-expanded \.sl-viewer \{[^}]*height: auto/,
+    /\.sl-viewer-wrap:fullscreen \.sl-viewer \{[^}]*height: auto/,
   );
 });
 
-test('the viewer comes first, with follow in its toolbar', () => {
+test('the viewer comes first, with EXPAND in its toolbar', () => {
   const controlsBlock = html.slice(html.indexOf('<div class="sl-main">'));
   assert.ok(
     controlsBlock.indexOf('id="sl-viewer-wrap"') <
@@ -153,33 +136,8 @@ test('the viewer comes first, with follow in its toolbar', () => {
   );
   assert.match(
     controlsBlock.slice(0, controlsBlock.indexOf('id="sl-viewer"')),
-    /id="sl-follow-btn"/,
-    'follow lives in the viewer toolbar',
-  );
-});
-
-test('Clean View, recording and the cockpit hide the expanded viewer on <body> (P2-5)', () => {
-  // EXPAND moves the viewer out of every panel, past the panel-hiding rules.
-  assert.match(
-    read('src/ui/styles/controls.css'),
-    /body\.ui-clean-view \.sl-viewer-wrap-expanded \{\s*opacity: 0 !important;\s*visibility: hidden !important;/,
-  );
-  assert.match(
-    read('src/ui/styles/recording.css'),
-    /body\.recording-mode \.sl-viewer-wrap-expanded \{\s*opacity: 0 !important;\s*visibility: hidden !important;/,
-  );
-  assert.match(
-    read('src/ui/styles/cockpit.css'),
-    /body\.cockpit-mode\s*:is\([^)]*\.sl-viewer-wrap-expanded\s*\)\s*\{\s*display: none !important;/,
-  );
-  // Hidden, it must not keep holding Esc and Tab.
-  assert.match(controls, /_isDialogShown\(\)/);
-});
-
-test('the expanded viewer keeps the panel tokens (P3)', () => {
-  assert.match(
-    panelCss,
-    /#street-level-panel,\s*\.sl-viewer-wrap \{\s*--sl-green:[^}]*--sl-text:[^}]*--sl-text-small:/,
+    /id="sl-viewer-expand"/,
+    'EXPAND lives in the viewer toolbar',
   );
 });
 

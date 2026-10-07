@@ -23,7 +23,6 @@ function snapshot(overrides = {}) {
     sequence: { providerId: null, selectedId: null, images: 0, loading: false },
     street: {
       open: false,
-      follow: false,
       loading: false,
       error: null,
       providerId: null,
@@ -65,7 +64,7 @@ test('a key-gated layer disables every control and flags KEY REQUIRED', () => {
   assert.equal(view.status.tone, 'warn');
 });
 
-test('KEY REQUIRED shows no raw error code under the pill', () => {
+test('KEY REQUIRED says how to add the key instead of a raw error code', () => {
   const view = presentStreetLevelPanel(
     snapshot({
       enabled: true,
@@ -75,9 +74,7 @@ test('KEY REQUIRED shows no raw error code under the pill', () => {
     }),
   );
   assert.equal(view.status.text, 'KEY REQUIRED');
-  assert.equal(view.error, null);
-  // The chip still says how to add the key.
-  assert.match(view.providers[0].title, /^Mapillary: Needs /);
+  assert.match(view.error, /^Mapillary: Needs MAPILLARY_CLIENT_TOKEN/);
 });
 
 test('a key Mapillary rejected reads KEY REJECTED and names the fix', () => {
@@ -96,8 +93,6 @@ test('a key Mapillary rejected reads KEY REJECTED and names the fix', () => {
   assert.equal(view.status.tone, 'warn');
   assert.equal(view.controlsDisabled, true);
   assert.equal(view.error, error);
-  assert.equal(view.providers[0].state, 'error');
-  assert.equal(view.providers[0].title, `Mapillary: ${error}`);
 });
 
 test('a key problem outranks loading on the pill: KEY REJECTED, then KEY REQUIRED (M65)', () => {
@@ -147,61 +142,6 @@ test('the header pill is the on/off switch and reads OFF, LOADING or ON', () => 
   );
 });
 
-test('one chip per provider: on, off, loading, and keyless as an error chip', () => {
-  const view = presentStreetLevelPanel(
-    snapshot({
-      enabled: true,
-      providers: [
-        provider(),
-        provider({
-          id: 'panoramax',
-          name: 'Panoramax',
-          label: 'PANORAMAX',
-          on: false,
-          requiresKeyId: null,
-        }),
-        provider({
-          id: 'kartaview',
-          name: 'KartaView',
-          label: 'KARTAVIEW',
-          loading: true,
-          requiresKeyId: null,
-        }),
-        provider({
-          id: 'google-street-view',
-          name: 'Google Street View',
-          label: 'STREET VIEW',
-          keyRequired: true,
-          requiresKeyId: 'google-maps',
-        }),
-      ],
-    }),
-  );
-  assert.deepEqual(
-    view.providers.map((chip) => [chip.id, chip.active, chip.state, chip.busy]),
-    [
-      ['mapillary', true, 'active', false],
-      ['panoramax', false, 'idle', false],
-      ['kartaview', true, 'loading', true],
-      ['google-street-view', true, 'error', false],
-    ],
-  );
-  assert.equal(view.providers[0].label, 'MAPILLARY');
-  assert.equal(view.providers[1].title, 'Panoramax imagery off');
-  assert.match(
-    view.providers[3].title,
-    /^Google Street View: Needs GOOGLE_MAPS_API_KEY/,
-  );
-  assert.ok(view.providers.every((chip) => chip.disabled === false));
-});
-
-test('a provider error is explained on its chip', () => {
-  const view = presentStreetLevelPanel(
-    snapshot({ providers: [provider({ error: 'Tile HTTP 502' })] }),
-  );
-  assert.equal(view.providers[0].title, 'Mapillary: Tile HTTP 502');
-});
-
 test('errors from the viewer or the coverage web surface in one alert', () => {
   assert.equal(presentStreetLevelPanel(snapshot()).error, null);
   assert.equal(
@@ -214,24 +154,6 @@ test('errors from the viewer or the coverage web surface in one alert', () => {
     presentStreetLevelPanel(snapshot({ coverage: { error: 'Tile HTTP 502' } }))
       .error,
     'Tile HTTP 502',
-  );
-});
-
-test('chips are dark while the layer is off, so the chip is the layer switch', () => {
-  const view = presentStreetLevelPanel(snapshot({ enabled: false }));
-  assert.deepEqual(
-    view.providers.map((chip) => [chip.id, chip.active, chip.state]),
-    [['mapillary', false, 'idle']],
-  );
-  assert.equal(view.providers[0].title, 'Mapillary imagery off');
-  assert.equal(view.enableButton, undefined, 'no separate ON/OFF button');
-  const keyless = presentStreetLevelPanel(
-    snapshot({ providers: [provider({ keyRequired: true })] }),
-  );
-  assert.equal(
-    keyless.providers[0].state,
-    'error',
-    'a keyless chip still says why',
   );
 });
 
@@ -272,36 +194,10 @@ test('the SINCE readout names the window and the cut-off date it means today', (
   assert.equal(custom.since.label, 'LAST 400 DAYS · SINCE 2025-08-21');
 });
 
-test('legend passes through in the layer’s order', () => {
-  const view = presentStreetLevelPanel(snapshot());
-  assert.deepEqual(
-    view.legend.map((entry) => entry.key),
-    ['mapillary', 'selected'],
-  );
-});
-
-test('each provider chip carries its source colour', () => {
-  const view = presentStreetLevelPanel(
-    snapshot({
-      providers: [
-        provider(),
-        provider({ id: 'panoramax', label: 'PANORAMAX', color: '#a66bff' }),
-      ],
-    }),
-  );
-  assert.deepEqual(
-    view.providers.map((chip) => [chip.id, chip.color]),
-    [
-      ['mapillary', '#05cb63'],
-      ['panoramax', '#a66bff'],
-    ],
-  );
-});
-
 test('the meta line never mixes the visible-sequence count with the selected sequence', () => {
   assert.equal(
     presentStreetLevelPanel(snapshot()).meta,
-    'Switch a provider on to draw its coverage.',
+    'Switch Street Level on to draw its coverage.',
   );
   const browsing = presentStreetLevelPanel(
     snapshot({ enabled: true, coverage: { count: 812 } }),
@@ -341,7 +237,6 @@ test('viewer caption reads "Image by" left, date right, and links to the provide
         isPano: true,
         externalUrl:
           'https://www.mapillary.com/app/?pKey=1814275685699406&focus=photo',
-        followAvailable: true,
       },
     }),
   );
@@ -352,8 +247,7 @@ test('viewer caption reads "Image by" left, date right, and links to the provide
     'https://www.mapillary.com/app/?pKey=1814275685699406&focus=photo',
   );
   assert.equal(view.viewer.linkLabel, 'MAPILLARY ↗');
-  assert.equal(view.viewer.follow.disabled, false);
-  assert.equal(view.wantsOpen, true);
+  assert.equal(view.viewer.open, true);
 });
 
 test('an image without a creator name leaves the left caption empty', () => {
@@ -366,25 +260,4 @@ test('an image without a creator name leaves the left caption empty', () => {
   assert.equal(view.viewer.captionRight, '2024-01-02');
   assert.equal(view.viewer.link, null);
   assert.equal(view.viewer.linkLabel, '');
-});
-
-test('FOLLOW is disabled off Google 3D and says where to switch', () => {
-  const open = { open: true, imageId: '1' };
-  const off3d = presentStreetLevelPanel(
-    snapshot({ street: { ...open, followAvailable: false } }),
-  );
-  assert.equal(off3d.viewer.follow.disabled, true);
-  assert.match(
-    off3d.viewer.follow.title,
-    /needs the Google 3D map.*MAP SOURCE/,
-  );
-  const on3d = presentStreetLevelPanel(
-    snapshot({ street: { ...open, followAvailable: true } }),
-  );
-  assert.equal(on3d.viewer.follow.disabled, false);
-  assert.match(on3d.viewer.follow.title, /^Camera follows view/);
-  const closed = presentStreetLevelPanel(
-    snapshot({ street: { open: false, followAvailable: true } }),
-  );
-  assert.equal(closed.viewer.follow.disabled, true, 'nothing to follow');
 });

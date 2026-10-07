@@ -86,12 +86,11 @@
           <div id="sl-viewer-wrap" class="sl-viewer-wrap" hidden>
             <div class="sl-viewer-bar">
               <div class="sl-viewer-tools">
-                <button id="sl-viewer-expand" class="scene-btn" type="button" aria-pressed="false" title="Expand the street-level view (Esc shrinks it)"><span class="sl-btn-icon" aria-hidden="true">⤢</span><span class="sl-btn-text">EXPAND</span></button>
+                <button id="sl-viewer-expand" class="scene-btn" type="button" aria-pressed="false" title="Show the street-level view full screen (Esc shrinks it)"><span class="sl-btn-icon" aria-hidden="true">⤢</span><span class="sl-btn-text">EXPAND</span></button>
                 <div class="sl-seg" role="radiogroup" aria-label="Image fit">
                   <button type="button" class="sl-seg-btn is-active" data-sl-render="letterbox" role="radio" aria-checked="true" title="Fit: show the whole photo, with dark bars where its shape differs from the frame">FIT</button>
                   <button type="button" class="sl-seg-btn" data-sl-render="fill" role="radio" aria-checked="false" tabindex="-1" title="Fill: fill the frame edge to edge, cropping the photo">FILL</button>
                 </div>
-                <button id="sl-follow-btn" class="scene-btn" type="button" aria-pressed="false" aria-label="Camera follows view" title="Camera follows view: move the globe camera wherever the street-level view looks"><span class="sl-btn-icon" aria-hidden="true">⌖</span><span class="sl-btn-text">FOLLOW</span></button>
               </div>
               <div class="sl-viewer-tools sl-viewer-tools-right">
                 <button id="sl-viewer-close" class="sl-viewer-x" type="button" title="Close the image and deselect it on the map" aria-label="Close the street-level image">×</button>
@@ -110,13 +109,8 @@
             </div>
           </div>
           <div class="sl-settings">
-            <div class="sl-providers" role="group" aria-label="Imagery providers">
-              <span class="cctv-summary-label">PROVIDERS</span>
-              <div id="sl-provider-chips" class="sl-chips"></div>
-            </div>
             <div id="sl-error" class="sl-error" role="alert" hidden><span aria-hidden="true">⚠</span> <span id="sl-error-text"></span></div>
-            <!-- A missing key gates the filters only: the chips above stay
-                 focusable so their tooltip can say how to add the key. -->
+            <!-- A missing key gates the filters; the line above says how to add it. -->
             <fieldset id="sl-controls" class="sl-controls">
               <div class="sl-filters" role="group" aria-label="Imagery filters">
                 <span class="cctv-summary-label">IMAGERY</span>

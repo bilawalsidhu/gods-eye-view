@@ -41,7 +41,7 @@ export const VIEWPORTS = Object.freeze([
   { width: 1280, height: 800 },
 ]);
 
-/** Provider chips the panel must show, in order. */
+/** Providers the layer registers: one legend swatch each, plus "Selected". */
 export const EXPECTED_PROVIDERS = Object.freeze(['mapillary']);
 
 /**
@@ -448,15 +448,12 @@ async function assertKeylessGate(page) {
   const info = await readPanel(page);
   assert.equal(info.controlsDisabled, true);
   assert.equal(info.status, 'KEY REQUIRED');
-  const chip = await page.$eval(
-    '#sl-provider-chips [data-chip-id="mapillary"]',
-    (node) => ({
-      error: node.classList.contains('chip-error'),
-      title: node.title,
-    }),
-  );
-  assert.equal(chip.error, true, 'the keyless provider chip reads as an error');
-  assert.match(chip.title, /MAPILLARY_CLIENT_TOKEN/);
+  const hint = await page.$eval('#sl-error', (node) => ({
+    hidden: node.hidden,
+    text: node.textContent,
+  }));
+  assert.equal(hint.hidden, false, 'the panel says how to add the key');
+  assert.match(hint.text, /MAPILLARY_CLIENT_TOKEN/);
 }
 
 /**
@@ -655,31 +652,17 @@ async function main() {
     };
     await expandStrip();
     await step(
-      'expanding the strip shows the body, one chip per provider and the legend',
+      'expanding the strip shows the body and the legend',
       async () => {
         const info = await panel();
         assert.ok(!isCollapsed(info.classes));
         assert.equal(info.bodyDisplay, 'flex');
-        const chips = await page.evaluate(() =>
-          [
-            ...document.querySelectorAll(
-              '#sl-provider-chips .data-toggle-chip',
-            ),
-          ].map((chip) => chip.dataset.chipId),
-        );
-        assert.deepEqual(chips, EXPECTED_PROVIDERS);
-        // One swatch per source plus "Selected"; each chip wears its colour.
+        // One swatch per source plus "Selected".
         assert.equal(
           await page.evaluate(
             () => document.querySelectorAll('#sl-legend li').length,
           ),
           EXPECTED_PROVIDERS.length + 1,
-        );
-        assert.equal(
-          await page.$eval('[data-chip-id="mapillary"]', (chip) =>
-            chip.style.getPropertyValue('--chip-color'),
-          ),
-          '#05cb63',
         );
       },
     );
@@ -779,7 +762,6 @@ async function main() {
           undefined,
           options,
         );
-      const chip = '#sl-provider-chips [data-chip-id="mapillary"]';
       const stacks = {
         active: () =>
           page.evaluate(() =>
@@ -834,42 +816,6 @@ async function main() {
             await page.$eval('#sl-status', (node) =>
               node.getAttribute('aria-pressed'),
             ),
-            'true',
-          );
-        },
-      );
-      await step(
-        'the only lit provider chip switches the whole layer off, credit and all',
-        async () => {
-          await clickPanelControl(page, chip);
-          await page.waitForFunction(
-            () =>
-              !window.__godsEyeView.dataManager.isEnabled('street-level') &&
-              window.__godsEyeView.dataManager.layers
-                .get('street-level')
-                .module.getUIState().coverage.count === 0,
-            { timeout: 15_000 },
-          );
-          await page.waitForFunction(
-            () =>
-              !document.body.innerHTML.includes('Mapillary</a> contributors'),
-            { timeout: 15_000 },
-          );
-          assert.equal(
-            await page.$eval(chip, (node) => node.getAttribute('aria-pressed')),
-            'false',
-          );
-          // The provider stays switched on, so the layer comes back with it.
-          assert.equal((await ui()).providers[0].on, true);
-        },
-      );
-      await step(
-        'lighting the chip turns the layer back on with coverage',
-        async () => {
-          await clickPanelControl(page, chip);
-          await waitForCoverage(page);
-          assert.equal(
-            await page.$eval(chip, (node) => node.getAttribute('aria-pressed')),
             'true',
           );
         },
@@ -1026,14 +972,10 @@ async function main() {
               error: document.getElementById('sl-error').textContent,
               errorHidden: document.getElementById('sl-error').hidden,
               controls: document.getElementById('sl-controls').disabled,
-              chip: document
-                .querySelector('#sl-provider-chips [data-chip-id="mapillary"]')
-                .classList.contains('chip-error'),
             }));
             assert.match(shown.error, /rejected MAPILLARY_CLIENT_TOKEN/);
             assert.equal(shown.errorHidden, false);
             assert.equal(shown.controls, true);
-            assert.equal(shown.chip, true);
             // Panning asks for nothing more: the verdict holds for every tile.
             const rejectedAt = await tileRequestsQuiet(QUIET_MS);
             await panTo(-121.42, 38.63);
@@ -1302,59 +1244,6 @@ async function main() {
           'fixtures only',
           'a click on a neighbouring cone steps the viewer to that photo',
         );
-      await step(
-        'FOLLOW is offered only on the Google 3D map',
-        async ({ skip }) => {
-          const follow = () =>
-            page.$eval('#sl-follow-btn', (node) => ({
-              disabled: node.disabled,
-              pressed: node.getAttribute('aria-pressed'),
-              title: node.title,
-            }));
-          const followIs = (disabled, pressed = null) =>
-            settle(
-              page,
-              ([d, p]) => {
-                const node = document.getElementById('sl-follow-btn');
-                return (
-                  node.disabled === d &&
-                  (p === null || node.getAttribute('aria-pressed') === p)
-                );
-              },
-              [disabled, pressed],
-            );
-          const original = await stacks.active();
-          await stacks.set('esri-imagery');
-          await followIs(true);
-          let state = await follow();
-          assert.equal(state.disabled, true, 'disabled on Esri');
-          assert.match(state.title, /needs the Google 3D map/);
-          if (await stacks.photoreal()) {
-            await stacks.set('photoreal');
-            await followIs(false);
-            state = await follow();
-            assert.equal(state.disabled, false, 'enabled on Google 3D');
-            await clickPanelControl(page, '#sl-follow-btn');
-            await followIs(false, 'true');
-            assert.equal((await follow()).pressed, 'true');
-            await stacks.set('esri-imagery');
-            await followIs(true, 'false');
-            state = await follow();
-            assert.equal(
-              state.pressed,
-              'false',
-              'leaving Google 3D stops following',
-            );
-            assert.equal(state.disabled, true);
-          } else {
-            console.log(
-              '  (Google 3D unavailable here: only the disabled path ran)',
-            );
-            skip('no Google 3D');
-          }
-          await stacks.set(original);
-        },
-      );
       await park();
       await step(
         'closing a photo stops the framing flight toward it',
@@ -1450,77 +1339,9 @@ async function main() {
         },
       );
       await step(
-        'EXPAND opens a modal dialog (the rest of <body> inert) and Esc returns focus to the button',
-        async () => {
-          await openById(firstImageId);
-          const inertBefore = await page.evaluate(
-            () =>
-              [...document.body.children].filter((node) => node.inert).length,
-          );
-          await clickPanelControl(page, '#sl-viewer-expand');
-          await settle(page, () =>
-            document
-              .getElementById('sl-viewer-wrap')
-              .classList.contains('sl-viewer-wrap-expanded'),
-          );
-          const dialog = await page.evaluate(() => {
-            const wrap = document.getElementById('sl-viewer-wrap');
-            const others = [...document.body.children].filter(
-              (node) => node !== wrap,
-            );
-            return {
-              role: wrap.getAttribute('role'),
-              modal: wrap.getAttribute('aria-modal'),
-              inside: wrap.contains(document.activeElement),
-              width: Math.round(wrap.getBoundingClientRect().width),
-              onBody: wrap.parentElement === document.body,
-              notInert: others
-                .filter((node) => !node.inert)
-                .map((node) => node.id || node.tagName.toLowerCase()),
-              wrapInert: wrap.inert,
-            };
-          });
-          assert.equal(dialog.role, 'dialog');
-          assert.equal(dialog.modal, 'true');
-          assert.equal(dialog.inside, true);
-          assert.ok(dialog.width > 900);
-          assert.equal(dialog.onBody, true);
-          assert.deepEqual(
-            dialog.notInert,
-            [],
-            'every other body child is inert',
-          );
-          assert.equal(dialog.wrapInert, false);
-          await page.keyboard.press('Escape');
-          await settle(
-            page,
-            () =>
-              !document
-                .getElementById('sl-viewer-wrap')
-                .classList.contains('sl-viewer-wrap-expanded'),
-          );
-          const after = await page.evaluate(() => ({
-            expanded: document
-              .getElementById('sl-viewer-wrap')
-              .classList.contains('sl-viewer-wrap-expanded'),
-            focus: document.activeElement?.id,
-            inert: [...document.body.children].filter((node) => node.inert)
-              .length,
-          }));
-          assert.equal(
-            `${after.expanded}:${after.focus}`,
-            'false:sl-viewer-expand',
-          );
-          assert.equal(
-            after.inert,
-            inertBefore,
-            'the application is live again',
-          );
-        },
-      );
-      await step(
         '× closes the image and deselects it on the globe',
         async () => {
+          await openById(firstImageId);
           await clickPanelControl(page, '#sl-viewer-close');
           await uiUntil(
             (u) => !u.street.open && u.sequence.selectedId === null,
