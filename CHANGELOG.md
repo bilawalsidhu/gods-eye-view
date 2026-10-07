@@ -10,9 +10,10 @@
   the terrain and on Google 3D tiles; MapillaryJS loads on the first photo,
   and opening one frames it with one camera flight.
   Share links carry the Mapillary switch, the filters and the panel's collapsed
-  state. A server proxy caches Mapillary coverage tiles (24 h, 1 GiB on disk),
-  refuses cross-site requests, rate-limits per IP and backs off when Mapillary
-  rejects the token or rate-limits.
+  state. A server proxy adds the token to Mapillary coverage tiles, drops
+  their unused image layer and keeps them in memory (24 h); it refuses
+  cross-site requests and rate-limits per IP, and the panel stops asking when
+  Mapillary rejects the token or rate-limits.
 
 - Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
   list is one keyless GeoJSON request to the agency's OGC API view of its

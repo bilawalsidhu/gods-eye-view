@@ -884,8 +884,6 @@
   "src/layers/streetLevel/providers/mapillary/source.js",
   "src/layers/streetLevel/providers/mapillary/nearest.js",
   "server/providers/mapillary.js",
-  "server/providers/mapillary/routes.js",
-  "server/providers/mapillary/constants.js",
   "server/providers/mapillary/tiles.js",
   "server/providers/mapillary/trim.js",
   "src/layers/streetLevel/tileMath.test.mjs",

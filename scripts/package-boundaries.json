@@ -188,8 +188,6 @@
     "exports": ["./server/providers/mapillary"],
     "modules": [
       "server/providers/mapillary.js",
-      "server/providers/mapillary/routes.js",
-      "server/providers/mapillary/constants.js",
       "server/providers/mapillary/tiles.js",
       "server/providers/mapillary/trim.js",
       "server/providers/common/same-site.js",
