@@ -1,83 +1,49 @@
-/** Shared Street Level test stand-ins: provider snapshot, minimal provider, ray-casting camera. */
+/** Shared Street Level test stand-ins: Mapillary source, photo viewer, ray-casting camera. */
 import * as Cesium from 'cesium';
-import { MAPILLARY_CREDIT_HTML } from '../layers/streetLevel/providers/mapillary/policy.js';
 
 const RAD = Math.PI / 180;
 
-/** One provider as `getUIState().providers` lists it. */
-export function providerSnapshot(overrides = {}) {
+/**
+ * A Mapillary source for the layer: a configured key, empty tiles, and the
+ * given lookups; `calls` records tile requests.
+ */
+export function fakeMapillarySource(overrides = {}) {
+  const calls = { tiles: [] };
   return {
-    id: 'mapillary',
-    name: 'Mapillary',
-    label: 'MAPILLARY',
-    on: true,
-    configured: true,
-    keyRequired: false,
-    requiresKeyId: 'mapillary',
-    loading: false,
-    count: 0,
-    hint: '',
-    error: null,
-    color: '#05cb63',
+    calls,
+    hasToken: () => true,
+    getStatus: async () => ({ configured: true }),
+    getTile: async (...args) => {
+      calls.tiles.push(args);
+      return new Uint8Array(0);
+    },
+    getSequenceImages: async () => [],
+    nearestImages: async () => [],
     ...overrides,
   };
 }
 
 /**
- * The smallest provider the core accepts. Mutate `stats` to change what
- * coverageStats() answers; `calls`, `filters` and `context()` record use.
+ * A photo viewer in place of MapillaryJS: `calls` records use, and `open`
+ * reports a pose for the image (when `pose` is given) as the real one does.
  */
-export function fakeStreetLevelProvider({
-  id = 'mapillary',
-  pickPrefix = 'mly:',
-  html = MAPILLARY_CREDIT_HTML,
-  nearestImage = async () => null,
-} = {}) {
-  const calls = { activate: 0, deactivate: 0, mount: 0, open: [], unmount: 0 };
-  const filters = [];
-  const stats = {
-    count: 0,
-    zoom: null,
-    kind: null,
-    loading: false,
-    hint: '',
-    error: null,
-    keyRequired: false,
-  };
-  let context = null;
+export function fakePhotoViewer({ pose = null } = {}) {
+  const calls = { mount: 0, open: [], unmount: 0 };
+  let emit = null;
   return {
     calls,
-    filters,
-    stats,
-    context: () => context,
-    id,
-    name: 'Mapillary',
-    label: 'MAPILLARY',
-    requiresKeyId: null,
-    pickPrefix,
-    colors: { coverage: '#05cb63' },
-    credit: { html },
-    create: (providerContext) => {
-      context = providerContext;
-      return {
-        status: async () => ({ configured: true }),
-        init() {},
-        activate: () => calls.activate++,
-        deactivate: () => calls.deactivate++,
-        destroy() {},
-        refreshCoverage() {},
-        setFilter: (filter) => filters.push(filter),
-        coverageStats: () => ({ ...stats }),
-        handlePick: () => false,
-        nearestImage,
-        viewer: {
-          mount: async () => calls.mount++,
-          open: async (imageId) => calls.open.push(imageId),
-          close() {},
-          unmount: () => calls.unmount++,
-          resize() {},
-          onPose: () => () => {},
-        },
+    mount: async () => calls.mount++,
+    async open(imageId) {
+      calls.open.push(imageId);
+      if (pose) emit?.({ imageId, ...pose });
+    },
+    close() {},
+    unmount: () => calls.unmount++,
+    resize() {},
+    onPose(listener) {
+      emit = listener;
+      return () => {
+        emit = null;
       };
     },
   };

@@ -180,15 +180,10 @@ export class StreetLevelControls {
 
   async _toggleEnabled() {
     const enabled = this.actions.isEnabled?.() === true;
-    // The pill is the only switch: switching on also brings back a provider
-    // a share link or a tool turned off, or the layer would draw nothing.
-    const dark = enabled
-      ? []
-      : (this._state?.providers || []).filter((entry) => entry.on === false);
-    if (dark.length)
-      this._setParams(
-        Object.fromEntries(dark.map((entry) => [entry.id, true])),
-      );
+    // The pill is the only switch: switching on also brings back Mapillary
+    // if a share link or a tool turned it off, or the layer would draw nothing.
+    if (!enabled && this._state?.providerOn === false)
+      this._setParams({ mapillary: true });
     try {
       await this.actions.setEnabled?.(!enabled);
     } catch (error) {

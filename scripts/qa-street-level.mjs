@@ -41,8 +41,8 @@ export const VIEWPORTS = Object.freeze([
   { width: 1280, height: 800 },
 ]);
 
-/** Providers the layer registers: one legend swatch each, plus "Selected". */
-export const EXPECTED_PROVIDERS = Object.freeze(['mapillary']);
+/** Legend swatches: Mapillary, then "Selected". */
+export const LEGEND_SWATCHES = 2;
 
 /**
  * Skips no setup can avoid: live runs cannot stage fixture-only cases.
@@ -89,24 +89,14 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const DAY_MS = 86_400_000;
 
 /**
- * Deterministic coverage for any tile: a grid of mixed 360°/flat, new/old
- * sequences plus the photo sequence (PHOTO_LINE), or a few overview points.
- * @returns {Uint8Array} empty for zooms that carry nothing
+ * Deterministic coverage for any street-zoom tile: a grid of mixed 360°/flat,
+ * new/old sequences plus the photo sequence (PHOTO_LINE).
+ * @returns {Uint8Array} empty below z11, which the layer never asks for
  */
 export function fixtureTile(z, x, y, now = Date.now()) {
   const tile = { x, y, z };
   const { west, east, south, north } = tileBounds(x, y, z);
   const at = (t, lo, hi) => lo + (hi - lo) * t;
-  if (z <= 5)
-    return encodeCoverageTile(tile, {
-      overview: [0.25, 0.5, 0.75].map((t, i) => ({
-        id: `fx-${z}-${x}-${y}-o${i}`,
-        lon: at(t, west, east),
-        lat: at(t, south, north),
-        isPano: i === 1,
-        capturedAt: now - 30 * DAY_MS,
-      })),
-    });
   if (z < 11) return new Uint8Array(0);
   const margin = (east - west) * 0.05;
   const sequences = [];
@@ -654,12 +644,12 @@ async function main() {
         const info = await panel();
         assert.ok(!isCollapsed(info.classes));
         assert.equal(info.bodyDisplay, 'flex');
-        // One swatch per source plus "Selected".
+        // Mapillary plus "Selected".
         assert.equal(
           await page.evaluate(
             () => document.querySelectorAll('#sl-legend li').length,
           ),
-          EXPECTED_PROVIDERS.length + 1,
+          LEGEND_SWATCHES,
         );
       },
     );
@@ -1016,7 +1006,7 @@ async function main() {
         await page.evaluate((imageId) => {
           void window.__godsEyeView.dataManager.layers
             .get('street-level')
-            .module.openImage('mapillary', imageId);
+            .module.openImage(imageId);
         }, id);
         await waitForImage(id);
         const street = (await ui()).street;
@@ -1149,7 +1139,6 @@ async function main() {
           assert.equal(view.hidden, false);
           assert.ok(view.width > 200);
           assert.ok(view.when.length > 0, 'caption shows the capture date');
-          assert.equal(street.providerId, 'mapillary');
           firstImageId = street.imageId;
           assert.equal(view.link, 'MAPILLARY ↗');
           if (fixtures) {
@@ -1246,7 +1235,7 @@ async function main() {
               window.__godsEyeView.dataManager.layers.get(
                 'street-level',
               ).module;
-            const opened = await module.openImage('mapillary', id);
+            const opened = await module.openImage(id);
             const flying = Boolean(v.camera._currentFlight);
             const from = v.camera.positionCartographic.clone();
             module.closeViewer();

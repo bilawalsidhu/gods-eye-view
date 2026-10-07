@@ -334,13 +334,13 @@ _The Space Missions layer replaying a Falcon 9 ascent — labeled `RECONSTRUCTED
 
 ## 📷 Street Level
 
-> Street-level photos from any provider in one panel. This build ships **Mapillary**, which needs a free client token.
+> Street-level photos from **Mapillary** in one panel. It needs a free client token.
 
 **Setup.** At [mapillary.com/dashboard/developers](https://www.mapillary.com/dashboard/developers), register an application with **Read** access and copy its **Client Token** (`MLY|…`). Paste it into **POWER UP → Mapillary**, or set `MAPILLARY_CLIENT_TOKEN` in `.env` and restart. Without it the panel reads **KEY REQUIRED**.
 
-**Use.** Turn on **Street Level** under DATA LAYERS → Cameras, or with the pill in the STREET LEVEL panel header. Each provider draws in its own colour (Mapillary green; see the legend). The **IMAGERY** (ALL / 360° / FLAT) and **SINCE** filters apply to every provider. Click a coverage line for its image cones and a cone to open the photo. Above the photo: **EXPAND** (full screen; Esc leaves) and **FIT / FILL**. The caption links to the image on the provider's site, and the globe credits "© Mapillary contributors, CC BY-SA 4.0" while Mapillary is on.
+**Use.** Turn on **Street Level** under DATA LAYERS → Cameras, or with the pill in the STREET LEVEL panel header. Zoom in to street level (below 60 km) for the green coverage lines; from orbit the panel says to zoom in. The **IMAGERY** (ALL / 360° / FLAT) and **SINCE** filters narrow the lines, cones and nearest-photo lookups. Click a coverage line for its image cones and a cone to open the photo. Above the photo: **EXPAND** (full screen; Esc leaves) and **FIT / FILL**. The caption links to the image on mapillary.com, and the globe credits "© Mapillary contributors, CC BY-SA 4.0" while the layer is on.
 
-Share links carry the provider switches and filters (`0.m.0` Mapillary off, `0.p.p` panoramas only, `0.s.365` the last year). To add a provider, implement the contract in `src/layers/streetLevel/registry.js` and register it in `src/app/layers/streetLevel.js`.
+Share links carry the Mapillary switch and the filters (`0.m.0` Mapillary off, `0.p.p` panoramas only, `0.s.365` the last year).
 
 ## 🎖️ Field Missions
 

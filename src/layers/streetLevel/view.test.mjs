@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import {
+  cameraNadir,
   createHorizonCull,
   groundUnderCamera,
   metresBetween,
   viewCentre,
-  viewFocus,
   visibleBbox,
 } from './view.js';
 import { rayCamera } from '../../testSupport/streetLevelFakes.mjs';
@@ -113,20 +113,22 @@ test('a tilted street view over high ground boxes the streets it looks at, not t
   // the box is 20 km wide and starts past the street at the screen centre.
   assert.ok(unranged[2] - unranged[0] > 0.2);
   assert.ok(unranged[1] > ahead, 'the old box missed the street in view');
-  const options = { groundHeight: 1610, maxRange: 6000, nearRange: 1000 };
+  const options = { groundHeight: 1610, maxRange: 6000 };
   const [west, south, east, north] = visibleBbox(view, options);
   assert.ok(north - south < 0.08 && east - west < 0.08, 'a street-sized box');
-  assert.ok(south < 39.74 && north > ahead, 'camera and screen centre inside');
-  const focus = viewFocus(view, options);
-  assert.ok(Math.abs(focus.nadir.lat - 39.74) < 1e-9);
+  assert.ok(south < ahead && north > ahead, 'the screen centre is inside');
   assert.ok(
-    Math.abs(focus.ahead.lat - ahead) < 0.002,
-    'centre ray on the street',
+    south > 39.74,
+    'it starts ahead of the camera, where the view does',
   );
-  assert.ok(Math.abs(focus.ahead.lon - -104.99) < 1e-6);
+  assert.ok(west < -104.99 && east > -104.99);
+  const nadir = cameraNadir(view);
+  assert.ok(
+    Math.abs(nadir.lat - 39.74) < 1e-9 && Math.abs(nadir.lon + 104.99) < 1e-9,
+  );
 });
 
-test('looking at the horizon from eye height still boxes the ground around the camera', () => {
+test('looking at the horizon from eye height boxes the near ground, not the horizon', () => {
   const view = pinhole({
     lon: -121.4944,
     lat: 38.5816,
@@ -137,10 +139,19 @@ test('looking at the horizon from eye height still boxes the ground around the c
   const [west, south, east, north] = visibleBbox(view, {
     groundHeight: 10,
     maxRange: 2500,
-    nearRange: 1000,
   });
-  assert.ok(north - 38.5816 > 0.008 && 38.5816 - south > 0.008);
-  assert.ok(east - -121.4944 > 0.008 && -121.4944 - west > 0.008);
+  assert.ok(south > 38.5816 && south - 38.5816 < 0.001, 'from just ahead');
+  assert.ok(north - 38.5816 < 2500 / 111_000, 'no further than the range');
+  assert.ok(west < -121.4944 && east > -121.4944);
+  // Looking at the sky, nothing is in range: no box, never the horizon's.
+  const sky = pinhole({
+    lon: -121.4944,
+    lat: 38.5816,
+    ground: 10,
+    agl: 2,
+    pitch: 60,
+  });
+  assert.equal(visibleBbox(sky, { groundHeight: 10, maxRange: 2500 }), null);
 });
 
 test('metresBetween measures the short way round the date line', () => {

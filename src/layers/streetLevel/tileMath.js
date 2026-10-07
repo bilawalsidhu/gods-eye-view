@@ -1,4 +1,4 @@
-/** Web-Mercator tile math, without Cesium, shared by the browser layer and the server executor. */
+/** Web-Mercator tile math for Street Level coverage, without Cesium. */
 
 const MAX_LAT = 85.05112878;
 
@@ -77,78 +77,42 @@ export function normalizeBbox(input) {
 }
 
 /**
- * Squared distance (in tiles) from tile (x, y)'s centre to the segment
- * `from` → `to` at zoom z, measured the short way round the date line.
- */
-function segmentDistance2(tile, from, to, z) {
-  const n = 2 ** z;
-  const px = tile.x + 0.5;
-  const py = tile.y + 0.5;
-  const ax = tileXAt(from.lon, z);
-  const ay = tileYAt(from.lat, z);
-  let bx = to ? tileXAt(to.lon, z) : ax;
-  const by = to ? tileYAt(to.lat, z) : ay;
-  if (bx - ax > n / 2) bx -= n;
-  else if (ax - bx > n / 2) bx += n;
-  let best = Infinity;
-  for (const shift of [-n, 0, n]) {
-    const x = px + shift;
-    const vx = bx - ax;
-    const vy = by - ay;
-    const len2 = vx * vx + vy * vy;
-    const t = len2
-      ? Math.max(0, Math.min(1, ((x - ax) * vx + (py - ay) * vy) / len2))
-      : 0;
-    const dx = x - (ax + t * vx);
-    const dy = py - (ay + t * vy);
-    best = Math.min(best, dx * dx + dy * dy);
-  }
-  return best;
-}
-
-/**
- * Tiles at zoom z covering a bbox (west > east crosses the date line), from
- * the centre outwards, capped at `limit`. With `focus`, tiles rank by distance
- * from the segment `from` (ground under the camera) to `to` (screen centre):
- * a tilted view's box centre can sit kilometres ahead of both.
- * @param {{limit?: number, focus?: {from: {lon: number, lat: number}, to?: {lon: number, lat: number}|null}|null}} [options]
+ * Tiles at zoom z covering a [west, south, east, north] box (west > east
+ * crosses the date line), nearest to `from` first (default: the box centre),
+ * capped at `limit`. Distances are measured the short way round ±180°.
+ * @param {{limit?: number, from?: {lon: number, lat: number}|null}} [options]
  * @returns {{tiles: Array<{x:number,y:number,z:number}>, truncated: boolean, total: number}}
  */
-export function tilesForBbox(bbox, z, { limit = Infinity, focus = null } = {}) {
+export function tilesForBbox(bbox, z, { limit = Infinity, from = null } = {}) {
+  const [west, south, east, north] = Array.isArray(bbox)
+    ? bbox.map(Number)
+    : [];
+  const across = west > east;
+  // A box across the date line is split at ±180°.
+  const halves = across
+    ? [
+        [west, south, 180, north],
+        [-180, south, east, north],
+      ]
+    : [bbox];
+  const tiles = halves
+    .map(normalizeBbox)
+    .filter(Boolean)
+    .flatMap((box) => tileGrid(box, z));
   const n = 2 ** z;
-  const tiles = [];
-  let centre;
-  if (Array.isArray(bbox) && Number(bbox[0]) > Number(bbox[2])) {
-    // A box across the date line comes as west > east: split it at ±180°.
-    const [west, south, east, north] = bbox.map(Number);
-    for (const half of [
-      [west, south, 180, north],
-      [-180, south, east, north],
-    ]) {
-      const box = normalizeBbox(half);
-      if (box) tiles.push(...tileGrid(box, z).tiles);
-    }
-    centre = {
-      x: ((lonToTileX(west, z) + lonToTileX(east, z) + n) / 2) % n,
-      y: (latToTileY(north, z) + latToTileY(south, z)) / 2,
-    };
-  } else {
-    const box = normalizeBbox(bbox);
-    if (!box) return { tiles: [], truncated: false, total: 0 };
-    const grid = tileGrid(box, z);
-    tiles.push(...grid.tiles);
-    centre = { x: (grid.x0 + grid.x1) / 2, y: (grid.y0 + grid.y1) / 2 };
-  }
-  const distance2 = focus?.from
-    ? (tile) => segmentDistance2(tile, focus.from, focus.to, z)
-    : (tile) => {
-        // Measured the short way round the date line.
-        const dx = Math.abs(tile.x - centre.x);
-        return Math.min(dx, n - dx) ** 2 + (tile.y - centre.y) ** 2;
-      };
+  const centre = from || {
+    lon: wrapLon(west + (east - west + (across ? 360 : 0)) / 2),
+    lat: (south + north) / 2,
+  };
+  const cx = tileXAt(wrapLon(centre.lon), z);
+  const cy = tileYAt(centre.lat, z);
   // Each tile's distance is computed once; ties keep their row order.
   const ranked = tiles
-    .map((tile) => ({ tile, d: distance2(tile) }))
+    .map((tile) => {
+      const dx = Math.abs(tile.x + 0.5 - cx);
+      const d = Math.min(dx, n - dx) ** 2 + (tile.y + 0.5 - cy) ** 2;
+      return { tile, d };
+    })
     .sort((a, b) => a.d - b.d)
     .map(({ tile }) => tile);
   const truncated = ranked.length > limit;
@@ -159,7 +123,7 @@ export function tilesForBbox(bbox, z, { limit = Infinity, focus = null } = {}) {
   };
 }
 
-/** The tiles at zoom z in a normalized box, row by row, and their range. */
+/** The tiles at zoom z in a normalized box, row by row. */
 function tileGrid(box, z) {
   const x0 = lonToTileX(box.west, z);
   const x1 = lonToTileX(box.east, z);
@@ -168,7 +132,7 @@ function tileGrid(box, z) {
   const tiles = [];
   for (let y = y0; y <= y1; y++)
     for (let x = x0; x <= x1; x++) tiles.push({ x, y, z });
-  return { tiles, x0, x1, y0, y1 };
+  return tiles;
 }
 
 /** A vector-tile-local coordinate (0..extent) in tile (x, y, z) as [lon, lat]. */
@@ -189,18 +153,4 @@ export function coverageZoomForHeight(heightM) {
   if (heightM > 5_000) return 12;
   if (heightM > 1_800) return 13;
   return 14;
-}
-
-/**
- * Overview-point zoom (z0–5) above 60 km, where sequence tiles are too heavy;
- * null below, where `coverageZoomForHeight` takes over.
- */
-export function overviewZoomForHeight(heightM) {
-  if (!Number.isFinite(heightM) || heightM <= 60_000) return null;
-  if (heightM > 15_000_000) return 0;
-  if (heightM > 7_000_000) return 1;
-  if (heightM > 3_000_000) return 2;
-  if (heightM > 1_200_000) return 3;
-  if (heightM > 400_000) return 4;
-  return 5;
 }

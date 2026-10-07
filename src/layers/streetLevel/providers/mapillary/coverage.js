@@ -1,31 +1,18 @@
 import * as Cesium from 'cesium';
 import { decodeCoverageTile } from './decode.js';
-import { passesImageryFilter } from '../../filter.js';
-import {
-  createHorizonCull,
-  groundUnderCamera,
-  metresBetween,
-  viewFocus,
-  visibleBbox,
-} from '../../view.js';
-import {
-  coverageZoomForHeight,
-  overviewZoomForHeight,
-  tileBounds,
-  tilesForBbox,
-} from '../../tileMath.js';
+import { passesImageryFilter, resolveFilter } from '../../filter.js';
+import { isActive } from '../../state.js';
+import { cameraNadir, groundUnderCamera, visibleBbox } from '../../view.js';
+import { coverageZoomForHeight, tilesForBbox } from '../../tileMath.js';
 import {
   COLORS,
   COVERAGE_LINE_WIDTH_PX,
   COVERAGE_MAX_SEQUENCES,
   COVERAGE_MAX_TILES,
   COVERAGE_MOVE_DEBOUNCE_MS,
-  COVERAGE_OVERVIEW_MAX_TILES,
-  COVERAGE_OVERVIEW_POINT_PX,
   KEY_REJECTED_MESSAGE,
   PICK_PREFIX,
   RATE_LIMITED_MESSAGE,
-  SEQUENCE_VIEW_NEAR_M,
   SEQUENCE_VIEW_RANGE_MIN_M,
   SEQUENCE_VIEW_RANGE_PER_HEIGHT,
 } from './policy.js';
@@ -67,9 +54,15 @@ export function sequenceIdFromPick(pickId) {
   return cut === -1 ? rest : rest.slice(0, cut);
 }
 
+/** Hint above the street-zoom ceiling, where no coverage is drawn. */
+export const ZOOM_IN_HINT = 'Zoom in to see street-level coverage';
+/** Hint when no ground is in view within range (looking at the sky). */
+export const NO_GROUND_HINT =
+  'Point the camera at the ground for street-level coverage';
+
 /**
- * Camera-driven coverage: overview points (z0–5) from orbit, sequence lines
- * (z11–14) near the ground, draped on terrain and 3D tiles alike.
+ * Camera-driven coverage: Mapillary sequence lines (z11–14) near the ground,
+ * draped on terrain and 3D tiles alike. Nothing is drawn from orbit.
  */
 export function createCoverage({ state, source }) {
   const { render } = state.services;
@@ -89,7 +82,7 @@ export function createCoverage({ state, source }) {
 
   /** The imagery filter, resolved now: "since N days" moves with the clock. */
   function filter() {
-    return state.context.getFilter();
+    return resolveFilter(state.filter);
   }
 
   /**
@@ -154,65 +147,17 @@ export function createCoverage({ state, source }) {
     return primitives;
   }
 
-  function buildOverviewCollection(points) {
-    const collection = new Cesium.PointPrimitiveCollection({
-      blendOption: Cesium.BlendOption.TRANSLUCENT,
-    });
-    const green = Cesium.Color.fromCssColorString(COLORS.coverage).withAlpha(
-      0.85,
-    );
-    const drawn = [];
-    const current = filter();
-    for (const point of points) {
-      if (!passesImageryFilter(point, current)) continue;
-      drawn.push(
-        collection.add({
-          position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat),
-          color: green,
-          pixelSize: COVERAGE_OVERVIEW_POINT_PX,
-          // Google 3D terrain and clouds must not hide the near side's dots;
-          // the horizon cull hides the far side's, which this lets through.
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        }),
-      );
-    }
-    return { collection, points: drawn };
-  }
-
-  /** Every overview point on the globe, current zoom and old alike. */
-  function* overviewPoints() {
-    for (const entry of drawnEntries())
-      if (entry.overviewPoints) yield* entry.overviewPoints;
-  }
-
-  // Overview points skip the depth test: hide the far hemisphere's.
-  const horizon = createHorizonCull({
-    getViewer: () => state.viewer,
-    items: overviewPoints,
-    onChange: requestRender,
-  });
-
   function attachPrimitive(entry) {
     const scene = state.viewer?.scene;
     if (!scene) return;
-    if (entry.kind === 'sequence') {
-      // Lookup, picking and counts follow what is drawn, not the whole tile.
-      const sequences = drawnSequences(entry);
-      entry.sequences = new Map(sequences.map((s) => [s.id, s]));
-      entry.primitives = buildSequencePrimitives(sequences);
-      entry.count = sequences.length;
-      for (const { primitive } of entry.primitives)
-        scene.groundPrimitives.add(primitive);
-      watchSelection();
-    } else {
-      const { collection, points } = buildOverviewCollection(entry.points);
-      entry.primitive = collection;
-      entry.overviewPoints = points;
-      entry.count = points.length;
-      scene.primitives.add(collection);
-      // Cull the new points now, then all of them whenever the camera moves.
-      horizon.update(points);
-    }
+    // Lookup, picking and counts follow what is drawn, not the whole tile.
+    const sequences = drawnSequences(entry);
+    entry.sequences = new Map(sequences.map((s) => [s.id, s]));
+    entry.primitives = buildSequencePrimitives(sequences);
+    entry.count = sequences.length;
+    for (const { primitive } of entry.primitives)
+      scene.groundPrimitives.add(primitive);
+    watchSelection();
   }
 
   function detachPrimitive(entry) {
@@ -225,15 +170,6 @@ export function createCoverage({ state, source }) {
       }
     }
     entry.primitives = [];
-    if (entry.primitive) {
-      try {
-        scene?.primitives?.remove(entry.primitive);
-      } catch {
-        /* already gone */
-      }
-      entry.primitive = null;
-      entry.overviewPoints = null;
-    }
   }
 
   function removeTile(key) {
@@ -243,7 +179,7 @@ export function createCoverage({ state, source }) {
     state.coverage.tiles.delete(key);
   }
 
-  async function loadTile(tile, kind) {
+  async function loadTile(tile) {
     const key = tileKey(tile);
     if (state.coverage.tiles.has(key) || state.coverage.pending.has(key))
       return;
@@ -257,43 +193,23 @@ export function createCoverage({ state, source }) {
         source.getTile('coverage', tile.z, tile.x, tile.y, {
           signal: controller.signal,
         }),
-        kind === 'sequence' ? ensureTerrainReady() : null,
+        ensureTerrainReady(),
       ]);
       // Only an abort, a retire, a clear or a newer request for this tile
       // discards the bytes; a refresh that still wants the tile keeps them.
-      const current = () =>
-        state.coverage.pending.get(key) === controller &&
-        !state.coverage.tiles.has(key);
       if (
         controller.signal.aborted ||
-        !current() ||
-        kind !== state.coverage.kind ||
+        state.coverage.pending.get(key) !== controller ||
+        state.coverage.tiles.has(key) ||
         tile.z !== state.coverage.zoom
       )
         return;
       const decoded = decodeCoverageTile(bytes, tile);
-      const entry = { kind, primitive: null, primitives: [], count: 0 };
-      // Padded: vector tiles carry a small buffer past their edge.
-      const bounds = tileBounds(tile.x, tile.y, tile.z);
-      const pad = (bounds.east - bounds.west) * 0.05;
-      entry.bounds = {
-        west: bounds.west - pad,
-        east: bounds.east + pad,
-        south: bounds.south - pad,
-        north: bounds.north + pad,
-      };
-      if (kind === 'sequence') {
-        // Newest first; the per-tile cap applies to what passes the filter.
-        entry.sequenceList = decoded.sequences.sort(
-          (a, b) => (b.capturedAt || 0) - (a.capturedAt || 0),
-        );
-        entry.sequences = new Map();
-        entry.total = decoded.sequences.length;
-      } else {
-        entry.points = decoded.overview;
-        entry.sequences = new Map();
-        entry.total = decoded.overview.length;
-      }
+      const entry = { primitives: [], count: 0, sequences: new Map() };
+      // Newest first; the per-tile cap applies to what passes the filter.
+      entry.sequenceList = decoded.sequences.sort(
+        (a, b) => (b.capturedAt || 0) - (a.capturedAt || 0),
+      );
       attachPrimitive(entry);
       state.coverage.tiles.set(key, entry);
       state.coverage.lastError = null;
@@ -304,14 +220,11 @@ export function createCoverage({ state, source }) {
         state.coverage.pending.get(key) !== controller
       )
         return;
-      state.coverage.lastError = error?.message || 'Coverage tile failed';
-      if (error?.keyRequired) state.keyRequired = true;
-      if (error?.keyRejected) {
-        // Every other tile would be refused too: stop asking.
-        state.keyRejected = true;
-        state.coverage.lastError = KEY_REJECTED_MESSAGE;
-      }
-      if (error?.retryAfterSec) holdFor(error.retryAfterSec);
+      // Every other tile would be refused too: stop asking.
+      if (error?.keyRejected) block('rejected');
+      else if (error?.keyRequired) block('no-key');
+      else if (error?.retryAfterSec) block('rate-limited', error.retryAfterSec);
+      else state.coverage.lastError = error?.message || 'Coverage tile failed';
     } finally {
       // Only the request that still owns the key settles it: a superseded one
       // must not drop a newer request's entry (which is what counts as loading).
@@ -324,29 +237,42 @@ export function createCoverage({ state, source }) {
   }
 
   /**
-   * Mapillary is rate-limiting: keep what is drawn, request nothing until the
-   * wait is over, then refresh once.
+   * Pause tile requests (see `blocked` in state.js). A rate limit keeps what
+   * is drawn and refreshes once its wait is over; a key problem outranks it,
+   * and a rejected key holds until `unblock` (the layer goes off).
    */
-  function holdFor(seconds) {
-    clearTimeout(state.coverage.holdTimer);
-    state.coverage.holdUntil = Date.now() + seconds * 1000;
-    state.coverage.lastError = RATE_LIMITED_MESSAGE;
-    state.coverage.holdTimer = setTimeout(() => {
-      state.coverage.holdTimer = null;
-      state.coverage.holdUntil = 0;
-      if (state.coverage.lastError === RATE_LIMITED_MESSAGE)
-        state.coverage.lastError = null;
-      refresh();
-    }, seconds * 1000);
+  function block(reason, retryAfterSec = 0) {
+    const current = state.coverage.blocked;
+    if (current === 'rejected') return;
+    if (reason === 'rate-limited' && current === 'no-key') return;
+    clearTimeout(state.coverage.blockTimer);
+    state.coverage.blockTimer = null;
+    state.coverage.blocked = reason;
+    if (reason === 'rate-limited')
+      state.coverage.blockTimer = setTimeout(() => {
+        state.coverage.blockTimer = null;
+        state.coverage.blocked = null;
+        refresh();
+      }, retryAfterSec * 1000);
   }
 
-  /** Forget refusals when the provider goes off, so the next run asks again. */
-  function resetErrors() {
-    clearTimeout(state.coverage.holdTimer);
-    state.coverage.holdTimer = null;
-    state.coverage.holdUntil = 0;
+  /** The layer went off: forget refusals and errors, so the next run asks again. */
+  function unblock() {
+    clearTimeout(state.coverage.blockTimer);
+    state.coverage.blockTimer = null;
+    if (['rejected', 'rate-limited'].includes(state.coverage.blocked))
+      state.coverage.blocked = null;
     state.coverage.lastError = null;
-    state.keyRejected = false;
+  }
+
+  /** The server's key status: until it answers, nothing is requested. */
+  function setKeyStatus(configured) {
+    if (!configured) block('no-key');
+    else if (['status', 'no-key'].includes(state.coverage.blocked)) {
+      state.coverage.blocked = null;
+      refresh();
+    }
+    notify();
   }
 
   /** Drop the previous zoom's tiles once the new ones are on screen. */
@@ -375,74 +301,56 @@ export function createCoverage({ state, source }) {
   }
 
   function notify() {
-    state.context.notify();
+    state.notify?.();
   }
 
   /**
-   * Whether the screen centre meets the ground further ahead than the camera
-   * is high (a view tilted above 45°), or misses it.
+   * The tiles for the camera: what the screen shows within range of it, at
+   * the zoom for its height above ground, nearest the camera first.
    */
-  function isTilted({ nadir, ahead }, height) {
-    if (!ahead) return true;
-    return metresBetween(nadir, ahead) > Math.max(1, height);
-  }
-
-  /** Recompute the tile set for the current camera and reconcile primitives. */
-  function refresh() {
-    const viewer = state.viewer;
-    if (!viewer || !state.context.isActive() || state.keyRequired) return;
-    if (state.statusKnown === false) return;
-    if (state.keyRejected || state.coverage.holdUntil > Date.now()) return;
+  function wantedTiles(viewer) {
     const ground = groundUnderCamera(viewer);
     const cameraHeight = viewer.camera?.positionCartographic?.height;
     const height = Number.isFinite(cameraHeight)
       ? cameraHeight - (ground ?? 0)
       : null;
-    const sequenceZoom = coverageZoomForHeight(height);
-    const overviewZoom = sequenceZoom ? null : overviewZoomForHeight(height);
-    const zoom = sequenceZoom ?? overviewZoom;
-    const kind = sequenceZoom ? 'sequence' : 'overview';
-    // At street zooms the rays meet the ground where it really is (1,600 m up
-    // in Denver) and stop short of the horizon.
-    const ranged =
-      kind === 'sequence'
-        ? {
-            groundHeight: ground,
-            maxRange: Math.max(
-              SEQUENCE_VIEW_RANGE_MIN_M,
-              height * SEQUENCE_VIEW_RANGE_PER_HEIGHT,
-            ),
-          }
-        : {};
-    // Tilted street views rank tiles along the line of sight, from the ground
-    // under the camera to the ground at the centre of the screen.
-    const focus = kind === 'sequence' ? viewFocus(viewer, ranged) : null;
-    let bbox = visibleBbox(viewer, {
-      ...ranged,
-      // A tilted view's screen rows jump from the first metres to the horizon:
-      // keep the ground around the camera too. Looking down needs no help.
-      nearRange: focus && isTilted(focus, height) ? SEQUENCE_VIEW_NEAR_M : null,
+    const zoom = coverageZoomForHeight(height);
+    if (zoom == null) return { hint: ZOOM_IN_HINT };
+    // Rays meet the ground where it really is (1,600 m up in Denver) and stop
+    // short of the horizon, which would stretch the box to the world.
+    const bbox = visibleBbox(viewer, {
+      groundHeight: ground,
+      maxRange: Math.max(
+        SEQUENCE_VIEW_RANGE_MIN_M,
+        height * SEQUENCE_VIEW_RANGE_PER_HEIGHT,
+      ),
     });
-    if (kind === 'overview' && (!bbox || zoom <= 1))
-      bbox = [-180, -85, 180, 85];
-    if (zoom == null || !bbox) {
-      state.coverage.hint =
-        'Point the camera at the globe for street-level coverage';
+    if (!bbox) return { hint: NO_GROUND_HINT };
+    // Ranked from the ground under the camera: a tilted view's box centre
+    // can sit kilometres ahead of anything near.
+    const { tiles } = tilesForBbox(bbox, zoom, {
+      limit: COVERAGE_MAX_TILES,
+      from: cameraNadir(viewer),
+    });
+    return { zoom, tiles };
+  }
+
+  /** Recompute the tile set for the current camera and reconcile primitives. */
+  function refresh() {
+    const viewer = state.viewer;
+    if (!viewer || !isActive(state) || state.coverage.blocked) return;
+    const { zoom, tiles, hint } = wantedTiles(viewer);
+    if (hint) {
+      state.coverage.hint = hint;
       clear();
       notify();
       return;
     }
     state.coverage.hint = '';
-    if (zoom !== state.coverage.zoom || kind !== state.coverage.kind) {
+    if (zoom !== state.coverage.zoom) {
       retire();
       state.coverage.zoom = zoom;
-      state.coverage.kind = kind;
     }
-    const { tiles } = tilesForBbox(bbox, zoom, {
-      limit:
-        kind === 'sequence' ? COVERAGE_MAX_TILES : COVERAGE_OVERVIEW_MAX_TILES,
-      focus: focus && { from: focus.nadir, to: focus.ahead },
-    });
     const wanted = new Set(tiles.map(tileKey));
     for (const key of [...state.coverage.tiles.keys()])
       if (!wanted.has(key)) removeTile(key);
@@ -453,7 +361,7 @@ export function createCoverage({ state, source }) {
         controller.abort();
         state.coverage.pending.delete(key);
       }
-    for (const tile of tiles) loadTile(tile, kind);
+    for (const tile of tiles) loadTile(tile);
     if (!state.coverage.pending.size) purgeStale();
     notify();
   }
@@ -491,9 +399,7 @@ export function createCoverage({ state, source }) {
     for (const key of [...state.coverage.tiles.keys()]) removeTile(key);
     purgeStale();
     state.coverage.zoom = null;
-    state.coverage.kind = null;
     stopSelectionWatch();
-    horizon.stop();
     requestRender();
   }
 
@@ -590,17 +496,32 @@ export function createCoverage({ state, source }) {
   }
 
   /**
-   * Sequences (or overview points) drawn. A sequence that crosses a tile
-   * edge is in both tiles' lists, so sequences count once by id.
+   * Sequences drawn. A sequence that crosses a tile edge is in both tiles'
+   * lists, so sequences count once by id.
    */
   function sequenceCount() {
     const ids = new Set();
-    let points = 0;
     for (const entry of state.coverage.tiles.values())
-      if (entry.kind === 'sequence')
-        for (const id of entry.sequences.keys()) ids.add(id);
-      else points += entry.count;
-    return ids.size + points;
+      for (const id of entry.sequences.keys()) ids.add(id);
+    return ids.size;
+  }
+
+  /** What the panel and the layer list show: count, LOADING, key gate, error. */
+  function stats() {
+    const { blocked } = state.coverage;
+    return {
+      count: sequenceCount(),
+      loading: state.coverage.pending.size > 0,
+      hint: state.coverage.hint,
+      keyRequired: blocked === 'no-key' || blocked === 'rejected',
+      keyRejected: blocked === 'rejected',
+      error:
+        blocked === 'rejected'
+          ? KEY_REJECTED_MESSAGE
+          : blocked === 'rate-limited'
+            ? RATE_LIMITED_MESSAGE
+            : state.coverage.lastError,
+    };
   }
 
   return {
@@ -608,9 +529,11 @@ export function createCoverage({ state, source }) {
     detach,
     refresh,
     clear,
-    resetErrors,
+    unblock,
+    setKeyStatus,
     rebuild,
     recolorSequence,
     sequenceCount,
+    stats,
   };
 }

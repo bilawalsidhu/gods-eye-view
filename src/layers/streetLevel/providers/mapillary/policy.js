@@ -1,15 +1,10 @@
-import { COLORS as SHARED_COLORS, PROVIDER_COLORS } from '../../policy.js';
+import { COLORS as SHARED_COLORS } from '../../policy.js';
 
-export { NEAREST_RADIUS_M } from '../../policy.js';
-
-/** Identity and tuning for the Mapillary street-level provider. */
-export const MAPILLARY_PROVIDER_ID = 'mapillary';
-export const MAPILLARY_NAME = 'Mapillary';
-export const MAPILLARY_LABEL = 'MAPILLARY';
+/** Identity and tuning for Street Level's Mapillary imagery. */
 export const MAPILLARY_KEY_ID = 'mapillary';
 export const MAPILLARY_GRAPH_HOST = 'https://graph.mapillary.com';
 
-/** Methods a source (./source.js or a stand-in) must have for the provider. */
+/** Methods a source (./source.js or a stand-in) must have. */
 export const MAPILLARY_SOURCE_METHODS = Object.freeze([
   'getStatus',
   'getTile',
@@ -24,17 +19,15 @@ export const PICK_PREFIX = Object.freeze({
   image: 'mly:img:',
 });
 
-/** Mapillary green for lines, points and cones; GEV cyan for selection. */
+/** Mapillary green for lines, cones and the legend; GEV cyan for selection. */
 export const COLORS = Object.freeze({
-  coverage: PROVIDER_COLORS.mapillary,
+  coverage: '#05cb63',
   selected: SHARED_COLORS.selected,
 });
 
 /** Camera-driven coverage refresh. */
 export const COVERAGE_MOVE_DEBOUNCE_MS = 320;
 export const COVERAGE_MAX_TILES = 9;
-/** Overview (z0–5) coverage points seen from orbit. */
-export const COVERAGE_OVERVIEW_MAX_TILES = 16;
 /** Shown when Mapillary refuses the server's token (401/403). */
 export const KEY_REJECTED_MESSAGE =
   'Mapillary rejected MAPILLARY_CLIENT_TOKEN — replace it in Provider Settings';
@@ -47,9 +40,6 @@ export const RATE_LIMITED_MESSAGE =
  */
 export const SEQUENCE_VIEW_RANGE_MIN_M = 2_500;
 export const SEQUENCE_VIEW_RANGE_PER_HEIGHT = 10;
-/** Ground always covered around the camera at street zooms, in metres. */
-export const SEQUENCE_VIEW_NEAR_M = 1_000;
-export const COVERAGE_OVERVIEW_POINT_PX = 2.5;
 export const COVERAGE_MAX_SEQUENCES = 6000;
 export const COVERAGE_LINE_WIDTH_PX = 2.5;
 
@@ -58,7 +48,9 @@ export const SEQUENCE_IMAGES_LIMIT = 2000;
 export const IMAGE_CONE_SIZE_PX = 26;
 export const IMAGE_CONE_MIN_SPACING_M = 3;
 
-/** Images asked for in a nearest-image search (radius: NEAREST_RADIUS_M). */
+/** Nearest-image search radius in metres (the graph API caps it at 50 m). */
+export const NEAREST_RADIUS_M = 50;
+/** Images asked for in a nearest-image search. */
 export const NEAREST_LIMIT = 8;
 
 /** On-globe credit: Mapillary imagery is CC BY-SA 4.0 and needs attribution. */

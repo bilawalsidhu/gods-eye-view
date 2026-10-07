@@ -9,7 +9,7 @@ import {
   REGISTERED_LAYER_IDS,
   encodeLayerStateParams,
 } from '../data/layerState.js';
-import { fakeStreetLevelProvider } from '../testSupport/streetLevelFakes.mjs';
+import { fakeMapillarySource } from '../testSupport/streetLevelFakes.mjs';
 
 /* ── A small DOM: just what the panel controls touch ───────────────────── */
 
@@ -215,12 +215,7 @@ async function withDom(fn, options) {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-/* ── A Street Level layer with one stand-in provider ───────────────────── */
-
-function standInProvider() {
-  const def = fakeStreetLevelProvider({ html: 'Mapillary' });
-  return { filters: def.filters, def };
-}
+/* ── A Street Level layer over a stand-in Mapillary source ─────────────── */
 
 /** Every other registered layer, as a module with no options. */
 function plainLayer(id) {
@@ -254,8 +249,7 @@ const memoryStorage = () => {
 
 /** The production path: controls → dataManager → layer → durable layer state. */
 async function productionPanel(dom) {
-  const provider = standInProvider();
-  const layer = createStreetLevelLayer({ providers: [provider.def] });
+  const layer = createStreetLevelLayer({ source: fakeMapillarySource() });
   const manager = new DataLayerManager({});
   for (const id of REGISTERED_LAYER_IDS)
     manager.register(id === 'street-level' ? layer : plainLayer(id));
@@ -288,7 +282,7 @@ async function productionPanel(dom) {
     encodeLayerStateParams(params, coordinator.getDurableState());
     return (params.get('lo') || '').split('_');
   };
-  return { provider, layer, manager, coordinator, controls, share };
+  return { layer, manager, coordinator, controls, share };
 }
 
 const TOKEN = LAYER_STATE_REGISTRY.find(
@@ -297,11 +291,14 @@ const TOKEN = LAYER_STATE_REGISTRY.find(
 
 test('a 360° click reaches the share link through the data manager', () =>
   withDom(async (dom) => {
-    const { provider, coordinator, controls, share } =
-      await productionPanel(dom);
+    const { layer, coordinator, controls, share } = await productionPanel(dom);
     dom.root.querySelectorAll('[data-sl-pano]')[1].click(); // 360°
     await settle();
-    assert.equal(provider.filters.at(-1).pano, 'pano', 'the layer applied it');
+    assert.equal(
+      layer.getUIState().filter.pano,
+      'pano',
+      'the layer applied it',
+    );
     assert.equal(
       coordinator.getDurableState().options['street-level'].pano,
       'pano',
@@ -362,35 +359,20 @@ function uiState({
 } = {}) {
   return {
     enabled,
+    providerOn: on,
     keyRequired,
+    keyRejected: false,
     filter: { pano, sinceDays: 0 },
-    providers: [
-      {
-        id: 'mapillary',
-        name: 'Mapillary',
-        label: 'MAPILLARY',
-        color: '#05cb63',
-        on,
-        configured: !keyRequired,
-        keyRequired,
-        requiresKeyId: 'mapillary',
-        loading: false,
-        count: 3,
-        hint: '',
-        error: null,
-      },
-    ],
     coverage: { count: 3, loading: false, hint: '', error: null },
     legend: legend || [
       { key: 'mapillary', label: 'Mapillary', color: '#05cb63' },
       { key: 'selected', label: 'Selected', color: '#00d4ff' },
     ],
-    sequence: { providerId: null, selectedId: null, images: 0, loading: false },
+    sequence: { selectedId: null, images: 0, loading: false },
     street: {
       open,
       loading: false,
       renderMode,
-      providerId: open ? 'mapillary' : null,
       imageId: open ? 'img-1' : null,
       error: null,
     },
@@ -422,18 +404,14 @@ function stubPanel(dom, state, extraActions = {}) {
   return { layer, calls, controls };
 }
 
-test('the header pill switches the layer, bringing back a provider switched off elsewhere', () =>
+test('the header pill switches the layer, bringing back Mapillary switched off elsewhere', () =>
   withDom(async (dom) => {
     const status = dom.root.querySelector('#sl-status');
     const on = stubPanel(dom, uiState());
     status.click();
     await settle();
     assert.deepEqual(on.calls.setEnabled, [false]);
-    assert.deepEqual(
-      on.calls.setParams,
-      [],
-      'switching off keeps the provider',
-    );
+    assert.deepEqual(on.calls.setParams, [], 'switching off keeps the switch');
     on.controls.destroy();
     const dark = stubPanel(dom, uiState({ enabled: false, on: false }));
     status.click();

@@ -2928,7 +2928,7 @@ its criteria cannot be silently ignored.
 | Dams ▰                 | OpenInfraMap/OSM extract (bundled)                                                                                                                                                              | `src/data/localLayers.js`                             | —                                                        | static                                                                            |
 | Submarine Cables ◠     | TeleGeography public map (bundled)                                                                                                                                                              | `src/data/telegeographySubmarineCables.js`            | —                                                        | static                                                                            |
 | FIRMS Active Fires ▲   | NASA FIRMS live (VIIRS ×3 NRT + MODIS NRT, trailing 24h)                                                                                                                                        | `src/data/firmsHeatmap.js`                            | `/api/firms` (`FIRMS_MAP_KEY`)                           | 10 min (proxy TTL 30 min)                                                         |
-| Street Level 📷 | Street-level imagery; Mapillary is the first provider (vector tiles, Graph API, MapillaryJS) | `src/layers/streetLevel/` via `src/app/layers/streetLevel.js` | `/api/mapillary/status`, `/api/mapillary/tiles/coverage/{z}/{x}/{y}` (`MAPILLARY_CLIENT_TOKEN`) | camera-driven (320 ms debounce, ≤9 tiles, cached 24 h) |
+| Street Level 📷 | Mapillary street-level imagery (vector tiles, Graph API, MapillaryJS) | `src/layers/streetLevel/` via `src/app/layers/streetLevel.js` | `/api/mapillary/status`, `/api/mapillary/tiles/coverage/{z}/{x}/{y}` (`MAPILLARY_CLIENT_TOKEN`) | camera-driven (320 ms debounce, ≤9 tiles, cached 24 h) |
 | Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
 | Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
 
@@ -2938,19 +2938,21 @@ Street Level is a collapsible right-rail panel (`#street-level-panel`, layer
 token `0`, option owner `street-level`, panel `ui` token `t`) that starts
 collapsed. It opens itself only when the user, voice or a tool switches the
 layer on or a photo opens, never on a restore, and those opens are not stored.
-Like the iD editor's photo overlay, it has one switch per registered provider
-(share options, no panel chips),
-shared 360°/flat and captured-since filters (relative days, so a link keeps its
-meaning), one viewer host and one on-globe credit per active provider. Each
-provider draws in one colour (`PROVIDER_COLORS` in
-`src/layers/streetLevel/policy.js`); 360° cones are rings and the selected
-sequence is GEV cyan. Share options: `m` (Mapillary), `p` (`a`/`p`/`f`
-panoramas), `s` (since, days). Only Mapillary is registered. Without
-`MAPILLARY_CLIENT_TOKEN` the panel reads KEY REQUIRED, its error line says
-which key to add, and the filters are disabled. With it, coverage draws as z0–5 overview points from orbit and z11–14
-sequence lines below 60 km; the proxy strips the unused `image` layer from z14
-tiles (12 MB → ~80 KB) and shares one upstream fetch between concurrent
-requests for a tile.
+Like the iD editor's photo overlay, it shows Mapillary with 360°/flat and
+captured-since filters (relative days, so a link keeps its meaning), one
+viewer host and an on-globe credit while the layer is on. Lines and cones are
+Mapillary green; 360° cones are rings and the selected sequence is GEV cyan.
+Share options: `m` (Mapillary on/off; off draws nothing), `p` (`a`/`p`/`f`
+panoramas), `s` (since, days). Without `MAPILLARY_CLIENT_TOKEN` the panel
+reads KEY REQUIRED, its error line says which key to add, and the filters are
+disabled. Coverage is z11–14 sequence lines below 60 km; above that nothing is
+drawn and the panel says to zoom in. Tiles come from the visible ground within
+range of the camera (rays meet the terrain height, not the bare ellipsoid),
+nearest the camera first, at most 9. The proxy serves only z11–14, strips the
+unused `image` layer from z14 tiles (12 MB → ~80 KB) and shares one upstream
+fetch between concurrent requests for a tile. A 429 pauses tile requests for
+its Retry-After and then refreshes once; a rejected key stops them and reads
+KEY REJECTED until the layer goes off.
 
 Sequence lines are `GroundPolylinePrimitive`s with
 `ClassificationType.BOTH`, so they drape on the terrain globe and on Google 3D
@@ -2959,12 +2961,13 @@ photo marker are billboards clamped to the ground; they skip the depth test, so
 a horizon cull hides the ones behind the globe. Roads on elevated decks are
 drawn at ground level.
 
-The header pill is the only layer switch; switching on also turns back on a
-provider a share link or tool switched off. The viewer sits under the header
+The header pill is the only layer switch; switching on also turns Mapillary
+back on if a share link or tool switched it off. The viewer sits under the header
 with EXPAND, FIT/FILL and close above the image. EXPAND is the browser's
 Fullscreen API on the viewer element, which stays in the panel (Esc or SHRINK
-leaves; the button is hidden where the API is missing). Opening a photo flies
-the globe camera once to frame it; there is no camera follow. The flight goes
+leaves; the button is hidden where the API is missing). MapillaryJS loads on the
+first photo (no prewarm). Opening a photo flies the globe camera once to frame
+it; there is no camera follow. The flight goes
 through the application's deferred navigation (`attachNavigation`: `begin` /
 `reassert`), which releases aircraft and satellite tracking and is refused in
 the cockpit; a photo takes its ticket when it starts opening and frames only
@@ -2972,14 +2975,9 @@ if nothing newer took the camera while it loaded. SINCE is a stepped slider whos
 cut-off date. At phone width (≤720 px) the viewer height is derived from the
 rail band so the whole photo fits.
 
-Providers implement the contract in `src/layers/streetLevel/registry.js`. The
-core routes clicks by pick prefix, swaps viewer adapters in the one host,
-manages each provider's credit and fans the filter out to every provider. To
-add a provider: implement the definition, register it in
-`src/app/layers/streetLevel.js`, add its boolean option to the `street-level`
-group in `src/data/layerState.js` and its modules to
-`scripts/package-boundaries.json`. Once a keyless provider registers, the
-layer's `requiresKeyId` becomes null and the key gate must move per provider.
+The layer (`src/layers/streetLevel/index.js`) owns the Mapillary parts
+directly: `providers/mapillary/` holds the source, tile decoding, coverage,
+sequence cones, nearest-image lookup and the MapillaryJS viewer.
 
 Street Level has two browser gates. `npm run qa:street-level -- --url <server>`
 runs against real Mapillary and needs `MAPILLARY_CLIENT_TOKEN`. `npm run

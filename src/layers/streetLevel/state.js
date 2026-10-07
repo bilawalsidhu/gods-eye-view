@@ -7,9 +7,6 @@ import { FILTER_DEFAULT } from './policy.js';
 export function freshStreet() {
   return {
     open: false,
-    providerId: null,
-    providerName: null,
-    providerLabel: null,
     imageId: null,
     position: null,
     bearing: null,
@@ -25,7 +22,33 @@ export function freshStreet() {
   };
 }
 
-/** Mutable core state, created once per layer instance. */
+/** Coverage bookkeeping, before the first refresh. */
+export function freshCoverage() {
+  return {
+    zoom: null,
+    /** Current zoom's tiles by `z/x/y` key. */
+    tiles: new Map(),
+    /** Previous zoom's tiles, kept on screen until replacements land. */
+    stale: new Map(),
+    staleTimer: null,
+    /** Tile key → its request's controller; any entry means LOADING. */
+    pending: new Map(),
+    lastError: null,
+    /**
+     * Why tile requests are paused, or null: 'status' until the key status
+     * answers, 'no-key', 'rejected' (until the layer goes off) or
+     * 'rate-limited' (until `blockTimer` fires).
+     */
+    blocked: 'status',
+    blockTimer: null,
+    debounceTimer: null,
+    removeCameraListener: null,
+    terrainReady: null,
+    hint: '',
+  };
+}
+
+/** Mutable layer state, created once per layer instance. */
 export function createState({ services }) {
   return {
     services,
@@ -35,10 +58,10 @@ export function createState({ services }) {
     destroyed: false,
     listeners: new Set(),
     notify: null,
-    /** Shared imagery filter, in the stored (relative-days) form. */
+    /** The share link's `mapillary` switch: off draws nothing. */
+    providerOn: true,
+    /** Imagery filter, in the stored (relative-days) form. */
     filter: { ...FILTER_DEFAULT },
-    /** @type {Map<string, {def: object, instance: object, on: boolean}>} */
-    providers: new Map(),
 
     street: {
       host: null,
@@ -47,7 +70,23 @@ export function createState({ services }) {
       ...freshStreet(),
     },
 
+    coverage: freshCoverage(),
+    sequence: {
+      selectedId: null,
+      images: [],
+      /** Recent sequences' thinned images, by sequence id. */
+      cache: new Map(),
+      collection: null,
+      loading: false,
+      abort: null,
+    },
+
     marker: { collection: null, billboard: null },
     clickHandler: null,
   };
+}
+
+/** Coverage, cones and lookups run only while the layer and its switch are on. */
+export function isActive(state) {
+  return state.enabled && state.providerOn;
 }

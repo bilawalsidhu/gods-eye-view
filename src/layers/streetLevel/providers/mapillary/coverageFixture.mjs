@@ -86,11 +86,11 @@ function lineGeometry(parts) {
  * Encode a `mly1_public`-shaped tile from lon/lat features, for tests and
  * the hermetic QA gate.
  * @param {{x: number, y: number, z: number}} tile
- * @param {{sequences?: Array<{id: string, capturedAt?: number, isPano?: boolean, parts: Array<Array<[number, number]>>}>, overview?: Array<{id: string, lon: number, lat: number, capturedAt?: number, isPano?: boolean}>, extent?: number}} [content]
+ * @param {{sequences?: Array<{id: string, capturedAt?: number, isPano?: boolean, parts: Array<Array<[number, number]>>}>, extent?: number}} [content]
  */
 export function encodeCoverageTile(
   tile,
-  { sequences = [], overview = [], extent = 4096 } = {},
+  { sequences = [], extent = 4096 } = {},
 ) {
   const pbf = new PbfWriter();
   if (sequences.length) {
@@ -109,18 +109,6 @@ export function encodeCoverageTile(
           is_pano: sequence.isPano === true,
         },
       );
-    pbf.writeMessage(3, (_, out) => layer.write(out), null);
-  }
-  if (overview.length) {
-    const layer = layerWriter('overview', extent);
-    for (const point of overview) {
-      const [px, py] = lonLatToTileLocal([point.lon, point.lat], tile, extent);
-      layer.add(1, [9, zigzag(px), zigzag(py)], {
-        id: point.id,
-        captured_at: point.capturedAt ?? Date.now(),
-        is_pano: point.isPano === true,
-      });
-    }
     pbf.writeMessage(3, (_, out) => layer.write(out), null);
   }
   return new Uint8Array(pbf.finish());

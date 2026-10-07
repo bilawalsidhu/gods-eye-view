@@ -1,30 +1,37 @@
 import * as Cesium from 'cesium';
-import { STREET_LEVEL_LAYER_ID } from './policy.js';
+import { POSITION_PICK_ID, STREET_LEVEL_LAYER_ID } from './policy.js';
+import { PICK_PREFIX } from './providers/mapillary/policy.js';
+import { sequenceIdFromPick } from './providers/mapillary/coverage.js';
 
 /** Hover picks at most ~8 times a second (like the CCTV layer), never per frame. */
 const HOVER_PICK_INTERVAL_MS = 120;
 
-/** One click/hover handler for every provider's coverage and image cones. */
+/** One click/hover handler for coverage lines, image cones and the marker. */
 export function createSelection({ state, parts }) {
   const { picking, input } = state.services;
 
-  function ownsPick(pickedId) {
-    return parts.router.ownsPick(pickedId);
+  /** Lines and cones (`mly:`) and the position marker are this layer's. */
+  function ownsPick(id) {
+    return (
+      typeof id === 'string' &&
+      (id === POSITION_PICK_ID || id.startsWith(PICK_PREFIX.root))
+    );
   }
 
+  /** A line selects its sequence; a cone opens its image. */
   function onClick(click) {
     const viewer = state.viewer;
-    if (!viewer || !state.enabled) return;
+    if (!viewer || !state.enabled || !state.providerOn) return;
     if (input?.isPointerFree && !input.isPointerFree()) return;
     const picked = viewer.scene.pick(click.position);
     const id = picking?.resolvePickId
       ? picking.resolvePickId(picked)
       : picked?.id;
-    const route = parts.router.resolve(id);
-    if (!route?.instance) return;
-    const entry = state.providers.get(route.providerId);
-    if (!entry?.on) return;
-    route.instance.handlePick(route.id);
+    if (typeof id !== 'string') return;
+    const sequenceId = sequenceIdFromPick(id);
+    if (sequenceId) parts.sequences.select(sequenceId);
+    else if (id.startsWith(PICK_PREFIX.image))
+      parts.openImage(id.slice(PICK_PREFIX.image.length));
   }
 
   /**
@@ -42,9 +49,9 @@ export function createSelection({ state, parts }) {
       )
     )
       return;
-    if (!parts.hasSelectedSequence()) return;
+    if (!state.sequence.selectedId) return;
     event.preventDefault();
-    parts.clearSequences();
+    parts.sequences.clearSelection();
   }
 
   let hoverQueued = false;

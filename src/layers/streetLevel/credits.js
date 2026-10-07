@@ -1,38 +1,32 @@
 import * as Cesium from 'cesium';
 
 /**
- * One static Cesium credit per active provider: CC BY-SA imagery needs
+ * A static Cesium credit shown while the layer draws: CC BY-SA imagery needs
  * visible attribution that goes away with the imagery.
  */
-export function createCredits() {
-  /** @type {Map<string, object>} provider id → Cesium.Credit */
-  const shown = new Map();
+export function createCredit(html) {
+  let shown = null;
 
-  function show(viewer, def) {
-    if (shown.has(def.id) || !viewer?.creditDisplay) return;
+  function show(viewer) {
+    if (shown || !viewer?.creditDisplay) return;
     try {
-      const credit = new Cesium.Credit(def.credit.html, true);
+      const credit = new Cesium.Credit(html, true);
       viewer.creditDisplay.addStaticCredit(credit);
-      shown.set(def.id, credit);
+      shown = credit;
     } catch {
       /* credit display unavailable */
     }
   }
 
-  function hide(viewer, def) {
-    const credit = shown.get(def.id);
-    if (!credit) return;
+  function hide(viewer) {
+    if (!shown) return;
     try {
-      viewer?.creditDisplay?.removeStaticCredit?.(credit);
+      viewer?.creditDisplay?.removeStaticCredit?.(shown);
     } catch {
       /* credit display already torn down */
     }
-    shown.delete(def.id);
+    shown = null;
   }
 
-  function hideAll(viewer) {
-    for (const id of [...shown.keys()]) hide(viewer, { id });
-  }
-
-  return { show, hide, hideAll };
+  return { show, hide };
 }

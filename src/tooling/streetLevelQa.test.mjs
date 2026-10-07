@@ -4,7 +4,7 @@ import test from 'node:test';
 import { createApplicationStreetLevel } from '../app/layers/streetLevel.js';
 import {
   fixtureTile,
-  EXPECTED_PROVIDERS,
+  LEGEND_SWATCHES,
   isCollapsed,
   PARK,
   STRICT_ALLOWED_SKIPS,
@@ -25,13 +25,13 @@ import { redact } from '../../scripts/qa-browserEvidence.mjs';
 globalThis.requestAnimationFrame ??= (callback) =>
   setTimeout(() => callback(Date.now()), 0);
 
-test('the harness expects exactly the providers the app registers, in order', () => {
-  // Any method a provider asks its source for is a no-op: only ids matter.
+test('the harness expects the legend the app layer draws', () => {
+  // Any method the layer asks its source for is a no-op: only the legend matters.
   const source = new Proxy({}, { get: () => () => {} });
   const layer = createApplicationStreetLevel({
     sources: { mapillary: source },
   });
-  assert.deepEqual([...EXPECTED_PROVIDERS], [...layer.providerIds]);
+  assert.equal(layer.getUIState().legend.length, LEGEND_SWATCHES);
 });
 
 test('a panel reads as collapsed only with the collapsed class', () => {
@@ -68,13 +68,8 @@ test('fixture tiles give the hermetic gate something real to filter', async () =
   const year = 365 * 86_400_000;
   const old = grid.filter((s) => now - s.capturedAt > year).length;
   assert.ok(old > 0 && old < 8, 'recent and older both present');
-  const orbit = decodeCoverageTile(fixtureTile(3, 1, 3, now), {
-    x: 1,
-    y: 3,
-    z: 3,
-  });
-  assert.ok(orbit.overview.length > 0, 'overview points from orbit');
-  assert.equal(fixtureTile(8, 1, 1, now).length, 0, 'nothing in between');
+  assert.equal(fixtureTile(3, 1, 3, now).length, 0, 'nothing from orbit');
+  assert.equal(fixtureTile(8, 1, 1, now).length, 0, 'nor in between');
 });
 
 /* ── The real status route probe ─────────────────────────────────────── */

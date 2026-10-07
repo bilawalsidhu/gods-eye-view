@@ -11,16 +11,6 @@ export function metresBetween(a, b) {
 }
 
 /**
- * Run `task(deadline)` when idle, within `timeout` ms; without idle callbacks
- * (Node) it runs a frame later with a null deadline.
- */
-export function whenIdle(task, timeout) {
-  if (typeof globalThis.requestIdleCallback === 'function')
-    globalThis.requestIdleCallback(task, { timeout });
-  else setTimeout(() => task(null), 16);
-}
-
-/**
  * Ellipsoidal height (m) of the globe terrain under the camera; null where
  * the globe is hidden (Google 3D) or not yet loaded.
  */
@@ -63,13 +53,14 @@ function groundHit(camera, point, ellipsoid, maxRange) {
 /**
  * Visible [west, south, east, north] degrees, or null. Only screen rays that
  * hit count, so a horizon cannot inflate the box to the world.
- * `groundHeight` raises the ellipsoid to the ground, `maxRange` (m) drops
- * near-horizon hits, and `nearRange` (m) always includes the ground around
- * the camera.
+ * `groundHeight` raises the ellipsoid to the ground (rays to the bare
+ * ellipsoid under Denver land kilometres too far out) and `maxRange` (m)
+ * drops near-horizon hits; with it, too few hits give null rather than
+ * Cesium's view rectangle, which can span the horizon.
  */
 export function visibleBbox(
   viewer,
-  { grid = 5, groundHeight = null, maxRange = null, nearRange = null } = {},
+  { grid = 5, groundHeight = null, maxRange = null } = {},
 ) {
   const scene = viewer?.scene;
   const camera = viewer?.camera;
@@ -91,27 +82,6 @@ export function visibleBbox(
         if (carto) hits.push(carto);
       }
     }
-  }
-  // The ground around the camera always counts: a street-level view's screen
-  // rows skip from the horizon to the first few metres.
-  const nadir = camera.positionCartographic;
-  if (Number.isFinite(nearRange) && nearRange > 0 && nadir) {
-    const dLat = nearRange / 111_320;
-    const dLon = dLat / Math.max(0.05, Math.cos(nadir.latitude));
-    const lat = Cesium.Math.toDegrees(nadir.latitude);
-    const lon = Cesium.Math.toDegrees(nadir.longitude);
-    for (const [dx, dy] of [
-      [-1, -1],
-      [-1, 1],
-      [1, -1],
-      [1, 1],
-    ])
-      hits.push(
-        Cesium.Cartographic.fromDegrees(
-          lon + dx * dLon,
-          Math.max(-85, Math.min(85, lat + dy * dLat)),
-        ),
-      );
   }
   if (hits.length >= 4) {
     let west = Infinity;
@@ -145,6 +115,7 @@ export function visibleBbox(
     }
     if (west !== east && north - south > 0) return [west, south, east, north];
   }
+  if (Number.isFinite(maxRange)) return null;
   const rectangle = camera.computeViewRectangle?.(scene.globe?.ellipsoid);
   if (!rectangle) return null;
   return [
@@ -166,50 +137,17 @@ export function viewCentre(viewer) {
     if (lon > 180) lon -= 360;
     return { lat: (bbox[1] + bbox[3]) / 2, lon };
   }
-  const carto = viewer.camera?.positionCartographic;
-  if (!carto) return null;
-  return {
-    lat: Cesium.Math.toDegrees(carto.latitude),
-    lon: Cesium.Math.toDegrees(carto.longitude),
-  };
+  return cameraNadir(viewer);
 }
 
-/**
- * Ground the camera looks at, for ranking tiles: `nadir` under the camera and
- * `ahead` at the screen centre (null on a miss or beyond `maxRange`).
- */
-export function viewFocus(
-  viewer,
-  { groundHeight = null, maxRange = null } = {},
-) {
-  const camera = viewer?.camera;
-  const carto = camera?.positionCartographic;
+/** The point on the ground under the camera, as {lon, lat} degrees. */
+export function cameraNadir(viewer) {
+  const carto = viewer?.camera?.positionCartographic;
   if (!carto) return null;
-  const nadir = {
+  return {
     lon: Cesium.Math.toDegrees(carto.longitude),
     lat: Cesium.Math.toDegrees(carto.latitude),
   };
-  const canvas = viewer.scene?.canvas;
-  const width = canvas?.clientWidth || canvas?.width || 0;
-  const height = canvas?.clientHeight || canvas?.height || 0;
-  let ahead = null;
-  if (width > 0 && height > 0) {
-    const hit = groundHit(
-      camera,
-      new Cesium.Cartesian2(width / 2, height / 2),
-      raisedEllipsoid(
-        viewer.scene?.globe?.ellipsoid || Cesium.Ellipsoid.WGS84,
-        groundHeight,
-      ),
-      maxRange,
-    );
-    if (hit)
-      ahead = {
-        lon: Cesium.Math.toDegrees(hit.longitude),
-        lat: Cesium.Math.toDegrees(hit.latitude),
-      };
-  }
-  return { nadir, ahead };
 }
 
 /**

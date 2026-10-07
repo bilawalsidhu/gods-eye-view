@@ -1,51 +1,70 @@
-import { createState } from './state.js';
+import { createState, isActive } from './state.js';
 import { createMarker } from './marker.js';
 import { createCameraFraming } from './cameraFraming.js';
-import { createCredits } from './credits.js';
-import { createPickRouter } from './pickRouter.js';
+import { createCredit } from './credits.js';
 import { createSelection } from './selection.js';
 import { createViewerHost } from './viewerHost.js';
-import { requiresKeyIdFor, validateProviders } from './registry.js';
 import { normalizeFilter, resolveFilter, sameFilter } from './filter.js';
-import { decodeParams, encodeParams } from './params.js';
-import { composeUIState, summarizeCoverage } from './uiState.js';
-import { viewCentre, whenIdle } from './view.js';
+import { viewCentre } from './view.js';
+import { COLORS, STREET_LEVEL_LAYER_ID } from './policy.js';
+import { createCoverage } from './providers/mapillary/coverage.js';
+import { createSequences } from './providers/mapillary/sequences.js';
+import { createMapillaryViewer } from './providers/mapillary/viewer.js';
+import { nearestImageId } from './providers/mapillary/nearest.js';
 import {
+  COLORS as MAPILLARY_COLORS,
+  MAPILLARY_CREDIT_HTML,
+  MAPILLARY_KEY_ID,
+  MAPILLARY_SOURCE_METHODS,
   NEAREST_RADIUS_M,
-  POSITION_PICK_ID,
-  STREET_LEVEL_LAYER_ID,
-} from './policy.js';
+} from './providers/mapillary/policy.js';
 
 export { STREET_LEVEL_LAYER_ID } from './policy.js';
 
+/** Coverage as the panel sees it while the `mapillary` switch is off. */
+const COVERAGE_OFF = Object.freeze({
+  count: 0,
+  loading: false,
+  hint: '',
+  error: null,
+  keyRequired: false,
+  keyRejected: false,
+});
+
 /**
- * The Street Level layer over imagery providers (contract in registry.js).
- * The core owns what they share; providers own coverage, sequences, viewer.
- * @param {{providers: Array<import('./registry.js').StreetLevelProvider>, services?: object}} options
+ * The Street Level layer: Mapillary coverage lines at street zoom, a selected
+ * sequence's image cones, and the photo viewer in the panel.
+ * @param {{source: object, services?: object, photoViewer?: object}} options
+ *   `source` is providers/mapillary/source.js or a stand-in; `photoViewer`
+ *   stands in for the MapillaryJS adapter (providers/mapillary/viewer.js).
  */
 export function createStreetLevelLayer({
-  providers: definitions,
+  source,
   services = {},
+  photoViewer = null,
 }) {
-  const definitionsFrozen = validateProviders(definitions);
+  if (
+    !MAPILLARY_SOURCE_METHODS.every(
+      (method) => typeof source?.[method] === 'function',
+    )
+  )
+    throw new TypeError('A Mapillary source is required');
   const state = createState({ services });
   const parts = {};
   const context = { state, parts };
-  parts.credits = createCredits();
+  const credit = createCredit(MAPILLARY_CREDIT_HTML);
   parts.marker = createMarker(context);
   parts.framing = createCameraFraming(context);
-  parts.router = createPickRouter(() => state.providers.values(), {
-    positionId: POSITION_PICK_ID,
+  parts.coverage = createCoverage({ state, source });
+  parts.sequences = createSequences({ state, source, parts });
+  parts.viewerHost = createViewerHost({
+    state,
+    parts,
+    adapter:
+      photoViewer || createMapillaryViewer({ source, render: services.render }),
   });
-  parts.viewerHost = createViewerHost(context);
-  parts.hasSelectedSequence = () =>
-    [...state.providers.values()].some(
-      (entry) => entry.instance.sequenceStats?.()?.selectedId,
-    );
-  parts.clearSequences = () => {
-    for (const entry of state.providers.values())
-      entry.instance.clearSequence?.();
-  };
+  parts.openImage = openImage;
+  parts.reportSequenceError = reportSequenceError;
   parts.selection = createSelection(context);
 
   let notifyQueued = false;
@@ -66,70 +85,64 @@ export function createStreetLevelLayer({
   }
   state.notify = notify;
 
-  function providerContext(entry) {
-    return Object.freeze({
-      services: state.services,
-      getFilter: () => resolveFilter(state.filter),
-      isActive: () => state.enabled && entry.on,
-      notify,
-      actions: {
-        openImage: (imageId) => openImage(entry.def.id, imageId),
-        /**
-         * Show a provider error, or withdraw it (null). A withdrawal clears
-         * only this provider's own error, never a newer one from elsewhere.
-         */
-        reportError: (message) => {
-          if (message) {
-            state.street.error = entry.reportedError = message;
-          } else {
-            if (!entry.reportedError) return;
-            if (state.street.error === entry.reportedError)
-              state.street.error = null;
-            entry.reportedError = null;
-          }
-          notify();
-        },
-      },
-    });
-  }
+  /** The error a sequence lookup last showed, until it withdraws it. */
+  let sequenceError = null;
 
-  for (const def of definitionsFrozen) {
-    const entry = {
-      def,
-      instance: null,
-      on: true,
-      status: null,
-      /** The error this provider last reported, until it withdraws it. */
-      reportedError: null,
-    };
-    entry.instance = def.create(providerContext(entry));
-    state.providers.set(def.id, entry);
-  }
-
-  const activeEntries = () =>
-    [...state.providers.values()].filter((entry) => entry.on);
-
-  async function refreshStatus(entry) {
-    try {
-      entry.status = await entry.instance.status();
-    } catch {
-      entry.status = null;
+  /**
+   * Show a sequence error, or withdraw it (null). A withdrawal clears only
+   * that error, never a newer one from the viewer.
+   */
+  function reportSequenceError(message) {
+    if (message) {
+      state.street.error = sequenceError = message;
+    } else {
+      if (!sequenceError) return;
+      if (state.street.error === sequenceError) state.street.error = null;
+      sequenceError = null;
     }
     notify();
   }
 
-  function activate(entry) {
-    if (!state.viewer) return;
-    entry.instance.activate(state.viewer);
-    parts.credits.show(state.viewer, entry.def);
-    if (!entry.status) refreshStatus(entry);
-    whenIdle(() => parts.viewerHost.prewarm([entry]), 1500);
+  /** Coverage waits for the key status: no tile requests without a key. */
+  async function checkKey() {
+    let configured;
+    try {
+      configured = (await source.getStatus())?.configured === true;
+    } catch {
+      configured = source.hasToken?.() === true;
+    }
+    parts.coverage.setKeyStatus(configured);
   }
 
-  function deactivate(entry) {
-    parts.viewerHost.unmount(entry.def.id);
-    entry.instance.deactivate();
-    parts.credits.hide(state.viewer, entry.def);
+  function startDrawing() {
+    const viewer = state.viewer;
+    if (!viewer) return;
+    parts.sequences.setVisible(true);
+    parts.coverage.attach(viewer);
+    credit.show(viewer);
+  }
+
+  /** Close the photo, clear lines and cones, forget refusals. */
+  function stopDrawing() {
+    abortNearest();
+    parts.viewerHost.unmount();
+    parts.coverage.detach();
+    parts.coverage.clear();
+    parts.coverage.unblock();
+    parts.sequences.clearSelection();
+    parts.sequences.setVisible(false);
+    credit.hide(state.viewer);
+  }
+
+  /** The share link's `mapillary` switch: off, the layer draws nothing. */
+  function setProviderOn(on) {
+    if (state.providerOn === on) return;
+    state.providerOn = on;
+    if (state.enabled) {
+      if (on) startDrawing();
+      else stopDrawing();
+    }
+    notify();
   }
 
   /** The nearest-image lookup in flight; any newer user action aborts it. */
@@ -140,97 +153,62 @@ export function createStreetLevelLayer({
     nearestLookup = null;
   }
 
-  function openImage(providerId, imageId) {
+  function openImage(imageId) {
     abortNearest();
-    return parts.viewerHost.open(providerId, imageId);
-  }
-
-  function setProviderEnabled(providerId, on) {
-    const entry = state.providers.get(providerId);
-    if (!entry) return false;
-    const next = on !== false;
-    if (entry.on === next) return true;
-    entry.on = next;
-    if (state.enabled) {
-      if (next) activate(entry);
-      else deactivate(entry);
-    }
-    notify();
-    return true;
+    return parts.viewerHost.open(imageId);
   }
 
   function setCoverageFilter(next) {
     const filter = normalizeFilter(next, state.filter);
     if (sameFilter(filter, state.filter)) return;
     state.filter = filter;
-    const resolved = resolveFilter(filter);
-    for (const entry of state.providers.values())
-      entry.instance.setFilter(resolved);
+    parts.coverage.rebuild();
+    parts.sequences.rerender();
     notify();
   }
 
-  function providerSnapshots() {
-    return [...state.providers.values()].map((entry) => {
-      const stats = entry.instance.coverageStats();
-      return {
-        id: entry.def.id,
-        name: entry.def.name,
-        label: entry.def.label,
-        on: entry.on,
-        configured: entry.status ? entry.status.configured === true : null,
-        // A rejected key gates the provider exactly like a missing one.
-        keyRequired: stats.keyRequired === true || stats.keyRejected === true,
-        keyRejected: stats.keyRejected === true,
-        requiresKeyId: entry.def.requiresKeyId || null,
-        loading: stats.loading === true,
-        count: stats.count || 0,
-        hint: stats.hint || '',
-        error: stats.error || null,
-        color: entry.def.colors.coverage,
-      };
-    });
-  }
-
-  function sequenceSnapshot() {
-    // The provider showing the open image answers first.
-    const owner = state.providers.get(state.street.providerId);
-    const candidates = owner
-      ? [owner, ...[...state.providers.values()].filter((e) => e !== owner)]
-      : [...state.providers.values()];
-    for (const entry of candidates) {
-      const stats = entry.instance.sequenceStats?.();
-      if (stats?.selectedId || stats?.loading)
-        return {
-          providerId: entry.def.id,
-          selectedId: stats.selectedId || null,
-          images: stats.images || 0,
-          loading: stats.loading === true,
-        };
-    }
-    return { providerId: null, selectedId: null, images: 0, loading: false };
+  function coverageStats() {
+    return state.providerOn ? parts.coverage.stats() : COVERAGE_OFF;
   }
 
   function getUIState() {
     const { host, ...street } = state.street;
-    return composeUIState({
+    const { keyRequired, keyRejected, ...coverage } = coverageStats();
+    return {
       enabled: state.enabled,
-      filter: state.filter,
-      providers: providerSnapshots(),
+      providerOn: state.providerOn,
+      // A rejected key gates the layer exactly like a missing one.
+      keyRequired,
+      keyRejected,
+      filter: { ...state.filter },
+      coverage,
+      legend: state.providerOn
+        ? [
+            {
+              key: 'mapillary',
+              label: 'Mapillary',
+              color: MAPILLARY_COLORS.coverage,
+            },
+            { key: 'selected', label: 'Selected', color: COLORS.selected },
+          ]
+        : [],
+      sequence: {
+        selectedId: state.sequence.selectedId,
+        images: state.sequence.images.length,
+        loading: state.sequence.loading,
+      },
       street,
-      sequence: sequenceSnapshot(),
-    });
+    };
   }
 
   const layer = {
     id: STREET_LEVEL_LAYER_ID,
     name: 'Street Level',
     icon: '📷',
-    source: definitionsFrozen.map((def) => def.name).join(' · '),
+    source: 'Mapillary',
     updateInterval: 0,
     statsRefreshInterval: 1000,
-    requiresKeyId: requiresKeyIdFor(definitionsFrozen),
-    /** Registered providers, in chip order. */
-    providerIds: definitionsFrozen.map((def) => def.id),
+    requiresKeyId: MAPILLARY_KEY_ID,
 
     init(viewer) {
       if (state.initialized)
@@ -239,10 +217,9 @@ export function createStreetLevelLayer({
       state.initialized = true;
       parts.marker.ensure(viewer);
       parts.marker.setVisible(false);
-      for (const entry of state.providers.values()) {
-        entry.instance.init(viewer);
-        refreshStatus(entry);
-      }
+      parts.sequences.ensureCollections(viewer);
+      parts.sequences.setVisible(false);
+      checkKey();
       console.log('[Data:StreetLevel] Initialized');
     },
 
@@ -251,16 +228,13 @@ export function createStreetLevelLayer({
       state.viewer = viewer;
       parts.marker.setVisible(true);
       parts.selection.install(viewer);
-      for (const entry of activeEntries()) activate(entry);
+      if (state.providerOn) startDrawing();
       notify();
     },
 
     disable() {
       state.enabled = false;
-      abortNearest();
-      parts.viewerHost.unmount();
-      for (const entry of state.providers.values()) entry.instance.deactivate();
-      parts.credits.hideAll(state.viewer);
+      stopDrawing();
       parts.selection.uninstall();
       parts.marker.setVisible(false);
       notify();
@@ -272,8 +246,7 @@ export function createStreetLevelLayer({
 
     destroy(viewer = state.viewer) {
       layer.disable();
-      for (const entry of state.providers.values())
-        entry.instance.destroy(viewer);
+      parts.sequences.destroy(viewer);
       parts.marker.destroy(viewer);
       parts.framing.attachNavigation(null);
       state.listeners.clear();
@@ -283,10 +256,9 @@ export function createStreetLevelLayer({
     },
 
     getStats() {
-      // The lifecycle polls this every second: summarise, don't snapshot.
-      const coverage = summarizeCoverage(providerSnapshots());
-      let loadingLabel = '';
+      const coverage = coverageStats();
       const keyLabel = coverage.keyRejected ? 'KEY REJECTED' : 'KEY REQUIRED';
+      let loadingLabel = '';
       if (coverage.keyRequired) loadingLabel = keyLabel;
       else if (coverage.loading) loadingLabel = 'loading coverage...';
       else if (coverage.hint && state.enabled) loadingLabel = coverage.hint;
@@ -294,11 +266,11 @@ export function createStreetLevelLayer({
         count: coverage.count,
         loading: coverage.loading,
         keyRequired: coverage.keyRequired,
-        error: coverage.keyRequired
-          ? coverage.keyRejected
-            ? coverage.error || keyLabel
-            : keyLabel
-          : coverage.error,
+        // A rejected key's message names the fix; a missing one says so.
+        error:
+          coverage.keyRequired && !coverage.keyRejected
+            ? keyLabel
+            : coverage.error,
         loadingLabel,
       };
     },
@@ -312,21 +284,26 @@ export function createStreetLevelLayer({
       parts.framing.attachNavigation(navigation);
     },
 
-    /** Share-link and stored state: provider switches plus the filter. */
+    /**
+     * Share-link and stored state, in the codec's keys (src/data/layerState.js):
+     * the `mapillary` switch plus the filter.
+     */
     getParams() {
-      return encodeParams({
-        providers: [...state.providers].map(([id, entry]) => [id, entry.on]),
-        filter: state.filter,
-      });
+      return {
+        mapillary: state.providerOn,
+        pano: state.filter.pano,
+        sinceDays: state.filter.sinceDays,
+      };
     },
 
+    /** Unknown keys and malformed values are ignored, so any link applies. */
     setParams(params = {}) {
-      const decoded = decodeParams(params, {
-        providerIds: state.providers.keys(),
-        filter: state.filter,
-      });
-      for (const [id, on] of decoded.providers) setProviderEnabled(id, on);
-      setCoverageFilter(decoded.filter);
+      const input = params && typeof params === 'object' ? params : {};
+      if (typeof input.mapillary === 'boolean') setProviderOn(input.mapillary);
+      const next = {};
+      if ('pano' in input) next.pano = input.pano;
+      if ('sinceDays' in input) next.sinceDays = input.sinceDays;
+      setCoverageFilter(next);
       return true;
     },
 
@@ -337,80 +314,59 @@ export function createStreetLevelLayer({
       return () => state.listeners.delete(listener);
     },
     getUIState,
-    /** The DOM element provider viewers render into. */
+    /** The DOM element the photo viewer renders into. */
     attachViewerHost(element) {
       parts.viewerHost.attach(element);
-      if (element && state.enabled)
-        whenIdle(() => parts.viewerHost.prewarm(activeEntries()), 1500);
     },
-    setProviderEnabled,
     /** Imagery filter for coverage, cones and nearest-image lookups. */
     setCoverageFilter,
     openImage,
-    /** Open the nearest image any active provider has around a point. */
+    /** Open the nearest image around a point (default: the view centre). */
     async openNearest(point) {
+      if (!isActive(state)) return false;
       const view = point || viewCentre(state.viewer);
       if (!Number.isFinite(view?.lat) || !Number.isFinite(view?.lon))
         return false;
       abortNearest();
       const lookup = new AbortController();
       nearestLookup = lookup;
-      const { signal } = lookup;
       state.street.loading = true;
       state.street.error = null;
       notify();
-      let lastError = null;
-      for (const entry of activeEntries()) {
-        let imageId = null;
-        try {
-          imageId = await entry.instance.nearestImage(
-            { lat: view.lat, lon: view.lon },
-            { signal },
-          );
-        } catch (error) {
-          // Overtaken: whatever replaced it owns the panel, errors included.
-          if (signal.aborted) return false;
-          // One provider failing (no key, offline) must not hide the others.
-          lastError = error;
-          continue;
-        }
-        if (signal.aborted) return false;
-        if (!state.enabled) break;
-        // This provider was switched off while it looked: try the next.
-        if (!imageId || !entry.on) continue;
-        nearestLookup = null;
-        return openImage(entry.def.id, imageId);
+      let imageId = null;
+      let failure = null;
+      try {
+        imageId = await nearestImageId(
+          source,
+          { lat: view.lat, lon: view.lon },
+          resolveFilter(state.filter),
+          { signal: lookup.signal },
+        );
+      } catch (error) {
+        failure = error;
       }
-      if (nearestLookup === lookup) nearestLookup = null;
-      // Switched off while it looked: nothing to open, nothing to report.
-      if (state.enabled && activeEntries().length)
-        state.street.error =
-          lastError?.message ||
-          `No street-level imagery within ${NEAREST_RADIUS_M} m of the view centre`;
+      // Overtaken, closed or switched off: whatever did that owns the panel.
+      if (lookup.signal.aborted) return false;
+      nearestLookup = null;
+      if (imageId) return openImage(imageId);
+      state.street.error =
+        failure?.message ||
+        `No street-level imagery within ${NEAREST_RADIUS_M} m of the view centre`;
       state.street.loading = false;
       notify();
       return false;
     },
-    /** Close the image and deselect it everywhere on the map. */
+    /** Close the image and deselect its sequence on the map. */
     closeViewer() {
       abortNearest();
       parts.viewerHost.close();
-      parts.clearSequences();
+      parts.sequences.clearSelection();
     },
     setViewerRenderMode: (mode) => parts.viewerHost.setRenderMode(mode),
     resizeViewer: () => parts.viewerHost.resize(),
-    selectSequence(
-      sequenceId,
-      providerId = state.providers.keys().next().value,
-    ) {
-      return state.providers
-        .get(providerId)
-        ?.instance.selectSequence?.(sequenceId);
-    },
-    clearSequence: () => parts.clearSequences(),
-    refreshCoverage() {
-      for (const entry of activeEntries()) entry.instance.refreshCoverage();
-    },
+    selectSequence: (sequenceId) => parts.sequences.select(sequenceId),
+    clearSequence: () => parts.sequences.clearSelection(),
+    refreshCoverage: () => parts.coverage.refresh(),
   };
   return layer;
 }

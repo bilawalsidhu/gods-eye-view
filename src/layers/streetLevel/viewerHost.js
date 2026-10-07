@@ -1,31 +1,25 @@
 import { freshStreet } from './state.js';
 
 /**
- * Owns the panel's viewer element and the provider adapter mounted in it.
- * Adapter poses update `state.street` and the marker.
+ * Owns the panel's viewer element and the photo viewer mounted in it (the
+ * MapillaryJS adapter, or a stand-in). Its poses update `state.street` and
+ * the marker; MapillaryJS loads on the first open.
  */
-export function createViewerHost({ state, parts }) {
-  /** @type {{id: string, adapter: object, unsubscribe: () => void}|null} */
-  let active = null;
-  /** @type {{id: string, promise: Promise<object>}|null} */
+export function createViewerHost({ state, parts, adapter }) {
+  /** Set once mounted, until `unmount`. */
+  let unsubscribe = null;
+  /** The mount in flight, shared by concurrent opens. */
   let mounting = null;
   let openSeq = 0;
-  /** Prewarmed, inactive adapters; each holds a live viewer (WebGL context) until `unmount`. */
-  const warmed = new Map();
 
   function notify() {
     state.notify?.();
   }
 
-  function providerEntry(providerId) {
-    return state.providers.get(providerId) || null;
-  }
-
   function applyPose(pose) {
-    if (!active || !state.street.open || pose.providerId !== active.id) return;
+    if (!unsubscribe || !state.street.open) return;
     const previousSequence = state.street.sequenceId;
     Object.assign(state.street, {
-      providerId: pose.providerId,
       imageId: pose.imageId,
       position: pose.position ? { ...pose.position } : null,
       bearing: Number.isFinite(pose.bearing) ? pose.bearing : null,
@@ -46,63 +40,43 @@ export function createViewerHost({ state, parts }) {
   }
 
   function selectCurrentSequence() {
-    const { sequenceId, providerId } = state.street;
-    const entry = providerEntry(providerId);
-    if (!sequenceId || !entry?.instance.selectSequence || !state.enabled)
-      return;
-    const current = entry.instance.sequenceStats?.()?.selectedId;
-    if (current !== sequenceId) entry.instance.selectSequence(sequenceId);
+    const { sequenceId } = state.street;
+    if (!sequenceId || !state.enabled) return;
+    if (state.sequence.selectedId !== sequenceId)
+      parts.sequences.select(sequenceId);
   }
 
   /**
-   * Mount a provider's adapter. It becomes `active` only on success, so a
-   * failed mount is retried on the next open; concurrent opens share one.
+   * Mount the viewer. It counts as mounted only on success, so a failed
+   * mount is retried on the next open; concurrent opens share one.
    */
-  function mount(entry) {
-    if (active?.id === entry.def.id) return Promise.resolve(active.adapter);
-    if (mounting?.id === entry.def.id) return mounting.promise;
-    if (active) {
-      active.adapter.close();
-      active.unsubscribe();
-      active.adapter.unmount();
-      active = null;
-    }
-    const adapter = entry.instance.viewer;
+  function mount() {
+    if (unsubscribe) return Promise.resolve();
+    if (mounting) return mounting;
     const promise = (async () => {
       await adapter.mount(state.street.host);
-      if (mounting?.promise !== promise) {
-        // Unmounted (layer off, provider switched) while loading. A newer
-        // mount of this provider shares the adapter and its viewer: tearing
-        // it down here would leave that mount active with no viewer.
-        const reused =
-          active?.id === entry.def.id || mounting?.id === entry.def.id;
-        if (!reused) adapter.unmount();
+      if (mounting !== promise) {
+        // Unmounted (layer off) while loading. A newer mount shares the
+        // viewer: tearing it down here would leave that mount without one.
+        if (!mounting && !unsubscribe) adapter.unmount();
         throw new Error('Street-level viewer was closed');
       }
       // Listen only once current: an outdated mount releasing the same
       // `applyPose` would otherwise unhook the mount that replaced it.
-      const unsubscribe = adapter.onPose(applyPose);
-      active = { id: entry.def.id, adapter, unsubscribe };
-      warmed.delete(entry.def.id);
+      unsubscribe = adapter.onPose(applyPose);
       adapter.setRenderMode?.(state.street.renderMode);
-      return adapter;
     })();
-    mounting = { id: entry.def.id, promise };
-    promise.then(
-      () => {
-        if (mounting?.promise === promise) mounting = null;
-      },
-      () => {
-        if (mounting?.promise === promise) mounting = null;
-      },
-    );
+    mounting = promise;
+    const settle = () => {
+      if (mounting === promise) mounting = null;
+    };
+    promise.then(settle, settle);
     return promise;
   }
 
   /** Open an image: true once its first pose is in, false if it failed or was overtaken. */
-  async function open(providerId, imageId) {
-    const entry = providerEntry(providerId);
-    if (!entry || !imageId) return false;
+  async function open(imageId) {
+    if (!imageId) return false;
     if (!state.street.host) {
       // A nearest-image lookup may have set it; nothing is loading now.
       state.street.loading = false;
@@ -114,17 +88,10 @@ export function createViewerHost({ state, parts }) {
     const current = () => seq === openSeq;
     // Claimed now, honoured after loading only if nothing newer took the camera.
     const ticket = parts.framing.begin();
-    Object.assign(state.street, {
-      loading: true,
-      error: null,
-      open: true,
-      providerId,
-      providerName: entry.def.name,
-      providerLabel: entry.def.label,
-    });
+    Object.assign(state.street, { loading: true, error: null, open: true });
     notify();
     try {
-      const adapter = await mount(entry);
+      await mount();
       if (!current()) return false;
       await adapter.open(String(imageId));
       if (!current()) return false;
@@ -141,11 +108,11 @@ export function createViewerHost({ state, parts }) {
     return true;
   }
 
-  /** Close the image and stop any framing flight; the adapter stays warm. */
+  /** Close the image and stop any framing flight; the viewer stays mounted. */
   function close() {
     openSeq++;
     parts.framing.cancel();
-    active?.adapter.close();
+    if (unsubscribe) adapter.close();
     Object.assign(state.street, freshStreet());
     parts.marker.clear();
     notify();
@@ -158,7 +125,7 @@ export function createViewerHost({ state, parts }) {
 
   function resize() {
     try {
-      active?.adapter.resize();
+      if (unsubscribe) adapter.resize();
     } catch {
       /* no-op */
     }
@@ -167,61 +134,21 @@ export function createViewerHost({ state, parts }) {
   function setRenderMode(mode) {
     state.street.renderMode = mode === 'fill' ? 'fill' : 'letterbox';
     try {
-      active?.adapter.setRenderMode?.(state.street.renderMode);
+      if (unsubscribe) adapter.setRenderMode?.(state.street.renderMode);
     } catch {
       /* adapter not ready */
     }
     notify();
   }
 
-  /** Stand active providers' viewers up ahead of the first image. */
-  async function prewarm(entries) {
-    const host = state.street.host;
-    if (!host || !state.enabled) return;
-    for (const entry of entries) {
-      const adapter = entry.instance.viewer;
-      if (!adapter.prewarm || !entry.on) continue;
-      try {
-        await adapter.prewarm(host);
-      } catch {
-        /* the real open reports errors */
-      }
-      if (active?.id === entry.def.id) continue;
-      // Switched off while it loaded: release it now rather than keep it.
-      if (!state.enabled || !entry.on) adapter.unmount();
-      else warmed.set(entry.def.id, adapter);
-    }
+  /** Close the image and destroy the viewer (and its WebGL context). */
+  function unmount() {
+    close();
+    mounting = null;
+    unsubscribe?.();
+    unsubscribe = null;
+    adapter.unmount();
   }
 
-  /** Tear down every viewer, or only `providerId`'s (active or prewarmed). */
-  function unmount(providerId) {
-    if (
-      !providerId ||
-      active?.id === providerId ||
-      mounting?.id === providerId
-    ) {
-      close();
-      mounting = null;
-      if (active) {
-        active.unsubscribe();
-        active.adapter.unmount();
-        active = null;
-      }
-    }
-    for (const [id, adapter] of warmed) {
-      if (providerId && id !== providerId) continue;
-      warmed.delete(id);
-      adapter.unmount();
-    }
-  }
-
-  return {
-    attach,
-    open,
-    close,
-    resize,
-    setRenderMode,
-    prewarm,
-    unmount,
-  };
+  return { attach, open, close, resize, setRenderMode, unmount };
 }

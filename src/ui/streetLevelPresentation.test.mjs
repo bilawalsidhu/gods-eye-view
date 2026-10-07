@@ -5,29 +5,23 @@ import {
   SINCE_STOPS,
   sinceStopIndex,
 } from './streetLevelPresentation.js';
-import { providerSnapshot } from '../testSupport/streetLevelFakes.mjs';
-
-const provider = providerSnapshot;
-
 function snapshot(overrides = {}) {
   const base = {
     enabled: false,
+    providerOn: true,
     keyRequired: false,
+    keyRejected: false,
     filter: { pano: 'all', sinceDays: 0 },
-    providers: [provider()],
     coverage: { loading: false, count: 0, hint: '', error: null },
     legend: [
       { key: 'mapillary', label: 'Mapillary', color: '#05cb63' },
       { key: 'selected', label: 'Selected', color: '#00d4ff' },
     ],
-    sequence: { providerId: null, selectedId: null, images: 0, loading: false },
+    sequence: { selectedId: null, images: 0, loading: false },
     street: {
       open: false,
       loading: false,
       error: null,
-      providerId: null,
-      providerName: null,
-      providerLabel: null,
       imageId: null,
       position: null,
       bearing: null,
@@ -70,7 +64,6 @@ test('KEY REQUIRED says how to add the key instead of a raw error code', () => {
       enabled: true,
       keyRequired: true,
       coverage: { error: 'no_key' },
-      providers: [provider({ keyRequired: true, error: 'no_key' })],
     }),
   );
   assert.equal(view.status.text, 'KEY REQUIRED');
@@ -86,7 +79,6 @@ test('a key Mapillary rejected reads KEY REJECTED and names the fix', () => {
       keyRequired: true,
       keyRejected: true,
       coverage: { error },
-      providers: [provider({ keyRequired: true, keyRejected: true, error })],
     }),
   );
   assert.equal(view.status.text, 'KEY REJECTED');
@@ -96,7 +88,7 @@ test('a key Mapillary rejected reads KEY REJECTED and names the fix', () => {
 });
 
 test('a key problem outranks loading on the pill: KEY REJECTED, then KEY REQUIRED (M65)', () => {
-  // A keyless provider can still report loading (its status check, a retry):
+  // A keyless layer can still report loading (its status check, a retry):
   // the pill must say what is wrong, not that something is on its way.
   const loading = { enabled: true, coverage: { loading: true } };
   assert.equal(
@@ -221,15 +213,12 @@ test('the meta line never mixes the visible-sequence count with the selected seq
   assert.equal(hinted.meta, 'Point the camera at the globe');
 });
 
-test('viewer caption reads "Image by" left, date right, and links to the provider', () => {
+test('viewer caption reads "Image by" left, date right, and links to Mapillary', () => {
   const view = presentStreetLevelPanel(
     snapshot({
       enabled: true,
       street: {
         open: true,
-        providerId: 'mapillary',
-        providerName: 'Mapillary',
-        providerLabel: 'MAPILLARY',
         imageId: '1814275685699406',
         creator: 'mapfool',
         capturedAt: Date.UTC(2023, 9, 8),

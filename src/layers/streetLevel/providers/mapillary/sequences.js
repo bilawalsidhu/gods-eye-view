@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
 import { imageConeGlyph } from '../../glyphs.js';
-import { passesImageryFilter } from '../../filter.js';
+import { passesImageryFilter, resolveFilter } from '../../filter.js';
 import { createHorizonCull, metresBetween } from '../../view.js';
 import {
   COLORS,
@@ -53,7 +53,12 @@ export function createSequences({ state, source, parts }) {
   }
 
   function notify() {
-    state.context.notify();
+    state.notify?.();
+  }
+
+  /** Show a sequence error, or withdraw it (null); see `reportSequenceError`. */
+  function reportError(message) {
+    parts.reportSequenceError?.(message);
   }
 
   /** Drawn cone billboards. */
@@ -95,7 +100,7 @@ export function createSequences({ state, source, parts }) {
       pano: true,
     });
     // Resolved now, so a "since N days" window keeps up with the clock.
-    const filter = state.context.getFilter();
+    const filter = resolveFilter(state.filter);
     for (const image of images) {
       if (!passesImageryFilter(image, filter)) continue;
       const billboard = collection.add({
@@ -146,7 +151,7 @@ export function createSequences({ state, source, parts }) {
       state.sequence.loading = false;
       state.sequence.images = cached;
       renderCones(cached);
-      state.context.actions.reportError(null);
+      reportError(null);
       notify();
       return;
     }
@@ -172,15 +177,13 @@ export function createSequences({ state, source, parts }) {
       remember(sequenceId, images);
       state.sequence.images = images;
       renderCones(images);
-      state.context.actions.reportError(null);
+      reportError(null);
     } catch (error) {
       if (!controller.signal.aborted) {
         // Nothing to show: drop the highlight, so a click asks again.
         parts.coverage.recolorSequence(sequenceId, false);
         state.sequence.selectedId = null;
-        state.context.actions.reportError(
-          error?.message || 'Sequence images unavailable',
-        );
+        reportError(error?.message || 'Sequence images unavailable');
       }
     } finally {
       if (state.sequence.abort === controller) {
@@ -200,7 +203,7 @@ export function createSequences({ state, source, parts }) {
     state.sequence.loading = false;
     clearCones();
     // An error about the sequence goes with it.
-    state.context.actions.reportError(null);
+    reportError(null);
     requestRender();
     notify();
   }

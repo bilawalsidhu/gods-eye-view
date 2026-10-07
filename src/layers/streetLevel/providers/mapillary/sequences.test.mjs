@@ -62,11 +62,8 @@ function setup() {
   const state = {
     services: {},
     viewer: {},
-    context: {
-      notify() {},
-      getFilter: () => ({ pano: 'all', sinceMs: null }),
-      actions: { reportError: (message) => errors.push(message) },
-    },
+    filter: { pano: 'all', sinceDays: 0 },
+    notify() {},
     sequence: {
       selectedId: null,
       images: [],
@@ -80,6 +77,7 @@ function setup() {
     coverage: {
       recolorSequence: (id, selected) => colours.push([id, selected]),
     },
+    reportSequenceError: (message) => errors.push(message),
   };
   const sequences = createSequences({ state, source, parts });
   const drawn = () =>

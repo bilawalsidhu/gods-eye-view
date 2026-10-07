@@ -3,13 +3,13 @@ import { VectorTile } from '@mapbox/vector-tile';
 import { tileLocalToLonLat } from '../../tileMath.js';
 
 /**
- * Decode a `mly1_public` coverage tile into sequences and (z0–5) overview
- * points. The z14 `image` layer, which can hold >150k points, is skipped.
+ * Decode a `mly1_public` coverage tile (z11–14) into sequences. The z14
+ * `image` layer, which can hold >150k points, is skipped.
  * @param {Uint8Array} bytes
  * @param {{x:number,y:number,z:number}} address
  */
 export function decodeCoverageTile(bytes, address) {
-  const result = { sequences: [], overview: [] };
+  const result = { sequences: [] };
   if (!bytes || !bytes.length) return result;
   const tile = new VectorTile(new PbfReader(bytes));
   const { x, y, z } = address;
@@ -38,31 +38,6 @@ export function decodeCoverageTile(bytes, address) {
           ? props.quality_score
           : null,
         parts,
-      });
-    }
-  }
-  const overviewLayer = tile.layers.overview;
-  if (overviewLayer) {
-    for (let i = 0; i < overviewLayer.length; i++) {
-      const feature = overviewLayer.feature(i);
-      const props = feature.properties || {};
-      const point = feature.loadGeometry()?.[0]?.[0];
-      if (!point) continue;
-      const [lon, lat] = tileLocalToLonLat(
-        point.x,
-        point.y,
-        overviewLayer.extent,
-        x,
-        y,
-        z,
-      );
-      result.overview.push({
-        id: String(props.id ?? feature.id ?? i),
-        lon,
-        lat,
-        capturedAt: Number(props.captured_at) || 0,
-        isPano: props.is_pano === true,
-        sequenceId: props.sequence_id ? String(props.sequence_id) : null,
       });
     }
   }

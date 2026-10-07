@@ -294,8 +294,8 @@ for (const [why, retryAfter] of [
 
 test('normalizeTileAddress enforces layer names, zoom ranges and tile bounds', () => {
   assert.equal(
-    normalizeTileAddress({ layer: 'coverage', z: 3, x: 1, y: 2 }).key,
-    'coverage/3/1/2',
+    normalizeTileAddress({ layer: 'coverage', z: 11, x: 1, y: 2 }).key,
+    'coverage/11/1/2',
   );
   assert.deepEqual(
     normalizeTileAddress({ layer: 'coverage', z: '14', x: '5', y: '6' })
@@ -307,8 +307,8 @@ test('normalizeTileAddress enforces layer names, zoom ranges and tile bounds', (
     { layer: 'points', z: 14, x: 1, y: 1 },
     { layer: 'signs', z: 14, x: 1, y: 1 },
     { layer: 'coverage', z: 15, x: 1, y: 1 },
-    { layer: 'coverage', z: 2, x: 4, y: 0 },
-    { layer: 'coverage', z: 2, x: 1.5, y: 0 },
+    { layer: 'coverage', z: 11, x: 2048, y: 0 },
+    { layer: 'coverage', z: 11, x: 1.5, y: 0 },
     { layer: 'coverage', z: -1, x: 0, y: 0 },
   ])
     assert.throws(
@@ -327,14 +327,14 @@ test('normalizeTileAddress refuses prototype keys as layer names', () => {
     );
 });
 
-test('coverage zooms the app never requests (z6–10) are refused with a 400', async () => {
-  for (const z of [6, 7, 8, 9, 10])
+test('coverage zooms the app never requests (below z11) are refused with a 400', async () => {
+  for (const z of [0, 3, 5, 6, 7, 8, 9, 10])
     assert.throws(
       () => normalizeTileAddress({ layer: 'coverage', z, x: 0, y: 0 }),
       TileRequestError,
       `z${z}`,
     );
-  for (const z of [0, 5, 11, 14])
+  for (const z of [11, 12, 13, 14])
     assert.equal(
       normalizeTileAddress({ layer: 'coverage', z, x: 0, y: 0 }).z,
       z,
@@ -345,7 +345,7 @@ test('coverage zooms the app never requests (z6–10) are refused with a 400', a
       const res = await call('/api/mapillary/tiles', '/coverage/9/5/5');
       assert.equal(res.statusCode, 400);
       assert.deepEqual(json(res), {
-        error: 'Tile zoom for coverage must be 0–5 or 11–14',
+        error: 'Tile zoom for coverage must be 11–14',
       });
       assert.equal(calls.length, 0, 'Mapillary is not asked');
     },

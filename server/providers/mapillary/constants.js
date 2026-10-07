@@ -5,12 +5,12 @@ export const MAPILLARY_TILE_HOST = 'https://tiles.mapillary.com/maps/vtp';
 
 /** Public tile layer names this proxy exposes, mapped to Mapillary's ids. */
 export const TILE_LAYERS = Object.freeze({
-  // Region-sized z6–10 tiles are refused; the app never asks for them. The
+  // Only the street zooms the app draws (z11–14); the rest are refused. The
   // z14 `image` layer is ~98% of a tile and unused (positions come from the
   // graph API), so it is dropped in transit.
   coverage: Object.freeze({
     upstream: 'mly1_public',
-    zoomRanges: Object.freeze([Object.freeze([0, 5]), Object.freeze([11, 14])]),
+    zoomRanges: Object.freeze([Object.freeze([11, 14])]),
     dropLayers: Object.freeze(['image']),
   }),
 });

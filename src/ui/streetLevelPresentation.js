@@ -67,13 +67,10 @@ function presentStatus(state) {
     : { text: 'OFF', tone: '', pressed, title };
 }
 
-/** How to add the missing key, for the provider that needs one. */
-function keyHint(state) {
-  const provider = (state.providers || []).find(
-    (entry) => entry.keyRequired === true && entry.requiresKeyId,
-  );
-  const requirement = provider && keySetupRequirement(provider.requiresKeyId);
-  return requirement ? `${provider.name}: ${requirement}` : null;
+/** How to add the missing Mapillary key. */
+function keyHint() {
+  const requirement = keySetupRequirement('mapillary');
+  return requirement ? `Mapillary: ${requirement}` : null;
 }
 
 function presentViewer(state) {
@@ -90,7 +87,7 @@ function presentViewer(state) {
     captionLeft: street.creator ? `Image by ${street.creator}` : '',
     captionRight: right.join(' · '),
     link: street.externalUrl || null,
-    linkLabel: street.providerLabel ? `${street.providerLabel} ↗` : '',
+    linkLabel: street.externalUrl ? 'MAPILLARY ↗' : '',
   };
 }
 
@@ -115,7 +112,7 @@ export function presentStreetLevelPanel(state, { now = Date.now() } = {}) {
     status: presentStatus(state),
     controlsDisabled: state.keyRequired === true,
     error: keyMissing
-      ? keyHint(state)
+      ? keyHint()
       : state.street.error || state.coverage.error || null,
     filter: { pano: filter.pano, sinceDays: Number(filter.sinceDays) || 0 },
     since: presentSince(filter.sinceDays, now),

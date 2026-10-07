@@ -58,17 +58,23 @@ function harness({ selected = false } = {}) {
   const state = {
     viewer,
     enabled: true,
+    providerOn: true,
     clickHandler: null,
     services: { picking: null, input: null },
+    sequence: {
+      get selectedId() {
+        return sequences.selected ? 'seq-1' : null;
+      },
+    },
   };
   const selection = createSelection({
     state,
     parts: {
-      router: { ownsPick: (id) => id === 'mly:seq:1', resolve: () => null },
-      hasSelectedSequence: () => sequences.selected,
-      clearSequences() {
-        sequences.cleared++;
-        sequences.selected = false;
+      sequences: {
+        clearSelection() {
+          sequences.cleared++;
+          sequences.selected = false;
+        },
       },
     },
   });
