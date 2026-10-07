@@ -9,6 +9,7 @@
   ["earthquakes", "e"],
   ["fire-perimeters", "2"],
   ["flights", "f"],
+  ["gnss-interference", "0"],
   ["local-dams", "q"],
   ["local-datacenters", "d"],
   ["local-firms", "w"],
