@@ -661,6 +661,12 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
   // Canonical serialization pins every tool name, description, property and
   // ordering while allowing source formatting. Derived from the unchanged
   // release schema before formatting (the previous source-byte pin passed).
+  // Re-pinned for Pattern Watch joining the two layer-visibility enums.
+  const block = JSON.stringify(GEV_REALTIME_TOOLS);
+  assert.equal(block.length, 27307, 'serialized tool schema length drifted');
+  assert.equal(
+    crypto.createHash('sha256').update(block).digest('hex'),
+    '00f1fbd1f235f28e78a21d2c0f5c71b64758127fcb7e5056d4b82286906cf591',
   const legacyTools = structuredClone(GEV_REALTIME_TOOLS).filter((tool) => tool.name !== 'set_cyber_sonar');
   const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud').parameters.properties.layout;
   assert.deepEqual(hudLayout.enum, ['tactical', 'operator', 'minimal', 'cyber']);

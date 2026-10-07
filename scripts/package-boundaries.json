@@ -1155,6 +1155,15 @@
     ],
     "external": ["hls.js", "cesium"]
   },
+  "pattern-watch": {
+    "exports": ["./layers/patterns"],
+    "modules": [
+      "src/layers/patterns/index.js",
+      "src/layers/patterns/policy.js",
+      "src/layers/patterns/circling.js"
+    ],
+    "external": ["cesium"]
+  },
   "alpr-cameras": {
     "exports": ["./layers/alpr"],
     "modules": [
@@ -1369,6 +1378,10 @@
       "src/app/layers/militaryFlights.js",
       "src/app/layers/militaryInstallations.js",
       "src/app/layers/overlayHost.js",
+      "src/app/layers/patternWatch.js",
+      "src/layers/patterns/index.js",
+      "src/layers/patterns/policy.js",
+      "src/layers/patterns/circling.js",
       "src/app/layers/radio.js",
       "src/app/layers/rocketLaunches.js",
       "src/app/layers/satellites.js",
@@ -2115,6 +2128,10 @@
       "src/app/layers/militaryFlights.js",
       "src/app/layers/militaryInstallations.js",
       "src/app/layers/overlayHost.js",
+      "src/app/layers/patternWatch.js",
+      "src/layers/patterns/index.js",
+      "src/layers/patterns/policy.js",
+      "src/layers/patterns/circling.js",
       "src/app/layers/radio.js",
       "src/app/layers/rocketLaunches.js",
       "src/app/layers/satellites.js",
