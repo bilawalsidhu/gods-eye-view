@@ -34,6 +34,7 @@ const SHARE_PANEL_STATE_REGISTRY = Object.freeze([
   { id: 'data-panel', token: 'd', pinnable: false },
   { id: 'cctv-panel', token: 'v', pinnable: false },
   { id: 'recent-imagery-panel', token: 'i', pinnable: false },
+  { id: 'street-level-panel', token: 't', pinnable: false },
   { id: 'radio-panel', token: 'r', pinnable: false },
   { id: 'scene-panel', token: 's', pinnable: false },
   { id: 'global-context-panel', token: 'g', pinnable: false },
