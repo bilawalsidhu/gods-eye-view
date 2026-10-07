@@ -295,6 +295,34 @@
   (`src/ui/imagerySplit.js`, `src/maps/imageryComparison.js`), and
   `MapSourceController.subscribe()` reports every settled map switch.
 
+## Unreleased — voice outlines without Overpass
+
+- Voice outlines work again without Overpass. Bundled US Census places and
+  Who's On First neighborhoods (lazy-loaded; `src/data/local_data/`) answer
+  first, then streets, grounds and pointed-at buildings from OpenFreeMap
+  tiles, then Nominatim for one explicit ask at a time. Traffic and outlines
+  share pending fetch/decode ownership and a projection-aware retained-byte
+  ceiling for the same immutable tile; consumer caches and request lifetimes
+  remain independent, and eviction or teardown retires queued idle projections.
+  Public-provider answers are cached and capped per
+  install. Public Nominatim requests now reserve their daily slot and paced
+  start atomically across processes sharing that installation's state file,
+  and fail closed when durable state is unavailable or invalid. Operator-selected
+  endpoints remain outside the public cap, spacing and state policy, and an
+  upstream cooldown is isolated to the endpoint that returned it. Anything else
+  stays a point marked "outline unavailable". Administrative Nominatim
+  outlines carry the selected record's verified country/admin-1/admin-2
+  identity; ambiguous, missing, contradictory or retired evidence is not
+  promoted into a verified level.
+- Who's On First rebuilds accept only exact raw registry licence values in the
+  reviewed open-licence allowlist. New, unknown, restricted or noncommercial
+  source licences stay excluded until they are reviewed explicitly.
+- New settings: `NOMINATIM_URL` (your own Nominatim instead of the public
+  one; empty disables it), `NOMINATIM_DAILY_CAP` (public requests per day,
+  default 50) and `PHOTON_URL` (browser place search; empty disables it).
+
+## Unreleased — local receiver feeds
+
 ### Local receiver feeds
 
 - The Local ADS-B layer also reads local 1090 MHz and 978 MHz UAT decoder

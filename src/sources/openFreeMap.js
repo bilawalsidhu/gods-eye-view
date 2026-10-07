@@ -1,6 +1,9 @@
 import { PbfReader } from 'pbf';
 import { VectorTile } from '@mapbox/vector-tile';
-import { createVectorTileSource } from './vectorTiles.js';
+import {
+  createSharedDecodedTileCache,
+  createVectorTileSource,
+} from './vectorTiles.js';
 import { clipTileRing, militaryOutlineLines } from './militaryTileGeometry.js';
 import { tileToBBox } from '../data/tomtomTiles.js';
 
@@ -12,6 +15,65 @@ const ROAD_TYPES = Object.freeze({
   tertiary: 'tertiary',
   minor: 'residential',
 });
+
+const SHARED_DECODED_TILES = createSharedDecodedTileCache({
+  maxEntries: 192,
+  maxCacheBytes: 64 * 1024 * 1024,
+});
+const TILE_PROJECTIONS = new Map();
+const MAX_PROJECTED_NUMBERS = 500_000;
+
+/** Conservative, deterministic retained-size estimate with a hard geometry cap. */
+export function estimateOpenFreeMapProjectionBytes(value) {
+  const seen = new Set();
+  const stack = [value];
+  let bytes = 0;
+  let numbers = 0;
+  while (stack.length) {
+    const item = stack.pop();
+    if (item == null) continue;
+    if (typeof item === 'number') {
+      numbers += 1;
+      if (numbers > MAX_PROJECTED_NUMBERS)
+        throw new Error('Vector tile projection coordinate limit exceeded');
+      bytes += 8;
+    } else if (typeof item === 'string') {
+      bytes += 16 + item.length * 2;
+    } else if (typeof item === 'boolean') {
+      bytes += 4;
+    } else if (typeof item === 'object') {
+      if (seen.has(item)) continue;
+      seen.add(item);
+      if (Array.isArray(item)) {
+        bytes += 24 + item.length * 8;
+        for (let i = 0; i < item.length; i += 1) stack.push(item[i]);
+      } else {
+        const entries = Object.entries(item);
+        bytes += 48 + entries.length * 16;
+        for (const [key, child] of entries) {
+          bytes += key.length * 2;
+          stack.push(child);
+        }
+      }
+    }
+  }
+  return bytes;
+}
+
+/** Register one consumer view over the parsed OpenFreeMap tile. */
+export function registerOpenFreeMapProjection(name, project) {
+  if (!name || typeof project !== 'function')
+    throw new TypeError('Invalid OpenFreeMap tile projection');
+  const current = TILE_PROJECTIONS.get(name);
+  if (current && current !== project)
+    throw new Error(`OpenFreeMap tile projection already registered: ${name}`);
+  TILE_PROJECTIONS.set(name, project);
+}
+
+/** Explicit test/runtime reset; individual consumers never evict each other. */
+export function clearSharedOpenFreeMapTiles() {
+  SHARED_DECODED_TILES.clear();
+}
 
 /**
  * Surface traffic uses public motor-road classes only. Untyped service ways
@@ -142,8 +204,8 @@ export function decodeOpenFreeMapMilitaryTile(bytes, z, x, y) {
   return decodeLayers(bytes, z, x, y, ['landuse']);
 }
 
-function decodeLayers(bytes, z, x, y, layerNames) {
-  const tile = new VectorTile(new PbfReader(bytes));
+function decodeLayers(bytes, z, x, y, layerNames, parsedTile = null) {
+  const tile = parsedTile || new VectorTile(new PbfReader(bytes));
   const roads = [],
     military = [];
   const box = tileToBBox(z, x, y);
@@ -214,14 +276,121 @@ function decodeLayers(bytes, z, x, y, layerNames) {
   return { roads, military };
 }
 
+function decodeSharedOpenFreeMapTile(bytes, z, x, y) {
+  const tile = new VectorTile(new PbfReader(bytes));
+  const base = decodeLayers(
+    bytes,
+    z,
+    x,
+    y,
+    ['transportation', 'landuse'],
+    tile,
+  );
+  const projections = new Map();
+  let baseBytes = 0;
+  let projectionBytes = 0;
+  let resizeCacheEntry = null;
+  let cacheBound = false;
+  const idleCallbacks = new Map();
+  const cancelIdleProjection = (name) => {
+    if (!idleCallbacks.has(name)) return;
+    const handle = idleCallbacks.get(name);
+    idleCallbacks.delete(name);
+    globalThis.cancelIdleCallback?.(handle);
+  };
+  const cancelIdleProjections = () => {
+    for (const name of [...idleCallbacks.keys()]) cancelIdleProjection(name);
+  };
+  const project = (name) => {
+    if (projections.has(name)) return projections.get(name);
+    cancelIdleProjection(name);
+    const projector = TILE_PROJECTIONS.get(name);
+    if (!projector)
+      throw new Error(`Unknown OpenFreeMap tile projection: ${name}`);
+    const value = projector(bytes, z, x, y, tile);
+    const retainedBytes = estimateOpenFreeMapProjectionBytes(value);
+    projections.set(name, value);
+    projectionBytes += retainedBytes;
+    resizeCacheEntry?.(baseBytes + projectionBytes);
+    return value;
+  };
+  const scheduleIdleProjections = () => {
+    // Scheduling is optional unless both lifecycle operations are available;
+    // otherwise eviction could not release the callback's decoded-tile closure.
+    if (
+      !cacheBound ||
+      typeof globalThis.requestIdleCallback !== 'function' ||
+      typeof globalThis.cancelIdleCallback !== 'function'
+    )
+      return;
+    for (const name of TILE_PROJECTIONS.keys())
+      if (!projections.has(name) && !idleCallbacks.has(name)) {
+        const handle = globalThis.requestIdleCallback(
+          () => {
+            if (!cacheBound || idleCallbacks.get(name) !== handle) return;
+            idleCallbacks.delete(name);
+            try {
+              project(name);
+            } catch {
+              // The explicit consumer path retries and reports projection errors.
+            }
+          },
+          { timeout: 1000 },
+        );
+        idleCallbacks.set(name, handle);
+      }
+  };
+  return {
+    ...base,
+    project,
+    bindSharedCacheEntry(resize, initialBytes) {
+      cancelIdleProjections();
+      resizeCacheEntry = resize;
+      baseBytes = initialBytes;
+      cacheBound = true;
+      resizeCacheEntry(baseBytes + projectionBytes);
+      scheduleIdleProjections();
+    },
+    releaseSharedCacheEntry() {
+      cacheBound = false;
+      cancelIdleProjections();
+      projections.clear();
+      baseBytes = 0;
+      projectionBytes = 0;
+      resizeCacheEntry = null;
+    },
+  };
+}
+
 /** Construct an immutable-version road/military tile source without starting I/O. */
 export function createOpenFreeMapSource(options = {}) {
+  const {
+    projection = null,
+    decode,
+    sharedDecodedCache,
+    selectDecoded,
+    ...sourceOptions
+  } = options;
+  const shared = !decode && !selectDecoded;
   return createVectorTileSource({
     tileJsonUrl: 'https://tiles.openfreemap.org/planet',
     allowedOrigin: 'https://tiles.openfreemap.org',
-    decode: decodeOpenFreeMapTile,
+    decode: shared
+      ? decodeSharedOpenFreeMapTile
+      : decode || decodeOpenFreeMapTile,
+    ...(shared
+      ? {
+          sharedDecodedCache: sharedDecodedCache || SHARED_DECODED_TILES,
+          selectDecoded: projection
+            ? (value) => value.project(projection)
+            : ({ roads, military }) => ({ roads, military }),
+        }
+      : {
+          ...(sharedDecodedCache ? { sharedDecodedCache } : {}),
+          ...(selectDecoded ? { selectDecoded } : {}),
+        }),
     maxEntries: 192,
     maxCacheBytes: 64 * 1024 * 1024,
-    ...options,
+    ...sourceOptions,
   });
 }

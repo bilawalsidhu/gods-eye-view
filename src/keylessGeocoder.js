@@ -402,6 +402,35 @@ export async function geocodeKeyless(query, options) {
 }
 
 /** Construct an independent Photon provider with a bounded query cache. */
+/**
+ * Read the PHOTON_URL setting: `undefined` keeps the public default, an empty
+ * value (or `off`) disables Photon (`null`), and anything else must be an
+ * http(s) URL without credentials. An unusable value disables Photon rather
+ * than silently using the public server.
+ * @param {string|undefined|null} value
+ * @returns {string|null|undefined}
+ */
+export function photonEndpointSetting(value) {
+  if (value === undefined) return undefined;
+  const text = String(value ?? '').trim();
+  if (!text || ['off', 'none', 'disabled'].includes(text.toLowerCase()))
+    return null;
+  try {
+    const url = new URL(text);
+    if (
+      !['http:', 'https:'].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    )
+      return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
 export function createPhotonGeocoder({
   fetchImpl = (...args) => fetch(...args),
   endpoint = PHOTON_ENDPOINT,

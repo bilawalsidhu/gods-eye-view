@@ -52,6 +52,7 @@ export function createBrowserViteConfig({
   publicDir,
   googleApiKey,
   cesiumToken,
+  photonUrl,
   host = 'localhost',
   port = 4173,
   allowedHosts = DEFAULT_ALLOWED_HOSTS,
@@ -104,6 +105,10 @@ export function createBrowserViteConfig({
     define: {
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
+      // Only when set: '' disables Photon in the browser, a URL replaces it.
+      ...(photonUrl === undefined
+        ? {}
+        : { 'import.meta.env.PHOTON_URL': JSON.stringify(String(photonUrl)) }),
     },
     build: { chunkSizeWarningLimit: 1500 },
   };

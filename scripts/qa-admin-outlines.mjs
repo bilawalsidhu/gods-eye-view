@@ -3,7 +3,7 @@
  * qa-admin-outlines.mjs — bundled state/province/county outlines, driven like a
  * user would drive them.
  *
- * Run: node scripts/qa-admin-outlines.mjs http://localhost:4173 [--headful] [--no-video]
+ * Run: node scripts/qa-admin-outlines.mjs http://localhost:4173 [--headful] [--no-video] [--offline-imagery]
  *
  * Journey: frame Texas at state scale and outline "Texas"; pan and zoom toward
  * Austin in smooth 2–3 s moves; outline "Travis County, Texas"; pan north and
@@ -33,7 +33,7 @@ import sharp from 'sharp';
 const args = process.argv.slice(2);
 if (args.includes('--help')) {
   console.log(
-    'Usage: node scripts/qa-admin-outlines.mjs <dev-server-url> [--headful] [--no-video]',
+    'Usage: node scripts/qa-admin-outlines.mjs <dev-server-url> [--headful] [--no-video] [--offline-imagery]',
   );
   process.exit(0);
 }
@@ -41,6 +41,15 @@ const url = args.find((arg) => !arg.startsWith('--'));
 if (!url || !['http:', 'https:'].includes(new URL(url).protocol))
   throw new Error('Supply a running dev server URL; see --help');
 const recordVideo = !args.includes('--no-video');
+const offlineImagery = args.includes('--offline-imagery');
+const offlineImageryTile = offlineImagery
+  ? await fs.readFile(
+      new URL(
+        '../node_modules/cesium/Build/Cesium/Assets/Textures/NaturalEarthII/0/0/0.jpg',
+        import.meta.url,
+      ),
+    )
+  : null;
 const shots = path.resolve('qa-shots');
 const framesDir = path.join(shots, 'admin-outlines-frames');
 await fs.mkdir(shots, { recursive: true });
@@ -61,6 +70,8 @@ const result = {
   pageErrors: [],
   screenshots: [],
   video: null,
+  offlineImagery,
+  offlineImageryRequests: 0,
 };
 
 const browser = await puppeteer.launch({
@@ -87,6 +98,35 @@ try {
     sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed');
   });
   await page.setViewport({ width: 1280, height: 800 });
+  await page.setRequestInterception(true);
+  page.on('request', (request) => {
+    let target;
+    try {
+      target = new URL(request.url());
+    } catch {
+      request.continue();
+      return;
+    }
+    const knownImageryTile =
+      request.method() === 'GET' &&
+      ((target.origin === 'https://services.arcgisonline.com' &&
+        /^\/ArcGIS\/rest\/services\/World_Imagery\/MapServer\/tile\/\d+\/\d+\/\d+$/.test(
+          target.pathname,
+        )) ||
+        (target.origin === 'https://tile.openstreetmap.org' &&
+          /^\/\d+\/\d+\/\d+\.png$/.test(target.pathname)));
+    if (offlineImagery && knownImageryTile) {
+      result.offlineImageryRequests += 1;
+      request.respond({
+        status: 200,
+        contentType: 'image/jpeg',
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: offlineImageryTile,
+      });
+      return;
+    }
+    request.continue();
+  });
   const client = await page.createCDPSession();
   await client.send('Network.enable');
   client.on('Network.requestWillBeSent', ({ request }) => {

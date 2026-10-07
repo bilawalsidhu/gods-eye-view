@@ -23,6 +23,9 @@
  *   node scripts/qa-voice-routing.mjs                 # both layers, :4415
  *   node scripts/qa-voice-routing.mjs --layer routing --budget 120
  *   node scripts/qa-voice-routing.mjs --layer behavior --url http://localhost:4173
+ *   node scripts/qa-voice-routing.mjs --layer behavior --behavior outlines   # bundled outlines only
+ *   node scripts/qa-voice-routing.mjs --layer behavior --outlines [--headful] [--shots qa-shots/pr2] [--only "Paris|Stanford"]
+ *     # six-country outline table: rung, parts, cold/warm latency, Nominatim use
  *
  * House gotchas honored: camera.cancelFlight() before every teleport; puppeteer
  * suites must run sequentially with other harnesses (SwiftShader saturation);
@@ -57,6 +60,11 @@ const LAYER = getOpt('--layer', 'all'); // routing | behavior | all
 const TURN_BUDGET = Number(getOpt('--budget', '120'));
 const PHRASES_PER_SESSION = Number(getOpt('--batch', '6'));
 const ONLY = getOpt('--only', null); // substring filter on phrase text
+const BEHAVIOR = process.argv.includes('--outlines')
+  ? 'acceptance'
+  : getOpt('--behavior', 'all'); // all | outlines | acceptance
+const HEADFUL = process.argv.includes('--headful');
+const SHOTS_DIR = getOpt('--shots', null);
 
 // ── Reporting ───────────────────────────────────────────────
 let pass = 0, fail = 0, skip = 0;
@@ -374,13 +382,12 @@ async function runBehaviorLayer() {
   }
 
   const browser = await puppeteer.launch({
-    headless: 'new',
+    headless: HEADFUL ? false : 'new',
     ...(CHROME_EXECUTABLE ? { executablePath: CHROME_EXECUTABLE } : {}),
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--use-gl=angle',
-      '--use-angle=swiftshader',
+      ...(HEADFUL ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
       '--disable-dev-shm-usage',
       '--disable-web-security',
       '--disable-background-timer-throttling',
@@ -392,9 +399,32 @@ async function runBehaviorLayer() {
   const page = await browser.newPage();
   await page.setViewport({ width: 1500, height: 950 });
   page.on('pageerror', (e) => console.log(`  [page error] ${String(e).slice(0, 140)}`));
+  // Network and resolver logs for the bundled-outline scenarios.
+  const requests = [];
+  const packTimes = [];
+  const started = new Map();
+  page.on('request', (req) => {
+    requests.push(req.url());
+    started.set(req, Date.now());
+  });
+  page.on('requestfinished', (req) => {
+    if (/us_census_places|wof_neighborhoods/.test(req.url()))
+      packTimes.push({
+        file: req.url().split('/').pop().split('?')[0],
+        ms: Date.now() - (started.get(req) ?? Date.now()),
+      });
+  });
+  const resolverLog = [];
+  page.on('console', (msg) => {
+    const text = msg.text();
+    if (text.startsWith('[Resolver]')) resolverLog.push(text);
+  });
 
   try {
-    await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    // The outline table skips the first-run chooser, which covers the map.
+    const startUrl = new URL(APP_URL);
+    if (BEHAVIOR === 'acceptance') startUrl.searchParams.set('welcome', '0');
+    await page.goto(startUrl.href, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
       () => window.__godsEyeView?.viewer && window.__gevVoiceCommands?.runner && window.__gevAnnotations,
       { timeout: 120000, polling: 250 },
@@ -413,6 +443,15 @@ async function runBehaviorLayer() {
       return { lat: p.latitude * 180 / Math.PI, lon: p.longitude * 180 / Math.PI, altKm: p.height / 1000, pitchDeg: c.pitch * 180 / Math.PI };
     });
     const settle = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    if (BEHAVIOR === 'outlines') {
+      await runBundledOutlineScenarios({ page, run, settle, requests, resolverLog, packTimes });
+      return;
+    }
+    if (BEHAVIOR === 'acceptance') {
+      await runOutlineAcceptance({ page, run, settle, requests });
+      return;
+    }
 
     // (1) fly_to_location lands near the target. Annotations follow IMMEDIATELY
     // while the camera is local — the resolver's proximity gate rejects far
@@ -699,6 +738,80 @@ async function runBehaviorLayer() {
     report((r?.drawn ?? 1) === 0 || (r?.failed ?? 0) >= 1,
       'behavior: far-target annotate is proximity-rejected by design',
       `drawn=${r?.drawn} failed=${r?.failed}`);
+
+    // (6c) Overpass-free outlines: bundled → OpenFreeMap tiles → guarded
+    // Nominatim. Each case flies there, asks once, waits for the progressive
+    // upgrade, and records which rung answered ([Outline]/[Resolver] trace).
+    // No browser request may reach an Overpass host.
+    const outlineTrace = [];
+    const overpassHits = [];
+    const onConsole = (msg) => {
+      const text = msg.text();
+      if (/^\[(Outline|Resolver)\]/.test(text)) outlineTrace.push(text);
+    };
+    const onRequest = (req) => {
+      try {
+        if (/overpass/i.test(new URL(req.url()).hostname)) overpassHits.push(req.url());
+      } catch { /* data: and blob: URLs */ }
+    };
+    page.on('console', onConsole);
+    page.on('request', onRequest);
+    const outlineCases = [
+      { name: 'outline Paris', fly: 'Paris, France', ann: { type: 'area', target: 'Paris', label: 'Paris' } },
+      // A world city outside the bundled packs exercises the Nominatim city rung.
+      { name: 'outline Toulouse', fly: 'Toulouse, France', ann: { type: 'area', target: 'Toulouse', label: 'Toulouse' } },
+      { name: 'outline the Texas Capitol grounds', fly: 'Texas State Capitol, Austin', ann: { type: 'area', target: 'the Texas Capitol grounds', label: 'Capitol grounds', entityKind: 'compound' } },
+      { name: 'outline Central Park', fly: 'Central Park, New York', ann: { type: 'area', target: 'Central Park', label: 'Central Park' } },
+      { name: 'highlight Congress Avenue', fly: 'Texas State Capitol, Austin', ann: { type: 'area', target: 'Congress Avenue, Austin', label: 'Congress Avenue', entityKind: 'street' } },
+      // A bare highlight (no footprint flag, no entityKind) of a street name.
+      { name: 'highlight Congress Avenue (bare highlight)', fly: 'Texas State Capitol, Austin', ann: { type: 'highlight', target: 'Congress Avenue, Austin', label: 'Congress highlight' } },
+      { name: 'circle this building', fly: 'Texas State Capitol, Austin', ann: { type: 'area', target: 'this building', label: 'This building', entityKind: 'building', latitude: 30.27472, longitude: -97.74035 } },
+    ];
+    const outlineTable = [];
+    for (const c of outlineCases) {
+      // Marks are left in place: later cases (fly_route) use the drawn route.
+      await run('fly_to_location', { query: c.fly });
+      // Wait for the flight to finish: the resolver biases by the view.
+      let before = await camState();
+      for (let i = 0; i < 20; i += 1) {
+        await settle(1000);
+        const now = await camState();
+        const still = Math.abs(now.lat - before.lat) + Math.abs(now.lon - before.lon) < 1e-4 &&
+          Math.abs(now.altKm - before.altKm) < 0.01;
+        before = now;
+        if (still) break;
+      }
+      outlineTrace.length = 0;
+      r = await run('annotate_map', { annotations: [c.ann] });
+      let state = null;
+      for (let i = 0; i < 16; i += 1) {
+        await settle(1500);
+        state = await page.evaluate((label) => {
+          const it = (window.__gevAnnotations?.list?.() || []).find((a) => a.label === label);
+          if (!it) return null;
+          return {
+            ring: Array.isArray(it.ring) ? it.ring.length : 0,
+            parts: Array.isArray(it.polygons) ? it.polygons.length : 0,
+            synthesized: Boolean(it.synthesized),
+            unavailable: Boolean(it.outlineUnavailable),
+            kind: it.footprintKind || null,
+          };
+        }, c.ann.label);
+        if (state?.ring >= 4 || state?.unavailable) break;
+      }
+      const rung =
+        outlineTrace.map((line) => line.match(/→ (openfreemap|nominatim)/)?.[1]).find(Boolean) ||
+        (outlineTrace.some((line) => /FINAL source=bundled|bundled/.test(line)) ? 'bundled' : 'none');
+      const rendered = Boolean(state?.ring >= 4) && !state?.synthesized;
+      outlineTable.push({ ask: c.name, rung, rendered, ...state });
+      report((r?.drawn ?? 0) >= 1 && rendered, `behavior: "${c.name}" draws an outline`,
+        `rung=${rung} ${JSON.stringify(state)}${rendered ? '' : ` trace=${outlineTrace.slice(-3).join(' | ').slice(0, 400)}`}`);
+    }
+    page.off('console', onConsole);
+    page.off('request', onRequest);
+    console.log('  outline rungs:', JSON.stringify(outlineTable));
+    report(overpassHits.length === 0, 'behavior: outline asks send no request to an Overpass host',
+      overpassHits.slice(0, 3).join(' '));
 
     // Camera-verb scenarios: shed the heavy layers first — headless
     // SwiftShader drops to ~1 fps with fires+vessels loaded and every
@@ -1000,6 +1113,8 @@ async function runBehaviorLayer() {
       'behavior: cockpit entry with Contacts off is refused, not half-entered',
       `ok=${gated?.ok} error=${String(gated?.error || '').slice(0, 90)} active=${cockpitAfterGate}`);
 
+    await runBundledOutlineScenarios({ page, run, settle, requests, resolverLog, packTimes });
+
     const shotDir = path.join(ROOT, 'qa-shots');
     fs.mkdirSync(shotDir, { recursive: true });
     await page.screenshot({ path: path.join(shotDir, 'voice-behavior-final.png') });
@@ -1008,6 +1123,259 @@ async function runBehaviorLayer() {
   } finally {
     await browser.close();
   }
+}
+
+/**
+ * Area asks that the bundled packs answer with no boundary lookup: a US
+ * Census place, the San Francisco DataSF pack, and Who's On First
+ * neighborhoods. Each teleports the camera over the place, draws the area,
+ * and checks the outline, the pack that answered, and that no request went
+ * to Overpass.
+ */
+const BUNDLED_OUTLINES = [
+  { target: 'Austin', lat: 30.2672, lon: -97.7431, pack: 'us-census' },
+  { target: 'the Mission District', lat: 37.7599, lon: -122.4148, pack: 'datasf', entityKind: 'district' },
+  { target: 'Notting Hill', lat: 51.5118, lon: -0.2046, pack: 'wof' },
+  { target: 'Williamsburg', lat: 40.7081, lon: -73.9571, pack: 'wof' },
+  { target: 'Le Marais', lat: 48.8575, lon: 2.358, pack: 'wof' },
+];
+
+/**
+ * A request to an Overpass host or a query to the app's Overpass proxy. The
+ * proxy's /status probe answers locally (is an operator server configured?).
+ */
+function isOverpassRequest(url) {
+  try {
+    const { hostname, pathname } = new URL(url);
+    return hostname.includes('overpass') ||
+      (pathname.startsWith('/api/overpass') && pathname !== '/api/overpass/status');
+  } catch {
+    return false;
+  }
+}
+
+async function runBundledOutlineScenarios({ page, run, settle, requests, resolverLog, packTimes }) {
+  const timings = [];
+  for (const scenario of BUNDLED_OUTLINES) {
+    const label = `behavior: "outline ${scenario.target}" draws the bundled ${scenario.pack} outline`;
+    await page.evaluate(({ lat, lon }) => {
+      const { viewer } = window.__godsEyeView;
+      viewer.camera.cancelFlight();
+      viewer.camera.setView({
+        destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+          longitude: (lon * Math.PI) / 180,
+          latitude: (lat * Math.PI) / 180,
+          height: 9000,
+        }),
+      });
+    }, scenario);
+    await run('clear_annotations', {});
+    await settle(1500);
+    const requestsBefore = requests.length;
+    const logBefore = resolverLog.length;
+    const packsBefore = packTimes.length;
+    const started = Date.now();
+    const r = await run('annotate_map', {
+      annotations: [{
+        type: 'area',
+        target: scenario.target,
+        label: scenario.target,
+        ...(scenario.entityKind ? { entityKind: scenario.entityKind } : {}),
+      }],
+    });
+    let ringPoints = 0;
+    for (let i = 0; i < 40 && ringPoints < 4; i += 1) {
+      ringPoints = await page.evaluate((target) => {
+        const items = window.__gevAnnotations?.list?.() || [];
+        const item = items.find((it) => it.label === target);
+        return Array.isArray(item?.ring) ? item.ring.length : 0;
+      }, scenario.target);
+      if (ringPoints < 4) await settle(250);
+    }
+    const ms = Date.now() - started;
+    const line = resolverLog.slice(logBefore).find((l) => l.includes('bundled')) || '';
+    const pack = /\((us-census|datasf|wof|natural-earth)[,)]/.exec(line)?.[1] || 'none';
+    const packFiles = packTimes.slice(packsBefore);
+    const overpass = requests.slice(requestsBefore).filter(isOverpassRequest);
+    timings.push({ target: scenario.target, ms, pack, overpass: overpass.length });
+    report((r?.drawn ?? 0) >= 1 && ringPoints >= 4 && pack === scenario.pack && overpass.length === 0,
+      label,
+      `drawn=${r?.drawn} ring=${ringPoints} pack=${pack} outlineMs=${ms} overpass=${overpass.length} ` +
+        `packFiles=${packFiles.map((f) => `${f.file}:${f.ms}ms`).join(',') || 'cached'}`);
+  }
+  await run('clear_annotations', {});
+  const overpassTotal = requests.filter(isOverpassRequest);
+  report(overpassTotal.length === 0, 'behavior: no request reached Overpass during the run',
+    `overpass=${overpassTotal.length} ${overpassTotal.slice(0, 2).join(' ')}`);
+  console.log(`  bundled outline timings: ${JSON.stringify(timings)}`);
+  console.log(`  pack files loaded: ${packTimes.map((f) => `${f.file}:${f.ms}ms`).join(' ')}`);
+}
+
+/**
+ * Outline acceptance across six countries: each ask teleports the camera
+ * over the place, draws the area once cold and once warm (after clearing),
+ * and records the rung that answered, the parts drawn, the latency, and how
+ * many public Nominatim requests the server spent (its daily count in
+ * .gev-cache/nominatim/state.json). Nothing may reach Overpass.
+ */
+const OUTLINE_ASKS = [
+  // group, target, camera lat/lon/height(m), extra annotation args, shot name
+  ['country', 'Switzerland', 46.8, 8.2, 1_200_000],
+  ['country', 'Iran', 32.4, 53.7, 3_500_000],
+  ['state', 'Texas', 31.0, -99.0, 2_000_000],
+  ['state', 'Bavaria', 48.9, 11.4, 900_000],
+  ['city', 'Austin', 30.2672, -97.7431, 60_000, {}, 'austin-city'],
+  ['city', 'Paris', 48.8566, 2.3522, 40_000],
+  ['city', 'Tokyo', 35.6762, 139.6503, 90_000],
+  ['city', 'São Paulo', -23.5505, -46.6333, 90_000],
+  ['city', 'Mumbai', 19.076, 72.8777, 60_000],
+  ['city', 'Lagos', 6.5244, 3.3792, 60_000],
+  ['neighborhood', 'the Mission District', 37.7599, -122.4148, 8000, { entityKind: 'district' }],
+  ['neighborhood', 'the Marina', 37.8037, -122.4368, 8000, { entityKind: 'district' }],
+  ['neighborhood', 'Notting Hill', 51.5118, -0.2046, 8000, { entityKind: 'district' }, 'notting-hill'],
+  ['neighborhood', 'Williamsburg', 40.7081, -73.9571, 8000, { entityKind: 'district' }],
+  ['neighborhood', 'SoHo', 40.7233, -74.003, 8000, { entityKind: 'district' }],
+  ['neighborhood', 'Le Marais', 48.8575, 2.358, 8000, { entityKind: 'district' }],
+  ['neighborhood', 'Shibuya', 35.6595, 139.7005, 8000, { entityKind: 'district' }],
+  ['landmark', 'the Texas Capitol grounds', 30.2747, -97.7404, 3000, { entityKind: 'compound' }],
+  ['landmark', 'Central Park', 40.7829, -73.9654, 6000, {}, 'central-park'],
+  ['landmark', 'the Eiffel Tower', 48.8584, 2.2945, 3000],
+  ['landmark', 'Stanford', 37.4275, -122.1697, 8000],
+  ['landmark', 'Stanford University', 37.4275, -122.1697, 8000],
+  ['landmark', 'Lady Bird Lake', 30.2638, -97.7526, 6000],
+  ['street', 'Congress Avenue', 30.2672, -97.7425, 3000, { entityKind: 'street' }, 'congress-avenue'],
+  ['street', 'Lombard Street', 37.8021, -122.4187, 3000, { entityKind: 'street' }],
+  ['building', 'this building', 30.27472, -97.74035, 1200,
+    { entityKind: 'building', latitude: 30.27472, longitude: -97.74035 }, 'building'],
+].map(([group, target, lat, lon, height, extra = {}, shot = null]) => ({ group, target, lat, lon, height, extra, shot }));
+
+const NOMINATIM_STATE = path.join(ROOT, '.gev-cache', 'nominatim', 'state.json');
+function nominatimCount() {
+  try {
+    return JSON.parse(fs.readFileSync(NOMINATIM_STATE, 'utf8')).count || 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function runOutlineAcceptance({ page, run, settle, requests }) {
+  const trace = [];
+  page.on('console', (msg) => {
+    const text = msg.text();
+    if (/^\[(Outline|Resolver)\]/.test(text)) trace.push(text);
+  });
+  const nominatimStart = nominatimCount();
+  const requestsStart = requests.length;
+  if (SHOTS_DIR) fs.mkdirSync(path.resolve(ROOT, SHOTS_DIR), { recursive: true });
+
+  const teleport = (ask) => page.evaluate(({ lat, lon, height }) => {
+    const { viewer } = window.__godsEyeView;
+    viewer.camera.cancelFlight();
+    viewer.camera.setView({
+      destination: viewer.scene.globe.ellipsoid.cartographicToCartesian({
+        longitude: (lon * Math.PI) / 180,
+        latitude: (lat * Math.PI) / 180,
+        height,
+      }),
+    });
+  }, ask);
+
+  const rungOf = (lines, state) => {
+    for (const line of lines) {
+      const m = /→ (openfreemap|nominatim)\b/.exec(line) ||
+        /bundled → ([a-z-]+)/.exec(line) ||
+        /\((us-census|datasf|wof|natural-earth),/.exec(line);
+      if (m) return m[1];
+    }
+    if (state?.synthesized) return 'approximate';
+    return state?.ring >= 4 ? 'other' : 'point';
+  };
+
+  const once = async (ask) => {
+    await run('clear_annotations', {});
+    await teleport(ask);
+    await settle(1200);
+    trace.length = 0;
+    const before = nominatimCount();
+    const label = `QA ${ask.target}`;
+    const started = Date.now();
+    const r = await run('annotate_map', {
+      annotations: [{ type: 'area', target: ask.target, label, ...ask.extra }],
+    });
+    let state = null;
+    for (let i = 0; i < 120; i += 1) {
+      state = await page.evaluate((l) => {
+        const it = (window.__gevAnnotations?.list?.() || []).find((a) => a.label === l);
+        if (!it) return null;
+        return {
+          ring: Array.isArray(it.ring) ? it.ring.length : 0,
+          parts: Array.isArray(it.polygons) && it.polygons.length ? it.polygons.length : (it.ring ? 1 : 0),
+          synthesized: Boolean(it.synthesized),
+          unavailable: Boolean(it.outlineUnavailable),
+          pending: Boolean(it.pendingOutline),
+        };
+      }, label);
+      if (state && !state.pending) break;
+      if (!state && r?.drawn === 0 && i > 8) break;
+      await settle(250);
+    }
+    const ms = Date.now() - started;
+    return {
+      ms,
+      drawn: r?.drawn ?? 0,
+      state,
+      rung: rungOf(trace, state),
+      nominatim: nominatimCount() - before,
+      error: r?.error || r?.results?.find?.((x) => x?.error)?.error || null,
+    };
+  };
+
+  const table = [];
+  // --only "Paris|Stanford" reruns a few rows.
+  const only = ONLY ? ONLY.split('|') : null;
+  for (const ask of OUTLINE_ASKS.filter((a) => !only || only.some((o) => a.target.includes(o)))) {
+    const cold = await once(ask);
+    if (SHOTS_DIR && ask.shot) {
+      await settle(HEADFUL ? 6000 : 2500);
+      await page.screenshot({ path: path.resolve(ROOT, SHOTS_DIR, `${ask.shot}.png`) });
+    }
+    const warm = await once(ask);
+    const rendered = Boolean(cold.state?.ring >= 4) && !cold.state?.synthesized;
+    const row = {
+      group: ask.group,
+      ask: ask.target,
+      rung: cold.rung,
+      rendered,
+      approximate: Boolean(cold.state?.synthesized),
+      parts: cold.state?.parts ?? 0,
+      coldMs: cold.ms,
+      warmMs: warm.ms,
+      warmRung: warm.rung,
+      nominatim: cold.nominatim + warm.nominatim,
+    };
+    table.push(row);
+    const detail = `rung=${row.rung} parts=${row.parts} cold=${row.coldMs}ms warm=${row.warmMs}ms ` +
+      `nominatim=${row.nominatim}${row.approximate ? ' approximate' : ''}` +
+      (rendered ? '' : ` trace=${trace.slice(-2).join(' | ').slice(0, 300)}`);
+    if (rendered) report(true, `outlines: ${ask.group} "${ask.target}"`, detail);
+    else skipped(`outlines: ${ask.group} "${ask.target}" (no exact outline)`, detail);
+  }
+  await run('clear_annotations', {});
+
+  const overpass = requests.slice(requestsStart).filter(isOverpassRequest);
+  report(overpass.length === 0, 'outlines: no request reached Overpass during the run',
+    `overpass=${overpass.length} ${overpass.slice(0, 2).join(' ')}`);
+  const used = nominatimCount() - nominatimStart;
+  report(used <= 30, 'outlines: public Nominatim requests within the run budget (30)', `used=${used}`);
+
+  console.log('\n  | Group | Ask | Rung | Outline | Parts | Cold ms | Warm ms | Nominatim |');
+  console.log('  |---|---|---|---|---|---|---|---|');
+  for (const row of table) {
+    const outline = row.rendered ? 'yes' : row.approximate ? 'approximate' : 'no (point)';
+    console.log(`  | ${row.group} | ${row.ask} | ${row.rung} | ${outline} | ${row.parts} | ${row.coldMs} | ${row.warmMs} | ${row.nominatim} |`);
+  }
+  if (SHOTS_DIR)
+    fs.writeFileSync(path.resolve(ROOT, SHOTS_DIR, 'outline-table.json'), JSON.stringify(table, null, 2));
 }
 
 // ── Main ────────────────────────────────────────────────────
