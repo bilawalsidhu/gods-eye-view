@@ -41,6 +41,7 @@ import {
   formatAwarenessLabel,
   getAwarenessNavigationTargets,
 } from './militaryAwarenessEngine.js';
+import { formatAwarenessCount } from '../layers/awareness/panel.js';
 import { NAVIGATION_AUTHORITY_EVENT } from '../navigationPolicy.js';
 
 const militaryAwarenessSource = readLayerSource(
@@ -54,6 +55,18 @@ const AWARENESS_DEPENDENCIES = [
   'ais-live-vessels',
   'military-installations',
 ];
+
+test('Contacts labels a capped cohort as a lower bound', () => {
+  assert.equal(
+    formatAwarenessCount({ count: 20_000, complete: false, truncated: true }),
+    'At least 20,000',
+  );
+  assert.equal(
+    formatAwarenessCount({ count: 19_999, complete: true, truncated: false }),
+    '19,999',
+  );
+  assert.equal(formatAwarenessCount({ count: null }), '?');
+});
 
 function installAwarenessRuntime({
   isEnabled = () => true,
@@ -2554,11 +2567,63 @@ test('the contacts window reports exactly the counts the panel renders', () => {
   assert.equal(window.flights, 42);
   assert.equal(window.military, 13);
   assert.equal(window.aircraft, 55);
+  assert.equal(window.complete, true);
   assert.equal(window.centeredOn, 'ASA635');
   assert.equal(window.radiusKm, Math.round(AWARENESS_RADIUS_M / 1000));
   // A feed that cannot answer says so rather than reporting a confident zero.
   assert.equal(rendered['ais-live-vessels'], null);
   assert.equal(window.vessels, 'unknown');
+});
+
+test('the voice query snapshot is a detached copy of the rendered aircraft cohort', async () => {
+  const subjectPosition = Cesium.Cartesian3.fromDegrees(-97.74, 30.27, 1_000);
+  const nearbyPosition = Cesium.Cartesian3.fromDegrees(-97.7, 30.3, 1_500);
+  const restoreCollections = stubAwarenessCollections({
+    flights: [
+      {
+        icao24: 'subject',
+        id: 'SUBJECT',
+        position: subjectPosition,
+        distance: 0,
+      },
+      {
+        icao24: 'nearby',
+        id: 'NEARBY',
+        position: nearbyPosition,
+        distance: 5_000,
+      },
+    ],
+  });
+  const runtime = installAwarenessRuntime();
+  try {
+    runtime.dispatch(
+      'gev:awareness-subject-selected',
+      awarenessSubject('flights', 'subject', subjectPosition),
+    );
+    await nextTurn();
+    const first = militaryAwarenessLayer.getAircraftQuerySnapshot();
+    assert.equal(first.cohorts.flights.count, 1);
+    assert.equal(first.cohorts.flights.complete, true);
+    assert.equal(first.cohorts.flights.provenance.id, 'flights');
+    assert.equal(first.cohorts.flights.provenance.enabled, true);
+    assert.equal(first.cohorts.flights.items[0].icao24, 'nearby');
+    first.cohorts.flights.items[0].icao24 = 'mutated';
+    first.cohorts.flights.items[0].position.x = 99;
+    first.cohorts.flights.provenance.source = 'mutated';
+    first.cohorts.flights.provenance.stats.coverage = { radiusM: 1 };
+    first.subject.position.x = 77;
+    const second = militaryAwarenessLayer.getAircraftQuerySnapshot();
+    assert.equal(second.cohorts.flights.items[0].icao24, 'nearby');
+    assert.equal(second.cohorts.flights.items[0].position.x, nearbyPosition.x);
+    assert.notEqual(second.cohorts.flights.provenance.source, 'mutated');
+    assert.notDeepEqual(second.cohorts.flights.provenance.stats.coverage, {
+      radiusM: 1,
+    });
+    assert.equal(second.subject.position.x, subjectPosition.x);
+  } finally {
+    runtime.restore();
+    restoreCollections();
+  }
 });
 
 test('there is no contacts window without a subject', () => {
