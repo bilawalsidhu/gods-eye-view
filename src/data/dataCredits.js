@@ -287,6 +287,10 @@ export const DATA_CREDITS = [
     html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
   },
   {
+    key: 'weather-alerts',
+    html: 'Weather warnings and watches: <a href="https://www.weather.gov/" target="_blank" rel="noopener">NOAA / National Weather Service</a> CAP alerts and NWS zone boundaries. Coverage follows the registered feed. Alerts are advisory context; follow official emergency instructions.',
+  },
+  {
     key: 'weather-lightning',
     html: 'Lightning density: NOAA/NWS nowCOAST · derived from Vaisala NLDN/GLD360. <a href="https://ocean.weather.gov/lightning/lightning_pdd.php" target="_blank" rel="noopener">Public derived density product</a>, not raw detections.',
   },

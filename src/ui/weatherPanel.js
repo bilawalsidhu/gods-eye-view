@@ -10,6 +10,7 @@ const ORDER = [
   'weather-radar',
   'weather-satellite',
   'weather-lightning',
+  'weather-alerts',
 ];
 const OBSERVED = new Set(ORDER.slice(2));
 const utc = (time) =>
@@ -191,16 +192,25 @@ export function createWeatherPanel({
         id: 'legend',
         type: 'legend',
         legend: {
-          categorical: id === 'weather-cyclones',
+          categorical: ['weather-cyclones', 'weather-alerts'].includes(id),
           colors: legend.map(({ color }) => color),
           labels: legend.map(({ label }) => label),
-          units: id === 'weather-cyclones' ? '' : summary.units,
+          units: ['weather-cyclones', 'weather-alerts'].includes(id)
+            ? ''
+            : summary.units,
           zeroIndex: legend.findIndex(({ label }) => label === '0'),
         },
       };
       const blocks = [
-        ...(id === 'weather-cyclones' && list?.items?.length
-          ? [{ id: 'storms', type: 'list', list }]
+        ...(list?.items?.length &&
+        ['weather-cyclones', 'weather-alerts'].includes(id)
+          ? [
+              {
+                id: id === 'weather-alerts' ? 'alerts' : 'storms',
+                type: 'list',
+                list,
+              },
+            ]
           : []),
         { id: 'details', type: 'lines', lines },
         ...(legend.length ? [legendBlock] : []),
@@ -273,7 +283,8 @@ export function createWeatherPanel({
             !openId &&
             ordered.find(
               ({ id, list }) =>
-                id === 'weather-cyclones' && list?.items?.length,
+                ['weather-cyclones', 'weather-alerts'].includes(id) &&
+                list?.items?.length,
             )?.id) ||
           ordered[0]?.id ||
           null;

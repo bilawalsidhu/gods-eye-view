@@ -37,11 +37,14 @@ const CHECKER_PATH = fileURLToPath(
 const NEXT_PATH = fileURLToPath(
   new URL('../../scripts/next-layer-state-token.mjs', import.meta.url),
 );
-const reservationRows = JSON.parse(
+const candidateReservationRows = JSON.parse(
   readFileSync(
     new URL('./layerStateTokenReservations.json', import.meta.url),
     'utf8',
   ),
+);
+const reservationRows = candidateReservationRows.filter(
+  ([id]) => id !== 'weather-alerts',
 );
 
 test('pre-ledger published ownership is independent of the candidate mapping', () => {
@@ -98,7 +101,11 @@ function withPublishedBase(
 }
 
 function writeCodecFixture(cwd, rows, entries) {
-  const source = readFileSync(CODEC_SOURCE_PATH, 'utf8');
+  const currentSource = readFileSync(CODEC_SOURCE_PATH, 'utf8');
+  const featureEntry =
+    "  Object.freeze({\n    id: 'weather-alerts',\n    token: '0',\n    disposition: 'enabled-only',\n  }),\n";
+  assert.equal(currentSource.split(featureEntry).length, 2);
+  const source = currentSource.replace(featureEntry, '');
   const registryEnd = ']);\n\nexport const REGISTERED_LAYER_IDS';
   assert.equal(source.split(registryEnd).length, 2);
   const additions = entries
@@ -119,13 +126,17 @@ function writeCodecFixture(cwd, rows, entries) {
 
 test('reservation ledger is complete, pinned, and rejects duplicate or malformed rows', () => {
   assert.deepEqual(
-    { ...parseLayerStateTokenReservations(reservationRows) },
+    { ...parseLayerStateTokenReservations(candidateReservationRows) },
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
   );
-  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 28);
+  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 29);
+  assert.deepEqual(
+    { ...parseLayerStateTokenReservations(reservationRows) },
+    { ...LEGACY_LAYER_STATE_TOKENS },
+  );
   assert.deepEqual(
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
-    { ...LEGACY_LAYER_STATE_TOKENS },
+    { ...LEGACY_LAYER_STATE_TOKENS, 'weather-alerts': '0' },
   );
   assert.throws(
     () => parseLayerStateTokenReservations(reservationRows.slice(1)),
@@ -344,7 +355,7 @@ test('an isolated valid two-character fixture round-trips an l field beyond the 
     );
     assert.equal(
       validateLayerStateAllocations(
-        LAYER_STATE_TOKEN_RESERVATIONS,
+        LEGACY_LAYER_STATE_TOKENS,
         codec.LAYER_STATE_TOKEN_RESERVATIONS,
       ),
       true,
