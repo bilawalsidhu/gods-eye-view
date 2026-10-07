@@ -63,7 +63,6 @@ export class PanelChrome {
       layoutRightPanels: () => this._layoutRightPanels(),
       syncCctvPanelViewport: () => this._syncCctvPanelViewport(),
       showToast: (message) => this._showToast(message),
-      onPanelResized: (panelId) => this._onPanelResized(panelId),
     });
     this._panelLayout = new PanelLayoutController({
       readHud: () => ({
@@ -147,7 +146,6 @@ export class PanelChrome {
     this._initCommandDockPins();
     this._initCommandDockTrayMetrics();
     this._maybeNotifyLayoutReset();
-    this._panelPosition._initPanelDrag();
   }
 
   _collapsePanelOnEscape(event, panelId) {
@@ -388,11 +386,6 @@ export class PanelChrome {
     this.shareLinkManager?.onPanelStateChange?.();
   }
 
-  /** @returns {boolean} Whether the panel was floating and is now docked. */
-  dockPanel(panelId) {
-    return this._panelPosition?.dockPanel?.(panelId) === true;
-  }
-
   setPanelCollapsed(
     panelId,
     collapsed,
@@ -415,20 +408,17 @@ export class PanelChrome {
       panelEl.classList.contains('cyber-accordion-collapsed');
     // A user opening a Cyber rail panel owns the whole accordion, including
     // peers that were only presentation-collapsed during a saved-state restore.
-    // A floating window is outside the accordion both ways.
     if (
       explicit &&
       !restore &&
       !nextCollapsed &&
       document.documentElement?.dataset.uiTheme === 'cyber' &&
-      panelEl.parentElement === this._rightPanelStack &&
-      !panelEl.classList.contains('panel-floating')
+      panelEl.parentElement === this._rightPanelStack
     ) {
       for (const peer of this._rightPanelStack.children) {
         if (
           peer !== panelEl &&
           peer.matches('[data-panel-id]') &&
-          !peer.classList.contains('panel-floating') &&
           !peer.hidden
         ) {
           this.setPanelCollapsed(peer.id, true, {
@@ -556,10 +546,6 @@ export class PanelChrome {
       }
     }
     panelEl.classList.toggle('collapsed', nextCollapsed);
-    // Only a user's own collapse docks a floating window; restores, cockpit
-    // entry and accordion peers keep its place.
-    if (explicit && !restore)
-      this._panelPosition?.onPanelCollapsed?.(panelId, nextCollapsed);
     if (
       nextCollapsed &&
       this.cockpitView?.active &&

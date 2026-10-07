@@ -407,7 +407,6 @@ async function productionPanel(dom) {
       setParams: (params, options) =>
         manager.setLayerParams('street-level', params, options),
       setPanelCollapsed() {},
-      dockPanel() {},
       showToast() {},
     },
   });
@@ -546,7 +545,6 @@ function stubPanel(dom, state, extraActions = {}) {
       setParams: (params, options) => calls.setParams.push([params, options]),
       setPanelCollapsed: (collapsed, options) =>
         calls.collapsed.push([collapsed, options]),
-      dockPanel() {},
       showToast: (message) => calls.toasts.push(message),
       ...extraActions,
     },

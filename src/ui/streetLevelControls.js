@@ -134,7 +134,7 @@ export class StreetLevelControls {
     });
     this.listen(el.viewerClose, 'click', () => this.layer.closeViewer?.());
     this.listen(el.viewerExpand, 'click', () =>
-      this.setViewerExpanded(!this.isViewerExpanded(), { dock: true }),
+      this.setViewerExpanded(!this.isViewerExpanded()),
     );
     for (const button of el.renderButtons) {
       this.listen(button, 'click', () => {
@@ -276,10 +276,6 @@ export class StreetLevelControls {
     if (this.layer.getUIState) this.render(this.layer.getUIState());
   }
 
-  onPanelResized() {
-    this._requestResize();
-  }
-
   setCollapsed(collapsed, options = {}) {
     this.actions.setPanelCollapsed?.(collapsed, options);
     if (!collapsed) this._requestResize();
@@ -293,11 +289,7 @@ export class StreetLevelControls {
     );
   }
 
-  /**
-   * A user's shrink (`dock`) also returns a floating panel to its rail, so the
-   * viewer does not land in a window over the globe.
-   */
-  setViewerExpanded(expanded, { dock = false } = {}) {
+  setViewerExpanded(expanded) {
     const wrap = this._elements.viewerWrap;
     if (!wrap) return;
     const on = expanded === true;
@@ -347,7 +339,6 @@ export class StreetLevelControls {
       button.setAttribute('aria-pressed', String(on));
       button.setAttribute('aria-label', on ? 'Shrink' : 'Expand');
     }
-    if (!on && dock) this.actions.dockPanel?.();
     this._requestResize();
   }
 
@@ -430,7 +421,7 @@ export class StreetLevelControls {
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
-      this.setViewerExpanded(false, { dock: true });
+      this.setViewerExpanded(false);
       return;
     }
     // A radio off the roving tab stop (tabindex -1) is not a stop either.

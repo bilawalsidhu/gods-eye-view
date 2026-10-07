@@ -125,7 +125,6 @@ button.sl-status:focus-visible {
   pointer-events: none;
 }
 
-/* In a resized window only this block scrolls; the viewer keeps its room. */
 .sl-settings {
   display: flex;
   flex-direction: column;
@@ -474,52 +473,6 @@ button.sl-status:focus-visible {
 
 .sl-meta:empty {
   display: none;
-}
-
-/* ── Floating window ─────────────────────────────────────────────────────── */
-/* A dragged window keeps its natural height, so bound it to the viewport:
-   the rail's max-height: 100% does not bind an auto-height parent.
-   Id-qualified to outrank that rule. */
-#right-context-rail > #street-level-panel.panel-floating > .street-level-panel-inner {
-  max-height: calc(100vh - 12px);
-  overflow-y: auto;
-}
-
-/* A resized window (inline height) gives its spare height to the viewer. */
-.panel-floating[style*='height'] > .street-level-panel-inner {
-  box-sizing: border-box;
-  height: 100%;
-  max-height: none;
-  overflow: hidden;
-}
-
-.panel-floating[style*='height'] .sl-body,
-.panel-floating[style*='height'] .sl-main {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.panel-floating[style*='height'] .sl-viewer-wrap {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.panel-floating[style*='height'] .sl-viewer-stage {
-  flex: 1 1 auto;
-  min-height: 140px;
-}
-
-.panel-floating[style*='height'] .sl-viewer {
-  flex: 1 1 auto;
-  height: auto;
-  min-height: 0;
-  aspect-ratio: auto;
-}
-
-.panel-floating[style*='height'] .sl-settings {
-  flex: 0 1 auto;
-  overflow-y: auto;
-  scrollbar-width: thin;
 }
 
 /* ── Expanded viewer ─────────────────────────────────────────────────────── */

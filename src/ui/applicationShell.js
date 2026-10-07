@@ -105,7 +105,6 @@ export class StyleManager extends ShellFacade {
         _setRadioDisclosure: (...args) => this._setRadioDisclosure(...args),
         _syncCctvPanelViewport: (...args) =>
           this._syncCctvPanelViewport(...args),
-        _onPanelResized: (...args) => this._onPanelResized(...args),
         _syncContextRadioLauncherState: (...args) =>
           this._syncContextRadioLauncherState(...args),
         _showToast: (...args) => this._showToast(...args),
@@ -960,7 +959,6 @@ export class StyleManager extends ShellFacade {
           this._dataManager?.setLayerParams('street-level', params, options),
         setPanelCollapsed: (collapsed, options) =>
           this.setPanelCollapsed('street-level-panel', collapsed, options),
-        dockPanel: () => this._panelChrome.dockPanel('street-level-panel'),
         showToast: (message) => this._showToast(message),
         // Lets the panel open for a user, voice or tool switch-on, not a restore.
         subscribeEnableRequests: (listener) =>
@@ -1514,13 +1512,6 @@ export class StyleManager extends ShellFacade {
       this._setCockpitDisclosure?.('display', !open);
     });
     this._initCockpitDisplayPortal();
-  }
-
-  /** A portable panel was resized or docked: refit any viewport inside it. */
-  _onPanelResized(panelId) {
-    if (panelId === 'cctv-panel') this._syncCctvPanelViewport();
-    if (panelId === 'street-level-panel')
-      this._streetLevelControls?.onPanelResized();
   }
 
   /**

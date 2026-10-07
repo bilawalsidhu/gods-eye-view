@@ -205,12 +205,9 @@ export class PanelLayoutController {
       this._streetLevelPanel,
     ]) {
       if (!panel) continue;
-      // A floating window keeps its restored place and size.
-      if (!panel.classList.contains('panel-floating')) {
-        for (const property of ['top', 'right', 'bottom', 'left', 'z-index'])
-          panel.style.removeProperty(property);
-        panel.classList.remove('panel-draggable', 'panel-dragging');
-      }
+      for (const property of ['top', 'right', 'bottom', 'left', 'z-index'])
+        panel.style.removeProperty(property);
+      panel.classList.remove('panel-draggable', 'panel-dragging');
       stack.insertBefore(panel, globalContextPanel);
       this._syncPanelCollapseButton(panel);
     }

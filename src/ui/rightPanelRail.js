@@ -69,10 +69,8 @@ export function layoutRightPanelRail({
   // A collapse may schedule one follow-up, which only measures and allocates.
   const isCollapseRetry = pendingCollapseRetries.delete(stack);
 
-  // A floating (lifted-out) panel is not laid out by the rail.
   const panels = [...stack.children].filter(
-    (panel) =>
-      panel.matches('[data-panel-id]:not(.panel-floating)') && !panel.hidden,
+    (panel) => panel.matches('[data-panel-id]') && !panel.hidden,
   );
   if (!hud.visible || hud.variant !== 'tactical') {
     for (const panel of panels.filter((item) =>

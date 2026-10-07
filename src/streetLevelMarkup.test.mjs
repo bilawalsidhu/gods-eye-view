@@ -54,14 +54,13 @@ test('the panel is registered with panel chrome, cockpit entry and the right rai
     /for \(const panel of \[[\s\S]*?this\._streetLevelPanel,[\s\S]*?\]\) \{[\s\S]*?stack\.insertBefore\(panel, globalContextPanel\)/,
   );
   for (const rule of [
-    '#right-context-rail > #street-level-panel:not(.panel-floating)',
-    '#right-context-rail #street-level-panel.collapsed:not(.panel-floating)',
+    '#right-context-rail > #street-level-panel',
+    '#right-context-rail #street-level-panel.collapsed',
   ])
     assert.ok(css.includes(rule), `layers.css names ${rule}`);
-  // Rail placement never applies to the panel once it floats as a window.
   assert.match(
     css,
-    /#right-context-rail\.layout-focus\s*>\s*#street-level-panel:not\(\.collapsed\):not\(\.panel-floating\)/,
+    /#right-context-rail\.layout-focus\s*>\s*#street-level-panel:not\(\.collapsed\)/,
   );
 });
 
@@ -138,15 +137,14 @@ test('on phones the viewer is sized from the rail band, not its aspect ratio', (
     panelCss,
     /@media \(max-width: 720px\) \{\s*\.sl-viewer \{[^}]*height: clamp\(/,
   );
-  // Floating and expanded viewers must not inherit the phone height.
-  for (const selector of [
-    ".panel-floating\\[style\\*='height'\\] \\.sl-viewer",
-    '\\.sl-viewer-wrap-expanded \\.sl-viewer',
-  ])
-    assert.match(panelCss, new RegExp(`${selector} \\{[^}]*height: auto`));
+  // The expanded viewer must not inherit the phone height.
+  assert.match(
+    panelCss,
+    /\.sl-viewer-wrap-expanded \.sl-viewer \{[^}]*height: auto/,
+  );
 });
 
-test('the viewer comes first and the panel is a portable, resizable window', () => {
+test('the viewer comes first, with follow in its toolbar', () => {
   const controlsBlock = html.slice(html.indexOf('<div class="sl-main">'));
   assert.ok(
     controlsBlock.indexOf('id="sl-viewer-wrap"') <
@@ -157,35 +155,6 @@ test('the viewer comes first and the panel is a portable, resizable window', () 
     controlsBlock.slice(0, controlsBlock.indexOf('id="sl-viewer"')),
     /id="sl-follow-btn"/,
     'follow lives in the viewer toolbar',
-  );
-  const position = read('src/ui/panelPositionControls.js');
-  assert.match(
-    position,
-    /id: 'street-level-panel',[\s\S]*?portable: true,[\s\S]*?min: \{ width: 320, height: 280 \}/,
-  );
-  assert.match(
-    panelCss,
-    /\.panel-floating\[style\*='height'\] \.sl-settings \{[^}]*overflow-y: auto/,
-  );
-  // Collapsing a floating panel, or SHRINK / Esc on the expanded viewer,
-  // docks it rather than leaving a window over the globe.
-  assert.match(
-    position,
-    /id: 'street-level-panel',[\s\S]*?dockOnCollapse: true/,
-  );
-  assert.match(
-    read('src/ui/panelChrome.js'),
-    /classList\.toggle\('collapsed', nextCollapsed\);[\s\S]{0,200}?if \(explicit && !restore\)\s*this\._panelPosition\?\.onPanelCollapsed\?\.\(panelId, nextCollapsed\)/,
-  );
-  assert.match(
-    controls,
-    /setViewerExpanded\(!this\.isViewerExpanded\(\), \{ dock: true \}\)/,
-  );
-  assert.match(controls, /this\.setViewerExpanded\(false, \{ dock: true \}\)/);
-  assert.match(controls, /if \(!on && dock\) this\.actions\.dockPanel\?\.\(\)/);
-  assert.match(
-    read('src/ui/applicationShell.js'),
-    /panelId === 'street-level-panel'\)\s*this\._streetLevelControls\?\.onPanelResized\(\)/,
   );
 });
 

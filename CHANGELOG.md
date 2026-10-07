@@ -14,10 +14,6 @@
   refuses cross-site requests, rate-limits per IP and backs off when Mapillary
   rejects the token or rate-limits.
 
-- The CCTV and Street Level panels are portable: drag the header to float the
-  panel, resize it from any edge or corner, and double-click the header to dock
-  it again. The position persists across reloads.
-
 - Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
   list is one keyless GeoJSON request to the agency's OGC API view of its
   DATEX 3.1 CCTV table, so no DATEX account is needed. Every working camera

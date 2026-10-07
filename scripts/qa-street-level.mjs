@@ -8,9 +8,8 @@
  * because the bundle carries it; CI uses a dummy one. Fixture runs also stage
  * a rejected key and a keyless second server.
  *
- * `--strict` fails on any skip not in STRICT_ALLOWED_SKIPS. `--fail-on-retry`
- * (or QA_FAIL_ON_RETRY=1) fails a missed header press unless the panel moved.
- * A failed run saves evidence under qa-artifacts/street-level/.
+ * `--strict` fails on any skip not in STRICT_ALLOWED_SKIPS. A failed run saves
+ * evidence under qa-artifacts/street-level/.
  */
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
@@ -18,12 +17,6 @@ import { LAYER_STATE_REGISTRY } from '../src/data/layerState.js';
 import { tileBounds } from '../src/layers/streetLevel/tileMath.js';
 import { encodeCoverageTile } from '../src/layers/streetLevel/providers/mapillary/coverageFixture.mjs';
 import { COVERAGE_MOVE_DEBOUNCE_MS } from '../src/layers/streetLevel/providers/mapillary/policy.js';
-import {
-  describePress,
-  dockPanelByDoubleClick,
-  liftPanelByHeader,
-  waitForStill,
-} from './qa-panelDrag.mjs';
 import {
   hookRenderErrors,
   readRenderErrors,
@@ -340,6 +333,38 @@ async function clearFirstRun(page) {
 }
 
 /**
+ * Best effort: wait until the panel's box has held still for `stillMs`, so a
+ * point read from it does not move before the press.
+ */
+async function waitForStill(
+  page,
+  panelId,
+  { stillMs = 300, timeout = 5000 } = {},
+) {
+  try {
+    await page.waitForFunction(
+      (id, ms) => {
+        const r = document.getElementById(id).getBoundingClientRect();
+        const box = [r.left, r.top, r.width, r.height].map(Math.round).join();
+        const now = performance.now();
+        if (window.__qaStillBox !== box) {
+          window.__qaStillBox = box;
+          window.__qaStillSince = now;
+        }
+        return now - window.__qaStillSince >= ms;
+      },
+      { polling: 100, timeout },
+      panelId,
+      stillMs,
+    );
+    return true;
+  } catch (error) {
+    if (error?.name !== 'TimeoutError') throw error;
+    return false;
+  }
+}
+
+/**
  * Click a panel control once the panel holds still and the control is what
  * lies under its centre: the rail animates panel heights, so a point read
  * once can miss by the time the pointer goes down.
@@ -528,7 +553,6 @@ async function main() {
   const url = urlIndex >= 0 ? args[urlIndex + 1] : 'http://localhost:4173';
   const fixtures = args.includes('--fixtures');
   const strict = args.includes('--strict');
-  if (args.includes('--fail-on-retry')) process.env.QA_FAIL_ON_RETRY = '1';
   const browser = await puppeteer.launch({
     headless: true,
     executablePath:
@@ -1425,12 +1449,6 @@ async function main() {
           await stacks.set(original);
         },
       );
-      const expanded = () =>
-        page.evaluate(() =>
-          document
-            .getElementById('sl-viewer-wrap')
-            .classList.contains('sl-viewer-wrap-expanded'),
-        );
       await step(
         'EXPAND opens a modal dialog (the rest of <body> inert) and Esc returns focus to the button',
         async () => {
@@ -1512,209 +1530,56 @@ async function main() {
           assert.equal(after.sequence.selectedId, null);
         },
       );
-      const floating = () =>
-        page.$eval('#street-level-panel', (node) =>
-          node.classList.contains('panel-floating'),
-        );
-      const center = (selector) =>
-        page.$eval(selector, (node) => {
-          const r = node.getBoundingClientRect();
-          return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-        });
-      // Right after a dock the rail is still animating, so the shared helpers
-      // re-resolve the header and retry only a press that provably missed it.
-      const floatPanel = async () => {
-        const attempt = await liftPanelByHeader(page, PANEL_ID, {
-          dx: -400,
-          dy: 80,
-        });
-        assert.equal(
-          attempt.done,
-          true,
-          `a header drag lifts the panel out of the rail (${describePress(attempt)})`,
-        );
-        assert.equal(await floating(), true);
-      };
-      await step(
-        'the panel floats on a header drag, resizes, and the viewer takes the room',
-        async () => {
-          await openById(firstImageId);
-          await floatPanel();
-          const viewerHeight = () =>
-            page.$eval('#sl-viewer', (node) =>
-              Math.round(node.getBoundingClientRect().height),
-            );
-          const before = await viewerHeight();
-          const grip = await center('#street-level-panel .panel-resize-grip');
-          await page.mouse.move(grip.x, grip.y);
-          await page.mouse.down();
-          await page.mouse.move(grip.x + 120, grip.y + 160, { steps: 10 });
-          await page.mouse.up();
-          await settle(
-            page,
-            (height) =>
-              document.getElementById('sl-viewer').getBoundingClientRect()
-                .height >
-              height + 60,
-            before,
-          );
-          const after = await viewerHeight();
-          assert.ok(
-            after > before + 60,
-            `viewer grew with the window (${before} → ${after}px)`,
-          );
-          assert.equal(
-            await page.$eval(
-              '.sl-settings',
-              (node) => getComputedStyle(node).overflowY,
-            ),
-            'auto',
-            'only the settings block scrolls',
-          );
-        },
-      );
-      await step(
-        'SHRINK after EXPAND docks the window back in the rail at its default size, viewer inside the panel',
-        async () => {
-          await clickPanelControl(page, '#sl-viewer-expand');
-          await settle(page, () =>
-            document
-              .getElementById('sl-viewer-wrap')
-              .classList.contains('sl-viewer-wrap-expanded'),
-          );
-          assert.equal(await expanded(), true, 'expanded');
-          await clickPanelControl(page, '#sl-viewer-expand');
-          await settle(
-            page,
-            () =>
-              !document
-                .getElementById('street-level-panel')
-                .classList.contains('panel-floating') &&
-              !document
-                .getElementById('sl-viewer-wrap')
-                .classList.contains('sl-viewer-wrap-expanded'),
-          );
-          assert.equal(await floating(), false, 'docked again');
-          const style = await page.$eval('#street-level-panel', (node) => ({
-            width: node.style.width,
-            height: node.style.height,
-            parent: node.parentElement.id,
-          }));
-          assert.deepEqual(style, {
-            width: '',
-            height: '',
-            parent: 'right-context-rail',
-          });
-          const home = await page.evaluate(() => {
-            const wrap = document.getElementById('sl-viewer-wrap');
-            return {
-              inPanel: Boolean(wrap.closest('#street-level-panel')),
-              onBody: wrap.parentElement === document.body,
-            };
-          });
-          assert.deepEqual(
-            home,
-            { inPanel: true, onBody: false },
-            'the viewer returned into the panel',
-          );
-        },
-      );
-      await step('a header double-click docks a floating window', async () => {
-        await floatPanel();
-        const attempt = await dockPanelByDoubleClick(page, PANEL_ID);
-        assert.equal(
-          attempt.done,
-          true,
-          `docked again (${describePress(attempt)})`,
-        );
-      });
-      await step(
-        'collapsing a floating window docks it as the rail strip',
-        async () => {
-          // The double-click just docked a panel showing a photo: let the photo
-          // and its sequence finish loading before pressing the header again.
-          await uiUntil((u) => !u.street.loading && !u.sequence.loading);
-          await floatPanel();
-          await clickPanelControl(
-            page,
-            '.panel-collapse-btn[data-collapse-target="street-level-panel"]',
-          );
-          await settle(page, () => {
-            const node = document.getElementById('street-level-panel');
-            return (
-              node.classList.contains('collapsed') &&
-              !node.classList.contains('panel-floating')
-            );
-          });
-          const state = await page.$eval('#street-level-panel', (node) => ({
-            floating: node.classList.contains('panel-floating'),
-            collapsed: node.classList.contains('collapsed'),
-            height: node.style.height,
-          }));
-          assert.deepEqual(state, {
-            floating: false,
-            collapsed: true,
-            height: '',
-          });
-        },
-      );
-      await step(
-        'on a phone the whole photo fits in the docked panel',
-        async () => {
-          // Width alone drives the phone layout; toggling isMobile would reload.
-          await page.setViewport({ width: 390, height: 844 });
-          await settle(page, () => innerWidth === 390);
-          if (
-            await page.$eval('#street-level-panel', (node) =>
-              node.classList.contains('collapsed'),
-            )
+      await step('on a phone the whole photo fits in the panel', async () => {
+        // Width alone drives the phone layout; toggling isMobile would reload.
+        await page.setViewport({ width: 390, height: 844 });
+        await settle(page, () => innerWidth === 390);
+        if (
+          await page.$eval('#street-level-panel', (node) =>
+            node.classList.contains('collapsed'),
           )
-            await expandStrip();
-          await openById(firstImageId);
-          const measure = () =>
-            page.evaluate(() => {
-              const inner = document
-                .querySelector('.street-level-panel-inner')
-                .getBoundingClientRect();
-              const meta = document
-                .getElementById('sl-image-meta')
-                .getBoundingClientRect();
-              const viewer = document
-                .getElementById('sl-viewer')
-                .getBoundingClientRect();
-              return {
-                cut: Math.round(meta.bottom - inner.bottom),
-                top: Math.round(viewer.top - inner.top),
-                height: Math.round(viewer.height),
-                overflowX: document.documentElement.scrollWidth > innerWidth,
-              };
-            });
-          // The panel settles its phone layout over a frame or two.
-          await settle(page, () => {
+        )
+          await expandStrip();
+        await openById(firstImageId);
+        const measure = () =>
+          page.evaluate(() => {
             const inner = document
               .querySelector('.street-level-panel-inner')
               .getBoundingClientRect();
             const meta = document
               .getElementById('sl-image-meta')
               .getBoundingClientRect();
-            return (
-              meta.bottom - inner.bottom <= 1 &&
-              document.getElementById('sl-viewer').getBoundingClientRect()
-                .height >= 100
-            );
+            const viewer = document
+              .getElementById('sl-viewer')
+              .getBoundingClientRect();
+            return {
+              cut: Math.round(meta.bottom - inner.bottom),
+              top: Math.round(viewer.top - inner.top),
+              height: Math.round(viewer.height),
+              overflowX: document.documentElement.scrollWidth > innerWidth,
+            };
           });
-          const fit = await measure();
-          assert.ok(fit.cut <= 1, `photo and caption fit (${fit.cut}px cut)`);
-          assert.ok(fit.height >= 100, `viewer stays usable (${fit.height}px)`);
-          assert.equal(fit.overflowX, false, 'no sideways scroll');
-          await page.setViewport(VIEWPORTS[0]);
-          await settle(
-            page,
-            (width) => innerWidth === width,
-            VIEWPORTS[0].width,
+        // The panel settles its phone layout over a frame or two.
+        await settle(page, () => {
+          const inner = document
+            .querySelector('.street-level-panel-inner')
+            .getBoundingClientRect();
+          const meta = document
+            .getElementById('sl-image-meta')
+            .getBoundingClientRect();
+          return (
+            meta.bottom - inner.bottom <= 1 &&
+            document.getElementById('sl-viewer').getBoundingClientRect()
+              .height >= 100
           );
-        },
-      );
+        });
+        const fit = await measure();
+        assert.ok(fit.cut <= 1, `photo and caption fit (${fit.cut}px cut)`);
+        assert.ok(fit.height >= 100, `viewer stays usable (${fit.height}px)`);
+        assert.equal(fit.overflowX, false, 'no sideways scroll');
+        await page.setViewport(VIEWPORTS[0]);
+        await settle(page, (width) => innerWidth === width, VIEWPORTS[0].width);
+      });
       await step(
         'a reload with the layer on keeps a collapsed panel collapsed, and the share link carries its ui token',
         async () => {

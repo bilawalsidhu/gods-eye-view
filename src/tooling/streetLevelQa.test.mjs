@@ -124,189 +124,6 @@ test('the gate requires the server’s real Mapillary status route', async () =>
     );
 });
 
-/* ── Header press-and-verify shared with the panel gate ───────────────── */
-
-/**
- * A page stand-in that runs page functions in Node against a fake document.
- * The hit check always sees the header; `presses` says where each pointerdown
- * lands ('header', 'other', 'moved' or 'none').
- */
-function fakePanelPage({ presses = [], floating = false, stuck = false } = {}) {
-  const state = { floating, downs: 0, last: null, dragging: false, shift: 0 };
-  const listeners = [];
-  const node = (tagName, id, classes, inHeader) => ({
-    tagName,
-    id,
-    classList: classes,
-    closest: (selector) =>
-      inHeader && selector.includes('.panel-header') ? {} : null,
-  });
-  const header = node('DIV', '', ['panel-title'], true);
-  const other = node('SECTION', 'weather-panel', ['panel'], false);
-  const rect = (left, top, width, height) => () => ({
-    left,
-    top,
-    width,
-    height,
-  });
-  const document = {
-    querySelector: () => ({ getBoundingClientRect: rect(120, 210, 100, 20) }),
-    getElementById: () => ({
-      getBoundingClientRect: () => rect(100, 200 + state.shift, 300, 400)(),
-      classList: {
-        contains: (name) => name === 'panel-floating' && state.floating,
-      },
-    }),
-    elementFromPoint: () => header,
-  };
-  const window = {
-    addEventListener: (type, listener) => listeners.push(listener),
-  };
-  const inPage = (fn, ...args) => {
-    const saved = { document: globalThis.document, window: globalThis.window };
-    Object.assign(globalThis, { document, window });
-    try {
-      return fn(...args);
-    } finally {
-      Object.assign(globalThis, saved);
-    }
-  };
-  const evaluate = async (fn, ...args) => inPage(fn, ...args);
-  const press = () => {
-    state.last = presses[state.downs++] ?? 'header';
-    // 'none': the pointerdown never reaches the page.
-    if (state.last === 'none') return;
-    const target = state.last === 'header' ? header : other;
-    // 'moved': the panel's layout shifted just before the press landed.
-    if (state.last === 'moved') state.shift = -116;
-    for (const listener of listeners.splice(0)) inPage(listener, { target });
-    state.shift = 0;
-  };
-  return {
-    state,
-    evaluate,
-    async waitForFunction(fn, options, ...args) {
-      for (let i = 0; i < 3; i++) {
-        if (await evaluate(fn, ...args)) return;
-        await new Promise((resolve) => setTimeout(resolve, 1));
-      }
-      throw Object.assign(new Error('timed out'), { name: 'TimeoutError' });
-    },
-    mouse: {
-      async move() {},
-      async down() {
-        press();
-        state.dragging = true;
-      },
-      async up() {
-        if (state.dragging && state.last === 'header' && !stuck)
-          state.floating = true;
-        state.dragging = false;
-      },
-      async click(x, y, { clickCount }) {
-        if (clickCount === 1) press();
-        else if (state.last === 'header' && !stuck) state.floating = false;
-      },
-    },
-  };
-}
-
-test('a header press is retried only when it provably missed the header', async () => {
-  const { pressMissed } = await import('../../scripts/qa-panelDrag.mjs');
-  assert.equal(pressMissed({ done: true, pressed: null }), false);
-  assert.equal(
-    pressMissed({ done: false, pressed: { inHeader: true } }),
-    false,
-  );
-  assert.equal(
-    pressMissed({ done: false, pressed: { inHeader: false } }),
-    true,
-  );
-  // No recorded press is a failure, not a miss to retry.
-  assert.equal(pressMissed({ done: false, pressed: null }), false);
-});
-
-test('a lift whose press the rail moved off the header is retried, then lifts', async () => {
-  const { liftPanelByHeader, describePress } =
-    await import('../../scripts/qa-panelDrag.mjs');
-  const page = fakePanelPage({ presses: ['other', 'header'] });
-  const notes = [];
-  const attempt = await liftPanelByHeader(page, 'street-level-panel', {
-    dx: -400,
-    dy: 80,
-    log: (line) => notes.push(line),
-    pauseMs: 0,
-  });
-  assert.equal(attempt.done, true);
-  assert.equal(page.state.downs, 2);
-  assert.equal(notes.length, 2, 'a note and a GitHub warning');
-  assert.match(notes[0], /missed the street-level-panel header/);
-  assert.match(notes[0], /section#weather-panel\.panel/, 'names what it hit');
-  assert.match(notes[0], /pre-press hit check passed/);
-  assert.match(notes[0], /stillness (held|timed out)/);
-  assert.match(
-    notes[0],
-    /panel box at hit check 100,200 300x400 -> at press 100,200 300x400/,
-  );
-  assert.match(notes[1], /^::warning title=Panel press retried::retry 1\/2/);
-  assert.match(describePress(attempt), /in header: true, after 1 retry$/);
-});
-
-test('a press in the header that does not lift fails at once, naming the target', async () => {
-  const { liftPanelByHeader, describePress } =
-    await import('../../scripts/qa-panelDrag.mjs');
-  const page = fakePanelPage({ stuck: true });
-  const attempt = await liftPanelByHeader(page, 'street-level-panel', {
-    dx: -400,
-    dy: 80,
-    log: () => assert.fail('no retry'),
-    pauseMs: 0,
-  });
-  assert.equal(attempt.done, false);
-  assert.equal(page.state.downs, 1);
-  assert.match(describePress(attempt), /on div\.panel-title, in header: true/);
-});
-
-test('presses that keep missing stop after the retries and report the miss', async () => {
-  const { liftPanelByHeader, PRESS_RETRIES } =
-    await import('../../scripts/qa-panelDrag.mjs');
-  const page = fakePanelPage({ presses: ['other', 'other', 'other', 'other'] });
-  const attempt = await liftPanelByHeader(page, 'street-level-panel', {
-    dx: -400,
-    dy: 80,
-    log: () => {},
-    pauseMs: 0,
-  });
-  assert.equal(attempt.done, false);
-  assert.equal(page.state.downs, PRESS_RETRIES + 1);
-  assert.equal(attempt.pressed.inHeader, false);
-});
-
-test('a header double-click docks, waiting on the docked state', async () => {
-  const { dockPanelByDoubleClick } =
-    await import('../../scripts/qa-panelDrag.mjs');
-  const page = fakePanelPage({ floating: true, presses: ['other', 'header'] });
-  const attempt = await dockPanelByDoubleClick(page, 'street-level-panel', {
-    log: () => {},
-    pauseMs: 0,
-  });
-  assert.equal(attempt.done, true);
-  assert.equal(page.state.floating, false);
-  assert.equal(page.state.downs, 2, 'the missed first press was retried');
-});
-
-test('both panel gates press the header through the shared helper', () => {
-  for (const script of ['qa-street-level.mjs', 'qa-panel-resize.mjs']) {
-    const source = fs.readFileSync(
-      new URL(`../../scripts/${script}`, import.meta.url),
-      'utf8',
-    );
-    assert.match(source, /from '\.\/qa-panelDrag\.mjs'/, script);
-    assert.match(source, /liftPanelByHeader\(page, PANEL_ID/, script);
-    assert.match(source, /dockPanelByDoubleClick\(page, PANEL_ID/, script);
-  }
-});
-
 /* ── Hermetic photo flow: the photo line and the Graph fixtures ────────── */
 
 test('the photo sequence runs through the parked view, clipped to each tile it crosses', async () => {
@@ -527,80 +344,17 @@ test('--strict accepts only the documented skips', () => {
   );
 });
 
-test('a press that records no pointerdown fails at once, without a retry', async () => {
-  const { liftPanelByHeader, describePress } =
-    await import('../../scripts/qa-panelDrag.mjs');
-  const page = fakePanelPage({ presses: ['none', 'header'] });
-  const attempt = await liftPanelByHeader(page, 'street-level-panel', {
-    dx: -400,
-    dy: 80,
-    log: () => assert.fail('no retry'),
-    pauseMs: 0,
-  });
-  assert.equal(attempt.done, false);
-  assert.equal(attempt.pressed, null);
-  assert.equal(page.state.downs, 1);
-  assert.match(describePress(attempt), /no pointerdown reached the page/);
-});
-
-test('QA_FAIL_ON_RETRY turns a retry into a failure that says why', async () => {
-  const { liftPanelByHeader, failOnRetryDefault } =
-    await import('../../scripts/qa-panelDrag.mjs');
-  assert.equal(failOnRetryDefault({ QA_FAIL_ON_RETRY: '1' }, []), true);
-  assert.equal(failOnRetryDefault({}, ['--fail-on-retry']), true);
-  assert.equal(failOnRetryDefault({}, []), false);
-  const page = fakePanelPage({ presses: ['other', 'header'] });
-  await assert.rejects(
-    liftPanelByHeader(page, 'street-level-panel', {
-      dx: -400,
-      dy: 80,
-      log: () => {},
-      pauseMs: 0,
-      failOnRetry: true,
-    }),
-    /QA_FAIL_ON_RETRY=1 .*missed the street-level-panel header.*pre-press hit check passed/,
+test('the gate saves failure evidence and fails on render-loop errors', () => {
+  const source = fs.readFileSync(
+    new URL('../../scripts/qa-street-level.mjs', import.meta.url),
+    'utf8',
   );
-  assert.equal(page.state.downs, 1);
+  assert.match(source, /saveFailureArtifacts\(/);
+  assert.match(source, /hookRenderErrors\(/);
+  assert.match(source, /readRenderErrors\(/);
 });
 
-test('QA_FAIL_ON_RETRY retries, with a warning, a miss the panel moving explains', async () => {
-  const { liftPanelByHeader, panelMoved } =
-    await import('../../scripts/qa-panelDrag.mjs');
-  assert.equal(panelMoved({ left: 0, top: 382 }, { left: 0, top: 266 }), true);
-  assert.equal(panelMoved({ left: 0, top: 382 }, { left: 1, top: 383 }), false);
-  const page = fakePanelPage({ presses: ['moved', 'header'] });
-  const lines = [];
-  const attempt = await liftPanelByHeader(page, 'street-level-panel', {
-    dx: -400,
-    dy: 80,
-    log: (line) => lines.push(line),
-    pauseMs: 0,
-    failOnRetry: true,
-  });
-  assert.equal(attempt.done, true, 'the second press lifted it');
-  assert.equal(page.state.downs, 2);
-  assert.ok(
-    lines.some((line) =>
-      /::warning title=Panel press retried::.*-> at press 100,84/.test(line),
-    ),
-    lines.join('\n'),
-  );
-});
-
-test('both gates save failure evidence and fail on render-loop errors', () => {
-  for (const script of ['qa-street-level.mjs', 'qa-panel-resize.mjs']) {
-    const source = fs.readFileSync(
-      new URL(`../../scripts/${script}`, import.meta.url),
-      'utf8',
-    );
-    assert.match(source, /saveFailureArtifacts\(/, script);
-    assert.match(source, /hookRenderErrors\(/, script);
-    assert.match(source, /readRenderErrors\(/, script);
-    assert.match(source, /--fail-on-retry/, script);
-  }
-});
-
-test('CI runs the gates hermetically against a production build, strict, with evidence', () => {
+test('CI runs the gate hermetically against a production build, strict, with evidence', () => {
   const ci = fs.readFileSync(
     new URL('../../.github/workflows/ci.yml', import.meta.url),
     'utf8',
@@ -628,9 +382,4 @@ test('CI runs the gates hermetically against a production build, strict, with ev
     /if: failure\(\)[\s\S]*actions\/upload-artifact@[0-9a-f]{40}/,
   );
   assert.match(gate, /path: qa-artifacts\//);
-  assert.match(
-    gate,
-    /QA_FAIL_ON_RETRY: '1'/,
-    'a missed header press fails CI now that the rail settles',
-  );
 });
