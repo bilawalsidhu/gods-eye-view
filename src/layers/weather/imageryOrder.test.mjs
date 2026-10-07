@@ -7,7 +7,8 @@ test('weather compositing remains consistent when scalar, observation and histor
     radar = { name: 'radar' },
     cloud = { name: 'cloud' },
     wind = { name: 'wind' },
-    lightning = { name: 'lightning' };
+    lightning = { name: 'lightning' },
+    aurora = { name: 'aurora' };
   const items = [base];
   const collection = {
     get length() {
@@ -22,23 +23,24 @@ test('weather compositing remains consistent when scalar, observation and histor
     [radar, 2],
     [cloud, 1],
     [lightning, 3],
+    [aurora, 4],
     [wind, 0],
   ]) {
     items.push(layer);
     orderWeatherImagery(collection, layer, priority);
   }
-  assert.deepEqual(items, [base, wind, cloud, radar, lightning]);
+  assert.deepEqual(items, [base, wind, cloud, radar, lightning, aurora]);
   const next = { name: 'new radar history frame' };
   items.push(next);
   orderWeatherImagery(collection, next, 2);
-  assert.deepEqual(items, [base, wind, cloud, radar, next, lightning]);
+  assert.deepEqual(items, [base, wind, cloud, radar, next, lightning, aurora]);
 });
 
-test('tileset imagery collection preserves scalar, infrared, radar and lightning order', async () => {
+test('tileset imagery collection preserves scalar, infrared, radar, lightning and aurora order', async () => {
   const { ImageryLayerCollection, ImageryLayer } = await import('cesium');
   const tileset = { imageryLayers: new ImageryLayerCollection() };
-  const layers = Array.from({ length: 4 }, () => new ImageryLayer());
-  for (const priority of [3, 2, 0, 1]) {
+  const layers = Array.from({ length: 5 }, () => new ImageryLayer());
+  for (const priority of [4, 3, 2, 0, 1]) {
     tileset.imageryLayers.add(layers[priority]);
     orderWeatherImagery(tileset.imageryLayers, layers[priority], priority);
   }
@@ -62,7 +64,7 @@ test('already ordered imagery adds and repeated ordering cause no collection chu
       items.push(...items.splice(items.indexOf(layer), 1));
     },
   };
-  for (const priority of [0, 1, 1, 2, 3]) {
+  for (const priority of [0, 1, 1, 2, 3, 4]) {
     const layer = {};
     items.push(layer);
     orderWeatherImagery(collection, layer, priority);

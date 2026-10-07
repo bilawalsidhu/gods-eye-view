@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DATA_CREDITS } from './dataCredits.js';
 
@@ -16,6 +16,13 @@ test('every credit carries a unique key and some markup to render', () => {
       `credit ${entry.key} has nothing to show`,
     );
   }
+});
+
+test('NOAA SWPC OVATION forecast carries forecast and public-domain context', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'weather-aurora');
+  assert.match(credit?.html || '', /NOAA Space Weather Prediction Center/);
+  assert.match(credit?.html || '', /30–90 minute forecast/);
+  assert.match(credit?.html || '', /public domain/);
 });
 
 test('adsbdb is credited and carries its published route-data restriction', () => {

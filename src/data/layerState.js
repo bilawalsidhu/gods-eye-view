@@ -303,6 +303,12 @@ const OPTION_GROUPS = Object.freeze({
       hybrid: 'h',
     }),
   ]),
+  'weather-aurora': Object.freeze([
+    enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
+      light: 'l',
+      strong: 's',
+    }),
+  ]),
   'weather-lightning': Object.freeze([
     enumOption('opacity', 'o', 'strong', ['light', 'strong'], {
       light: 'l',
@@ -661,6 +667,12 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     optionOwner: 'traffic',
   }),
   Object.freeze({ id: 'transit', token: 'j', disposition: 'enabled-only' }),
+  Object.freeze({
+    id: 'weather-aurora',
+    token: '3',
+    disposition: 'enabled+options',
+    optionOwner: 'weather-aurora',
+  }),
   Object.freeze({
     id: 'weather-cyclones',
     token: 'y',

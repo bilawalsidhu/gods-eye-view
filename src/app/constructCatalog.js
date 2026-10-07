@@ -2,6 +2,7 @@ import { createWeatherClock } from '../layers/weather/clock.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
 import { createCyclonesLayer } from '../layers/cyclones/index.js';
 import { createWindLayer } from '../layers/wind/index.js';
+import { createAuroraLayer } from '../layers/aurora/index.js';
 import { createLayerCatalog } from './catalog.js';
 import { MAPILLARY_SOURCE_METHODS } from '../layers/streetLevel/providers/mapillary/policy.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
@@ -53,6 +54,7 @@ const SOURCE_METHODS = Object.freeze({
   firms: ['getSnapshot'],
   wind: ['getSnapshot'],
   weather: ['getSnapshot'],
+  aurora: ['getSnapshot'],
   cyclones: ['getSnapshot'],
   earthquakes: ['getSnapshot'],
   'fire-perimeters': ['getSnapshot'],
@@ -188,6 +190,7 @@ export function createApplicationCatalog({
           id: 'weather-lightning',
           clock: weatherClock,
         }),
+        createAuroraLayer({ feed: sources.aurora }),
         createCyclonesLayer({ feed: sources.cyclones }),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),

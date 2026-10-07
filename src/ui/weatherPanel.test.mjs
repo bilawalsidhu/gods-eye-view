@@ -380,8 +380,17 @@ const lightning = {
   icon: 'ϟ',
   summary: { label: 'Lightning density' },
 };
+const aurora = {
+  id: 'weather-aurora',
+  icon: '✦',
+  summary: {
+    label: 'Aurora probability · FORECAST',
+    validTime: '2026-09-25T13:00:00.000Z',
+    issuedTime: '2026-09-25T12:00:00.000Z',
+  },
+};
 const opened = (f) =>
-  [cyclone, wind, radar, satellite, lightning]
+  [cyclone, wind, radar, satellite, lightning, aurora]
     .filter(({ id }) => card(f, id)?.dataset.open === 'true')
     .map(({ id }) => id);
 const clickHeader = (f, id) => card(f, id).children[0].click();
@@ -389,11 +398,11 @@ const clickHeader = (f, id) => card(f, id).children[0].click();
 test('cyclones lead, and observed history owns one bordered group with only active products in scope', () => {
   const f = fixture();
   const view = createWeatherPanel(f);
-  view.update([lightning, radar, wind, cyclone, satellite]);
+  view.update([lightning, radar, wind, cyclone, satellite, aurora]);
   const root = f.container.children[0];
   assert.deepEqual(
     root.children[0].children.map((n) => n.dataset.cardId),
-    ['weather-cyclones', 'wind'],
+    ['weather-cyclones', 'wind', 'weather-aurora'],
   );
   const group = f.find((n) => n.className === 'weather-observed-group');
   assert.equal(root.children[1], group);
@@ -408,6 +417,15 @@ test('cyclones lead, and observed history owns one bordered group with only acti
     ['weather-radar', 'weather-satellite', 'weather-lightning'],
   );
   assert.deepEqual(opened(f), ['weather-cyclones']);
+  // Closed cards render the compact line, which carries valid time only;
+  // `issued` appears in the expanded body. Wind follows the same contract.
+  assert.match(
+    f.find(
+      (n) => n.className.startsWith('rail-card-compact'),
+      card(f, aurora.id),
+    ).textContent,
+    /^Forecast · valid /,
+  );
   assert.equal(
     card(f, cyclone.id).children[1].children[0].dataset.blockId,
     'storms',
