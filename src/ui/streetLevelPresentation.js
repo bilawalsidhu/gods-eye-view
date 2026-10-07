@@ -53,8 +53,11 @@ function formatDate(ms) {
   }
 }
 
+/** Whether the layer draws: on, and Mapillary not switched off by a link or tool. */
+const drawing = (state) => state.enabled === true && state.providerOn !== false;
+
 function presentStatus(state) {
-  const pressed = state.enabled === true;
+  const pressed = drawing(state);
   const title = pressed ? 'Turn Street Level off' : 'Turn Street Level on';
   if (state.keyRejected)
     return { text: 'KEY REJECTED', tone: 'warn', pressed, title };
@@ -93,6 +96,8 @@ function presentViewer(state) {
 
 function presentMeta(state) {
   if (!state.enabled) return 'Switch Street Level on to draw its coverage.';
+  if (!drawing(state))
+    return 'Mapillary is off in this view. Switch Street Level on to show it.';
   if (state.sequence.selectedId)
     return state.sequence.loading
       ? 'Loading this sequence…'

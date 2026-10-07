@@ -5,6 +5,8 @@ import {
 } from './streetLevelPresentation.js';
 
 const RENDER_MODE_KEY = 'gev:street-level:render-mode';
+/** <body> classes of the modes that hide every panel; an expanded photo leaves with them. */
+const PANEL_HIDING_MODES = ['ui-clean-view', 'recording-mode', 'cockpit-mode'];
 const RADIO_STEPS = Object.freeze({
   ArrowRight: 1,
   ArrowDown: 1,
@@ -108,10 +110,24 @@ export class StreetLevelControls {
     );
     this.listen(el.viewerClose, 'click', () => this.layer.closeViewer?.());
     // EXPAND is the browser's own fullscreen: it handles Esc, focus and the
-    // rest of the page. Without the API the button is simply not offered.
-    if (typeof el.viewerWrap?.requestFullscreen === 'function') {
-      this.listen(el.viewerExpand, 'click', () => this._toggleFullscreen());
-      this.listen(document, 'fullscreenchange', () => this._syncFullscreen());
+    // rest of the page. iPhone Safari has no element fullscreen, so there the
+    // viewer opens as a top-layer popover over the page instead (Esc and the
+    // button close it). With neither, the button is not offered.
+    this._expandMode =
+      typeof el.viewerWrap?.requestFullscreen === 'function'
+        ? 'fullscreen'
+        : typeof el.viewerWrap?.showPopover === 'function'
+          ? 'popover'
+          : null;
+    this._popoverOpen = false;
+    if (this._expandMode) {
+      this.listen(el.viewerExpand, 'click', () => this._toggleExpanded());
+      if (this._expandMode === 'fullscreen')
+        this.listen(document, 'fullscreenchange', () => this._syncExpanded());
+      else
+        this.listen(el.viewerWrap, 'toggle', (event) =>
+          this._onPopoverToggle(event),
+        );
     } else setProp(el.viewerExpand, 'hidden', true);
     for (const button of el.renderButtons) {
       this.listen(button, 'click', () => {
@@ -180,10 +196,13 @@ export class StreetLevelControls {
 
   async _toggleEnabled() {
     const enabled = this.actions.isEnabled?.() === true;
-    // The pill is the only switch: switching on also brings back Mapillary
-    // if a share link or a tool turned it off, or the layer would draw nothing.
-    if (!enabled && this._state?.providerOn === false)
+    // The pill is the only switch. A share link or tool can switch Mapillary
+    // off under a layer that is on; the pill then reads OFF, and switching on
+    // brings Mapillary back (and the layer, if it is off too).
+    if (this._state?.providerOn === false) {
       this._setParams({ mapillary: true });
+      if (enabled) return;
+    }
     try {
       await this.actions.setEnabled?.(!enabled);
     } catch (error) {
@@ -198,27 +217,74 @@ export class StreetLevelControls {
     else this.layer.setParams?.(params);
   }
 
-  isViewerFullscreen() {
+  /** Whether EXPAND has the viewer full screen (or, on iPhone, open over the page). */
+  isViewerExpanded() {
     const wrap = this._elements.viewerWrap;
-    return Boolean(wrap) && document.fullscreenElement === wrap;
+    if (!wrap) return false;
+    return this._expandMode === 'popover'
+      ? this._popoverOpen
+      : document.fullscreenElement === wrap;
   }
 
-  async _toggleFullscreen() {
+  async _toggleExpanded() {
+    const wrap = this._elements.viewerWrap;
     try {
-      if (this.isViewerFullscreen()) await document.exitFullscreen();
-      else await this._elements.viewerWrap.requestFullscreen();
+      if (this.isViewerExpanded()) this._exitExpanded();
+      else if (this._expandMode === 'fullscreen')
+        await wrap.requestFullscreen();
+      else {
+        // Only while open: a closed popover is hidden even inside the panel.
+        wrap.popover = 'auto';
+        wrap.showPopover();
+      }
     } catch {
       /* refused (no user gesture, policy): the panel view stays */
     }
   }
 
-  _exitFullscreen() {
-    if (this.isViewerFullscreen()) document.exitFullscreen().catch(() => {});
+  _exitExpanded() {
+    if (!this.isViewerExpanded()) return;
+    if (this._expandMode === 'popover') this._elements.viewerWrap.hidePopover();
+    else document.exitFullscreen().catch(() => {});
   }
 
-  /** Mirror the browser's fullscreen state on EXPAND and refit the viewer. */
-  _syncFullscreen() {
-    const on = this.isViewerFullscreen();
+  _onPopoverToggle(event) {
+    this._popoverOpen = event.newState === 'open';
+    if (!this._popoverOpen)
+      this._elements.viewerWrap.removeAttribute('popover');
+    this._syncExpanded();
+  }
+
+  /**
+   * While expanded, leave when Clean View, recording or the cockpit starts:
+   * they hide every panel, and the photo would stay over the globe (and in a
+   * recording).
+   */
+  _watchPanelHidingModes(on) {
+    const body = document.body;
+    if (!on || !body) {
+      this._modesObserver?.disconnect();
+      this._modesObserver = null;
+      return;
+    }
+    const leaveIfHiding = () => {
+      if (PANEL_HIDING_MODES.some((mode) => body.classList.contains(mode)))
+        this._exitExpanded();
+    };
+    if (!this._modesObserver && typeof MutationObserver === 'function') {
+      this._modesObserver = new MutationObserver(leaveIfHiding);
+      this._modesObserver.observe(body, {
+        attributes: true,
+        attributeFilter: ['class'],
+      });
+    }
+    leaveIfHiding();
+  }
+
+  /** Mirror the expanded state on EXPAND, watch the panel-hiding modes, refit. */
+  _syncExpanded() {
+    const on = this.isViewerExpanded();
+    this._watchPanelHidingModes(on);
     const button = this._elements.viewerExpand;
     if (button) {
       setProp(
@@ -344,7 +410,7 @@ export class StreetLevelControls {
     const el = this._elements;
     const { viewer } = view;
     const wrap = el.viewerWrap;
-    if (!viewer.open) this._exitFullscreen();
+    if (!viewer.open) this._exitExpanded();
     if (wrap) {
       // Closing the image (its × button) hides the wrap: move focus out
       // first, or it drops to <body>.
@@ -398,7 +464,8 @@ export class StreetLevelControls {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
-    this._exitFullscreen();
+    this._exitExpanded();
+    this._watchPanelHidingModes(false);
     this.listeners.abort();
     this._resizeObserver?.disconnect();
     this._resizeObserver = null;

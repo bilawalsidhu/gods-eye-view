@@ -2963,9 +2963,13 @@ MapillaryJS loads on the first photo. Opening one frames it with a single
 camera flight through the application's deferred navigation (`begin` /
 `reassert`): it releases tracking, is refused in the cockpit, and is skipped
 if newer navigation took the camera while the photo loaded; closing the photo
-cancels it. EXPAND is the browser's Fullscreen API on the viewer element
-(hidden where the API is missing). At phone width the viewer height comes from
-the rail band so the whole photo fits.
+cancels it. EXPAND is the browser's Fullscreen API on the viewer element; on
+iPhone, which has no element fullscreen, the viewer opens as a top-layer
+popover instead (hidden where neither API exists). Clean View, recording and
+the cockpit take an expanded photo out of full screen. With the layer on but
+Mapillary switched off by a link or tool, the header pill reads OFF and turns
+Mapillary back on. At phone width the viewer height comes from the rail band
+so the whole photo fits.
 
 Browser gates: `npm run qa:street-level -- --url <server>` runs against real
 Mapillary with a token; `npm run qa:street-level:fixtures` answers every

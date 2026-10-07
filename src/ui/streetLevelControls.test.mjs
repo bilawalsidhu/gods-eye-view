@@ -73,6 +73,10 @@ class FakeNode {
   getAttribute(key) {
     return this.attributes.get(key) ?? null;
   }
+  removeAttribute(key) {
+    mutations.count++;
+    this.attributes.delete(key);
+  }
   appendChild(child) {
     child.parent = this;
     this.children.push(child);
@@ -131,6 +135,7 @@ class FakeNode {
       type: event.type,
       target: this,
       key: event.key,
+      newState: event.newState,
       preventDefault() {},
     };
     for (let node = this; node; node = event.bubbles ? node.parent : null)
@@ -145,9 +150,10 @@ class FakeNode {
 
 /**
  * The Street Level panel's body, as layer-panels.html lays it out, on a page
- * with the Fullscreen API unless `fullscreen` is false.
+ * with the Fullscreen API unless `fullscreen` is false, and the Popover API
+ * if `popover` is true (iPhone Safari: popovers, no element fullscreen).
  */
-function panelDom({ fullscreen = true } = {}) {
+function panelDom({ fullscreen = true, popover = false } = {}) {
   const document = new FakeNode(null, '#document');
   Object.assign(document, {
     ownerDocument: document,
@@ -170,6 +176,19 @@ function panelDom({ fullscreen = true } = {}) {
   add(root, 'button', { id: 'sl-status' });
   const wrap = add(root, 'div', { id: 'sl-viewer-wrap' });
   if (fullscreen) wrap.requestFullscreen = async () => fullscreenTo(wrap);
+  if (popover) {
+    // The browser fires `toggle` after the popover opens or closes.
+    const toggleTo = (newState) =>
+      setTimeout(() => wrap.dispatchEvent({ type: 'toggle', newState }), 0);
+    wrap.showPopover = () => {
+      wrap.popoverOpen = true;
+      toggleTo('open');
+    };
+    wrap.hidePopover = () => {
+      wrap.popoverOpen = false;
+      toggleTo('closed');
+    };
+  }
   const expand = add(wrap, 'button', { id: 'sl-viewer-expand' });
   add(expand, 'span', { classes: ['sl-btn-icon'] });
   add(expand, 'span', { classes: ['sl-btn-text'] });
@@ -423,6 +442,25 @@ test('the header pill switches the layer, bringing back Mapillary switched off e
     dark.controls.destroy();
   }));
 
+test('a layer that is on with Mapillary switched off reads OFF, and the pill brings Mapillary back', () =>
+  withDom(async (dom) => {
+    const status = dom.root.querySelector('#sl-status');
+    const { calls, controls } = stubPanel(dom, uiState({ on: false }));
+    assert.equal(status.textContent, 'OFF');
+    assert.equal(status.getAttribute('aria-pressed'), 'false');
+    assert.match(
+      dom.root.querySelector('#sl-coverage-meta').textContent,
+      /Mapillary is off in this view/,
+    );
+    status.click();
+    await settle();
+    assert.deepEqual(calls.setParams, [
+      [{ mapillary: true }, { origin: 'user' }],
+    ]);
+    assert.deepEqual(calls.setEnabled, [], 'the layer itself stays on');
+    controls.destroy();
+  }));
+
 test('under KEY REQUIRED the filters are gated and the error line says how to add the key', () =>
   withDom(async (dom) => {
     const { controls } = stubPanel(dom, uiState({ keyRequired: true }));
@@ -511,7 +549,7 @@ test('an image closed while full screen leaves full screen', () =>
     controls.destroy();
   }));
 
-test('without the Fullscreen API there is no EXPAND button', () =>
+test('without the Fullscreen or Popover API there is no EXPAND button', () =>
   withDom(
     async (dom) => {
       const { controls } = stubPanel(dom, uiState({ open: true }));
@@ -520,6 +558,79 @@ test('without the Fullscreen API there is no EXPAND button', () =>
     },
     { fullscreen: false },
   ));
+
+test('on iPhone (no element fullscreen) EXPAND opens the viewer as a popover over the page', () =>
+  withDom(
+    async (dom) => {
+      const { controls } = stubPanel(dom, uiState({ open: true }));
+      const expand = dom.root.querySelector('#sl-viewer-expand');
+      assert.equal(expand.hidden, false, 'offered');
+      expand.click();
+      await settle();
+      await settle();
+      assert.equal(dom.wrap.popoverOpen, true);
+      assert.equal(dom.root.contains(dom.wrap), true, 'never leaves the panel');
+      assert.deepEqual(expandLabel(dom), ['SHRINK', 'true']);
+      expand.click();
+      await settle();
+      await settle();
+      assert.equal(dom.wrap.popoverOpen, false);
+      assert.equal(
+        dom.wrap.getAttribute('popover'),
+        null,
+        'a closed popover would be hidden inside the panel',
+      );
+      assert.deepEqual(expandLabel(dom), ['EXPAND', 'false']);
+      controls.destroy();
+    },
+    { fullscreen: false, popover: true },
+  ));
+
+/** A MutationObserver stand-in whose callback the test fires. */
+function fakeMutationObserver() {
+  const observers = new Set();
+  class FakeObserver {
+    constructor(callback) {
+      this.callback = callback;
+    }
+    observe() {
+      observers.add(this);
+    }
+    disconnect() {
+      observers.delete(this);
+    }
+  }
+  return {
+    FakeObserver,
+    observers,
+    fire: () => [...observers].forEach((o) => o.callback([])),
+  };
+}
+
+for (const mode of ['ui-clean-view', 'recording-mode', 'cockpit-mode'])
+  test(`entering ${mode} takes the photo out of full screen`, () =>
+    withDom(async (dom) => {
+      const saved = globalThis.MutationObserver;
+      const watch = fakeMutationObserver();
+      globalThis.MutationObserver = watch.FakeObserver;
+      try {
+        const { controls } = stubPanel(dom, uiState({ open: true }));
+        dom.root.querySelector('#sl-viewer-expand').click();
+        await settle();
+        await settle();
+        assert.equal(dom.document.fullscreenElement, dom.wrap);
+        assert.equal(watch.observers.size, 1, 'watching while expanded');
+        dom.document.body.classList.toggle(mode, true);
+        watch.fire();
+        await settle();
+        await settle();
+        assert.equal(dom.document.fullscreenElement, null);
+        assert.equal(watch.observers.size, 0, 'and not after');
+        controls.destroy();
+      } finally {
+        globalThis.MutationObserver = saved;
+      }
+    }));
 
 /* ── Restores and keyboard rules ───────────────────────────────────────── */
 

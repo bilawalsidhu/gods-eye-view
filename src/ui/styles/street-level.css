@@ -415,14 +415,29 @@
 }
 
 /* ── Full screen (EXPAND) ────────────────────────────────────────────────── */
-/* The browser lifts the viewer into the top layer; the photo takes the rest. */
+/* The browser lifts the viewer into the top layer; the photo takes the rest.
+   iPhone Safari has no element fullscreen, so there the viewer is a popover
+   sized to the viewport instead. */
 .sl-viewer-wrap:fullscreen {
   border: 0;
   border-radius: 0;
 }
 
-.sl-viewer-wrap:fullscreen .sl-viewer-stage,
-.sl-viewer-wrap:fullscreen .sl-viewer {
+.sl-viewer-wrap:popover-open {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.sl-viewer-wrap:is(:fullscreen, :popover-open) .sl-viewer-stage,
+.sl-viewer-wrap:is(:fullscreen, :popover-open) .sl-viewer {
   flex: 1 1 auto;
   height: auto;
   min-height: 0;
