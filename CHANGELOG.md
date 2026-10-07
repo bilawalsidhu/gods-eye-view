@@ -1,5 +1,9 @@
 # Changelog
 
+- MCP setup examples use the app's default port, `4173`. Thanks to
+  [Huanyi Xie](https://github.com/xiehuanyi) (#934) and
+  [shirunjies8-png](https://github.com/shirunjies8-png) (#959) for the same fix.
+
 - Voice revisits numbered analyst records through current layer snapshots and
   preserves resolved pin coordinates. Requested analyst lists and rankings can
   speak returned items alongside the exact count and coverage caveats. Failed
@@ -68,6 +72,14 @@
   Avinor's planned 2029 opening. `scripts/build-airports-norway.py` rebuilds
   or `--verify`s the file from a pinned Geofabrik extract. Voice and the
   analyst know the layer as `local-airports`; its share-link token is `3`.
+- Stdio servers from one install share a panel key so a page read from one
+  process can make requests through another. Concurrent malformed-key repairs
+  now select one winner; unavailable storage or a busy repair retains the
+  logged per-process fallback. Thanks to [Jibran Tahir](https://github.com/jibraaan)
+  for #958, [MarvinNL046](https://github.com/MarvinNL046) for the report and
+  proposed diagnosis in #927, and [kvnloo](https://github.com/kvnloo) for identifying
+  the repair race. Windows/Claude Desktop Cowork confirmation remains outstanding.
+
 - Street Level: a street-level imagery layer modelled on the iD editor's photo
   overlay, with Mapillary as its first provider (free client token, CC BY-SA 4.0
   imagery). One right-rail panel holds a chip per provider, shared 360°/flat and

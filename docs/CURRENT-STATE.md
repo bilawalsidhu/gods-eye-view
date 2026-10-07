@@ -14,6 +14,19 @@ new views from the page that frames it; framing is off unless
 `GEV_EMBED_FRAME_ANCESTORS` allows the framing page. MCP leads with the tools that find
 what to show. See [tools and the MCP server](TOOLS.md).
 
+Stdio processes from one install share the panel key in
+`.gev-cache/mcp-panel-key`, resolved from the checkout rather than the client's
+working directory. First creation is atomic; malformed-file repairs select one
+winner and concurrent processes re-read it. A busy repair waits at most two
+seconds before falling back. If the cache cannot be read/written or repair remains
+busy, stderr reports the fallback to a per-process key; cross-process panels can
+still fail in that mode. An abandoned `.repair-lock` is left intact: after
+confirming no repair process is running, remove it to allow repair on restart.
+HTTP MCP servers retain per-server keys. This key is a panel routing guard, not
+authentication. Large-response continuations remain process-local and require
+consistent tool-call routing. Two-process reproduction is covered locally;
+Windows/Claude Desktop Cowork confirmation remains outstanding (#927).
+
 ## Tools and local MCP server — October 1, 2026
 
 `gods-eye-view/tools` defines queries that answer questions from the app's data,
