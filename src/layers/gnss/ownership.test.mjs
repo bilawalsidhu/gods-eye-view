@@ -284,6 +284,21 @@ test('cells expire while no view anchor is available', async () => {
   assert.equal(layer.getStats().error, null);
 });
 
+test('re-enabling after a long disable does not show cells past the window', async () => {
+  const { layer, sources, advance, now } = harness(async () => ({
+    rows: threeHealthy(),
+    fetchedAt: now(),
+  }));
+  layer.enable();
+  await layer.update();
+  assert.equal(sources[0].entities.values.length, 1);
+  layer.disable();
+  advance(31 * MIN);
+  layer.enable();
+  assert.equal(layer.getStats().count, 0);
+  assert.equal(sources[0].entities.values.length, 0);
+});
+
 const threeCells = () => ({
   rows: [row('a1', 50.1, true), row('a2', 50.1, true), row('a3', 50.2, false)],
 });

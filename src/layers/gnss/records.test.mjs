@@ -305,10 +305,29 @@ test('an aircraft returning after the window starts fresh', () => {
     degradedAt: null,
   });
   // Returning degraded dates the evidence from the new report.
-  accumulateGnssObservations(store, [report('a9', true)], 0);
-  accumulateGnssObservations(store, [], 31 * MIN);
-  accumulateGnssObservations(store, [report('a9', true)], 33 * MIN);
-  assert.equal(entry(store, 'a9').degradedAt, 33 * MIN);
+  const again = new Map();
+  accumulateGnssObservations(again, [report('a9', true)], 0);
+  accumulateGnssObservations(again, [], 31 * MIN);
+  accumulateGnssObservations(again, [report('a9', true)], 33 * MIN);
+  assert.equal(entry(again, 'a9').degradedAt, 33 * MIN);
+});
+
+test('an aircraft heard healthy right after the window drops its stale degraded evidence', () => {
+  // No prune runs in between: the old entry is still in the store when the
+  // healthy report arrives, so the new report alone must not carry it over.
+  const store = new Map();
+  accumulateGnssObservations(store, [report('a1', true)], 0);
+  accumulateGnssObservations(store, [report('a1', false)], 31 * MIN);
+  assert.deepEqual(entry(store, 'a1'), {
+    cell: gnssCellKey(50.1, 20.1),
+    seenAt: 31 * MIN,
+    degradedAt: null,
+  });
+  // Exactly one window after the degraded report it still counts.
+  const edge = new Map();
+  accumulateGnssObservations(edge, [report('a1', true)], 0);
+  accumulateGnssObservations(edge, [report('a1', false)], 30 * MIN);
+  assert.equal(entry(edge, 'a1').degradedAt, 0);
 });
 
 test('rows are dated by the snapshot observation time, so a replay never restarts the window', () => {

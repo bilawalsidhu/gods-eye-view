@@ -122,7 +122,11 @@ export function createGnssIntegrityLayer({
 
     enable() {
       _enabled = true;
-      if (_dataSource) _dataSource.show = true;
+      // Cells left from before a long disable must not reappear past the window.
+      if (_dataSource) {
+        expire();
+        _dataSource.show = true;
+      }
     },
 
     disable() {

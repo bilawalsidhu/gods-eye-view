@@ -63,7 +63,6 @@ const getOpt = (name, dflt) => {
 const APP_URL = getOpt('--url', 'http://localhost:4173');
 const HEADFUL = argv.includes('--headful');
 const LAYER_ID = 'gnss-interference';
-/** Live rows below this cannot reliably fill a 3-aircraft cell. */
 
 const results = [];
 function record(name, ok, detail) {
