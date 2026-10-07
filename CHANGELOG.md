@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Refresh Norway's datacenters from a Geofabrik OpenStreetMap extract
+  (2026-10-05). Troll Housing joins the layer (4,352 features) and four
+  Norwegian sites pick up current OSM tags; no site moved or was removed.
+  `scripts/build-datacenters-norway.py` reproduces or `--verify`s the merge,
+  touching only features inside Geofabrik's Norway boundary, and the dataset
+  README records the extract, checksum and filter.
 - Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
   list is one keyless GeoJSON request to the agency's OGC API view of its
   DATEX 3.1 CCTV table, so no DATEX account is needed. Every working camera
