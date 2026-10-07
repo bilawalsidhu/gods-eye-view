@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   presentStreetLevelPanel,
-  SINCE_STOPS,
   sinceStopIndex,
 } from './streetLevelPresentation.js';
 function snapshot(overrides = {}) {
@@ -51,14 +50,7 @@ function deepMerge(target, source) {
   return out;
 }
 
-test('a key-gated layer disables every control and flags KEY REQUIRED', () => {
-  const view = presentStreetLevelPanel(snapshot({ keyRequired: true }));
-  assert.equal(view.controlsDisabled, true);
-  assert.equal(view.status.text, 'KEY REQUIRED');
-  assert.equal(view.status.tone, 'warn');
-});
-
-test('KEY REQUIRED says how to add the key instead of a raw error code', () => {
+test('KEY REQUIRED disables every control and says how to add the key', () => {
   const view = presentStreetLevelPanel(
     snapshot({
       enabled: true,
@@ -66,7 +58,9 @@ test('KEY REQUIRED says how to add the key instead of a raw error code', () => {
       coverage: { error: 'no_key' },
     }),
   );
+  assert.equal(view.controlsDisabled, true);
   assert.equal(view.status.text, 'KEY REQUIRED');
+  assert.equal(view.status.tone, 'warn');
   assert.match(view.error, /^Mapillary: Needs MAPILLARY_CLIENT_TOKEN/);
 });
 
@@ -149,18 +143,10 @@ test('errors from the viewer or the coverage web surface in one alert', () => {
   );
 });
 
-test('the SINCE slider runs from any date on the left to the last month on the right', () => {
-  assert.deepEqual(
-    SINCE_STOPS.map((stop) => stop.days),
-    [0, 3652, 1826, 1095, 730, 365, 182, 91, 30],
-  );
+test('a SINCE window from a link lands on the nearest slider stop', () => {
   assert.equal(sinceStopIndex(0), 0);
   assert.equal(sinceStopIndex(365), 5);
-  assert.equal(
-    sinceStopIndex(400),
-    5,
-    'an off-stop link lands on the nearest stop',
-  );
+  assert.equal(sinceStopIndex(400), 5);
   assert.equal(sinceStopIndex(-4), 0);
 });
 

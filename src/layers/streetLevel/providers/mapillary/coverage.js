@@ -57,7 +57,7 @@ export function sequenceIdFromPick(pickId) {
 /** Hint above the street-zoom ceiling, where no coverage is drawn. */
 export const ZOOM_IN_HINT = 'Zoom in to see street-level coverage';
 /** Hint when no ground is in view within range (looking at the sky). */
-export const NO_GROUND_HINT =
+const NO_GROUND_HINT =
   'Point the camera at the ground for street-level coverage';
 
 /**

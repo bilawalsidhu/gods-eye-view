@@ -3,17 +3,15 @@
 ## [Unreleased]
 
 - Street Level: Mapillary street-level imagery modelled on the iD editor's
-  photo overlay (free client token, CC BY-SA 4.0 imagery). One right-rail panel
-  holds an ON/OFF pill, 360°/flat and captured-since filters, a legend, and an
-  embedded viewer with full-screen EXPAND and FIT/FILL. Coverage lines (below
-  60 km; from orbit the panel says to zoom in) and image cones are draped on
-  the terrain and on Google 3D tiles; MapillaryJS loads on the first photo,
-  and opening one frames it with one camera flight.
-  Share links carry the Mapillary switch, the filters and the panel's collapsed
-  state. A server proxy adds the token to Mapillary coverage tiles, drops
-  their unused image layer and keeps them in memory (24 h); it refuses
-  cross-site requests and rate-limits per IP, and the panel stops asking when
-  Mapillary rejects the token or rate-limits.
+  photo overlay (free client token, CC BY-SA 4.0 imagery). A docked right-rail
+  panel holds an ON/OFF pill, 360°/flat and captured-since filters, a legend
+  and an embedded viewer with full-screen EXPAND and FIT/FILL. Coverage lines
+  (below 60 km) and image cones drape on the terrain and Google 3D tiles;
+  opening a photo frames it with one camera flight. Share links carry the
+  switch, the filters and the panel's collapsed state. A server proxy keeps
+  the token server-side, trims coverage tiles and caches them in memory for
+  24 h; it refuses cross-site requests and rate-limits per IP. The panel reads
+  KEY REQUIRED without a token and KEY REJECTED when Mapillary refuses it.
 
 - Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
   list is one keyless GeoJSON request to the agency's OGC API view of its

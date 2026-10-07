@@ -104,12 +104,6 @@ test('graph API errors carry the upstream message and status', async () => {
   );
 });
 
-test('the source exposes only imagery lookups', () => {
-  const source = createMapillarySource({ token: 'MLY|1|abc' });
-  for (const gone of ['queryFeatures', 'plan', 'geocode', 'spriteUrl'])
-    assert.equal(source[gone], undefined, gone);
-});
-
 test('a rejected key and a rate limit are told apart from other tile errors', async () => {
   const rejectedSource = createMapillarySource({
     token: 'MLY|1|abc',

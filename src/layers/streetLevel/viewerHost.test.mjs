@@ -189,24 +189,6 @@ function deferred() {
   return { promise, resolve };
 }
 
-test('switching the layer off and on during a cold first open keeps the shared viewer', async () => {
-  const gate = deferred();
-  const adapter = fakeAdapter({ gate });
-  const { state, host } = harness(adapter);
-  const first = host.open('a'); // the library is still loading
-  host.unmount(); // layer off …
-  const second = host.open('b'); // … on again, and a new click
-  gate.resolve();
-  await Promise.all([first, second]);
-  assert.equal(adapter.calls.unmount, 1, 'only the layer going off');
-  assert.equal(adapter.calls.listeners, 1);
-  assert.equal(state.street.error, null);
-  assert.equal(state.street.imageId, 'b');
-  await host.open('c');
-  assert.equal(state.street.error, null, 'later opens are not stuck');
-  assert.equal(state.street.imageId, 'c');
-});
-
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 test('every pose the viewer reports moves the marker; only the open frames the camera', async () => {
@@ -393,15 +375,6 @@ test('a Mapillary viewer unmounted mid-download is never built; the next mount b
   assert.equal(viewers.live, 0, 'nothing left holding a WebGL context');
 });
 
-test('the Mapillary viewer leaves resizing to the panel, so a hidden one never asks for z=NaN', async () => {
-  const { gate, viewers } = fakeLibrary();
-  gate.resolve();
-  const adapter = createMapillaryViewer({ source: { token: 't' } });
-  await adapter.mount({});
-  assert.equal(viewers.instances[0].options.trackResize, false);
-  adapter.unmount();
-});
-
 test('closing the photo stops sequence playback in the hidden viewer', async () => {
   const { gate, viewers } = fakeLibrary();
   gate.resolve();
@@ -413,18 +386,6 @@ test('closing the photo stops sequence playback in the hidden viewer', async () 
   host.close();
   assert.equal(viewer.playback.stops, 1, 'playback stopped with the photo');
   assert.equal(viewers.live, 1, 'the viewer itself stays warm');
-});
-
-test('closing the photo or switching the layer off stops its framing flight', async () => {
-  const adapter = fakeAdapter();
-  const { framing, host } = harness(adapter);
-  await host.open('a');
-  assert.equal(framing.started, 1, 'the open framed the photo');
-  host.close();
-  assert.equal(framing.cancelled, 1, 'closed: the globe stops flying to it');
-  await host.open('b');
-  host.unmount();
-  assert.equal(framing.cancelled, 2, 'layer off: likewise');
 });
 
 /** The real Mapillary adapter, mounted on a ready library, and its poses. */

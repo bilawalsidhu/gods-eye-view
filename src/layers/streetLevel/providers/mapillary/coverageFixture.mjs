@@ -3,7 +3,7 @@ import { PbfWriter } from 'pbf';
 const zigzag = (value) => (value << 1) ^ (value >> 31);
 
 /** Tile-local [x, y] (0..extent) of a lon/lat inside tile (x, y, z). */
-export function lonLatToTileLocal([lon, lat], { x, y, z }, extent = 4096) {
+function lonLatToTileLocal([lon, lat], { x, y, z }, extent = 4096) {
   const n = 2 ** z;
   const rad = (lat * Math.PI) / 180;
   const tx = ((lon + 180) / 360) * n;

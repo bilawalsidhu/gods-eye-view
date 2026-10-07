@@ -21,7 +21,7 @@ export const PHOTO_LINE = Object.freeze({
   north: 38.591,
 });
 /** Metres between consecutive photos on the line (≥ the 3 m cone thinning). */
-export const PHOTO_SPACING_M = 30;
+const PHOTO_SPACING_M = 30;
 /** Fixture thumbnail host (answered, never reached). */
 export const THUMB_HOST = 'qa-fixture.mapillary.com';
 
@@ -117,7 +117,7 @@ const json = (status, body) => ({
 });
 
 let photoBytes = null;
-export function photoJpeg() {
+function photoJpeg() {
   photoBytes ??= readFileSync(new URL('./street-640x320.jpg', import.meta.url));
   return photoBytes;
 }

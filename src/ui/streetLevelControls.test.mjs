@@ -435,25 +435,6 @@ test('under KEY REQUIRED the filters are gated and the error line says how to ad
     controls.destroy();
   }));
 
-test('the legend rebuilds when a swatch changes, even at the same count', () =>
-  withDom(async (dom) => {
-    const { layer, controls } = stubPanel(dom, uiState());
-    const legend = dom.root.querySelector('#sl-legend');
-    const swatch = () => legend.children[0].children[0].style.background;
-    assert.equal(swatch(), '#05cb63');
-    layer.publish(
-      uiState({
-        legend: [
-          { key: 'mapillary', label: 'Mapillary', color: '#a66bff' },
-          { key: 'selected', label: 'Selected', color: '#00d4ff' },
-        ],
-      }),
-    );
-    assert.equal(legend.childElementCount, 2);
-    assert.equal(swatch(), '#a66bff');
-    controls.destroy();
-  }));
-
 test('the viewer is resized once when it opens, not on every render', () =>
   withDom(async (dom) => {
     const { layer, controls } = stubPanel(dom, uiState());

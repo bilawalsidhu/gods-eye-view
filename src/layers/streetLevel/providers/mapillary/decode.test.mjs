@@ -19,7 +19,7 @@ function linePart(points) {
 
 /**
  * A minimal mly1_public-shaped tile: one sequence line, plus one point in the
- * low-zoom `overview` layer the layer never draws.
+ * z14 `image` layer the decoder skips.
  */
 function sampleTile({ geometry = null } = {}) {
   const writer = new PbfWriter();
@@ -73,7 +73,7 @@ function sampleTile({ geometry = null } = {}) {
     3,
     (_, layer) => {
       layer.writeVarintField(15, 2);
-      layer.writeStringField(1, 'overview');
+      layer.writeStringField(1, 'image');
       layer.writeVarintField(5, 4096);
       layer.writeStringField(3, 'is_pano');
       layer.writeMessage(
@@ -97,7 +97,7 @@ function sampleTile({ geometry = null } = {}) {
   return new Uint8Array(writer.finish());
 }
 
-test('sequences decode into lon/lat records; overview points are ignored', () => {
+test('sequences decode into lon/lat records; image points are skipped', () => {
   const decoded = decodeCoverageTile(sampleTile(), { x: 0, y: 0, z: 1 });
   assert.equal(decoded.sequences.length, 1);
   const [sequence] = decoded.sequences;

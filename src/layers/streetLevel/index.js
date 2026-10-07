@@ -318,8 +318,6 @@ export function createStreetLevelLayer({
     attachViewerHost(element) {
       parts.viewerHost.attach(element);
     },
-    /** Imagery filter for coverage, cones and nearest-image lookups. */
-    setCoverageFilter,
     openImage,
     /** Open the nearest image around a point (default: the view centre). */
     async openNearest(point) {
@@ -366,7 +364,6 @@ export function createStreetLevelLayer({
     resizeViewer: () => parts.viewerHost.resize(),
     selectSequence: (sequenceId) => parts.sequences.select(sequenceId),
     clearSequence: () => parts.sequences.clearSelection(),
-    refreshCoverage: () => parts.coverage.refresh(),
   };
   return layer;
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { nearestImageId } from './nearest.js';
-import { COLORS, mapillaryImageUrl } from './policy.js';
+import { mapillaryImageUrl } from './policy.js';
 import { sequenceIdFromPick } from './coverage.js';
 import { thinImages } from './sequences.js';
 import { resolveFilter } from '../../filter.js';
@@ -27,8 +27,7 @@ const at = (id, lon, lat) => ({
   geometry: { type: 'Point', coordinates: [lon, lat] },
 });
 
-test('Mapillary draws in its green; image deep links match the mapillary.com share format', () => {
-  assert.equal(COLORS.coverage, '#05cb63');
+test('image deep links match the mapillary.com share format', () => {
   assert.equal(
     mapillaryImageUrl(1814275685699406),
     'https://www.mapillary.com/app/?pKey=1814275685699406&focus=photo',

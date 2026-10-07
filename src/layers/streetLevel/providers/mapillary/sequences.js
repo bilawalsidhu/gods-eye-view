@@ -15,7 +15,7 @@ const SPRITE_ID = 'street-level:mapillary-cones';
 const SEQUENCE_CACHE_SIZE = 40;
 
 /** Normalize a graph image record into the shape the cones use. */
-export function normalizeSequenceImage(record) {
+function normalizeSequenceImage(record) {
   const coordinates = record?.geometry?.coordinates;
   if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
   return {

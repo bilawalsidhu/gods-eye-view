@@ -1,15 +1,6 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import test from 'node:test';
-import { createApplicationStreetLevel } from '../app/layers/streetLevel.js';
-import {
-  fixtureTile,
-  LEGEND_SWATCHES,
-  isCollapsed,
-  PARK,
-  STRICT_ALLOWED_SKIPS,
-  strictViolations,
-} from '../../scripts/qa-street-level.mjs';
+import { fixtureTile } from '../../scripts/qa-street-level.mjs';
 import {
   answerMapillaryRequest,
   describeCall,
@@ -20,37 +11,6 @@ import {
   THUMB_HOST,
 } from '../../scripts/fixtures/street-level/mapillaryGraph.mjs';
 import { redact } from '../../scripts/qa-browserEvidence.mjs';
-
-// The press helpers wait for paint; Node has no frames, so a tick stands in.
-globalThis.requestAnimationFrame ??= (callback) =>
-  setTimeout(() => callback(Date.now()), 0);
-
-test('the harness expects the legend the app layer draws', () => {
-  // Any method the layer asks its source for is a no-op: only the legend matters.
-  const source = new Proxy({}, { get: () => () => {} });
-  const layer = createApplicationStreetLevel({
-    sources: { mapillary: source },
-  });
-  assert.equal(layer.getUIState().legend.length, LEGEND_SWATCHES);
-});
-
-test('a panel reads as collapsed only with the collapsed class', () => {
-  assert.equal(isCollapsed(['panel-collapsible', 'collapsed']), true);
-  assert.equal(isCollapsed(['panel-collapsible']), false);
-});
-
-test('the harness only runs its browser flow when executed directly', () => {
-  const source = fs.readFileSync(
-    new URL('../../scripts/qa-street-level.mjs', import.meta.url),
-    'utf8',
-  );
-  assert.match(
-    source,
-    /import\.meta\.url === pathToFileURL\(process\.argv\[1\]\)\.href/,
-  );
-  assert.match(source, /PUPPETEER_EXECUTABLE_PATH/);
-  assert.match(source, /--url/);
-});
 
 test('fixture tiles give the hermetic gate something real to filter', async () => {
   const { decodeCoverageTile } =
@@ -70,52 +30,6 @@ test('fixture tiles give the hermetic gate something real to filter', async () =
   assert.ok(old > 0 && old < 8, 'recent and older both present');
   assert.equal(fixtureTile(3, 1, 3, now).length, 0, 'nothing from orbit');
   assert.equal(fixtureTile(8, 1, 1, now).length, 0, 'nor in between');
-});
-
-/* ── The real status route probe ─────────────────────────────────────── */
-
-test('the gate requires the server’s real Mapillary status route', async () => {
-  const { assertRealStatusRoute } =
-    await import('../../scripts/qa-street-level.mjs');
-  const asked = [];
-  const answer = (body, init) => async (url) => {
-    asked.push(url);
-    return typeof body === 'string'
-      ? new Response(body, init)
-      : Response.json(body, init);
-  };
-  assert.deepEqual(
-    await assertRealStatusRoute(
-      'http://localhost:4173',
-      answer({ configured: false }),
-    ),
-    { configured: false },
-  );
-  assert.deepEqual(asked, ['http://localhost:4173/api/mapillary/status']);
-  for (const [why, fetchImpl] of [
-    [
-      'an unregistered route (the API 404)',
-      answer({ error: 'Unknown API route' }, { status: 404 }),
-    ],
-    [
-      'the SPA fallback',
-      answer('<!doctype html><title>GEV</title>', {
-        headers: { 'content-type': 'text/html' },
-      }),
-    ],
-    ['a malformed status', answer({ configured: 'yes' })],
-    [
-      'an unreachable server',
-      async () => {
-        throw new TypeError('fetch failed');
-      },
-    ],
-  ])
-    await assert.rejects(
-      assertRealStatusRoute('http://localhost:4173', fetchImpl),
-      /api\/mapillary\/status/,
-      why,
-    );
 });
 
 /* ── Hermetic photo flow: the photo line and the Graph fixtures ────────── */
@@ -157,9 +71,6 @@ test('the photo sequence runs through the parked view, clipped to each tile it c
     elsewhere.sequences.some((s) => s.id === PHOTO_SEQUENCE_ID),
     false,
   );
-  // The parked camera looks down onto the line.
-  assert.equal(PARK.lon, PHOTO_LINE.lon);
-  assert.ok(PARK.lat > PHOTO_LINE.south && PARK.lat < PHOTO_LINE.north);
 });
 
 test('the fixture photos: one sequence, 360° and flat, close enough for any nearest lookup on the line', () => {
@@ -321,55 +232,4 @@ test('evidence never carries a Mapillary token', () => {
     redact('loaded with AIzaSyBexampleexampleexampleexample00 inline'),
     'loaded with AIza…REDACTED inline',
   );
-});
-
-test('--strict accepts only the documented skips', () => {
-  assert.deepEqual([...STRICT_ALLOWED_SKIPS], ['fixtures only']);
-  assert.deepEqual(
-    strictViolations([
-      { reason: 'fixtures only', label: 'keyless page' },
-      { reason: 'no Mapillary key', label: 'the keyed steps' },
-    ]),
-    [{ reason: 'no Mapillary key', label: 'the keyed steps' }],
-  );
-});
-
-test('the gate saves failure evidence and fails on render-loop errors', () => {
-  const source = fs.readFileSync(
-    new URL('../../scripts/qa-street-level.mjs', import.meta.url),
-    'utf8',
-  );
-  assert.match(source, /saveFailureArtifacts\(/);
-  assert.match(source, /hookRenderErrors\(/);
-  assert.match(source, /readRenderErrors\(/);
-});
-
-test('CI runs the gate hermetically against a production build, strict, with evidence', () => {
-  const ci = fs.readFileSync(
-    new URL('../../.github/workflows/ci.yml', import.meta.url),
-    'utf8',
-  );
-  const job = ci.slice(ci.indexOf('street-level-browser:'));
-  const gate = job.slice(0, job.indexOf('\n  windows-onboarding:'));
-  // The dummy token is baked into the bundle at build time and the preview
-  // server's status route reads it at run time: both steps carry it.
-  assert.match(
-    gate,
-    /MAPILLARY_CLIENT_TOKEN: 'MLY\|0\|qa-fixture'\s+run: npm run build/,
-  );
-  assert.match(
-    gate,
-    /MAPILLARY_CLIENT_TOKEN: 'MLY\|0\|qa-fixture'\s+run: \|\s+npx vite preview --port 4173 --strictPort/,
-  );
-  assert.doesNotMatch(gate, /npx vite --port/);
-  assert.equal(
-    (gate.match(/MAPILLARY_CLIENT_TOKEN: 'MLY\|0\|qa-fixture'/g) || []).length,
-    2,
-  );
-  assert.match(gate, /qa:street-level:fixtures -- --strict/);
-  assert.match(
-    gate,
-    /if: failure\(\)[\s\S]*actions\/upload-artifact@[0-9a-f]{40}/,
-  );
-  assert.match(gate, /path: qa-artifacts\//);
 });

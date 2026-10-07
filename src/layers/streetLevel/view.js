@@ -154,7 +154,7 @@ export function cameraNadir(viewer) {
  * Horizon occluder depth below WGS84 (m): ground can lie below the ellipsoid
  * (NYC −22 m), and an occluder at 0 m would hide the cones around it.
  */
-export const HORIZON_CULL_DEPTH_M = 1000;
+const HORIZON_CULL_DEPTH_M = 1000;
 const HORIZON_CULL_ELLIPSOID = new Cesium.Ellipsoid(
   Cesium.Ellipsoid.WGS84.radii.x - HORIZON_CULL_DEPTH_M,
   Cesium.Ellipsoid.WGS84.radii.y - HORIZON_CULL_DEPTH_M,

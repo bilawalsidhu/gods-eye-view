@@ -2934,58 +2934,44 @@ its criteria cannot be silently ignored.
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
 
-Street Level is a collapsible right-rail panel (`#street-level-panel`, layer
-token `0`, option owner `street-level`, panel `ui` token `t`) that starts
+Street Level is a docked, collapsible right-rail panel (`#street-level-panel`,
+layer token `0`, option owner `street-level`, panel `ui` token `t`) that starts
 collapsed. It opens itself only when the user, voice or a tool switches the
 layer on or a photo opens, never on a restore, and those opens are not stored.
-Like the iD editor's photo overlay, it shows Mapillary with 360°/flat and
+Like the iD editor's photo overlay it shows Mapillary only: 360°/flat and
 captured-since filters (relative days, so a link keeps its meaning), one
-viewer host and an on-globe credit while the layer is on. Lines and cones are
-Mapillary green; 360° cones are rings and the selected sequence is GEV cyan.
-Share options: `m` (Mapillary on/off; off draws nothing), `p` (`a`/`p`/`f`
-panoramas), `s` (since, days). Without `MAPILLARY_CLIENT_TOKEN` the panel
-reads KEY REQUIRED, its error line says which key to add, and the filters are
-disabled. Coverage is z11–14 sequence lines below 60 km; above that nothing is
-drawn and the panel says to zoom in. Tiles come from the visible ground within
-range of the camera (rays meet the terrain height, not the bare ellipsoid),
-nearest the camera first, at most 9. The proxy serves only z11–14, strips the
-unused `image` layer from z14 tiles (12 MB → ~80 KB) and shares one upstream
-fetch between concurrent requests for a tile. A 429 pauses tile requests for
-its Retry-After and then refreshes once; a rejected key stops them and reads
-KEY REJECTED until the layer goes off.
+embedded viewer and an on-globe credit while the layer is on. Share options:
+`m` (Mapillary on/off; off draws nothing), `p` (`a`/`p`/`f` panoramas), `s`
+(since, days). The header pill is the only layer switch and also turns a
+switched-off `m` back on.
 
-Sequence lines are `GroundPolylinePrimitive`s with
-`ClassificationType.BOTH`, so they drape on the terrain globe and on Google 3D
-tiles alike (on 3D tiles they can land on roofs and tree tops). Cones and the
-photo marker are billboards clamped to the ground; they skip the depth test, so
-a horizon cull hides the ones behind the globe. Roads on elevated decks are
-drawn at ground level.
+Coverage is z11–14 sequence lines below 60 km; above that nothing is drawn and
+the panel says to zoom in. Tiles come from the visible ground within range of
+the camera, nearest first, at most 9. Lines are draped
+`GroundPolylinePrimitive`s (`ClassificationType.BOTH`), so they follow terrain
+and Google 3D tiles alike; cones and the photo marker are ground-clamped
+billboards with a horizon cull. Without `MAPILLARY_CLIENT_TOKEN` the panel
+reads KEY REQUIRED, says which key to add and disables the filters; a rejected
+key reads KEY REJECTED and stops tile requests until the layer goes off; a 429
+pauses them for its Retry-After.
 
-The header pill is the only layer switch; switching on also turns Mapillary
-back on if a share link or tool switched it off. The viewer sits under the header
-with EXPAND, FIT/FILL and close above the image. EXPAND is the browser's
-Fullscreen API on the viewer element, which stays in the panel (Esc or SHRINK
-leaves; the button is hidden where the API is missing). MapillaryJS loads on the
-first photo (no prewarm). Opening a photo flies the globe camera once to frame
-it; there is no camera follow. The flight goes
-through the application's deferred navigation (`attachNavigation`: `begin` /
-`reassert`), which releases aircraft and satellite tracking and is refused in
-the cockpit; a photo takes its ticket when it starts opening and frames only
-if nothing newer took the camera while it loaded. SINCE is a stepped slider whose readout names the
-cut-off date. At phone width (≤720 px) the viewer height is derived from the
-rail band so the whole photo fits.
+The server proxy (`server/providers/mapillary.js`) keeps the token server-side,
+serves only z11–14 coverage, strips the unused `image` layer, coalesces
+concurrent requests and keeps tiles in a 24 h memory cache.
 
-The layer (`src/layers/streetLevel/index.js`) owns the Mapillary parts
-directly: `providers/mapillary/` holds the source, tile decoding, coverage,
-sequence cones, nearest-image lookup and the MapillaryJS viewer.
+MapillaryJS loads on the first photo. Opening one frames it with a single
+camera flight through the application's deferred navigation (`begin` /
+`reassert`): it releases tracking, is refused in the cockpit, and is skipped
+if newer navigation took the camera while the photo loaded; closing the photo
+cancels it. EXPAND is the browser's Fullscreen API on the viewer element
+(hidden where the API is missing). At phone width the viewer height comes from
+the rail band so the whole photo fits.
 
-Street Level has two browser gates. `npm run qa:street-level -- --url <server>`
-runs against real Mapillary and needs `MAPILLARY_CLIENT_TOKEN`. `npm run
-qa:street-level:fixtures -- --url <server>` answers every Mapillary request
-from fixtures (`providers/mapillary/coverageFixture.mjs`,
-`scripts/fixtures/street-level/`), so it needs no network and covers the whole
-photo flow. CI runs the fixture gate against a production build served by
-`vite preview` with a dummy token.
+Browser gates: `npm run qa:street-level -- --url <server>` runs against real
+Mapillary with a token; `npm run qa:street-level:fixtures` answers every
+Mapillary request from fixtures (`providers/mapillary/coverageFixture.mjs`,
+`scripts/fixtures/street-level/`). CI runs the fixture gate with `--strict`
+against a production build served by `vite preview` with a dummy token.
 
 Directions is a keyless front end to the routing the voice agent already
 uses. Its row chips are the whole interface: DRIVE / WALK / BIKE pick the

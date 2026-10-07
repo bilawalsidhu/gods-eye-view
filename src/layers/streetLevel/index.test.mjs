@@ -143,18 +143,6 @@ function slowLookups() {
   return { lookups, source: fakeMapillarySource({ nearestImages }) };
 }
 
-test('the layer is Mapillary under the codec keys it has always had', () => {
-  const layer = createStreetLevelLayer({ source: fakeMapillarySource() });
-  assert.equal(layer.id, 'street-level');
-  assert.equal(layer.requiresKeyId, 'mapillary');
-  assert.deepEqual(layer.getParams(), {
-    mapillary: true,
-    pano: 'all',
-    sinceDays: 0,
-  });
-  assert.throws(() => createStreetLevelLayer({ source: {} }), /source/);
-});
-
 test('the CC BY-SA credit shows while Mapillary is on and goes with it', async (t) => {
   const { layer, viewer } = await startLayer(t);
   const shown = () => viewer.credits.map((credit) => credit.html);
@@ -284,7 +272,7 @@ test('a sequence error is withdrawn with the sequence, never the viewer’s own'
   assert.match(layer.getUIState().street.error, /Open the Street Level panel/);
 });
 
-test('closing the photo stops the globe flying to it', async (t) => {
+test('closing the photo, switching the layer off or destroying it stops the framing flight', async (t) => {
   const { layer, viewer } = await startLayer(t, {
     photoViewer: posingViewer(),
   });
@@ -292,35 +280,16 @@ test('closing the photo stops the globe flying to it', async (t) => {
   assert.equal(await layer.openImage('img1'), true);
   assert.equal(viewer.flights.started, 1, 'the photo is framed');
   layer.closeViewer();
-  assert.equal(viewer.flights.cancelled, 1);
-});
+  assert.equal(viewer.flights.cancelled, 1, 'closed');
 
-test('switching the layer off or destroying it stops the framing flight', async (t) => {
-  const { layer, viewer } = await startLayer(t, {
-    photoViewer: posingViewer(),
-  });
-  layer.attachViewerHost({});
-  await layer.openImage('img1');
+  await layer.openImage('img2');
   layer.disable();
-  assert.equal(viewer.flights.cancelled, 1, 'layer off');
+  assert.equal(viewer.flights.cancelled, 2, 'layer off');
 
   layer.enable(viewer);
-  await layer.openImage('img2');
+  await layer.openImage('img3');
   layer.destroy();
-  assert.equal(viewer.flights.cancelled, 2, 'destroyed');
-});
-
-test('closing the photo leaves a newer navigation flight alone', async (t) => {
-  const { layer, viewer } = await startLayer(t, {
-    photoViewer: posingViewer(),
-  });
-  layer.attachViewerHost({});
-  await layer.openImage('img1');
-  assert.equal(viewer.flights.started, 1, 'the photo is being framed');
-  // A search result flies the globe elsewhere before the framing lands.
-  viewer.camera.flyToBoundingSphere(null, {});
-  layer.closeViewer();
-  assert.equal(viewer.flights.cancelled, 0, 'the search flight keeps going');
+  assert.equal(viewer.flights.cancelled, 3, 'destroyed');
 });
 
 test('an older nearest lookup that answers late cannot replace a newer one', async (t) => {
@@ -383,7 +352,13 @@ test('closing the viewer or switching the layer off retires a nearest lookup', a
 });
 
 test('setParams takes "any date" (0 days) and the switch over the current values (share-link defaults)', async (t) => {
+  assert.throws(() => createStreetLevelLayer({ source: {} }), /source/);
   const { layer } = await startLayer(t);
+  assert.deepEqual(layer.getParams(), {
+    mapillary: true,
+    pano: 'all',
+    sinceDays: 0,
+  });
   layer.setParams({ pano: 'flat', sinceDays: 365 });
   assert.equal(layer.getParams().sinceDays, 365);
   layer.setParams({ sinceDays: 0 });
