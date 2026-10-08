@@ -229,11 +229,11 @@ async function main() {
         const nowSec = Date.now() / 1000 + (S.timeOffsetSec || 0);
         const tRel = nowSec - S.epochMs / 1000;
 
-        if (url.includes('/api/opensky-track')) return Promise.resolve(jsonResponse({ path: [] }));
-        if (url.includes('/api/adsblol/trace')) {
+        if (url.includes('/api/flights/track')) return Promise.resolve(jsonResponse({ path: [] }));
+        if (url.includes('/api/military/track')) {
           return Promise.resolve(jsonResponse({ timestamp: Math.floor(nowSec), trace: [] }));
         }
-        if (url.includes('/api/opensky')) {
+        if (url.includes('/api/flights')) {
           window.__SPR_HITS.opensky++;
           const states = S.flights.map((f) => {
             const s = S.stateAt(f, tRel);
@@ -249,7 +249,7 @@ async function main() {
           });
           return Promise.resolve(jsonResponse({ time: Math.floor(nowSec), states }));
         }
-        if (url.includes('/api/adsblol/mil')) {
+        if (url.includes('/api/military')) {
           window.__SPR_HITS.mil++;
           const ac = S.military.map((m) => {
             const s = S.stateAt(m, tRel);

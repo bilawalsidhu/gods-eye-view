@@ -79,8 +79,8 @@ if its layer is later removed.
 
 New layers first use the remaining unreserved single-character digits (`0`
 through `9`), then the two-character base-36 namespace (`00` through `zz`). On the
-current published ledger, `1` and `2` are already owned, so the next choices
-are `0`, `3` through `9`, then `00`. After rebasing onto the latest `main`, run
+current published ledger, `0`, `1` and `2` are already owned, so the next
+choices are `3` through `9`, then `00`. After rebasing onto the latest `main`, run
 `npm run layer-token:next -- <layer-id>`, add that result to both the permanent
 JSON reservation ledger and registry entry, and keep the exact registered-layer
 count assertion up to date. The token is assigned against the merge-time base, not

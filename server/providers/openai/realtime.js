@@ -1,4 +1,4 @@
-import { enforceOptInRateLimit, openAiRateLimiter } from './rate-limit.js';
+import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
 import {
   resolveVoiceModel,
   isKnownVoiceTier,
@@ -10,6 +10,7 @@ import {
   OPENAI_REALTIME_REASONING_DEFAULT,
   OPENAI_REALTIME_CONTEXT_TOKENS_DEFAULT,
   OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT,
+  OPENAI_REALTIME_TRANSCRIBE_MODEL_DEFAULT,
 } from './constants.js';
 import { realtimeInstructions } from './instructions.js';
 import { GEV_REALTIME_TOOLS } from './tools.js';
@@ -20,6 +21,7 @@ function createRealtimeTokenHandler({
   fetchImpl = (...args) => fetch(...args),
   resolveApiKey = () => process.env.OPENAI_API_KEY,
   models = {},
+  tools = GEV_REALTIME_TOOLS,
 } = {}) {
   return async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -30,8 +32,8 @@ function createRealtimeTokenHandler({
       return;
     }
 
-    // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). No-op when unset.
-    if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
+    // Per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). On by default; 0 disables.
+    if (!enforceRateLimit(openAiRateLimiter(), req, res)) return;
 
     const apiKey = resolveApiKey();
     if (!apiKey) {
@@ -88,6 +90,14 @@ function createRealtimeTokenHandler({
           OPENAI_REALTIME_CONTEXT_RETENTION_DEFAULT,
       ),
     );
+    // User captions for the voice card. Billed separately from the session.
+    const transcribeModel =
+      process.env.OPENAI_REALTIME_TRANSCRIBE_MODEL ||
+      OPENAI_REALTIME_TRANSCRIBE_MODEL_DEFAULT;
+    const transcription =
+      transcribeModel.toLowerCase() === 'off'
+        ? {}
+        : { transcription: { model: transcribeModel } };
     const sessionConfig = {
       session: {
         type: 'realtime',
@@ -103,6 +113,7 @@ function createRealtimeTokenHandler({
         audio: {
           input: {
             noise_reduction: { type: 'near_field' },
+            ...transcription,
             turn_detection: {
               type: 'semantic_vad',
               eagerness: 'low',
@@ -113,7 +124,7 @@ function createRealtimeTokenHandler({
           output: { voice },
         },
         instructions: realtimeInstructions(annotationGuidance),
-        tools: GEV_REALTIME_TOOLS,
+        tools,
         tool_choice: 'auto',
       },
     };
@@ -138,6 +149,11 @@ function createRealtimeTokenHandler({
       // case where a bogus ?tier= was silently downgraded to standard.
       res.setHeader('X-GEV-Voice-Tier', tier);
       res.setHeader('X-GEV-Voice-Model', model);
+      // Captions are billed separately; the client meters them with this id.
+      res.setHeader(
+        'X-GEV-Voice-Transcribe-Model',
+        transcription.transcription ? transcribeModel : 'off',
+      );
       if (requestedTier && !isKnownVoiceTier(requestedTier)) {
         res.setHeader('X-GEV-Voice-Tier-Fallback', '1');
       }
