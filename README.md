@@ -245,7 +245,7 @@ Click **GEV MIC**, grant the microphone, and just talk. This is more than a voic
 - **🎬 Cinematic framing.** _"Show me the planes overhead"_ pulls the camera back, angles it, and frames the live traffic like a director.
 - **🔒 Honest and secure.** The agent only confirms actions that succeeded. Your `OPENAI_API_KEY` never touches the browser; the client only gets a short-lived session token.
 
-Twenty-nine tools, four jobs — the commands below come straight from the product's voice test suite and tool playbook:
+Thirty tools, four jobs — the commands below come straight from the product's voice test suite and tool playbook:
 
 **🎥 Direct it** — drone-operator camera verbs:
 
@@ -395,7 +395,7 @@ src/
 ├── hud.js                  # Intelligence HUD + AI scene summary
 ├── keySetup.js             # POWER UP panel — in-app provider keys (dev server only)
 ├── mapStackController.js   # Basemap switching — Google 3D / Esri / OSM / ion stacks
-├── voice/                  # OpenAI Realtime session + 29 voice tools
+├── voice/                  # OpenAI Realtime session + 30 voice tools
 ├── layers/                 # Layer components — weather, wind, cyclones, transit, ALPR, …
 ├── data/                   # One module per layer + orchestration + context store
 │   ├── iconOrientation.js  # Screen-projected headings + horizon cull
