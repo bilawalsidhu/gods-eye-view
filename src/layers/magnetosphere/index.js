@@ -72,7 +72,7 @@ const OPACITY = Object.freeze({ light: 0.4, strong: 0.8 });
 /**
  * Trace every seed, yielding between lines.
  *
- * Tracing 80 field lines is a few seconds of arithmetic. Done in one go it
+ * Tracing 112 field lines is a few seconds of arithmetic. Done in one go it
  * freezes the frame; yielding lets the globe keep drawing while the structure
  * fills in, which also reads better than a sudden appearance.
  */

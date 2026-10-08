@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   MAX_BOUNDARY_ANGLE_RAD,
+  SEED_LATITUDES,
   clipToBoundary,
   fieldLineSeeds,
   magnetopauseWireframe,
@@ -75,6 +76,15 @@ test('seeds cover both hemispheres and start above the surface', () => {
     assert.ok(r > EARTH_RADIUS_KM, 'seeds must start above ground');
   }
   assert.equal(new Set(seeds.map((s) => s.longitude)).size, 6);
+});
+
+test('seeds cover the band where the solar wind takes over from the internal field', () => {
+  // Between ~5 and ~8 Re is where storms visibly stretch closed lines into the
+  // tail; without seeds there the layer only shows the outermost shell moving.
+  for (const latitude of [65, 70, -65, -70]) {
+    assert.ok(SEED_LATITUDES.includes(latitude), `missing ${latitude}`);
+  }
+  assert.equal(fieldLineSeeds(8).length, SEED_LATITUDES.length * 8);
 });
 
 test('a line crossing the boundary is clipped, and one inside is untouched', () => {
