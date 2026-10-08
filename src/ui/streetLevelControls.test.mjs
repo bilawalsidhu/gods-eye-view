@@ -293,6 +293,7 @@ async function productionPanel(dom) {
         manager.setLayerParams('street-level', params, options),
       setPanelCollapsed() {},
       showToast() {},
+      subscribeEnableRequests: () => () => {},
     },
   });
   controls.connect();
@@ -402,6 +403,8 @@ function stubPanel(dom, state, extraActions = {}) {
   const layer = stubLayer();
   const calls = { setParams: [], setEnabled: [], collapsed: [] };
   let enabled = state.enabled;
+  /** Reports a switch-on request's origin, as the data manager does. */
+  let announce = null;
   layer.publish(state);
   const controls = new StreetLevelControls({
     root: dom.root,
@@ -416,11 +419,23 @@ function stubPanel(dom, state, extraActions = {}) {
       setPanelCollapsed: (collapsed, options) =>
         calls.collapsed.push([collapsed, options]),
       showToast() {},
+      subscribeEnableRequests: (listener) => {
+        announce = listener;
+        return () => {
+          announce = null;
+        };
+      },
       ...extraActions,
     },
   });
   controls.connect();
-  return { layer, calls, controls };
+  return {
+    layer,
+    calls,
+    controls,
+    announce: (origin) => announce?.(origin),
+    subscribed: () => announce !== null,
+  };
 }
 
 test('the header pill switches the layer, bringing back Mapillary switched off elsewhere', () =>
@@ -634,55 +649,11 @@ for (const mode of ['ui-clean-view', 'recording-mode', 'cockpit-mode'])
 
 /* ── Restores and keyboard rules ───────────────────────────────────────── */
 
-test('a restored layer does not reopen a panel the user collapsed, and automatic opens are never stored (P2-1)', () =>
+test('only an explicit switch-on opens the panel, unstored; a restore never does (P2-1)', () =>
   withDom(async (dom) => {
-    // The panel chrome restored the user's stored "collapsed" before connect.
-    dom.root.dataset.collapsedPreference = 'stored';
-    const { layer, calls, controls } = stubPanel(
+    const { layer, calls, controls, announce, subscribed } = stubPanel(
       dom,
       uiState({ enabled: false }),
-    );
-    layer.publish(uiState({ enabled: true })); // saved layer state restored
-    assert.deepEqual(calls.collapsed, [], 'the collapsed panel stays shut');
-    // Later, a user switches the layer off and on: that opens the panel,
-    // without overwriting the stored preference.
-    dom.document.body.dispatchEvent({ type: 'pointerdown', bubbles: true });
-    layer.publish(uiState({ enabled: false }));
-    layer.publish(uiState({ enabled: true }));
-    assert.deepEqual(calls.collapsed, [[false, { persist: false }]]);
-    layer.publish(uiState({ enabled: true, open: true }));
-    assert.deepEqual(calls.collapsed.at(-1), [false, { persist: false }]);
-    controls.destroy();
-  }));
-
-test('without a stored choice, a restored layer still opens its panel, unstored (P2-1)', () =>
-  withDom(async (dom) => {
-    dom.root.dataset.collapsedPreference = 'default';
-    const { layer, calls, controls } = stubPanel(
-      dom,
-      uiState({ enabled: false }),
-    );
-    layer.publish(uiState({ enabled: true }));
-    assert.deepEqual(calls.collapsed, [[false, { persist: false }]]);
-    controls.destroy();
-  }));
-
-test('with request origins, only a user switch-on opens the panel; a restore never does (P2-1)', () =>
-  withDom(async (dom) => {
-    // No stored choice: the restore window alone would open the panel.
-    dom.root.dataset.collapsedPreference = 'default';
-    let announce = null;
-    const { layer, calls, controls } = stubPanel(
-      dom,
-      uiState({ enabled: false }),
-      {
-        subscribeEnableRequests: (listener) => {
-          announce = listener;
-          return () => {
-            announce = null;
-          };
-        },
-      },
     );
     announce('restore');
     layer.publish(uiState({ enabled: true }));
@@ -691,8 +662,10 @@ test('with request origins, only a user switch-on opens the panel; a restore nev
     announce('user');
     layer.publish(uiState({ enabled: true }));
     assert.deepEqual(calls.collapsed, [[false, { persist: false }]]);
+    layer.publish(uiState({ enabled: true, open: true }));
+    assert.equal(calls.collapsed.length, 2, 'a photo opening opens it too');
     controls.destroy();
-    assert.equal(announce, null, 'destroy unsubscribes');
+    assert.equal(subscribed(), false, 'destroy unsubscribes');
   }));
 
 test('FIT / FILL show the selected render mode (P3)', () =>

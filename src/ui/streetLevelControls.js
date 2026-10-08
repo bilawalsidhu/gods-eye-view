@@ -38,12 +38,8 @@ export class StreetLevelControls {
     this._state = null;
     this._wasEnabled = null;
     this._wasOpen = false;
-    // Until the user first touches the app, an off → on is the saved layer
-    // state being restored, not a user switching the layer on.
-    this._restoreWindow = true;
-    // Whether the last switch-on was explicit (user, voice, tool) rather than
-    // a restore; null when the shell does not report request origins.
-    this._explicitEnable = null;
+    // Whether the last switch-on was explicit (user, voice, tool), not a restore.
+    this._explicitEnable = false;
     this._unsubscribeEnableRequests = null;
     this._resizeQueued = false;
     this._elements = this._collect();
@@ -147,11 +143,6 @@ export class StreetLevelControls {
     } catch {
       /* storage unavailable */
     }
-    const endRestoreWindow = () => {
-      this._restoreWindow = false;
-    };
-    for (const type of ['pointerdown', 'keydown'])
-      this.listen(document, type, endRestoreWindow, { capture: true });
     // MapillaryJS only tracks window resizes; the panel resizes on its own.
     if (typeof ResizeObserver === 'function' && el.viewer) {
       this._resizeObserver = new ResizeObserver(() => this._requestResize());
@@ -212,9 +203,7 @@ export class StreetLevelControls {
 
   /** Through the data manager, so saved state and share links record it. */
   _setParams(params) {
-    if (this.actions.setParams)
-      this.actions.setParams(params, { origin: 'user' });
-    else this.layer.setParams?.(params);
+    this.actions.setParams(params, { origin: 'user' });
   }
 
   /** Whether EXPAND has the viewer full screen (or, on iPhone, open over the page). */
@@ -308,10 +297,11 @@ export class StreetLevelControls {
     this._unsubscribe = null;
     if (this.destroyed || !this.root) return;
     this._unsubscribeEnableRequests?.();
-    this._unsubscribeEnableRequests =
-      this.actions.subscribeEnableRequests?.((origin) => {
+    this._unsubscribeEnableRequests = this.actions.subscribeEnableRequests(
+      (origin) => {
         this._explicitEnable = isExplicitLayerStateOrigin(origin);
-      }) || null;
+      },
+    );
     this._unsubscribe = this.layer.subscribe?.((state) => this.render(state));
     if (this.layer.getUIState) this.render(this.layer.getUIState());
   }
@@ -441,17 +431,9 @@ export class StreetLevelControls {
   _reactToTransitions(view) {
     const enabled = view.enabled;
     if (enabled && this._wasEnabled === false) {
-      // A restore must not reopen a panel the user or a share link kept
-      // collapsed. Without request origins, the restore window decides.
-      const preference = this.root.dataset?.collapsedPreference;
-      const restoring =
-        this._explicitEnable === null
-          ? this._restoreWindow &&
-            (preference === 'stored' || preference === 'share')
-          : !this._explicitEnable;
-      if (!restoring) this.setCollapsed(false, { persist: false });
-      this._restoreWindow = false;
-      this._explicitEnable = this._explicitEnable === null ? null : false;
+      // A restore must not reopen a panel the user or a share link kept collapsed.
+      if (this._explicitEnable) this.setCollapsed(false, { persist: false });
+      this._explicitEnable = false;
     }
     this._wasEnabled = enabled;
     // Other size changes reach the viewer through the ResizeObserver; opening
