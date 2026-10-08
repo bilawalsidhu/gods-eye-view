@@ -18,6 +18,7 @@ import {
   loadNswSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
+  loadKingCountySourcesFromOpenData,
   loadVegvesenSourcesFromOpenData,
 } from './sources.js';
 
@@ -92,6 +93,11 @@ const LIVE_PACKS = [
     name: 'deldot',
     enabled: () => envEnabled('CCTV_DELDOT_ENABLED'),
     load: loadDelDOTSourcesFromOpenData,
+  },
+  {
+    name: 'kingcounty',
+    enabled: () => envEnabled('CCTV_KINGCOUNTY_ENABLED'),
+    load: loadKingCountySourcesFromOpenData,
   },
   {
     name: 'vegvesen',

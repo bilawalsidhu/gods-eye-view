@@ -551,5 +551,19 @@ export function normalizeSourceItem(item) {
     // badge can distinguish them from raw automated priors (e.g. Austin Open
     // Data, which never sets this field). Passed through as-is to the client.
     poseSource: item.poseSource === 'curated' ? 'curated' : undefined,
+    // Optional hardware-model passthrough (additive, like poseSource): packs
+    // whose catalog publishes the camera's hardware model — King County's
+    // layer carries Manufacturer/Model per camera — pass it through so
+    // identified-hardware consumers can use it. Absent everywhere else.
+    model:
+      typeof item.model === 'string' && item.model.trim()
+        ? item.model.trim()
+        : undefined,
+    // Bare model strings collide across vendors (e.g. "3950"), so the
+    // publishing pack's manufacturer rides along for disambiguation.
+    manufacturer:
+      typeof item.manufacturer === 'string' && item.manufacturer.trim()
+        ? item.manufacturer.trim()
+        : undefined,
   };
 }
