@@ -132,11 +132,9 @@ export function createSequences({ state, source, parts }) {
       (state.sequence.images.length || state.sequence.abort)
     )
       return;
-    if (state.sequence.selectedId && state.sequence.selectedId !== sequenceId)
-      parts.coverage.recolorSequence(state.sequence.selectedId, false);
     state.sequence.abort?.abort();
     state.sequence.selectedId = sequenceId;
-    parts.coverage.recolorSequence(sequenceId, true);
+    parts.coverage.highlight(sequenceId);
     const cached = state.sequence.cache.get(sequenceId);
     if (cached) {
       state.sequence.abort = null;
@@ -173,7 +171,7 @@ export function createSequences({ state, source, parts }) {
     } catch (error) {
       if (!controller.signal.aborted) {
         // Nothing to show: drop the highlight, so a click asks again.
-        parts.coverage.recolorSequence(sequenceId, false);
+        parts.coverage.highlight(null);
         state.sequence.selectedId = null;
         state.sequence.error = error?.message || 'Sequence images unavailable';
       }
@@ -189,8 +187,7 @@ export function createSequences({ state, source, parts }) {
   function clearSelection() {
     state.sequence.abort?.abort();
     state.sequence.abort = null;
-    if (state.sequence.selectedId)
-      parts.coverage.recolorSequence(state.sequence.selectedId, false);
+    if (state.sequence.selectedId) parts.coverage.highlight(null);
     state.sequence.selectedId = null;
     state.sequence.loading = false;
     clearCones();

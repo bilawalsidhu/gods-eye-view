@@ -6,7 +6,6 @@ import { freshCoverage } from '../../state.js';
 import { encodeCoverageTile } from './coverageFixture.mjs';
 import { rayCamera } from '../../../../testSupport/streetLevelFakes.mjs';
 import {
-  COLORS,
   COVERAGE_MAX_SEQUENCES,
   COVERAGE_MAX_TILES,
 } from './policy.js';
@@ -48,29 +47,13 @@ function tileCentre(lon, lat) {
 
 /** A viewer looking straight down on a 0.004° square around `view`. */
 function fakeViewer(view) {
-  const postRender = new Set();
-  const preRender = new Set();
   return {
     view,
-    postRender,
-    preRender,
     scene: {
       canvas: { clientWidth: 100, clientHeight: 100 },
       globe: { show: false, ellipsoid: Cesium.Ellipsoid.WGS84 },
       groundPrimitives: collection(),
       primitives: collection(),
-      postRender: {
-        addEventListener(listener) {
-          postRender.add(listener);
-          return () => postRender.delete(listener);
-        },
-      },
-      preRender: {
-        addEventListener(listener) {
-          preRender.add(listener);
-          return () => preRender.delete(listener);
-        },
-      },
     },
     camera: {
       get positionCartographic() {
@@ -142,11 +125,6 @@ function setup() {
     viewer.scene.groundPrimitives.items.size +
     viewer.scene.primitives.items.size;
   return { viewer, source, state, coverage, bytes, tileKey, onGlobe, centre };
-}
-
-/** Run one frame's listeners, as Cesium's render loop would. */
-function frame(listeners) {
-  for (const listener of [...listeners]) listener();
 }
 
 test('a superseded tile request cannot strand lines on the globe', async () => {
@@ -345,7 +323,7 @@ test('the per-tile cap applies after the imagery filter, so a dense tile keeps i
   const cap = Math.floor(COVERAGE_MAX_SEQUENCES / COVERAGE_MAX_TILES);
   assert.equal(entry.count, Math.min(300, cap), 'every 360° line is drawn');
   assert.equal(coverage.sequenceCount(), Math.min(300, cap));
-  // Picking and recolouring look sequences up among the drawn lines.
+  // Picking and the highlight look sequences up among the drawn lines.
   assert.ok(entry.sequences.has('pano-0'), 'drawn lines can be looked up');
   assert.equal(entry.sequences.has('flat-699'), false);
   state.filter = { pano: 'all', sinceDays: 0 };
@@ -354,56 +332,6 @@ test('the per-tile cap applies after the imagery filter, so a dense tile keeps i
   assert.ok(entry.sequences.has('flat-699'), 'the newest flat line is drawn');
   assert.equal(entry.sequences.has('pano-299'), false, 'over the cap');
   coverage.clear();
-});
-
-/** The colour attribute value of a line, selected or not. */
-function colourValue(selected) {
-  return Array.from(
-    Cesium.ColorGeometryInstanceAttribute.toValue(
-      selected
-        ? Cesium.Color.fromCssColorString(COLORS.selected)
-        : Cesium.Color.fromCssColorString(COLORS.coverage).withAlpha(0.92),
-    ),
-  );
-}
-
-/** Take over a drawn primitive's readiness and seq-1's colour attribute. */
-function controlled(record, ready) {
-  const control = { ready, attributes: { color: undefined } };
-  Object.defineProperty(record.primitive, 'ready', {
-    get: () => control.ready,
-  });
-  record.primitive.getGeometryInstanceAttributes = (id) =>
-    id === 'mly:seq:seq-1' ? control.attributes : undefined;
-  return control;
-}
-
-test('a selection made or cleared while a tile builds is applied once it is ready', async () => {
-  const { viewer, source, state, coverage, bytes } = setup();
-  coverage.refresh();
-  source.calls[0].resolve(bytes);
-  await settle();
-  const [entry] = state.coverage.tiles.values();
-  // Selected while its line is still building: nothing to recolour yet...
-  const first = controlled(entry.primitives[0], false);
-  state.sequence.selectedId = 'seq-1';
-  coverage.recolorSequence('seq-1', true);
-  assert.equal(first.attributes.color, undefined);
-  // ...so the highlight lands once it is ready.
-  first.ready = true;
-  frame(viewer.postRender);
-  assert.deepEqual(Array.from(first.attributes.color), colourValue(true));
-
-  // Rebuilt with the highlight baked in, then cleared mid-build: not stuck.
-  coverage.rebuild();
-  const second = controlled(entry.primitives[0], false);
-  coverage.recolorSequence('seq-1', false);
-  state.sequence.selectedId = null;
-  second.ready = true;
-  frame(viewer.postRender);
-  assert.deepEqual(Array.from(second.attributes.color), colourValue(false));
-  coverage.clear();
-  assert.equal(viewer.postRender.size, 0, 'the selection watch is gone');
 });
 
 test('a sequence that crosses a tile edge is counted once', async () => {
@@ -517,56 +445,39 @@ test('a street view toward the horizon asks only for the ground within range', (
   coverage.clear();
 });
 
-test('a selection cleared while the old zoom is still shown uncolours its lines', async () => {
+test('the selected sequence is drawn over the coverage, and goes with the selection', async () => {
   const { viewer, source, state, coverage, bytes } = setup();
   coverage.refresh();
   source.calls[0].resolve(bytes);
   await settle();
-  const [entry] = state.coverage.tiles.values();
-  const line = controlled(entry.primitives[0], true);
-  state.sequence.selectedId = 'seq-1';
-  coverage.recolorSequence('seq-1', true);
-  assert.deepEqual(Array.from(line.attributes.color), colourValue(true));
-  // Zoom out: the street tile stays on screen while the new zoom loads...
-  viewer.view.height = 3000;
-  coverage.refresh();
-  assert.equal(state.coverage.stale.size, 1, 'the old zoom is kept');
-  // ...and the selection is cleared meanwhile.
-  state.sequence.selectedId = null;
-  coverage.recolorSequence('seq-1', false);
-  assert.deepEqual(
-    Array.from(line.attributes.color),
-    colourValue(false),
-    'the retained line is not left cyan',
-  );
+  const lines = () => [...viewer.scene.groundPrimitives.items];
+  assert.equal(lines().length, 1, 'the coverage');
+  coverage.highlight('seq-1');
+  assert.equal(lines().length, 2);
+  const highlight = lines().at(-1);
+  assert.equal(state.coverage.highlight, highlight, 'drawn last, on top');
+  assert.equal(highlight.classificationType, Cesium.ClassificationType.BOTH);
+  coverage.highlight('not-drawn');
+  assert.equal(lines().length, 1, 'nothing to highlight off the map');
+  coverage.highlight(null);
+  assert.equal(state.coverage.highlight, null);
   coverage.clear();
+  assert.equal(lines().length, 0);
 });
 
-test('a selection made while the old zoom is still building is applied once it is ready', async () => {
+test('a tile that lands with the selected sequence draws the highlight again, on top', async () => {
   const { viewer, source, state, coverage, bytes } = setup();
+  state.sequence.selectedId = 'seq-1';
   coverage.refresh();
+  assert.equal(state.coverage.highlight, null, 'nothing loaded yet');
   source.calls[0].resolve(bytes);
   await settle();
-  const [entry] = state.coverage.tiles.values();
-  const line = controlled(entry.primitives[0], false);
-  viewer.view.height = 3000;
-  coverage.refresh();
-  assert.equal(state.coverage.stale.size, 1);
-  frame(viewer.postRender);
-  state.sequence.selectedId = 'seq-1';
-  coverage.recolorSequence('seq-1', true);
-  line.ready = true;
-  frame(viewer.postRender);
-  assert.deepEqual(
-    line.attributes.color && Array.from(line.attributes.color),
-    colourValue(true),
-    'the highlight lands on the retained line',
-  );
+  assert.ok(state.coverage.highlight, 'highlighted once its tile is in');
+  assert.equal([...viewer.scene.groundPrimitives.items].at(-1), state.coverage.highlight);
   coverage.clear();
-  assert.equal(viewer.postRender.size, 0, 'the selection watch is gone');
 });
 
-test('the old zoom goes as soon as the new zoom has loaded, not after the stale wait', async () => {
+test('a zoom change drops the old zoom\'s lines', async () => {
   const { viewer, source, state, coverage, bytes } = setup();
   coverage.refresh();
   source.calls[0].resolve(bytes);
@@ -576,23 +487,8 @@ test('the old zoom goes as soon as the new zoom has loaded, not after the stale 
   viewer.view.height = 3000; // zoom out to z13
   coverage.refresh();
   assert.equal(state.coverage.zoom, 13);
-  const fresh = source.calls.slice(1);
-  assert.ok(fresh.length > 0, 'the new zoom is loading');
-  assert.equal(state.coverage.stale.size, 1, 'the old zoom stays meanwhile');
-  assert.ok(viewer.scene.groundPrimitives.items.has(old));
-  for (const call of fresh) {
-    assert.ok(
-      viewer.scene.groundPrimitives.items.has(old),
-      'kept while a new tile is still loading',
-    );
-    call.resolve(new Uint8Array());
-    await settle();
-  }
-  // The last new tile is in: the old lines go now, long before the wait.
-  assert.equal(state.coverage.pending.size, 0);
-  assert.equal(state.coverage.stale.size, 0);
   assert.equal(viewer.scene.groundPrimitives.items.has(old), false);
-  assert.equal(state.coverage.staleTimer, null, 'the stale wait is cancelled');
+  assert.ok(state.coverage.pending.size > 0, 'the new zoom is loading');
   coverage.clear();
 });
 

@@ -17,8 +17,6 @@ import {
   SEQUENCE_VIEW_RANGE_PER_HEIGHT,
 } from './policy.js';
 
-/** Old-zoom tiles are kept at most this long after a zoom change. */
-const STALE_TILE_MAX_MS = 6000;
 /** Sequences per primitive: smaller batches build, and show, sooner. */
 const SEQUENCE_PRIMITIVE_BATCH = 120;
 
@@ -26,32 +24,48 @@ const PER_TILE_SEQUENCE_CAP = Math.floor(
   COVERAGE_MAX_SEQUENCES / COVERAGE_MAX_TILES,
 );
 
-/** Colour for a sequence: Mapillary green, GEV cyan while selected. */
-function sequenceColor({ selected = false } = {}) {
-  return selected
-    ? Cesium.Color.fromCssColorString(COLORS.selected)
-    : Cesium.Color.fromCssColorString(COLORS.coverage).withAlpha(0.92);
-}
-
-/** Separates a multi-part sequence's part index from its id in pick ids. */
-const PART_SEPARATOR = '~';
-
-/** Pick ids for every part of a sequence; the first part is unsuffixed. */
-function partIds(sequence) {
-  return sequence.parts.map((_, index) =>
-    index
-      ? `${PICK_PREFIX.sequence}${sequence.id}${PART_SEPARATOR}${index}`
-      : `${PICK_PREFIX.sequence}${sequence.id}`,
-  );
-}
-
-/** Sequence id for any part's pick id (`mly:seq:<id>[~<part>]`), else null. */
+/** Sequence id for a line's pick id (`mly:seq:<id>`), else null. */
 export function sequenceIdFromPick(pickId) {
   if (typeof pickId !== 'string' || !pickId.startsWith(PICK_PREFIX.sequence))
     return null;
-  const rest = pickId.slice(PICK_PREFIX.sequence.length);
-  const cut = rest.indexOf(PART_SEPARATOR);
-  return cut === -1 ? rest : rest.slice(0, cut);
+  return pickId.slice(PICK_PREFIX.sequence.length);
+}
+
+/** Line instances for sequences' parts, every part picking its sequence. */
+function lineInstances(sequences, color, width) {
+  const attributes = {
+    color: Cesium.ColorGeometryInstanceAttribute.fromColor(color),
+  };
+  const instances = [];
+  for (const sequence of sequences)
+    for (const coordinates of sequence.parts) {
+      let positions;
+      try {
+        positions = Cesium.Cartesian3.fromDegreesArray(coordinates.flat());
+      } catch {
+        continue;
+      }
+      if (positions.length < 2) continue;
+      instances.push(
+        new Cesium.GeometryInstance({
+          geometry: new Cesium.GroundPolylineGeometry({ positions, width }),
+          id: `${PICK_PREFIX.sequence}${sequence.id}`,
+          attributes,
+        }),
+      );
+    }
+  return instances;
+}
+
+/** Draped lines that follow terrain and 3D tiles (Google 3D) alike. */
+function linePrimitive(geometryInstances, asynchronous) {
+  return new Cesium.GroundPolylinePrimitive({
+    geometryInstances,
+    appearance: new Cesium.PolylineColorAppearance(),
+    classificationType: Cesium.ClassificationType.BOTH,
+    asynchronous,
+    allowPicking: true,
+  });
 }
 
 /** Hint above the street-zoom ceiling, where no coverage is drawn. */
@@ -99,52 +113,46 @@ export function createCoverage({ state, source }) {
     return drawn;
   }
 
-  /**
-   * Batched draped primitives for a tile's sequence parts. Each batch records
-   * the selection its colours were built with.
-   */
+  /** Batched draped primitives for a tile's sequences. */
   function buildSequencePrimitives(sequences) {
-    const selectedId = state.sequence.selectedId ?? null;
-    const instances = [];
-    for (const sequence of sequences) {
-      const color = Cesium.ColorGeometryInstanceAttribute.fromColor(
-        sequenceColor({ selected: sequence.id === selectedId }),
-      );
-      const ids = partIds(sequence);
-      sequence.parts.forEach((coordinates, index) => {
-        let positions;
-        try {
-          positions = Cesium.Cartesian3.fromDegreesArray(coordinates.flat());
-        } catch {
-          return;
-        }
-        if (positions.length < 2) return;
-        instances.push(
-          new Cesium.GeometryInstance({
-            geometry: new Cesium.GroundPolylineGeometry({
-              positions,
-              width: COVERAGE_LINE_WIDTH_PX,
-            }),
-            id: ids[index],
-            attributes: { color },
-          }),
-        );
-      });
-    }
+    const instances = lineInstances(
+      sequences,
+      Cesium.Color.fromCssColorString(COLORS.coverage).withAlpha(0.92),
+      COVERAGE_LINE_WIDTH_PX,
+    );
     const primitives = [];
     for (let i = 0; i < instances.length; i += SEQUENCE_PRIMITIVE_BATCH)
-      primitives.push({
-        selectedId,
-        primitive: new Cesium.GroundPolylinePrimitive({
-          geometryInstances: instances.slice(i, i + SEQUENCE_PRIMITIVE_BATCH),
-          appearance: new Cesium.PolylineColorAppearance(),
-          // Drapes on the globe and on 3D tiles (Google 3D) alike.
-          classificationType: Cesium.ClassificationType.BOTH,
-          asynchronous: true,
-          allowPicking: true,
-        }),
-      });
+      primitives.push(
+        linePrimitive(instances.slice(i, i + SEQUENCE_PRIMITIVE_BATCH), true),
+      );
     return primitives;
+  }
+
+  /**
+   * Draw the selected sequence again over the coverage, in the selection
+   * colour, from every loaded tile it crosses; none when nothing is selected.
+   * Built at once: its tiles loaded, so the terrain table has too.
+   */
+  function highlight(sequenceId = state.sequence.selectedId) {
+    const scene = state.viewer?.scene;
+    if (state.coverage.highlight) {
+      scene?.groundPrimitives?.remove(state.coverage.highlight);
+      state.coverage.highlight = null;
+    }
+    if (!sequenceId || !scene) return;
+    const parts = [];
+    for (const entry of state.coverage.tiles.values())
+      parts.push(...(entry.sequences.get(sequenceId)?.parts || []));
+    const instances = lineInstances(
+      [{ id: sequenceId, parts }],
+      Cesium.Color.fromCssColorString(COLORS.selected),
+      COVERAGE_LINE_WIDTH_PX + 1,
+    );
+    if (!instances.length) return;
+    state.coverage.highlight = scene.groundPrimitives.add(
+      linePrimitive(instances, false),
+    );
+    requestRender();
   }
 
   function attachPrimitive(entry) {
@@ -155,14 +163,13 @@ export function createCoverage({ state, source }) {
     entry.sequences = new Map(sequences.map((s) => [s.id, s]));
     entry.primitives = buildSequencePrimitives(sequences);
     entry.count = sequences.length;
-    for (const { primitive } of entry.primitives)
+    for (const primitive of entry.primitives)
       scene.groundPrimitives.add(primitive);
-    watchSelection();
   }
 
   function detachPrimitive(entry) {
     const scene = state.viewer?.scene;
-    for (const { primitive } of entry.primitives || []) {
+    for (const primitive of entry.primitives || []) {
       try {
         scene?.groundPrimitives?.remove(primitive);
       } catch {
@@ -195,7 +202,7 @@ export function createCoverage({ state, source }) {
         }),
         ensureTerrainReady(),
       ]);
-      // Only an abort, a retire, a clear or a newer request for this tile
+      // Only an abort, a zoom change, a clear or a newer request for this tile
       // discards the bytes; a refresh that still wants the tile keeps them.
       if (
         controller.signal.aborted ||
@@ -213,6 +220,8 @@ export function createCoverage({ state, source }) {
       attachPrimitive(entry);
       state.coverage.tiles.set(key, entry);
       state.coverage.lastError = null;
+      // Over the new lines, and along any of the selection's parts they add.
+      if (entry.sequences.has(state.sequence.selectedId)) highlight();
       requestRender();
     } catch (error) {
       if (
@@ -228,10 +237,8 @@ export function createCoverage({ state, source }) {
     } finally {
       // Only the request that still owns the key settles it: a superseded one
       // must not drop a newer request's entry (which is what counts as loading).
-      if (state.coverage.pending.get(key) === controller) {
+      if (state.coverage.pending.get(key) === controller)
         state.coverage.pending.delete(key);
-        if (!state.coverage.pending.size) purgeStale();
-      }
       notify();
     }
   }
@@ -273,31 +280,6 @@ export function createCoverage({ state, source }) {
       refresh();
     }
     notify();
-  }
-
-  /** Drop the previous zoom's tiles once the new ones are on screen. */
-  function purgeStale() {
-    clearTimeout(state.coverage.staleTimer);
-    state.coverage.staleTimer = null;
-    if (!state.coverage.stale.size) return;
-    for (const entry of state.coverage.stale.values()) detachPrimitive(entry);
-    state.coverage.stale.clear();
-    requestRender();
-  }
-
-  /** Move tiles to the stale set: the old zoom shows until the new one loads. */
-  function retire() {
-    for (const controller of state.coverage.pending.values())
-      controller.abort();
-    state.coverage.pending.clear();
-    for (const [key, entry] of state.coverage.tiles) {
-      const previous = state.coverage.stale.get(key);
-      if (previous) detachPrimitive(previous);
-      state.coverage.stale.set(key, entry);
-    }
-    state.coverage.tiles.clear();
-    clearTimeout(state.coverage.staleTimer);
-    state.coverage.staleTimer = setTimeout(purgeStale, STALE_TILE_MAX_MS);
   }
 
   function notify() {
@@ -348,10 +330,7 @@ export function createCoverage({ state, source }) {
       return;
     }
     state.coverage.hint = '';
-    if (zoom !== state.coverage.zoom) {
-      retire();
-      state.coverage.zoom = zoom;
-    }
+    state.coverage.zoom = zoom;
     const wanted = new Set(tiles.map(tileKey));
     for (const key of [...state.coverage.tiles.keys()])
       if (!wanted.has(key)) removeTile(key);
@@ -363,7 +342,6 @@ export function createCoverage({ state, source }) {
         state.coverage.pending.delete(key);
       }
     for (const tile of tiles) loadTile(tile);
-    if (!state.coverage.pending.size) purgeStale();
     notify();
   }
 
@@ -398,102 +376,20 @@ export function createCoverage({ state, source }) {
       controller.abort();
     state.coverage.pending.clear();
     for (const key of [...state.coverage.tiles.keys()]) removeTile(key);
-    purgeStale();
+    highlight(null);
     state.coverage.zoom = null;
-    stopSelectionWatch();
     requestRender();
   }
 
   /** Rebuild every loaded tile from its decoded cache (after a filter change). */
   function rebuild() {
-    purgeStale();
     for (const entry of state.coverage.tiles.values()) {
       detachPrimitive(entry);
       attachPrimitive(entry);
     }
+    highlight();
     requestRender();
     notify();
-  }
-
-  /** Recolour every part of a sequence in one ready primitive. */
-  function recolorInstances(primitive, sequence, selected) {
-    const value = sequenceColor({ selected });
-    for (const instanceId of partIds(sequence)) {
-      try {
-        const attributes = primitive.getGeometryInstanceAttributes(instanceId);
-        if (attributes)
-          attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(
-            value,
-            attributes.color,
-          );
-      } catch {
-        /* instance not in this primitive */
-      }
-    }
-  }
-
-  /** Every tile on the globe: the current zoom's and the stale zoom's. */
-  function drawnEntries() {
-    return [...state.coverage.tiles.values(), ...state.coverage.stale.values()];
-  }
-
-  /** Recolour one sequence, every part of it, in place (selection highlight). */
-  function recolorSequence(id, selected) {
-    for (const entry of drawnEntries()) {
-      const sequence = entry.sequences.get(id);
-      if (!sequence) continue;
-      for (const record of entry.primitives || []) {
-        // Still building: `syncSelection` catches it up once it is ready.
-        if (!record.primitive.ready) continue;
-        recolorInstances(record.primitive, sequence, selected);
-        if (selected) record.selectedId = id;
-        else if (record.selectedId === id) record.selectedId = null;
-      }
-    }
-    requestRender();
-  }
-
-  /**
-   * Bring a ready primitive's highlight up to the current selection, when
-   * it was built with another one (or none). True when it changed.
-   */
-  function syncSelection(entry, record) {
-    const current = state.sequence.selectedId ?? null;
-    if (record.selectedId === current || !record.primitive.ready) return false;
-    const previous =
-      record.selectedId && entry.sequences.get(record.selectedId);
-    if (previous) recolorInstances(record.primitive, previous, false);
-    const next = current && entry.sequences.get(current);
-    if (next) recolorInstances(record.primitive, next, true);
-    record.selectedId = current;
-    return true;
-  }
-
-  /**
-   * A primitive cannot be recoloured until it is ready, so while any is
-   * building, catch each one up with the selection as it becomes ready.
-   */
-  function watchSelection() {
-    const scene = state.viewer?.scene;
-    if (state.coverage.stopSelectionWatch || !scene?.postRender) return;
-    const stop = scene.postRender.addEventListener(() => {
-      let building = false;
-      let changed = false;
-      for (const entry of drawnEntries()) {
-        for (const record of entry.primitives || []) {
-          if (!record.primitive.ready) building = true;
-          else if (syncSelection(entry, record)) changed = true;
-        }
-      }
-      if (changed) requestRender();
-      if (!building) stopSelectionWatch();
-    });
-    state.coverage.stopSelectionWatch = stop;
-  }
-
-  function stopSelectionWatch() {
-    state.coverage.stopSelectionWatch?.();
-    state.coverage.stopSelectionWatch = null;
   }
 
   /**
@@ -533,7 +429,7 @@ export function createCoverage({ state, source }) {
     unblock,
     setKeyStatus,
     rebuild,
-    recolorSequence,
+    highlight,
     sequenceCount,
     stats,
   };

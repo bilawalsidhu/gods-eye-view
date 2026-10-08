@@ -57,7 +57,8 @@ function records(sequenceId, count = 2) {
 
 function setup() {
   const source = deferredSource();
-  const colours = [];
+  /** Every highlight asked of the coverage: a sequence id, or null for none. */
+  const highlights = [];
   const state = {
     services: {},
     viewer: {},
@@ -75,17 +76,17 @@ function setup() {
   };
   const parts = {
     coverage: {
-      recolorSequence: (id, selected) => colours.push([id, selected]),
+      highlight: (id) => highlights.push(id),
     },
   };
   const sequences = createSequences({ state, source, parts });
   const drawn = () =>
     state.sequence.collection.items.map((cone) => cone.id.split(':').at(-1));
-  return { state, source, sequences, colours, drawn };
+  return { state, source, sequences, highlights, drawn };
 }
 
 test('a failed sequence load leaves no stale cones and can be retried', async () => {
-  const { state, source, sequences, colours, drawn } = setup();
+  const { state, source, sequences, highlights, drawn } = setup();
   sequences.select('A');
   source.last('A').resolve(records('A'));
   await settle();
@@ -98,7 +99,7 @@ test('a failed sequence load leaves no stale cones and can be retried', async ()
   assert.deepEqual(drawn(), [], 'nothing of A is left to click');
   assert.equal(state.sequence.loading, false);
   assert.equal(state.sequence.selectedId, null, 'B is not left highlighted');
-  assert.deepEqual(colours.at(-1), ['B', false]);
+  assert.equal(highlights.at(-1), null);
   assert.equal(state.sequence.error, 'Sequence images unavailable');
 
   // Clicking B again asks again.
@@ -149,15 +150,12 @@ test('a cached sequence is re-selected without a lookup', async () => {
   assert.equal(state.sequence.selectedId, 'A');
 });
 
-test('clearSelection cancels the lookup and uncolours the sequence', async () => {
-  const { state, source, sequences, colours, drawn } = setup();
+test('clearSelection cancels the lookup and drops the highlight', async () => {
+  const { state, source, sequences, highlights, drawn } = setup();
   sequences.select('A');
   sequences.clearSelection();
   assert.equal(source.last('A').signal.aborted, true);
-  assert.deepEqual(colours, [
-    ['A', true],
-    ['A', false],
-  ]);
+  assert.deepEqual(highlights, ['A', null]);
   assert.equal(state.sequence.selectedId, null);
   assert.equal(state.sequence.loading, false);
   assert.equal(state.sequence.error, null, 'an error about it goes too');

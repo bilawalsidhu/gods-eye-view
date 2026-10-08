@@ -27,9 +27,8 @@ export function freshCoverage() {
     zoom: null,
     /** Current zoom's tiles by `z/x/y` key. */
     tiles: new Map(),
-    /** Previous zoom's tiles, kept on screen until replacements land. */
-    stale: new Map(),
-    staleTimer: null,
+    /** The selected sequence drawn over the coverage, or null. */
+    highlight: null,
     /** Tile key → its request's controller; any entry means LOADING. */
     pending: new Map(),
     lastError: null,
