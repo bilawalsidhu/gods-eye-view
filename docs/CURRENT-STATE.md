@@ -69,6 +69,8 @@ layout preference. It is not a rail panel, so `PanelPositionControls` — which
 owns lifting a panel out of a rail and docking it back — does not apply.
 Gate: `node scripts/qa-agent-console.mjs --url http://localhost:4173`
 (`--offline` checks the chrome and endpoints without a configured provider).
+OpenRouter joins the Provider Settings registry, so its key is pasteable in
+POWER UP like every other server-side credential rather than being `.env`-only.
 See [the typed agent](TEXT-AGENT.md).
 
 ## God's Eye View in conversations — October 2, 2026

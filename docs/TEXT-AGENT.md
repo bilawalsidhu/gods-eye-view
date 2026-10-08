@@ -68,7 +68,7 @@ and uses `OPENAI_API_KEY`, the same credential voice uses.
 | `GEV_AGENT_MODEL_<PROVIDER>` | Default model for one provider, e.g. `GEV_AGENT_MODEL_OLLAMA`. |
 | `GEV_AGENT_MODELS` | Comma-separated allowlist of model ids a request may run. |
 | `GEV_AGENT_MODELS_<PROVIDER>` | The same allowlist for one provider. |
-| `OPENROUTER_API_KEY` | Enables OpenRouter. |
+| `OPENROUTER_API_KEY` | Enables OpenRouter. Pasteable in Provider Settings (the POWER UP chip) like any other server-side key. |
 | `OPENROUTER_BASE_URL` | Overrides OpenRouter's base URL. |
 | `OLLAMA_BASE_URL` | Where the Ollama daemon is, default `http://localhost:11434/v1`. |
 | `GEV_RATELIMIT_AGENT_PER_MIN` | Per-IP cap on the agent endpoints, default 60. Exactly `0` disables it. |
