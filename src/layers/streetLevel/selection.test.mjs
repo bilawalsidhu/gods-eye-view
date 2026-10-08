@@ -1,19 +1,17 @@
 import assert from 'node:assert/strict';
-import test, { mock } from 'node:test';
+import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createSelection } from './selection.js';
 
 /**
  * The selection installed on a stand-in viewer. Animation frames queue until
- * `frame()` runs them; timers and Date.now() are mocked so a burst of moves
- * has a known timeline.
+ * `frame()` runs them.
  */
 function harness({ selected = false } = {}) {
   const saved = {
     document: globalThis.document,
     requestAnimationFrame: globalThis.requestAnimationFrame,
   };
-  mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   const frames = [];
   globalThis.requestAnimationFrame = (task) => frames.push(task);
   globalThis.document = new EventTarget();
@@ -43,7 +41,6 @@ function harness({ selected = false } = {}) {
     disableRootEvents: true,
     onwheel: null,
   });
-  const camera = { moveStart: new Cesium.Event(), moveEnd: new Cesium.Event() };
   const viewer = {
     scene: {
       canvas,
@@ -52,8 +49,6 @@ function harness({ selected = false } = {}) {
         return scene.under && { id: scene.under };
       },
     },
-    camera,
-    isDestroyed: () => false,
   };
   const state = {
     viewer,
@@ -79,9 +74,9 @@ function harness({ selected = false } = {}) {
     },
   });
   selection.install(viewer);
-  const onMove = state.clickHandler.getInputAction(
-    Cesium.ScreenSpaceEventType.MOUSE_MOVE,
-  );
+  const action = (type) =>
+    state.clickHandler.getInputAction(Cesium.ScreenSpaceEventType[type]);
+  const onMove = action('MOUSE_MOVE');
   return {
     state,
     sequences,
@@ -100,110 +95,55 @@ function harness({ selected = false } = {}) {
     },
     scene,
     canvas,
-    camera,
     picks,
     move: (x) => onMove({ endPosition: { x, y: 10 } }),
+    down: () => action('LEFT_DOWN')(),
+    up: () => action('LEFT_UP')(),
     frame() {
       for (const task of frames.splice(0)) task();
     },
-    /** Let `ms` pass, running the frames that come due on the way. */
-    wait(ms) {
-      this.frame();
-      mock.timers.tick(ms);
-      this.frame();
-    },
-    buttons(type, buttons) {
-      const event = new Event(type);
-      Object.defineProperty(event, 'buttons', { value: buttons });
-      canvas.dispatchEvent(event);
-    },
     restore() {
       selection.uninstall();
-      mock.timers.reset();
       Object.assign(globalThis, saved);
     },
   };
 }
 
-test('hover picks at most every 120 ms through a burst of moves, ending on the last one', () => {
-  const h = harness();
-  try {
-    // One second of a pointer moving at 60 Hz.
-    for (let i = 0; i < 60; i++) {
-      h.move(i);
-      h.wait(16);
-    }
-    assert.ok(h.picks.length <= 9, `${h.picks.length} picks in ~1 s`);
-    assert.ok(h.picks.length >= 7, `${h.picks.length} picks in ~1 s`);
-    h.wait(200);
-    assert.deepEqual(h.picks.at(-1), { x: 59, y: 10 }, 'the resting position');
-    const settled = h.picks.length;
-    h.wait(1000);
-    assert.equal(h.picks.length, settled, 'a still pointer costs nothing');
-  } finally {
-    h.restore();
-  }
-});
-
-test('hover does not pick while a mouse button is held', () => {
-  const h = harness();
-  try {
-    h.buttons('pointerdown', 1);
-    h.move(1);
-    h.wait(200);
-    assert.equal(h.picks.length, 0, 'a drag in progress');
-    h.buttons('pointerup', 0);
-    h.move(2);
-    h.wait(200);
-    assert.equal(h.picks.length, 1);
-  } finally {
-    h.restore();
-  }
-});
-
-test('a camera that never stops (orbit, tracking) keeps hover throttled, not off', () => {
-  const h = harness();
-  try {
-    // An orbiting or tracking camera raises moveStart and never moveEnd.
-    h.camera.moveStart.raiseEvent();
-    for (let i = 0; i < 60; i++) {
-      h.move(i);
-      h.wait(16);
-    }
-    assert.ok(h.picks.length >= 7, `${h.picks.length} picks in ~1 s`);
-    assert.ok(h.picks.length <= 9, `${h.picks.length} picks in ~1 s`);
-  } finally {
-    h.restore();
-  }
-});
-
-test('when the camera stops, the pointer is picked again so the cursor cannot stick', () => {
+test('hover picks once a frame, at the latest position, and shows a pointer over a line', () => {
   const h = harness();
   try {
     h.scene.under = 'mly:seq:1';
-    h.move(5);
-    h.wait(200);
-    assert.equal(h.canvas.style.cursor, 'pointer', 'over a line');
-    // The camera moves the line out from under a still pointer.
-    h.camera.moveStart.raiseEvent();
+    for (let x = 0; x < 5; x++) h.move(x);
+    h.frame();
+    assert.deepEqual(
+      h.picks.map(({ x }) => x),
+      [4],
+      'one pick for the burst',
+    );
+    assert.equal(h.canvas.style.cursor, 'pointer');
     h.scene.under = null;
-    h.camera.moveEnd.raiseEvent();
-    h.wait(200);
-    assert.equal(h.picks.length, 2, 'one pick when the camera rests');
-    assert.deepEqual(h.picks.at(-1), { x: 5, y: 10 });
-    assert.equal(h.canvas.style.cursor, '', 'the pointer cursor is gone');
+    h.move(6);
+    h.frame();
+    assert.equal(h.canvas.style.cursor, '', 'off the line');
+    h.frame();
+    assert.equal(h.picks.length, 2, 'a still pointer costs nothing');
   } finally {
     h.restore();
   }
 });
 
-test('a hover frame queued before the layer went off does not pick', () => {
+test('a drag, or a layer gone off before the frame, picks nothing', () => {
   const h = harness();
   try {
+    h.down();
     h.move(1);
+    h.frame();
+    assert.equal(h.picks.length, 0, 'a drag in progress');
+    h.up();
+    h.move(2);
     h.state.enabled = false;
-    h.wait(200);
-    assert.equal(h.picks.length, 0);
+    h.frame();
+    assert.equal(h.picks.length, 0, 'the layer went off');
   } finally {
     h.restore();
   }
