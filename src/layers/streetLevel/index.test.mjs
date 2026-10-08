@@ -205,23 +205,26 @@ test('switching Mapillary off clears coverage and closes the image it shows', as
   assert.equal(layer.getUIState().providerOn, false);
 });
 
-test('a sequence error goes with the sequence and leaves the viewer’s own', async (t) => {
+test('a sequence that fails to load reports it apart from the photo, and the error goes with it', async (t) => {
   const source = fakeMapillarySource({
     getSequenceImages: async () => {
       throw new Error('Sequence images unavailable');
     },
   });
-  const { layer } = await startLayer(t, { source });
-  await layer.selectSequence('seq-1');
-  layer.attachViewerHost(null);
-  await layer.openImage('img1');
+  // The photo's pose names its sequence, which opening selects.
+  const photoViewer = fakePhotoViewer({
+    pose: { position: { lon: -121.49, lat: 38.58 }, sequenceId: 'seq-1' },
+  });
+  const { layer } = await startLayer(t, { source, photoViewer });
+  layer.attachViewerHost({});
+  assert.equal(await layer.openImage('img1'), true);
+  await settle();
   let ui = layer.getUIState();
   assert.equal(ui.sequence.error, 'Sequence images unavailable');
-  assert.match(ui.street.error, /Open the Street Level panel/);
-  layer.clearSequence();
+  assert.equal(ui.street.error, null, 'the photo itself is fine');
+  layer.closeViewer();
   ui = layer.getUIState();
   assert.equal(ui.sequence.error, null, 'withdrawn with the sequence');
-  assert.match(ui.street.error, /Open the Street Level panel/, 'kept');
 });
 
 test('closing the photo, switching the layer off or destroying it stops the framing flight', async (t) => {
@@ -245,7 +248,6 @@ test('closing the photo, switching the layer off or destroying it stops the fram
 });
 
 test('setParams takes "any date" (0 days) and the switch over the current values (share-link defaults)', async (t) => {
-  assert.throws(() => createStreetLevelLayer({ source: {} }), /source/);
   const { layer } = await startLayer(t);
   assert.deepEqual(layer.getParams(), {
     mapillary: true,

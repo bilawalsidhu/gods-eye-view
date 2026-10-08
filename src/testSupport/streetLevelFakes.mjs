@@ -103,6 +103,5 @@ export function rayCamera({
       const hit = Cesium.IntersectionTests.rayEllipsoid(ray, ellipsoid);
       return hit ? Cesium.Ray.getPoint(ray, hit.start) : undefined;
     },
-    computeViewRectangle: () => undefined,
   };
 }

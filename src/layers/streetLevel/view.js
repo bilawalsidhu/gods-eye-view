@@ -77,17 +77,19 @@ function groundHit(camera, point, ellipsoid, maxRange) {
   return Cesium.Cartographic.fromCartesian(cartesian, ellipsoid) || null;
 }
 
+/** Screen rays per side, less one, that `visibleBbox` casts. */
+const BBOX_GRID = 5;
+
 /**
- * Visible [west, south, east, north] degrees, or null. Only screen rays that
- * hit count, so a horizon cannot inflate the box to the world.
+ * Visible [west, south, east, north] degrees, or null when fewer than four
+ * rays hit. Only hits count, so a horizon cannot inflate the box to the world.
  * `groundHeight` raises the ellipsoid to the ground (rays to the bare
  * ellipsoid under Denver land kilometres too far out) and `maxRange` (m)
- * drops near-horizon hits; with it, too few hits give null rather than
- * Cesium's view rectangle, which can span the horizon.
+ * drops near-horizon hits.
  */
 export function visibleBbox(
   viewer,
-  { grid = 5, groundHeight = null, maxRange = null } = {},
+  { groundHeight = null, maxRange = null } = {},
 ) {
   const scene = viewer?.scene;
   const camera = viewer?.camera;
@@ -101,10 +103,10 @@ export function visibleBbox(
       groundHeight,
     );
     const point = new Cesium.Cartesian2();
-    for (let i = 0; i <= grid; i++) {
-      for (let j = 0; j <= grid; j++) {
-        point.x = (width * i) / grid;
-        point.y = (height * j) / grid;
+    for (let i = 0; i <= BBOX_GRID; i++) {
+      for (let j = 0; j <= BBOX_GRID; j++) {
+        point.x = (width * i) / BBOX_GRID;
+        point.y = (height * j) / BBOX_GRID;
         const carto = groundHit(camera, point, ellipsoid, maxRange);
         if (carto) hits.push(carto);
       }
@@ -142,15 +144,7 @@ export function visibleBbox(
     }
     if (west !== east && north - south > 0) return [west, south, east, north];
   }
-  if (Number.isFinite(maxRange)) return null;
-  const rectangle = camera.computeViewRectangle?.(scene.globe?.ellipsoid);
-  if (!rectangle) return null;
-  return [
-    Cesium.Math.toDegrees(rectangle.west),
-    Cesium.Math.toDegrees(rectangle.south),
-    Cesium.Math.toDegrees(rectangle.east),
-    Cesium.Math.toDegrees(rectangle.north),
-  ];
+  return null;
 }
 
 /** The point on the ground under the camera, as {lon, lat} degrees. */

@@ -155,7 +155,7 @@ test('a tilted view from 3 km loads the tile at the centre of the screen', () =>
   const ahead = lat + 3000 / Math.tan((20 * Math.PI) / 180) / 110_540;
   const centreTile = `${lonToTileX(lon, 13)}/${latToTileY(ahead, 13)}`;
   const chosen = (from) =>
-    tilesForBbox(bbox, 13, { limit: 9, from }).tiles.map(
+    tilesForBbox(bbox, 13, { limit: 9, from }).map(
       (tile) => `${tile.x}/${tile.y}`,
     );
   assert.ok(

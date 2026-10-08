@@ -1,4 +1,5 @@
 import { keySetupRequirement } from '../keySetupCore.mjs';
+import { keyStatusLabel } from '../layers/streetLevel/policy.js';
 
 // Street Level UI state to panel strings and flags. Pure, so it is testable.
 
@@ -59,10 +60,8 @@ const drawing = (state) => state.enabled === true && state.providerOn !== false;
 function presentStatus(state) {
   const pressed = drawing(state);
   const title = pressed ? 'Turn Street Level off' : 'Turn Street Level on';
-  if (state.keyRejected)
-    return { text: 'KEY REJECTED', tone: 'warn', pressed, title };
-  if (state.keyRequired)
-    return { text: 'KEY REQUIRED', tone: 'warn', pressed, title };
+  const key = keyStatusLabel(state);
+  if (key) return { text: key, tone: 'warn', pressed, title };
   if (state.coverage.loading)
     return { text: 'LOADING', tone: 'busy', pressed, title };
   return pressed

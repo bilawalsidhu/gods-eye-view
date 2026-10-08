@@ -18,3 +18,9 @@ export const MAX_SINCE_DAYS = 36_500;
 
 /** Filter the layer starts with: all imagery, any date. */
 export const FILTER_DEFAULT = Object.freeze({ pano: 'all', sinceDays: 0 });
+
+/** The key gate's label for the pill and the layer list, or null when the key is fine. */
+export function keyStatusLabel({ keyRequired, keyRejected }) {
+  if (keyRejected) return 'KEY REJECTED';
+  return keyRequired ? 'KEY REQUIRED' : null;
+}

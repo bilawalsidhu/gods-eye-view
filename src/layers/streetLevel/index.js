@@ -5,14 +5,13 @@ import { createCredit } from './credits.js';
 import { createSelection } from './selection.js';
 import { createViewerHost } from './viewerHost.js';
 import { normalizeFilter, sameFilter } from './filter.js';
-import { STREET_LEVEL_LAYER_ID } from './policy.js';
+import { keyStatusLabel, STREET_LEVEL_LAYER_ID } from './policy.js';
 import { createCoverage } from './providers/mapillary/coverage.js';
 import { createSequences } from './providers/mapillary/sequences.js';
 import { createMapillaryViewer } from './providers/mapillary/viewer.js';
 import {
   MAPILLARY_CREDIT_HTML,
   MAPILLARY_KEY_ID,
-  MAPILLARY_SOURCE_METHODS,
 } from './providers/mapillary/policy.js';
 
 export { STREET_LEVEL_LAYER_ID } from './policy.js';
@@ -39,12 +38,6 @@ export function createStreetLevelLayer({
   services = {},
   photoViewer = null,
 }) {
-  if (
-    !MAPILLARY_SOURCE_METHODS.every(
-      (method) => typeof source?.[method] === 'function',
-    )
-  )
-    throw new TypeError('A Mapillary source is required');
   const state = createState({ services });
   const parts = {};
   const context = { state, parts };
@@ -169,10 +162,7 @@ export function createStreetLevelLayer({
     requiresKeyId: MAPILLARY_KEY_ID,
 
     init(viewer) {
-      if (state.initialized)
-        throw new Error('Street Level layer is already initialized');
       state.viewer = viewer;
-      state.initialized = true;
       parts.marker.ensure(viewer);
       parts.marker.setVisible(false);
       parts.sequences.ensureCollections(viewer);
@@ -209,14 +199,13 @@ export function createStreetLevelLayer({
       parts.framing.attachNavigation(null);
       state.listeners.clear();
       state.viewer = null;
-      state.initialized = false;
     },
 
     getStats() {
       const coverage = coverageStats();
-      const keyLabel = coverage.keyRejected ? 'KEY REJECTED' : 'KEY REQUIRED';
+      const keyLabel = keyStatusLabel(coverage);
       let loadingLabel = '';
-      if (coverage.keyRequired) loadingLabel = keyLabel;
+      if (keyLabel) loadingLabel = keyLabel;
       else if (coverage.loading) loadingLabel = 'loading coverage...';
       else if (coverage.hint && state.enabled) loadingLabel = coverage.hint;
       return {
@@ -224,10 +213,7 @@ export function createStreetLevelLayer({
         loading: coverage.loading,
         keyRequired: coverage.keyRequired,
         // A rejected key's message names the fix; a missing one says so.
-        error:
-          coverage.keyRequired && !coverage.keyRejected
-            ? keyLabel
-            : coverage.error,
+        error: keyLabel && !coverage.keyRejected ? keyLabel : coverage.error,
         loadingLabel,
       };
     },
@@ -283,8 +269,6 @@ export function createStreetLevelLayer({
     },
     setViewerRenderMode: (mode) => parts.viewerHost.setRenderMode(mode),
     resizeViewer: () => parts.viewerHost.resize(),
-    selectSequence: (sequenceId) => parts.sequences.select(sequenceId),
-    clearSequence: () => parts.sequences.clearSelection(),
   };
   return layer;
 }

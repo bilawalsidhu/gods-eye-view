@@ -121,20 +121,12 @@ export function createViewerHost({ state, parts, adapter }) {
   }
 
   function resize() {
-    try {
-      if (unsubscribe) adapter.resize();
-    } catch {
-      /* no-op */
-    }
+    if (unsubscribe) adapter.resize();
   }
 
   function setRenderMode(mode) {
     state.street.renderMode = mode === 'fill' ? 'fill' : 'letterbox';
-    try {
-      if (unsubscribe) adapter.setRenderMode?.(state.street.renderMode);
-    } catch {
-      /* adapter not ready */
-    }
+    if (unsubscribe) adapter.setRenderMode?.(state.street.renderMode);
     notify();
   }
 

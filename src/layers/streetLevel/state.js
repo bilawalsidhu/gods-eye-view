@@ -52,7 +52,6 @@ export function createState({ services }) {
     services,
     viewer: null,
     enabled: false,
-    initialized: false,
     listeners: new Set(),
     notify: null,
     /** The share link's `mapillary` switch: off draws nothing. */

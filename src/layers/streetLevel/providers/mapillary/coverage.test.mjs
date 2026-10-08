@@ -66,7 +66,6 @@ function fakeViewer(view) {
           view.lat + 0.002 - (point.y / 100) * 0.004,
         );
       },
-      computeViewRectangle: () => undefined,
     },
   };
 }
@@ -318,14 +317,18 @@ test('the per-tile cap applies after the imagery filter, so a dense tile keeps i
   await settle();
   const [entry] = state.coverage.tiles.values();
   const cap = Math.floor(COVERAGE_MAX_SEQUENCES / COVERAGE_MAX_TILES);
-  assert.equal(entry.count, Math.min(300, cap), 'every 360° line is drawn');
-  assert.equal(coverage.sequenceCount(), Math.min(300, cap));
+  assert.equal(
+    entry.sequences.size,
+    Math.min(300, cap),
+    'every 360° line is drawn',
+  );
+  assert.equal(coverage.stats().count, Math.min(300, cap));
   // Picking and the highlight look sequences up among the drawn lines.
   assert.ok(entry.sequences.has('pano-0'), 'drawn lines can be looked up');
   assert.equal(entry.sequences.has('flat-699'), false);
   state.filter = { pano: 'all', sinceDays: 0 };
   coverage.rebuild();
-  assert.equal(entry.count, cap, 'all imagery is capped as before');
+  assert.equal(entry.sequences.size, cap, 'all imagery is capped as before');
   assert.ok(entry.sequences.has('flat-699'), 'the newest flat line is drawn');
   assert.equal(entry.sequences.has('pano-299'), false, 'over the cap');
   coverage.clear();
@@ -359,7 +362,7 @@ test('a sequence that crosses a tile edge is counted once', async () => {
     );
   }
   await settle();
-  assert.equal(coverage.sequenceCount(), 3, 'across, plus one per tile');
+  assert.equal(coverage.stats().count, 3, 'across, plus one per tile');
   coverage.clear();
 });
 

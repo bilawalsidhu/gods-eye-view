@@ -162,7 +162,6 @@ export function createCoverage({ state, source }) {
     const sequences = drawnSequences(entry);
     entry.sequences = new Map(sequences.map((s) => [s.id, s]));
     entry.primitives = buildSequencePrimitives(sequences);
-    entry.count = sequences.length;
     for (const primitive of entry.primitives)
       scene.groundPrimitives.add(primitive);
   }
@@ -212,7 +211,7 @@ export function createCoverage({ state, source }) {
       )
         return;
       const decoded = decodeCoverageTile(bytes, tile);
-      const entry = { primitives: [], count: 0, sequences: new Map() };
+      const entry = { primitives: [], sequences: new Map() };
       // Newest first; the per-tile cap applies to what passes the filter.
       entry.sequenceList = decoded.sequences.sort(
         (a, b) => (b.capturedAt || 0) - (a.capturedAt || 0),
@@ -311,7 +310,7 @@ export function createCoverage({ state, source }) {
     if (!bbox) return { hint: NO_GROUND_HINT };
     // Ranked from between the camera's ground point and the screen centre's:
     // a tilted view's box centre can sit kilometres past both.
-    const { tiles } = tilesForBbox(bbox, zoom, {
+    const tiles = tilesForBbox(bbox, zoom, {
       limit: COVERAGE_MAX_TILES,
       from: viewFocus(viewer, ranged),
     });
@@ -430,7 +429,6 @@ export function createCoverage({ state, source }) {
     setKeyStatus,
     rebuild,
     highlight,
-    sequenceCount,
     stats,
   };
 }

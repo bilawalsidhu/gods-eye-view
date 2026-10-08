@@ -660,6 +660,7 @@
       "src/ui/shellFacade.js",
       "src/ui/streetLevelControls.js",
       "src/ui/streetLevelPresentation.js",
+      "src/layers/streetLevel/policy.js",
       "src/ui/localSdrControls.js",
       "src/layers/localAdsb/feedNames.js",
       "src/ui/localSdrPresentation.js",

@@ -58,15 +58,10 @@ export function tileBounds(x, y, z) {
   };
 }
 
-/** A [west, south, east, north] array or object as finite, ordered bounds; null if unusable. */
+/** A [west, south, east, north] array as finite, ordered bounds; null if unusable. */
 export function normalizeBbox(input) {
-  const values = Array.isArray(input)
-    ? input
-    : input && typeof input === 'object'
-      ? [input.west, input.south, input.east, input.north]
-      : null;
-  if (!values || values.length !== 4) return null;
-  const [w, s, e, n] = values.map(Number);
+  if (!Array.isArray(input) || input.length !== 4) return null;
+  const [w, s, e, n] = input.map(Number);
   if (![w, s, e, n].every(Number.isFinite)) return null;
   const west = Math.max(-180, Math.min(w, e));
   const east = Math.min(180, Math.max(w, e));
@@ -81,7 +76,7 @@ export function normalizeBbox(input) {
  * crosses the date line), nearest to `from` first (default: the box centre),
  * capped at `limit`. Distances are measured the short way round ±180°.
  * @param {{limit?: number, from?: {lon: number, lat: number}|null}} [options]
- * @returns {{tiles: Array<{x:number,y:number,z:number}>, truncated: boolean, total: number}}
+ * @returns {Array<{x:number,y:number,z:number}>}
  */
 export function tilesForBbox(bbox, z, { limit = Infinity, from = null } = {}) {
   const [west, south, east, north] = Array.isArray(bbox)
@@ -95,7 +90,7 @@ export function tilesForBbox(bbox, z, { limit = Infinity, from = null } = {}) {
         [-180, south, east, north],
       ]
     : [bbox];
-  const tiles = halves
+  const grid = halves
     .map(normalizeBbox)
     .filter(Boolean)
     .flatMap((box) => tileGrid(box, z));
@@ -107,7 +102,7 @@ export function tilesForBbox(bbox, z, { limit = Infinity, from = null } = {}) {
   const cx = tileXAt(wrapLon(centre.lon), z);
   const cy = tileYAt(centre.lat, z);
   // Each tile's distance is computed once; ties keep their row order.
-  const ranked = tiles
+  const ranked = grid
     .map((tile) => {
       const dx = Math.abs(tile.x + 0.5 - cx);
       const d = Math.min(dx, n - dx) ** 2 + (tile.y + 0.5 - cy) ** 2;
@@ -115,12 +110,7 @@ export function tilesForBbox(bbox, z, { limit = Infinity, from = null } = {}) {
     })
     .sort((a, b) => a.d - b.d)
     .map(({ tile }) => tile);
-  const truncated = ranked.length > limit;
-  return {
-    tiles: truncated ? ranked.slice(0, limit) : ranked,
-    truncated,
-    total: ranked.length,
-  };
+  return ranked.slice(0, limit);
 }
 
 /** The tiles at zoom z in a normalized box, row by row. */
