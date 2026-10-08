@@ -77,9 +77,10 @@
   and an embedded viewer with full-screen EXPAND and FIT/FILL. Coverage lines
   (below 60 km) and image cones drape on the terrain and Google 3D tiles;
   opening a photo frames it with one camera flight. Share links carry the
-  switch, the filters and the panel's collapsed state. A server proxy keeps
-  the token server-side, trims coverage tiles and caches them in memory for
-  24 h; it refuses cross-site requests and rate-limits per IP. The panel reads
+  switch, the filters and the panel's collapsed state. A server proxy adds the
+  token to coverage-tile requests, trims the tiles and caches them in memory
+  for 24 h; it refuses cross-site requests and upstream redirects, rate-limits
+  per IP and runs at most six Mapillary fetches at once. The panel reads
   KEY REQUIRED without a token and KEY REJECTED when Mapillary refuses it.
 
 - Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
