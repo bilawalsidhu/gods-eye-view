@@ -1,5 +1,13 @@
 # Changelog
 
+- CCTV cameras with identified hardware show the model's datasheet specs. When a
+  source names a camera model found in the vendored CCTV Camera Database records
+  (CC0), the HUD meta line adds its resolution, night vision and PTZ capability.
+  A fixed single-lens model's horizontal FOV replaces the estimate
+  (`FOV n° (DATASHEET)`); a PTZ or varifocal range is what the lens can do, not
+  its current zoom, so those cameras keep the estimate and show
+  `SPEC FOV min–max° (CAPABILITY)` beside it (bassem chagra, #452).
+
 - MCP setup examples use the app's default port, `4173`. Thanks to
   [Huanyi Xie](https://github.com/xiehuanyi) (#934) and
   [shirunjies8-png](https://github.com/shirunjies8-png) (#959) for the same fix.
