@@ -376,7 +376,10 @@ export class GevRealtimeController extends RealtimeFacade {
       status: this.status,
       connection: this.connectionDiagnostics(),
     });
-    if (this.dc && this.responseActive) this.costTracker.markIncomplete();
+    if (this.dc && this.responseActive) {
+      this.costTracker.markIncomplete();
+      this.syncCostUi();
+    }
     this._metrics.flush('stop');
     this._connection.closeTransport();
     this.stopVoiceVisualizer();

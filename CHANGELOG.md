@@ -1,5 +1,17 @@
 # Changelog
 
+- Name the missing key when voice cannot start without one. With no OpenAI
+  key, pressing the mic showed "OPENAI_API_KEY is not set" under advice to
+  check the microphone and network. The token route now says which provider
+  key it needs, and the voice error tray reads "Needs OPENAI_API_KEY — add it
+  in Provider Settings", the same guidance layers and map sources give.
+  Other voice errors keep the microphone and network advice (#143).
+
+- Vector tile sources take their allowed tile origin from the configured
+  `tileJsonUrl`, so repointing only that URL at a mirror loads tiles from the
+  mirror or fails visibly instead of silently using OpenFreeMap. Thanks to
+  [daikaginza](https://github.com/daikaginza) (#935).
+
 - MCP setup examples use the app's default port, `4173`. Thanks to
   [Huanyi Xie](https://github.com/xiehuanyi) (#934) and
   [shirunjies8-png](https://github.com/shirunjies8-png) (#959) for the same fix.
@@ -63,12 +75,17 @@
 
 ## [Unreleased]
 
-- Name the missing key when voice cannot start without one. With no OpenAI
-  key, pressing the mic showed "OPENAI_API_KEY is not set" under advice to
-  check the microphone and network. The token route now says which provider
-  key it needs, and the voice error tray reads "Needs OPENAI_API_KEY — add it
-  in Provider Settings", the same guidance layers and map sources give.
-  Other voice errors keep the microphone and network advice (#143).
+- Add an experimental ChatGPT/Codex OAuth option for cloud voice in Provider
+  Settings. API-key voice remains the default. Local sign-in can start from
+  the auth button and reports completion, failure, timeout, or expired
+  credentials. OAuth credentials stay on the server; local routes require
+  loopback access and same-site requests. OAuth sessions retain usage data
+  and show unknown cost; caption transcriptions are counted rather than
+  priced into the API-key cap. The auth button keeps keyboard focus after a
+  mode change, and pending sign-in does not discard text in the key fields.
+  Thanks to [Shayan Khan](https://github.com/devv-shayan) for #621 and
+  [TheSmokeDev](https://github.com/TheSmokeDev) for the credential handling
+  from #653.
 
 - Stdio servers from one install share a panel key so a page read from one
   process can make requests through another. Concurrent malformed-key repairs
