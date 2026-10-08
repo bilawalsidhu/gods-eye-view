@@ -18,6 +18,7 @@ import {
   loadNswSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
+  loadVancouverSourcesFromCatalog,
   loadVegvesenSourcesFromOpenData,
 } from './sources.js';
 
@@ -92,6 +93,11 @@ const LIVE_PACKS = [
     name: 'deldot',
     enabled: () => envEnabled('CCTV_DELDOT_ENABLED'),
     load: loadDelDOTSourcesFromOpenData,
+  },
+  {
+    name: 'vancouver',
+    enabled: () => envEnabled('CCTV_VANCOUVER_ENABLED'),
+    load: loadVancouverSourcesFromCatalog,
   },
   {
     name: 'vegvesen',

@@ -1,5 +1,10 @@
 # Changelog
 
+- Register Vancouver as a LIVE_PACKS entry (gated by `CCTV_VANCOUVER_ENABLED`)
+  instead of routing it through the global `CCTV_SOURCES_FILE` override, so the
+  830-camera pack adds to the mesh instead of replacing Austin/Caltrans/TfL/
+  Ontario/etc. Vancouver loads by default; `CCTV_VANCOUVER_ENABLED=0` suppresses
+  Vancouver only while leaving peer regions intact.
 - MCP setup examples use the app's default port, `4173`. Thanks to
   [Huanyi Xie](https://github.com/xiehuanyi) (#934) and
   [shirunjies8-png](https://github.com/shirunjies8-png) (#959) for the same fix.

@@ -1304,6 +1304,29 @@ only when no source is selected. A bounded retry handles delayed tray visibility
 Moving focus away, pointer interaction, closing the tray, or disposing the UI
 cancels pending work; a later reopening cannot inherit an old focus request.
 
+## September 15, 2026
+
+The Vancouver CCTV pack ships as a generated catalog: 830 public directional
+cameras across 218 City of Vancouver intersections, produced by
+`scripts/build-vancouver-cctv.mjs` from the official traffic-camera KML and the
+per-intersection pages on trafficcams.vancouver.ca into
+`config/cctv_sources.vancouver.json`. Vancouver registers as its own
+LIVE_PACKS entry — enabled by default, alongside the built-in
+Austin/Caltrans/TfL/Ontario/Texas/NSW/Calgary/Tallinn/Warendorf packs — so it
+adds to the mesh instead of replacing it. Disable Vancouver only with
+`CCTV_VANCOUVER_ENABLED=0` (or repoint its catalog file via
+`CCTV_VANCOUVER_SOURCES_FILE`). The global `CCTV_SOURCES_FILE` override still
+exists as an alternate full-catalog input for self-hosters, but Vancouver no
+longer depends on it. Coordinates are intersection-level (the city publishes one point per
+intersection), headings come from the city's own N/E/S/W designations with high
+confidence, and frame URLs stay pinned to trafficcams.vancouver.ca. The pack
+carries an explicit 5-minute ambient refresh entry — `city of vancouver traffic
+cams` in the CCTV LOD table — because the city's stills regenerate on a 300 s
+page cycle, and the attribution control lists the new `vancouver-cctv` credit.
+Vancouver is also a curated location now: `CITY_POIS` gains the city with
+five POIs and `CAMERA_SEEDS` gains two demo cameras, so the Location panel
+can fly there and the layer carries keyless content before the pack loads.
+
 ## September 8, 2026
 
 Earthquake refreshes validate the complete feed and construct replacement entities before clearing the previous snapshot. Malformed rows and duplicate rendered IDs retain the last good entities, overlays, count and timestamp and report a malformed response; unknown magnitude is excluded from M2.5+ rendering.
@@ -4757,6 +4780,9 @@ Replay transport uses one Play/Pause toggle plus Cancel. During ascent only the 
 - `tools/pano-pinhole.mjs`: equirectangular-to-pinhole reprojection.
 - `tools/sat-ortho.mjs`: Map Tiles ortho stitch and centered crop with georef corners.
 - `scripts/track-regression.mjs`: headless real-app regression harness for aircraft tracking/model/detection invariants (`npm run test:track`).
+- `scripts/build-vancouver-cctv.mjs`: regenerates the Vancouver CCTV pack
+  `config/cctv_sources.vancouver.json` from the city's public traffic-camera
+  KML and intersection pages (`node scripts/build-vancouver-cctv.mjs`).
 - `scripts/qa-map-source-tray.mjs`: browser proof for the four-source Map Source
   tray — presentation, keyboard disclosure, responsive bounds, unpinned
   auto-dismiss, ACQUIRING status, and retired/unknown stack-id restore
