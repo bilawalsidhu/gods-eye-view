@@ -66,12 +66,13 @@
   height: min(26rem, calc(100dvh - 12rem));
   min-width: 20rem;
   min-height: 13.75rem;
-  /* The shared surface is translucent by design. A console sits over the HUD
-     readouts rather than beside them, and transcript text competing with
-     coordinates underneath is unreadable, so this one is opaque. */
-  background:
-    linear-gradient(145deg, rgba(10, 27, 37, 0.97), rgba(7, 13, 22, 0.96)),
-    rgba(6, 14, 22, 0.98);
+  /* Keep the shared surface's translucency (--glass-bg) and diffuse what is
+     behind it instead of hiding it. A console sits OVER the HUD readouts
+     rather than beside them, and legible coordinates showing through a
+     transcript are unreadable; blurring them settles both. Same treatment
+     the Street Level panel uses. */
+  backdrop-filter: blur(20px) saturate(1.25);
+  -webkit-backdrop-filter: blur(20px) saturate(1.25);
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
