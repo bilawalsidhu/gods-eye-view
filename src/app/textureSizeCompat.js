@@ -91,13 +91,10 @@ export function applyTextureSizeWorkaround(viewer) {
       const baseRatio = widget._useBrowserRecommendedResolution
         ? 1
         : globalThis.window?.devicePixelRatio || 1;
-      const hardwareMaxScale = calculateMaxAllowedResolutionScale({
-        clientWidth: canvas.clientWidth,
-        clientHeight: canvas.clientHeight,
-        pixelRatio: baseRatio,
-        maxTextureSize,
-      });
-      appliedScale = Math.min(requestedScale, hardwareMaxScale);
+      const maxDrawingBufferScale =
+        maxTextureSize /
+        (Math.max(canvas.clientWidth, canvas.clientHeight) * baseRatio);
+      appliedScale = Math.min(requestedScale, maxDrawingBufferScale);
       widget._resolutionScale = appliedScale;
     }
 
