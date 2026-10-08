@@ -319,6 +319,7 @@ async function park(page) {
     }, PARK);
     if (stayed) return;
   }
+  throw new Error('the camera would not stay parked over the photo line');
 }
 
 async function main() {

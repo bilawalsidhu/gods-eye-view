@@ -3032,8 +3032,7 @@ Like the iD editor's photo overlay it shows Mapillary only: 360°/flat and
 captured-since filters (relative days, so a link keeps its meaning), one
 embedded viewer and an on-globe credit while the layer is on. Share options:
 `m` (Mapillary on/off; off draws nothing), `p` (`a`/`p`/`f` panoramas), `s`
-(since, days). The header pill is the only layer switch and also turns a
-switched-off `m` back on.
+(since, days). The header pill is the only layer switch.
 
 Coverage is z11–14 sequence lines below 60 km; above that nothing is drawn and
 the panel says to zoom in. Tiles come from the visible ground within range of
@@ -3066,8 +3065,10 @@ so the whole photo fits.
 Browser gates: `npm run qa:street-level -- --url <server>` runs against real
 Mapillary with a token; `npm run qa:street-level:fixtures` answers every
 Mapillary request from fixtures (`providers/mapillary/coverageFixture.mjs`,
-`scripts/fixtures/street-level/`). CI runs the fixture gate with `--strict`
-against a production build served by `vite preview` with a dummy token.
+`scripts/fixtures/street-level/`); its server (default `:4173`) still needs a
+`MAPILLARY_CLIENT_TOKEN`, and any value will do. CI runs the fixture gate with
+`--strict` against a production build served by `vite preview` with a dummy
+token.
 
 Directions is a keyless front end to the routing the voice agent already
 uses. Its row chips are the whole interface: DRIVE / WALK / BIKE pick the

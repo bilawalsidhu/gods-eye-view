@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 
 /**
  * Mapillary Graph API and image CDN answered from fixtures, covering every
- * request the provider and MapillaryJS make while opening, stepping and
- * closing a photo, so the gate needs no network and no real token.
+ * request the provider and MapillaryJS make while opening and closing a
+ * photo, so the gate needs no network and no real token.
  *
  * No `merge_cc` or `sfm_cluster` means MapillaryJS never asks for a mesh or
  * cluster, and empty S2 cells mean no spatial edges, which the gate does not

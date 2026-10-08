@@ -411,7 +411,7 @@ const OPTION_GROUPS = Object.freeze({
     booleanOption('viirs', 'v', false),
   ]),
   'street-level': Object.freeze([
-    // One switch per registered imagery provider (src/app/layers/streetLevel.js).
+    // The Mapillary switch: off, the layer draws nothing.
     booleanOption('mapillary', 'm', true),
     enumOption('pano', 'p', 'all', ['all', 'pano', 'flat'], {
       all: 'a',
