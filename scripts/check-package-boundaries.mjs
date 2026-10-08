@@ -9,7 +9,76 @@ export async function checkPackageBoundaries(root) {
   const readJson = async (name) =>
     JSON.parse(await readFile(path.join(root, name), 'utf8'));
   const pkg = await readJson('package.json');
-  const groups = await readJson('scripts/package-boundaries.json');
+  let groups = await readJson('scripts/package-boundaries.json');
+  const localFile = 'scripts/package-boundaries.local.json';
+  let localText;
+  try {
+    localText = await readFile(path.join(root, localFile), 'utf8');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  if (localText !== undefined) {
+    const invalid = (name = '') =>
+      new Error(`Invalid local package boundaries in ${localFile}: ${name}`);
+    let localGroups;
+    try {
+      localGroups = JSON.parse(localText);
+    } catch {
+      throw invalid();
+    }
+    if (
+      !localGroups ||
+      typeof localGroups !== 'object' ||
+      Array.isArray(localGroups)
+    ) {
+      throw invalid();
+    }
+    const arrays = ['exports', 'modules', 'external'];
+    for (const [name, group] of Object.entries(localGroups)) {
+      const base = Object.hasOwn(groups, name) ? groups[name] : undefined;
+      if (
+        !group ||
+        typeof group !== 'object' ||
+        Array.isArray(group) ||
+        Object.keys(group).some(
+          (key) => ![...arrays, 'runtime'].includes(key),
+        ) ||
+        arrays.some(
+          (key) =>
+            (!base || Object.hasOwn(group, key)) &&
+            (!Array.isArray(group[key]) ||
+              group[key].some((value) => typeof value !== 'string')),
+        ) ||
+        (Object.hasOwn(group, 'runtime') &&
+          !['browser', 'node'].includes(group.runtime))
+      ) {
+        throw invalid(name);
+      }
+      if (
+        base &&
+        group.runtime &&
+        group.runtime !== (base.runtime || 'browser')
+      ) {
+        throw new Error(
+          `Local boundary runtime conflicts with main group: ${name}`,
+        );
+      }
+      groups = {
+        ...groups,
+        [name]: base
+          ? {
+              ...base,
+              ...Object.fromEntries(
+                arrays.map((key) => [
+                  key,
+                  [...base[key], ...(group[key] || [])],
+                ]),
+              ),
+            }
+          : group,
+      };
+    }
+  }
   const declaredExports = Object.keys(pkg.exports || {}).sort();
   const classifiedExports = Object.values(groups)
     .flatMap((group) => group.exports)
