@@ -1,10 +1,79 @@
 # Changelog
 
+- MCP setup examples use the app's default port, `4173`. Thanks to
+  [Huanyi Xie](https://github.com/xiehuanyi) (#934) and
+  [shirunjies8-png](https://github.com/shirunjies8-png) (#959) for the same fix.
+
+- Voice revisits numbered analyst records through current layer snapshots and
+  preserves resolved pin coordinates. Requested analyst lists and rankings can
+  speak returned items alongside the exact count and coverage caveats. Failed
+  actions settle the voice card without reviving cancelled turns. Coverage
+  benchmarks reject invalid calls before accepting semantic matches.
+
+- Street Level is included in the voice layer manifest for visibility toggles;
+  imagery is not exposed as countable analyst records.
+
+- Voice debug logs omit complete tool-result bodies and serialized function
+  outputs by default, including location queries and generated spoken replies.
+  `GEV_VOICE_LOG_CONTENT=1` retains them for explicit content debugging.
+
+- Unqualified Alps searches use the bundled European range for navigation
+  and annotations instead of a same-named peak returned by a geocoder.
+  Coordinates, supplied presets and geographically qualified place names
+  keep their precedence; annotation proximity and containment guards remain.
+- Contacts analyst follow-ups retain the snapshot's distance ranking rather
+  than switching to the camera. Requested radii and explicit scopes remain
+  authoritative, and a request for a list still requires an analyst query.
+  Analyst speech names stale or degraded feeds and withholds authoritative
+  counts when unavailable. The existing NOTES disclosure preserves complete,
+  deduplicated coverage and source caveats, including crowded results.
+- The voice card shows analyst counts ("At least 250,000 aircraft …") with
+  their scope, feed window and caveats, and marks partial answers. Analyst
+  speech uses the same deterministic headline, preserves lower bounds and says
+  when an answer is partial. Follow-ups retain unanswered-layer coverage, and
+  keep the original scope label when they narrow a remembered result.
+  Contacts-window answers read one immutable panel snapshot, mark a 20,000-row
+  layer cap as a lower bound, and commit that displayed cohort only after
+  cancellation checks pass. Concurrent analyst calls from one model response
+  remain independent; a stopped or replaced user turn still cancels them.
+- Voice answers are shorter and fill slow work instead of going silent. Slow
+  or multi-step requests may open with one short spoken plan; instant ones
+  just happen. Tool results carry a code-built `say` line and a `display`
+  card: sources and notes stay on screen, a caveat is spoken only when it
+  changes the answer, and "at least" and partial answers are always said. A card above the mic shows captions, the plan's steps and the
+  result. When a tool that reports steps (layers, place lookups, outlines,
+  nearest-aircraft) is still running after 1.5 s its current step is spoken
+  once; others say "still working" once after 8 s. A soft
+  tick plays in push-to-talk. Holding Space while the assistant talks cuts it
+  off. Each turn writes latency and speech figures to the debug log
+  (`node scripts/voice-turn-spans.mjs`). Captions of what you say are
+  counted in the voice cost meter; the debug log leaves out what was said
+  unless `GEV_VOICE_LOG_CONTENT=1`.
+- Point and ask: hold Space with the cursor on an aircraft, ship or spot on
+  the map and say "what's that", "track that one" or "how many flights
+  around here". A reticle marks the point and the voice card shows what
+  "this" meant. In open mic it works when you have just moved the cursor
+  there. "The second one" picks from the last numbered list. Asking about
+  "the last one" resolves to the last of the five rows actually shown, and
+  referent-only tracking calls are accepted while empty targets are rejected.
+  Asking about
+  bare ground up close gives the assistant a small crop of the map around the
+  point. A slow render gets one bounded second frame request, while hidden,
+  stale, moved-camera, invalid and oversized captures still fail closed.
+
 ## [Unreleased]
 
 - Keep later satellites when a TLE catalog entry is missing an orbital line.
   The parser skips the incomplete set and resumes at the next complete named
   set, instead of losing the rest of the group (#906).
+
+- Stdio servers from one install share a panel key so a page read from one
+  process can make requests through another. Concurrent malformed-key repairs
+  now select one winner; unavailable storage or a busy repair retains the
+  logged per-process fallback. Thanks to [Jibran Tahir](https://github.com/jibraaan)
+  for #958, [MarvinNL046](https://github.com/MarvinNL046) for the report and
+  proposed diagnosis in #927, and [kvnloo](https://github.com/kvnloo) for identifying
+  the repair race. Windows/Claude Desktop Cowork confirmation remains outstanding.
 
 - Street Level: a street-level imagery layer modelled on the iD editor's photo
   overlay, with Mapillary as its first provider (free client token, CC BY-SA 4.0
@@ -315,6 +384,32 @@
   (`src/ui/imagerySplit.js`, `src/maps/imageryComparison.js`), and
   `MapSourceController.subscribe()` reports every settled map switch.
 
+## Unreleased — voice reaches every layer; honest analyst answers
+
+- Voice can switch on every shipped data layer (the two scene-driven
+  Bhote Koshi layers stay scene-only), including transit, Recent
+  Imagery, wind, the weather layers, cyclones and mapped installations, and
+  understands their spoken names ("buses", "hurricanes", "military bases").
+  One voice manifest (`src/voice/layerManifest.js`) generates the tool enums
+  and aliases, and a unit test fails when a new layer has no entry.
+- `analyst_query` counts up to 250,000 loaded records per layer instead of the
+  first 2,000, and says when a layer went past that (`complete: false`). It
+  also answers over bikeshare stations, transit vehicles, rocket launches,
+  cyclones, ALPR cameras, mapped installations, local ADS-B aircraft and fire perimeters; fire
+  records carry their sensor (VIIRS or MODIS).
+- Unknown fields, operators, units, value types, scope kinds and invalid
+  centres are refused with the allowed values instead of answering zero or widening to anywhere. A
+  layer that is off, still loading or unavailable is reported as such, not
+  as a count of zero; a partly answerable query is marked `partial`.
+  Distance sorts honour `sortDir`, a written unit such as `altitudeM(ft)`
+  converts, and large rankings no longer sort the whole set.
+- Results carry `lat`/`lon` for each item and a `display` object with the
+  scope, the feed window (earthquakes and fires cover the last 24 h) and any
+  caveat for the screen. The model is asked to answer in one short phrase.
+- The weather and Recent Imagery panels can be opened by voice.
+
+## Unreleased — local receiver feeds
+
 ### Local receiver feeds
 
 - The Local ADS-B layer also reads local 1090 MHz and 978 MHz UAT decoder
@@ -457,6 +552,7 @@
 Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+
 - New Fire Perimeters layer (Events group): live NIFC WFIGS interagency
   wildfire incident perimeters as ground-clamped polygons with a
   containment-colored fire line, refreshed every 5 minutes from the public
@@ -732,7 +828,6 @@ This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
 ### Other changes
-
 
 - Add ECMWF IFS model selection to Wind (#464, thanks @beneduzi), with model-scoped forecast-step caches, cancellation of replaced requests, and separate issue/valid timestamps.
 
@@ -1542,4 +1637,3 @@ represent previously published GitHub Releases.
 ## [0.1.0] — 2026-02-09
 
 - Initial project version.
-
