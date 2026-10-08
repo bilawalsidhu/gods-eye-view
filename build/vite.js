@@ -1,8 +1,22 @@
+import { fileURLToPath } from 'node:url';
 import { applicationHtmlPlugin } from './application-html.js';
 import cesium from 'vite-plugin-cesium';
 import { DEFAULT_ALLOWED_HOSTS, hostCheckPlugin } from './allowedHosts.js';
 import { embedFramingPlugin } from './embed-framing.js';
 import { panelBuildPlugin } from './panel.js';
+
+/**
+ * The repository root (this file lives at `<root>/build/vite.js`), as a
+ * forward-slash path for glob matching. Vite's `fs.deny` patterns are
+ * matched against the full absolute file path, and a bare `**\/dist/**`
+ * matches a `dist` directory at *any* depth — including dependencies that
+ * ship their own, such as `node_modules/vite/dist/client/client.mjs` (the
+ * dev client itself). Anchoring to this repository's root denies only the
+ * project's own build output.
+ */
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
+  .replace(/\\/g, '/')
+  .replace(/\/$/, '');
 
 /**
  * Content-Security-Policy for every document the dev/preview server serves.
@@ -98,7 +112,10 @@ export function createBrowserViteConfig({
           '**/ENVIRONMENT',
           '**/.gev-logs/**',
           '**/.gev-cache/**',
-          '**/dist/**',
+          // Root-anchored: a bare '**/dist/**' would also deny every
+          // dependency's own dist/ (e.g. node_modules/vite/dist/client),
+          // breaking /@vite/client and other dev-client assets.
+          `${REPO_ROOT}/dist/**`,
         ],
       },
       // These headers protect the document containing Provider Settings and
