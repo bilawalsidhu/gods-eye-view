@@ -1,49 +1,16 @@
-/** Own panel position preferences, viewport clamping and drag listeners. */
+/** Own panel collapsed-state preferences and the one-time layout-reset notice. */
 /** Versioned localStorage namespace prefix to invalidate stale panel layouts. */
 const PANEL_LAYOUT_STORAGE_VERSION = 'v6';
 /**
- * Position keys are versioned separately from collapsed-state keys so layout
- * default changes (e.g. right-rail origin) can reset positions without also
- * resetting every panel's open/closed preference.
+ * Position keys are versioned separately from collapsed-state keys. The rails
+ * now lay panels out themselves and store no position; the version still names
+ * the layout-reset notice and the documented key.
  */
 const PANEL_POSITION_STORAGE_VERSION = 'v8';
-/** Z ladder: panels promote within [100, 139]; voice pill 150, toast 200, clean-view-exit 300. */
-const PANEL_Z_BASE = 100;
-const PANEL_Z_MAX = 139;
 export class PanelPositionControls {
-  constructor({
-    syncPanelCollapseButton,
-    layoutRightPanels,
-    syncCctvPanelViewport,
-    showToast,
-  }) {
+  constructor({ syncPanelCollapseButton, showToast }) {
     this._syncPanelCollapseButton = syncPanelCollapseButton;
-    this._layoutRightPanels = layoutRightPanels;
-    this._syncCctvPanelViewport = syncCctvPanelViewport;
     this._showToast = showToast;
-    this._ppToggles = document.getElementById('pp-toggles');
-    this._panelZCounter = PANEL_Z_BASE + 10;
-    this._draggableResizeObserver = null;
-    this._cancelDrag = null;
-    this.removers = [];
-    this.destroyed = false;
-  }
-  listen(target, type, callback) {
-    if (this.destroyed || !target) return;
-    const listener = (event) => {
-      if (!this.destroyed) callback(event);
-    };
-    target.addEventListener(type, listener);
-    this.removers.push(() => target.removeEventListener(type, listener));
-  }
-  _reclampDraggablePanels() {
-    if (this.destroyed) return;
-    const el = this._ppToggles;
-    if (!el || !el.style.top || el.style.top === 'auto') return;
-    const top = parseInt(el.style.top, 10);
-    if (!Number.isFinite(top)) return;
-    el.style.top = `${this._clampToViewport(0, top, el).top}px`;
-    this._pinPanelToRight(el);
   }
 
   _maybeNotifyLayoutReset() {
@@ -62,35 +29,6 @@ export class PanelPositionControls {
     } catch {
       // storage unavailable
     }
-  }
-
-  _initPanelDrag() {
-    if (this.destroyed) return;
-    const dragSpecs = [
-      {
-        id: 'pp-toggles',
-        panel: this._ppToggles,
-        handle: this._ppToggles?.querySelector('.panel-drag-handle.compact'),
-      },
-    ].filter(Boolean);
-
-    for (const spec of dragSpecs) {
-      if (!spec.panel || !spec.handle) continue;
-      this._restorePanelPosition(spec.id, spec.panel);
-      this._makePanelDraggable(spec.id, spec.panel, spec.handle);
-    }
-    // A restored panel grows a frame or two later, so the restore-time clamp
-    // is stale: re-clamp on every size change.
-    if (this._ppToggles && typeof ResizeObserver !== 'undefined') {
-      this._draggableResizeObserver = new ResizeObserver(() =>
-        this._reclampDraggablePanels(),
-      );
-      this._draggableResizeObserver.observe(this._ppToggles);
-    }
-  }
-
-  _panelStorageKey(panelId) {
-    return `godsEyeView.${PANEL_POSITION_STORAGE_VERSION}.panelPos.${panelId}`;
   }
 
   _panelCollapseStorageKey(panelId) {
@@ -141,160 +79,5 @@ export class PanelPositionControls {
     } catch {
       // storage unavailable
     }
-  }
-
-  _pinPanelToRight(panelEl) {
-    if (!panelEl) return;
-    const rect = panelEl.getBoundingClientRect();
-    const rightOffset = Math.max(6, Math.round(window.innerWidth - rect.right));
-    panelEl.style.right = `${rightOffset}px`;
-    panelEl.style.left = 'auto';
-  }
-
-  _restorePanelPosition(panelId, panelEl) {
-    try {
-      const raw = localStorage.getItem(this._panelStorageKey(panelId));
-      if (!raw) return;
-      const pos = JSON.parse(raw);
-      if (!pos || typeof pos.left !== 'number' || typeof pos.top !== 'number')
-        return;
-      // A position saved at another window size can land off-screen.
-      const { left, top } = this._clampToViewport(
-        Math.round(pos.left),
-        Math.round(pos.top),
-        panelEl,
-      );
-      panelEl.style.left = `${left}px`;
-      panelEl.style.top = `${top}px`;
-      panelEl.style.right = 'auto';
-      panelEl.style.bottom = 'auto';
-      if (panelId === 'pp-toggles') {
-        this._pinPanelToRight(panelEl);
-      }
-    } catch {
-      // ignore malformed saved panel position
-    }
-  }
-
-  _clampToViewport(left, top, panelEl) {
-    const rect = panelEl.getBoundingClientRect();
-    const maxLeft = Math.max(6, window.innerWidth - rect.width - 6);
-    const maxTop = Math.max(6, window.innerHeight - rect.height - 6);
-    return {
-      left: Math.max(6, Math.min(maxLeft, left)),
-      top: Math.max(6, Math.min(maxTop, top)),
-    };
-  }
-
-  _savePanelPosition(panelId, panelEl) {
-    const rect = panelEl.getBoundingClientRect();
-    try {
-      localStorage.setItem(
-        this._panelStorageKey(panelId),
-        JSON.stringify({
-          left: Math.round(rect.left),
-          top: Math.round(rect.top),
-        }),
-      );
-    } catch {
-      // storage unavailable
-    }
-  }
-
-  _promotePanelZ(panelEl) {
-    this._panelZCounter += 1;
-    if (this._panelZCounter > PANEL_Z_MAX) {
-      const promoted = [...document.querySelectorAll('.panel-draggable')]
-        .filter((el) => el.style.zIndex)
-        .sort((a, b) => Number(a.style.zIndex) - Number(b.style.zIndex));
-      let z = PANEL_Z_BASE + 1;
-      for (const el of promoted) {
-        el.style.zIndex = String(z);
-        z += 1;
-      }
-      this._panelZCounter = z;
-    }
-    panelEl.style.zIndex = String(this._panelZCounter);
-  }
-
-  _makePanelDraggable(panelId, panelEl, handleEl) {
-    // Z-order promotion: bring clicked panel to front of the stacking context
-    this.listen(panelEl, 'pointerdown', () => {
-      this._promotePanelZ(panelEl);
-    });
-
-    this.listen(handleEl, 'pointerdown', (event) => {
-      if (event.button !== 0) return;
-      if (event.target.closest('.panel-collapse-btn')) return;
-      if (
-        event.target.closest(
-          'input, select, option, button:not(.panel-collapse-btn)',
-        )
-      )
-        return;
-
-      this._cancelDrag?.();
-      event.preventDefault();
-      const rect = panelEl.getBoundingClientRect();
-      const startX = event.clientX;
-      const startY = event.clientY;
-      const offsetX = startX - rect.left;
-      const offsetY = startY - rect.top;
-
-      panelEl.style.left = `${rect.left}px`;
-      panelEl.style.top = `${rect.top}px`;
-      panelEl.style.right = 'auto';
-      panelEl.style.bottom = 'auto';
-      panelEl.classList.add('panel-dragging');
-      this._promotePanelZ(panelEl);
-
-      const onMove = (moveEvent) => {
-        const nextLeftRaw = moveEvent.clientX - offsetX;
-        const nextTopRaw = moveEvent.clientY - offsetY;
-        const maxLeft = Math.max(6, window.innerWidth - rect.width - 6);
-        const maxTop = Math.max(6, window.innerHeight - rect.height - 6);
-        const nextLeft = Math.max(6, Math.min(maxLeft, nextLeftRaw));
-        const nextTop = Math.max(6, Math.min(maxTop, nextTopRaw));
-        panelEl.style.left = `${nextLeft}px`;
-        panelEl.style.top = `${nextTop}px`;
-        if (panelId === 'pp-toggles') {
-          this._layoutRightPanels();
-        }
-        if (panelId === 'cctv-panel') {
-          this._syncCctvPanelViewport();
-        }
-      };
-
-      const cancel = () => {
-        panelEl.classList.remove('panel-dragging');
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
-        window.removeEventListener('pointercancel', onUp);
-        this._cancelDrag = null;
-      };
-      const onUp = () => {
-        cancel();
-        if (panelId === 'pp-toggles') {
-          this._pinPanelToRight(panelEl);
-        }
-        this._savePanelPosition(panelId, panelEl);
-        if (panelId === 'cctv-panel') {
-          this._syncCctvPanelViewport();
-        }
-      };
-
-      this._cancelDrag = cancel;
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onUp);
-      window.addEventListener('pointercancel', onUp);
-    });
-  }
-  destroy() {
-    if (this.destroyed) return;
-    this.destroyed = true;
-    this._cancelDrag?.();
-    for (const remove of this.removers.splice(0)) remove();
-    this._draggableResizeObserver?.disconnect();
-    this._draggableResizeObserver = null;
   }
 }

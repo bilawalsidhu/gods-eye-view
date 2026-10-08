@@ -60,8 +60,6 @@ export class PanelChrome {
     this._cockpitContextCollapsedForDataPanel = false;
     this._panelPosition = new PanelPositionControls({
       syncPanelCollapseButton: (panel) => this._syncPanelCollapseButton(panel),
-      layoutRightPanels: () => this._layoutRightPanels(),
-      syncCctvPanelViewport: () => this._syncCctvPanelViewport(),
       showToast: (message) => this._showToast(message),
     });
     this._panelLayout = new PanelLayoutController({
@@ -615,7 +613,6 @@ export class PanelChrome {
     if (this._disposed) return;
     this._disposed = true;
     this._lifetime.destroy();
-    this._panelPosition.destroy();
     this._panelLayout.destroy();
     for (const control of this._panelDisclosureControls || [])
       control.destroy();

@@ -72,37 +72,6 @@
   text-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
 }
 
-.panel-drag-handle {
-  cursor: grab;
-  user-select: none;
-}
-
-.panel-drag-handle:active {
-  cursor: grabbing;
-}
-
-.panel-drag-handle.compact {
-  margin-left: auto;
-  margin-bottom: 2px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 1.4px;
-  color: var(--text-dim);
-}
-
-.panel-drag-handle.compact:hover {
-  color: var(--text-primary);
-  border-color: var(--glass-border-hover);
-}
-
-.panel-dragging {
-  opacity: 0.96;
-}
-
 .panel-title {
   font-family: var(--font-mono);
   font-size: 9px;
