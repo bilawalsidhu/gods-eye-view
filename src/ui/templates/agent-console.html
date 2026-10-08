@@ -1,0 +1,30 @@
+  <!-- GEV COMMAND — the typed transport for the same agent voice drives. The
+       chip opens a non-modal dialog so the globe stays interactive while a
+       command runs; src/agent/agentConsole.js owns everything inside it. -->
+  <button id="agent-console-chip" type="button" hidden aria-haspopup="dialog" aria-controls="agent-console" aria-expanded="false" title="Type commands to the GEV agent">
+    <span class="agent-console-chip-caret" aria-hidden="true">&gt;_</span>
+    <span>GEV COMMAND</span>
+  </button>
+  <dialog id="agent-console" data-panel-surface aria-labelledby="agent-console-title">
+    <header data-panel-header>
+      <h2 id="agent-console-title" class="panel-title panel-surface-title">GEV COMMAND</h2>
+      <div class="agent-console-selects">
+        <label class="agent-console-field">
+          <span>PROVIDER</span>
+          <select id="agent-provider" class="panel-surface-control"></select>
+        </label>
+        <label class="agent-console-field">
+          <span>MODEL</span>
+          <select id="agent-model" class="panel-surface-control"></select>
+        </label>
+        <span id="agent-cost" class="agent-console-cost" title="Estimated cost per command">n/a</span>
+      </div>
+      <button id="agent-console-close" class="panel-surface-control agent-console-close" type="button" aria-label="Close GEV Command">×</button>
+    </header>
+    <ol id="agent-transcript" data-panel-body data-rail-scroller aria-label="Command transcript"></ol>
+    <form id="agent-form" class="agent-console-form">
+      <input id="agent-input" class="panel-surface-control" type="text" autocomplete="off" spellcheck="false" placeholder="zoom out to full planet view" aria-label="Typed command" />
+      <button id="agent-send" class="panel-surface-control" type="submit">SEND</button>
+    </form>
+    <p id="agent-status" class="agent-console-status" role="status" aria-live="polite">READY</p>
+  </dialog>
