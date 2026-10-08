@@ -246,6 +246,52 @@ test('an explicit lower scale remains the requested scale after a hardware clamp
   assert.equal(canvas.height, 648);
 });
 
+test('safe supersampling is preserved and only capped when hardware requires it', () => {
+  const canvas = {
+    clientWidth: 1000,
+    clientHeight: 700,
+    width: 1000,
+    height: 700,
+  };
+  const widget = {
+    _canvas: canvas,
+    _useBrowserRecommendedResolution: true,
+    _resolutionScale: 1.5,
+    resize() {
+      this._canvas.width = Math.floor(
+        this._canvas.clientWidth * this._resolutionScale,
+      );
+      this._canvas.height = Math.floor(
+        this._canvas.clientHeight * this._resolutionScale,
+      );
+    },
+  };
+  const viewer = {
+    cesiumWidget: widget,
+    scene: {
+      context: { maximumTextureSize: 2048 },
+      preRender: { addEventListener() {} },
+    },
+    canvas,
+  };
+
+  applyTextureSizeWorkaround(viewer);
+  assert.equal(widget._resolutionScale, 1.5);
+  assert.equal(canvas.width, 1500);
+
+  canvas.clientWidth = 1600;
+  canvas.clientHeight = 900;
+  widget.resize();
+  assert.equal(widget._resolutionScale, 1.28);
+  assert.equal(canvas.width, 2048);
+
+  canvas.clientWidth = 1000;
+  canvas.clientHeight = 700;
+  widget.resize();
+  assert.equal(widget._resolutionScale, 1.5);
+  assert.equal(canvas.width, 1500);
+});
+
 test('applyTextureSizeWorkaround handles null or incomplete viewer instances without error', () => {
   assert.doesNotThrow(() => applyTextureSizeWorkaround(null));
   assert.doesNotThrow(() => applyTextureSizeWorkaround({}));
