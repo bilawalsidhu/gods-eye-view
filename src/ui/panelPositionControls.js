@@ -79,9 +79,8 @@ export class PanelPositionControls {
       this._restorePanelPosition(spec.id, spec.panel);
       this._makePanelDraggable(spec.id, spec.panel, spec.handle);
     }
-    // Keep a positioned panel on-screen when its HEIGHT changes after restore — it expands to its
-    // full row set a frame or two later, so the restore-time clamp used a stale (shorter) height and
-    // the panel could still hang off the bottom (audit U2). Re-clamp on every size change.
+    // A restored panel grows a frame or two later, so the restore-time clamp
+    // is stale: re-clamp on every size change.
     if (this._ppToggles && typeof ResizeObserver !== 'undefined') {
       this._draggableResizeObserver = new ResizeObserver(() =>
         this._reclampDraggablePanels(),
@@ -159,8 +158,7 @@ export class PanelPositionControls {
       const pos = JSON.parse(raw);
       if (!pos || typeof pos.left !== 'number' || typeof pos.top !== 'number')
         return;
-      // Clamp to the viewport: a position saved at one window size would otherwise land off-screen at
-      // another (audit U2 — observed a panel at x:-192). The drag handler clamps; restore must too.
+      // A position saved at another window size can land off-screen.
       const { left, top } = this._clampToViewport(
         Math.round(pos.left),
         Math.round(pos.top),

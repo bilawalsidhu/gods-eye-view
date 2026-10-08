@@ -31,10 +31,9 @@ export function sampledSurfaceHeight(scene, carto) {
 }
 
 /**
- * Ellipsoidal height (m) of the ground under the camera, or null. The globe
- * answers where shown; Google 3D hides it, so the rendered surface does
- * (roofs count: a building's height at most). A sample above the camera is
- * ignored: a raised ground would put the camera underground.
+ * Ellipsoidal height (m) of the ground under the camera, or null. Under
+ * Google 3D (globe hidden) the rendered surface counts, minus any roof above
+ * the camera.
  */
 export function groundUnderCamera(viewer) {
   const carto = viewer?.camera?.positionCartographic;
@@ -81,11 +80,9 @@ function groundHit(camera, point, ellipsoid, maxRange) {
 const BBOX_GRID = 5;
 
 /**
- * Visible [west, south, east, north] degrees, or null when fewer than four
- * rays hit. Only hits count, so a horizon cannot inflate the box to the world.
- * `groundHeight` raises the ellipsoid to the ground (rays to the bare
- * ellipsoid under Denver land kilometres too far out) and `maxRange` (m)
- * drops near-horizon hits.
+ * Visible [west, south, east, north] degrees from the rays that hit the
+ * ground, or null when fewer than four do. `groundHeight` raises the ellipsoid
+ * to the ground (Denver is 1,600 m up); `maxRange` (m) drops far hits.
  */
 export function visibleBbox(
   viewer,
@@ -158,10 +155,8 @@ export function cameraNadir(viewer) {
 }
 
 /**
- * Where coverage tiles are ranked from: halfway between the ground under the
- * camera and the ground at the centre of the screen, so a tilted view loads
- * what it looks at as well as what is near. The nadir when the centre ray
- * misses the ground within `maxRange`. Options as `visibleBbox`.
+ * Where coverage tiles are ranked from: halfway between the nadir and the
+ * screen centre's ground, or the nadir when that is out of `maxRange`.
  */
 export function viewFocus(
   viewer,

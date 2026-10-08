@@ -105,10 +105,8 @@ export class StreetLevelControls {
       this._setParams({ sinceDays: sinceDays() }),
     );
     this.listen(el.viewerClose, 'click', () => this.layer.closeViewer?.());
-    // EXPAND is the browser's own fullscreen: it handles Esc, focus and the
-    // rest of the page. iPhone Safari has no element fullscreen, so there the
-    // viewer opens as a top-layer popover over the page instead (Esc and the
-    // button close it). With neither, the button is not offered.
+    // EXPAND is the browser's fullscreen. iPhone Safari has no element
+    // fullscreen, so there it is a top-layer popover; with neither, no button.
     this._expandMode =
       typeof el.viewerWrap?.requestFullscreen === 'function'
         ? 'fullscreen'
@@ -195,9 +193,8 @@ export class StreetLevelControls {
 
   async _toggleEnabled() {
     const enabled = this.actions.isEnabled?.() === true;
-    // The pill is the only switch. A share link or tool can switch Mapillary
-    // off under a layer that is on; the pill then reads OFF, and switching on
-    // brings Mapillary back (and the layer, if it is off too).
+    // The pill is the only switch: it also brings back Mapillary that a link
+    // or tool switched off under a layer that is on.
     if (this._state?.providerOn === false) {
       this._setParams({ mapillary: true });
       if (enabled) return;
@@ -252,11 +249,7 @@ export class StreetLevelControls {
     this._syncExpanded();
   }
 
-  /**
-   * While expanded, leave when Clean View, recording or the cockpit starts:
-   * they hide every panel, and the photo would stay over the globe (and in a
-   * recording).
-   */
+  /** Clean View, recording and the cockpit hide every panel, so they end EXPAND too. */
   _watchPanelHidingModes(on) {
     const body = document.body;
     if (!on || !body) {

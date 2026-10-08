@@ -14,10 +14,7 @@ const DROP_LAYERS = ['image'];
 /** A z14 tile with its image layer is ~11 MB; anything past this is wrong. */
 export const TILE_MAX_BYTES = 48 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 60_000;
-/**
- * Upstream fetches at once; more wait their turn. A fetch every client has
- * left is cancelled, or never started, so the queue holds live tiles only.
- */
+/** Upstream fetches at once; more wait their turn. */
 export const TILE_UPSTREAM_CONCURRENCY = 6;
 /** Tiles change only when new imagery is processed. */
 export const TILE_TTL_MS = 24 * 60 * 60 * 1000;

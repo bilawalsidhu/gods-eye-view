@@ -66,10 +66,9 @@ gate for the feature you changed.
 > **CI does not cover this for you.** The workflow runs the setup policy
 > checks, the formatting and package-boundary checks, the unit suite and the
 > production build, plus a Windows onboarding job. It runs neither
-> `npm run test:track` nor any other `qa-*.mjs` gate — both need a live dev
-> server and a browser. The one exception is the hermetic Street Level fixture
-> gate (`street-level-browser` job). Include the applicable local run in your PR's validation
-> evidence.
+> `npm run test:track` nor any `qa-*.mjs` gate except the Street Level fixture
+> gate (`street-level-browser` job) — they need a live dev server and a
+> browser. Include the applicable local run in your PR's validation evidence.
 
 ## Share-link layer tokens
 

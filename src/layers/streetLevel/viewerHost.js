@@ -1,10 +1,6 @@
 import { freshStreet } from './state.js';
 
-/**
- * Owns the panel's viewer element and the photo viewer mounted in it (the
- * MapillaryJS adapter, or a stand-in). Its poses update `state.street` and
- * the marker; MapillaryJS loads on the first open.
- */
+/** The panel's photo viewer: its poses update `state.street` and the marker. */
 export function createViewerHost({ state, parts, adapter }) {
   /** Set once mounted, until `unmount`. */
   let unsubscribe = null;

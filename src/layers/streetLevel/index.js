@@ -218,11 +218,7 @@ export function createStreetLevelLayer({
       };
     },
 
-    /**
-     * The application's camera authority, the deferred `begin(noun)` /
-     * `reassert(generation)` pair: a photo claims the camera when opening
-     * starts and frames only if it still owns it once loaded.
-     */
+    /** A photo frames itself only if it still owns the camera once loaded. */
     attachNavigation(navigation) {
       parts.framing.attachNavigation(navigation);
     },

@@ -71,16 +71,14 @@
   proposed diagnosis in #927, and [kvnloo](https://github.com/kvnloo) for identifying
   the repair race. Windows/Claude Desktop Cowork confirmation remains outstanding.
 
-- Street Level: Mapillary street-level imagery modelled on the iD editor's
-  photo overlay (free client token, CC BY-SA 4.0 imagery). A docked right-rail
-  panel holds an ON/OFF pill, 360°/flat and captured-since filters, a legend
-  and an embedded viewer with full-screen EXPAND and FIT/FILL. Coverage lines
-  (below 60 km) and image cones drape on the terrain and Google 3D tiles;
+- Street Level: Mapillary street-level imagery (free client token, CC BY-SA
+  4.0). A right-rail panel holds an ON/OFF pill, 360°/flat and captured-since
+  filters, a legend and an embedded viewer with EXPAND and FIT/FILL. Coverage
+  lines (below 60 km) and image cones drape on terrain and Google 3D tiles;
   opening a photo frames it with one camera flight. Share links carry the
   switch, the filters and the panel's collapsed state. A server proxy adds the
-  token to coverage-tile requests, trims the tiles and caches them in memory
-  for 24 h; it refuses cross-site requests and upstream redirects, rate-limits
-  per IP and runs at most six Mapillary fetches at once. The panel reads
+  token to coverage tiles, trims and caches them for 24 h, refuses cross-site
+  requests and redirects, and limits load per IP and upstream. The panel reads
   KEY REQUIRED without a token and KEY REJECTED when Mapillary refuses it.
 
 - Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera

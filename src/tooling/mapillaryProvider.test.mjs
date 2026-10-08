@@ -45,7 +45,7 @@ const UNTRIMMED = tile([
   { name: 'image', payload: Buffer.alloc(4000, 1) },
 ]);
 
-/** Mount the plugin and return `call(route, url, method, headers)`. */
+/** Mount the plugin and return `call(route, url, method, headers, onResponse)`. */
 function install(mode = 'configureServer') {
   const routes = new Map();
   mapillaryProxy()[mode]({

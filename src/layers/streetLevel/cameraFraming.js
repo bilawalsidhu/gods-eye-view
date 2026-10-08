@@ -4,10 +4,8 @@ import { plausibleSurfaceHeight, sampledSurfaceHeight } from './view.js';
 /** Fly the globe camera once to frame a photo after it opens. */
 export function createCameraFraming({ state }) {
   /**
-   * The application's camera authority (`attachNavigation`): `begin(noun)`
-   * takes a deferred ticket (a generation, or false when refused) that
-   * `reassert(generation)` honours, releasing tracking, only if nothing newer
-   * took the camera. Without it, framing flies directly.
+   * The application's camera authority: `reassert(begin())` succeeds only if
+   * nothing newer took the camera. Without it, framing flies directly.
    */
   let navigation = null;
   /** Our framing flight while it is current; Cesium calls `cancel` when another flight starts. */

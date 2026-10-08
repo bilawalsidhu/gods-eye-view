@@ -3028,9 +3028,8 @@ Street Level is a docked, collapsible right-rail panel (`#street-level-panel`,
 layer token `0`, option owner `street-level`, panel `ui` token `t`) that starts
 collapsed. It opens itself only when the user, voice or a tool switches the
 layer on or a photo opens, never on a restore, and those opens are not stored.
-Like the iD editor's photo overlay it shows Mapillary only: 360°/flat and
-captured-since filters (relative days, so a link keeps its meaning), one
-embedded viewer and an on-globe credit while the layer is on. Share options:
+It has 360°/flat and captured-since filters (relative days, so a link keeps
+its meaning), one embedded viewer and an on-globe credit while the layer is on. Share options:
 `m` (Mapillary on/off; off draws nothing), `p` (`a`/`p`/`f` panoramas), `s`
 (since, days). The header pill is the only layer switch.
 
@@ -3047,9 +3046,8 @@ pauses them for its Retry-After.
 The server proxy (`server/providers/mapillary.js`) adds the token to
 coverage-tile requests (the browser holds it too, for MapillaryJS and the Graph
 API), serves only z11–14 coverage, refuses upstream redirects, strips the
-unused `image` layer, coalesces concurrent requests, runs at most six Mapillary
-fetches at once (a fetch every client has left is cancelled, or never started)
-and keeps tiles in a 24 h memory cache.
+unused `image` layer, shares one fetch per tile, runs at most six at once
+(cancelling those every client has left) and keeps tiles in memory for 24 h.
 
 MapillaryJS loads on the first photo. Opening one frames it with a single
 camera flight through the application's deferred navigation (`begin` /
@@ -3064,12 +3062,10 @@ Mapillary back on. At phone width the viewer height comes from the rail band
 so the whole photo fits.
 
 Browser gates: `npm run qa:street-level -- --url <server>` runs against real
-Mapillary with a token; `npm run qa:street-level:fixtures` answers every
-Mapillary request from fixtures (`providers/mapillary/coverageFixture.mjs`,
-`scripts/fixtures/street-level/`); its server (default `:4173`) still needs a
-`MAPILLARY_CLIENT_TOKEN`, and any value will do. CI runs the fixture gate with
-`--strict` against a production build served by `vite preview` with a dummy
-token.
+Mapillary; `npm run qa:street-level:fixtures` answers every Mapillary request
+from fixtures (`providers/mapillary/coverageFixture.mjs`,
+`scripts/fixtures/street-level/`), but its server (default `:4173`) still needs
+some `MAPILLARY_CLIENT_TOKEN`. CI runs it `--strict` against `vite preview`.
 
 Directions is a keyless front end to the routing the voice agent already
 uses. Its row chips are the whole interface: DRIVE / WALK / BIKE pick the
