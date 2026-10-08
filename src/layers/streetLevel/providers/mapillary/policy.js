@@ -59,4 +59,5 @@ export function mapillaryImageUrl(imageId) {
 }
 
 /** Fields requested for a sequence's images. */
-export const SEQUENCE_IMAGE_FIELDS = 'id,captured_at,compass_angle,geometry,is_pano';
+export const SEQUENCE_IMAGE_FIELDS =
+  'id,captured_at,compass_angle,geometry,is_pano';

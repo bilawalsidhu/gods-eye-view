@@ -5,10 +5,7 @@ import { createCoverage, ZOOM_IN_HINT } from './coverage.js';
 import { freshCoverage } from '../../state.js';
 import { encodeCoverageTile } from './coverageFixture.mjs';
 import { rayCamera } from '../../../../testSupport/streetLevelFakes.mjs';
-import {
-  COVERAGE_MAX_SEQUENCES,
-  COVERAGE_MAX_TILES,
-} from './policy.js';
+import { COVERAGE_MAX_SEQUENCES, COVERAGE_MAX_TILES } from './policy.js';
 import { lonToTileX, latToTileY, tileBounds } from '../../tileMath.js';
 
 const RAD = Math.PI / 180;
@@ -473,11 +470,14 @@ test('a tile that lands with the selected sequence draws the highlight again, on
   source.calls[0].resolve(bytes);
   await settle();
   assert.ok(state.coverage.highlight, 'highlighted once its tile is in');
-  assert.equal([...viewer.scene.groundPrimitives.items].at(-1), state.coverage.highlight);
+  assert.equal(
+    [...viewer.scene.groundPrimitives.items].at(-1),
+    state.coverage.highlight,
+  );
   coverage.clear();
 });
 
-test('a zoom change drops the old zoom\'s lines', async () => {
+test("a zoom change drops the old zoom's lines", async () => {
   const { viewer, source, state, coverage, bytes } = setup();
   coverage.refresh();
   source.calls[0].resolve(bytes);

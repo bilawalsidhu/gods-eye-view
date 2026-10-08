@@ -284,7 +284,11 @@ const findPick = (page, prefix, { box = null, step = 3 } = {}) =>
         for (let px = x; px < x + w; px += stride) {
           const id = scene.pick({ x: px, y: py })?.id;
           if (typeof id === 'string' && id.startsWith(want))
-            return { x: rect.left + px, y: rect.top + py, local: { x: px, y: py } };
+            return {
+              x: rect.left + px,
+              y: rect.top + py,
+              local: { x: px, y: py },
+            };
         }
       return null;
     },

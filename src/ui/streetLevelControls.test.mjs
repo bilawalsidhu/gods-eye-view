@@ -462,7 +462,11 @@ test('a layer that is on with Mapillary switched off reads OFF, and the pill bri
       dom.root.querySelector('#sl-coverage-meta').textContent,
       /Mapillary is off in this view/,
     );
-    assert.equal(dom.root.querySelector('#sl-legend').hidden, true, 'no legend');
+    assert.equal(
+      dom.root.querySelector('#sl-legend').hidden,
+      true,
+      'no legend',
+    );
     status.click();
     await settle();
     assert.deepEqual(calls.setParams, [

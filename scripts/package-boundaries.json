@@ -1198,7 +1198,6 @@
       "src/layers/streetLevel/selection.js",
       "src/layers/streetLevel/providers/mapillary/viewer.js",
       "src/layers/streetLevel/providers/mapillary/source.js",
-      "src/layers/streetLevel/providers/mapillary/nearest.js",
       "scripts/qa-street-level.mjs"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "mapillary-js"]
@@ -2111,7 +2110,6 @@
       "src/layers/streetLevel/selection.js",
       "src/layers/streetLevel/providers/mapillary/viewer.js",
       "src/layers/streetLevel/providers/mapillary/source.js",
-      "src/layers/streetLevel/providers/mapillary/nearest.js",
       "src/app/layers/streetLevel.js",
       "src/layers/alpr/tileRecords.js",
       "src/sources/capability.js",
@@ -2626,7 +2624,6 @@
       "src/layers/streetLevel/selection.js",
       "src/layers/streetLevel/providers/mapillary/viewer.js",
       "src/layers/streetLevel/providers/mapillary/source.js",
-      "src/layers/streetLevel/providers/mapillary/nearest.js",
       "src/app/layers/streetLevel.js",
       "src/layers/alpr/tileRecords.js",
       "src/sources/capability.js",
