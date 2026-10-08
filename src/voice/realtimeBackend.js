@@ -56,6 +56,8 @@ export function createRealtimeBackend({
           data?.session?.model ||
           null,
         tier: response.headers?.get?.('X-GEV-Voice-Tier') || null,
+        transcribeModel:
+          response.headers?.get?.('X-GEV-Voice-Transcribe-Model') || null,
         expiresAt,
       };
     },
