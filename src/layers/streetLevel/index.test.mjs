@@ -132,17 +132,6 @@ function deferred() {
 const posingViewer = () =>
   fakePhotoViewer({ pose: { position: { lon: -121.49, lat: 38.58 } } });
 
-/** Nearest-image lookups that answer when the test says, with their signals. */
-function slowLookups() {
-  const lookups = [];
-  const nearestImages = (query, { signal } = {}) => {
-    const answer = deferred();
-    lookups.push({ query, signal, answer });
-    return answer.promise.then((id) => [{ id, is_pano: false }]);
-  };
-  return { lookups, source: fakeMapillarySource({ nearestImages }) };
-}
-
 test('the CC BY-SA credit shows while Mapillary is on and goes with it', async (t) => {
   const { layer, viewer } = await startLayer(t);
   const shown = () => viewer.credits.map((credit) => credit.html);
@@ -217,41 +206,6 @@ test('switching Mapillary off clears coverage and closes the image it shows', as
   assert.equal(layer.getUIState().providerOn, false);
 });
 
-test('openNearest without the panel reports it instead of loading forever', async (t) => {
-  const source = fakeMapillarySource({
-    nearestImages: async () => [{ id: 1 }],
-  });
-  const { layer, photoViewer } = await startLayer(t, { source });
-  assert.equal(await layer.openNearest({ lat: 38.58, lon: -121.49 }), false);
-  const { street } = layer.getUIState();
-  assert.equal(street.loading, false);
-  assert.match(street.error, /Open the Street Level panel/);
-  assert.equal(photoViewer.calls.mount, 0);
-});
-
-test('openNearest opens nothing once the layer or its switch went off during the lookup', async (t) => {
-  for (const off of [
-    (layer) => layer.disable(),
-    (layer) => layer.setParams({ mapillary: false }),
-  ]) {
-    const { lookups, source } = slowLookups();
-    const { layer, photoViewer } = await startLayer(t, { source });
-    layer.attachViewerHost({});
-    const opening = layer.openNearest({ lat: 38.58, lon: -121.49 });
-    off(layer);
-    lookups[0].answer.resolve('img1');
-    assert.equal(await opening, false);
-    assert.equal(lookups[0].signal.aborted, true, 'the request was aborted');
-    assert.equal(photoViewer.calls.mount, 0, 'no viewer was stood up');
-    const { street } = layer.getUIState();
-    assert.deepEqual(
-      [street.open, street.loading, street.error],
-      [false, false, null],
-    );
-    layer.destroy();
-  }
-});
-
 test('a sequence error is withdrawn with the sequence, never the viewer’s own', async (t) => {
   const source = fakeMapillarySource({
     getSequenceImages: async () => {
@@ -290,65 +244,6 @@ test('closing the photo, switching the layer off or destroying it stops the fram
   await layer.openImage('img3');
   layer.destroy();
   assert.equal(viewer.flights.cancelled, 3, 'destroyed');
-});
-
-test('an older nearest lookup that answers late cannot replace a newer one', async (t) => {
-  const { lookups, source } = slowLookups();
-  const { layer, photoViewer } = await startLayer(t, { source });
-  layer.attachViewerHost({});
-  const older = layer.openNearest({ lat: 38.58, lon: -121.49 });
-  const newer = layer.openNearest({ lat: 38.59, lon: -121.48 });
-  lookups[1].answer.resolve('newer');
-  assert.equal(await newer, true);
-  lookups[0].answer.resolve('older');
-  assert.equal(await older, false);
-  assert.deepEqual(photoViewer.calls.open, ['newer']);
-  assert.equal(lookups[0].signal?.aborted, true, 'its request was aborted');
-  assert.equal(lookups[1].signal?.aborted, false);
-});
-
-test('an image picked during a nearest lookup wins over its late answer', async (t) => {
-  const { lookups, source } = slowLookups();
-  const { layer, photoViewer } = await startLayer(t, { source });
-  layer.attachViewerHost({});
-  const lookup = layer.openNearest({ lat: 38.58, lon: -121.49 });
-  // A cone click opens its image directly.
-  assert.equal(await layer.openImage('picked'), true);
-  lookups[0].answer.resolve('nearest');
-  assert.equal(await lookup, false);
-  assert.deepEqual(photoViewer.calls.open, ['picked']);
-  assert.equal(lookups[0].signal?.aborted, true);
-});
-
-test('closing the viewer or switching the layer off retires a nearest lookup', async (t) => {
-  const { lookups, source } = slowLookups();
-  const { layer, viewer, photoViewer } = await startLayer(t, { source });
-  layer.attachViewerHost({});
-
-  const closed = layer.openNearest({ lat: 38.58, lon: -121.49 });
-  layer.closeViewer();
-  // The aborted fetch rejects, as fetch does; that is not the user's error.
-  lookups[0].answer.reject(new DOMException('aborted', 'AbortError'));
-  assert.equal(await closed, false);
-  let { street } = layer.getUIState();
-  assert.deepEqual(
-    [street.open, street.loading, street.error],
-    [false, false, null],
-  );
-  assert.equal(lookups[0].signal?.aborted, true, 'closing aborts the request');
-
-  const disabled = layer.openNearest({ lat: 38.58, lon: -121.49 });
-  layer.disable();
-  layer.enable(viewer);
-  lookups[1].answer.resolve('img1');
-  assert.equal(await disabled, false, 'nor does it open once back on');
-  assert.deepEqual(photoViewer.calls.open, []);
-  ({ street } = layer.getUIState());
-  assert.deepEqual(
-    [street.open, street.loading, street.error],
-    [false, false, null],
-  );
-  assert.equal(lookups[1].signal?.aborted, true, 'layer off aborts it too');
 });
 
 test('setParams takes "any date" (0 days) and the switch over the current values (share-link defaults)', async (t) => {

@@ -9,7 +9,6 @@ export const MAPILLARY_SOURCE_METHODS = Object.freeze([
   'getStatus',
   'getTile',
   'getSequenceImages',
-  'nearestImages',
 ]);
 
 /** Stable id prefixes for picked primitives; every one starts with `mly:`. */
@@ -48,11 +47,6 @@ export const SEQUENCE_IMAGES_LIMIT = 2000;
 export const IMAGE_CONE_SIZE_PX = 26;
 export const IMAGE_CONE_MIN_SPACING_M = 3;
 
-/** Nearest-image search radius in metres (the graph API caps it at 50 m). */
-export const NEAREST_RADIUS_M = 50;
-/** Images asked for in a nearest-image search. */
-export const NEAREST_LIMIT = 8;
-
 /** On-globe credit: Mapillary imagery is CC BY-SA 4.0 and needs attribution. */
 export const MAPILLARY_CREDIT_HTML =
   'Street Level: imagery © <a href="https://www.mapillary.com" target="_blank" rel="noopener">Mapillary</a> contributors, CC BY-SA 4.0';
@@ -64,8 +58,5 @@ export function mapillaryImageUrl(imageId) {
   return `https://www.mapillary.com/app/?pKey=${encodeURIComponent(id)}&focus=photo`;
 }
 
-/** Fields requested from the graph API. */
-export const IMAGE_FIELDS =
-  'id,captured_at,compass_angle,computed_compass_angle,geometry,computed_geometry,computed_altitude,is_pano,sequence,thumb_256_url,creator,quality_score';
-export const SEQUENCE_IMAGE_FIELDS =
-  'id,captured_at,compass_angle,geometry,is_pano,computed_altitude';
+/** Fields requested for a sequence's images. */
+export const SEQUENCE_IMAGE_FIELDS = 'id,captured_at,compass_angle,geometry,is_pano';

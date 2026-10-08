@@ -78,8 +78,6 @@ export function createViewerHost({ state, parts, adapter }) {
   async function open(imageId) {
     if (!imageId) return false;
     if (!state.street.host) {
-      // A nearest-image lookup may have set it; nothing is loading now.
-      state.street.loading = false;
       state.street.error = 'Open the Street Level panel to view imagery';
       notify();
       return false;

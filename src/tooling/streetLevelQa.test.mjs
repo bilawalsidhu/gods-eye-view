@@ -4,7 +4,6 @@ import { fixtureTile } from '../../scripts/qa-street-level.mjs';
 import {
   answerMapillaryRequest,
   describeCall,
-  metresApart,
   PHOTO_LINE,
   PHOTO_SEQUENCE_ID,
   photoImages,
@@ -73,16 +72,14 @@ test('the photo sequence runs through the parked view, clipped to each tile it c
   );
 });
 
-test('the fixture photos: one sequence, 360° and flat, close enough for any nearest lookup on the line', () => {
+test('the fixture photos: one sequence, 360° and flat, spaced past the cone thinning', () => {
   const images = photoImages(Date.UTC(2026, 9, 1));
   assert.ok(images.length >= 3);
   assert.ok(images.some((image) => image.isPano));
   assert.ok(images.some((image) => !image.isPano));
   for (let i = 1; i < images.length; i++) {
-    const gap = metresApart(images[i - 1], images[i]);
-    // Above the cones' 3 m thinning, and at most 50 m apart: any point on
-    // the line has a photo within the Graph API's 50 m radius.
-    assert.ok(gap > 3 && gap < 50, `gap ${gap}`);
+    const gap = (images[i].lat - images[i - 1].lat) * 110_540;
+    assert.ok(gap > 3, `gap ${gap}`);
   }
   assert.equal(new Set(images.map((image) => image.id)).size, images.length);
 });
@@ -97,35 +94,8 @@ const answer = (url, method = 'GET') => {
   };
 };
 
-test('the Graph fixtures answer the provider’s nearest and sequence lookups', () => {
+test('the Graph fixtures answer the provider’s sequence lookups', () => {
   const images = photoImages();
-  const middle = images[Math.floor(images.length / 2)];
-  const near = answer(
-    graph('images', {
-      lat: String(middle.lat + 0.0001),
-      lng: String(middle.lon),
-      radius: '50',
-      limit: '8',
-      fields: 'id,geometry,is_pano,captured_at,sequence',
-    }),
-  );
-  assert.equal(near.status, 200);
-  assert.ok(near.json.data.length > 0);
-  assert.ok(near.json.data.some((record) => record.id === middle.id));
-  for (const record of near.json.data) {
-    assert.deepEqual(Object.keys(record).sort(), [
-      'captured_at',
-      'geometry',
-      'id',
-      'is_pano',
-      'sequence',
-    ]);
-    assert.equal(record.sequence, PHOTO_SEQUENCE_ID);
-  }
-  const far = answer(
-    graph('images', { lat: '0', lng: '0', radius: '50', fields: 'id' }),
-  );
-  assert.deepEqual(far.json.data, [], 'nothing outside the radius');
   const sequence = answer(
     graph('images', {
       sequence_ids: PHOTO_SEQUENCE_ID,

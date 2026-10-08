@@ -6,7 +6,6 @@ import {
   createHorizonCull,
   groundUnderCamera,
   metresBetween,
-  viewCentre,
   viewFocus,
   visibleBbox,
 } from './view.js';
@@ -89,16 +88,11 @@ test('a view across the date line is a narrow box with west > east', () => {
   const bbox = visibleBbox(viewer);
   assert.ok(bbox[0] > 177 && bbox[0] < 179, `west ${bbox[0]}`);
   assert.ok(bbox[2] < -177 && bbox[2] > -179, `east ${bbox[2]}`);
-  const centre = viewCentre(viewer);
-  assert.ok(Math.abs(Math.abs(centre.lon) - 180) < 0.5, `centre ${centre.lon}`);
 });
 
 test('an ordinary view keeps west < east', () => {
   const bbox = visibleBbox(gridViewer([10, 11, 12], [50, 51]));
   assert.ok(bbox[0] < bbox[2]);
-  assert.ok(
-    Math.abs(viewCentre(gridViewer([10, 11, 12], [50, 51])).lon - 11) < 1e-6,
-  );
 });
 
 /** A pinhole viewer `agl` m above ground `ground` m up, looking north. */

@@ -153,20 +153,6 @@ export function visibleBbox(
   ];
 }
 
-/** Centre of the visible ground, or the camera's own footprint. */
-export function viewCentre(viewer) {
-  if (!viewer) return null;
-  const bbox = visibleBbox(viewer);
-  if (bbox) {
-    // Across the date line (west > east) the middle is on the far side of 0°.
-    const span = bbox[2] - bbox[0] + (bbox[0] > bbox[2] ? 360 : 0);
-    let lon = bbox[0] + span / 2;
-    if (lon > 180) lon -= 360;
-    return { lat: (bbox[1] + bbox[3]) / 2, lon };
-  }
-  return cameraNadir(viewer);
-}
-
 /** The point on the ground under the camera, as {lon, lat} degrees. */
 export function cameraNadir(viewer) {
   const carto = viewer?.camera?.positionCartographic;

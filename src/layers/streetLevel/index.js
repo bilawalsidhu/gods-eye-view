@@ -1,22 +1,19 @@
-import { createState, isActive } from './state.js';
+import { createState } from './state.js';
 import { createMarker } from './marker.js';
 import { createCameraFraming } from './cameraFraming.js';
 import { createCredit } from './credits.js';
 import { createSelection } from './selection.js';
 import { createViewerHost } from './viewerHost.js';
-import { normalizeFilter, resolveFilter, sameFilter } from './filter.js';
-import { viewCentre } from './view.js';
+import { normalizeFilter, sameFilter } from './filter.js';
 import { COLORS, STREET_LEVEL_LAYER_ID } from './policy.js';
 import { createCoverage } from './providers/mapillary/coverage.js';
 import { createSequences } from './providers/mapillary/sequences.js';
 import { createMapillaryViewer } from './providers/mapillary/viewer.js';
-import { nearestImageId } from './providers/mapillary/nearest.js';
 import {
   COLORS as MAPILLARY_COLORS,
   MAPILLARY_CREDIT_HTML,
   MAPILLARY_KEY_ID,
   MAPILLARY_SOURCE_METHODS,
-  NEAREST_RADIUS_M,
 } from './providers/mapillary/policy.js';
 
 export { STREET_LEVEL_LAYER_ID } from './policy.js';
@@ -124,7 +121,6 @@ export function createStreetLevelLayer({
 
   /** Close the photo, clear lines and cones, forget refusals. */
   function stopDrawing() {
-    abortNearest();
     parts.viewerHost.unmount();
     parts.coverage.detach();
     parts.coverage.clear();
@@ -145,16 +141,7 @@ export function createStreetLevelLayer({
     notify();
   }
 
-  /** The nearest-image lookup in flight; any newer user action aborts it. */
-  let nearestLookup = null;
-
-  function abortNearest() {
-    nearestLookup?.abort();
-    nearestLookup = null;
-  }
-
   function openImage(imageId) {
-    abortNearest();
     return parts.viewerHost.open(imageId);
   }
 
@@ -319,44 +306,8 @@ export function createStreetLevelLayer({
       parts.viewerHost.attach(element);
     },
     openImage,
-    /** Open the nearest image around a point (default: the view centre). */
-    async openNearest(point) {
-      if (!isActive(state)) return false;
-      const view = point || viewCentre(state.viewer);
-      if (!Number.isFinite(view?.lat) || !Number.isFinite(view?.lon))
-        return false;
-      abortNearest();
-      const lookup = new AbortController();
-      nearestLookup = lookup;
-      state.street.loading = true;
-      state.street.error = null;
-      notify();
-      let imageId = null;
-      let failure = null;
-      try {
-        imageId = await nearestImageId(
-          source,
-          { lat: view.lat, lon: view.lon },
-          resolveFilter(state.filter),
-          { signal: lookup.signal },
-        );
-      } catch (error) {
-        failure = error;
-      }
-      // Overtaken, closed or switched off: whatever did that owns the panel.
-      if (lookup.signal.aborted) return false;
-      nearestLookup = null;
-      if (imageId) return openImage(imageId);
-      state.street.error =
-        failure?.message ||
-        `No street-level imagery within ${NEAREST_RADIUS_M} m of the view centre`;
-      state.street.loading = false;
-      notify();
-      return false;
-    },
     /** Close the image and deselect its sequence on the map. */
     closeViewer() {
-      abortNearest();
       parts.viewerHost.close();
       parts.sequences.clearSelection();
     },

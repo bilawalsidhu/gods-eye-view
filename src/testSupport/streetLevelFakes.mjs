@@ -18,7 +18,6 @@ export function fakeMapillarySource(overrides = {}) {
       return new Uint8Array(0);
     },
     getSequenceImages: async () => [],
-    nearestImages: async () => [],
     ...overrides,
   };
 }

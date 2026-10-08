@@ -264,6 +264,35 @@ async function assertKeyRequired(page) {
   assert.match(shown.hint, /MAPILLARY_CLIENT_TOKEN/, 'names the key to add');
 }
 
+/**
+ * Client coordinates of the first thing drawn whose pick id starts with
+ * `prefix`, scanning `box` ({x, y, w, h} in canvas pixels; default: a row
+ * across the middle) every `step` px; null when nothing matches.
+ */
+const findPick = (page, prefix, { box = null, step = 3 } = {}) =>
+  page.evaluate(
+    (want, area, stride) => {
+      const { scene } = window.__godsEyeView.viewer;
+      const rect = scene.canvas.getBoundingClientRect();
+      const { x, y, w, h } = area || {
+        x: 0,
+        y: Math.round(rect.height / 2),
+        w: rect.width,
+        h: 1,
+      };
+      for (let py = y; py < y + h; py += stride)
+        for (let px = x; px < x + w; px += stride) {
+          const id = scene.pick({ x: px, y: py })?.id;
+          if (typeof id === 'string' && id.startsWith(want))
+            return { x: rect.left + px, y: rect.top + py, local: { x: px, y: py } };
+        }
+      return null;
+    },
+    prefix,
+    box,
+    step,
+  );
+
 /** Park the camera over the photo line; a late startup flight can move it. */
 async function park(page) {
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -519,14 +548,30 @@ async function main() {
       await park(page);
       await waitForCoverage(page);
       await step(
-        'the viewer loads and the nearest photo opens with a caption',
+        'a line selects its sequence, and a cone opens its photo with a caption',
         async () => {
-          await page.evaluate(() => {
-            // Fire and forget: the open can outlive one CDP call.
-            void window.__godsEyeView.dataManager.layers
-              .get('street-level')
-              .module.openNearest();
+          // Fixtures answer lookups for the photo sequence only.
+          const line = await findPick(
+            page,
+            fixtures ? `mly:seq:${PHOTO_SEQUENCE_ID}` : 'mly:seq:',
+          );
+          assert.ok(line, 'a sequence line across the middle of the view');
+          await page.mouse.click(line.x, line.y);
+          await uiUntil(
+            page,
+            (u) => u.sequence.selectedId && !u.sequence.loading,
+          );
+          const cone = await findPick(page, 'mly:img:', {
+            box: {
+              x: Math.max(0, line.local.x - 150),
+              y: Math.max(0, line.local.y - 150),
+              w: 300,
+              h: 300,
+            },
+            step: 8,
           });
+          assert.ok(cone, 'an image cone near the selected line');
+          await page.mouse.click(cone.x, cone.y);
           await uiUntil(
             page,
             (u) => (u.street.imageId && !u.street.loading) || u.street.error,
