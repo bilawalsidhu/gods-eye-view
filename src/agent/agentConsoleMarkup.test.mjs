@@ -137,13 +137,19 @@ test('the console overrides the dialog insets its UA rules would centre it with'
   assert.match(css, /#agent-console \{[^}]*?margin:\s*0/s);
 });
 
-test('the console window is opaque, and its header reads as a drag handle', () => {
-  // It sits over the HUD readouts, so the shared translucent surface would
-  // leave transcript text competing with coordinates underneath.
-  assert.match(
-    css,
-    /#agent-console \{[^}]*?background:\s*\n?\s*linear-gradient/s,
+test('the console keeps the shared glass surface, and reads as a drag handle', () => {
+  // It sits OVER the HUD readouts rather than beside them, so what is behind
+  // it is blurred rather than hidden: the surface keeps its shared --glass-bg
+  // translucency, and the coordinates underneath stop competing with
+  // transcript text.
+  const consoleBlock = /#agent-console \{([^}]*)\}/s.exec(css)[1];
+  assert.doesNotMatch(
+    consoleBlock,
+    /background:/,
+    'the console overrides the shared translucent surface',
   );
+  assert.match(consoleBlock, /backdrop-filter:\s*blur/);
+  assert.match(consoleBlock, /-webkit-backdrop-filter:\s*blur/);
   assert.match(
     css,
     /#agent-console > \[data-panel-header\] \{[^}]*?cursor:\s*move/s,
