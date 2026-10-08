@@ -101,9 +101,10 @@ test('a failed sequence load leaves no stale cones and can be retried', async ()
   assert.equal(highlights.at(-1), null);
   assert.equal(state.sequence.error, 'Sequence images unavailable');
 
-  // Clicking B again asks again.
+  // Clicking B again asks again, without the old error.
   sequences.select('B');
   assert.equal(source.calls.filter((c) => c.sequenceId === 'B').length, 2);
+  assert.equal(state.sequence.error, null, 'not shown while B loads again');
   source.last('B').resolve(records('B'));
   await settle();
   assert.deepEqual(drawn(), ['B-0', 'B-1']);

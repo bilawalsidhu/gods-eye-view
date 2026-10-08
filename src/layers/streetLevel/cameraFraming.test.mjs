@@ -177,3 +177,12 @@ test('a refused claim (cockpit) does not frame the photo', () => {
   framing.frame(framing.begin());
   assert.equal(flights.length, 0);
 });
+
+test('a photo that loads after the navigation was detached does not frame', () => {
+  const { framing, state, flights } = setup({ sampled: 160 });
+  framing.attachNavigation(navigationFor(state));
+  const ticket = framing.begin();
+  framing.attachNavigation(null);
+  assert.doesNotThrow(() => framing.frame(ticket));
+  assert.equal(flights.length, 0);
+});

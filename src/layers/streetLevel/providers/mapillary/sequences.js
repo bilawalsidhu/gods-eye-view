@@ -131,6 +131,8 @@ export function createSequences({ state, source, parts }) {
     const controller = new AbortController();
     state.sequence.abort = controller;
     state.sequence.loading = true;
+    // An earlier sequence's error does not belong to this one.
+    state.sequence.error = null;
     notify();
     try {
       const records = await source.getSequenceImages(sequenceId, {

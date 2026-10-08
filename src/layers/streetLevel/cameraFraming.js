@@ -44,7 +44,8 @@ export function createCameraFraming({ state }) {
   function frame(ticket) {
     const { position, bearing, altitude } = state.street;
     if (!ticket || !position || !state.viewer) return;
-    if (ticket.generation !== null && !navigation.reassert(ticket.generation))
+    // Detached (shell teardown) since the ticket was issued: nothing to frame for.
+    if (ticket.generation !== null && !navigation?.reassert(ticket.generation))
       return;
     const ground = groundHeightAt(position.lon, position.lat, altitude);
     // Owned before the call: starting it cancels the previous flight (ours
