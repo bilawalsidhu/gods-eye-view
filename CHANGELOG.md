@@ -63,6 +63,10 @@
 
 ## [Unreleased]
 
+- Bound the remaining upstream body reads (FIRMS, CelesTrak, adsb.lol,
+  TomTom, OpenSky, adsbdb) with streaming size caps and shared deadlines; the
+  adsb.lol military poll gains a deadline of its own.
+
 - Stdio servers from one install share a panel key so a page read from one
   process can make requests through another. Concurrent malformed-key repairs
   now select one winner; unavailable storage or a busy repair retains the

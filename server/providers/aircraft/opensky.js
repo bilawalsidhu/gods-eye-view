@@ -2,6 +2,7 @@ import { normalizeAdsbLolPointResponse } from '../../../src/data/adsbLolFallback
 import {
   coalesceProxyRequest,
   readResponseJsonCapped,
+  readResponseTextCapped,
 } from '../common/http.js';
 import { requiredFiniteQueryNumber } from '../common/query.js';
 // ---------------------------------------------------------------------------
@@ -29,6 +30,8 @@ const OPENSKY_CACHE_MS = 9000;
 const OPENSKY_ATTEMPT_TIMEOUT_MS = 10_000;
 const OPENSKY_STATES_URL =
   'https://opensky-network.org/api/states/all?extended=1';
+/** states/all?extended=1 measures ~0.8 MB anonymously; bounded, not budgeted. */
+const OPENSKY_STATES_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 /**
  * Fetch and read the global snapshot, giving each attempt
@@ -41,11 +44,14 @@ const OPENSKY_STATES_URL =
 async function fetchOpenSkyStates(headers) {
   for (let attempt = 1; ; attempt++) {
     try {
-      const upstream = await fetch(OPENSKY_STATES_URL, {
-        headers,
-        signal: AbortSignal.timeout(OPENSKY_ATTEMPT_TIMEOUT_MS),
-      });
-      return { upstream, body: await upstream.text() };
+      const signal = AbortSignal.timeout(OPENSKY_ATTEMPT_TIMEOUT_MS);
+      const upstream = await fetch(OPENSKY_STATES_URL, { headers, signal });
+      const body = await readResponseTextCapped(
+        upstream,
+        OPENSKY_STATES_MAX_RESPONSE_BYTES,
+        signal,
+      );
+      return { upstream, body };
     } catch (error) {
       if (attempt >= 2) throw error;
       console.warn(
