@@ -3048,7 +3048,8 @@ The server proxy (`server/providers/mapillary.js`) adds the token to
 coverage-tile requests (the browser holds it too, for MapillaryJS and the Graph
 API), serves only z11–14 coverage, refuses upstream redirects, strips the
 unused `image` layer, coalesces concurrent requests, runs at most six Mapillary
-fetches at once and keeps tiles in a 24 h memory cache.
+fetches at once (a fetch every client has left is cancelled, or never started)
+and keeps tiles in a 24 h memory cache.
 
 MapillaryJS loads on the first photo. Opening one frames it with a single
 camera flight through the application's deferred navigation (`begin` /

@@ -47,14 +47,20 @@ async function handleTile(req, res, allow) {
     });
   if (!mapillaryToken())
     return sendJson(res, 503, { error: 'no_key', keyRequired: true });
+  // A client that leaves (a tile the camera moved past) cancels its fetch.
+  const left = new AbortController();
+  res.on?.('close', () => {
+    if (!res.writableEnded) left.abort();
+  });
   try {
-    const { bytes, source } = await fetchTile(address);
+    const { bytes, source } = await fetchTile(address, { signal: left.signal });
     res.statusCode = bytes.length ? 200 : 204;
     res.setHeader('Content-Type', 'application/x-protobuf');
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.setHeader('X-Gev-Cache', source);
     res.end(bytes.length ? bytes : undefined);
   } catch (error) {
+    if (left.signal.aborted) return;
     const status = error instanceof TileUpstreamError ? error.status : 0;
     // A rejected token is a key problem the panel can name, not a fault.
     if (status === 401 || status === 403)

@@ -1,7 +1,4 @@
-import {
-  coalesceProxyRequest,
-  readResponseBytesCapped,
-} from '../common/http.js';
+import { readResponseBytesCapped } from '../common/http.js';
 import { stripTileLayers } from './trim.js';
 
 /** Mapillary vector tiles, /{layer}/2/{z}/{x}/{y}: the only host the token goes to. */
@@ -18,8 +15,8 @@ const DROP_LAYERS = ['image'];
 export const TILE_MAX_BYTES = 48 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 60_000;
 /**
- * Upstream fetches at once; more wait their turn. A client drops the tiles a
- * camera move leaves behind, but their fetches run on, so this bounds them.
+ * Upstream fetches at once; more wait their turn. A fetch every client has
+ * left is cancelled, or never started, so the queue holds live tiles only.
  */
 export const TILE_UPSTREAM_CONCURRENCY = 6;
 /** Tiles change only when new imagery is processed. */
@@ -66,12 +63,12 @@ function trim(bytes) {
 }
 
 /** One tile from Mapillary, trimmed; empty bytes mean no coverage. */
-async function fetchUpstream({ z, x, y }) {
+async function fetchUpstream({ z, x, y }, signal) {
   const token = encodeURIComponent(mapillaryToken());
   const response = await fetch(
     `${TILE_HOST}/mly1_public/2/${z}/${x}/${y}?access_token=${token}`,
     {
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(FETCH_TIMEOUT_MS)]),
       // The token is in the query: a redirect is never followed (a 3xx is a 502).
       redirect: 'manual',
       headers: { Accept: 'application/x-protobuf' },
@@ -100,10 +97,27 @@ let upstreamActive = 0;
 /** @type {Array<() => void>} fetches waiting for a slot, oldest first */
 const upstreamWaiting = [];
 
-/** Run `task` once an upstream slot is free. */
-async function withUpstreamSlot(task) {
+/** Run `task` once an upstream slot is free, unless `signal` aborts first. */
+async function withUpstreamSlot(signal, task) {
   while (upstreamActive >= TILE_UPSTREAM_CONCURRENCY)
-    await new Promise((resolve) => upstreamWaiting.push(resolve));
+    await new Promise((resolve, reject) => {
+      const wake = () => {
+        signal.removeEventListener('abort', leave);
+        resolve();
+      };
+      const leave = () => {
+        const at = upstreamWaiting.indexOf(wake);
+        if (at !== -1) upstreamWaiting.splice(at, 1);
+        reject(signal.reason);
+      };
+      upstreamWaiting.push(wake);
+      signal.addEventListener('abort', leave, { once: true });
+    });
+  if (signal.aborted) {
+    // Woken, then left: hand the free slot on.
+    upstreamWaiting.shift()?.();
+    throw signal.reason;
+  }
   upstreamActive++;
   try {
     return await task();
@@ -113,10 +127,26 @@ async function withUpstreamSlot(task) {
   }
 }
 
+/** `promise`, or a rejection as soon as `signal` aborts. */
+function unlessAborted(promise, signal) {
+  if (!signal) return promise;
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const leave = () => reject(signal.reason);
+    signal.addEventListener('abort', leave, { once: true });
+    promise
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener('abort', leave));
+  });
+}
+
 /** @type {Map<string, {bytes: Buffer, at: number}>} insertion-ordered LRU */
 const memory = new Map();
 let memoryBytes = 0;
-/** @type {Map<string, Promise<Buffer>>} upstream fetches shared per tile */
+/**
+ * Upstream fetches shared per tile, with the requests still waiting on each.
+ * @type {Map<string, {promise: Promise<Buffer>, controller: AbortController, waiters: number}>}
+ */
 const inFlight = new Map();
 const cost = (bytes) => bytes.length + ENTRY_OVERHEAD_BYTES;
 
@@ -147,24 +177,50 @@ function recall(key) {
   return hit.bytes;
 }
 
-/**
- * One tile from memory, a shared in-flight fetch, or Mapillary.
- * @param {{z: number, x: number, y: number, key: string}} address from parseTilePath
- * @returns {Promise<{bytes: Buffer, source: 'memory'|'inflight'|'upstream'}>}
- */
-export async function fetchTile(address) {
-  const cached = recall(address.key);
-  if (cached) return { bytes: cached, source: 'memory' };
-  const { promise, shared } = coalesceProxyRequest(
-    inFlight,
-    address.key,
-    async () => {
-      const bytes = await withUpstreamSlot(() => fetchUpstream(address));
+/** Start the upstream fetch for a tile, shared until its last request leaves. */
+function startFlight(address) {
+  const controller = new AbortController();
+  const flight = { controller, waiters: 0 };
+  flight.promise = withUpstreamSlot(controller.signal, () =>
+    fetchUpstream(address, controller.signal),
+  )
+    .then((bytes) => {
       remember(address.key, bytes);
       return bytes;
-    },
-  );
-  return { bytes: await promise, source: shared ? 'inflight' : 'upstream' };
+    })
+    .finally(() => {
+      if (inFlight.get(address.key) === flight) inFlight.delete(address.key);
+    });
+  // Every request may have left; the rejection is then nobody's.
+  flight.promise.catch(() => {});
+  inFlight.set(address.key, flight);
+  return flight;
+}
+
+/**
+ * One tile from memory, a shared in-flight fetch, or Mapillary. `signal`
+ * aborts when the request's client leaves; the fetch stops once all have.
+ * @param {{z: number, x: number, y: number, key: string}} address from parseTilePath
+ * @param {{signal?: AbortSignal}} [options]
+ * @returns {Promise<{bytes: Buffer, source: 'memory'|'inflight'|'upstream'}>}
+ */
+export async function fetchTile(address, { signal } = {}) {
+  const cached = recall(address.key);
+  if (cached) return { bytes: cached, source: 'memory' };
+  let flight = inFlight.get(address.key);
+  const shared = Boolean(flight);
+  flight ||= startFlight(address);
+  flight.waiters++;
+  try {
+    const bytes = await unlessAborted(flight.promise, signal);
+    return { bytes, source: shared ? 'inflight' : 'upstream' };
+  } finally {
+    if (--flight.waiters === 0) {
+      // A later request for the tile must not join a cancelled fetch.
+      if (inFlight.get(address.key) === flight) inFlight.delete(address.key);
+      flight.controller.abort();
+    }
+  }
 }
 
 /** Test seam: forget every cached and in-flight tile. */

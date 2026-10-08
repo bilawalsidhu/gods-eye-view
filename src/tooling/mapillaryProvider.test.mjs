@@ -14,6 +14,8 @@ import {
   TILE_MEMORY_BUDGET_BYTES,
   TILE_UPSTREAM_CONCURRENCY,
   TILE_TTL_MS,
+  fetchTile,
+  parseTilePath,
   _resetTileCacheForTest,
   _tileMemoryForTest,
 } from '../../server/providers/mapillary/tiles.js';
@@ -49,13 +51,23 @@ function install(mode = 'configureServer') {
   mapillaryProxy()[mode]({
     middlewares: { use: (route, handler) => routes.set(route, handler) },
   });
-  const call = async (route, url = '/', method = 'GET', reqHeaders = {}) => {
+  const call = async (
+    route,
+    url = '/',
+    method = 'GET',
+    reqHeaders = {},
+    onResponse = null,
+  ) => {
     const handler = routes.get(route);
     assert.ok(handler, `route ${route} is mounted`);
     const headers = {};
+    const listeners = new Map();
     const res = {
       statusCode: 200,
       headers,
+      on: (type, listener) => listeners.set(type, listener),
+      /** The client goes away, as Node reports it. */
+      close: () => listeners.get('close')?.(),
       setHeader: (name, value) => (headers[name.toLowerCase()] = value),
       getHeader: (name) => headers[name.toLowerCase()],
       writeHead(status, extra) {
@@ -67,6 +79,7 @@ function install(mode = 'configureServer') {
         this.writableEnded = true;
       },
     };
+    onResponse?.(res);
     await handler({ url, method, headers: reqHeaders }, res);
     return res;
   };
@@ -102,7 +115,7 @@ async function withUpstream(answer, run) {
   globalThis.fetch = async (url, init) => {
     calls.push(String(url));
     inits.push(init);
-    return answer(calls.length, String(url));
+    return answer(calls.length, String(url), init);
   };
   try {
     await withToken('MLY|test|token', () =>
@@ -409,6 +422,101 @@ test('at most a few upstream fetches run at once; the rest wait their turn', asy
     },
   );
 });
+
+/** An upstream that answers when released, and fails as a fetch does when aborted. */
+function heldUpstream() {
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  const answer = (n, url, init) =>
+    new Promise((resolve, reject) => {
+      init?.signal?.addEventListener('abort', () =>
+        reject(new DOMException('aborted', 'AbortError')),
+      );
+      gate.then(() => resolve(ok()));
+    });
+  return { answer, release };
+}
+
+const settleSoon = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+test(
+  'a queued fetch whose client left never reaches Mapillary',
+  { timeout: 5000 },
+  async () => {
+    const upstream = heldUpstream();
+    await withUpstream(upstream.answer, async ({ calls }) => {
+      const busy = Array.from({ length: TILE_UPSTREAM_CONCURRENCY }, (_, i) =>
+        fetchTile(parseTilePath(`/coverage/14/${i}/5`)),
+      );
+      const client = new AbortController();
+      const queued = fetchTile(parseTilePath('/coverage/14/99/5'), {
+        signal: client.signal,
+      });
+      await settleSoon();
+      assert.equal(calls.length, TILE_UPSTREAM_CONCURRENCY, 'the 7th waits');
+      client.abort();
+      await assert.rejects(queued, { name: 'AbortError' });
+      upstream.release();
+      await Promise.all(busy);
+      await settleSoon();
+      assert.equal(calls.length, TILE_UPSTREAM_CONCURRENCY, 'and never ran');
+      // The freed slots still serve a live request.
+      await fetchTile(parseTilePath('/coverage/14/98/5'));
+      assert.equal(calls.length, TILE_UPSTREAM_CONCURRENCY + 1);
+    });
+  },
+);
+
+test(
+  'a client that disconnects cancels its tile fetch and gets no answer',
+  { timeout: 5000 },
+  async () => {
+    const upstream = heldUpstream();
+    await withUpstream(upstream.answer, async ({ inits, call }) => {
+      let res;
+      const done = call(
+        '/api/mapillary/tiles',
+        '/coverage/14/8/8',
+        'GET',
+        {},
+        (r) => (res = r),
+      );
+      await settleSoon();
+      res.close();
+      await done;
+      assert.equal(inits[0].signal.aborted, true, 'the upstream fetch stopped');
+      assert.equal(res.body, undefined, 'nothing written to a closed socket');
+    });
+  },
+);
+
+test(
+  'a shared fetch is cancelled only when its last client leaves',
+  { timeout: 5000 },
+  async () => {
+    const upstream = heldUpstream();
+    await withUpstream(upstream.answer, async ({ calls, inits }) => {
+      const address = parseTilePath('/coverage/14/7/7');
+      const first = new AbortController();
+      const second = new AbortController();
+      const a = fetchTile(address, { signal: first.signal });
+      const b = fetchTile(address, { signal: second.signal });
+      await settleSoon();
+      assert.equal(calls.length, 1, 'one fetch for both');
+      first.abort();
+      await assert.rejects(a, { name: 'AbortError' });
+      assert.equal(inits[0].signal.aborted, false, 'the other still waits');
+      second.abort();
+      await assert.rejects(b, { name: 'AbortError' });
+      assert.equal(inits[0].signal.aborted, true, 'the last one left');
+      // A new request starts afresh rather than joining the cancelled fetch.
+      upstream.release();
+      const again = await fetchTile(address);
+      assert.equal(again.source, 'upstream');
+      assert.equal(calls.length, 2);
+    });
+  },
+);
 
 test('a tile held in memory past its TTL is fetched again', async (t) => {
   await withUpstream(
