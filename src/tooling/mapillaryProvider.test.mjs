@@ -5,19 +5,15 @@ import {
   mapillaryProxy,
   TILE_ROUTE_MAX_PER_MIN,
 } from 'gods-eye-view/server/providers/mapillary';
-import {
-  listTileLayers,
-  stripTileLayers,
-} from '../../server/providers/mapillary/trim.js';
+import { stripTileLayers } from '../../server/providers/mapillary/trim.js';
 import {
   TILE_MAX_BYTES,
-  TILE_MEMORY_BUDGET_BYTES,
+  TILE_MEMORY_MAX_TILES,
   TILE_UPSTREAM_CONCURRENCY,
   TILE_TTL_MS,
   fetchTile,
   parseTilePath,
   _resetTileCacheForTest,
-  _tileMemoryForTest,
 } from '../../server/providers/mapillary/tiles.js';
 
 /** Build a minimal MVT: layers with a name, a version and one opaque feature. */
@@ -545,26 +541,18 @@ test('a tile held in memory past its TTL is fetched again', async (t) => {
   );
 });
 
-test('the memory cache evicts the least recently used tile past its budget', async () => {
-  const MB = 1024 * 1024;
-  // Three 30 MB tiles fit in the budget, a fourth does not.
-  const big = tile([{ name: 'sequence', payload: Buffer.alloc(30 * MB) }]);
-  assert.ok(3 * big.length < TILE_MEMORY_BUDGET_BYTES);
-  assert.ok(4 * big.length > TILE_MEMORY_BUDGET_BYTES);
+test('the memory cache evicts the least recently used tile past its size', async () => {
   await withUpstream(
-    () => ok(big),
-    async ({ calls, call }) => {
+    () => ok(),
+    async ({ calls }) => {
       const get = async (x) =>
-        (await call('/api/mapillary/tiles', `/coverage/14/${x}/20`)).headers[
-          'x-gev-cache'
-        ];
-      for (const x of [20, 21, 22]) assert.equal(await get(x), 'upstream');
-      assert.equal(await get(20), 'memory', 'A is used again');
-      assert.equal(await get(23), 'upstream');
-      assert.equal(_tileMemoryForTest().entries, 3);
-      for (const x of [20, 22, 23]) assert.equal(await get(x), 'memory');
-      assert.equal(await get(21), 'upstream', 'B was evicted');
-      assert.equal(calls.length, 5);
+        (await fetchTile(parseTilePath(`/coverage/14/${x}/20`))).source;
+      for (let x = 0; x < TILE_MEMORY_MAX_TILES; x++) await get(x);
+      assert.equal(await get(0), 'memory', 'the first is used again');
+      await get(TILE_MEMORY_MAX_TILES);
+      assert.equal(await get(0), 'memory', 'so it stays');
+      assert.equal(await get(1), 'upstream', 'the least recently used went');
+      assert.equal(calls.length, TILE_MEMORY_MAX_TILES + 2);
     },
   );
 });
@@ -578,7 +566,6 @@ test('dropping a layer keeps the others byte-for-byte', () => {
     { name: 'overview' },
   ]);
   const trimmed = stripTileLayers(bytes, ['image']);
-  assert.deepEqual(listTileLayers(trimmed), ['sequence', 'overview']);
   assert.deepEqual(trimmed, tile([{ name: 'sequence' }, { name: 'overview' }]));
 });
 

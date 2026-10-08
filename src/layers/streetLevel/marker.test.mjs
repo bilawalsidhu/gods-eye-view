@@ -3,13 +3,6 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createMarker } from './marker.js';
 
-// The marker glyph draws on a canvas; Node has none, so drawing is a no-op.
-const noop = () => {};
-const context2d = new Proxy({}, { get: () => noop, set: () => true });
-globalThis.document ??= {
-  createElement: () => ({ getContext: () => context2d }),
-};
-
 /** A viewer whose camera is 20,000 km over `view`, and its pre-render listeners. */
 function setup() {
   const view = { lon: -121.49, lat: 38.58, height: 20_000_000 };

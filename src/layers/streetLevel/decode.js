@@ -1,6 +1,6 @@
 import { PbfReader } from 'pbf';
 import { VectorTile } from '@mapbox/vector-tile';
-import { tileLocalToLonLat } from '../../tileMath.js';
+import { tileLocalToLonLat } from './tileMath.js';
 
 /**
  * Decode a `mly1_public` coverage tile (z11–14) into sequences. The z14

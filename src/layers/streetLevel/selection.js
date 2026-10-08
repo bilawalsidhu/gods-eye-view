@@ -1,9 +1,12 @@
 import * as Cesium from 'cesium';
-import { POSITION_PICK_ID, STREET_LEVEL_LAYER_ID } from './policy.js';
-import { PICK_PREFIX } from './providers/mapillary/policy.js';
-import { sequenceIdFromPick } from './providers/mapillary/coverage.js';
+import {
+  PICK_PREFIX,
+  POSITION_PICK_ID,
+  STREET_LEVEL_LAYER_ID,
+} from './policy.js';
+import { sequenceIdFromPick } from './coverage.js';
 
-/** One click/hover handler for coverage lines, image cones and the marker. */
+/** One click handler for coverage lines, image cones and the marker. */
 export function createSelection({ state, parts }) {
   const { picking, input } = state.services;
 
@@ -51,67 +54,6 @@ export function createSelection({ state, parts }) {
     parts.sequences.clearSelection();
   }
 
-  /** The pointer over the globe, and whether a frame is queued to pick it. */
-  let pointer = null;
-  let hoverQueued = false;
-  let hoverCursor = false;
-  /** Buttons held: any of them, with any modifier, is a camera drag. */
-  let pointerButtons = 0;
-  let removeHoverWatchers = null;
-
-  function setHoverCursor(canvas, hit) {
-    if (hit === hoverCursor) return;
-    canvas.style.cursor = hit ? 'pointer' : '';
-    hoverCursor = hit;
-  }
-
-  function pickHover() {
-    hoverQueued = false;
-    const canvas = state.viewer?.scene?.canvas;
-    // Switched off (or torn down) since the frame was queued, or dragging.
-    if (!canvas || !state.enabled || !state.clickHandler || pointerButtons)
-      return;
-    let hit = false;
-    try {
-      const picked = state.viewer.scene.pick(pointer);
-      hit = ownsPick(
-        picking?.resolvePickId ? picking.resolvePickId(picked) : picked?.id,
-      );
-    } catch {
-      hit = false;
-    }
-    setHoverCursor(canvas, hit);
-  }
-
-  /** Pick the pointer on the next frame; at most one pick a frame. */
-  function queueHoverPick() {
-    if (hoverQueued || !pointer || pointerButtons) return;
-    hoverQueued = true;
-    requestAnimationFrame(pickHover);
-  }
-
-  /** Pointer cursor over anything this layer owns. */
-  function onMove(movement) {
-    if (!state.enabled) return;
-    pointer = Cesium.Cartesian2.clone(movement.endPosition, pointer);
-    queueHoverPick();
-  }
-
-  /** Track held buttons, and pick again once the camera rests under a still pointer. */
-  function watchHover(viewer) {
-    const canvas = viewer.scene.canvas;
-    const onButtons = (event) => {
-      pointerButtons = event.buttons ?? 0;
-    };
-    const types = ['pointerdown', 'pointermove', 'pointerup'];
-    for (const type of types) canvas.addEventListener?.(type, onButtons);
-    const removeEnd = viewer.camera?.moveEnd?.addEventListener(queueHoverPick);
-    removeHoverWatchers = () => {
-      for (const type of types) canvas.removeEventListener?.(type, onButtons);
-      removeEnd?.();
-    };
-  }
-
   function install(viewer) {
     if (state.clickHandler) return;
     state.clickHandler = new Cesium.ScreenSpaceEventHandler(
@@ -121,11 +63,6 @@ export function createSelection({ state, parts }) {
       onClick,
       Cesium.ScreenSpaceEventType.LEFT_CLICK,
     );
-    state.clickHandler.setInputAction(
-      onMove,
-      Cesium.ScreenSpaceEventType.MOUSE_MOVE,
-    );
-    watchHover(viewer);
     document.addEventListener('keydown', onKeyDown);
     picking?.registerPickOwner?.(STREET_LEVEL_LAYER_ID, ownsPick);
   }
@@ -133,16 +70,7 @@ export function createSelection({ state, parts }) {
   function uninstall() {
     // Nothing to undo for a layer that was never enabled.
     if (!state.clickHandler) return;
-    removeHoverWatchers?.();
-    removeHoverWatchers = null;
-    pointer = null;
-    pointerButtons = 0;
-    if (hoverCursor && state.viewer?.scene?.canvas) {
-      state.viewer.scene.canvas.style.cursor = '';
-      hoverCursor = false;
-    }
-    if (state.clickHandler && !state.clickHandler.isDestroyed())
-      state.clickHandler.destroy();
+    if (!state.clickHandler.isDestroyed()) state.clickHandler.destroy();
     state.clickHandler = null;
     document.removeEventListener('keydown', onKeyDown);
     picking?.unregisterPickOwner?.(STREET_LEVEL_LAYER_ID);

@@ -2,82 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createStreetLevelLayer } from './index.js';
-import { MAPILLARY_CREDIT_HTML } from './providers/mapillary/policy.js';
+import { MAPILLARY_CREDIT_HTML } from './policy.js';
 import {
+  fakeCesiumViewer,
   fakeMapillarySource,
   fakePhotoViewer,
-  rayCamera,
 } from '../../testSupport/streetLevelFakes.mjs';
-
-/**
- * A stand-in Cesium viewer the layer can be enabled on: a canvas for the
- * click handler, camera events, a primitive list and a credit display. With
- * `view`, the camera looks straight down on Sacramento from 900 m, so
- * coverage asks for tiles.
- */
-function fakeViewer({ view = false } = {}) {
-  const credits = [];
-  /** Cesium's flight bookkeeping: a new flight cancels the current one. */
-  let flight = null;
-  const flights = { started: 0, cancelled: 0 };
-  const stopFlight = () => {
-    const current = flight;
-    flight = null;
-    current?.cancel?.();
-    return Boolean(current);
-  };
-  const canvas = Object.assign(new EventTarget(), {
-    style: {},
-    // Keep Cesium's handler on the canvas; there is no real document here.
-    disableRootEvents: true,
-    onwheel: null,
-    ...(view ? { clientWidth: 100, clientHeight: 100 } : {}),
-  });
-  const camera = Object.assign(
-    view
-      ? rayCamera({
-          lon: -121.4944,
-          lat: 38.5816,
-          altitude: 900,
-          pitch: -90,
-          width: 100,
-          height: 100,
-        })
-      : {},
-    {
-      changed: new Cesium.Event(),
-      moveStart: new Cesium.Event(),
-      moveEnd: new Cesium.Event(),
-      flyToBoundingSphere(sphere, options = {}) {
-        stopFlight();
-        flight = options;
-        flights.started++;
-      },
-      cancelFlight() {
-        if (stopFlight()) flights.cancelled++;
-      },
-    },
-  );
-  return {
-    credits,
-    flights,
-    scene: {
-      canvas,
-      primitives: { add: (p) => p, remove() {} },
-      groundPrimitives: { add: (p) => p, remove() {} },
-      // Enough of a scene for the position marker to clamp to the ground.
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
-    },
-    camera,
-    creditDisplay: {
-      addStaticCredit: (credit) => credits.push(credit),
-      removeStaticCredit: (credit) =>
-        credits.splice(credits.indexOf(credit), 1),
-    },
-  };
-}
 
 /**
  * A layer over `source` and `photoViewer`, initialised on a stand-in viewer
@@ -93,18 +23,15 @@ async function startLayer(
   } = {},
 ) {
   const saved = globalThis.document;
-  // A pose moves the position marker, whose glyph is drawn on a canvas.
-  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
-  globalThis.document = Object.assign(new EventTarget(), {
-    createElement: () => ({ getContext: () => drawing }),
-  });
+  // The click handler listens for Esc on the document.
+  globalThis.document = new EventTarget();
   // Skip Cesium's one-time terrain table download for draped lines.
   t.mock.method(
     Cesium.GroundPolylinePrimitive,
     'initializeTerrainHeights',
     async () => {},
   );
-  const viewer = fakeViewer({ view });
+  const viewer = fakeCesiumViewer({ view });
   const layer = createStreetLevelLayer({ source, photoViewer });
   layer.init(viewer);
   if (enable) layer.enable(viewer);

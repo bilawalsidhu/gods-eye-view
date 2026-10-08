@@ -118,7 +118,7 @@
   color: #ff8a80;
 }
 
-/* ── Filters and legend ──────────────────────────────────────────────────── */
+/* ── Filters ──────────────────────────────────────────────────── */
 .sl-filters {
   display: flex;
   align-items: center;
@@ -194,42 +194,6 @@
   font-size: var(--sl-text);
   letter-spacing: 0.08em;
   color: var(--text-primary);
-}
-
-.sl-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.sl-legend li {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-mono);
-  font-size: var(--sl-text);
-  letter-spacing: 0.06em;
-  color: var(--text-secondary);
-}
-
-.sl-legend[hidden] {
-  display: none;
-}
-
-.sl-legend-swatch {
-  width: 14px;
-  height: 3px;
-  border-radius: 2px;
-  display: inline-block;
-  background: var(--sl-green);
-}
-
-/* COLORS.selected in src/layers/streetLevel/policy.js */
-.sl-legend-swatch.is-selected {
-  background: #00d4ff;
 }
 
 /* ── Embedded viewer ─────────────────────────────────────────────────────── */

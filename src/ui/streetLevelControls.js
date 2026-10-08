@@ -24,8 +24,8 @@ const setAttr = (node, key, value) => {
 };
 
 /**
- * Fills the Street Level panel body: filters, legend and viewer. The panel
- * chrome itself belongs to the application shell.
+ * Fills the Street Level panel body: filters and viewer. The panel chrome
+ * itself belongs to the application shell.
  */
 export class StreetLevelControls {
   constructor({ root, layer, actions }) {
@@ -58,7 +58,6 @@ export class StreetLevelControls {
       errorText: byId('sl-error-text'),
       sinceRange: byId('sl-since'),
       sinceLabel: byId('sl-since-label'),
-      legend: byId('sl-legend'),
       viewerWrap: byId('sl-viewer-wrap'),
       viewerExpand: byId('sl-viewer-expand'),
       viewerClose: byId('sl-viewer-close'),
@@ -376,7 +375,6 @@ export class StreetLevelControls {
         setAttr(el.sinceRange, 'aria-valuetext', view.since.label);
       }
     }
-    setProp(el.legend, 'hidden', !view.legend);
   }
 
   _renderViewer(view) {

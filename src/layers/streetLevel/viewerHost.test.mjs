@@ -27,8 +27,7 @@ registerHooks({
     return { format: 'module', shortCircuit: true, source };
   },
 });
-const { createMapillaryViewer } =
-  await import('./providers/mapillary/viewer.js');
+const { createMapillaryViewer } = await import('./viewer.js');
 
 /**
  * A viewer host over `adapter`. `marker` records where the position marker

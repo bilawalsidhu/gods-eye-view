@@ -2,48 +2,23 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createCameraFraming } from './cameraFraming.js';
+import { fakeCesiumViewer } from '../../testSupport/streetLevelFakes.mjs';
 
 /** Height (m) of a Cartesian above the WGS84 ellipsoid. */
 const heightOf = (cartesian) =>
   Cesium.Cartographic.fromCartesian(cartesian).height;
 
 /**
- * A camera with Cesium's flight bookkeeping: a new flight or `cancelFlight`
- * cancels the current one, `land()` completes it, `cancelled` counts stops.
- */
-function flightCamera(flights) {
-  let current = null;
-  function stop() {
-    const flight = current;
-    current = null;
-    flight?.options.cancel?.();
-    return Boolean(flight);
-  }
-  const camera = {
-    cancelled: 0,
-    flyToBoundingSphere(sphere, options = {}) {
-      stop();
-      current = { sphere, options };
-      flights.push(current);
-    },
-    cancelFlight() {
-      if (stop()) camera.cancelled++;
-    },
-    land() {
-      const flight = current;
-      current = null;
-      flight?.options.complete?.();
-    },
-  };
-  return camera;
-}
-
-/**
  * A viewer whose scene sample is `sampled` (e.g. −14,886 m before the tiles
  * under the photo load) and whose globe terrain is `globe`.
  */
 function setup({ sampled, globe = null, altitude = 149 }) {
-  const flights = [];
+  const viewer = fakeCesiumViewer();
+  Object.assign(viewer.scene, {
+    sampleHeightSupported: true,
+    sampleHeight: () => sampled,
+    globe: { getHeight: () => globe },
+  });
   const state = {
     services: {},
     street: {
@@ -51,19 +26,13 @@ function setup({ sampled, globe = null, altitude = 149 }) {
       bearing: 105,
       altitude,
     },
-    viewer: {
-      scene: {
-        sampleHeightSupported: true,
-        sampleHeight: () => sampled,
-        globe: { getHeight: () => globe },
-      },
-      camera: flightCamera(flights),
-    },
+    viewer,
   };
   return {
     framing: createCameraFraming({ state }),
     state,
-    flights,
+    viewer,
+    flights: viewer.flights.list,
   };
 }
 
@@ -88,35 +57,37 @@ test('a sample kilometres underground falls back to the globe, then the image al
 });
 
 test('cancel stops the framing flight while it is still ours', () => {
-  const { framing, state } = setup({ sampled: 121 });
-  const { camera } = state.viewer;
+  const { framing, viewer } = setup({ sampled: 121 });
   framing.frame(framing.begin());
   framing.cancel();
-  assert.equal(camera.cancelled, 1, 'the flight toward the closed photo stops');
+  assert.equal(
+    viewer.flights.cancelled,
+    1,
+    'the flight toward the photo stops',
+  );
   framing.cancel();
-  assert.equal(camera.cancelled, 1, 'and only once');
+  assert.equal(viewer.flights.cancelled, 1, 'and only once');
 
   // Re-framing (the next photo) supersedes the first flight, not the claim.
   framing.frame(framing.begin());
   framing.frame(framing.begin());
   framing.cancel();
-  assert.equal(camera.cancelled, 2);
+  assert.equal(viewer.flights.cancelled, 2);
 });
 
 test('cancel leaves a landed flight and a newer navigation flight alone', () => {
-  const { framing, state, flights } = setup({ sampled: 121 });
-  const { camera } = state.viewer;
+  const { framing, viewer, flights } = setup({ sampled: 121 });
   framing.frame(framing.begin());
-  camera.land();
+  viewer.flights.land();
   framing.cancel();
-  assert.equal(camera.cancelled, 0, 'landed: nothing to stop');
+  assert.equal(viewer.flights.cancelled, 0, 'landed: nothing to stop');
 
   framing.frame(framing.begin());
   // A search result flies the globe elsewhere; Cesium cancels ours first.
-  camera.flyToBoundingSphere(null, {});
+  viewer.camera.flyToBoundingSphere(null, {});
   assert.equal(flights.length, 3);
   framing.cancel();
-  assert.equal(camera.cancelled, 0, 'the newer flight keeps going');
+  assert.equal(viewer.flights.cancelled, 0, 'the newer flight keeps going');
 });
 
 /**

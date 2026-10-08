@@ -1,4 +1,4 @@
-/** Shared Street Level test stand-ins: Mapillary source, photo viewer, ray-casting camera. */
+/** Shared Street Level test stand-ins: Mapillary source, photo viewer, Cesium viewer, ray-casting camera. */
 import * as Cesium from 'cesium';
 
 const RAD = Math.PI / 180;
@@ -44,6 +44,87 @@ export function fakePhotoViewer({ pose = null } = {}) {
       return () => {
         emit = null;
       };
+    },
+  };
+}
+
+/**
+ * A stand-in Cesium viewer a layer can be enabled on: a canvas for the click
+ * handler, camera events with Cesium's flight bookkeeping (`flights` counts
+ * them, lists them and can `land` the current one), primitive lists and a
+ * credit display. With `view`, the camera looks straight down on Sacramento
+ * from 900 m, so coverage asks for tiles.
+ */
+export function fakeCesiumViewer({ view = false } = {}) {
+  const credits = [];
+  let flight = null;
+  const flights = {
+    started: 0,
+    cancelled: 0,
+    /** Every flight asked for, oldest first: `{ sphere, options }`. */
+    list: [],
+    land() {
+      const current = flight;
+      flight = null;
+      current?.options.complete?.();
+    },
+  };
+  const stopFlight = () => {
+    const current = flight;
+    flight = null;
+    current?.options.cancel?.();
+    return Boolean(current);
+  };
+  const canvas = Object.assign(new EventTarget(), {
+    style: {},
+    // Keep Cesium's handler on the canvas; there is no real document here.
+    disableRootEvents: true,
+    onwheel: null,
+    ...(view ? { clientWidth: 100, clientHeight: 100 } : {}),
+  });
+  const camera = Object.assign(
+    view
+      ? rayCamera({
+          lon: -121.4944,
+          lat: 38.5816,
+          altitude: 900,
+          pitch: -90,
+          width: 100,
+          height: 100,
+        })
+      : {},
+    {
+      changed: new Cesium.Event(),
+      moveStart: new Cesium.Event(),
+      moveEnd: new Cesium.Event(),
+      flyToBoundingSphere(sphere, options = {}) {
+        stopFlight();
+        flight = { sphere, options };
+        flights.list.push(flight);
+        flights.started++;
+      },
+      cancelFlight() {
+        if (stopFlight()) flights.cancelled++;
+      },
+    },
+  );
+  return {
+    credits,
+    flights,
+    scene: {
+      canvas,
+      primitives: { add: (p) => p, remove() {} },
+      groundPrimitives: { add: (p) => p, remove() {} },
+      // Enough of a scene for the position marker to clamp to the ground.
+      frameState: { mode: Cesium.SceneMode.SCENE3D },
+      updateHeight: () => () => {},
+      getHeight: () => undefined,
+    },
+    camera,
+    creditDisplay: {
+      addStaticCredit: (credit) => credits.push(credit),
+      removeStaticCredit: (credit) =>
+        credits.splice(credits.indexOf(credit), 1),
     },
   };
 }

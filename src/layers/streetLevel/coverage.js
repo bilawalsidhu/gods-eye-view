@@ -1,9 +1,9 @@
 import * as Cesium from 'cesium';
 import { decodeCoverageTile } from './decode.js';
-import { passesImageryFilter, resolveFilter } from '../../filter.js';
-import { isActive } from '../../state.js';
-import { groundUnderCamera, viewFocus, visibleBbox } from '../../view.js';
-import { coverageZoomForHeight, tilesForBbox } from '../../tileMath.js';
+import { passesImageryFilter, resolveFilter } from './filter.js';
+import { isActive } from './state.js';
+import { groundUnderCamera, viewFocus, visibleBbox } from './view.js';
+import { coverageZoomForHeight, tilesForBbox } from './tileMath.js';
 import {
   COLORS,
   COVERAGE_LINE_WIDTH_PX,

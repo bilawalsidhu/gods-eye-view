@@ -18,9 +18,8 @@ const FETCH_TIMEOUT_MS = 60_000;
 export const TILE_UPSTREAM_CONCURRENCY = 6;
 /** Tiles change only when new imagery is processed. */
 export const TILE_TTL_MS = 24 * 60 * 60 * 1000;
-export const TILE_MEMORY_BUDGET_BYTES = 96 * 1024 * 1024;
-/** Per-entry cost on top of its bytes, so empty tiles still count. */
-const ENTRY_OVERHEAD_BYTES = 1024;
+/** Trimmed tiles are ~80 KB: a dozen 9-tile views, well under 100 MB. */
+export const TILE_MEMORY_MAX_TILES = 120;
 
 /** The client token lives in the browser by design; the server adds it to tile URLs too. */
 export function mapillaryToken() {
@@ -139,39 +138,30 @@ function unlessAborted(promise, signal) {
   });
 }
 
-/** @type {Map<string, {bytes: Buffer, at: number}>} insertion-ordered LRU */
+/** @type {Map<string, {bytes: Buffer, at: number}>} least recently used first */
 const memory = new Map();
-let memoryBytes = 0;
 /**
  * Upstream fetches shared per tile, with the requests still waiting on each.
  * @type {Map<string, {promise: Promise<Buffer>, controller: AbortController, waiters: number}>}
  */
 const inFlight = new Map();
-const cost = (bytes) => bytes.length + ENTRY_OVERHEAD_BYTES;
-
-function forget(key) {
-  const hit = memory.get(key);
-  if (!hit) return null;
-  memory.delete(key);
-  memoryBytes -= cost(hit.bytes);
-  return hit;
-}
 
 function remember(key, bytes, at = Date.now()) {
-  // One huge (untrimmed) tile must not flush everything else.
-  if (cost(bytes) > TILE_MEMORY_BUDGET_BYTES / 2) return;
-  forget(key);
+  memory.delete(key);
   memory.set(key, { bytes, at });
-  memoryBytes += cost(bytes);
-  for (const [oldest] of memory) {
-    if (memoryBytes <= TILE_MEMORY_BUDGET_BYTES) break;
-    forget(oldest);
+  for (const oldest of memory.keys()) {
+    if (memory.size <= TILE_MEMORY_MAX_TILES) break;
+    memory.delete(oldest);
   }
 }
 
 function recall(key) {
-  const hit = forget(key);
-  if (!hit || Date.now() - hit.at > TILE_TTL_MS) return null;
+  const hit = memory.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > TILE_TTL_MS) {
+    memory.delete(key);
+    return null;
+  }
   remember(key, hit.bytes, hit.at); // most recently used again
   return hit.bytes;
 }
@@ -225,11 +215,5 @@ export async function fetchTile(address, { signal } = {}) {
 /** Test seam: forget every cached and in-flight tile. */
 export function _resetTileCacheForTest() {
   memory.clear();
-  memoryBytes = 0;
   inFlight.clear();
-}
-
-/** Test seam: how many tiles memory holds and the bytes charged for them. */
-export function _tileMemoryForTest() {
-  return { entries: memory.size, bytes: memoryBytes };
 }

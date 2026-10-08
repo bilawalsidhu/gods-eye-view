@@ -3063,7 +3063,7 @@ so the whole photo fits.
 
 Browser gates: `npm run qa:street-level -- --url <server>` runs against real
 Mapillary; `npm run qa:street-level:fixtures` answers every Mapillary request
-from fixtures (`providers/mapillary/coverageFixture.mjs`,
+from fixtures (`src/layers/streetLevel/coverageFixture.mjs`,
 `scripts/fixtures/street-level/`), but its server (default `:4173`) still needs
 some `MAPILLARY_CLIENT_TOKEN`. CI runs it `--strict` against `vite preview`.
 

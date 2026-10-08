@@ -223,7 +223,6 @@ function panelDom({ fullscreen = true, popover = false } = {}) {
     add(controls, 'button', { dataset: { slPano: pano } });
   add(controls, 'input', { id: 'sl-since' });
   add(controls, 'output', { id: 'sl-since-label' });
-  add(root, 'ul', { id: 'sl-legend' });
   add(root, 'div', { id: 'sl-coverage-meta' });
   return { document, root, wrap };
 }
@@ -474,11 +473,6 @@ test('a layer that is on with Mapillary switched off reads OFF, and the pill bri
     assert.match(
       dom.root.querySelector('#sl-coverage-meta').textContent,
       /Mapillary is off in this view/,
-    );
-    assert.equal(
-      dom.root.querySelector('#sl-legend').hidden,
-      true,
-      'no legend',
     );
     status.click();
     await settle();

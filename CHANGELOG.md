@@ -73,7 +73,7 @@
 
 - Street Level: Mapillary street-level imagery (free client token, CC BY-SA
   4.0). A right-rail panel holds an ON/OFF pill, 360°/flat and captured-since
-  filters, a legend and an embedded viewer with EXPAND and FIT/FILL. Coverage
+  filters and an embedded viewer with EXPAND and FIT/FILL. Coverage
   lines (below 60 km) and image cones drape on terrain and Google 3D tiles;
   opening a photo frames it with one camera flight. Share links carry the
   switch, the filters and the panel's collapsed state. A server proxy adds the

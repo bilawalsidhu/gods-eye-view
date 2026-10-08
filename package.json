@@ -260,7 +260,7 @@
       "node": "./server/providers/mapillary.js"
     },
     "./layers/street-level": "./src/layers/streetLevel/index.js",
-    "./layers/street-level/mapillary/source": "./src/layers/streetLevel/providers/mapillary/source.js",
+    "./layers/street-level/mapillary/source": "./src/layers/streetLevel/source.js",
     "./tools": "./src/tools/index.js",
     "./tools/mcp": "./src/tools/mcp/index.js",
     "./tools/panel": "./src/tools/panel.js",

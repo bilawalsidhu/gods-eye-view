@@ -1,18 +1,19 @@
+import * as Cesium from 'cesium';
 import { createState } from './state.js';
 import { createMarker } from './marker.js';
 import { createCameraFraming } from './cameraFraming.js';
-import { createCredit } from './credits.js';
 import { createSelection } from './selection.js';
 import { createViewerHost } from './viewerHost.js';
 import { normalizeFilter, sameFilter } from './filter.js';
-import { keyStatusLabel, STREET_LEVEL_LAYER_ID } from './policy.js';
-import { createCoverage } from './providers/mapillary/coverage.js';
-import { createSequences } from './providers/mapillary/sequences.js';
-import { createMapillaryViewer } from './providers/mapillary/viewer.js';
 import {
+  keyStatusLabel,
   MAPILLARY_CREDIT_HTML,
   MAPILLARY_KEY_ID,
-} from './providers/mapillary/policy.js';
+  STREET_LEVEL_LAYER_ID,
+} from './policy.js';
+import { createCoverage } from './coverage.js';
+import { createSequences } from './sequences.js';
+import { createMapillaryViewer } from './viewer.js';
 
 export { STREET_LEVEL_LAYER_ID } from './policy.js';
 
@@ -33,8 +34,8 @@ const COVERAGE_OFF = Object.freeze({
  * The Street Level layer: Mapillary coverage lines at street zoom, a selected
  * sequence's image cones, and the photo viewer in the panel.
  * @param {{source: object, services?: object, photoViewer?: object}} options
- *   `source` is providers/mapillary/source.js or a stand-in; `photoViewer`
- *   stands in for the MapillaryJS adapter (providers/mapillary/viewer.js).
+ *   `source` is source.js or a stand-in; `photoViewer` stands in for the
+ *   MapillaryJS adapter (viewer.js).
  */
 export function createStreetLevelLayer({
   source,
@@ -44,7 +45,6 @@ export function createStreetLevelLayer({
   const state = createState({ services });
   const parts = {};
   const context = { state, parts };
-  const credit = createCredit(MAPILLARY_CREDIT_HTML);
   parts.marker = createMarker(context);
   parts.framing = createCameraFraming(context);
   parts.coverage = createCoverage({ state, source });
@@ -97,12 +97,25 @@ export function createStreetLevelLayer({
     return keyCheck;
   }
 
+  /** The on-globe credit while the layer draws: CC BY-SA imagery needs it. */
+  let credit = null;
+  function showCredit(viewer) {
+    if (credit || !viewer?.creditDisplay) return;
+    credit = new Cesium.Credit(MAPILLARY_CREDIT_HTML, true);
+    viewer.creditDisplay.addStaticCredit(credit);
+  }
+  function hideCredit(viewer) {
+    if (!credit) return;
+    viewer?.creditDisplay?.removeStaticCredit?.(credit);
+    credit = null;
+  }
+
   function startDrawing() {
     const viewer = state.viewer;
     if (!viewer) return;
     parts.sequences.setVisible(true);
     parts.coverage.attach(viewer);
-    credit.show(viewer);
+    showCredit(viewer);
     // Without a known key, a switch-on asks again: the server may be back,
     // or have a key now.
     if (['status', 'no-key'].includes(state.coverage.blocked)) checkKey();
@@ -116,7 +129,7 @@ export function createStreetLevelLayer({
     parts.coverage.unblock();
     parts.sequences.clearSelection();
     parts.sequences.setVisible(false);
-    credit.hide(state.viewer);
+    hideCredit(state.viewer);
   }
 
   /** The share link's `mapillary` switch: off, the layer draws nothing. */

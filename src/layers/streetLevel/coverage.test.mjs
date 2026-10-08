@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createCoverage, ZOOM_IN_HINT } from './coverage.js';
-import { freshCoverage } from '../../state.js';
+import { freshCoverage } from './state.js';
 import { encodeCoverageTile } from './coverageFixture.mjs';
-import { rayCamera } from '../../../../testSupport/streetLevelFakes.mjs';
+import { rayCamera } from '../../testSupport/streetLevelFakes.mjs';
 import { COVERAGE_MAX_SEQUENCES, COVERAGE_MAX_TILES } from './policy.js';
-import { lonToTileX, latToTileY, tileBounds } from '../../tileMath.js';
+import { lonToTileX, latToTileY, tileBounds } from './tileMath.js';
 
 const RAD = Math.PI / 180;
 // Node has no WebGL context to report line-width limits; a browser's

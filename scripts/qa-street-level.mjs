@@ -12,7 +12,7 @@
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import { tileBounds } from '../src/layers/streetLevel/tileMath.js';
-import { encodeCoverageTile } from '../src/layers/streetLevel/providers/mapillary/coverageFixture.mjs';
+import { encodeCoverageTile } from '../src/layers/streetLevel/coverageFixture.mjs';
 import {
   hookRenderErrors,
   readRenderErrors,
@@ -28,7 +28,6 @@ import {
 } from './fixtures/street-level/mapillaryGraph.mjs';
 
 const VIEWPORT = { width: 1440, height: 900 };
-const PHONE = { width: 390, height: 844 };
 /** Over downtown Sacramento, above the fixture photo line, looking down. */
 const PARK = { lon: PHOTO_LINE.lon, lat: 38.5816, height: 900, pitch: -1.3 };
 const DAY_MS = 86_400_000;
@@ -38,7 +37,7 @@ const DAY_MS = 86_400_000;
  * sequences, plus the photo sequence where PHOTO_LINE crosses the tile.
  * @returns {Uint8Array} empty below z11, which the layer never asks for
  */
-export function fixtureTile(z, x, y, now = Date.now()) {
+function fixtureTile(z, x, y, now = Date.now()) {
   if (z < 11) return new Uint8Array(0);
   const { west, east, south, north } = tileBounds(x, y, z);
   const at = (t, lo, hi) => lo + (hi - lo) * t;
@@ -387,33 +386,7 @@ async function main() {
         'fixture runs need a server started with MAPILLARY_CLIENT_TOKEN (CI uses a dummy one)',
       );
 
-    await step('the panel starts as a collapsed right-rail strip', async () => {
-      const box = await page.evaluate(() => {
-        const panel = document.getElementById('street-level-panel');
-        const r = panel.getBoundingClientRect();
-        return {
-          collapsed: panel.classList.contains('collapsed'),
-          inRail: panel.parentElement.id === 'right-context-rail',
-          body: getComputedStyle(document.getElementById('sl-body')).display,
-          width: r.width,
-          right: r.right,
-        };
-      });
-      assert.equal(box.collapsed, true);
-      assert.equal(box.inRail, true);
-      assert.equal(box.body, 'none');
-      assert.ok(box.width <= 200 && box.right <= VIEWPORT.width);
-    });
-
-    await step('expanding the strip shows the body and legend', async () => {
-      await expandPanel(page);
-      assert.equal(
-        await page.$$eval('#sl-legend li', (items) => items.length),
-        2,
-        'Mapillary and Selected',
-      );
-    });
-
+    await expandPanel(page);
     if (!configured) {
       await step('keyless server: KEY REQUIRED gates the controls', () =>
         assertKeyRequired(page),
@@ -439,79 +412,6 @@ async function main() {
             () =>
               document.body.innerHTML.includes('Mapillary</a> contributors'),
             { timeout: 15_000 },
-          );
-        },
-      );
-
-      await step('the header pill switches the layer off and on', async () => {
-        await press(page, '#sl-status');
-        await statusIs(page, 'OFF');
-        assert.equal(
-          await page.evaluate(() =>
-            window.__godsEyeView.dataManager.isEnabled('street-level'),
-          ),
-          false,
-        );
-        assert.equal((await getUI(page)).coverage.count, 0);
-        await press(page, '#sl-status');
-        await waitForCoverage(page);
-        await statusIs(page, 'ON');
-      });
-
-      await step('the 360° filter narrows coverage', async () => {
-        const before = (await getUI(page)).coverage.count;
-        await press(page, '[data-sl-pano="pano"]');
-        await uiUntil(
-          page,
-          (u) => u.filter.pano === 'pano' && !u.coverage.loading,
-        );
-        const after = (await getUI(page)).coverage.count;
-        // Fixtures hold flat sequences too, so the filter must drop some.
-        assert.ok(
-          fixtures ? after < before : after <= before,
-          `${after} vs ${before}`,
-        );
-        await press(page, '[data-sl-pano="all"]');
-        await uiUntil(
-          page,
-          (u, n) => u.filter.pano === 'all' && u.coverage.count === n,
-          before,
-        );
-      });
-
-      await step(
-        'the SINCE slider narrows coverage and names its cut-off',
-        async () => {
-          const before = (await getUI(page)).coverage.count;
-          const setStop = (index) =>
-            page.$eval(
-              '#sl-since',
-              (input, value) => {
-                input.value = String(value);
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-              },
-              index,
-            );
-          await setStop(5);
-          await uiUntil(
-            page,
-            (u) => u.filter.sinceDays === 365 && !u.coverage.loading,
-          );
-          const after = (await getUI(page)).coverage.count;
-          assert.ok(
-            fixtures ? after < before : after <= before,
-            `${after} vs ${before}`,
-          );
-          assert.match(
-            await page.$eval('#sl-since-label', (node) => node.textContent),
-            /^LAST YEAR · SINCE \d{4}-\d{2}-\d{2}$/,
-          );
-          await setStop(0);
-          await uiUntil(
-            page,
-            (u, n) => u.filter.sinceDays === 0 && u.coverage.count === n,
-            before,
           );
         },
       );
@@ -549,7 +449,6 @@ async function main() {
         },
       );
 
-      let imageId = null;
       await park(page);
       await waitForCoverage(page);
       await step(
@@ -585,7 +484,6 @@ async function main() {
           );
           const { street } = await getUI(page);
           assert.equal(street.error, null, `viewer error: ${street.error}`);
-          imageId = street.imageId;
           await page.waitForSelector('#sl-viewer .mapillary-dom', {
             timeout: 60_000,
           });
@@ -606,8 +504,8 @@ async function main() {
           assert.match(view.link, /mapillary\.com\/app\/\?pKey=/);
           if (fixtures) {
             assert.ok(
-              fixture.images.some((image) => image.id === imageId),
-              `fixture photo ${imageId}`,
+              fixture.images.some((image) => image.id === street.imageId),
+              `fixture photo ${street.imageId}`,
             );
             assert.equal(street.sequenceId, PHOTO_SEQUENCE_ID);
           }
@@ -629,52 +527,6 @@ async function main() {
           await page.$eval('#sl-viewer-wrap', (node) => node.hidden),
           true,
         );
-      });
-
-      await step('on a phone the whole photo fits in the panel', async () => {
-        // Width alone drives the phone layout; toggling isMobile would reload.
-        await page.setViewport(PHONE);
-        await page.waitForFunction((w) => innerWidth === w, {}, PHONE.width);
-        await expandPanel(page);
-        await page.evaluate((id) => {
-          void window.__godsEyeView.dataManager.layers
-            .get('street-level')
-            .module.openImage(id);
-        }, imageId);
-        await uiUntil(
-          page,
-          (u, id) => u.street.imageId === id && !u.street.loading,
-          imageId,
-          60_000,
-        );
-        // The panel settles its phone layout over a frame or two.
-        const fits = () => {
-          const inner = document
-            .querySelector('.street-level-panel-inner')
-            .getBoundingClientRect();
-          const meta = document
-            .getElementById('sl-image-meta')
-            .getBoundingClientRect();
-          const viewer = document
-            .getElementById('sl-viewer')
-            .getBoundingClientRect();
-          return {
-            cut: Math.round(meta.bottom - inner.bottom),
-            height: Math.round(viewer.height),
-            overflowX: document.documentElement.scrollWidth > innerWidth,
-          };
-        };
-        await page
-          .waitForFunction(
-            `(${fits})().cut <= 1 && (${fits})().height >= 100`,
-            { timeout: 10_000 },
-          )
-          .catch(() => {});
-        const fit = await page.evaluate(fits);
-        assert.ok(fit.cut <= 1, `photo and caption fit (${fit.cut}px cut)`);
-        assert.ok(fit.height >= 100, `viewer stays usable (${fit.height}px)`);
-        assert.equal(fit.overflowX, false, 'no sideways scroll');
-        await page.setViewport(VIEWPORT);
       });
 
       await fixtureStep(

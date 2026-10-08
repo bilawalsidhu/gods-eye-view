@@ -130,7 +130,6 @@ export function presentStreetLevelPanel(state, { now = Date.now() } = {}) {
         null,
     filter: { pano: filter.pano, sinceDays: Number(filter.sinceDays) || 0 },
     since: presentSince(filter.sinceDays, now),
-    legend: state.providerOn !== false,
     viewer: presentViewer(state),
     meta: presentMeta(state),
   };

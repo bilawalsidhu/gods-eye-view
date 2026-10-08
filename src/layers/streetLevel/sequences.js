@@ -1,7 +1,7 @@
 import * as Cesium from 'cesium';
-import { imageConeGlyph } from '../../glyphs.js';
-import { passesImageryFilter, resolveFilter } from '../../filter.js';
-import { createHorizonCull, metresBetween } from '../../view.js';
+import { imageConeGlyph } from './glyphs.js';
+import { passesImageryFilter, resolveFilter } from './filter.js';
+import { createHorizonCull, metresBetween } from './view.js';
 import {
   COLORS,
   IMAGE_CONE_MIN_SPACING_M,

@@ -3,13 +3,6 @@ import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createSequences } from './sequences.js';
 
-// The cone glyphs draw on a canvas; Node has none, so any drawing is a no-op.
-const noop = () => {};
-const context2d = new Proxy({}, { get: () => noop, set: () => true });
-globalThis.document ??= {
-  createElement: () => ({ getContext: () => context2d }),
-};
-
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** A billboard collection that remembers the cones on the globe. */
