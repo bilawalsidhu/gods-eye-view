@@ -1385,7 +1385,9 @@
       "src/voice/narration.js",
       "src/voice/earcon.js",
       "src/voice/pointerContext.js",
-      "src/voice/pointerReticle.js"
+      "src/voice/pointerReticle.js",
+      "src/keySetupCore.mjs",
+      "src/localRequestGate.mjs"
     ],
     "external": []
   },
