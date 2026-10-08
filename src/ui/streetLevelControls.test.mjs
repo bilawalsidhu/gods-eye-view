@@ -136,9 +136,17 @@ class FakeNode {
       target: this,
       key: event.key,
       newState: event.newState,
+      stopped: false,
       preventDefault() {},
+      stopPropagation() {
+        this.stopped = true;
+      },
     };
-    for (let node = this; node; node = event.bubbles ? node.parent : null)
+    for (
+      let node = this;
+      node && !delivered.stopped;
+      node = event.bubbles ? node.parent : null
+    )
       for (const listener of [...(node.listeners.get(event.type) || [])])
         listener(delivered);
     return true;
@@ -586,6 +594,19 @@ test('on iPhone (no element fullscreen) EXPAND opens the viewer as a popover ove
       assert.equal(dom.wrap.popoverOpen, true);
       assert.equal(dom.root.contains(dom.wrap), true, 'never leaves the panel');
       assert.deepEqual(expandLabel(dom), ['SHRINK', 'true']);
+      // Esc shrinks the photo; the panel's own Esc (collapse) never sees it.
+      let panelEsc = 0;
+      dom.root.addEventListener('keydown', () => panelEsc++);
+      expand.dispatchEvent({ type: 'keydown', key: 'Escape', bubbles: true });
+      await settle();
+      await settle();
+      assert.equal(dom.wrap.popoverOpen, false);
+      assert.equal(panelEsc, 0, 'the panel stays open');
+      assert.deepEqual(expandLabel(dom), ['EXPAND', 'false']);
+      expand.click();
+      await settle();
+      await settle();
+      assert.equal(dom.wrap.popoverOpen, true, 'and opens again');
       expand.click();
       await settle();
       await settle();

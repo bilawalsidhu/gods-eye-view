@@ -120,10 +120,18 @@ export class StreetLevelControls {
       this.listen(el.viewerExpand, 'click', () => this._toggleExpanded());
       if (this._expandMode === 'fullscreen')
         this.listen(document, 'fullscreenchange', () => this._syncExpanded());
-      else
+      else {
         this.listen(el.viewerWrap, 'toggle', (event) =>
           this._onPopoverToggle(event),
         );
+        // Esc shrinks the photo before the panel's own Esc can collapse it.
+        this.listen(el.viewerWrap, 'keydown', (event) => {
+          if (event.key !== 'Escape' || !this.isViewerExpanded()) return;
+          event.preventDefault();
+          event.stopPropagation();
+          this._exitExpanded();
+        });
+      }
     } else setProp(el.viewerExpand, 'hidden', true);
     for (const button of el.renderButtons) {
       this.listen(button, 'click', () => {
