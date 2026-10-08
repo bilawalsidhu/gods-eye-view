@@ -41,16 +41,3 @@ export function stripTileLayers(bytes, dropNames) {
   }, null);
   return dropped ? Buffer.from(writer.finish()) : bytes;
 }
-
-/** Names of the layers inside a vector tile, in order. */
-export function listTileLayers(bytes) {
-  const names = [];
-  if (!bytes?.length) return names;
-  new PbfReader(bytes).readFields((tag, _result, pbf) => {
-    if (tag !== TILE_LAYER_FIELD) return;
-    const end = pbf.readVarint() + pbf.pos;
-    names.push(layerName(bytes.subarray(pbf.pos, end)));
-    pbf.pos = end;
-  }, null);
-  return names;
-}

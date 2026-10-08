@@ -10,40 +10,42 @@ export function metresBetween(a, b) {
   );
 }
 
-/**
- * Run `task(deadline)` when idle, within `timeout` ms; without idle callbacks
- * (Node) it runs a frame later with a null deadline.
- */
-export function whenIdle(task, timeout) {
-  if (typeof globalThis.requestIdleCallback === 'function')
-    globalThis.requestIdleCallback(task, { timeout });
-  else setTimeout(() => task(null), 16);
+/** Whether a height (m) is plausible ellipsoidal land: Dead Sea to Everest, with geoid slack. */
+export function plausibleSurfaceHeight(height) {
+  return Number.isFinite(height) && height >= -500 && height <= 9000;
 }
 
 /**
- * Ellipsoidal height (m) of the surface under the camera: globe terrain, or
- * `groundAt` where Google 3D hides the globe; null without a sample.
- * @param {object} viewer
- * @param {{groundAt?: (lon: number, lat: number) => number|null}} [options]
+ * Height (m) of the rendered surface, 3D tiles included, at `carto`; null
+ * when unsampleable or implausible (`sampleHeight` reads kilometres
+ * underground before tiles load).
  */
-export function groundUnderCamera(viewer, { groundAt } = {}) {
-  const carto = viewer?.camera?.positionCartographic;
-  if (!carto) return null;
-  const globe = viewer.scene?.globe;
-  let ground = globe?.show === false ? null : globe?.getHeight?.(carto);
-  if (!Number.isFinite(ground))
-    ground = groundAt?.(
-      Cesium.Math.toDegrees(carto.longitude),
-      Cesium.Math.toDegrees(carto.latitude),
-    );
-  return Number.isFinite(ground) ? ground : null;
+export function sampledSurfaceHeight(scene, carto) {
+  let height = null;
+  try {
+    if (scene?.sampleHeightSupported) height = scene.sampleHeight(carto);
+  } catch {
+    /* not sampleable yet */
+  }
+  return plausibleSurfaceHeight(height) ? height : null;
 }
 
-/** Camera height (m) above the ground under it (options as `groundUnderCamera`). */
-export function cameraHeightAboveGround(viewer, options = {}) {
+/**
+ * Ellipsoidal height (m) of the ground under the camera, or null. Under
+ * Google 3D (globe hidden) the rendered surface counts, minus any roof above
+ * the camera.
+ */
+export function groundUnderCamera(viewer) {
   const carto = viewer?.camera?.positionCartographic;
-  if (!carto) return null;
-  return carto.height - (groundUnderCamera(viewer, options) ?? 0);
+  const scene = viewer?.scene;
+  if (!carto || !scene) return null;
+  const globe = scene.globe;
+  if (globe && globe.show !== false) {
+    const ground = globe.getHeight?.(carto);
+    if (Number.isFinite(ground)) return ground;
+  }
+  const sampled = sampledSurfaceHeight(scene, carto);
+  return sampled !== null && sampled < carto.height ? sampled : null;
 }
 
 /** The ellipsoid `height` metres above `ellipsoid` (the ground at that height). */
@@ -74,16 +76,17 @@ function groundHit(camera, point, ellipsoid, maxRange) {
   return Cesium.Cartographic.fromCartesian(cartesian, ellipsoid) || null;
 }
 
+/** Screen rays per side, less one, that `visibleBbox` casts. */
+const BBOX_GRID = 5;
+
 /**
- * Visible [west, south, east, north] degrees, or null. Only screen rays that
- * hit count, so a horizon cannot inflate the box to the world.
- * `groundHeight` raises the ellipsoid to the ground (Google 3D hides the
- * globe), `maxRange` (m) drops near-horizon hits, and `nearRange` (m) always
- * includes the ground around the camera.
+ * Visible [west, south, east, north] degrees from the rays that hit the
+ * ground, or null when fewer than four do. `groundHeight` raises the ellipsoid
+ * to the ground (Denver is 1,600 m up); `maxRange` (m) drops far hits.
  */
 export function visibleBbox(
   viewer,
-  { grid = 5, groundHeight = null, maxRange = null, nearRange = null } = {},
+  { groundHeight = null, maxRange = null } = {},
 ) {
   const scene = viewer?.scene;
   const camera = viewer?.camera;
@@ -97,35 +100,14 @@ export function visibleBbox(
       groundHeight,
     );
     const point = new Cesium.Cartesian2();
-    for (let i = 0; i <= grid; i++) {
-      for (let j = 0; j <= grid; j++) {
-        point.x = (width * i) / grid;
-        point.y = (height * j) / grid;
+    for (let i = 0; i <= BBOX_GRID; i++) {
+      for (let j = 0; j <= BBOX_GRID; j++) {
+        point.x = (width * i) / BBOX_GRID;
+        point.y = (height * j) / BBOX_GRID;
         const carto = groundHit(camera, point, ellipsoid, maxRange);
         if (carto) hits.push(carto);
       }
     }
-  }
-  // The ground around the camera always counts: a street-level view's screen
-  // rows skip from the horizon to the first few metres.
-  const nadir = camera.positionCartographic;
-  if (Number.isFinite(nearRange) && nearRange > 0 && nadir) {
-    const dLat = nearRange / 111_320;
-    const dLon = dLat / Math.max(0.05, Math.cos(nadir.latitude));
-    const lat = Cesium.Math.toDegrees(nadir.latitude);
-    const lon = Cesium.Math.toDegrees(nadir.longitude);
-    for (const [dx, dy] of [
-      [-1, -1],
-      [-1, 1],
-      [1, -1],
-      [1, 1],
-    ])
-      hits.push(
-        Cesium.Cartographic.fromDegrees(
-          lon + dx * dLon,
-          Math.max(-85, Math.min(85, lat + dy * dLat)),
-        ),
-      );
   }
   if (hits.length >= 4) {
     let west = Infinity;
@@ -159,78 +141,57 @@ export function visibleBbox(
     }
     if (west !== east && north - south > 0) return [west, south, east, north];
   }
-  const rectangle = camera.computeViewRectangle?.(scene.globe?.ellipsoid);
-  if (!rectangle) return null;
-  return [
-    Cesium.Math.toDegrees(rectangle.west),
-    Cesium.Math.toDegrees(rectangle.south),
-    Cesium.Math.toDegrees(rectangle.east),
-    Cesium.Math.toDegrees(rectangle.north),
-  ];
+  return null;
 }
 
-/** Centre of the visible ground, or the camera's own footprint. */
-export function viewCentre(viewer) {
-  if (!viewer) return null;
-  const bbox = visibleBbox(viewer);
-  if (bbox) {
-    // Across the date line (west > east) the middle is on the far side of 0°.
-    const span = bbox[2] - bbox[0] + (bbox[0] > bbox[2] ? 360 : 0);
-    let lon = bbox[0] + span / 2;
-    if (lon > 180) lon -= 360;
-    return { lat: (bbox[1] + bbox[3]) / 2, lon };
-  }
-  const carto = viewer.camera?.positionCartographic;
+/** The point on the ground under the camera, as {lon, lat} degrees. */
+export function cameraNadir(viewer) {
+  const carto = viewer?.camera?.positionCartographic;
   if (!carto) return null;
   return {
-    lat: Cesium.Math.toDegrees(carto.latitude),
     lon: Cesium.Math.toDegrees(carto.longitude),
+    lat: Cesium.Math.toDegrees(carto.latitude),
   };
 }
 
 /**
- * Ground the camera looks at, for ranking tiles: `nadir` under the camera and
- * `ahead` at the screen centre (null on a miss or beyond `maxRange`).
+ * Where coverage tiles are ranked from: halfway between the nadir and the
+ * screen centre's ground, or the nadir when that is out of `maxRange`.
  */
 export function viewFocus(
   viewer,
   { groundHeight = null, maxRange = null } = {},
 ) {
-  const camera = viewer?.camera;
-  const carto = camera?.positionCartographic;
-  if (!carto) return null;
-  const nadir = {
-    lon: Cesium.Math.toDegrees(carto.longitude),
-    lat: Cesium.Math.toDegrees(carto.latitude),
+  const nadir = cameraNadir(viewer);
+  const scene = viewer?.scene;
+  const width = scene?.canvas?.clientWidth || scene?.canvas?.width || 0;
+  const height = scene?.canvas?.clientHeight || scene?.canvas?.height || 0;
+  if (!nadir || !width || !height) return nadir;
+  const hit = groundHit(
+    viewer.camera,
+    new Cesium.Cartesian2(width / 2, height / 2),
+    raisedEllipsoid(
+      scene.globe?.ellipsoid || Cesium.Ellipsoid.WGS84,
+      groundHeight,
+    ),
+    maxRange,
+  );
+  if (!hit) return nadir;
+  const ahead = {
+    lon: Cesium.Math.toDegrees(hit.longitude),
+    lat: Cesium.Math.toDegrees(hit.latitude),
   };
-  const canvas = viewer.scene?.canvas;
-  const width = canvas?.clientWidth || canvas?.width || 0;
-  const height = canvas?.clientHeight || canvas?.height || 0;
-  let ahead = null;
-  if (width > 0 && height > 0) {
-    const hit = groundHit(
-      camera,
-      new Cesium.Cartesian2(width / 2, height / 2),
-      raisedEllipsoid(
-        viewer.scene?.globe?.ellipsoid || Cesium.Ellipsoid.WGS84,
-        groundHeight,
-      ),
-      maxRange,
-    );
-    if (hit)
-      ahead = {
-        lon: Cesium.Math.toDegrees(hit.longitude),
-        lat: Cesium.Math.toDegrees(hit.latitude),
-      };
-  }
-  return { nadir, ahead };
+  return {
+    lon: wrapLon(nadir.lon + wrapLon(ahead.lon - nadir.lon) / 2),
+    lat: (nadir.lat + ahead.lat) / 2,
+  };
 }
 
 /**
  * Horizon occluder depth below WGS84 (m): ground can lie below the ellipsoid
  * (NYC −22 m), and an occluder at 0 m would hide the cones around it.
  */
-export const HORIZON_CULL_DEPTH_M = 1000;
+const HORIZON_CULL_DEPTH_M = 1000;
 const HORIZON_CULL_ELLIPSOID = new Cesium.Ellipsoid(
   Cesium.Ellipsoid.WGS84.radii.x - HORIZON_CULL_DEPTH_M,
   Cesium.Ellipsoid.WGS84.radii.y - HORIZON_CULL_DEPTH_M,

@@ -1,22 +1,13 @@
 import { createStreetLevelLayer } from '../../layers/streetLevel/index.js';
-import { createMapillaryProvider } from '../../layers/streetLevel/providers/mapillary/index.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as input from '../../data/inputOwnership.js';
 import * as render from '../../renderGovernor.js';
 
-/** A new provider registers here; its chip, credit and share bit follow. */
-export function createApplicationStreetLevel({ surface, sources }) {
+/** The Street Level layer over the application's Mapillary source. */
+export function createApplicationStreetLevel({ sources }) {
   return createStreetLevelLayer({
-    providers: [createMapillaryProvider({ source: sources.mapillary })],
-    services: {
-      sprites,
-      picking,
-      input,
-      render,
-      ground: surface?.groundFloor ?? null,
-      meshFloor: surface?.meshFloor ?? null,
-      terrain: surface?.terrain ?? null,
-    },
+    source: sources.mapillary,
+    services: { sprites, picking, input, render },
   });
 }

@@ -3,7 +3,6 @@ import { createWeatherLayer } from '../layers/weather/index.js';
 import { createCyclonesLayer } from '../layers/cyclones/index.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
-import { MAPILLARY_SOURCE_METHODS } from '../layers/streetLevel/providers/mapillary/policy.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
 import { createApplicationFlights } from './layers/flights.js';
@@ -57,7 +56,7 @@ const SOURCE_METHODS = Object.freeze({
   earthquakes: ['getSnapshot'],
   'fire-perimeters': ['getSnapshot'],
   cables: ['fetch'],
-  mapillary: MAPILLARY_SOURCE_METHODS,
+  mapillary: ['getStatus', 'getTile', 'getSequenceImages'],
 });
 
 /**
@@ -152,7 +151,6 @@ export function createApplicationCatalog({
         }),
         createApplicationAlpr({ surface, source: sources.alpr }),
         createApplicationStreetLevel({
-          surface,
           sources: { mapillary: sources.mapillary },
         }),
         satellites,

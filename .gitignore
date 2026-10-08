@@ -16,6 +16,10 @@ output/
 .gev-cache/
 # Browser QA gate evidence (screenshots, console and network dumps).
 qa-artifacts/
+# Playwright MCP session logs: browser consoles can carry tokens in URLs.
+.playwright-mcp/
+# Local Claude Code settings and preview configs.
+.claude/
 .DS_Store
 .gstack/
 3d-models/

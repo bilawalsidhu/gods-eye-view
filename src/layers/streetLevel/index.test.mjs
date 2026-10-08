@@ -2,81 +2,45 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { createStreetLevelLayer } from './index.js';
-import { MAPILLARY_CREDIT_HTML } from './providers/mapillary/policy.js';
-import { createMapillaryProvider } from './providers/mapillary/index.js';
-import { fakeStreetLevelProvider as fakeProvider } from '../../testSupport/streetLevelFakes.mjs';
+import { MAPILLARY_CREDIT_HTML } from './policy.js';
+import {
+  fakeCesiumViewer,
+  fakeMapillarySource,
+  fakePhotoViewer,
+} from '../../testSupport/streetLevelFakes.mjs';
 
 /**
- * A stand-in Cesium viewer the layer can be enabled on: a canvas for the
- * click handler, camera events, a primitive list and a credit display.
+ * A layer over `source` and `photoViewer`, initialised on a stand-in viewer
+ * and (unless `enable` is false) enabled.
  */
-function fakeViewer() {
-  const credits = [];
-  /** Cesium's flight bookkeeping: a new flight cancels the current one. */
-  let flight = null;
-  const flights = { started: 0, cancelled: 0 };
-  const stopFlight = () => {
-    const current = flight;
-    flight = null;
-    current?.cancel?.();
-    return Boolean(current);
-  };
-  const canvas = Object.assign(new EventTarget(), {
-    style: {},
-    // Keep Cesium's handler on the canvas; there is no real document here.
-    disableRootEvents: true,
-    onwheel: null,
-  });
-  return {
-    credits,
-    flights,
-    scene: {
-      canvas,
-      primitives: { add: (p) => p, remove() {} },
-      // Enough of a scene for the position marker to clamp to the ground.
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
-    },
-    camera: {
-      changed: new Cesium.Event(),
-      moveStart: new Cesium.Event(),
-      moveEnd: new Cesium.Event(),
-      flyToBoundingSphere(sphere, options = {}) {
-        stopFlight();
-        flight = options;
-        flights.started++;
-      },
-      cancelFlight() {
-        if (stopFlight()) flights.cancelled++;
-      },
-    },
-    creditDisplay: {
-      addStaticCredit: (credit) => credits.push(credit),
-      removeStaticCredit: (credit) =>
-        credits.splice(credits.indexOf(credit), 1),
-    },
-  };
-}
-
-/** A layer over `providers`, initialised and enabled on a stand-in viewer. */
-async function enabledLayer(t, providers = [fakeProvider()]) {
+async function startLayer(
+  t,
+  {
+    source = fakeMapillarySource(),
+    photoViewer = fakePhotoViewer(),
+    view = false,
+    enable = true,
+  } = {},
+) {
   const saved = globalThis.document;
-  // A pose moves the position marker, whose glyph is drawn on a canvas.
-  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
-  globalThis.document = Object.assign(new EventTarget(), {
-    createElement: () => ({ getContext: () => drawing }),
-  });
-  const viewer = fakeViewer();
-  const layer = createStreetLevelLayer({ providers });
+  // The click handler listens for Esc on the document.
+  globalThis.document = new EventTarget();
+  // Skip Cesium's one-time terrain table download for draped lines.
+  t.mock.method(
+    Cesium.GroundPolylinePrimitive,
+    'initializeTerrainHeights',
+    async () => {},
+  );
+  const viewer = fakeCesiumViewer({ view });
+  const layer = createStreetLevelLayer({ source, photoViewer });
   layer.init(viewer);
-  layer.enable(viewer);
+  if (enable) layer.enable(viewer);
   t.after(() => {
     layer.destroy();
     globalThis.document = saved;
   });
   await settle();
-  return { layer, viewer };
+  return { layer, viewer, source, photoViewer };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -91,338 +55,190 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-/** A provider whose viewer reports a pose for every image it opens. */
-function posingProvider() {
-  const provider = fakeProvider();
-  const create = provider.create;
-  provider.create = (context) => {
-    const instance = create(context);
-    let emit = null;
-    instance.viewer.onPose = (listener) => {
-      emit = listener;
-      return () => {
-        emit = null;
-      };
-    };
-    instance.viewer.open = async (imageId) => {
-      provider.calls.open.push(imageId);
-      emit?.({
-        providerId: 'mapillary',
-        imageId,
-        position: { lon: -121.49, lat: 38.58 },
-        bearing: 90,
-      });
-    };
-    return instance;
-  };
-  return provider;
-}
+/** A photo viewer reporting a pose for every image it opens. */
+const posingViewer = () =>
+  fakePhotoViewer({ pose: { position: { lon: -121.49, lat: 38.58 } } });
 
-/** nearestImage lookups that answer when the test says, with their signals. */
-function slowLookups() {
-  const lookups = [];
-  const nearestImage = (point, { signal } = {}) => {
-    const answer = deferred();
-    lookups.push({ point, signal, answer });
-    return answer.promise;
-  };
-  return { lookups, nearestImage };
-}
-
-/** A map stack controller that can be switched between stacks. */
-function fakeMapStack(initial) {
-  let active = initial;
-  const listeners = new Set();
-  return {
-    getActiveId: () => active,
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    switchTo(id) {
-      active = id;
-      for (const listener of listeners) listener();
-    },
-    listenerCount: () => listeners.size,
-  };
-}
-
-test('FOLLOW is available only while the Google 3D map stack is active', () => {
-  const layer = createStreetLevelLayer({ providers: [fakeProvider()] });
-  assert.equal(
-    layer.getUIState().street.followAvailable,
-    false,
-    'unknown stack: off',
-  );
-
-  const stack = fakeMapStack('esri-imagery');
-  layer.attachMapStackController(stack);
-  assert.equal(layer.getUIState().street.followAvailable, false);
-  layer.setFollow(true);
-  assert.equal(layer.getUIState().street.follow, false, 'refused on Esri');
-
-  stack.switchTo('photoreal');
-  assert.equal(layer.getUIState().street.followAvailable, true);
-  layer.setFollow(true);
-  assert.equal(layer.getUIState().street.follow, true);
-
-  stack.switchTo('osm');
-  assert.equal(layer.getUIState().street.followAvailable, false);
-  assert.equal(
-    layer.getUIState().street.follow,
-    false,
-    'leaving Google 3D stops following',
-  );
-});
-
-test('the layer lets go of the map stack when destroyed or re-attached', () => {
-  const layer = createStreetLevelLayer({ providers: [fakeProvider()] });
-  const first = fakeMapStack('photoreal');
-  layer.attachMapStackController(first);
-  assert.equal(first.listenerCount(), 1);
-  const second = fakeMapStack('photoreal');
-  layer.attachMapStackController(second);
-  assert.equal(first.listenerCount(), 0);
-  assert.equal(second.listenerCount(), 1);
-  layer.destroy();
-  assert.equal(second.listenerCount(), 0);
-});
-
-test('the CC BY-SA credit shows while a provider is on and goes with it', async (t) => {
-  const { layer, viewer } = await enabledLayer(t);
+test('the CC BY-SA credit shows while Mapillary is on and goes with it', async (t) => {
+  const { layer, viewer } = await startLayer(t);
   const shown = () => viewer.credits.map((credit) => credit.html);
-  assert.deepEqual(shown(), [MAPILLARY_CREDIT_HTML], 'shown on activate');
+  assert.deepEqual(shown(), [MAPILLARY_CREDIT_HTML], 'shown on enable');
   assert.match(shown()[0], /CC BY-SA 4\.0/);
-  layer.setProviderEnabled('mapillary', false);
-  assert.deepEqual(shown(), [], 'hidden with the provider');
-  layer.setProviderEnabled('mapillary', true);
+  layer.setParams({ mapillary: false });
+  assert.deepEqual(shown(), [], 'hidden with the switch');
+  layer.setParams({ mapillary: true });
   assert.deepEqual(shown(), [MAPILLARY_CREDIT_HTML]);
   layer.disable();
-  assert.deepEqual(shown(), [], 'every credit goes with the layer');
+  assert.deepEqual(shown(), [], 'the credit goes with the layer');
 });
 
-test('getStats tells a rejected key from a missing one', async (t) => {
-  const provider = fakeProvider();
-  const { layer } = await enabledLayer(t, [provider]);
-  provider.stats.loading = true;
-  assert.equal(layer.getStats().loadingLabel, 'loading coverage...');
-  assert.equal(layer.getStats().keyRequired, false);
+test('coverage asks for no tiles before the key status is known, and none without a key', async (t) => {
+  for (const configured of [false, true]) {
+    const status = deferred();
+    const source = fakeMapillarySource({ getStatus: () => status.promise });
+    const { layer } = await startLayer(t, { source, view: true });
+    assert.equal(source.calls.tiles.length, 0, 'nothing before the status');
+    status.resolve({ configured });
+    await settle();
+    if (configured) assert.ok(source.calls.tiles.length > 0, 'then coverage');
+    else {
+      assert.equal(
+        source.calls.tiles.length,
+        0,
+        'a key-less install never asks',
+      );
+      assert.deepEqual(
+        [layer.getStats().loadingLabel, layer.getStats().error],
+        ['KEY REQUIRED', 'KEY REQUIRED'],
+      );
+      assert.equal(layer.getUIState().keyRequired, true);
+      assert.equal(layer.getUIState().keyRejected, false);
+    }
+    layer.destroy();
+  }
+});
 
-  provider.stats.keyRequired = true;
-  assert.deepEqual(
-    [layer.getStats().loadingLabel, layer.getStats().error],
-    ['KEY REQUIRED', 'KEY REQUIRED'],
-  );
+test('a key status that failed is asked again on the next switch-on', async (t) => {
+  let up = false;
+  let asked = 0;
+  const source = fakeMapillarySource({
+    hasToken: () => false,
+    getStatus: async () => {
+      asked++;
+      if (!up) throw new TypeError('fetch failed');
+      return { configured: true };
+    },
+  });
+  const { layer, viewer } = await startLayer(t, { source, view: true });
+  assert.equal(asked, 1, 'one check for init and the first switch-on');
+  assert.equal(layer.getUIState().keyRequired, true);
+  up = true; // the server is reachable again
+  layer.disable();
+  layer.enable(viewer);
+  await settle();
+  assert.equal(asked, 2);
+  assert.equal(layer.getUIState().keyRequired, false);
+  assert.ok(source.calls.tiles.length > 0, 'coverage loads');
+  // A known key is not asked again.
+  layer.disable();
+  layer.enable(viewer);
+  await settle();
+  assert.equal(asked, 2);
+});
 
-  // A rejected key gates the provider exactly like a missing one.
-  provider.stats.keyRequired = false;
-  provider.stats.keyRejected = true;
-  provider.stats.error = 'Mapillary rejected MAPILLARY_CLIENT_TOKEN';
+test('a key status that never answers gives up, so the next switch-on asks again', async (t) => {
+  // The check's timeout, fired when the test says.
+  const timeouts = [];
+  t.mock.method(AbortSignal, 'timeout', (ms) => {
+    const controller = new AbortController();
+    timeouts.push({ ms, fire: () => controller.abort(new Error('timed out')) });
+    return controller.signal;
+  });
+  let asked = 0;
+  const source = fakeMapillarySource({
+    hasToken: () => false,
+    getStatus: ({ signal } = {}) =>
+      new Promise((_, reject) => {
+        asked++;
+        signal?.addEventListener('abort', () => reject(signal.reason));
+      }),
+  });
+  const { layer, viewer } = await startLayer(t, { source, view: true });
+  assert.equal(asked, 1);
+  assert.equal(timeouts[0].ms, 10_000, 'the check can be cut short');
+  assert.equal(layer.getUIState().coverage.loading, true, 'LOADING meanwhile');
+  timeouts[0].fire();
+  await settle();
+  assert.equal(layer.getUIState().coverage.loading, false);
+  assert.equal(layer.getUIState().keyRequired, true, 'no token: KEY REQUIRED');
+  layer.disable();
+  layer.enable(viewer);
+  assert.equal(asked, 2, 'asked again, not stuck on the first');
+});
+
+test('a rejected key gates the layer as KEY REJECTED until it goes off', async (t) => {
+  const rejected = Object.assign(new Error('Mapillary rejected the token'), {
+    keyRejected: true,
+  });
+  const source = fakeMapillarySource({
+    getTile: async () => {
+      throw rejected;
+    },
+  });
+  const { layer, viewer } = await startLayer(t, { source, view: true });
+  await settle();
   const stats = layer.getStats();
   assert.equal(stats.keyRequired, true);
   assert.equal(stats.loadingLabel, 'KEY REJECTED');
-  assert.equal(stats.error, 'Mapillary rejected MAPILLARY_CLIENT_TOKEN');
+  assert.match(stats.error, /rejected MAPILLARY_CLIENT_TOKEN/);
   const ui = layer.getUIState();
-  assert.equal(ui.keyRequired, true);
-  assert.equal(ui.keyRejected, true);
-  assert.equal(ui.providers[0].keyRequired, true);
-});
-
-test('switching a provider off deactivates it and closes the image it shows', async (t) => {
-  const provider = fakeProvider();
-  const { layer } = await enabledLayer(t, [provider]);
-  layer.attachViewerHost({});
-  assert.equal(await layer.openImage('mapillary', 'img1'), true);
-  assert.deepEqual(provider.calls.open, ['img1']);
-  assert.equal(layer.getUIState().street.open, true);
-  layer.setProviderEnabled('mapillary', false);
-  assert.equal(provider.calls.deactivate, 1);
-  assert.equal(provider.calls.unmount, 1, 'its viewer is released');
-  assert.equal(layer.getUIState().street.open, false);
-  assert.equal(layer.getUIState().street.providerId, null);
-});
-
-test('openNearest without the panel reports it instead of loading forever', async (t) => {
-  const provider = fakeProvider({ nearestImage: async () => 'img1' });
-  const { layer } = await enabledLayer(t, [provider]);
-  assert.equal(await layer.openNearest({ lat: 38.58, lon: -121.49 }), false);
-  const { street } = layer.getUIState();
-  assert.equal(street.loading, false);
-  assert.match(street.error, /Open the Street Level panel/);
-  assert.equal(provider.calls.mount, 0);
-});
-
-test('openNearest opens nothing once the layer went off during the lookup', async (t) => {
-  const answer = deferred();
-  const provider = fakeProvider({ nearestImage: () => answer.promise });
-  const { layer } = await enabledLayer(t, [provider]);
-  layer.attachViewerHost({});
-  const opening = layer.openNearest({ lat: 38.58, lon: -121.49 });
+  assert.deepEqual([ui.keyRequired, ui.keyRejected], [true, true]);
   layer.disable();
-  answer.resolve('img1');
-  assert.equal(await opening, false);
-  assert.equal(provider.calls.mount, 0, 'no viewer was stood up');
-  const { street } = layer.getUIState();
-  assert.equal(street.open, false);
-  assert.equal(street.loading, false);
-  assert.equal(street.error, null);
+  layer.enable(viewer);
+  assert.equal(layer.getUIState().keyRejected, false, 'asked again once on');
 });
 
-test('openNearest skips a provider switched off during its lookup', async (t) => {
-  const answer = deferred();
-  const provider = fakeProvider({ nearestImage: () => answer.promise });
-  const { layer } = await enabledLayer(t, [provider]);
+test('switching Mapillary off clears coverage and closes the image it shows', async (t) => {
+  const { layer, photoViewer } = await startLayer(t);
   layer.attachViewerHost({});
-  const opening = layer.openNearest({ lat: 38.58, lon: -121.49 });
-  layer.setProviderEnabled('mapillary', false);
-  answer.resolve('img1');
-  assert.equal(await opening, false);
-  assert.deepEqual(provider.calls.open, []);
-  assert.equal(layer.getUIState().street.loading, false);
+  assert.equal(await layer.openImage('img1'), true);
+  assert.deepEqual(photoViewer.calls.open, ['img1']);
+  assert.equal(layer.getUIState().street.open, true);
+  layer.setParams({ mapillary: false });
+  assert.equal(photoViewer.calls.unmount, 1, 'its viewer is released');
+  assert.equal(layer.getUIState().street.open, false);
+  assert.equal(layer.getUIState().providerOn, false);
 });
 
-test('a provider withdraws only the error it reported', async (t) => {
-  const provider = fakeProvider();
-  const { layer } = await enabledLayer(t, [provider]);
-  const { actions } = provider.context();
-  actions.reportError('Sequence images unavailable');
-  assert.equal(layer.getUIState().street.error, 'Sequence images unavailable');
-  actions.reportError(null);
-  assert.equal(layer.getUIState().street.error, null, 'withdrawn');
-
-  // The viewer's own error is not the provider's to clear.
-  layer.attachViewerHost(null);
-  actions.reportError('Sequence images unavailable');
-  await layer.openImage('mapillary', 'img1');
-  actions.reportError(null);
-  assert.match(layer.getUIState().street.error, /Open the Street Level panel/);
-});
-
-test('closing the photo stops the globe flying to it', async (t) => {
-  const { layer, viewer } = await enabledLayer(t, [posingProvider()]);
+test('a sequence that fails to load reports it apart from the photo, and the error goes with it', async (t) => {
+  const source = fakeMapillarySource({
+    getSequenceImages: async () => {
+      throw new Error('Sequence images unavailable');
+    },
+  });
+  // The photo's pose names its sequence, which opening selects.
+  const photoViewer = fakePhotoViewer({
+    pose: { position: { lon: -121.49, lat: 38.58 }, sequenceId: 'seq-1' },
+  });
+  const { layer } = await startLayer(t, { source, photoViewer });
   layer.attachViewerHost({});
-  assert.equal(await layer.openImage('mapillary', 'img1'), true);
+  assert.equal(await layer.openImage('img1'), true);
+  await settle();
+  let ui = layer.getUIState();
+  assert.equal(ui.sequence.error, 'Sequence images unavailable');
+  assert.equal(ui.street.error, null, 'the photo itself is fine');
+  layer.closeViewer();
+  ui = layer.getUIState();
+  assert.equal(ui.sequence.error, null, 'withdrawn with the sequence');
+});
+
+test('closing the photo, switching the layer off or destroying it stops the framing flight', async (t) => {
+  const { layer, viewer } = await startLayer(t, {
+    photoViewer: posingViewer(),
+  });
+  layer.attachViewerHost({});
+  assert.equal(await layer.openImage('img1'), true);
   assert.equal(viewer.flights.started, 1, 'the photo is framed');
   layer.closeViewer();
-  assert.equal(viewer.flights.cancelled, 1);
-});
+  assert.equal(viewer.flights.cancelled, 1, 'closed');
 
-test('switching the layer off or destroying it stops the framing flight', async (t) => {
-  const { layer, viewer } = await enabledLayer(t, [posingProvider()]);
-  layer.attachViewerHost({});
-  await layer.openImage('mapillary', 'img1');
+  await layer.openImage('img2');
   layer.disable();
-  assert.equal(viewer.flights.cancelled, 1, 'layer off');
+  assert.equal(viewer.flights.cancelled, 2, 'layer off');
 
   layer.enable(viewer);
-  await layer.openImage('mapillary', 'img2');
+  await layer.openImage('img3');
   layer.destroy();
-  assert.equal(viewer.flights.cancelled, 2, 'destroyed');
+  assert.equal(viewer.flights.cancelled, 3, 'destroyed');
 });
 
-test('closing the photo leaves a newer navigation flight alone', async (t) => {
-  const { layer, viewer } = await enabledLayer(t, [posingProvider()]);
-  layer.attachViewerHost({});
-  await layer.openImage('mapillary', 'img1');
-  assert.equal(viewer.flights.started, 1, 'the photo is being framed');
-  // A search result flies the globe elsewhere before the framing lands.
-  viewer.camera.flyToBoundingSphere(null, {});
-  layer.closeViewer();
-  assert.equal(viewer.flights.cancelled, 0, 'the search flight keeps going');
-});
-
-test('an older nearest lookup that answers late cannot replace a newer one', async (t) => {
-  const { lookups, nearestImage } = slowLookups();
-  const provider = fakeProvider({ nearestImage });
-  const { layer } = await enabledLayer(t, [provider]);
-  layer.attachViewerHost({});
-  const older = layer.openNearest({ lat: 38.58, lon: -121.49 });
-  const newer = layer.openNearest({ lat: 38.59, lon: -121.48 });
-  lookups[1].answer.resolve('newer');
-  assert.equal(await newer, true);
-  lookups[0].answer.resolve('older');
-  assert.equal(await older, false);
-  assert.deepEqual(provider.calls.open, ['newer']);
-  assert.equal(lookups[0].signal?.aborted, true, 'its request was aborted');
-  assert.equal(lookups[1].signal?.aborted, false);
-});
-
-test('an image picked during a nearest lookup wins over its late answer', async (t) => {
-  const { lookups, nearestImage } = slowLookups();
-  const provider = fakeProvider({ nearestImage });
-  const { layer } = await enabledLayer(t, [provider]);
-  layer.attachViewerHost({});
-  const lookup = layer.openNearest({ lat: 38.58, lon: -121.49 });
-  // A cone click goes through the provider's openImage action.
-  assert.equal(await provider.context().actions.openImage('picked'), true);
-  lookups[0].answer.resolve('nearest');
-  assert.equal(await lookup, false);
-  assert.deepEqual(provider.calls.open, ['picked']);
-  assert.equal(lookups[0].signal?.aborted, true);
-});
-
-test('closing the viewer or switching the layer off retires a nearest lookup', async (t) => {
-  const { lookups, nearestImage } = slowLookups();
-  const provider = fakeProvider({ nearestImage });
-  const { layer, viewer } = await enabledLayer(t, [provider]);
-  layer.attachViewerHost({});
-
-  const closed = layer.openNearest({ lat: 38.58, lon: -121.49 });
-  layer.closeViewer();
-  // The aborted fetch rejects, as fetch does; that is not the user's error.
-  lookups[0].answer.reject(new DOMException('aborted', 'AbortError'));
-  assert.equal(await closed, false);
-  let { street } = layer.getUIState();
-  assert.deepEqual(
-    [street.open, street.loading, street.error],
-    [false, false, null],
-  );
-  assert.equal(lookups[0].signal?.aborted, true, 'closing aborts the request');
-
-  const disabled = layer.openNearest({ lat: 38.58, lon: -121.49 });
-  layer.disable();
-  layer.enable(viewer);
-  lookups[1].answer.resolve('img1');
-  assert.equal(await disabled, false, 'nor does it open once back on');
-  assert.deepEqual(provider.calls.open, []);
-  ({ street } = layer.getUIState());
-  assert.deepEqual(
-    [street.open, street.loading, street.error],
-    [false, false, null],
-  );
-  assert.equal(lookups[1].signal?.aborted, true, 'layer off aborts it too');
-});
-
-test('the Mapillary provider hands the lookup signal to its source', async () => {
-  const requests = [];
-  const source = {
-    hasToken: () => true,
-    getStatus: async () => ({ configured: true }),
-    getTile: async () => new Uint8Array(0),
-    getSequenceImages: async () => [],
-    nearestImages: async (query, options) => {
-      requests.push(options);
-      return [{ id: 7, is_pano: false, captured_at: 10 }];
-    },
-  };
-  const instance = createMapillaryProvider({ source }).create({
-    services: {},
-    getFilter: () => ({ pano: 'all', sinceMs: null }),
-    isActive: () => true,
-    notify() {},
-    actions: { openImage() {}, reportError() {} },
+test('setParams takes "any date" (0 days) and the switch over the current values (share-link defaults)', async (t) => {
+  const { layer } = await startLayer(t);
+  assert.deepEqual(layer.getParams(), {
+    mapillary: true,
+    pano: 'all',
+    sinceDays: 0,
   });
-  const { signal } = new AbortController();
-  assert.equal(
-    await instance.nearestImage({ lat: 1, lon: 2 }, { signal }),
-    '7',
-  );
-  assert.equal(requests[0]?.signal, signal);
-});
-
-test('setParams takes "any date" (0 days) and a provider switch over the current values (share-link defaults)', async (t) => {
-  const provider = fakeProvider();
-  const { layer } = await enabledLayer(t, [provider]);
   layer.setParams({ pano: 'flat', sinceDays: 365 });
   assert.equal(layer.getParams().sinceDays, 365);
   layer.setParams({ sinceDays: 0 });
@@ -431,54 +247,39 @@ test('setParams takes "any date" (0 days) and a provider switch over the current
     pano: 'flat',
     sinceDays: 0,
   });
-  assert.equal(
-    provider.filters.at(-1).sinceMs,
-    null,
-    'providers drop the cut-off',
-  );
   layer.setParams({ mapillary: false });
   assert.equal(layer.getParams().mapillary, false);
 });
 
-/** A layer initialised on a stand-in viewer but never enabled. */
-function initialisedLayer(t, providers) {
-  const saved = globalThis.document;
-  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
-  globalThis.document = Object.assign(new EventTarget(), {
-    createElement: () => ({ getContext: () => drawing }),
+test('setParams ignores unknown keys and malformed values', async (t) => {
+  const { layer } = await startLayer(t);
+  layer.setParams({ pano: 'pano', sinceDays: 730 });
+  layer.setParams({ mapillary: '0', kartaview: true, pano: 'weird', x: 1 });
+  layer.setParams({ sinceDays: -3 });
+  layer.setParams(null);
+  assert.deepEqual(layer.getParams(), {
+    mapillary: true,
+    pano: 'pano',
+    sinceDays: 730,
   });
-  const viewer = fakeViewer();
-  const layer = createStreetLevelLayer({ providers });
-  layer.init(viewer);
-  t.after(() => {
-    layer.destroy();
-    globalThis.document = saved;
-  });
-  return { layer, viewer };
-}
+});
 
-test('switching a provider on while the layer is off activates nothing (M01)', async (t) => {
-  const provider = fakeProvider();
-  const prewarmed = [];
-  const create = provider.create;
-  provider.create = (context) => {
-    const instance = create(context);
-    instance.viewer.prewarm = async (host) => prewarmed.push(host);
-    return instance;
-  };
-  const { layer, viewer } = initialisedLayer(t, [provider]);
+test('switching Mapillary on while the layer is off draws nothing (M01)', async (t) => {
+  const { layer, viewer, source, photoViewer } = await startLayer(t, {
+    view: true,
+    enable: false,
+  });
   layer.attachViewerHost({});
-  layer.setProviderEnabled('mapillary', false);
-  layer.setProviderEnabled('mapillary', true);
   layer.setParams({ mapillary: false });
   layer.setParams({ mapillary: true });
-  await new Promise((resolve) => setTimeout(resolve, 40)); // past whenIdle
-  assert.equal(provider.calls.activate, 0, 'no coverage drawn');
+  await settle();
+  assert.equal(source.calls.tiles.length, 0, 'no coverage drawn');
   assert.deepEqual(viewer.credits, [], 'no credit shown');
-  assert.deepEqual(prewarmed, [], 'no viewer stood up');
-  assert.equal(layer.getUIState().providers[0].on, true, 'the switch is kept');
-  // Enabling the layer is what activates it, once.
+  assert.equal(photoViewer.calls.mount, 0, 'no viewer stood up');
+  assert.equal(layer.getUIState().providerOn, true, 'the switch is kept');
+  // Enabling the layer is what draws it.
   layer.enable(viewer);
-  assert.equal(provider.calls.activate, 1);
+  await settle();
+  assert.ok(source.calls.tiles.length > 0);
   assert.equal(viewer.credits.length, 1);
 });

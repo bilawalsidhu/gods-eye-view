@@ -1,24 +1,34 @@
-import { MAPILLARY_PROVIDER_ID, mapillaryImageUrl } from './policy.js';
+import { mapillaryImageUrl } from './policy.js';
 
 /**
- * Viewer adapter: lazy-loads MapillaryJS into the core's host and emits a
- * provider-neutral pose on every image, view or position change.
- * @returns {import('../../registry.js').ViewerAdapter}
+ * @typedef {object} StreetPose
+ * @property {string} imageId
+ * @property {{lon: number, lat: number}} position
+ * @property {number|null} bearing
+ * @property {number|null} altitude
+ * @property {boolean} isPano
+ * @property {number|null} capturedAt   Epoch milliseconds.
+ * @property {string|null} creator
+ * @property {string|null} sequenceId
+ * @property {string} externalUrl      Deep link to the image on mapillary.com.
+ */
+
+/**
+ * The panel's photo viewer: loads MapillaryJS on the first `mount` and emits
+ * a pose on every image, view or position change.
  */
 export function createMapillaryViewer({ source, render } = {}) {
   let viewer = null;
   let Library = null;
   let container = null;
   let pendingOpen = null;
-  let prewarming = null;
-  /** In-flight viewer construction, so pre-warm and open never build two. */
-  let creating = null;
   /** Bumped by `unmount`, so a construction it overtook builds nothing. */
   let generation = 0;
   let renderMode = 'letterbox';
   /** Metadata of the image on screen; pov/position events reuse it. */
   let current = null;
-  const listeners = new Set();
+  /** The pose listener (the viewer host); one at a time. */
+  let poseListener = null;
 
   function requestRender() {
     render?.governorRequestRender?.('mapillary-viewer');
@@ -43,16 +53,14 @@ export function createMapillaryViewer({ source, render } = {}) {
   }
 
   function emit(pose) {
-    for (const listener of [...listeners]) {
-      try {
-        listener(pose);
-      } catch {
-        /* listener errors are the core's to log */
-      }
+    try {
+      poseListener?.(pose);
+    } catch {
+      /* listener errors are the core's to log */
     }
   }
 
-  /** Read MapillaryJS image metadata into the neutral pose shape. */
+  /** Read MapillaryJS image metadata into the pose shape. */
   function describe(image) {
     return {
       imageId: String(image.id),
@@ -81,11 +89,9 @@ export function createMapillaryViewer({ source, render } = {}) {
       if (image) current = describe(image);
       if (!current || !viewer) return;
       emit({
-        providerId: MAPILLARY_PROVIDER_ID,
         ...current,
         position: { lon: lngLat.lng, lat: lngLat.lat },
         bearing: Number.isFinite(pov?.bearing) ? pov.bearing : null,
-        tilt: Number.isFinite(pov?.tilt) ? pov.tilt : 0,
         externalUrl: mapillaryImageUrl(current.imageId),
       });
       requestRender();
@@ -94,17 +100,8 @@ export function createMapillaryViewer({ source, render } = {}) {
     }
   }
 
-  function ensureViewer(host) {
+  async function ensureViewer(host) {
     if (viewer && container === host) return viewer;
-    if (creating?.container === host) return creating.promise;
-    const promise = createViewer(host).finally(() => {
-      if (creating?.promise === promise) creating = null;
-    });
-    creating = { container: host, promise };
-    return promise;
-  }
-
-  async function createViewer(host) {
     const built = generation;
     destroyViewer();
     const { Viewer } = await ensureLibrary();
@@ -178,9 +175,8 @@ export function createMapillaryViewer({ source, render } = {}) {
 
     unmount() {
       pendingOpen = null;
-      // The next mount builds afresh rather than joining a stale build.
+      // A build still waiting for the library gives up when it arrives.
       generation++;
-      creating = null;
       destroyViewer();
     },
 
@@ -190,26 +186,6 @@ export function createMapillaryViewer({ source, render } = {}) {
       } catch {
         /* no-op */
       }
-    },
-
-    /** Build the viewer ahead of the first image. Safe to call repeatedly. */
-    async prewarm(host) {
-      if (!host) return;
-      // An in-flight prewarm may give up (layer toggled mid-download): wait
-      // for it, then build if it did not.
-      if (prewarming) await prewarming;
-      if (viewer) return;
-      const run = (async () => {
-        try {
-          await ensureLibrary();
-          if (!viewer) await ensureViewer(host);
-        } catch {
-          /* the real open reports errors */
-        }
-      })();
-      prewarming = run;
-      await run;
-      if (prewarming === run) prewarming = null;
     },
 
     /** Show the whole image ('letterbox') or crop it to the frame ('fill'). */
@@ -224,8 +200,10 @@ export function createMapillaryViewer({ source, render } = {}) {
     },
 
     onPose(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
+      poseListener = listener;
+      return () => {
+        if (poseListener === listener) poseListener = null;
+      };
     },
   };
 }

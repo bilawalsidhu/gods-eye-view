@@ -1,4 +1,3 @@
-import { syncChipGroup } from './chipGroup.js';
 import { isExplicitLayerStateOrigin } from '../data/layerState.js';
 import {
   presentStreetLevelPanel,
@@ -6,8 +5,8 @@ import {
 } from './streetLevelPresentation.js';
 
 const RENDER_MODE_KEY = 'gev:street-level:render-mode';
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+/** <body> classes of the modes that hide every panel; an expanded photo leaves with them. */
+const PANEL_HIDING_MODES = ['ui-clean-view', 'recording-mode', 'cockpit-mode'];
 const RADIO_STEPS = Object.freeze({
   ArrowRight: 1,
   ArrowDown: 1,
@@ -25,8 +24,8 @@ const setAttr = (node, key, value) => {
 };
 
 /**
- * Fills the Street Level panel body: provider chips, filters, legend and
- * viewer. The panel chrome itself belongs to the application shell.
+ * Fills the Street Level panel body: filters and viewer. The panel chrome
+ * itself belongs to the application shell.
  */
 export class StreetLevelControls {
   constructor({ root, layer, actions }) {
@@ -37,22 +36,12 @@ export class StreetLevelControls {
     this.listeners = new AbortController();
     this._unsubscribe = null;
     this._state = null;
-    this._view = null;
     this._wasEnabled = null;
-    this._wasStreetOpen = false;
-    // Until the user first touches the app, an off → on is the saved layer
-    // state being restored, not a user switching the layer on.
-    this._restoreWindow = true;
-    // Whether the last switch-on was explicit (user, voice, tool) rather than
-    // a restore; null when the shell does not report request origins.
-    this._explicitEnable = null;
+    this._wasOpen = false;
+    // Whether the last switch-on was explicit (user, voice, tool), not a restore.
+    this._explicitEnable = false;
     this._unsubscribeEnableRequests = null;
     this._resizeQueued = false;
-    this._wrapHome = null;
-    this._expandReturnFocus = null;
-    // Only the <body> children this class made inert are released again.
-    this._inerted = new Set();
-    this._modalObserver = null;
     this._elements = this._collect();
     this._bind();
   }
@@ -65,13 +54,10 @@ export class StreetLevelControls {
     return {
       status: byId('sl-status'),
       controls: byId('sl-controls'),
-      providerChips: byId('sl-provider-chips'),
       error: byId('sl-error'),
       errorText: byId('sl-error-text'),
       sinceRange: byId('sl-since'),
       sinceLabel: byId('sl-since-label'),
-      legend: byId('sl-legend'),
-      followBtn: byId('sl-follow-btn'),
       viewerWrap: byId('sl-viewer-wrap'),
       viewerExpand: byId('sl-viewer-expand'),
       viewerClose: byId('sl-viewer-close'),
@@ -82,7 +68,6 @@ export class StreetLevelControls {
       imageLink: byId('sl-image-link'),
       coverageMeta: byId('sl-coverage-meta'),
       panoButtons: all('[data-sl-pano]'),
-      // Held, not re-queried: EXPAND moves them to <body> with the viewer.
       renderButtons: all('[data-sl-render]'),
     };
   }
@@ -100,17 +85,6 @@ export class StreetLevelControls {
     this.layer.attachViewerHost?.(el.viewer);
 
     this.listen(el.status, 'click', () => this._toggleEnabled());
-    this.listen(el.providerChips, 'click', (event) => {
-      const button = event.target?.closest?.('.data-toggle-chip');
-      if (!button || button.disabled) return;
-      // Without a key the chips stay focusable for their tooltip; a click
-      // says the same thing rather than switching on a layer that cannot draw.
-      if (this._view?.controlsDisabled) {
-        if (button.title) this.actions.showToast?.(button.title);
-        return;
-      }
-      this._toggleProvider(button.dataset.chipId);
-    });
     for (const button of el.panoButtons) {
       this.listen(button, 'click', () =>
         this._setParams({ pano: button.dataset.slPano }),
@@ -129,13 +103,33 @@ export class StreetLevelControls {
     this.listen(el.sinceRange, 'change', () =>
       this._setParams({ sinceDays: sinceDays() }),
     );
-    this.listen(el.followBtn, 'click', () => {
-      this.layer.setFollow?.(!(this._state?.street?.follow === true));
-    });
     this.listen(el.viewerClose, 'click', () => this.layer.closeViewer?.());
-    this.listen(el.viewerExpand, 'click', () =>
-      this.setViewerExpanded(!this.isViewerExpanded(), { dock: true }),
-    );
+    // EXPAND is the browser's fullscreen. iPhone Safari has no element
+    // fullscreen, so there it is a top-layer popover; with neither, no button.
+    this._expandMode =
+      typeof el.viewerWrap?.requestFullscreen === 'function'
+        ? 'fullscreen'
+        : typeof el.viewerWrap?.showPopover === 'function'
+          ? 'popover'
+          : null;
+    this._popoverOpen = false;
+    if (this._expandMode) {
+      this.listen(el.viewerExpand, 'click', () => this._toggleExpanded());
+      if (this._expandMode === 'fullscreen')
+        this.listen(document, 'fullscreenchange', () => this._syncExpanded());
+      else
+        this.listen(el.viewerWrap, 'toggle', (event) =>
+          this._onPopoverToggle(event),
+        );
+      // Esc shrinks the photo before the panel's own Esc can collapse it, in
+      // a browser that hands the key to the page while full screen too.
+      this.listen(el.viewerWrap, 'keydown', (event) => {
+        if (event.key !== 'Escape' || !this.isViewerExpanded()) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this._exitExpanded();
+      });
+    } else setProp(el.viewerExpand, 'hidden', true);
     for (const button of el.renderButtons) {
       this.listen(button, 'click', () => {
         const mode = button.dataset.slRender;
@@ -154,18 +148,6 @@ export class StreetLevelControls {
     } catch {
       /* storage unavailable */
     }
-    // The expanded viewer is a dialog: Esc shrinks it, Tab stays inside.
-    // Listen on the document, ahead of everything else, so both still hold
-    // once focus has left it (a click on the globe) and Esc never reaches
-    // the map's own handler, which would clear the selected sequence.
-    this.listen(document, 'keydown', (event) => this._onDialogKey(event), {
-      capture: true,
-    });
-    const endRestoreWindow = () => {
-      this._restoreWindow = false;
-    };
-    for (const type of ['pointerdown', 'keydown'])
-      this.listen(document, type, endRestoreWindow, { capture: true });
     // MapillaryJS only tracks window resizes; the panel resizes on its own.
     if (typeof ResizeObserver === 'function' && el.viewer) {
       this._resizeObserver = new ResizeObserver(() => this._requestResize());
@@ -208,21 +190,14 @@ export class StreetLevelControls {
     });
   }
 
-  async _ensureEnabled() {
-    if (this.actions.isEnabled?.()) return true;
-    try {
-      await this.actions.setEnabled?.(true);
-    } catch (error) {
-      this.actions.showToast?.(
-        error?.message || 'Street Level could not start',
-      );
-      return false;
-    }
-    return this.actions.isEnabled?.() === true;
-  }
-
   async _toggleEnabled() {
     const enabled = this.actions.isEnabled?.() === true;
+    // The pill is the only switch: it also brings back Mapillary that a link
+    // or tool switched off under a layer that is on.
+    if (this._state?.providerOn === false) {
+      this._setParams({ mapillary: true });
+      if (enabled) return;
+    }
     try {
       await this.actions.setEnabled?.(!enabled);
     } catch (error) {
@@ -232,35 +207,89 @@ export class StreetLevelControls {
 
   /** Through the data manager, so saved state and share links record it. */
   _setParams(params) {
-    if (this.actions.setParams)
-      this.actions.setParams(params, { origin: 'user' });
-    else this.layer.setParams?.(params);
+    this.actions.setParams(params, { origin: 'user' });
   }
 
-  /**
-   * Lighting a chip turns the layer on; darkening the last lit one turns the
-   * layer off but keeps the provider on, so the layer comes back with it.
-   */
-  async _toggleProvider(providerId) {
-    const chip = this._view?.providers.find((entry) => entry.id === providerId);
-    if (!chip) return;
-    if (!chip.active) {
-      this._setParams({ [providerId]: true });
-      await this._ensureEnabled();
-      return;
-    }
-    const othersLit = this._view.providers.some(
-      (entry) => entry.id !== providerId && entry.active,
-    );
-    if (othersLit) {
-      this._setParams({ [providerId]: false });
-      return;
-    }
+  /** Whether EXPAND has the viewer full screen (or, on iPhone, open over the page). */
+  isViewerExpanded() {
+    const wrap = this._elements.viewerWrap;
+    if (!wrap) return false;
+    return this._expandMode === 'popover'
+      ? this._popoverOpen
+      : document.fullscreenElement === wrap;
+  }
+
+  async _toggleExpanded() {
+    const wrap = this._elements.viewerWrap;
     try {
-      await this.actions.setEnabled?.(false);
-    } catch (error) {
-      this.actions.showToast?.(error?.message || 'Street Level toggle failed');
+      if (this.isViewerExpanded()) this._exitExpanded();
+      else if (this._expandMode === 'fullscreen')
+        await wrap.requestFullscreen();
+      else {
+        // Only while open: a closed popover is hidden even inside the panel.
+        wrap.popover = 'auto';
+        wrap.showPopover();
+      }
+    } catch {
+      /* refused (no user gesture, policy): the panel view stays */
     }
+  }
+
+  _exitExpanded() {
+    if (!this.isViewerExpanded()) return;
+    if (this._expandMode === 'popover') this._elements.viewerWrap.hidePopover();
+    else document.exitFullscreen().catch(() => {});
+  }
+
+  _onPopoverToggle(event) {
+    this._popoverOpen = event.newState === 'open';
+    if (!this._popoverOpen)
+      this._elements.viewerWrap.removeAttribute('popover');
+    this._syncExpanded();
+  }
+
+  /** Clean View, recording and the cockpit hide every panel, so they end EXPAND too. */
+  _watchPanelHidingModes(on) {
+    const body = document.body;
+    if (!on || !body) {
+      this._modesObserver?.disconnect();
+      this._modesObserver = null;
+      return;
+    }
+    const leaveIfHiding = () => {
+      if (PANEL_HIDING_MODES.some((mode) => body.classList.contains(mode)))
+        this._exitExpanded();
+    };
+    if (!this._modesObserver && typeof MutationObserver === 'function') {
+      this._modesObserver = new MutationObserver(leaveIfHiding);
+      this._modesObserver.observe(body, {
+        attributes: true,
+        attributeFilter: ['class'],
+      });
+    }
+    leaveIfHiding();
+  }
+
+  /** Mirror the expanded state on EXPAND, watch the panel-hiding modes, refit. */
+  _syncExpanded() {
+    const on = this.isViewerExpanded();
+    this._watchPanelHidingModes(on);
+    const button = this._elements.viewerExpand;
+    if (button) {
+      setProp(
+        button.querySelector('.sl-btn-icon'),
+        'textContent',
+        on ? '⤡' : '⤢',
+      );
+      setProp(
+        button.querySelector('.sl-btn-text'),
+        'textContent',
+        on ? 'SHRINK' : 'EXPAND',
+      );
+      setAttr(button, 'aria-pressed', String(on));
+      setAttr(button, 'aria-label', on ? 'Shrink' : 'Expand');
+    }
+    this._requestResize();
   }
 
   connect() {
@@ -268,16 +297,13 @@ export class StreetLevelControls {
     this._unsubscribe = null;
     if (this.destroyed || !this.root) return;
     this._unsubscribeEnableRequests?.();
-    this._unsubscribeEnableRequests =
-      this.actions.subscribeEnableRequests?.((origin) => {
+    this._unsubscribeEnableRequests = this.actions.subscribeEnableRequests(
+      (origin) => {
         this._explicitEnable = isExplicitLayerStateOrigin(origin);
-      }) || null;
+      },
+    );
     this._unsubscribe = this.layer.subscribe?.((state) => this.render(state));
     if (this.layer.getUIState) this.render(this.layer.getUIState());
-  }
-
-  onPanelResized() {
-    this._requestResize();
   }
 
   setCollapsed(collapsed, options = {}) {
@@ -285,188 +311,17 @@ export class StreetLevelControls {
     if (!collapsed) this._requestResize();
   }
 
-  isViewerExpanded() {
-    return (
-      this._elements.viewerWrap?.classList.contains(
-        'sl-viewer-wrap-expanded',
-      ) === true
-    );
-  }
-
-  /**
-   * A user's shrink (`dock`) also returns a floating panel to its rail, so the
-   * viewer does not land in a window over the globe.
-   */
-  setViewerExpanded(expanded, { dock = false } = {}) {
-    const wrap = this._elements.viewerWrap;
-    if (!wrap) return;
-    const on = expanded === true;
-    if (on === this.isViewerExpanded()) return;
-    if (on) {
-      // Lift the viewer out of the panel: the panel's backdrop-filter would
-      // otherwise pin a fixed-position child inside it.
-      this._wrapHome = { parent: wrap.parentNode, next: wrap.nextSibling };
-      this._expandReturnFocus = document.activeElement;
-      document.body.appendChild(wrap);
-      wrap.classList.add('sl-viewer-wrap-expanded');
-      wrap.setAttribute('role', 'dialog');
-      wrap.setAttribute('aria-modal', 'true');
-      wrap.setAttribute('aria-label', 'Street-level image');
-      wrap.tabIndex = -1;
-      wrap.focus({ preventScroll: true });
-      this._watchModal(true);
-    } else {
-      // Release the application first: the focus returned below may be in it.
-      this._watchModal(false);
-      wrap.classList.remove('sl-viewer-wrap-expanded');
-      wrap.removeAttribute('role');
-      wrap.removeAttribute('aria-modal');
-      wrap.removeAttribute('aria-label');
-      wrap.removeAttribute('tabindex');
-      if (this._wrapHome?.parent)
-        this._wrapHome.parent.insertBefore(wrap, this._wrapHome.next);
-      this._wrapHome = null;
-      const target = this._expandReturnFocus;
-      this._expandReturnFocus = null;
-      // A closed image hides the wrap: focus inside it would drop to <body>.
-      const reachable = (node) =>
-        node?.isConnected &&
-        typeof node.focus === 'function' &&
-        !(wrap.hidden && wrap.contains(node));
-      if (reachable(target)) target.focus({ preventScroll: true });
-      else if (reachable(this._elements.viewerExpand))
-        this._elements.viewerExpand.focus({ preventScroll: true });
-      else this._focusPanelControl();
-    }
-    const button = this._elements.viewerExpand;
-    if (button) {
-      const icon = button.querySelector('.sl-btn-icon');
-      const text = button.querySelector('.sl-btn-text');
-      if (icon) icon.textContent = on ? '⤡' : '⤢';
-      if (text) text.textContent = on ? 'SHRINK' : 'EXPAND';
-      button.setAttribute('aria-pressed', String(on));
-      button.setAttribute('aria-label', on ? 'Shrink' : 'Expand');
-    }
-    if (!on && dock) this.actions.dockPanel?.();
-    this._requestResize();
-  }
-
-  /** Park focus on a control that stays on screen while the viewer is hidden. */
-  _focusPanelControl() {
-    const el = this._elements;
-    const target =
-      el.status || el.providerChips?.querySelector('.data-toggle-chip');
-    target?.focus?.({ preventScroll: true });
-  }
-
-  /** Clean View, recording and the cockpit hide the expanded viewer with CSS. */
-  _isDialogShown() {
-    if (!this.isViewerExpanded()) return false;
-    const wrap = this._elements.viewerWrap;
-    return (
-      typeof wrap.checkVisibility !== 'function' ||
-      // `checkVisibilityCSS` is the option's name before Chrome 121.
-      wrap.checkVisibility({
-        visibilityProperty: true,
-        checkVisibilityCSS: true,
-      })
-    );
-  }
-
-  /**
-   * Make every other <body> child inert while the expanded viewer is shown.
-   * A CSS-hidden viewer releases them so a hidden modal never leaves the app
-   * dead. Returns whether the dialog is shown.
-   */
-  _syncModal() {
-    if (this.destroyed || !this._isDialogShown()) {
-      this._releaseModal();
-      return false;
-    }
-    const wrap = this._elements.viewerWrap;
-    for (const node of [...(document.body?.children || [])]) {
-      if (node === wrap || node.inert) continue;
-      node.inert = true;
-      this._inerted.add(node);
-    }
-    return true;
-  }
-
-  _releaseModal() {
-    for (const node of this._inerted) node.inert = false;
-    this._inerted.clear();
-  }
-
-  /** Re-check the modal when <body> changes class or gains a child. */
-  _watchModal(on) {
-    this._modalObserver?.disconnect();
-    this._modalObserver = null;
-    if (!on) return this._releaseModal();
-    if (typeof MutationObserver === 'function' && document.body) {
-      this._modalObserver = new MutationObserver(() => this._syncModal());
-      this._modalObserver.observe(document.body, {
-        attributes: true,
-        attributeFilter: ['class'],
-        childList: true,
-      });
-    }
-    this._syncModal();
-  }
-
-  _onDialogKey(event) {
-    if (event.key !== 'Escape' && event.key !== 'Tab') return;
-    if (!this._syncModal()) return;
-    // Only keys meant for the viewer: from inside it, from nowhere (<body>)
-    // or from the globe. A field elsewhere (search) keeps its Esc and Tab.
-    const target = event.target;
-    const wrap = this._elements.viewerWrap;
-    if (
-      !wrap.contains(target) &&
-      target !== document.body &&
-      target !== document.documentElement &&
-      !target?.closest?.('#cesiumContainer')
-    )
-      return;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      this.setViewerExpanded(false, { dock: true });
-      return;
-    }
-    // A radio off the roving tab stop (tabindex -1) is not a stop either.
-    const focusable = [...wrap.querySelectorAll(FOCUSABLE)].filter(
-      (node) =>
-        node.getAttribute('tabindex') !== '-1' &&
-        (node.offsetParent !== null || node === document.activeElement),
-    );
-    if (!focusable.length) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    } else if (!wrap.contains(document.activeElement)) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
   render(state) {
     if (this.destroyed || !state || !this.root) return;
     this._state = state;
     const view = presentStreetLevelPanel(state);
-    this._view = view;
     this._renderHeader(view);
-    this._renderGate(view);
-    this._renderProviders(view);
+    setProp(this._elements.controls, 'disabled', view.controlsDisabled);
     this._renderError(view);
     this._renderFilters(view);
     this._renderViewer(view);
-    this._renderMeta(view);
-    this._reactToTransitions(view, state);
+    setProp(this._elements.coverageMeta, 'textContent', view.meta);
+    this._reactToTransitions(view);
   }
 
   _renderHeader(view) {
@@ -482,14 +337,6 @@ export class StreetLevelControls {
       setAttr(el.status, 'aria-pressed', String(view.status.pressed));
       setProp(el.status, 'title', view.status.title);
     }
-  }
-
-  _renderGate(view) {
-    setProp(this._elements.controls, 'disabled', view.controlsDisabled);
-  }
-
-  _renderProviders(view) {
-    syncChipGroup(this._elements.providerChips, view.providers);
   }
 
   _renderError(view) {
@@ -528,51 +375,21 @@ export class StreetLevelControls {
         setAttr(el.sinceRange, 'aria-valuetext', view.since.label);
       }
     }
-    // Rebuild when the swatches change, not only their count: one provider
-    // can replace another with the same number of entries.
-    const legendKey = view.legend
-      .map((entry) => `${entry.key}:${entry.color}:${entry.label}`)
-      .join('|');
-    if (el.legend && this._legendKey !== legendKey) {
-      this._legendKey = legendKey;
-      el.legend.replaceChildren(
-        ...view.legend.map((entry) => {
-          const item = document.createElement('li');
-          const swatch = document.createElement('i');
-          swatch.className = 'sl-legend-swatch';
-          swatch.style.background = entry.color;
-          const label = document.createElement('span');
-          label.textContent = entry.label;
-          item.append(swatch, label);
-          return item;
-        }),
-      );
-    }
   }
 
   _renderViewer(view) {
     const el = this._elements;
     const { viewer } = view;
     const wrap = el.viewerWrap;
+    if (!viewer.open) this._exitExpanded();
     if (wrap) {
       // Closing the image (its × button) hides the wrap: move focus out
-      // first, or it drops to <body>. A shrink below returns it itself.
-      if (
-        !viewer.open &&
-        !wrap.hidden &&
-        !this.isViewerExpanded() &&
-        wrap.contains(document.activeElement)
-      )
-        this._focusPanelControl();
+      // first, or it drops to <body>.
+      if (!viewer.open && !wrap.hidden && wrap.contains(document.activeElement))
+        el.status?.focus?.({ preventScroll: true });
       setProp(wrap, 'hidden', !viewer.open);
     }
-    if (!viewer.open && this.isViewerExpanded()) this.setViewerExpanded(false);
     setProp(el.viewerPlaceholder, 'hidden', !viewer.loading);
-    if (el.followBtn) {
-      setAttr(el.followBtn, 'aria-pressed', String(viewer.follow.pressed));
-      setProp(el.followBtn, 'disabled', viewer.follow.disabled);
-      setProp(el.followBtn, 'title', viewer.follow.title);
-    }
     this._renderRadios(
       el.renderButtons,
       (button) => button.dataset.slRender === viewer.renderMode,
@@ -588,43 +405,34 @@ export class StreetLevelControls {
     }
   }
 
-  _renderMeta(view) {
-    setProp(this._elements.coverageMeta, 'textContent', view.meta);
-  }
-
   /**
    * Open the panel on a switch-on or when an image opens. Never persisted:
    * the stored collapse state stays the user's own choice.
    */
-  _reactToTransitions(view, state) {
+  _reactToTransitions(view) {
     const enabled = view.enabled;
     if (enabled && this._wasEnabled === false) {
-      // A restore must not reopen a panel the user or a share link kept
-      // collapsed. Without request origins, the restore window decides.
-      const preference = this.root.dataset?.collapsedPreference;
-      const restoring =
-        this._explicitEnable === null
-          ? this._restoreWindow &&
-            (preference === 'stored' || preference === 'share')
-          : !this._explicitEnable;
-      if (!restoring) this.setCollapsed(false, { persist: false });
-      this._restoreWindow = false;
-      this._explicitEnable = this._explicitEnable === null ? null : false;
+      // A restore must not reopen a panel the user or a share link kept collapsed.
+      if (this._explicitEnable) this.setCollapsed(false, { persist: false });
+      this._explicitEnable = false;
     }
     this._wasEnabled = enabled;
     // Other size changes reach the viewer through the ResizeObserver; opening
     // asks for one resize because the element may not have a size yet.
-    const open = state.street.open === true;
-    if (open && !this._wasStreetOpen)
-      this.setCollapsed(false, { persist: false });
-    this._wasStreetOpen = open;
+    const open = view.viewer.open;
+    if (open && !this._wasOpen) this.setCollapsed(false, { persist: false });
+    this._wasOpen = open;
   }
 
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.setViewerExpanded(false);
-    this._watchModal(false);
+    this._exitExpanded();
+    // Its `toggle` is not heard once destroyed: a popover left on the wrap
+    // would hide the viewer even inside the panel.
+    if (this._expandMode === 'popover')
+      this._elements.viewerWrap?.removeAttribute('popover');
+    this._watchPanelHidingModes(false);
     this.listeners.abort();
     this._resizeObserver?.disconnect();
     this._resizeObserver = null;

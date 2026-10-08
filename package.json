@@ -46,7 +46,6 @@
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
-    "qa:panel-resize": "node scripts/qa-panel-resize.mjs",
     "qa:street-level": "node scripts/qa-street-level.mjs",
     "qa:street-level:fixtures": "node scripts/qa-street-level.mjs --fixtures",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
@@ -261,8 +260,7 @@
       "node": "./server/providers/mapillary.js"
     },
     "./layers/street-level": "./src/layers/streetLevel/index.js",
-    "./layers/street-level/mapillary": "./src/layers/streetLevel/providers/mapillary/index.js",
-    "./layers/street-level/mapillary/source": "./src/layers/streetLevel/providers/mapillary/source.js",
+    "./layers/street-level/mapillary/source": "./src/layers/streetLevel/source.js",
     "./tools": "./src/tools/index.js",
     "./tools/mcp": "./src/tools/mcp/index.js",
     "./tools/panel": "./src/tools/panel.js",

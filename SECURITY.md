@@ -28,7 +28,7 @@ These are designed to be used directly in the browser (like a Mapbox public toke
 
 1. **Google Maps API key** — loads Photorealistic 3D Tiles directly and powers GEV place search. **Restrict it** (HTTP referrer + API restriction to the required Google APIs) in the Google Cloud Console. An unrestricted key in a public deployment can be abused and billed to you.
 2. **Cesium ion token** (`CESIUM_ION_TOKEN`, optional — for ion-hosted Google Photorealistic 3D Tiles, Bing world imagery, and world terrain) — used as `Cesium.Ion.defaultAccessToken` client-side. Use a public **`assets:read`** token with **URL restrictions** for any hosted deployment. The Community plan has eligibility and usage limits; a public token is not a secret, but it can still consume the account's quota.
-3. **Mapillary client token** (`MAPILLARY_CLIENT_TOKEN`, optional, Street Level) — used by the MapillaryJS viewer and Graph API lookups in the browser, and by the server's coverage-tile proxy. Mapillary client tokens are meant for browser use.
+3. **Mapillary client token** (`MAPILLARY_CLIENT_TOKEN`, optional, Street Level) — used by the MapillaryJS viewer and Graph API lookups in the browser, and by the server's coverage-tile proxy, which sends it only to `tiles.mapillary.com` over HTTPS (an upstream redirect is refused and answered 502, never followed) and caches tiles in memory only. Mapillary client tokens are meant for browser use.
 
 > The explicit browser `define` block in `build/vite.js` controls exactly what reaches the client: only these three keys. Everything else stays server-side.
 

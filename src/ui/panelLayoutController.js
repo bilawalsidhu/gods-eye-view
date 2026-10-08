@@ -194,7 +194,6 @@ export class PanelLayoutController {
     this._ppToggles.style.removeProperty('bottom');
     this._ppToggles.style.removeProperty('left');
     this._ppToggles.style.removeProperty('z-index');
-    this._ppToggles.classList.remove('panel-draggable', 'panel-dragging');
     this._ppToggles.querySelector('.pp-header-row')?.removeAttribute('title');
     stack.prepend(this._ppToggles);
     const globalContextPanel = document.getElementById('global-context-panel');
@@ -205,12 +204,8 @@ export class PanelLayoutController {
       this._streetLevelPanel,
     ]) {
       if (!panel) continue;
-      // A floating window keeps its restored place and size.
-      if (!panel.classList.contains('panel-floating')) {
-        for (const property of ['top', 'right', 'bottom', 'left', 'z-index'])
-          panel.style.removeProperty(property);
-        panel.classList.remove('panel-draggable', 'panel-dragging');
-      }
+      for (const property of ['top', 'right', 'bottom', 'left', 'z-index'])
+        panel.style.removeProperty(property);
       stack.insertBefore(panel, globalContextPanel);
       this._syncPanelCollapseButton(panel);
     }

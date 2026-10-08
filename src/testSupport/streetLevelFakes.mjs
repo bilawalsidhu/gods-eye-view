@@ -1,84 +1,130 @@
-/** Shared Street Level test stand-ins: provider snapshot, minimal provider, ray-casting camera. */
+/** Shared Street Level test stand-ins: Mapillary source, photo viewer, Cesium viewer, ray-casting camera. */
 import * as Cesium from 'cesium';
-import { MAPILLARY_CREDIT_HTML } from '../layers/streetLevel/providers/mapillary/policy.js';
 
 const RAD = Math.PI / 180;
 
-/** One provider as `getUIState().providers` lists it. */
-export function providerSnapshot(overrides = {}) {
+/**
+ * A Mapillary source for the layer: a configured key, empty tiles, and the
+ * given lookups; `calls` records tile requests.
+ */
+export function fakeMapillarySource(overrides = {}) {
+  const calls = { tiles: [] };
   return {
-    id: 'mapillary',
-    name: 'Mapillary',
-    label: 'MAPILLARY',
-    on: true,
-    configured: true,
-    keyRequired: false,
-    requiresKeyId: 'mapillary',
-    loading: false,
-    count: 0,
-    hint: '',
-    error: null,
-    color: '#05cb63',
+    calls,
+    hasToken: () => true,
+    getStatus: async () => ({ configured: true }),
+    getTile: async (...args) => {
+      calls.tiles.push(args);
+      return new Uint8Array(0);
+    },
+    getSequenceImages: async () => [],
     ...overrides,
   };
 }
 
 /**
- * The smallest provider the core accepts. Mutate `stats` to change what
- * coverageStats() answers; `calls`, `filters` and `context()` record use.
+ * A photo viewer in place of MapillaryJS: `calls` records use, and `open`
+ * reports a pose for the image (when `pose` is given) as the real one does.
  */
-export function fakeStreetLevelProvider({
-  id = 'mapillary',
-  pickPrefix = 'mly:',
-  html = MAPILLARY_CREDIT_HTML,
-  nearestImage = async () => null,
-} = {}) {
-  const calls = { activate: 0, deactivate: 0, mount: 0, open: [], unmount: 0 };
-  const filters = [];
-  const stats = {
-    count: 0,
-    zoom: null,
-    kind: null,
-    loading: false,
-    hint: '',
-    error: null,
-    keyRequired: false,
-  };
-  let context = null;
+export function fakePhotoViewer({ pose = null } = {}) {
+  const calls = { mount: 0, open: [], unmount: 0 };
+  let emit = null;
   return {
     calls,
-    filters,
-    stats,
-    context: () => context,
-    id,
-    name: 'Mapillary',
-    label: 'MAPILLARY',
-    requiresKeyId: null,
-    pickPrefix,
-    colors: { coverage: '#05cb63' },
-    credit: { html },
-    create: (providerContext) => {
-      context = providerContext;
-      return {
-        status: async () => ({ configured: true }),
-        init() {},
-        activate: () => calls.activate++,
-        deactivate: () => calls.deactivate++,
-        destroy() {},
-        refreshCoverage() {},
-        setFilter: (filter) => filters.push(filter),
-        coverageStats: () => ({ ...stats }),
-        handlePick: () => false,
-        nearestImage,
-        viewer: {
-          mount: async () => calls.mount++,
-          open: async (imageId) => calls.open.push(imageId),
-          close() {},
-          unmount: () => calls.unmount++,
-          resize() {},
-          onPose: () => () => {},
-        },
+    mount: async () => calls.mount++,
+    async open(imageId) {
+      calls.open.push(imageId);
+      if (pose) emit?.({ imageId, ...pose });
+    },
+    close() {},
+    unmount: () => calls.unmount++,
+    resize() {},
+    onPose(listener) {
+      emit = listener;
+      return () => {
+        emit = null;
       };
+    },
+  };
+}
+
+/**
+ * A stand-in Cesium viewer a layer can be enabled on: a canvas for the click
+ * handler, camera events with Cesium's flight bookkeeping (`flights` counts
+ * them, lists them and can `land` the current one), primitive lists and a
+ * credit display. With `view`, the camera looks straight down on Sacramento
+ * from 900 m, so coverage asks for tiles.
+ */
+export function fakeCesiumViewer({ view = false } = {}) {
+  const credits = [];
+  let flight = null;
+  const flights = {
+    started: 0,
+    cancelled: 0,
+    /** Every flight asked for, oldest first: `{ sphere, options }`. */
+    list: [],
+    land() {
+      const current = flight;
+      flight = null;
+      current?.options.complete?.();
+    },
+  };
+  const stopFlight = () => {
+    const current = flight;
+    flight = null;
+    current?.options.cancel?.();
+    return Boolean(current);
+  };
+  const canvas = Object.assign(new EventTarget(), {
+    style: {},
+    // Keep Cesium's handler on the canvas; there is no real document here.
+    disableRootEvents: true,
+    onwheel: null,
+    ...(view ? { clientWidth: 100, clientHeight: 100 } : {}),
+  });
+  const camera = Object.assign(
+    view
+      ? rayCamera({
+          lon: -121.4944,
+          lat: 38.5816,
+          altitude: 900,
+          pitch: -90,
+          width: 100,
+          height: 100,
+        })
+      : {},
+    {
+      changed: new Cesium.Event(),
+      moveStart: new Cesium.Event(),
+      moveEnd: new Cesium.Event(),
+      flyToBoundingSphere(sphere, options = {}) {
+        stopFlight();
+        flight = { sphere, options };
+        flights.list.push(flight);
+        flights.started++;
+      },
+      cancelFlight() {
+        if (stopFlight()) flights.cancelled++;
+      },
+    },
+  );
+  return {
+    credits,
+    flights,
+    scene: {
+      canvas,
+      primitives: { add: (p) => p, remove() {} },
+      groundPrimitives: { add: (p) => p, remove() {} },
+      // Enough of a scene for the position marker to clamp to the ground.
+      frameState: { mode: Cesium.SceneMode.SCENE3D },
+      updateHeight: () => () => {},
+      getHeight: () => undefined,
+    },
+    camera,
+    creditDisplay: {
+      addStaticCredit: (credit) => credits.push(credit),
+      removeStaticCredit: (credit) =>
+        credits.splice(credits.indexOf(credit), 1),
     },
   };
 }
@@ -138,6 +184,5 @@ export function rayCamera({
       const hit = Cesium.IntersectionTests.rayEllipsoid(ray, ellipsoid);
       return hit ? Cesium.Ray.getPoint(ray, hit.start) : undefined;
     },
-    computeViewRectangle: () => undefined,
   };
 }

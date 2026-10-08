@@ -139,7 +139,6 @@ try {
       const focusBefore = document.activeElement;
       const stoppedBeforeRestoration =
         ui._panelLayout.destroyed &&
-        ui._panelPosition.destroyed &&
         ui._feedback.destroyed &&
         ui._recording.destroyed &&
         cockpit.destroyed &&

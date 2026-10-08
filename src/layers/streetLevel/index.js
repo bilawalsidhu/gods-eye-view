@@ -1,70 +1,61 @@
+import * as Cesium from 'cesium';
 import { createState } from './state.js';
 import { createMarker } from './marker.js';
-import { createCameraFollow } from './cameraFollow.js';
-import { createCredits } from './credits.js';
-import { createPickRouter } from './pickRouter.js';
+import { createCameraFraming } from './cameraFraming.js';
 import { createSelection } from './selection.js';
 import { createViewerHost } from './viewerHost.js';
-import { requiresKeyIdFor, validateProviders } from './registry.js';
-import { normalizeFilter, resolveFilter, sameFilter } from './filter.js';
-import { decodeParams, encodeParams } from './params.js';
-import { composeUIState, summarizeCoverage } from './uiState.js';
-import { cameraHeightAboveGround, viewCentre, whenIdle } from './view.js';
-import { createGroundCaster, nextSurfaceMode } from './groundCast.js';
-import { createMeshSampler } from './meshSampler.js';
-
-/** Above this camera height the ground under the camera is not worth fetching. */
-const SURFACE_WARM_BELOW_M = 6000;
+import { normalizeFilter, sameFilter } from './filter.js';
 import {
-  FOLLOW_MAP_STACK_ID,
-  NEAREST_RADIUS_M,
-  POSITION_PICK_ID,
+  keyStatusLabel,
+  MAPILLARY_CREDIT_HTML,
+  MAPILLARY_KEY_ID,
   STREET_LEVEL_LAYER_ID,
 } from './policy.js';
+import { createCoverage } from './coverage.js';
+import { createSequences } from './sequences.js';
+import { createMapillaryViewer } from './viewer.js';
 
 export { STREET_LEVEL_LAYER_ID } from './policy.js';
 
+/** Longest wait for the server's key status; past it, the bundle's token decides. */
+const KEY_STATUS_TIMEOUT_MS = 10_000;
+
+/** Coverage as the panel sees it while the `mapillary` switch is off. */
+const COVERAGE_OFF = Object.freeze({
+  count: 0,
+  loading: false,
+  hint: '',
+  error: null,
+  keyRequired: false,
+  keyRejected: false,
+});
+
 /**
- * The Street Level layer over imagery providers (contract in registry.js).
- * The core owns what they share; providers own coverage, sequences, viewer.
- * @param {{providers: Array<import('./registry.js').StreetLevelProvider>, services?: object}} options
+ * The Street Level layer: Mapillary coverage lines at street zoom, a selected
+ * sequence's image cones, and the photo viewer in the panel.
+ * @param {{source: object, services?: object, photoViewer?: object}} options
+ *   `source` is source.js or a stand-in; `photoViewer` stands in for the
+ *   MapillaryJS adapter (viewer.js).
  */
 export function createStreetLevelLayer({
-  providers: definitions,
+  source,
   services = {},
+  photoViewer = null,
 }) {
-  const definitionsFrozen = validateProviders(definitions);
   const state = createState({ services });
   const parts = {};
   const context = { state, parts };
-  parts.groundCaster = services.terrain?.resolveEllipsoidalGround
-    ? createGroundCaster({ terrain: services.terrain })
-    : null;
-  // Mesh samples follow the application's rules: a real bare-earth prior,
-  // its mesh window, and a tileset that has finished streaming.
-  parts.meshSampler = parts.groundCaster
-    ? createMeshSampler({
-        getViewer: () => state.viewer,
-        groundAt: parts.groundCaster.groundAt,
-        withinPrior: services.ground?.meshFloorSampleWithinPrior ?? null,
-        tilesReady: services.meshFloor?.visibleTilesetLoaded ?? null,
-      })
-    : null;
-  parts.credits = createCredits();
   parts.marker = createMarker(context);
-  parts.follow = createCameraFollow(context);
-  parts.router = createPickRouter(() => state.providers.values(), {
-    positionId: POSITION_PICK_ID,
+  parts.framing = createCameraFraming(context);
+  parts.coverage = createCoverage({ state, source });
+  parts.sequences = createSequences({ state, source, parts });
+  parts.viewerHost = createViewerHost({
+    state,
+    parts,
+    adapter:
+      photoViewer || createMapillaryViewer({ source, render: services.render }),
   });
-  parts.viewerHost = createViewerHost(context);
-  parts.hasSelectedSequence = () =>
-    [...state.providers.values()].some(
-      (entry) => entry.instance.sequenceStats?.()?.selectedId,
-    );
-  parts.clearSequences = () => {
-    for (const entry of state.providers.values())
-      entry.instance.clearSequence?.();
-  };
+  parts.openImage = openImage;
   parts.selection = createSelection(context);
 
   let notifyQueued = false;
@@ -85,266 +76,127 @@ export function createStreetLevelLayer({
   }
   state.notify = notify;
 
-  function providerContext(entry) {
-    return Object.freeze({
-      services: state.services,
-      getFilter: () => resolveFilter(state.filter),
-      isActive: () => state.enabled && entry.on,
-      groundCaster: parts.groundCaster,
-      meshSampler: parts.meshSampler,
-      getSurface: () => state.surface,
-      notify,
-      actions: {
-        openImage: (imageId) => openImage(entry.def.id, imageId),
-        /**
-         * Show a provider error, or withdraw it (null). A withdrawal clears
-         * only this provider's own error, never a newer one from elsewhere.
-         */
-        reportError: (message) => {
-          if (message) {
-            state.street.error = entry.reportedError = message;
-          } else {
-            if (!entry.reportedError) return;
-            if (state.street.error === entry.reportedError)
-              state.street.error = null;
-            entry.reportedError = null;
-          }
-          notify();
-        },
-      },
+  /** The key-status request in flight; overlapping checks share it. */
+  let keyCheck = null;
+
+  /** Coverage waits for the key status: no tile requests without a key. */
+  function checkKey() {
+    keyCheck ||= (async () => {
+      let configured;
+      try {
+        // A hung server must not hold LOADING, or the next check, forever.
+        const signal = AbortSignal.timeout(KEY_STATUS_TIMEOUT_MS);
+        configured = (await source.getStatus({ signal }))?.configured === true;
+      } catch {
+        configured = source.hasToken?.() === true;
+      }
+      parts.coverage.setKeyStatus(configured);
+    })().finally(() => {
+      keyCheck = null;
     });
+    return keyCheck;
   }
 
-  for (const def of definitionsFrozen) {
-    const entry = {
-      def,
-      instance: null,
-      on: true,
-      status: null,
-      /** The error this provider last reported, until it withdraws it. */
-      reportedError: null,
-    };
-    entry.instance = def.create(providerContext(entry));
-    state.providers.set(def.id, entry);
+  /** The on-globe credit while the layer draws: CC BY-SA imagery needs it. */
+  let credit = null;
+  function showCredit(viewer) {
+    if (credit || !viewer?.creditDisplay) return;
+    credit = new Cesium.Credit(MAPILLARY_CREDIT_HTML, true);
+    viewer.creditDisplay.addStaticCredit(credit);
+  }
+  function hideCredit(viewer) {
+    if (!credit) return;
+    viewer?.creditDisplay?.removeStaticCredit?.(credit);
+    credit = null;
   }
 
-  let mapStack = null;
-  let unsubscribeMapStack = null;
-
-  /** Follow is offered only on the Google 3D stack; leaving it stops following. */
-  function syncFollowAvailability() {
-    const available = mapStack?.getActiveId?.() === FOLLOW_MAP_STACK_ID;
-    if (available === state.street.followAvailable) return;
-    state.street.followAvailable = available;
-    if (!available && state.street.follow) parts.follow.setFollow(false);
-    notify();
+  function startDrawing() {
+    const viewer = state.viewer;
+    if (!viewer) return;
+    parts.sequences.setVisible(true);
+    parts.coverage.attach(viewer);
+    showCredit(viewer);
+    // Without a known key, a switch-on asks again: the server may be back,
+    // or have a key now.
+    if (['status', 'no-key'].includes(state.coverage.blocked)) checkKey();
   }
 
-  /**
-   * Camera height above bare earth, for the surface mode. A cold grid cell is
-   * fetched once and the mode rechecked when it lands.
-   */
-  function cameraHeightForSurface() {
-    const carto = state.viewer?.camera?.positionCartographic;
-    if (!carto) return null;
-    const caster = parts.groundCaster;
-    const height = cameraHeightAboveGround(state.viewer, {
-      groundAt: caster.groundAt,
-    });
-    const lon = (carto.longitude * 180) / Math.PI;
-    const lat = (carto.latitude * 180) / Math.PI;
-    if (caster.groundAt(lon, lat) === null && height < SURFACE_WARM_BELOW_M)
-      caster.prepare([[lon, lat]]).then((ready) => {
-        if (ready) scheduleSurfaceSync();
-      });
-    return height;
+  /** Close the photo, clear lines and cones, forget refusals. */
+  function stopDrawing() {
+    parts.viewerHost.unmount();
+    parts.coverage.detach();
+    parts.coverage.clear();
+    parts.coverage.unblock();
+    parts.sequences.clearSelection();
+    parts.sequences.setVisible(false);
+    hideCredit(state.viewer);
   }
 
-  /** Cast overlays to bare earth on Google 3D at street zoom; drape them elsewhere. */
-  function syncSurface() {
-    const available = Boolean(parts.groundCaster) && state.enabled;
-    const photoreal = mapStack?.getActiveId?.() === FOLLOW_MAP_STACK_ID;
-    const mode = nextSurfaceMode(state.surface, {
-      available,
-      photoreal,
-      heightM: available && photoreal ? cameraHeightForSurface() : null,
-    });
-    if (mode === state.surface) return;
-    state.surface = mode;
-    parts.meshSampler?.setEnabled(mode === 'terrain');
-    parts.marker.setSurface(mode);
-    for (const entry of state.providers.values())
-      entry.instance.setSurface?.(mode);
-    notify();
-  }
-
-  let surfaceTimer = null;
-  function scheduleSurfaceSync() {
-    clearTimeout(surfaceTimer);
-    surfaceTimer = setTimeout(syncSurface, 150);
-  }
-
-  let removeSurfaceListeners = null;
-  function watchSurface(viewer) {
-    removeSurfaceListeners?.();
-    const camera = viewer?.camera;
-    if (!camera?.changed || !camera?.moveEnd) {
-      removeSurfaceListeners = null;
-      return;
-    }
-    const removeChanged = camera.changed.addEventListener(scheduleSurfaceSync);
-    const removeEnd = camera.moveEnd.addEventListener(scheduleSurfaceSync);
-    removeSurfaceListeners = () => {
-      removeChanged();
-      removeEnd();
-    };
-  }
-
-  function unwatchSurface() {
-    removeSurfaceListeners?.();
-    removeSurfaceListeners = null;
-    clearTimeout(surfaceTimer);
-    surfaceTimer = null;
-  }
-
-  const activeEntries = () =>
-    [...state.providers.values()].filter((entry) => entry.on);
-
-  async function refreshStatus(entry) {
-    try {
-      entry.status = await entry.instance.status();
-    } catch {
-      entry.status = null;
-    }
-    notify();
-  }
-
-  function activate(entry) {
-    if (!state.viewer) return;
-    entry.instance.activate(state.viewer);
-    parts.credits.show(state.viewer, entry.def);
-    if (!entry.status) refreshStatus(entry);
-    whenIdle(() => parts.viewerHost.prewarm([entry]), 1500);
-  }
-
-  function deactivate(entry) {
-    parts.viewerHost.unmount(entry.def.id);
-    entry.instance.deactivate();
-    parts.credits.hide(state.viewer, entry.def);
-  }
-
-  /** The nearest-image lookup in flight; any newer user action aborts it. */
-  let nearestLookup = null;
-
-  function abortNearest() {
-    nearestLookup?.abort();
-    nearestLookup = null;
-  }
-
-  function openImage(providerId, imageId) {
-    abortNearest();
-    return parts.viewerHost.open(providerId, imageId);
-  }
-
-  function setProviderEnabled(providerId, on) {
-    const entry = state.providers.get(providerId);
-    if (!entry) return false;
-    const next = on !== false;
-    if (entry.on === next) return true;
-    entry.on = next;
+  /** The share link's `mapillary` switch: off, the layer draws nothing. */
+  function setProviderOn(on) {
+    if (state.providerOn === on) return;
+    state.providerOn = on;
     if (state.enabled) {
-      if (next) activate(entry);
-      else deactivate(entry);
+      if (on) startDrawing();
+      else stopDrawing();
     }
     notify();
-    return true;
+  }
+
+  function openImage(imageId) {
+    return parts.viewerHost.open(imageId);
   }
 
   function setCoverageFilter(next) {
     const filter = normalizeFilter(next, state.filter);
     if (sameFilter(filter, state.filter)) return;
     state.filter = filter;
-    const resolved = resolveFilter(filter);
-    for (const entry of state.providers.values())
-      entry.instance.setFilter(resolved);
+    parts.coverage.rebuild();
+    parts.sequences.rerender();
     notify();
   }
 
-  function providerSnapshots() {
-    return [...state.providers.values()].map((entry) => {
-      const stats = entry.instance.coverageStats();
-      return {
-        id: entry.def.id,
-        name: entry.def.name,
-        label: entry.def.label,
-        on: entry.on,
-        configured: entry.status ? entry.status.configured === true : null,
-        // A rejected key gates the provider exactly like a missing one.
-        keyRequired: stats.keyRequired === true || stats.keyRejected === true,
-        keyRejected: stats.keyRejected === true,
-        requiresKeyId: entry.def.requiresKeyId || null,
-        loading: stats.loading === true,
-        count: stats.count || 0,
-        hint: stats.hint || '',
-        error: stats.error || null,
-        color: entry.def.colors.coverage,
-      };
-    });
-  }
-
-  function sequenceSnapshot() {
-    // The provider showing the open image answers first.
-    const owner = state.providers.get(state.street.providerId);
-    const candidates = owner
-      ? [owner, ...[...state.providers.values()].filter((e) => e !== owner)]
-      : [...state.providers.values()];
-    for (const entry of candidates) {
-      const stats = entry.instance.sequenceStats?.();
-      if (stats?.selectedId || stats?.loading)
-        return {
-          providerId: entry.def.id,
-          selectedId: stats.selectedId || null,
-          images: stats.images || 0,
-          loading: stats.loading === true,
-        };
-    }
-    return { providerId: null, selectedId: null, images: 0, loading: false };
+  function coverageStats() {
+    return state.providerOn ? parts.coverage.stats() : COVERAGE_OFF;
   }
 
   function getUIState() {
     const { host, ...street } = state.street;
-    return composeUIState({
+    const { keyRequired, keyRejected, ...coverage } = coverageStats();
+    return {
       enabled: state.enabled,
-      filter: state.filter,
-      providers: providerSnapshots(),
+      providerOn: state.providerOn,
+      // A rejected key gates the layer exactly like a missing one.
+      keyRequired,
+      keyRejected,
+      filter: { ...state.filter },
+      coverage,
+      sequence: {
+        selectedId: state.sequence.selectedId,
+        images: state.sequence.images.length,
+        loading: state.sequence.loading,
+        error: state.sequence.error,
+      },
       street,
-      sequence: sequenceSnapshot(),
-      surface: state.surface,
-    });
+    };
   }
 
   const layer = {
     id: STREET_LEVEL_LAYER_ID,
     name: 'Street Level',
     icon: '📷',
-    source: definitionsFrozen.map((def) => def.name).join(' · '),
+    source: 'Mapillary',
     updateInterval: 0,
     statsRefreshInterval: 1000,
-    requiresKeyId: requiresKeyIdFor(definitionsFrozen),
-    /** Registered providers, in chip order. */
-    providerIds: definitionsFrozen.map((def) => def.id),
+    requiresKeyId: MAPILLARY_KEY_ID,
 
     init(viewer) {
-      if (state.initialized)
-        throw new Error('Street Level layer is already initialized');
       state.viewer = viewer;
-      state.initialized = true;
       parts.marker.ensure(viewer);
       parts.marker.setVisible(false);
-      for (const entry of state.providers.values()) {
-        entry.instance.init(viewer);
-        refreshStatus(entry);
-      }
+      parts.sequences.ensureCollections(viewer);
+      parts.sequences.setVisible(false);
+      checkKey();
       console.log('[Data:StreetLevel] Initialized');
     },
 
@@ -353,20 +205,13 @@ export function createStreetLevelLayer({
       state.viewer = viewer;
       parts.marker.setVisible(true);
       parts.selection.install(viewer);
-      for (const entry of activeEntries()) activate(entry);
-      watchSurface(viewer);
-      syncSurface();
+      if (state.providerOn) startDrawing();
       notify();
     },
 
     disable() {
       state.enabled = false;
-      abortNearest();
-      unwatchSurface();
-      parts.viewerHost.unmount();
-      for (const entry of state.providers.values()) entry.instance.deactivate();
-      syncSurface();
-      parts.credits.hideAll(state.viewer);
+      stopDrawing();
       parts.selection.uninstall();
       parts.marker.setVisible(false);
       notify();
@@ -378,80 +223,55 @@ export function createStreetLevelLayer({
 
     destroy(viewer = state.viewer) {
       layer.disable();
-      for (const entry of state.providers.values())
-        entry.instance.destroy(viewer);
+      parts.sequences.destroy(viewer);
       parts.marker.destroy(viewer);
-      parts.meshSampler?.destroy();
-      parts.follow.destroy();
-      unsubscribeMapStack?.();
-      unsubscribeMapStack = null;
-      mapStack = null;
+      parts.framing.attachNavigation(null);
       state.listeners.clear();
       state.viewer = null;
-      state.initialized = false;
-      state.destroyed = true;
     },
 
     getStats() {
-      // The lifecycle polls this every second: summarise, don't snapshot.
-      const coverage = summarizeCoverage(providerSnapshots());
+      const coverage = coverageStats();
+      const keyLabel = keyStatusLabel(coverage);
       let loadingLabel = '';
-      const keyLabel = coverage.keyRejected ? 'KEY REJECTED' : 'KEY REQUIRED';
-      if (coverage.keyRequired) loadingLabel = keyLabel;
+      if (keyLabel) loadingLabel = keyLabel;
       else if (coverage.loading) loadingLabel = 'loading coverage...';
       else if (coverage.hint && state.enabled) loadingLabel = coverage.hint;
       return {
         count: coverage.count,
         loading: coverage.loading,
         keyRequired: coverage.keyRequired,
-        error: coverage.keyRequired
-          ? coverage.keyRejected
-            ? coverage.error || keyLabel
-            : keyLabel
-          : coverage.error,
+        // A rejected key's message names the fix; a missing one says so.
+        error: keyLabel && !coverage.keyRejected ? keyLabel : coverage.error,
         loadingLabel,
       };
     },
 
-    /**
-     * The application's camera authority: `run(noun, move)`, the deferred
-     * `begin(noun)` / `reassert(generation)` pair and
-     * `subscribeHandoff(listener)`. FOLLOW claims the camera with `run`; a
-     * photo claims it when opening starts and frames only if it still owns
-     * it once loaded. FOLLOW stops when another feature takes the camera.
-     */
+    /** A photo frames itself only if it still owns the camera once loaded. */
     attachNavigation(navigation) {
-      parts.follow.attachNavigation(navigation);
+      parts.framing.attachNavigation(navigation);
     },
 
-    /** The application map stack; FOLLOW is available only on Google 3D. */
-    attachMapStackController(controller) {
-      unsubscribeMapStack?.();
-      mapStack = controller || null;
-      unsubscribeMapStack =
-        mapStack?.subscribe?.(() => {
-          syncFollowAvailability();
-          syncSurface();
-        }) || null;
-      syncFollowAvailability();
-      syncSurface();
-    },
-
-    /** Share-link and stored state: provider switches plus the filter. */
+    /**
+     * Share-link and stored state, in the codec's keys (src/data/layerState.js):
+     * the `mapillary` switch plus the filter.
+     */
     getParams() {
-      return encodeParams({
-        providers: [...state.providers].map(([id, entry]) => [id, entry.on]),
-        filter: state.filter,
-      });
+      return {
+        mapillary: state.providerOn,
+        pano: state.filter.pano,
+        sinceDays: state.filter.sinceDays,
+      };
     },
 
+    /** Unknown keys and malformed values are ignored, so any link applies. */
     setParams(params = {}) {
-      const decoded = decodeParams(params, {
-        providerIds: state.providers.keys(),
-        filter: state.filter,
-      });
-      for (const [id, on] of decoded.providers) setProviderEnabled(id, on);
-      setCoverageFilter(decoded.filter);
+      const input = params && typeof params === 'object' ? params : {};
+      if (typeof input.mapillary === 'boolean') setProviderOn(input.mapillary);
+      const next = {};
+      if ('pano' in input) next.pano = input.pano;
+      if ('sinceDays' in input) next.sinceDays = input.sinceDays;
+      setCoverageFilter(next);
       return true;
     },
 
@@ -462,81 +282,18 @@ export function createStreetLevelLayer({
       return () => state.listeners.delete(listener);
     },
     getUIState,
-    /** The DOM element provider viewers render into. */
+    /** The DOM element the photo viewer renders into. */
     attachViewerHost(element) {
       parts.viewerHost.attach(element);
-      if (element && state.enabled)
-        whenIdle(() => parts.viewerHost.prewarm(activeEntries()), 1500);
     },
-    setProviderEnabled,
-    /** Imagery filter for coverage, cones and nearest-image lookups. */
-    setCoverageFilter,
     openImage,
-    /** Open the nearest image any active provider has around a point. */
-    async openNearest(point) {
-      const view = point || viewCentre(state.viewer);
-      if (!Number.isFinite(view?.lat) || !Number.isFinite(view?.lon))
-        return false;
-      abortNearest();
-      const lookup = new AbortController();
-      nearestLookup = lookup;
-      const { signal } = lookup;
-      state.street.loading = true;
-      state.street.error = null;
-      notify();
-      let lastError = null;
-      for (const entry of activeEntries()) {
-        let imageId = null;
-        try {
-          imageId = await entry.instance.nearestImage(
-            { lat: view.lat, lon: view.lon },
-            { signal },
-          );
-        } catch (error) {
-          // Overtaken: whatever replaced it owns the panel, errors included.
-          if (signal.aborted) return false;
-          // One provider failing (no key, offline) must not hide the others.
-          lastError = error;
-          continue;
-        }
-        if (signal.aborted) return false;
-        if (!state.enabled) break;
-        // This provider was switched off while it looked: try the next.
-        if (!imageId || !entry.on) continue;
-        nearestLookup = null;
-        return openImage(entry.def.id, imageId);
-      }
-      if (nearestLookup === lookup) nearestLookup = null;
-      // Switched off while it looked: nothing to open, nothing to report.
-      if (state.enabled && activeEntries().length)
-        state.street.error =
-          lastError?.message ||
-          `No street-level imagery within ${NEAREST_RADIUS_M} m of the view centre`;
-      state.street.loading = false;
-      notify();
-      return false;
-    },
-    /** Close the image and deselect it everywhere on the map. */
+    /** Close the image and deselect its sequence on the map. */
     closeViewer() {
-      abortNearest();
       parts.viewerHost.close();
-      parts.clearSequences();
+      parts.sequences.clearSelection();
     },
     setViewerRenderMode: (mode) => parts.viewerHost.setRenderMode(mode),
-    setFollow: (enabled) => parts.follow.setFollow(enabled),
     resizeViewer: () => parts.viewerHost.resize(),
-    selectSequence(
-      sequenceId,
-      providerId = state.providers.keys().next().value,
-    ) {
-      return state.providers
-        .get(providerId)
-        ?.instance.selectSequence?.(sequenceId);
-    },
-    clearSequence: () => parts.clearSequences(),
-    refreshCoverage() {
-      for (const entry of activeEntries()) entry.instance.refreshCoverage();
-    },
   };
   return layer;
 }

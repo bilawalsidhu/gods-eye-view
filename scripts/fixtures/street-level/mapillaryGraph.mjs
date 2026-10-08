@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 
 /**
  * Mapillary Graph API and image CDN answered from fixtures, covering every
- * request the provider and MapillaryJS make while opening, stepping and
- * closing a photo, so the gate needs no network and no real token.
+ * request the provider and MapillaryJS make while opening and closing a
+ * photo, so the gate needs no network and no real token.
  *
  * No `merge_cc` or `sfm_cluster` means MapillaryJS never asks for a mesh or
  * cluster, and empty S2 cells mean no spatial edges, which the gate does not
@@ -21,20 +21,11 @@ export const PHOTO_LINE = Object.freeze({
   north: 38.591,
 });
 /** Metres between consecutive photos on the line (≥ the 3 m cone thinning). */
-export const PHOTO_SPACING_M = 30;
+const PHOTO_SPACING_M = 30;
 /** Fixture thumbnail host (answered, never reached). */
 export const THUMB_HOST = 'qa-fixture.mapillary.com';
 
 const METRES_PER_DEG_LAT = 110_540;
-
-/** Ground distance in metres, as the app's metresBetween. */
-export function metresApart(a, b) {
-  const lat = (((a.lat + b.lat) / 2) * Math.PI) / 180;
-  return Math.hypot(
-    (b.lon - a.lon) * 111_320 * Math.cos(lat),
-    (b.lat - a.lat) * METRES_PER_DEG_LAT,
-  );
-}
 
 /**
  * Photos along PHOTO_LINE, south to north; every third one is a panorama.
@@ -117,7 +108,7 @@ const json = (status, body) => ({
 });
 
 let photoBytes = null;
-export function photoJpeg() {
+function photoJpeg() {
   photoBytes ??= readFileSync(new URL('./street-640x320.jpg', import.meta.url));
   return photoBytes;
 }
@@ -179,18 +170,6 @@ export function answerMapillaryRequest({ method, url, images }) {
             .slice(0, limit)
             .map((image) => withFields(imageRecord(image), fields))
         : [];
-      return { ...json(200, { data }), known: true };
-    }
-    if (q.has('lat') && q.has('lng')) {
-      const at = { lat: Number(q.get('lat')), lon: Number(q.get('lng')) };
-      const radius = Math.min(50, Number(q.get('radius')) || 50);
-      const limit = Number(q.get('limit')) || 10;
-      // In no particular order, as the real API answers.
-      const data = photos
-        .filter((image) => metresApart(at, image) <= radius)
-        .reverse()
-        .slice(0, limit)
-        .map((image) => withFields(imageRecord(image), fields));
       return { ...json(200, { data }), known: true };
     }
     if (q.has('s2')) return { ...json(200, { data: [] }), known: true };
