@@ -146,3 +146,26 @@ test('controller lifetime stops pending transport and releases resources through
   assert.equal(controller.stream, null);
   assert.equal(controller.isActive(), false);
 });
+
+test('a token refusal that names a provider key carries it on the error', async () => {
+  const backend = createRealtimeBackend({
+    tokenTransport: async () =>
+      Response.json(
+        { error: 'OPENAI_API_KEY is not set', keyId: 'openai' },
+        { status: 503 },
+      ),
+  });
+  await assert.rejects(backend.requestToken(), (error) => {
+    assert.equal(error.message, 'OPENAI_API_KEY is not set');
+    assert.equal(error.keyId, 'openai');
+    return true;
+  });
+  const other = createRealtimeBackend({
+    tokenTransport: async () =>
+      Response.json({ error: 'Rate limited' }, { status: 429 }),
+  });
+  await assert.rejects(other.requestToken(), (error) => {
+    assert.equal(error.keyId, undefined);
+    return true;
+  });
+});

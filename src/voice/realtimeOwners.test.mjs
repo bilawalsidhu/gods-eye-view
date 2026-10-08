@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { keySetupRequirement } from '../keySetupCore.mjs';
+import { VOICE_ERROR_HINT } from './control.js';
+import { createRealtimeBackend } from './realtimeBackend.js';
 import { GevRealtimeController } from './realtimeController.js';
 import { RealtimeInput } from './realtimeInput.js';
 import { RealtimeViewport } from './realtimeViewport.js';
@@ -262,4 +265,32 @@ test('late action or viewport completion cannot resume a stopped or replacement 
       controller.stop();
     }
   }
+});
+
+test('a missing provider key names the key instead of blaming the microphone', async (t) => {
+  browser(t);
+  installGlobals(t, { localStorage: { getItem: () => null, setItem() {}, removeItem() {} } });
+  const ui = {
+    root: { dataset: {}, classList: { remove() {} }, querySelectorAll: () => [] },
+    status: {}, detail: {}, errorDetail: {}, errorHint: {},
+  };
+  const controller = new GevRealtimeController({
+    runner: async () => ({ ok: true }),
+    backend: createRealtimeBackend({
+      tokenTransport: async () =>
+        Response.json({ error: 'OPENAI_API_KEY is not set', keyId: 'openai' }, { status: 503 }),
+      connectionTransport: () => assert.fail('no SDP without a token'),
+    }),
+    debugSink: null,
+    ui,
+  });
+  t.mock.method(console, 'error', () => {});
+  await controller.start();
+  assert.equal(controller.status, 'error');
+  assert.match(ui.errorDetail.textContent, /OPENAI_API_KEY is not set/);
+  assert.equal(ui.errorHint.textContent, keySetupRequirement('openai'));
+  assert.match(ui.errorHint.textContent, /^Needs OPENAI_API_KEY — add it in Provider Settings$/);
+  // Any other failure keeps the general advice.
+  controller.setStatus('error', 'ICE connection: failed');
+  assert.equal(ui.errorHint.textContent, VOICE_ERROR_HINT);
 });

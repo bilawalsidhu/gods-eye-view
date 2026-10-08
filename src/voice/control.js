@@ -1,3 +1,7 @@
+/** The error tray's advice when nothing more specific is known. */
+export const VOICE_ERROR_HINT =
+  'Check microphone permission and network access, then try again.';
+
 /** Build the voice control independently of its connection backend. */
 export function createVoiceControl({ reset = false } = {}) {
   let root = document.getElementById('gev-voice-control');
@@ -61,7 +65,7 @@ export function createVoiceControl({ reset = false } = {}) {
           <button class="gev-voice-error-dismiss" type="button">DISMISS</button>
         </div>
         <div id="gev-voice-error-detail"></div>
-        <div class="gev-voice-error-hint">Check microphone permission and network access, then try again.</div>
+        <div class="gev-voice-error-hint">${VOICE_ERROR_HINT}</div>
       </div>
     `;
     const commandDock = document.getElementById('command-dock');
@@ -88,6 +92,7 @@ export function createVoiceControl({ reset = false } = {}) {
     detail: root.querySelector('#gev-voice-detail'),
     helpDetail: root.querySelector('.gev-voice-help-detail'),
     errorDetail: root.querySelector('#gev-voice-error-detail'),
+    errorHint: root.querySelector('.gev-voice-error-hint'),
     tierButton: root.querySelector('#gev-voice-tier'),
     costValue: root.querySelector('#gev-voice-cost-value'),
     card: root.querySelector('#gev-voice-card'),

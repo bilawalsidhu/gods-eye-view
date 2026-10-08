@@ -1,5 +1,12 @@
 # Changelog
 
+- Name the missing key when voice cannot start without one. With no OpenAI
+  key, pressing the mic showed "OPENAI_API_KEY is not set" under advice to
+  check the microphone and network. The token route now says which provider
+  key it needs, and the voice error tray reads "Needs OPENAI_API_KEY — add it
+  in Provider Settings", the same guidance layers and map sources give.
+  Other voice errors keep the microphone and network advice (#143).
+
 - Vector tile sources take their allowed tile origin from the configured
   `tileJsonUrl`, so repointing only that URL at a mirror loads tiles from the
   mirror or fails visibly instead of silently using OpenFreeMap. Thanks to

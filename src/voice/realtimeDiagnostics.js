@@ -83,6 +83,7 @@ export function createErrorRecord(source, error, extra = {}) {
       String(error?.message || '').trim() ||
       'No browser error message supplied',
     errorDetail: rtcError?.errorDetail || null,
+    keyId: typeof rtcError?.keyId === 'string' ? rtcError.keyId : null,
     sctpCauseCode: rtcError?.sctpCauseCode ?? null,
     receivedAlert: rtcError?.receivedAlert ?? null,
     sentAlert: rtcError?.sentAlert ?? null,
@@ -179,7 +180,9 @@ export class RealtimeDiagnostics {
     storeErrors(this.errors);
     console.error('[GEV Realtime]', record);
     this.debugLog('error', record);
-    this.setStatus('error', formatErrorForDisplay(record));
+    this.setStatus('error', formatErrorForDisplay(record), {
+      keyId: record.keyId,
+    });
     return record;
   }
 
