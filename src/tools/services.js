@@ -31,9 +31,9 @@ import { createApplicationRequestServices } from '../services/requests.js';
 import { createEventPackSource } from '../sources/eventPacks.js';
 import { createInfrastructureSource } from '../sources/infrastructureData.js';
 import {
-  createAdsbLolSource,
-  createAisStreamSource,
-  createOpenSkySource,
+  createMilitarySource,
+  createVesselSource,
+  createFlightSource,
 } from '../sources/live/standalone.js';
 import {
   createGeocodePlaceService,
@@ -51,9 +51,9 @@ export function createToolServices({ fetchImpl, appUrl, panelKey }) {
     earthquakes: createUsgsEarthquakeSource({ fetchImpl }),
     fires: createFirmsSource({ fetchImpl }),
     launches: createLaunchSource({ fetchImpl }),
-    aircraft: createOpenSkySource({ fetchImpl }),
-    military: createAdsbLolSource({ fetchImpl }),
-    vessels: createAisStreamSource({
+    aircraft: createFlightSource({ fetchImpl }),
+    military: createMilitarySource({ fetchImpl }),
+    vessels: createVesselSource({
       fetchImpl,
       origin: () => new URL(appUrl).origin,
     }),

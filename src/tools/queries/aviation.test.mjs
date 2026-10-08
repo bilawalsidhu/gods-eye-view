@@ -373,10 +373,10 @@ test('aircraft searches say when a feed that answered is stale', async () => {
 });
 
 test('the real OpenSky source marks an hour-old snapshot stale for searches', async () => {
-  const { createOpenSkySource } =
+  const { createFlightSource } =
     await import('../../sources/live/standalone.js');
   const now = Date.UTC(2026, 0, 1, 12);
-  const opensky = createOpenSkySource({
+  const opensky = createFlightSource({
     now: () => now,
     fetchImpl: async () =>
       Response.json({ time: now / 1000 - 3600, states: [] }),

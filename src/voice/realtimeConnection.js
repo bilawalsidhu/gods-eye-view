@@ -98,6 +98,7 @@ export class RealtimeConnection {
       // and pricing by the tier we asked for would then under-meter and let the
       // cap be overrun. Unrecognised ids bill at worst-case rates.
       const costState = this.cost.bindServedModel(minted.model);
+      this.cost.bindTranscriptionModel?.(minted.transcribeModel);
       if (!costState.ratesRecognized) {
         console.warn(
           `[GEV voice] unrecognised Realtime model "${costState.modelId}" — ` +

@@ -450,7 +450,7 @@ export function createAisWatchdog(options = {}) {
     return generation;
   }
 
-  /** Status metadata for /api/ais-live. */
+  /** Status metadata for /api/vessels. */
   function snapshot() {
     const monoNow = clock.mono();
     const wallNow = clock.wall();

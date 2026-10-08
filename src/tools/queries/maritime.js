@@ -6,6 +6,7 @@ import {
   AREA_SCHEMA,
   areaCenter,
   areaContains,
+  areaRadiusKm,
   distanceKm,
   resolveArea,
 } from '../area.js';
@@ -48,12 +49,29 @@ function vesselRow(record, from) {
 }
 
 /**
- * Every vessel the source retains. The source's default is the newest few
- * thousand, which can leave out a vessel the server still holds; asking for
- * more than any server keeps lets the server return all of them.
+ * Every vessel the source retains, or with `area`, every vessel around it.
+ * The source's default is the newest few thousand, which can leave out a
+ * vessel the server still holds; asking for more than any server keeps lets
+ * the server return all of them. The area lets a server answer for that
+ * place alone; callers still keep only the vessels inside it.
  */
-function readVessels(services, signal) {
-  return services.vessels.getSnapshot({ maxRows: ALL_VESSELS }, { signal });
+function readVessels(services, signal, area) {
+  const center = area ? areaCenter(area) : null;
+  return services.vessels.getSnapshot(
+    {
+      maxRows: ALL_VESSELS,
+      ...(center
+        ? {
+            area: {
+              lat: center.lat,
+              lon: center.lon,
+              radiusKm: areaRadiusKm(area),
+            },
+          }
+        : {}),
+    },
+    { signal },
+  );
 }
 
 function snapshotInfo(snapshot) {
@@ -90,7 +108,7 @@ export const vesselsInArea = defineTool({
   async run(args, { services, signal }) {
     const area = await resolveArea(args.area, { services, signal });
     const center = areaCenter(area);
-    const snapshot = await readVessels(services, signal);
+    const snapshot = await readVessels(services, signal, area);
     const wanted = args.type?.toLowerCase();
     const rows = snapshot.records
       .filter(

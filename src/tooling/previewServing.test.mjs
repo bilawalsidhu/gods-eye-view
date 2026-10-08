@@ -44,6 +44,7 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
     TOMTOM_API_KEY: '',
     GOOGLE_MAPS_API_KEY: '',
     GOOGLE_MAPS_SERVER_API_KEY: '',
+    MAPILLARY_CLIENT_TOKEN: '',
     OPENAI_API_KEY: '',
     OPENSKY_AUTH_MODE: 'anon',
     OPENSKY_CLIENT_ID: '',
@@ -97,8 +98,8 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
     const origin = `http://127.0.0.1:${server.httpServer.address().port}`;
     try {
       for (const [route, status] of [
-        ['/api/opensky', 200],
-        ['/api/adsblol/mil', 200],
+        ['/api/flights', 200],
+        ['/api/military', 200],
         ['/api/adsbdb/type/invalid', 400],
         ['/api/firms/status', 200],
         ['/api/fire-perimeters/inciweb/publication/invalid', 400],
@@ -108,6 +109,10 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         ['/api/cctv/sources', 200],
         ['/api/gbfs/', 400],
         ['/api/tomtom/status', 200],
+        // The Street Level QA gate intercepts these in the browser; this is
+        // the check that the real servers register them.
+        ['/api/mapillary/status', 200],
+        ['/api/mapillary/tiles/coverage/14/1/2', 503],
         ['/api/radio/unknown', 404],
         ['/api/setup/status', isPreview ? 404 : 200],
         ['/api/setup/update', 404],
@@ -128,6 +133,10 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         const body = await response.json();
         if (route === '/api/cctv/sources')
           assert.equal(body.sources[0].id, 'fixture');
+        if (route === '/api/mapillary/status')
+          assert.deepEqual(body, { configured: false }, route);
+        if (route.startsWith('/api/mapillary/tiles'))
+          assert.deepEqual(body, { error: 'no_key', keyRequired: true }, route);
         if (
           route === '/api/does-not-exist' ||
           (isPreview && route.startsWith('/api/setup'))

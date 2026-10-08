@@ -386,8 +386,12 @@ function openSkySourceIsStale(sourceEpochMs, now = Date.now()) {
  */
 export function openSkyProxy() {
   const installMiddleware = (server) => {
-    server.middlewares.use('/api/opensky', async (req, res) => {
+    server.middlewares.use('/api/flights', async (req, res, next) => {
       try {
+        // This mount also matches its /track route, served by its own handler.
+        if (new URL(req.url || '/', 'http://localhost').pathname !== '/')
+          return next();
+        res.setHeader('X-Feed-Source', 'OpenSky Network');
         const requestedMode = normalizeOpenSkyAuthMode(
           process.env.OPENSKY_AUTH_MODE,
         );

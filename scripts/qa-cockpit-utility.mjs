@@ -42,7 +42,7 @@ page.on('pageerror', (error) => consoleErrors.push(error.message));
 page.on('response', (response) => {
   const url = new URL(response.url());
   const expectedOptionalTrackMiss = response.status() === 404
-    && url.pathname === '/api/opensky-track';
+    && url.pathname === '/api/flights/track';
   if (
     url.origin === new URL(appUrl).origin
     && response.status() >= 400
@@ -108,7 +108,7 @@ try {
       });
       return;
     }
-    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/ais-live') {
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/vessels') {
       request.respond({
         status: 200,
         contentType: 'application/json',
@@ -124,7 +124,7 @@ try {
       });
       return;
     }
-    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/adsblol/mil') {
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/military') {
       request.respond({
         status: 200,
         contentType: 'application/json',
@@ -132,7 +132,7 @@ try {
       });
       return;
     }
-    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/opensky-track') {
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/flights/track') {
       request.respond({
         status: 200,
         contentType: 'application/json',
@@ -832,7 +832,7 @@ try {
     await readinessPage.setRequestInterception(true);
     readinessPage.on('request', (request) => {
       const url = new URL(request.url());
-      if (url.origin === new URL(appUrl).origin && url.pathname === '/api/opensky') {
+      if (url.origin === new URL(appUrl).origin && url.pathname === '/api/flights') {
         const now = Math.floor(Date.now() / 1000);
         request.respond({
           status: 200, contentType: 'application/json',
