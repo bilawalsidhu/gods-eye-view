@@ -1135,6 +1135,29 @@ test('the body scroll position survives renders even when DOM mutations reset it
   assert.equal(f.body.scrollTop, 120);
 });
 
+test('opening DETAILS scrolls its card into view, and closing it does not scroll', async () => {
+  const f = fixture();
+  await f.ready();
+  // The body is 100 px high and scrolled 40 px; the card opens 150 px down.
+  f.body.scrollTop = 40;
+  f.body.clientHeight = 100;
+  f.body.getBoundingClientRect = () => ({ top: 0 });
+  const header = f
+    .byId('ri-details')
+    .find((node) => node.classList.contains('rail-card-header'));
+  const card = header.parentNode;
+  card.getBoundingClientRect = () => ({
+    top: 150,
+    height: card.dataset.open === 'true' ? 60 : 0,
+  });
+  header.click();
+  assert.equal(card.dataset.open, 'true');
+  assert.equal(f.body.scrollTop, 150);
+  header.click();
+  assert.equal(card.dataset.open, 'false');
+  assert.equal(f.body.scrollTop, 150);
+});
+
 test('destroy returns every listener, the divider and the panel state', async () => {
   const f = fixture();
   await f.ready();
