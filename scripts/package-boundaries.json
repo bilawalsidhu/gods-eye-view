@@ -22,7 +22,11 @@
   },
   "viewer": {
     "exports": ["./application/viewer"],
-    "modules": ["src/app/viewer.js", "src/app/atmosphereCompat.js"],
+    "modules": [
+      "src/app/viewer.js",
+      "src/app/atmosphereCompat.js",
+      "src/app/textureSizeCompat.js"
+    ],
     "external": ["cesium"]
   },
   "vite-build": {
@@ -1462,6 +1466,7 @@
       "src/app/tools.js",
       "src/app/viewer.js",
       "src/app/atmosphereCompat.js",
+      "src/app/textureSizeCompat.js",
       "src/bloom.js",
       "src/camera.js",
       "src/cameraGroundGuard.js",
