@@ -2956,7 +2956,8 @@ key reads KEY REJECTED and stops tile requests until the layer goes off; a 429
 pauses them for its Retry-After.
 
 The server proxy (`server/providers/mapillary.js`) keeps the token server-side,
-serves only z11–14 coverage, strips the unused `image` layer, coalesces
+serves only z11–14 coverage, refuses upstream redirects, strips the unused
+`image` layer, coalesces
 concurrent requests and keeps tiles in a 24 h memory cache.
 
 MapillaryJS loads on the first photo. Opening one frames it with a single

@@ -11,7 +11,6 @@ import {
 } from '../../server/providers/mapillary/trim.js';
 import {
   TILE_MAX_BYTES,
-  TILE_MAX_REDIRECTS,
   TILE_MEMORY_BUDGET_BYTES,
   TILE_TTL_MS,
   _resetTileCacheForTest,
@@ -260,7 +259,7 @@ for (const [sent, expected] of [
     );
   });
 
-for (const status of [400, 410, 500])
+for (const status of [302, 400, 410, 500])
   test(`an upstream ${status} is a 502, not the client's fault`, async () => {
     await withUpstream(
       () => new Response('{}', { status }),
@@ -270,62 +269,6 @@ for (const status of [400, 410, 500])
         assert.deepEqual(json(res), {
           error: `Mapillary tiles HTTP ${status}`,
         });
-      },
-    );
-  });
-
-const redirect = (location) =>
-  new Response(null, {
-    status: 302,
-    headers: location === null ? {} : { location },
-  });
-
-test('a redirect within the tile origin is followed by hand; endless ones stop', async () => {
-  await withUpstream(
-    (n) =>
-      n === 1 ? redirect('/maps/vtp/mly1_public/2/14/13/13?moved=1') : ok(),
-    async ({ calls, inits, call }) => {
-      const res = await call('/api/mapillary/tiles', '/coverage/14/13/13');
-      assert.equal(res.statusCode, 200);
-      assert.equal(
-        calls[1],
-        'https://tiles.mapillary.com/maps/vtp/mly1_public/2/14/13/13?moved=1',
-      );
-      for (const init of inits) assert.equal(init.redirect, 'manual');
-    },
-  );
-  await withUpstream(
-    (n) => redirect(`/maps/vtp/mly1_public/2/14/15/15?hop=${n}`),
-    async ({ calls, call }) => {
-      const res = await call('/api/mapillary/tiles', '/coverage/14/15/15');
-      assert.equal(res.statusCode, 502);
-      assert.deepEqual(json(res), {
-        error: 'Mapillary tile redirected too often',
-      });
-      assert.equal(calls.length, TILE_MAX_REDIRECTS + 1);
-    },
-  );
-});
-
-for (const [why, location] of [
-  ['another host', 'https://evil.example/collect'],
-  ['a look-alike host', 'https://tiles.mapillary.com.evil.example/t'],
-  ['another port', 'https://tiles.mapillary.com:8443/t'],
-  ['plain HTTP', 'http://tiles.mapillary.com/maps/vtp/t'],
-  ['credentials in the URL', 'https://user:pw@tiles.mapillary.com/t'],
-  ['a scheme-relative host', '//evil.example/t'],
-  ['no Location', null],
-])
-  test(`a redirect off the tile origin (${why}) is a 502, and the token stays home`, async () => {
-    await withUpstream(
-      (n) => (n === 1 ? redirect(location) : ok()),
-      async ({ calls, call }) => {
-        const res = await call('/api/mapillary/tiles', '/coverage/14/14/14');
-        assert.equal(res.statusCode, 502);
-        assert.deepEqual(json(res), {
-          error: 'Mapillary tile redirect left the tile origin',
-        });
-        assert.equal(calls.length, 1, 'the redirect was not followed');
       },
     );
   });

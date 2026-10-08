@@ -6,7 +6,6 @@ import { stripTileLayers } from './trim.js';
 
 /** Mapillary vector tiles, /{layer}/2/{z}/{x}/{y}: the only host the token goes to. */
 const TILE_HOST = 'https://tiles.mapillary.com/maps/vtp';
-const TILE_ORIGIN = new URL(TILE_HOST).origin;
 /** Only the street zooms the app draws are proxied. */
 const MIN_ZOOM = 11;
 const MAX_ZOOM = 14;
@@ -17,21 +16,19 @@ const MAX_ZOOM = 14;
 const DROP_LAYERS = ['image'];
 /** A z14 tile with its image layer is ~11 MB; anything past this is wrong. */
 export const TILE_MAX_BYTES = 48 * 1024 * 1024;
-export const TILE_MAX_REDIRECTS = 3;
 const FETCH_TIMEOUT_MS = 60_000;
 /** Tiles change only when new imagery is processed. */
 export const TILE_TTL_MS = 24 * 60 * 60 * 1000;
 export const TILE_MEMORY_BUDGET_BYTES = 96 * 1024 * 1024;
 /** Per-entry cost on top of its bytes, so empty tiles still count. */
 const ENTRY_OVERHEAD_BYTES = 1024;
-const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 /** The client token lives in the browser by design; the server adds it to tile URLs too. */
 export function mapillaryToken() {
   return String(process.env.MAPILLARY_CLIENT_TOKEN || '').trim();
 }
 
-/** Mapillary answered with an error status (or a redirect/size this proxy refuses). */
+/** Mapillary answered with an error status (or a size this proxy refuses). */
 export class TileUpstreamError extends Error {
   constructor(status, message, retryAfter = null) {
     super(message || `Mapillary tiles HTTP ${status}`);
@@ -54,27 +51,6 @@ export function parseTilePath(pathname) {
   return { z, x, y, key: `${z}/${x}/${y}` };
 }
 
-/** The next hop, if it stays HTTPS on the tile origin (the token is in the query). */
-function pinnedRedirect(location, base) {
-  let target = null;
-  try {
-    target = location ? new URL(location, base) : null;
-  } catch {
-    /* unparseable Location */
-  }
-  if (
-    target?.protocol !== 'https:' ||
-    target.origin !== TILE_ORIGIN ||
-    target.username ||
-    target.password
-  )
-    throw new TileUpstreamError(
-      502,
-      'Mapillary tile redirect left the tile origin',
-    );
-  return target.href;
-}
-
 function trim(bytes) {
   try {
     return stripTileLayers(bytes, DROP_LAYERS);
@@ -87,36 +63,31 @@ function trim(bytes) {
 /** One tile from Mapillary, trimmed; empty bytes mean no coverage. */
 async function fetchUpstream({ z, x, y }) {
   const token = encodeURIComponent(mapillaryToken());
-  let url = `${TILE_HOST}/mly1_public/2/${z}/${x}/${y}?access_token=${token}`;
-  const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
-  for (let hop = 0; ; hop++) {
-    // Redirects are followed by hand so every hop is checked.
-    const response = await fetch(url, {
-      signal,
+  const response = await fetch(
+    `${TILE_HOST}/mly1_public/2/${z}/${x}/${y}?access_token=${token}`,
+    {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      // The token is in the query: a redirect is never followed (a 3xx is a 502).
       redirect: 'manual',
       headers: { Accept: 'application/x-protobuf' },
-    });
-    if (response.ok && response.status !== 204) {
-      try {
-        const bytes = await readResponseBytesCapped(response, TILE_MAX_BYTES);
-        return trim(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length));
-      } catch (error) {
-        if (error?.code !== 'RESPONSE_TOO_LARGE') throw error;
-        throw new TileUpstreamError(502, 'Mapillary tile exceeds size cap');
-      }
-    }
+    },
+  );
+  if (!response.ok || response.status === 204) {
     await response.body?.cancel().catch(() => {});
     if (response.status === 204 || response.status === 404)
       return Buffer.alloc(0);
-    if (!REDIRECT_STATUSES.has(response.status))
-      throw new TileUpstreamError(
-        response.status,
-        undefined,
-        response.headers.get('retry-after'),
-      );
-    if (hop >= TILE_MAX_REDIRECTS)
-      throw new TileUpstreamError(502, 'Mapillary tile redirected too often');
-    url = pinnedRedirect(response.headers.get('location'), url);
+    throw new TileUpstreamError(
+      response.status,
+      undefined,
+      response.headers.get('retry-after'),
+    );
+  }
+  try {
+    const bytes = await readResponseBytesCapped(response, TILE_MAX_BYTES);
+    return trim(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length));
+  } catch (error) {
+    if (error?.code !== 'RESPONSE_TOO_LARGE') throw error;
+    throw new TileUpstreamError(502, 'Mapillary tile exceeds size cap');
   }
 }
 
