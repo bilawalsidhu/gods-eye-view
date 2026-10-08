@@ -1,5 +1,9 @@
 # Changelog
 
+- Recent Imagery: opening DETAILS scrolls its card into view when it opens below
+  the fold. The panel used to restore the previous scroll position right after
+  the reveal, so the card stayed out of sight.
+
 - MCP setup examples use the app's default port, `4173`. Thanks to
   [Huanyi Xie](https://github.com/xiehuanyi) (#934) and
   [shirunjies8-png](https://github.com/shirunjies8-png) (#959) for the same fix.
