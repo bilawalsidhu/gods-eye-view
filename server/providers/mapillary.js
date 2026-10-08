@@ -8,8 +8,8 @@ import {
 } from './mapillary/tiles.js';
 
 /**
- * Tile requests per client IP per minute, cache hits included: 24 new 25-tile
- * views a minute, more than a person flying the camera reaches.
+ * Tile requests per client IP per minute, cache hits included: over 60 new
+ * 9-tile views a minute, more than a person flying the camera reaches.
  */
 export const TILE_ROUTE_MAX_PER_MIN = 600;
 /** The longest upstream Retry-After passed on, in seconds. */

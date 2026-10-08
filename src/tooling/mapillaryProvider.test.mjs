@@ -12,6 +12,7 @@ import {
 import {
   TILE_MAX_BYTES,
   TILE_MEMORY_BUDGET_BYTES,
+  TILE_UPSTREAM_CONCURRENCY,
   TILE_TTL_MS,
   _resetTileCacheForTest,
   _tileMemoryForTest,
@@ -385,6 +386,26 @@ test('identical concurrent tile requests share one upstream fetch', async () => 
       assert.equal(failed.statusCode, 502);
       await call('/api/mapillary/tiles', '/coverage/14/2/2');
       assert.equal(calls.length, 3);
+    },
+  );
+});
+
+test('at most a few upstream fetches run at once; the rest wait their turn', async () => {
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  await withUpstream(
+    async () => (await gate, ok()),
+    async ({ calls, call }) => {
+      const tiles = TILE_UPSTREAM_CONCURRENCY + 4;
+      const pending = Array.from({ length: tiles }, (_, i) =>
+        call('/api/mapillary/tiles', `/coverage/14/${i}/3`),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      assert.equal(calls.length, TILE_UPSTREAM_CONCURRENCY);
+      release();
+      const done = await Promise.all(pending);
+      assert.ok(done.every((res) => res.statusCode === 200));
+      assert.equal(calls.length, tiles, 'the waiting ones ran too');
     },
   );
 });

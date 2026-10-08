@@ -17,6 +17,11 @@ const DROP_LAYERS = ['image'];
 /** A z14 tile with its image layer is ~11 MB; anything past this is wrong. */
 export const TILE_MAX_BYTES = 48 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 60_000;
+/**
+ * Upstream fetches at once; more wait their turn. A client drops the tiles a
+ * camera move leaves behind, but their fetches run on, so this bounds them.
+ */
+export const TILE_UPSTREAM_CONCURRENCY = 6;
 /** Tiles change only when new imagery is processed. */
 export const TILE_TTL_MS = 24 * 60 * 60 * 1000;
 export const TILE_MEMORY_BUDGET_BYTES = 96 * 1024 * 1024;
@@ -91,6 +96,23 @@ async function fetchUpstream({ z, x, y }) {
   }
 }
 
+let upstreamActive = 0;
+/** @type {Array<() => void>} fetches waiting for a slot, oldest first */
+const upstreamWaiting = [];
+
+/** Run `task` once an upstream slot is free. */
+async function withUpstreamSlot(task) {
+  while (upstreamActive >= TILE_UPSTREAM_CONCURRENCY)
+    await new Promise((resolve) => upstreamWaiting.push(resolve));
+  upstreamActive++;
+  try {
+    return await task();
+  } finally {
+    upstreamActive--;
+    upstreamWaiting.shift()?.();
+  }
+}
+
 /** @type {Map<string, {bytes: Buffer, at: number}>} insertion-ordered LRU */
 const memory = new Map();
 let memoryBytes = 0;
@@ -137,7 +159,7 @@ export async function fetchTile(address) {
     inFlight,
     address.key,
     async () => {
-      const bytes = await fetchUpstream(address);
+      const bytes = await withUpstreamSlot(() => fetchUpstream(address));
       remember(address.key, bytes);
       return bytes;
     },
