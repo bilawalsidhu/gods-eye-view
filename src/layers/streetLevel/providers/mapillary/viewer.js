@@ -5,7 +5,6 @@ import { mapillaryImageUrl } from './policy.js';
  * @property {string} imageId
  * @property {{lon: number, lat: number}} position
  * @property {number|null} bearing
- * @property {number|null} tilt
  * @property {number|null} altitude
  * @property {boolean} isPano
  * @property {number|null} capturedAt   Epoch milliseconds.
@@ -94,7 +93,6 @@ export function createMapillaryViewer({ source, render } = {}) {
         ...current,
         position: { lon: lngLat.lng, lat: lngLat.lat },
         bearing: Number.isFinite(pov?.bearing) ? pov.bearing : null,
-        tilt: Number.isFinite(pov?.tilt) ? pov.tilt : 0,
         externalUrl: mapillaryImageUrl(current.imageId),
       });
       requestRender();

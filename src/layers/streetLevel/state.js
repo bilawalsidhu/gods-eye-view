@@ -10,7 +10,6 @@ export function freshStreet() {
     imageId: null,
     position: null,
     bearing: null,
-    tilt: null,
     altitude: null,
     isPano: false,
     capturedAt: null,
@@ -55,7 +54,6 @@ export function createState({ services }) {
     viewer: null,
     enabled: false,
     initialized: false,
-    destroyed: false,
     listeners: new Set(),
     notify: null,
     /** The share link's `mapillary` switch: off draws nothing. */
@@ -78,6 +76,8 @@ export function createState({ services }) {
       cache: new Map(),
       collection: null,
       loading: false,
+      /** Why the selected sequence's images could not load, until it goes. */
+      error: null,
       abort: null,
     },
 

@@ -124,13 +124,19 @@ test('the header pill is the on/off switch and reads OFF, LOADING or ON', () => 
   );
 });
 
-test('errors from the viewer or the coverage web surface in one alert', () => {
+test('errors from the viewer, the sequence or the coverage surface in one alert', () => {
   assert.equal(presentStreetLevelPanel(snapshot()).error, null);
   assert.equal(
     presentStreetLevelPanel(
       snapshot({ street: { error: 'Image could not be opened' } }),
     ).error,
     'Image could not be opened',
+  );
+  assert.equal(
+    presentStreetLevelPanel(
+      snapshot({ sequence: { error: 'Sequence images unavailable' } }),
+    ).error,
+    'Sequence images unavailable',
   );
   assert.equal(
     presentStreetLevelPanel(snapshot({ coverage: { error: 'Tile HTTP 502' } }))

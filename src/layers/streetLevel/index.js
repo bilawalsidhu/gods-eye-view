@@ -60,7 +60,6 @@ export function createStreetLevelLayer({
       photoViewer || createMapillaryViewer({ source, render: services.render }),
   });
   parts.openImage = openImage;
-  parts.reportSequenceError = reportSequenceError;
   parts.selection = createSelection(context);
 
   let notifyQueued = false;
@@ -80,24 +79,6 @@ export function createStreetLevelLayer({
     });
   }
   state.notify = notify;
-
-  /** The error a sequence lookup last showed, until it withdraws it. */
-  let sequenceError = null;
-
-  /**
-   * Show a sequence error, or withdraw it (null). A withdrawal clears only
-   * that error, never a newer one from the viewer.
-   */
-  function reportSequenceError(message) {
-    if (message) {
-      state.street.error = sequenceError = message;
-    } else {
-      if (!sequenceError) return;
-      if (state.street.error === sequenceError) state.street.error = null;
-      sequenceError = null;
-    }
-    notify();
-  }
 
   /** Coverage waits for the key status: no tile requests without a key. */
   async function checkKey() {
@@ -172,6 +153,7 @@ export function createStreetLevelLayer({
         selectedId: state.sequence.selectedId,
         images: state.sequence.images.length,
         loading: state.sequence.loading,
+        error: state.sequence.error,
       },
       street,
     };
@@ -228,7 +210,6 @@ export function createStreetLevelLayer({
       state.listeners.clear();
       state.viewer = null;
       state.initialized = false;
-      state.destroyed = true;
     },
 
     getStats() {

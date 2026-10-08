@@ -118,7 +118,10 @@ export function presentStreetLevelPanel(state, { now = Date.now() } = {}) {
     controlsDisabled: state.keyRequired === true,
     error: keyMissing
       ? keyHint()
-      : state.street.error || state.coverage.error || null,
+      : state.street.error ||
+        state.sequence.error ||
+        state.coverage.error ||
+        null,
     filter: { pano: filter.pano, sinceDays: Number(filter.sinceDays) || 0 },
     since: presentSince(filter.sinceDays, now),
     legend: state.providerOn !== false,

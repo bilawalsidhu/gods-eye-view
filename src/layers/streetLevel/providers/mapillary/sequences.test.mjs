@@ -58,7 +58,6 @@ function records(sequenceId, count = 2) {
 function setup() {
   const source = deferredSource();
   const colours = [];
-  const errors = [];
   const state = {
     services: {},
     viewer: {},
@@ -70,6 +69,7 @@ function setup() {
       cache: new Map(),
       collection: cones(),
       loading: false,
+      error: null,
       abort: null,
     },
   };
@@ -77,16 +77,15 @@ function setup() {
     coverage: {
       recolorSequence: (id, selected) => colours.push([id, selected]),
     },
-    reportSequenceError: (message) => errors.push(message),
   };
   const sequences = createSequences({ state, source, parts });
   const drawn = () =>
     state.sequence.collection.items.map((cone) => cone.id.split(':').at(-1));
-  return { state, source, sequences, colours, errors, drawn };
+  return { state, source, sequences, colours, drawn };
 }
 
 test('a failed sequence load leaves no stale cones and can be retried', async () => {
-  const { state, source, sequences, colours, errors, drawn } = setup();
+  const { state, source, sequences, colours, drawn } = setup();
   sequences.select('A');
   source.last('A').resolve(records('A'));
   await settle();
@@ -100,7 +99,7 @@ test('a failed sequence load leaves no stale cones and can be retried', async ()
   assert.equal(state.sequence.loading, false);
   assert.equal(state.sequence.selectedId, null, 'B is not left highlighted');
   assert.deepEqual(colours.at(-1), ['B', false]);
-  assert.deepEqual(errors, [null, 'Sequence images unavailable']);
+  assert.equal(state.sequence.error, 'Sequence images unavailable');
 
   // Clicking B again asks again.
   sequences.select('B');
@@ -109,7 +108,7 @@ test('a failed sequence load leaves no stale cones and can be retried', async ()
   await settle();
   assert.deepEqual(drawn(), ['B-0', 'B-1']);
   assert.equal(state.sequence.selectedId, 'B');
-  assert.equal(errors.at(-1), null, 'the error is cleared once B loads');
+  assert.equal(state.sequence.error, null, 'cleared once B loads');
 });
 
 test('a late answer for a superseded sequence neither draws nor is cached', async () => {
@@ -151,7 +150,7 @@ test('a cached sequence is re-selected without a lookup', async () => {
 });
 
 test('clearSelection cancels the lookup and uncolours the sequence', async () => {
-  const { state, source, sequences, colours, errors, drawn } = setup();
+  const { state, source, sequences, colours, drawn } = setup();
   sequences.select('A');
   sequences.clearSelection();
   assert.equal(source.last('A').signal.aborted, true);
@@ -161,7 +160,7 @@ test('clearSelection cancels the lookup and uncolours the sequence', async () =>
   ]);
   assert.equal(state.sequence.selectedId, null);
   assert.equal(state.sequence.loading, false);
-  assert.equal(errors.at(-1), null, 'an error about it goes too');
+  assert.equal(state.sequence.error, null, 'an error about it goes too');
   source.last('A').resolve(records('A'));
   await settle();
   assert.deepEqual(drawn(), [], 'the late answer draws nothing');

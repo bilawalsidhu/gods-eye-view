@@ -23,7 +23,6 @@ export function createViewerHost({ state, parts, adapter }) {
       imageId: pose.imageId,
       position: pose.position ? { ...pose.position } : null,
       bearing: Number.isFinite(pose.bearing) ? pose.bearing : null,
-      tilt: Number.isFinite(pose.tilt) ? pose.tilt : 0,
       altitude: Number.isFinite(pose.altitude) ? pose.altitude : null,
       isPano: pose.isPano === true,
       capturedAt: pose.capturedAt ?? null,

@@ -25,9 +25,6 @@ function normalizeSequenceImage(record) {
     compassAngle: Number(record.compass_angle) || 0,
     capturedAt: Number(record.captured_at) || 0,
     isPano: record.is_pano === true,
-    altitude: Number.isFinite(record.computed_altitude)
-      ? record.computed_altitude
-      : null,
   };
 }
 
@@ -54,11 +51,6 @@ export function createSequences({ state, source, parts }) {
 
   function notify() {
     state.notify?.();
-  }
-
-  /** Show a sequence error, or withdraw it (null); see `reportSequenceError`. */
-  function reportError(message) {
-    parts.reportSequenceError?.(message);
   }
 
   /** Drawn cone billboards. */
@@ -151,7 +143,7 @@ export function createSequences({ state, source, parts }) {
       state.sequence.loading = false;
       state.sequence.images = cached;
       renderCones(cached);
-      reportError(null);
+      state.sequence.error = null;
       notify();
       return;
     }
@@ -177,13 +169,13 @@ export function createSequences({ state, source, parts }) {
       remember(sequenceId, images);
       state.sequence.images = images;
       renderCones(images);
-      reportError(null);
+      state.sequence.error = null;
     } catch (error) {
       if (!controller.signal.aborted) {
         // Nothing to show: drop the highlight, so a click asks again.
         parts.coverage.recolorSequence(sequenceId, false);
         state.sequence.selectedId = null;
-        reportError(error?.message || 'Sequence images unavailable');
+        state.sequence.error = error?.message || 'Sequence images unavailable';
       }
     } finally {
       if (state.sequence.abort === controller) {
@@ -203,7 +195,7 @@ export function createSequences({ state, source, parts }) {
     state.sequence.loading = false;
     clearCones();
     // An error about the sequence goes with it.
-    reportError(null);
+    state.sequence.error = null;
     requestRender();
     notify();
   }

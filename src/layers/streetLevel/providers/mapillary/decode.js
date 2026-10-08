@@ -30,13 +30,8 @@ export function decodeCoverageTile(bytes, address) {
       if (!parts.length) continue;
       result.sequences.push({
         id: String(props.id ?? feature.id ?? `${x}/${y}/${i}`),
-        imageId: props.image_id != null ? String(props.image_id) : null,
         capturedAt: Number(props.captured_at) || 0,
         isPano: props.is_pano === true,
-        onFoot: props.foot === true,
-        quality: Number.isFinite(props.quality_score)
-          ? props.quality_score
-          : null,
         parts,
       });
     }

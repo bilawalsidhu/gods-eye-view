@@ -205,7 +205,7 @@ test('switching Mapillary off clears coverage and closes the image it shows', as
   assert.equal(layer.getUIState().providerOn, false);
 });
 
-test('a sequence error is withdrawn with the sequence, never the viewer’s own', async (t) => {
+test('a sequence error goes with the sequence and leaves the viewer’s own', async (t) => {
   const source = fakeMapillarySource({
     getSequenceImages: async () => {
       throw new Error('Sequence images unavailable');
@@ -213,16 +213,15 @@ test('a sequence error is withdrawn with the sequence, never the viewer’s own'
   });
   const { layer } = await startLayer(t, { source });
   await layer.selectSequence('seq-1');
-  assert.equal(layer.getUIState().street.error, 'Sequence images unavailable');
-  layer.clearSequence();
-  assert.equal(layer.getUIState().street.error, null, 'withdrawn');
-
-  // The viewer's own error is not the sequence's to clear.
-  await layer.selectSequence('seq-2');
   layer.attachViewerHost(null);
   await layer.openImage('img1');
+  let ui = layer.getUIState();
+  assert.equal(ui.sequence.error, 'Sequence images unavailable');
+  assert.match(ui.street.error, /Open the Street Level panel/);
   layer.clearSequence();
-  assert.match(layer.getUIState().street.error, /Open the Street Level panel/);
+  ui = layer.getUIState();
+  assert.equal(ui.sequence.error, null, 'withdrawn with the sequence');
+  assert.match(ui.street.error, /Open the Street Level panel/, 'kept');
 });
 
 test('closing the photo, switching the layer off or destroying it stops the framing flight', async (t) => {
