@@ -47,10 +47,7 @@ export function calculateMaxAllowedResolutionScale({
   return maxTextureSize / maxDimension;
 }
 
-/**
- * Apply the maximum texture size guard to the Cesium viewer.
- * @param {object} viewer Cesium.Viewer instance.
- */
+/** Return a valid positive requested scale, or null. */
 function validResolutionScale(value) {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
