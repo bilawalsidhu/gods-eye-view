@@ -139,7 +139,6 @@ test('the CC BY-SA credit shows while Mapillary is on and goes with it', async (
   assert.match(shown()[0], /CC BY-SA 4\.0/);
   layer.setParams({ mapillary: false });
   assert.deepEqual(shown(), [], 'hidden with the switch');
-  assert.deepEqual(layer.getUIState().legend, [], 'no legend either');
   layer.setParams({ mapillary: true });
   assert.deepEqual(shown(), [MAPILLARY_CREDIT_HTML]);
   layer.disable();

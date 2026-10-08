@@ -5,12 +5,11 @@ import { createCredit } from './credits.js';
 import { createSelection } from './selection.js';
 import { createViewerHost } from './viewerHost.js';
 import { normalizeFilter, sameFilter } from './filter.js';
-import { COLORS, STREET_LEVEL_LAYER_ID } from './policy.js';
+import { STREET_LEVEL_LAYER_ID } from './policy.js';
 import { createCoverage } from './providers/mapillary/coverage.js';
 import { createSequences } from './providers/mapillary/sequences.js';
 import { createMapillaryViewer } from './providers/mapillary/viewer.js';
 import {
-  COLORS as MAPILLARY_COLORS,
   MAPILLARY_CREDIT_HTML,
   MAPILLARY_KEY_ID,
   MAPILLARY_SOURCE_METHODS,
@@ -169,16 +168,6 @@ export function createStreetLevelLayer({
       keyRejected,
       filter: { ...state.filter },
       coverage,
-      legend: state.providerOn
-        ? [
-            {
-              key: 'mapillary',
-              label: 'Mapillary',
-              color: MAPILLARY_COLORS.coverage,
-            },
-            { key: 'selected', label: 'Selected', color: COLORS.selected },
-          ]
-        : [],
       sequence: {
         selectedId: state.sequence.selectedId,
         images: state.sequence.images.length,

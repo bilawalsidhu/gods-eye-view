@@ -121,7 +121,7 @@ export function presentStreetLevelPanel(state, { now = Date.now() } = {}) {
       : state.street.error || state.coverage.error || null,
     filter: { pano: filter.pano, sinceDays: Number(filter.sinceDays) || 0 },
     since: presentSince(filter.sinceDays, now),
-    legend: state.legend || [],
+    legend: state.providerOn !== false,
     viewer: presentViewer(state),
     meta: presentMeta(state),
   };

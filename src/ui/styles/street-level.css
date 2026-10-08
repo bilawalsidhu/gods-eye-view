@@ -88,21 +88,14 @@
 }
 
 .sl-body,
-.sl-main,
-.sl-settings,
 .sl-controls {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.sl-body,
-.sl-settings {
+.sl-body {
   min-height: 0;
-}
-
-.sl-main {
-  min-width: 0;
 }
 
 .sl-controls {
@@ -222,11 +215,21 @@
   color: var(--text-secondary);
 }
 
+.sl-legend[hidden] {
+  display: none;
+}
+
 .sl-legend-swatch {
   width: 14px;
   height: 3px;
   border-radius: 2px;
   display: inline-block;
+  background: var(--sl-green);
+}
+
+/* COLORS.selected in src/layers/streetLevel/policy.js */
+.sl-legend-swatch.is-selected {
+  background: #00d4ff;
 }
 
 /* ── Embedded viewer ─────────────────────────────────────────────────────── */

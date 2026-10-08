@@ -372,7 +372,6 @@ function uiState({
   enabled = true,
   on = true,
   open = false,
-  legend,
   pano = 'all',
   renderMode = 'letterbox',
   keyRequired = false,
@@ -384,10 +383,6 @@ function uiState({
     keyRejected: false,
     filter: { pano, sinceDays: 0 },
     coverage: { count: 3, loading: false, hint: '', error: null },
-    legend: legend || [
-      { key: 'mapillary', label: 'Mapillary', color: '#05cb63' },
-      { key: 'selected', label: 'Selected', color: '#00d4ff' },
-    ],
     sequence: { selectedId: null, images: 0, loading: false },
     street: {
       open,
@@ -467,6 +462,7 @@ test('a layer that is on with Mapillary switched off reads OFF, and the pill bri
       dom.root.querySelector('#sl-coverage-meta').textContent,
       /Mapillary is off in this view/,
     );
+    assert.equal(dom.root.querySelector('#sl-legend').hidden, true, 'no legend');
     status.click();
     await settle();
     assert.deepEqual(calls.setParams, [

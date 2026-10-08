@@ -12,10 +12,6 @@ function snapshot(overrides = {}) {
     keyRejected: false,
     filter: { pano: 'all', sinceDays: 0 },
     coverage: { loading: false, count: 0, hint: '', error: null },
-    legend: [
-      { key: 'mapillary', label: 'Mapillary', color: '#05cb63' },
-      { key: 'selected', label: 'Selected', color: '#00d4ff' },
-    ],
     sequence: { selectedId: null, images: 0, loading: false },
     street: {
       open: false,

@@ -375,25 +375,7 @@ export class StreetLevelControls {
         setAttr(el.sinceRange, 'aria-valuetext', view.since.label);
       }
     }
-    // Rebuild when the swatches change, not only their count.
-    const legendKey = view.legend
-      .map((entry) => `${entry.key}:${entry.color}:${entry.label}`)
-      .join('|');
-    if (el.legend && this._legendKey !== legendKey) {
-      this._legendKey = legendKey;
-      el.legend.replaceChildren(
-        ...view.legend.map((entry) => {
-          const item = document.createElement('li');
-          const swatch = document.createElement('i');
-          swatch.className = 'sl-legend-swatch';
-          swatch.style.background = entry.color;
-          const label = document.createElement('span');
-          label.textContent = entry.label;
-          item.append(swatch, label);
-          return item;
-        }),
-      );
-    }
+    setProp(el.legend, 'hidden', !view.legend);
   }
 
   _renderViewer(view) {
