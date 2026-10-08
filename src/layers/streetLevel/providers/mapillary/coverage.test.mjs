@@ -220,11 +220,16 @@ test('the key status gates coverage: nothing before it answers, nothing without 
     state.coverage.blocked = 'status';
     coverage.refresh();
     assert.equal(source.calls.length, 0, 'nothing before the status answers');
+    assert.equal(coverage.stats().loading, true, 'waiting reads as loading');
+    state.enabled = false;
+    assert.equal(coverage.stats().loading, false, 'but not while off');
+    state.enabled = true;
     coverage.setKeyStatus(configured);
     if (configured)
       assert.equal(source.calls.length, 1, 'coverage loads once it is known');
     else {
       assert.equal(source.calls.length, 0, 'a key-less install never asks');
+      assert.equal(coverage.stats().loading, false);
       assert.equal(coverage.stats().keyRequired, true);
       assert.equal(coverage.stats().keyRejected, false);
       coverage.unblock();

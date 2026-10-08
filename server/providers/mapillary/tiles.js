@@ -94,9 +94,14 @@ let upstreamActive = 0;
 /** @type {Array<() => void>} fetches waiting for a slot, oldest first */
 const upstreamWaiting = [];
 
-/** Run `task` once an upstream slot is free, unless `signal` aborts first. */
+/**
+ * Run `task` in an upstream slot, waiting for one unless `signal` aborts
+ * first. A freed slot passes straight to the oldest waiter, still counted, so
+ * a request arriving meanwhile cannot take it first.
+ */
 async function withUpstreamSlot(signal, task) {
-  while (upstreamActive >= TILE_UPSTREAM_CONCURRENCY)
+  if (upstreamActive < TILE_UPSTREAM_CONCURRENCY) upstreamActive++;
+  else
     await new Promise((resolve, reject) => {
       const wake = () => {
         signal.removeEventListener('abort', leave);
@@ -110,17 +115,14 @@ async function withUpstreamSlot(signal, task) {
       upstreamWaiting.push(wake);
       signal.addEventListener('abort', leave, { once: true });
     });
-  if (signal.aborted) {
-    // Woken, then left: hand the free slot on.
-    upstreamWaiting.shift()?.();
-    throw signal.reason;
-  }
-  upstreamActive++;
   try {
+    // Handed a slot after leaving: it goes on to the next waiter.
+    signal.throwIfAborted();
     return await task();
   } finally {
-    upstreamActive--;
-    upstreamWaiting.shift()?.();
+    const next = upstreamWaiting.shift();
+    if (next) next();
+    else upstreamActive--;
   }
 }
 

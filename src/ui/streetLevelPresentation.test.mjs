@@ -201,6 +201,24 @@ test('the meta line never mixes the visible-sequence count with the selected seq
   assert.equal(hinted.meta, 'Point the camera at the globe');
 });
 
+test('an empty view says so, and whether the filter emptied it', () => {
+  const meta = (overrides) =>
+    presentStreetLevelPanel(snapshot({ enabled: true, ...overrides })).meta;
+  assert.equal(meta({}), 'No Mapillary coverage in view');
+  assert.equal(
+    meta({ filter: { pano: 'flat', sinceDays: 0 } }),
+    'No sequences in view match the filter',
+  );
+  assert.equal(
+    meta({ filter: { pano: 'all', sinceDays: 365 } }),
+    'No sequences in view match the filter',
+  );
+  // Nothing to claim while it loads, or when the error line explains it.
+  assert.equal(meta({ coverage: { loading: true } }), '');
+  assert.equal(meta({ keyRequired: true }), '');
+  assert.equal(meta({ coverage: { error: 'Tile HTTP 502' } }), '');
+});
+
 test('viewer caption reads "Image by" left, date right, and links to Mapillary', () => {
   const view = presentStreetLevelPanel(
     snapshot({

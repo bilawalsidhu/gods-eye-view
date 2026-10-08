@@ -103,7 +103,14 @@ function presentMeta(state) {
       : `${state.sequence.images.toLocaleString()} images in this sequence · Esc clears`;
   if (state.coverage.count > 0)
     return `${state.coverage.count.toLocaleString()} sequences in view · click a line for its photos`;
-  return state.coverage.hint || '';
+  if (state.coverage.hint) return state.coverage.hint;
+  // Still loading, or the error line already says why.
+  if (state.coverage.loading || state.keyRequired || state.coverage.error)
+    return '';
+  const filter = state.filter || {};
+  return (filter.pano || 'all') !== 'all' || Number(filter.sinceDays) > 0
+    ? 'No sequences in view match the filter'
+    : 'No Mapillary coverage in view';
 }
 
 /** @param {{now?: number}} [options] Clock for the SINCE readout. */

@@ -407,7 +407,10 @@ export function createCoverage({ state, source }) {
     const { blocked } = state.coverage;
     return {
       count: sequenceCount(),
-      loading: state.coverage.pending.size > 0,
+      // Waiting for the key status is loading too, not an empty view.
+      loading:
+        state.coverage.pending.size > 0 ||
+        (blocked === 'status' && isActive(state)),
       hint: state.coverage.hint,
       keyRequired: blocked === 'no-key' || blocked === 'rejected',
       keyRejected: blocked === 'rejected',

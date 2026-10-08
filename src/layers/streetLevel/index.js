@@ -16,6 +16,9 @@ import {
 
 export { STREET_LEVEL_LAYER_ID } from './policy.js';
 
+/** Longest wait for the server's key status; past it, the bundle's token decides. */
+const KEY_STATUS_TIMEOUT_MS = 10_000;
+
 /** Coverage as the panel sees it while the `mapillary` switch is off. */
 const COVERAGE_OFF = Object.freeze({
   count: 0,
@@ -73,15 +76,25 @@ export function createStreetLevelLayer({
   }
   state.notify = notify;
 
+  /** The key-status request in flight; overlapping checks share it. */
+  let keyCheck = null;
+
   /** Coverage waits for the key status: no tile requests without a key. */
-  async function checkKey() {
-    let configured;
-    try {
-      configured = (await source.getStatus())?.configured === true;
-    } catch {
-      configured = source.hasToken?.() === true;
-    }
-    parts.coverage.setKeyStatus(configured);
+  function checkKey() {
+    keyCheck ||= (async () => {
+      let configured;
+      try {
+        // A hung server must not hold LOADING, or the next check, forever.
+        const signal = AbortSignal.timeout(KEY_STATUS_TIMEOUT_MS);
+        configured = (await source.getStatus({ signal }))?.configured === true;
+      } catch {
+        configured = source.hasToken?.() === true;
+      }
+      parts.coverage.setKeyStatus(configured);
+    })().finally(() => {
+      keyCheck = null;
+    });
+    return keyCheck;
   }
 
   function startDrawing() {
@@ -90,6 +103,9 @@ export function createStreetLevelLayer({
     parts.sequences.setVisible(true);
     parts.coverage.attach(viewer);
     credit.show(viewer);
+    // Without a known key, a switch-on asks again: the server may be back,
+    // or have a key now.
+    if (['status', 'no-key'].includes(state.coverage.blocked)) checkKey();
   }
 
   /** Close the photo, clear lines and cones, forget refusals. */

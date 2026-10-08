@@ -171,6 +171,64 @@ test('coverage asks for no tiles before the key status is known, and none withou
   }
 });
 
+test('a key status that failed is asked again on the next switch-on', async (t) => {
+  let up = false;
+  let asked = 0;
+  const source = fakeMapillarySource({
+    hasToken: () => false,
+    getStatus: async () => {
+      asked++;
+      if (!up) throw new TypeError('fetch failed');
+      return { configured: true };
+    },
+  });
+  const { layer, viewer } = await startLayer(t, { source, view: true });
+  assert.equal(asked, 1, 'one check for init and the first switch-on');
+  assert.equal(layer.getUIState().keyRequired, true);
+  up = true; // the server is reachable again
+  layer.disable();
+  layer.enable(viewer);
+  await settle();
+  assert.equal(asked, 2);
+  assert.equal(layer.getUIState().keyRequired, false);
+  assert.ok(source.calls.tiles.length > 0, 'coverage loads');
+  // A known key is not asked again.
+  layer.disable();
+  layer.enable(viewer);
+  await settle();
+  assert.equal(asked, 2);
+});
+
+test('a key status that never answers gives up, so the next switch-on asks again', async (t) => {
+  // The check's timeout, fired when the test says.
+  const timeouts = [];
+  t.mock.method(AbortSignal, 'timeout', (ms) => {
+    const controller = new AbortController();
+    timeouts.push({ ms, fire: () => controller.abort(new Error('timed out')) });
+    return controller.signal;
+  });
+  let asked = 0;
+  const source = fakeMapillarySource({
+    hasToken: () => false,
+    getStatus: ({ signal } = {}) =>
+      new Promise((_, reject) => {
+        asked++;
+        signal?.addEventListener('abort', () => reject(signal.reason));
+      }),
+  });
+  const { layer, viewer } = await startLayer(t, { source, view: true });
+  assert.equal(asked, 1);
+  assert.equal(timeouts[0].ms, 10_000, 'the check can be cut short');
+  assert.equal(layer.getUIState().coverage.loading, true, 'LOADING meanwhile');
+  timeouts[0].fire();
+  await settle();
+  assert.equal(layer.getUIState().coverage.loading, false);
+  assert.equal(layer.getUIState().keyRequired, true, 'no token: KEY REQUIRED');
+  layer.disable();
+  layer.enable(viewer);
+  assert.equal(asked, 2, 'asked again, not stuck on the first');
+});
+
 test('a rejected key gates the layer as KEY REJECTED until it goes off', async (t) => {
   const rejected = Object.assign(new Error('Mapillary rejected the token'), {
     keyRejected: true,

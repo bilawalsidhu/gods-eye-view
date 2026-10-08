@@ -405,7 +405,7 @@ test('identical concurrent tile requests share one upstream fetch', async () => 
 
 test('at most a few upstream fetches run at once; the rest wait their turn', async () => {
   let release;
-  const gate = new Promise((resolve) => (release = resolve));
+  let gate = new Promise((resolve) => (release = resolve));
   await withUpstream(
     async () => (await gate, ok()),
     async ({ calls, call }) => {
@@ -419,6 +419,17 @@ test('at most a few upstream fetches run at once; the rest wait their turn', asy
       const done = await Promise.all(pending);
       assert.ok(done.every((res) => res.statusCode === 200));
       assert.equal(calls.length, tiles, 'the waiting ones ran too');
+      // Every slot came back: a second burst runs as many at once again.
+      let reopen;
+      gate = new Promise((resolve) => (reopen = resolve));
+      const again = Array.from({ length: tiles }, (_, i) =>
+        call('/api/mapillary/tiles', `/coverage/14/${i}/4`),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      assert.equal(calls.length, tiles + TILE_UPSTREAM_CONCURRENCY);
+      reopen();
+      await Promise.all(again);
+      assert.equal(calls.length, 2 * tiles);
     },
   );
 });

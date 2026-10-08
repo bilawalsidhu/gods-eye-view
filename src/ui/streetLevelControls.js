@@ -118,18 +118,18 @@ export class StreetLevelControls {
       this.listen(el.viewerExpand, 'click', () => this._toggleExpanded());
       if (this._expandMode === 'fullscreen')
         this.listen(document, 'fullscreenchange', () => this._syncExpanded());
-      else {
+      else
         this.listen(el.viewerWrap, 'toggle', (event) =>
           this._onPopoverToggle(event),
         );
-        // Esc shrinks the photo before the panel's own Esc can collapse it.
-        this.listen(el.viewerWrap, 'keydown', (event) => {
-          if (event.key !== 'Escape' || !this.isViewerExpanded()) return;
-          event.preventDefault();
-          event.stopPropagation();
-          this._exitExpanded();
-        });
-      }
+      // Esc shrinks the photo before the panel's own Esc can collapse it, in
+      // a browser that hands the key to the page while full screen too.
+      this.listen(el.viewerWrap, 'keydown', (event) => {
+        if (event.key !== 'Escape' || !this.isViewerExpanded()) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this._exitExpanded();
+      });
     } else setProp(el.viewerExpand, 'hidden', true);
     for (const button of el.renderButtons) {
       this.listen(button, 'click', () => {
@@ -430,6 +430,10 @@ export class StreetLevelControls {
     if (this.destroyed) return;
     this.destroyed = true;
     this._exitExpanded();
+    // Its `toggle` is not heard once destroyed: a popover left on the wrap
+    // would hide the viewer even inside the panel.
+    if (this._expandMode === 'popover')
+      this._elements.viewerWrap?.removeAttribute('popover');
     this._watchPanelHidingModes(false);
     this.listeners.abort();
     this._resizeObserver?.disconnect();

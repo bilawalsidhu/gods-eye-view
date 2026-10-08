@@ -185,6 +185,11 @@ function panelDom({ fullscreen = true, popover = false } = {}) {
   const wrap = add(root, 'div', { id: 'sl-viewer-wrap' });
   if (fullscreen) wrap.requestFullscreen = async () => fullscreenTo(wrap);
   if (popover) {
+    // `popover` reflects its attribute, as in the DOM.
+    Object.defineProperty(wrap, 'popover', {
+      get: () => wrap.getAttribute('popover'),
+      set: (value) => wrap.setAttribute('popover', value),
+    });
     // The browser fires `toggle` after the popover opens or closes.
     const toggleTo = (newState) =>
       setTimeout(() => wrap.dispatchEvent({ type: 'toggle', newState }), 0);
@@ -559,6 +564,28 @@ test('EXPAND puts the viewer full screen in place, and the button shrinks it aga
     controls.destroy();
   }));
 
+test('Esc in full screen shrinks the photo; the panel never sees it', () =>
+  withDom(async (dom) => {
+    const { controls } = stubPanel(dom, uiState({ open: true }));
+    const expand = dom.root.querySelector('#sl-viewer-expand');
+    expand.click();
+    await settle();
+    await settle();
+    assert.equal(dom.document.fullscreenElement, dom.wrap);
+    let panelEsc = 0;
+    dom.root.addEventListener('keydown', () => panelEsc++);
+    expand.dispatchEvent({ type: 'keydown', key: 'Escape', bubbles: true });
+    await settle();
+    await settle();
+    assert.equal(dom.document.fullscreenElement, null);
+    assert.equal(panelEsc, 0, 'the panel stays open');
+    assert.deepEqual(expandLabel(dom), ['EXPAND', 'false']);
+    // Not expanded, Esc is the panel's again.
+    expand.dispatchEvent({ type: 'keydown', key: 'Escape', bubbles: true });
+    assert.equal(panelEsc, 1);
+    controls.destroy();
+  }));
+
 test('an image closed while full screen leaves full screen', () =>
   withDom(async (dom) => {
     const { layer, controls } = stubPanel(dom, uiState({ open: true }));
@@ -618,6 +645,26 @@ test('on iPhone (no element fullscreen) EXPAND opens the viewer as a popover ove
       );
       assert.deepEqual(expandLabel(dom), ['EXPAND', 'false']);
       controls.destroy();
+    },
+    { fullscreen: false, popover: true },
+  ));
+
+test('destroying the panel while the iPhone popover is open leaves no popover behind', () =>
+  withDom(
+    async (dom) => {
+      const { controls } = stubPanel(dom, uiState({ open: true }));
+      dom.root.querySelector('#sl-viewer-expand').click();
+      await settle();
+      await settle();
+      assert.equal(dom.wrap.getAttribute('popover'), 'auto');
+      controls.destroy();
+      await settle();
+      assert.equal(dom.wrap.popoverOpen, false);
+      assert.equal(
+        dom.wrap.getAttribute('popover'),
+        null,
+        'its toggle is not heard any more',
+      );
     },
     { fullscreen: false, popover: true },
   ));
