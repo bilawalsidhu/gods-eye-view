@@ -1,5 +1,19 @@
 # Changelog
 
+- Add the Autostrada del Brennero (A22, Brenner–Modena) motorway webcams as a
+  CCTV pack, the first Italian cameras. The 13-camera list is one keyless
+  request to the Open Data Hub (NOI Techpark) tourism API, which republishes
+  Autobrennero's own list with coordinates; frames are the operator's stills,
+  refreshed about once a minute and pinned to each camera's own `km<N>.jpg`.
+  Each camera's ground elevation comes from a per-kilometre DEM table, since
+  the road climbs from the Po valley to the Brenner Pass. `CCTV_A22_ENABLED=0`
+  disables the pack. Closes #155.
+
+- Vector tile sources take their allowed tile origin from the configured
+  `tileJsonUrl`, so repointing only that URL at a mirror loads tiles from the
+  mirror or fails visibly instead of silently using OpenFreeMap. Thanks to
+  [daikaginza](https://github.com/daikaginza) (#935).
+
 - MCP setup examples use the app's default port, `4173`. Thanks to
   [Huanyi Xie](https://github.com/xiehuanyi) (#934) and
   [shirunjies8-png](https://github.com/shirunjies8-png) (#959) for the same fix.
@@ -63,14 +77,17 @@
 
 ## [Unreleased]
 
-- Add the Autostrada del Brennero (A22, Brenner–Modena) motorway webcams as a
-  CCTV pack, the first Italian cameras. The 13-camera list is one keyless
-  request to the Open Data Hub (NOI Techpark) tourism API, which republishes
-  Autobrennero's own list with coordinates; frames are the operator's stills,
-  refreshed about once a minute and pinned to each camera's own `km<N>.jpg`.
-  Each camera's ground elevation comes from a per-kilometre DEM table, since
-  the road climbs from the Po valley to the Brenner Pass. `CCTV_A22_ENABLED=0`
-  disables the pack. Closes #155.
+- Add an experimental ChatGPT/Codex OAuth option for cloud voice in Provider
+  Settings. API-key voice remains the default. Local sign-in can start from
+  the auth button and reports completion, failure, timeout, or expired
+  credentials. OAuth credentials stay on the server; local routes require
+  loopback access and same-site requests. OAuth sessions retain usage data
+  and show unknown cost; caption transcriptions are counted rather than
+  priced into the API-key cap. The auth button keeps keyboard focus after a
+  mode change, and pending sign-in does not discard text in the key fields.
+  Thanks to [Shayan Khan](https://github.com/devv-shayan) for #621 and
+  [TheSmokeDev](https://github.com/TheSmokeDev) for the credential handling
+  from #653.
 
 - Stdio servers from one install share a panel key so a page read from one
   process can make requests through another. Concurrent malformed-key repairs
