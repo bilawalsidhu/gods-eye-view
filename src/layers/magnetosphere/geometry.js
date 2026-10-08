@@ -19,9 +19,15 @@ import { EARTH_RADIUS_KM, surfacePoint } from './trace.js';
  * lines reaching several Earth radii, where the oval maps — is all above 50
  * degrees. Both hemispheres, because the southern one is real and usually
  * forgotten.
+ *
+ * 65 and 70 sit in the band where the external field takes over from the
+ * internal one (apexes of roughly 5 to 8 Earth radii). Lines there stay closed
+ * in quiet solar wind but stretch down the tail or open in a storm, so they
+ * are the ones that show the magnetosphere responding; 55 and 62 barely move
+ * either way.
  */
 export const SEED_LATITUDES = Object.freeze([
-  55, 62, 68, 73, 78, -55, -62, -68, -73, -78,
+  55, 62, 65, 68, 70, 73, 78, -55, -62, -65, -68, -70, -73, -78,
 ]);
 
 /**
