@@ -4,7 +4,7 @@ import { createCyclonesLayer } from '../layers/cyclones/index.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
 import { MAPILLARY_SOURCE_METHODS } from '../layers/streetLevel/providers/mapillary/policy.js';
-import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
+import { LAYER_STATE_REGISTRY, userLayerMetadata } from '../data/layerState.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
 import { createApplicationFlights } from './layers/flights.js';
 import { createApplicationMilitary } from './layers/militaryFlights.js';
@@ -25,6 +25,7 @@ import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
+import { loadUserLayers } from '../userLayers/index.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
@@ -134,6 +135,7 @@ export function createApplicationCatalog({
     });
     const catalog = createLayerCatalog(
       [
+        ...loadUserLayers(),
         createBhoteKoshiEventLayer(),
         createBhoteKoshiLocatorLayer({
           boundaryResolver: nepalBoundaryResolver,
@@ -200,7 +202,9 @@ export function createApplicationCatalog({
           feed: sources.firms,
         }),
       ],
-      metadata,
+      // User layers are registered alongside the built-ins, so the seal in
+      // finalizeRegistrations needs their dispositions too or startup fails.
+      [...metadata, ...userLayerMetadata()],
     );
     return Object.freeze({
       ...catalog,
