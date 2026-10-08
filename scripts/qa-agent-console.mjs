@@ -308,6 +308,76 @@ async function main() {
       }
     }
 
+    console.log('window');
+    const geometry = () =>
+      page.evaluate(() => {
+        const rect = document.getElementById('agent-console').getBoundingClientRect();
+        return {
+          left: Math.round(rect.left),
+          top: Math.round(rect.top),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        };
+      });
+    const placed = await geometry();
+    const credits = await page.evaluate(() => {
+      const node = document.querySelector('.cesium-widget-credits');
+      return node ? Math.round(node.getBoundingClientRect().top) : null;
+    });
+    check(
+      'the console opens on the left',
+      placed.left + placed.width < VIEWPORT.width / 2,
+      `left ${placed.left}, width ${placed.width}`,
+    );
+    check(
+      'the console clears the map attribution',
+      credits === null || placed.top + placed.height <= credits,
+      `console ends ${placed.top + placed.height}, credits start ${credits}`,
+    );
+
+    // Drag by the header, which is the gesture the operator actually makes.
+    await page.mouse.move(placed.left + 120, placed.top + 14);
+    await page.mouse.down();
+    for (let step = 1; step <= 8; step += 1) {
+      await page.mouse.move(placed.left + 120 + step * 30, placed.top + 14 + step * 8);
+    }
+    await page.mouse.up();
+    const dragged = await geometry();
+    check(
+      'the header drags the window',
+      dragged.left === placed.left + 240 && dragged.top === placed.top + 64,
+      `moved to ${dragged.left},${dragged.top}`,
+    );
+    check(
+      'the window it was left in is remembered',
+      await page.evaluate(() =>
+        Boolean(localStorage.getItem('godsEyeView.agent.console.box.v1')),
+      ),
+    );
+
+    // Resize from the corner grip.
+    const grip = await page.evaluate(() => {
+      const rect = document
+        .querySelector('#agent-console .panel-resize-grip')
+        .getBoundingClientRect();
+      return {
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + rect.height / 2),
+      };
+    });
+    await page.mouse.move(grip.x, grip.y);
+    await page.mouse.down();
+    for (let step = 1; step <= 8; step += 1) {
+      await page.mouse.move(grip.x + step * 15, grip.y + step * 5);
+    }
+    await page.mouse.up();
+    const resized = await geometry();
+    check(
+      'the corner grip resizes the window',
+      resized.width > dragged.width && resized.left === dragged.left,
+      `${dragged.width}px to ${resized.width}px`,
+    );
+
     console.log('teardown');
     await page.keyboard.press('Escape');
     state = await readConsole(page);

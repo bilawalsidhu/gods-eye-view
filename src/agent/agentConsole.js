@@ -1,4 +1,5 @@
 import { createSurfaceKeyboard } from '../ui/surfaceKeyboard.js';
+import { attachConsoleBox } from './consoleBox.js';
 import { createAgentSession, AGENT_EVENTS } from './agentLoop.js';
 import { formatCommandCostUsd } from './cost.js';
 
@@ -215,6 +216,7 @@ function pickInitialProvider(
  *
  * @param {{
  *   root?: Document,
+ *   view?: Window,
  *   runAction: (name: string, args: object) => Promise<object>,
  *   fetchImpl?: typeof fetch,
  *   storage?: Storage,
@@ -224,6 +226,7 @@ function pickInitialProvider(
  */
 function mountAgentConsole({
   root = globalThis.document,
+  view = globalThis,
   runAction,
   fetchImpl = globalThis.fetch?.bind(globalThis),
   storage,
@@ -232,6 +235,7 @@ function mountAgentConsole({
   const chip = root?.getElementById?.('agent-console-chip');
   if (!dialog || !chip) return null;
 
+  const header = dialog.querySelector('[data-panel-header]');
   const providerSelect = root.getElementById('agent-provider');
   const modelSelect = root.getElementById('agent-model');
   const transcript = root.getElementById('agent-transcript');
@@ -432,6 +436,17 @@ function mountAgentConsole({
     refreshCost();
   }
 
+  // The window is draggable from its header and resizable from every edge,
+  // and remembers where it was left. Attached before the keyboard so a
+  // destroy tears the two down in the order they were built.
+  const windowBox = attachConsoleBox({
+    dialog,
+    handle: header,
+    root,
+    view,
+    storage,
+  });
+
   // Escape and Tab come from the shared surface keyboard, the same owner key
   // setup and the first-run launcher use. A non-modal dialog does not dismiss
   // itself, and its own keydown listener would miss Escape whenever focus is
@@ -446,6 +461,9 @@ function mountAgentConsole({
 
   function open() {
     if (dialog.open) return;
+    // Placed before it is shown, so it never paints at the stylesheet's
+    // corner for a frame and then jump to where the operator left it.
+    windowBox.apply();
     keyboard.activate();
     // Non-modal on purpose: a command moves the camera, and the point of
     // typing one is watching it happen.
@@ -479,6 +497,7 @@ function mountAgentConsole({
 
   return {
     session,
+    windowBox,
     open,
     close,
     destroy() {
@@ -488,6 +507,7 @@ function mountAgentConsole({
       chip.removeEventListener('click', onChipClick);
       closeButton.removeEventListener('click', close);
       keyboard.destroy();
+      windowBox.destroy();
       session.abort();
       if (dialog.open) dialog.close();
       chip.hidden = true;

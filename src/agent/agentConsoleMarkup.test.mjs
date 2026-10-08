@@ -105,42 +105,26 @@ test('the console sits below the dialog that configures its own credentials', ()
   assert.ok(zIndex('#agent-console') < zIndex('#key-setup'));
 });
 
-test('the chips and the console stack without covering each other', () => {
-  // Three fixed surfaces share the bottom-right corner, at two breakpoints:
-  // POWER UP owns the corner, the GEV COMMAND chip sits above it, and the
-  // open console sits above both so its own toggle stays clickable.
-  const bottoms = (selector) =>
-    [
-      ...css.matchAll(
-        new RegExp(`${selector} \\{[^}]*?bottom:\\s*([\\d.]+)rem`, 'gs'),
-      ),
-    ].map((match) => Number(match[1]));
-  const insetBottoms = [
+test('the chip and the console sit on the left, clear of each other', () => {
+  // The right corner belongs to POWER UP; the console opened over it there.
+  // Both now anchor left, and the chip sits below the console, not under it.
+  const chipBlock = /#agent-console-chip \{([^}]*)\}/s.exec(css)[1];
+  assert.match(chipBlock, /left:\s*[\d.]+rem/);
+  assert.doesNotMatch(chipBlock, /\bright:\s*[\d.]+rem/);
+  const insets = [
     ...css.matchAll(
-      /#agent-console \{[^}]*?inset:\s*auto [\d.]+rem ([\d.]+)rem auto/gs,
+      /#agent-console \{[^}]*?inset:\s*auto auto ([\d.]+)rem ([\d.]+)rem/gs,
     ),
+  ];
+  assert.equal(insets.length, 2, 'the console should anchor per breakpoint');
+  const chipBottoms = [
+    ...css.matchAll(/#agent-console-chip \{[^}]*?bottom:\s*([\d.]+)rem/gs),
   ].map((match) => Number(match[1]));
-  const powerUp = bottoms('#key-setup-chip');
-  const chip = bottoms('#agent-console-chip');
-  assert.equal(
-    powerUp.length,
-    2,
-    'POWER UP should set a bottom per breakpoint',
-  );
-  assert.equal(chip.length, 2, 'the chip should set a bottom per breakpoint');
-  assert.equal(
-    insetBottoms.length,
-    2,
-    'the console should anchor per breakpoint',
-  );
+  assert.equal(chipBottoms.length, 2);
   for (const index of [0, 1]) {
     assert.ok(
-      chip[index] > powerUp[index],
-      `chip overlaps POWER UP at ${index}`,
-    );
-    assert.ok(
-      insetBottoms[index] > chip[index],
-      `console covers its chip at ${index}`,
+      Number(insets[index][1]) > chipBottoms[index],
+      `the console covers its own chip at breakpoint ${index}`,
     );
   }
 });
@@ -148,9 +132,40 @@ test('the chips and the console stack without covering each other', () => {
 test('the console overrides the dialog insets its UA rules would centre it with', () => {
   assert.match(
     css,
-    /#agent-console \{[^}]*?inset:\s*auto [\d.]+rem [\d.]+rem auto/s,
+    /#agent-console \{[^}]*?inset:\s*auto auto [\d.]+rem [\d.]+rem/s,
   );
   assert.match(css, /#agent-console \{[^}]*?margin:\s*0/s);
+});
+
+test('the console window is opaque, and its header reads as a drag handle', () => {
+  // It sits over the HUD readouts, so the shared translucent surface would
+  // leave transcript text competing with coordinates underneath.
+  assert.match(
+    css,
+    /#agent-console \{[^}]*?background:\s*\n?\s*linear-gradient/s,
+  );
+  assert.match(
+    css,
+    /#agent-console > \[data-panel-header\] \{[^}]*?cursor:\s*move/s,
+  );
+  assert.match(
+    css,
+    /#agent-console > \[data-panel-header\] \{[^}]*?user-select:\s*none/s,
+  );
+  assert.match(
+    css,
+    /#agent-console > \[data-panel-header\] \{[^}]*?touch-action:\s*none/s,
+  );
+});
+
+test('the console reuses the resize handle styling the app already ships', () => {
+  // consoleBox.js creates .panel-resize-edge / .panel-resize-grip rather than
+  // a second set of handles, so this stylesheet must not restyle them.
+  assert.match(css, /\.panel-resize-edge,\s*\n?\.panel-resize-grip \{/);
+  const consoleCss = readStylesheet(
+    new URL('../ui/styles/agent-console.css', import.meta.url),
+  );
+  assert.doesNotMatch(consoleCss, /panel-resize-(edge|grip)/);
 });
 
 test('the template adds no icon glyph, so the font subset stays untouched', () => {

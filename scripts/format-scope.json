@@ -974,6 +974,7 @@
   "src/agent/agentEndpoints.test.mjs",
   "src/agent/agentLoop.test.mjs",
   "src/agent/agentOwnership.test.mjs",
+  "src/agent/consoleBox.test.mjs",
   "src/agent/conversation.test.mjs",
   "src/agent/cost.test.mjs",
   "src/agent/diagnostics.test.mjs",

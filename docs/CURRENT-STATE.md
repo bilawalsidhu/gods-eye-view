@@ -55,6 +55,18 @@ The console is a `dialog[data-panel-surface]` (see
 clean-UI, recording, Cockpit and scene concealment. It owns its own geometry
 and dismissal, with Escape and Tab from the shared `createSurfaceKeyboard`, so
 Escape still closes it when a disabled input leaves nothing inside it focused.
+
+The chip and the window sit bottom-left; POWER UP keeps the right corner. The
+window drags by its header, resizes from every edge through the app's existing
+`.panel-resize-edge` / `.panel-resize-grip` handles and `resizeBox` geometry,
+and persists under `godsEyeView.agent.console.box.v1`. A double press on the
+header forgets it, detected from `pointerdown` because the drag's
+`preventDefault()` suppresses `dblclick`. A remembered window from a larger
+screen is clamped on open, and a shrinking viewport re-clamps without
+overwriting the saved preference. The default placement clears the left rail
+above and the map attribution below, which is a licence condition rather than a
+layout preference. It is not a rail panel, so `PanelPositionControls` — which
+owns lifting a panel out of a rail and docking it back — does not apply.
 Gate: `node scripts/qa-agent-console.mjs --url http://localhost:4173`
 (`--offline` checks the chrome and endpoints without a configured provider).
 See [the typed agent](TEXT-AGENT.md).

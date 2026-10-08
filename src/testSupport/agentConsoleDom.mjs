@@ -24,6 +24,7 @@ function createElement(tag) {
     tagName: String(tag).toUpperCase(),
     children: [],
     dataset: {},
+    style: {},
     attributes: new Map(),
     className: '',
     textContent: '',
@@ -50,6 +51,13 @@ function createElement(tag) {
       this.children = [];
       for (const child of nodes) this.appendChild(child);
     },
+    remove() {
+      const siblings = this.parent?.children;
+      if (!siblings) return;
+      const index = siblings.indexOf(this);
+      if (index >= 0) siblings.splice(index, 1);
+      this.parent = null;
+    },
     isConnected: true,
     focus() {
       this.focused = true;
@@ -63,6 +71,34 @@ function createElement(tag) {
     },
     hasAttribute(name) {
       return this.attributes.has(name);
+    },
+    matches(selector) {
+      if (selector.startsWith('[') && selector.endsWith(']')) {
+        const name = selector.slice(1, -1).replace(/^data-/, '');
+        const key = name.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+        return this.dataset[key] !== undefined;
+      }
+      if (selector.startsWith('.')) {
+        return this.classList.contains(selector.slice(1));
+      }
+      return this.tagName === selector.toUpperCase();
+    },
+    closest(selector) {
+      for (let node = this; node; node = node.parent) {
+        if (node.matches?.(selector.split(',')[0].trim())) return node;
+      }
+      return null;
+    },
+    querySelector(selector) {
+      const find = (node) => {
+        for (const child of node.children) {
+          if (child.matches?.(selector)) return child;
+          const nested = find(child);
+          if (nested) return nested;
+        }
+        return null;
+      };
+      return find(this);
     },
     querySelectorAll() {
       return [];
@@ -84,9 +120,19 @@ function createElement(tag) {
     lastElementChild: { get: () => node.children.at(-1) ?? null },
     options: { get: () => node.children },
   });
+  const classes = () => new Set(node.className.split(' ').filter(Boolean));
   node.classList = {
-    contains: (name) =>
-      node.className.split(' ').filter(Boolean).includes(name),
+    contains: (name) => classes().has(name),
+    add(...names) {
+      const next = classes();
+      for (const name of names) next.add(name);
+      node.className = [...next].join(' ');
+    },
+    remove(...names) {
+      const next = classes();
+      for (const name of names) next.delete(name);
+      node.className = [...next].join(' ');
+    },
   };
   return node;
 }
@@ -97,6 +143,13 @@ function createElement(tag) {
  * @param {{ids?: string[]}} [options]
  */
 export function agentConsoleDom({ ids = consoleTemplateIds() } = {}) {
+  // A stand-in window: the box controller listens for pointer and resize
+  // events here, not on the document.
+  const view = Object.assign(new EventTarget(), {
+    innerWidth: 1440,
+    innerHeight: 900,
+  });
+  let pointerClock = 0;
   // An EventTarget, because the shared surface keyboard listens for Escape on
   // the document in the capture phase rather than on the surface.
   const document = Object.assign(new EventTarget(), {
@@ -111,6 +164,13 @@ export function agentConsoleDom({ ids = consoleTemplateIds() } = {}) {
     }),
   );
   document.getElementById = (id) => elements.get(id) ?? null;
+  // The console drags by its header, which the real template nests inside the
+  // dialog. The fixture's elements are flat by id, so the one structural
+  // relationship the console depends on is built explicitly.
+  const header = createElement('header');
+  header.ownerDocument = document;
+  header.dataset.panelHeader = '';
+  elements.get('agent-console')?.appendChild(header);
   const byId = (id) => {
     const element = elements.get(id);
     if (!element) throw new Error(`The console template has no #${id}`);
@@ -120,6 +180,7 @@ export function agentConsoleDom({ ids = consoleTemplateIds() } = {}) {
     document,
     elements,
     dialog: byId('agent-console'),
+    header,
     chip: byId('agent-console-chip'),
     closeButton: byId('agent-console-close'),
     providerSelect: byId('agent-provider'),
@@ -145,6 +206,32 @@ export function agentConsoleDom({ ids = consoleTemplateIds() } = {}) {
       element.value = value;
       element.dispatchEvent(new Event('change'));
     },
+    /** Press a pointer button on an element, as the window sees it. */
+    pointer(element, type, { x = 0, y = 0, button = 0, pointerId = 1 } = {}) {
+      const event = new Event(type);
+      Object.assign(event, { clientX: x, clientY: y, button, pointerId });
+      // `target` and `timeStamp` are getter-only on a real Event.
+      for (const [name, value] of [
+        ['target', element],
+        ['currentTarget', element],
+        ['timeStamp', pointerClock],
+      ]) {
+        Object.defineProperty(event, name, { configurable: true, value });
+      }
+      event.preventDefault = () => {};
+      event.stopPropagation = () => {};
+      // A press is delivered to the element; the rest of the gesture is
+      // tracked on the window, as the controller listens for it there.
+      if (type === 'pointerdown') element.dispatchEvent(event);
+      else view.dispatchEvent(event);
+      return event;
+    },
+    /** Advance the clock the double-press detector reads. */
+    advance(ms) {
+      pointerClock += ms;
+    },
+    view,
+
     /** Press a key, as the document-level surface keyboard sees it. */
     keydown(key) {
       const event = new Event('keydown');
@@ -174,6 +261,10 @@ export function fakeStorage({ throws = false } = {}) {
     setItem(key, value) {
       if (throws) throw new Error('storage is unavailable');
       map.set(key, String(value));
+    },
+    removeItem(key) {
+      if (throws) throw new Error('storage is unavailable');
+      map.delete(key);
     },
     get size() {
       return map.size;
