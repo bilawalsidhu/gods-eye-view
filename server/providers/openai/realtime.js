@@ -39,7 +39,11 @@ function createRealtimeTokenHandler({
     if (!apiKey) {
       res.statusCode = 503;
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'OPENAI_API_KEY is not set' }));
+      // `keyId` names the Provider Settings entry, so the voice control can
+      // say which key to add instead of blaming the microphone.
+      res.end(
+        JSON.stringify({ error: 'OPENAI_API_KEY is not set', keyId: 'openai' }),
+      );
       return;
     }
 

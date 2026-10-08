@@ -31,9 +31,12 @@ export function createRealtimeBackend({
       if (!response.ok) {
         const reason =
           typeof data?.error === 'string' ? data.error : data?.error?.message;
-        throw new Error(
+        const error = new Error(
           reason || `Realtime token failed: HTTP ${response.status}`,
         );
+        // The server names a missing provider key so the UI can say which.
+        if (typeof data?.keyId === 'string') error.keyId = data.keyId;
+        throw error;
       }
       const token =
         data?.value || data?.client_secret?.value || data?.client_secret;

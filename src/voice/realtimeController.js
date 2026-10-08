@@ -1,3 +1,5 @@
+import { keySetupRequirement } from '../keySetupCore.mjs';
+import { VOICE_ERROR_HINT } from './control.js';
 import { RealtimeConnection } from './realtimeConnection.js';
 import { RealtimeTurns } from './realtimeTurns.js';
 import { RealtimeViewport } from './realtimeViewport.js';
@@ -423,7 +425,7 @@ export class GevRealtimeController extends RealtimeFacade {
     }
   }
 
-  setStatus(status, detail) {
+  setStatus(status, detail, { keyId = null } = {}) {
     this.status = status;
     this.emitSessionEvent({ type: 'state', state: status, detail });
     this.ui.root.dataset.status = status;
@@ -448,6 +450,13 @@ export class GevRealtimeController extends RealtimeFacade {
         status === 'error'
           ? resolvedDetail || 'Voice session could not be started.'
           : '';
+    }
+    // A missing provider key is a setup step, not a microphone or network
+    // fault: name the key and where to add it.
+    if (this.ui.errorHint) {
+      const keyGuidance =
+        status === 'error' && keyId ? keySetupRequirement(keyId) : '';
+      this.ui.errorHint.textContent = keyGuidance || VOICE_ERROR_HINT;
     }
     if (status === 'idle' || status === 'connecting' || status === 'error') {
       this.setVoiceSpeaker('idle');

@@ -63,6 +63,13 @@
 
 ## [Unreleased]
 
+- Name the missing key when voice cannot start without one. With no OpenAI
+  key, pressing the mic showed "OPENAI_API_KEY is not set" under advice to
+  check the microphone and network. The token route now says which provider
+  key it needs, and the voice error tray reads "Needs OPENAI_API_KEY — add it
+  in Provider Settings", the same guidance layers and map sources give.
+  Other voice errors keep the microphone and network advice (#143).
+
 - Stdio servers from one install share a panel key so a page read from one
   process can make requests through another. Concurrent malformed-key repairs
   now select one winner; unavailable storage or a busy repair retains the
