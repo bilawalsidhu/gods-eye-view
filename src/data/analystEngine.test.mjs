@@ -174,11 +174,95 @@ test('analyst: nearest sorting attaches distanceKm ascending', async () => {
 
 test('analyst: follow-up re-filters the remembered set without re-snapshot', async () => {
   const eng = makeEngine();
-  await eng.query({ layers: ['flights'], scope: { kind: 'region', name: 'Texland' } });
-  const r = await eng.query({ followUp: true, filters: [{ field: 'onGround', op: 'eq', value: true }] });
+  const first = await eng.query({
+    layers: ['flights'],
+    scope: { kind: 'region', name: 'Texland' },
+  });
+  const r = await eng.query({
+    followUp: true,
+    filters: [{ field: 'onGround', op: 'eq', value: true }],
+  });
   assert.equal(r.count, 1);
   assert.equal(r.items[0].id, 'GND1');
   assert.equal(r.coverage.followUp, true);
+  assert.equal(r.scopeLabel, first.scopeLabel);
+  assert.equal(r.display.scope, first.display.scope);
+  assert.equal(r.coverage.scope, first.coverage.scope);
+});
+
+test('analyst: follow-ups preserve partial and unanswered coverage', async () => {
+  const eng = createAnalystEngine({
+    getRecords: (key) => (key === 'flights' ? FLIGHTS : []),
+    getLayerSnapshot: (key) => ({
+      enabled: key === 'flights',
+      feedState: key === 'flights' ? 'nominal' : 'off',
+    }),
+    getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
+  });
+  const first = await eng.query({
+    layers: ['flights', 'military'],
+    scope: { kind: 'anywhere' },
+  });
+  assert.equal(first.partial, true);
+  assert.deepEqual(first.unanswered, ['military']);
+
+  const followUp = await eng.query({ followUp: true, limit: 1 });
+  assert.equal(followUp.partial, true);
+  assert.deepEqual(followUp.unanswered, ['military']);
+  assert.deepEqual(
+    followUp.coverage.layersQueried.map(({ layerKey, status }) => [
+      layerKey,
+      status,
+    ]),
+    first.coverage.layersQueried.map(({ layerKey, status }) => [
+      layerKey,
+      status,
+    ]),
+  );
+});
+
+test('analyst: cancelled pre-commit work cannot replace follow-up memory', async () => {
+  const eng = makeEngine();
+  await eng.query({
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'id', op: 'eq', value: 'SWA1' }],
+  });
+  let current = true;
+  const stale = await eng.query(
+    { layers: ['local-firms'], scope: { kind: 'anywhere' } },
+    {
+      isCurrent: () => current,
+      beforeCommit: async () => {
+        current = false;
+      },
+    },
+  );
+  assert.equal(stale.code, 'CANCELLED');
+  const followUp = await eng.query({ followUp: true });
+  assert.deepEqual(followUp.items.map((item) => item.id), ['SWA1']);
+});
+
+test('analyst: failed pre-commit work cannot replace follow-up memory', async () => {
+  const eng = makeEngine();
+  await eng.query({
+    layers: ['flights'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'id', op: 'eq', value: 'SWA1' }],
+  });
+  await assert.rejects(
+    eng.query(
+      { layers: ['local-firms'], scope: { kind: 'anywhere' } },
+      {
+        beforeCommit: async () => {
+          throw new Error('projection failed');
+        },
+      },
+    ),
+    /projection failed/,
+  );
+  const followUp = await eng.query({ followUp: true });
+  assert.deepEqual(followUp.items.map((item) => item.id), ['SWA1']);
 });
 
 test('analyst: unresolved region is an honest failure, not empty success', async () => {
@@ -198,6 +282,39 @@ test('analyst: a region lookup timeout is reported as region-timeout', async () 
   assert.equal(r.code, 'region-timeout');
   assert.match(r.error, /Texas/);
   assert.equal(r.coverage.scope, 'region:Texas:timeout');
+});
+
+test('analyst: region lookup receives and obeys the owning action signal', async () => {
+  const controller = new AbortController();
+  let receivedSignal = null;
+  const eng = createAnalystEngine({
+    getRecords: () => FLIGHTS,
+    resolveRegionRing: async (_name, signal) => {
+      receivedSignal = signal;
+      await new Promise((resolve) =>
+        signal.addEventListener('abort', resolve, { once: true }),
+      );
+      return null;
+    },
+    getViewContext: () => ({
+      lat: 30.27,
+      lon: -97.74,
+      viewRadiusKm: 150,
+    }),
+  });
+  const pending = eng.query(
+    { layers: ['flights'], scope: { kind: 'region', name: 'Texas' } },
+    {
+      signal: controller.signal,
+      isCurrent: () => !controller.signal.aborted,
+    },
+  );
+  await Promise.resolve();
+  controller.abort();
+  const result = await pending;
+  assert.equal(receivedSignal, controller.signal);
+  assert.equal(result.code, 'CANCELLED');
+  assert.equal(result.cancelled, true);
 });
 
 test('analyst: route fields queryable from cached enrichment only', async () => {
@@ -262,20 +379,132 @@ test('helpers: haversine sanity + scope radius', () => {
   assert.deepEqual(scoped.map((f) => f.id).sort(), ['GND1', 'SWA1']);
 });
 
-test('bounded loaded cohorts disclose truncation before filtering and retain it on follow-up', async () => {
+test('capped cohorts report returned/total/truncated and keep it on follow-up', async () => {
   const engine = createAnalystEngine({
     getRecords: () => [{ id: 'sample dam', lat: 0, lon: 0, name: 'sample' }],
-    getRecordCoverage: () => ({ basis: 'bounded-loaded-records', recordsExamined: 1, loadedCount: 3000, sourceTruncated: true }),
+    getRecordCoverage: () => ({ total: 3000, truncated: true }),
     getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
   });
   const result = await engine.query({ layers: ['local-dams'], scope: { kind: 'anywhere' }, sortBy: 'distance' });
   assert.equal(result.count, 1);
-  assert.equal(result.coverage.layersQueried[0].sourceTruncated, true);
-  assert.match(result.coverage.note, /omitted records may change the nearest item or count/);
+  const layer = result.coverage.layersQueried[0];
+  assert.deepEqual({ returned: layer.returned, total: layer.total, truncated: layer.truncated }, { returned: 1, total: 3000, truncated: true });
+  assert.deepEqual(result.coverage.records, { returned: 1, total: 3000, truncated: true });
+  assert.match(result.display.caveat, /counted 1 of 3,000 loaded records/);
   const followUp = await engine.query({ followUp: true });
-  assert.equal(followUp.coverage.layersQueried[0].loadedCount, 3000);
+  assert.equal(followUp.coverage.layersQueried[0].total, 3000);
 });
 
+test('an uncapped cohort is complete and carries no caveat', async () => {
+  const result = await makeEngine().query({ layers: ['flights'], scope: { kind: 'anywhere' } });
+  assert.deepEqual(result.coverage.records, { returned: 4, total: 4, truncated: false });
+  assert.equal(result.display.caveat, undefined);
+  assert.equal(result.display.scope, 'anywhere in the loaded data');
+});
+
+test('unknown fields, operators, scopes and wrong-typed values are refused with the allowed values', async () => {
+  const engine = makeEngine();
+  const field = await engine.query({ layers: ['flights'], filters: [{ field: 'time', op: 'gte', value: 5 }] });
+  assert.equal(field.ok, false);
+  assert.equal(field.code, 'UNKNOWN_FIELD');
+  assert.ok(field.allowed.includes('altitudeM'));
+  const op = await engine.query({ layers: ['flights'], filters: [{ field: 'altitudeM', op: 'wat', value: 5 }] });
+  assert.equal(op.code, 'BAD_OPERATOR');
+  assert.deepEqual(op.allowed, ['gt', 'gte', 'lt', 'lte', 'eq', 'neq']);
+  const flag = await engine.query({ layers: ['flights'], filters: [{ field: 'military', op: 'eq', value: 'false' }] });
+  assert.equal(flag.code, 'BAD_VALUE', 'the string "false" must not match the TRUE record');
+  const num = await engine.query({ layers: ['flights'], filters: [{ field: 'altitudeM', op: 'gt', value: 'high' }] });
+  assert.equal(num.code, 'BAD_VALUE');
+  const scope = await engine.query({ layers: ['flights'], scope: { kind: 'polygon' } });
+  assert.equal(scope.code, 'UNKNOWN_SCOPE');
+  assert.deepEqual(scope.allowed, ['view', 'region', 'radius', 'anywhere']);
+  const sort = await engine.query({ layers: ['flights'], sortBy: 'loudness' });
+  assert.equal(sort.code, 'UNKNOWN_FIELD');
+  assert.equal(engine.hasMemory(), false, 'refusals never become follow-up memory');
+});
+
+test('a typed boolean filter still matches exactly', async () => {
+  const r = await makeEngine().query({ layers: ['flights'], scope: { kind: 'anywhere' }, filters: [{ field: 'military', op: 'eq', value: false }] });
+  assert.deepEqual(r.items.map((i) => i.id).sort(), ['GND1', 'N123', 'SWA1']);
+});
+
+test('distance honours sortDir: desc is farthest first', async () => {
+  const far = await makeEngine().query({ layers: ['flights'], scope: { kind: 'anywhere' }, sortBy: 'distance', sortDir: 'desc', limit: 1 });
+  assert.equal(far.items[0].id, 'N123');
+  const near = await makeEngine().query({ layers: ['flights'], scope: { kind: 'anywhere' }, sortBy: 'distance', limit: 1 });
+  assert.equal(near.items[0].id, 'SWA1');
+});
+
+test('a follow-up without a previous answer is refused, not a fresh flights query', async () => {
+  const r = await makeEngine().query({ followUp: true, filters: [] });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'NO_RESULT_CONTEXT');
+});
+
+test('follow-ups never rewrite the remembered rows', async () => {
+  const engine = makeEngine();
+  await engine.query({ layers: ['flights'], scope: { kind: 'anywhere' } });
+  await engine.query({ followUp: true, sortBy: 'distance' });
+  const again = await engine.query({ followUp: true });
+  assert.equal(again.count, 4, 'a follow-up keeps the remembered set, not the view');
+  assert.ok(again.items.every((item) => item.distanceKm === undefined));
+});
+
+test('a superseded slow region query cannot overwrite the newer follow-up memory', async () => {
+  let releaseSlow;
+  const engine = createAnalystEngine({
+    getRecords: (key) => ({ flights: FLIGHTS, 'ais-live-vessels': SHIPS }[key] || []),
+    resolveRegionRing: () => new Promise((resolve) => { releaseSlow = () => resolve(TEXLAND); }),
+    getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
+  });
+  let generation = 0;
+  const slowGeneration = ++generation;
+  const slow = engine.query({ layers: ['flights'], scope: { kind: 'region', name: 'Texland' } }, { isCurrent: () => generation === slowGeneration });
+  const newGeneration = ++generation;
+  const fresh = await engine.query({ layers: ['ais-live-vessels'], scope: { kind: 'anywhere' } }, { isCurrent: () => generation === newGeneration });
+  assert.equal(fresh.ok, true);
+  releaseSlow();
+  const stale = await slow;
+  assert.equal(stale.code, 'CANCELLED');
+  const followUp = await engine.query({ followUp: true });
+  assert.deepEqual(followUp.items.map((i) => i.layerKey), ['ais-live-vessels', 'ais-live-vessels']);
+});
+
+test('off, loading and unavailable layers are refused distinctly; a real zero stays ok', async () => {
+  const engineFor = (snapshot, rows = [], warming = false) => createAnalystEngine({
+    getRecords: () => rows,
+    getLayerSnapshot: () => snapshot,
+    isWarming: () => warming,
+    getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
+  });
+  assert.equal((await engineFor({ enabled: false, feedState: 'off' }).query({ layers: ['earthquakes'] })).code, 'LAYER_OFF');
+  assert.equal((await engineFor({ enabled: true, feedState: 'loading' }).query({ layers: ['earthquakes'] })).code, 'NOT_READY');
+  assert.equal((await engineFor({ enabled: true, feedState: 'nominal' }, [], true).query({ layers: ['earthquakes'] })).code, 'NOT_READY');
+  assert.equal((await engineFor({ enabled: true, feedState: 'unavailable' }).query({ layers: ['earthquakes'] })).code, 'FEED_UNAVAILABLE');
+  const zero = await engineFor({ enabled: true, feedState: 'nominal' }, [{ id: 'q', lat: 50, lon: 50, magnitude: 2 }]).query({ layers: ['earthquakes'], filters: [{ field: 'magnitude', op: 'gte', value: 5 }] });
+  assert.equal(zero.ok, true);
+  assert.equal(zero.count, 0);
+  assert.equal(zero.coverage.layersQueried[0].status, 'ok');
+});
+
+test('time fields filter by ISO and derive ageHours; the feed window is exposed', async () => {
+  const now = Date.parse('2026-09-23T12:00:00Z');
+  const engine = createAnalystEngine({
+    now: () => now,
+    getRecords: () => [
+      { id: 'recent', lat: 0, lon: 0, magnitude: 4, timeMs: now - 2 * 3_600_000 },
+      { id: 'older', lat: 0, lon: 0, magnitude: 5, timeMs: now - 20 * 3_600_000 },
+    ],
+    getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
+  });
+  const iso = await engine.query({ layers: ['earthquakes'], scope: { kind: 'anywhere' }, filters: [{ field: 'timeMs', op: 'gte', value: '2026-09-23T06:00:00Z' }] });
+  assert.deepEqual(iso.items.map((i) => i.id), ['recent']);
+  const age = await engine.query({ layers: ['earthquakes'], scope: { kind: 'anywhere' }, filters: [{ field: 'ageHours', op: 'lte', value: 6 }] });
+  assert.deepEqual(age.items.map((i) => i.id), ['recent']);
+  assert.equal(age.items[0].ageHours, 2);
+  assert.equal(age.display.window, 'last 24 h');
+  assert.equal(age.coverage.layersQueried[0].window, 'last 24 h');
+});
 
 test('follow-up provenance stays attached to old rows after a feed recovers', async () => {
   let state = 'stale';
@@ -292,4 +521,142 @@ test('follow-up provenance stays attached to old rows after a feed recovers', as
   engine.reset();
   assert.equal(engine.hasMemory(), false);
   assert.equal((await engine.query()).coverage.feedProvenance.overall, 'nominal');
+});
+
+test('a large loaded set sorts and summarizes without overflowing the stack', async () => {
+  const rows = Array.from({ length: 200_000 }, (_, i) => ({ id: `FIRE-${i}`, lat: 0, lon: 0, frp: i }));
+  const engine = createAnalystEngine({
+    getRecords: () => rows,
+    getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
+  });
+  const result = await engine.query({ layers: ['local-firms'], scope: { kind: 'anywhere' }, sortBy: 'frp', limit: 1 });
+  assert.equal(result.count, 200_000);
+  assert.equal(result.items[0].frp, 199_999);
+  assert.equal(result.summary.frpMin, 0);
+});
+
+test('an enabled but empty layer says why on screen', async () => {
+  const engine = createAnalystEngine({
+    getRecords: () => [],
+    getLayerSnapshot: () => ({ enabled: true, feedState: 'nominal' }),
+    getEmptyNote: () => 'Fly below 400 km to a covered region',
+    getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
+  });
+  const result = await engine.query({ layers: ['transit'] });
+  assert.equal(result.ok, true);
+  assert.equal(result.count, 0);
+  assert.equal(result.coverage.layersQueried[0].status, 'empty');
+  assert.match(result.display.caveat, /transit: Fly below 400 km/);
+});
+
+test('a radius around a named place without a centre is refused, not measured around the camera', async () => {
+  const r = await makeEngine().query({ layers: ['ais-live-vessels'], scope: { kind: 'radius', name: 'Singapore', km: 200 } });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'BAD_SCOPE');
+  const ok = await makeEngine().query({ layers: ['ais-live-vessels'], scope: { kind: 'radius', name: 'Houston', km: 200, center: { lat: 29.6, lon: -95.0 } } });
+  assert.equal(ok.ok, true);
+});
+
+test('a field copied with its hinted unit still resolves', async () => {
+  const r = await makeEngine().query({ layers: ['local-firms'], scope: { kind: 'anywhere' }, sortBy: 'frp(MW)', filters: [{ field: 'frp (MW)', op: 'gt', value: 100 }] });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.items.map((i) => i.id), ['FIRE-3', 'FIRE-1']);
+});
+
+test('a written unit converts to the field unit or is refused', async () => {
+  const engine = makeEngine();
+  const feet = await engine.query({ layers: ['flights'], scope: { kind: 'anywhere' }, filters: [{ field: 'altitudeM(ft)', op: 'gt', value: 40000 }] });
+  assert.equal(feet.ok, true);
+  assert.deepEqual(feet.items.map((i) => i.id), ['RCH01'], '40,000 ft is 12,192 m, not 40,000 m');
+  const same = await engine.query({ layers: ['flights'], scope: { kind: 'anywhere' }, filters: [{ field: 'altitudeM (m)', op: 'gt', value: 12192 }] });
+  assert.deepEqual(same.items.map((i) => i.id), ['RCH01']);
+  const knots = await engine.query({ layers: ['flights'], scope: { kind: 'anywhere' }, filters: [{ field: 'speedMps(kts)', op: 'gt', value: 470 }] });
+  assert.deepEqual(knots.items.map((i) => i.id), ['RCH01'], '470 kn is ~242 m/s');
+  const wrong = await engine.query({ layers: ['flights'], filters: [{ field: 'altitudeM(kts)', op: 'gt', value: 1 }] });
+  assert.equal(wrong.code, 'BAD_UNIT');
+  const unitless = await engine.query({ layers: ['flights'], filters: [{ field: 'callsign(ft)', op: 'eq', value: 'X' }] });
+  assert.equal(unitless.code, 'BAD_UNIT');
+  const hinted = await engine.query({ layers: ['local-firms'], scope: { kind: 'anywhere' }, sortBy: 'frp(MW)' });
+  assert.equal(hinted.ok, true);
+});
+
+test('unambiguous numeric strings are numbers; blanks, booleans and words are not', async () => {
+  const engine = makeEngine();
+  const text = await engine.query({ layers: ['flights'], scope: { kind: 'anywhere' }, filters: [{ field: 'altitudeM', op: 'gt', value: '12192' }] });
+  assert.equal(text.ok, true);
+  assert.deepEqual(text.items.map((i) => i.id), ['RCH01']);
+  for (const value of ['', '  ', true, 'high', '12k'])
+    assert.equal((await engine.query({ layers: ['flights'], filters: [{ field: 'altitudeM', op: 'gt', value }] })).code, 'BAD_VALUE', JSON.stringify(value));
+});
+
+test('any supplied centre must be a real coordinate', async () => {
+  const engine = makeEngine();
+  for (const center of [{ lat: 0 }, { lat: 999, lon: 0 }, { lat: 10, lon: 200 }, { lat: '10', lon: 20 }])
+    assert.equal((await engine.query({ layers: ['flights'], scope: { kind: 'radius', km: 100, center } })).code, 'BAD_SCOPE', JSON.stringify(center));
+  assert.equal((await engine.query({ layers: ['flights'], scope: { kind: 'radius', km: 100, center: { lat: 30.2, lon: -97.7 } } })).ok, true);
+});
+
+test('mixed off/loading/unavailable layers refuse; a partly answerable query says so', async () => {
+  const snapshots = { earthquakes: { enabled: true, feedState: 'unavailable' }, 'local-firms': { enabled: true, feedState: 'loading' }, flights: { enabled: false, feedState: 'off' } };
+  const engine = createAnalystEngine({
+    getRecords: (key) => (key === 'ais-live-vessels' ? SHIPS : []),
+    getLayerSnapshot: (key) => snapshots[key] || { enabled: true, feedState: 'nominal' },
+    getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }),
+  });
+  const none = await engine.query({ layers: ['earthquakes', 'local-firms', 'flights'] });
+  assert.equal(none.ok, false);
+  assert.equal(none.code, 'NOT_READY');
+  assert.deepEqual(none.layerStatus.map((l) => l.status), ['error', 'loading', 'off']);
+  assert.equal(engine.hasMemory(), false, 'a refusal never becomes follow-up memory');
+  const down = await engine.query({ layers: ['earthquakes', 'flights'] });
+  assert.equal(down.code, 'FEED_UNAVAILABLE');
+  const partial = await engine.query({ layers: ['ais-live-vessels', 'earthquakes'], scope: { kind: 'anywhere' } });
+  assert.equal(partial.ok, true);
+  assert.equal(partial.partial, true);
+  assert.deepEqual(partial.unanswered, ['earthquakes']);
+  assert.match(partial.display.caveat, /earthquakes error/);
+});
+
+test('returned items are copies: mutating them cannot change the remembered answer', async () => {
+  const engine = makeEngine();
+  const first = await engine.query({ layers: ['flights'], scope: { kind: 'anywhere' }, sortBy: 'altitudeM' });
+  for (const item of first.items) {
+    item.altitudeM = -1;
+    item.id = 'MUTATED';
+  }
+  const again = await engine.query({ followUp: true, sortBy: 'altitudeM' });
+  assert.deepEqual(again.items.map((i) => i.id), ['RCH01', 'SWA1', 'N123', 'GND1']);
+  assert.equal(FLIGHTS[1].altitudeM, 13500, 'the provider rows are untouched');
+});
+
+test('ranking 250k rows stays within a budget and yields to the page', async () => {
+  const rows = Array.from({ length: 250_000 }, (_, i) => ({ id: `F${i}`, lat: (i % 170) - 85, lon: (i % 350) - 175, frp: (i * 7919) % 100_003 }));
+  const engine = createAnalystEngine({ getRecords: () => rows, getViewContext: () => ({ lat: 0, lon: 0, viewRadiusKm: 25 }) });
+  let ticks = 0;
+  const timer = setInterval(() => ticks++, 0);
+  const started = performance.now();
+  const result = await engine.query({ layers: ['local-firms'], scope: { kind: 'anywhere' }, sortBy: 'frp', limit: 1 });
+  const elapsed = performance.now() - started;
+  clearInterval(timer);
+  assert.equal(result.count, 250_000);
+  assert.equal(result.items[0].frp, 100_002);
+  assert.ok(elapsed < 400, `took ${Math.round(elapsed)} ms`);
+  assert.ok(ticks > 0, 'the scan yielded between slices');
+  let current = true;
+  const pending = engine.query({ layers: ['local-firms'], scope: { kind: 'anywhere' }, sortBy: 'distance' }, { isCurrent: () => current });
+  current = false;
+  assert.equal((await pending).code, 'CANCELLED', 'a superseded scan stops at the next slice');
+});
+
+test('analyst: a follow-up naming other layers than the last answer is refused', async () => {
+  const engine = createAnalystEngine({
+    getRecords: (key) => ({ flights: FLIGHTS, 'local-firms': FIRES }[key] || []),
+    resolveRegionRing: async () => null,
+    getViewContext: () => ({ lat: 30.27, lon: -97.74, viewRadiusKm: 150 }),
+  });
+  await engine.query({ layers: ['flights'], scope: { kind: 'anywhere' } });
+  const r = await engine.query({ layers: ['local-firms'], followUp: true });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'FOLLOW_UP_MISMATCH');
+  assert.equal(engine.hasMemory(), true, 'the earlier answer is still the last answer');
 });

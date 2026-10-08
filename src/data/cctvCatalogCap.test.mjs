@@ -127,6 +127,14 @@ test('the catalog applies the fair cap to configured packs end to end', async ()
       sources.slice(0, 3).map((s) => s.id),
       ['env-0', 'env-1', 'env-2'],
     );
+    assert.equal(sources[0].pack, 'env');
+    const [trimmed] = getSources.trimmedPacks();
+    assert.deepEqual(
+      { ...trimmed, region: undefined },
+      { pack: 'env', available: 12, served: 9, region: undefined },
+    );
+    assert.equal(trimmed.region.south, 30);
+    assert.ok(Math.abs(trimmed.region.north - 30.11) < 1e-9);
   } finally {
     for (const key of Object.keys(process.env)) {
       if (!(key in saved)) delete process.env[key];
@@ -154,4 +162,21 @@ test('default per-pack camera caps fit inside the default catalog cap', () => {
     DEFAULT_CCTV_MAX_SOURCES <= CCTV_MAX_SOURCES_CEILING,
     'the default cap must sit inside the CCTV_MAX_SOURCES ceiling',
   );
+});
+
+test('a pack trimmed to its nearest cameras reports how many it offered', async () => {
+  const { prioritizeSources } =
+    await import('../../server/providers/cctv/normalize.js');
+  const cameras = Array.from({ length: 5 }, (_, i) => ({
+    id: `c${i}`,
+    lat: i,
+    lon: 0,
+  }));
+  const kept = prioritizeSources(cameras, 2, [{ lat: 0, lon: 0 }]);
+  assert.deepEqual(
+    kept.map((camera) => camera.id),
+    ['c0', 'c1'],
+  );
+  assert.equal(kept.available, 5);
+  assert.deepEqual(kept.region, { west: 0, south: 0, east: 0, north: 4 });
 });
