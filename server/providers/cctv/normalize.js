@@ -378,6 +378,17 @@ export function isLikelyNorwayCoordinate(lat, lon) {
   );
 }
 
+/** The A22 corridor, Brenner Pass to Modena, with slack either side. */
+export function isLikelyA22Coordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 44.5 &&
+    lat <= 47.1 &&
+    lon >= 10.5 &&
+    lon <= 11.8
+  );
+}
+
 export function isLikelyFinlandCoordinate(lat, lon) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return false;
   return lat >= 59.5 && lat <= 70.5 && lon >= 19 && lon <= 32;

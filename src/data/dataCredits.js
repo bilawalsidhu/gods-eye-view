@@ -248,6 +248,13 @@ export const DATA_CREDITS = [
       'distributed by Statens vegvesen',
   },
   {
+    key: 'a22-cctv',
+    html:
+      'Motorway webcams (A22 Brennero–Modena): images © ' +
+      '<a href="https://www.autobrennero.it/" target="_blank" rel="noopener">Autostrada del Brennero S.p.A.</a>, ' +
+      'camera list via the <a href="https://opendatahub.com/" target="_blank" rel="noopener">Open Data Hub</a> (NOI Techpark)',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },
