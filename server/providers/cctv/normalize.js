@@ -271,6 +271,36 @@ export function extractAustinHeading(record) {
 }
 
 /**
+ * Austin's `camera_mfg` values, mapped to the full maker / product-line name.
+ * The column holds a maker or a product line (Wisenet is Hanwha Vision's
+ * line; Sarix and Spectra are Pelco's), never a model, so the result labels
+ * the hardware family only.
+ */
+const AUSTIN_MANUFACTURERS = new Map([
+  ['wisenet', 'Hanwha Wisenet'],
+  ['advidia', 'Advidia'],
+  ['sarix', 'Pelco Sarix'],
+  ['spectra enhanced', 'Pelco Spectra Enhanced'],
+  ['axis', 'Axis'],
+]);
+
+/**
+ * Extract the camera maker from an Austin record's `camera_mfg` column.
+ * Known values map to their full maker / product-line name; an unknown
+ * non-empty value passes through trimmed, so a new maker still shows.
+ *
+ * @param {object} record - Flattened camera record.
+ * @returns {string} Maker label, or '' when the row names none.
+ */
+export function extractAustinManufacturer(record) {
+  const raw = String(record?.camera_mfg ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!raw) return '';
+  return AUSTIN_MANUFACTURERS.get(raw.toLowerCase()) || raw;
+}
+
+/**
  * Bounding-box sanity check: is this coordinate plausibly in the Austin metro area?
  *
  * @param {number} lat
@@ -551,5 +581,19 @@ export function normalizeSourceItem(item) {
     // badge can distinguish them from raw automated priors (e.g. Austin Open
     // Data, which never sets this field). Passed through as-is to the client.
     poseSource: item.poseSource === 'curated' ? 'curated' : undefined,
+    // Optional hardware-model passthrough (additive, like poseSource): packs
+    // whose catalog publishes the camera's hardware model — King County's
+    // layer carries Manufacturer/Model per camera — pass it through so
+    // identified-hardware consumers can use it. Absent everywhere else.
+    model:
+      typeof item.model === 'string' && item.model.trim()
+        ? item.model.trim()
+        : undefined,
+    // Bare model strings collide across vendors (e.g. "3950"), so the
+    // publishing pack's manufacturer rides along for disambiguation.
+    manufacturer:
+      typeof item.manufacturer === 'string' && item.manufacturer.trim()
+        ? item.manufacturer.trim()
+        : undefined,
   };
 }

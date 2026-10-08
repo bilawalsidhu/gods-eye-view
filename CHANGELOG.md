@@ -1,5 +1,23 @@
 # Changelog
 
+- Austin cameras show their hardware maker. Austin's catalog names each camera's
+  maker or product line (Wisenet, Advidia, Sarix, Spectra Enhanced, Axis), which
+  the pack now serves as `manufacturer` on `/api/cctv/sources`. The HUD shows
+  `HW <MAKER>` and the camera panel adds the label. Pelco Spectra is a PTZ-only
+  line, so those cameras are labelled `(PTZ)`: their listed facing is at best a
+  home position. The maker never changes the pose or FOV estimate (bassem
+  chagra).
+- Add King County road cameras (Washington State) as a keyless CCTV source
+  pack: one public King County DOT ArcGIS layer, fetched with an explicit field
+  list so its staff-name columns are never requested, and frames pinned to the
+  county's own image host and upgraded to HTTPS. WSDOT-owned rows are skipped,
+  and city-owned cameras the county hosts credit their owner. The layer
+  publishes no facing, so headings use the shared id-hash fallback at low
+  confidence. It does publish each camera's hardware, which is served on
+  `/api/cctv/sources` as `model` and `manufacturer`. `CCTV_KINGCOUNTY_MAX_SOURCES`
+  sets the cap and `CCTV_KINGCOUNTY_ENABLED=0` turns the pack off
+  (bassem chagra, #645).
+
 - MCP setup examples use the app's default port, `4173`. Thanks to
   [Huanyi Xie](https://github.com/xiehuanyi) (#934) and
   [shirunjies8-png](https://github.com/shirunjies8-png) (#959) for the same fix.
