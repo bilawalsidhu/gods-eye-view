@@ -30,9 +30,17 @@ prefix (see [Cost](#cost)).
 
 ## Using it
 
-The **GEV COMMAND** chip sits above POWER UP in the bottom-right corner. It
-opens a non-modal dialog, so the globe stays interactive while a command runs —
-the point of typing one is watching it happen. Escape or the × closes it.
+The **GEV COMMAND** chip sits in the bottom-left corner, below the map
+attribution. It opens a non-modal dialog, so the globe stays interactive while
+a command runs — the point of typing one is watching it happen. Escape or the ×
+closes it.
+
+The window is **draggable by its header and resizable from every edge**, and
+remembers where it was left. Double-press the header to forget that and return
+it to its default placement, the same gesture the app's other floating panels
+use to snap back. On first open it sits on the left, clear of the rail above it
+and the map attribution below it — the credit line is a licence condition, not
+decoration, so the default placement never covers it.
 
 Pick a provider and a model, type a command, press SEND:
 
@@ -95,6 +103,7 @@ doubt rather than losing the model from the list.
 src/agent/
 ├── conversation.js   # transcript sanitizing, bounded history, bounded results
 ├── cost.js           # per-command estimate and its formatting
+├── consoleBox.js     # the window: drag, resize, clamping, persistence
 ├── agentLoop.js      # the client-side tool loop
 └── agentConsole.js   # the dialog
 

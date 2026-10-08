@@ -4,5 +4,6 @@
   than copied, credentials and the model decision stay server-side, and the
   console trims its own transcript and bounds tool results to valid JSON.
   Prefix-truncation and reasoning-overflow are reported as warnings with their
-  remedy. Voice, the HUD summary and the map credential path are unchanged
-  (darrendignam, #976).
+  remedy. The console opens bottom-left, drags by its header, resizes from
+  every edge and remembers its window. Voice, the HUD summary and the map
+  credential path are unchanged (darrendignam, #976).
