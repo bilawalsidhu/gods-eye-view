@@ -41,7 +41,9 @@ function harness({ selected = false } = {}) {
     disableRootEvents: true,
     onwheel: null,
   });
+  const camera = { moveEnd: new Cesium.Event() };
   const viewer = {
+    camera,
     scene: {
       canvas,
       pick(position) {
@@ -97,8 +99,13 @@ function harness({ selected = false } = {}) {
     canvas,
     picks,
     move: (x) => onMove({ endPosition: { x, y: 10 } }),
-    down: () => action('LEFT_DOWN')(),
-    up: () => action('LEFT_UP')(),
+    camera,
+    /** A pointer event on the canvas with `buttons` held. */
+    buttons(type, buttons) {
+      const event = new Event(type);
+      Object.defineProperty(event, 'buttons', { value: buttons });
+      canvas.dispatchEvent(event);
+    },
     frame() {
       for (const task of frames.splice(0)) task();
     },
@@ -132,14 +139,46 @@ test('hover picks once a frame, at the latest position, and shows a pointer over
   }
 });
 
-test('a drag, or a layer gone off before the frame, picks nothing', () => {
+test('a drag with any button picks nothing, and a release with a modifier held does not stick', () => {
   const h = harness();
   try {
-    h.down();
-    h.move(1);
+    for (const held of [1, 2, 4]) {
+      h.buttons('pointerdown', held);
+      h.move(held);
+      h.frame();
+    }
+    assert.equal(h.picks.length, 0, 'left, right and middle drags');
+    // Released with Shift held: Cesium's plain LEFT_UP never fires.
+    h.buttons('pointerup', 0);
+    h.move(5);
     h.frame();
-    assert.equal(h.picks.length, 0, 'a drag in progress');
-    h.up();
+    assert.equal(h.picks.length, 1, 'hover picks again');
+  } finally {
+    h.restore();
+  }
+});
+
+test('when the camera rests, a still pointer is picked again so the cursor cannot stick', () => {
+  const h = harness();
+  try {
+    h.scene.under = 'mly:seq:1';
+    h.move(5);
+    h.frame();
+    assert.equal(h.canvas.style.cursor, 'pointer');
+    // The camera moves the line out from under a still pointer.
+    h.scene.under = null;
+    h.camera.moveEnd.raiseEvent();
+    h.frame();
+    assert.equal(h.picks.length, 2);
+    assert.equal(h.canvas.style.cursor, '');
+  } finally {
+    h.restore();
+  }
+});
+
+test('a hover frame queued before the layer went off does not pick', () => {
+  const h = harness();
+  try {
     h.move(2);
     h.state.enabled = false;
     h.frame();

@@ -51,10 +51,13 @@ export function createSelection({ state, parts }) {
     parts.sequences.clearSelection();
   }
 
-  /** Where the pointer is, until a frame picks it; a drag picks nothing. */
-  let hoverPosition = null;
+  /** The pointer over the globe, and whether a frame is queued to pick it. */
+  let pointer = null;
+  let hoverQueued = false;
   let hoverCursor = false;
-  let dragging = false;
+  /** Buttons held: any of them, with any modifier, is a camera drag. */
+  let pointerButtons = 0;
+  let removeHoverWatchers = null;
 
   function setHoverCursor(canvas, hit) {
     if (hit === hoverCursor) return;
@@ -63,14 +66,14 @@ export function createSelection({ state, parts }) {
   }
 
   function pickHover() {
-    const position = hoverPosition;
-    hoverPosition = null;
+    hoverQueued = false;
     const canvas = state.viewer?.scene?.canvas;
-    // Switched off (or torn down) since the frame was queued.
-    if (!canvas || !state.enabled || !state.clickHandler || dragging) return;
+    // Switched off (or torn down) since the frame was queued, or dragging.
+    if (!canvas || !state.enabled || !state.clickHandler || pointerButtons)
+      return;
     let hit = false;
     try {
-      const picked = state.viewer.scene.pick(position);
+      const picked = state.viewer.scene.pick(pointer);
       hit = ownsPick(
         picking?.resolvePickId ? picking.resolvePickId(picked) : picked?.id,
       );
@@ -80,11 +83,33 @@ export function createSelection({ state, parts }) {
     setHoverCursor(canvas, hit);
   }
 
-  /** Pointer cursor over anything this layer owns, picked at most once a frame. */
+  /** Pick the pointer on the next frame; at most one pick a frame. */
+  function queueHoverPick() {
+    if (hoverQueued || !pointer || pointerButtons) return;
+    hoverQueued = true;
+    requestAnimationFrame(pickHover);
+  }
+
+  /** Pointer cursor over anything this layer owns. */
   function onMove(movement) {
-    if (!state.enabled || dragging) return;
-    if (!hoverPosition) requestAnimationFrame(pickHover);
-    hoverPosition = Cesium.Cartesian2.clone(movement.endPosition);
+    if (!state.enabled) return;
+    pointer = Cesium.Cartesian2.clone(movement.endPosition, pointer);
+    queueHoverPick();
+  }
+
+  /** Track held buttons, and pick again once the camera rests under a still pointer. */
+  function watchHover(viewer) {
+    const canvas = viewer.scene.canvas;
+    const onButtons = (event) => {
+      pointerButtons = event.buttons ?? 0;
+    };
+    const types = ['pointerdown', 'pointermove', 'pointerup'];
+    for (const type of types) canvas.addEventListener?.(type, onButtons);
+    const removeEnd = viewer.camera?.moveEnd?.addEventListener(queueHoverPick);
+    removeHoverWatchers = () => {
+      for (const type of types) canvas.removeEventListener?.(type, onButtons);
+      removeEnd?.();
+    };
   }
 
   function install(viewer) {
@@ -100,12 +125,7 @@ export function createSelection({ state, parts }) {
       onMove,
       Cesium.ScreenSpaceEventType.MOUSE_MOVE,
     );
-    state.clickHandler.setInputAction(() => {
-      dragging = true;
-    }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
-    state.clickHandler.setInputAction(() => {
-      dragging = false;
-    }, Cesium.ScreenSpaceEventType.LEFT_UP);
+    watchHover(viewer);
     document.addEventListener('keydown', onKeyDown);
     picking?.registerPickOwner?.(STREET_LEVEL_LAYER_ID, ownsPick);
   }
@@ -113,8 +133,10 @@ export function createSelection({ state, parts }) {
   function uninstall() {
     // Nothing to undo for a layer that was never enabled.
     if (!state.clickHandler) return;
-    hoverPosition = null;
-    dragging = false;
+    removeHoverWatchers?.();
+    removeHoverWatchers = null;
+    pointer = null;
+    pointerButtons = 0;
     if (hoverCursor && state.viewer?.scene?.canvas) {
       state.viewer.scene.canvas.style.cursor = '';
       hoverCursor = false;
