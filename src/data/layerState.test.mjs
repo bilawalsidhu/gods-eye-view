@@ -243,7 +243,11 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   }
   assert.equal(nextLayerStateToken(), '3');
   assert.equal(
-    nextLayerStateToken({ ...LAYER_STATE_TOKEN_RESERVATIONS, alpha: '3', bravo: '4' }),
+    nextLayerStateToken({
+      ...LAYER_STATE_TOKEN_RESERVATIONS,
+      alpha: '3',
+      bravo: '4',
+    }),
     '5',
   );
   const digitsExhausted = {
@@ -276,7 +280,9 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
           [
             ...'0123456789',
             ...[...LAYER_STATE_TOKEN_ALPHABET].flatMap((first) =>
-              [...LAYER_STATE_TOKEN_ALPHABET].map((second) => `${first}${second}`),
+              [...LAYER_STATE_TOKEN_ALPHABET].map(
+                (second) => `${first}${second}`,
+              ),
             ),
           ].map((token, index) => [`occupied-${index}`, token]),
         ),
@@ -298,33 +304,37 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
     true,
   );
   assert.equal(
-    validateLayerStateAllocations(
-      LAYER_STATE_TOKEN_RESERVATIONS,
-      { ...LAYER_STATE_TOKEN_RESERVATIONS, future: '3', next: '4' },
-    ),
+    validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
+      ...LAYER_STATE_TOKEN_RESERVATIONS,
+      future: '3',
+      next: '4',
+    }),
     true,
   );
   assert.throws(
-    () => validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
-      ...LAYER_STATE_TOKEN_RESERVATIONS,
-      future: '00',
-    }),
+    () =>
+      validateLayerStateAllocations(LAYER_STATE_TOKEN_RESERVATIONS, {
+        ...LAYER_STATE_TOKEN_RESERVATIONS,
+        future: '00',
+      }),
     /next free token 3/,
   );
   const beforeLastDigit = { ...digitsExhausted };
   delete beforeLastDigit['prior-9'];
   assert.equal(
-    validateLayerStateAllocations(
-      beforeLastDigit,
-      { ...beforeLastDigit, futurePair: '00', futureDigit: '9' },
-    ),
+    validateLayerStateAllocations(beforeLastDigit, {
+      ...beforeLastDigit,
+      futurePair: '00',
+      futureDigit: '9',
+    }),
     true,
   );
   assert.equal(
-    validateLayerStateAllocations(
-      digitsExhausted,
-      { ...digitsExhausted, pairB: '01', pairA: '00' },
-    ),
+    validateLayerStateAllocations(digitsExhausted, {
+      ...digitsExhausted,
+      pairB: '01',
+      pairA: '00',
+    }),
     true,
   );
   assert.throws(
@@ -2660,12 +2670,14 @@ test('Street Level: every option round-trips through a share link and stored sta
   state.enabledLayerIds = ['street-level'];
   state.options['street-level'] = {
     mapillary: false,
+    google: true,
     pano: 'flat',
     sinceDays: MAX_SINCE_DAYS,
   };
   const decoded = decodeLayerStateParams(new URLSearchParams(encode(state)));
   assert.deepEqual(decoded.options['street-level'], {
     mapillary: false,
+    google: true,
     pano: 'flat',
     sinceDays: MAX_SINCE_DAYS,
   });
@@ -2690,12 +2702,15 @@ test('Street Level: the link codec accepts exactly the windows the filter keeps'
   assert.equal(streetLevelOptions('0.s.3652').sinceDays, 3652);
 });
 
-test('Street Level: a link without the provider switch keeps Mapillary on', () => {
+test('Street Level: a link without the provider switches keeps Mapillary on and Street View off', () => {
   assert.deepEqual(streetLevelOptions(''), {
     mapillary: true,
+    google: false,
     pano: 'all',
     sinceDays: 0,
   });
+  assert.equal(streetLevelOptions('0.g.1').google, true);
+  assert.equal(createDefaultLayerState().options['street-level'].google, false);
   assert.equal(streetLevelOptions('0.p.f').mapillary, true);
   assert.equal(streetLevelOptions('0.m.0').mapillary, false);
   assert.equal(

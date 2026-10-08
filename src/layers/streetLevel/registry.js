@@ -9,10 +9,13 @@
  * @property {string} pickPrefix    Every primitive id the provider creates starts with it.
  * @property {{coverage: string}} colors   The source's one colour, from policy.js PROVIDER_COLORS.
  * @property {{html: string}} credit   On-globe attribution while the provider is active.
+ * @property {boolean} [groundClick]   No coverage to click: a click on the ground at street zoom opens its nearest image.
+ * @property {string} [requiresMapStack]   Usable only on this map stack (Google Street View: 'photoreal', per Google's terms).
+ * @property {boolean} [defaultOn]     Switched on until the user says otherwise (default true); match the share-link option default.
  * @property {(context: ProviderContext) => ProviderInstance} create
  *
  * @typedef {object} ProviderContext   Handed to `create()` once by the core.
- * @property {object} services         Scene services: picking, input, render, sprites, ground, terrain.
+ * @property {object} services         Scene services: picking, input, render, sprites, ground, terrain, scenePick (ground clicks need it).
  * @property {() => {pano: string, sinceMs: number|null}} getFilter   Filter resolved against now; read it on every use so "since N days" keeps up.
  * @property {() => boolean} isActive  Layer enabled and this provider switched on.
  * @property {() => 'draped'|'terrain'} getSurface   'terrain' on Google 3D at street zoom: draw on bare earth.
@@ -63,6 +66,8 @@
  * @property {number|null} altitude
  * @property {boolean} isPano
  * @property {number|null} capturedAt   Epoch milliseconds.
+ * @property {'day'|'month'} [capturedAtPrecision]   How exactly the provider dates images (default 'day').
+ * @property {string|null} [title]     A place name for the caption, e.g. the address.
  * @property {string|null} creator
  * @property {string|null} sequenceId
  * @property {string} externalUrl      Deep link to the image on the provider's site.

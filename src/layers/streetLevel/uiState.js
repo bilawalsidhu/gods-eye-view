@@ -27,7 +27,7 @@ export function summarizeCoverage(providers) {
   return {
     count: active.reduce((sum, p) => sum + (p.count || 0), 0),
     loading: active.some((p) => p.loading),
-    hint: active.find((p) => p.hint)?.hint || '',
+    hint: [...new Set(active.map((p) => p.hint).filter(Boolean))].join(' · '),
     error: active.find((p) => p.error)?.error || null,
     keyRequired:
       active.length > 0 && active.every((p) => p.keyRequired === true),
@@ -45,6 +45,7 @@ export function summarizeCoverage(providers) {
  */
 export function composeUIState({
   enabled,
+  groundClickReady = false,
   filter,
   providers,
   street,
@@ -63,6 +64,8 @@ export function composeUIState({
     legend.push({ key: 'selected', label: 'Selected', color: COLORS.selected });
   return {
     enabled,
+    /** The camera is at street zoom: a ground-click provider can open here. */
+    groundClickReady: groundClickReady === true,
     keyRequired,
     keyRejected,
     filter: { ...filter },

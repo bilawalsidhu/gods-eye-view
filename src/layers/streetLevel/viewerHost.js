@@ -33,6 +33,9 @@ export function createViewerHost({ state, parts }) {
       altitude: Number.isFinite(pose.altitude) ? pose.altitude : null,
       isPano: pose.isPano === true,
       capturedAt: pose.capturedAt ?? null,
+      capturedAtPrecision:
+        pose.capturedAtPrecision === 'month' ? 'month' : 'day',
+      title: pose.title || null,
       sequenceId: pose.sequenceId ?? null,
       creator: pose.creator || null,
       externalUrl: pose.externalUrl || null,
@@ -67,6 +70,13 @@ export function createViewerHost({ state, parts }) {
       active.unsubscribe();
       active.adapter.unmount();
       active = null;
+    }
+    // Another provider's prewarmed viewer shares the host: it would sit
+    // under this one, holding its WebGL context.
+    for (const [id, warm] of warmed) {
+      if (id === entry.def.id) continue;
+      warmed.delete(id);
+      warm.unmount();
     }
     const adapter = entry.instance.viewer;
     const promise = (async () => {
@@ -128,6 +138,8 @@ export function createViewerHost({ state, parts }) {
     try {
       const adapter = await mount(entry);
       if (!current()) return false;
+      // Per open: close() resets it, and a reopen skips mount().
+      state.street.renderModes = typeof adapter.setRenderMode === 'function';
       await adapter.open(String(imageId));
       if (!current()) return false;
       if (ticket && !state.street.follow) parts.follow.lookAtPosition(ticket);
@@ -183,14 +195,18 @@ export function createViewerHost({ state, parts }) {
     for (const entry of entries) {
       const adapter = entry.instance.viewer;
       if (!adapter.prewarm || !entry.on) continue;
+      // Another provider's viewer is showing in the host: do not build under it.
+      if (active && active.id !== entry.def.id) continue;
       try {
         await adapter.prewarm(host);
       } catch {
         /* the real open reports errors */
       }
-      if (active?.id === entry.def.id) continue;
-      // Switched off while it loaded: release it now rather than keep it.
-      if (!state.enabled || !entry.on) adapter.unmount();
+      if (active?.id === entry.def.id || mounting?.id === entry.def.id)
+        continue;
+      // Switched off while it loaded, or another provider's viewer took the
+      // host meanwhile: release it now rather than keep it under that one.
+      if (!state.enabled || !entry.on || active || mounting) adapter.unmount();
       else warmed.set(entry.def.id, adapter);
     }
   }

@@ -37,6 +37,11 @@ const PROVIDER_ORIGINS = Object.freeze([
   'https://fonts.googleapis.com',
   'https://fonts.gstatic.com',
   'https://graph.mapillary.com',
+  // Google Street View's tiles, controls and contributed photos (the Maps
+  // JavaScript API itself comes from maps.googleapis.com above).
+  'https://streetviewpixels-pa.googleapis.com',
+  'https://maps.gstatic.com',
+  'https://*.ggpht.com',
   // Mapillary photos come from regional hosts, e.g. scontent-man2-1.xx.fbcdn.net.
   'https://*.xx.fbcdn.net',
 ]);

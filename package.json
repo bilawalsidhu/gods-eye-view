@@ -263,6 +263,7 @@
     "./layers/street-level": "./src/layers/streetLevel/index.js",
     "./layers/street-level/mapillary": "./src/layers/streetLevel/providers/mapillary/index.js",
     "./layers/street-level/mapillary/source": "./src/layers/streetLevel/providers/mapillary/source.js",
+    "./layers/street-level/google": "./src/layers/streetLevel/providers/google/index.js",
     "./tools": "./src/tools/index.js",
     "./tools/mcp": "./src/tools/mcp/index.js",
     "./tools/panel": "./src/tools/panel.js",

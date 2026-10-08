@@ -66,6 +66,7 @@ export class StreetLevelControls {
       status: byId('sl-status'),
       controls: byId('sl-controls'),
       providerChips: byId('sl-provider-chips'),
+      nearestBtn: byId('sl-nearest-btn'),
       error: byId('sl-error'),
       errorText: byId('sl-error-text'),
       sinceRange: byId('sl-since'),
@@ -103,9 +104,18 @@ export class StreetLevelControls {
     this.listen(el.providerChips, 'click', (event) => {
       const button = event.target?.closest?.('.data-toggle-chip');
       if (!button || button.disabled) return;
-      // Without a key the chips stay focusable for their tooltip; a click
-      // says the same thing rather than switching on a layer that cannot draw.
-      if (this._view?.controlsDisabled) {
+      // A chip without a usable key stays focusable for its tooltip; a click
+      // that would light it, or switch the layer off through it, says the
+      // same thing instead. Other chips still switch (a refused Street View
+      // key cannot lock Mapillary out), and it darkens beside a lit one.
+      const providers = this._view?.providers || [];
+      const chip = providers.find(
+        (entry) => entry.id === button.dataset.chipId,
+      );
+      const othersLit = providers.some(
+        (entry) => entry.id !== chip?.id && entry.active,
+      );
+      if (chip?.state === 'error' && (!chip.active || !othersLit)) {
         if (button.title) this.actions.showToast?.(button.title);
         return;
       }
@@ -129,6 +139,17 @@ export class StreetLevelControls {
     this.listen(el.sinceRange, 'change', () =>
       this._setParams({ sinceDays: sinceDays() }),
     );
+    // The keyboard path to Street View: its nearest image at the view centre,
+    // without moving the camera.
+    this.listen(el.nearestBtn, 'click', () => {
+      const nearest = this._view?.nearest;
+      if (!nearest?.visible || nearest.disabled) return;
+      this.layer.openNearest?.(undefined, {
+        providerIds: nearest.providerIds,
+        frame: false,
+        aim: 'screen-centre',
+      });
+    });
     this.listen(el.followBtn, 'click', () => {
       this.layer.setFollow?.(!(this._state?.street?.follow === true));
     });
@@ -466,6 +487,7 @@ export class StreetLevelControls {
     this._renderFilters(view);
     this._renderViewer(view);
     this._renderMeta(view);
+    this._renderNearest(view);
     this._reactToTransitions(view, state);
   }
 
@@ -577,6 +599,9 @@ export class StreetLevelControls {
       el.renderButtons,
       (button) => button.dataset.slRender === viewer.renderMode,
     );
+    // Google's viewer always fills its frame: no FIT/FILL to offer.
+    const renderGroup = el.renderButtons[0]?.parentElement;
+    if (renderGroup) setProp(renderGroup, 'hidden', !viewer.renderModes);
     if (!viewer.open) return;
     setProp(el.imageBy, 'textContent', viewer.captionLeft);
     setProp(el.imageWhen, 'textContent', viewer.captionRight);
@@ -590,6 +615,17 @@ export class StreetLevelControls {
 
   _renderMeta(view) {
     setProp(this._elements.coverageMeta, 'textContent', view.meta);
+  }
+
+  _renderNearest(view) {
+    const button = this._elements.nearestBtn;
+    if (!button) return;
+    const { nearest } = view;
+    setProp(button, 'hidden', !nearest.visible);
+    if (!nearest.visible) return;
+    setProp(button, 'textContent', nearest.label);
+    setProp(button, 'title', nearest.title);
+    setProp(button, 'disabled', nearest.disabled);
   }
 
   /**

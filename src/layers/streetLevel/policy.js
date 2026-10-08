@@ -7,6 +7,7 @@ export const POSITION_PICK_ID = 'sl:pos';
 /** One colour per imagery source: chip, coverage lines, points, cones and legend. */
 export const PROVIDER_COLORS = Object.freeze({
   mapillary: '#05cb63',
+  google: '#4285f4',
 });
 
 /** Colours every provider shares: the selection highlight and the marker. */
@@ -35,3 +36,9 @@ export const FOLLOW_MAP_STACK_ID = 'photoreal';
 
 /** Eye height above the sampled ground when the globe camera follows the viewer. */
 export const FOLLOW_EYE_HEIGHT_M = 2.4;
+
+/**
+ * A ground click opens the nearest image of a provider without coverage lines
+ * (Google Street View) only from this close: from higher up it is a misclick.
+ */
+export const GROUND_CLICK_MAX_HEIGHT_M = 3_000;

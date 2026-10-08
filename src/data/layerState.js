@@ -413,6 +413,8 @@ const OPTION_GROUPS = Object.freeze({
   'street-level': Object.freeze([
     // One switch per registered imagery provider (src/app/layers/streetLevel.js).
     booleanOption('mapillary', 'm', true),
+    // Off until lit: every Street View panorama is billed to the Maps key.
+    booleanOption('google', 'g', false),
     enumOption('pano', 'p', 'all', ['all', 'pano', 'flat'], {
       all: 'a',
       pano: 'p',

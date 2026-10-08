@@ -576,3 +576,86 @@ test('a photo asks for the camera when it starts opening and frames with that ti
   assert.equal(await host.open('mapillary', 'b'), true);
   assert.deepEqual([framing.begun, framing.started], [1, 1]);
 });
+
+/** The harness with a second provider, `google`, whose adapter has no render modes. */
+function twoProviders() {
+  const mapillary = fakeAdapter();
+  mapillary.prewarm = async () => {};
+  mapillary.setRenderMode = () => {};
+  const google = fakeAdapter();
+  google.prewarm = async () => {};
+  const h = harness(mapillary);
+  h.state.providers.set('google', {
+    def: { id: 'google', name: 'Google Street View', label: 'STREET VIEW' },
+    instance: { viewer: google },
+    on: true,
+  });
+  h.state.providers.get('mapillary').on = true;
+  return { ...h, mapillary, google };
+}
+
+test("opening one provider's image releases another's prewarmed viewer in the shared host", async () => {
+  const { state, host, mapillary, google } = twoProviders();
+  await host.prewarm([state.providers.get('mapillary')]);
+  assert.equal(mapillary.calls.unmount, 0, 'warm');
+  await host.open('google', 'g-1');
+  assert.equal(mapillary.calls.unmount, 1, 'not left under the panorama');
+  assert.equal(google.calls.unmount, 0);
+  // While Google shows, Mapillary is not built again under it.
+  let built = 0;
+  mapillary.prewarm = async () => built++;
+  await host.prewarm([...state.providers.values()]);
+  assert.equal(built, 0);
+});
+
+test('the render modes follow the viewer that is open', async () => {
+  const { state, host } = twoProviders();
+  await host.open('mapillary', 'm-1');
+  assert.equal(state.street.renderModes, true);
+  await host.open('google', 'g-1');
+  assert.equal(state.street.renderModes, false, 'Google always fills');
+});
+
+test('a pose can date its image by month and name its place', async () => {
+  const { state, host, google } = twoProviders();
+  await host.open('google', 'g-1');
+  google.emitPose('g-1', {
+    providerId: 'google',
+    capturedAtPrecision: 'month',
+    title: '1014 10th St',
+    capturedAt: Date.UTC(2023, 0, 1),
+  });
+  assert.equal(state.street.capturedAtPrecision, 'month');
+  assert.equal(state.street.title, '1014 10th St');
+  host.close();
+  assert.deepEqual(
+    [state.street.capturedAtPrecision, state.street.title],
+    ['day', null],
+  );
+});
+
+test('a prewarm that lands after another provider took the host is released, not built under it', async () => {
+  const { state, host, mapillary } = twoProviders();
+  let release;
+  mapillary.prewarm = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  const warming = host.prewarm([state.providers.get('mapillary')]);
+  await host.open('google', 'g-1'); // the user opens Street View meanwhile
+  release();
+  await warming;
+  assert.equal(mapillary.calls.unmount, 1, 'released at once');
+  // Not kept warm: the next Mapillary open mounts afresh.
+  await host.open('mapillary', 'm-1');
+  assert.equal(state.street.providerId, 'mapillary');
+});
+
+test('FIT/FILL stays hidden for a second Street View panorama after a close', async () => {
+  const { state, host } = twoProviders();
+  await host.open('google', 'g-1');
+  assert.equal(state.street.renderModes, false);
+  host.close();
+  await host.open('google', 'g-2');
+  assert.equal(state.street.renderModes, false);
+});

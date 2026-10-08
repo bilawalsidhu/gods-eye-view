@@ -618,32 +618,11 @@ export function createDirectionsLayer({ services }) {
   }
 
   function pickGround(screenPosition) {
-    const scene = _viewer?.scene;
-    let cartesian = null;
-    if (
-      scene?.pickPositionSupported &&
-      typeof scene.pickPosition === 'function'
-    ) {
-      try {
-        cartesian = scene.pickPosition(screenPosition);
-      } catch {
-        cartesian = null;
-      }
-    }
-    if (
-      !services.scenePick.isPickedWorldPosition(cartesian) &&
-      typeof _viewer?.camera?.pickEllipsoid === 'function'
-    ) {
-      try {
-        cartesian = _viewer.camera.pickEllipsoid(
-          screenPosition,
-          Cesium.Ellipsoid.WGS84,
-        );
-      } catch {
-        cartesian = null;
-      }
-    }
-    if (!services.scenePick.isPickedWorldPosition(cartesian)) return null;
+    const cartesian = services.scenePick.pickGroundPosition(
+      _viewer,
+      screenPosition,
+    );
+    if (!cartesian) return null;
     const carto = Cesium.Cartographic.fromCartesian(cartesian);
     if (!carto) return null;
     return {

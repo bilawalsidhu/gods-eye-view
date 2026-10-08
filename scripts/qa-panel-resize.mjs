@@ -381,8 +381,23 @@ async function main() {
       );
       await nextFrames(page);
     };
-    await drag(handlePoint(await readPanel(), 'se'), 0, 200);
-    const chosen = await readPanel();
+    // Grow it from the corner once the restored window holds still, with the
+    // pointer really on the handle (a press beside it selects page text).
+    let chosen = await readPanel();
+    for (
+      let attempt = 0;
+      attempt < 3 && chosen.height <= MIN_SIZE.height + 150;
+      attempt++
+    ) {
+      await settle();
+      const corner = handlePoint(await readPanel(), 'se');
+      const onHandle = await page.evaluate(
+        ({ x, y }) => document.elementFromPoint(x, y)?.dataset?.dir === 'se',
+        corner,
+      );
+      if (onHandle) await drag(corner, 0, 200);
+      chosen = await readPanel();
+    }
     assert.ok(
       chosen.height > MIN_SIZE.height + 150,
       `the window grew to ${chosen.height}px`,

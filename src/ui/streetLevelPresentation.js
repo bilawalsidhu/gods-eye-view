@@ -44,10 +44,11 @@ function presentSince(days, now) {
   };
 }
 
-function formatDate(ms) {
+/** YYYY-MM-DD, or YYYY-MM for a provider that dates images by month. */
+function formatDate(ms, precision = 'day') {
   if (!Number.isFinite(ms)) return '';
   try {
-    return new Date(ms).toISOString().slice(0, 10);
+    return new Date(ms).toISOString().slice(0, precision === 'month' ? 7 : 10);
   } catch {
     return '';
   }
@@ -104,12 +105,17 @@ function presentViewer(state) {
   if (street.isPano) right.push('360°');
   if (Number.isFinite(street.bearing))
     right.push(`${Math.round(street.bearing)}°`);
-  if (street.capturedAt) right.push(formatDate(street.capturedAt));
+  if (street.capturedAt)
+    right.push(formatDate(street.capturedAt, street.capturedAtPrecision));
+  const left = [];
+  if (street.title) left.push(street.title);
+  if (street.creator) left.push(`Image by ${street.creator}`);
   return {
     open: street.open === true,
     loading: street.loading === true && !street.imageId,
     renderMode: street.renderMode === 'fill' ? 'fill' : 'letterbox',
-    captionLeft: street.creator ? `Image by ${street.creator}` : '',
+    renderModes: street.renderModes !== false,
+    captionLeft: left.join(' · '),
     captionRight: right.join(' · '),
     link: street.externalUrl || null,
     linkLabel: street.providerLabel ? `${street.providerLabel} ↗` : '',
@@ -124,15 +130,51 @@ function presentViewer(state) {
   };
 }
 
+/**
+ * A button for the providers with no coverage to click (Street View): opens
+ * their nearest image at the view centre, so they need no pointer.
+ */
+function presentNearest(state) {
+  const targets = (state.providers || []).filter(
+    (provider) =>
+      provider.on && provider.groundClick && provider.keyRequired !== true,
+  );
+  if (state.enabled !== true || !targets.length)
+    return {
+      visible: false,
+      label: '',
+      title: '',
+      disabled: true,
+      providerIds: [],
+    };
+  const names = targets.map((provider) => provider.name).join(' or ');
+  const ready = state.groundClickReady === true;
+  return {
+    visible: true,
+    label: `OPEN ${targets.map((provider) => provider.label).join(' / ')}`,
+    title: ready
+      ? `Open ${names} at the centre of the view`
+      : `Zoom in to a street to open ${names} here`,
+    disabled: !ready || state.street.loading === true,
+    providerIds: targets.map((provider) => provider.id),
+  };
+}
+
 function presentMeta(state) {
   if (!state.enabled) return 'Switch a provider on to draw its coverage.';
   if (state.sequence.selectedId)
     return state.sequence.loading
       ? 'Loading this sequence…'
       : `${state.sequence.images.toLocaleString()} images in this sequence · Esc clears`;
+  const hint = state.coverage.hint || '';
   if (state.coverage.count > 0)
-    return `${state.coverage.count.toLocaleString()} sequences in view · click a line for its photos`;
-  return state.coverage.hint || '';
+    return [
+      `${state.coverage.count.toLocaleString()} sequences in view · click a line for its photos`,
+      hint,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  return hint;
 }
 
 /** @param {{now?: number}} [options] Clock for the SINCE readout. */
@@ -157,6 +199,7 @@ export function presentStreetLevelPanel(state, { now = Date.now() } = {}) {
     legend: state.legend || [],
     viewer: presentViewer(state),
     meta: presentMeta(state),
+    nearest: presentNearest(state),
     wantsOpen: state.street.open === true,
   };
 }

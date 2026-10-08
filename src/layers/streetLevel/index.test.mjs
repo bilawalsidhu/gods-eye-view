@@ -482,3 +482,158 @@ test('switching a provider on while the layer is off activates nothing (M01)', a
   assert.equal(provider.calls.activate, 1);
   assert.equal(viewer.credits.length, 1);
 });
+
+/** The real Google provider over the Street View fakes, beside a Mapillary stand-in. */
+async function withStreetView(t, { mapStack = 'photoreal', nearest } = {}) {
+  const { createGoogleProvider } = await import('./providers/google/index.js');
+  const { fakeHost, fakeMapsLoader, fakeStreetViewLibrary } =
+    await import('../../testSupport/googleStreetViewFakes.mjs');
+  const fake = fakeStreetViewLibrary({
+    panoramas: {
+      'pano-a': { lat: 38.5816, lng: -121.4944, imageDate: '2024-05' },
+    },
+    nearest: nearest ?? (() => 'pano-a'),
+  });
+  const mapillaryLookups = [];
+  const mapillary = fakeProvider({
+    nearestImage: async (point) => {
+      mapillaryLookups.push(point);
+      return null;
+    },
+  });
+  mapillary.requiresKeyId = 'mapillary';
+  const loader = fakeMapsLoader(fake.library);
+  const google = createGoogleProvider({
+    getApiKey: () => 'browser-key',
+    loader,
+  });
+  const { layer, viewer } = await enabledLayer(t, [mapillary, google]);
+  const stack = fakeMapStack(mapStack);
+  layer.attachMapStackController(stack);
+  layer.attachViewerHost(fakeHost());
+  return { layer, viewer, stack, fake, loader, mapillaryLookups };
+}
+
+test('Street View starts off, and the layer row names the key of the providers that are on', async (t) => {
+  const { layer } = await withStreetView(t);
+  const google = () =>
+    layer.getUIState().providers.find((p) => p.id === 'google');
+  assert.equal(google().on, false);
+  assert.equal(layer.requiresKeyId, 'mapillary');
+  layer.setProviderEnabled('google', true);
+  assert.equal(layer.requiresKeyId, null, 'two keys: each chip names its own');
+});
+
+test('Street View appears only on the Google 3D map: chip, legend, credit, source and images', async (t) => {
+  const { layer, viewer, stack } = await withStreetView(t, {
+    mapStack: 'esri-imagery',
+  });
+  layer.setProviderEnabled('google', true);
+  await settle();
+  const ui = () => layer.getUIState();
+  const listed = () => ui().providers.map((p) => p.id);
+  const credited = () =>
+    viewer.credits.some((credit) => /Street View imagery/.test(credit.html));
+  assert.deepEqual(listed(), ['mapillary'], 'no Street View chip');
+  assert.ok(!ui().legend.some((item) => item.key === 'google'));
+  assert.equal(credited(), false, 'no Google credit on another map');
+  assert.equal(layer.source, 'Mapillary');
+  assert.equal(layer.getStats().source, 'Mapillary');
+  assert.equal(await layer.openImage('google', 'pano-a'), false);
+  assert.match(ui().street.error, /needs the Google 3D map/);
+  assert.equal(layer.getParams().google, true, 'the choice is kept');
+
+  stack.switchTo('photoreal');
+  assert.deepEqual(listed(), ['mapillary', 'google']);
+  assert.equal(credited(), true);
+  assert.equal(layer.source, 'Mapillary · Google Street View');
+  assert.equal(await layer.openImage('google', 'pano-a'), true);
+  assert.equal(ui().street.providerId, 'google');
+
+  stack.switchTo('bing');
+  await settle();
+  assert.equal(ui().street.open, false, 'closed with the map');
+  assert.equal(credited(), false);
+  assert.deepEqual(listed(), ['mapillary']);
+});
+
+test('the UI state says when a click (or the button) can open Street View here', async (t) => {
+  const { layer } = await withStreetView(t);
+  assert.equal(typeof layer.getUIState().groundClickReady, 'boolean');
+});
+
+test('a lookup for the click-to-open providers asks only them and reports "that point"', async (t) => {
+  const { layer, mapillaryLookups } = await withStreetView(t, {
+    nearest: () => null,
+  });
+  layer.setProviderEnabled('google', true);
+  await settle();
+  const opened = await layer.openNearest(
+    { lat: 38.58, lon: -121.49 },
+    { providerIds: ['google'], frame: false },
+  );
+  assert.equal(opened, false);
+  assert.deepEqual(mapillaryLookups, [], 'Mapillary was not asked');
+  assert.equal(
+    layer.getUIState().street.error,
+    'No street-level imagery within 50 m of that point',
+  );
+});
+
+test('an image opened from a ground click leaves the camera where it is', async (t) => {
+  const { layer, viewer } = await withStreetView(t);
+  layer.setProviderEnabled('google', true);
+  await settle();
+  await layer.openNearest(
+    { lat: 38.58, lon: -121.49 },
+    { providerIds: ['google'], frame: false },
+  );
+  assert.equal(layer.getUIState().street.imageId, 'pano-a');
+  assert.equal(viewer.flights.started, 0, 'no framing flight');
+});
+
+test('off Google 3D not even Google\u2019s script is loaded for Street View', async (t) => {
+  const { layer, loader } = await withStreetView(t, {
+    mapStack: 'esri-imagery',
+  });
+  layer.setProviderEnabled('google', true);
+  layer.attachViewerHost({ ownerDocument: { createElement: () => ({}) } });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.deepEqual(loader.imports, [], 'no prewarm, no lookup');
+});
+
+test('the button’s “centre of the view” is the ground under the middle of the screen', async (t) => {
+  const { createStreetLevelLayer: create } = await import('./index.js');
+  const scenePick = await import('../../data/scenePick.js');
+  const lookups = [];
+  const provider = fakeProvider({
+    nearestImage: async (point) => {
+      lookups.push(point);
+      return null;
+    },
+  });
+  const saved = globalThis.document;
+  const drawing = new Proxy({}, { get: () => () => ({ addColorStop() {} }) });
+  globalThis.document = Object.assign(new EventTarget(), {
+    createElement: () => ({ getContext: () => drawing }),
+  });
+  const viewer = fakeViewer();
+  const centre = Cesium.Cartesian3.fromDegrees(-121.4937, 38.5799, 0);
+  Object.assign(viewer.scene, {
+    pickPositionSupported: true,
+    pickPosition: (at) => (at.x === 500 && at.y === 300 ? centre : undefined),
+  });
+  viewer.scene.canvas.clientWidth = 1000;
+  viewer.scene.canvas.clientHeight = 600;
+  const layer = create({ providers: [provider], services: { scenePick } });
+  layer.init(viewer);
+  layer.enable(viewer);
+  t.after(() => {
+    layer.destroy();
+    globalThis.document = saved;
+  });
+  await layer.openNearest(undefined, { aim: 'screen-centre' });
+  assert.equal(lookups.length, 1);
+  assert.ok(Math.abs(lookups[0].lat - 38.5799) < 1e-9);
+  assert.ok(Math.abs(lookups[0].lon - -121.4937) < 1e-9);
+});

@@ -305,6 +305,7 @@ function panelDom() {
   const settings = add(main, 'div', { classes: ['sl-settings'] });
   for (const id of ['sl-provider-chips', 'sl-error', 'sl-error-text'])
     add(settings, 'div', { id });
+  add(settings, 'button', { id: 'sl-nearest-btn' });
   // A missing key gates the filters only; the chips stay outside the gate.
   const controls = add(settings, 'fieldset', { id: 'sl-controls' });
   for (const pano of ['all', 'pano', 'flat'])
@@ -1136,3 +1137,72 @@ test('a <body> child added while the viewer is expanded goes inert with the rest
       assert.equal(observer.watching(), false);
     }),
   ));
+
+test('OPEN STREET VIEW opens the nearest panorama at the view centre without moving the camera', () =>
+  withDom(async (dom) => {
+    const state = uiState();
+    state.providers.push({
+      ...state.providers[0],
+      id: 'google',
+      name: 'Google Street View',
+      label: 'STREET VIEW',
+      groundClick: true,
+      count: 0,
+    });
+    state.groundClickReady = true;
+    const { layer } = stubPanel(dom, state);
+    const asked = [];
+    layer.openNearest = (point, options) => asked.push([point, options]);
+    const button = dom.root.querySelector('#sl-nearest-btn');
+    assert.equal(button.hidden, false);
+    assert.equal(button.textContent, 'OPEN STREET VIEW');
+    button.click();
+    assert.deepEqual(asked, [
+      [
+        undefined,
+        { providerIds: ['google'], frame: false, aim: 'screen-centre' },
+      ],
+    ]);
+    // Too high to mean a street: disabled, and a click does nothing.
+    layer.publish({ ...state, groundClickReady: false });
+    assert.equal(button.disabled, true);
+    button.click();
+    assert.equal(asked.length, 1);
+    // Off Google 3D the provider is not listed: no button.
+    layer.publish({ ...state, providers: [state.providers[0]] });
+    assert.equal(button.hidden, true);
+  }));
+
+test('a refused key on one provider leaves the other chip switchable, and the refused chip darkens beside it', () =>
+  withDom(async (dom) => {
+    const state = uiState({ on: false, keyRequired: true });
+    state.providers.push({
+      ...state.providers[0],
+      id: 'google',
+      name: 'Google Street View',
+      label: 'STREET VIEW',
+      on: true,
+      keyRequired: true,
+      keyRejected: true,
+      error: 'Google refused GOOGLE_MAPS_API_KEY for Street View',
+    });
+    state.providers[0].keyRequired = false;
+    const { calls, layer } = stubPanel(dom, state);
+    const chips = () => dom.root.querySelector('#sl-provider-chips').children;
+    chips()[0].click(); // Mapillary: configured, dark
+    await settle();
+    assert.deepEqual(calls.setParams, [
+      [{ mapillary: true }, { origin: 'user' }],
+    ]);
+    // With Mapillary lit, the refused Street View chip can be darkened.
+    state.providers[0].on = true;
+    state.keyRequired = false;
+    layer.publish({ ...state });
+    chips()[1].click();
+    await settle();
+    assert.deepEqual(calls.setParams.at(-1), [
+      { google: false },
+      { origin: 'user' },
+    ]);
+    assert.equal(calls.toasts.length, 0);
+  }));

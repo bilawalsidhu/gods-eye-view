@@ -49,17 +49,26 @@ export const VIEWPORTS = Object.freeze([
 ]);
 
 /** Provider chips the panel must show, in order. */
-export const EXPECTED_PROVIDERS = Object.freeze(['mapillary']);
+export const EXPECTED_PROVIDERS = Object.freeze(['mapillary', 'google']);
 
 /**
- * Skips no setup can avoid: CI forks have no Google key, and live runs cannot
- * stage fixture-only cases. `no Mapillary key` is not accepted: CI's dummy
- * token runs the keyed flow, so a keyless strict run means that wiring broke.
+ * Skips no setup can avoid: CI forks have no Google key (so neither Google 3D
+ * nor Street View), and live runs cannot stage fixture-only cases. `no
+ * Mapillary key` is not accepted: CI's dummy token runs the keyed flow, so a
+ * keyless strict run means that wiring broke. Nor is `Google key refused`: a
+ * key that is set must work.
  */
 export const STRICT_ALLOWED_SKIPS = Object.freeze([
   'no Google 3D',
+  'no Google key',
   'fixtures only',
 ]);
+
+/** A Sacramento street with Google Street View (10th St, by the Capitol). */
+export const STREET_VIEW_STREET = Object.freeze({
+  lon: -121.49372,
+  lat: 38.57986,
+});
 
 export function strictViolations(skips) {
   return skips.filter((skip) => !STRICT_ALLOWED_SKIPS.includes(skip.reason));
@@ -619,7 +628,8 @@ async function main() {
     }
     await page.setViewport(VIEWPORTS[0]);
     const expandStrip = async (target = page) => {
-      await target.click(
+      await clickPanelControl(
+        target,
         '.panel-collapse-btn[data-collapse-target="street-level-panel"]',
       );
       await settle(
@@ -643,14 +653,30 @@ async function main() {
             ),
           ].map((chip) => chip.dataset.chipId),
         );
-        assert.deepEqual(chips, EXPECTED_PROVIDERS);
-        // One swatch per source plus "Selected"; each chip wears its colour.
-        assert.equal(
-          await page.evaluate(
-            () => document.querySelectorAll('#sl-legend li').length,
-          ),
-          EXPECTED_PROVIDERS.length + 1,
+        // Every registered provider usable on this map, in order (Street View
+        // only on Google 3D).
+        const listed = await page.evaluate(() =>
+          window.__godsEyeView.dataManager.layers
+            .get('street-level')
+            .module.getUIState()
+            .providers.map((provider) => provider.id),
         );
+        assert.deepEqual(chips, listed);
+        assert.deepEqual(
+          EXPECTED_PROVIDERS.filter((id) => listed.includes(id)),
+          listed,
+        );
+        assert.ok(listed.includes('mapillary'));
+        // One swatch per switched-on source plus "Selected" (Street View
+        // starts off); each chip wears its colour.
+        const legend = await page.evaluate(() => ({
+          swatches: document.querySelectorAll('#sl-legend li').length,
+          on: window.__godsEyeView.dataManager.layers
+            .get('street-level')
+            .module.getUIState()
+            .providers.filter((provider) => provider.on).length,
+        }));
+        assert.equal(legend.swatches, legend.on + 1);
         assert.equal(
           await page.$eval('[data-chip-id="mapillary"]', (chip) =>
             chip.style.getPropertyValue('--chip-color'),
@@ -1713,6 +1739,271 @@ async function main() {
             (width) => innerWidth === width,
             VIEWPORTS[0].width,
           );
+        },
+      );
+      const googleChip = '#sl-provider-chips [data-chip-id="google"]';
+      const googleKey = await page.evaluate(() =>
+        Boolean(window.__GOOGLE_MAPS_API_KEY__),
+      );
+      await step(
+        'Street View starts off, appears only on the Google 3D map, and travels in the share link',
+        async () => {
+          const module = () =>
+            window.__godsEyeView.dataManager.layers.get('street-level').module;
+          assert.equal(
+            await page.evaluate(`(${module})().getParams().google`),
+            false,
+            'off until lit: panoramas are billed',
+          );
+          const setStreetView = (on) =>
+            page.evaluate(
+              (value) =>
+                window.__godsEyeView.dataManager.setLayerParams(
+                  'street-level',
+                  { google: value },
+                  { origin: 'user' },
+                ),
+              on,
+            );
+          const shown = () =>
+            page.evaluate(() => ({
+              chip: Boolean(
+                document.querySelector(
+                  '#sl-provider-chips [data-chip-id="google"]',
+                ),
+              ),
+              legend: [...document.querySelectorAll('#sl-legend li')].some(
+                (item) => /Street View/.test(item.textContent),
+              ),
+              credit: document.body.innerHTML.includes('Street View imagery'),
+              button: !document.getElementById('sl-nearest-btn').hidden,
+            }));
+          const original = await stacks.active();
+          // Off Google 3D (CI's only map) nothing of Street View shows, even
+          // switched on: Google's terms keep it off other maps.
+          if (original === 'photoreal') await stacks.set('esri-imagery');
+          await setStreetView(true);
+          await uiUntil((u) => u.providers.every((p) => p.id !== 'google'));
+          assert.ok(
+            await settle(
+              page,
+              () => !document.body.innerHTML.includes('Street View imagery'),
+            ),
+            'no Google credit on another map',
+          );
+          assert.deepEqual(await shown(), {
+            chip: false,
+            legend: false,
+            credit: false,
+            button: false,
+          });
+          const option = `${STREET_LEVEL_TOKEN}.g.1`;
+          assert.ok(
+            await settle(
+              page,
+              (token) =>
+                (new URLSearchParams(location.hash.slice(1)).get('lo') || '')
+                  .split('_')
+                  .includes(token),
+              option,
+            ),
+            `the share link keeps the choice: ${option}`,
+          );
+          if (await stacks.photoreal()) {
+            await stacks.set('photoreal');
+            await uiUntil((u) => u.providers.some((p) => p.id === 'google'));
+            const chipNow = await page.$eval(googleChip, (node) => ({
+              className: node.className,
+              title: node.title,
+              color: node.style.getPropertyValue('--chip-color'),
+            }));
+            assert.equal(chipNow.color, '#4285f4');
+            if (googleKey) assert.match(chipNow.className, /chip-active/);
+            else {
+              assert.match(chipNow.className, /chip-error/);
+              assert.match(chipNow.title, /GOOGLE_MAPS_API_KEY/);
+            }
+            assert.ok(
+              await settle(page, () =>
+                document.body.innerHTML.includes('Street View imagery'),
+              ),
+              'the Google credit shows on Google 3D',
+            );
+          }
+          // Back off, as the next steps expect.
+          await setStreetView(false);
+          await stacks.set(original);
+          await uiUntil(
+            (u) => u.providers.find((p) => p.id === 'google')?.on !== true,
+          );
+        },
+      );
+      await step(
+        'on Google 3D a click on a street opens Google Street View where it is, captioned and linked, and its view drives the pose',
+        async ({ skip }) => {
+          if (!googleKey) return skip('no Google key');
+          // Google's terms: Street View only beside Google's own map.
+          if (!(await stacks.photoreal())) return skip('no Google 3D');
+          const original = await stacks.active();
+          const closePhoto = () =>
+            page.evaluate(() =>
+              window.__godsEyeView.dataManager.layers
+                .get('street-level')
+                .module.closeViewer(),
+            );
+          const setOn = async (selector, id, on) => {
+            const now = (await ui()).providers.find((p) => p.id === id)?.on;
+            if (now === on) return;
+            await clickPanelControl(page, selector);
+            assert.ok(
+              await uiUntil(
+                (u, want) =>
+                  u.providers.find((p) => p.id === want.id)?.on === want.on,
+                { id, on },
+              ),
+              `the ${id} chip switched ${on ? 'on' : 'off'}`,
+            );
+          };
+          await closePhoto();
+          await stacks.set('photoreal');
+          // A Mapillary line under the pointer wins the click: aim at bare
+          // ground with only Street View on (lit first: the last lit chip
+          // would switch the layer off).
+          await setOn(googleChip, 'google', true);
+          await setOn(chip, 'mapillary', false);
+          try {
+            const street = STREET_VIEW_STREET;
+            await page.evaluate((at) => {
+              const v = window.__godsEyeView.viewer;
+              v.camera.cancelFlight?.();
+              const C = v.camera.positionCartographic.constructor;
+              v.camera.setView({
+                destination: v.scene.globe.ellipsoid.cartographicToCartesian(
+                  C.fromDegrees(at.lon, at.lat, 300),
+                ),
+                orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+              });
+            }, street);
+            // At street zoom the hint invites the click.
+            assert.ok(
+              await uiUntil(
+                (u) =>
+                  u.providers.find((p) => p.id === 'google')?.hint ===
+                  'click a street to open Street View',
+              ),
+              'the click hint shows at street zoom',
+            );
+            const camera = () =>
+              page.evaluate(() => {
+                const c = window.__godsEyeView.viewer.camera.positionWC;
+                return [c.x, c.y, c.z];
+              });
+            const at = await page.evaluate((point) => {
+              const v = window.__godsEyeView.viewer;
+              const C = v.camera.positionCartographic.constructor;
+              const ground = v.scene.globe.ellipsoid.cartographicToCartesian(
+                C.fromDegrees(point.lon, point.lat, 0),
+              );
+              const canvas = v.scene.cartesianToCanvasCoordinates(ground);
+              const box = v.scene.canvas.getBoundingClientRect();
+              return (
+                canvas && { x: box.left + canvas.x, y: box.top + canvas.y }
+              );
+            }, street);
+            assert.ok(at, 'the street is on screen');
+            const before = await camera();
+            await page.mouse.click(at.x, at.y);
+            await uiUntil(
+              (u) =>
+                Boolean(u.street.error) ||
+                (u.street.providerId === 'google' &&
+                  Boolean(u.street.imageId) &&
+                  !u.street.loading),
+              null,
+              { timeout: 30_000 },
+            );
+            const opened = (await ui()).street;
+            if (/refused GOOGLE_MAPS_API_KEY/.test(opened.error || ''))
+              return skip('Google key refused');
+            if (/did not answer/.test(opened.error || ''))
+              return skip('Google did not answer');
+            assert.equal(opened.error, null);
+            assert.equal(opened.providerId, 'google');
+            const after = await camera();
+            assert.ok(
+              Math.hypot(...after.map((v, i) => v - before[i])) < 1,
+              'the camera stays where the user clicked',
+            );
+            const shown = await page.evaluate(() => ({
+              by: document.getElementById('sl-image-by').textContent,
+              when: document.getElementById('sl-image-when').textContent,
+              label: document.getElementById('sl-image-link').textContent,
+              href: document.getElementById('sl-image-link').href,
+              fitFillHidden:
+                document.querySelector('[data-sl-render]').parentElement.hidden,
+              panorama: Boolean(
+                document.querySelector('#sl-viewer .sl-google-panorama'),
+              ),
+              mapillaryLeft: Boolean(
+                document.querySelector('#sl-viewer .mapillary-dom'),
+              ),
+            }));
+            assert.match(shown.by, /Image by /);
+            assert.match(shown.when, /\d{4}-\d{2}$/, 'dated by month');
+            assert.equal(shown.label, 'STREET VIEW ↗');
+            assert.match(shown.href, /map_action=pano&pano=/);
+            assert.equal(shown.fitFillHidden, true, 'no FIT/FILL for Google');
+            assert.equal(shown.panorama, true);
+            assert.equal(shown.mapillaryLeft, false, 'no viewer left under it');
+            // A real drag turns Google's view, and the pose follows it.
+            const box = await page.$eval(
+              '#sl-viewer .sl-google-panorama',
+              (node) => {
+                const r = node.getBoundingClientRect();
+                return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+              },
+            );
+            await page.mouse.move(box.x, box.y);
+            await page.mouse.down();
+            await page.mouse.move(box.x - 120, box.y, { steps: 12 });
+            await page.mouse.up();
+            assert.ok(
+              await uiUntil(
+                (u, start) =>
+                  Number.isFinite(u.street.bearing) &&
+                  Math.abs(u.street.bearing - start) > 5,
+                opened.bearing ?? 0,
+                { timeout: 10_000 },
+              ),
+              'the pose bearing follows the drag',
+            );
+            // The keyboard path: OPEN STREET VIEW at the view centre.
+            await closePhoto();
+            await uiUntil((u) => u.street.open === false);
+            await clickPanelControl(page, '#sl-nearest-btn');
+            assert.ok(
+              await uiUntil(
+                (u) =>
+                  u.street.providerId === 'google' &&
+                  Boolean(u.street.imageId) &&
+                  !u.street.loading,
+                null,
+                { timeout: 30_000 },
+              ),
+              'OPEN STREET VIEW opens the panorama at the view centre',
+            );
+            // Leaving Google 3D closes the panorama (Google's terms).
+            await stacks.set('esri-imagery');
+            assert.ok(
+              await uiUntil((u) => u.street.open === false),
+              'the panorama closes off Google 3D',
+            );
+          } finally {
+            await closePhoto();
+            await setOn(chip, 'mapillary', true);
+            await setOn(googleChip, 'google', false);
+            await stacks.set(original);
+          }
         },
       );
       await step(

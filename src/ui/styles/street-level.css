@@ -183,6 +183,14 @@ button.sl-status:focus-visible {
   border-color: rgba(255, 179, 0, 0.55);
 }
 
+.sl-nearest-btn {
+  margin-left: auto;
+}
+
+.sl-nearest-btn[hidden] {
+  display: none;
+}
+
 /* ── Errors ──────────────────────────────────────────────────────────────── */
 .sl-error {
   font-family: var(--font-sans);
@@ -205,6 +213,10 @@ button.sl-status:focus-visible {
   display: inline-flex;
   border: 1px solid var(--glass-border-hover);
   border-radius: 999px;
+}
+
+.sl-seg[hidden] {
+  display: none;
 }
 
 .sl-seg-btn {

@@ -47,3 +47,53 @@ export function isPickedWorldPosition(position) {
   const magnitude = Math.hypot(x, y, z);
   return magnitude >= MIN_PICK_MAGNITUDE_M && magnitude <= MAX_PICK_MAGNITUDE_M;
 }
+
+/**
+ * The world position under a screen point: the rendered surface (terrain,
+ * Google 3D) where the depth buffer has it, else the ellipsoid. Null over the
+ * sky or for a pick that names no place.
+ *
+ * @param {object} viewer A Cesium viewer.
+ * @param {{x: number, y: number}} screenPosition
+ * @returns {{x: number, y: number, z: number}|null} A Cartesian3.
+ */
+export function pickGroundPosition(viewer, screenPosition) {
+  const scene = viewer?.scene;
+  let position = null;
+  if (
+    scene?.pickPositionSupported &&
+    typeof scene.pickPosition === 'function'
+  ) {
+    try {
+      position = scene.pickPosition(screenPosition);
+    } catch {
+      position = null;
+    }
+  }
+  if (
+    !isPickedWorldPosition(position) &&
+    typeof viewer?.camera?.pickEllipsoid === 'function'
+  ) {
+    try {
+      position = viewer.camera.pickEllipsoid(screenPosition);
+    } catch {
+      position = null;
+    }
+  }
+  return isPickedWorldPosition(position) ? position : null;
+}
+
+/**
+ * Whether a `scene.pick()` result is the map itself: nothing, or Google 3D
+ * tile content, which picks without an id.
+ *
+ * @param {object|null|undefined} picked
+ * @returns {boolean}
+ */
+export function isSurfacePick(picked) {
+  if (!picked) return true;
+  if (picked.id !== undefined) return false;
+  return (
+    picked.content !== undefined || picked.primitive?.isCesium3DTileset === true
+  );
+}

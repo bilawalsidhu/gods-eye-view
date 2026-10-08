@@ -149,3 +149,22 @@ test('the surface mode defaults to draped and passes through', () => {
     'terrain',
   );
 });
+
+test('every switched-on provider’s hint is kept, once each', async () => {
+  const { summarizeCoverage } = await import('./uiState.js');
+  const { providerSnapshot } =
+    await import('../../testSupport/streetLevelFakes.mjs');
+  const summary = summarizeCoverage([
+    providerSnapshot({ hint: 'zoom in for sequences' }),
+    providerSnapshot({
+      id: 'google',
+      hint: 'click a street to open Street View',
+    }),
+    providerSnapshot({ id: 'off', on: false, hint: 'not shown' }),
+    providerSnapshot({ id: 'dup', hint: 'zoom in for sequences' }),
+  ]);
+  assert.equal(
+    summary.hint,
+    'zoom in for sequences · click a street to open Street View',
+  );
+});
