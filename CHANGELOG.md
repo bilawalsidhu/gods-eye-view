@@ -1,5 +1,19 @@
 # Changelog
 
+- Add WSDOT highway cameras (Washington State) as a keyless CCTV source pack:
+  WSDOT's official Travel Center camera layer, with frames registered only on
+  WSDOT's own image host (partner-hosted cameras such as Oregon DOT and City of
+  Seattle are skipped). Cameras with a single `CompassDirection`, cardinal or
+  diagonal, get a high-confidence heading; `BW` (Bothways) cameras use the
+  shared id-hash fallback at low confidence. By default the 250 cameras nearest
+  Seattle and Spokane load; `CCTV_WSDOT_MAX_SOURCES` sets the cap and
+  `CCTV_WSDOT_ENABLED=0` turns the pack off. The default catalog cap
+  (`CCTV_MAX_SOURCES`) rises from 4,000 to 5,500, and its ceiling from 5,000 to
+  6,000: the per-pack defaults already summed to 4,954 before WSDOT (Statens
+  vegvesen alone defaults to 900), so a default install was being trimmed. A
+  test now sums every pack's default and fails if they exceed the cap
+  (bassem chagra, #644).
+
 - MCP setup examples use the app's default port, `4173`. Thanks to
   [Huanyi Xie](https://github.com/xiehuanyi) (#934) and
   [shirunjies8-png](https://github.com/shirunjies8-png) (#959) for the same fix.

@@ -4,10 +4,9 @@ import {
   allocateSourceCap,
   resolveCatalogCap,
 } from '../../server/providers/cctv/cap.js';
-import {
-  CCTV_MAX_SOURCES_CEILING,
-  DEFAULT_CCTV_MAX_SOURCES,
-} from '../../server/providers/cctv/constants.js';
+import * as constants from '../../server/providers/cctv/constants.js';
+
+const { CCTV_MAX_SOURCES_CEILING, DEFAULT_CCTV_MAX_SOURCES } = constants;
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
 
 const pack = (name, count, prefix = name) => ({
@@ -142,6 +141,27 @@ test('the catalog applies the fair cap to configured packs end to end', async ()
     }
     Object.assign(process.env, saved);
   }
+});
+
+test('default per-pack camera caps fit inside the default catalog cap', () => {
+  // Every exported DEFAULT_<PACK>_MAX_SOURCES counts, so a new pack cannot
+  // slip past this check by not being listed (Warendorf ships 1 curated
+  // camera and has no cap constant).
+  const packCaps = Object.entries(constants).filter(
+    ([name]) =>
+      /^DEFAULT_[A-Z_]+_MAX_SOURCES$/.test(name) &&
+      name !== 'DEFAULT_CCTV_MAX_SOURCES',
+  );
+  assert.ok(packCaps.length >= 13, 'every pack cap constant is found');
+  const total = packCaps.reduce((sum, [, cap]) => sum + cap, 0) + 1;
+  assert.ok(
+    total <= DEFAULT_CCTV_MAX_SOURCES,
+    `default packs (${total}) would be thinned by the catalog cap (${DEFAULT_CCTV_MAX_SOURCES})`,
+  );
+  assert.ok(
+    DEFAULT_CCTV_MAX_SOURCES <= CCTV_MAX_SOURCES_CEILING,
+    'the default cap must sit inside the CCTV_MAX_SOURCES ceiling',
+  );
 });
 
 test('a pack trimmed to its nearest cameras reports how many it offered', async () => {
