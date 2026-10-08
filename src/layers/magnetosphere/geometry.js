@@ -152,25 +152,73 @@ export function magnetopauseWireframe(
 }
 
 /**
- * Where a traced line crosses the boundary, if it does.
+ * A run of a traced line reaching this close to Earth is attached to it. The
+ * boundary never comes nearer than geosynchronous orbit, so the near-Earth
+ * part of every line is inside it.
+ */
+const ANCHOR_RADIUS_KM = 2 * EARTH_RADIUS_KM;
+
+/**
+ * The parts of a traced line inside the boundary, each ending on it.
  *
  * A line whose apex lies outside the magnetopause is not a closed loop out
  * there — it has been opened by the solar wind. Clipping at the crossing is
  * more honest than drawing a tidy closed arc through a boundary the same
  * frame says it cannot cross.
+ *
+ * A traced line runs from the far end of its backward half to the far end of
+ * its forward half, so either end may be the one outside. Only runs attached
+ * to Earth are kept: a stretch that re-enters the boundary far down the tail
+ * after leaving it is disconnected from the filament, and drawn alone it
+ * floats in space.
+ *
+ * @returns {{segments: Array<Array<object>>, clipped: boolean}}
  */
 export function clipToBoundary(points, parameters, sunDirection) {
   const basis = sunAlignedBasis(sunDirection);
-  if (!basis || !parameters) return { points, clipped: false };
-  const outside = (p) => {
+  if (!basis || !parameters) return { segments: [points], clipped: false };
+  // Signed distance outside the boundary along the radius; positive outside.
+  const excess = (p) => {
     const r = Math.hypot(p.x, p.y, p.z);
-    if (!(r > 0)) return false;
+    if (!(r > 0)) return -Infinity;
     const cosTheta = (p.x * basis.x.x + p.y * basis.x.y + p.z * basis.x.z) / r;
     const theta = Math.acos(Math.min(1, Math.max(-1, cosTheta)));
-    if (theta >= MAX_BOUNDARY_ANGLE_RAD) return false;
-    return r > boundaryRadius(parameters, theta) * EARTH_RADIUS_KM;
+    if (theta >= MAX_BOUNDARY_ANGLE_RAD) return -Infinity;
+    return r - boundaryRadius(parameters, theta) * EARTH_RADIUS_KM;
   };
-  const index = points.findIndex(outside);
-  if (index < 0) return { points, clipped: false };
-  return { points: points.slice(0, Math.max(index, 2)), clipped: true };
+  const excesses = points.map(excess);
+  if (excesses.every((e) => !(e > 0))) {
+    return { segments: [points], clipped: false };
+  }
+  // Where the line crosses between an inside and an outside point, so a kept
+  // run ends on the cage rather than one step short of it.
+  const crossing = (i, j) => {
+    const a = excesses[i];
+    const b = excesses[j];
+    const t = Number.isFinite(a) && Number.isFinite(b) ? a / (a - b) : 0;
+    return {
+      x: points[i].x + (points[j].x - points[i].x) * t,
+      y: points[i].y + (points[j].y - points[i].y) * t,
+      z: points[i].z + (points[j].z - points[i].z) * t,
+    };
+  };
+  const segments = [];
+  let start = -1;
+  const close = (end) => {
+    const run = points.slice(start, end + 1);
+    if (start > 0) run.unshift(crossing(start, start - 1));
+    if (end < points.length - 1) run.push(crossing(end, end + 1));
+    const anchored = run.some(
+      (p) => Math.hypot(p.x, p.y, p.z) <= ANCHOR_RADIUS_KM,
+    );
+    if (anchored && run.length >= 2) segments.push(run);
+    start = -1;
+  };
+  excesses.forEach((e, i) => {
+    if (!(e > 0)) {
+      if (start < 0) start = i;
+    } else if (start >= 0) close(i - 1);
+  });
+  if (start >= 0) close(points.length - 1);
+  return { segments, clipped: true };
 }

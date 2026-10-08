@@ -94,18 +94,19 @@ export function createMagnetosphereRendering({
       lastLines = lines;
       filaments.removeAll();
       for (const line of lines) {
-        const { points } =
+        const { segments } =
           parameters && sunDirection
             ? clipToBoundary(line.points, parameters, sunDirection)
-            : { points: line.points };
-        if (!points || points.length < 2) continue;
-        filaments.add({
-          positions: toPositions(points),
-          width: 1.5,
-          material: cesium.Material.fromType('Color', {
-            color: colorOf(filamentColorFor(apexRe(line.points)), opacity),
-          }),
-        });
+            : { segments: [line.points] };
+        const color = colorOf(filamentColorFor(apexRe(line.points)), opacity);
+        for (const points of segments) {
+          if (!points || points.length < 2) continue;
+          filaments.add({
+            positions: toPositions(points),
+            width: 1.5,
+            material: cesium.Material.fromType('Color', { color }),
+          });
+        }
       }
       scene?.requestRender?.();
     },
