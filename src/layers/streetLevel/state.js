@@ -71,8 +71,6 @@ export function createState({ services }) {
     sequence: {
       selectedId: null,
       images: [],
-      /** Recent sequences' thinned images, by sequence id. */
-      cache: new Map(),
       collection: null,
       loading: false,
       /** Why the selected sequence's images could not load, until it goes. */

@@ -27,7 +27,8 @@ export function createMapillaryViewer({ source, render } = {}) {
   let renderMode = 'letterbox';
   /** Metadata of the image on screen; pov/position events reuse it. */
   let current = null;
-  const listeners = new Set();
+  /** The pose listener (the viewer host); one at a time. */
+  let poseListener = null;
 
   function requestRender() {
     render?.governorRequestRender?.('mapillary-viewer');
@@ -52,12 +53,10 @@ export function createMapillaryViewer({ source, render } = {}) {
   }
 
   function emit(pose) {
-    for (const listener of [...listeners]) {
-      try {
-        listener(pose);
-      } catch {
-        /* listener errors are the core's to log */
-      }
+    try {
+      poseListener?.(pose);
+    } catch {
+      /* listener errors are the core's to log */
     }
   }
 
@@ -201,8 +200,10 @@ export function createMapillaryViewer({ source, render } = {}) {
     },
 
     onPose(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
+      poseListener = listener;
+      return () => {
+        if (poseListener === listener) poseListener = null;
+      };
     },
   };
 }

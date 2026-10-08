@@ -11,9 +11,6 @@ import {
 
 const SPRITE_ID = 'street-level:mapillary-cones';
 
-/** How many recently viewed sequences keep their image list in memory. */
-const SEQUENCE_CACHE_SIZE = 40;
-
 /** Normalize a graph image record into the shape the cones use. */
 function normalizeSequenceImage(record) {
   const coordinates = record?.geometry?.coordinates;
@@ -115,14 +112,6 @@ export function createSequences({ state, source, parts }) {
     requestRender();
   }
 
-  function remember(sequenceId, images) {
-    const { cache } = state.sequence;
-    cache.delete(sequenceId);
-    cache.set(sequenceId, images);
-    while (cache.size > SEQUENCE_CACHE_SIZE)
-      cache.delete(cache.keys().next().value);
-  }
-
   /** Select a sequence: highlight its line and load its image cones. */
   async function select(sequenceId) {
     if (!sequenceId || !state.viewer) return;
@@ -135,16 +124,6 @@ export function createSequences({ state, source, parts }) {
     state.sequence.abort?.abort();
     state.sequence.selectedId = sequenceId;
     parts.coverage.highlight(sequenceId);
-    const cached = state.sequence.cache.get(sequenceId);
-    if (cached) {
-      state.sequence.abort = null;
-      state.sequence.loading = false;
-      state.sequence.images = cached;
-      renderCones(cached);
-      state.sequence.error = null;
-      notify();
-      return;
-    }
     // The previous sequence's cones must not stay clickable under the new
     // highlight while this one loads, nor after its load fails.
     clearCones();
@@ -164,7 +143,6 @@ export function createSequences({ state, source, parts }) {
           .filter(Boolean)
           .sort((a, b) => a.capturedAt - b.capturedAt),
       );
-      remember(sequenceId, images);
       state.sequence.images = images;
       renderCones(images);
       state.sequence.error = null;

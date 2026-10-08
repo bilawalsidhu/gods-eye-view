@@ -67,7 +67,6 @@ function setup() {
     sequence: {
       selectedId: null,
       images: [],
-      cache: new Map(),
       collection: cones(),
       loading: false,
       error: null,
@@ -112,7 +111,7 @@ test('a failed sequence load leaves no stale cones and can be retried', async ()
   assert.equal(state.sequence.error, null, 'cleared once B loads');
 });
 
-test('a late answer for a superseded sequence neither draws nor is cached', async () => {
+test('a late answer for a superseded sequence draws nothing', async () => {
   const { state, source, sequences, drawn } = setup();
   sequences.select('A');
   sequences.select('B');
@@ -123,7 +122,6 @@ test('a late answer for a superseded sequence neither draws nor is cached', asyn
   await settle();
   assert.deepEqual(drawn(), ['B-0', 'B-1']);
   assert.equal(state.sequence.selectedId, 'B');
-  assert.equal(state.sequence.cache.has('A'), false);
   assert.equal(state.sequence.loading, false);
 });
 
@@ -133,21 +131,6 @@ test('a second click on a loading sequence does not start another lookup', async
   sequences.select('A');
   assert.equal(source.calls.length, 1);
   assert.equal(source.calls[0].signal.aborted, false);
-});
-
-test('a cached sequence is re-selected without a lookup', async () => {
-  const { state, source, sequences, drawn } = setup();
-  sequences.select('A');
-  source.last('A').resolve(records('A'));
-  await settle();
-  sequences.select('B');
-  source.last('B').resolve(records('B'));
-  await settle();
-  sequences.select('A');
-  assert.equal(source.calls.length, 2, 'A came from the cache');
-  assert.deepEqual(drawn(), ['A-0', 'A-1'], 'drawn at once');
-  assert.equal(state.sequence.loading, false);
-  assert.equal(state.sequence.selectedId, 'A');
 });
 
 test('clearSelection cancels the lookup and drops the highlight', async () => {
