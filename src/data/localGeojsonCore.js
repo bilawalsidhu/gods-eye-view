@@ -1,4 +1,9 @@
 import * as Cesium from 'cesium';
+import {
+  layerTitle,
+  mapAnalystRecord,
+  parseGeojsonLines,
+} from '../sources/infrastructureData.js';
 import { createInfrastructureOverlayEntry } from './infrastructureOverlayEntry.js';
 import { isPointerFree } from './inputOwnership.js';
 import {
@@ -84,78 +89,6 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
   }
 
   return { title, details };
-}
-
-/**
- * Map one local infrastructure feature to a JSON-safe analyst record
- * (analyst query engine seam). Pure — no Cesium types. Missing/unknown
- * fields are null, never NaN/undefined. Layer-specific fields that do not
- * apply (river/output on datacenters, capacity on dams) stay null so a
- * shared compact payload can copy them without inventing values.
- * Names are unclamped — overlay cards shorten for paint; queries need the
- * full source string ("Usina Hidrelétrica de Itaipu").
- * @param {Object|null|undefined} raw - {id, lat, lon, properties}.
- * @param {string} [layerId] Local layer id (`local-datacenters` / `local-dams`).
- * @returns {{id: string, name: string|null, lat: number|null, lon: number|null,
- *   operator: string|null, capacity: string|null, river: string|null,
- *   output: string|null}}
- */
-export function mapAnalystRecord(raw, layerId = '') {
-  const num = (v) => (Number.isFinite(v) ? v : null);
-  const text = (v) => {
-    const t = String(v ?? '').trim();
-    return t && t !== 'undefined' && t !== 'null' ? t : null;
-  };
-  const props =
-    raw?.properties &&
-    typeof raw.properties === 'object' &&
-    !Array.isArray(raw.properties)
-      ? raw.properties
-      : {};
-  const tags =
-    props.tags && typeof props.tags === 'object' && !Array.isArray(props.tags)
-      ? props.tags
-      : {};
-  const name =
-    text(props.name) ||
-    text(tags.name) ||
-    text(tags['name:en']) ||
-    text(tags.official_name) ||
-    null;
-  const operator =
-    text(tags.operator) ||
-    text(props.operator) ||
-    text(tags['operator:short']) ||
-    null;
-  const capacity =
-    layerId === 'local-datacenters'
-      ? text(tags['capacity:it_load']) ||
-        text(tags.it_load) ||
-        text(tags.capacity) ||
-        text(props.capacity)
-      : null;
-  const river =
-    layerId === 'local-dams'
-      ? text(tags.associated_river) ||
-        text(props.associated_river) ||
-        text(tags.river) ||
-        text(props.river) ||
-        text(tags['river:name'])
-      : null;
-  const output =
-    layerId === 'local-dams'
-      ? text(props.output) || text(tags['plant:output:electricity'])
-      : null;
-  return {
-    id: name || text(raw?.id) || layerTitle(layerId),
-    name,
-    lat: num(raw?.lat),
-    lon: num(raw?.lon),
-    operator,
-    capacity,
-    river,
-    output,
-  };
 }
 
 /**
@@ -664,11 +597,7 @@ export function createLocalGeoJsonLayer(
                 }
                 const text = await response.text();
                 if (_destroyed) return;
-                const lines = text
-                  .split('\n')
-                  .filter((l) => l.trim().length > 0);
-
-                features = lines.map((line) => JSON.parse(line));
+                features = parseGeojsonLines(text);
                 _cachedFeatures = features;
               }
 
@@ -1360,8 +1289,4 @@ function clampCardLine(value) {
   return text.length > 48 ? `${text.slice(0, 45)}...` : text;
 }
 
-function layerTitle(layerId) {
-  if (layerId === 'local-datacenters') return 'Datacenter';
-  if (layerId === 'local-dams') return 'Dam';
-  return 'Feature';
-}
+export { mapAnalystRecord };

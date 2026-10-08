@@ -3,7 +3,7 @@ import path from 'node:path';
 import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
 import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
-import { normalizeSourceItem } from './normalize.js';
+import { cameraRegion, normalizeSourceItem } from './normalize.js';
 import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
@@ -19,6 +19,7 @@ import {
   loadCalgarySourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
   loadKingCountySourcesFromOpenData,
+  loadVegvesenSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
@@ -98,6 +99,11 @@ const LIVE_PACKS = [
     enabled: () => envEnabled('CCTV_KINGCOUNTY_ENABLED'),
     load: loadKingCountySourcesFromOpenData,
   },
+  {
+    name: 'vegvesen',
+    enabled: () => envEnabled('CCTV_VEGVESEN_ENABLED'),
+    load: loadVegvesenSourcesFromOpenData,
+  },
 ];
 /**
  * Load CCTV sources from a local JSON file (CCTV_SOURCES_FILE env or default).
@@ -149,6 +155,9 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
   /** @type {Promise<Array<object>>|null} In-flight refresh, shared by concurrent
    * callers so a post-TTL burst launches ONE refetch, not one per request. */
   let _cctvSourceInflight = null;
+  /** @type {Array<{pack: string, available: number, served: number}>} Packs
+   * that serve fewer cameras than they offer. */
+  let _cctvTrimmedPacks = [];
 
   /**
    * Assemble and cache the merged CCTV source list.
@@ -215,8 +224,12 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
       name,
       sources: items
         .filter((item) => item && typeof item === 'object')
-        .map((item) => normalizeSourceItem(item))
+        .map((item) => ({ ...normalizeSourceItem(item), pack: name }))
         .filter((item) => item.id),
+      available: Number.isFinite(items.available)
+        ? items.available
+        : items.length,
+      region: items.region ?? null,
     });
     const packs = [
       ...LIVE_PACKS.map((pack, index) =>
@@ -240,6 +253,16 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
       loadGroundHeights(sourceRoot),
     );
     const trimmed = allocation.packs.filter((pack) => pack.kept < pack.offered);
+    // Each pack's own nearest-first cap and the shared catalog cap both trim.
+    const trimmedPacks = packs
+      .map((pack, index) => ({
+        pack: pack.name,
+        available: Math.max(pack.available, allocation.packs[index].offered),
+        served: allocation.packs[index].kept,
+        // Where the pack's cameras are, including those not served.
+        region: pack.region ?? cameraRegion(pack.sources),
+      }))
+      .filter((pack) => pack.served < pack.available);
     if (trimmed.length) {
       const detail = trimmed
         .map((pack) => `${pack.name} ${pack.kept}/${pack.offered}`)
@@ -250,6 +273,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     }
     if (capped.length > 0 || _cctvSourceCache.length === 0) {
       _cctvSourceCache = capped;
+      _cctvTrimmedPacks = trimmedPacks;
     } else {
       // Every source came back empty (all live packs timed out / upstream outage)
       // but a good catalog is already cached — serve it stale rather than blanking
@@ -263,5 +287,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     return _cctvSourceCache;
   }
 
+  /** Packs serving fewer cameras than they offer, as of the last refresh. */
+  getCctvSources.trimmedPacks = () => _cctvTrimmedPacks;
   return getCctvSources;
 }
