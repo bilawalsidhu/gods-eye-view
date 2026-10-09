@@ -18,7 +18,13 @@ import {
   SLF_NETWORK_ID,
   SMN_NETWORK_ID,
 } from './networks.js';
-import { DEFAULT_PARAMETER_ID, STATION_PARAMETER_IDS } from './parameters.js';
+import {
+  DEFAULT_PARAMETER_ID,
+  STATION_PARAMETER_IDS,
+  formatParameter,
+  parameterValue,
+  parameterView,
+} from './parameters.js';
 
 const NOW = Date.UTC(2026, 9, 9, 12, 0);
 const MEASURED = new Date(NOW - 10 * 60_000).toISOString();
@@ -941,4 +947,78 @@ test('an arrow reports itself visible on the very first draw', async () => {
       true,
       `${entity.id} reports show=${entity.billboard.show} before any chip change`,
     );
+});
+
+test('a list row and a marker label format the same reading identically', async () => {
+  // Both appear in the same card. Re-deriving the decimals printed "42.0 cm"
+  // in the list beside "42 cm" on the map.
+  const { layer } = build();
+  layer.enable();
+  await layer.update();
+  for (const parameter of STATION_PARAMETER_IDS) {
+    layer.setParams({ parameter });
+    const view = parameterView(parameter);
+    const { list } = layer.getRowControls();
+    for (const item of list.items) {
+      const record = snapshot().stations.find((s) => s.id === item.id);
+      const expected = formatParameter(parameterValue(record, view), view);
+      if (!expected) continue;
+      assert.ok(
+        item.text.endsWith(expected),
+        `${parameter}: "${item.text}" should end with "${expected}"`,
+      );
+    }
+  }
+});
+
+test('the detail line never trails a dangling separator', async () => {
+  // Reachable with pressure selected while SwissMetNet, its only source, is
+  // unreachable: the network list is empty and the join left "… stations · ".
+  const { layer } = build({
+    snapshotOverrides: {
+      networks: [
+        { id: SLF_NETWORK_ID, status: 'ok', stationCount: 1 },
+        { id: SMN_NETWORK_ID, status: 'unavailable', stationCount: 0 },
+      ],
+    },
+  });
+  layer.enable();
+  await layer.update();
+  layer.setParams({ parameter: 'pressure' });
+  const { detail } = layer.getRowControls().summary;
+  assert.ok(!/·\s*$/.test(detail), `trailing separator in "${detail}"`);
+  assert.match(detail, /^\d+ of \d+ stations$/);
+});
+
+test('a parameter no reachable network publishes is offered but disabled', async () => {
+  // Kept visible so the picker does not change shape under the pointer, and
+  // disabled because choosing it could only ever draw an empty map.
+  const { layer } = build({
+    snapshotOverrides: {
+      networks: [
+        { id: SLF_NETWORK_ID, status: 'ok', stationCount: 1 },
+        { id: SMN_NETWORK_ID, status: 'unavailable', stationCount: 0 },
+      ],
+    },
+  });
+  layer.enable();
+  await layer.update();
+  const chips = layer.getRowControls().summary.settings[0].chips;
+  assert.equal(chips.length, STATION_PARAMETER_IDS.length, 'all still offered');
+  const byId = Object.fromEntries(chips.map((chip) => [chip.id, chip]));
+  assert.equal(byId.pressure.disabled, true, 'only SwissMetNet has a barometer');
+  assert.equal(byId.snow.disabled, false, 'SLF answers for snow');
+  assert.equal(byId.wind.disabled, false);
+  // The active chip is never disabled, or it could not be changed away from.
+  layer.setParams({ parameter: 'pressure' });
+  const active = layer.getRowControls().summary.settings[0].chips;
+  assert.equal(active.find((chip) => chip.id === 'pressure').disabled, false);
+});
+
+test('with every network reachable no parameter chip is disabled', async () => {
+  const { layer } = build();
+  layer.enable();
+  await layer.update();
+  for (const chip of layer.getRowControls().summary.settings[0].chips)
+    assert.equal(chip.disabled, false, chip.id);
 });

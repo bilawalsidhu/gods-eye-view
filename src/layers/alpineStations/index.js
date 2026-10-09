@@ -8,6 +8,7 @@ import {
   DEFAULT_PARAMETER_ID,
   STATION_PARAMETER_IDS,
   STATION_PARAMETER_VIEWS,
+  formatParameter,
   parameterLegend,
   parameterProminence,
   parameterValue,
@@ -320,7 +321,12 @@ export function createAlpineStationsLayer({
    * naming SLF as a source for it.
    */
   function supportingNetworks() {
-    const measuring = networksMeasuring(parameterId);
+    return reachableNetworksMeasuring(parameterId);
+  }
+
+  /** Networks publishing `id` that also answered the most recent poll. */
+  function reachableNetworksMeasuring(id) {
+    const measuring = networksMeasuring(id);
     if (!snapshot?.networks) return measuring;
     const reachable = new Set(
       snapshot.networks
@@ -480,10 +486,14 @@ export function createAlpineStationsLayer({
       const station = selected();
       const inView = nearest();
       const supporting = supportingNetworks();
-      const measured = `${summary.measuring} of ${summary.total} stations`;
       const detail = snapshot
         ? summary.total
-          ? `${measured} · ${supporting.map((network) => network.label).join(' · ')}`
+          ? [
+              `${summary.measuring} of ${summary.total} stations`,
+              // Omitted rather than left as a dangling separator when the
+              // selected parameter has no reachable network behind it.
+              ...supporting.map((network) => network.label),
+            ].join(' · ')
           : 'No stations loaded'
         : loading
           ? 'Loading stations…'
@@ -531,10 +541,16 @@ export function createAlpineStationsLayer({
             {
               id: 'parameter',
               label: 'VALUE',
+              // A parameter no reachable network publishes stays visible, so
+              // the picker does not change shape under the pointer, but is
+              // disabled: choosing it could only ever draw an empty map.
               chips: STATION_PARAMETER_IDS.map((id) => ({
                 id,
                 label: STATION_PARAMETER_VIEWS[id].chipLabel,
                 active: id === parameterId,
+                disabled:
+                  id !== parameterId &&
+                  reachableNetworksMeasuring(id).length === 0,
                 params: { parameter: id },
               })),
             },
@@ -571,6 +587,9 @@ export function createAlpineStationsLayer({
           })),
         },
         chips: [],
+        // Named bands, not a numeric ramp: a two-endpoint ramp would leave
+        // every middle band unexplained when the labels are words.
+        legendCategorical: true,
         legend: parameterLegend(current),
         info: [
           `${detail}`,
@@ -651,6 +670,7 @@ function readingText(station, current, clock) {
   if (marker.state === 'offline')
     return isReporting(station) && isStale(station, clock) ? 'late' : 'no data';
   if (marker.state === 'unmeasured') return 'not measured';
-  const value = parameterValue(station, current);
-  return `${value.toFixed(current.id === 'wind' ? 0 : 1)} ${current.unit}`;
+  // The SAME formatter the marker label uses. Re-deriving the decimals here
+  // printed "42.0 cm" in the list beside "42 cm" on the map, in one card.
+  return formatParameter(parameterValue(station, current), current);
 }

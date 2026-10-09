@@ -790,3 +790,26 @@ test('the Alpine card is in the weather order but not in the observed group', ()
   for (const id of observed) assert.ok(order.includes(id), id);
   assert.ok(!observed.includes('alpine-stations'));
 });
+
+test('a legend of named bands renders as swatches, not as a two-ended ramp', () => {
+  // The ramp path prints only its endpoints. With word labels that leaves
+  // every middle band unexplained: "Calm — Storm km/h" says nothing about the
+  // three colours between them.
+  const source = readFileSync(
+    new URL('./weatherPanel.js', import.meta.url),
+    'utf8',
+  );
+  const declarations = source.slice(
+    source.indexOf('const ORDER ='),
+    source.indexOf('const utc ='),
+  );
+  const { categorical, order } = JSON.parse(
+    runInNewContext(
+      `${declarations}\nJSON.stringify({ categorical: [...CATEGORICAL_LEGEND_IDS], order: ORDER })`,
+    ),
+  );
+  assert.ok(categorical.includes('alpine-stations'));
+  assert.ok(categorical.includes('weather-cyclones'), 'cyclones keep theirs');
+  assert.ok(!categorical.includes('wind'), 'wind has a numeric scale');
+  for (const id of categorical) assert.ok(order.includes(id), id);
+});

@@ -290,9 +290,18 @@ try {
       open: node.dataset.open,
       hasSettings: Boolean(block('settings')),
       hasLegend: Boolean(block('legend')) && !block('legend').hidden,
+      // A banded legend renders per-band swatches, not a two-ended ramp: with
+      // word labels a ramp shows only "Calm" and "Storm" and leaves the three
+      // colours between them unexplained.
       rampVisible: Boolean(
         block('legend')?.querySelector('.rail-card-ramp:not([hidden])'),
       ),
+      swatches: [
+        ...(block('legend')?.querySelectorAll('.rail-card-legend-entry') ?? []),
+      ].map((entry) => ({
+        colour: entry.dataset.color ?? '',
+        label: entry.textContent.trim(),
+      })),
       chips: [...node.querySelectorAll('[data-chip-id]')].map((chip) => ({
         id: chip.dataset.chipId,
         active: chip.classList.contains('active'),
@@ -316,9 +325,16 @@ try {
     card?.chips.map((chip) => `${chip.id}${chip.active ? '*' : ''}`).join(','),
   );
   check(
-    'the card shows a colour ramp legend',
-    card?.hasLegend && card?.rampVisible && overAlps.legend >= 5,
-    `${overAlps.legend} bands`,
+    'the card explains every band, with a swatch and a name',
+    card?.hasLegend &&
+      card.swatches.length === overAlps.legend &&
+      overAlps.legend >= 5 &&
+      card.swatches.every((entry) => entry.label && /^#[0-9a-f]{6}$/i.test(entry.colour)),
+    `${card?.swatches.length}/${overAlps.legend} bands: ${card?.swatches.map((e) => e.label).join(', ')}`,
+  );
+  check(
+    'and does not also draw a two-ended ramp over them',
+    !card?.rampVisible,
   );
   check(
     'the card lists the nearest stations in view',
