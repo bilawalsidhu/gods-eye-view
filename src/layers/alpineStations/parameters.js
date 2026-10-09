@@ -11,8 +11,6 @@
  * this layer does not reproduce.
  */
 
-import { ALPINE_NETWORKS } from './networks.js';
-
 /** Metres per second to kilometres per hour, to one decimal. */
 export function msToKmh(ms) {
   return Number.isFinite(ms) ? Math.round(ms * 36) / 10 : null;
@@ -326,10 +324,4 @@ export function parameterLegend(view) {
   return [...view.bands]
     .reverse()
     .map((band) => ({ label: band.label, color: band.accent }));
-}
-
-/** Parameter ids no configured network publishes, so the picker can say so. */
-export function unsupportedParameterIds(networks = ALPINE_NETWORKS) {
-  const supported = new Set(networks.flatMap((network) => network.parameters));
-  return STATION_PARAMETER_IDS.filter((id) => !supported.has(id));
 }

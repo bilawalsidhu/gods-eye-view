@@ -4,7 +4,6 @@ import {
   TAWES_PARAMETERS,
   TAWES_PARAMETER_QUERY,
   joinTawesStationRecords,
-  joinTawesStations,
   normalizeTawesStations,
   tawesReadingIndex,
   tawesReadings,
@@ -17,6 +16,10 @@ import {
   TAWES_METADATA,
   TAWES_OBSERVATIONS,
 } from '../../../testSupport/alpineStationFixtures.mjs';
+
+/** The two steps the proxy composes, since the observation call is chunked. */
+const joinTawesStations = (metadata, observations) =>
+  joinTawesStationRecords(metadata, tawesReadings(observations));
 
 const byCode = (rows) => Object.fromEntries(rows.map((row) => [row.code, row]));
 const reporting = TAWES_OBSERVATIONS.features.filter((feature) =>

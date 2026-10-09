@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SLF_STATION_TYPE_LABELS,
   joinSlfStations,
   latestSlfMeasurements,
   normalizeSlfMeasurement,
@@ -27,19 +26,25 @@ test('a station carries its published identity, canton and altitude', () => {
   assert.equal(station.elevationM, 2558);
   assert.ok(station.lat > 46 && station.lat < 47);
   assert.ok(station.lon > 9 && station.lon < 10);
-  assert.equal(station.stationTypeLabel, SLF_STATION_TYPE_LABELS.SNOW_FLAT);
 });
 
-test('a station type the network adds later keeps its station', () => {
-  // The position and the readings are what the layer draws; an unmodelled
-  // label is not a reason to lose a box from the map.
-  const station = normalizeSlfStation({
-    ...SLF_STATIONS[0],
-    type: 'SOMETHING_NEW',
-  });
-  assert.equal(station.stationType, 'SOMETHING_NEW');
-  assert.equal(station.stationTypeLabel, null);
-  assert.equal(normalizeSlfStation({ ...SLF_STATIONS[0], type: null }).stationTypeLabel, null);
+test('the canonical record carries only network-neutral fields', () => {
+  // The network's own station type is read and dropped: nothing downstream
+  // can present an SLF-only label, and a field no consumer reads only invites
+  // someone to trust it later.
+  const station = normalizeSlfStation({ ...SLF_STATIONS[0], type: 'SOMETHING_NEW' });
+  assert.ok(!('stationType' in station));
+  assert.ok(!('stationTypeLabel' in station));
+  assert.deepEqual(Object.keys(station).sort(), [
+    'code',
+    'country',
+    'elevationM',
+    'label',
+    'lat',
+    'lon',
+    'networkId',
+    'region',
+  ]);
   assert.equal(normalizeSlfStation({}), null, 'no code means no station');
 });
 
@@ -58,6 +63,10 @@ test('measurement codes map to the canonical fields and units', () => {
     'windDirDeg',
   ])
     assert.ok(Object.hasOwn(row, field), field);
+  assert.ok(
+    !('snowSurfaceTempC' in row),
+    'a reading no canonical record carries is not parsed',
+  );
   assert.equal(normalizeSlfMeasurement({}), null);
   assert.equal(normalizeSlfMeasurement(null), null);
 });

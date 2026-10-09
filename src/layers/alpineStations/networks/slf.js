@@ -13,7 +13,6 @@
  * measurement-api.slf.ch/openapi.json and are NOT guessed:
  *   HS              snow height, cm
  *   TA_30MIN_MEAN   air temperature, °C
- *   TSS_30MIN_MEAN  snow surface temperature, °C
  *   RH_30MIN_MEAN   relative humidity, %
  *   VW_30MIN_MEAN   wind speed, vectorial mean, m/s
  *   VW_30MIN_MAX    wind speed, 5 s maximum, m/s
@@ -28,24 +27,16 @@ import { SLF_NETWORK_ID } from '../networks.js';
 import { finiteOrNull, isoOrNull, textOrNull } from '../records.js';
 
 /**
- * Station types the network reports.
+ * Normalize one entry from `/public/api/imis/stations`.
  *
- * A type the network adds later falls through to a plain station rather than
- * being dropped: the position and the readings are what the layer draws, and
- * an unmodelled label is not a reason to lose a box.
+ * The network's own station TYPE (snow field, slope, wind mast, FlowCapt) is
+ * read and dropped: the canonical record is network-neutral, nothing
+ * downstream can present an SLF-only label, and carrying a field no consumer
+ * reads only invites someone to trust it later.
  */
-export const SLF_STATION_TYPE_LABELS = Object.freeze({
-  SNOW_FLAT: 'Snow (flat field)',
-  SNOW_SLOPE: 'Snow (slope)',
-  WIND: 'Wind',
-  FLOWCAPT: 'Blowing snow',
-});
-
-/** Normalize one entry from `/public/api/imis/stations`. */
 export function normalizeSlfStation(raw) {
   const code = textOrNull(raw?.code);
   if (!code) return null;
-  const type = textOrNull(raw?.type);
   return {
     networkId: SLF_NETWORK_ID,
     code,
@@ -55,8 +46,6 @@ export function normalizeSlfStation(raw) {
     elevationM: finiteOrNull(raw?.elevation),
     region: textOrNull(raw?.canton_code),
     country: textOrNull(raw?.country_code) || 'CH',
-    stationType: type,
-    stationTypeLabel: type ? (SLF_STATION_TYPE_LABELS[type] ?? null) : null,
   };
 }
 
@@ -69,7 +58,6 @@ export function normalizeSlfMeasurement(raw) {
     measuredAt: isoOrNull(raw?.measure_date),
     snowDepthCm: finiteOrNull(raw?.HS),
     airTempC: finiteOrNull(raw?.TA_30MIN_MEAN),
-    snowSurfaceTempC: finiteOrNull(raw?.TSS_30MIN_MEAN),
     humidityPct: finiteOrNull(raw?.RH_30MIN_MEAN),
     windSpeedMs: finiteOrNull(raw?.VW_30MIN_MEAN),
     windGustMs: finiteOrNull(raw?.VW_30MIN_MAX),
@@ -115,7 +103,6 @@ export function joinSlfStations(stations, measurements) {
       measuredAt: reading?.measuredAt ?? null,
       airTempC: reading?.airTempC ?? null,
       snowDepthCm: reading?.snowDepthCm ?? null,
-      snowSurfaceTempC: reading?.snowSurfaceTempC ?? null,
       humidityPct: reading?.humidityPct ?? null,
       windSpeedMs: reading?.windSpeedMs ?? null,
       windGustMs: reading?.windGustMs ?? null,

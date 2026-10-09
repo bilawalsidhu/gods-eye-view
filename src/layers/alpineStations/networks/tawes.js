@@ -207,8 +207,3 @@ export function joinTawesStationRecords(metadata, readings) {
     return { ...station, ...SILENT_READING, ...reading };
   });
 }
-
-/** Read one observation response and join it onto metadata in one step. */
-export function joinTawesStations(metadata, observations) {
-  return joinTawesStationRecords(metadata, tawesReadings(observations));
-}

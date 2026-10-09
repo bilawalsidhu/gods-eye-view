@@ -14,7 +14,6 @@ import {
   parameterValue,
   parameterView,
   staleAfterMs,
-  unsupportedParameterIds,
   windCompass,
 } from './parameters.js';
 
@@ -163,14 +162,6 @@ test('the legend reads quietest first and covers every band', () => {
   }
 });
 
-test('no shipped view is left without a network to feed it', () => {
-  assert.deepEqual(unsupportedParameterIds(), []);
-  // With a hypothetical registry that publishes nothing, every view is listed.
-  assert.deepEqual(
-    unsupportedParameterIds([{ parameters: [] }]),
-    [...STATION_PARAMETER_IDS],
-  );
-});
 
 test('a bigger reading is a bigger marker, inside a band as well as across one', () => {
   // The bug this pins: sizing by band index quantised the reading to five
