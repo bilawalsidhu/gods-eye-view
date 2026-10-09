@@ -40,6 +40,11 @@ function estimatePrefixTokens(parts = {}) {
 // Computed once on first use, not at import: the instruction builder reads the
 // voice manual and the schema reshape walks every tool, and both are stable
 // for the life of the process.
+//
+// Stable because no caller passes `annotationGuidance`, so this measures the
+// prompt the command handler actually sends. Wiring that option without
+// threading it through here would leave the model-context floor, the cost
+// estimate and the truncation warning all measuring a prompt nobody sends.
 let cached;
 
 /** The running server's prefix estimate. */
