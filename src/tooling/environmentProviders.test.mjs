@@ -189,7 +189,9 @@ test('FIRMS retains a large successful source during partial failure and filters
       : new Response('offline', { status: 503 });
   });
   const request = install(firmsProxy());
-  assert.equal((await request()).status, 503);
+  const keyless = await request();
+  assert.equal(keyless.status, 200);
+  assert.deepEqual(json(keyless), { keyRequired: true });
   assert.equal(json(await request('/status')).hasKey, false);
   assert.equal(calls, 0);
   process.env.FIRMS_MAP_KEY = 'fixture-key';

@@ -10,11 +10,10 @@ const MODULE_PATH = fileURLToPath(import.meta.url);
 const ROOT = realpathSync(path.resolve(path.dirname(MODULE_PATH), '..'));
 const READY_FILE = path.join(ROOT, 'pinokio', '.installed');
 
-export function runChecked(command, args, { shell = false } = {}) {
+export function runChecked(command, args) {
   const result = spawnSync(command, args, {
     cwd: ROOT,
     env: { ...process.env, PUPPETEER_SKIP_DOWNLOAD: '1' },
-    shell,
     stdio: 'inherit',
   });
   if (result.error) throw result.error;
@@ -24,8 +23,8 @@ export function runChecked(command, args, { shell = false } = {}) {
 export function installPinokioDependencies() {
   applyPinokioEnvironment();
   rmSync(READY_FILE, { force: true });
-  const npm = npmProcessSpec();
-  runChecked(npm.command, ['ci'], { shell: npm.shell });
+  const npm = npmProcessSpec(process.platform, ['ci']);
+  runChecked(npm.command, npm.args);
 
   // Pinokio starts Vite directly and loads only its ENVIRONMENT file plus the
   // normal dotenv ladder. Unlike dev-fresh.sh, it does not import macOS

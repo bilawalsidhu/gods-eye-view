@@ -76,10 +76,23 @@ export function hasRequiredDependencies(rootDir = ROOT) {
   }
 }
 
-/** Return the npm command and spawn mode required by the target platform. */
-export function npmProcessSpec(platform = process.platform) {
-  const windows = platform === 'win32';
-  return { command: windows ? 'npm.cmd' : 'npm', shell: windows };
+/** Return an npm command without using spawn's implicit shell mode. */
+export function npmProcessSpec(
+  platform = process.platform,
+  npmArgs = ['--version'],
+  comSpec = process.env.ComSpec,
+) {
+  const supportedArgs = new Set(['--version', 'ci']);
+  if (!Array.isArray(npmArgs) || npmArgs.some((arg) => !supportedArgs.has(arg))) {
+    throw new TypeError('npm arguments must be simple command-line tokens');
+  }
+  if (platform === 'win32') {
+    return {
+      command: comSpec || 'cmd.exe',
+      args: ['/d', '/s', '/c', ['npm.cmd', ...npmArgs].join(' ')],
+    };
+  }
+  return { command: 'npm', args: npmArgs };
 }
 
 /** Read one key from Vite's dotenv file ladder without depending on Vite. */
@@ -191,9 +204,9 @@ export function buildCapabilitySummary(
 export function inspectSetup({ includeKeychain = true, authoritativeEnvironment = false, rootDir = ROOT } = {}) {
   const node = classifyNodeVersion();
   const npm = npmProcessSpec();
-  const npmResult = spawnSync(npm.command, ['--version'], {
+  const npmResult = spawnSync(npm.command, npm.args, {
     encoding: 'utf8',
-    shell: npm.shell,
+    windowsHide: true,
   });
   const credentials = Object.fromEntries(CREDENTIALS.map((spec) => [
     spec.name,

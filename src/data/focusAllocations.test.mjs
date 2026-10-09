@@ -13,7 +13,7 @@ import { isCalibratedAllocationRuntime } from '../../scripts/run-unit-tests.mjs'
  */
 test('converged focus treatment stays within the GC-bracketed allocation budget', (t) => {
   if (!isCalibratedAllocationRuntime()) {
-    return t.skip(`allocation budgets are calibrated for Node 24; running ${process.versions.node}`);
+    return t.skip(`allocation budgets are calibrated for Node 24/26; running ${process.versions.node}`);
   }
   const result = spawnSync(
     process.execPath,

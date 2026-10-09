@@ -112,6 +112,9 @@ export function createBrowserViteConfig({
         mapillaryToken ?? '',
       ),
     },
+    // satellite.js 7 ships ESM workers with top-level await; Vite 8 must
+    // emit workers as modules instead of wrapping them in an IIFE.
+    worker: { format: 'es' },
     build: { chunkSizeWarningLimit: 1500 },
   };
 }

@@ -314,7 +314,7 @@ function runAllocationProbe(entryCount, profile = 'generic') {
 for (const workload of WORKLOADS) {
   test(`steady moving-source frames stay in budget ${workload.name}`, (t) => {
     if (!CALIBRATED_ALLOCATION_RUNTIME) {
-      return t.skip(`allocation budgets are calibrated for Node 24; running ${process.versions.node}`);
+      return t.skip(`allocation budgets are calibrated for Node 24/26; running ${process.versions.node}`);
     }
     const payload = runAllocationProbe(workload.entries, workload.profile);
 

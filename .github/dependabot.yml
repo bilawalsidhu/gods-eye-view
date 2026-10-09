@@ -1,0 +1,34 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    versioning-strategy: increase-if-necessary
+    groups:
+      runtime-dependencies:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      tooling:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: npm
+    directory: /pinokio
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        update-types:
+          - minor
+          - patch

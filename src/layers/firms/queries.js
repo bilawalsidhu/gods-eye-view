@@ -39,7 +39,7 @@ export function createQueries({
     source,
 
     // The one data-layer control a provider key gates: the proxy answers
-    // 503 {error:'no_key'} without a FIRMS key. Declared as a key-registry id
+    // {keyRequired:true} without a FIRMS key. Declared as a key-registry id
     // rather than an env-var string, so the panel can name the key from the
     // one place that owns what each key is called.
     requiresKeyId: 'firms',

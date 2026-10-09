@@ -37,19 +37,16 @@ test('unit runner serializes only GC-bracketed allocation microbenchmarks', () =
   );
 });
 
-test('allocation runtime calibration is explicit and pinned to Node 24', () => {
+test('allocation runtime calibration is explicit for supported Node 24 and 26', () => {
   assert.equal(assertNode24AllocationRuntime('24.19.0'), '24.19.0');
+  assert.equal(assertNode24AllocationRuntime('26.0.0'), '26.0.0');
   assert.throws(
     () => assertNode24AllocationRuntime('22.23.1'),
-    /calibrated Node 24 runtime/,
-  );
-  assert.throws(
-    () => assertNode24AllocationRuntime('26.0.0'),
-    /calibrated Node 24 runtime/,
+    /calibrated Node 24 or 26/,
   );
   assert.equal(isCalibratedAllocationRuntime('24.19.0'), true);
   assert.equal(isCalibratedAllocationRuntime('22.23.1'), false);
-  assert.equal(isCalibratedAllocationRuntime('26.3.0'), false);
+  assert.equal(isCalibratedAllocationRuntime('26.3.0'), true);
 });
 
 test('npm test stays green on every supported engine, not only the calibrated one', () => {

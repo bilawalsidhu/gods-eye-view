@@ -21,7 +21,7 @@ import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
  *   GET /api/firms        → {fetchedAt, stale, ttlMs, sources, count, fires}
  *   GET /api/firms/status → {hasKey, lastFetch, count, stale, ttlMs, transactions}
  *
- * Keyless (no FIRMS_MAP_KEY): /api/firms → 503 {error:'no_key'}; status →
+ * Keyless (no FIRMS_MAP_KEY): /api/firms → 200 {keyRequired:true}; status →
  * {hasKey:false}. Upstream is never touched without a key.
  *
  * @returns {import('vite').Plugin}
@@ -213,7 +213,10 @@ export function firmsProxy() {
         }
 
         if (!key) {
-          sendJson(503, { error: 'no_key' });
+          // Missing optional configuration is a normal layer state, not a
+          // failed HTTP service. Return an explicit payload so browsers and
+          // monitoring do not report a configured-but-optional feed as 5xx.
+          sendJson(200, { keyRequired: true });
           return;
         }
 

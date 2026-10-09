@@ -194,6 +194,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'infrastructure.js',
     'infrastructureData.js',
     'infrastructureOverlayEntry.js',
+    'inputOwnership.js',
     'localGeojsonCore.js',
     'localGeojsonLod.js',
   ]);

@@ -2943,7 +2943,7 @@ test:track` 43 tracking invariants · headless QA harnesses under
 >   the bundled 2026-05-25 snapshot (58 MB) is deleted; a new `/api/firms` proxy
 >   (vite.config.js) merges VIIRS NOAA-20/NOAA-21/Suomi-NPP NRT world CSVs
 >   (days=2 → trailing-24h clamp, 30 min memory+disk cache, single-flight,
->   serve-stale-on-failure) behind server-side `FIRMS_MAP_KEY` (keyless → 503 +
+>   serve-stale-on-failure) behind server-side `FIRMS_MAP_KEY` (keyless → 200 `{keyRequired:true}` +
 >   in-app KEY REQUIRED chip). Client polls 10 min (`src/data/firmsHeatmap.js`;
 >   adapter `src/data/firmsAdapt.js`, CSV parser `src/data/firmsCsv.js`).
 >   `/api/firms/status` reports cache age + MAP_KEY transaction usage.
