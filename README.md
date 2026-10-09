@@ -285,6 +285,8 @@ _Ask for radio near anywhere and the globe starts broadcasting — every station
 
 ---
 
+**⌨️ Or type instead of talking.** The **GEV COMMAND** chip opens a console that drives the same agent and the same actions by typing, over OpenAI, OpenRouter, or a model on your own GPU through Ollama. Roughly two orders of magnitude cheaper than an open mic, and free locally — see [docs/TEXT-AGENT.md](docs/TEXT-AGENT.md).
+
 **💬 Or ask from Claude and Codex.** God's Eye View is also an MCP server: ask Claude Desktop, Codex or ChatGPT desktop to show a place, and the live globe opens right in the conversation. Setup takes a minute — see [docs/MCP_SETUP.md](docs/MCP_SETUP.md).
 
 ## 🛰️ What's on the Globe

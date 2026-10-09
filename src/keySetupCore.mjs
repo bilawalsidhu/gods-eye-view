@@ -61,6 +61,14 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'metered',
   }),
   Object.freeze({
+    id: 'openrouter',
+    title: 'OPENROUTER',
+    unlocks: 'Typed agent (GEV COMMAND) over hundreds of hosted models',
+    getUrl: 'https://openrouter.ai/keys',
+    envVars: Object.freeze(['OPENROUTER_API_KEY']),
+    tier: 'metered',
+  }),
+  Object.freeze({
     id: 'aisstream',
     title: 'AISSTREAM',
     unlocks: 'Live ships, worldwide',

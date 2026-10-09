@@ -968,5 +968,19 @@
   "src/tools/views.test.mjs",
   "src/app/embed.test.mjs",
   "src/tools/globePanel.test.mjs",
-  "src/costEndpointThrottle.test.mjs"
+  "src/costEndpointThrottle.test.mjs",
+  "src/agent/agentConsole.test.mjs",
+  "src/agent/agentConsoleMarkup.test.mjs",
+  "src/agent/agentEndpoints.test.mjs",
+  "src/agent/agentLoop.test.mjs",
+  "src/agent/agentOwnership.test.mjs",
+  "src/agent/consoleBox.test.mjs",
+  "src/agent/conversation.test.mjs",
+  "src/agent/cost.test.mjs",
+  "src/agent/diagnostics.test.mjs",
+  "src/agent/instructions.test.mjs",
+  "src/agent/registry.test.mjs",
+  "src/agent/routes.test.mjs",
+  "src/agent/toolSchema.test.mjs",
+  "src/agent/upstream.test.mjs"
 ]

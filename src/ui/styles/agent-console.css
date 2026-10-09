@@ -1,0 +1,261 @@
+/* GEV COMMAND: the typed console. Geometry, stacking and disclosure only —
+   the surface, control and concealment rules come from panel-surfaces.css
+   (see docs/panel-surfaces.md, `dialog[data-panel-surface]`). */
+
+#agent-console-chip {
+  position: fixed;
+  /* Bottom LEFT, below the map attribution rather than over it: the credit
+     line is a licence condition, not decoration. POWER UP keeps the right
+     corner. */
+  left: 0.9rem;
+  bottom: 0.9rem;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.7rem;
+  color: rgba(225, 244, 248, 0.92);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.09rem;
+  background: linear-gradient(
+    145deg,
+    rgba(10, 27, 37, 0.92),
+    rgba(7, 13, 22, 0.9)
+  );
+  border: 1px solid rgba(54, 220, 255, 0.38);
+  border-radius: 0.42rem;
+  box-shadow:
+    0 0.4rem 1.6rem rgba(0, 0, 0, 0.5),
+    0 0 1.2rem rgba(0, 212, 255, 0.07);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+#agent-console-chip:hover,
+#agent-console-chip:focus-visible {
+  border-color: rgba(54, 220, 255, 0.72);
+}
+
+#agent-console-chip[hidden] {
+  display: none;
+}
+
+.agent-console-chip-caret {
+  color: rgba(54, 220, 255, 0.85);
+}
+
+#agent-console {
+  position: fixed;
+  /* Above the first-run launcher (175), below key setup (190): a command
+     console must not cover the dialog that configures its own credentials. */
+  z-index: 185;
+  /* A dialog's UA rules set both inline insets and auto margins, which would
+     otherwise centre this one however the corner is specified. */
+  /* A first placement only: consoleBox.js sets explicit left/top/width/height
+     from the remembered window as soon as it opens, and clears the other two
+     edges. A dialog's UA rules set both inline insets and auto margins, which
+     would otherwise centre it however the corner is specified. */
+  inset: auto auto 8.5rem 0.9rem;
+  margin: 0;
+  width: min(30rem, calc(100vw - 1.8rem));
+  height: min(26rem, calc(100dvh - 12rem));
+  min-width: 20rem;
+  min-height: 13.75rem;
+  /* Keep the shared surface's translucency (--glass-bg) and diffuse what is
+     behind it instead of hiding it. A console sits OVER the HUD readouts
+     rather than beside them, and legible coordinates showing through a
+     transcript are unreadable; blurring them settles both. Same treatment
+     the Street Level panel uses. */
+  backdrop-filter: blur(20px) saturate(1.25);
+  -webkit-backdrop-filter: blur(20px) saturate(1.25);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+#agent-console > [data-panel-header] {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'title close'
+    'selects selects';
+  gap: 0.4rem 0.5rem;
+  align-items: center;
+}
+
+#agent-console-title {
+  grid-area: title;
+  margin: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.12rem;
+}
+
+.agent-console-close {
+  grid-area: close;
+  padding: 0 0.4rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.agent-console-selects {
+  grid-area: selects;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.agent-console-field {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+  font-size: 0.52rem;
+  letter-spacing: 0.08rem;
+  opacity: 0.75;
+}
+
+.agent-console-field select {
+  max-width: 11rem;
+  font-size: 0.58rem;
+}
+
+.agent-console-cost {
+  margin-left: auto;
+  font-size: 0.55rem;
+  letter-spacing: 0.06rem;
+  opacity: 0.8;
+}
+
+#agent-console > [data-panel-header] {
+  cursor: move;
+  /* A pointer drag on the header must not select the title text instead. */
+  user-select: none;
+  touch-action: none;
+}
+
+#agent-console.agent-console-dragging,
+#agent-console.agent-console-resizing {
+  /* No transition while a pointer is driving the geometry directly. */
+  transition: none;
+  user-select: none;
+}
+
+#agent-console.agent-console-dragging > [data-panel-header] {
+  cursor: grabbing;
+}
+
+#agent-transcript {
+  flex: 1 1 auto;
+  min-height: 6rem;
+  margin: 0;
+  padding: 0.4rem;
+  overflow-y: auto;
+  list-style: none;
+  font-size: 0.62rem;
+  line-height: 1.45;
+  /* Opaque enough that the Cesium attribution underneath cannot read through
+     a line of transcript. */
+  background: rgba(4, 10, 16, 0.92);
+  border: 1px solid rgba(54, 220, 255, 0.14);
+  border-radius: 0.3rem;
+}
+
+.agent-entry {
+  margin: 0 0 0.3rem;
+  overflow-wrap: anywhere;
+}
+
+.agent-entry:last-child {
+  margin-bottom: 0;
+}
+
+.agent-entry-user::before {
+  content: '> ';
+  color: rgba(54, 220, 255, 0.85);
+}
+
+.agent-entry-agent {
+  color: rgba(225, 244, 248, 0.95);
+}
+
+.agent-entry-tool {
+  color: rgba(140, 200, 220, 0.78);
+  font-size: 0.56rem;
+}
+
+.agent-entry-tool[data-outcome]::after {
+  content: ' · ' attr(data-outcome);
+  opacity: 0.7;
+}
+
+.agent-entry-warning {
+  color: #f3c969;
+}
+
+.agent-entry-error {
+  color: var(--panel-surface-error, #ff6b6b);
+}
+
+.agent-console-form {
+  display: flex;
+  gap: 0.4rem;
+}
+
+#agent-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.65rem;
+}
+
+#agent-send {
+  font-size: 0.58rem;
+  letter-spacing: 0.08rem;
+  cursor: pointer;
+}
+
+.agent-console-status {
+  margin: 0;
+  font-size: 0.52rem;
+  letter-spacing: 0.1rem;
+  opacity: 0.7;
+}
+
+#agent-console[data-agent-status='unavailable'] .agent-console-status {
+  color: var(--panel-surface-error, #ff6b6b);
+  opacity: 1;
+}
+
+/* The same exclusive surfaces that hide key setup hide this one: a typed
+   console belongs in neither a recording, a cockpit, nor a scene. */
+body.ui-clean-view #agent-console-chip,
+body.recording-mode #agent-console-chip,
+body.cockpit-mode #agent-console-chip,
+body.scene-playback-mode #agent-console-chip,
+body.ui-clean-view #agent-console,
+body.recording-mode #agent-console,
+body.cockpit-mode #agent-console,
+body.scene-playback-mode #agent-console {
+  display: none;
+}
+
+@media (max-width: 620px) {
+  /* Clear the dock, as POWER UP does. Desktop-first app; a courtesy. */
+  #agent-console-chip {
+    bottom: 5.8rem;
+  }
+
+  #agent-console {
+    inset: auto auto 13.4rem 0.9rem;
+    height: min(20rem, calc(100dvh - 16rem));
+  }
+}
