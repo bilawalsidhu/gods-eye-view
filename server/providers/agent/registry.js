@@ -477,9 +477,20 @@ function normalizeOllamaModel(raw, details = null) {
     details?.model_info && typeof details.model_info === 'object'
       ? details.model_info
       : {};
-  const contextKey = Object.keys(info).find((key) =>
-    key.endsWith('.context_length'),
-  );
+  // Ollama documents this key as prefixed by the value of
+  // `general.architecture`, so that is read first. The suffix scan stays as the
+  // fallback for a daemon that reports a context length without an
+  // architecture, and because a multi-modal model can carry more than one
+  // `*.context_length` and the named one is the text context.
+  const architecture =
+    typeof info['general.architecture'] === 'string'
+      ? info['general.architecture']
+      : '';
+  const namedKey = architecture ? `${architecture}.context_length` : '';
+  const contextKey =
+    namedKey && namedKey in info
+      ? namedKey
+      : Object.keys(info).find((key) => key.endsWith('.context_length'));
   return {
     id,
     label: id,

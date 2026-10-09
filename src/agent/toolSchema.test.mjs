@@ -187,3 +187,32 @@ test('an invalid argument names the tool so the model can restate it', () => {
   );
   assert.match(malformed.error, /not valid JSON/);
 });
+
+test('a fence the model never closed is cheap to reject, not a stall', () => {
+  // The pattern this replaced backtracked: 5,000 characters of whitespace
+  // after an unterminated fence cost about 29 seconds on one core, and this
+  // string is whatever the model put in `arguments`.
+  const unterminated = `\`\`\`json${' '.repeat(50_000)}${'{'.repeat(10)}`;
+  const started = process.hrtime.bigint();
+  const parsed = parseToolArguments(unterminated);
+  const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.equal(parsed.ok, false);
+  assert.ok(
+    elapsedMs < 250,
+    `parsing an unterminated fence took ${elapsedMs.toFixed(0)}ms`,
+  );
+});
+
+test('fenced arguments are unwrapped and unfenced ones left alone', () => {
+  const expected = { ok: true, args: { a: 1 } };
+  assert.deepEqual(parseToolArguments('{"a":1}'), expected);
+  assert.deepEqual(parseToolArguments('```json\n{"a":1}\n```'), expected);
+  assert.deepEqual(parseToolArguments('```\n{"a":1}\n```'), expected);
+  assert.deepEqual(parseToolArguments('```json {"a":1} ```'), expected);
+  assert.deepEqual(parseToolArguments('```json{"a":1}```'), expected);
+  assert.deepEqual(parseToolArguments('``````'), { ok: true, args: {} });
+  // A lone fence and trailing content past the close are not fenced blocks, so
+  // the text is parsed as-is and fails as the malformed JSON it is.
+  assert.equal(parseToolArguments('```').ok, false);
+  assert.equal(parseToolArguments('```json\n{"a":1}\n```x').ok, false);
+});

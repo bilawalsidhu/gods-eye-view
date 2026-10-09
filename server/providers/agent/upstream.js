@@ -293,6 +293,7 @@ async function fetchOllamaCapabilities({
       url: `${ollamaNativeRoot(baseUrl)}/api/show`,
       init: {
         method: 'POST',
+        redirect: 'error',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: modelId }),
       },
@@ -354,7 +355,11 @@ async function fetchModels({
     reply = await requestUpstreamJson({
       fetchImpl,
       url: modelsUrl(provider, baseUrl),
-      init: { method: 'GET', headers: authHeaders(provider, apiKey) },
+      init: {
+        method: 'GET',
+        redirect: 'error',
+        headers: authHeaders(provider, apiKey),
+      },
       timeoutMs,
     });
   } catch (error) {

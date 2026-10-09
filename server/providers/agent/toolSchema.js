@@ -193,15 +193,38 @@ function validateToolArguments(schema, args) {
   return { valid: errors.length === 0, errors };
 }
 
+/** Markdown fence delimiter. */
+const CODE_FENCE = '```';
+
+/** Info string a model puts on the opening fence of a JSON block. */
+const CODE_FENCE_INFO = 'json';
+
 /**
  * Strip a Markdown code fence from an argument payload.
  *
  * Local models frequently wrap JSON in a ```json fence despite the tool-call
  * contract. Recovering here turns a hard failure into a successful call.
+ *
+ * Deliberately not a regular expression. The obvious pattern for this needs
+ * three variable-width parts around a lazy body, and with an unterminated
+ * fence the engine tries every split between them: a few thousand characters
+ * of whitespace cost tens of seconds on one core, and this input comes
+ * straight from a model's reply. Index arithmetic is linear and cannot
+ * backtrack.
  */
 function stripCodeFence(text) {
-  const fenced = /^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/.exec(text);
-  return fenced ? fenced[1] : text;
+  const trimmed = text.trim();
+  if (!trimmed.startsWith(CODE_FENCE)) return text;
+  const close = trimmed.lastIndexOf(CODE_FENCE);
+  // One fence is an opening with no close, which is not a fenced block.
+  if (close < CODE_FENCE.length) return text;
+  // Anything but whitespace after the closing fence means this is not a block
+  // either, matching what anchoring the pattern to the end used to enforce.
+  if (trimmed.slice(close + CODE_FENCE.length).trim()) return text;
+  const body = trimmed.slice(CODE_FENCE.length, close);
+  return (
+    body.startsWith(CODE_FENCE_INFO) ? body.slice(CODE_FENCE_INFO.length) : body
+  ).trim();
 }
 
 /**
