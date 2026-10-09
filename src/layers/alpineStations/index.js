@@ -75,6 +75,9 @@ export function createAlpineStationsLayer({
   // layer is drivable under `node --test` without either.
   arrowImage = windArrowImage,
   projectRotation = screenProjectedRotation,
+  // CC BY is a condition of using these networks, so the operators are
+  // credited on the globe for exactly as long as their data is drawn.
+  credit = null,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Alpine stations require a snapshot source');
@@ -209,7 +212,10 @@ export function createAlpineStationsLayer({
               outlineColor: cesium.Color.BLACK.withAlpha(0.65),
               outlineWidth: marker.outlined ? 1 : 0,
               heightReference: cesium.HeightReference.CLAMP_TO_GROUND,
-              disableDepthTestDistance: 0,
+              // Always on top. A depth-tested ground-clamped marker is half
+              // buried by the ridge in front of it at oblique pitch, which
+              // reads as a smudge of the wrong size and the wrong colour.
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
             },
             properties: { stationId: station.id },
           }),
@@ -289,7 +295,7 @@ export function createAlpineStationsLayer({
         alignedAxis: cesium.Cartesian3.ZERO,
         rotation: 0,
         heightReference: cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: 0,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
       });
       return true;
     }
@@ -353,6 +359,7 @@ export function createAlpineStationsLayer({
       if (destroyed || enabled) return;
       enabled = true;
       if (dataSource) dataSource.show = true;
+      credit?.show?.(viewer);
       overlayHost.setVisible(ALPINE_OVERLAY_SOURCE_ID, true);
       // moveEnd, never preRender: this recomputes a six-row list, not geometry.
       removeMoveEnd =
@@ -371,6 +378,7 @@ export function createAlpineStationsLayer({
       nearestIds = '';
       arrows.clear();
       if (dataSource) dataSource.show = false;
+      credit?.hide?.(viewer);
       overlayHost.clearSource(ALPINE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(ALPINE_OVERLAY_SOURCE_ID, false);
       notify();
@@ -616,6 +624,7 @@ export function createAlpineStationsLayer({
       removeMoveEnd?.();
       removeMoveEnd = null;
       listener = null;
+      credit?.hide?.(target ?? viewer);
       overlayHost.clearSource(ALPINE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(ALPINE_OVERLAY_SOURCE_ID, false);
       entities.clear();
