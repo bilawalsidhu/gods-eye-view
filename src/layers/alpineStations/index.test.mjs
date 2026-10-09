@@ -29,11 +29,20 @@ function fakeCesium() {
       BLACK: { withAlpha: (alpha) => ({ black: alpha }) },
       fromCssColorString: (css) => ({ css }),
     },
-    Cartesian3: { fromDegrees: (lon, lat) => ({ lon, lat }) },
+    Cartesian3: { fromDegrees: (lon, lat) => ({ lon, lat }), ZERO: 'zero' },
+    BillboardGraphics: class {
+      constructor(options) {
+        Object.assign(this, { show: true }, options);
+      }
+    },
     HeightReference: { CLAMP_TO_GROUND: 'clamp' },
     Entity: class {
       constructor(options) {
         Object.assign(this, options);
+        // Cesium wraps a Cartesian3 in a ConstantPositionProperty here. The
+        // stub did not, which hid that aiming an arrow at `entity.position`
+        // hands the projection a PROPERTY and silently never turns it.
+        this.position = { isPositionProperty: true, _value: options.position };
       }
     },
     CustomDataSource: class {
@@ -73,6 +82,9 @@ function fakeViewer({ lat = 46.0, lon = 7.75 } = {}) {
       this.camera.positionCartographic.latitude = (nextLat * Math.PI) / 180;
       this.camera.positionCartographic.longitude = (nextLon * Math.PI) / 180;
     },
+    // aimArrows resolves a world bearing against the scene, so a viewer
+    // without one draws arrows that never turn.
+    scene: {},
     camera: {
       positionCartographic: {
         latitude: (lat * Math.PI) / 180,
@@ -154,7 +166,7 @@ const snapshot = (stations = [station()], overrides = {}) => ({
   ...overrides,
 });
 
-function build({ stations, snapshotOverrides, fail } = {}) {
+function build({ stations, snapshotOverrides, fail, rotations } = {}) {
   const overlayHost = fakeOverlayHost();
   const viewer = fakeViewer();
   const cesium = fakeCesium();
@@ -168,11 +180,18 @@ function build({ stations, snapshotOverrides, fail } = {}) {
       return served;
     },
   };
+  // The real pair needs a canvas and a live Scene; these stand in for both.
+  const projected = [];
   const layer = createAlpineStationsLayer({
     source,
     overlayHost,
     cesium,
     now: () => NOW,
+    arrowImage: () => 'data:image/png;base64,ARROW',
+    projectRotation: (scene, position, bearingDeg, previous) => {
+      projected.push({ position, bearingDeg, previous });
+      return rotations ? rotations(bearingDeg) : (bearingDeg * Math.PI) / 180;
+    },
   });
   layer.init(viewer);
   return {
@@ -180,6 +199,7 @@ function build({ stations, snapshotOverrides, fail } = {}) {
     viewer,
     overlayHost,
     source,
+    projected,
     dataSource: viewer.dataSources.added[0],
     serve(next) {
       served = next;
@@ -654,4 +674,174 @@ test('with every network reachable the status stays quiet', async () => {
   const { summary } = layer.getRowControls();
   assert.equal(summary.status, null);
   assert.match(summary.detail, /SLF IMIS/);
+});
+
+test('the wind view draws arrows, and every other view draws dots', async () => {
+  const { layer, dataSource } = build();
+  layer.enable();
+  await layer.update();
+  const [entity] = dataSource.entities.values;
+  assert.ok(entity.billboard, 'the wind view gives a station a billboard');
+  assert.equal(entity.billboard.show, true);
+  assert.equal(entity.point.show, false, 'and hides its dot');
+  assert.equal(entity.billboard.image, 'data:image/png;base64,ARROW');
+
+  layer.setParams({ parameter: 'temperature' });
+  assert.equal(entity.billboard.show, false, 'temperature has no direction');
+  assert.equal(entity.point.show, true);
+  assert.equal(
+    dataSource.entities.values.length,
+    1,
+    'and swapping the symbol never replaces the entity',
+  );
+  assert.equal(dataSource.entities.values[0], entity);
+});
+
+test('the arrow points where the wind is GOING, not where it comes from', async () => {
+  // All three networks publish the direction the wind blows FROM, per the WMO
+  // convention. The label keeps that reading; the arrow is its reverse.
+  const { layer, projected } = build({
+    stations: [station({ windDirDeg: 270, windSpeedMs: 6 })],
+  });
+  layer.enable();
+  await layer.update();
+  assert.ok(projected.length);
+  assert.equal(projected.at(-1).bearingDeg, 90, 'wind FROM the west blows east');
+});
+
+test('a station with no vane, or calm air, stays a dot', async () => {
+  // Pointing an arrow with a vane in still air would assert a direction the
+  // station never really measured.
+  const { layer, dataSource } = build({
+    stations: [
+      station({ code: 'NOVANE', id: `${SLF_NETWORK_ID}:NOVANE`, windDirDeg: null }),
+      station({ code: 'CALM', id: `${SLF_NETWORK_ID}:CALM`, windSpeedMs: 0.1 }),
+      station({ code: 'BLOWING', id: `${SLF_NETWORK_ID}:BLOWING` }),
+    ],
+  });
+  layer.enable();
+  await layer.update();
+  const byId = Object.fromEntries(
+    dataSource.entities.values.map((entity) => [entity.id, entity]),
+  );
+  for (const code of ['NOVANE', 'CALM']) {
+    const entity = byId[`alpine-station:${SLF_NETWORK_ID}:${code}`];
+    assert.ok(!entity.billboard?.show, `${code} should stay a dot`);
+    assert.equal(entity.point.show, true, code);
+  }
+  const blowing = byId[`alpine-station:${SLF_NETWORK_ID}:BLOWING`];
+  assert.equal(blowing.billboard.show, true);
+});
+
+test('a silent or stale station never gets an arrow', async () => {
+  const { layer, dataSource } = build({
+    stations: [
+      station({
+        code: 'STALE',
+        id: `${SLF_NETWORK_ID}:STALE`,
+        measuredAt: new Date(NOW - 7 * 24 * 60 * 60_000).toISOString(),
+      }),
+    ],
+  });
+  layer.enable();
+  await layer.update();
+  const [entity] = dataSource.entities.values;
+  assert.ok(!entity.billboard?.show);
+  assert.equal(entity.point.show, true);
+});
+
+test('arrows are re-aimed when the camera settles, touching no geometry', async () => {
+  // A billboard is a camera-facing quad, so a world bearing is resolved in
+  // screen space and therefore depends on the camera. Re-aiming writes one
+  // number per arrow; it must not create, destroy or re-tessellate anything.
+  let heading = 0;
+  const { layer, viewer, dataSource, projected } = build({
+    rotations: (bearingDeg) => ((bearingDeg + heading) * Math.PI) / 180,
+  });
+  layer.enable();
+  await layer.update();
+  const [entity] = dataSource.entities.values;
+  const first = entity.billboard.rotation;
+  const drawn = projected.length;
+
+  heading = 90;
+  viewer.setCentre(47.5, 13.0);
+  viewer.moveEnd();
+  assert.ok(projected.length > drawn, 'the settle re-projected the bearing');
+  assert.notEqual(entity.billboard.rotation, first, 'and turned the arrow');
+  assert.equal(dataSource.entities.values.length, 1);
+  assert.equal(dataSource.entities.values[0], entity, 'the same entity object');
+  assert.ok(entity.billboard, 'with the same billboard');
+});
+
+test('a settle that does not move the arrow leaves it alone', async () => {
+  // Sub-degree projection noise must not jitter 600 arrows against their own
+  // rounding on every settle.
+  const { layer, viewer, dataSource } = build();
+  layer.enable();
+  await layer.update();
+  const [entity] = dataSource.entities.values;
+  const before = entity.billboard.rotation;
+  viewer.moveEnd();
+  assert.equal(entity.billboard.rotation, before);
+});
+
+test('an arrow carries the same band colour and grows with the reading', async () => {
+  const { layer, dataSource } = build({
+    stations: [
+      station({ code: 'LIGHT', id: `${SLF_NETWORK_ID}:LIGHT`, windSpeedMs: 2 }),
+      station({ code: 'STORM', id: `${SLF_NETWORK_ID}:STORM`, windSpeedMs: 25 }),
+    ],
+  });
+  layer.enable();
+  await layer.update();
+  const [light, storm] = dataSource.entities.values;
+  assert.ok(storm.billboard.width > light.billboard.width);
+  assert.notEqual(storm.billboard.color.css, light.billboard.color.css);
+  assert.equal(storm.billboard.alignedAxis, 'zero', 'never an aligned axis');
+});
+
+test('without a canvas the layer falls back to dots rather than failing', async () => {
+  // Server-side rendering and headless harnesses have no document.
+  const overlayHost = fakeOverlayHost();
+  const layer = createAlpineStationsLayer({
+    source: { async getSnapshot() { return snapshot(); } },
+    overlayHost,
+    cesium: fakeCesium(),
+    now: () => NOW,
+    arrowImage: () => null,
+    projectRotation: () => 0,
+  });
+  const viewer = fakeViewer();
+  layer.init(viewer);
+  layer.enable();
+  await layer.update();
+  const [entity] = viewer.dataSources.added[0].entities.values;
+  assert.equal(entity.billboard, undefined);
+  assert.equal(entity.point.show, true);
+});
+
+test('an arrow is aimed with its cartesian, never with its position property', () => {
+  // Cesium wraps an entity position in a PositionProperty. Handing one to the
+  // screen projection yields no rotation at all, and the arrows then sit at a
+  // fixed screen angle that looks plausible and means nothing.
+  const { layer, projected, dataSource } = build();
+  layer.enable();
+  return layer.update().then(() => {
+    assert.ok(projected.length, 'the arrow was aimed');
+    const [entity] = dataSource.entities.values;
+    assert.ok(
+      entity.position.isPositionProperty,
+      'the fixture must model Cesium wrapping the position',
+    );
+    for (const call of projected) {
+      assert.ok(call.position, 'a position was passed');
+      assert.ok(
+        !call.position.isPositionProperty,
+        'but it must be the cartesian, not the property',
+      );
+      assert.equal(call.position.lat, 46.0);
+      assert.equal(call.position.lon, 7.75);
+    }
+  });
 });

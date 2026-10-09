@@ -423,7 +423,12 @@ down never blanks the others.
 
 Markers are static point geometry coloured by one selected measurement — wind,
 temperature, snow depth, precipitation or pressure — with size carrying distance
-from an ordinary reading. There is no per-frame animator and no continuous-render
+from an ordinary reading. In the wind view a station with a current reading, a
+working vane and air actually moving draws an arrowhead instead, pointing where
+the wind is going; the networks publish the direction it blows from, which the
+card and label keep. Arrow orientation is a screen-projected rotation with
+alignedAxis zero, following the flight and vessel layers, re-aimed on camera
+settle rather than per frame. There is no per-frame animator and no continuous-render
 hold; a parameter change retints the existing entities rather than rebuilding
 them, and the camera is read only on settle, only to refresh the card's nearest
 list. The WEATHER rail card carries the readings, the legend, the parameter

@@ -35,6 +35,22 @@ export const ALPINE_OVERLAY_COLLISION_CAPACITY = 48;
 export const MARKER_MIN_PX = 6;
 export const MARKER_MAX_PX = 15;
 
+/**
+ * Wind arrows run larger than the dots they replace: a head has to show its
+ * direction, which a disc of the same area does not have to do.
+ */
+export const ARROW_MIN_PX = 16;
+export const ARROW_MAX_PX = 30;
+
+/**
+ * Below this the arrow is dropped and the station draws as a dot.
+ *
+ * A vane in still air is reporting noise, and pointing an arrow with it would
+ * assert a direction the station never really measured. 2 km/h is inside the
+ * reporting resolution of all three networks.
+ */
+export const WIND_ARROW_CALM_FLOOR_MS = 0.6;
+
 /** A station that is reporting, but not the parameter currently selected. */
 export const UNMEASURED_ACCENT = '#55636d';
 
@@ -98,6 +114,32 @@ export function stationLabel(station, view, marker) {
   if (view.id !== 'wind') return text;
   const compass = windCompass(station.windDirDeg);
   return compass ? `${text} ${compass}` : text;
+}
+
+/**
+ * How a station's wind arrow draws, or null when it should stay a dot.
+ *
+ * `bearingDeg` is where the wind is GOING. Every one of these networks
+ * publishes the direction the wind blows FROM, per the WMO convention, so the
+ * arrow is the reverse of the published figure; the card and the label keep
+ * the meteorological reading ("22 km/h W" is wind FROM the west).
+ *
+ * Four things must all hold, and each omission is deliberate: this is the wind
+ * view, the station has a current reading, it has a working vane, and the air
+ * is actually moving.
+ */
+export function stationArrow(station, view, marker) {
+  if (view.id !== 'wind' || marker.state !== 'value') return null;
+  if (!Number.isFinite(station?.windDirDeg)) return null;
+  if (!Number.isFinite(station.windSpeedMs)) return null;
+  if (station.windSpeedMs < WIND_ARROW_CALM_FLOOR_MS) return null;
+  return {
+    bearingDeg: (station.windDirDeg + 180) % 360,
+    pixelSize: Math.round(
+      ARROW_MIN_PX +
+        parameterProminence(marker.value, view) * (ARROW_MAX_PX - ARROW_MIN_PX),
+    ),
+  };
 }
 
 /**

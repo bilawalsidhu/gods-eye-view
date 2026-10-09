@@ -28,9 +28,15 @@ import {
   createStationOverlayEntry,
   mapAnalystRecord,
   selectOverlayCohort,
+  stationArrow,
   stationLabel,
   stationMarker,
 } from './model.js';
+import { windArrowImage } from './windArrow.js';
+import {
+  screenProjectedRotation,
+  stabilizeScreenRotation,
+} from '../../data/iconOrientation.js';
 export * from './model.js';
 export * from './networks.js';
 export * from './parameters.js';
@@ -65,6 +71,10 @@ export function createAlpineStationsLayer({
   overlayHost,
   cesium = Cesium,
   now = () => Date.now(),
+  // Both need a browser: one a canvas, the other a live Scene. Injected so the
+  // layer is drivable under `node --test` without either.
+  arrowImage = windArrowImage,
+  projectRotation = screenProjectedRotation,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Alpine stations require a snapshot source');
@@ -86,6 +96,8 @@ export function createAlpineStationsLayer({
   let removeMoveEnd = null;
   let nearestIds = '';
   const entities = new Map();
+  /** Station id to its wind arrow's world bearing and last drawn rotation. */
+  const arrows = new Map();
 
   const view = () => parameterView(parameterId);
   const stations = () => snapshot?.stations ?? [];
@@ -121,12 +133,48 @@ export function createAlpineStationsLayer({
    */
   function refreshNearest() {
     if (!enabled || destroyed) return;
+    aimArrows();
     const next = nearest()
       .map(({ station }) => station.id)
       .join(',');
     if (next === nearestIds) return;
     nearestIds = next;
     notify();
+  }
+
+  /**
+   * Point the wind arrows at their real-world bearings.
+   *
+   * A billboard is a camera-facing quad, so a world bearing has to be resolved
+   * in SCREEN space, which means it depends on where the camera is. This is
+   * the repo's established way of doing that: `alignedAxis: Cartesian3.ZERO`
+   * with a screen-projected `rotation`, as the flight and vessel layers do.
+   *
+   * It runs on camera settle, never per frame. Nothing is created, destroyed
+   * or re-tessellated here — it writes one number per visible arrow — so the
+   * layer still builds no geometry in response to the camera and still takes
+   * no continuous-render hold.
+   */
+  function aimArrows() {
+    if (!arrows.size || !viewer?.scene) return;
+    for (const [id, arrow] of arrows) {
+      const entity = entities.get(id);
+      if (!entity?.billboard) continue;
+      const next = projectRotation(
+        viewer.scene,
+        // The CARTESIAN, not `entity.position`: that is a PositionProperty,
+        // and handing one to the projection silently yields no rotation.
+        arrow.position,
+        arrow.bearingDeg,
+        arrow.rotation,
+      );
+      // Hold through sub-degree projection noise so a settled camera does not
+      // jitter 600 arrows against their own rounding.
+      const stable = stabilizeScreenRotation(arrow.rotation, next);
+      if (stable === null || stable === arrow.rotation) continue;
+      arrow.rotation = stable;
+      entity.billboard.rotation = stable;
+    }
   }
 
   /** Write the marker and ambient label for every station. */
@@ -136,9 +184,14 @@ export function createAlpineStationsLayer({
     const clock = now();
     const overlayEntries = [];
     const seen = new Set();
+    // Pruned after the pass rather than cleared before it: a redraw must keep
+    // each arrow's last drawn rotation, which is what the stabiliser compares
+    // against to hold through sub-degree projection noise.
+    const aimed = new Set();
     for (const station of stations()) {
       const marker = stationMarker(station, current, { now: clock });
       const color = cesium.Color.fromCssColorString(marker.accent);
+      const arrow = stationArrow(station, current, marker);
       let entity = entities.get(station.id);
       const position = cesium.Cartesian3.fromDegrees(station.lon, station.lat);
       if (!entity) {
@@ -165,6 +218,17 @@ export function createAlpineStationsLayer({
         entity.point.pixelSize = marker.pixelSize;
         entity.point.color = color;
       }
+      // A station carries both graphics and shows one, so switching parameter
+      // swaps the symbol without replacing the entity.
+      // The dot follows whether an arrow was actually attached, not whether
+      // one was wanted: without a canvas there is no arrow image, and a
+      // station must never end up with neither symbol.
+      const drawnArrow = arrow
+        ? addArrow(entity, station, arrow, color, position)
+        : false;
+      if (drawnArrow) aimed.add(station.id);
+      else if (entity.billboard) entity.billboard.show = false;
+      entity.point.show = !drawnArrow;
       seen.add(station.id);
       const title = stationLabel(station, current, marker);
       if (title) {
@@ -184,6 +248,7 @@ export function createAlpineStationsLayer({
       dataSource.entities.remove(entity);
       entities.delete(id);
     }
+    for (const id of arrows.keys()) if (!aimed.has(id)) arrows.delete(id);
     overlayHost.setEntries(
       ALPINE_OVERLAY_SOURCE_ID,
       selectOverlayCohort(overlayEntries),
@@ -193,6 +258,43 @@ export function createAlpineStationsLayer({
         moving: false,
       },
     );
+    aimArrows();
+  }
+
+  /**
+   * Attach or update one station's wind arrow, creating it on first use.
+   *
+   * @returns {boolean} Whether the station now has an arrow to show.
+   */
+  function addArrow(entity, station, arrow, color, position) {
+    const image = arrowImage();
+    if (!image) return false;
+    const held = arrows.get(station.id);
+    arrows.set(station.id, {
+      bearingDeg: arrow.bearingDeg,
+      position,
+      rotation: held?.rotation ?? null,
+    });
+    if (!entity.billboard) {
+      entity.billboard = new cesium.BillboardGraphics({
+        image,
+        width: arrow.pixelSize,
+        height: arrow.pixelSize,
+        color,
+        // The repo orients icons with a screen-projected rotation, never with
+        // alignedAxis; see src/data/iconOrientation.js for why.
+        alignedAxis: cesium.Cartesian3.ZERO,
+        rotation: 0,
+        heightReference: cesium.HeightReference.CLAMP_TO_GROUND,
+        disableDepthTestDistance: 0,
+      });
+      return true;
+    }
+    entity.billboard.show = true;
+    entity.billboard.width = arrow.pixelSize;
+    entity.billboard.height = arrow.pixelSize;
+    entity.billboard.color = color;
+    return true;
   }
 
   /**
@@ -264,6 +366,7 @@ export function createAlpineStationsLayer({
       removeMoveEnd?.();
       removeMoveEnd = null;
       nearestIds = '';
+      arrows.clear();
       if (dataSource) dataSource.show = false;
       overlayHost.clearSource(ALPINE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(ALPINE_OVERLAY_SOURCE_ID, false);
@@ -513,6 +616,7 @@ export function createAlpineStationsLayer({
       overlayHost.clearSource(ALPINE_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(ALPINE_OVERLAY_SOURCE_ID, false);
       entities.clear();
+      arrows.clear();
       if (dataSource) {
         target?.dataSources?.remove(dataSource, true);
         dataSource = null;

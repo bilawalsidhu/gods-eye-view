@@ -202,6 +202,57 @@ The camera is read only on `moveEnd`, and only to recompute the card's six-row
 against the old and publishes nothing when it has not changed, so panning within
 one valley does not rewrite the rail on every gesture.
 
+### Wind arrows
+
+In the wind view a station that has something to say about direction draws an
+arrowhead instead of a dot. Four things must all hold, and each omission is
+deliberate: this is the wind view, the station has a current reading, it has a
+working vane, and the air is actually moving above `WIND_ARROW_CALM_FLOOR_MS`.
+A vane in still air is reporting noise, and pointing an arrow with it would
+assert a direction the station never really measured.
+
+**The arrow points downwind.** All three networks publish the direction the
+wind blows FROM, per the WMO convention, so the arrow is the reverse of the
+published figure. The card and the ambient label keep the meteorological
+reading: "22 km/h W" is wind FROM the west, drawn as an arrow pointing east.
+
+**Orientation is screen-space, and that is not optional.** A billboard is a
+camera-facing quad, so a world bearing has to be resolved against the camera.
+This follows the repo's established approach — `alignedAxis: Cartesian3.ZERO`
+with a `rotation` from `screenProjectedRotation`, as the flight and vessel
+layers do. Do NOT reach for `alignedAxis`: `src/data/iconOrientation.js`
+records why that approach was abandoned.
+
+Two consequences worth knowing:
+
+- Arrows are re-aimed on camera **settle**, never per frame. Re-aiming writes
+  one number per visible arrow; it creates, destroys and re-tessellates
+  nothing, so the layer still builds no geometry in response to the camera and
+  still takes no continuous-render hold. `stabilizeScreenRotation` holds
+  through sub-degree projection noise so a settled camera does not jitter
+  hundreds of arrows against their own rounding.
+- **Aim with the cartesian, not `entity.position`.** Cesium wraps an entity
+  position in a `PositionProperty`, and handing one to the projection yields
+  no rotation at all — the arrows then sit at a fixed screen angle that looks
+  plausible and means nothing. This shipped briefly and was caught by the
+  browser gate, not by unit tests, because the test fixture was handing back a
+  plain cartesian where Cesium hands back a property. The fixture now models
+  the wrapper and a test pins it.
+
+A station carries BOTH a `point` and a `billboard` and shows one, so switching
+parameter swaps the symbol without replacing the entity. The dot follows
+whether an arrow was actually attached rather than whether one was wanted:
+without a canvas there is no arrow image, and a station must never end up with
+neither symbol.
+
+The arrow texture is a memoised data URL, not a canvas. `Billboard.image`
+assigns a fresh texture-atlas id to every non-string source, so handing the
+same canvas to hundreds of billboards still makes Cesium upload and repack
+hundreds of identical textures; `cockpitContactDotImage` records the same
+finding. One white arrowhead is tinted per station through `billboard.color`.
+
+### Ambient labels
+
 Ambient overlay entries are `variant: 'label'` carrying just the reading
 (`"22 km/h W"`, `"-3.5 °C"`). One `variant: 'card'` per station was the first
 cut of this on the earlier branch and it buried the map: at Alpine zoom the

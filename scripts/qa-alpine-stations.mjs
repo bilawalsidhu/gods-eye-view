@@ -213,6 +213,17 @@ try {
         sizes: entities
           .slice(0, 40)
           .map((entity) => valueOf(entity.point?.pixelSize) ?? null),
+        // Arrow state: a billboard that is shown, its screen rotation, and
+        // whether the dot it replaced is correctly hidden.
+        arrows: entities
+          .slice(0, 60)
+          .filter((entity) => valueOf(entity.billboard?.show) === true)
+          .map((entity) => ({
+            id: entity.id,
+            rotation: valueOf(entity.billboard.rotation) ?? null,
+            width: valueOf(entity.billboard.width) ?? null,
+            pointShown: valueOf(entity.point?.show) !== false,
+          })),
         legend: controls?.legend?.length ?? 0,
         listItems: controls?.list?.items?.map((item) => item.id) ?? [],
         status: controls?.summary?.status ?? null,
@@ -359,7 +370,81 @@ try {
   await sleep(600);
   await page.screenshot({ path: path.join(outDir, '03-temperature.png') });
 
-  // 5. Selecting a station from the list, and clearing it.
+  // 5. Wind arrows: shown only in the wind view, and actually turned to a
+  //    world bearing rather than left at a fixed screen angle.
+  await clickChip('wind');
+  await sleep(900);
+  const windView = await readState(LAYER);
+  check(
+    'the wind view draws arrows',
+    windView.arrows.length > 10,
+    `${windView.arrows.length} arrows in a 60-marker sample of ${windView.entityCount}`,
+  );
+  check(
+    'an arrow hides the dot it replaces',
+    windView.arrows.every((arrow) => !arrow.pointShown),
+  );
+  check(
+    'arrows carry a real screen rotation, not a default of zero',
+    windView.arrows.some((arrow) => Number.isFinite(arrow.rotation) && arrow.rotation !== 0),
+    `rotations: ${windView.arrows.slice(0, 3).map((arrow) => arrow.rotation?.toFixed(3)).join(', ')}`,
+  );
+  check(
+    'arrows point in different directions, as a wind field does',
+    new Set(windView.arrows.map((arrow) => arrow.rotation?.toFixed(2))).size > 2,
+  );
+  await page.screenshot({ path: path.join(outDir, '05-wind-arrows.png') });
+
+  // Rotating the camera must turn the arrows, because a billboard is a
+  // camera-facing quad and the bearing is resolved in screen space.
+  const beforeTurn = new Map(
+    windView.arrows.map((arrow) => [arrow.id, arrow.rotation]),
+  );
+  await page.evaluate(() => {
+    const { viewer } = window.__godsEyeView;
+    const d2r = Math.PI / 180;
+    viewer.camera.cancelFlight();
+    viewer.camera.setView({
+      destination: viewer.camera.positionWC.clone(),
+      orientation: { heading: 90 * d2r, pitch: -90 * d2r, roll: 0 },
+    });
+  });
+  await sleep(1800);
+  const turned = await readState(LAYER);
+  const moved = turned.arrows.filter(
+    (arrow) =>
+      beforeTurn.has(arrow.id) && beforeTurn.get(arrow.id) !== arrow.rotation,
+  );
+  check(
+    'turning the camera re-aims the arrows',
+    moved.length > 0,
+    `${moved.length} of ${turned.arrows.length} arrows turned`,
+  );
+  check(
+    'and re-aiming rebuilt no geometry',
+    turned.entityCount === windView.entityCount &&
+      JSON.stringify(turned.entityIds) === JSON.stringify(windView.entityIds),
+  );
+  check(
+    're-aiming took no continuous render hold',
+    !turned.renderHolds || !JSON.stringify(turned.renderHolds).includes(LAYER),
+    JSON.stringify(turned.renderHolds),
+  );
+
+  // Switching away from wind must put the dots back.
+  await clickChip('snow');
+  await sleep(800);
+  const snowView = await readState(LAYER);
+  check(
+    'leaving the wind view puts the dots back',
+    snowView.arrows.length === 0 && snowView.entityCount === windView.entityCount,
+    `${snowView.arrows.length} arrows remain`,
+  );
+
+  await clickChip('wind');
+  await sleep(700);
+
+  // 6. Selecting a station from the list, and clearing it.
   const selected = await page.evaluate((id) => {
     const row = document.querySelector(
       `[data-card-id="${id}"] [data-block-id="stations"] .data-row-list-item`,
@@ -383,7 +468,7 @@ try {
   const afterClear = await readState(LAYER);
   check('and the selection can be cleared', cleared && !afterClear.hasResult);
 
-  // 6. Settling the camera refreshes the list without touching geometry.
+  // 7. Settling the camera refreshes the list without touching geometry.
   const beforeMove = await readState(LAYER);
   await flyTo(13.0, 47.3, 60_000);
   await sleep(2500);
@@ -407,7 +492,7 @@ try {
   );
   await page.screenshot({ path: path.join(outDir, '04-austria.png') });
 
-  // 7. The attribution is on screen, because CC BY is a licence condition.
+  // 8. The attribution is on screen, because CC BY is a licence condition.
   const credits = await page.evaluate(() => {
     const lightbox = document.querySelector('.cesium-credit-lightbox');
     document.querySelector('.cesium-credit-expand-link')?.click();
@@ -416,7 +501,7 @@ try {
   for (const operator of ['SLF', 'MeteoSwiss', 'GeoSphere Austria'])
     check(`${operator} is credited in the app`, credits.includes(operator));
 
-  // 8. Disabling releases everything.
+  // 9. Disabling releases everything.
   await page.evaluate((id) => {
     document.querySelector(`[data-layer-id="${id}"] .data-toggle-btn`)?.click();
   }, LAYER);

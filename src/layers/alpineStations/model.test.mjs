@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ARROW_MAX_PX,
+  ARROW_MIN_PX,
+  WIND_ARROW_CALM_FLOOR_MS,
+  stationArrow,
   ALPINE_OVERLAY_COHORT_LIMIT,
   ALPINE_OVERLAY_MAX_DISTANCE_M,
   ALPINE_OVERLAY_SOURCE_ID,
@@ -193,4 +197,77 @@ test('an analyst record carries plain values and an epoch-ms time', () => {
   );
   const silent = mapAnalystRecord(station({ measuredAt: null }));
   assert.equal(silent.measuredAtMs, null);
+});
+
+test('an arrow points downwind, because the networks publish the upwind bearing', () => {
+  // All three follow the WMO convention: the published figure is the direction
+  // the wind blows FROM. The card and the label keep that reading.
+  const wind = parameterView('wind');
+  const arrowFor = (overrides) => {
+    const record = station(overrides);
+    return stationArrow(record, wind, stationMarker(record, wind, { now: NOW }));
+  };
+  assert.equal(arrowFor({ windDirDeg: 270 }).bearingDeg, 90, 'from W, blows E');
+  assert.equal(arrowFor({ windDirDeg: 0 }).bearingDeg, 180, 'from N, blows S');
+  assert.equal(arrowFor({ windDirDeg: 180 }).bearingDeg, 0, 'from S, blows N');
+  assert.equal(arrowFor({ windDirDeg: 359 }).bearingDeg, 179);
+  for (const degrees of [0, 45, 90, 135, 180, 225, 270, 315, 359]) {
+    const bearing = arrowFor({ windDirDeg: degrees }).bearingDeg;
+    assert.ok(bearing >= 0 && bearing < 360, `${degrees} -> ${bearing}`);
+  }
+});
+
+test('only the wind view draws arrows', () => {
+  for (const id of ['temperature', 'snow', 'precipitation', 'pressure']) {
+    const view = parameterView(id);
+    const record = station();
+    assert.equal(
+      stationArrow(record, view, stationMarker(record, view, { now: NOW })),
+      null,
+      id,
+    );
+  }
+});
+
+test('an arrow is withheld without a current reading, a vane or moving air', () => {
+  // Each omission asserts nothing: a vane in still air is reporting noise, and
+  // pointing an arrow with it would claim a direction never really measured.
+  const wind = parameterView('wind');
+  const arrowFor = (overrides) => {
+    const record = station(overrides);
+    return stationArrow(record, wind, stationMarker(record, wind, { now: NOW }));
+  };
+  assert.equal(arrowFor({ windDirDeg: null }), null, 'no vane');
+  assert.equal(arrowFor({ windSpeedMs: null }), null, 'no anemometer');
+  assert.equal(arrowFor({ windSpeedMs: 0 }), null, 'dead calm');
+  assert.equal(
+    arrowFor({ windSpeedMs: WIND_ARROW_CALM_FLOOR_MS - 0.01 }),
+    null,
+    'below the calm floor',
+  );
+  assert.ok(arrowFor({ windSpeedMs: WIND_ARROW_CALM_FLOOR_MS }), 'at the floor');
+  assert.equal(
+    arrowFor({
+      measuredAt: new Date(NOW - 7 * 24 * 60 * 60_000).toISOString(),
+    }),
+    null,
+    'a stale reading is not a current direction',
+  );
+});
+
+test('arrow size stays within its bounds and grows with the wind', () => {
+  const wind = parameterView('wind');
+  const sizeFor = (windSpeedMs) => {
+    const record = station({ windSpeedMs });
+    return stationArrow(record, wind, stationMarker(record, wind, { now: NOW }))
+      .pixelSize;
+  };
+  const light = sizeFor(2);
+  const storm = sizeFor(30);
+  assert.ok(storm > light);
+  for (const speed of [1, 5, 15, 30, 200]) {
+    const size = sizeFor(speed);
+    assert.ok(size >= ARROW_MIN_PX && size <= ARROW_MAX_PX, `${speed} -> ${size}`);
+  }
+  assert.ok(ARROW_MIN_PX > MARKER_MAX_PX - 5, 'an arrow reads larger than a dot');
 });
