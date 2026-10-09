@@ -19,6 +19,7 @@ import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
  *
  * Routes:
  *   GET /api/firms        → {fetchedAt, stale, ttlMs, sources, count, fires}
+ *                           with a weak ETag; a matching If-None-Match → 304
  *   GET /api/firms/status → {hasKey, lastFetch, count, stale, ttlMs, transactions}
  *
  * Keyless (no FIRMS_MAP_KEY): /api/firms → 503 {error:'no_key'}; status →
@@ -121,6 +122,17 @@ export function firmsProxy() {
   }
 
   /**
+   * Weak validator naming the cache entry a payload was built from, not the
+   * rows the trailing window keeps: that set shrinks between polls (measured
+   * on 3/3 ten-minute polls of a live snapshot), so a validator over it would
+   * almost never match. A client that sends this back is answered 304 and
+   * applies the same trailing window to the rows it already holds.
+   */
+  function snapshotTag(entry, stale) {
+    return `W/"firms-${entry.at}-${stale ? 's' : 'f'}"`;
+  }
+
+  /**
    * Cache entry → response payload. Fires are RE-filtered to the trailing
    * 24 h at serve time so a stale cache never serves >24h-old detections.
    */
@@ -175,13 +187,26 @@ export function firmsProxy() {
 
   const installMiddleware = (server) => {
     server.middlewares.use('/api/firms', async (req, res) => {
-      const sendJson = (status, obj) => {
+      const sendJson = (status, obj, headers = {}) => {
         if (res.headersSent) return;
         res.writeHead(status, {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store',
+          ...headers,
         });
         res.end(JSON.stringify(obj));
+      };
+      // ~40 MB of JSON for a worldwide snapshot: skip building it when the
+      // client already holds this entry.
+      const sendSnapshot = (entry, stale) => {
+        if (res.headersSent) return;
+        const tag = snapshotTag(entry, stale);
+        if (req.headers?.['if-none-match'] === tag) {
+          res.writeHead(304, { ETag: tag, 'Cache-Control': 'no-store' });
+          res.end();
+          return;
+        }
+        sendJson(200, buildPayload(entry, stale), { ETag: tag });
       };
       try {
         const subPath = String(req.url || '').split('?')[0];
@@ -219,7 +244,7 @@ export function firmsProxy() {
 
         const entry = mem;
         if (entry && Date.now() - entry.at < TTL_MS) {
-          sendJson(200, buildPayload(entry, false));
+          sendSnapshot(entry, false);
           return;
         }
         // Stale or missing → refresh, single-flight (concurrent requests
@@ -245,9 +270,9 @@ export function firmsProxy() {
         const pending = inflight;
         const fresh = await pending;
         if (fresh) {
-          sendJson(200, buildPayload(fresh, false));
+          sendSnapshot(fresh, false);
         } else if (entry) {
-          sendJson(200, buildPayload(entry, true)); // upstream down — stale beats empty
+          sendSnapshot(entry, true); // upstream down — stale beats empty
         } else {
           sendJson(502, {
             error: 'firms fetch failed and no cache available',

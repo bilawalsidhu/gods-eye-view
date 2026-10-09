@@ -1,5 +1,12 @@
 # Changelog
 
+- Active Fires no longer re-downloads the worldwide snapshot (~40 MB, ~200k
+  detections) on every 10-minute poll. `/api/firms` sends an `ETag` naming its
+  cached snapshot and answers a matching `If-None-Match` with an empty `304`;
+  the layer then keeps its records and drops only detections that aged past
+  24 hours. Unchanged polls fell from 258–293 ms (with ~150 ms of main-thread
+  long tasks) to 4–72 ms in Chrome. Tool callers still get the full snapshot.
+
 - Vector tile sources take their allowed tile origin from the configured
   `tileJsonUrl`, so repointing only that URL at a mirror loads tiles from the
   mirror or fails visibly instead of silently using OpenFreeMap. Thanks to

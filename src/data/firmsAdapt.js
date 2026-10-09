@@ -6,6 +6,12 @@
  * swap (2026-07-16).
  */
 
+// The proxy's trailing window (firmsCsv.js filterTrailing24h), restated so
+// the fire-layer package does not own the CSV parser. firmsAdapt.test.mjs
+// pins equality with the proxy's filter.
+const WINDOW_MS = 24 * 3600_000;
+const FORWARD_SLACK_MS = 2 * 3600_000;
+
 /**
  * Map proxy fire records into internal fire records. Records with
  * non-finite coordinates are skipped; `index` is the post-skip position
@@ -38,6 +44,44 @@ export function adaptFirmsRecords(records) {
     });
   }
   return fires;
+}
+
+/**
+ * Drop held records that have left the live window, as a poll answered "not
+ * modified" would otherwise leave them on the globe. Equals adapting a full
+ * refetch at `nowMs`: survivors keep their order and are renumbered, and the
+ * FRP view keeps its order without a re-sort. Survivors are fresh objects so
+ * the lazily filled `contextEntity`/`position` are rebuilt for the new index.
+ * @param {Array<Object>} fires - Held internal records, index order.
+ * @param {Array<Object>} firesByFrp - The same records, strongest first.
+ * @param {number} nowMs - Reference epoch milliseconds.
+ * @returns {?{fires: Array<Object>, firesByFrp: Array<Object>}} Null when
+ *   every record is still live.
+ */
+export function expireFirmsRecords(fires, firesByFrp, nowMs) {
+  const oldest = nowMs - WINDOW_MS;
+  const newest = nowMs + FORWARD_SLACK_MS;
+  const live = (fire) => fire.acqMs >= oldest && fire.acqMs <= newest;
+  if (fires.every(live)) return null;
+  const renumbered = new Map();
+  const kept = [];
+  for (const fire of fires) {
+    if (!live(fire)) continue;
+    const copy = {
+      ...fire,
+      index: kept.length,
+      contextEntity: null,
+      position: null,
+    };
+    renumbered.set(fire, copy);
+    kept.push(copy);
+  }
+  const keptByFrp = [];
+  for (const fire of firesByFrp) {
+    const copy = renumbered.get(fire);
+    if (copy) keptByFrp.push(copy);
+  }
+  return { fires: kept, firesByFrp: keptByFrp };
 }
 
 /**

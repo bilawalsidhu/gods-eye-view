@@ -79,6 +79,9 @@ function harness({
       canvas: { clientWidth: 1280, clientHeight: 800 },
       camera: cameraPosition ? { positionWC: cameraPosition } : undefined,
       globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
+      // Without it every refresh threw inside the LOD rebuild and was
+      // reported as "live feed unavailable".
+      primitives: { add: (primitive) => primitive, remove: () => true, raiseToTop() {} },
     },
     dataSources: { add() {}, remove() {} },
   };
@@ -367,4 +370,107 @@ test('disable cancels a pending source and a late response cannot repopulate the
     assert.equal(h.layer.getStats().lastUpdate, before.lastUpdate);
     assert.equal(h.layer.getStats().loading, false);
   } finally { h.layer.destroy(h.viewer); h.cleanup(); }
+});
+
+// ── Unchanged-snapshot polls ─────────────────────────────────────────────────
+// A worldwide snapshot is ~200k detections and ~40 MB; the proxy refreshes it
+// every 30 min while the layer polls every 10. The layer offers the validator
+// of what it holds, and on "not modified" keeps its records, expiring only
+// the detections that have aged out of the trailing 24 h.
+
+function proxyRow(acquiredMs, overrides = {}) {
+  const at = new Date(acquiredMs);
+  return {
+    lat: 30.51, lon: -98.21, frp: 12, confidence: 'h', brightness: 330,
+    daynight: 'D', acqDate: at.toISOString().slice(0, 10),
+    acqTime: String(at.getUTCHours() * 100 + at.getUTCMinutes()),
+    satellite: 'N21', instrument: 'VIIRS', ...overrides,
+  };
+}
+
+function scriptedFeed(responses) {
+  const calls = [];
+  return {
+    calls,
+    getSnapshot(options) {
+      calls.push(options);
+      return Promise.resolve(responses.shift());
+    },
+  };
+}
+
+test('an unchanged poll offers the held validator and keeps the held fires', async () => {
+  const hour = Date.UTC(2026, 8, 11, 12);
+  const feed = scriptedFeed([
+    { fires: [proxyRow(hour - 3600_000), proxyRow(hour - 7200_000, { lat: 31 })],
+      fetchedAt: hour - 60_000, stale: false, etag: 'W/"firms-1-f"' },
+    { notModified: true },
+  ]);
+  const priorNow = Date.now;
+  Date.now = () => hour;
+  const h = harness({ withDataSource: true, feed });
+  try {
+    await h.layer.update();
+    const loaded = h.layer.getStats();
+    assert.equal(loaded.count, 2);
+    assert.equal(feed.calls[0].etag ?? null, null, 'nothing held yet, nothing to offer');
+
+    await h.layer.update();
+    assert.equal(feed.calls[1].etag, 'W/"firms-1-f"');
+    const after = h.layer.getStats();
+    assert.equal(after.count, 2);
+    assert.equal(after.lastUpdate, loaded.lastUpdate, 'still the same snapshot');
+    assert.equal(after.error, null);
+  } finally {
+    Date.now = priorNow;
+    h.layer.destroy(h.viewer);
+    h.cleanup();
+  }
+});
+
+test('an unchanged poll still drops detections that aged past 24 hours', async () => {
+  const start = Date.UTC(2026, 8, 11, 12);
+  let clock = start;
+  const feed = scriptedFeed([
+    { fires: [proxyRow(start - 24 * 3600_000 + 5 * 60_000), proxyRow(start - 3600_000, { lat: 31 })],
+      fetchedAt: start, stale: false, etag: 'W/"firms-1-f"' },
+    { notModified: true },
+  ]);
+  const priorNow = Date.now;
+  Date.now = () => clock;
+  const h = harness({ withDataSource: true, feed });
+  try {
+    await h.layer.update();
+    assert.equal(h.layer.getStats().count, 2);
+    clock = start + 10 * 60_000; // the first detection is now 24 h 5 min old
+    await h.layer.update();
+    assert.equal(h.layer.getStats().count, 1, 'a full refetch would no longer carry it');
+    assert.equal(h.layer.getStrongestFire().latitude, 31);
+  } finally {
+    Date.now = priorNow;
+    h.layer.destroy(h.viewer);
+    h.cleanup();
+  }
+});
+
+test('a validator is only offered for the exact records it describes', async () => {
+  const hour = Date.UTC(2026, 8, 11, 12);
+  const feed = scriptedFeed([
+    { fires: [proxyRow(hour - 3600_000)], fetchedAt: hour, stale: false, etag: 'W/"firms-1-f"' },
+    { fires: [proxyRow(hour - 3600_000)], fetchedAt: hour, stale: false, etag: 'W/"firms-1-f"' },
+  ]);
+  const priorNow = Date.now;
+  Date.now = () => hour;
+  const h = harness({ withDataSource: true, feed });
+  try {
+    await h.layer.update();
+    // Any other writer of the record set voids the validator it came with.
+    h.layer._bindInteractionForTest(h.viewer, [makeFire({ index: 0 })]);
+    await h.layer.update();
+    assert.equal(feed.calls[1].etag ?? null, null);
+  } finally {
+    Date.now = priorNow;
+    h.layer.destroy(h.viewer);
+    h.cleanup();
+  }
 });

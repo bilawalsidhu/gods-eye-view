@@ -1,4 +1,7 @@
-import { adaptFirmsRecords } from '../../data/firmsAdapt.js';
+import {
+  adaptFirmsRecords,
+  expireFirmsRecords,
+} from '../../data/firmsAdapt.js';
 import { fireDetectionKey } from '../../data/firmsLabels.js';
 
 export function createIngestion({
@@ -21,7 +24,13 @@ export function createIngestion({
     layerState._loading = true;
 
     try {
-      const payload = await feed.getSnapshot({ signal: request.signal });
+      // A validator belongs to the exact record set it arrived with; any
+      // other writer of `_fires` voids it.
+      const held = layerState._snapshot;
+      const payload = await feed.getSnapshot({
+        signal: request.signal,
+        etag: held?.fires === layerState._fires ? held.etag : null,
+      });
       if (
         request.signal.aborted ||
         layerState.request !== request ||
@@ -36,19 +45,37 @@ export function createIngestion({
       }
       layerState._keyRequired = false;
       layerState._error = null;
-      layerState._stale = Boolean(payload?.stale);
+      let fires;
+      let firesByFrp;
+      if (payload.notModified) {
+        // Same snapshot, so freshness and staleness stand; only detections
+        // that aged out of the trailing window leave.
+        const expired = expireFirmsRecords(
+          layerState._fires,
+          layerState._firesByFrp,
+          Date.now(),
+        );
+        if (!expired) return;
+        ({ fires, firesByFrp } = expired);
+      } else {
+        layerState._stale = Boolean(payload?.stale);
+        fires = adaptFirmsRecords(payload?.fires);
+        firesByFrp = [...fires].sort((a, b) => b.frp - a.frp);
+        // Data age, not response age: a stale proxy payload truthfully reads old.
+        layerState._lastUpdate = Number.isFinite(payload?.fetchedAt)
+          ? payload.fetchedAt
+          : Date.now();
+      }
       const previousSelection = layerState._selectedFire;
       layerState._selectedFire = null;
-      layerState._fires = adaptFirmsRecords(payload?.fires);
+      layerState._fires = fires;
       layerState._cellCacheByGrid.clear(); // aggregation is per-dataset — new fires, new cells
-      layerState._firesByFrp = [...layerState._fires].sort(
-        (a, b) => b.frp - a.frp,
-      );
+      layerState._firesByFrp = firesByFrp;
       layerState._count = layerState._fires.length;
-      // Data age, not response age: a stale proxy payload truthfully reads old.
-      layerState._lastUpdate = Number.isFinite(payload?.fetchedAt)
-        ? payload.fetchedAt
-        : Date.now();
+      layerState._snapshot = {
+        etag: payload.notModified ? held.etag : payload.etag,
+        fires,
+      };
       // Settle the previous selection BEFORE the LOD rebuild. renderCurrentLod
       // runs refreshContextRegistrations(), which deletes every context record
       // not in the new top-N — including the one the store still points at.

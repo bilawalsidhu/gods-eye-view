@@ -1345,6 +1345,18 @@ throws, that source reports failure without a contradictory success entry.
 The existing per-record append continues to support large feeds; sequential
 fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 
+`/api/firms` answers with a weak `ETag` naming the cache entry and its stale
+flag, not the rows the trailing window keeps: that set shrinks on nearly every
+10-minute poll, while the entry changes at most every 30 minutes. A request
+whose `If-None-Match` matches gets an empty `304` (no ~40 MB body is built).
+Only the fire layer sends one, and only for the record set it arrived with;
+on `304` it keeps its records, drops detections that left the window
+(`expireFirmsRecords`; a test pins its bounds to the proxy's filter) and
+rebuilds only if one did. Tool callers send none and
+always receive the full snapshot. Measured in Chrome on a 206k-detection
+snapshot: a full refresh took 258–293 ms with ~150 ms of long tasks; an
+unchanged poll 4–20 ms, or 47–72 ms when aged-out detections forced a rebuild.
+
 ## Installations and map-source guidance
 
 - Keyless mapped installations use OpenFreeMap `landuse` military polygons,
