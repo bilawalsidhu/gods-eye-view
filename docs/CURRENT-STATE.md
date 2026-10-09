@@ -21,7 +21,8 @@ refuse cross-site browser requests and share a per-IP throttle
 (`GEV_RATELIMIT_AGENT_PER_MIN`, default 60; exactly `0` disables it). A
 requested model id that is malformed, over-long or outside
 `GEV_AGENT_MODELS`/`GEV_AGENT_MODELS_<PROVIDER>` degrades to the configured
-default instead of reaching the upstream, and the response echoes
+default instead of reaching the upstream, and that default is itself held to
+the allowlist, so omitting `model` cannot step outside it. The response echoes
 `X-GEV-Agent-Model` plus `X-GEV-Agent-Model-Fallback` when it did. A client
 `system` message is discarded. Nothing is requested until the console is opened.
 
@@ -36,7 +37,8 @@ hosted provider and 300 s on a local one, which pays for a cold model load.
 Ollama's compatible endpoint does not accept `tool_choice`, so a malformed tool
 call is caught and handed back with its own validation error, twice, without
 that exchange reaching the browser. The model picker withholds models that
-report no `tools` capability or a context window under 16,384 tokens, and hides
+report no `tools` capability or a context window under twice the measured
+prompt prefix (near 25,000 tokens today), and hides
 OpenAI's non-chat families (speech, transcription, embedding, image,
 moderation). Each offered model carries a per-command cost estimate derived
 from the real instruction string and the real tool schemas, so the figure

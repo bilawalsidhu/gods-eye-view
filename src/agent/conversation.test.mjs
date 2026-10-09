@@ -7,8 +7,6 @@ import {
   boundedResultJson,
   buildRequestMessages,
   dropOrphanToolMessages,
-  estimatePromptTokens,
-  estimateTextTokens,
   fitHistoryToBytes,
   messagesByteLength,
   sanitizeMessage,
@@ -317,24 +315,4 @@ test('byte length counts UTF-8, not code units', () => {
     messagesByteLength([{ role: 'user', content: '🛰' }]) >
       messagesByteLength([{ role: 'user', content: 'ab' }]),
   );
-});
-
-test('token estimates count content and tool-call arguments', () => {
-  assert.equal(
-    estimatePromptTokens([{ role: 'user', content: 'x'.repeat(40) }]),
-    10,
-  );
-  assert.equal(
-    estimatePromptTokens([
-      {
-        role: 'assistant',
-        content: '',
-        tool_calls: [{ function: { name: 'ab', arguments: '{"a":1}' } }],
-      },
-    ]),
-    3,
-  );
-  assert.equal(estimatePromptTokens(null), 0);
-  assert.equal(estimateTextTokens('x'.repeat(400)), 100);
-  assert.equal(estimateTextTokens(null), 0);
 });

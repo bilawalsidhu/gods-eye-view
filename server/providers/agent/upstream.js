@@ -1,3 +1,4 @@
+import { readResponseTextCapped } from '../common/http.js';
 import {
   normalizeOllamaModel,
   normalizeOpenAiModel,
@@ -45,7 +46,20 @@ const CAPABILITY_PROBE_LIMIT = 40;
 /** Longest upstream error snippet echoed to the browser. */
 const ERROR_SNIPPET_CHARS = 240;
 
-/** Response body ceiling, guarding against a hostile or broken upstream. */
+/**
+ * Shortest key worth redacting from an error snippet.
+ *
+ * A placeholder of a few characters would match ordinary prose and turn a
+ * readable upstream complaint into redaction markers.
+ */
+const MIN_REDACTABLE_SECRET_CHARS = 8;
+
+/**
+ * Response body ceiling, guarding against a hostile or broken upstream.
+ *
+ * Enforced in bytes during the read, so an unbounded body is cancelled rather
+ * than buffered and measured after the fact.
+ */
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 /**
@@ -104,18 +118,63 @@ function authHeaders(provider, apiKey) {
   return headers;
 }
 
+/** Remove the operator's key from text on its way to the browser. */
+function redactSecret(text, apiKey) {
+  if (typeof apiKey !== 'string' || apiKey.length < MIN_REDACTABLE_SECRET_CHARS)
+    return text;
+  return text.split(apiKey).join('[redacted]');
+}
+
+/**
+ * The provider's own complaint, taken from a JSON error body and nothing else.
+ *
+ * A 4xx body is worth relaying for its message alone: "x is not a valid model
+ * ID" is the actual fault and nothing on this side can infer it. The siblings
+ * of that message are not worth relaying. OpenRouter answers a bad model id
+ * with the message AND the account's `user_id`, so lifting one known field is
+ * the difference between a useful error and leaking the operator's identity to
+ * every visitor.
+ *
+ * @param {string} body
+ * @returns {string} The message, or '' when a JSON body carries none.
+ */
+function upstreamComplaint(body) {
+  let parsed;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    // Not JSON, so there are no sibling fields to drop: a plain-text body from
+    // a local daemon IS the message, and it is the case where the complaint
+    // helps most.
+    return body;
+  }
+  const candidates = [
+    parsed?.error?.message,
+    parsed?.error,
+    parsed?.message,
+    parsed?.detail,
+  ];
+  const found = candidates.find(
+    (value) => typeof value === 'string' && value.trim(),
+  );
+  return found ? found.trim() : '';
+}
+
 /**
  * Reduce an upstream failure to something safe and useful.
  *
- * Never includes headers or the request body, either of which can carry the
- * key, and never relays the provider's own error wording, which carries
- * request ids, organization hints and quota phrasing.
+ * A classified status gets this app's own wording, which never includes the
+ * upstream body. An unclassified 4xx relays the provider's own message, which
+ * carries the real fault, but only that message: the rest of the body can hold
+ * request ids, account identifiers and quota phrasing, and this server holds
+ * the operator's key. A body in no shape we recognise contributes nothing.
  *
  * @param {number} status
  * @param {string} body
+ * @param {{apiKey?: string|null}} [options]
  * @returns {string}
  */
-function normalizeUpstreamError(status, body) {
+function normalizeUpstreamError(status, body, { apiKey = null } = {}) {
   if (status === 401 || status === 403) {
     return 'Upstream rejected the credentials for this provider. Check the configured API key.';
   }
@@ -130,7 +189,10 @@ function normalizeUpstreamError(status, body) {
   }
   const snippet =
     typeof body === 'string'
-      ? body.slice(0, ERROR_SNIPPET_CHARS).replace(/\s+/g, ' ').trim()
+      ? redactSecret(upstreamComplaint(body), apiKey)
+          .slice(0, ERROR_SNIPPET_CHARS)
+          .replace(/\s+/g, ' ')
+          .trim()
       : '';
   return snippet
     ? `Upstream rejected the request (HTTP ${status}): ${snippet}`
@@ -152,6 +214,9 @@ function describeTransportError(error, { provider, baseUrl } = {}) {
   if (error?.name === 'AbortError' || error?.name === 'TimeoutError') {
     return `Timed out waiting for ${provider?.label || 'the provider'}.`;
   }
+  if (code === 'RESPONSE_TOO_LARGE') {
+    return `${provider?.label || 'The provider'} returned more data than this server will read.`;
+  }
   if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EAI_AGAIN') {
     return provider?.kind === 'local'
       ? `Cannot reach ${provider.label} at ${baseUrl}. Is the daemon running?`
@@ -161,31 +226,47 @@ function describeTransportError(error, { provider, baseUrl } = {}) {
 }
 
 /**
- * Read a bounded JSON response.
+ * Fetch one upstream JSON reply, bounding the whole exchange.
  *
- * @param {Response} response
+ * The deadline has to span the body read rather than stop at the headers:
+ * `fetch` resolves the moment headers arrive, so a timer cleared at that point
+ * leaves a stalled body with no ceiling at all. One controller covers both,
+ * and the read is capped in bytes by the shared reader, which cancels the
+ * stream at the limit instead of buffering first and measuring after.
+ *
+ * Transport failure, timeout and an oversized body all throw, so every caller
+ * routes the three through `describeTransportError` together.
+ *
+ * @param {{fetchImpl: Function, url: string, init: object, timeoutMs: number,
+ *   maxBytes?: number}} request
  * @returns {Promise<{ok: boolean, status: number, data: any, text: string}>}
  */
-async function readJsonResponse(response) {
-  const text = await response.text();
-  if (text.length > MAX_RESPONSE_BYTES) {
-    throw new Error('Upstream response exceeded the size limit');
-  }
-  let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = null;
-  }
-  return { ok: response.ok, status: response.status, data, text };
-}
-
-/** Run a fetch with a timeout that always clears its own timer. */
-async function fetchWithTimeout(fetchImpl, url, init, timeoutMs) {
+async function requestUpstreamJson({
+  fetchImpl,
+  url,
+  init,
+  timeoutMs,
+  maxBytes = MAX_RESPONSE_BYTES,
+}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetchImpl(url, { ...init, signal: controller.signal });
+    const response = await fetchImpl(url, {
+      ...init,
+      signal: controller.signal,
+    });
+    const text = await readResponseTextCapped(
+      response,
+      maxBytes,
+      controller.signal,
+    );
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = null;
+    }
+    return { ok: response.ok, status: response.status, data, text };
   } finally {
     clearTimeout(timer);
   }
@@ -207,18 +288,17 @@ async function fetchOllamaCapabilities({
   timeoutMs = CAPABILITY_TIMEOUT_MS,
 }) {
   try {
-    const response = await fetchWithTimeout(
+    const { ok, data } = await requestUpstreamJson({
       fetchImpl,
-      `${ollamaNativeRoot(baseUrl)}/api/show`,
-      {
+      url: `${ollamaNativeRoot(baseUrl)}/api/show`,
+      init: {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: modelId }),
       },
       timeoutMs,
-    );
-    if (!response.ok) return null;
-    const { data } = await readJsonResponse(response);
+    });
+    if (!ok) return null;
     return data && typeof data === 'object' ? data : null;
   } catch {
     return null;
@@ -269,14 +349,14 @@ async function fetchModels({
   timeoutMs = MODELS_TIMEOUT_MS,
   probeLimit = CAPABILITY_PROBE_LIMIT,
 }) {
-  let response;
+  let reply;
   try {
-    response = await fetchWithTimeout(
+    reply = await requestUpstreamJson({
       fetchImpl,
-      modelsUrl(provider, baseUrl),
-      { method: 'GET', headers: authHeaders(provider, apiKey) },
+      url: modelsUrl(provider, baseUrl),
+      init: { method: 'GET', headers: authHeaders(provider, apiKey) },
       timeoutMs,
-    );
+    });
   } catch (error) {
     return {
       ok: false,
@@ -284,8 +364,12 @@ async function fetchModels({
     };
   }
 
-  const { ok, status, data, text } = await readJsonResponse(response);
-  if (!ok) return { ok: false, error: normalizeUpstreamError(status, text) };
+  const { ok, status, data, text } = reply;
+  if (!ok)
+    return {
+      ok: false,
+      error: normalizeUpstreamError(status, text, { apiKey }),
+    };
 
   const rows = Array.isArray(data?.data) ? data.data : [];
   const normalize = NORMALIZERS[provider.id];
@@ -346,19 +430,19 @@ async function requestChatCompletion({
   const body = { model, messages };
   if (Array.isArray(tools) && tools.length) body.tools = tools;
 
-  let response;
+  let reply;
   try {
-    response = await fetchWithTimeout(
+    reply = await requestUpstreamJson({
       fetchImpl,
-      chatCompletionsUrl(baseUrl),
-      {
+      url: chatCompletionsUrl(baseUrl),
+      init: {
         method: 'POST',
         redirect: 'error',
         headers: authHeaders(provider, apiKey),
         body: JSON.stringify(body),
       },
-      budget,
-    );
+      timeoutMs: budget,
+    });
   } catch (error) {
     return {
       ok: false,
@@ -366,9 +450,13 @@ async function requestChatCompletion({
     };
   }
 
-  const { ok, status, data, text } = await readJsonResponse(response);
+  const { ok, status, data, text } = reply;
   if (!ok)
-    return { ok: false, status, error: normalizeUpstreamError(status, text) };
+    return {
+      ok: false,
+      status,
+      error: normalizeUpstreamError(status, text, { apiKey }),
+    };
 
   const choice = Array.isArray(data?.choices) ? data.choices[0] : null;
   if (!choice?.message) {

@@ -11,7 +11,7 @@
  * needs no credential:
  *
  *   docker run -d --gpus all -p 11434:11434 \
- *     -e OLLAMA_CONTEXT_LENGTH=16384 --name gev-ollama ollama/ollama
+ *     -e OLLAMA_CONTEXT_LENGTH=32768 --name gev-ollama ollama/ollama
  *   docker exec gev-ollama ollama pull qwen3:4b
  *   npm run dev
  *   node scripts/qa-agent-console.mjs --url http://localhost:4173

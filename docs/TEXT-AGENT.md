@@ -83,19 +83,22 @@ fresh checkout with nothing configured:
 
 ```bash
 docker run -d --gpus all -p 11434:11434 \
-  -e OLLAMA_CONTEXT_LENGTH=16384 --name gev-ollama ollama/ollama
+  -e OLLAMA_CONTEXT_LENGTH=32768 --name gev-ollama ollama/ollama
 docker exec gev-ollama ollama pull qwen3:4b
 ```
 
 `OLLAMA_CONTEXT_LENGTH` is not optional. The stock runtime window is 4096
-tokens, and this app's prompt prefix is around 12,000 — see
-[Two silent failures](#two-silent-failures).
+tokens, and this app's prompt prefix is around 12,000, resent on every round
+trip — see [Two silent failures](#two-silent-failures).
 
 The model picker lists only models that can actually do the job: Ollama reports
 tool support and context length through its native `/api/show`, so a model
-without the `tools` capability or with a window under 16,384 tokens is withheld
-with its reason. A daemon too old to report either gets the benefit of the
-doubt rather than losing the model from the list.
+without the `tools` capability, or with a window under twice the measured
+prompt prefix, is withheld with its reason. The floor is derived rather than
+written down, because the prefix grows whenever a tool or a directive is added
+and a fixed figure would stop being adequate silently; it currently lands near
+25,000 tokens. A daemon too old to report either gets the benefit of the doubt
+rather than losing the model from the list.
 
 ## Architecture
 

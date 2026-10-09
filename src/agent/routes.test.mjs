@@ -4,6 +4,10 @@ import { Readable } from 'node:stream';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 import { agentPromptPrefixTokens } from '../../server/providers/agent/prefix.js';
 import {
+  MIN_TOOL_CONTEXT_TOKENS,
+  toolContextFloor,
+} from '../../server/providers/agent/registry.js';
+import {
   AGENT_REQUEST_MAX_BYTES,
   MAX_TOOL_CORRECTIONS,
   createAgentCommandHandler,
@@ -57,11 +61,13 @@ function stubFetch(script) {
         ? script(url, init)
         : script[calls.length - 1];
     const { status = 200, body = {} } = entry ?? {};
+    const text = typeof body === 'string' ? body : JSON.stringify(body);
     return {
       ok: status >= 200 && status < 300,
       status,
-      text: async () =>
-        typeof body === 'string' ? body : JSON.stringify(body),
+      // The capped body reader reads content-length before the body.
+      headers: new Headers(),
+      text: async () => text,
     };
   };
   impl.calls = calls;
@@ -518,4 +524,115 @@ test('an upstream 5xx becomes a 502 from this server', async () => {
     res,
   );
   assert.equal(res.statusCode, 502);
+});
+
+test('a JSON body of null is answered, not left hanging', async () => {
+  // `null` parses, so the parse guard passes and every field read on it used to
+  // throw past the catch with nothing written to the response at all.
+  for (const body of ['null', '[]', '"text"', '42']) {
+    const res = response();
+    await createAgentCommandHandler({
+      env: KEYED,
+      fetchImpl: stubFetch([]),
+      limiter: admitAll,
+    })(request({ method: 'POST', body }), res);
+    assert.equal(res.ended, true, `no reply sent for body ${body}`);
+    assert.equal(res.statusCode, 400, `wrong status for body ${body}`);
+    assert.match(res.json.error, /Malformed request body/);
+  }
+});
+
+test('a tool call with no id is given one, in the call and in the message', async () => {
+  // Without an id the browser's own sanitizer drops the call, the next round
+  // rebuilds an identical prompt, and the same action runs every round.
+  const res = response();
+  const fetchImpl = stubFetch([
+    toolCallReply('zoom_to_globe', {}, { id: null }),
+  ]);
+  await createAgentCommandHandler({ env: KEYED, fetchImpl, limiter: admitAll })(
+    request({
+      method: 'POST',
+      body: JSON.stringify({
+        provider: 'openai',
+        messages: [{ role: 'user', content: 'zoom out' }],
+      }),
+    }),
+    res,
+  );
+  const [call] = res.json.toolCalls;
+  assert.match(call.id, /^gev_call_\d+$/);
+  assert.equal(res.json.message.tool_calls[0].id, call.id);
+  assert.equal(res.json.message.tool_calls[0].function.name, 'zoom_to_globe');
+});
+
+test('an id the provider supplied is passed through untouched', async () => {
+  const res = response();
+  const fetchImpl = stubFetch([
+    toolCallReply('zoom_to_globe', {}, { id: 'call_upstream' }),
+  ]);
+  await createAgentCommandHandler({ env: KEYED, fetchImpl, limiter: admitAll })(
+    request({
+      method: 'POST',
+      body: JSON.stringify({
+        provider: 'openai',
+        messages: [{ role: 'user', content: 'zoom out' }],
+      }),
+    }),
+    res,
+  );
+  assert.equal(res.json.toolCalls[0].id, 'call_upstream');
+  assert.equal(res.json.message.tool_calls[0].id, 'call_upstream');
+});
+
+test('the context floor the console is told is the one the listing gates on', async () => {
+  const res = response();
+  await createAgentConfigHandler({ env: KEYED })(request({}), res);
+  assert.equal(
+    res.json.minContextTokens,
+    toolContextFloor(res.json.promptPrefixTokens),
+  );
+  assert.ok(res.json.minContextTokens > res.json.promptPrefixTokens);
+});
+
+test('a model whose window barely clears the prefix is gated out of the listing', async () => {
+  // OpenRouter is the provider that actually reports a context length, so it is
+  // the one where the derived floor has anything to act on.
+  const prefixTokens = agentPromptPrefixTokens();
+  const listed = (id, contextLength) => ({
+    id,
+    context_length: contextLength,
+    supported_parameters: ['tools'],
+  });
+
+  // The discriminating window sits ABOVE the old hard-coded floor and below
+  // the derived one, so this only passes while the gate follows the prefix.
+  const betweenFloors = Math.floor(
+    (MIN_TOOL_CONTEXT_TOKENS + toolContextFloor(prefixTokens)) / 2,
+  );
+  assert.ok(betweenFloors > MIN_TOOL_CONTEXT_TOKENS);
+  assert.ok(betweenFloors < toolContextFloor(prefixTokens));
+
+  const res = response();
+  const fetchImpl = stubFetch([
+    {
+      status: 200,
+      body: {
+        data: [
+          listed('roomy', prefixTokens * 4),
+          listed('tight', betweenFloors),
+        ],
+      },
+    },
+  ]);
+  await createAgentModelsHandler({
+    env: { OPENROUTER_API_KEY: 'sk-test' },
+    fetchImpl,
+    limiter: admitAll,
+  })(request({ url: '/api/agent/models?provider=openrouter' }), res);
+  assert.deepEqual(
+    res.json.models.map((model) => model.id),
+    ['roomy'],
+  );
+  assert.equal(res.json.rejected[0].id, 'tight');
+  assert.equal(res.json.rejected[0].reason, 'context-too-small');
 });

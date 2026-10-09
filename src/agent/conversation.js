@@ -345,41 +345,6 @@ function buildRequestMessages({
 }
 
 /**
- * Rough prompt size in tokens.
- *
- * Deliberately approximate: it exists to warn before a context overrun, not to
- * reconcile with a provider's billed token count.
- *
- * @param {object[]} messages
- * @returns {number}
- */
-function estimatePromptTokens(messages) {
-  const list = Array.isArray(messages) ? messages : [];
-  let chars = 0;
-  for (const message of list) {
-    chars += typeof message?.content === 'string' ? message.content.length : 0;
-    for (const call of Array.isArray(message?.tool_calls)
-      ? message.tool_calls
-      : []) {
-      chars +=
-        (call.function?.name?.length ?? 0) +
-        (call.function?.arguments?.length ?? 0);
-    }
-  }
-  return Math.ceil(chars / CHARS_PER_TOKEN);
-}
-
-/**
- * Rough token size of a serialized payload.
- *
- * @param {string} text
- * @returns {number}
- */
-function estimateTextTokens(text) {
-  return Math.ceil(String(text ?? '').length / CHARS_PER_TOKEN);
-}
-
-/**
  * Build the tool result message answering one call.
  *
  * The action runner returns plain objects; JSON is what the model reads best,
@@ -408,8 +373,6 @@ export {
   boundedResultJson,
   buildRequestMessages,
   dropOrphanToolMessages,
-  estimatePromptTokens,
-  estimateTextTokens,
   fitHistoryToBytes,
   messagesByteLength,
   sanitizeMessage,

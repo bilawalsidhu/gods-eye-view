@@ -295,7 +295,15 @@ function mountAgentConsole({
     return data;
   }
 
+  // The provider picker stays live while a listing is in flight, so a slow
+  // listing can land after a newer one. Only the newest may touch the DOM, or
+  // the picker ends up showing one provider's models under another's name.
+  let latestModelsRequest = 0;
+
   async function loadModels(providerId) {
+    const request = (latestModelsRequest += 1);
+    const superseded = () => request !== latestModelsRequest;
+
     modelSelect.replaceChildren();
     models = [];
     refreshCost();
@@ -321,6 +329,7 @@ function mountAgentConsole({
       const data = await readJson(
         `/api/agent/models?provider=${encodeURIComponent(providerId)}`,
       );
+      if (superseded()) return;
       models = Array.isArray(data.models) ? data.models : [];
       for (const model of models) {
         const option = root.createElement('option');
@@ -342,6 +351,7 @@ function mountAgentConsole({
       setBusy(models.length === 0);
       providerSelect.disabled = false;
     } catch (error) {
+      if (superseded()) return;
       setStatus(AGENT_STATUS.UNAVAILABLE);
       append(ENTRY_KIND.ERROR, error?.message || 'Could not list models');
       providerSelect.disabled = false;
