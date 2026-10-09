@@ -226,18 +226,16 @@ export class ShareRestoration {
         : result.classification === 'source-unavailable'
           ? `Shared ${subject} could not be restored — feed unavailable`
           : `Shared ${subject} is unavailable`;
-    this._showDeferredStatusNotice(message, () =>
-      canPresentDeferredStatusNotice(
-        noticeGeneration,
-        this._shareTrackingNoticeGeneration,
-        this._disposed,
-      ),
-    );
-  }
-  _showDeferredStatusNotice(message, isCurrent = () => !this._disposed) {
     const showAfterStartupCover = () => {
       this._lifetime.frame(() => {
-        if (!isCurrent()) return;
+        if (
+          !canPresentDeferredStatusNotice(
+            noticeGeneration,
+            this._shareTrackingNoticeGeneration,
+            this._disposed,
+          )
+        )
+          return;
         const startupCover = document.getElementById('loading-screen');
         if (
           !startupCover ||
@@ -251,7 +249,48 @@ export class ShareRestoration {
         const showOnce = () => {
           removeStartupListener();
           if (fallbackTimer) this._lifetime.cancelTimeout(fallbackTimer);
-          if (isCurrent()) this.showStatus(message);
+          if (
+            canPresentDeferredStatusNotice(
+              noticeGeneration,
+              this._shareTrackingNoticeGeneration,
+              this._disposed,
+            )
+          )
+            this.showStatus(message);
+        };
+        removeStartupListener = this._lifetime.listen(
+          startupCover,
+          'transitionend',
+          showOnce,
+          { once: true },
+        );
+        fallbackTimer = this._lifetime.timeout(showOnce, 1000);
+      });
+    };
+    if (this._resolveInitialShareRestore) {
+      void this.initialRestorePromise.then(showAfterStartupCover);
+      return;
+    }
+    showAfterStartupCover();
+  }
+  _showDeferredStatusNotice(message) {
+    const showAfterStartupCover = () => {
+      this._lifetime.frame(() => {
+        if (this._disposed) return;
+        const startupCover = document.getElementById('loading-screen');
+        if (
+          !startupCover ||
+          getComputedStyle(startupCover).visibility === 'hidden'
+        ) {
+          this.showStatus(message);
+          return;
+        }
+        let fallbackTimer = null;
+        let removeStartupListener = () => {};
+        const showOnce = () => {
+          removeStartupListener();
+          if (fallbackTimer) this._lifetime.cancelTimeout(fallbackTimer);
+          if (!this._disposed) this.showStatus(message);
         };
         removeStartupListener = this._lifetime.listen(
           startupCover,
