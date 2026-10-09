@@ -14,6 +14,8 @@ qa-shots/
 output/
 .gev-logs/
 .gev-cache/
+# Browser QA gate evidence (screenshots, console and network dumps).
+qa-artifacts/
 .DS_Store
 .gstack/
 3d-models/

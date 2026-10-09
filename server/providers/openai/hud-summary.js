@@ -2,7 +2,7 @@ import {
   HUD_SUMMARY_INSTRUCTIONS,
   keylessHudSummaryResponse,
 } from '../../../src/hudSummaryResponse.js';
-import { enforceOptInRateLimit, openAiRateLimiter } from './rate-limit.js';
+import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
 import { readRequestBody } from '../common/request.js';
 import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
 import { allowedMethods } from '../common/methods.js';
@@ -48,10 +48,10 @@ async function handleHudSummary(req, res) {
     return;
   }
 
-  // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). Keyless HUD
-  // fallback has no provider cost and resolves above without consuming a
-  // paid-endpoint quota slot.
-  if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
+  // Per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). On by default; 0 disables.
+  // Keyless HUD fallback has no provider cost and resolves above without
+  // consuming a paid-endpoint quota slot.
+  if (!enforceRateLimit(openAiRateLimiter(), req, res)) return;
 
   try {
     const body = await readRequestBody(req, 64 * 1024);
