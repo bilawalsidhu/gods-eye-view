@@ -286,6 +286,11 @@ export function createAlpineStationsLayer({
     });
     if (!entity.billboard) {
       entity.billboard = new cesium.BillboardGraphics({
+        // Explicit, though Cesium treats an unset `show` as visible: a
+        // freshly created arrow then reports `show === undefined`, so
+        // anything inspecting it — including this layer's own browser gate —
+        // cannot tell a drawn arrow from a hidden one.
+        show: true,
         image,
         width: arrow.pixelSize,
         height: arrow.pixelSize,

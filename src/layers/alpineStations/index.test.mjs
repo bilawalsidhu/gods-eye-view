@@ -923,3 +923,22 @@ test('a layer built without a credit host still runs', () => {
   layer.disable();
   layer.destroy();
 });
+
+test('an arrow reports itself visible on the very first draw', async () => {
+  // Cesium renders a billboard whose `show` was never set, so a missing
+  // `show: true` is invisible in behaviour and wrong in state: the arrow
+  // reports `undefined`, and the browser gate counting shown arrows then
+  // cannot catch arrows that fail to appear on first load. That path is the
+  // one a visitor actually takes.
+  const { layer, dataSource } = build();
+  layer.enable();
+  await layer.update();
+  const arrows = dataSource.entities.values.filter((entity) => entity.billboard);
+  assert.ok(arrows.length, 'the wind view drew at least one arrow');
+  for (const entity of arrows)
+    assert.equal(
+      entity.billboard.show,
+      true,
+      `${entity.id} reports show=${entity.billboard.show} before any chip change`,
+    );
+});

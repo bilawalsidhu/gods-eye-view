@@ -252,6 +252,20 @@ try {
     `stale=${enabled.stats?.stale} staleStations=${enabled.stats?.staleStations}`,
   );
 
+  // Arrows on the FIRST draw, before any chip has been touched. That is the
+  // path a visitor actually takes, and it is a different code path from the
+  // one a parameter change follows: the first draw CREATES each billboard
+  // while a change UPDATES it. The update path masked a missing `show: true`.
+  check(
+    'the default wind view draws arrows without touching a chip first',
+    enabled.arrows.length > 5,
+    `${enabled.arrows.length} arrows in a 60-marker sample of ${enabled.entityCount}`,
+  );
+  check(
+    'and those first-draw arrows report themselves visible',
+    enabled.arrows.every((arrow) => !arrow.pointShown),
+  );
+
   // The app opens on the global view, where "nearest stations in view" is
   // correctly empty. The card's list only means anything over the Alps.
   await flyTo(7.75, 46.0, 120_000);
