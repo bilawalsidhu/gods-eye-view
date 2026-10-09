@@ -704,6 +704,25 @@ test('narrow-screen rails pin every hosted panel glow inside its panel box', () 
   }
 });
 
+test('right layout ignores a CSS-hidden expanded panel when deciding exclusivity', () => {
+  const f = fixture('right');
+  const weather = element('weather-panel', { height: 300 });
+  weather.computed.display = 'none';
+  f.stack.children.push(weather);
+  weather.parentElement = f.stack;
+
+  f.run();
+
+  assert.equal(f.stack.classList.contains('layout-exclusive'), false);
+  assert.equal(f.stack.dataset.expandedCount, '0');
+  assert.equal(f.first.getAttribute('aria-hidden'), undefined);
+  assert.equal(f.second.getAttribute('aria-hidden'), undefined);
+  assert.equal(
+    weather.style.getPropertyValue('--right-panel-allocated-height'),
+    '',
+  );
+});
+
 test('right layout ignores a hidden panel: no lane, no gap, no auto-collapse', () => {
   const f = fixture('right');
   const imagery = element('recent-imagery-panel', { height: 0 });
