@@ -16,11 +16,27 @@ export function validTileBounds(box) {
   );
 }
 
+/**
+ * The origin a configured TileJSON is served from, or undefined when there is
+ * no absolute URL to read one off. Deriving `allowedOrigin` from it means
+ * repointing `tileJsonUrl` at a mirror cannot silently keep loading tiles from
+ * the old host: the origin check below then names the mismatch instead of
+ * passing it (#933).
+ */
+function tileJsonOrigin(tileJsonUrl) {
+  if (typeof tileJsonUrl !== 'string') return undefined;
+  try {
+    return new URL(tileJsonUrl).origin;
+  } catch {
+    return undefined;
+  }
+}
+
 /** A decoded XYZ cache with bounded workers, reads, retained bytes and request lifetimes. */
 export function createVectorTileSource({
   tileJsonUrl,
   template,
-  allowedOrigin,
+  allowedOrigin = tileJsonOrigin(tileJsonUrl),
   decode,
   fetchImpl = (...args) => globalThis.fetch(...args),
   maxTiles = 16,

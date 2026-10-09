@@ -14,12 +14,126 @@ import {
 } from './constants.js';
 import { realtimeInstructions } from './instructions.js';
 import { GEV_REALTIME_TOOLS } from './tools.js';
+import {
+  preferCodexOAuth,
+  readCodexOAuthAccessToken,
+  createCodexOAuthLogin,
+} from './codex-auth.js';
+
+const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
+function isLoopbackRequest(req) {
+  return LOOPBACK_ADDRESSES.has(String(req.socket?.remoteAddress || ''));
+}
+
+function isSameOriginRequest(req) {
+  const origin = String(req.headers?.origin || '').trim();
+  if (!origin) return true;
+  const host = String(req.headers?.host || '').trim();
+  if (!host) return false;
+  const protocol = req.socket?.encrypted ? 'https:' : 'http:';
+  try {
+    return new URL(origin).origin === new URL(`${protocol}//${host}`).origin;
+  } catch {
+    return false;
+  }
+}
+
+function requestQuery(req) {
+  try {
+    return new URL(req.url || '', 'http://localhost').searchParams;
+  } catch {
+    return new URLSearchParams();
+  }
+}
+
+function resolveRealtimeAuthMode(query) {
+  const requested = String(query.get('auth') || 'api-key').toLowerCase();
+  if (requested === 'api-key' || requested === 'oauth') return requested;
+  return null;
+}
+
+function createRealtimeOAuthStatusHandler({
+  oauthLogin = createCodexOAuthLogin(),
+} = {}) {
+  return (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Type', 'application/json');
+    if (req.method !== 'GET') {
+      res.statusCode = 405;
+      res.end(JSON.stringify({ error: 'Method not allowed' }));
+      return;
+    }
+    if (!isLoopbackRequest(req)) {
+      res.statusCode = 403;
+      res.end(
+        JSON.stringify({
+          available: false,
+          error: 'ChatGPT OAuth is available only from this machine',
+        }),
+      );
+      return;
+    }
+    res.statusCode = 200;
+    res.end(JSON.stringify(oauthLogin.status()));
+  };
+}
+
+function createRealtimeOAuthLoginHandler({
+  oauthLogin = createCodexOAuthLogin(),
+} = {}) {
+  return async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Type', 'application/json');
+    if (req.method !== 'POST') {
+      res.statusCode = 405;
+      res.end(JSON.stringify({ error: 'Method not allowed' }));
+      return;
+    }
+    if (!isLoopbackRequest(req)) {
+      res.statusCode = 403;
+      res.end(
+        JSON.stringify({
+          available: false,
+          error: 'ChatGPT OAuth sign-in is available only from this machine',
+        }),
+      );
+      return;
+    }
+    if (!isSameOriginRequest(req)) {
+      res.statusCode = 403;
+      res.end(
+        JSON.stringify({
+          available: false,
+          error: 'Cross-origin ChatGPT OAuth sign-in is not allowed',
+        }),
+      );
+      return;
+    }
+
+    try {
+      const result = await oauthLogin.start();
+      res.statusCode = result.available ? 200 : result.loginFailed ? 503 : 202;
+      res.end(JSON.stringify(result));
+    } catch {
+      res.statusCode = 503;
+      res.end(
+        JSON.stringify({
+          available: false,
+          error: 'Could not start ChatGPT sign-in',
+        }),
+      );
+    }
+  };
+}
 
 function createRealtimeTokenHandler({
   annotationGuidance,
   endpoint = 'https://api.openai.com/v1/realtime/client_secrets',
   fetchImpl = (...args) => fetch(...args),
   resolveApiKey = () => process.env.OPENAI_API_KEY,
+  resolveOAuthAccessToken = () => readCodexOAuthAccessToken(),
+  environment = process.env,
   models = {},
   tools = GEV_REALTIME_TOOLS,
 } = {}) {
@@ -32,15 +146,84 @@ function createRealtimeTokenHandler({
       return;
     }
 
+    const query = requestQuery(req);
+    const authMode = resolveRealtimeAuthMode(query);
+    if (!authMode) {
+      res.statusCode = 400;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Unsupported cloud voice auth mode' }));
+      return;
+    }
+
+    let oauthPinned;
+    try {
+      oauthPinned = preferCodexOAuth(environment);
+    } catch (error) {
+      res.statusCode = 503;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: error.message }));
+      return;
+    }
+    if (oauthPinned && authMode !== 'oauth') {
+      res.statusCode = 503;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(
+        JSON.stringify({
+          error:
+            'ChatGPT OAuth is required by GEV_PREFER_CODEX_OAUTH. Select USE CHATGPT OAUTH in Provider Settings.',
+          code: 'CODEX_OAUTH_REQUIRED',
+        }),
+      );
+      return;
+    }
+
     // Per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). On by default; 0 disables.
     if (!enforceRateLimit(openAiRateLimiter(), req, res)) return;
 
-    const apiKey = resolveApiKey();
-    if (!apiKey) {
-      res.statusCode = 503;
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'OPENAI_API_KEY is not set' }));
-      return;
+    let bearer;
+    if (authMode === 'oauth') {
+      if (!isLoopbackRequest(req)) {
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(
+          JSON.stringify({
+            error: 'ChatGPT OAuth voice is available only from this machine',
+          }),
+        );
+        return;
+      }
+      try {
+        bearer = resolveOAuthAccessToken();
+      } catch (error) {
+        res.statusCode = 503;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(
+          JSON.stringify({
+            error: error?.message || 'ChatGPT sign-in is unavailable',
+            code: error?.code || 'CODEX_OAUTH_UNAVAILABLE',
+          }),
+        );
+        return;
+      }
+      if (!bearer) {
+        res.statusCode = 503;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(
+          JSON.stringify({
+            error: 'ChatGPT sign-in is unavailable',
+            code: 'CODEX_OAUTH_UNAVAILABLE',
+          }),
+        );
+        return;
+      }
+    } else {
+      bearer = resolveApiKey();
+      if (!bearer) {
+        res.statusCode = 503;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: 'OPENAI_API_KEY is not set' }));
+        return;
+      }
     }
 
     // Voice model tier, requested by the client as ?tier=standard|mini.
@@ -49,15 +232,7 @@ function createRealtimeTokenHandler({
     // bad querystring degrades to a normal session rather than a dead mic.
     // The env overrides stay authoritative per tier (see .env.example) —
     // a wrong upstream model id is then a config fix, not a code change.
-    const requestedTier = (() => {
-      try {
-        return new URL(req.url || '', 'http://localhost').searchParams.get(
-          'tier',
-        );
-      } catch {
-        return null;
-      }
-    })();
+    const requestedTier = query.get('tier');
     const tier = resolveVoiceModel(requestedTier).tier;
     const model =
       tier === 'mini'
@@ -135,7 +310,7 @@ function createRealtimeTokenHandler({
         redirect: 'error',
         signal: AbortSignal.timeout(30_000),
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${bearer}`,
           'Content-Type': 'application/json',
           'OpenAI-Safety-Identifier': 'gev-local-dev',
         },
@@ -149,6 +324,10 @@ function createRealtimeTokenHandler({
       // case where a bogus ?tier= was silently downgraded to standard.
       res.setHeader('X-GEV-Voice-Tier', tier);
       res.setHeader('X-GEV-Voice-Model', model);
+      res.setHeader(
+        'X-GEV-Voice-Auth',
+        authMode === 'oauth' ? 'codex-oauth' : 'env',
+      );
       // Captions are billed separately; the client meters them with this id.
       res.setHeader(
         'X-GEV-Voice-Transcribe-Model',
@@ -183,4 +362,8 @@ function createRealtimeTokenHandler({
   };
 }
 
-export { createRealtimeTokenHandler };
+export {
+  createRealtimeOAuthLoginHandler,
+  createRealtimeOAuthStatusHandler,
+  createRealtimeTokenHandler,
+};
