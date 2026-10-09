@@ -125,9 +125,14 @@ export function alpineStationsProxy({
     const held = caches.get(networkId);
     if (held && now() - held.fetchedAt < OBSERVATION_CACHE_MS)
       return { ...held, stale: false };
+    // Both the cooldown and the failure path serve the last payload, and BOTH
+    // have to stop at the same ceiling. Checking it in only one of them made a
+    // long-dead upstream alternate, once a minute, between reporting itself
+    // unavailable and serving readings days old.
+    const servable = held && now() - held.fetchedAt <= MAX_SERVE_STALE_MS;
     const failedAt = failures.get(networkId) ?? -Infinity;
     if (now() - failedAt < RETRY_AFTER_FAILURE_MS) {
-      if (held) return { ...held, stale: true };
+      if (servable) return { ...held, stale: true };
       throw new Error('alpine_retry_later');
     }
     // One refresh per network at a time; concurrent callers share this promise
@@ -145,8 +150,7 @@ export function alpineStationsProxy({
       return { ...(await raceAbort(shared.promise, signal)), stale: false };
     } catch (error) {
       if (!signal.aborted) failures.set(networkId, now());
-      if (held && now() - held.fetchedAt <= MAX_SERVE_STALE_MS)
-        return { ...held, stale: true };
+      if (servable) return { ...held, stale: true };
       throw error;
     }
   }

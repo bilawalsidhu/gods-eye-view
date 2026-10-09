@@ -7,6 +7,7 @@ import {
   alpineStationsProxy,
 } from '../../server/providers/alpine-stations.js';
 import {
+  MAX_SERVE_STALE_MS,
   METADATA_CACHE_MS,
   OBSERVATION_CACHE_MS,
   SLF_MEASUREMENTS_URL,
@@ -459,4 +460,43 @@ test('the envelope carries only fields the client reads', () => {
       ],
     );
   });
+});
+
+test('the serve-stale ceiling binds during the cooldown as well as after it', () => {
+  // Both paths serve the last payload, so both must stop at the same age.
+  // Checking it only in the failure path made a long-dead upstream alternate,
+  // once a minute, between reporting itself unavailable and serving readings
+  // days old — the cache is never evicted, so `held` outlives the ceiling.
+  const fail = new Set();
+  const clock = { value: NOW };
+  const { json } = harness({ fail, clock });
+  return json()
+    .then(() => {
+      fail.add('measurement-api.slf.ch');
+      // Inside the ceiling: stale is better than nothing.
+      clock.value += MAX_SERVE_STALE_MS - 60_000;
+      return json();
+    })
+    .then((payload) => {
+      const slf = payload.networks.find((n) => n.id === SLF_NETWORK_ID);
+      assert.equal(slf.status, 'stale');
+      assert.ok(slf.stationCount > 0);
+      // Past the ceiling, and still inside the retry cooldown the failure
+      // above started. This is the path that leaked days-old readings.
+      clock.value += 2 * MAX_SERVE_STALE_MS;
+      return json();
+    })
+    .then((payload) => {
+      const slf = payload.networks.find((n) => n.id === SLF_NETWORK_ID);
+      assert.equal(
+        slf.status,
+        'unavailable',
+        'a payload past the ceiling is not served, cooldown or not',
+      );
+      assert.equal(slf.stationCount, 0);
+      assert.ok(
+        !payload.stations.some((s) => s.networkId === SLF_NETWORK_ID),
+        'and none of its stations reach the client',
+      );
+    });
 });
