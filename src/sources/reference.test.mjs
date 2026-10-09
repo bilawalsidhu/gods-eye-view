@@ -13,12 +13,15 @@ test('reference factories retain compatibility without starting acquisition or s
   const first = createReferenceSources();
   const second = createReferenceSources();
   assert.deepEqual(Object.keys(first), [
+    'alpine-stations',
     'earthquakes',
     'air-quality',
     'fire-perimeters',
     'cables',
     'gnss-integrity',
   ]);
+  assert.notEqual(first['alpine-stations'], second['alpine-stations']);
+  assert.equal(typeof first['alpine-stations'].getSnapshot, 'function');
   assert.notEqual(first.earthquakes, second.earthquakes);
   assert.notEqual(first['air-quality'], second['air-quality']);
   assert.notEqual(first['fire-perimeters'], second['fire-perimeters']);

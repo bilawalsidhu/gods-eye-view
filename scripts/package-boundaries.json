@@ -2530,7 +2530,17 @@
       "src/voice/geminiSession.js",
       "src/voice/geminiAudio.js",
       "src/voice/geminiCaptureWorklet.js",
-      "src/ui/statusBadge.js"
+      "src/ui/statusBadge.js",
+      "src/layers/alpineStations/networks.js",
+      "src/layers/alpineStations/parameters.js",
+      "src/layers/alpineStations/records.js",
+      "src/layers/alpineStations/networks/slf.js",
+      "src/layers/alpineStations/networks/smn.js",
+      "src/layers/alpineStations/networks/tawes.js",
+      "src/layers/alpineStations/model.js",
+      "src/layers/alpineStations/source.js",
+      "src/layers/alpineStations/index.js",
+      "src/app/layers/alpineStations.js"
     ],
     "external": [
       "hls.js",
@@ -3097,7 +3107,17 @@
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
       "src/ui/layerNames.js",
-      "src/layers/streetLevel/providers/mapillary/policy.js"
+      "src/layers/streetLevel/providers/mapillary/policy.js",
+      "src/layers/alpineStations/networks.js",
+      "src/layers/alpineStations/parameters.js",
+      "src/layers/alpineStations/records.js",
+      "src/layers/alpineStations/networks/slf.js",
+      "src/layers/alpineStations/networks/smn.js",
+      "src/layers/alpineStations/networks/tawes.js",
+      "src/layers/alpineStations/model.js",
+      "src/layers/alpineStations/source.js",
+      "src/layers/alpineStations/index.js",
+      "src/app/layers/alpineStations.js"
     ],
     "external": [
       "hls.js",
@@ -3529,7 +3549,12 @@
       "src/layers/submarineCables/bundledSource.js",
       "src/layers/gnss/source.js",
       "src/layers/airQuality/model.js",
-      "src/layers/airQuality/source.js"
+      "src/layers/airQuality/source.js",
+      "src/layers/alpineStations/networks.js",
+      "src/geoDistance.js",
+      "src/layers/alpineStations/parameters.js",
+      "src/layers/alpineStations/records.js",
+      "src/layers/alpineStations/source.js"
     ],
     "external": []
   },
