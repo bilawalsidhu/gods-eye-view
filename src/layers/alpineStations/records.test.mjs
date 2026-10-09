@@ -176,7 +176,10 @@ test('the summary counts reporting honestly and keeps feed staleness out', () =>
   assert.equal(summary.reporting, 3, 'the silent station is not reporting');
   assert.equal(summary.staleStations, 1);
   assert.ok(!Object.hasOwn(summary, 'stale'), 'stale is a feed-level flag');
-  assert.equal(summary.measuring, 3, 'three carry a snow depth');
+  // Only readings the MAP draws count toward the range. D carries a snow
+  // depth but its reading is a week old, so the markers show it offline and
+  // the card must not take a network minimum or maximum from it.
+  assert.equal(summary.measuring, 2, 'the week-old reading is not counted');
   assert.equal(summary.min, 42);
   assert.equal(summary.max, 100);
   assert.equal(summary.newestAt, MEASURED);
@@ -285,4 +288,47 @@ test('times print as a UTC minute, and an unusable one says so', () => {
   assert.equal(utcMinute('2026-10-09T12:34:56Z'), '10-09 12:34 UTC');
   assert.equal(utcMinute('nonsense'), 'Unavailable');
   assert.equal(utcMinute(null), 'Unavailable');
+});
+
+test('a stale reading is excluded from the range the card prints', () => {
+  // The map draws a stale station as offline with no value, so letting its
+  // figure set the network minimum or maximum would put a number on the card
+  // that is nowhere on the globe.
+  const fresh = raw({ code: 'FRESH', snowDepthCm: 50 });
+  const ancient = raw({
+    code: 'OLD',
+    snowDepthCm: 400,
+    measuredAt: new Date(NOW - 30 * 24 * 60 * 60_000).toISOString(),
+  });
+  const summary = summarizeStations(mergeNetworkStations([[fresh, ancient]]), {
+    parameterId: 'snow',
+    now: NOW,
+  });
+  assert.equal(summary.measuring, 1);
+  assert.equal(summary.max, 50, 'not the 400 cm nobody can see');
+  assert.equal(summary.reporting, 2, 'both still count as part of the network');
+  assert.equal(summary.staleStations, 1);
+});
+
+test('a reading whose time will not parse cannot be called current', () => {
+  // Reachable from a malformed VQHA80 Date or a TAWES timestamp that fails to
+  // normalise: the values arrive, the time does not. There is no way to tell
+  // whether it is ten minutes or ten days old, so it is not shown as current.
+  const undated = alpineStationRecord(raw({ measuredAt: 'not a date' }));
+  assert.equal(undated.measuredAt, null);
+  assert.equal(isReporting(undated), true);
+  assert.equal(isStale(undated, NOW), true);
+
+  // A SILENT station is still not stale: it has no reading to be out of date.
+  const silent = alpineStationRecord(
+    raw({
+      measuredAt: null,
+      snowDepthCm: null,
+      airTempC: null,
+      windSpeedMs: null,
+      windGustMs: null,
+      windDirDeg: null,
+    }),
+  );
+  assert.equal(isStale(silent, NOW), false);
 });

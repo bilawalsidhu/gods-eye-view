@@ -135,11 +135,12 @@ export function isReporting(station) {
  * two read differently on the card.
  */
 export function isStale(station, now = Date.now()) {
-  if (!station?.measuredAt) return false;
-  const network = alpineNetwork(station.networkId);
-  const measured = Date.parse(station.measuredAt);
-  if (!Number.isFinite(measured)) return true;
-  return now - measured > staleAfterMs(network);
+  const measured = Date.parse(station?.measuredAt ?? '');
+  // A reading whose time will not parse cannot be shown as current: there is
+  // no way to tell whether it is ten minutes or ten days old. A SILENT station
+  // is still not stale, because it has no reading to be out of date.
+  if (!Number.isFinite(measured)) return isReporting(station);
+  return now - measured > staleAfterMs(alpineNetwork(station?.networkId));
 }
 
 /**
@@ -201,7 +202,10 @@ export function summarizeStations(
         newest = measured;
     }
     byNetwork.set(station.networkId, counts);
-    if (view) {
+    // Only readings the MAP is willing to draw count toward the card's range.
+    // A station the markers show as offline must not quietly set the network
+    // minimum or maximum from a week-old figure.
+    if (view && !isStale(station, now)) {
       const value = parameterValue(station, view);
       if (Number.isFinite(value)) {
         measuring++;
