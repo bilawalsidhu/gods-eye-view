@@ -421,6 +421,13 @@ one refresh per upstream is ever in flight. The networks are acquired
 independently and each reports ok, stale or unavailable, so one operator being
 down never blanks the others.
 
+All three operators are credited on the globe for as long as the layer is
+enabled, not only in the attribution lightbox: CC BY is a condition of use and
+SLF's terms require a clearly visible linked reference to the institute while
+its data is displayed. Marker size is continuous in the reading rather than
+quantised by colour band, so a bigger number is a bigger marker even within one
+band and equal numbers are equal markers.
+
 Markers are static point geometry coloured by one selected measurement — wind,
 temperature, snow depth, precipitation or pressure — with size carrying distance
 from an ordinary reading. In the wind view a station with a current reading, a

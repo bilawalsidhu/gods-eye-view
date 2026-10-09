@@ -205,6 +205,24 @@ green while every station rendered as its bare code with no altitude.
 one thing arranged rather than captured (which timestamp slot each GeoSphere
 station reports in) is called out in its header.
 
+## Attribution is on the globe, not only in the lightbox
+
+CC BY is a condition of using all three networks, and SLF's data-service terms
+go further: *"when displaying, processing or otherwise using the data, there
+must be a clearly visible reference to the data source (WSL Institute for Snow
+and Avalanche Research SLF), in the case of digital products as link
+(www.slf.ch)"*.
+
+A lightbox the reader has to open first is a weaker reading of "clearly
+visible" than this layer should rely on, so the credit rides the on-globe
+credit line for exactly as long as the layer is enabled, the way Mapillary's
+CC BY-SA credit does. `showAlpineStationsCredit` / `hideAlpineStationsCredit`
+are driven from the layer's `enable`, `disable` and `destroy`, injected by the
+application wrapper so the layer itself needs no Cesium credit plumbing. The
+`DATA_CREDITS` lightbox entry stays, and carries the fuller text and the
+not-a-danger-rating caveat. The browser gate checks both, and checks that the
+on-globe credit leaves with the layer.
+
 ## Rendering
 
 Geometry is **static**, following the earthquakes layer. Points are written only
@@ -280,7 +298,31 @@ detail boxes covered the country. Labels are dropped past
 `ALPINE_OVERLAY_MAX_DISTANCE_M`; the markers keep rendering, so the network
 stays visible as a network while the numbers stop competing for space.
 
-Snow depth is drawn as **colour, not as a vertical stem**. The earlier branch
+### Size is continuous in the value, never quantised by band
+
+Marker size reads as "how much", so it varies with the reading itself.
+
+The first cut sized by band INDEX, and it was wrong in a way that is obvious
+the moment two labelled stations sit side by side: 1 cm and 9 cm of snow drew
+identical discs because both are `trace`, while 9 cm and 13 cm differed because
+they straddle a boundary. Worse, on an ordinary high-pressure day the whole
+country sits inside one 10 hPa band, so all 59 stations publishing QFF drew at
+exactly the same size and the encoding carried nothing at all.
+
+`parameterProminence` now reads a per-view `size` domain, in one of two shapes:
+
+- `from-zero` for wind, snow and rain, which have a real floor and a long
+  tail. The square-root curve gives the crowded low end room; linearly, every
+  October snow depth rounds to the minimum.
+- `diverging` for temperature and pressure, which are remarkable in both
+  directions from an ordinary value. `quiet` is the radius around `centre` that
+  still draws at minimum size, because ordinary is a range, not a point.
+
+Colour still comes from the bands, so the legend remains a legend. Tests pin
+both halves: a bigger reading is a bigger marker even inside one band, and
+equal readings are equal markers.
+
+Snow depth is drawn as **colour and size, not as a vertical stem**. The earlier branch
 drew stems scaled to camera altitude, which required rebuilding geometry on
 every camera settle. That is what the current design exists to avoid.
 
@@ -314,6 +356,16 @@ list and a parameter change that recolours without rebuilding.
 
 Headless Chrome needs `--use-gl=angle --use-angle=swiftshader`; plain
 `--use-gl=swiftshader` fails to create a WebGL context.
+
+### Markers look soft on a HiDPI display, and that is not this layer
+
+Cesium runs with `useBrowserRecommendedResolution: true` (its default, and the
+app sets nothing else), so the globe canvas renders at CSS resolution and the
+browser upsamples it on a HiDPI screen. Canvas-drawn markers therefore look
+softer than the DOM-rendered labels beside them, which are crisp at native
+density. It affects every Cesium-drawn layer equally, not just this one; judge
+marker tuning at `deviceScaleFactor: 1`, or the blur will be mistaken for a
+sizing or colour problem. It was, once.
 
 ### A new `/api` route needs a container restart
 
