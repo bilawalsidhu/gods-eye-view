@@ -772,3 +772,74 @@ test('a listing that lands late does not overwrite a newer provider', async () =
   );
   console_.destroy();
 });
+
+test('a hidden console stops claiming Escape', async () => {
+  // Four exclusive surfaces hide the console with display:none while it stays
+  // open. The handler is capture-phase, so without a visibility check it eats
+  // the Escape that stops a recording.
+  const dom = agentConsoleDom();
+  const console_ = mountAgentConsole({
+    root: dom.document,
+    runAction: async () => ({ ok: true }),
+    fetchImpl: stubEndpoints(),
+    storage: fakeStorage(),
+  });
+  dom.click(dom.chip);
+  await new Promise(setImmediate);
+  assert.equal(dom.dialog.open, true);
+
+  dom.dialog.getClientRects = () => [];
+  const hidden = dom.keydown('Escape');
+  assert.equal(
+    hidden.prevented,
+    false,
+    'a hidden console still swallowed Escape',
+  );
+  assert.equal(hidden.stopped, false, 'and it stopped it reaching the app');
+  assert.equal(dom.dialog.open, true, 'it should not have closed either');
+
+  dom.dialog.getClientRects = () => [{ width: 10, height: 10 }];
+  const shown = dom.keydown('Escape');
+  assert.equal(shown.prevented, true, 'a visible console must claim Escape');
+  assert.equal(dom.dialog.open, false);
+  console_.destroy();
+});
+
+test('a failed first load is retried on the next open, not remembered', async () => {
+  let attempt = 0;
+  const fetchImpl = async (url) => {
+    if (url === '/api/agent/config') {
+      attempt += 1;
+      if (attempt === 1) {
+        return {
+          ok: false,
+          status: 503,
+          json: async () => ({ error: 'Unknown API route' }),
+        };
+      }
+    }
+    return stubEndpoints()(url);
+  };
+  const dom = agentConsoleDom();
+  const console_ = mountAgentConsole({
+    root: dom.document,
+    runAction: async () => ({ ok: true }),
+    fetchImpl,
+    storage: fakeStorage(),
+  });
+
+  dom.click(dom.chip);
+  await new Promise(setImmediate);
+  assert.equal(dom.status.textContent, AGENT_STATUS.UNAVAILABLE);
+  assert.equal(dom.providerSelect.children.length, 0);
+
+  dom.click(dom.chip);
+  dom.click(dom.chip);
+  await new Promise(setImmediate);
+  await new Promise(setImmediate);
+
+  assert.equal(attempt, 2, 'the failed load was remembered as done');
+  assert.ok(dom.providerSelect.children.length > 0, 'providers never arrived');
+  assert.equal(dom.status.textContent, AGENT_STATUS.READY);
+  console_.destroy();
+});

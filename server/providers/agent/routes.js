@@ -125,11 +125,16 @@ function resolveRequestProvider(requestedId, res, env) {
 /**
  * GET /api/agent/config — providers, defaults and prefix size for the console.
  *
- * @param {{env?: Record<string,string|undefined>}} [options]
+ * @param {{env?: Record<string,string|undefined>,
+ *   limiter?: () => ((key: string) => boolean)|null}} [options]
  */
-function createAgentConfigHandler({ env = process.env } = {}) {
+function createAgentConfigHandler({
+  env = process.env,
+  limiter = agentRateLimiter,
+} = {}) {
   return (req, res) => {
     if (!requireMethod(req, res, 'GET')) return;
+    if (!enforceRateLimit(limiter(env), req, res)) return;
     const configured = resolveConfiguredProvider(env);
     sendJson(res, 200, {
       providers: describeProviders(env),
@@ -210,7 +215,7 @@ function prepareCalls(message) {
   const raw = Array.isArray(message?.tool_calls) ? message.tool_calls : [];
   return raw.map((call) => ({
     id: toolCallPairingId(call),
-    result: prepareToolCall(call.function, toolIndex()),
+    result: prepareToolCall(call?.function, toolIndex()),
   }));
 }
 
@@ -373,7 +378,10 @@ function createAgentCommandHandler({
         return;
       }
 
-      corrections.push(completion.message);
+      // The same pairing the answer path applies: the correction prompt sends
+      // this message back alongside a tool result per call, and an upstream
+      // rejects the pair outright when the result's id matches no call.
+      corrections.push(messageWithPairingIds(completion.message, prepared));
       for (const entry of prepared) {
         corrections.push(
           toolResultMessage(

@@ -178,7 +178,7 @@ test('an OpenAI listing is normalized and its non-chat families removed', async 
         provider: 'openai',
         contextLength: 0,
         supportsTools: true,
-        supportsVision: true,
+        supportsVision: false,
         pricing: null,
       },
     ],

@@ -636,3 +636,82 @@ test('a model whose window barely clears the prefix is gated out of the listing'
   assert.equal(res.json.rejected[0].id, 'tight');
   assert.equal(res.json.rejected[0].reason, 'context-too-small');
 });
+
+test('the correction prompt pairs its tool results with the ids it sent', async () => {
+  // The retry carries the assistant message plus one tool result per call. An
+  // upstream rejects that pair outright when a result names an id no call in
+  // the message has, which turns an invisible correction into a visible error.
+  const sent = [];
+  const fetchImpl = stubFetch((url, init) => {
+    const body = JSON.parse(init.body);
+    sent.push(body.messages);
+    return sent.length === 1
+      ? toolCallReply('set_visual_style', { nonsense: true }, { id: null })
+      : answerReply('Done.');
+  });
+  const res = response();
+  await createAgentCommandHandler({ env: KEYED, fetchImpl, limiter: admitAll })(
+    request({
+      method: 'POST',
+      body: JSON.stringify({
+        provider: 'openai',
+        messages: [{ role: 'user', content: 'night vision' }],
+      }),
+    }),
+    res,
+  );
+
+  const retry = sent[1];
+  const assistant = retry.find((message) => message.role === 'assistant');
+  const toolResults = retry.filter((message) => message.role === 'tool');
+  const offered = (assistant?.tool_calls ?? []).map((call) => call.id);
+  assert.equal(offered.length, toolResults.length);
+  for (const result of toolResults) {
+    assert.ok(
+      offered.includes(result.tool_call_id),
+      `tool result ${result.tool_call_id} pairs with no call in ${JSON.stringify(offered)}`,
+    );
+    assert.ok(result.tool_call_id);
+  }
+});
+
+test('a null entry in tool_calls is answered, not left hanging', async () => {
+  const res = response();
+  const fetchImpl = stubFetch([
+    {
+      body: {
+        model: 'gpt-5-mini',
+        choices: [
+          {
+            message: { role: 'assistant', content: '', tool_calls: [null] },
+            finish_reason: 'tool_calls',
+          },
+        ],
+      },
+    },
+    answerReply('Done.'),
+    answerReply('Done.'),
+  ]);
+  await createAgentCommandHandler({ env: KEYED, fetchImpl, limiter: admitAll })(
+    request({
+      method: 'POST',
+      body: JSON.stringify({
+        provider: 'openai',
+        messages: [{ role: 'user', content: 'hello' }],
+      }),
+    }),
+    res,
+  );
+  assert.equal(res.ended, true, 'no reply was sent at all');
+  assert.equal(res.statusCode, 200);
+});
+
+test('the config endpoint shares the throttle the other two use', async () => {
+  const res = response();
+  await createAgentConfigHandler({ env: KEYED, limiter: refuseAll })(
+    request({}),
+    res,
+  );
+  assert.equal(res.statusCode, 429);
+  assert.equal(res.headers['retry-after'], '5');
+});
