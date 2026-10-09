@@ -98,6 +98,51 @@ export const NYC_DOT_DISCLAIMER =
   'NYC DOT and the City of New York make no representation as to the accuracy or usefulness of the information provided by this application or the information&#39;s suitability for any purpose and disclaim any liability for omissions or errors that may be contained therein. ' +
   'The public is advised to observe posted signage for compliance with applicable laws and regulations.';
 
+const alpineDisplays = new WeakMap();
+
+/**
+ * The Alpine station operators' credit, kept ON THE GLOBE while the layer is
+ * on rather than only in the attribution lightbox.
+ *
+ * This is a licence condition, not a preference. SLF's data-service terms
+ * require that "when displaying, processing or otherwise using the data, there
+ * must be a clearly visible reference to the data source (WSL Institute for
+ * Snow and Avalanche Research SLF), in the case of digital products as link
+ * (www.slf.ch)". A lightbox the reader has to open first is a weaker reading of
+ * "clearly visible" than this repo should rely on, so the reference stays on
+ * screen for exactly as long as the data is — the way Mapillary's CC BY-SA
+ * credit does. The lightbox entry in DATA_CREDITS remains, and carries the
+ * fuller text and the coverage caveat.
+ */
+export const ALPINE_STATIONS_INLINE_CREDIT =
+  'Alpine stations: ' +
+  '<a href="https://www.slf.ch/" target="_blank" rel="noopener">WSL Institute for Snow and Avalanche Research SLF</a> · ' +
+  '<a href="https://www.meteoswiss.admin.ch/" target="_blank" rel="noopener">MeteoSwiss</a> · ' +
+  '<a href="https://data.hub.geosphere.at/" target="_blank" rel="noopener">GeoSphere Austria</a> ' +
+  '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)';
+
+/** Show the on-globe Alpine station credit. Idempotent per viewer. */
+export function showAlpineStationsCredit(viewer) {
+  if (!viewer?.creditDisplay?.addStaticCredit) return false;
+  if (alpineDisplays.has(viewer)) return false;
+  // `true` is showOnScreen: this one rides the on-globe credit line.
+  const credit = new Cesium.Credit(ALPINE_STATIONS_INLINE_CREDIT, true);
+  alpineDisplays.set(viewer, credit);
+  viewer.creditDisplay.addStaticCredit(credit);
+  viewer.scene?.requestRender?.();
+  return true;
+}
+
+/** Remove it again when the layer stops displaying their data. */
+export function hideAlpineStationsCredit(viewer) {
+  const credit = alpineDisplays.get(viewer);
+  if (!credit) return false;
+  alpineDisplays.delete(viewer);
+  viewer.creditDisplay?.removeStaticCredit?.(credit);
+  viewer.scene?.requestRender?.();
+  return true;
+}
+
 export const DATA_CREDITS = [
   // ── Live sources ────────────────────────────────────────────────
   {

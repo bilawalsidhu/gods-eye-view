@@ -873,3 +873,53 @@ test('an arrow is aimed with its cartesian, never with its position property', (
     }
   });
 });
+
+test('the operators are credited on the globe for as long as their data is', async () => {
+  // CC BY is a condition of using these networks, and SLF's terms require a
+  // "clearly visible reference ... as link". A credit that outlives the data,
+  // or appears without it, is wrong in both directions.
+  const calls = [];
+  const overlayHost = fakeOverlayHost();
+  const viewer = fakeViewer();
+  const layer = createAlpineStationsLayer({
+    source: {
+      async getSnapshot() {
+        return snapshot();
+      },
+    },
+    overlayHost,
+    cesium: fakeCesium(),
+    now: () => NOW,
+    arrowImage: () => null,
+    projectRotation: () => 0,
+    credit: {
+      show: (target) => calls.push(['show', target === viewer]),
+      hide: (target) => calls.push(['hide', target === viewer]),
+    },
+  });
+  layer.init(viewer);
+  assert.deepEqual(calls, [], 'nothing is credited before the layer draws');
+  layer.enable();
+  await layer.update();
+  assert.deepEqual(calls, [['show', true]]);
+  layer.disable();
+  assert.deepEqual(calls, [['show', true], ['hide', true]]);
+  layer.enable();
+  layer.destroy();
+  assert.deepEqual(calls.at(-1), ['hide', true], 'destroy releases it too');
+});
+
+test('a layer built without a credit host still runs', () => {
+  // The credit is injected by the application wrapper; the layer itself must
+  // not require one to be drivable in a test or a standalone host.
+  const layer = createAlpineStationsLayer({
+    source: { async getSnapshot() { return snapshot(); } },
+    overlayHost: fakeOverlayHost(),
+    cesium: fakeCesium(),
+    now: () => NOW,
+  });
+  layer.init(fakeViewer());
+  layer.enable();
+  layer.disable();
+  layer.destroy();
+});

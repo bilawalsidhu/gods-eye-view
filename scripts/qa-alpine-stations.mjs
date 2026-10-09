@@ -492,14 +492,36 @@ try {
   );
   await page.screenshot({ path: path.join(outDir, '04-austria.png') });
 
-  // 8. The attribution is on screen, because CC BY is a licence condition.
+  // 8. The attribution is ON THE GLOBE, not only in the lightbox, because
+  //    SLF's terms require a clearly visible linked reference while the data
+  //    is displayed.
+  const onScreen = await page.evaluate(() => {
+    const line = document.querySelector('.cesium-widget-credits');
+    return {
+      text: line?.textContent ?? '',
+      links: [...(line?.querySelectorAll('a') ?? [])].map((a) => a.href),
+    };
+  });
+  check(
+    'SLF is named in full on the globe, as the licence requires',
+    onScreen.text.includes('WSL Institute for Snow and Avalanche Research SLF'),
+    onScreen.text.slice(0, 120),
+  );
+  check(
+    'and linked to slf.ch, as the licence requires',
+    onScreen.links.some((href) => href.startsWith('https://www.slf.ch/')),
+  );
+  for (const operator of ['MeteoSwiss', 'GeoSphere Austria'])
+    check(`${operator} is credited on the globe`, onScreen.text.includes(operator));
+  check('the on-globe credit states the licence', /CC BY 4\.0/.test(onScreen.text));
+
   const credits = await page.evaluate(() => {
     const lightbox = document.querySelector('.cesium-credit-lightbox');
     document.querySelector('.cesium-credit-expand-link')?.click();
     return (lightbox?.textContent || document.body.textContent || '').slice(0, 20_000);
   });
   for (const operator of ['SLF', 'MeteoSwiss', 'GeoSphere Austria'])
-    check(`${operator} is credited in the app`, credits.includes(operator));
+    check(`${operator} is credited in the lightbox too`, credits.includes(operator));
 
   // 9. Disabling releases everything.
   await page.evaluate((id) => {
@@ -508,6 +530,15 @@ try {
   await sleep(900);
   const off = await readState(LAYER);
   check('disabling hides the layer', !off.enabled && !off.show);
+  check(
+    'the on-globe credit leaves with the layer',
+    !(await page.evaluate(
+      () =>
+        document
+          .querySelector('.cesium-widget-credits')
+          ?.textContent?.includes('Avalanche Research SLF') ?? false,
+    )),
+  );
   check(
     'the card leaves the WEATHER rail with the layer',
     await page.evaluate(
