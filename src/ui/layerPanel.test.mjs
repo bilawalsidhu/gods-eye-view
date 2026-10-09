@@ -357,3 +357,58 @@ test('the Weather readout receives enabled air-quality alongside weather layers'
     ],
   );
 });
+
+test('the Alpine station card sits in Weather, after wind and before the rasters', () => {
+  // The rail renders this group in PANEL_ORDER order, and the observed-history
+  // group below it owns the three timeline-driven raster products.
+  const source = readFileSync(
+    new URL('./layerPanel.js', import.meta.url),
+    'utf8',
+  );
+  const declarations = source.slice(
+    source.indexOf('const PANEL_GROUPS ='),
+    source.indexOf('const PANEL_POSITIONS ='),
+  );
+  const order = JSON.parse(
+    runInNewContext(`${declarations}\nJSON.stringify(PANEL_ORDER)`),
+  );
+  assert.deepEqual(
+    order.filter(({ label }) => label === 'Weather').map(({ id }) => id),
+    [
+      'wind',
+      'alpine-stations',
+      'weather-radar',
+      'weather-satellite',
+      'weather-lightning',
+      'weather-cyclones',
+    ],
+  );
+  assert.equal(order.filter(({ id }) => id === 'alpine-stations').length, 1);
+});
+
+test('the WEATHER rail subscribes to exactly the layers the group lists', () => {
+  // Two independent lists name the weather layers: the panel group and the
+  // subscription filter in _refreshWeatherPanel. A layer in one and not the
+  // other either never refreshes its card or refreshes a card it has no row
+  // for, and both fail silently.
+  const source = readFileSync(
+    new URL('./layerPanel.js', import.meta.url),
+    'utf8',
+  );
+  const declarations = source.slice(
+    source.indexOf('const PANEL_GROUPS ='),
+    source.indexOf('const PANEL_POSITIONS ='),
+  );
+  const group = JSON.parse(
+    runInNewContext(`${declarations}\nJSON.stringify(PANEL_ORDER)`),
+  )
+    .filter(({ label }) => label === 'Weather')
+    .map(({ id }) => id);
+  const refresh = source.slice(source.indexOf('_refreshWeatherPanel()'));
+  const literal = refresh.slice(
+    refresh.lastIndexOf('[', refresh.indexOf('].includes(layer.id)')),
+    refresh.indexOf('].includes(layer.id)') + 1,
+  );
+  const subscribed = JSON.parse(runInNewContext(`JSON.stringify(${literal})`));
+  assert.deepEqual([...subscribed].sort(), [...group].sort());
+});

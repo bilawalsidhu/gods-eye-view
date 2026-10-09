@@ -405,6 +405,15 @@ export const DATA_CREDITS = [
     html: 'Observed weather: <a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener">NOAA nowCOAST</a> · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners. <a href="https://oceanservice.noaa.gov/disclaimer.html" target="_blank" rel="noopener">Source disclaimer</a>.',
   },
   {
+    key: 'alpine-stations',
+    html:
+      'Alpine weather stations: ' +
+      '<a href="https://www.slf.ch/" target="_blank" rel="noopener">WSL Institute for Snow and Avalanche Research SLF</a> (IMIS) · ' +
+      '<a href="https://www.meteoswiss.admin.ch/" target="_blank" rel="noopener">MeteoSwiss</a> (SwissMetNet) · ' +
+      '<a href="https://data.hub.geosphere.at/" target="_blank" rel="noopener">GeoSphere Austria</a> (TAWES), each ' +
+      '<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Measurements only, not avalanche danger ratings.',
+  },
+  {
     key: 'weather-cyclones',
     html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
   },

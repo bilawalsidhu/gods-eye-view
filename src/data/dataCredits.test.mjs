@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DATA_CREDITS, NYC_DOT_DISCLAIMER } from './dataCredits.js';
+import { ALPINE_NETWORKS } from '../layers/alpineStations/networks.js';
 
 test('every credit carries a unique key and some markup to render', () => {
   const keys = DATA_CREDITS.map((entry) => entry.key);
@@ -140,4 +141,34 @@ test('every Street Level imagery source is in the attribution lightbox', () => {
       DATA_CREDITS.some((entry) => entry.key === key),
       `${key} has no credit`,
     );
+});
+
+test('every Alpine station network is credited, with its licence and caveat', () => {
+  // CC BY is a licence condition, not a courtesy: the credit lightbox is the
+  // app's canonical attribution surface, so a network on screen without an
+  // entry here is a licence breach rather than a cosmetic gap.
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'alpine-stations');
+  assert.ok(credit, 'the layer has no attribution entry');
+  for (const network of ALPINE_NETWORKS) {
+    assert.ok(
+      credit.html.includes(network.attribution),
+      `${network.id} is not credited`,
+    );
+    assert.ok(credit.html.includes(network.homepage), `${network.id} homepage`);
+  }
+  assert.match(credit.html, /creativecommons\.org\/licenses\/by\/4\.0/);
+  assert.match(credit.html, /CC BY 4\.0/);
+  // Snow depth is a measurement; the operators' avalanche bulletins are a
+  // separate product this layer does not reproduce.
+  assert.match(credit.html, /not avalanche danger ratings/);
+  for (const link of credit.html.matchAll(/<a [^>]*>/g))
+    assert.match(link[0], /rel="noopener"/, link[0]);
+});
+
+test('the credited networks are exactly the ones the layer can draw', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'alpine-stations');
+  const mentioned = ALPINE_NETWORKS.filter((network) =>
+    credit.html.includes(network.attribution),
+  );
+  assert.equal(mentioned.length, ALPINE_NETWORKS.length);
 });

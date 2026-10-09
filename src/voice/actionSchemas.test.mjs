@@ -38,7 +38,9 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
     // Air quality (ECCC AQHI) extends the manifest.
-    '775ba323384b4c1b62fb8415bac52aecc3fc668e20bedcfa57e426dcd1da3969',
+    // Alpine Stations adds its toggle/analyst enum values, aliases and field
+    // hints; it rides the existing tools and edits none of them.
+    '760a0d21fdeadbb222b2da8a750cb1c36df0629336374fe713c74e953833bdf0',
   );
 });
 

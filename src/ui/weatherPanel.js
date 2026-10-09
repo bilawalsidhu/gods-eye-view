@@ -8,12 +8,20 @@ const openDocuments = new WeakMap();
 const ORDER = [
   'weather-cyclones',
   'wind',
+  'alpine-stations',
   'weather-radar',
   'weather-satellite',
   'weather-lightning',
   'air-quality',
 ];
-const OBSERVED = new Set(ORDER.slice(2, 5));
+// Named rather than taken positionally from ORDER: the observed-history group
+// is the three timeline-driven raster products, and inserting any other card
+// into the order must not silently enrol it in the timeline.
+const OBSERVED = new Set([
+  'weather-radar',
+  'weather-satellite',
+  'weather-lightning',
+]);
 const utc = (time) =>
   Number.isFinite(Date.parse(time))
     ? `${formatUtcDayMonth(time)} ${utcClock(time)}`
