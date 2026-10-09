@@ -410,9 +410,41 @@ geographic seams and releases on disable; forecast animation is not implied.
 Cyclone markers, labels, tracks and cones are hidden beyond the horizon on every map source.
 Consult the linked official advisory for safety decisions.
 
+Alpine Stations draws about 650 automatic weather stations across the Swiss and
+Austrian Alps from three keyless CC BY 4.0 networks, one adapter per operator:
+WSL/SLF IMIS, MeteoSwiss SwissMetNet and GeoSphere Austria TAWES. A bounded
+same-origin provider joins each network's identity and reading payloads and
+merges them, because none of the three can be called from a browser usefully:
+SLF advertises no CORS, and the other two publish identity and current values in
+separate files. Readings cache for five minutes, station metadata for a day, and
+one refresh per upstream is ever in flight. The networks are acquired
+independently and each reports ok, stale or unavailable, so one operator being
+down never blanks the others.
+
+Markers are static point geometry coloured by one selected measurement — wind,
+temperature, snow depth, precipitation or pressure — with size carrying distance
+from an ordinary reading. There is no per-frame animator and no continuous-render
+hold; a parameter change retints the existing entities rather than rebuilding
+them, and the camera is read only on settle, only to refresh the card's nearest
+list. The WEATHER rail card carries the readings, the legend, the parameter
+chips and the nearest stations in view; selecting one shows its full readings.
+
+What each network can supply is declared rather than assumed, because two of
+them cannot supply a measurement honestly through these endpoints. SwissMetNet
+publishes no snow depth in its whole-network current file, and GeoSphere reduces
+pressure only to a local datum, which at 3,000 m is a map of altitude rather
+than of weather. Pressure is sea-level QFF only, never station level or the
+standard-atmosphere reduction. An absent reading stays absent: 0 cm, 0 mm and
+0 °C are all real readings, and a station without a sensor is not a station
+reading zero. Feed staleness (the provider served a cached payload) and the
+count of individually late stations are reported separately. Snow depth is a
+measurement; avalanche danger bulletins are a separate product this layer does
+not reproduce. The layer holds no share-link token yet, so it is registered and
+drawable but does not travel in a share link.
+
 Voice and HUD snapshots reuse the existing feedState classifier. Analyst follow-ups retain their original data provenance; current-view results append provenance without replacing legacy fields. HUD context and deterministic telemetry include non-nominal feed state.
 
-Analyst records come on demand from each layer's `getAnalystRecords`: flights, military, local ADS-B, vessels, satellites, launches, earthquakes, FIRMS (VIIRS and MODIS, with a `sensor` field), fire perimeters, cyclones, transit, bikeshare, ALPR cameras, mapped installations, datacenters and dams. `analyst_query` counts the whole loaded set (up to 250,000 records per layer; past that `coverage.records` reports `returned`, `total` and `truncated: true` and the result carries `complete: false`). Ranking keeps a top-k and scans in 20,000-row slices that yield to the page and stop when superseded. It refuses unknown fields, operators, units that do not convert (`altitudeM(ft)` converts), wrong-typed values, invalid centres, unknown scope kinds and sort fields with `code` and `allowed`, refuses a follow-up with no previous answer (`NO_RESULT_CONTEXT`) or naming other layers than that answer (`FOLLOW_UP_MISMATCH`), and tells `LAYER_OFF`, `NOT_READY` and `FEED_UNAVAILABLE` apart from a real zero; when only some layers can answer the result is `partial` with `unanswered` ids. The Contacts-window path applies the same filters, ranking and item shape to one immutable panel snapshot. Each aircraft layer retains at most 20,000 rows; reaching that bound sets `complete: false` and the spoken/card count becomes “At least”, never an exact claim. A superseded query never replaces follow-up memory, while sibling analyst calls from one assistant response do not cancel one another. Items carry `lat`/`lon`; the feed window (earthquakes and FIRMS: last 24 h), the precise scope and any caveat sit in `display`, which is on-screen detail rather than something the model recites. "In view" is still a radius around the view centre, not the visible footprint. Satellite distance is ground distance.
+Analyst records come on demand from each layer's `getAnalystRecords`: flights, military, local ADS-B, vessels, satellites, launches, earthquakes, FIRMS (VIIRS and MODIS, with a `sensor` field), fire perimeters, cyclones, Alpine stations, transit, bikeshare, ALPR cameras, mapped installations, datacenters and dams. `analyst_query` counts the whole loaded set (up to 250,000 records per layer; past that `coverage.records` reports `returned`, `total` and `truncated: true` and the result carries `complete: false`). Ranking keeps a top-k and scans in 20,000-row slices that yield to the page and stop when superseded. It refuses unknown fields, operators, units that do not convert (`altitudeM(ft)` converts), wrong-typed values, invalid centres, unknown scope kinds and sort fields with `code` and `allowed`, refuses a follow-up with no previous answer (`NO_RESULT_CONTEXT`) or naming other layers than that answer (`FOLLOW_UP_MISMATCH`), and tells `LAYER_OFF`, `NOT_READY` and `FEED_UNAVAILABLE` apart from a real zero; when only some layers can answer the result is `partial` with `unanswered` ids. The Contacts-window path applies the same filters, ranking and item shape to one immutable panel snapshot. Each aircraft layer retains at most 20,000 rows; reaching that bound sets `complete: false` and the spoken/card count becomes “At least”, never an exact claim. A superseded query never replaces follow-up memory, while sibling analyst calls from one assistant response do not cancel one another. Items carry `lat`/`lon`; the feed window (earthquakes and FIRMS: last 24 h), the precise scope and any caveat sit in `display`, which is on-screen detail rather than something the model recites. "In view" is still a radius around the view centre, not the visible footprint. Satellite distance is ground distance.
 
 Keyless terrain tiles retry when Re:Earth throttles them. The browser fetches
 `terrain.reearth.land/cesium-mesh/ellipsoid/{z}/{x}/{y}.terrain` directly; no
