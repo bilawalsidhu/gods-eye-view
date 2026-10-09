@@ -145,6 +145,19 @@ See [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 **macOS shortcut:** `./scripts/dev-fresh.sh` clears the Vite cache and pulls any
 configured keys straight from the Keychain. It starts keyless too.
 
+### Path 3 — Cloud Deployment (Zero-Local-GPU / No Credit Card)
+
+If you run into local integrated graphics hardware throttling or lack credit cards for required API providers, you can spin this up 100% free on GitHub Codespaces (60 hours free/mo).
+
+- Navigate to your forked copy of this repository on GitHub.
+- Click the green **Code** button -> select the **Codespaces** tab -> click **Create codespace on main**.
+- Once the cloud terminal workspace loads inside your web browser, execute:
+  ```bash
+  npm ci
+  npm run dev
+  ```
+- Click the **Ports** tab at the bottom, hover over local port `4173`, and click the **Globe icon (Open in Browser)** to interact with the full 3D map engine tracking layers seamlessly without stressing your local machine processor.
+
 ### Then power it up — in the app, not in a file
 
 Keys are upgrades, not prerequisites. When you want one, click the **POWER UP**
