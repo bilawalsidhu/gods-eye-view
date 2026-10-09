@@ -378,6 +378,10 @@ function mountAgentConsole({
     } catch (error) {
       setStatus(AGENT_STATUS.UNAVAILABLE);
       append(ENTRY_KIND.ERROR, error?.message || 'Agent backend unavailable');
+      // Clear the memo so reopening retries. A transient failure on the very
+      // first open would otherwise leave the console empty until a reload,
+      // because the swallowed rejection still resolves the remembered promise.
+      configLoaded = null;
     }
   }
 
@@ -461,10 +465,16 @@ function mountAgentConsole({
   // setup and the first-run launcher use. A non-modal dialog does not dismiss
   // itself, and its own keydown listener would miss Escape whenever focus is
   // outside it — which is exactly the state a disabled input leaves it in.
+  // Four exclusive surfaces hide this console with `display: none` while it is
+  // still open, and the handler is capture-phase: without the visibility check
+  // it would swallow the Escape that stops a recording. Same test key setup
+  // uses.
+  const visible = () => dialog.getClientRects().length > 0;
+
   const keyboard = createSurfaceKeyboard({
     root: dialog,
     documentRef: root,
-    isActive: () => dialog.open === true,
+    isActive: () => dialog.open === true && visible(),
     onEscape: () => close(),
     fallbackFocus: () => chip,
   });
@@ -481,7 +491,7 @@ function mountAgentConsole({
     chip.setAttribute('aria-expanded', 'true');
     // The listing is fetched on first open, not at startup: an install with no
     // provider configured should not spend a request to discover that.
-    configLoaded ||= loadConfig();
+    if (!configLoaded) configLoaded = loadConfig();
     input.focus();
   }
 

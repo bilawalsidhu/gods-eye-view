@@ -346,6 +346,10 @@ function openRouterPricing(raw) {
   const prompt = finiteNumber(raw?.prompt, Number.NaN);
   const completion = finiteNumber(raw?.completion, Number.NaN);
   if (!Number.isFinite(prompt) || !Number.isFinite(completion)) return null;
+  // A negative price is OpenRouter's sentinel for a rate it will not quote up
+  // front, not a rebate. Priced as unknown, it sorts last; taken literally it
+  // sorts cheapest and becomes the preselected model at a negative cost.
+  if (prompt < 0 || completion < 0) return null;
   return {
     promptPerMTok: prompt * 1_000_000,
     completionPerMTok: completion * 1_000_000,
@@ -441,7 +445,11 @@ function normalizeOpenAiModel(raw) {
     provider: 'openai',
     contextLength: UNKNOWN_CONTEXT_TOKENS,
     supportsTools: true,
-    supportsVision: true,
+    // OpenAI's listing reports no capabilities at all, which is why the context
+    // length is unknown here too. An unknown capability is recorded as absent,
+    // as it is for Ollama, rather than labelling o1-mini and gpt-3.5-turbo as
+    // vision models in the picker.
+    supportsVision: false,
     pricing: null,
   };
 }

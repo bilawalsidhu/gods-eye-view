@@ -233,12 +233,25 @@ export function agentConsoleDom({ ids = consoleTemplateIds() } = {}) {
     view,
 
     /** Press a key, as the document-level surface keyboard sees it. */
+    /**
+     * Dispatch a key in the capture phase and report whether the surface
+     * claimed it, which is how "the console no longer eats Escape" is
+     * observable at all.
+     *
+     * @returns {{prevented: boolean, stopped: boolean}}
+     */
     keydown(key) {
+      const claimed = { prevented: false, stopped: false };
       const event = new Event('keydown');
       event.key = key;
-      event.preventDefault = () => {};
-      event.stopPropagation = () => {};
+      event.preventDefault = () => {
+        claimed.prevented = true;
+      };
+      event.stopPropagation = () => {
+        claimed.stopped = true;
+      };
       document.dispatchEvent(event);
+      return claimed;
     },
     /** The transcript as [kind, text] pairs. */
     entries() {

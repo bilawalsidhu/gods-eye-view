@@ -244,7 +244,9 @@ test('OpenAI entries report unverified context and assumed tool support', () => 
     provider: 'openai',
     contextLength: UNKNOWN_CONTEXT_TOKENS,
     supportsTools: true,
-    supportsVision: true,
+    // OpenAI reports no capabilities, so vision is recorded as absent rather
+    // than claimed for every chat model in the picker.
+    supportsVision: false,
     pricing: null,
   });
   assert.equal(normalizeOpenAiModel({}), null);
@@ -453,4 +455,31 @@ test('a window that merely exceeds the prefix is not enough to be offered', () =
     ['roomy'],
   );
   assert.equal(rejected[0].reason, MODEL_REJECTION.CONTEXT_TOO_SMALL);
+});
+
+test('a negative upstream price is unknown pricing, not a cheap model', () => {
+  // OpenRouter uses a negative value for a rate it will not quote up front.
+  // Taken literally it sorts cheapest and gets preselected at a negative cost.
+  assert.equal(
+    normalizeOpenRouterModel({
+      id: 'openrouter/auto',
+      supported_parameters: ['tools'],
+      pricing: { prompt: '-1', completion: '-1' },
+    }).pricing,
+    null,
+  );
+
+  const free = {
+    id: 'free',
+    pricing: { promptPerMTok: 0, completionPerMTok: 0 },
+  };
+  const paid = {
+    id: 'paid',
+    pricing: { promptPerMTok: 1, completionPerMTok: 2 },
+  };
+  const unquoted = { id: 'unquoted', pricing: null };
+  assert.deepEqual(
+    sortModelsForPicker([unquoted, paid, free]).map((model) => model.id),
+    ['free', 'paid', 'unquoted'],
+  );
 });
