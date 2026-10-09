@@ -20,7 +20,13 @@ const openai = AGENT_PROVIDERS.openai;
 const openrouter = AGENT_PROVIDERS.openrouter;
 const ollama = AGENT_PROVIDERS.ollama;
 
-/** A fetch stand-in that records calls and replays scripted JSON responses. */
+/**
+ * A fetch stand-in that records calls and replays scripted JSON responses.
+ *
+ * `headers` is modelled because the capped body reader consults
+ * content-length before it reads anything, and a script entry may declare one
+ * to exercise the size ceiling.
+ */
 function stubFetch(script) {
   const calls = [];
   const impl = async (url, init = {}) => {
@@ -30,12 +36,17 @@ function stubFetch(script) {
         ? script(url, init)
         : script[calls.length - 1];
     if (entry instanceof Error) throw entry;
-    const { status = 200, body = {} } = entry ?? {};
+    const { status = 200, body = {}, contentLength = null } = entry ?? {};
+    const text = typeof body === 'string' ? body : JSON.stringify(body);
     return {
       ok: status >= 200 && status < 300,
       status,
-      text: async () =>
-        typeof body === 'string' ? body : JSON.stringify(body),
+      headers: new Headers(
+        contentLength === null
+          ? {}
+          : { 'content-length': String(contentLength) },
+      ),
+      text: async () => text,
     };
   };
   impl.calls = calls;
@@ -344,4 +355,138 @@ test('a completion failure keeps the upstream status so the route can relay it',
   assert.equal(completion.ok, false);
   assert.equal(completion.status, 429);
   assert.match(completion.error, /rate limit/i);
+});
+
+/**
+ * A response whose body opens and then never finishes, so the only thing that
+ * can end the read is the deadline cancelling it.
+ */
+function stallingResponse() {
+  let release;
+  const stalled = new Promise((resolve) => {
+    release = resolve;
+  });
+  return {
+    release: () => release(),
+    response: {
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: {
+        getReader: () => ({
+          read: () => stalled,
+          cancel: async () => release({ done: true }),
+          releaseLock: () => {},
+        }),
+      },
+      text: async () => {
+        await stalled;
+        return '{}';
+      },
+    },
+  };
+}
+
+test('the deadline covers the body, not just the headers', async () => {
+  // fetch resolves the moment headers arrive, so a timer cleared at that point
+  // leaves a stalled body reading forever. This hangs if the controller stops
+  // at the headers.
+  const stall = stallingResponse();
+  const result = await requestChatCompletion({
+    provider: openai,
+    baseUrl: 'https://api.openai.com/v1',
+    apiKey: 'sk-x',
+    model: 'gpt-5-mini',
+    messages: [{ role: 'user', content: 'hello' }],
+    fetchImpl: async () => stall.response,
+    timeoutMs: 20,
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /Timed out waiting for OpenAI/);
+});
+
+test('an oversized listing is a reported failure, not a thrown one', async () => {
+  const fetchImpl = stubFetch([
+    { status: 200, body: { data: [] }, contentLength: 64 * 1024 * 1024 },
+  ]);
+  const listing = await fetchModels({
+    provider: openai,
+    baseUrl: 'https://api.openai.com/v1',
+    apiKey: 'sk-x',
+    fetchImpl,
+  });
+  assert.equal(listing.ok, false);
+  assert.match(listing.error, /more data than this server will read/);
+});
+
+test('a body that fails mid-read is a reported failure, not a thrown one', async () => {
+  // readJsonResponse used to be awaited outside the try/catch, so a truncated
+  // body escaped as a rejection and the route answered nothing at all.
+  const truncated = async () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers(),
+    text: async () => {
+      throw Object.assign(new Error('terminated'), { code: 'ECONNRESET' });
+    },
+  });
+  const completion = await requestChatCompletion({
+    provider: openai,
+    baseUrl: 'https://api.openai.com/v1',
+    apiKey: 'sk-x',
+    model: 'gpt-5-mini',
+    messages: [{ role: 'user', content: 'hello' }],
+    fetchImpl: truncated,
+  });
+  assert.equal(completion.ok, false);
+  assert.match(completion.error, /Request to OpenAI failed/);
+
+  const listing = await fetchModels({
+    provider: openai,
+    baseUrl: 'https://api.openai.com/v1',
+    apiKey: 'sk-x',
+    fetchImpl: truncated,
+  });
+  assert.equal(listing.ok, false);
+  assert.match(listing.error, /Request to OpenAI failed/);
+});
+
+test('an unclassified 4xx relays the upstream complaint without the key', () => {
+  const key = 'sk-proj-abcdefghijklmnop';
+  const echoed = `{"error":"bad request for Authorization: Bearer ${key}"}`;
+  const message = normalizeUpstreamError(400, echoed, { apiKey: key });
+  assert.match(message, /bad request/);
+  assert.ok(!message.includes(key));
+  assert.match(message, /\[redacted\]/);
+});
+
+test('a short placeholder key is not treated as a secret to strip', () => {
+  const message = normalizeUpstreamError(400, 'model "key" is unknown', {
+    apiKey: 'key',
+  });
+  assert.match(message, /model "key" is unknown/);
+});
+
+test('a 4xx relays the provider message without its account identifiers', () => {
+  // The exact shape OpenRouter answers a bad model id with. The message is the
+  // whole diagnostic value; `user_id` beside it is the operator's account.
+  const body = JSON.stringify({
+    error: {
+      message: 'not-a-real/model-xyz is not a valid model ID',
+      code: 400,
+    },
+    user_id: 'user_3BkOPdSEY2QZXHdfNlcxNr7pCfd',
+  });
+  const message = normalizeUpstreamError(400, body);
+  assert.match(message, /not a valid model ID/);
+  assert.ok(!message.includes('user_3BkOPdSEY2QZXHdfNlcxNr7pCfd'));
+  assert.ok(!message.includes('user_id'));
+});
+
+test('a JSON body with no message of its own contributes no snippet', () => {
+  const message = normalizeUpstreamError(
+    400,
+    JSON.stringify({ request_id: 'req_abc', organization: 'org_private' }),
+  );
+  assert.equal(message, 'Upstream rejected the request (HTTP 400).');
 });

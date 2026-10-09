@@ -152,7 +152,7 @@ function diagnoseToolTurn({
       promptTokens: truncation.promptTokens,
       message: `${label} may have truncated the tool prefix, so ${named} may not have seen the full tool list.${windowNote(truncation)}`,
       remedy: isLocal
-        ? 'Raise the runtime context window: set OLLAMA_CONTEXT_LENGTH=16384 on the Ollama server (or PARAMETER num_ctx 16384 in a Modelfile) and restart it.'
+        ? 'Raise the runtime context window: set OLLAMA_CONTEXT_LENGTH=32768 on the Ollama server (or PARAMETER num_ctx 32768 in a Modelfile) and restart it.'
         : 'Select a model with a larger context window.',
     });
   }
@@ -162,7 +162,7 @@ function diagnoseToolTurn({
       code: AGENT_WARNING.TEXTUAL_TOOL_CALL,
       message: `${named} wrote a tool call as text instead of issuing one, which usually means its tool definitions were truncated or it does not support tool calling.`,
       remedy: isLocal
-        ? 'Confirm the model reports the "tools" capability, and raise OLLAMA_CONTEXT_LENGTH to at least 16384.'
+        ? 'Confirm the model reports the "tools" capability, and raise OLLAMA_CONTEXT_LENGTH to at least 32768.'
         : 'Select a model that supports tool calling.',
     });
   }

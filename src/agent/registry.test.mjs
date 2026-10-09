@@ -6,6 +6,7 @@ import {
   MAX_MODEL_ID_CHARS,
   MIN_TOOL_CONTEXT_TOKENS,
   MODEL_REJECTION,
+  TOOL_CONTEXT_PREFIX_HEADROOM,
   UNKNOWN_CONTEXT_TOKENS,
   describeProviders,
   gateModels,
@@ -23,6 +24,7 @@ import {
   resolveProvider,
   resolveRequestedModel,
   sortModelsForPicker,
+  toolContextFloor,
 } from '../../server/providers/agent/registry.js';
 
 const openai = AGENT_PROVIDERS.openai;
@@ -376,4 +378,79 @@ test('the native Ollama root drops the compatible /v1 suffix', () => {
     ollamaNativeRoot('http://localhost:11434'),
     'http://localhost:11434',
   );
+});
+
+test('an allowlist also binds the configured default, which is the fallback', () => {
+  // Omitting `model` is the bypass this guards: every unresolvable request
+  // lands on the configured default, so an unchecked default is an unchecked
+  // model.
+  assert.equal(
+    resolveConfiguredModel(AGENT_PROVIDERS.openai, {
+      GEV_AGENT_MODELS: 'gpt-5-nano',
+    }),
+    'gpt-5-nano',
+  );
+  assert.equal(
+    resolveRequestedModel(undefined, AGENT_PROVIDERS.openai, {
+      GEV_AGENT_MODELS: 'gpt-5-nano',
+    }).model,
+    'gpt-5-nano',
+  );
+  assert.equal(
+    resolveRequestedModel('gpt-5-mini', AGENT_PROVIDERS.openai, {
+      GEV_AGENT_MODELS: 'gpt-5-nano',
+    }).model,
+    'gpt-5-nano',
+  );
+});
+
+test('an allowed configured default is left exactly as configured', () => {
+  assert.equal(
+    resolveConfiguredModel(AGENT_PROVIDERS.openai, {
+      GEV_AGENT_MODEL: 'gpt-5-mini',
+      GEV_AGENT_MODELS: 'gpt-5-mini,gpt-5-nano',
+    }),
+    'gpt-5-mini',
+  );
+});
+
+test('a provider with nothing configured does not adopt an allowlist entry', () => {
+  // Ollama depends entirely on what the operator pulled, so the picker has to
+  // ask. An allowlist narrows that question, it does not answer it.
+  assert.equal(
+    resolveConfiguredModel(AGENT_PROVIDERS.ollama, {
+      GEV_AGENT_MODELS_OLLAMA: 'llama3.2:3b',
+    }),
+    null,
+  );
+});
+
+test('the tool context floor follows the prefix and never drops below the gate', () => {
+  assert.equal(toolContextFloor(12_655), 12_655 * TOOL_CONTEXT_PREFIX_HEADROOM);
+  assert.equal(toolContextFloor(1_000), MIN_TOOL_CONTEXT_TOKENS);
+  assert.equal(toolContextFloor(0), MIN_TOOL_CONTEXT_TOKENS);
+  assert.equal(toolContextFloor(Number.NaN), MIN_TOOL_CONTEXT_TOKENS);
+  assert.equal(toolContextFloor(undefined), MIN_TOOL_CONTEXT_TOKENS);
+});
+
+test('a window that merely exceeds the prefix is not enough to be offered', () => {
+  const prefixTokens = 12_655;
+  const tightWindow = {
+    id: 'tight',
+    supportsTools: true,
+    contextLength: MIN_TOOL_CONTEXT_TOKENS,
+  };
+  const roomyWindow = {
+    id: 'roomy',
+    supportsTools: true,
+    contextLength: prefixTokens * TOOL_CONTEXT_PREFIX_HEADROOM,
+  };
+  const { usable, rejected } = gateModels([tightWindow, roomyWindow], {
+    minContextTokens: toolContextFloor(prefixTokens),
+  });
+  assert.deepEqual(
+    usable.map((model) => model.id),
+    ['roomy'],
+  );
+  assert.equal(rejected[0].reason, MODEL_REJECTION.CONTEXT_TOO_SMALL);
 });

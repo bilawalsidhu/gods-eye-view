@@ -11,7 +11,6 @@ import { buildAgentInstructions } from './instructions.js';
 import { agentPromptPrefixTokens } from './prefix.js';
 import { agentRateLimiter } from './rate-limit.js';
 import {
-  MIN_TOOL_CONTEXT_TOKENS,
   describeProviders,
   gateModels,
   isProviderConfigured,
@@ -23,6 +22,7 @@ import {
   resolveProvider,
   resolveRequestedModel,
   sortModelsForPicker,
+  toolContextFloor,
 } from './registry.js';
 import {
   indexToolsByName,
@@ -137,7 +137,7 @@ function createAgentConfigHandler({ env = process.env } = {}) {
       defaultModel: resolveConfiguredModel(configured, env),
       toolCount: GEV_REALTIME_TOOLS.length,
       promptPrefixTokens: agentPromptPrefixTokens(),
-      minContextTokens: MIN_TOOL_CONTEXT_TOKENS,
+      minContextTokens: toolContextFloor(agentPromptPrefixTokens()),
     });
   };
 }
@@ -172,6 +172,7 @@ function createAgentModelsHandler({
 
     const prefixTokens = agentPromptPrefixTokens();
     const { usable, rejected } = gateModels(listing.models, {
+      minContextTokens: toolContextFloor(prefixTokens),
       allowList: modelAllowList(resolved.provider, env),
     });
     sendJson(res, 200, {
@@ -187,13 +188,47 @@ function createAgentModelsHandler({
   };
 }
 
+/**
+ * Pairing id for one tool call, assigned here when the model omitted it.
+ *
+ * A compliant provider always sends an id, but a local model sometimes does
+ * not, and the browser drops an id-less call on its way back into the
+ * transcript. The next round then rebuilds a byte-identical prompt, so the
+ * model asks for the same call again and the action runs once per round until
+ * the loop gives up. Issuing the id server-side keeps the result pairable.
+ */
+let assignedCallSequence = 0;
+function toolCallPairingId(call) {
+  const id = typeof call?.id === 'string' ? call.id.trim() : '';
+  if (id) return id;
+  assignedCallSequence += 1;
+  return `gev_call_${assignedCallSequence}`;
+}
+
 /** Shape the tool calls one completion asked for, or the reason it cannot run. */
 function prepareCalls(message) {
   const raw = Array.isArray(message?.tool_calls) ? message.tool_calls : [];
   return raw.map((call) => ({
-    id: call.id,
+    id: toolCallPairingId(call),
     result: prepareToolCall(call.function, toolIndex()),
   }));
+}
+
+/**
+ * The assistant message carrying the ids `prepareCalls` settled on, so the
+ * transcript the browser keeps pairs with the tool results it sends back.
+ */
+function messageWithPairingIds(message, prepared) {
+  const calls = Array.isArray(message?.tool_calls) ? message.tool_calls : [];
+  if (calls.every((call, index) => call?.id === prepared[index]?.id))
+    return message;
+  return {
+    ...message,
+    tool_calls: calls.map((call, index) => ({
+      ...call,
+      id: prepared[index].id,
+    })),
+  };
 }
 
 /**
@@ -217,6 +252,11 @@ function createAgentCommandHandler({
     let payload;
     try {
       payload = JSON.parse((await readRequestBody(req, maxBytes)) || '{}');
+      // `null` and `[]` are valid JSON, so the parse succeeds and every field
+      // read after it throws past this catch with no reply sent.
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        throw new SyntaxError('Request body is not a JSON object');
+      }
     } catch (error) {
       const tooLarge = error?.code === 'BODY_TOO_LARGE';
       sendJson(res, tooLarge ? 413 : 400, {
@@ -300,7 +340,7 @@ function createAgentCommandHandler({
           provider: resolved.provider.id,
           model: completion.model,
           message: prepared.length
-            ? completion.message
+            ? messageWithPairingIds(completion.message, prepared)
             : { role: 'assistant', content: completion.message.content || '' },
           toolCalls: prepared.map((entry) => ({
             id: entry.id,

@@ -23,6 +23,36 @@ const MIN_TOOL_CONTEXT_TOKENS = 16384;
 const UNKNOWN_CONTEXT_TOKENS = 0;
 
 /**
+ * Multiple of the fixed request prefix a model needs to be usable.
+ *
+ * The prefix is resent on every round trip, so a window merely larger than it
+ * leaves nothing for the transcript, the tool results and the answer. A full
+ * eight-round command can carry eight bounded tool results of 6,000
+ * characters, which at four characters per token is roughly another whole
+ * prefix on top of the one being resent, so one prefix of headroom is the
+ * smallest honest figure rather than a round number.
+ */
+const TOOL_CONTEXT_PREFIX_HEADROOM = 2;
+
+/**
+ * The context window a model must report to be offered for tool use.
+ *
+ * Derived from the measured prefix rather than compared against the floor
+ * alone, because the floor stops being adequate the moment somebody adds a
+ * tool or a directive, and it stops silently.
+ *
+ * @param {number} prefixTokens Heuristic size of the fixed request prefix.
+ * @returns {number}
+ */
+function toolContextFloor(prefixTokens) {
+  const prefix = Number.isFinite(prefixTokens) ? prefixTokens : 0;
+  return Math.max(
+    MIN_TOOL_CONTEXT_TOKENS,
+    Math.ceil(prefix * TOOL_CONTEXT_PREFIX_HEADROOM),
+  );
+}
+
+/**
  * Provider definitions. `apiKeyEnv: null` means the provider is reachable
  * without a credential, which is what makes a local daemon usable with no
  * signup at all.
@@ -144,17 +174,26 @@ function envString(env, name) {
  * The model this provider starts on: per-provider override, shared override,
  * then the provider's own default.
  *
+ * Clamped to the allowlist when the operator set one. Without that clamp the
+ * allowlist is bypassed by simply omitting `model`, because every caller that
+ * cannot resolve a request falls back to this value, which defeats the one
+ * thing the allowlist exists to do. A provider with nothing configured stays
+ * unconfigured rather than adopting an allowlist entry, so a picker that must
+ * ask still asks.
+ *
  * @param {Readonly<object>|null} provider
  * @param {Record<string,string|undefined>} [env]
  * @returns {string|null}
  */
 function resolveConfiguredModel(provider, env = {}) {
   if (!provider) return null;
-  return (
+  const configured =
     envString(env, `GEV_AGENT_MODEL_${provider.id.toUpperCase()}`) ||
     envString(env, 'GEV_AGENT_MODEL') ||
-    provider.defaultModel
-  );
+    provider.defaultModel;
+  const allowed = modelAllowList(provider, env);
+  if (!allowed || !configured) return configured;
+  return allowed.includes(configured) ? configured : allowed[0];
 }
 
 /**
@@ -532,6 +571,7 @@ export {
   MIN_TOOL_CONTEXT_TOKENS,
   MODEL_REJECTION,
   OPENAI_NON_CHAT_PATTERNS,
+  TOOL_CONTEXT_PREFIX_HEADROOM,
   UNKNOWN_CONTEXT_TOKENS,
   describeProviders,
   gateModels,
@@ -549,4 +589,5 @@ export {
   resolveProvider,
   resolveRequestedModel,
   sortModelsForPicker,
+  toolContextFloor,
 };

@@ -708,3 +708,67 @@ test('the console exposes open and close for the application to drive', async ()
   assert.equal(dom.dialog.open, false);
   console_.destroy();
 });
+
+test('a listing that lands late does not overwrite a newer provider', async () => {
+  // The provider picker stays live while a listing is in flight, so the first
+  // request can resolve after the second. The slower reply must not repopulate
+  // the picker under the provider the operator has since chosen.
+  const dom = agentConsoleDom();
+  const openRouterModels = {
+    models: [
+      { id: 'openai/gpt-5-mini', label: 'GPT-5 mini', costPerCommandUsd: 0.01 },
+    ],
+    defaultModel: 'openai/gpt-5-mini',
+  };
+  let releaseOllama;
+  const ollamaLanded = new Promise((resolve) => {
+    releaseOllama = resolve;
+  });
+  const fetchImpl = async (url) => {
+    if (url === '/api/agent/config') {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          providers: PROVIDERS,
+          defaultProvider: 'ollama',
+          defaultModel: null,
+        }),
+      };
+    }
+    if (url === '/api/agent/models?provider=ollama') {
+      await ollamaLanded;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ models: MODELS, defaultModel: null }),
+      };
+    }
+    return { ok: true, status: 200, json: async () => openRouterModels };
+  };
+
+  const console_ = mountAgentConsole({
+    root: dom.document,
+    runAction: async () => ({ ok: true }),
+    fetchImpl,
+    storage: fakeStorage(),
+  });
+  dom.click(dom.chip);
+  await new Promise(setImmediate);
+
+  dom.select(dom.providerSelect, 'openrouter');
+  await new Promise(setImmediate);
+  assert.equal(dom.modelSelect.value, 'openai/gpt-5-mini');
+
+  releaseOllama();
+  await new Promise(setImmediate);
+  await new Promise(setImmediate);
+
+  assert.equal(dom.providerSelect.value, 'openrouter');
+  assert.equal(dom.modelSelect.value, 'openai/gpt-5-mini');
+  assert.deepEqual(
+    dom.modelSelect.children.map((option) => option.value),
+    ['openai/gpt-5-mini'],
+  );
+  console_.destroy();
+});

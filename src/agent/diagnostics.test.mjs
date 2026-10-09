@@ -160,7 +160,7 @@ test('a truncated prefix warns, hedges, and names the local remedy', () => {
   assert.match(warning.message, /Ollama may have truncated/);
   assert.match(warning.message, /4,096 prompt tokens/);
   assert.match(warning.message, /stock default window/);
-  assert.match(warning.remedy, /OLLAMA_CONTEXT_LENGTH=16384/);
+  assert.match(warning.remedy, /OLLAMA_CONTEXT_LENGTH=32768/);
 });
 
 test('a hosted provider gets a remedy it can actually act on', () => {
