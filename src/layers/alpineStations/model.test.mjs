@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  MARKER_QUIET_PX,
   ARROW_MAX_PX,
   ARROW_MIN_PX,
   WIND_ARROW_CALM_FLOOR_MS,
@@ -270,4 +271,33 @@ test('arrow size stays within its bounds and grows with the wind', () => {
     assert.ok(size >= ARROW_MIN_PX && size <= ARROW_MAX_PX, `${speed} -> ${size}`);
   }
   assert.ok(ARROW_MIN_PX > MARKER_MAX_PX - 5, 'an arrow reads larger than a dot');
+});
+
+test('quiet markers recede, because most markers ARE quiet in a thin view', () => {
+  // Only 175 of ~650 stations carry a snow sensor and 59 publish a sea-level
+  // pressure, so in those views a quiet marker drawn at full weight buries the
+  // stations that actually have a reading.
+  const wind = parameterView('wind');
+  const pressure = parameterView('pressure');
+  const reading = stationMarker(station(), wind, { now: NOW });
+  const unmeasured = stationMarker(station(), pressure, { now: NOW });
+  const offline = stationMarker(
+    station({ measuredAt: new Date(NOW - 7 * 24 * 60 * 60_000).toISOString() }),
+    wind,
+    { now: NOW },
+  );
+
+  assert.equal(reading.alpha, 1);
+  assert.ok(unmeasured.alpha < reading.alpha);
+  assert.ok(offline.alpha < unmeasured.alpha, 'silent recedes furthest');
+  for (const quiet of [unmeasured, offline]) {
+    assert.equal(quiet.pixelSize, MARKER_QUIET_PX);
+    assert.ok(quiet.pixelSize < reading.pixelSize);
+    assert.equal(quiet.outlined, false, 'an outline is most of a 4 px dot');
+  }
+  assert.equal(reading.outlined, true);
+  // Still drawn: a station that exists but cannot answer is a different thing
+  // from no station at all, and the network is part of the picture.
+  assert.ok(unmeasured.pixelSize > 0 && unmeasured.alpha > 0);
+  assert.ok(offline.pixelSize > 0 && offline.alpha > 0);
 });

@@ -7,9 +7,11 @@ import {
 } from './index.js';
 import {
   ALPINE_OVERLAY_SOURCE_ID,
-  MARKER_MIN_PX,
+  MARKER_QUIET_PX,
   OFFLINE_ACCENT,
+  OFFLINE_ALPHA,
   UNMEASURED_ACCENT,
+  UNMEASURED_ALPHA,
 } from './model.js';
 import {
   ALPINE_NETWORK_IDS,
@@ -27,7 +29,13 @@ function fakeCesium() {
     Math: { toDegrees: (radians) => (radians * 180) / Math.PI },
     Color: {
       BLACK: { withAlpha: (alpha) => ({ black: alpha }) },
-      fromCssColorString: (css) => ({ css }),
+      fromCssColorString: (css) => ({
+        css,
+        alpha: 1,
+        withAlpha(alpha) {
+          return { css, alpha };
+        },
+      }),
     },
     Cartesian3: { fromDegrees: (lon, lat) => ({ lon, lat }), ZERO: 'zero' },
     BillboardGraphics: class {
@@ -325,7 +333,7 @@ test('only stations with a reading for the selected parameter get a label', asyn
   );
 });
 
-test('an offline and an unmeasured station draw at minimum size, in their own greys', async () => {
+test('a station with nothing to say about this parameter recedes', async () => {
   const { layer, dataSource } = build({
     stations: [
       station({
@@ -343,10 +351,16 @@ test('an offline and an unmeasured station draw at minimum size, in their own gr
   });
   layer.enable();
   await layer.update();
-  assert.equal(dataSource.entities.values[0].point.color.css, OFFLINE_ACCENT);
-  assert.equal(dataSource.entities.values[0].point.pixelSize, MARKER_MIN_PX);
+  // Coverage is uneven by nature: in the snow and pressure views MOST markers
+  // are quiet ones, so drawn at full weight they bury the readings and, on a
+  // light basemap, read as smudges over the map.
+  const [point] = dataSource.entities.values.map((entity) => entity.point);
+  assert.equal(point.color.css, OFFLINE_ACCENT);
+  assert.equal(point.color.alpha, OFFLINE_ALPHA);
+  assert.equal(point.pixelSize, MARKER_QUIET_PX);
+  assert.equal(point.outlineWidth, 0, 'an outline is most of a 4 px dot');
   layer.setParams({ parameter: 'pressure' });
-  assert.equal(dataSource.entities.values[0].point.color.css, OFFLINE_ACCENT);
+  assert.equal(point.color.css, OFFLINE_ACCENT);
 });
 
 test('a reporting station that lacks the selected sensor is unmeasured, not offline', async () => {
@@ -354,7 +368,21 @@ test('a reporting station that lacks the selected sensor is unmeasured, not offl
   layer.enable();
   await layer.update();
   layer.setParams({ parameter: 'pressure' });
-  assert.equal(dataSource.entities.values[0].point.color.css, UNMEASURED_ACCENT);
+  const [point] = dataSource.entities.values.map((entity) => entity.point);
+  assert.equal(point.color.css, UNMEASURED_ACCENT);
+  assert.equal(point.color.alpha, UNMEASURED_ALPHA);
+  assert.equal(point.pixelSize, MARKER_QUIET_PX);
+  assert.equal(point.outlineWidth, 0);
+});
+
+test('a station WITH a reading keeps its full weight and its outline', async () => {
+  const { layer, dataSource } = build();
+  layer.enable();
+  await layer.update();
+  const [point] = dataSource.entities.values.map((entity) => entity.point);
+  assert.equal(point.color.alpha, 1);
+  assert.equal(point.outlineWidth, 1);
+  assert.ok(point.pixelSize > MARKER_QUIET_PX);
 });
 
 test('the card lists the nearest stations in view, bounded and nearest first', async () => {

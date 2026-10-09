@@ -190,7 +190,9 @@ export function createAlpineStationsLayer({
     const aimed = new Set();
     for (const station of stations()) {
       const marker = stationMarker(station, current, { now: clock });
-      const color = cesium.Color.fromCssColorString(marker.accent);
+      const color = cesium.Color.fromCssColorString(marker.accent).withAlpha(
+        marker.alpha,
+      );
       const arrow = stationArrow(station, current, marker);
       let entity = entities.get(station.id);
       const position = cesium.Cartesian3.fromDegrees(station.lon, station.lat);
@@ -205,7 +207,7 @@ export function createAlpineStationsLayer({
               pixelSize: marker.pixelSize,
               color,
               outlineColor: cesium.Color.BLACK.withAlpha(0.65),
-              outlineWidth: 1,
+              outlineWidth: marker.outlined ? 1 : 0,
               heightReference: cesium.HeightReference.CLAMP_TO_GROUND,
               disableDepthTestDistance: 0,
             },
@@ -217,6 +219,7 @@ export function createAlpineStationsLayer({
         // Recolour in place. The position of a weather station does not change.
         entity.point.pixelSize = marker.pixelSize;
         entity.point.color = color;
+        entity.point.outlineWidth = marker.outlined ? 1 : 0;
       }
       // A station carries both graphics and shows one, so switching parameter
       // swaps the symbol without replacing the entity.

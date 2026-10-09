@@ -163,6 +163,26 @@ readings that were never made: a current value, `unmeasured` (the station is
 reporting, but not this parameter), and `offline` (silent, or too old to
 present).
 
+### Quiet markers have to RECEDE, not merely differ
+
+Coverage is uneven by nature, and the thin views are thin: only 175 of ~650
+stations carry a snow sensor, and only 59 publish a sea-level pressure. So in
+those views MOST markers are quiet ones.
+
+Drawn at the same weight as a reading they bury the stations that actually have
+one, and on a light basemap several hundred dark discs read as smudges over the
+map — which is exactly how this was found, on the OSM stack where the first
+tuning (chosen against dark satellite imagery) fell apart. A quiet marker is
+therefore 4 px at low alpha with no outline, against 6-15 px fully opaque and
+outlined for a reading. An outline is most of a 4 px dot, which is why only a
+reading carries one.
+
+They are not dropped. A station that exists but cannot answer is a different
+thing from no station at all, and the network is part of the picture.
+
+**Tune these against the light basemap, not only the dark one.** `osm` is the
+hardest case for anything grey.
+
 ### A silent station is not a stale station
 
 It has no reading to be out of date. They read differently on the card and

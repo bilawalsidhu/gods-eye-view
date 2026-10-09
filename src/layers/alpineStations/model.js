@@ -36,6 +36,23 @@ export const MARKER_MIN_PX = 6;
 export const MARKER_MAX_PX = 15;
 
 /**
+ * Size and opacity for a station with nothing to say about this parameter.
+ *
+ * These have to recede, not just differ. Coverage is uneven by nature: only
+ * 175 of ~650 stations carry a snow sensor and only 59 publish a sea-level
+ * pressure, so in those views MOST markers are quiet ones. Drawn at the same
+ * weight as a reading they bury the stations that actually have one, and on a
+ * light basemap several hundred dark discs read as smudges over the map.
+ *
+ * They are not dropped, because the network is part of the picture and a
+ * station that exists but cannot answer is a different thing from no station.
+ * They are simply made quiet enough to read as background.
+ */
+export const MARKER_QUIET_PX = 4;
+export const UNMEASURED_ALPHA = 0.4;
+export const OFFLINE_ALPHA = 0.26;
+
+/**
  * Wind arrows run larger than the dots they replace: a head has to show its
  * direction, which a disc of the same area does not have to do.
  */
@@ -72,7 +89,9 @@ export function stationMarker(station, view, { now = Date.now() } = {}) {
     return {
       state: 'offline',
       accent: OFFLINE_ACCENT,
-      pixelSize: MARKER_MIN_PX,
+      alpha: OFFLINE_ALPHA,
+      pixelSize: MARKER_QUIET_PX,
+      outlined: false,
       value: null,
       band: null,
     };
@@ -82,7 +101,9 @@ export function stationMarker(station, view, { now = Date.now() } = {}) {
     return {
       state: 'unmeasured',
       accent: UNMEASURED_ACCENT,
-      pixelSize: MARKER_MIN_PX,
+      alpha: UNMEASURED_ALPHA,
+      pixelSize: MARKER_QUIET_PX,
+      outlined: false,
       value: null,
       band: null,
     };
@@ -92,9 +113,12 @@ export function stationMarker(station, view, { now = Date.now() } = {}) {
   return {
     state: 'value',
     accent: band?.accent ?? UNMEASURED_ACCENT,
+    alpha: 1,
     pixelSize: Math.round(
       MARKER_MIN_PX + prominence * (MARKER_MAX_PX - MARKER_MIN_PX),
     ),
+    // An outline is most of a 4 px dot, so only a reading carries one.
+    outlined: true,
     value,
     band,
   };
