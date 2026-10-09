@@ -113,10 +113,10 @@
   military awareness and links that open the app over an area with layers on.
   Voice offers the same queries next to its app actions.
 - Bound upstream requests that relied on Node's five-minute fetch defaults:
-  OpenSky OAuth token and `/states/all`, adsb.lol military, Google Places and
-  the OpenAI HUD summary. A stalled OpenSky token request no longer holds
-  every flight and track poll for five minutes; timeouts take each route's
-  existing cache, regional-fallback or error path.
+  adsb.lol military, Google Places and the OpenAI HUD summary. A stalled
+  upstream no longer holds its route for five minutes; timeouts take each
+  route's existing error path. Tests also cover the OpenSky token and
+  `/states/all` timeouts.
 
 - Public Overpass instances are no longer used by default. Street Traffic
   roads come from TomTom flow tiles, OpenFreeMap vector tiles, or both, chosen
