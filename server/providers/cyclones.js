@@ -1,4 +1,5 @@
 import { readResponseTextCapped } from './common/http.js';
+import { allowedMethods } from './common/methods.js';
 
 const STATUS_URL = 'https://www.nhc.noaa.gov/CurrentStorms.json';
 const GIS =
@@ -379,6 +380,7 @@ export function cycloneProxy({
       res.writeHead(status, {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store',
+        ...(status === 405 ? { Allow: allowedMethods('GET') } : {}),
         ...(status === 429 ? { 'Retry-After': '2' } : {}),
       });
       res.end(JSON.stringify(value));

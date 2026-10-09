@@ -1,5 +1,8 @@
 # Changelog
 
+- Every local route that answers `405 Method Not Allowed` now names the methods
+  it accepts in an `Allow` header (#809). Response bodies are unchanged.
+
 - Vector tile sources take their allowed tile origin from the configured
   `tileJsonUrl`, so repointing only that URL at a mirror loads tiles from the
   mirror or fails visibly instead of silently using OpenFreeMap. Thanks to

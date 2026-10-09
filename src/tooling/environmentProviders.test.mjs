@@ -223,10 +223,9 @@ test('GBFS keeps host/path/method guards, response caps and distinct information
   });
   const request = install(gbfsProxy());
   const target = (p) => '/' + encodeURIComponent('https://gbfs.lyft.com/' + p);
-  assert.equal(
-    (await request(target('station_status.json'), 'POST')).status,
-    405,
-  );
+  const rejected = await request(target('station_status.json'), 'POST');
+  assert.equal(rejected.status, 405);
+  assert.equal(rejected.headers.Allow, 'GET');
   assert.equal(
     (
       await request(

@@ -2,9 +2,11 @@ import { sameSiteGated } from '../common/same-site.js';
 import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
 import { fetchTile, TileRequestError, TileUpstreamError } from './tiles.js';
 import { mapillaryToken, TILE_ROUTE_MAX_PER_MIN } from './constants.js';
+import { allowedMethods } from '../common/methods.js';
 
 function sendJson(res, status, payload) {
   res.statusCode = status;
+  if (status === 405) res.setHeader('Allow', allowedMethods('GET'));
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
   res.end(JSON.stringify(payload));

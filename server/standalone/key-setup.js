@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import { parseEnv as parseDotenvText } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { hardenCredentialFile } from './key-setup-hardening.mjs';
+import { allowedMethods } from '../providers/common/methods.js';
 
 /**
  * Which launcher started this process, captured at MODULE LOAD — before the
@@ -246,16 +247,20 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
       command === 'serve' && !isPreview,
     configureServer(server) {
       server.middlewares.use('/api/setup/status', (req, res) => {
-        if (req.method !== 'GET')
+        if (req.method !== 'GET') {
+          res.setHeader('Allow', allowedMethods('GET'));
           return respond(res, 405, { error: 'Method not allowed' });
+        }
         const admission = admit(req);
         if (!admission.ok)
           return respond(res, admission.status, { error: admission.error });
         respond(res, 200, providerStatus());
       });
       server.middlewares.use('/api/setup/keys', (req, res) => {
-        if (req.method !== 'POST')
+        if (req.method !== 'POST') {
+          res.setHeader('Allow', allowedMethods('POST'));
           return respond(res, 405, { error: 'Method not allowed' });
+        }
         const admission = admit(req);
         if (!admission.ok)
           return respond(res, admission.status, { error: admission.error });

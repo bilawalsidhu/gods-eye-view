@@ -19,6 +19,7 @@ import {
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { createHlsPuller } from './cctv/stream.js';
 import { googleServerApiKey } from './places/google-key.js';
+import { allowedMethods } from './common/methods.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
@@ -227,7 +228,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             return;
           }
           if (req.method !== 'GET') {
-            res.writeHead(405);
+            res.writeHead(405, { Allow: allowedMethods('GET', 'DELETE') });
             res.end();
             return;
           }
