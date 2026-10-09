@@ -149,12 +149,26 @@ const PRESSURE_BANDS = Object.freeze([
 /**
  * The parameter views, in chip order.
  *
- * `neutral` names the band that means "nothing remarkable", which is what
- * marker SIZE is measured against. For wind, rain and snow the quiet point is
- * the bottom of the scale, so size simply grows with the reading; for
- * temperature and pressure it sits mid-scale, so both a hard frost and a heat
- * wave draw large while a mild day draws small. Colour carries the direction,
- * size the distance from ordinary.
+ * `size` is how a reading becomes a marker size, and it is deliberately NOT
+ * the band table. Sizing by band index quantises the reading to five steps,
+ * which made 1 cm and 9 cm of snow identical discs while 9 cm and 13 cm
+ * differed, and made every station on a high-pressure day the same size
+ * because the whole country sat inside one 10 hPa band. Size reads as "how
+ * much", so it has to vary with the value, continuously.
+ *
+ * Two shapes, because the parameters are two shapes:
+ *
+ * - `from-zero` — wind, snow and rain have a real floor at zero and a long
+ *   tail. `to` is the depth/speed at which a marker is as large as it gets,
+ *   chosen as a useful upper end rather than a record. The square-root curve
+ *   gives the crowded low end the room it needs: linearly, every October snow
+ *   depth would round to the minimum.
+ * - `diverging` — temperature and pressure are remarkable in BOTH directions
+ *   from an ordinary value, and ordinary is a range, not a point. `quiet` is
+ *   the radius around `centre` that draws at minimum size, so a mild day and
+ *   an average pressure stay small while a hard frost and a deep low grow.
+ *
+ * Colour still comes from the bands, so the legend remains a legend.
  *
  * `derive` exists because the stored field is not always the presented one:
  * wind is stored in m/s, as all three networks publish it, and read in km/h.
@@ -168,6 +182,7 @@ export const STATION_PARAMETER_VIEWS = Object.freeze({
     derive: msToKmh,
     unit: 'km/h',
     neutral: 'calm',
+    size: Object.freeze({ kind: 'from-zero', to: 90, curve: 'sqrt' }),
     bands: WIND_BANDS,
   }),
   temperature: Object.freeze({
@@ -178,6 +193,7 @@ export const STATION_PARAMETER_VIEWS = Object.freeze({
     derive: null,
     unit: '°C',
     neutral: 'mild',
+    size: Object.freeze({ kind: 'diverging', centre: 10, quiet: 6, to: 30 }),
     bands: TEMPERATURE_BANDS,
   }),
   snow: Object.freeze({
@@ -188,6 +204,7 @@ export const STATION_PARAMETER_VIEWS = Object.freeze({
     derive: null,
     unit: 'cm',
     neutral: 'bare',
+    size: Object.freeze({ kind: 'from-zero', to: 150, curve: 'sqrt' }),
     bands: SNOW_BANDS,
   }),
   precipitation: Object.freeze({
@@ -198,6 +215,7 @@ export const STATION_PARAMETER_VIEWS = Object.freeze({
     derive: null,
     unit: 'mm/10min',
     neutral: 'dry',
+    size: Object.freeze({ kind: 'from-zero', to: 8, curve: 'sqrt' }),
     bands: PRECIPITATION_BANDS,
   }),
   pressure: Object.freeze({
@@ -208,6 +226,7 @@ export const STATION_PARAMETER_VIEWS = Object.freeze({
     derive: null,
     unit: 'hPa',
     neutral: 'average',
+    size: Object.freeze({ kind: 'diverging', centre: 1013, quiet: 3, to: 20 }),
     bands: PRESSURE_BANDS,
   }),
 });
@@ -248,22 +267,27 @@ export function parameterBand(value, view) {
 }
 
 /**
- * Distance from the view's neutral band, as 0..1.
+ * How far a reading is from ordinary, as a continuous 0..1.
  *
- * Marker size reads this, so a view whose quiet point is mid-scale grows in
- * both directions from it while a view whose quiet point is the floor only
- * grows upward.
+ * Marker size reads this. It varies with the VALUE, not with which band the
+ * value fell in: a reader comparing two labelled stations expects the bigger
+ * number to be the bigger marker, and band-index sizing broke that for every
+ * pair inside one band.
  */
 export function parameterProminence(value, view) {
   if (!Number.isFinite(value)) return 0;
-  const bands = view.bands;
-  const index = bands.findIndex((band) => value >= band.min);
-  if (index < 0) return 0;
-  const neutral = bands.findIndex((band) => band.id === view.neutral);
-  if (neutral < 0) return 0;
-  const span = Math.max(neutral, bands.length - 1 - neutral) || 1;
-  return Math.min(1, Math.abs(neutral - index) / span);
+  const size = view?.size;
+  if (!size) return 0;
+  if (size.kind === 'diverging') {
+    const distance = Math.abs(value - size.centre) - size.quiet;
+    const span = size.to - size.quiet;
+    return span > 0 ? clampUnit(distance / span) : 0;
+  }
+  const fraction = clampUnit(value / size.to);
+  return size.curve === 'sqrt' ? Math.sqrt(fraction) : fraction;
 }
+
+const clampUnit = (value) => Math.min(1, Math.max(0, value));
 
 /** A reading's text with its unit, for a card line or a marker label. */
 export function formatParameter(value, view) {

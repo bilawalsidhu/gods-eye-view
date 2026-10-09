@@ -171,3 +171,65 @@ test('no shipped view is left without a network to feed it', () => {
     [...STATION_PARAMETER_IDS],
   );
 });
+
+test('a bigger reading is a bigger marker, inside a band as well as across one', () => {
+  // The bug this pins: sizing by band index quantised the reading to five
+  // steps, so 1 cm and 9 cm of snow drew identical discs while 9 cm and 13 cm
+  // differed. A reader comparing two labelled stations expects the bigger
+  // number to be the bigger marker.
+  const snow = parameterView('snow');
+  const depths = [0, 1, 5, 9, 20, 48, 120];
+  const sizes = depths.map((cm) => parameterProminence(cm, snow));
+  for (let at = 1; at < sizes.length; at++)
+    assert.ok(
+      sizes[at] > sizes[at - 1],
+      `${depths[at]} cm must outgrow ${depths[at - 1]} cm (${sizes[at]} vs ${sizes[at - 1]})`,
+    );
+  // 1 cm and 9 cm share the 'trace' band and must still differ in size.
+  assert.equal(parameterBand(1, snow).id, parameterBand(9, snow).id);
+  assert.ok(parameterProminence(9, snow) > parameterProminence(1, snow));
+});
+
+test('equal readings are equal markers', () => {
+  // The other half of the same complaint: on a high-pressure day the whole
+  // country reads 1023 hPa, and every one of those stations must look alike.
+  for (const id of STATION_PARAMETER_IDS) {
+    const view = parameterView(id);
+    const value = id === 'pressure' ? 1023 : 7;
+    assert.equal(
+      parameterProminence(value, view),
+      parameterProminence(value, view),
+      id,
+    );
+  }
+});
+
+test('pressure varies by size across a real synoptic spread', () => {
+  // The whole of Switzerland sits inside one 10 hPa band on an ordinary day,
+  // so band-index sizing made all 59 reporting stations identical.
+  const pressure = parameterView('pressure');
+  const ordinary = parameterProminence(1013, pressure);
+  const high = parameterProminence(1023, pressure);
+  const low = parameterProminence(1003, pressure);
+  assert.equal(ordinary, 0, 'an average pressure is unremarkable');
+  assert.ok(high > 0.2, `1023 hPa should read as high (${high})`);
+  assert.ok(low > 0.2, 'and 1003 hPa as low');
+  assert.ok(
+    parameterProminence(1023, pressure) > parameterProminence(1017, pressure),
+    'and 1023 must outgrow 1017, which shares its band',
+  );
+  assert.equal(parameterBand(1023, pressure).id, parameterBand(1017, pressure).id);
+});
+
+test('prominence stays bounded for absurd readings in every view', () => {
+  for (const id of STATION_PARAMETER_IDS) {
+    const view = parameterView(id);
+    for (const value of [-1e6, -273, 0, 1e6]) {
+      const prominence = parameterProminence(value, view);
+      assert.ok(
+        prominence >= 0 && prominence <= 1,
+        `${id}(${value}) = ${prominence}`,
+      );
+    }
+  }
+});

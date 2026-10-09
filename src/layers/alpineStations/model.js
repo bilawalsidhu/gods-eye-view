@@ -33,7 +33,7 @@ export const ALPINE_OVERLAY_COLLISION_CAPACITY = 48;
 
 /** Marker size in pixels, from the view's neutral band to its extreme. */
 export const MARKER_MIN_PX = 6;
-export const MARKER_MAX_PX = 15;
+export const MARKER_MAX_PX = 18;
 
 /**
  * Size and opacity for a station with nothing to say about this parameter.
