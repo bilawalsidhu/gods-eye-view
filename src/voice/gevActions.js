@@ -4616,6 +4616,7 @@ function cleanText(value) {
 function layerTitle(layerId) {
   if (layerId === 'local-datacenters') return 'Datacenter';
   if (layerId === 'local-dams') return 'Dam';
+  if (layerId === 'local-airports') return 'Airport';
   if (layerId === 'telegeography-submarine-cables') return 'Submarine Cable';
   if (layerId === 'local-firms') return 'Active Fire';
   return layerId || 'Entity';

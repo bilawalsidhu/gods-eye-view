@@ -349,6 +349,21 @@ const layers = [
     },
   },
   {
+    id: 'local-airports',
+    aliases: ['airports', 'airfields', 'norwegian airports'],
+    context: true,
+    query: {
+      fields: {
+        name: ['t'],
+        operator: ['t'],
+        icao: ['t'],
+        iata: ['t'],
+        kind: ['t'],
+        status: ['t'],
+      },
+    },
+  },
+  {
     id: 'telegeography-submarine-cables',
     aliases: ['submarine cables', 'undersea cables', 'cables', 'telegeography'],
     context: false,
