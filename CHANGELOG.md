@@ -95,6 +95,21 @@
 
 ## [Unreleased]
 
+- Bound what a caller can grow through `/api/terrain/heights`. Every distinct
+  5-decimal point was a permanent in-memory entry, a permanent line in an
+  uncapped `.gev-cache/terrain-heights.json`, and a live upstream call, with
+  nothing limiting the rate and only a finite-number check on the coordinates.
+  Coordinates outside WGS-84 range are now rejected with `400`, the point cache
+  holds at most 50,000 entries and evicts oldest-first, a cache file above
+  24 MB is not read back, and the route is limited to 90 requests/minute per
+  client (270 global). Evicting a point costs one refetch, never a wrong
+  answer, since terrain does not move. Ordinary use is unaffected: a full
+  `test:track` run drives 10 requests, peaking at 8/min.
+
+- `/api/terrain/heights` refuses cross-site browser requests before rate
+  limiting, cache access or upstream work. Same-origin app requests and
+  non-browser local callers remain supported.
+
 - Add an experimental ChatGPT/Codex OAuth option for cloud voice in Provider
   Settings. API-key voice remains the default. Local sign-in can start from
   the auth button and reports completion, failure, timeout, or expired
