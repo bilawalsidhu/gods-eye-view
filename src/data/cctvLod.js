@@ -38,6 +38,10 @@ const PROVIDER_STATIC_REFRESH_MS = Object.freeze({
   // collectionInterval, 600 s for every station sampled; polling faster only
   // re-fetches the same JPEG.
   fintraffic: 10 * 60 * 1000,
+  // Measured empirically (2026-09-15): polling the same SCT/Terrassa frame
+  // every 20s showed no change inside 64s but a new frame by ~90-150s later —
+  // matches the other highway packs' 3-minute cadence.
+  'servei català de trànsit': 3 * 60 * 1000,
 });
 
 /**
