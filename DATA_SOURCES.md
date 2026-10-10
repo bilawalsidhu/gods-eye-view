@@ -13,6 +13,26 @@ How to read this:
 
 ## Live sources (fetched at runtime — not stored in this repo)
 
+CAP catalog coverage includes the requested INMET, IDAP, UNB, SMN, DMC,
+INUMET, INAMHI, UNGRD, HMS, NWS, ECCC, DWD, MET Norway, MetService and NEMA
+entries, and discovery entries for Meteoalarm, IFRC, WMO/SWIC and KDE. Entries
+without a confirmed direct CAP/XML or RSS contract are disabled by default.
+RSS links are followed only on the registered HTTPS host/path; redirects,
+arbitrary XML links and GeoJSON are rejected. Attribution and redistribution
+terms remain those of each publisher.
+
+### CAP alerts
+
+Direct CAP and RSS/Atom feeds are catalogued with explicit format, region and
+enablement state. Active entries include INMET, IDAP, SMN, DMC, INUMET, INAMHI,
+UNGRD, HMS, NWS, DWD, MET Norway, MetService and NEMA. IDAP's alternate URL,
+UNB, ECCC and Meteoalarm are opt-in through `CAP_OPT_IN_SOURCES`; IFRC, WMO/SWIC
+and KDE remain disabled until a direct feed contract is confirmed. RSS/Atom
+links are followed only on the registered HTTPS host/path; redirects,
+arbitrary XML links and GeoJSON are rejected. Attribution and redistribution
+terms remain those of each publisher. CAP alerts are advisory, not a
+replacement for official emergency communications.
+
 | Source                                                                | Used for                                                                                                                            | License / terms                                                                                                                                                                                                                                                                                                                                       | Attribution                                                                                                                                 |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | **NOAA GFS (wind)** (`noaa-gfs-bdp-pds.s3.amazonaws.com`) | Global 10 m wind, optional 2 m temperature and mean sea-level pressure for Wind. Keyless; latest 6-hourly 0.25° cycle, byte-range GRIB2 reads, cached for an hour | U.S. public domain (NOAA); keyless via NOAA Open Data on AWS | "NOAA Global Forecast System (GFS)" (courtesy; not an endorsement) |
