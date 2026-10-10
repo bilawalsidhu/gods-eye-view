@@ -47,6 +47,11 @@ export class ShareRestoration {
       : Promise.resolve({ status: 'not-requested', share: null, layers: [] });
     if (savedState) {
       this._hasShareState = true;
+      if (savedState.layerStateInvalid) {
+        this._showDeferredStatusNotice(
+          'Shared layer selection could not be restored',
+        );
+      }
       // Reserve camera authority now; the delayed mesh-friendly flight may
       // run only if no newer user, voice, or tracking navigation has won.
       this._initialShareNavigationGeneration =
@@ -252,6 +257,40 @@ export class ShareRestoration {
             )
           )
             this.showStatus(message);
+        };
+        removeStartupListener = this._lifetime.listen(
+          startupCover,
+          'transitionend',
+          showOnce,
+          { once: true },
+        );
+        fallbackTimer = this._lifetime.timeout(showOnce, 1000);
+      });
+    };
+    if (this._resolveInitialShareRestore) {
+      void this.initialRestorePromise.then(showAfterStartupCover);
+      return;
+    }
+    showAfterStartupCover();
+  }
+  _showDeferredStatusNotice(message) {
+    const showAfterStartupCover = () => {
+      this._lifetime.frame(() => {
+        if (this._disposed) return;
+        const startupCover = document.getElementById('loading-screen');
+        if (
+          !startupCover ||
+          getComputedStyle(startupCover).visibility === 'hidden'
+        ) {
+          this.showStatus(message);
+          return;
+        }
+        let fallbackTimer = null;
+        let removeStartupListener = () => {};
+        const showOnce = () => {
+          removeStartupListener();
+          if (fallbackTimer) this._lifetime.cancelTimeout(fallbackTimer);
+          if (!this._disposed) this.showStatus(message);
         };
         removeStartupListener = this._lifetime.listen(
           startupCover,
