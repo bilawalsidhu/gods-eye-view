@@ -189,7 +189,7 @@ export default {
   'keySetup.unlocks.google-maps': 'The photorealistic 3D planet + place search',
   'keySetup.unlocks.google-maps-server':
     'Places context + Street View fallback; optional separate key',
-  'keySetup.unlocks.openai': 'Voice control — talk to the planet',
+  'keySetup.unlocks.openai': 'Voice control — API key or ChatGPT OAuth',
   'keySetup.unlocks.aisstream': 'Live ships, worldwide',
   'keySetup.unlocks.firms': 'Live active-fire detections',
   'keySetup.unlocks.tomtom': 'Real live traffic (keyless runs a simulation)',
@@ -197,6 +197,8 @@ export default {
   'keySetup.unlocks.opensky':
     'More flight-polling credits (anonymous works without)',
   'keySetup.unlocks.launch-library': 'Higher space-missions request allowance',
+  'keySetup.unlocks.mapillary':
+    'Street-level imagery and coverage in the Street Level layer. Free: register an app in the Mapillary developer dashboard and paste its Client Token',
 
   'scenes.status.actionFailed': 'Scene action failed',
 
