@@ -72,9 +72,9 @@ Status: Open (owner-accepted 2026-07-08, documented)
   a few stragglers take one more poll.
 - **Born-grounded first poll:** a contact first seen on the ground with no altitude
   data renders at the geoid for ≤1 poll until its floor cell warms.
-- Full context, improvement ideas, and the verification oracle
-  (`scripts/qa-floor-verify.mjs`):
-  `docs/superpowers/reports/2026-07-08-height-datum-handover.md`.
+- Verify floor-placement behavior with `scripts/qa-floor-verify.mjs` against a
+  running local app; set `QA_BASE_URL` when it is not on the default port
+  (`http://localhost:4173`).
 
 ---
 
