@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import {
   contextLayerEnableBlockReason,
   isExplicitUserIntentOrigin,
@@ -124,7 +125,12 @@ export function connectContextManager(manager) {
                 restoreError,
               );
             }
-            return `${entryMode === 'space-missions' ? 'Space Missions' : 'Context'} could not start because another layer did not stop cleanly`;
+            return t('cockpit.context.toastStartBlocked', {
+              mode:
+                entryMode === 'space-missions'
+                  ? t('cockpit.context.modeSpaceMissions')
+                  : t('cockpit.context.modeContext'),
+            });
           } finally {
             if (ownsNotificationToken) {
               this._userFacingContextNotificationTokens.delete(

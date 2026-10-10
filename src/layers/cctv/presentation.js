@@ -1,4 +1,5 @@
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
+import { t } from '../../i18n/index.js';
 import { ACTIVE_FRAME_REFRESH_MS, IDLE_FRAME_REFRESH_MS } from './policy.js';
 import { headingHudToken, isHeadingEstimated } from './headingConfidence.js';
 
@@ -19,8 +20,10 @@ export function createPresentation({
     const active = parts.selection.getActiveRecord();
     if (!active) {
       return layerState._records.length
-        ? `${layerState._records.length} CAMERAS STANDING BY · NO CAMERA SELECTED · CLICK A CAMERA TO ACTIVATE`
-        : 'No cameras available in catalog.';
+        ? t('layers.cctv.summary.standingBy', {
+            count: layerState._records.length,
+          })
+        : t('layers.cctv.summary.empty');
     }
 
     const area = parts.model.sectorAreaKm2(
@@ -34,21 +37,37 @@ export function createPresentation({
     const calBadge = parts.calibration.deriveCalBadge(active.camera);
 
     return [
-      `${active.camera.city.toUpperCase()} CCTV`,
+      t('layers.cctv.summary.city', {
+        city: active.camera.city.toUpperCase(),
+      }),
       `${active.camera.name.toUpperCase()}`,
       // A synthetic bearing (headingConfidence 'low', no human calibration)
       // is tagged so a hashed guess never reads as a surveyed facing (#639).
       headingHudToken(active.camera),
-      `FOV ${Math.round(active.camera.fovDeg)}°`,
-      `COVERAGE ${area.toFixed(2)}km²`,
-      overlapCount > 0 ? `OVERLAP ${overlapCount} cams` : 'ISOLATED VIEW',
-      `PROJ ${layerState._showProjection ? 'MONITOR' : 'OFF'}`,
-      layerState._coverageMode === 'viewshed' ? 'VIEWSHED' : null,
-      `CAL ${calBadge.replace('-', ' ').toUpperCase()}`,
+      t('layers.cctv.summary.fov', {
+        value: Math.round(active.camera.fovDeg),
+      }),
+      t('layers.cctv.summary.coverage', { value: area.toFixed(2) }),
+      overlapCount > 0
+        ? t('layers.cctv.summary.overlap', { count: overlapCount })
+        : t('layers.cctv.summary.isolated'),
+      layerState._showProjection
+        ? t('layers.cctv.summary.projMonitor')
+        : t('layers.cctv.summary.projOff'),
+      layerState._coverageMode === 'viewshed'
+        ? t('layers.cctv.summary.viewshed')
+        : null,
+      t('layers.cctv.summary.cal', {
+        value: calBadge.replace('-', ' ').toUpperCase(),
+      }),
       health?.sourceKind
-        ? `SRC ${String(health.sourceKind).toUpperCase()}`
-        : `SRC ${String(active.camera.feedType || 'image').toUpperCase()}`,
-      `${viewBand.toUpperCase()} CONTEXT`,
+        ? t('layers.cctv.summary.src', {
+            value: String(health.sourceKind).toUpperCase(),
+          })
+        : t('layers.cctv.summary.src', {
+            value: String(active.camera.feedType || 'image').toUpperCase(),
+          }),
+      t('layers.cctv.summary.context', { value: viewBand.toUpperCase() }),
     ]
       .filter(Boolean)
       .join(' · ');

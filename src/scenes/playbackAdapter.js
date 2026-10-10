@@ -1,4 +1,6 @@
 /** Connect the portable Director runner to the existing scene presentation. */
+import { t } from '../i18n/index.js';
+
 export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
   let timing;
   let travel;
@@ -14,7 +16,12 @@ export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
       director._renderSceneSelect();
       director._renderShotList();
       director._updateStatus(
-        `Running ${index + 1}/${total}: ${scene.title} / ${shot.title}`,
+        t('setup.scenes.status.runningShot', {
+          index: index + 1,
+          total,
+          scene: scene.title,
+          shot: shot.title,
+        }),
       );
       director._logEvent('shot_start', {
         sceneId: scene.id,
@@ -71,7 +78,7 @@ export function createScenePlaybackAdapter(director, defaultShotDurationSec) {
     },
     complete() {
       director._setProgress(1);
-      director._updateStatus('Scene run complete');
+      director._updateStatus(t('setup.scenes.status.runComplete'));
       director._logEvent('scene_run_complete', {});
     },
   };

@@ -1,4 +1,5 @@
 import { fireDetectionKey } from '../../data/firmsLabels.js';
+import { t } from '../../i18n/index.js';
 import { REFRESH_INTERVAL_MS } from './policy.js';
 
 export function createQueries({
@@ -59,21 +60,26 @@ export function createQueries({
     getStats() {
       const now = Date.now();
       const staleText = layerState._lastUpdate
-        ? `STALE · cached ${components.model.formatAge(now - layerState._lastUpdate) || '<1h'}`
-        : 'STALE';
+        ? t('layers.firms.staleCached', {
+            age:
+              components.model.formatAge(now - layerState._lastUpdate) || '<1h',
+          })
+        : t('layers.status.stale');
       let loadingLabel = '';
       if (layerState._loading) {
         loadingLabel = layerState._fires.length
-          ? 'refreshing...'
-          : 'loading...';
+          ? t('layers.meta.refreshing')
+          : t('layers.meta.loading');
       } else if (layerState._keyRequired) {
-        loadingLabel = 'KEY REQUIRED';
+        loadingLabel = t('layers.firms.keyRequired');
       } else if (layerState._stale) {
         loadingLabel = staleText;
       } else if (layerState._error) {
         loadingLabel = layerState._error;
       } else if (layerState._lastUpdate) {
-        loadingLabel = `LIVE · updated ${components.model.formatAgoMinutes(now - layerState._lastUpdate)}`;
+        loadingLabel = t('layers.firms.liveUpdated', {
+          age: components.model.formatAgoMinutes(now - layerState._lastUpdate),
+        });
       }
       return {
         count: layerState._count,
@@ -87,7 +93,7 @@ export function createQueries({
         // the operator can take.
         keyRequired: layerState._keyRequired,
         error: layerState._keyRequired
-          ? 'KEY REQUIRED'
+          ? t('layers.firms.keyRequired')
           : layerState._stale
             ? staleText
             : layerState._error,

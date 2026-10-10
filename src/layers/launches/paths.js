@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   EARTH_ROTATION_RAD_PER_SEC,
   PROJECTED_ASCENT_ROTATION_SEC,
@@ -521,7 +522,7 @@ export function createPaths({ state: layerState, services, parts, source }) {
     return {
       lat: Cesium.Math.toDegrees(lat),
       lon: Cesium.Math.toDegrees(Cesium.Math.negativePiToPi(lon)),
-      accuracy: 'EST. DOWNRANGE',
+      accuracy: t('layers.missions.estDownrange'),
     };
   }
 

@@ -11,6 +11,8 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
     plugins: [plugin],
     googleApiKey: 'browser-fixture',
     cesiumToken: 'ion-fixture',
+    defaultLocale: 'fr',
+    secondaryLocale: 'en',
   });
   // The Host check runs before every other plugin's middleware.
   assert.equal(config.plugins[0].name, 'host-check');
@@ -38,6 +40,9 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
   assert.deepEqual(config.define, {
     'import.meta.env.GOOGLE_MAPS_API_KEY': '"browser-fixture"',
     'import.meta.env.CESIUM_ION_TOKEN': '"ion-fixture"',
+    // Locale pair (i18n): threaded like the other explicit browser inputs.
+    'import.meta.env.GEV_DEFAULT_LOCALE': '"fr"',
+    'import.meta.env.GEV_SECONDARY_LOCALE': '"en"',
     'import.meta.env.MAPILLARY_CLIENT_TOKEN': '""',
   });
   assert.equal(

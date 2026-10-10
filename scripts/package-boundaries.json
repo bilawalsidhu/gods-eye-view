@@ -418,7 +418,13 @@
       "src/ui/mapSourceControls.js",
       "src/mapStackChips.js",
       "src/keySetupCore.mjs",
-      "src/localRequestGate.mjs"
+      "src/localRequestGate.mjs",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": []
   },
@@ -439,7 +445,13 @@
       "src/keySetupCore.mjs",
       "src/localRequestGate.mjs",
       "src/data/feedState.js",
-      "src/data/layerSnapshot.js"
+      "src/data/layerSnapshot.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": []
   },
@@ -450,7 +462,13 @@
       "src/ui/locationControls.js",
       "src/ui/locationSearch.js",
       "src/locationStatus.js",
-      "src/app/stateChannel.js"
+      "src/app/stateChannel.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": []
   },
@@ -461,7 +479,13 @@
       "src/ui/radioControls.js",
       "src/ui/radioBindings.js",
       "src/ui/radioPresentation.js",
-      "src/ui/radioTunerModel.js"
+      "src/ui/radioTunerModel.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": []
   },
@@ -474,7 +498,13 @@
       "src/ui/cctvControls.js",
       "src/ui/cctvFrames.js",
       "src/ui/cctvVideo.js",
-      "src/ui/cctvPresentation.js"
+      "src/ui/cctvPresentation.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": []
   },
@@ -492,7 +522,13 @@
       "src/ui/contextTransactions.js",
       "src/contextModePolicy.js",
       "src/rightRailPolicy.js",
-      "src/ui/panelRailGeometry.js"
+      "src/ui/panelRailGeometry.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": []
   },
@@ -520,7 +556,13 @@
       "src/cockpitMath.js",
       "src/cockpitUtilityLayout.js",
       "src/cockpitVisionPolicy.js",
-      "src/ui/panelRailGeometry.js"
+      "src/ui/panelRailGeometry.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium"]
   },
@@ -529,7 +571,13 @@
     "modules": [
       "src/ui/scenes.js",
       "src/ui/sceneControls.js",
-      "src/ui/scenePresentation.js"
+      "src/ui/scenePresentation.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": []
   },
@@ -668,7 +716,13 @@
       "src/ui/localSdrControls.js",
       "src/layers/localAdsb/feedNames.js",
       "src/ui/localSdrPresentation.js",
-      "src/data/cameraArrival.js"
+      "src/data/cameraArrival.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium"]
   },
@@ -774,7 +828,13 @@
       "src/director/authoring.js",
       "src/scenes/sharing.js",
       "src/ui/sceneSharing.js",
-      "src/data/cameraArrival.js"
+      "src/data/cameraArrival.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium"]
   },
@@ -828,7 +888,13 @@
       "src/layers/flights/snapshotRenderer.js",
       "src/layers/flights/modelSpec.js",
       "src/data/inputOwnership.js",
-      "src/data/modelEligibility.js"
+      "src/data/modelEligibility.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium"]
   },
@@ -867,7 +933,13 @@
       "src/layers/military/recordPolicy.js",
       "src/layers/military/snapshotRenderer.js",
       "src/data/inputOwnership.js",
-      "src/data/modelEligibility.js"
+      "src/data/modelEligibility.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium"]
   },
@@ -920,7 +992,13 @@
       "src/layers/vessels/records.js",
       "src/layers/vessels/recordPolicy.js",
       "src/layers/vessels/snapshotRenderer.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium"]
   },
@@ -966,7 +1044,13 @@
       "src/layers/firms/source.js",
       "src/layers/firms/state.js",
       "src/layers/firms/viewport.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium"]
   },
@@ -992,7 +1076,13 @@
       "src/layers/satellites/state.js",
       "src/layers/satellites/testing.js",
       "src/layers/satellites/tracking.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium", "satellite.js"]
   },
@@ -1019,7 +1109,13 @@
       "src/layers/launches/source.js",
       "src/layers/launches/state.js",
       "src/layers/launches/testing.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium"]
   },
@@ -1054,7 +1150,13 @@
       "src/data/bundledJson.js",
       "src/data/retryableLoad.js",
       "src/layers/installations/namedMarkers.js",
-      "src/data/infrastructureOverlayEntry.js"
+      "src/data/infrastructureOverlayEntry.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf"]
   },
@@ -1081,7 +1183,13 @@
       "src/layers/awareness/state.js",
       "src/layers/awareness/subject.js",
       "src/layers/awareness/testing.js",
-      "src/ui/panelRailGeometry.js"
+      "src/ui/panelRailGeometry.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium"]
   },
@@ -1122,7 +1230,13 @@
       "src/sources/militaryTileGeometry.js",
       "src/sources/vectorTiles.js",
       "src/sources/phaseTiming.js",
-      "src/layers/traffic/roadModes.js"
+      "src/layers/traffic/roadModes.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
@@ -1145,7 +1259,13 @@
       "src/layers/bikeshare/testing.js",
       "src/layers/bikeshare/viewport.js",
       "src/data/inputOwnership.js",
-      "src/data/cameraSensitivity.js"
+      "src/data/cameraSensitivity.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium"]
   },
@@ -1186,7 +1306,13 @@
       "src/overlays/worldOverlayTokens.js",
       "src/data/cctvFootprint.js",
       "src/data/inputOwnership.js",
-      "src/layers/cctv/sourcePolicy.js"
+      "src/layers/cctv/sourcePolicy.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["hls.js", "cesium"]
   },
@@ -1281,7 +1407,13 @@
       "src/layers/radio/tuningNoise.js",
       "src/layers/radio/volume.js",
       "src/ui/radioTunerModel.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium"]
   },
@@ -1298,7 +1430,13 @@
       "src/layers/submarineCables/rendering.js",
       "src/layers/submarineCables/state.js",
       "src/layers/submarineCables/surface.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium"]
   },
@@ -1347,7 +1485,13 @@
       "src/maps/terrainRetry.js",
       "src/keySetupCore.mjs",
       "src/localRequestGate.mjs",
-      "src/maps/imageryHost.js"
+      "src/maps/imageryHost.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium"]
   },
@@ -1394,7 +1538,13 @@
       "src/voice/narration.js",
       "src/voice/earcon.js",
       "src/voice/pointerContext.js",
-      "src/voice/pointerReticle.js"
+      "src/voice/pointerReticle.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": []
   },
@@ -2198,7 +2348,13 @@
       "src/tools/functions.js",
       "src/voice/actionSchemas.js",
       "src/view/index.js",
-      "src/app/embed.js"
+      "src/app/embed.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": [
       "hls.js",
@@ -2720,7 +2876,13 @@
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
-      "src/sources/infrastructureData.js"
+      "src/sources/infrastructureData.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": [
       "hls.js",
@@ -2822,7 +2984,13 @@
       "src/loadingFeedback.js",
       "src/navigationPolicy.js",
       "src/ui/shareRestoration.js",
-      "src/ui/uiLifetime.js"
+      "src/ui/uiLifetime.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": []
   },
@@ -2850,7 +3018,13 @@
       "src/ui/visualEffects.js",
       "src/ui/visualInput.js",
       "src/ui/visualPresets.js",
-      "src/ui/visualSettings.js"
+      "src/ui/visualSettings.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": ["cesium"]
   },
@@ -2870,7 +3044,13 @@
       "src/ui/panelRailGeometry.js",
       "src/ui/panelRails.js",
       "src/ui/rightPanelRail.js",
-      "src/ui/uiLifetime.js"
+      "src/ui/uiLifetime.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": []
   },
@@ -2993,7 +3173,13 @@
       "src/voice/referents.js",
       "src/voice/layerManifest.js",
       "src/voice/speech.js",
-      "src/voice/pointerReticle.js"
+      "src/voice/pointerReticle.js",
+      "src/i18n/index.js",
+      "src/i18n/locale.js",
+      "src/i18n/locales/en/cockpit.js",
+      "src/i18n/locales/en/layers.js",
+      "src/i18n/locales/en/setup.js",
+      "src/i18n/locales/en/shell.js"
     ],
     "external": []
   },

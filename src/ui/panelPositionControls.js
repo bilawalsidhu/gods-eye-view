@@ -1,6 +1,6 @@
 /** Own panel position preferences, viewport clamping and drag listeners. */
+import { t } from '../i18n/index.js';
 import { RESIZE_DIRECTIONS, resizeBox } from './panelResize.js';
-
 /** Versioned localStorage namespace prefix to invalidate stale panel layouts. */
 const PANEL_LAYOUT_STORAGE_VERSION = 'v6';
 /**
@@ -220,9 +220,7 @@ export class PanelPositionControls {
         key.startsWith('godsEyeView.v6.panelPos.'),
       );
       if (hadOldPositions) {
-        this._showToast(
-          'Panel layout updated — positions reset to new defaults',
-        );
+        this._showToast(t('cockpit.panel.layoutResetToast'));
       }
     } catch {
       // storage unavailable

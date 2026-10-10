@@ -1,4 +1,5 @@
 import { MUSIC_GENRES, CATEGORY_MATCHERS } from './policy.js';
+import { t } from '../../i18n/index.js';
 
 export function createCategories({
   state: layerState,
@@ -69,14 +70,20 @@ export function createCategories({
   function buildRadioCategories(stations) {
     const rows = Array.isArray(stations) ? stations : [];
     const categories = [
-      { id: 'all', label: 'All' },
-      { id: 'news', label: 'News' },
-      { id: 'talk', label: 'Talk' },
-      { id: 'weather', label: 'Weather / Emergency' },
-      { id: 'public-safety', label: 'Public Safety' },
-      { id: 'aviation-marine', label: 'Aviation / Marine' },
-      { id: 'traffic-transit', label: 'Traffic / Transit' },
-      { id: 'music', label: 'Music' },
+      { id: 'all', label: t('layers.radio.filterAll') },
+      { id: 'news', label: t('layers.radio.category.news') },
+      { id: 'talk', label: t('layers.radio.category.talk') },
+      { id: 'weather', label: t('layers.radio.category.weather') },
+      { id: 'public-safety', label: t('layers.radio.category.publicSafety') },
+      {
+        id: 'aviation-marine',
+        label: t('layers.radio.category.aviationMarine'),
+      },
+      {
+        id: 'traffic-transit',
+        label: t('layers.radio.category.trafficTransit'),
+      },
+      { id: 'music', label: t('layers.radio.category.music') },
     ];
 
     for (const [genre, label] of MUSIC_GENRES) {
@@ -85,7 +92,7 @@ export function createCategories({
         categories.push({ id, label });
       }
     }
-    categories.push({ id: 'other', label: 'Other' });
+    categories.push({ id: 'other', label: t('layers.radio.category.other') });
     return categories.map((category) => ({
       ...category,
       color: parts.model.radioCategoryColor(category.id),

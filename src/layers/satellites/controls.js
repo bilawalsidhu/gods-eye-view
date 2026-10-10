@@ -4,6 +4,7 @@ import {
   satelliteClassLegend,
 } from '../../data/satelliteClass.js';
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import { ISS_NORAD, POINT_STYLES } from './policy.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
@@ -493,19 +494,22 @@ export function createControls({ state: layerState, services, parts, source }) {
       const active =
         layerState._params.catalog === 'dense' &&
         layerState._denseStatus === 'ready';
-      let title =
-        'Add the full Starlink broadband shell (thousands of extra points)';
-      if (loading) title = 'Loading the Starlink shell…';
+      let title = t('layers.satellites.denseTitleAdd');
+      if (loading) title = t('layers.satellites.denseTitleLoading');
       else if (failed)
-        title = `Starlink ${layerState._denseError || 'load failed'} — click to retry`;
-      else if (active)
-        title =
-          'Showing the full Starlink shell — click for the core catalog only';
+        title = t('layers.satellites.denseTitleFailed', {
+          detail: layerState._denseError || t('layers.satellites.loadFailed'),
+        });
+      else if (active) title = t('layers.satellites.denseTitleActive');
       return {
         chips: [
           {
             id: 'catalog',
-            label: loading ? 'DENSE ···' : failed ? 'DENSE ✕' : 'DENSE',
+            label: loading
+              ? t('layers.satellites.denseChipLoading')
+              : failed
+                ? t('layers.satellites.denseChipFailed')
+                : t('layers.satellites.denseChip'),
             active,
             busy: loading,
             disabled: loading,

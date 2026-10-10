@@ -1,11 +1,27 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
+
+// The vessels ingestion owner is a portable module graph (it also runs in the
+// server-side source builds), so it writes stable English feed labels into
+// state. Localize those known labels here, at the presentation read; anything
+// else (a bespoke manager label) passes through verbatim.
+const FEED_STATE_LABEL_KEYS = Object.freeze({
+  'refreshing...': 'layers.meta.refreshing',
+  'loading...': 'layers.meta.loading',
+  'awaiting first AIS position…': 'layers.vessel.awaitingFirstPosition',
+});
+
+function localizeFeedLabel(raw) {
+  if (typeof raw !== 'string' || !raw.trim()) return raw;
+  const key = FEED_STATE_LABEL_KEYS[raw.trim()];
+  return key ? t(key) : raw;
+}
 import {
   AIS_DEGRADED_STATUSES,
   AIS_HEALTHY_STATUSES,
   AIS_STATUS_REASON,
   REFRESH_MS,
   FOCUS_EVIDENCE_DEV,
-  AIS_FIRST_CONNECT_LABEL,
 } from './policy.js';
 
 export function createQueries({
@@ -82,8 +98,8 @@ export function createQueries({
     if (acceptedRowCount > 0) return null; // accepted rows may be stale while reconnecting, but remain usable
     if (AIS_HEALTHY_STATUSES.has(status)) {
       return payload?.lastMessageAt
-        ? 'awaiting usable AIS positions…'
-        : 'awaiting first AIS message…';
+        ? t('layers.vessel.awaitingPositions')
+        : t('layers.vessel.awaitingFirstMessage');
     }
     if (!status) return null;
     const detail =
@@ -107,7 +123,7 @@ export function createQueries({
   /**
    * Classify one server snapshot before any destructive reconciliation.
    * @param {Object|null|undefined} payload - Parsed /api/vessels payload.
-   * @returns {{transportStatus: string|null, lastMessageAt: number|string|null,
+   * @returns {{emptyCoverage: boolean, transportStatus: string|null, lastMessageAt: number|string|null,
    *   rawRows: Array<Object>, acceptedRows: Array<Object>, rawRowCount: number,
    *   acceptedRowCount: number, error: string|null}}
    */
@@ -142,7 +158,9 @@ export function createQueries({
       error: emptyCoverage
         ? null
         : deriveAisFeedError(payload, acceptedRowCount) ||
-          (acceptedRowCount === 0 ? 'awaiting usable AIS positions…' : null),
+          (acceptedRowCount === 0
+            ? t('layers.vessel.awaitingPositions')
+            : null),
     };
   }
 
@@ -514,8 +532,8 @@ export function createQueries({
         lastUpdate: state.feed.lastUpdate,
         loading: state.feed.loading || waitingForFirstPosition,
         loadingLabel: waitingForFirstPosition
-          ? AIS_FIRST_CONNECT_LABEL
-          : state.feed.loadingLabel,
+          ? t('layers.vessel.awaitingFirstPosition')
+          : localizeFeedLabel(state.feed.loadingLabel),
         error: state.feed.error,
         stale: state.feed.stale,
         partial: state.feed.partial,

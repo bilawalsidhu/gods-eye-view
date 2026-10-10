@@ -23,6 +23,8 @@ export default defineConfig(({ command, mode }) => {
     ],
     googleApiKey: process.env.GOOGLE_MAPS_API_KEY,
     cesiumToken: process.env.CESIUM_ION_TOKEN,
+    defaultLocale: process.env.GEV_DEFAULT_LOCALE ?? '',
+    secondaryLocale: process.env.GEV_SECONDARY_LOCALE ?? '',
     mapillaryToken: process.env.MAPILLARY_CLIENT_TOKEN,
     host: process.env.HOST,
     port: process.env.PORT,
