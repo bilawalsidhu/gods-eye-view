@@ -72,7 +72,9 @@ export function layoutRightPanelRail({
   // A floating (lifted-out) panel is not laid out by the rail.
   const panels = [...stack.children].filter(
     (panel) =>
-      panel.matches('[data-panel-id]:not(.panel-floating)') && !panel.hidden,
+      panel.matches('[data-panel-id]:not(.panel-floating)') &&
+      !panel.hidden &&
+      getComputedStyle(panel).display !== 'none',
   );
   if (!hud.visible || hud.variant !== 'tactical') {
     for (const panel of panels.filter((item) =>
