@@ -5,6 +5,7 @@ import {
   MILITARY_INSTALLATION_DISK_DIR,
   MILITARY_INSTALLATION_MAX_CACHE,
 } from './constants.js';
+import { cachedByConfiguredUpstream } from '../overpass/constants.js';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { promises as fsp } from 'node:fs';
@@ -114,6 +115,9 @@ async function readMilitaryInstallationDisk(
     const entry = JSON.parse(
       await fsp.readFile(militaryInstallationDiskPath(cacheKey, dir), 'utf8'),
     );
+    // Same reason as the Overpass disk cache: the key is the bbox alone, so an
+    // entry written against a different OVERPASS_UPSTREAMS is otherwise a hit.
+    if (!cachedByConfiguredUpstream(entry)) return null;
     if (!militaryInstallationDiskFresh(entry, maxAgeMs)) return null;
     return migrateMilitaryInstallationEntry(entry);
   } catch {

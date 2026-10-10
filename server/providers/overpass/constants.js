@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 
 // ---------------------------------------------------------------------------
 // Overpass API proxy constants and cache state
@@ -27,14 +28,66 @@ function parseOverpassUpstreams(raw) {
   return endpoints.slice(0, 8);
 }
 
-let upstreamMemo = { raw: null, endpoints: [] };
+let upstreamMemo = { raw: null, endpoints: [], tag: 'none' };
+
+/**
+ * Short, stable identifier for the configured upstream set. Cached responses
+ * carry it so an answer produced by a different instance is not served after
+ * the operator repoints `OVERPASS_UPSTREAMS` — the disk cache outlives the
+ * configuration change by 7 days, a month for boundary queries, and forever on
+ * the serve-stale path. It is a hash, never the URLs, and it is only ever
+ * compared on read: it is not sent to clients and does not appear in errors.
+ */
+function upstreamTag(endpoints) {
+  if (!endpoints.length) return 'none';
+  return createHash('sha1')
+    .update(endpoints.join('\n'))
+    .digest('hex')
+    .slice(0, 12);
+}
 
 /** Resolve after environment loading. Public Overpass instances are not used by default. */
 function resolveOverpassUpstreams() {
-  const raw = process.env.OVERPASS_UPSTREAMS || '';
-  if (upstreamMemo.raw !== raw)
-    upstreamMemo = { raw, endpoints: parseOverpassUpstreams(raw) };
+  readUpstreamMemo();
   return [...upstreamMemo.endpoints];
+}
+
+/** The configured-upstream tag stored alongside, and checked against, cache entries. */
+function resolveOverpassUpstreamTag() {
+  return readUpstreamMemo().tag;
+}
+
+let reportedForeignCache = false;
+
+/**
+ * Was this cached entry produced by the upstream set configured now?
+ *
+ * With nothing configured there is no instance to contradict, and serving
+ * last-good data at any age is the point of the cache (the proxy's
+ * not-configured path depends on it), so any entry is accepted. Once an
+ * operator does configure an instance, only its own answers are served: an
+ * entry with no tag, or one from a different instance, is refused rather than
+ * matched on the query alone. Shared by both caches fed by these upstreams.
+ */
+function cachedByConfiguredUpstream(entry) {
+  const tag = resolveOverpassUpstreamTag();
+  if (tag === 'none' || entry?.upstreams === tag) return true;
+  if (!reportedForeignCache) {
+    reportedForeignCache = true;
+    console.warn(
+      '[Overpass] ignoring cached responses produced by a different OVERPASS_UPSTREAMS; they will be refetched from the configured instance.',
+    );
+  }
+  return false;
+}
+
+function readUpstreamMemo() {
+  const raw = process.env.OVERPASS_UPSTREAMS || '';
+  if (upstreamMemo.raw !== raw) {
+    const endpoints = parseOverpassUpstreams(raw);
+    upstreamMemo = { raw, endpoints, tag: upstreamTag(endpoints) };
+  }
+  return upstreamMemo;
 }
 
 /**
@@ -153,6 +206,8 @@ export {
   OVERPASS_MAX_RESPONSE_BYTES,
   parseOverpassUpstreams,
   resolveOverpassUpstreams,
+  resolveOverpassUpstreamTag,
+  cachedByConfiguredUpstream,
   OVERPASS_USER_AGENT,
   OVERPASS_TIMEOUT_MS,
 };
