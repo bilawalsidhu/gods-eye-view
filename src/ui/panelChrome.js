@@ -1,3 +1,4 @@
+import { subscribeLocale, t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
 import { displayPanelScroller } from './displayPanelScroll.js';
 import { PanelPositionControls } from './panelPositionControls.js';
@@ -77,6 +78,22 @@ export class PanelChrome {
           ? this._standardDisplayScrollTop
           : displayPanelScroller(this._ppToggles)?.scrollTop || 0,
     });
+    // Collapse buttons compose their labels from live panel names, so a
+    // locale switch re-syncs every one of them through the same path.
+    this._unsubscribeLocale = subscribeLocale(() => {
+      if (!this._disposed) this._resyncAllCollapseButtons();
+    });
+  }
+
+  /** Re-run every collapse/dock-toggle label through the active locale. */
+  _resyncAllCollapseButtons() {
+    document
+      .querySelectorAll(
+        '[data-panel-id], #param-slider-panel, #control-panel, #location-bar',
+      )
+      .forEach((panelEl) => {
+        if (panelEl.isConnected) this._syncPanelCollapseButton(panelEl);
+      });
   }
   get hud() {
     return this.readHud();
@@ -309,15 +326,17 @@ export class PanelChrome {
         btn.setAttribute('aria-expanded', String(!collapsed));
         const panelName =
           panelEl
-            .querySelector('.panel-title, .pp-header-label')
-            ?.textContent?.trim() || 'panel';
-        const action = collapsed ? 'Expand' : 'Collapse';
+            .querySelector('.panel-title, .pp-header-label, .param-panel-title')
+            ?.textContent?.trim() || t('chrome.panels.fallbackName');
+        const action = collapsed ? t('common.expand') : t('common.collapse');
         btn.title = `${action} ${panelName}`;
         btn.setAttribute('aria-label', `${action} ${panelName}`);
         if (panelEl.id === 'radio-panel') {
-          const action = collapsed ? 'Expand' : 'Collapse';
-          btn.title = `${action} Radio`;
-          btn.setAttribute('aria-label', `${action} Radio section`);
+          btn.title = t('chrome.panels.radioTitle', { action });
+          btn.setAttribute(
+            'aria-label',
+            t('chrome.panels.radioSectionAria', { action }),
+          );
         }
       });
     const dockToggle = panelEl.querySelector(
@@ -326,9 +345,11 @@ export class PanelChrome {
     if (dockToggle) {
       const panelName =
         panelEl
-          .querySelector('.panel-title, .location-toolbar-label')
-          ?.textContent?.trim() || 'panel';
-      const action = collapsed ? 'Expand' : 'Collapse';
+          .querySelector(
+            '.panel-title, .location-toolbar-label, .param-panel-title',
+          )
+          ?.textContent?.trim() || t('chrome.panels.fallbackName');
+      const action = collapsed ? t('common.expand') : t('common.collapse');
       dockToggle.setAttribute('aria-expanded', String(!collapsed));
       dockToggle.setAttribute('aria-label', `${action} ${panelName}`);
       dockToggle.title = `${action} ${panelName}`;
@@ -628,6 +649,8 @@ export class PanelChrome {
   destroy() {
     if (this._disposed) return;
     this._disposed = true;
+    this._unsubscribeLocale?.();
+    this._unsubscribeLocale = null;
     this._lifetime.destroy();
     this._panelPosition.destroy();
     this._panelLayout.destroy();

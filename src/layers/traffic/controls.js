@@ -8,15 +8,17 @@ import {
   trafficStyleProfile,
 } from '../../data/trafficPresetStyle.js';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
+import { t } from '../../i18n/index.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   /** One status line: feed, drawn road source, then degraded-coverage notes. */
   function roadStatusLabel(feed) {
     const source = layerState._roadSource;
     if (layerState._roadError)
-      return `UNAVAILABLE · ${source} · Roads unavailable`;
+      return t('ground.traffic.status.unavailable', { source });
     const notes = [feed.loadingLabel];
-    if (!layerState._liveMode || feed.error) notes.push(`Roads: ${source}`);
+    if (!layerState._liveMode || feed.error)
+      notes.push(t('ground.traffic.status.roadsSource', { source }));
     // An explicit TomTom or Hybrid choice without a key draws OpenStreetMap.
     if (
       !layerState._liveMode &&
@@ -24,16 +26,22 @@ export function createControls({ state: layerState, services, parts, source }) {
     )
       notes.push(
         layerState._flowStatusUnavailable
-          ? `${layerState._roadMode === 'tomtom' ? 'TomTom roads' : 'Hybrid'} unavailable while the traffic service is unreachable`
+          ? layerState._roadMode === 'tomtom'
+            ? t('ground.traffic.status.serviceUnavailableTomTom')
+            : t('ground.traffic.status.serviceUnavailableHybrid')
           : layerState._roadMode === 'tomtom'
-            ? 'TomTom roads need a TomTom key'
-            : 'Hybrid needs a TomTom key',
+            ? t('ground.traffic.status.tomtomNeedsKey')
+            : t('ground.traffic.status.hybridNeedsKey'),
       );
-    if (layerState._surfacePending) notes.push('Local surface still loading');
+    if (layerState._surfacePending)
+      notes.push(t('ground.traffic.status.surfaceLoading'));
     if (layerState._roadWarning) notes.push(layerState._roadWarning);
-    else if (layerState._roadPartial) notes.push('Partial coverage');
-    if (layerState._detailError) notes.push('Detailed roads unavailable');
-    else if (layerState._detailLimited) notes.push('Reduced detail coverage');
+    else if (layerState._roadPartial)
+      notes.push(t('ground.traffic.status.partialCoverage'));
+    if (layerState._detailError)
+      notes.push(t('ground.traffic.status.detailError'));
+    else if (layerState._detailLimited)
+      notes.push(t('ground.traffic.status.detailLimited'));
     return notes.join(' · ');
   }
 
@@ -161,11 +169,13 @@ export function createControls({ state: layerState, services, parts, source }) {
     getRowControls() {
       const selected =
         layerState._roadMode || resolveRoadMode(null, layerState._liveMode);
-      const needsKey = layerState._liveMode ? '' : ' (needs a TomTom key)';
+      const needsKey = layerState._liveMode
+        ? ''
+        : t('ground.traffic.chips.needsKeySuffix');
       const titles = {
-        tomtom: `TomTom roads only, each with its live flow${needsKey}`,
-        osm: 'OpenStreetMap roads, with TomTom flow matched when available',
-        hybrid: `TomTom roads first; OpenStreetMap fills the rest, simulated${needsKey}`,
+        tomtom: t('ground.traffic.chips.tomtomTitle', { suffix: needsKey }),
+        osm: t('ground.traffic.chips.osmTitle'),
+        hybrid: t('ground.traffic.chips.hybridTitle', { suffix: needsKey }),
       };
       const labels = { tomtom: 'TomTom', osm: 'OSM', hybrid: 'Hybrid' };
       return {

@@ -478,7 +478,12 @@ export function createVoiceCostTracker(options = {}) {
     incomplete,
     /** Compact chip text. The '*' is a see-note mark, NOT a direction claim. */
     display: formatCostUsd(totalUsd) + (incomplete ? '*' : ''),
-    /** Prose for the tooltip; null when the accounting is complete. */
+    /**
+     * Prose for the tooltip; null when the accounting is complete. This
+     * module stays import-free (it is shared with the server build), so the
+     * display edge (realtimeCost.js) renders this note through the `voice.
+     * cost.incompleteNote` message instead of using the English literal.
+     */
     note: incomplete
       ? 'Estimate is incomplete — a response was still in flight when the session ended, so its usage was never reported.'
       : null,

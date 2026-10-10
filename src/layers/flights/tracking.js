@@ -14,6 +14,7 @@ import {
   isTrackingSelectionGesture,
   isTrackingClickGesture,
 } from '../../data/trackingClickGesture.js';
+import { t } from '../../i18n/index.js';
 import {
   TRACKED_MODEL_MAX_LOAD_FAILS,
   TRACKED_MODEL_RETRY_BACKOFF_MS,
@@ -118,7 +119,7 @@ export function createTracking({
         registration: described.registration || '',
         type: described.typeName || described.typeCode || '',
         altitude: described.onGround
-          ? 'on ground'
+          ? t('fleet.flights.context.onGround')
           : `${altFt.toLocaleString('en-US')} ft`,
         speed: Number.isFinite(described.velocityMps)
           ? `${Math.round(described.velocityMps * 1.944)} kt`
@@ -130,7 +131,9 @@ export function createTracking({
         icao24,
         // Honesty cue: the contact is coasting on dead reckoning, so the
         // narrated position/velocity are last-known rather than live.
-        status: described.stale ? 'stale (missed polls)' : 'live',
+        status: described.stale
+          ? t('fleet.flights.context.statusStale')
+          : t('fleet.flights.context.statusLive'),
       },
     };
   }
@@ -755,7 +758,7 @@ export function createTracking({
     const spd = info.velocity ? `${Math.round(info.velocity * 1.944)} kts` : '';
     const stale =
       flightState.records.missingPolls.get(icao24) || flightState.feed._backoff
-        ? 'STALE'
+        ? t('fleet.flights.tracked.stale')
         : '';
     const lines = [[cs, fl, spd, stale].filter(Boolean).join(' · ')];
     // Converted contacts report their class as TR-3B and nothing else — the

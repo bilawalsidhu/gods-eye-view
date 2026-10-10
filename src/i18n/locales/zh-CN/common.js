@@ -1,0 +1,36 @@
+/**
+ * Simplified Chinese pack — shared vocabulary.
+ * 术语基准见 docs/I18N.md；品牌名（God's Eye View）、供应商名与协议标识保留原文。
+ */
+export default {
+  on: '开',
+  off: '关',
+  enable: '启用',
+  disable: '停用',
+  enabled: '启用',
+  disabled: '停用',
+  expand: '展开',
+  collapse: '折叠',
+  open: '打开',
+  closePanel: '关闭',
+  previous: '上一个',
+  next: '下一个',
+  play: '播放',
+  pause: '暂停',
+  stop: '停止',
+  cancel: '取消',
+  clear: '清除',
+  remove: '移除',
+  retry: '重试',
+  ready: '就绪',
+  loading: '加载中…',
+  loadingPlain: '加载中',
+  unavailable: '不可用',
+  unknown: '未知',
+  notSelected: '未设置',
+  justNow: '刚刚',
+  secondsAgo: '{count} 秒前',
+  minutesAgo: '{count} 分钟前',
+  hoursAgo: '{count} 小时前',
+  daysAgo: '{count} 天前',
+};

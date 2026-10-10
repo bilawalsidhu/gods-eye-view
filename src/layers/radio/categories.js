@@ -1,4 +1,9 @@
-import { MUSIC_GENRES, CATEGORY_MATCHERS } from './policy.js';
+import {
+  MUSIC_GENRES,
+  MUSIC_GENRE_LABEL_KEYS,
+  CATEGORY_MATCHERS,
+} from './policy.js';
+import { t } from '../../i18n/index.js';
 
 export function createCategories({
   state: layerState,
@@ -68,24 +73,41 @@ export function createCategories({
 
   function buildRadioCategories(stations) {
     const rows = Array.isArray(stations) ? stations : [];
+    // Labels resolve through the airwaves pack at build time — this runs on
+    // every catalog refresh, so a locale switch repaints the next refresh.
     const categories = [
-      { id: 'all', label: 'All' },
-      { id: 'news', label: 'News' },
-      { id: 'talk', label: 'Talk' },
-      { id: 'weather', label: 'Weather / Emergency' },
-      { id: 'public-safety', label: 'Public Safety' },
-      { id: 'aviation-marine', label: 'Aviation / Marine' },
-      { id: 'traffic-transit', label: 'Traffic / Transit' },
-      { id: 'music', label: 'Music' },
+      { id: 'all', label: t('airwaves.radio.category.all') },
+      { id: 'news', label: t('airwaves.radio.category.news') },
+      { id: 'talk', label: t('airwaves.radio.category.talk') },
+      { id: 'weather', label: t('airwaves.radio.category.weather') },
+      {
+        id: 'public-safety',
+        label: t('airwaves.radio.category.publicSafety'),
+      },
+      {
+        id: 'aviation-marine',
+        label: t('airwaves.radio.category.aviationMarine'),
+      },
+      {
+        id: 'traffic-transit',
+        label: t('airwaves.radio.category.trafficTransit'),
+      },
+      { id: 'music', label: t('airwaves.radio.category.music') },
     ];
 
-    for (const [genre, label] of MUSIC_GENRES) {
+    for (const [genre] of MUSIC_GENRES) {
       const id = `genre:${genre}`;
       if (rows.some((station) => stationMatchesRadioCategory(station, id))) {
-        categories.push({ id, label });
+        categories.push({
+          id,
+          label: t(MUSIC_GENRE_LABEL_KEYS[genre] || genre),
+        });
       }
     }
-    categories.push({ id: 'other', label: 'Other' });
+    categories.push({
+      id: 'other',
+      label: t('airwaves.radio.category.other'),
+    });
     return categories.map((category) => ({
       ...category,
       color: parts.model.radioCategoryColor(category.id),

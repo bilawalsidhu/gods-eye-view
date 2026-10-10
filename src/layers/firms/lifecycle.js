@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { FIRMS_OVERLAY_SOURCE_ID } from '../../data/firmsLabels.js';
+import { subscribeLocale } from '../../i18n/index.js';
 
 export function createLifecycle({
   layerState,
@@ -12,6 +13,13 @@ export function createLifecycle({
   const { restoreSpriteOrderOnEnable } = services.sprites;
   const { clearSelectedEntityContextForLayer } = services.context;
   const { id, overlayHost } = config;
+
+  // Overlay cards persist between data ticks; rebuild them on a locale switch
+  // so their text never outlives the active language.
+  const unsubscribeLocale = subscribeLocale(() => {
+    if (layerState._enabled && !layerState._destroyed)
+      components.cards.rebuildAmbientLabels();
+  });
 
   const methods = {
     init(viewer) {
@@ -74,6 +82,7 @@ export function createLifecycle({
     },
 
     destroy(viewer = layerState._viewer) {
+      unsubscribeLocale?.();
       layerState.request?.abort();
       layerState.request = null;
       layerState._loading = false;

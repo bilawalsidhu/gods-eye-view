@@ -1,4 +1,6 @@
 /** Scene panel elements and text-only project presentation. */
+import { t } from '../i18n/index.js';
+
 export function sceneElements(root = document) {
   const ids = {
     panel: 'scene-panel',
@@ -47,7 +49,7 @@ export function renderSceneShots(
   if (!scene || scene.shots.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'scene-shot-empty';
-    empty.textContent = 'No shots yet. Use CAPTURE SHOT to save current look.';
+    empty.textContent = t('scenes.shots.empty');
     element.appendChild(empty);
     return;
   }
@@ -61,14 +63,14 @@ export function renderSceneShots(
     const label = document.createElement('div');
     label.className = 'scene-shot-label';
     label.textContent = shot.title;
-    label.title = 'Double-click to rename';
+    label.title = t('scenes.shots.renameHint');
     listen(label, 'click', () => select(shot.id));
     listen(label, 'dblclick', () => {
       if (label.children.length) return;
       const input = document.createElement('input');
       input.type = 'text';
       input.className = 'scene-shot-rename';
-      input.setAttribute('aria-label', 'Shot name');
+      input.setAttribute('aria-label', t('scenes.shots.nameAria'));
       input.value = shot.title;
       let finished = false;
       const finish = (save) => {
@@ -96,11 +98,11 @@ export function renderSceneShots(
     actions.className = 'scene-shot-actions';
     const loadButton = document.createElement('button');
     loadButton.className = 'scene-shot-btn';
-    loadButton.textContent = 'LOAD';
+    loadButton.textContent = t('scenes.shots.load');
     listen(loadButton, 'click', () => load(scene.id, shot.id));
     const deleteButton = document.createElement('button');
     deleteButton.className = 'scene-shot-btn scene-shot-danger';
-    deleteButton.textContent = 'DEL';
+    deleteButton.textContent = t('scenes.shots.delete');
     listen(deleteButton, 'click', () => remove(scene.id, shot.id));
     actions.appendChild(loadButton);
     actions.appendChild(deleteButton);

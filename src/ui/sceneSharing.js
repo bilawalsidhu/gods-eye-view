@@ -1,4 +1,6 @@
 /** Small owned modal for scene authoring and import review; text never becomes markup. */
+import { t } from '../i18n/index.js';
+
 export function createSceneDialog(title, onClose) {
   const dialog = document.createElement('dialog');
   dialog.dataset.directorDialog = '';
@@ -82,7 +84,7 @@ export function createSceneDialog(title, onClose) {
     body.append(wrapper);
     return node;
   }
-  button('Cancel', onClose);
+  button(t('common.cancel'), onClose);
   listen(dialog, 'cancel', (event) => {
     event.preventDefault();
     onClose();
@@ -116,8 +118,8 @@ export function mountSceneSharing(
   bar.dataset.directorAuthoring = '';
   bar.className = 'scene-controls';
   const entries = [
-    ['EDIT DETAILS', edit],
-    ['SHARE SCENE', share],
+    [t('scenes.authoring.editDetails'), edit],
+    [t('scenes.authoring.share'), share],
   ];
   const removers = [];
   for (const [text, fn] of entries) {

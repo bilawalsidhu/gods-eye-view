@@ -2,6 +2,16 @@ import { createVoiceControl } from './control.js';
 import { createVoiceSession } from './session.js';
 import { VoiceCardControls } from './voiceCard.js';
 import { PointerReticle } from './pointerReticle.js';
+import { subscribeLocale, t } from '../i18n/index.js';
+
+/** Status chip words, keyed by state (mirrors realtimeController). */
+const STATUS_KEYS = {
+  idle: 'voice.status.idle',
+  connecting: 'voice.status.connecting',
+  listening: 'voice.status.listening',
+  executing: 'voice.status.executing',
+  error: 'voice.status.error',
+};
 
 function createDefaultReticle(pointer) {
   const element = pointer?.element;
@@ -52,26 +62,44 @@ export function createVoiceCommands({
   if (ui.tierButton) ui.tierButton.hidden = !capabilities.costControls;
   if (ui.costValue) ui.costValue.hidden = !capabilities.costControls;
   if (!capabilities.pushToTalk) {
-    ui.button.setAttribute('aria-label', 'Toggle voice control');
-    if (ui.helpDetail) ui.helpDetail.textContent = 'Activate to toggle voice';
+    ui.button.setAttribute('aria-label', t('voice.hint.toggleAria'));
+    if (ui.helpDetail)
+      ui.helpDetail.textContent = t('voice.hint.activateToggle');
   }
   // Retain the existing controller's inspection surface for browser tools.
   const controls = adapter.controller || session;
   controls.session = session;
-  const updateStatus = session.subscribe((event) => {
-    if (event.type !== 'state') return;
+  const paintState = (event) => {
     ui.root.dataset.status = event.state;
-    ui.status.textContent =
-      event.state === 'idle' ? 'OFF' : event.state.toUpperCase();
+    ui.status.textContent = t(STATUS_KEYS[event.state] || STATUS_KEYS.idle);
     ui.detail.textContent =
-      event.detail || (event.state === 'idle' ? 'Voice off' : 'Voice active');
+      event.detail ||
+      (event.state === 'idle'
+        ? t('voice.status.offDetail')
+        : t('voice.status.onDetail'));
     ui.button.setAttribute('aria-pressed', String(session.isActive()));
     if (ui.errorDetail)
       ui.errorDetail.textContent =
         event.state === 'error'
-          ? event.detail || 'Voice could not be started.'
+          ? event.detail || t('voice.status.couldNotStart')
           : '';
     if (event.state === 'error') ui.root.classList?.remove('error-dismissed');
+  };
+  let lastStateEvent = null;
+  const updateStatus = session.subscribe((event) => {
+    if (event.type !== 'state') return;
+    lastStateEvent = event;
+    paintState(event);
+  });
+  // A live locale switch re-paints the fixed captions and the last state's
+  // readout (I18N.md rule 6); released in both teardown paths below.
+  const unsubscribeLocale = subscribeLocale(() => {
+    if (!capabilities.pushToTalk) {
+      ui.button.setAttribute('aria-label', t('voice.hint.toggleAria'));
+      if (ui.helpDetail)
+        ui.helpDetail.textContent = t('voice.hint.activateToggle');
+    }
+    if (lastStateEvent) paintState(lastStateEvent);
   });
   // Captions, plan and result card nested in the control; it only reads
   // provider-neutral session events.
@@ -110,6 +138,7 @@ export function createVoiceCommands({
     () => {
       ui.button.removeEventListener('click', buttonHandler);
       annotationUnsubscribe?.();
+      unsubscribeLocale();
       updateStatus();
       updateCard?.();
       updatePointer();
@@ -123,6 +152,7 @@ export function createVoiceCommands({
   if (session.disposed) {
     ui.button.removeEventListener('click', buttonHandler);
     annotationUnsubscribe?.();
+    unsubscribeLocale();
     updateStatus();
     updateCard?.();
     updatePointer();

@@ -6,6 +6,7 @@ import {
   shouldCaptureContextSession,
   shouldDeferContextEntryDuringClear,
 } from '../contextModePolicy.js';
+import { t } from '../i18n/index.js';
 
 export function connectContextManager(manager) {
   this.disconnect();
@@ -124,7 +125,13 @@ export function connectContextManager(manager) {
                 restoreError,
               );
             }
-            return `${entryMode === 'space-missions' ? 'Space Missions' : 'Context'} could not start because another layer did not stop cleanly`;
+            return t('context.toast.startBlocked', {
+              mode: t(
+                entryMode === 'space-missions'
+                  ? 'context.modeWord.spaceMissions'
+                  : 'context.modeWord.context',
+              ),
+            });
           } finally {
             if (ownsNotificationToken) {
               this._userFacingContextNotificationTokens.delete(

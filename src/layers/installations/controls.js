@@ -5,6 +5,7 @@ import {
   DISTANCE_PREFILTER_MARGIN_M,
   ANCHOR_REFRESH_M,
 } from './policy.js';
+import { t } from '../../i18n/index.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const methods = {
@@ -231,13 +232,15 @@ export function createControls({ state: layerState, services, parts, source }) {
           retrying: layerState.loading && Boolean(layerState.failureReason),
         }),
         loadingLabel: layerState.loading
-          ? 'loading mapped installation context'
+          ? t('sensors.installations.loading')
           : '',
         coverage: layerState.coverage,
         coverageLabel:
           layerState.coverage?.kind === 'subject'
-            ? `WITHIN ${Math.round(layerState.coverage.radiusM / 1000)} KM`
-            : 'CURRENT VIEWPORT ONLY',
+            ? t('sensors.installations.withinKm', {
+                n: Math.round(layerState.coverage.radiusM / 1000),
+              })
+            : t('sensors.installations.viewportOnly'),
       };
     },
   };

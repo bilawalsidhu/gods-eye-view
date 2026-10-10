@@ -372,6 +372,15 @@ async function clickPanelControl(page, selector, { timeout = 5_000 } = {}) {
 
 /** Load the app and clear the first-run dialog. */
 export async function boot(page, url) {
+  // The fixtures gate asserts English button text (BUTTON:ON), so pin the
+  // English locale before the app resolves one from a zh-locale machine.
+  await page.evaluateOnNewDocument(() => {
+    try {
+      localStorage.setItem('gods-eye-view.locale', 'en');
+    } catch {
+      // Assertions need English; a blocked store cannot provide it.
+    }
+  });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await clearFirstRun(page);
 }
@@ -1090,26 +1099,34 @@ async function main() {
               ((i + 2) / 13) * (PHOTO_LINE.north - PHOTO_LINE.south),
           ]);
           // Ground primitives are built over a few frames: poll for a pick.
-          const handle = await page.waitForFunction(
-            findPickPoint,
-            { timeout: 30_000, polling: 250 },
-            {
-              prefix: 'mly:seq:',
-              id: target,
-              points: fixtures ? along : null,
-              billboardIds: null,
-            },
-          );
-          const at = await handle.jsonValue();
-          await page.mouse.click(at.x, at.y);
-          const selected = await uiUntil(
-            (u, id) =>
-              u.sequence.selectedId === id &&
-              !u.sequence.loading &&
-              u.sequence.images > 0,
-            at.id,
-            { timeout: 30_000 },
-          );
+          // A click can land while the pick routing is still warming up on a
+          // cold server, so re-find the pick and click again (bounded) before
+          // treating the target as missed; the final attempt keeps the full
+          // 30 s settle so a genuine regression still fails loudly.
+          let at = null;
+          let selected = false;
+          for (let attempt = 0; attempt < 3 && !selected; attempt += 1) {
+            const handle = await page.waitForFunction(
+              findPickPoint,
+              { timeout: 30_000, polling: 250 },
+              {
+                prefix: 'mly:seq:',
+                id: target,
+                points: fixtures ? along : null,
+                billboardIds: null,
+              },
+            );
+            at = await handle.jsonValue();
+            await page.mouse.click(at.x, at.y);
+            selected = await uiUntil(
+              (u, id) =>
+                u.sequence.selectedId === id &&
+                !u.sequence.loading &&
+                u.sequence.images > 0,
+              at.id,
+              { timeout: attempt === 2 ? 30_000 : 5_000 },
+            );
+          }
           const sequence = (await ui()).sequence;
           assert.ok(
             selected,

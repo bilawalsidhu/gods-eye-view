@@ -229,6 +229,8 @@ export function createLifecycle({
     destroy() {
       this.disable();
       detachRuntimeListeners();
+      layerState.localeUnsubscribe?.();
+      layerState.localeUnsubscribe = null;
       layerState.panel?.removeEventListener(
         'click',
         layerState.panelClickListener,

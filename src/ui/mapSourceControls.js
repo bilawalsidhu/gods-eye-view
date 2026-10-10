@@ -1,4 +1,5 @@
 import { renderMapStackChips, syncMapStackChips } from '../mapStackChips.js';
+import { subscribeLocale, t } from '../i18n/index.js';
 
 /**
  * Own Map Source presentation and selection without constructing map providers.
@@ -27,8 +28,8 @@ export function createMapSourceControls({
       const stack = state.activeStack;
       statusElement.textContent =
         state.status === 'switching'
-          ? '...'
-          : stack?.shortLabel || stack?.label || 'MAP';
+          ? t('mapsource.status.switching')
+          : stack?.shortLabel || stack?.label || t('mapsource.status.fallback');
       statusElement.classList.toggle('warn', !!state.lastError);
     }
   }
@@ -72,6 +73,10 @@ export function createMapSourceControls({
     render(controller.getState());
     onStateChanged();
   });
+  // A locale switch repaints the chip row (labels/tooltips) and status chip.
+  const unsubscribeLocale = subscribeLocale(() => {
+    if (!destroyed) refresh();
+  });
   refresh();
   return {
     render,
@@ -82,6 +87,7 @@ export function createMapSourceControls({
       destroyed = true;
       generation++;
       unsubscribe?.();
+      unsubscribeLocale?.();
       for (const remove of removers.splice(0)) remove();
     },
   };

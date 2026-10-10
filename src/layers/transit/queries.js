@@ -11,6 +11,7 @@ import {
   getRegisteredTransitFeed,
 } from '../../data/transitFeeds.js';
 import { transitModeTier } from '../../data/transitPresetStyle.js';
+import { t } from '../../i18n/index.js';
 
 /**
  * The layer row's answer to "what is on screen and is it honest?".
@@ -224,8 +225,12 @@ export function createQueries({ state, parts }) {
           source: 'GTFS-RT',
           status: 'zoom-in',
           coverage: state._altitudeGateOpen
-            ? `No feed here yet · ${TRANSIT_ENABLED_FEEDS.length} regions available`
-            : `Fly below ${Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString()} km to a covered region`,
+            ? t('ground.transit.stats.noFeed', {
+                n: TRANSIT_ENABLED_FEEDS.length,
+              })
+            : t('ground.transit.stats.flyBelow', {
+                n: Math.round(ACTIVATION_ALTITUDE_M / 1000).toLocaleString(),
+              }),
         };
       }
       // Age is shown by the same rule the row state uses, so the text and the
@@ -239,9 +244,15 @@ export function createQueries({ state, parts }) {
               now - status.upstreamAt > FEED_STALE_AFTER_MS);
           const aged =
             quiet && Number.isFinite(status.upstreamAt)
-              ? ` (${Math.round((now - status.upstreamAt) / 1000)}s old)`
+              ? t('ground.transit.stats.ageSuffix', {
+                  n: Math.round((now - status.upstreamAt) / 1000),
+                })
               : '';
-          return `${feed.name} ${status.count}${aged}`;
+          return t('ground.transit.stats.feedCount', {
+            name: feed.name,
+            count: status.count,
+            aged,
+          });
         })
         .join(' · ');
       return {
@@ -255,7 +266,9 @@ export function createQueries({ state, parts }) {
         loading: health.loading && count === 0,
         loadingLabel:
           health.loading && count === 0
-            ? `Loading ${active.map((feed) => feed.name).join(', ')}`
+            ? t('ground.transit.stats.loading', {
+                names: active.map((feed) => feed.name).join(', '),
+              })
             : undefined,
         stale: health.stale,
         source: 'GTFS-RT',

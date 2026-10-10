@@ -1,4 +1,5 @@
 import { STATUS_POLL_MS } from './policy.js';
+import { t } from '../../i18n/index.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const methods = {
@@ -67,8 +68,10 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (layerState._loading) {
         stats.loadingLabel =
           layerState._activeCityIds.size > 0
-            ? `syncing ${layerState._activeCityIds.size} city feeds...`
-            : 'scanning nearby systems...';
+            ? t('ground.bikeshare.syncingCities', {
+                n: layerState._activeCityIds.size,
+              })
+            : t('ground.bikeshare.scanning');
       }
       if (layerState._error) stats.error = layerState._error;
       return stats;

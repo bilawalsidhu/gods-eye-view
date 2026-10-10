@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from './inputOwnership.js';
+import { subscribeLocale, t } from '../i18n/index.js';
 import {
   clearOverlaySource,
   hitTestWorldOverlay,
@@ -112,7 +113,9 @@ const DEFAULT_RENDER_HOST = Object.freeze({
 const DEFAULT_EVENT_LOADER = async () => {
   const response = await fetch(eventAsset('event.json'), { cache: 'no-store' });
   if (!response.ok)
-    throw new Error(`Bhote Koshi event pack unavailable (${response.status})`);
+    throw new Error(
+      t('events.error.packUnavailable', { status: response.status }),
+    );
   return response.json();
 };
 const DEFAULT_IMAGERY_PROVIDER_FACTORY = (url, options) =>
@@ -135,7 +138,7 @@ const DEFAULT_TERRAIN_SAMPLER = async (viewer, observations) => {
 };
 const DEFAULT_MEDIA_LOADER = async (url, { signal } = {}) => {
   if (typeof createImageBitmap !== 'function') {
-    throw new Error('Evidence poster decoding is unavailable');
+    throw new Error(t('events.error.posterDecoding'));
   }
   const response = await fetch(url, {
     cache: 'force-cache',
@@ -144,7 +147,9 @@ const DEFAULT_MEDIA_LOADER = async (url, { signal } = {}) => {
     signal,
   });
   if (!response.ok)
-    throw new Error(`Evidence poster unavailable (${response.status})`);
+    throw new Error(
+      t('events.error.posterUnavailable', { status: response.status }),
+    );
   return createImageBitmap(await response.blob());
 };
 const DEFAULT_VIDEO_FACTORY = () => {
@@ -390,7 +395,7 @@ export function evidenceCorroborationLabel(observation) {
     0,
     Math.floor(Number(observation?.corroboration?.sourceCount) || 0),
   );
-  return count > 1 ? `${count} GEOLOCATED SOURCE-MAP PLACEMENTS` : '';
+  return count > 1 ? t('events.card.corroboration', { n: count }) : '';
 }
 
 /** Interpolate headings across north using the shortest angular path. */
@@ -641,7 +646,7 @@ function drawEvidenceFallback(ctx, observation, width, height) {
   }
   ctx.fillStyle = WORLD_OVERLAY_STYLE.accent;
   ctx.font = scaledOverlayFont(WORLD_OVERLAY_STYLE.fontLabel, 1.4);
-  ctx.fillText('NO PREVIEW', 20, 30);
+  ctx.fillText(t('events.card.noPreview'), 20, 30);
 }
 
 function ellipsizeEvidenceText(value, limit) {
@@ -713,10 +718,12 @@ export function updateEvidenceFrame(
   ctx.fillStyle = WORLD_OVERLAY_STYLE.detail;
   ctx.font = scaledOverlayFont(WORLD_OVERLAY_STYLE.fontDetail);
   const publisher = String(
-    observation.media?.publisher || 'SOURCE LINK',
+    observation.media?.publisher || t('events.card.sourceLinkFallback'),
   ).toUpperCase();
   ctx.fillText(
-    `${ellipsizeEvidenceText(publisher, 24)} / OPEN`,
+    t('events.card.open', {
+      publisher: ellipsizeEvidenceText(publisher, 24),
+    }),
     16,
     infoY + 53,
   );
@@ -736,7 +743,7 @@ function eventAsset(path) {
 }
 
 function cancellationError() {
-  const error = new Error('Bhote Koshi event enable cancelled');
+  const error = new Error(t('events.error.enableCancelled'));
   error.name = 'AbortError';
   return error;
 }
@@ -816,25 +823,25 @@ function collectPanelReferences(panel) {
 function createPanel(event, handlers) {
   const panel = document.createElement('aside');
   panel.id = 'bhote-koshi-event-panel';
-  panel.setAttribute('aria-label', 'Bhote Koshi flood reconstruction controls');
+  panel.setAttribute('aria-label', t('events.panel.aria'));
   panel.innerHTML = `
     <div class="bhote-event-header">
       <div>
-        <div class="bhote-event-kicker">EVENT RECONSTRUCTION · 26 AUG 2026</div>
-        <div class="bhote-event-title">BHOTE KOSHI OUTBURST FLOOD</div>
+        <div class="bhote-event-kicker">${t('events.panel.kicker')}</div>
+        <div class="bhote-event-title">${t('events.panel.title')}</div>
       </div>
-      <button class="bhote-event-icon-btn" type="button" data-action="close" title="Close event layer" aria-label="Close event layer">×</button>
+      <button class="bhote-event-icon-btn" type="button" data-action="close" title="${t('events.panel.close')}" aria-label="${t('events.panel.close')}">×</button>
     </div>
     <div class="bhote-event-status-row">
-      <span class="bhote-event-status observed">OBSERVED IMAGERY</span>
-      <span class="bhote-event-status reconstructed">SCHEMATIC CORRIDOR</span>
+      <span class="bhote-event-status observed">${t('events.panel.observed')}</span>
+      <span class="bhote-event-status reconstructed">${t('events.panel.schematic')}</span>
     </div>
     <section class="bhote-event-section" data-role="imagery-comparison">
       <div class="bhote-event-section-head">
-        <span>2021 HISTORICAL REFERENCE / 2026 POST-EVENT</span>
+        <span>${t('events.panel.comparisonHead')}</span>
         <span data-role="split-readout">50 / 50</span>
       </div>
-      <input class="bhote-event-range" data-role="split" type="range" min="0" max="100" value="50" aria-label="Historical reference and post-event image split" />
+      <input class="bhote-event-range" data-role="split" type="range" min="0" max="100" value="50" aria-label="${t('events.panel.splitAria')}" />
       <div class="bhote-event-dates">
         <span data-role="before-date"></span>
         <span data-role="after-date"></span>
@@ -842,37 +849,37 @@ function createPanel(event, handlers) {
     </section>
     <section class="bhote-event-section">
       <div class="bhote-event-section-head">
-        <span data-role="timeline-label">RECONSTRUCTION CLOCK</span>
+        <span data-role="timeline-label">${t('events.panel.clock')}</span>
         <span data-role="time"></span>
       </div>
-      <input class="bhote-event-range flood" data-role="progress" type="range" min="0" max="1000" value="0" aria-label="Schematic downstream progression" />
-      <div class="bhote-event-story-nav" aria-label="Story beat navigation">
-        <button type="button" data-action="previous-beat" title="Previous story beat" aria-label="Previous story beat">‹</button>
+      <input class="bhote-event-range flood" data-role="progress" type="range" min="0" max="1000" value="0" aria-label="${t('events.panel.progressAria')}" />
+      <div class="bhote-event-story-nav" aria-label="${t('events.panel.storyNavAria')}">
+        <button type="button" data-action="previous-beat" title="${t('events.panel.previousBeat')}" aria-label="${t('events.panel.previousBeat')}">‹</button>
         <div class="bhote-event-story-current">
           <span data-role="beat-index">01 / 06</span>
-          <strong data-role="beat-title" aria-live="polite">CAUSE</strong>
-          <small data-role="beat-meta">CAPTURE TIME UNVERIFIED</small>
+          <strong data-role="beat-title" aria-live="polite">${t('events.panel.initialBeatTitle')}</strong>
+          <small data-role="beat-meta">${t('events.panel.initialBeatMeta')}</small>
         </div>
-        <button type="button" data-action="next-beat" title="Next story beat" aria-label="Next story beat">›</button>
+        <button type="button" data-action="next-beat" title="${t('events.panel.nextBeat')}" aria-label="${t('events.panel.nextBeat')}">›</button>
       </div>
       <div class="bhote-event-actions">
-        <button type="button" data-action="play">▶ PLAY</button>
-        <button type="button" data-action="play-scene" hidden title="Play the next shot and continue through this scene">▶ PLAY SCENE</button>
-        <button type="button" data-action="cinematic" aria-pressed="false">◉ CINEMATIC</button>
-        <button type="button" data-action="story-replay">↺ FULL STORY</button>
-        <button type="button" data-action="open-source">↗ OPEN ORIGINAL</button>
-        <button type="button" data-action="corridor">⌖ LOWER GORGE</button>
+        <button type="button" data-action="play">${t('events.panel.play')}</button>
+        <button type="button" data-action="play-scene" hidden title="${t('events.panel.playSceneTitle')}">${t('events.panel.playScene')}</button>
+        <button type="button" data-action="cinematic" aria-pressed="false">${t('events.panel.cinematic')}</button>
+        <button type="button" data-action="story-replay">${t('events.panel.fullStory')}</button>
+        <button type="button" data-action="open-source">${t('events.panel.openOriginal')}</button>
+        <button type="button" data-action="corridor">${t('events.panel.lowerGorge')}</button>
       </div>
     </section>
     <details class="bhote-event-evidence">
-      <summary>FIELD REPORTS · ${event.fieldReports.length}</summary>
+      <summary>${t('events.panel.fieldReports', { n: event.fieldReports.length })}</summary>
       <div class="bhote-event-report-list"></div>
     </details>
     <div class="bhote-event-credit">
-      <span>GEOLOCATIONS · GEO GEORGE SHADRACH</span>
-      <button type="button" data-action="geolocation-map">↗ OPEN PUBLIC MAP</button>
+      <span>${t('events.panel.geolocations')}</span>
+      <button type="button" data-action="geolocation-map">${t('events.panel.openPublicMap')}</button>
     </div>
-    <p class="bhote-event-caveat"><span data-role="caveat"></span><span data-role="imagery-cloud-note"> Clouds are preserved from the source imagery.</span></p>
+    <p class="bhote-event-caveat"><span data-role="caveat"></span><span data-role="imagery-cloud-note">${t('events.panel.cloudNote')}</span></p>
   `;
 
   const refs = collectPanelReferences(panel);
@@ -966,6 +973,7 @@ export function createBhoteKoshiEventLayer({
   let _enabled = false;
   let _panel = null;
   let _panelRefs = null;
+  let _panelLocaleUnsubscribe = null;
   let _splitControl = null;
   let _beforeLayer = null;
   let _afterLayer = null;
@@ -1205,7 +1213,7 @@ export function createBhoteKoshiEventLayer({
       _embeddedMedia?.show?.({
         observation: {
           title: witness.title,
-          shortTitle: 'Rasuwagadhi witness',
+          shortTitle: t('events.witness.shortTitle'),
           media: { sourceUrl: witness.sourceUrl },
         },
         anchor,
@@ -2320,7 +2328,9 @@ export function createBhoteKoshiEventLayer({
         collisionGroup: 'ambient-card',
         zIndex: 60,
         interactive: true,
-        accessibilityLabel: `Open original source for ${observation.title}; capture time unverified`,
+        accessibilityLabel: t('events.card.openSourceAria', {
+          title: observation.title,
+        }),
         activate: () => openExternal(observation.media.sourceUrl),
         minDistance: 0,
         maxDistance: 220000,
@@ -2416,7 +2426,7 @@ export function createBhoteKoshiEventLayer({
           closeFrame(poster);
           if (
             error?.name !== 'AbortError' &&
-            error?.message !== 'Evidence poster decoding is unavailable'
+            error?.message !== t('events.error.posterDecoding')
           ) {
             console.warn(
               `[Data:BhoteKoshi] Evidence poster failed for ${observation.id}:`,
@@ -2561,9 +2571,12 @@ export function createBhoteKoshiEventLayer({
       cssProperty: '--bhote-koshi-split',
       beforeTitle: event.imagery.before.label,
       afterTitle: event.imagery.after.label,
-      ariaLabel: 'Historical reference and post-event image divider',
+      ariaLabel: t('events.panel.splitDividerAria'),
       formatValueText: (beforePercent, afterPercent) =>
-        `A historical reference ${beforePercent} percent, B post-event ${afterPercent} percent`,
+        t('events.panel.splitValue', {
+          before: beforePercent,
+          after: afterPercent,
+        }),
       onChange: setSplit,
     });
   }
@@ -2595,7 +2608,9 @@ export function createBhoteKoshiEventLayer({
     setElementProperty(
       button,
       'textContent',
-      _cinematicActive ? '■ RELEASE CAMERA' : '◉ CINEMATIC',
+      _cinematicActive
+        ? t('events.panel.releaseCamera')
+        : t('events.panel.cinematic'),
     );
     setElementAttribute(button, 'aria-pressed', String(_cinematicActive));
   }
@@ -2961,13 +2976,13 @@ export function createBhoteKoshiEventLayer({
       _panelRefs.progressInput,
       'aria-label',
       sceneDirected
-        ? 'Seek Nepal scene clock'
-        : 'Schematic downstream progression',
+        ? t('events.panel.sceneProgressAria')
+        : t('events.panel.progressAria'),
     );
     setElementProperty(
       _panelRefs.timelineLabel,
       'textContent',
-      sceneDirected ? 'NEPAL SCENE CLOCK' : 'RECONSTRUCTION CLOCK',
+      sceneDirected ? t('events.panel.sceneClock') : t('events.panel.clock'),
     );
     const sceneDuration = Number(_sceneContext?.sceneDurationSec) || 0;
     setElementProperty(
@@ -2980,22 +2995,22 @@ export function createBhoteKoshiEventLayer({
     );
     const playLabel = sceneDirected
       ? _sceneActionPending && _sceneActionPending.type !== 'scene'
-        ? '… PLAYING SHOT'
-        : '▶ PLAY SHOT'
+        ? t('events.panel.playingShot')
+        : t('events.panel.playShot')
       : _playing
-        ? 'Ⅱ PAUSE'
+        ? t('events.panel.pause')
         : _progress >= 1
           ? _cinematicReplayArmed
-            ? '↺ REPLAY CINEMATIC'
-            : '↺ REPLAY'
-          : '▶ PLAY';
+            ? t('events.panel.replayCinematic')
+            : t('events.panel.replay')
+          : t('events.panel.play');
     setElementProperty(_panelRefs.playButton, 'textContent', playLabel);
     setElementProperty(
       _panelRefs.playSceneButton,
       'textContent',
       _sceneActionPending?.type === 'scene'
-        ? '… PLAYING SCENE'
-        : '▶ PLAY SCENE',
+        ? t('events.panel.playingScene')
+        : t('events.panel.playScene'),
     );
     setElementProperty(
       _panelRefs.playSceneButton,
@@ -3011,19 +3026,21 @@ export function createBhoteKoshiEventLayer({
     setElementAttribute(
       _panelRefs.playSceneButton,
       'aria-label',
-      `Continue ${_sceneContext?.sceneTitle || 'current scene'} from next shot`,
+      t('events.panel.continueScene', {
+        scene: _sceneContext?.sceneTitle || t('events.panel.currentScene'),
+      }),
     );
     setElementProperty(
       _panelRefs.storyReplayButton,
       'textContent',
-      '↺ FULL STORY',
+      t('events.panel.fullStory'),
     );
     if (!sceneDirected) {
       setElementProperty(_panelRefs.storyReplayButton, 'disabled', false);
       setElementAttribute(
         _panelRefs.storyReplayButton,
         'aria-label',
-        'Replay the full reconstruction',
+        t('events.panel.replayStoryAria'),
       );
     }
     const beatIndex = currentEvidenceIndex();
@@ -3047,18 +3064,24 @@ export function createBhoteKoshiEventLayer({
       _panelRefs.beatTitle,
       'textContent',
       sceneDirected
-        ? _sceneContext?.shotTitle || 'SCENE SHOT'
-        : observation?.shortTitle || observation?.title || 'EVIDENCE',
+        ? _sceneContext?.shotTitle || t('events.panel.sceneShotFallback')
+        : observation?.shortTitle ||
+            observation?.title ||
+            t('events.panel.beatFallback'),
     );
     const sourceCount = Math.max(
       0,
       Math.floor(Number(observation?.corroboration?.sourceCount) || 0),
     );
     const beatMeta = [
-      String(observation?.phase || 'EVIDENCE').toUpperCase(),
-      'TIME UNVERIFIED',
-      sourceCount > 1 ? `${sourceCount} SOURCES` : '',
-      observation?.imageryCoverage === 'outside' ? 'OUTSIDE IMAGERY SWIPE' : '',
+      String(
+        observation?.phase || t('events.panel.beatFallback'),
+      ).toUpperCase(),
+      t('events.panel.timeUnverified'),
+      sourceCount > 1 ? t('events.panel.sources', { n: sourceCount }) : '',
+      observation?.imageryCoverage === 'outside'
+        ? t('events.panel.outsideImagery')
+        : '',
     ]
       .filter(Boolean)
       .join(' / ');
@@ -3066,7 +3089,11 @@ export function createBhoteKoshiEventLayer({
       _panelRefs.beatMeta,
       'textContent',
       sceneDirected
-        ? `${String(_sceneContext?.sceneTitle || 'NEPAL FLOOD INCIDENT').toUpperCase()} / AUTHORED SHOT`
+        ? t('events.panel.authoredShot', {
+            scene: String(
+              _sceneContext?.sceneTitle || t('events.panel.fallbackSceneTitle'),
+            ).toUpperCase(),
+          })
         : beatMeta,
     );
     setElementProperty(
@@ -3093,18 +3120,25 @@ export function createBhoteKoshiEventLayer({
       _panelRefs.playButton,
       'aria-label',
       sceneDirected
-        ? `Play ${_sceneContext?.shotTitle || 'current scene shot'}`
-        : 'Play reconstruction',
+        ? t('events.panel.playShotAria', {
+            title:
+              _sceneContext?.shotTitle || t('events.panel.currentSceneShot'),
+          })
+        : t('events.panel.playAria'),
     );
     setElementAttribute(
       _panelRefs.previousButton,
       'aria-label',
-      sceneDirected ? 'Load previous scene shot' : 'Previous story beat',
+      sceneDirected
+        ? t('events.panel.previousShotAria')
+        : t('events.panel.previousBeat'),
     );
     setElementAttribute(
       _panelRefs.nextButton,
       'aria-label',
-      sceneDirected ? 'Load next scene shot' : 'Next story beat',
+      sceneDirected
+        ? t('events.panel.nextShotAria')
+        : t('events.panel.nextBeat'),
     );
     setElementProperty(
       _panelRefs.openSourceButton,
@@ -3123,6 +3157,85 @@ export function createBhoteKoshiEventLayer({
       'textContent',
       `${beforePercent} / ${100 - beforePercent}`,
     );
+  }
+
+  /** Repaint every panel-owned label from the active locale, then the live state. */
+  function repaintPanelLocale() {
+    if (!_panel || !_panelRefs) return;
+    _panel.setAttribute('aria-label', t('events.panel.aria'));
+    const set = (element, text) => {
+      if (element) element.textContent = text;
+    };
+    set(_panel.querySelector('.bhote-event-kicker'), t('events.panel.kicker'));
+    set(_panel.querySelector('.bhote-event-title'), t('events.panel.title'));
+    const closeButton = _panel.querySelector('[data-action="close"]');
+    closeButton?.setAttribute('title', t('events.panel.close'));
+    closeButton?.setAttribute('aria-label', t('events.panel.close'));
+    set(
+      _panel.querySelector('.bhote-event-status.observed'),
+      t('events.panel.observed'),
+    );
+    set(
+      _panel.querySelector('.bhote-event-status.reconstructed'),
+      t('events.panel.schematic'),
+    );
+    set(
+      _panel.querySelector(
+        '[data-role="imagery-comparison"] .bhote-event-section-head > span',
+      ),
+      t('events.panel.comparisonHead'),
+    );
+    _panelRefs.splitInput?.setAttribute(
+      'aria-label',
+      t('events.panel.splitAria'),
+    );
+    const splitHandle = document.querySelector('.bhote-koshi-split-handle');
+    splitHandle?.setAttribute('aria-label', t('events.panel.splitDividerAria'));
+    set(
+      _panel.querySelector('.bhote-event-evidence summary'),
+      t('events.panel.fieldReports', { n: _event?.fieldReports.length || 0 }),
+    );
+    set(
+      _panel.querySelector('.bhote-event-credit > span'),
+      t('events.panel.geolocations'),
+    );
+    set(
+      _panel.querySelector('[data-action="geolocation-map"]'),
+      t('events.panel.openPublicMap'),
+    );
+    set(
+      _panel.querySelector('[data-role="imagery-cloud-note"]'),
+      t('events.panel.cloudNote'),
+    );
+    const storyNav = _panel.querySelector('.bhote-event-story-nav');
+    storyNav?.setAttribute('aria-label', t('events.panel.storyNavAria'));
+    const previousButton = _panel.querySelector(
+      '[data-action="previous-beat"]',
+    );
+    previousButton?.setAttribute('title', t('events.panel.previousBeat'));
+    previousButton?.setAttribute('aria-label', t('events.panel.previousBeat'));
+    const nextButton = _panel.querySelector('[data-action="next-beat"]');
+    nextButton?.setAttribute('title', t('events.panel.nextBeat'));
+    nextButton?.setAttribute('aria-label', t('events.panel.nextBeat'));
+    const playSceneButton = _panel.querySelector('[data-action="play-scene"]');
+    set(playSceneButton, t('events.panel.playScene'));
+    playSceneButton?.setAttribute('title', t('events.panel.playSceneTitle'));
+    set(
+      _panel.querySelector('[data-action="story-replay"]'),
+      t('events.panel.fullStory'),
+    );
+    set(
+      _panel.querySelector('[data-action="open-source"]'),
+      t('events.panel.openOriginal'),
+    );
+    set(
+      _panel.querySelector('[data-action="corridor"]'),
+      t('events.panel.lowerGorge'),
+    );
+    // Dynamic labels and the canvas evidence cards repaint from live state.
+    syncPanel();
+    for (let index = 0; index < _evidenceFrameSlots.length; index += 1)
+      redrawEvidenceSlot(index);
   }
 
   function syncPresentationMode() {
@@ -3390,6 +3503,8 @@ export function createBhoteKoshiEventLayer({
       });
       _panel = panelView.panel;
       _panelRefs = panelView.refs;
+      _panelLocaleUnsubscribe?.();
+      _panelLocaleUnsubscribe = subscribeLocale(repaintPanelLocale);
       syncPresentationMode();
       overlayHost.setVisible(
         BHOTE_KOSHI_OVERLAY_SOURCE_ID,
@@ -3488,6 +3603,8 @@ export function createBhoteKoshiEventLayer({
       ?.classList.remove('bhote-event-active');
     _panel = null;
     _panelRefs = null;
+    _panelLocaleUnsubscribe?.();
+    _panelLocaleUnsubscribe = null;
     _splitControl?.destroy();
     _splitControl = null;
     _progress = 0;
@@ -3694,7 +3811,11 @@ export function createBhoteKoshiEventLayer({
 
   return {
     id: BHOTE_KOSHI_LAYER_ID,
-    name: 'Bhote Koshi Flood',
+    // Resolved per read so a locale switch relabels the layer without
+    // re-registering it.
+    get name() {
+      return t('events.layer.name');
+    },
     // Scene-owned component; retain registration without a standalone menu row.
     showInTogglePanel: false,
     icon: '🌊',
@@ -3716,8 +3837,10 @@ export function createBhoteKoshiEventLayer({
       return {
         count: _enabled ? 1 : 0,
         status: _enabled ? 'nominal' : 'idle',
-        source: 'Vantor + GeoPera',
-        coverage: _enabled ? 'Rasuwa · 26 Aug 2026' : 'Event reconstruction',
+        source: t('events.layer.source'),
+        coverage: _enabled
+          ? t('events.layer.coverage')
+          : t('events.layer.coverageIdle'),
       };
     },
     getPlaybackState() {

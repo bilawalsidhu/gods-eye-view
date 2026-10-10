@@ -1,17 +1,20 @@
 import { localReceiverFeedName } from './feedNames.js';
 import { LAYER_SOURCE } from './policy.js';
+import { t } from '../../i18n/index.js';
 
 /**
  * Layers-panel status for Local ADS-B, from its two inputs: the browser
  * WebUSB receiver and the server's decoder feeds. Pure; no DOM or Cesium.
+ * The row's `source` registration stays English (LAYER_SOURCE); the
+ * statusMessage/loadingLabel lines compose through the sensors pack here.
  */
 
+const FEED_SOURCE_KEY = 'sensors.localAdsb.status.feedsSource';
+const COMBINED_SOURCE_KEY = 'sensors.localAdsb.status.combinedSource';
+
+/** English constants kept for source-text regression readers. */
 export const FEED_SOURCE = 'Decoder feeds';
 export const COMBINED_SOURCE = 'WebUSB + decoder feeds';
-
-function plural(count, one, many) {
-  return count === 1 ? one : many;
-}
 
 /**
  * Describe the feeds that are not live, grouped by status, e.g.
@@ -30,7 +33,11 @@ export function describeFeedProblems(feeds) {
   return [...byStatus]
     .map(([status, names]) => {
       const list = [...names];
-      return `${plural(list.length, 'feed', 'feeds')} ${list.join(', ')} ${status}`;
+      return t('sensors.localAdsb.status.feedProblem', {
+        count: list.length,
+        list: list.join(', '),
+        status,
+      });
     })
     .join(' · ');
 }
@@ -48,26 +55,46 @@ function webUsbStatus(receiver, heard, feedState) {
   if (receiver.status === 'error')
     return { status: 'error', error: receiver.message };
   if (receiver.status === 'connecting' || receiver.status === 'tuning')
-    return { loading: true, loadingLabel: 'opening receiver' };
+    return {
+      loading: true,
+      loadingLabel: t('sensors.localAdsb.status.openingReceiver'),
+    };
   if (
     feedState?.polling &&
     feedState.configured === null &&
     !receiver.connected
   )
-    return { loading: true, loadingLabel: 'checking decoder feeds' };
+    return {
+      loading: true,
+      loadingLabel: t('sensors.localAdsb.status.checkingFeeds'),
+    };
   if (!receiver.webUsbSupported)
     return {
       status: 'idle',
-      statusMessage: 'WebUSB needs desktop Chrome or Edge',
+      statusMessage: t('sensors.localAdsb.status.webusbUnsupported'),
     };
   if (!receiver.connected)
-    return { status: 'idle', statusMessage: 'connect a receiver in Radio' };
+    return {
+      status: 'idle',
+      statusMessage: t('sensors.localAdsb.status.connectHint'),
+    };
   if (receiver.mode !== 'adsb')
-    return { status: 'idle', statusMessage: 'receiver is in FM mode' };
+    return {
+      status: 'idle',
+      statusMessage: t('sensors.localAdsb.status.fmMode'),
+    };
   const rate = Number.isFinite(receiver.messagesPerSecond)
-    ? `${receiver.messagesPerSecond} msg/s`
-    : 'listening';
-  return { status: 'streaming', loadingLabel: `${heard} heard · ${rate}` };
+    ? t('sensors.localAdsb.status.msgRate', {
+        rate: receiver.messagesPerSecond,
+      })
+    : t('sensors.localAdsb.status.listening');
+  return {
+    status: 'streaming',
+    loadingLabel: t('sensors.localAdsb.status.heardRate', {
+      heard,
+      rate,
+    }),
+  };
 }
 
 /**
@@ -94,22 +121,27 @@ export function localAdsbStatus({ receiver, feedState, heard }) {
       ...webUsbStatus(receiver, heard, feedState),
     };
   const usbActive = Boolean(receiver.connected && receiver.mode === 'adsb');
-  const source = usbActive ? COMBINED_SOURCE : FEED_SOURCE;
+  const source = usbActive ? t(COMBINED_SOURCE_KEY) : t(FEED_SOURCE_KEY);
   const live = feedState.feeds.filter((feed) => feed.status === 'live');
   const problems = [describeFeedProblems(feedState.feeds)].filter(Boolean);
-  if (usbActive && receiver.status === 'error') problems.push('USB error');
+  if (usbActive && receiver.status === 'error')
+    problems.push(t('sensors.localAdsb.status.usbError'));
   const rate =
     usbActive &&
     receiver.status !== 'error' &&
     Number.isFinite(receiver.messagesPerSecond)
       ? ` · USB ${receiver.messagesPerSecond} msg/s`
       : '';
-  const heardText = `${heard} heard`;
+  const heardText = t('sensors.localAdsb.status.heardCount', { n: heard });
   if (!problems.length) {
     return {
       source,
       status: 'streaming',
-      loadingLabel: `${live.length} ${plural(live.length, 'feed', 'feeds')} live · ${heardText}${rate}`,
+      loadingLabel: `${t('sensors.localAdsb.status.feedsLive', {
+        live: live.length,
+        heard: heardText,
+        count: live.length,
+      })}${rate}`,
     };
   }
   const problemText = problems.join(' · ');

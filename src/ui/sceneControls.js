@@ -8,6 +8,19 @@ import {
   presentSceneProgress,
   presentSceneRuntime,
 } from './scenePresentation.js';
+import { subscribeLocale, t } from '../i18n/index.js';
+
+/**
+ * Status texts this surface owns or injects, mapped to their keys so a locale
+ * switch can repaint them. Everything the director produces itself ("Loaded:
+ * …", "Project exported", …) stays verbatim.
+ */
+const STATUS_KEYS = {
+  Ready: 'common.ready',
+  'Scene action failed': 'scenes.status.failed',
+  Stopped: 'scenes.status.stopped',
+  'Stopped (Esc)': 'scenes.status.stoppedEsc',
+};
 
 export class SceneControls {
   constructor({ read, actions, subscribe, elements = sceneElements() }) {
@@ -28,6 +41,13 @@ export class SceneControls {
       this.renderSceneSelect();
       this.renderShotList();
     }
+    // A locale switch repaints the shot rows and the last owned status; the
+    // scene dropdown holds project titles (operator data) and needs none.
+    this.unsubscribeLocale = subscribeLocale(() => {
+      if (this.destroyed) return;
+      this.renderShotList();
+      this.updateStatus(this.statusText);
+    });
     this.listen(elements.select, 'change', () =>
       this.run('selectScene', elements.select.value),
     );
@@ -45,7 +65,9 @@ export class SceneControls {
     this.listen(elements.start, 'click', () =>
       this.run('start', this.read().selectedSceneId),
     );
-    this.listen(elements.stop, 'click', () => this.run('stop', 'Stopped'));
+    this.listen(elements.stop, 'click', () =>
+      this.run('stop', t('scenes.status.stopped')),
+    );
     this.listen(elements.import, 'click', () => elements.file?.click());
     this.listen(elements.file, 'change', async () => {
       const file = elements.file?.files?.[0];
@@ -57,7 +79,7 @@ export class SceneControls {
       if (!this.destroyed) elements.file.value = '';
     });
     if (!subscribe) {
-      this.updateStatus('Ready');
+      this.updateStatus(t('common.ready'));
       this.setProgress(0);
       this.setButtons(false);
     }
@@ -123,7 +145,7 @@ export class SceneControls {
     const generation = ++this.actionGeneration;
     const failed = () => {
       if (!this.destroyed && generation === this.actionGeneration)
-        this.updateStatus('Scene action failed');
+        this.updateStatus(t('scenes.status.failed'));
     };
     try {
       const result = this.actions[action](...args);
@@ -140,8 +162,10 @@ export class SceneControls {
   createScene() {
     if (this.destroyed) return;
     const name = window.prompt(
-      'New scene name',
-      `Scene ${this.read().scenes.length + 1}`,
+      t('scenes.prompt.newName'),
+      t('scenes.prompt.defaultName', {
+        n: this.read().scenes.length + 1,
+      }),
     );
     if (name) this.run('create', name);
   }
@@ -152,7 +176,10 @@ export class SceneControls {
     const scene = state.scenes.find(
       (item) => item.id === state.selectedSceneId,
     );
-    if (scene && window.confirm(`Delete scene "${scene.title}" and all shots?`))
+    if (
+      scene &&
+      window.confirm(t('scenes.confirm.deleteScene', { title: scene.title }))
+    )
       this.run('deleteScene');
   }
 
@@ -160,7 +187,10 @@ export class SceneControls {
     if (this.destroyed) return;
     const scene = this.read().scenes.find((item) => item.id === sceneId);
     const shot = scene?.shots.find((item) => item.id === shotId);
-    if (shot && window.confirm(`Delete shot "${shot.title}"?`))
+    if (
+      shot &&
+      window.confirm(t('scenes.confirm.deleteShot', { title: shot.title }))
+    )
       this.run('deleteShot', sceneId, shotId);
   }
 
@@ -195,8 +225,12 @@ export class SceneControls {
   }
 
   updateStatus(text) {
-    if (!this.destroyed && this.elements.status)
-      this.elements.status.textContent = text;
+    if (this.destroyed || text == null) return;
+    this.statusText = text;
+    if (this.elements.status) {
+      const key = STATUS_KEYS[text];
+      this.elements.status.textContent = key ? t(key) : text;
+    }
   }
 
   updateRuntime(text) {
@@ -214,8 +248,9 @@ export class SceneControls {
       this.playbackKeyRemover = null;
     } else if (!this.destroyed && !this.playbackKeyRemover) {
       const onKeyDown = (event) => {
-        if (!this.destroyed && event.key === 'Escape' && this.read().running)
-          this.run('stop', 'Stopped (Esc)');
+        if (!this.destroyed && event.key === 'Escape' && this.read().running) {
+          this.run('stop', t('scenes.status.stoppedEsc'));
+        }
       };
       document.addEventListener('keydown', onKeyDown);
       this.playbackKeyRemover = () =>
@@ -229,6 +264,8 @@ export class SceneControls {
     this.actionGeneration++;
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.unsubscribeLocale?.();
+    this.unsubscribeLocale = null;
     this.setPlaybackKeyboardEnabled(false);
     for (const remove of [
       ...this.removers.splice(0),

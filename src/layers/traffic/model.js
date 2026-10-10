@@ -10,6 +10,7 @@ import {
   DENSITY_MULT,
   JAM_DOT_FAR_SCALE,
 } from './policy.js';
+import { t } from '../../i18n/index.js';
 
 export function createModel({ state: layerState, services, parts, source }) {
   /** Build scene waypoints from source records; thinning and terrain remain rendering policy. */
@@ -251,7 +252,7 @@ export function createModel({ state: layerState, services, parts, source }) {
       // drops `loadingLabel` in its error branch, so the owner's SIMULATED copy
       // has to BE the error text or the steady state reverts to a bare
       // "TomTom daily budget reached" that never says what is on screen.
-      const degraded = `SIMULATED — ${flowError}`;
+      const degraded = t('ground.traffic.feed.degraded', { reason: flowError });
       return { mode, error: degraded, loadingLabel: degraded };
     }
     // TomTom and Hybrid name their geometry; OpenStreetMap keeps its match copy.
@@ -260,10 +261,10 @@ export function createModel({ state: layerState, services, parts, source }) {
         mode,
         error: null,
         loadingLabel: fetching
-          ? 'Syncing flow · Roads: TomTom'
+          ? t('ground.traffic.feed.syncTomTom')
           : coveragePct > 0
-            ? 'LIVE · Roads: TomTom · Roads without flow hidden'
-            : 'LIVE · Roads: TomTom · No flow roads in view',
+            ? t('ground.traffic.feed.liveTomTomHidden')
+            : t('ground.traffic.feed.liveTomTomNoFlow'),
       };
     }
     if (liveMode && roadSource === 'TomTom + OpenStreetMap') {
@@ -271,8 +272,15 @@ export function createModel({ state: layerState, services, parts, source }) {
         mode,
         error: null,
         loadingLabel: fetching
-          ? `Syncing flow · Roads: ${roadSource}`
-          : `${coveragePct > 0 ? 'LIVE' : 'SIMULATED'} · Roads: ${roadSource} · Flow ${coveragePct}%`,
+          ? t('ground.traffic.feed.syncNamed', { source: roadSource })
+          : t('ground.traffic.feed.liveNamed', {
+              live:
+                coveragePct > 0
+                  ? t('ground.traffic.feed.liveToken')
+                  : t('ground.traffic.feed.simToken'),
+              source: roadSource,
+              pct: coveragePct,
+            }),
       };
     }
     if (liveMode) {
@@ -280,10 +288,16 @@ export function createModel({ state: layerState, services, parts, source }) {
         mode,
         error: null,
         loadingLabel: fetching
-          ? 'Syncing flow · Roads: OpenStreetMap · Flow: TomTom · Unmatched: simulated'
+          ? t('ground.traffic.feed.syncOsm')
           : coveragePct > 0
-            ? `LIVE · Roads: OpenStreetMap · Flow: TomTom · ${coveragePct}% cov${coveragePct < 100 ? ' · Unmatched: simulated' : ''}`
-            : 'SIMULATED · Roads: OpenStreetMap · Flow: TomTom (no matches)',
+            ? t('ground.traffic.feed.liveOsm', {
+                pct: coveragePct,
+                unmatched:
+                  coveragePct < 100
+                    ? t('ground.traffic.feed.unmatchedSimulated')
+                    : '',
+              })
+            : t('ground.traffic.feed.simOsm'),
       };
     }
     // Keyless simulation — one terse line that names the mode and the remedy
@@ -293,8 +307,8 @@ export function createModel({ state: layerState, services, parts, source }) {
       mode,
       error: null,
       loadingLabel: statusUnavailable
-        ? 'SIMULATED — traffic service unreachable'
-        : 'SIMULATED — add TomTom key for live',
+        ? t('ground.traffic.feed.serviceUnreachable')
+        : t('ground.traffic.feed.addKey'),
     };
   }
 

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import { renderPackGeometry } from './geometry.js';
 
 function caption(viewer, pack) {
@@ -18,7 +19,7 @@ function caption(viewer, pack) {
   card.append(title);
   if (pack.attribution.url) {
     const link = document.createElement('a');
-    link.textContent = 'Source';
+    link.textContent = t('director.labels.source');
     link.href = pack.attribution.url;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';

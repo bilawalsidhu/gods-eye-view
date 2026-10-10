@@ -72,7 +72,8 @@ export function createIngestion({
       )
         return;
       console.warn(`[Data:${id}] FIRMS live load failed:`, error);
-      layerState._error = 'live feed unavailable';
+      // Closed token; getStats names it in the active locale.
+      layerState._error = 'liveFeed';
     } finally {
       if (layerState.request === request) {
         layerState.request = null;

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   satelliteShortName,
   fireDetectionKey,
@@ -329,14 +330,20 @@ export function createModel({
    */
 
   function buildSelectedFireCard(fire, nowMs) {
-    const meta = [`${confidenceBucket(fire.confidence)} conf`];
+    const meta = [
+      t('hazard.firms.confSuffix', {
+        bucket: confidenceLabel(fire.confidence),
+      }),
+    ];
     if (fire.acqMs > 0) {
       const age = formatAge(nowMs - fire.acqMs);
-      if (age) meta.push(`${age} ago`);
+      if (age) meta.push(t('hazard.firms.agoSuffix', { age }));
     }
     const sat = satelliteShortName(fire.satellite);
     meta.push(
-      sat ? `${fire.sensor || 'VIIRS'} ${sat}` : fire.sensor || 'sensor n/a',
+      sat
+        ? `${fire.sensor || 'VIIRS'} ${sat}`
+        : fire.sensor || t('hazard.firms.sensorNA'),
     );
     return {
       id: `selected-fire:${fireDetectionKey(fire)}`,
@@ -346,10 +353,11 @@ export function createModel({
       cullPosition: fireCullPosition(fire),
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: `FIRE · ${formatFrp(fire.frp)} MW`,
+      title: t('hazard.firms.selectedTitle', { frp: formatFrp(fire.frp) }),
       details: [
         meta.join(' · '),
-        formatLatLon(fire.lat, fire.lon) + (fire.night ? ' · NIGHT' : ''),
+        formatLatLon(fire.lat, fire.lon) +
+          (fire.night ? t('hazard.firms.night') : ''),
       ],
       selected: true,
       priority: Number.MAX_SAFE_INTEGER,
@@ -368,7 +376,7 @@ export function createModel({
 
   function buildFireCard(candidate, nowMs) {
     const fire = candidate.fire;
-    const meta = [confidenceBucket(fire.confidence)];
+    const meta = [confidenceLabel(fire.confidence)];
     if (fire.acqMs > 0) {
       const age = formatAge(nowMs - fire.acqMs);
       if (age) meta.push(age);
@@ -382,7 +390,7 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: `▲ ${formatFrp(fire.frp)} MW`,
+      title: t('hazard.firms.ambientTitle', { frp: formatFrp(fire.frp) }),
       details: [meta.join(' · ')],
       selected: false,
       priority: Number(fire.frp) || 0,
@@ -400,11 +408,10 @@ export function createModel({
 
   function buildCellCard(candidate, nowMs) {
     const cell = candidate.cell;
-    const noun = cell.count === 1 ? 'FIRE' : 'FIRES';
-    const parts = [`max ${formatFrp(cell.maxFrp)} MW`];
+    const parts = [t('hazard.firms.maxFrp', { frp: formatFrp(cell.maxFrp) })];
     if (cell.newestAcqMs > 0) {
       const age = formatAge(nowMs - cell.newestAcqMs);
-      if (age) parts.push(`new ${age}`);
+      if (age) parts.push(t('hazard.firms.newAge', { age }));
     }
     return {
       id: `cell:${cell.latCell ?? 'x'}:${cell.lonCell ?? 'x'}`,
@@ -412,7 +419,7 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: 10,
       accent: candidate.accent || accentForSeverity('yellow'),
-      title: `${cell.count} ${noun}`,
+      title: t('hazard.firms.cellTitle', { count: cell.count }),
       details: [parts.join(' · ')],
       selected: false,
       priority: Number(cell.maxFrp) || 0,
@@ -482,19 +489,20 @@ export function createModel({
   function formatAge(deltaMs) {
     if (!Number.isFinite(deltaMs) || deltaMs < 0) return '';
     const hours = deltaMs / 3600000;
-    if (hours < 1) return '<1h';
-    if (hours < 48) return `${Math.round(hours)}h`;
-    return `${Math.round(hours / 24)}d`;
+    if (hours < 1) return t('hazard.firms.age.underHour');
+    if (hours < 48)
+      return t('hazard.firms.age.hours', { n: Math.round(hours) });
+    return t('hazard.firms.age.days', { n: Math.round(hours / 24) });
   }
 
   /** Millisecond delta → "<1m ago" / "Xm ago" / "Xh ago" (fresh-feed readout). */
 
   function formatAgoMinutes(deltaMs) {
-    if (!Number.isFinite(deltaMs) || deltaMs < 0) return 'just now';
+    if (!Number.isFinite(deltaMs) || deltaMs < 0) return t('common.justNow');
     const minutes = Math.floor(deltaMs / 60000);
-    if (minutes < 1) return '<1m ago';
-    if (minutes < 90) return `${minutes}m ago`;
-    return `${Math.round(minutes / 60)}h ago`;
+    if (minutes < 1) return t('hazard.firms.agoUnderMinute');
+    if (minutes < 90) return t('common.minutesAgo', { count: minutes });
+    return t('common.hoursAgo', { count: Math.round(minutes / 60) });
   }
 
   /** Normalized 0..1 confidence → low/nominal/high display bucket. */
@@ -503,6 +511,17 @@ export function createModel({
     if (confidence >= 0.75) return 'high';
     if (confidence >= 0.45) return 'nominal';
     return 'low';
+  }
+
+  /** Localized display label for a normalized confidence value. */
+  function confidenceLabel(confidence) {
+    return t(
+      {
+        high: 'hazard.firms.confidence.high',
+        nominal: 'hazard.firms.confidence.nominal',
+        low: 'hazard.firms.confidence.low',
+      }[confidenceBucket(confidence)],
+    );
   }
   return {
     mapAnalystRecord,
@@ -530,5 +549,6 @@ export function createModel({
     formatAge,
     formatAgoMinutes,
     confidenceBucket,
+    confidenceLabel,
   };
 }

@@ -16,6 +16,7 @@ import { applicationServices } from './services/application.js';
 
 import * as Cesium from 'cesium';
 import { forward as toMGRS } from 'mgrs';
+import { subscribeLocale, t } from './i18n/index.js';
 import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
 import {
@@ -27,7 +28,7 @@ import { getBasemapLabelContext } from './voice/gevActions.js';
 import {
   hudSummaryMatchesProvenance,
   hudSummaryLayerContext,
-  hudTelemetryProvenanceTag,
+  hudTelemetryProvenanceParts,
   isHudSummaryUnconfigured,
 } from './hudSummaryResponse.js';
 import {
@@ -62,6 +63,46 @@ const HUD_COLORS = {
 
 /** Shader modes that automatically show the HUD overlay. */
 const MILITARY_STYLES = new Set(['retro', 'surveillance', 'thermal']);
+
+// View-band and region tokens are stable internal enums; the displayed words
+// translate through these key maps (unknown tokens pass through untouched).
+const HUD_BAND_KEYS = {
+  STREET: 'hud.band.street',
+  CITY: 'hud.band.city',
+  METRO: 'hud.band.metro',
+  REGIONAL: 'hud.band.regional',
+  GLOBAL: 'hud.band.global',
+};
+
+const HUD_REGION_KEYS = {
+  ARCTIC: 'hud.region.arctic',
+  ANTARCTIC: 'hud.region.antarctic',
+  'NORTH AMERICA': 'hud.region.northAmerica',
+  'SOUTH AMERICA': 'hud.region.southAmerica',
+  EUROPE: 'hud.region.europe',
+  AFRICA: 'hud.region.africa',
+  ASIA: 'hud.region.asia',
+  OCEANIA: 'hud.region.oceania',
+  'NORTHERN OCEANIC GRID': 'hud.region.northernOcean',
+  'SOUTHERN OCEANIC GRID': 'hud.region.southernOcean',
+};
+
+// Feed-state tokens are protocol enums (hudSummaryMatchesProvenance must keep
+// matching the model's English tokens); only the DISPLAYED provenance suffix
+// translates, here at the display edge. Unknown states pass through uppercased.
+const HUD_PROVENANCE_STATE_KEYS = {
+  DEGRADED: 'hud.provenance.degraded',
+  STALE: 'hud.provenance.stale',
+  FALLBACK: 'hud.provenance.fallback',
+  LOADING: 'hud.provenance.loading',
+  UNAVAILABLE: 'hud.provenance.unavailable',
+};
+
+/** Translate a known enum token for display; unknown tokens pass through. */
+function translateEnumLabel(value, keys) {
+  const key = keys[value];
+  return key ? t(key) : value;
+}
 
 const HUD_SUMMARY_INTERVAL_MS = 15000;
 
@@ -127,6 +168,11 @@ export class IntelHUD {
     this._summaryRequest = null;
     this._lastSummarySignature = '';
     this._summaryRevision = 0;
+    // Whether the currently displayed summary is the deterministic line (vs a
+    // model-authored one). Only the deterministic line is recomposed on a
+    // locale switch; model output stays as delivered.
+    this._summaryIsDeterministic = true;
+    this._unsubscribeLocale = null;
     // One-shot guards so the very first summary lands immediately instead of
     // waiting for the 15s interval tick: B) swap the "Awaiting telemetry..."
     // placeholder for the deterministic line as soon as metrics exist, then
@@ -174,6 +220,14 @@ export class IntelHUD {
     this._buildDOM();
     this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd);
     this._startTimers();
+    // The HUD DOM is built once and never rebuilt, so a locale switch would
+    // otherwise leave stale-language labels until the next timer tick — and
+    // state-held text (mode label, deterministic summary) not repaint at all.
+    // Re-applying ONLY the label text nodes is the state-safe option: a full
+    // innerHTML rebuild would reset live readouts (REC blink state, mode,
+    // an in-flight AI summary) until the next cadence. Released in destroy().
+    this._unsubscribeLocale = subscribeLocale(() => this._applyHudLabels());
+    this._applyHudLabels();
   }
 
   /**
@@ -185,13 +239,18 @@ export class IntelHUD {
     this._el = document.getElementById('intel-hud');
     if (!this._el) return;
 
+    // Classification banners stay VERBATIM by design: 'TOP SECRET // SI-TK //
+    // NOFORN' is a fictional classification marking that is part of the visual
+    // design, not UI copy. The other kept-English readouts (MGRS/GSD/NIIRS/
+    // ALT/EL/COLL/ONA/BAND/BITS/LVL, ORB/PASS/DESC, LAT/LON, REC timestamps)
+    // are standard abbreviations plus numbers with no full words to translate.
     this._el.innerHTML = `
       <div class="hud-sonar" aria-hidden="true"></div>
 
       <div class="hud-top-bar">
         <span class="hud-top-bar-left">TOP SECRET // SI-TK // NOFORN</span>
         <span class="hud-top-bar-center">${this._missionId}</span>
-        <span class="hud-top-bar-right">PAGE 1/1</span>
+        <span class="hud-top-bar-right" id="hud-page"></span>
       </div>
 
       <div class="hud-corner hud-top-left">
@@ -201,15 +260,15 @@ export class IntelHUD {
           <div class="hud-system">${this._missionId}  ${this._sensorId}</div>
           <div class="hud-mode" id="hud-mode">NORMAL</div>
           <div class="hud-summary-wrap">
-            <div class="hud-summary-label">SUMMARY</div>
-            <div class="hud-summary" id="hud-summary">Awaiting telemetry...</div>
+            <div class="hud-summary-label" id="hud-summary-label"></div>
+            <div class="hud-summary" id="hud-summary"></div>
           </div>
         </div>
       </div>
 
       <div class="hud-corner hud-top-right">
         <div class="hud-content" style="text-align:right">
-          <div class="hud-rec"><span id="hud-rec-dot">●</span> REC  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div>
+          <div class="hud-rec"><span id="hud-rec-dot">●</span> <span id="hud-rec-label"></span>  <span id="hud-timestamp">2026-01-01 00:00:00Z</span></div>
           <div class="hud-orbital">ORB: ${this._orbitNum}  PASS: DESC-${this._passNum}</div>
         </div>
         <div class="hud-bracket">┐</div>
@@ -248,6 +307,40 @@ export class IntelHUD {
       </div>
     `;
     this._el.dataset.variant = this._variant;
+  }
+
+  /**
+   * (Re)apply every translated static label and the mode label. Called at
+   * construction and on every locale switch — see the subscription note in
+   * the constructor for why only label nodes are touched.
+   */
+  _applyHudLabels() {
+    const pageEl = document.getElementById('hud-page');
+    if (pageEl) pageEl.textContent = t('hud.page', { n: 1, m: 1 });
+    const summaryLabelEl = document.getElementById('hud-summary-label');
+    if (summaryLabelEl) summaryLabelEl.textContent = t('hud.summaryLabel');
+    const recLabelEl = document.getElementById('hud-rec-label');
+    if (recLabelEl) recLabelEl.textContent = t('hud.rec');
+    this._applyModeLabel();
+    // Recompose the deterministic line (band/region/locality words translate);
+    // a model-authored summary is left untouched until its next refresh.
+    if (!this._latestMetrics || this._summaryIsDeterministic)
+      this._setSummaryText(this._composeSummary(), false);
+  }
+
+  /**
+   * Paint the shader-mode label. Acronyms (NVG/FLIR/CRT and unknown style
+   * keys) stay uppercase tags; the full word 'normal' translates.
+   */
+  _applyModeLabel() {
+    const modeEl = document.getElementById('hud-mode');
+    if (!modeEl) return;
+    const modeNames = { surveillance: 'NVG', thermal: 'FLIR', retro: 'CRT' };
+    modeEl.textContent =
+      modeNames[this._currentStyle] ||
+      (this._currentStyle === 'normal'
+        ? t('hud.modeNormal')
+        : String(this._currentStyle).toUpperCase());
   }
 
   /**
@@ -634,13 +727,16 @@ export class IntelHUD {
    */
   _composeSummary() {
     const m = this._latestMetrics;
-    if (!m) return 'Awaiting telemetry...';
+    if (!m) return t('hud.awaitingTelemetry');
 
     const modeEl = document.getElementById('hud-mode');
-    const modeLabel = modeEl?.textContent || 'NORMAL';
-    const region = this._regionLabel(m.latDeg, m.lonDeg);
+    const modeLabel = modeEl?.textContent || t('hud.modeNormal');
+    const region = translateEnumLabel(
+      this._regionLabel(m.latDeg, m.lonDeg),
+      HUD_REGION_KEYS,
+    );
     const nearest = this._nearestKnownPoint(m.latDeg, m.lonDeg);
-    const band = this._viewBand(m.altM);
+    const band = translateEnumLabel(this._viewBand(m.altM), HUD_BAND_KEYS);
     const window = this._viewWindowKm(m.latDeg);
     // Rough local timezone from longitude (15 deg per hour)
     const utcOffset = Math.round(m.lonDeg / 15);
@@ -659,11 +755,28 @@ export class IntelHUD {
     // NEAR the nearest catalogued POI at metro range; otherwise the lat/lon sector.
     const localityTag = composeLocalityTag(nearest, m.latDeg, m.lonDeg);
 
-    const provenance = hudTelemetryProvenanceTag(
+    const provenance = this._provenanceDisplayTag(
       this._dataManager?.getAll?.() || [],
     );
     const line = `${modeLabel} ${band} ${localityTag} | ${region} | ALT ${altTag} | WINDOW ${winTag} | SUN ${m.sunEl.toFixed(0)}° | ONA ${m.ona.toFixed(0)}° | ${localTag}`;
     return provenance ? `${line} | ${provenance}` : line;
+  }
+
+  /**
+   * Localized provenance suffix. The portable provenance module (also
+   * imported by the server's OpenAI provider, so it must stay free of the
+   * i18n packs) returns the raw feed-state enum plus unresolved layer labels
+   * (`null` = no name or id); this display edge translates them.
+   */
+  _provenanceDisplayTag(layers) {
+    const parts = hudTelemetryProvenanceParts(layers);
+    if (!parts) return null;
+    const stateLabel = translateEnumLabel(
+      parts.state.toUpperCase(),
+      HUD_PROVENANCE_STATE_KEYS,
+    );
+    const names = parts.names.map((name) => name ?? t('hud.provenance.layer'));
+    return `${stateLabel}${names.length ? ` ${names.join('/')}` : ''}`;
   }
 
   /**
@@ -754,6 +867,10 @@ export class IntelHUD {
           : fallbackText,
         animate,
       );
+      this._summaryIsDeterministic = !hudSummaryMatchesProvenance(
+        data.summary,
+        context.feedProvenance,
+      );
     } catch (error) {
       if (error?.name !== 'AbortError') {
         console.warn('[HUD] AI summary unavailable:', error);
@@ -770,6 +887,10 @@ export class IntelHUD {
   }
 
   _setSummaryText(text, animate) {
+    // Every caller writes either the deterministic line or the awaiting
+    // placeholder except the model-success path, which flips the flag back
+    // right after — so the locale refresh knows what it may recompose.
+    this._summaryIsDeterministic = true;
     if (animate) {
       this._typeSummary(text);
       return;
@@ -815,12 +936,8 @@ export class IntelHUD {
   onStyleChange(styleName) {
     this._currentStyle = styleName;
 
-    // Update mode label
-    const modeEl = document.getElementById('hud-mode');
-    if (modeEl) {
-      const modeNames = { surveillance: 'NVG', thermal: 'FLIR', retro: 'CRT' };
-      modeEl.textContent = modeNames[styleName] || styleName.toUpperCase();
-    }
+    // Update mode label (acronyms stay tags; 'normal' translates)
+    this._applyModeLabel();
     // Update color scheme
     const colors = HUD_COLORS[styleName] || HUD_COLORS._default;
     if (this._el) {
@@ -943,6 +1060,8 @@ export class IntelHUD {
     clearInterval(this._timestampInterval);
     clearInterval(this._summaryInterval);
     clearInterval(this._summaryTypingInterval);
+    this._unsubscribeLocale?.();
+    this._unsubscribeLocale = null;
     this.viewer.camera.moveEnd.removeEventListener(this._onCameraMoveEnd);
     this._dataManagerUnsubscribe?.();
     this._summaryRequest?.abort();

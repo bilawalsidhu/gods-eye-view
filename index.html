@@ -34,6 +34,12 @@
 
   <!-- gev:template hud-loading -->
 
+  <!-- Pre-paint locale bootstrap: applies the saved (or browser-detected)
+       language to the static loading screen before the app module evaluates.
+       External classic script because the app CSP forbids inline scripts;
+       src/i18n/bootMarkup.test.mjs fails when its strings drift. -->
+  <script src="/locale-boot.js"></script>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

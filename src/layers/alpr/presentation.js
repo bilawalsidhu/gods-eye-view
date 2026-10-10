@@ -22,6 +22,7 @@ import {
   alprLabelDetails,
   validAlprGroundHeight,
 } from './visuals.js';
+import { t } from '../../i18n/index.js';
 
 export function createAlprPresentation({ state, services, source }) {
   const { governorRequestRender } = services.render;
@@ -448,10 +449,12 @@ export function createAlprPresentation({ state, services, source }) {
         id: record.id,
         layerId: LAYER_ID,
         dataSource: state.dataSource,
-        layerName: 'ALPR Cameras',
+        layerName: t('sensors.alpr.rowName'),
         source:
-          source.attribution?.description || source.label || 'Camera source',
-        label: 'ALPR camera',
+          source.attribution?.description ||
+          source.label ||
+          t('sensors.alpr.sourceFallback'),
+        label: t('sensors.alpr.entity'),
         latitude: record.latitude,
         longitude: record.longitude,
         properties: {

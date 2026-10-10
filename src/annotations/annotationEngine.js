@@ -1,5 +1,6 @@
 import { isUnavailableCapability } from '../sources/capability.js';
 import { defaultGeospatial } from '../search/defaults.js';
+import { t } from '../i18n/index.js';
 import * as Cesium from 'cesium';
 import {
   holdContinuousRender,
@@ -305,7 +306,7 @@ export function createAnnotationEngine({
           if (outcome.status === 'rejected') throw outcome.reason; // resolution threw → same path as before
           const resolved = outcome.value;
           if (!resolved) {
-            results.push(failResult(spec, 'could not resolve location'));
+            results.push(failResult(spec, t('draw.error.unresolved')));
             continue;
           }
           const anno = buildAnnotation(spec, resolved, persist);
@@ -407,7 +408,7 @@ export function createAnnotationEngine({
           // set (no await in between), so overlapping annotate() calls can't both slip past.
           if (annotations.size >= MAX_LIVE_ANNOTATIONS) {
             capped = true;
-            results.push(failResult(spec, 'annotation limit reached'));
+            results.push(failResult(spec, t('draw.error.limit')));
             continue;
           }
           annotations.set(anno.id, anno);
@@ -439,7 +440,7 @@ export function createAnnotationEngine({
           results.push(
             failResult(
               spec,
-              error?.message || 'annotation failed',
+              error?.message || t('draw.error.failed'),
               Array.isArray(error?.failedTargets) ? error.failedTargets : null,
             ),
           );

@@ -148,6 +148,8 @@ export function createLifecycle({
       layerState._replayTracks.clear();
       layerState._missionPanel?.remove();
       layerState._missionPanel = null;
+      layerState._panelLocaleUnsubscribe?.();
+      layerState._panelLocaleUnsubscribe = null;
       if (layerState._missionRoster) {
         layerState._missionRoster.onclick = null;
       }

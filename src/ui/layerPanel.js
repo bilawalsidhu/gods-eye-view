@@ -5,20 +5,39 @@ export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
 import { keySetupRequirement } from '../keySetupCore.mjs';
 import { createWeatherPanel } from './weatherPanel.js';
-const FEED_STATE_LABELS = Object.freeze({
-  nominal: 'ON',
-  loading: 'LOADING',
-  degraded: 'DEGRADED',
-  stale: 'STALE',
-  partial: 'PARTIAL',
-  fallback: 'FALLBACK',
-  unavailable: 'UNAVAILABLE',
+import { subscribeLocale, t } from '../i18n/index.js';
+const FEED_STATE_KEYS = Object.freeze({
+  nominal: 'layers.state.on',
+  loading: 'layers.state.loading',
+  degraded: 'layers.state.degraded',
+  stale: 'layers.state.stale',
+  partial: 'layers.state.partial',
+  fallback: 'layers.state.fallback',
+  unavailable: 'layers.state.unavailable',
+});
+
+// Lifecycle transition labels, keyed by the layer's lifecycleState. Kept as a
+// lookup rather than an inline ternary so the transition words never sit inside
+// a textContent assignment — src/materialSymbolsSubset.test.mjs reads quoted
+// literals there and would enrol `enabling`/`disabling` as icon glyphs.
+const LIFECYCLE_STATE_KEYS = Object.freeze({
+  enabling: 'layers.state.enablePending',
+  disabling: 'layers.state.disablePending',
+});
+
+// Provider-produced labels that pass through layer stats verbatim; the
+// presentation edge names them (docs/I18N.md §8) so the row stays truthful
+// in the active locale. Unknown labels keep their source text.
+const KNOWN_LOADING_LABEL_KEYS = Object.freeze({
+  'KEY REJECTED': 'streetlevel.status.keyRejected',
+  'KEY REQUIRED': 'streetlevel.status.keyRequired',
+  'loading coverage...': 'streetlevel.meta.loadingCoverage',
 });
 
 // Presentation order is independent of catalog registration and startup order.
 const PANEL_GROUPS = [
   {
-    label: 'Movement',
+    key: 'layers.group.movement',
     ids: [
       'satellites',
       'flights',
@@ -31,11 +50,11 @@ const PANEL_GROUPS = [
     ],
   },
   {
-    label: 'Cameras',
+    key: 'layers.group.cameras',
     ids: ['cctv', 'recent-imagery', 'street-level'],
   },
   {
-    label: 'Infrastructure',
+    key: 'layers.group.infrastructure',
     ids: [
       'alpr-cameras',
       'military-installations',
@@ -45,11 +64,11 @@ const PANEL_GROUPS = [
     ],
   },
   {
-    label: 'Events',
+    key: 'layers.group.events',
     ids: ['rocket-launches', 'earthquakes', 'local-firms', 'fire-perimeters'],
   },
   {
-    label: 'Weather',
+    key: 'layers.group.weather',
     ids: [
       'wind',
       'weather-radar',
@@ -59,28 +78,49 @@ const PANEL_GROUPS = [
     ],
   },
   {
-    label: 'Utilities',
+    key: 'layers.group.utilities',
     ids: ['directions', 'radio'],
   },
 ];
-const PANEL_ORDER = PANEL_GROUPS.flatMap(({ label, ids }) =>
-  ids.map((id) => ({ id, label })),
+const PANEL_ORDER = PANEL_GROUPS.flatMap(({ key, ids }) =>
+  ids.map((id) => ({ id, key })),
 );
 const PANEL_POSITIONS = new Map(
   PANEL_ORDER.map(({ id }, index) => [id, index]),
 );
-const PANEL_LABELS = {
-  'ais-live-vessels': 'Live Vessels',
-  bikeshare: 'Bike Share',
-  cctv: 'Cameras',
-  'street-level': 'Street Level',
-  'alpr-cameras': 'Mapped ALPR Cameras',
-  'local-datacenters': 'Data Centers',
-  'local-firms': 'Active Fires',
+const PANEL_LABEL_KEYS = {
+  'ais-live-vessels': 'layers.label.liveVessels',
+  bikeshare: 'layers.label.bikeShare',
+  cctv: 'layers.label.cameras',
+  'street-level': 'layers.label.streetLevel',
+  'alpr-cameras': 'layers.label.alprCameras',
+  'local-datacenters': 'layers.label.dataCenters',
+  'local-firms': 'layers.label.activeFires',
+  satellites: 'layers.label.satellites',
+  flights: 'layers.label.flights',
+  military: 'layers.label.militaryFlights',
+  'local-adsb': 'layers.label.localAdsb',
+  traffic: 'layers.label.traffic',
+  transit: 'layers.label.transit',
+  directions: 'layers.label.directions',
+  radio: 'layers.label.radio',
+  'recent-imagery': 'layers.label.recentImagery',
+  'military-installations': 'layers.label.mappedInstallations',
+  'telegeography-submarine-cables': 'layers.label.submarineCables',
+  'local-dams': 'layers.label.dams',
+  'rocket-launches': 'layers.label.spaceMissions',
+  earthquakes: 'layers.label.earthquakes',
+  'weather-radar': 'atmos.row.weatherRadar',
+  'weather-lightning': 'atmos.row.weatherLightning',
+  'weather-satellite': 'atmos.row.weatherSatellite',
+  wind: 'atmos.row.wind',
+  'weather-cyclones': 'hazard.row.cyclones',
+  'fire-perimeters': 'hazard.row.perimeters',
 };
 
 function panelLabel(layer) {
-  return PANEL_LABELS[layer.id] || layer.name;
+  const key = PANEL_LABEL_KEYS[layer.id];
+  return key ? t(key) : layer.name;
 }
 
 /**
@@ -131,6 +171,12 @@ export class LayerPanel {
     this._cancelRowControlsRefresh = null;
     this._recentImageryFactory = null;
     this._recentImageryPanel = null;
+    // A locale switch repaints the whole toggle list from live state; rows
+    // own no interaction state that outlives a render (toggles re-sync from
+    // the layer manager, chips re-reconcile on their next refresh).
+    this._unsubscribeLocale = subscribeLocale(() => {
+      if (!this._destroyed && this._toggleContainer) this._renderToggles();
+    });
   }
   mount(container) {
     if (this._destroyed) return;
@@ -179,6 +225,8 @@ export class LayerPanel {
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
+    this._unsubscribeLocale?.();
+    this._unsubscribeLocale = null;
     this._releaseBindings();
     this._weatherPanel?.destroy();
     this._weatherPanel = null;
@@ -204,11 +252,11 @@ export class LayerPanel {
     for (const layer of layers) {
       if (!layer.showInTogglePanel) continue;
       const group =
-        PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.label ?? 'Other layers';
+        PANEL_ORDER[PANEL_POSITIONS.get(layer.id)]?.key ?? 'layers.group.other';
       if (group && group !== previousGroup) {
         const heading = document.createElement('h3');
         heading.className = 'data-layer-group-heading';
-        heading.textContent = group;
+        heading.textContent = t(group);
         this._toggleContainer.appendChild(heading);
       }
       previousGroup = group;
@@ -521,23 +569,35 @@ export class LayerPanel {
   _buildMetaText(layer) {
     const stats = layer.stats || {};
     const feedState = layerFeedState(stats);
-    const stateLabel = FEED_STATE_LABELS[feedState];
+    const stateLabel = t(FEED_STATE_KEYS[feedState]);
     const source = stats.source || layer.source;
     const lifecycleState =
       layer.lifecycleState || (layer.enabled ? 'enabled' : 'disabled');
     if (lifecycleState === 'enabling' || lifecycleState === 'disabling') {
-      return `${lifecycleState.toUpperCase()} · ${source}`;
+      return t('layers.meta.lifecycle', {
+        state: t(LIFECYCLE_STATE_KEYS[lifecycleState]),
+        source,
+      });
     }
     if (layer.lifecycleUncertain) {
-      return `UNCERTAIN · ${source} · lifecycle state requires reconciliation`;
+      return t('layers.meta.uncertain', { source });
     }
     const presentedError =
       stats.error || stats.lastError || stats.managerRefreshError;
     if (presentedError) {
       if (typeof stats.retryInSec === 'number' && stats.retryInSec > 0) {
-        return `${stateLabel} · ${source} · ${presentedError} · retry ${stats.retryInSec}s`;
+        return t('layers.meta.stateSourceErrorRetry', {
+          state: stateLabel,
+          source,
+          error: presentedError,
+          n: stats.retryInSec,
+        });
       }
-      return `${stateLabel} · ${source} · ${presentedError}`;
+      return t('layers.meta.stateSourceError', {
+        state: stateLabel,
+        source,
+        error: presentedError,
+      });
     }
     // A guidance status carries its prompt in `statusMessage`, not `error`, so
     // the row still tells the operator what to do without reporting a fault.
@@ -546,22 +606,31 @@ export class LayerPanel {
       typeof stats.statusMessage === 'string' &&
       stats.statusMessage.trim()
     ) {
-      return `${source} · ${stats.statusMessage.trim()}`;
+      return t('layers.meta.sourceMessage', {
+        source,
+        message: stats.statusMessage.trim(),
+      });
     }
-    const ago = stats.lastUpdate ? this._timeAgo(stats.lastUpdate) : 'never';
+    const ago = stats.lastUpdate
+      ? this._timeAgo(stats.lastUpdate)
+      : t('layers.meta.never');
     if (stats.loading) {
       const loadingLabel =
         typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()
-          ? stats.loadingLabel.trim()
-          : 'loading...';
-      return `${source} · ${loadingLabel}`;
+          ? this._knownLabel(stats.loadingLabel.trim())
+          : t('layers.meta.loading');
+      return t('layers.meta.sourceMessage', { source, message: loadingLabel });
     }
     if (feedState === 'fallback') {
       const detail =
         typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()
-          ? stats.loadingLabel.trim()
+          ? this._knownLabel(stats.loadingLabel.trim())
           : stats.coverage || ago;
-      return `${stateLabel} · ${source} · ${detail}`;
+      return t('layers.meta.stateSourceDetail', {
+        state: stateLabel,
+        source,
+        detail,
+      });
     }
     if (feedState === 'partial') {
       const { acceptedRowCount, rawRowCount } = stats;
@@ -570,21 +639,42 @@ export class LayerPanel {
         Number.isInteger(rawRowCount) &&
         acceptedRowCount >= 0 &&
         rawRowCount > acceptedRowCount
-          ? `${acceptedRowCount} of ${rawRowCount} records accepted`
-          : 'incomplete snapshot';
-      return `${stateLabel} · ${source} · ${detail} · ${ago}`;
+          ? t('layers.meta.accepted', {
+              accepted: acceptedRowCount,
+              raw: rawRowCount,
+            })
+          : t('layers.meta.incompleteSnapshot');
+      return t('layers.meta.stateSourceDetailAgo', {
+        state: stateLabel,
+        source,
+        detail,
+        ago,
+      });
     }
     if (feedState === 'stale') {
       const retry =
         typeof stats.retryInSec === 'number' && stats.retryInSec > 0
-          ? ` · retrying in ${stats.retryInSec}s`
+          ? t('layers.meta.retrying', { n: stats.retryInSec })
           : '';
-      return `${stateLabel} · ${source} · ${ago}${retry}`;
+      return `${t('layers.meta.stateSourceAgo', {
+        state: stateLabel,
+        source,
+        ago,
+      })}${retry}`;
     }
     if (typeof stats.loadingLabel === 'string' && stats.loadingLabel.trim()) {
-      return `${source} · ${stats.loadingLabel.trim()}`;
+      return t('layers.meta.sourceMessage', {
+        source,
+        message: this._knownLabel(stats.loadingLabel.trim()),
+      });
     }
-    return `${source} · ${ago}`;
+    return t('layers.meta.sourceAgo', { source, ago });
+  }
+
+  /** Translate provider-produced labels the presentation edge knows. */
+  _knownLabel(label) {
+    const key = KNOWN_LOADING_LABEL_KEYS[label];
+    return key ? t(key) : label;
   }
 
   _syncToggleButton(button, layer) {
@@ -603,7 +693,7 @@ export class LayerPanel {
     button.classList.toggle('enabling', layer.lifecycleState === 'enabling');
     button.classList.toggle('disabling', layer.lifecycleState === 'disabling');
     button.classList.toggle('lifecycle-uncertain', uncertain);
-    for (const state of Object.keys(FEED_STATE_LABELS)) {
+    for (const state of Object.keys(FEED_STATE_KEYS)) {
       button.classList.toggle(
         `feed-${state}`,
         (layer.enabled || unavailable) && !uncertain && feedState === state,
@@ -624,24 +714,30 @@ export class LayerPanel {
     );
     button.setAttribute('aria-busy', String(transitioning));
     button.textContent = transitioning
-      ? layer.lifecycleState.toUpperCase()
+      ? t(LIFECYCLE_STATE_KEYS[layer.lifecycleState])
       : uncertain
-        ? 'UNCERTAIN'
+        ? t('layers.state.uncertain')
         : layer.enabled || unavailable
-          ? FEED_STATE_LABELS[feedState]
-          : 'OFF';
+          ? t(FEED_STATE_KEYS[feedState])
+          : t('layers.state.off');
     const keyGuidance = unavailable
-      ? String(layer.stats.error || 'Data source unavailable')
-      : layerKeyRequirementTooltip(layer);
-    // Name the missing key on the control itself: a row reading KEY REQUIRED
+      ? String(layer.stats.error || t('layers.guidance.sourceUnavailable'))
+      : layerKeyRequirementTooltip(layer); // Name the missing key on the control itself: a row reading KEY REQUIRED
     // without saying WHICH key leaves a dead control and no next step. Empty
     // when the layer needs no key, or already has one.
     button.title = keyGuidance;
     button.setAttribute(
       'aria-label',
-      keyGuidance
-        ? `${panelLabel(layer)}: ${button.textContent}. ${keyGuidance}`
-        : `${panelLabel(layer)}: ${button.textContent}`,
+      t(
+        keyGuidance ? 'layers.aria.withGuidance' : 'layers.aria.plain',
+        keyGuidance
+          ? {
+              label: panelLabel(layer),
+              state: button.textContent,
+              guidance: keyGuidance,
+            }
+          : { label: panelLabel(layer), state: button.textContent },
+      ),
     );
   }
 
@@ -652,9 +748,10 @@ export class LayerPanel {
 
   _timeAgo(timestamp) {
     const diff = Math.floor((Date.now() - timestamp) / 1000);
-    if (diff < 5) return 'just now';
-    if (diff < 60) return `${diff}s ago`;
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 5) return t('layers.time.justNow');
+    if (diff < 60) return t('layers.time.seconds', { n: diff });
+    if (diff < 3600)
+      return t('layers.time.minutes', { n: Math.floor(diff / 60) });
+    return t('layers.time.hours', { n: Math.floor(diff / 3600) });
   }
 }

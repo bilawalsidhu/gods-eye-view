@@ -25,7 +25,7 @@ test('Street Level is an ordinary collapsible GEV panel that starts collapsed', 
     html,
     /<button class="panel-collapse-btn" data-collapse-target="street-level-panel"/,
   );
-  assert.match(html, /<span class="panel-title">STREET LEVEL<\/span>/);
+  assert.match(html, /<span class="panel-title"[^>]*>STREET LEVEL<\/span>/);
   // Provider-neutral header: no vendor mark; the inner restores its scroll.
   assert.doesNotMatch(html, /sl-mark|mly-mark/);
   assert.match(

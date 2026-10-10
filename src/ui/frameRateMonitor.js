@@ -1,4 +1,6 @@
 /** Count rendered globe frames while the optional readout is visible. */
+import { subscribeLocale, t } from '../i18n/index.js';
+
 export function createFrameRateMonitor({ viewer, documentRef = document }) {
   const host = documentRef.getElementById('title-bar');
   const frameEvent = viewer?.scene?.postRender;
@@ -7,14 +9,35 @@ export function createFrameRateMonitor({ viewer, documentRef = document }) {
   const readout = documentRef.createElement('div');
   readout.className = 'frame-rate-readout';
   readout.hidden = true;
-  readout.textContent = 'FPS —';
-  readout.title = 'Rendered globe frames per second · toggle with `';
+  readout.textContent = t('hud.fps.idle');
+  readout.title = t('hud.fps.title');
   host.appendChild(readout);
   let removeFrameListener = null;
   let timer = null;
   let frames = 0;
   let startedAt = 0;
   let destroyed = false;
+
+  // The readout is created once; FPS is an international abbreviation and
+  // stays, but the title and the idle text translate. While visible the value
+  // repaints every second anyway, so a locale switch only needs one repaint.
+  const unsubscribeLocale = subscribeLocale(() => {
+    readout.title = t('hud.fps.title');
+    if (!readout.hidden) {
+      const now = performance.now();
+      const elapsed = now - startedAt;
+      readout.textContent =
+        documentRef.hidden || elapsed <= 0
+          ? t('hud.fps.idle')
+          : t('hud.fps.value', {
+              n: Math.round((frames * 1000) / elapsed),
+            });
+    }
+  });
+
+  function paintIdle() {
+    readout.textContent = t('hud.fps.idle');
+  }
 
   function hide() {
     readout.hidden = true;
@@ -27,7 +50,7 @@ export function createFrameRateMonitor({ viewer, documentRef = document }) {
   function show() {
     frames = 0;
     startedAt = performance.now();
-    readout.textContent = 'FPS —';
+    paintIdle();
     readout.hidden = false;
     removeFrameListener = frameEvent.addEventListener(() => {
       frames++;
@@ -37,8 +60,8 @@ export function createFrameRateMonitor({ viewer, documentRef = document }) {
       const elapsed = now - startedAt;
       readout.textContent =
         documentRef.hidden || elapsed <= 0
-          ? 'FPS —'
-          : `FPS ${Math.round((frames * 1000) / elapsed)}`;
+          ? t('hud.fps.idle')
+          : t('hud.fps.value', { n: Math.round((frames * 1000) / elapsed) });
       frames = 0;
       startedAt = now;
     }, 1000);
@@ -73,6 +96,7 @@ export function createFrameRateMonitor({ viewer, documentRef = document }) {
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      unsubscribeLocale();
       hide();
       documentRef.removeEventListener('keydown', onKeyDown);
       readout.remove();

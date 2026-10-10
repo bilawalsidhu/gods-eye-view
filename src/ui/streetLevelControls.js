@@ -2,8 +2,10 @@ import { syncChipGroup } from './chipGroup.js';
 import { isExplicitLayerStateOrigin } from '../data/layerState.js';
 import {
   presentStreetLevelPanel,
+  sinceStopLabel,
   SINCE_STOPS,
 } from './streetLevelPresentation.js';
+import { subscribeLocale, t } from '../i18n/index.js';
 
 const RENDER_MODE_KEY = 'gev:street-level:render-mode';
 const FOCUSABLE =
@@ -54,6 +56,13 @@ export class StreetLevelControls {
     this._inerted = new Set();
     this._modalObserver = null;
     this._elements = this._collect();
+    // A locale switch re-renders the last known layer state and re-syncs the
+    // expand button chrome, which lives outside the state render path.
+    this._unsubscribeLocale = subscribeLocale(() => {
+      if (this.destroyed || !this.root) return;
+      if (this._state) this.render(this._state);
+      this._syncExpandButton(this.isViewerExpanded());
+    });
     this._bind();
   }
 
@@ -122,7 +131,7 @@ export class StreetLevelControls {
     const sinceDays = () =>
       SINCE_STOPS[Number(el.sinceRange?.value) || 0]?.days ?? 0;
     this.listen(el.sinceRange, 'input', () => {
-      const label = SINCE_STOPS[Number(el.sinceRange.value) || 0].label;
+      const label = sinceStopLabel(Number(el.sinceRange.value) || 0);
       if (el.sinceLabel) el.sinceLabel.textContent = label;
       el.sinceRange.setAttribute('aria-valuetext', label);
     });
@@ -214,7 +223,7 @@ export class StreetLevelControls {
       await this.actions.setEnabled?.(true);
     } catch (error) {
       this.actions.showToast?.(
-        error?.message || 'Street Level could not start',
+        error?.message || t('streetlevel.toast.startFailed'),
       );
       return false;
     }
@@ -226,7 +235,9 @@ export class StreetLevelControls {
     try {
       await this.actions.setEnabled?.(!enabled);
     } catch (error) {
-      this.actions.showToast?.(error?.message || 'Street Level toggle failed');
+      this.actions.showToast?.(
+        error?.message || t('streetlevel.toast.toggleFailed'),
+      );
     }
   }
 
@@ -311,7 +322,7 @@ export class StreetLevelControls {
       wrap.classList.add('sl-viewer-wrap-expanded');
       wrap.setAttribute('role', 'dialog');
       wrap.setAttribute('aria-modal', 'true');
-      wrap.setAttribute('aria-label', 'Street-level image');
+      wrap.setAttribute('aria-label', t('streetlevel.viewer.imageAria'));
       wrap.tabIndex = -1;
       wrap.focus({ preventScroll: true });
       this._watchModal(true);
@@ -338,17 +349,33 @@ export class StreetLevelControls {
         this._elements.viewerExpand.focus({ preventScroll: true });
       else this._focusPanelControl();
     }
-    const button = this._elements.viewerExpand;
-    if (button) {
-      const icon = button.querySelector('.sl-btn-icon');
-      const text = button.querySelector('.sl-btn-text');
-      if (icon) icon.textContent = on ? '⤡' : '⤢';
-      if (text) text.textContent = on ? 'SHRINK' : 'EXPAND';
-      button.setAttribute('aria-pressed', String(on));
-      button.setAttribute('aria-label', on ? 'Shrink' : 'Expand');
-    }
+    this._syncExpandButton(on);
     if (!on && dock) this.actions.dockPanel?.();
     this._requestResize();
+  }
+
+  /**
+   * Paint the EXPAND/SHRINK chrome for the given expanded state. Split out of
+   * `setViewerExpanded` (whose early return would skip it) so a locale switch
+   * can retranslate the button without touching the viewer layout.
+   */
+  _syncExpandButton(on) {
+    const button = this._elements.viewerExpand;
+    if (!button) return;
+    const icon = button.querySelector('.sl-btn-icon');
+    const text = button.querySelector('.sl-btn-text');
+    if (icon) icon.textContent = on ? '⤡' : '⤢';
+    if (text)
+      text.textContent = on
+        ? t('streetlevel.viewer.shrink')
+        : t('streetlevel.viewer.expand');
+    button.setAttribute('aria-pressed', String(on));
+    button.setAttribute(
+      'aria-label',
+      on
+        ? t('streetlevel.viewer.shrinkAria')
+        : t('streetlevel.viewer.expandAria'),
+    );
   }
 
   /** Park focus on a control that stays on screen while the viewer is hidden. */
@@ -623,6 +650,8 @@ export class StreetLevelControls {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._unsubscribeLocale?.();
+    this._unsubscribeLocale = null;
     this.setViewerExpanded(false);
     this._watchModal(false);
     this.listeners.abort();

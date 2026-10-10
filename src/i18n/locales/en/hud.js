@@ -1,0 +1,45 @@
+/** Intel HUD (hud.js + hudLocality.js + hudSummaryResponse.js + frame rate readout). */
+export default {
+  page: 'PAGE {n}/{m}',
+  modeNormal: 'NORMAL',
+  summaryLabel: 'SUMMARY',
+  awaitingTelemetry: 'Awaiting telemetry...',
+  rec: 'REC',
+  band: {
+    street: 'STREET',
+    city: 'CITY',
+    metro: 'METRO',
+    regional: 'REGIONAL',
+    global: 'GLOBAL',
+  },
+  region: {
+    arctic: 'ARCTIC',
+    antarctic: 'ANTARCTIC',
+    northAmerica: 'NORTH AMERICA',
+    southAmerica: 'SOUTH AMERICA',
+    europe: 'EUROPE',
+    africa: 'AFRICA',
+    asia: 'ASIA',
+    oceania: 'OCEANIA',
+    northernOcean: 'NORTHERN OCEANIC GRID',
+    southernOcean: 'SOUTHERN OCEANIC GRID',
+  },
+  locality: {
+    near: 'NEAR {poi} ({city}) {n}KM',
+    sector: 'SECTOR {lat} {lon}',
+  },
+  provenance: {
+    layer: 'LAYER',
+    degraded: 'DEGRADED',
+    stale: 'STALE',
+    fallback: 'FALLBACK',
+    loading: 'LOADING',
+    unavailable: 'UNAVAILABLE',
+    nominal: 'NOMINAL',
+  },
+  fps: {
+    idle: 'FPS —',
+    value: 'FPS {n}',
+    title: 'Rendered globe frames per second · toggle with `',
+  },
+};

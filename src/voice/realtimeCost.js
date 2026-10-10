@@ -11,6 +11,7 @@ import {
   formatCostUsd,
   estimateTranscriptionCostUsd,
 } from './voiceCost.js';
+import { t } from '../i18n/index.js';
 
 /** Own next-session preferences and the immutable-model session cost meter. */
 export class RealtimeCost {
@@ -56,33 +57,43 @@ export class RealtimeCost {
       const pendingId = resolveVoiceModel(pendingTier).id;
       this.ui.tierButton.title =
         this.isActive() && state.modelId !== pendingId
-          ? `Next session: ${pendingId} — this session stays on ${state.modelId}`
-          : `Voice model: ${pendingId} — click to switch to ${
-              isMini ? 'standard' : 'mini'
-            }; applies next session`;
+          ? t('voice.cost.tierLive', {
+              next: pendingId,
+              current: state.modelId,
+            })
+          : t('voice.cost.tierSwitch', {
+              model: pendingId,
+              other: isMini ? 'standard' : 'mini',
+            });
     }
     if (this.ui?.costValue) {
       const liveAuth = this.sessionCloudVoiceAuth || this.cloudVoiceAuth;
       if (liveAuth === 'oauth') {
         const { responses, input, output, captions } = this.oauthUsage;
         this.ui.costValue.hidden = false;
-        this.ui.costValue.textContent = 'COST UNKNOWN';
+        this.ui.costValue.textContent = t('voice.cost.unknown');
         this.ui.costValue.dataset.level = 'unknown';
         this.ui.costValue.title =
-          `ChatGPT OAuth session: ${responses} response(s), ${input} input and ${output} output tokens, ${captions} caption transcription(s) reported. ` +
-          'USD cost and the API spend cap are unavailable for this auth mode.' +
-          (state.incomplete
-            ? ' Usage is incomplete because a response was still in flight when the session ended.'
-            : '');
+          `${t('voice.cost.oauthSession', { responses, input, output, captions })} ` +
+          t('voice.cost.oauthUnavailable') +
+          (state.incomplete ? ` ${t('voice.cost.oauthIncomplete')}` : '');
         return;
       }
       this.ui.costValue.hidden = false;
       this.ui.costValue.textContent = state.display;
       this.ui.costValue.dataset.level = state.level;
+      // The tracker's `note` prose is translated here at the presentation
+      // edge — voiceCost.js itself stays import-free for the server build.
       this.ui.costValue.title =
-        `Estimated session cost on ${state.modelId} — ${state.responses} response(s). ` +
-        `Warns at ${formatCostUsd(state.warnUsd)}, ends the session at ${formatCostUsd(state.capUsd)}.` +
-        (state.note ? ` ${state.note}` : '');
+        `${t('voice.cost.sessionCost', {
+          model: state.modelId,
+          responses: state.responses,
+        })} ` +
+        t('voice.cost.thresholds', {
+          warn: formatCostUsd(state.warnUsd),
+          cap: formatCostUsd(state.capUsd),
+        }) +
+        (state.incomplete ? ` ${t('voice.cost.incompleteNote')}` : '');
     }
   }
 
@@ -125,7 +136,7 @@ export class RealtimeCost {
     if (this.isActive() && this.ui?.detail) {
       this.setStatus(
         this.status,
-        `${this.voiceTier.toUpperCase()} applies next session`,
+        t('voice.cost.tierApplies', { tier: this.voiceTier.toUpperCase() }),
       );
     }
     return this.voiceTier;
@@ -240,7 +251,10 @@ export class RealtimeCost {
     try {
       this.stop({ preserveStatus: true });
     } finally {
-      this.setStatus('idle', `Session ended — cost cap ${state.display}`);
+      this.setStatus(
+        'idle',
+        t('voice.cost.capEnded', { display: state.display }),
+      );
       this.syncCostUi();
     }
   }

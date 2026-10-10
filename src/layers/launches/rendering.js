@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   TRAJECTORY_STAGE_COLORS,
   REPLAY_ORBIT_DURATION_SEC,
@@ -351,7 +352,9 @@ export function createRendering({
             parts.overlays.createRocketMissionElementOverlayEntry({
               id: `reentry:${launch.id}:${stageIndex}`,
               position: reentryPosition,
-              text: 'STAGE RE-ENTRY',
+              // Factories run inside the overlay sync, so the label resolves
+              // through the active locale on every repaint.
+              text: t('space.overlay.stageReentry'),
               accent: '#ffd166',
               priority: 700_000 - stageIndex,
               gapPx: 8,
@@ -464,7 +467,7 @@ export function createRendering({
           ? parts.overlays
               .shortMissionLabel(satelliteTrack.name, 22)
               .toUpperCase()
-          : 'EST. ORBIT POSITION';
+          : t('space.overlay.estOrbitPosition');
         return parts.overlays.createRocketMissionElementOverlayEntry({
           id: `payload-position:${launch.id}`,
           position: () => livePosition,
@@ -520,7 +523,9 @@ export function createRendering({
         parts.overlays.createRocketMissionElementOverlayEntry({
           id: `orbit:${launch.id}`,
           position: orbitLabelPosition,
-          text: satelliteTrack ? 'ORBIT' : 'PROJECTED ORBIT',
+          text: satelliteTrack
+            ? t('space.overlay.orbit')
+            : t('space.overlay.projectedOrbit'),
           accent: satelliteTrack ? '#22e6e6' : '#c084fc',
           priority: 800_000,
           gapPx: 8,

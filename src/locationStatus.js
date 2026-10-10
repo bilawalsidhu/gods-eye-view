@@ -8,9 +8,20 @@
  *
  * Before this existed only the pill path was rendered, so a search left the
  * readout reporting "Location: --" while the camera sat over the destination.
+ *
+ * City/POI records are localized by the callers (locationControls /
+ * locationNavigation) through the `location.cities` pack; this module owns the
+ * placeholder and searched-location copy.
  */
+import { t } from './i18n/index.js';
 
-const EMPTY = Object.freeze({ city: '📍 Location: --', poi: 'Landmark: --' });
+/** The honest empty state. Composed per call so a locale switch repaints. */
+function emptyStatus() {
+  return {
+    city: t('location.status.emptyCity'),
+    poi: t('location.status.emptyPoi'),
+  };
+}
 
 /** Split a geocoder `formatted_address` into its trimmed, non-empty segments. */
 export function addressSegments(label) {
@@ -58,11 +69,11 @@ export function locationMiniStatus({
       poi:
         segments.length > 1
           ? segments.slice(1).join(', ')
-          : 'Searched location',
+          : t('location.status.searched'),
     };
   }
 
-  return { ...EMPTY };
+  return emptyStatus();
 }
 
 export default locationMiniStatus;

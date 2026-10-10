@@ -1,0 +1,45 @@
+/** 简体中文语言包 — 情报 HUD。 */
+export default {
+  page: '第 {n}/{m} 页',
+  modeNormal: '常规',
+  summaryLabel: '摘要',
+  awaitingTelemetry: '正在等待遥测数据…',
+  rec: '录制',
+  band: {
+    street: '街道',
+    city: '城市',
+    metro: '都市',
+    regional: '区域',
+    global: '全球',
+  },
+  region: {
+    arctic: '北极',
+    antarctic: '南极洲',
+    northAmerica: '北美洲',
+    southAmerica: '南美洲',
+    europe: '欧洲',
+    africa: '非洲',
+    asia: '亚洲',
+    oceania: '大洋洲',
+    northernOcean: '北方海洋网格',
+    southernOcean: '南方海洋网格',
+  },
+  locality: {
+    near: '附近 {poi} ({city}) {n}KM',
+    sector: '扇区 {lat} {lon}',
+  },
+  provenance: {
+    layer: '图层',
+    degraded: '已降级',
+    stale: '已过期',
+    fallback: '回退',
+    loading: '加载中',
+    unavailable: '不可用',
+    nominal: '正常',
+  },
+  fps: {
+    idle: 'FPS —',
+    value: 'FPS {n}',
+    title: '每秒渲染的地球帧数 · 按 ` 键切换',
+  },
+};

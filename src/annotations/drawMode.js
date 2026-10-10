@@ -17,6 +17,7 @@
  * No Cesium, no DOM — importable under `node --test`. The Cesium/DOM half is
  * `drawTool.js`.
  */
+import { t } from '../i18n/index.js';
 
 export const DRAW_SHAPES = Object.freeze(['area', 'line', 'pin']);
 export const MIN_VERTICES = Object.freeze({ area: 3, line: 2, pin: 1 });
@@ -284,20 +285,20 @@ export function closeRing(pairs) {
 
 /** One line of guidance for the person drawing, by state. */
 export function drawHint(session) {
-  if (!session) return 'Pick a shape, then click the map.';
+  if (!session) return t('draw.hint.pickShape');
   const n = session.vertices.length;
   if (session.shape === 'pin')
-    return n
-      ? 'Enter to place the pin, Esc to cancel.'
-      : 'Click where the pin goes.';
+    return n ? t('draw.hint.pinPlace') : t('draw.hint.pinClick');
   const need = MIN_VERTICES[session.shape] - n;
-  if (need > 0) return `Click ${need} more point${need === 1 ? '' : 's'}.`;
+  if (need > 0) return t('draw.hint.clickMore', { count: need });
   if (finishReason(session) === 'degenerate') {
     return session.shape === 'area'
-      ? 'Those points are in a line — move one off it to enclose an area.'
-      : 'That line has no length — click somewhere further away.';
+      ? t('draw.hint.areaDegenerate')
+      : t('draw.hint.lineDegenerate');
   }
   const full =
-    n >= MAX_VERTICES ? ` · ${MAX_VERTICES}-point limit reached` : '';
-  return `${formatMeasure(session)} · double-click or Enter to finish, Backspace undoes, Esc cancels.${full}`;
+    n >= MAX_VERTICES
+      ? ` · ${t('draw.hint.limitReached', { max: MAX_VERTICES })}`
+      : '';
+  return t('draw.hint.finish', { measure: formatMeasure(session) }) + full;
 }

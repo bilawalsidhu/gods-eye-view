@@ -1,4 +1,5 @@
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
+import { t } from '../i18n/index.js';
 import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { LayerBindings } from './layerBindings.js';
@@ -1478,7 +1479,11 @@ export class StyleManager extends ShellFacade {
     this._lifetime.listen(this._shareBtn, 'click', async () => {
       const success = await this.shareLinkManager.copyLink();
       if (!this._disposed)
-        this._showToast(success ? 'Link copied!' : 'Copy failed');
+        this._showToast(
+          success
+            ? t('chrome.toasts.linkCopied')
+            : t('chrome.toasts.copyFailed'),
+        );
     });
   }
 

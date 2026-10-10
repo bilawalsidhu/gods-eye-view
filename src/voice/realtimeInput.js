@@ -13,6 +13,7 @@ import {
   resetVoiceVisualizerBars,
 } from './realtimeInputPolicy.js';
 import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
+import { t } from '../i18n/index.js';
 
 /** Own physical push-to-talk gestures, microphone controls and audio meters. */
 export class RealtimeInput {
@@ -118,7 +119,7 @@ export class RealtimeInput {
           this.ui.root.dataset.pushToTalk = 'held';
           this.setMicrophoneEnabled(true);
           if (this.status === 'listening')
-            this.setStatus('listening', 'Release Space to send');
+            this.setStatus('listening', t('voice.hint.release'));
         } else {
           this.start({ pushToTalk: true });
           // start() performs a controlled stop() before connecting. Restore the
@@ -194,7 +195,7 @@ export class RealtimeInput {
     if (!this.pushToTalkMode) return;
     this.setMicrophoneEnabled(false);
     if (this.status === 'listening')
-      this.setStatus('listening', 'Hold Space to talk');
+      this.setStatus('listening', t('voice.hint.holdTalk'));
     else this.updateVoiceButtonLabel();
   }
 

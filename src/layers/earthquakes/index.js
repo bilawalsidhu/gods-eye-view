@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   EARTHQUAKE_OVERLAY_SOURCE_ID,
   EARTHQUAKE_OVERLAY_COHORT_LIMIT,
@@ -10,6 +11,10 @@ import {
 } from './model.js';
 export * from './model.js';
 export { createUsgsEarthquakeSource } from './source.js';
+
+// The stored error stays a stable English data message; this known-message
+// presentation edge resolves the layer's own fallback through the pack.
+const SOURCE_UNAVAILABLE_ERROR = 'Earthquake source unavailable';
 
 /** Own one earthquake display and its refresh lifecycle. */
 export function createEarthquakesLayer({ source, overlayHost } = {}) {
@@ -154,7 +159,7 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         console.warn('[Data:Earthquakes] Fetch error:', e);
-        _lastError = e?.message || 'Earthquake source unavailable';
+        _lastError = e?.message || SOURCE_UNAVAILABLE_ERROR;
         return false;
       } finally {
         if (_request === request) _request = null;
@@ -225,7 +230,10 @@ export function createEarthquakesLayer({ source, overlayHost } = {}) {
       return {
         count: _count,
         lastUpdate: _lastUpdate,
-        error: _lastError,
+        error:
+          _lastError === SOURCE_UNAVAILABLE_ERROR
+            ? t('geology.earthquakes.sourceUnavailable')
+            : _lastError,
       };
     },
   };

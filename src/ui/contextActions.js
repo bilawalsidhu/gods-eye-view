@@ -2,10 +2,11 @@ import {
   settleUserFacingContextAction,
   contextModeWord,
 } from '../contextModePolicy.js';
+import { t } from '../i18n/index.js';
 
 export async function _runUserFacingContextAction(
   operation,
-  message = 'Context could not restore every layer; try again',
+  message = t('context.toast.restoreFailed'),
   { falseIsFailure = true } = {},
 ) {
   if (this.destroyed) return false;
@@ -222,21 +223,21 @@ export function clearSelectedLayers() {
   const operation = managerOperation
     .then((result) => {
       if (result.targetIds.length === 0) {
-        this.showToast('No selected data layers');
+        this.showToast(t('context.toast.noneSelected'));
       } else if (result.notClearedIds.length > 0) {
         this.showToast(
-          `${result.notClearedIds.length} data layer${result.notClearedIds.length === 1 ? '' : 's'} could not be cleared`,
+          t('context.toast.notCleared', { count: result.notClearedIds.length }),
         );
       } else {
         this.showToast(
-          `Cleared ${result.clearedIds.length} data layer${result.clearedIds.length === 1 ? '' : 's'}`,
+          t('context.toast.cleared', { count: result.clearedIds.length }),
         );
       }
       return result;
     })
     .catch((error) => {
       console.warn('[Data] clear selected layers failed', error);
-      this.showToast('Selected data layers could not be cleared');
+      this.showToast(t('context.toast.clearFailed'));
       return {
         targetIds: [],
         items: [],

@@ -43,6 +43,23 @@ The custom switch field is bounded to 256 characters;
 provider registration rejects compositions that cannot fit rather than truncating
 identities. A malformed or duplicate entry invalidates the complete custom-switch
 field. Existing whole-link size limits still apply.
+## Interface language: English and Simplified Chinese — October 9, 2026
+
+The app ships two locales: English (complete baseline and fallback) and
+Simplified Chinese. First launch follows the browser language (any `zh`
+variant selects `zh-CN`); a manual choice in the Display panel's **Language**
+select persists under the namespaced `gods-eye-view.locale` key and wins over
+the browser. Switching never reloads the page: open panels re-render through
+locale subscriptions, and the map, tracking, share links and form state are
+untouched. An external pre-paint script (`public/locale-boot.js`, CSP-safe —
+no inline scripts) renders the loading screen in the detected locale before
+the app module evaluates. Own-UI coverage, deliberate exclusions (layer
+registration names, server protocol strings, brands, units, the HUD
+classification banner) and known gaps are ledgered in
+[docs/I18N-COVERAGE.md](I18N-COVERAGE.md); the architecture and the
+add-a-locale steps live in [docs/I18N.md](I18N.md). `npm run test:track`
+pins the English locale before loading the app because its visible-text
+assertions are English contracts.
 
 ## God's Eye View in conversations — October 2, 2026
 

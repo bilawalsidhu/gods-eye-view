@@ -1,4 +1,5 @@
 import { STYLE_STATUS_LABELS } from './visualPresets.js';
+import { subscribeLocale, t } from '../i18n/index.js';
 import { UiLifetime } from './uiLifetime.js';
 import {
   VisualEffects,
@@ -216,6 +217,11 @@ export class VisualSettings {
     }
     this._detectionAllocationPreference = normalizeAllocationStrategy(
       storedDetectionAllocation,
+    );
+    // The style readouts and detection/sonar labels are repainted by this
+    // class, so a locale switch has to re-present the CURRENT state here.
+    this._unsubscribeLocale = subscribeLocale(() =>
+      this._repaintLocalizedState(),
     );
   }
   get hud() {
@@ -671,7 +677,9 @@ export class VisualSettings {
     const settings = applyCyberSonarSettings(readCyberSonarSettings());
     this._cyberSonarBtn.classList.toggle('active', enabled);
     this._cyberSonarBtn.setAttribute('aria-pressed', String(enabled));
-    this._cyberSonarBtn.textContent = enabled ? 'ON' : 'OFF';
+    this._cyberSonarBtn.textContent = enabled
+      ? t('common.on')
+      : t('common.off');
     for (const [input, output, value, suffix] of [
       [this._cyberSonarRings, this._cyberSonarRingsValue, settings.rings, ''],
       [this._cyberSonarRange, this._cyberSonarRangeValue, settings.range, '%'],
@@ -1190,8 +1198,8 @@ export class VisualSettings {
       this._celestialBtn.disabled = !styleSupported;
       this._celestialBtn.setAttribute('aria-disabled', String(!styleSupported));
       this._celestialBtn.title = styleSupported
-        ? 'Celestial ring — reveal the full globe'
-        : 'Celestial ring — available in Normal style';
+        ? t('display.celestial.title')
+        : t('display.celestial.titleNormalOnly');
     }
     let cameraFocused = false;
     if (nextEnabled && focus) {
@@ -1594,9 +1602,7 @@ export class VisualSettings {
     });
 
     // Update style indicator
-    const displayNames = { surveillance: 'NVG', thermal: 'FLIR', retro: 'CRT' };
-    this._styleIndicator.textContent =
-      displayNames[styleName] || styleName.toUpperCase();
+    this._paintActiveStyle(styleName);
     this._updateStyleMiniStatus(styleName);
 
     // Update parameter sliders
@@ -1626,11 +1632,46 @@ export class VisualSettings {
     this._visualEffects.startTransition(styleName, fromValue, toValue);
   }
 
-  _updateStyleMiniStatus(styleName = this.activeStyle) {
-    if (!this._styleMiniValue) return;
-    this._styleMiniValue.textContent =
+  /**
+   * Localized display label for one style, keyed by meaning with the shipped
+   * preset labels (STYLE_STATUS_LABELS) as the fallback for unknown names.
+   */
+  _styleStatusLabel(styleName = this.activeStyle) {
+    const fallback =
       STYLE_STATUS_LABELS[styleName] ||
       String(styleName || 'normal').toUpperCase();
+    const translated = t(`display.styleStatus.${styleName}`);
+    return translated === `display.styleStatus.${styleName}`
+      ? fallback
+      : translated;
+  }
+
+  /** The style indicator has exactly one writer so state owners cannot fight. */
+  _paintActiveStyle(styleName) {
+    if (!this._styleIndicator) return;
+    this._styleIndicator.textContent = this._styleStatusLabel(styleName);
+  }
+
+  _updateStyleMiniStatus(styleName = this.activeStyle) {
+    if (!this._styleMiniValue) return;
+    this._styleMiniValue.textContent = this._styleStatusLabel(styleName);
+  }
+
+  /** Re-present every feature-painted label after a locale switch. */
+  _repaintLocalizedState() {
+    this._paintActiveStyle(this.activeStyle);
+    this._updateStyleMiniStatus();
+    this._syncCyberSonarControl();
+    const { getDetectionMode } = this.services;
+    if (typeof getDetectionMode === 'function') {
+      this._updateDetectionButton(getDetectionMode());
+    }
+    if (this._celestialBtn) {
+      this.setCelestialRingEnabled(this.celestialRingEnabled, {
+        syncShare: false,
+        focus: false,
+      });
+    }
   }
 
   _updateHudButtonState() {
@@ -1641,6 +1682,14 @@ export class VisualSettings {
     this._scheduleAdaptivePanelLayout({ settle: true });
   }
 
+  /** Localized detection profile word for the aria summary ({mode} stays a
+   *  stable profile id when the pack has no entry for it). */
+  _detectionModeLabel(modeLabel) {
+    const key = String(modeLabel || 'off').toLowerCase();
+    const translated = t(`display.detection.modes.${key}`);
+    return translated === `display.detection.modes.${key}` ? key : translated;
+  }
+
   _updateDetectionButton(modeLabel) {
     const btn = this._detectionBtn;
     const enabled = modeLabel !== 'OFF';
@@ -1648,21 +1697,24 @@ export class VisualSettings {
     btn.setAttribute(
       'aria-label',
       enabled
-        ? `Detection overlay: ${String(modeLabel).toLowerCase()}`
-        : 'Detection overlay: off',
+        ? t('display.detection.ariaOn', {
+            mode: this._detectionModeLabel(modeLabel),
+          })
+        : t('display.detection.ariaOff'),
     );
     btn.classList.remove('active', 'god', 'panoptic');
+    const label = btn.querySelector('.pp-label');
     if (modeLabel === 'SPARSE') {
-      btn.querySelector('.pp-label').textContent = 'SPARSE';
+      label.textContent = t('display.detection.label.sparse');
       btn.classList.add('active');
     } else if (modeLabel === 'BALANCED') {
-      btn.querySelector('.pp-label').textContent = 'BALANCED';
+      label.textContent = t('display.detection.label.balanced');
       btn.classList.add('active');
     } else if (modeLabel === 'DENSE') {
-      btn.querySelector('.pp-label').textContent = 'DENSE';
+      label.textContent = t('display.detection.label.dense');
       btn.classList.add('active', 'panoptic');
     } else {
-      btn.querySelector('.pp-label').textContent = 'DETECT';
+      label.textContent = t('display.detection.label.detect');
     }
 
     if (this._detectionSliderRow) {
@@ -1686,6 +1738,8 @@ export class VisualSettings {
     this._layoutRightPanels();
   }
   stop() {
+    this._unsubscribeLocale?.();
+    this._unsubscribeLocale = null;
     this._lifetime.destroy();
     this._styleParameters?.destroy();
     this._visualEffects.stop();

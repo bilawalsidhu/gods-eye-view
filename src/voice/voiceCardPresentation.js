@@ -1,6 +1,7 @@
 import { planStepLabel, progressStepLabel, spokenLabel } from './speech.js';
 import { presentResult } from './resultDisplay.js';
 import { MAX_DISPLAYED_REFERENTS, normalizeReferents } from './referents.js';
+import { t } from '../i18n/index.js';
 
 /**
  * Pure presentation of the voice card nested in the voice control: captions,
@@ -17,11 +18,12 @@ const MAX_LINES = 6;
 const MAX_NOTES = 6;
 const MAX_CAPTION = 220;
 
-const STATUS_TEXT = Object.freeze({
-  running: 'in progress',
-  done: 'done',
-  failed: 'failed',
-  cancelled: 'cancelled',
+/** Step status words, resolved through `t()` at render time (I18N.md rule 5). */
+const STATUS_KEYS = Object.freeze({
+  running: 'voice.card.statusRunning',
+  done: 'voice.card.statusDone',
+  failed: 'voice.card.statusFailed',
+  cancelled: 'voice.card.statusCancelled',
 });
 
 /** An empty, hidden card. */
@@ -119,11 +121,16 @@ export function reduceVoiceCard(state, event) {
       if (!pointer && !state.pointer) return state;
       if (!pointer) return { ...state, pointer };
       // The live region says what "this" meant, as the chip does.
-      const kind = pointer.kind === 'here' ? 'Here' : 'This';
+      const announce = t(
+        pointer.kind === 'here'
+          ? 'voice.card.announceHere'
+          : 'voice.card.announceThis',
+        { label: spokenLabel(pointer.label, 32) },
+      );
       return reveal({
         ...state,
         pointer,
-        announce: `${kind}: ${spokenLabel(pointer.label, 32)}`,
+        announce,
       });
     }
     case 'transcript': {
@@ -190,7 +197,7 @@ export function reduceVoiceCard(state, event) {
             : result.ok
               ? 'done'
               : 'failed',
-          detail: result.outlinePending ? 'Tracing outline' : '',
+          detail: result.outlinePending ? t('voice.card.tracingOutline') : '',
           annotationIds: result.outlinePending ? annotationIds(result) : [],
         }),
       );
@@ -224,10 +231,10 @@ export function reduceVoiceCard(state, event) {
           ...step,
           annotationIds: remaining,
           detail: remaining.length
-            ? 'Tracing outline'
+            ? t('voice.card.tracingOutline')
             : event.status === 'resolved'
-              ? 'Outline traced'
-              : 'Outline unavailable',
+              ? t('voice.card.outlineTraced')
+              : t('voice.card.outlineUnavailable'),
         };
         return reveal({ ...state, steps });
       }
@@ -244,7 +251,9 @@ export function voiceCardView(state) {
   const display = state.result?.display || null;
   const allNotes = [
     ...(display?.notes || []),
-    ...(display?.sources || []).map((source) => `Source: ${source.label}`),
+    ...(display?.sources || []).map((source) =>
+      t('voice.card.sourceLine', { label: source.label }),
+    ),
   ];
   // Analyst notes carry count/scope/provenance qualifications. Preserve their
   // full sanitized text in at most six existing rows, joining overflow into
@@ -267,14 +276,21 @@ export function voiceCardView(state) {
   return {
     visible: Boolean(state.visible),
     busy: running,
-    phase: running ? 'WORKING' : state.steps.length ? 'DONE' : '',
+    phase: running
+      ? t('voice.card.phaseWorking')
+      : state.steps.length
+        ? t('voice.card.phaseDone')
+        : '',
     user: {
       visible: state.user !== null,
       text: state.user || '…',
     },
     pointer: {
       visible: Boolean(state.pointer),
-      kind: state.pointer?.kind === 'here' ? 'HERE' : 'THIS',
+      kind:
+        state.pointer?.kind === 'here'
+          ? t('voice.card.chipHere')
+          : t('voice.card.chipThis'),
       text: spokenLabel(state.pointer?.label || '', 32),
     },
     assistant: {
@@ -285,7 +301,7 @@ export function voiceCardView(state) {
       key: String(step.id),
       label: step.label,
       status: step.status,
-      statusText: STATUS_TEXT[step.status] || '',
+      statusText: STATUS_KEYS[step.status] ? t(STATUS_KEYS[step.status]) : '',
       detail: step.detail || '',
     })),
     result: {

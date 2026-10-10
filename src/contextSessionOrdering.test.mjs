@@ -165,7 +165,9 @@ test('the Radio chip catches lifecycle rejection and semantic false through the 
     radioBindings.indexOf("this.listen(this._radioFilter, 'change'"),
   );
   assert.match(radioControls, /await this\.actions\.runUserAction\(/);
-  assert.match(radioControls, /Radio could not \$\{enabling \? 'start' : 'stop'\} cleanly/);
+  // The failure message resolves through the shared translator at call time
+  // (en stays 'Radio could not start/stop cleanly'); the pin tracks the keys.
+  assert.match(radioControls, /\?\s*'radio\.toast\.startFailed'\s*:\s*'radio\.toast\.stopFailed'/);
   assert.match(radioControls, /if \(this\.destroyed \|\| toggled === false\) return/);
 });
 

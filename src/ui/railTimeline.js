@@ -1,3 +1,5 @@
+import { subscribeLocale, t } from '../i18n/index.js';
+
 const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
 };
@@ -32,7 +34,7 @@ export function createRailTimeline({
     parent.appendChild(node);
     return node;
   };
-  const previous = makeButton('‹', 'Earlier observation', row);
+  const previous = makeButton('‹', t('weather.timeline.earlier'), row);
   const slider = document.createElement('input');
   slider.type = 'range';
   slider.className = `gev-quantitative-slider${sliderClassName ? ` ${sliderClassName}` : ''}`;
@@ -40,19 +42,27 @@ export function createRailTimeline({
   slider.max = '0';
   slider.step = '1';
   slider.value = '0';
-  slider.setAttribute('aria-label', 'Observed history');
+  slider.setAttribute('aria-label', t('weather.observedHistory'));
   row.appendChild(slider);
-  const next = makeButton('›', 'Later observation', row);
+  const next = makeButton('›', t('weather.timeline.later'), row);
   const controls = document.createElement('div');
   controls.className = 'rail-timeline-controls';
-  const latest = makeButton('Latest', 'Newest frame per product', controls);
-  const play = makeButton('Play', 'Replay observed history', controls);
+  const latest = makeButton(
+    t('weather.timeline.latest'),
+    t('weather.timeline.latestTitle'),
+    controls,
+  );
+  const play = makeButton(
+    t('common.play'),
+    t('weather.timeline.replayTitle'),
+    controls,
+  );
   const readout = document.createElement('span');
   readout.className = 'rail-timeline-readout';
   controls.appendChild(readout);
   const label = document.createElement('div');
   label.className = 'panel-title';
-  label.textContent = 'Observed history';
+  label.textContent = t('weather.observedHistory');
   const endpoints = document.createElement('div');
   endpoints.className = 'rail-timeline-endpoints';
   const oldest = document.createElement('span');
@@ -128,7 +138,11 @@ export function createRailTimeline({
       `data-toggle-chip${props.mode === 'latest' ? ' active' : ''}`,
     );
     set(play, 'className', `data-toggle-chip${props.playing ? ' active' : ''}`);
-    set(play, 'textContent', props.playing ? 'Pause' : 'Play');
+    set(
+      play,
+      'textContent',
+      props.playing ? t('common.pause') : t('common.play'),
+    );
     for (const [node, active] of [
       [latest, props.mode === 'latest'],
       [play, props.playing],
@@ -187,10 +201,28 @@ export function createRailTimeline({
   ];
   for (const [node, event, handler] of bindings)
     node.addEventListener(event, handler);
+  // Static labels resolve once; repaint them when the language changes.
+  const paintStaticLabels = () => {
+    set(previous, 'title', t('weather.timeline.earlier'));
+    slider.setAttribute('aria-label', t('weather.observedHistory'));
+    set(next, 'title', t('weather.timeline.later'));
+    set(latest, 'textContent', t('weather.timeline.latest'));
+    set(latest, 'title', t('weather.timeline.latestTitle'));
+    set(
+      play,
+      'textContent',
+      props.playing ? t('common.pause') : t('common.play'),
+    );
+    set(play, 'title', t('weather.timeline.replayTitle'));
+    set(label, 'textContent', t('weather.observedHistory'));
+  };
+  paintStaticLabels();
+  const unsubscribeLocale = subscribeLocale(paintStaticLabels);
   return {
     update,
     destroy() {
       destroyed = true;
+      unsubscribeLocale();
       cancel();
       for (const [node, event, handler] of bindings)
         node.removeEventListener(event, handler);

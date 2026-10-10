@@ -1,5 +1,6 @@
 import { militaryOsmKey } from '../../data/militaryNames.js';
 import { isUnavailableCapability } from '../../sources/capability.js';
+import { t } from '../../i18n/index.js';
 /** Keep named point coverage until its matching polygon takes over. */
 export function retainNamedHandoff(previous, records, box) {
   const named = new Map(
@@ -198,8 +199,7 @@ export function createIngestion({
             error?.name === 'AbortError'
           )
             return;
-          placesError =
-            'Google Places search unavailable; showing mapped sites';
+          placesError = t('sensors.installations.placesUnavailable');
         }
       }
       let floorTimer;
@@ -253,9 +253,11 @@ export function createIngestion({
               : 'ready'
             : 'empty',
           payload.status === 'stale'
-            ? `Serving cached mapped context · ${payload.records[0]?.retrievedAt || 'date unknown'}`
+            ? t('sensors.installations.servingCached', {
+                date: payload.records[0]?.retrievedAt || 'date unknown',
+              })
             : saturated
-              ? 'Too many mapped sites in view to list them all'
+              ? t('sensors.installations.tooManySites')
               : placesError,
         );
         parts.rendering.renderRecords();
@@ -291,7 +293,7 @@ export function createIngestion({
       layerState.failureReason = error?.failureReason || 'unavailable';
       setInstallationStatus(
         'unavailable',
-        error?.message || 'Installation context unavailable',
+        error?.message || t('sensors.installations.contextUnavailable'),
       );
       if (!isUnavailableCapability(error))
         parts.viewport.scheduleUnavailableRetry(error?.retryAfterMs);

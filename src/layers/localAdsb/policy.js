@@ -19,3 +19,14 @@ export const SOURCE_LABELS = Object.freeze({
   webusb: 'browser SDR',
   feed: 'decoder feed',
 });
+/**
+ * i18n keys (sensors.localAdsb.*) resolved with t() at the card/status edge.
+ * The constants above stay byte-identical — source tests assert them and the
+ * band symbols carry no translatable words — so localization rides on these
+ * parallel key maps instead of the values.
+ */
+export const HEARD_BY_RECEIVER_KEY = 'sensors.localAdsb.heardBy';
+export const SOURCE_LABEL_KEYS = Object.freeze({
+  webusb: 'sensors.localAdsb.source.webusb',
+  feed: 'sensors.localAdsb.source.feed',
+});

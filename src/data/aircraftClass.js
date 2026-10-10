@@ -452,6 +452,25 @@ export const AIRCRAFT_CLASS_LABELS = Object.freeze({
   uav: 'Drone',
 });
 
+/**
+ * Class → `fleet.aircraftClass.*` i18n key, resolved with `t()` at the card
+ * edge (this module stays import-free for the portable records graph).
+ * AIRCRAFT_CLASS_LABELS stays byte-identical (pinned by tests and used as the
+ * English fallback), so localization rides on this parallel map.
+ */
+export const AIRCRAFT_CLASS_LABEL_KEYS = Object.freeze({
+  light: 'fleet.aircraftClass.light',
+  glider: 'fleet.aircraftClass.glider',
+  turboprop: 'fleet.aircraftClass.turboprop',
+  airliner: 'fleet.aircraftClass.airliner',
+  widebody: 'fleet.aircraftClass.widebody',
+  quadjet: 'fleet.aircraftClass.quadjet',
+  helicopter: 'fleet.aircraftClass.helicopter',
+  fastjet: 'fleet.aircraftClass.fastjet',
+  bizjet: 'fleet.aircraftClass.bizjet',
+  uav: 'fleet.aircraftClass.uav',
+});
+
 /** Billboard scale multipliers (skylight GLYPH_SCALE, + fastjet). */
 export const CLASS_SCALE_2D = {
   light: 0.62,

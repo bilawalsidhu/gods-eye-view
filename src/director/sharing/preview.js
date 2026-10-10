@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { BUNDLE_SOURCE } from './bundle.js';
 
 /** Describe an import without fetching assets, applying state or exposing source configuration. */
@@ -16,11 +17,11 @@ export function describeSceneShare(
       status:
         pack.source.adapter === BUNDLE_SOURCE
           ? assets.has(pack.source.path)
-            ? 'Included in bundle'
-            : 'Missing bundle file — reimport its bundle'
+            ? t('director.preview.includedInBundle')
+            : t('director.preview.missingBundleFile')
           : sources.has(pack.source.adapter)
-            ? 'Source configured; file checked when loaded'
-            : 'Source unavailable',
+            ? t('director.preview.sourceConfigured')
+            : t('director.preview.sourceUnavailable'),
     })),
   );
   return {

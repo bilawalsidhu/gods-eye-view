@@ -1,4 +1,5 @@
 import { fireDetectionKey } from '../../data/firmsLabels.js';
+import { t } from '../../i18n/index.js';
 import { REFRESH_INTERVAL_MS } from './policy.js';
 
 export function createQueries({
@@ -10,6 +11,15 @@ export function createQueries({
 }) {
   const { id, name, icon, source } = config;
 
+  // Stored ingestion failures are closed tokens; unknown provider text passes
+  // through verbatim.
+  const errorText = (value) =>
+    !value
+      ? null
+      : value === 'liveFeed'
+        ? t('hazard.firms.error.liveFeed')
+        : value;
+
   const methods = {
     /** Return the selected detection as a plain record for application consumers. */
     getSelectedInfo() {
@@ -17,7 +27,9 @@ export function createQueries({
       if (!fire) return null;
       return {
         id: fireDetectionKey(fire),
-        label: `Fire · FRP ${components.model.formatFrp(fire.frp)} MW`,
+        label: t('hazard.firms.label', {
+          frp: components.model.formatFrp(fire.frp),
+        }),
         latitude: fire.lat,
         longitude: fire.lon,
         frp: fire.frp,
@@ -59,21 +71,27 @@ export function createQueries({
     getStats() {
       const now = Date.now();
       const staleText = layerState._lastUpdate
-        ? `STALE · cached ${components.model.formatAge(now - layerState._lastUpdate) || '<1h'}`
-        : 'STALE';
+        ? t('hazard.firms.status.staleCached', {
+            age:
+              components.model.formatAge(now - layerState._lastUpdate) ||
+              t('hazard.firms.age.underHour'),
+          })
+        : t('hazard.firms.status.stale');
       let loadingLabel = '';
       if (layerState._loading) {
         loadingLabel = layerState._fires.length
-          ? 'refreshing...'
-          : 'loading...';
+          ? t('hazard.firms.status.refreshing')
+          : t('hazard.firms.status.loading');
       } else if (layerState._keyRequired) {
-        loadingLabel = 'KEY REQUIRED';
+        loadingLabel = t('hazard.firms.status.keyRequired');
       } else if (layerState._stale) {
         loadingLabel = staleText;
       } else if (layerState._error) {
-        loadingLabel = layerState._error;
+        loadingLabel = errorText(layerState._error);
       } else if (layerState._lastUpdate) {
-        loadingLabel = `LIVE · updated ${components.model.formatAgoMinutes(now - layerState._lastUpdate)}`;
+        loadingLabel = t('hazard.firms.status.live', {
+          ago: components.model.formatAgoMinutes(now - layerState._lastUpdate),
+        });
       }
       return {
         count: layerState._count,
@@ -87,10 +105,10 @@ export function createQueries({
         // the operator can take.
         keyRequired: layerState._keyRequired,
         error: layerState._keyRequired
-          ? 'KEY REQUIRED'
+          ? t('hazard.firms.status.keyRequired')
           : layerState._stale
             ? staleText
-            : layerState._error,
+            : errorText(layerState._error),
         loadingLabel,
       };
     },
@@ -109,7 +127,9 @@ export function createQueries({
         latitude: strongest.lat,
         longitude: strongest.lon,
         frp: strongest.frp,
-        label: `Fire · FRP ${components.model.formatFrp(strongest.frp)} MW`,
+        label: t('hazard.firms.label', {
+          frp: components.model.formatFrp(strongest.frp),
+        }),
       };
     },
 

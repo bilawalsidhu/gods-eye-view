@@ -1,5 +1,6 @@
 import { realtimeSessionEvent } from './realtimeEvents.js';
 import { readLayerLifecycleSummary } from './layerSummary.js';
+import { t } from '../i18n/index.js';
 import {
   CALL_DEDUPE_MS,
   SUPERSEDED_RESPONSE_MEMORY,
@@ -16,7 +17,8 @@ export const PROGRESS_RESPONSE_TAG = 'progress';
 
 /**
  * Speaks one code-authored progress line out of band. The line travels as
- * input data, never inside the instruction text.
+ * input data, never inside the instruction text. Deliberately English: this
+ * is a model-facing instruction (voice protocol), not UI text.
  */
 const PROGRESS_INSTRUCTIONS =
   'Read the user message aloud exactly, as a brief status update in your normal voice. Say nothing else.';
@@ -115,7 +117,7 @@ export class RealtimeTurns {
 
   sendTextCommand(text) {
     if (!this.dc || this.dc.readyState !== 'open') {
-      throw new Error('GEV voice is not connected');
+      throw new Error(t('voice.turns.notConnected'));
     }
     const cleanText = String(text || '').trim();
     if (!cleanText) return;
@@ -277,7 +279,7 @@ export class RealtimeTurns {
           eventId: payload.event_id,
           activeResponseMessage: payload.error?.message || null,
         });
-        this.setStatus('listening', 'Ask or command');
+        this.setStatus('listening', t('voice.status.ask'));
         return;
       }
       // A conversation.item.delete for a stale viewport screenshot can land
@@ -301,7 +303,7 @@ export class RealtimeTurns {
       this.pendingResponseInstructions = null;
       this.pendingUserTextResponse = false;
       this.cancelRadioHandoff({ abortTools: true });
-      this.reportError('Realtime API', payload.error, {
+      this.reportError(t('voice.error.source.realtimeApi'), payload.error, {
         eventId: payload.event_id,
         type: payload.error?.type,
         code: payload.error?.code,
@@ -414,7 +416,7 @@ export class RealtimeTurns {
       return;
     }
 
-    this.setStatus('executing', 'Running command');
+    this.setStatus('executing', t('voice.turns.runningCommand'));
     this.pruneProcessedCalls();
     let sentOutput = false;
     let lastResult = null;
@@ -585,7 +587,7 @@ export class RealtimeTurns {
           : null;
         result = {
           ok: false,
-          error: error?.message || 'GEV command failed',
+          error: error?.message || t('voice.turns.commandFailed'),
           tool: call.name,
           ...(isRadioFeatureCall
             ? readLayerLifecycleSummary(this.dataManager, 'radio', {
@@ -678,7 +680,7 @@ export class RealtimeTurns {
         ),
       );
     }
-    this.setStatus('listening', 'Ask or command');
+    this.setStatus('listening', t('voice.status.ask'));
   }
 
   /**
@@ -986,7 +988,7 @@ export class RealtimeTurns {
       if (responseStatus === 'failed') {
         const details = payload.response?.status_details || null;
         const failErr = details?.error || null;
-        this.reportError('Realtime response failed', failErr, {
+        this.reportError(t('voice.error.source.realtimeResponse'), failErr, {
           responseId: payload.response?.id || payload.response_id || null,
           statusReason: details?.reason || null,
           type: failErr?.type || null,
@@ -997,7 +999,7 @@ export class RealtimeTurns {
         // connection is still live. Recover to listening so the user can retry
         // (mirrors the transient-blip philosophy, H8).
         if (this.dc?.readyState === 'open') {
-          this.setStatus('listening', 'Ask or command');
+          this.setStatus('listening', t('voice.status.ask'));
         }
       }
       if (!this.radio.pendingRadioPlaybackResult) {
@@ -1021,6 +1023,7 @@ export class RealtimeTurns {
       });
       return;
     }
+    // Model-facing fallback instruction: deliberately English (voice protocol).
     this.pendingResponseInstructions =
       instructions || 'Briefly respond once. Do not repeat yourself.';
     if (!this.responseActive && !this.responseCreatePending)

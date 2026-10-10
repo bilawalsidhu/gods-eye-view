@@ -1,7 +1,9 @@
 /**
  * Names for the server's decoder feeds, shared by the Local ADS-B row status
- * and the Radio card. Pure; no imports, so any surface may use it.
+ * and the Radio card. The i18n import stays portable (no browser globals), so
+ * any surface may still use it.
  */
+import { t } from '../../i18n/index.js';
 
 /**
  * Display name of one feed: its band, or its ordinal label ("978 MHz UAT #2")
@@ -12,7 +14,7 @@
  */
 export function localReceiverFeedName(feed, feeds = []) {
   const band = feed?.band;
-  if (!band) return feed?.label || 'feed';
+  if (!band) return feed?.label || t('sensors.localAdsb.feedName');
   const sharing = feeds.filter((other) => other?.band === band);
   if (sharing.length < 2) return band;
   if (typeof feed.label === 'string' && feed.label.includes('#'))

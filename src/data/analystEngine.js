@@ -25,6 +25,7 @@
  */
 
 import { feedProvenanceEnvelope } from './layerSnapshot.js';
+import { formatNumber, t } from '../i18n/index.js';
 import { pointInRing } from './naturalEarthRegions.js';
 import { VOICE_LAYER_MANIFEST, voiceLayer } from '../voice/layerManifest.js';
 
@@ -857,22 +858,24 @@ export function createAnalystEngine(providers) {
           })),
           coverage: { layersQueried, scope: 'none' },
         };
-        const names = `${layers.join(', ')} ${layers.length > 1 ? 'are' : 'is'}`;
+        // The locale pack carries the copula so word order can differ; the
+        // count picks is/are in English.
+        const names = layers.join(', ');
         if (statuses.every((status) => status === 'off'))
           return refusal(
             'LAYER_OFF',
-            `${names} off. Offer to turn it on.`,
+            t('analyst.refusal.off', { names, count: layers.length }),
             detail,
           );
         if (statuses.includes('loading'))
           return refusal(
             'NOT_READY',
-            `${names} still loading or off — no records yet.`,
+            t('analyst.refusal.notReady', { names, count: layers.length }),
             detail,
           );
         return refusal(
           'FEED_UNAVAILABLE',
-          `${names} unavailable or off right now.`,
+          t('analyst.refusal.unavailable', { names, count: layers.length }),
           detail,
         );
       }
@@ -891,7 +894,7 @@ export function createAnalystEngine(providers) {
     // Human phrasing for the same scope, so every spoken count can name what it
     // measured ("8 in view", "about 30 within 250 km of Austin") instead of
     // arriving as a bare number that contradicts the panel.
-    let scopeLabel = rememberedScope?.label || 'anywhere in the loaded data';
+    let scopeLabel = rememberedScope?.label || t('analyst.scope.anywhere');
     let scopeDetail = rememberedScope?.detail || scopeLabel;
     // A follow-up re-filters a set that was already scoped, so it only narrows
     // further when a new scope is given.
@@ -903,7 +906,7 @@ export function createAnalystEngine(providers) {
         return {
           ok: false,
           code: 'region-timeout',
-          error: `Looking up the boundary for "${scope.name}" is taking too long — ask again in a moment.`,
+          error: t('analyst.region.timeout', { name: scope.name }),
           coverage: { layersQueried, scope: `region:${scope.name}:timeout` },
         };
       }
@@ -911,13 +914,13 @@ export function createAnalystEngine(providers) {
         return {
           ok: false,
           code: 'REGION_UNRESOLVED',
-          error: `I couldn't resolve a boundary for "${scope.name}" — try a state, country, or a named natural region.`,
+          error: t('analyst.region.unresolved', { name: scope.name }),
           coverage: { layersQueried, scope: `region:${scope.name}:unresolved` },
         };
       }
       resolvedScope = region;
       scopeNote = `region:${region.name}`;
-      scopeLabel = `over ${region.name}`;
+      scopeLabel = t('analyst.scope.overRegion', { name: region.name });
       scopeDetail = scopeLabel;
     } else if (scope.kind === 'radius') {
       // An explicit center always wins. Otherwise, when Contacts is active its
@@ -948,8 +951,11 @@ export function createAnalystEngine(providers) {
         ? `radius:${resolvedScope.km}km@${resolvedScope.centeredOn}`
         : `radius:${resolvedScope.km}km`;
       scopeLabel = resolvedScope.centeredOn
-        ? `within ${resolvedScope.km} km of ${resolvedScope.centeredOn}`
-        : `within ${resolvedScope.km} km`;
+        ? t('analyst.scope.withinKmOf', {
+            km: resolvedScope.km,
+            center: resolvedScope.centeredOn,
+          })
+        : t('analyst.scope.withinKm', { km: resolvedScope.km });
       scopeDetail = scopeLabel;
     } else if (scope.kind === 'view') {
       const view = providers.getViewContext();
@@ -960,8 +966,10 @@ export function createAnalystEngine(providers) {
       scopeNote = `view:${Math.round(view.viewRadiusKm)}km`;
       // TODO: "in view" is a radius around the camera centre, not the visible
       // footprint; the display detail says so until a footprint scope lands.
-      scopeLabel = 'in view';
-      scopeDetail = `within ${Math.round(view.viewRadiusKm)} km of the view centre`;
+      scopeLabel = t('analyst.scope.inView');
+      scopeDetail = t('analyst.scope.viewDetail', {
+        km: Math.round(view.viewRadiusKm),
+      });
     }
     const inScope =
       scope.kind === 'region' && resolvedScope?.ring
@@ -1019,13 +1027,29 @@ export function createAnalystEngine(providers) {
     if (totals.truncated)
       caveats.push(
         totals.total === null
-          ? `counted the first ${totals.returned.toLocaleString('en-US')} loaded records`
-          : `counted ${totals.returned.toLocaleString('en-US')} of ${totals.total.toLocaleString('en-US')} loaded records`,
+          ? t('analyst.caveat.countedFirst', {
+              n: formatNumber(totals.returned),
+            })
+          : t('analyst.caveat.countedOf', {
+              n: formatNumber(totals.returned),
+              m: formatNumber(totals.total),
+            }),
       );
     for (const layer of layersQueried) {
-      if (layer.note) caveats.push(`${layer.layerKey}: ${layer.note}`);
+      if (layer.note)
+        caveats.push(
+          t('analyst.caveat.layerNote', {
+            layer: layer.layerKey,
+            note: layer.note,
+          }),
+        );
       else if (!ANSWERABLE.has(layer.status))
-        caveats.push(`${layer.layerKey} ${layer.status}`);
+        caveats.push(
+          t('analyst.caveat.layerStatus', {
+            layer: layer.layerKey,
+            status: layer.status,
+          }),
+        );
     }
     const distanceScoped =
       spec.sortBy === 'distance' ||

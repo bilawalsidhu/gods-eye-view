@@ -1,9 +1,6 @@
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
-import {
-  AIS_FIRST_CONNECT_GRACE_MS,
-  AIS_FIRST_CONNECT_LABEL,
-  AIS_HEALTHY_STATUSES,
-} from './policy.js';
+import { AIS_FIRST_CONNECT_GRACE_MS, AIS_HEALTHY_STATUSES } from './policy.js';
+import { t } from '../../i18n/index.js';
 
 export function createLifecycle({
   vesselState,
@@ -41,7 +38,10 @@ export function createLifecycle({
     state.feed.firstConnectStartedAt = startedAt;
     state.feed.firstConnectDeadline = startedAt + AIS_FIRST_CONNECT_GRACE_MS;
     state.feed.error = null;
-    state.feed.loadingLabel = AIS_FIRST_CONNECT_LABEL;
+    // The constant stays English in the portable recordPolicy boundary; this
+    // composition edge translates it. getStats() re-translates while the
+    // first-connect phase is active, so a mid-load locale switch repaints too.
+    state.feed.loadingLabel = t('fleet.vessels.chip.firstConnect');
     scheduleFirstConnectExpiry(sessionId, AIS_FIRST_CONNECT_GRACE_MS);
   }
 

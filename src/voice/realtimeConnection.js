@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+
 const DISCONNECT_GRACE_MS = 6000;
 
 function releaseStartResources({ localStream = null, localPc = null } = {}) {
@@ -59,7 +61,7 @@ export class RealtimeConnection {
     this.input.pushToTalkKeyHeld = pushToTalkKeyHeld;
     this.input.spaceKeyHeld = spaceKeyHeld;
     if (!window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) {
-      this.setStatus('error', 'WebRTC microphone support unavailable');
+      this.setStatus('error', t('voice.connection.micUnsupported'));
       return;
     }
 
@@ -78,7 +80,7 @@ export class RealtimeConnection {
     // — this is what "applies next session" means.
     this.cost.prepareSession();
     this.syncCostUi();
-    this.setStatus('connecting', 'Requesting microphone');
+    this.setStatus('connecting', t('voice.connection.requestingMic'));
     this.debugLog('session.starting', {
       epoch,
       tier: this.cost.voiceTier,
@@ -154,12 +156,16 @@ export class RealtimeConnection {
       };
       this.pc.oniceconnectionstatechange = () => {
         if (ownsConnection() && this.pc?.iceConnectionState === 'failed') {
-          this.fatalError('ICE connection', null, this.connectionDiagnostics());
+          this.fatalError(
+            t('voice.error.source.iceConnection'),
+            null,
+            this.connectionDiagnostics(),
+          );
         }
       };
       this.pc.onicecandidateerror = (event) => {
         if (!ownsConnection()) return;
-        this.reportError('ICE candidate', event, {
+        this.reportError(t('voice.error.source.iceCandidate'), event, {
           errorCode: event.errorCode,
           errorText: event.errorText,
           address: event.address,
@@ -179,9 +185,9 @@ export class RealtimeConnection {
         if (!ownsChannel()) return;
         const detail = this.input.pushToTalkMode
           ? this.input.pushToTalkKeyHeld
-            ? 'Release Space to send'
-            : 'Hold Space to talk'
-          : 'Ask or command';
+            ? t('voice.hint.release')
+            : t('voice.hint.holdTalk')
+          : t('voice.status.ask');
         this.setStatus('listening', detail);
         this.debugLog('data_channel.open', {
           connection: this.connectionDiagnostics(dataChannel),
@@ -196,7 +202,7 @@ export class RealtimeConnection {
         // channel error tears the session down so the mic doesn't stay live (H8).
         if (this._tearingDown || !ownsChannel()) return;
         this.fatalError(
-          'Realtime data channel',
+          t('voice.error.source.dataChannel'),
           event,
           this.connectionDiagnostics(dataChannel),
         );
@@ -209,7 +215,7 @@ export class RealtimeConnection {
           this.status !== 'error'
         ) {
           this.fatalError(
-            'Realtime data channel closed',
+            t('voice.error.source.dataChannelClosed'),
             null,
             this.connectionDiagnostics(dataChannel),
           );
@@ -248,7 +254,11 @@ export class RealtimeConnection {
       }
       const diagnostics = this.connectionDiagnostics();
       this.stop({ preserveStatus: true });
-      this.reportError('Realtime connection', error, diagnostics);
+      this.reportError(
+        t('voice.error.source.realtimeConnection'),
+        error,
+        diagnostics,
+      );
     }
   }
 
@@ -283,7 +293,11 @@ export class RealtimeConnection {
   handleConnectionStateChange() {
     const state = this.pc?.connectionState;
     if (state === 'failed') {
-      this.fatalError('WebRTC connection', null, this.connectionDiagnostics());
+      this.fatalError(
+        t('voice.error.source.webrtc'),
+        null,
+        this.connectionDiagnostics(),
+      );
       return;
     }
     if (state === 'disconnected') {
@@ -297,7 +311,7 @@ export class RealtimeConnection {
         // Still not recovered after the grace window → treat as a real drop.
         if (this.pc?.connectionState === 'disconnected') {
           this.fatalError(
-            'WebRTC connection lost',
+            t('voice.error.source.webrtcLost'),
             null,
             this.connectionDiagnostics(),
           );

@@ -5,6 +5,7 @@ import {
   DIRECTION_CONE_HALF_ANGLE_DEG,
   MARKER_SCALE_BY_DISTANCE,
 } from './policy.js';
+import { t } from '../../i18n/index.js';
 
 /**
  * Badge scale at a camera distance, matching Cesium's NearFarScalar for the
@@ -38,19 +39,27 @@ export const BRACKETS_IMAGE = new URL(
 
 /** Compact display label; selection identity always uses the full record id. */
 export function alprDisplayId(record) {
-  if (!Number.isSafeInteger(record.osmId)) return 'ALPR CAMERA';
+  if (!Number.isSafeInteger(record.osmId))
+    return t('sensors.alpr.displayFallback');
+  // The ALPR-<osm tail> form is selection identity shorthand; it stays tokens.
   return `ALPR-${String(record.osmId).slice(-4).padStart(4, '0')}`;
 }
 
 /** Show only supplied metadata, with the actual source named for custom adapters. */
 export function alprLabelDetails(record, source) {
   const sourceName =
-    source.attribution?.name || source.label || 'Camera source';
+    source.attribution?.name ||
+    source.label ||
+    t('sensors.alpr.sourceFallback');
   const details = [
-    sourceName === 'OpenStreetMap' ? 'OSM MAPPED' : `Source: ${sourceName}`,
+    sourceName === 'OpenStreetMap'
+      ? t('sensors.alpr.osmMapped')
+      : t('sensors.alpr.sourceNamed', { name: sourceName }),
   ];
   if (Number.isFinite(record.directionDeg))
-    details.push(`DIRECTION ${Math.round(record.directionDeg)}°`);
+    details.push(
+      t('sensors.alpr.direction', { deg: Math.round(record.directionDeg) }),
+    );
   const equipment = [
     ...new Set(
       [record.manufacturer, record.operator, record.cameraType]
@@ -63,7 +72,8 @@ export function alprLabelDetails(record, source) {
     ),
   ];
   if (equipment.length) details.push(equipment.join(' · '));
-  if (sourceName === 'OpenStreetMap') details.push('PUBLIC MAP DATA');
+  if (sourceName === 'OpenStreetMap')
+    details.push(t('sensors.alpr.publicMapData'));
   return details;
 }
 

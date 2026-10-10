@@ -138,6 +138,55 @@ export const RADIO_CLUSTER_LABELS = Object.freeze({
   other: 'OTHER',
 });
 
+/**
+ * Category → `airwaves.radio.cluster.*` i18n key, resolved with t() at the
+ * badge edge (radio/model.js). RADIO_CLUSTER_LABELS stays byte-identical so
+ * the English pack and any protocol reader keep the shipped badges.
+ */
+export const RADIO_CLUSTER_LABEL_KEYS = Object.freeze({
+  news: 'airwaves.radio.cluster.news',
+  talk: 'airwaves.radio.cluster.talk',
+  weather: 'airwaves.radio.cluster.weather',
+  'public-safety': 'airwaves.radio.cluster.publicSafety',
+  'aviation-marine': 'airwaves.radio.cluster.aviationMarine',
+  'traffic-transit': 'airwaves.radio.cluster.trafficTransit',
+  music: 'airwaves.radio.cluster.music',
+  other: 'airwaves.radio.cluster.other',
+});
+
+/**
+ * Genre tag → `airwaves.radio.genre.*` i18n key, resolved with t() at the
+ * categories edge. MUSIC_GENRES keeps its English labels (source tests pin
+ * them); localization rides on this parallel map.
+ */
+export const MUSIC_GENRE_LABEL_KEYS = Object.freeze({
+  alternative: 'airwaves.radio.genre.alternative',
+  ambient: 'airwaves.radio.genre.ambient',
+  blues: 'airwaves.radio.genre.blues',
+  classical: 'airwaves.radio.genre.classical',
+  country: 'airwaves.radio.genre.country',
+  dance: 'airwaves.radio.genre.dance',
+  electronic: 'airwaves.radio.genre.electronic',
+  folk: 'airwaves.radio.genre.folk',
+  funk: 'airwaves.radio.genre.funk',
+  'hip hop': 'airwaves.radio.genre.hipHop',
+  house: 'airwaves.radio.genre.house',
+  indie: 'airwaves.radio.genre.indie',
+  jazz: 'airwaves.radio.genre.jazz',
+  latin: 'airwaves.radio.genre.latin',
+  metal: 'airwaves.radio.genre.metal',
+  oldies: 'airwaves.radio.genre.oldies',
+  pop: 'airwaves.radio.genre.pop',
+  punk: 'airwaves.radio.genre.punk',
+  'r&b': 'airwaves.radio.genre.rb',
+  reggae: 'airwaves.radio.genre.reggae',
+  rock: 'airwaves.radio.genre.rock',
+  soul: 'airwaves.radio.genre.soul',
+  techno: 'airwaves.radio.genre.techno',
+  trance: 'airwaves.radio.genre.trance',
+  world: 'airwaves.radio.genre.world',
+});
+
 export const RADIO_MARKER_CATEGORY_ORDER = Object.freeze([
   'news',
   'public-safety',

@@ -1,6 +1,8 @@
 import * as Cesium from 'cesium';
 import { createWindRendering } from './rendering.js';
+import { NO_IMAGERY_HOST } from '../weather/imageryHost.js';
 import { WIND_FIELDS } from './fields.js';
+import { subscribeLocale, t } from '../../i18n/index.js';
 import {
   formatWindReading,
   windReadingResult,
@@ -20,14 +22,37 @@ export function formatWindValidTime(value) {
     : null;
 }
 
-/** Forecast issue time is source age; valid time is reported separately. */
+// Own failure messages are stored as closed tokens and translated at paint;
+// unknown provider strings stay verbatim.
+const WIND_ERROR_KEYS = Object.freeze({
+  source: 'atmos.wind.error.source',
+});
+// Stable rendering-module messages, named at this presentation edge.
+const KNOWN_WIND_IMAGERY_ERRORS = new Map([
+  ['Globe imagery unavailable', 'atmos.wind.error.globeImagery'],
+  ['Globe field image unavailable', 'atmos.wind.error.globeFieldImage'],
+  ['temperature field unavailable', 'atmos.wind.error.temperatureField'],
+  ['pressure field unavailable', 'atmos.wind.error.pressureField'],
+]);
+const errorText = (value) => {
+  if (!value) return null;
+  const key =
+    WIND_ERROR_KEYS[value] ||
+    KNOWN_WIND_IMAGERY_ERRORS.get(value) ||
+    (value === NO_IMAGERY_HOST ? 'atmos.weather.error.hostHidden' : null);
+  return key ? t(key) : value;
+};
+const modelLabel = (model) => (model === 'ifs' ? 'ECMWF IFS' : 'GFS');
+
+/** Layer stats over a manifest; messages resolve through the translator. */
 export function windStats(manifest) {
   const run = Date.parse(manifest?.cycle?.runIso);
   return {
     count: manifest?.grid ? manifest.grid.nx * manifest.grid.ny : 0,
     lastUpdate: Number.isFinite(run) ? run : null,
     error:
-      manifest?.reason || (manifest?.unavailable ? 'Wind unavailable' : null),
+      manifest?.reason ||
+      (manifest?.unavailable ? t('atmos.wind.error.unavailable') : null),
   };
 }
 
@@ -68,12 +93,15 @@ export function createWindLayer({
       overlay,
       model: model === 'ifs' ? 'ECMWF' : 'GFS',
       validTime:
-        formatWindValidTime(manifest?.cycle?.validIso) || 'Unavailable',
+        formatWindValidTime(manifest?.cycle?.validIso) ||
+        t('common.unavailable'),
       status: loading
-        ? 'Loading forecast'
-        : error ||
+        ? t('atmos.wind.status.loading')
+        : errorText(error) ||
           manifest?.reason ||
-          (manifest?.stale ? 'Cached forecast · stale' : 'Model forecast'),
+          (manifest?.stale
+            ? t('atmos.wind.status.stale')
+            : t('atmos.wind.status.model')),
     });
     sampledPosition = reading.position || position || null;
     inspectionMarker?.show(sampledPosition);
@@ -84,6 +112,12 @@ export function createWindLayer({
   let rowControlsListener = null;
   const notify = () => rowControlsListener?.();
   const unsubscribeClock = clock?.subscribe(notify);
+  // The captured reading and row summaries persist between ticks; re-sample
+  // and repaint them on a locale switch.
+  const unsubscribeLocale = subscribeLocale(() => {
+    if (sampledPosition) sample(sampledPosition);
+    notify();
+  });
   const layer = {
     id: 'wind',
     name: 'Wind',
@@ -172,7 +206,7 @@ export function createWindLayer({
         return true;
       } catch (cause) {
         if (controller.signal.aborted || request !== controller) return false;
-        error = cause?.message || 'Wind source unavailable';
+        error = cause?.message || 'source';
         return true;
       } finally {
         signal?.removeEventListener('abort', abort);
@@ -242,7 +276,7 @@ export function createWindLayer({
     getRowControls() {
       const historyStatus =
         clock?.getState().mode === 'history'
-          ? 'Forecast · does not follow history'
+          ? t('atmos.wind.status.history')
           : null;
       const valid = formatWindValidTime(manifest?.cycle?.validIso);
       const run = formatWindValidTime(manifest?.cycle?.runIso);
@@ -261,10 +295,10 @@ export function createWindLayer({
       const imageryError =
         enabled && !loading ? diagnostic?.imageryError : null;
       const label = {
-        none: 'Wind motion',
-        speed: 'Wind speed',
-        pressure: 'Sea-level pressure',
-        temperature: 'Air temperature · 2 m',
+        none: t('atmos.wind.overlay.none'),
+        speed: t('atmos.wind.overlay.speed'),
+        pressure: t('atmos.wind.overlay.pressure'),
+        temperature: t('atmos.wind.overlay.temperature'),
       }[overlay];
       const kind = ['temperature', 'pressure'].includes(overlay)
         ? overlay
@@ -290,19 +324,22 @@ export function createWindLayer({
         readout: true,
         summary: {
           label,
-          coverage: 'Global · 1° grid',
+          coverage: t('atmos.wind.coverage'),
           validTime: manifest?.cycle?.validIso,
           issuedTime: manifest?.cycle?.runIso,
-          detail: `${model === 'ifs' ? 'ECMWF IFS' : 'GFS'} forecast · ${valid || 'Unavailable'}`,
+          detail: t('atmos.wind.detail', {
+            model: modelLabel(model),
+            time: valid || t('common.unavailable'),
+          }),
           status: loading
-            ? 'Loading forecast'
+            ? t('atmos.wind.status.loading')
             : preparing
-              ? 'Preparing flow'
-              : error ||
+              ? t('atmos.wind.status.preparing')
+              : errorText(error) ||
                 manifest?.reason ||
-                imageryError ||
-                (scalarMissing ? 'Selected field unavailable' : null) ||
-                (manifest?.stale ? 'Cached forecast · stale' : null),
+                errorText(imageryError) ||
+                (scalarMissing ? t('atmos.wind.status.scalarMissing') : null) ||
+                (manifest?.stale ? t('atmos.wind.status.stale') : null),
           units: legendUnit,
         },
         chips: [
@@ -313,37 +350,36 @@ export function createWindLayer({
             params: { model: value },
             title:
               value === 'ifs'
-                ? 'ECMWF IFS surface forecast'
-                : 'NOAA GFS surface forecast',
+                ? t('atmos.wind.chips.ecmwfTitle')
+                : t('atmos.wind.chips.gfsTitle'),
           })),
           {
             id: 'motion',
             label: diagnostic?.reducedMotion
-              ? 'Reduced motion'
+              ? t('atmos.wind.chips.reducedMotion')
               : paused
-                ? 'Resume'
-                : 'Pause',
+                ? t('atmos.wind.chips.resume')
+                : t('atmos.wind.chips.pause'),
             active: motionPaused,
             disabled: Boolean(diagnostic?.reducedMotion),
             params: { paused: !paused },
-            title:
-              'Pause visual flow; forecast time does not advance with animation',
+            title: t('atmos.wind.chips.pauseTitle'),
           },
           ...['none', 'speed', 'pressure', 'temperature'].map((value) => ({
             id: `overlay-${value}`,
             label: {
-              none: 'None',
-              speed: 'Speed',
-              pressure: 'Pressure',
-              temperature: 'Temperature',
+              none: t('atmos.wind.chips.none'),
+              speed: t('atmos.wind.chips.speed'),
+              pressure: t('atmos.wind.chips.pressure'),
+              temperature: t('atmos.wind.chips.temperature'),
             }[value],
             active: overlay === value,
             params: { overlay: value },
             title: {
-              none: 'Wind trails with no field shading',
-              speed: 'How hard the surface wind is blowing',
-              pressure: 'Sea-level air pressure: broad highs and lows',
-              temperature: 'Air temperature two meters above the surface',
+              none: t('atmos.wind.chips.noneTitle'),
+              speed: t('atmos.wind.chips.speedTitle'),
+              pressure: t('atmos.wind.chips.pressureTitle'),
+              temperature: t('atmos.wind.chips.temperatureTitle'),
             }[value],
           })),
           ...(speedLegendVisible ||
@@ -356,15 +392,14 @@ export function createWindLayer({
             label: value,
             active: units === value,
             params: { units: value },
-            title: 'Wind speed units',
+            title: t('atmos.wind.chips.unitsTitle'),
           })),
           {
             id: 'read-wind',
-            label: 'Read wind at map center',
+            label: t('atmos.wind.chips.readWind'),
             params: { inspect: true },
             disabled: loading || !manifest?.u || manifest?.unavailable,
-            title:
-              'Read the forecast at the center of the map without changing selection',
+            title: t('atmos.wind.chips.readWindTitle'),
           },
         ],
         legend:
@@ -373,9 +408,8 @@ export function createWindLayer({
           (overlay === 'none' && !speedLegendVisible)
             ? []
             : legend,
-        info: `${model === 'ifs' ? 'ECMWF IFS' : 'GFS'} forecast · ${label} (${legendUnit})${historyStatus ? `\n${historyStatus}` : ''}\nValid: ${valid || 'Unavailable'}${loading ? ' · loading' : preparing ? ' · preparing' : ''}\nIssued: ${run || 'Unavailable'}${manifest?.stale ? ' · STALE' : ''}${error ? '\n' + error : ''}${scalarMissing ? '\nSelected field unavailable · wind remains visible' : ''}${imageryError && !scalarMissing ? '\n' + imageryError + ' · wind remains visible' : ''}`,
-        infoTitle:
-          'Surface wind at 10 m. Approximately 1° global grid. Curves follow the 10 m wind field, lifted 12 km for visibility; display height is not weather altitude. View lighting is for readability. Animation shows flow through one fixed forecast; it does not advance time. Color fields drape the globe basemap or the active photorealistic 3D Tiles.',
+        info: `${t('atmos.wind.info.header', { model: modelLabel(model), field: label, units: legendUnit })}${historyStatus ? `\n${historyStatus}` : ''}\n${t('atmos.wind.info.valid', { time: valid || t('common.unavailable') })}${loading ? t('atmos.wind.info.loading') : preparing ? t('atmos.wind.info.preparing') : ''}\n${t('atmos.wind.info.issued', { time: run || t('common.unavailable') })}${manifest?.stale ? t('atmos.wind.info.stale') : ''}${error ? '\n' + errorText(error) : ''}${scalarMissing ? `\n${t('atmos.wind.info.scalarMissing')}` : ''}${imageryError && !scalarMissing ? `\n${t('atmos.wind.info.imagerySuffix', { error: errorText(imageryError) })}` : ''}`,
+        infoTitle: t('atmos.wind.infoTitle'),
       };
       controls.summary.reading = reading;
       controls.summary.result = reading ? windReadingResult(reading) : null;
@@ -385,12 +419,18 @@ export function createWindLayer({
         chips: controls.chips.filter((chip) => chip.id.startsWith(prefix)),
       });
       controls.summary.settings = [
-        setting('model', 'MODEL', 'model-'),
-        setting('field', 'FIELD', 'overlay-'),
+        setting('model', t('atmos.wind.settings.model'), 'model-'),
+        setting('field', t('atmos.wind.settings.field'), 'overlay-'),
         ...(controls.chips.some(({ id }) => id.startsWith('units-'))
-          ? [{ id: 'units', label: 'UNITS', chips: windUnitChips(units) }]
+          ? [
+              {
+                id: 'units',
+                label: t('atmos.wind.settings.units'),
+                chips: windUnitChips(units),
+              },
+            ]
           : []),
-        setting('motion', 'MOTION', 'motion'),
+        setting('motion', t('atmos.wind.settings.motion'), 'motion'),
       ];
       controls.summary.actions = controls.chips.filter(
         ({ id }) => id === 'read-wind',
@@ -404,6 +444,7 @@ export function createWindLayer({
     destroy() {
       layer.disable();
       unsubscribeClock?.();
+      unsubscribeLocale?.();
       rendering?.destroy();
       rendering = null;
       imageryHost = null;
@@ -425,7 +466,7 @@ export function createWindLayer({
           : null;
       return {
         ...windStats(manifest),
-        countLabel: 'Forecast',
+        countLabel: t('atmos.wind.countLabel'),
         loading: loading || Boolean(preparing),
         model: model.toUpperCase(),
         overlay,
@@ -433,12 +474,13 @@ export function createWindLayer({
         stale: Boolean(manifest?.stale),
         source: model === 'ifs' ? 'ECMWF IFS' : 'NOAA GFS',
         validTime:
-          formatWindValidTime(manifest?.cycle?.validIso) || 'Unavailable',
+          formatWindValidTime(manifest?.cycle?.validIso) ||
+          t('common.unavailable'),
         error:
-          error ||
+          errorText(error) ||
           windStats(manifest).error ||
           (requestedScalar() !== 'none' ? manifest?.scalarError : null) ||
-          imageryError,
+          errorText(imageryError),
       };
     },
     getDiagnostics() {

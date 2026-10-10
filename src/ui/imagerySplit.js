@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+
 const HANDLE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End']);
 
 function clampUnit(value) {
@@ -12,8 +14,12 @@ function defaultViewportWidth() {
   );
 }
 
+/** Screen-reader text for the split position; localized at compose time. */
 function defaultValueText(beforePercent, afterPercent) {
-  return `A ${beforePercent} percent, B ${afterPercent} percent`;
+  return t('display.imagerySplit.valueText', {
+    before: beforePercent,
+    after: afterPercent,
+  });
 }
 
 /**
