@@ -449,6 +449,7 @@
       "src/ui/location.js",
       "src/ui/locationControls.js",
       "src/ui/locationSearch.js",
+      "src/ui/savedLocations.js",
       "src/locationStatus.js",
       "src/app/stateChannel.js"
     ],
