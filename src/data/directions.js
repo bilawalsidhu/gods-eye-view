@@ -1,3 +1,4 @@
+import { createDirectionsSource } from '../layers/directions/source.js';
 /**
  * @module directions
  * @description Service bundle for the Directions layer.
@@ -37,8 +38,10 @@ export const directionsServices = Object.freeze({
 });
 
 /** Construct one Directions layer over the application scene owners. */
-export function createApplicationDirectionsLayer() {
-  return createDirectionsLayer({ services: directionsServices });
+export function createApplicationDirectionsLayer({
+  source = createDirectionsSource(),
+} = {}) {
+  return createDirectionsLayer({ services: directionsServices, source });
 }
 
 export {

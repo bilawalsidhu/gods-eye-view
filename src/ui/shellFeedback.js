@@ -121,15 +121,15 @@ export class ShellFeedback {
     // the flap keeps textContent equal to the settled label throughout, so
     // this stays a no-op on the repeat ticks exactly as it did before.
     if (presentation.label)
-    if (presentation.label)
-      setSplitFlapText(
-        this._trafficSyncLabel,
-        localizeStatusLabel(presentation.label),
-        {
-          // Completion is a timing signal, not another animated loading stage.
-          immediate: !presentation.busy,
-        },
-      );
+      if (presentation.label)
+        setSplitFlapText(
+          this._trafficSyncLabel,
+          localizeStatusLabel(presentation.label),
+          {
+            // Completion is a timing signal, not another animated loading stage.
+            immediate: !presentation.busy,
+          },
+        );
     // Written on every change INCLUDING the empty settled value — the reducer
     // clears the progress number once the sync lands, and a truthiness guard
     // here would strand the last "..." beside the settled label.

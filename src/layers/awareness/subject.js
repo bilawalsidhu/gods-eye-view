@@ -53,11 +53,23 @@ export function createSubject({ state: layerState, services, parts, source }) {
     const militaryState = sourceStates.military;
     const vesselsState = sourceStates['ais-live-vessels'];
     const installationsState = sourceStates['military-installations'];
+    const evaluatedAt = Date.now();
+    const retainedProvenance = (id, label, sourceState, fallbackSource) => {
+      const retainedSource = sourceState.stats.source || fallbackSource;
+      return {
+        id,
+        name: label,
+        enabled: sourceState.enabled,
+        source: retainedSource,
+        stats: { ...sourceState.stats, source: retainedSource },
+      };
+    };
     // Same engine the voice analyst calls — see collectAircraftProximityWindow.
-    const { flights, military } = parts.queries.collectAircraftProximityWindow(
+    const aircraftWindow = parts.queries.collectAircraftProximityWindow(
       position,
       { subject },
     );
+    const { flights, military, completeByLayer } = aircraftWindow;
     const vessels = aisLiveVesselsLayer
       .getNearby(position, AWARENESS_RADIUS_M, AWARENESS_QUERY_LIMIT)
       .filter(
@@ -77,31 +89,57 @@ export function createSubject({ state: layerState, services, parts, source }) {
       );
     return {
       subject,
-      evaluatedAt: Date.now(),
+      evaluatedAt,
       radiusM: AWARENESS_RADIUS_M,
       cohorts: [
         {
           id: 'flights',
           label: t('layers.awareness.cohort.flights'),
           source: flightsState.stats.source || SOURCE_LABEL.flights,
+          provenance: retainedProvenance(
+            'flights',
+            'Flights',
+            flightsState,
+            SOURCE_LABEL.flights,
+          ),
           summary: parts.navigation.summarizeAwarenessCohortForNavigation(
             flights,
             flightsState,
+            {
+              navigationLimit: AWARENESS_QUERY_LIMIT,
+              complete: completeByLayer.flights,
+            },
           ),
         },
         {
           id: 'military',
           label: t('layers.awareness.cohort.military'),
           source: militaryState.stats.source || SOURCE_LABEL.military,
+          provenance: retainedProvenance(
+            'military',
+            'Military flights',
+            militaryState,
+            SOURCE_LABEL.military,
+          ),
           summary: parts.navigation.summarizeAwarenessCohortForNavigation(
             military,
             militaryState,
+            {
+              navigationLimit: AWARENESS_QUERY_LIMIT,
+              complete: completeByLayer.military,
+            },
           ),
         },
         {
           id: 'ais-live-vessels',
           label: t('layers.awareness.cohort.vessels'),
           source: vesselsState.stats.source || SOURCE_LABEL['ais-live-vessels'],
+          provenance: retainedProvenance(
+            'ais-live-vessels',
+            'AIS vessels',
+            vesselsState,
+            SOURCE_LABEL['ais-live-vessels'],
+          ),
           summary: parts.navigation.summarizeAwarenessCohortForNavigation(
             vessels,
             vesselsState,
@@ -113,6 +151,12 @@ export function createSubject({ state: layerState, services, parts, source }) {
           source:
             installationsState.stats.source ||
             SOURCE_LABEL['military-installations'],
+          provenance: retainedProvenance(
+            'military-installations',
+            'Mapped installations',
+            installationsState,
+            SOURCE_LABEL['military-installations'],
+          ),
           coverage:
             localizeCoverageLabel(installationsState.stats.coverageLabel) ||
             t('layers.awareness.coverage.viewport'),

@@ -12,7 +12,7 @@
  * least 60 m above the rendered surface under it and under the view centre.
  *
  * Contacts: serves two synthetic aircraft through the page's own
- * /api/opensky response (one flying north over Camp Mabry at 2,500 m, one
+ * /api/flights response (one flying north over Camp Mabry at 2,500 m, one
  * near Fort Cavazos) and an empty military feed, starts from a wide Texas
  * view, and presses CONTACTS as a user would. Asserts the Mapped
  * installations row lists at least one site with a distance within 15 s,
@@ -110,7 +110,7 @@ async function openPage({ aircraft = false } = {}) {
       } catch {
         return realFetch(input, init);
       }
-      if (url.origin === location.origin && url.pathname === '/api/opensky') {
+      if (url.origin === location.origin && url.pathname === '/api/flights') {
         const now = Math.floor(Date.now() / 1000);
         const seconds = (Date.now() - started) / 1000;
         const lat = 30.29 + (seconds * 120) / 111_320;
@@ -159,7 +159,7 @@ async function openPage({ aircraft = false } = {}) {
         };
         return Promise.resolve(Response.json(json));
       }
-      if (url.origin === location.origin && url.pathname === '/api/adsblol/mil')
+      if (url.origin === location.origin && url.pathname === '/api/military')
         return Promise.resolve(
           Response.json({ ac: [], now: Date.now(), total: 0 }),
         );

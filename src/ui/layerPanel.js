@@ -76,7 +76,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Cameras',
-    ids: ['cctv', 'recent-imagery'],
+    ids: ['cctv', 'recent-imagery', 'street-level'],
   },
   {
     label: 'Infrastructure',
@@ -117,6 +117,7 @@ const PANEL_LABELS = {
   'ais-live-vessels': 'Live Vessels',
   bikeshare: 'Bike Share',
   cctv: 'Cameras',
+  'street-level': 'Street Level',
   'alpr-cameras': 'Mapped ALPR Cameras',
   'local-datacenters': 'Data Centers',
   'local-firms': 'Active Fires',
@@ -673,7 +674,12 @@ export class LayerPanel {
   }
 
   _syncToggleButton(button, layer) {
-    const feedState = layer.enabled ? layerFeedState(layer.stats) : 'off';
+    const unavailable = layer.stats?.sourceUnavailable === true;
+    const feedState = unavailable
+      ? 'unavailable'
+      : layer.enabled
+        ? layerFeedState(layer.stats)
+        : 'off';
     const transitioning =
       layer.lifecycleState === 'enabling' ||
       layer.lifecycleState === 'disabling';
@@ -686,7 +692,7 @@ export class LayerPanel {
     for (const state of Object.keys(FEED_STATE_LABELS)) {
       button.classList.toggle(
         `feed-${state}`,
-        layer.enabled && !uncertain && feedState === state,
+        (layer.enabled || unavailable) && !uncertain && feedState === state,
       );
     }
     button.dataset.feedState = transitioning
@@ -698,16 +704,21 @@ export class LayerPanel {
     // click guard above prevents repeat activation without the focus loss caused
     // by native `disabled`.
     button.disabled = false;
-    button.setAttribute('aria-disabled', String(transitioning));
+    button.setAttribute(
+      'aria-disabled',
+      String(transitioning || (unavailable && !layer.enabled)),
+    );
     button.setAttribute('aria-busy', String(transitioning));
     button.textContent = transitioning
       ? lifecycleStateLabel(layer.lifecycleState)
       : uncertain
         ? t('layers.status.uncertain')
-        : layer.enabled
+        : layer.enabled || unavailable
           ? t(FEED_STATE_LABEL_KEYS[feedState])
           : t('layers.status.off');
-    const keyGuidance = layerKeyRequirementTooltip(layer);
+    const keyGuidance = unavailable
+      ? String(layer.stats.error || t('layers.meta.dataSourceUnavailable'))
+      : layerKeyRequirementTooltip(layer);
     // Name the missing key on the control itself: a row reading KEY REQUIRED
     // without saying WHICH key leaves a dead control and no next step. Empty
     // when the layer needs no key, or already has one.

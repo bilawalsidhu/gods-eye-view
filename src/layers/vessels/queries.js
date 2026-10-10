@@ -52,7 +52,7 @@ export function createQueries({
   /**
    * Chip text for a feed the server has reported as not delivering.
    * @param {string} status - 'stale' | 'reconnecting' | 'down'
-   * @param {Object} payload - Parsed /api/ais-live JSON.
+   * @param {Object} payload - Parsed /api/vessels JSON.
    * @returns {string}
    */
 
@@ -77,12 +77,12 @@ export function createQueries({
   }
 
   /**
-   * Derive a surfaced error string from an /api/ais-live payload, or null when the
+   * Derive a surfaced error string from an /api/vessels payload, or null when the
    * feed has accepted product data. Socket transport, message receipt, and usable
    * vessel positions are separate health stages: an open socket with no message
    * or no accepted positions must not read as a fresh successful update.
    *
-   * @param {Object|null|undefined} payload - Parsed /api/ais-live JSON.
+   * @param {Object|null|undefined} payload - Parsed /api/vessels JSON.
    * @param {number} acceptedRowCount - Number of rows accepted by vessel normalization.
    * @returns {string|null} A short reason for the chip, or null if healthy.
    */
@@ -122,8 +122,8 @@ export function createQueries({
 
   /**
    * Classify one server snapshot before any destructive reconciliation.
-   * @param {Object|null|undefined} payload - Parsed /api/ais-live payload.
-   * @returns {{transportStatus: string|null, lastMessageAt: number|string|null,
+   * @param {Object|null|undefined} payload - Parsed /api/vessels payload.
+   * @returns {{emptyCoverage: boolean, transportStatus: string|null, lastMessageAt: number|string|null,
    *   rawRows: Array<Object>, acceptedRows: Array<Object>, rawRowCount: number,
    *   acceptedRowCount: number, error: string|null}}
    */
@@ -135,7 +135,16 @@ export function createQueries({
       typeof payload?.status === 'string' ? payload.status : null;
     const lastMessageAt = payload?.lastMessageAt ?? null;
     const acceptedRowCount = acceptedRows.length;
+    const emptyCoverage =
+      rawRows.length === 0 &&
+      payload?.rawRowCount === 0 &&
+      payload?.complete === true &&
+      payload?.freshness === 'current' &&
+      AIS_HEALTHY_STATUSES.has(transportStatus) &&
+      Number.isFinite(Number(lastMessageAt)) &&
+      Number(lastMessageAt) > 0;
     return {
+      emptyCoverage,
       transportStatus,
       lastMessageAt,
       rawRows,
@@ -146,9 +155,12 @@ export function createQueries({
           ? payload.rawRowCount
           : rawRows.length,
       acceptedRowCount,
-      error:
-        deriveAisFeedError(payload, acceptedRowCount) ||
-        (acceptedRowCount === 0 ? t('layers.vessel.awaitingPositions') : null),
+      error: emptyCoverage
+        ? null
+        : deriveAisFeedError(payload, acceptedRowCount) ||
+          (acceptedRowCount === 0
+            ? t('layers.vessel.awaitingPositions')
+            : null),
     };
   }
 
@@ -156,7 +168,7 @@ export function createQueries({
    * Map one internal vessel record to a plain JSON-safe analyst record
    * (analyst query engine seam). Pure — no Cesium types. Missing/unknown
    * fields are null, never NaN/undefined. navStatus is always null: the
-   * /api/ais-live proxy does not surface AIS NavigationalStatus, so it
+   * /api/vessels proxy does not surface AIS NavigationalStatus, so it
    * cannot be derived client-side.
    * @param {Object|null|undefined} record - `state.records.byMmsi`/`state.records.all` entry.
    * @returns {{id: string|null, mmsi: string|null, name: string|null,

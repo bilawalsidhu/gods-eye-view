@@ -22,10 +22,6 @@ const CITY_FILES = [
       './local_data/neighborhoods/san-francisco.json',
       import.meta.url,
     ),
-    importJson: () =>
-      import('./local_data/neighborhoods/san-francisco.json', {
-        with: { type: 'json' },
-      }),
   },
 ];
 
@@ -112,7 +108,7 @@ function cityLoader(city) {
   let loader = _cityLoaders.get(city.id);
   if (!loader) {
     loader = createRetryableLoader(async () => {
-      const fc = await loadBundledJson(city.url, city.importJson);
+      const fc = await loadBundledJson(city.url);
       return Array.isArray(fc.features) ? fc.features : [];
     });
     _cityLoaders.set(city.id, loader);

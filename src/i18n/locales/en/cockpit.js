@@ -311,7 +311,9 @@ export default {
   // NORMAL default) into {style} templates.
   'vision.styleNameNightVision': 'Night vision',
   'vision.styleNameThermal': 'Thermal',
+  'vision.styleNameAnime': 'Anime',
   'vision.styleNameNoir': 'Noir',
+  'vision.styleNameSnow': 'Snow',
   'vision.currentAriaTemplate':
     'Current cockpit vision style: {style}. Activate for next style.',
   'vision.currentTitleTemplate': 'Current style: {style} — click for next',

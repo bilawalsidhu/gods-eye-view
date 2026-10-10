@@ -31,6 +31,7 @@ import {
   readStoredVoiceLimits,
   writeStoredVoiceTier,
   writeStoredVoiceLimits,
+  withToolCatalog,
 } from './gevRealtime.js';
 import { createVoiceCostTracker } from './voiceCost.js';
 
@@ -3194,6 +3195,54 @@ test('F1: the toggle still records the next-session preference while live', () =
   assert.match(ui.tierButton.title, /this session stays on/i);
 });
 
+test('OAuth cloud sessions report unknown cost and usage without tripping the API spend guard', () => {
+  const { controller, ui } = costControllerHarness();
+  controller.status = 'listening';
+  controller._cost.cloudVoiceAuth = 'oauth';
+  controller._cost.sessionCloudVoiceAuth = 'oauth';
+  controller.syncCostUi();
+  const before = controller.costTracker.state();
+  assert.equal(ui.costValue.hidden, false);
+  assert.equal(ui.costValue.textContent, 'COST UNKNOWN');
+  assert.deepEqual(controller.recordUsage(usdUsage(100)), {
+    responses: 1,
+    input: 0,
+    output: 1562500,
+    captions: 0,
+    costKnown: false,
+  });
+  const after = controller.costTracker.state();
+  assert.equal(after.totalUsd, before.totalUsd);
+  assert.equal(controller.costCapStopped, false);
+  assert.match(ui.costValue.title, /1 response\(s\).*1562500 output tokens/);
+  controller.dc = {};
+  controller.responseActive = true;
+  controller.stop();
+  assert.match(ui.costValue.title, /Usage is incomplete/);
+});
+
+test('OAuth cloud sessions count caption transcriptions without pricing them into the API cap', () => {
+  const { controller, ui } = costControllerHarness();
+  controller.status = 'listening';
+  controller._cost.cloudVoiceAuth = 'oauth';
+  controller._cost.sessionCloudVoiceAuth = 'oauth';
+  controller._cost.bindTranscriptionModel('gpt-4o-mini-transcribe');
+  const before = controller.costTracker.state();
+  // Priced, this much caption audio would cross the $5 cap.
+  const result = controller.recordTranscriptionUsage({
+    type: 'duration',
+    seconds: 3_600_000,
+  });
+  assert.equal(result.captions, 1);
+  assert.equal(result.costKnown, false);
+  const after = controller.costTracker.state();
+  assert.equal(after.totalUsd, before.totalUsd);
+  assert.equal(after.capReached, false);
+  assert.equal(controller.costCapStopped, false);
+  assert.equal(ui.costValue.textContent, 'COST UNKNOWN');
+  assert.match(ui.costValue.title, /1 caption transcription\(s\)/);
+});
+
 test('F1: when idle, toggling does re-price the preview meter', () => {
   const { controller } = costControllerHarness();
   controller.status = 'idle';
@@ -3678,6 +3727,104 @@ test('a genuinely different refused call still gets its own output', async () =>
   assert.deepEqual(outputs, ['call_one', 'call_two'], 'each distinct call is answered');
 });
 
+test('a claimed Space hold barges in on the assistant; a short tap never does', (t) => {
+  const f = createPushToTalkFixture(t);
+  const canvas = pushToTalkTarget({ tagName: 'CANVAS', id: 'world-overlay-canvas', tabIndex: 0 });
+  let bargeIns = 0;
+  f.controller._turns.bargeIn = () => {
+    bargeIns += 1;
+    return true;
+  };
+  // First hold starts the push-to-talk session; nothing to interrupt yet.
+  f.key('keydown', canvas);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  f.key('keyup', canvas);
+  assert.equal(bargeIns, 0);
+  // A short tap during the reply stays a tap.
+  f.key('keydown', canvas);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS - 1);
+  f.key('keyup', canvas);
+  assert.equal(bargeIns, 0);
+  // Only the 500 ms claim interrupts, and the microphone opens as before.
+  f.key('keydown', canvas);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.equal(bargeIns, 1);
+  assert.equal(f.microphone.enabled, true);
+  f.key('keyup', canvas);
+  // Radio's claim is read before Radio is paused, and a held handoff is
+  // never interrupted.
+  const order = [];
+  const input = f.controller._input;
+  input.mayClaimSpeaker = () => {
+    order.push('claim');
+    return false;
+  };
+  const pause = input.pauseRadioForVoice;
+  input.pauseRadioForVoice = (...args) => {
+    order.push('pause');
+    return pause(...args);
+  };
+  f.key('keydown', canvas);
+  f.advance(PUSH_TO_TALK_HOLD_DELAY_MS);
+  assert.deepEqual(order.slice(0, 2), ['claim', 'pause']);
+  assert.equal(bargeIns, 1, 'no barge-in while Radio holds the speaker');
+  f.key('keyup', canvas);
+});
+
 const testPlaceSearch = () => createStandalonePlaceSearch({ resolveApiKey: () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ });
 function createGevActionRunner(options) { return createActionRunner({ placeSearch: testPlaceSearch(), ...options }); }
 function controlRadio(viewer, manager, args, options) { return runControlRadio(viewer, manager, args, { placeSearch: testPlaceSearch(), ...options }); }
+
+test('voice runs app actions itself and other tools through the catalog', async () => {
+  const actions = [];
+  const runner = async (name, args) => {
+    actions.push([name, args]);
+    return { ok: true, action: name };
+  };
+  const resets = [];
+  const disposals = [];
+  runner.resetConversation = (...args) => {
+    resets.push(args);
+    return 'reset';
+  };
+  runner.dispose = (...args) => {
+    disposals.push(args);
+    return 'disposed';
+  };
+  const calls = [];
+  let loads = 0;
+  const catalog = {
+    get: (name) => (name === 'get_wind' ? { name } : undefined),
+    async call(name, args, options) {
+      calls.push([name, args, options.signal]);
+      return { summary: 'Calm.', data: { calm: true } };
+    },
+  };
+  const run = withToolCatalog(runner, async () => {
+    loads += 1;
+    return catalog;
+  });
+  const signal = new AbortController().signal;
+  assert.deepEqual(await run('zoom_to_globe', {}), {
+    ok: true,
+    action: 'zoom_to_globe',
+  });
+  assert.equal(loads, 0);
+  assert.deepEqual(
+    await run('get_wind', { location: { place: 'Oslo' } }, { signal }),
+    { ok: true, tool: 'get_wind', summary: 'Calm.', data: { calm: true } },
+  );
+  assert.deepEqual(calls, [
+    ['get_wind', { location: { place: 'Oslo' } }, signal],
+  ]);
+  await run('not_a_tool', {});
+  assert.deepEqual(
+    actions.map(([name]) => name),
+    ['zoom_to_globe', 'not_a_tool'],
+  );
+  assert.equal(run.resetConversation('stopped'), 'reset');
+  assert.equal(run.dispose('removed'), 'disposed');
+  assert.deepEqual(resets, [['stopped']]);
+  assert.deepEqual(disposals, [['removed']]);
+  assert.equal(withToolCatalog(runner, undefined), runner);
+});

@@ -1,5 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {
+  initialVoiceCardState,
+  reduceVoiceCard,
+  voiceCardView,
+} from './voiceCardPresentation.js';
 import { createVoiceSession } from './session.js';
 import { realtimeSessionEvent } from './realtimeEvents.js';
 import { createVoiceCommands } from './sessionCommands.js';
@@ -345,4 +350,86 @@ test('late actions cannot run after stop and failed startup closes the adapter',
   assert.equal(session.state, 'error');
   assert.equal(stopped, 1);
   session.destroy();
+});
+
+test('action events carry the call id; progress after cancellation is dropped', async () => {
+  let report;
+  const f = fixture(async (name, args, options) => {
+    options.progress({ step: 'resolve', label: 'Zilker' });
+    report = options.progress;
+    return { ok: true };
+  });
+  const events = [];
+  f.session.subscribe((event) => events.push(event));
+  await f.session.start();
+  await f.hooks.runAction('annotate_map', {}, { callId: 'call_7' });
+  const actionEvents = events.filter(
+    (e) => e.type.startsWith('action-') || e.type === 'progress',
+  );
+  assert.deepEqual(
+    actionEvents.map((e) => [e.type, e.callId]),
+    [
+      ['action-call', 'call_7'],
+      ['progress', 'call_7'],
+      ['action-result', 'call_7'],
+    ],
+  );
+  f.hooks.emit({ type: 'interruption' });
+  report({ step: 'outline' });
+  assert.equal(events.filter((e) => e.type === 'progress').length, 1);
+});
+
+test('a rejected current action settles its card and preserves the rejection', async () => {
+  const failure = new Error('Unknown panel');
+  const f = fixture(async () => {
+    throw failure;
+  });
+  let card = initialVoiceCardState();
+  const events = [];
+  f.session.subscribe((event) => {
+    events.push(event);
+    card = reduceVoiceCard(card, event);
+  });
+  await f.session.start();
+  await assert.rejects(
+    f.hooks.runAction(
+      'set_panel_open',
+      { panelId: 'missing' },
+      { callId: 'failed-call' },
+    ),
+    (error) => error === failure,
+  );
+  f.hooks.emit({ type: 'completion', status: 'completed' });
+  assert.equal(voiceCardView(card).busy, false);
+  assert.equal(card.steps[0].status, 'failed');
+  const result = events.find((event) => event.type === 'action-result');
+  assert.equal(result.callId, 'failed-call');
+  assert.equal(result.result.ok, false);
+  f.session.destroy();
+});
+
+test('a late rejection cannot settle a newer turn card', async () => {
+  let reject;
+  const f = fixture(
+    () =>
+      new Promise((_, fail) => {
+        reject = fail;
+      }),
+  );
+  const events = [];
+  f.session.subscribe((event) => events.push(event));
+  await f.session.start();
+  const pending = f.hooks.runAction(
+    'set_panel_open',
+    {},
+    { callId: 'old-call' },
+  );
+  f.hooks.emit({ type: 'interruption', reason: 'user-speech' });
+  reject(new Error('late failure'));
+  await assert.rejects(pending, /late failure/);
+  assert.equal(
+    events.some((event) => event.type === 'action-result'),
+    false,
+  );
+  f.session.destroy();
 });

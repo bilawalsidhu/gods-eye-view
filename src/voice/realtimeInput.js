@@ -80,6 +80,9 @@ export class RealtimeInput {
       // never surprise the user by muting a click-started conversation.
       if (this.isActive() && !this.pushToTalkMode) return;
       this.cancelPushToTalkHold();
+      // Point-and-ask: the user decided to ask at keydown, so that is where
+      // the pointer is read. A short tap releases it below.
+      this.holdPointer?.();
       const holdGeneration = ++this.pushToTalkHoldGeneration;
       this.pushToTalkHoldTimer = setTimeout(() => {
         this.pushToTalkHoldTimer = null;
@@ -103,9 +106,16 @@ export class RealtimeInput {
         ) {
           this.pushToTalkHoldControl.blur();
         }
+        // Read Radio's claim before pausing it: pausing can change the very
+        // handoff state that decides whether voice may interrupt.
+        const mayInterrupt = this.mayClaimSpeaker?.() ?? true;
         this.pauseRadioForVoice();
         this.pushToTalkKeyHeld = true;
         if (this.isActive()) {
+          // A claimed hold is an explicit request to speak: cut the assistant
+          // off if it is talking. Short taps never reach this point.
+          if (mayInterrupt) this.bargeIn?.();
+          this.beginPointerTurn?.('keydown');
           this.ui.root.dataset.pushToTalk = 'held';
           this.setMicrophoneEnabled(true);
           if (this.status === 'listening')
@@ -128,6 +138,7 @@ export class RealtimeInput {
       this.spaceKeyHeld = false;
       this.cancelPushToTalkHold();
       if (!this.pushToTalkKeyHeld) {
+        if (wasHoldingSpace) this.releasePointerHold?.();
         if (wasHoldingSpace && !preservedNativeActivation)
           event.preventDefault();
         this.resetPushToTalkGesture();
@@ -179,6 +190,8 @@ export class RealtimeInput {
    */
   releasePushToTalkKey() {
     this.cancelPushToTalkHold();
+    // The pointer snapshot belongs to this gesture; release or blur ends it.
+    this.releasePointerHold?.();
     if (!this.pushToTalkKeyHeld) return;
     this.pushToTalkKeyHeld = false;
     delete this.ui.root.dataset.pushToTalk;

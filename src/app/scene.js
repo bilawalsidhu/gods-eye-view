@@ -20,6 +20,7 @@ import { t } from '../i18n/index.js';
 export async function createApplicationScene({
   requestServices,
   googleApiKey,
+  googleTokens = null,
   cesiumToken,
   credits,
   MapController = MapStackController,
@@ -60,11 +61,12 @@ export async function createApplicationScene({
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
   loaderStatus.textContent =
-    googleApiKey || cesiumToken
+    googleApiKey || googleTokens || cesiumToken
       ? t('shell.loading.status.tilesGoogle')
       : t('shell.loading.status.tilesKeyless');
   const photoreal = await loadPhotorealisticTileset(Cesium, {
     googleApiKey,
+    googleTokens,
     cesiumToken,
   });
   const tileset = photoreal.tileset;

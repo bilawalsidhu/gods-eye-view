@@ -142,6 +142,7 @@ export default {
   'meta.minutesAgo': '{count}m ago',
   'meta.hoursAgo': '{count}h ago',
   'meta.never': 'never',
+  'meta.dataSourceUnavailable': 'Data source unavailable',
   'meta.loading': 'loading...',
   'meta.uncertainLifecycle':
     'UNCERTAIN · {source} · lifecycle state requires reconciliation',

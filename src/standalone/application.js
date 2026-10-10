@@ -8,6 +8,7 @@ import { createStandaloneData } from './data.js';
 import { createStandaloneTools } from './tools.js';
 import { resolveLocale, applyDocumentLanguage } from '../i18n/locale.js';
 import { applyDocumentTranslations, setLocale } from '../i18n/index.js';
+import { createGoogleTokenSource } from '../maps/googleTokens.js';
 
 // The existing controls and layer catalog contain page-scoped state.
 let constructed = false;
@@ -18,6 +19,8 @@ export function createStandaloneApplication({
   cesiumToken,
   geospatial = {},
   voice = {},
+  sources = {},
+  streetLevelProviders,
   allowQaRegistration = false,
 }) {
   if (constructed)
@@ -49,10 +52,15 @@ export function createStandaloneApplication({
       const scene = await createStandaloneScene({
         ...context,
         googleApiKey,
+        // Without a key, Google 3D can still load with tokens from the
+        // app's server when it offers them.
+        googleTokens: googleApiKey ? null : createGoogleTokenSource(),
         cesiumToken,
         loaderStatus,
       });
       catalog = createStandaloneCatalog({
+        sources,
+        streetLevelProviders,
         nepalBoundaryResolver: (signal) =>
           scene.operations.annotationResolver.resolveRegionRingForQuery(
             'Nepal',

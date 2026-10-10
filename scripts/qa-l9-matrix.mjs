@@ -738,9 +738,9 @@ check({
 });
 
 check({
-  id: 'B2', group: 'B', desc: 'Flights proxy returns live contacts (/api/opensky)',
+  id: 'B2', group: 'B', desc: 'Flights proxy returns live contacts (/api/flights)',
   run: async () => {
-    const r = await jget('/api/opensky?lamin=24&lomin=-125&lamax=50&lomax=-66', { timeoutMs: 45000 });
+    const r = await jget('/api/flights?lamin=24&lomin=-125&lamax=50&lomax=-66', { timeoutMs: 45000 });
     if (!r.ok) return fail(`HTTP ${r.status}: ${r.text.slice(0, 120)}`);
     const n = r.json?.states?.length || 0;
     return n > 0 ? pass(`${n} states, cache=${r.headers.get('x-opensky-cache') || 'n/a'}`) : fail('0 states returned');
@@ -750,7 +750,7 @@ check({
 check({
   id: 'B3', group: 'B', desc: 'OpenSky credentials are actually in use (not the anonymous/fallback path)',
   run: async () => {
-    const r = await jget('/api/opensky?lamin=24&lomin=-125&lamax=50&lomax=-66', { timeoutMs: 45000 });
+    const r = await jget('/api/flights?lamin=24&lomin=-125&lamax=50&lomax=-66', { timeoutMs: 45000 });
     // Header names are exact: X-OpenSky-Auth-Mode-Used / X-OpenSky-Auth-Reason.
     // (An earlier guess at these names made this check pass vacuously.)
     const reason = r.headers.get('X-OpenSky-Auth-Reason') || '';
@@ -826,9 +826,9 @@ check({
 });
 
 check({
-  id: 'B8', group: 'B', desc: 'AIS vessel feed is live (/api/ais-live)', needsKey: 'AIS',
+  id: 'B8', group: 'B', desc: 'AIS vessel feed is live (/api/vessels)', needsKey: 'AIS',
   run: async () => {
-    const r = await jget('/api/ais-live', { timeoutMs: 40000 });
+    const r = await jget('/api/vessels', { timeoutMs: 40000 });
     const rows = r.json?.rows?.length || 0;
     const status = r.json?.status;
     if (!r.ok) return fail(`HTTP ${r.status} status=${status}`);
@@ -864,7 +864,7 @@ check({
     const guard = keyGuard('AIS', env.keys.AIS);
     if (guard) return guard;
     if (env.keys.AIS === true) return skip('server HAS an AISStream key', 'N/A');
-    const r = await jget('/api/ais-live');
+    const r = await jget('/api/vessels');
     return r.status === 503 && r.json?.status === 'missing-key' && Array.isArray(r.json?.rows)
       ? pass(`503 status=missing-key, rows=[] — "${String(r.json?.error).slice(0, 60)}"`)
       : fail(`expected 503/missing-key, got ${r.status} ${r.text.slice(0, 120)}`);
@@ -1022,7 +1022,7 @@ check({
 check({
   id: 'B21', group: 'B', desc: 'No proxy echoes credential material back to the client (P1-5 acceptance #4)',
   run: async () => {
-    const paths = ['/api/cctv/sources', '/api/tomtom/status', '/api/firms/status', '/api/celestrak/stations', '/api/ais-live'];
+    const paths = ['/api/cctv/sources', '/api/tomtom/status', '/api/firms/status', '/api/celestrak/stations', '/api/vessels'];
     const leaked = [];
     const unscannable = [];
     for (const p of paths) {
@@ -1036,7 +1036,7 @@ check({
       // An error page is not a payload. Scanning five 500s and finding no key
       // is trivially true and proves nothing — a broken app must not satisfy a
       // negative assertion. The one documented exception is the keyless
-      // 503 {status:'missing-key'} from /api/ais-live, which IS its real shape.
+      // 503 {status:'missing-key'} from /api/vessels, which IS its real shape.
       const documentedKeyless = r.status === 503
         && (r.json?.status === 'missing-key' || r.json?.error === 'no_key' || /OPENAI_API_KEY is not set/.test(r.text));
       if (!r.ok && !documentedKeyless) {
@@ -2071,13 +2071,13 @@ async function preflight() {
   env.keys.FIRMS = await statusKey('/api/firms/status');
   env.keys.TOMTOM = await statusKey('/api/tomtom/status');
   try {
-    const ais = await jget('/api/ais-live');
+    const ais = await jget('/api/vessels');
     if (ais.status === 503 && ais.json?.status === 'missing-key') env.keys.AIS = false;
     else if (ais.status === 200 && ais.json && Array.isArray(ais.json.rows)) env.keys.AIS = true;
     else env.keys.AIS = 'error';
   } catch { env.keys.AIS = 'error'; }
   try {
-    const os = await jget('/api/opensky?lamin=29&lomin=-99&lamax=31&lomax=-97', { timeoutMs: 40000 });
+    const os = await jget('/api/flights?lamin=29&lomin=-99&lamax=31&lomax=-97', { timeoutMs: 40000 });
     const reason = os.headers.get('X-OpenSky-Auth-Reason') || '';
     const used = os.headers.get('X-OpenSky-Auth-Mode-Used') || os.headers.get('X-OpenSky-Auth') || '';
     if (!os.ok) env.keys.OPENSKY = 'error';

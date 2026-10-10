@@ -236,22 +236,23 @@ export function syncWeatherToggle(enabled) {
 export function setVisionMode(mode, { revealParameters = false } = {}) {
   const next = normalizeCockpitVisionMode(mode);
   this.visionMode = next;
-  const inherited = String(
-    this.getInheritedVisionLabel?.() || 'NORMAL',
-  ).toUpperCase();
   const labels = {
-    optical: inherited,
+    optical: 'NORMAL',
     crt: 'CRT',
     nvg: 'NVG',
     thermal: 'FLIR',
+    anime: 'ANIME',
     noir: 'NOIR',
+    snow: 'SNOW',
   };
   const names = {
-    optical: inherited,
+    optical: 'Normal',
     crt: 'CRT',
     nvg: t('cockpit.vision.styleNameNightVision'),
     thermal: t('cockpit.vision.styleNameThermal'),
+    anime: t('cockpit.vision.styleNameAnime'),
     noir: t('cockpit.vision.styleNameNoir'),
+    snow: t('cockpit.vision.styleNameSnow'),
   };
   if (this.visionCurrent) {
     this.visionCurrent.dataset.cockpitVision = next;
