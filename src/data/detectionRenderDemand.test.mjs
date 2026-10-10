@@ -285,7 +285,15 @@ test('detection holds nothing, and asks for its own frames instead', async () =>
   assert.ok(paintLane, 'detection.js still has a paint lane');
   assert.doesNotMatch(paintLane, /nowMs: Date\.now\(\)/,
     'demand must not re-sample the clock — that is the dropped terminal frame');
-  assert.match(paintLane, /nowMs: Number\.isFinite\(frame\.timestamp\) \? frame\.timestamp : _nowMs\(\)/);
+  assert.match(
+    paintLane,
+    /const nowMs = Number\.isFinite\(frame\.timestamp\) \? frame\.timestamp : _nowMs\(\)/,
+  );
+  assert.match(
+    paintLane,
+    /detectionNeedsFollowUpFrame\(\{[\s\S]*?\n\s*nowMs,/,
+    'the sonar cadence and fade demand share the same frame-clock sample',
+  );
   assert.match(paintLane, /animatingLabelCount: result\.animatingCount/,
     'demand counts fades in both directions');
   // …and `animatingCount` must really be the BOTH-directions count. Feeding the

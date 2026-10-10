@@ -15,12 +15,19 @@ import { readShellElements } from './shellElements.js';
 import { CockpitCoordinator } from './cockpitCoordinator.js';
 import { ContextControls } from './context.js';
 import { CctvControls } from './cctv.js';
+import { StreetLevelControls } from './streetLevelControls.js';
 import { RadioControls } from './radio.js';
+import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
 import { bindClearLayersControl } from './layers.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
 import { createMapSourceControls } from './mapSource.js';
 import { STYLES } from './effects.js';
+import { isHudLayout } from '../hudLayouts.js';
+import {
+  getCyberSonarControlState,
+  setCyberSonarControls,
+} from './cyberSonarControls.js';
 
 import * as Cesium from 'cesium';
 
@@ -77,6 +84,7 @@ export class StyleManager extends ShellFacade {
       transitLayer,
       aisLiveVesselsLayer,
       militaryAwarenessLayer,
+      localAdsbLayer,
     } = services;
     this.services = services;
     this._lifetime = new UiLifetime();
@@ -97,6 +105,7 @@ export class StyleManager extends ShellFacade {
         _setRadioDisclosure: (...args) => this._setRadioDisclosure(...args),
         _syncCctvPanelViewport: (...args) =>
           this._syncCctvPanelViewport(...args),
+        _onPanelResized: (...args) => this._onPanelResized(...args),
         _syncContextRadioLauncherState: (...args) =>
           this._syncContextRadioLauncherState(...args),
         _showToast: (...args) => this._showToast(...args),
@@ -189,6 +198,17 @@ export class StyleManager extends ShellFacade {
         _detectionOpacityValue: this._detectionOpacityValue,
         _detectionSliderRow: this._detectionSliderRow,
         _hudBtn: this._hudBtn,
+        _cyberSonarBtn: this._cyberSonarBtn,
+        _cyberSonarRings: this._cyberSonarRings,
+        _cyberSonarRingsValue: this._cyberSonarRingsValue,
+        _cyberSonarRange: this._cyberSonarRange,
+        _cyberSonarRangeValue: this._cyberSonarRangeValue,
+        _cyberSonarIntensity: this._cyberSonarIntensity,
+        _cyberSonarIntensityValue: this._cyberSonarIntensityValue,
+        _cyberSonarOpacity: this._cyberSonarOpacity,
+        _cyberSonarOpacityValue: this._cyberSonarOpacityValue,
+        _cyberSonarSector: this._cyberSonarSector,
+        _cyberSonarSectorValue: this._cyberSonarSectorValue,
         _hudLayoutRow: this._hudLayoutRow,
         _hudLayoutSelect: this._hudLayoutSelect,
         _ppToggles: this._ppToggles,
@@ -449,12 +469,13 @@ export class StyleManager extends ShellFacade {
         trafficLayer,
         flightsLayer,
         militaryFlightsLayer,
+        localAdsbLayer,
         satellitesLayer,
         cctvLayer,
         bikeshareLayer,
         transitLayer,
         aisLiveVesselsLayer,
-      ],
+      ].filter(Boolean),
       (modeLabel) => {
         this._updateDetectionButton(modeLabel);
       },
@@ -483,6 +504,12 @@ export class StyleManager extends ShellFacade {
         _scopeFeatherSlider: this._scopeFeatherSlider,
         _hudLayoutSelect: this._hudLayoutSelect,
         _hudBtn: this._hudBtn,
+        _cyberSonarBtn: this._cyberSonarBtn,
+        _cyberSonarRings: this._cyberSonarRings,
+        _cyberSonarRange: this._cyberSonarRange,
+        _cyberSonarIntensity: this._cyberSonarIntensity,
+        _cyberSonarOpacity: this._cyberSonarOpacity,
+        _cyberSonarSector: this._cyberSonarSector,
         _cleanViewBtn: this._cleanViewBtn,
         _cleanViewExitBtn: this._cleanViewExitBtn,
         _detectionDensitySlider: this._detectionDensitySlider,
@@ -508,6 +535,8 @@ export class StyleManager extends ShellFacade {
         _applySharpenIntensity: (...args) =>
           this._applySharpenIntensity(...args),
         _setHudVariant: (...args) => this._setHudVariant(...args),
+        _setCyberSonarEnabled: (...args) => this._setCyberSonarEnabled(...args),
+        _setCyberSonarSetting: (...args) => this._setCyberSonarSetting(...args),
         _applyDetectionDensityFromUi: (...args) =>
           this._applyDetectionDensityFromUi(...args),
         _setDetectionAllocation: (...args) =>
@@ -542,6 +571,7 @@ export class StyleManager extends ShellFacade {
     this._initRightPanelAdaptiveLayout();
     this._initRadioPanel();
     this._initCctvPanel();
+    this._initStreetLevelPanel();
     this._initGlobalContextPanel();
     this._initLocationBar();
     this._initShareButton();
@@ -860,11 +890,33 @@ export class StyleManager extends ShellFacade {
         isCockpitActive: () => this.cockpitView?.active,
         signalUserCollapsed: () => this.cockpitView?.signalUserCollapsed,
         layoutCockpit: () => this.cockpitView?.scheduleContextLayout(),
+        // An open local receiver keeps the shared Radio panel expanded.
         preservePanelStateDuringClear: () =>
-          this._preservePanelStateDuringLayerClear,
+          this._preservePanelStateDuringLayerClear ||
+          Boolean(this._localSdrControls?.isActive()),
         scheduleLayout: () => this._scheduleRightPanelLayout(),
       },
     });
+    this._localSdrControls?.destroy();
+    this._localSdrControls = null;
+    const receiver = this.services.localAdsbLayer?.receiver;
+    if (receiver) {
+      this._localSdrControls = new LocalSdrControls({
+        document,
+        receiver,
+        feeds: this.services.localAdsbLayer?.feeds || null,
+        radio: radioLayer,
+        actions: {
+          isLocalAdsbEnabled: () =>
+            Boolean(this._dataManager?.isEnabled('local-adsb')),
+          setLocalAdsbEnabled: (enabled) =>
+            this._dataManager?.setEnabled('local-adsb', enabled, {
+              origin: 'user',
+            }),
+          scheduleLayout: () => this._scheduleRightPanelLayout(),
+        },
+      });
+    }
   }
 
   /**
@@ -879,6 +931,46 @@ export class StyleManager extends ShellFacade {
     const cameraId = activate();
     if (!cameraId) return false;
     return this._runExplicitNavigation('camera', () => focus(cameraId));
+  }
+
+  /** Compose the Street Level panel controls from its layer and application actions. */
+  _initStreetLevelPanel() {
+    const { streetLevelLayer } = this.services;
+    this._streetLevelControls?.destroy();
+    this._streetLevelControls = null;
+    if (!this._streetLevelPanel || !streetLevelLayer) return;
+    // Photo framing and FOLLOW release tracking like any explicit flight.
+    streetLevelLayer.attachNavigation?.({
+      run: (noun, move) => this._runExplicitNavigation(noun, move),
+      begin: (noun) => this._beginDeferredNavigation(noun),
+      reassert: (generation) => this._reassertNavigationHandoff(generation),
+      subscribeHandoff: (listener) =>
+        this._navigation.subscribeCameraHandoff(listener),
+    });
+    this._streetLevelControls = new StreetLevelControls({
+      root: this._streetLevelPanel,
+      layer: streetLevelLayer,
+      actions: {
+        isEnabled: () => this._dataManager?.isEnabled('street-level') === true,
+        setEnabled: (enabled) =>
+          this._dataManager?.setEnabled('street-level', enabled, {
+            origin: 'user',
+          }),
+        setParams: (params, options) =>
+          this._dataManager?.setLayerParams('street-level', params, options),
+        setPanelCollapsed: (collapsed, options) =>
+          this.setPanelCollapsed('street-level-panel', collapsed, options),
+        dockPanel: () => this._panelChrome.dockPanel('street-level-panel'),
+        showToast: (message) => this._showToast(message),
+        // Lets the panel open for a user, voice or tool switch-on, not a restore.
+        subscribeEnableRequests: (listener) =>
+          this._dataManager?.subscribeVisibilityRequests?.((change) => {
+            if (change?.layerId === 'street-level' && change.enabled)
+              listener(change.origin);
+          }) || null,
+      },
+    });
+    this._streetLevelControls.connect();
   }
 
   /** Compose camera panel controls from the existing camera port and application actions. */
@@ -1046,16 +1138,16 @@ export class StyleManager extends ShellFacade {
 
   /**
    * Switches the HUD layout variant.
-   * @param {'tactical'|'operator'|'minimal'} variantName - Layout variant.
+   * @param {'tactical'|'operator'|'minimal'|'cyber'} variantName - Layout variant.
    * @returns {{ok: boolean, layout?: string, visible?: boolean, error?: string}}
    */
   setHudLayout(variantName) {
     const variant = String(variantName ?? '').toLowerCase();
-    if (!['tactical', 'operator', 'minimal'].includes(variant)) {
+    if (!isHudLayout(variant)) {
       return { ok: false, error: `Unknown HUD layout: ${variantName}` };
     }
     this.shareLinkManager?.claimRestoreLane?.('visual');
-    this._setHudVariant(variant);
+    this._setHudVariant(variant, { applyVisualDefaults: true });
     return {
       ok: true,
       layout: this.hud.getVariant(),
@@ -1171,6 +1263,11 @@ export class StyleManager extends ShellFacade {
     };
   }
 
+  /** Apply Cyber-only sonar settings through the shared visual controls. */
+  setCyberSonar(settings) {
+    return setCyberSonarControls(this, settings);
+  }
+
   /**
    * Full control-state snapshot — single source for voice read-back so the
    * agent confirms from the same state it acted on.
@@ -1183,6 +1280,7 @@ export class StyleManager extends ShellFacade {
       hud: {
         visible: !!this.hud?.visible,
         layout: this.hud?.getVariant?.() || null,
+        sonar: getCyberSonarControlState(),
       },
       detection: this.getDetectionState(),
       bloom: {
@@ -1304,6 +1402,8 @@ export class StyleManager extends ShellFacade {
    * @param {string} styleName - Target style ('normal'|'retro'|'surveillance'|'thermal'|'anime'|'noir'|'snow').
    * @param {object} [options]
    * @param {boolean} [options.applyPreset=true] - Whether to apply STYLE_PRESET_DEFAULTS for the new style.
+   * @param {boolean} [options.userInitiated=false] - Whether a direct user preset choice owns the Cyber exit style.
+   * @param {boolean} [options.preserveCyberRestore=false] - Whether an automatic style update keeps the Cyber entry snapshot.
    * @returns {void}
    */
   setStyle(
@@ -1416,6 +1516,13 @@ export class StyleManager extends ShellFacade {
     this._initCockpitDisplayPortal();
   }
 
+  /** A portable panel was resized or docked: refit any viewport inside it. */
+  _onPanelResized(panelId) {
+    if (panelId === 'cctv-panel') this._syncCctvPanelViewport();
+    if (panelId === 'street-level-panel')
+      this._streetLevelControls?.onPanelResized();
+  }
+
   /**
    * Recalculates the CCTV panel max-height based on its current top position
    * and the window height, enabling internal scroll without viewport overflow.
@@ -1478,7 +1585,10 @@ export class StyleManager extends ShellFacade {
     this._cameraOrientationControls?.destroy();
     this._clearLayersControl?.destroy();
     this._cctvControls?.destroy();
+    this.services?.streetLevelLayer?.attachNavigation?.(null);
+    this._streetLevelControls?.destroy();
     this._radioControls?.destroy();
+    this._localSdrControls?.destroy();
     this._cockpitCoordinator.stop();
     this._visualSettings.stop();
     this.shareLinkManager?.destroy();

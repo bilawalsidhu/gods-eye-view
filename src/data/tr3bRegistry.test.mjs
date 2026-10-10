@@ -189,7 +189,7 @@ test('a conversion survives a poll refresh, in both the billboard and the tracke
   const realFetch = globalThis.fetch;
   const nowSec = Math.floor(Date.now() / 1000);
   globalThis.fetch = async (url) => {
-    if (!String(url).startsWith('/api/opensky')) {
+    if (!String(url).startsWith('/api/flights')) {
       return { ok: true, status: 200, json: async () => ({ ac: [] }) };
     }
     return {
@@ -309,7 +309,7 @@ test('conversions are session-scoped and no lifecycle path clears them', async (
     meta: { callsign: 'OLD1', altitude: 9_000, klass: 'airliner', rawLat: 30.2, rawLon: -97.7 },
   });
   const realFetch = globalThis.fetch;
-  globalThis.fetch = async (url) => (String(url).startsWith('/api/opensky')
+  globalThis.fetch = async (url) => (String(url).startsWith('/api/flights')
     ? { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ time: 0, states: [] }) }
     : { ok: true, status: 200, json: async () => ({ ac: [] }) });
   try {
@@ -415,8 +415,10 @@ test('a converted contact never consumes a 3D model CAP SLOT', async () => {
     assert.match(loop, /keepDistSq/, `${name}: matched the model-eligibility loop`);
     assert.match(loop, /if \(isTr3b\(icao\)\) continue;/,
       `${name}: converted contacts are dropped BEFORE entering the capped candidate list`);
-    // ...and the cap really is applied to that list, so a dropped candidate is a freed slot.
-    assert.match(source, /modelEligible\.size >= cap/,
+    // ...and the cap really is applied to that list, so a dropped candidate is a
+    // freed slot. The four-pass selection itself is the shared
+    // selectModelEligible (behavior-tested in modelEligibility.test.mjs).
+    assert.match(source, /modelEligible\s*=\s*selectModelEligible\(\s*cand,\s*\{\s*cap,/,
       `${name}: the cap bounds the candidate-derived eligible set`);
   }
 });

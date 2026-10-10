@@ -196,9 +196,9 @@ test('FIRMS retains a large successful source during partial failure and filters
   const first = json(await request());
   assert.equal(first.count, 130001);
   assert.equal(first.sources.filter((s) => s.ok).length, 1);
-  assert.equal(calls, 3);
+  assert.equal(calls, 4);
   assert.equal(json(await request()).count, 130001);
-  assert.equal(calls, 3);
+  assert.equal(calls, 4);
   assert.deepEqual(json(await request('/status')).transactions, {
     used: 3,
     limit: 5000,

@@ -4,7 +4,43 @@ import {
   collectKeyUpdates,
   keySetupChipLabel,
   stripKeylessBasemapFromHash,
+  bindKeySetupPlacement,
+  waitForChatGptOAuth,
 } from './keySetup.js';
+
+test('setup placement moves the same button only in Cyber and disconnects on teardown', () => {
+  const home = {};
+  const chip = { parentNode: home, hidden: true };
+  const root = { parentNode: home, before: (node) => { node.parentNode = home; } };
+  let moves = 0;
+  const toolbar = { append: (node) => { moves++; node.parentNode = toolbar; } };
+  const theme = { dataset: { uiTheme: 'tactical' } };
+  let notify, disconnected = false;
+  class Observer {
+    constructor(callback) { notify = callback; }
+    observe(target, options) {
+      assert.equal(target, theme);
+      assert.deepEqual(options.attributeFilter, ['data-ui-theme']);
+    }
+    disconnect() { disconnected = true; }
+  }
+  const dispose = bindKeySetupPlacement({
+    documentElement: theme,
+    getElementById: () => toolbar,
+    defaultView: { MutationObserver: Observer },
+  }, chip, root);
+  assert.equal(chip.parentNode, home);
+  for (const variant of ['cyber', 'operator', 'cyber', 'minimal']) {
+    theme.dataset.uiTheme = variant;
+    notify();
+    assert.equal(chip.parentNode, variant === 'cyber' ? toolbar : home);
+    notify();
+  }
+  assert.equal(moves, 2, 'identical theme sync does not reparent again');
+  assert.equal(chip.hidden, true, 'placement cannot reveal a retired button');
+  dispose();
+  assert.equal(disconnected, true);
+});
 
 test('the chip counts what is missing, and retires the count at zero', () => {
   assert.equal(keySetupChipLabel({ setCount: 0, total: 8 }), 'POWER UP · 8 KEYS WAITING');
@@ -24,6 +60,64 @@ test('collectKeyUpdates keeps only non-empty trimmed values', () => {
   assert.deepEqual(updates, { OPENAI_API_KEY: 'sk-abc' });
   assert.deepEqual(collectKeyUpdates([]), {});
   assert.deepEqual(collectKeyUpdates(null), {});
+});
+
+test('OAuth login polling stops as soon as local ChatGPT auth becomes available', async () => {
+  let checks = 0;
+  let clock = 0;
+  const available = await waitForChatGptOAuth({
+    fetchImpl: async () => {
+      checks += 1;
+      return {
+        ok: true,
+        json: async () => ({ available: checks >= 3 }),
+      };
+    },
+    timeoutMs: 10_000,
+    pollMs: 100,
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    },
+  });
+  assert.equal(available, true);
+  assert.equal(checks, 3);
+});
+
+test('OAuth login polling stops on login or HTTP failure instead of waiting for timeout', async () => {
+  for (const result of [
+    { ok: true, payload: { available: false, loginFailed: true, error: 'Sign-in failed.' } },
+    { ok: false, payload: { error: 'Sign-in is local only.' } },
+  ]) {
+    let checks = 0;
+    await assert.rejects(waitForChatGptOAuth({
+      fetchImpl: async () => { checks += 1; return { ok: result.ok, json: async () => result.payload }; },
+      sleep: () => assert.fail('failed login must stop polling'),
+    }), { message: result.payload.error });
+    assert.equal(checks, 1);
+  }
+});
+
+test('OAuth login polling respects timeout and an aborted setup surface', async () => {
+  let clock = 0;
+  let checks = 0;
+  const poll = { fetchImpl: async () => { checks += 1; return { ok: true, json: async () => ({ available: false, pending: true }) }; } };
+  assert.equal(await waitForChatGptOAuth({ ...poll, timeoutMs: 100, pollMs: 100, now: () => clock, sleep: async (ms) => { clock += ms; } }), false);
+  assert.equal(checks, 2);
+  const controller = new AbortController();
+  controller.abort();
+  assert.equal(await waitForChatGptOAuth({ ...poll, signal: controller.signal }), false);
+  assert.equal(checks, 2, 'aborted polling does not fetch');
+});
+
+test('OAuth polling ignores a ready response received after the surface was aborted', async () => {
+  const controller = new AbortController();
+  const available = await waitForChatGptOAuth({
+    signal: controller.signal,
+    fetchImpl: async () => ({ ok: true, json: async () => { controller.abort(); return { available: true }; } }),
+    sleep: () => assert.fail('aborted polling must not continue'),
+  });
+  assert.equal(available, false);
 });
 
 test('the first Google key strips ONLY the keyless OSM basemap from the share hash', () => {

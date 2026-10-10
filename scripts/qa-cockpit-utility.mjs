@@ -42,7 +42,7 @@ page.on('pageerror', (error) => consoleErrors.push(error.message));
 page.on('response', (response) => {
   const url = new URL(response.url());
   const expectedOptionalTrackMiss = response.status() === 404
-    && url.pathname === '/api/opensky-track';
+    && url.pathname === '/api/flights/track';
   if (
     url.origin === new URL(appUrl).origin
     && response.status() >= 400
@@ -108,7 +108,7 @@ try {
       });
       return;
     }
-    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/ais-live') {
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/vessels') {
       request.respond({
         status: 200,
         contentType: 'application/json',
@@ -124,7 +124,7 @@ try {
       });
       return;
     }
-    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/adsblol/mil') {
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/military') {
       request.respond({
         status: 200,
         contentType: 'application/json',
@@ -132,7 +132,7 @@ try {
       });
       return;
     }
-    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/opensky-track') {
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/flights/track') {
       request.respond({
         status: 200,
         contentType: 'application/json',
@@ -832,7 +832,7 @@ try {
     await readinessPage.setRequestInterception(true);
     readinessPage.on('request', (request) => {
       const url = new URL(request.url());
-      if (url.origin === new URL(appUrl).origin && url.pathname === '/api/opensky') {
+      if (url.origin === new URL(appUrl).origin && url.pathname === '/api/flights') {
         const now = Math.floor(Date.now() / 1000);
         request.respond({
           status: 200, contentType: 'application/json',
@@ -1572,6 +1572,10 @@ try {
     const cockpit = manager.cockpitView;
     const current = document.getElementById('cockpit-vision-current');
     const label = document.getElementById('cockpit-vision-current-label');
+    const settle = (ms = 900) => new Promise((resolve) => setTimeout(resolve, ms));
+    const intensities = () => Object.fromEntries(
+      Object.entries(manager.stages || {}).map(([name, stage]) => [name, stage.uniforms?.intensity]),
+    );
     const read = () => ({
       mode: current?.dataset.cockpitVision,
       label: label?.textContent?.trim(),
@@ -1582,62 +1586,106 @@ try {
       parametersCollapsed: document.getElementById('param-slider-panel')?.classList.contains('collapsed'),
       signalCollapsed: cockpit.signalCollapsed,
       focusRetained: document.activeElement === current,
+      activeStyle: manager.activeStyle,
+      intensities: intensities(),
     });
+    const reenter = async () => {
+      cockpit.exit({ restoreTracking: true });
+      await settle();
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        if (cockpit.enter() === true) return true;
+        await settle(200);
+      }
+      return false;
+    };
     manager._setCockpitDisclosure('display', false);
     manager._setCockpitDisclosure('radio', false);
     cockpit.setVisionMode('optical');
     current.focus({ preventScroll: true });
     const states = [read()];
-    for (let index = 0; index < 5; index += 1) {
+    for (let index = 0; index < 7; index += 1) {
       current.click();
       states.push(read());
     }
     const originalStyle = manager.activeStyle;
+    // A Noir map preset: Cockpit enters on Noir, Normal clears every shader
+    // without changing the map preset, and Exit Cockpit restores Noir.
+    cockpit.exit({ restoreTracking: true });
     manager.setStyle('noir');
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    await settle();
+    const enteredOnNoir = await reenter();
+    const entryNoir = read();
     cockpit.setVisionMode('optical');
-    const inheritedNoir = read();
-    cockpit.setVisionMode('noir');
-    const explicitNoir = read();
-    cockpit.setVisionMode('optical');
-    const restoredNoir = {
-      ...read(),
-      activeStyle: manager.activeStyle,
-      intensity: manager.stages.noir?.uniforms?.intensity,
-    };
+    const normalInsideNoir = read();
+    cockpit.setVisionMode('crt');
+    const cockpitOnlyCrt = read();
+    const exitedNoir = cockpit.exit({ restoreTracking: true }) === true;
+    await settle();
+    const restoredNoir = { ...read(), cockpitActive: cockpit.active };
     manager.setStyle(originalStyle);
-    await new Promise((resolve) => setTimeout(resolve, 900));
+    await settle();
+    const reentered = await reenter();
     cockpit.setVisionMode('optical');
-    return { states, inheritedNoir, explicitNoir, restoredNoir };
+    return {
+      states,
+      enteredOnNoir,
+      entryNoir,
+      normalInsideNoir,
+      cockpitOnlyCrt,
+      exitedNoir,
+      restoredNoir,
+      reentered,
+    };
   });
+  const cycleModes = ['optical', 'crt', 'nvg', 'thermal', 'anime', 'noir', 'snow', 'optical'];
+  const cycleLabels = ['NORMAL', 'CRT', 'NVG', 'FLIR', 'ANIME', 'NOIR', 'SNOW', 'NORMAL'];
   check(
-    'Cockpit vision control exposes inherited, CRT, NVG, FLIR, and NOIR before wrapping',
-    JSON.stringify(visionCycle.states.map((state) => state.mode))
-      === JSON.stringify(['optical', 'crt', 'nvg', 'thermal', 'noir', 'optical'])
-      && visionCycle.states[4]?.label === 'NOIR'
-      && visionCycle.states[4]?.aria === 'Current cockpit vision style: Noir. Activate for next style.',
-    JSON.stringify(visionCycle),
+    'Cockpit vision control exposes Normal, CRT, NVG, FLIR, Anime, Noir and Snow before wrapping',
+    JSON.stringify(visionCycle.states.map((state) => state.mode)) === JSON.stringify(cycleModes)
+      && JSON.stringify(visionCycle.states.map((state) => state.label)) === JSON.stringify(cycleLabels)
+      && visionCycle.states[5]?.aria === 'Current cockpit vision style: Noir. Activate for next style.'
+      && visionCycle.states[7]?.aria === 'Current cockpit vision style: Normal. Activate for next style.',
+    JSON.stringify(visionCycle.states.map(({ mode, label, aria }) => ({ mode, label, aria }))),
   );
   check(
     'user vision changes open Display for every temporary treatment and retain selector focus',
-    visionCycle.states[1]?.mode === 'crt'
-      && visionCycle.states.slice(1, 5).every((state) => state.displayOpen === 'true')
-      && visionCycle.states.slice(1, 5).every((state) => state.radioOpen === 'false')
-      && visionCycle.states.slice(1, 5).every((state) => state.parametersActive)
-      && visionCycle.states.slice(1, 5).every((state) => !state.parametersCollapsed)
-      && visionCycle.states.slice(1, 5).every((state) => state.signalCollapsed)
+    visionCycle.states.slice(1, 7).every((state) => state.displayOpen === 'true')
+      && visionCycle.states.slice(1, 7).every((state) => state.radioOpen === 'false')
+      && visionCycle.states.slice(1, 7).every((state) => state.parametersActive)
+      && visionCycle.states.slice(1, 7).every((state) => !state.parametersCollapsed)
+      && visionCycle.states.slice(1, 7).every((state) => state.signalCollapsed)
       && visionCycle.states.every((state) => state.focusRetained),
     JSON.stringify(visionCycle.states),
   );
   check(
-    'inherited Noir and explicit Noir keep distinct ownership and restore the Noir map preset',
-    visionCycle.inheritedNoir?.mode === 'optical'
-      && visionCycle.inheritedNoir?.label === 'NOIR'
-      && visionCycle.explicitNoir?.mode === 'noir'
-      && visionCycle.explicitNoir?.label === 'NOIR'
-      && visionCycle.restoredNoir?.mode === 'optical'
+    'each Cockpit vision mode drives only its own shader and Normal clears them all',
+    visionCycle.states.slice(1, 7).every((state) => {
+      const target = {
+        crt: 'retro', nvg: 'surveillance', thermal: 'thermal', anime: 'anime', noir: 'noir', snow: 'snow',
+      }[state.mode];
+      return Object.entries(state.intensities).every(([name, value]) =>
+        name === target ? value > 0 : value === 0);
+    })
+      && Object.values(visionCycle.states[7].intensities).every((value) => value === 0),
+    JSON.stringify(visionCycle.states.map(({ mode, intensities }) => ({ mode, intensities }))),
+  );
+  check(
+    'Cockpit enters on the Noir map preset, Normal clears it, and Exit Cockpit restores it',
+    visionCycle.enteredOnNoir
+      && visionCycle.entryNoir?.mode === 'noir'
+      && visionCycle.entryNoir?.label === 'NOIR'
+      && visionCycle.normalInsideNoir?.mode === 'optical'
+      && visionCycle.normalInsideNoir?.label === 'NORMAL'
+      && visionCycle.normalInsideNoir?.activeStyle === 'noir'
+      && Object.values(visionCycle.normalInsideNoir?.intensities || {}).every((value) => value === 0)
+      && visionCycle.cockpitOnlyCrt?.mode === 'crt'
+      && visionCycle.cockpitOnlyCrt?.activeStyle === 'noir'
+      && visionCycle.exitedNoir
+      && !visionCycle.restoredNoir?.cockpitActive
       && visionCycle.restoredNoir?.activeStyle === 'noir'
-      && visionCycle.restoredNoir?.intensity === 1,
+      && visionCycle.restoredNoir?.intensities?.noir === 1
+      && visionCycle.restoredNoir?.intensities?.retro === 0
+      && visionCycle.reentered,
     JSON.stringify(visionCycle),
   );
   await page.evaluate(() => window.__godsEyeView.styleManager.cockpitView.setVisionMode('noir'));
@@ -1943,6 +1991,98 @@ try {
     }),
   );
 
+  // Cyber relocates its collapsed briefing header into the expanded utility
+  // lane. Exercise actual height changes without reload and measure both cards.
+  await page.evaluate(() => {
+    const manager = window.__godsEyeView.styleManager;
+    manager._setHudVariant('cyber');
+    manager.hud.setMode('on');
+    manager._setCockpitDisclosure('display', false);
+    manager._setCockpitDisclosure('radio', true);
+  });
+  const cyberRadioOrder = await page.evaluate(() => {
+    const manager = window.__godsEyeView.styleManager;
+    manager.cockpitView.syncSignalLayout();
+    const display = document
+      .getElementById('cockpit-display-toggle-btn')
+      .closest('.cockpit-utility-control');
+    const radio = document
+      .getElementById('cockpit-radio-toggle-btn')
+      .closest('.cockpit-utility-control');
+    const displayRect = display.getBoundingClientRect();
+    const radioRect = radio.getBoundingClientRect();
+    return {
+      display: displayRect.toJSON(),
+      radio: radioRect.toJSON(),
+      displayExpanded: display.classList.contains('is-expanded'),
+      radioExpanded: radio.classList.contains('is-expanded'),
+      gap: radioRect.top - displayRect.bottom,
+    };
+  });
+  check(
+    'Cyber expanding Radio preserves the authored Display-then-Radio order',
+    !cyberRadioOrder.displayExpanded
+      && cyberRadioOrder.radioExpanded
+      && cyberRadioOrder.display.height > 0
+      && cyberRadioOrder.radio.height > 0
+      && cyberRadioOrder.gap >= 7,
+    JSON.stringify(cyberRadioOrder),
+  );
+  await page.screenshot({ path: path.join(shotsDir, 'cyber-radio-order.png') });
+  await page.evaluate(() => {
+    const manager = window.__godsEyeView.styleManager;
+    manager._setCockpitDisclosure('radio', false);
+    manager._setCockpitDisclosure('display', true);
+  });
+  const cyberStyleStates = await page.evaluate(() => {
+    const manager = window.__godsEyeView.styleManager;
+    const states = [];
+    for (const style of ['normal', 'surveillance', 'thermal', 'retro']) {
+      document.querySelector(`.style-btn[data-style="${style}"]`).click();
+      states.push({
+        requestedStyle: style,
+        activeStyle: manager.activeStyle,
+        hud: manager.hud.getVariant(),
+        theme: document.documentElement.dataset.uiTheme,
+        selector: document.getElementById('hud-layout-select').value,
+        savedHud: manager.getVisualState().hud.variant,
+      });
+    }
+    return states;
+  });
+  check('Cockpit visual-style controls retain Cyber HUD, selector, shell and saved layout',
+    cyberStyleStates.every(state => state.activeStyle === state.requestedStyle
+      && state.hud === 'cyber' && state.theme === 'cyber'
+      && state.selector === 'cyber' && state.savedHud === 'cyber'),
+    JSON.stringify(cyberStyleStates));
+  for (const height of [987, 720, 640, 900]) {
+    await page.setViewport({ width: 1440, height, deviceScaleFactor: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const geometry = await page.evaluate(() => {
+      const signal = document.getElementById('cockpit-signal-stream');
+      const utility = document.getElementById('cockpit-utility-controls');
+      const expanded = utility.querySelector('.cockpit-utility-control.is-expanded');
+      const s = signal.getBoundingClientRect();
+      const u = expanded.getBoundingClientRect();
+      const toggle = document.getElementById('cockpit-signal-toggle');
+      const t = toggle.getBoundingClientRect();
+      const hit = document.elementFromPoint(t.x + t.width / 2, t.y + t.height / 2);
+      return { height: innerHeight, theme: document.documentElement.dataset.uiTheme,
+        collapsed: signal.dataset.collapsed, signal: s.toJSON(), utility: u.toJSON(),
+        reachable: Boolean(hit && toggle.contains(hit)),
+        contained: u.bottom <= s.top - 7 && s.bottom < innerHeight,
+      };
+    });
+    check(`Cyber collapsed Live Signals remains visible and reachable after resize to ${height}px`,
+      geometry.theme === 'cyber' && geometry.collapsed === 'true'
+        && geometry.signal.width > 0 && geometry.signal.height > 0
+        && geometry.reachable && geometry.contained, JSON.stringify(geometry));
+    if (height === 640 || height === 900) {
+      await page.screenshot({ path: path.join(shotsDir, `cyber-resize-${height}.png`) });
+    }
+  }
+  await page.evaluate(() => window.__godsEyeView.styleManager._setHudVariant('operator'));
+
   const signalTransition = await page.evaluate(() => {
     const manager = window.__godsEyeView.styleManager;
     const cockpit = manager.cockpitView;
@@ -2174,10 +2314,16 @@ try {
     // Both the UI and compatibility facade delegate to this navigation owner.
     const manager = window.__godsEyeView.styleManager._locationNavigation;
     const awareness = window.__godsEyeView.dataManager.layers.get('military-awareness')?.module;
+    const styleManager = window.__godsEyeView.styleManager;
+    const styleBefore = styleManager.activeStyle;
+    // A Cockpit-only choice that Reset must undo.
+    styleManager.cockpitView.setVisionMode('snow');
     window.__qaCockpitReset = {
       calls: 0,
       original: manager.resetToGlobeView,
       subjectId: awareness?.getContextSnapshot?.()?.subject?.id || null,
+      styleBefore,
+      snowDuringCockpit: styleManager.stages?.snow?.uniforms?.intensity,
     };
     manager.resetToGlobeView = function qaCountedCockpitReset(...args) {
       window.__qaCockpitReset.calls += 1;
@@ -2213,16 +2359,26 @@ try {
       resetHidden: document.getElementById('cockpit-reset-globe')?.hidden,
       height,
       subjectPreserved: Boolean(qa.subjectId && subjectId === qa.subjectId),
+      styleRestored: gev.styleManager.activeStyle === qa.styleBefore,
+      snowDuringCockpit: qa.snowDuringCockpit,
+      // Cockpit-time intensities are Cockpit's own, so check against the map preset.
+      visionRestored: Object.entries(gev.styleManager.stages || {}).every(([name, stage]) =>
+        name === gev.styleManager.activeStyle
+          ? stage.uniforms?.intensity > 0
+          : stage.uniforms?.intensity === 0),
     };
   });
   check(
-    'keyboard Cockpit Reset uses one canonical route and preserves Contact selection',
+    'keyboard Cockpit Reset uses one canonical route, preserves Contact selection and restores the map style',
     resetState.calls === 1
       && !resetState.cockpitActive
       && !resetState.trackedEntity
       && resetState.resetHidden
       && Math.abs(resetState.height - 18_000_000) < 150_000
-      && resetState.subjectPreserved,
+      && resetState.subjectPreserved
+      && resetState.snowDuringCockpit > 0
+      && resetState.styleRestored
+      && resetState.visionRestored,
     JSON.stringify(resetState),
   );
   check('runtime console remains clean', consoleErrors.length === 0 && localHttpErrors.length === 0,

@@ -21,6 +21,7 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
       'satellites',
       'flights',
       'military',
+      'local-adsb',
       'ais-live-vessels',
       'traffic',
       'transit',
@@ -226,4 +227,34 @@ test('the Recent Imagery readout mounts in its rail body like the weather readou
     panel.destroy();
     globalThis.document = previousDocument;
   }
+});
+
+test('an omitted source is visibly unavailable and cannot be toggled on', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const attrs = new Map();
+  const button = {
+    classList: { toggle() {} },
+    dataset: {},
+    setAttribute: (key, value) => attrs.set(key, value),
+  };
+  const layer = {
+    id: 'flights',
+    name: 'Flights',
+    enabled: false,
+    stats: {
+      sourceUnavailable: true,
+      status: 'unavailable',
+      error: 'Data source not configured: flights',
+    },
+  };
+  LayerPanel.prototype._syncToggleButton(button, layer);
+  assert.equal(button.textContent, 'UNAVAILABLE');
+  assert.equal(attrs.get('aria-disabled'), 'true');
+  assert.match(button.title, /not configured/);
+  LayerPanel.prototype._syncToggleButton(button, { ...layer, enabled: true });
+  assert.equal(
+    attrs.get('aria-disabled'),
+    'false',
+    'an active layer can always be switched off',
+  );
 });

@@ -93,11 +93,11 @@ test('OpenSky state and track routes share tokens, retain cache and use regional
   });
   const states = install(providers.openSkyProxy());
   assert.equal(
-    (await states('/api/opensky', '?lat=30&lon=-97')).statusCode,
+    (await states('/api/flights', '?lat=30&lon=-97')).statusCode,
     200,
   );
   assert.equal(
-    (await states('/api/opensky', '?lat=30&lon=-97')).headers[
+    (await states('/api/flights', '?lat=30&lon=-97')).headers[
       'x-opensky-cache'
     ],
     'HIT',
@@ -105,14 +105,14 @@ test('OpenSky state and track routes share tokens, retain cache and use regional
   assert.equal(calls.length, 2);
   const tracks = install(providers.trackBackfillProxies(), true);
   assert.equal(
-    (await tracks('/api/opensky-track', '?icao24=ABC123')).statusCode,
+    (await tracks('/api/flights/track', '?icao24=ABC123')).statusCode,
     200,
   );
-  await tracks('/api/opensky-track', '?icao24=abc123');
+  await tracks('/api/flights/track', '?icao24=abc123');
   assert.equal(calls.filter((call) => call.url.includes('/token')).length, 1);
   assert.equal(calls.filter((call) => call.url.includes('/tracks/')).length, 1);
   assert.equal(
-    (await tracks('/api/adsblol/trace', '?hex=invalid')).statusCode,
+    (await tracks('/api/military/track', '?hex=invalid')).statusCode,
     400,
   );
   now += 130_000;
@@ -131,12 +131,66 @@ test('OpenSky state and track routes share tokens, retain cache and use regional
   );
   process.env.OPENSKY_AUTH_MODE = 'anon';
   const fallback = await install(fresh.openSkyProxy())(
-    '/api/opensky',
+    '/api/flights',
     '?lat=30&lon=-97',
   );
   assert.equal(fallback.statusCode, 200);
   assert.equal(fallback.headers['x-flight-source'], 'adsb.lol');
   assert.equal(JSON.parse(fallback.body).states[0][0], 'abc123');
+});
+
+test('OpenSky global snapshot attempts are time-limited, retried once, then fall back', async (t) => {
+  environment(t, {
+    OPENSKY_CLIENT_ID: undefined,
+    OPENSKY_CLIENT_SECRET: undefined,
+    OPENSKY_AUTH_MODE: 'anon',
+    OPENSKY_USERNAME: undefined,
+    OPENSKY_PASSWORD: undefined,
+  });
+  t.mock.method(console, 'warn', () => {});
+  const timedOut = () =>
+    Promise.reject(
+      new DOMException(
+        'The operation was aborted due to timeout',
+        'TimeoutError',
+      ),
+    );
+  const load = async (respond) => {
+    const attempts = [];
+    t.mock.method(globalThis, 'fetch', async (url, options) => {
+      if (url.includes('/states/')) {
+        assert.ok(options.signal instanceof AbortSignal);
+        attempts.push(url);
+        return respond(attempts.length);
+      }
+      if (url.includes('/lat/'))
+        return Response.json({
+          now: Date.now() / 1000,
+          ac: [{ hex: 'abc123', lat: 30, lon: -97, alt_baro: 10000 }],
+        });
+      throw Error(`Unexpected URL: ${url}`);
+    });
+    const fresh = await import(
+      `../../server/providers/aircraft/opensky.js?timeout=${Math.random()}`
+    );
+    const response = await install(fresh.openSkyProxy())(
+      '/api/flights',
+      '?lat=30&lon=-97',
+    );
+    return { response, attempts };
+  };
+  const recovered = await load((attempt) =>
+    attempt === 1
+      ? timedOut()
+      : Response.json({ time: Math.floor(Date.now() / 1000), states: [] }),
+  );
+  assert.equal(recovered.attempts.length, 2);
+  assert.equal(recovered.response.statusCode, 200);
+  assert.equal(recovered.response.headers['x-flight-source'], undefined);
+  const stalled = await load(() => timedOut());
+  assert.equal(stalled.attempts.length, 2);
+  assert.equal(stalled.response.statusCode, 200);
+  assert.equal(stalled.response.headers['x-flight-source'], 'adsb.lol');
 });
 
 test('military aircraft route preserves fresh cache and stale response after upstream failure', async (t) => {
@@ -149,11 +203,11 @@ test('military aircraft route preserves fresh cache and stale response after ups
     return Response.json({ ac: [{ hex: 'abc123' }] });
   });
   const request = install(providers.adsbLolProxy());
-  const first = await request('/api/adsblol/mil');
-  assert.equal((await request('/api/adsblol/mil')).body, first.body);
+  const first = await request('/api/military');
+  assert.equal((await request('/api/military')).body, first.body);
   assert.equal(calls, 1);
   now += 13_000;
-  assert.equal((await request('/api/adsblol/mil')).body, first.body);
+  assert.equal((await request('/api/military')).body, first.body);
   assert.equal(calls, 2);
 });
 
@@ -207,7 +261,7 @@ test('AIS preview route ingests through the socket, returns tracks and disposes 
   const request = install(plugin, true);
   let res;
   for (let i = 0; i < 100; i++) {
-    res = await request('/api/ais-live');
+    res = await request('/api/vessels');
     if (JSON.parse(res.body).rows.length) break;
     await delay(10);
   }
@@ -215,10 +269,10 @@ test('AIS preview route ingests through the socket, returns tracks and disposes 
   assert.equal(data.status, 'live');
   assert.equal(data.rows[0].mmsi, '123456789');
   assert.equal(data.rows[0].heading, null);
-  const history = await request('/api/ais-live', '/track?mmsi=123456789');
+  const history = await request('/api/vessels', '/track?mmsi=123456789');
   assert.equal(JSON.parse(history.body).samples.length, 2);
   assert.equal(
-    (await request('/api/ais-live', '/track?mmsi=bad')).statusCode,
+    (await request('/api/vessels', '/track?mmsi=bad')).statusCode,
     400,
   );
   assert.equal(sockets.length, 1);
@@ -226,7 +280,7 @@ test('AIS preview route ingests through the socket, returns tracks and disposes 
   for (let i = 0; i < 100 && sockets[0].readyState !== 3; i++) await delay(10);
   assert.equal(sockets[0].readyState, 3);
   const restarted = install(plugin);
-  await restarted('/api/ais-live');
+  await restarted('/api/vessels');
   for (let i = 0; i < 100 && sockets.length < 2; i++) await delay(10);
   assert.equal(sockets.length, 2);
 });
@@ -245,10 +299,10 @@ test('military aircraft route serves stale cache on an upstream 429 and cools do
     });
   });
   const request = install(providers.adsbLolProxy());
-  const first = await request('/api/adsblol/mil');
+  const first = await request('/api/military');
   assert.equal(first.statusCode, 200);
   now += 13_000;
-  const limited = await request('/api/adsblol/mil');
+  const limited = await request('/api/military');
   assert.equal(calls, 2);
   assert.equal(
     limited.statusCode,
@@ -256,16 +310,16 @@ test('military aircraft route serves stale cache on an upstream 429 and cools do
     'a 429 with a cached body is never relayed',
   );
   assert.equal(limited.body, first.body);
-  assert.equal(limited.headers['x-ads-b-cache'], 'STALE');
+  assert.equal(limited.headers['x-feed-cache'], 'STALE');
   assert.equal(limited.headers['x-ads-b-upstream-status'], '429');
-  assert.equal(limited.headers['x-ads-b-cache-age-ms'], '13000');
+  assert.equal(limited.headers['x-feed-age-ms'], '13000');
   now += 5_000;
-  const cooling = await request('/api/adsblol/mil');
+  const cooling = await request('/api/military');
   assert.equal(calls, 2, 'no upstream call inside the Retry-After window');
-  assert.equal(cooling.headers['x-ads-b-cache'], 'STALE');
-  assert.equal(cooling.headers['x-ads-b-cache-age-ms'], '18000');
+  assert.equal(cooling.headers['x-feed-cache'], 'STALE');
+  assert.equal(cooling.headers['x-feed-age-ms'], '18000');
   now += 16_000;
-  await request('/api/adsblol/mil');
+  await request('/api/military');
   assert.equal(calls, 3, 'upstream is retried once Retry-After elapses');
 });
 
@@ -277,10 +331,10 @@ test('military aircraft route relays an upstream 429 when nothing is cached', as
     return new Response('{"error":"rate limited"}', { status: 429 });
   });
   const request = install(providers.adsbLolProxy());
-  const limited = await request('/api/adsblol/mil');
+  const limited = await request('/api/military');
   assert.equal(limited.statusCode, 429);
   assert.ok(limited.headers['retry-after']);
-  const again = await request('/api/adsblol/mil');
+  const again = await request('/api/military');
   assert.equal(again.statusCode, 429);
   assert.equal(
     calls,
@@ -315,21 +369,21 @@ test('military fallback cancels a stalled 5xx body and starts cooldown at receip
     );
   });
   const request = install(providers.adsbLolProxy());
-  await request('/api/adsblol/mil');
+  await request('/api/military');
   now += 1000;
-  const hit = await request('/api/adsblol/mil');
-  assert.equal(hit.headers['x-ads-b-cache-age-ms'], '1000');
+  const hit = await request('/api/military');
+  assert.equal(hit.headers['x-feed-age-ms'], '1000');
   now += 12000;
-  const fallback = await request('/api/adsblol/mil');
+  const fallback = await request('/api/military');
   assert.equal(fallback.statusCode, 200);
   assert.equal(cancelled, true);
-  assert.equal(fallback.headers['x-ads-b-cache-age-ms'], '23000');
+  assert.equal(fallback.headers['x-feed-age-ms'], '23000');
   assert.equal(fallback.headers['x-ads-b-retry-after-seconds'], '20');
   now += 19000;
-  await request('/api/adsblol/mil');
+  await request('/api/military');
   assert.equal(calls, 2);
   now += 2000;
-  await request('/api/adsblol/mil');
+  await request('/api/military');
   assert.equal(calls, 3);
 });
 
@@ -349,7 +403,35 @@ test('military cooldown bounds untrusted Retry-After and defaults server errors'
           headers: { 'Retry-After': raw },
         }),
     );
-    const result = await install(providers.adsbLolProxy())('/api/adsblol/mil');
+    const result = await install(providers.adsbLolProxy())('/api/military');
     assert.equal(Number(result.headers['retry-after']), seconds);
   }
+});
+
+test('track backfill proxy returns 502 on an oversized upstream body and caches it as an error', async (t) => {
+  const tracks = install(providers.trackBackfillProxies(), true);
+  let callCount = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    callCount++;
+    return {
+      ok: true,
+      status: 200,
+      headers: new Map(),
+      body: (async function* () {
+        yield Buffer.alloc(6 * 1024 * 1024, 'x');
+      })(),
+    };
+  });
+
+  const res1 = await tracks('/api/flights/track', '?icao24=def456');
+  assert.equal(res1.statusCode, 502);
+  assert.deepEqual(JSON.parse(res1.body), {
+    error: 'Upstream track response too large',
+  });
+
+  // Cached as a 502 (never a 200): a retry inside the window neither
+  // reads as an empty track nor spends OpenSky credits on another download.
+  const res2 = await tracks('/api/flights/track', '?icao24=def456');
+  assert.equal(res2.statusCode, 502);
+  assert.equal(callCount, 1);
 });

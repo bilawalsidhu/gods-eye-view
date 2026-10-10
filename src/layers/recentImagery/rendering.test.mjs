@@ -53,10 +53,11 @@ const S30 = { key: 'S30:2026-09-18', product: 'S30', day: '2026-09-18' };
 const L30 = { key: 'L30:2026-09-16', product: 'L30', day: '2026-09-16' };
 const VIIRS = { key: 'VIIRS:2026-09-20', product: 'VIIRS', day: '2026-09-20' };
 
-function fixture({ requestImage, maxTileRequests } = {}) {
+function fixture({ requestImage, maxTileRequests, ...options } = {}) {
   const renders = [];
   const timers = manualTimers();
   const renderer = createRecentImageryRenderer({
+    ...options,
     cesium: fakeCesium(requestImage),
     maxTileRequests,
     requestRender: (reason) => renders.push(reason),
@@ -207,4 +208,22 @@ test('against the basemap slot a splits left with no second layer, and leaving t
   assert.deepEqual(globe.layers, [layer], 'no rebuild for a new look');
   assert.equal(layer.splitDirection, 0);
   assert.deepEqual(renders, ['recent-imagery-show', 'recent-imagery-look']);
+});
+
+test('replacement imagery uses source-owned tile URLs and credit and tears down normally', () => {
+  const { renderer, globe } = fixture({
+    tileTemplate: (product, day) =>
+      `https://tiles.example/${product}/${day}/{z}/{x}/{y}`,
+    credit: 'Example imagery',
+  });
+  assert.equal(renderer.showSlot('a', S30, BOX), true);
+  const layer = globe.layers[0];
+  assert.equal(
+    layer.provider.options.url,
+    'https://tiles.example/S30/2026-09-18/{z}/{x}/{y}',
+  );
+  assert.equal(layer.provider.options.credit, 'Example imagery');
+  renderer.destroy();
+  assert.equal(globe.layers.length, 0);
+  assert.equal(layer.destroyed, true);
 });

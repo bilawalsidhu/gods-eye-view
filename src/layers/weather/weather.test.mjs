@@ -75,9 +75,13 @@ function target(extra = {}) {
 function mockCanvas() {
   const canvas = { width: 0, height: 0 };
   canvas.getContext = () => ({
+    setTransform(...matrix) {
+      canvas.transforms = [...(canvas.transforms ?? []), matrix];
+    },
     drawImage(source, ...crop) {
       canvas.source = source;
       canvas.crop = crop;
+      canvas.drawnWith = canvas.transforms?.at(-1) ?? null;
     },
     getImageData: () => ({ data: new Uint8ClampedArray([194, 100, 0, 200]) }),
     putImageData(pixels) {
@@ -1508,6 +1512,37 @@ test('regional transfer preserves deferrals, original Request, rejection and can
   provider.response.resolve(image);
   assert.equal(await late, image, 'closed frames do not process late images');
   assert.equal(await stage, false);
+});
+
+test('regional tiles decoded as flipped ImageBitmaps are drawn back upright', async () => {
+  const hadBitmap = Object.hasOwn(globalThis, 'ImageBitmap');
+  const previous = globalThis.ImageBitmap;
+  globalThis.ImageBitmap = class ImageBitmap {
+    width = 256;
+    height = 256;
+  };
+  try {
+    const h = renderingHarness();
+    void h.rendering.setFrame(
+      { ...snapshot, product: 'clouds-regional' },
+      times[0],
+    );
+    const provider = h.providers[0];
+    // Cesium decodes with imageOrientation 'flipY'; the canvas upload flips again.
+    provider.response = { promise: Promise.resolve(new ImageBitmap()) };
+    const bitmapTile = await provider.requestImage(0, 0, 0, {});
+    assert.deepEqual(bitmapTile.drawnWith, [1, 0, 0, -1, 0, 256]);
+    // An HTMLImageElement fallback is not pre-flipped.
+    provider.response = {
+      promise: Promise.resolve({ width: 256, height: 256 }),
+    };
+    const imageTile = await provider.requestImage(1, 0, 0, {});
+    assert.equal(imageTile.drawnWith, null);
+    h.rendering.clear();
+  } finally {
+    if (hadBitmap) globalThis.ImageBitmap = previous;
+    else delete globalThis.ImageBitmap;
+  }
 });
 
 for (const kind of ['globe']) {
