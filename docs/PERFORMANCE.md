@@ -128,6 +128,12 @@ Use the same controls before attributing a difference to the application:
 6. Record live object counts before attributing a difference to the client.
 7. Treat a live-source outage as missing coverage, not as evidence of low client
    rendering cost.
+8. Record whether the app is running in Pinokio's embedded view or in an
+   external browser. The same Pinokio 8.2.0 Linux server was reported as
+   severely stuttery in the embedded view and smooth when its local URL was
+   opened directly in a normal browser ([#365](https://github.com/bilawalsidhu/gods-eye-view/issues/365)).
+   Treat that as a browser/compositor-path difference until the GPU renderer
+   proves otherwise.
 
 ## What is not established yet
 
