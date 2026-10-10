@@ -18,6 +18,17 @@ Android app (Capacitor)  ──loads──▶  DroidEye server (vite preview)
 - `droideye/www/`: offline page shown if the server can't be reached.
 - `render.yaml`: one-click free hosting on Render.
 
+## Build the APK (one command)
+
+```bash
+npm run droideye:apk                                   # app loads your Mac over Wi-Fi
+npm run droideye:apk -- https://droideye.onrender.com  # app loads the hosted server
+```
+
+Output: `DroidEye-debug.apk` in the project root. Uses Android Studio's bundled
+Java and `~/Library/Android/sdk`. No Mac handy? On GitHub: **Actions → DroidEye APK
+→ Run workflow**, enter the server URL, and download the APK from the run.
+
 ## 1. First run on your phone (same Wi-Fi as the Mac)
 
 ```bash

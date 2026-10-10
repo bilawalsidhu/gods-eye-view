@@ -2,7 +2,7 @@
   "name": "gods-eye-view",
   "private": true,
   "version": "0.2.1",
-  "description": "A real-time intelligence console for planet Earth — photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
+  "description": "A real-time intelligence console for planet Earth \u2014 photorealistic 3D globe, live aircraft/ships/satellites/earthquakes/CCTV, and hands-free voice control. Runs in a browser.",
   "type": "module",
   "license": "MIT",
   "author": "Bilawal Sidhu",
@@ -55,7 +55,8 @@
     "droideye:server": "node droideye/set-server.mjs",
     "droideye:sync": "npx cap sync android",
     "droideye:open": "npx cap open android",
-    "start:hosted": "vite build && GEV_ALLOWED_HOSTS=\"${GEV_ALLOWED_HOSTS:-$RENDER_EXTERNAL_HOSTNAME}\" vite preview --host 0.0.0.0 --port ${PORT:-4173} --strictPort"
+    "start:hosted": "vite build && GEV_ALLOWED_HOSTS=\"${GEV_ALLOWED_HOSTS:-$RENDER_EXTERNAL_HOSTNAME}\" vite preview --host 0.0.0.0 --port ${PORT:-4173} --strictPort",
+    "droideye:apk": "bash droideye/build-apk.sh"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",
