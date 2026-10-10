@@ -1,8 +1,13 @@
 /** Place-search and route middleware for Node development servers. */
-export { googlePlacesContextProxy } from './places/google.js';
+export {
+  googlePlacesContextProxy,
+  validateGeocodeAddress,
+  geocodeBounds,
+} from './places/google.js';
 export {
   googleServerApiKey,
   keylessGooglePlacesResponse,
+  keylessGoogleGeocodeResponse,
 } from './places/google-key.js';
 export { installRouteMiddleware } from './places/routes.js';
 export {
