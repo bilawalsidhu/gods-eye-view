@@ -178,6 +178,22 @@ export const DATA_CREDITS = [
       '(CC BY 4.0)',
   },
   {
+    key: 'hko-weather',
+    html:
+      'Cockpit current conditions (Hong Kong): ' +
+      '<a href="https://www.hko.gov.hk/en/abouthko/opendata_intro.htm" target="_blank" rel="noopener">Hong Kong Observatory</a> ' +
+      '/ <a href="https://data.gov.hk/en-data/dataset/hk-hko-rss-current-weather-report" target="_blank" rel="noopener">DATA.GOV.HK</a> ' +
+      '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> — attribution required)',
+  },
+  {
+    key: 'hko-radar',
+    html:
+      'Hong Kong rain radar: ' +
+      '<a href="https://www.hko.gov.hk/en/abouthko/opendata_intro.htm" target="_blank" rel="noopener">Hong Kong Observatory</a> ' +
+      '/ <a href="https://data.gov.hk/" target="_blank" rel="noopener">DATA.GOV.HK</a> ' +
+      '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> — attribution required)',
+  },
+  {
     key: 'google-news-rss',
     html:
       'Cockpit regional headlines: ' +
@@ -239,6 +255,13 @@ export const DATA_CREDITS = [
     html:
       'Traffic cameras (Calgary): contains information licensed under the ' +
       '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
+  },
+  {
+    key: 'hk-cctv',
+    html:
+      'Traffic snapshot cameras (Hong Kong): ' +
+      '<a href="https://data.gov.hk/en-data/dataset/hk-td-tis_2-traffic-snapshot-images" target="_blank" rel="noopener">Transport Department / DATA.GOV.HK</a> ' +
+      '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> — attribution required)',
   },
   {
     key: 'vegvesen-cctv',

@@ -16,6 +16,7 @@ import { createSatelliteSource } from '../layers/satellites/source.js';
 import { createLaunchSource } from '../layers/launches/source.js';
 import { createAlprTileSource } from '../layers/alpr/source.js';
 import { createWeatherSource } from '../layers/weather/source.js';
+import { createHkoRadarSource } from '../layers/hkoRadar/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createWindSource } from '../layers/wind/source.js';
 import { createFirmsSource } from '../layers/firms/source.js';
@@ -52,6 +53,7 @@ export function createStandaloneLayerSources(overrides = {}) {
     firms: createFirmsSource(),
     wind: createWindSource(),
     weather: createWeatherSource(),
+    'hko-radar': createHkoRadarSource(),
     cyclones: createCycloneSource(),
     mapillary: createMapillarySource({
       token: import.meta.env?.MAPILLARY_CLIENT_TOKEN || '',

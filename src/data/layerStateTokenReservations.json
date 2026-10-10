@@ -24,6 +24,7 @@
   ["traffic", "t"],
   ["transit", "j"],
   ["weather-cyclones", "y"],
+  ["weather-hko-radar", "3"],
   ["weather-lightning", "l"],
   ["weather-radar", "v"],
   ["weather-satellite", "o"],

@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  hkoIconToWmo,
+  isNearHongKong,
+  normalizeHkoWeather,
   normalizeRegionalArticles,
   normalizeRegionalPlace,
   normalizeRegionalWeather,
@@ -38,8 +41,43 @@ test('normalizes weather values and labels WMO conditions', () => {
   } });
   assert.equal(weather.temperatureC, 21.4);
   assert.equal(weather.visibilityM, 18000);
+  assert.equal(weather.source, 'open-meteo');
   assert.equal(weatherCodeLabel(weather.weatherCode), 'PARTLY CLOUDY');
   assert.equal(normalizeRegionalWeather({ current: {} }), null);
+});
+
+test('HKO current weather prefers the nearest station and maps icons', () => {
+  assert.equal(isNearHongKong({ latitude: 22.3, longitude: 114.17 }), true);
+  assert.equal(isNearHongKong({ latitude: 37.77, longitude: -122.42 }), false);
+  assert.equal(hkoIconToWmo(65), 95);
+  assert.equal(weatherCodeLabel(hkoIconToWmo(62)), 'RAIN');
+  const weather = normalizeHkoWeather(
+    {
+      updateTime: '2026-10-11T01:02:00+08:00',
+      icon: [62],
+      temperature: {
+        recordTime: '2026-10-11T01:00:00+08:00',
+        data: [
+          { place: 'Hong Kong Observatory', value: 27, unit: 'C' },
+          { place: 'Sha Tin', value: 24, unit: 'C' },
+        ],
+      },
+      rainfall: {
+        data: [
+          { place: 'Yau Tsim Mong', max: 0, unit: 'mm' },
+          { place: 'Sha Tin', max: 1.2, unit: 'mm' },
+        ],
+      },
+    },
+    { latitude: 22.38, longitude: 114.19 },
+  );
+  assert.equal(weather.source, 'hko');
+  assert.equal(weather.temperatureC, 24);
+  assert.equal(weather.precipitationMm, 1.2);
+  assert.equal(weather.weatherCode, 61);
+  assert.equal(weather.windKph, null);
+  assert.equal(weather.observedAt, '2026-10-10T17:00:00.000Z');
+  assert.equal(normalizeHkoWeather({ temperature: { data: [] } }, { latitude: 22.3, longitude: 114.17 }), null);
 });
 
 test('zone-naive Open-Meteo timestamps are pinned to UTC, zoned ones pass through', () => {

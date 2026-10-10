@@ -49,6 +49,7 @@ test('tool enums are generated from the manifest', () => {
     'street-level',
     'wind',
     'weather-radar',
+    'weather-hko-radar',
     'weather-satellite',
     'weather-lightning',
     'weather-cyclones',
@@ -98,7 +99,8 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
   for (const [phrase, id] of Object.entries(legacy)) assert.equal(aliases.get(phrase), id, phrase);
   const added = {
     buses: 'transit', trains: 'transit', hurricanes: 'weather-cyclones', cyclones: 'weather-cyclones',
-    'weather radar': 'weather-radar', lightning: 'weather-lightning', 'military bases': 'military-installations',
+    'weather radar': 'weather-radar', 'hk radar': 'weather-hko-radar',
+    lightning: 'weather-lightning', 'military bases': 'military-installations',
     'recent imagery': 'recent-imagery', 'bike share': 'bikeshare', 'rocket launches': 'rocket-launches',
     'street level': 'street-level', mapillary: 'street-level',
     wind: 'wind', directions: 'directions', 'fire perimeters': 'fire-perimeters',

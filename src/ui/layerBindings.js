@@ -124,6 +124,7 @@ export class LayerBindings {
     for (const id of [
       'wind',
       'weather-radar',
+      'weather-hko-radar',
       'weather-satellite',
       'weather-lightning',
       'weather-cyclones',
