@@ -55,6 +55,11 @@ import {
   DEFAULT_CALGARY_MAX_SOURCES,
   CALGARY_DOWNTOWN,
   CALGARY_MAX_CATALOG_BYTES,
+  DEFAULT_HK_CAMERAS_URL,
+  HK_IMAGE_ORIGIN,
+  DEFAULT_HK_MAX_SOURCES,
+  HK_ANCHORS,
+  HK_MAX_CATALOG_BYTES,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
   DELDOT_CCTV_URL,
   DEFAULT_DELDOT_MAX_SOURCES,
@@ -82,13 +87,17 @@ import {
   isLikelyTexasCoordinate,
   isLikelyNswCoordinate,
   isLikelyCalgaryCoordinate,
+  isLikelyHongKongCoordinate,
   isLikelyNorwayCoordinate,
   cameraDisplayCode,
   rowArrayToObject,
   prioritizeSources,
 } from './normalize.js';
 import { directionToHeading } from '../../../src/data/directionText.js';
-import { readResponseJsonCapped } from '../common/http.js';
+import {
+  readResponseJsonCapped,
+  readResponseTextCapped,
+} from '../common/http.js';
 /**
  * Fetch and parse Austin traffic camera records from the city Open Data portal.
  *
@@ -1601,6 +1610,226 @@ export async function loadCalgarySourcesFromOpenData() {
       '[CCTV] Calgary camera download error:',
       error?.message || error,
     );
+    return [];
+  }
+}
+
+/**
+ * Read one XML child tag's text from an `<image>` block.
+ *
+ * @param {string} body
+ * @param {string} tag
+ * @returns {string}
+ */
+function hkXmlTag(body, tag) {
+  const match = new RegExp(`<${tag}>\\s*([^<]*?)\\s*</${tag}>`, 'i').exec(
+    String(body || ''),
+  );
+  return match ? match[1].trim() : '';
+}
+
+/**
+ * Parse the Transport Department English camera-locations XML into rows.
+ *
+ * Schema-specific: each `<image>` carries key, description, lat/lon and a
+ * still URL. No XML dependency — same regex style as the Tarktee DATEX parser.
+ *
+ * @param {string} xml
+ * @returns {Array<object>}
+ */
+export function parseHkCameraLocationsXml(xml) {
+  const rows = [];
+  const blockRe = /<image>([\s\S]*?)<\/image>/gi;
+  let match;
+  while ((match = blockRe.exec(String(xml || ''))) !== null) {
+    const body = match[1];
+    rows.push({
+      key: hkXmlTag(body, 'key'),
+      region: hkXmlTag(body, 'region'),
+      district: hkXmlTag(body, 'district'),
+      description: hkXmlTag(body, 'description'),
+      latitude: hkXmlTag(body, 'latitude'),
+      longitude: hkXmlTag(body, 'longitude'),
+      url: hkXmlTag(body, 'url'),
+    });
+  }
+  return rows;
+}
+
+/**
+ * Build a host-pinned still URL from a Transport Department camera key.
+ *
+ * The catalog also publishes a URL; the registered frame is always rebuilt
+ * from the key so a catalog edit cannot steer the proxy off-origin.
+ *
+ * @param {string|null|undefined} key
+ * @returns {?string}
+ */
+export function hkImageUrlFromKey(key) {
+  const id = String(key ?? '')
+    .trim()
+    .toUpperCase();
+  if (!/^[A-Z0-9]{1,32}$/.test(id)) return null;
+  return `${HK_IMAGE_ORIGIN}${id}.JPG`;
+}
+
+/**
+ * Pin a catalog frame URL to the Transport Department still host.
+ *
+ * @param {string|null|undefined} raw
+ * @returns {?string}
+ */
+export function normalizeHkImageUrl(raw) {
+  const text = String(raw ?? '').trim();
+  if (!text) return null;
+  let parsed;
+  try {
+    parsed = new URL(text);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  parsed.protocol = 'https:';
+  const upgraded = parsed.toString();
+  return upgraded.startsWith(HK_IMAGE_ORIGIN) ? upgraded : null;
+}
+
+/**
+ * Label for one HK camera: the published English description, else the key.
+ *
+ * @param {object} record
+ * @param {string} cameraId
+ * @returns {string}
+ */
+export function hkCameraName(record, cameraId) {
+  const description = String(record?.description ?? '').trim();
+  if (description) return description;
+  const key = String(record?.key ?? '').trim();
+  if (key) return key;
+  return `HK Camera ${String(cameraId).replace(/^hk-/, '')}`;
+}
+
+/**
+ * One Transport Department locations row -> one catalog source, or null.
+ *
+ * The dataset publishes no camera facing, so headings use the shared id-hash
+ * fallback at low confidence and are corrected with the calibration gizmo.
+ *
+ * @param {object} record
+ * @returns {?object}
+ */
+export function hkCameraToSource(record) {
+  if (!record || typeof record !== 'object') return null;
+  const key = String(record.key ?? '')
+    .trim()
+    .toUpperCase();
+  if (!key) return null;
+  const lat = toFiniteNumber(record.latitude);
+  const lon = toFiniteNumber(record.longitude);
+  if (!isLikelyHongKongCoordinate(lat, lon)) return null;
+
+  const imageUrl = hkImageUrlFromKey(key);
+  if (!imageUrl) return null;
+  // If the catalog carries a URL, it must already be on the pinned host.
+  const catalogUrl = String(record.url ?? '').trim();
+  if (catalogUrl) {
+    const pinnedCatalog = normalizeHkImageUrl(catalogUrl);
+    if (!pinnedCatalog) return null;
+  }
+
+  const cameraId = `hk-${key.toLowerCase()}`;
+  const name = hkCameraName(record, cameraId);
+  const region = String(record.region ?? '').trim();
+
+  return {
+    id: cameraId,
+    name,
+    city: region || 'Hong Kong',
+    cityId: 'hk',
+    provider: 'Transport Department',
+    lat,
+    lon,
+    headingDeg: fallbackHeadingFromId(cameraId),
+    headingConfidence: 'low',
+    pitchDeg: -18,
+    fovDeg: 44,
+    rangeM: 145,
+    mountHeightM: 8,
+    // Coastal / harbour prior; the client's one-shot ground snap corrects.
+    groundElevationM: 15,
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'hk-td-open-data',
+    license:
+      'Hong Kong Transport Department / DATA.GOV.HK — attribution required',
+    code: cameraDisplayCode(name.toUpperCase()),
+  };
+}
+
+/**
+ * Fetch Hong Kong Transport Department traffic snapshot cameras from the
+ * keyless DATA.GOV.HK English locations XML. Frames are stills on
+ * tdcctv.data.one.gov.hk.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadHkSourcesFromOpenData() {
+  try {
+    const endpoint = process.env.CCTV_HK_CAMERAS_URL || DEFAULT_HK_CAMERAS_URL;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: 'application/xml,text/xml,*/*' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn('[CCTV] HK catalog redirected; redirects are not followed');
+      return discard();
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] HK camera download failed:', resp.status);
+      return discard();
+    }
+    let xml;
+    try {
+      xml = await readResponseTextCapped(resp, HK_MAX_CATALOG_BYTES);
+    } catch (error) {
+      if (error?.code === 'RESPONSE_TOO_LARGE') {
+        console.warn('[CCTV] HK catalog body exceeded byte ceiling');
+        return [];
+      }
+      throw error;
+    }
+    const rows = parseHkCameraLocationsXml(xml);
+    const cameras = [];
+    const seen = new Set();
+    for (const record of rows) {
+      const camera = hkCameraToSource(record);
+      if (!camera || seen.has(camera.id)) continue;
+      seen.add(camera.id);
+      cameras.push(camera);
+    }
+    const maxRaw = Number(
+      process.env.CCTV_HK_MAX_SOURCES || DEFAULT_HK_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(400, Math.floor(maxRaw)))
+      : DEFAULT_HK_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, HK_ANCHORS);
+    console.log(
+      `[CCTV] Loaded HK camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] HK camera download error:', error?.message || error);
     return [];
   }
 }

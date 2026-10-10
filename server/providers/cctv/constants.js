@@ -236,6 +236,24 @@ export const CALGARY_DOWNTOWN = { lat: 51.0461, lon: -114.0626 };
  * body cannot be buffered without limit. */
 export const CALGARY_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
 
+/** Hong Kong Transport Department traffic snapshot cameras: keyless English
+ * locations XML on DATA.GOV.HK; frames are stills on the TD CCTV host. */
+export const DEFAULT_HK_CAMERAS_URL =
+  'https://static.data.gov.hk/td/traffic-snapshot-images/code/Traffic_Camera_Locations_En.xml';
+/** The only origin HK camera frames may come from. Verified 2026-10-11: still
+ * URLs answer 200 on this host with no redirect hop. */
+export const HK_IMAGE_ORIGIN = 'https://tdcctv.data.one.gov.hk/';
+export const DEFAULT_HK_MAX_SOURCES = 250;
+/** Prioritization anchors: Central and Tsim Sha Tsui. */
+export const HK_ANCHORS = [
+  { lat: 22.2819, lon: 114.158 }, // Central
+  { lat: 22.2976, lon: 114.1722 }, // Tsim Sha Tsui
+];
+/** Hard ceiling on the locations XML body. The live English list is ~400 KB
+ * for ~1,000 cameras; this only exists so an unbounded upstream cannot be
+ * buffered without limit. */
+export const HK_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+
 /** Statens vegvesen (Norway) road cameras: the keyless OGC API Features view
  * of the official DATEX 3.1 CCTV site table, one GeoJSON request for the whole
  * country (~900 cameras). The raw DATEX node needs an account; this view does
