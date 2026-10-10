@@ -27,14 +27,16 @@ const INSTRUCTIONS =
 export function createLocalMcpServer({
   apiBase = DEFAULT_API_BASE,
   fetchImpl,
+  panelKey = randomBytes(32).toString('base64url'),
 } = {}) {
   const { version } = JSON.parse(
     readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
   );
-  // Each server makes a new key for its panel. The panel's page carries it
-  // and panel_request requires it; any client may read the page, so it keeps
-  // the tool from clients that only list it, and is not access control.
-  const panelKey = randomBytes(32).toString('base64url');
+  // Unless given one, each server makes a new key for its panel. The panel's
+  // page carries it and panel_request requires it; any client may read the
+  // page, so it keeps the tool from clients that only list it, and is not
+  // access control. The stdio entry passes the install's shared key
+  // (panelKey.js), so separate processes of one client agree.
   return createMcpServer({
     catalog: catalogForSurface(
       composeCatalog({

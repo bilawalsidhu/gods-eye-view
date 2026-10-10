@@ -255,8 +255,22 @@ export class LayerStateCoordinator {
       const explicitlyRequested = Object.hasOwn(requestedParams, spec.key);
       const implicitTrackingSync =
         !explicitlyRequested && spec.key === trackingOptionKey;
-      if (!explicitlyRequested && !implicitTrackingSync) continue;
-      const value = spec.normalize(change.params[spec.key]);
+      // Packed options can persist only the subkeys owned by this request.
+      const requestedValue =
+        explicitlyRequested || implicitTrackingSync
+          ? change.params[spec.key]
+          : spec.patchRequested?.(
+              nextOwnerOptions[spec.key],
+              change.params[spec.key],
+              requestedParams,
+            );
+      if (
+        !explicitlyRequested &&
+        !implicitTrackingSync &&
+        requestedValue === undefined
+      )
+        continue;
+      const value = spec.normalize(requestedValue);
       if (value === null) {
         if (implicitTrackingSync) {
           nextOwnerOptions[spec.key] = null;

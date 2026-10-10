@@ -12,6 +12,28 @@ import { displayPanelScroller } from './displayPanelScroll.js';
 const pendingCollapseRetries = new WeakSet();
 
 /**
+ * Where the left rail's top will settle, not where it is mid-transition:
+ * nothing re-runs this pass when the `top` animation ends (ResizeObserver
+ * ignores moves). Returns NaN when there is no left rail.
+ */
+function settledLeftRailTop(leftStack, viewportHeight, getComputedStyle) {
+  const top = leftStack?.getBoundingClientRect().top;
+  if (!Number.isFinite(top)) return NaN;
+  const transition = leftStack
+    .getAnimations?.()
+    .find((animation) => animation.transitionProperty === 'top');
+  if (!transition) return top;
+  const keyframes = transition.effect?.getKeyframes?.() || [];
+  const targetTop = parseFloat(keyframes.at(-1)?.top);
+  const currentTop = parseFloat(getComputedStyle(leftStack).top);
+  // The rect and the computed `top` move together; keep any offset between them.
+  if (Number.isFinite(targetTop) && Number.isFinite(currentTop))
+    return top + targetTop - currentTop;
+  const targetPct = parseFloat(leftStack.dataset?.safeTopPct);
+  return Number.isFinite(targetPct) ? (targetPct * viewportHeight) / 100 : top;
+}
+
+/**
  * Measure and place the right panel rail for one synchronous layout pass.
  * The caller owns scheduling, obstacle selection, disclosure preferences and
  * persistence. Auto-collapse is presentation only and reports through callbacks.
@@ -47,8 +69,10 @@ export function layoutRightPanelRail({
   // A collapse may schedule one follow-up, which only measures and allocates.
   const isCollapseRetry = pendingCollapseRetries.delete(stack);
 
+  // A floating (lifted-out) panel is not laid out by the rail.
   const panels = [...stack.children].filter(
-    (panel) => panel.matches('[data-panel-id]') && !panel.hidden,
+    (panel) =>
+      panel.matches('[data-panel-id]:not(.panel-floating)') && !panel.hidden,
   );
   if (!hud.visible || hud.variant !== 'tactical') {
     for (const panel of panels.filter((item) =>
@@ -110,7 +134,11 @@ export function layoutRightPanelRail({
   const viewportHeight = Math.max(1, windowRef.innerHeight);
   const safeGap = Math.max(8, viewportHeight * 0.012);
   const stackRect = stack.getBoundingClientRect();
-  const leftStackTop = leftStack?.getBoundingClientRect().top;
+  const leftStackTop = settledLeftRailTop(
+    leftStack,
+    viewportHeight,
+    getComputedStyle,
+  );
   const alignedTop = Number.isFinite(leftStackTop)
     ? leftStackTop
     : viewportHeight * 0.26;

@@ -8,7 +8,8 @@
  * card on every render, so a read that counted would evict the visible cards
  * first). Eviction revokes the image only; what the probe proved is kept.
  */
-import { thumbnailOrder, wvsSnapshotUrl } from './model.js';
+import { thumbnailOrder } from './model.js';
+import { createRecentImagerySource } from './source.js';
 
 const EMPTY = Object.freeze({
   status: 'unknown',
@@ -22,6 +23,7 @@ const EMPTY = Object.freeze({
  */
 export function createThumbnailLoader({
   fetchImpl = globalThis.fetch?.bind(globalThis),
+  requestThumbnail = createRecentImagerySource({ fetchImpl }).getThumbnail,
   maxInFlight = 3,
   maxDecoded = 16,
   createObjectUrl = (blob) => URL.createObjectURL(blob),
@@ -90,14 +92,10 @@ export function createThumbnailLoader({
     let acquisitionTime = null;
     let cancelled = false;
     try {
-      const url = wvsSnapshotUrl({
-        product: entry.candidate.product,
-        day: entry.candidate.day,
-        box: entry.box,
-        width: size,
-        height: size,
+      const response = await requestThumbnail(entry.candidate, entry.box, {
+        size,
+        signal: controller.signal,
       });
-      const response = await fetchImpl(url, { signal: controller.signal });
       if (controller.signal.aborted) {
         cancelled = true;
       } else if (response?.ok) {
