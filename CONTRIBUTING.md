@@ -108,7 +108,7 @@ prints anything; never fix that by renaming or deleting PR A's published token.
 The highest-leverage places to jump in:
 
 - **🌆 Add a CCTV source pack.** Austin is the reference camera source. Adding another city means a clean public camera catalog with coordinates, attribution, and server-registered frame URLs (the proxy only fetches registered URLs — never client-supplied ones, see [SECURITY.md](SECURITY.md)). City packs are the best first lane.
-- **🛰️ Add or improve a data layer.** Layer factories live in `src/layers/<family>/`, with source, record, controller and renderer owners implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template.
+- **🛰️ Add or improve a data layer.** Layer factories live in `src/layers/<family>/`, with source, record, controller and renderer owners implementing the layer interface (`init/enable/disable/update/destroy/getStats`, optional `getDetectableObjects`/`getStats`). Use an existing layer as a template, and see [Adding a new layer](#adding-a-new-layer) for what the PR needs.
 - **🎙️ Extend voice control.** Voice arguments are defined in `src/voice/actionSchemas.js`, with server-side descriptions in `server/providers/openai/tools.js` and client-side execution in `src/voice/gevActions.js`. Keep the tool surface tight and the responses honest (confirm only what actually happened).
 - **🎨 Add a visual style.** Styles are GLSL post-process shaders in `src/styles/`.
 - **🐛 Fix bugs / improve the first-run experience.** See [docs/KNOWN-ISSUES.md](docs/KNOWN-ISSUES.md).
@@ -152,6 +152,33 @@ ownership and adoption process.
 3. If you change runtime behavior, update `docs/CURRENT-STATE.md` and `CHANGELOG.md` in the same PR.
 4. If you add or change a data source, update [DATA_SOURCES.md](DATA_SOURCES.md) with its license and attribution. **Don't add data you don't have the right to redistribute** — fetch it at runtime instead.
 5. Describe what you changed and how you verified it (screenshots welcome for anything visual).
+6. If you add a new layer, fill in the new-layer section of the PR template. See [Adding a new layer](#adding-a-new-layer).
+
+## Adding a new layer
+
+A new layer changes what everyone sees on the globe, so maintainers need to see
+it working and know where its data comes from before reviewing the code. PRs
+that add a layer must include all four of these in the description. The PR
+template has a section for them.
+
+1. **Screenshots.** At least one of the layer on the globe, plus its info card
+   or panel if it has one.
+2. **A screen recording**, preferably 15 to 30 seconds: turn the layer on, move
+   around, and open a record. Drag an `.mp4` or `.mov` into the PR description.
+   GitHub accepts videos up to 10 MB on free accounts, so link to a larger file
+   instead of attaching it.
+3. **The proposed category.** Say which layer-panel group the layer belongs in.
+   The groups are defined in `PANEL_GROUPS` in `src/ui/layerPanel.js` (today:
+   Movement, Cameras, Infrastructure, Events, Weather and Utilities). A layer
+   that isn't listed there falls under "Other layers". If none of the groups
+   fits, propose a new one and explain why.
+4. **The data source and licence.** Name the provider and endpoint, link its
+   licence or terms, give the attribution shown in the app, and say whether it
+   needs a key and whether the data is fetched at runtime or bundled. Add the
+   same details to [DATA_SOURCES.md](DATA_SOURCES.md) and register the credit
+   in `src/data/dataCredits.js`.
+
+Maintainers may hold a layer PR until all four are there.
 
 ## Maintainers
 
