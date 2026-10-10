@@ -221,8 +221,12 @@ export function createIngestion({ state, services, parts, source }) {
     for (const record of records) {
       if (isStaleVehicleFix(record, now, fetchedAt)) continue;
       const key = transitVehicleKey(feed.id, record.id);
-      const mode = transitModeFor(feed, record.routeId);
-      const modeInferred = !transitModeResolved(feed, record.routeId);
+      const mode = transitModeFor(feed, record.routeId, record.mode);
+      const modeInferred = !transitModeResolved(
+        feed,
+        record.routeId,
+        record.mode,
+      );
       // A stamp ahead of the fetch is a clock fault; the fetch time bounds it.
       const stamped = vehicleReportTimeMs(record, fetchedAt);
       const reportAt =

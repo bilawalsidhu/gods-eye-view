@@ -115,6 +115,14 @@
   proposed diagnosis in #927, and [kvnloo](https://github.com/kvnloo) for identifying
   the repair race. Windows/Claude Desktop Cowork confirmation remains outstanding.
 
+- Show Norway's whole live transit fleet. The Entur feed now reads the
+  Vehicles GraphQL API (realtime v2) instead of the v1 GTFS-Realtime feed,
+  which lacks Skyss, Vestfold og Telemark, Innlandet and other operators —
+  roughly half again as many vehicles. Each vehicle's own reported mode
+  (bus, coach, tram, rail, ferry) sets its marker, and the coverage circle
+  now reaches from Kristiansand to Kirkenes while still leaving Helsinki to
+  HSL. Ruter does not publish to either open Entur feed.
+
 - Street Level: a street-level imagery layer modelled on the iD editor's photo
   overlay, with Mapillary as its first provider (free client token, CC BY-SA 4.0
   imagery). One right-rail panel holds a chip per provider, shared 360°/flat and

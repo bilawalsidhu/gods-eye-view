@@ -57,6 +57,9 @@ export async function fetchTransitFeed(
       signal,
       headers: transitUpstreamHeaders(feed, validators),
       redirect: 'manual',
+      ...(feed.request
+        ? { method: feed.request.method, body: feed.request.body }
+        : {}),
     });
     // Only a real redirect is followed. A 304 is the successful answer to our
     // own conditional request and has no Location; sending it round this loop
