@@ -8,12 +8,45 @@ export function createNavigation({
   source,
 }) {
   /**
-   * Finds the camera closest to the Cesium viewer's current position.
+   * The ground point the viewer is actually looking at (the map location the
+   * operator scrolled/panned onto), not the high-above-surface camera eye.
+   * Falls back to the eye position when no surface is under the screen center.
+   * @returns {Cesium.Cartographic|null} Ground point being viewed, or null.
+   */
+
+  function viewedCartographic() {
+    const viewer = layerState._viewer;
+    const camera = viewer?.camera;
+    if (!camera) return null;
+    const scene = viewer.scene;
+    if (scene && typeof camera.getPickRay === 'function') {
+      const width = scene.canvas?.clientWidth || scene.drawingBufferWidth || 0;
+      const height =
+        scene.canvas?.clientHeight || scene.drawingBufferHeight || 0;
+      if (width > 0 && height > 0) {
+        const ray = camera.getPickRay(
+          new Cesium.Cartesian2(width / 2, height / 2),
+        );
+        const picked = ray && scene.globe?.pick?.(ray, scene);
+        if (picked) {
+          const fromPicked = Cesium.Cartographic.fromCartesian(picked);
+          if (fromPicked && Number.isFinite(fromPicked.longitude))
+            return fromPicked;
+        }
+      }
+    }
+    return camera.positionCartographic || null;
+  }
+
+  /**
+   * Finds the camera closest to the map location the viewer is currently
+   * looking at (screen-center ground point). Never snaps back to a region the
+   * operator already left.
    * @returns {string|null} Camera ID of the nearest camera, or null.
    */
 
   function nearestCameraIdToViewer() {
-    const carto = layerState._viewer?.camera?.positionCartographic;
+    const carto = viewedCartographic();
     if (!carto || !layerState._records.length) return null;
     const lat = Cesium.Math.toDegrees(carto.latitude);
     const lon = Cesium.Math.toDegrees(carto.longitude);
@@ -59,6 +92,7 @@ export function createNavigation({
     }
     const { camera } = record;
     const range = Math.max(280, camera.rangeM * 1.18);
+    pushCurrentViewToHistory();
     viewer.camera.flyToBoundingSphere(
       new Cesium.BoundingSphere(
         record.position,
@@ -83,6 +117,118 @@ export function createNavigation({
       layerState._recordById.get(cameraId),
       duration,
     );
+  }
+
+  /** Copies the viewer's current camera pose for later restoration. */
+
+  function captureCameraPose() {
+    const camera = layerState._viewer?.camera;
+    const position = camera?.positionWC?.clone?.();
+    if (!position) return null;
+    return {
+      position,
+      heading: camera.heading,
+      pitch: camera.pitch,
+      roll: camera.roll,
+    };
+  }
+
+  function posesEquivalent(a, b) {
+    if (!a || !b) return false;
+    const wrap = (value) => {
+      const half = Math.PI;
+      let result = value % (2 * half);
+      if (result > half) result -= 2 * half;
+      if (result < -half) result += 2 * half;
+      return result;
+    };
+    return (
+      Cesium.Cartesian3.distance(a.position, b.position) <= 5 &&
+      Math.abs(wrap(a.heading - b.heading)) <= 0.05 &&
+      Math.abs(wrap(a.pitch - b.pitch)) <= 0.05 &&
+      Math.abs(wrap(a.roll - b.roll)) <= 0.05
+    );
+  }
+
+  /**
+   * Remembers the view being left behind so an explicit camera flight can be
+   * undone with the BACK control. Skips an entry identical to the last one
+   * (re-focus on the same camera) and drops the forward stack on a new branch.
+   * @returns {boolean} True when a new entry was captured.
+   */
+
+  function pushCurrentViewToHistory() {
+    const pose = captureCameraPose();
+    if (!pose) return false;
+    const last = layerState._viewHistory.at(-1);
+    if (last && posesEquivalent(last, pose)) return false;
+    layerState._viewHistory.push(pose);
+    if (layerState._viewHistory.length > layerState._viewHistoryLimit) {
+      layerState._viewHistory.shift();
+    }
+    layerState._viewForward.length = 0;
+    parts.presentation.notifyListeners();
+    return true;
+  }
+
+  function restoreCameraPose(pose) {
+    const viewer = layerState._viewer;
+    if (!viewer || !pose) return false;
+    viewer.camera.flyTo({
+      destination: pose.position,
+      orientation: {
+        heading: pose.heading,
+        pitch: pose.pitch,
+        roll: pose.roll,
+      },
+      duration: 1.2,
+      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+    });
+    return true;
+  }
+
+  /** Goes back to the previous camera view. Returns false when history is empty. */
+
+  function historyBack() {
+    const prior = layerState._viewHistory.at(-1);
+    if (!prior) return false;
+    layerState._viewHistory.pop();
+    const current = captureCameraPose();
+    if (current && !posesEquivalent(current, prior)) {
+      layerState._viewForward.push(current);
+      if (layerState._viewForward.length > layerState._viewHistoryLimit) {
+        layerState._viewForward.shift();
+      }
+    }
+    const restored = restoreCameraPose(prior);
+    parts.presentation.notifyListeners();
+    return restored;
+  }
+
+  /** Goes forward to the view abandoned by the last BACK. */
+
+  function historyForward() {
+    const next = layerState._viewForward.at(-1);
+    if (!next) return false;
+    layerState._viewForward.pop();
+    const current = captureCameraPose();
+    if (current && !posesEquivalent(current, next)) {
+      layerState._viewHistory.push(current);
+      if (layerState._viewHistory.length > layerState._viewHistoryLimit) {
+        layerState._viewHistory.shift();
+      }
+    }
+    const restored = restoreCameraPose(next);
+    parts.presentation.notifyListeners();
+    return restored;
+  }
+
+  function canGoBack() {
+    return layerState._viewHistory.length > 0;
+  }
+
+  function canGoForward() {
+    return layerState._viewForward.length > 0;
   }
 
   /**
@@ -149,9 +295,15 @@ export function createNavigation({
   }
   return {
     nearestCameraIdToViewer,
+    viewedCartographic,
     focusCctvRecord,
     focusCamera,
     maybeAutoHop,
     cctvCycleIndex,
+    pushCurrentViewToHistory,
+    historyBack,
+    historyForward,
+    canGoBack,
+    canGoForward,
   };
 }

@@ -64,6 +64,7 @@ export const _extractPickedCameraIdForTest =
   layer._extractPickedCameraIdForTest;
 export const _setCctvCoverageStateForTest = layer._setCctvCoverageStateForTest;
 export const focusCctvRecord = layer.focusCctvRecord;
+export const nearestCameraIdToViewer = layer.nearestCameraIdToViewer;
 export const maybeAutoHop = layer.maybeAutoHop;
 export const cctvCycleIndex = layer.cctvCycleIndex;
 export {

@@ -88,6 +88,12 @@ export function _renderCctvState(state) {
     if (!btn) continue;
     btn.disabled = !enabled || cameras.length === 0;
   }
+  if (this._cctvBackBtn) {
+    this._cctvBackBtn.disabled = !enabled || !state?.canGoBack;
+  }
+  if (this._cctvForwardBtn) {
+    this._cctvForwardBtn.disabled = !enabled || !state?.canGoForward;
+  }
   if (this._cctvFocusBtn) {
     this._cctvFocusBtn.disabled = !enabled || cameras.length === 0 || !activeId;
   }

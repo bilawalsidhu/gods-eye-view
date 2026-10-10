@@ -146,6 +146,8 @@ export function readShellElements(document = globalThis.document) {
     _cctvNearestBtn: document.getElementById('cctv-nearest-btn'),
     _cctvPrevBtn: document.getElementById('cctv-prev-btn'),
     _cctvNextBtn: document.getElementById('cctv-next-btn'),
+    _cctvBackBtn: document.getElementById('cctv-back-btn'),
+    _cctvForwardBtn: document.getElementById('cctv-forward-btn'),
     _cctvSelect: document.getElementById('cctv-camera-select'),
     _cctvFocusBtn: document.getElementById('cctv-focus-btn'),
     _cctvCoverageBtn: document.getElementById('cctv-coverage-btn'),

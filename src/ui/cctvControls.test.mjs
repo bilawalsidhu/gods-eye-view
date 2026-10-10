@@ -218,3 +218,119 @@ test('disposing during camera enable prevents the delayed focus and future click
   assert.equal(enables, 1);
   assert.equal(focuses, 0);
 });
+
+test('NEAREST enables CCTV without the transition grab, then flies once to the viewed spot', async () => {
+  const button = new EventTarget();
+  const enables = [];
+  const activations = [];
+  let activationsRun = 0;
+  const controls = new CctvControls({
+    elements: { _cctvPanel: {}, _cctvNearestBtn: button },
+    cctv: {
+      focusNearest({ focus }) {
+        activationsRun++;
+        return focus === false ? 'view-cam' : null;
+      },
+    },
+    actions: {
+      isEnabled: () => true,
+      syncViewport() {},
+      toggleEnabled(force, options) {
+        enables.push([force, options]);
+        return Promise.resolve(true);
+      },
+      runExplicitFocus(activate, focus) {
+        activations.push([activate, focus]);
+      },
+    },
+  });
+  button.dispatchEvent(new Event('click'));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(enables, [[true, { suppressAutoFocus: true }]]);
+  assert.equal(activations.length, 1);
+  // The single nearest measurement decides the flight target.
+  assert.equal(activations[0][0](), 'view-cam');
+  assert.equal(activationsRun, 1);
+  controls.destroy();
+});
+
+test('BACK and FORWARD buttons restore prior camera views through explicit navigation', async () => {
+  const backBtn = new EventTarget();
+  const forwardBtn = new EventTarget();
+  const enables = [];
+  const navigations = [];
+  const controls = new CctvControls({
+    elements: {
+      _cctvPanel: {},
+      _cctvBackBtn: backBtn,
+      _cctvForwardBtn: forwardBtn,
+    },
+    cctv: {
+      historyBack() {
+        return true;
+      },
+      historyForward() {
+        return true;
+      },
+    },
+    actions: {
+      isEnabled: () => true,
+      syncViewport() {},
+      toggleEnabled(force, options) {
+        enables.push([force, options]);
+        return Promise.resolve(true);
+      },
+      runExplicitNavigation(noun, navigate) {
+        navigations.push([noun, navigate()]);
+      },
+    },
+  });
+  backBtn.dispatchEvent(new Event('click'));
+  await new Promise((resolve) => setImmediate(resolve));
+  forwardBtn.dispatchEvent(new Event('click'));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(enables, [
+    [true, { suppressAutoFocus: true }],
+    [true, { suppressAutoFocus: true }],
+  ]);
+  assert.deepEqual(navigations, [
+    ['camera', true],
+    ['camera', true],
+  ]);
+  controls.destroy();
+});
+
+test('NEAREST refuses to fly when the active camera changes while enabling', async () => {
+  const button = new EventTarget();
+  const activations = [];
+  const state = { activeCameraId: 'cam-a' };
+  const controls = new CctvControls({
+    elements: { _cctvPanel: {}, _cctvNearestBtn: button },
+    cctv: {
+      focusNearest() {
+        return 'view-cam';
+      },
+    },
+    actions: {
+      syncViewport() {},
+      // The enable resolves after the operator already switched to a
+      // different camera elsewhere, so the pending nearest flight must not
+      // override the newer selection.
+      async toggleEnabled() {
+        state.activeCameraId = 'cam-b';
+        return true;
+      },
+      isEnabled() {
+        return true;
+      },
+      runExplicitFocus(activate, focus) {
+        activations.push([activate, focus]);
+      },
+    },
+  });
+  controls._cctvState = state;
+  button.dispatchEvent(new Event('click'));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(activations.length, 0);
+  controls.destroy();
+});

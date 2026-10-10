@@ -44,6 +44,8 @@ export function createLifecycle({
     // Task 5: the applied-regime tracker is record-set-scoped — a fresh init
     // recomputes it against the then-current scene.
     layerState._lastAppliedRegime = null;
+    layerState._viewHistory.length = 0;
+    layerState._viewForward.length = 0;
   }
   const methods = {
     /**
