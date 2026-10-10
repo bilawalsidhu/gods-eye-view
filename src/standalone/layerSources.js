@@ -2,10 +2,15 @@ import { createDirectionsSource } from '../layers/directions/source.js';
 import { createRecentImagerySource } from '../layers/recentImagery/source.js';
 import { createOpenFreeMapSource } from '../sources/openFreeMap.js';
 import {
+  createOpenSkySource,
+  createAdsbLolSource,
+  createAeroApiSource,
+  createAisStreamSource,
   createFlightSource,
   createMilitarySource,
   createVesselSource,
 } from '../sources/live/standalone.js';
+import { composeSource } from '../sources/live/contract.js';
 import { createCctvSource } from '../layers/cctv/source.js';
 import { createRadioSource } from '../layers/radio/source.js';
 import { createTransitSource } from '../layers/transit/source.js';
@@ -30,6 +35,10 @@ export function createStandaloneLayerSources(overrides = {}) {
   const mapTiles = createOpenFreeMapSource();
   const defaults = {
     ...createReferenceSources(),
+    flights: composeSource(createOpenSkySource(), createAeroApiSource()),
+    military: createAdsbLolSource(),
+    vessels: createAisStreamSource({
+      apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/ais-live',
     directions: createDirectionsSource(),
     'recent-imagery': createRecentImagerySource(),
     flights: createFlightSource(),

@@ -1,11 +1,19 @@
 import { defaultSurface } from './surfaceServices.js';
 import { createApplicationFlights } from '../app/layers/flights.js';
 
+import { composeSource } from '../sources/live/contract.js';
+import {
+  createOpenSkySource,
+  createAeroApiSource,
+} from '../sources/live/standalone.js';
 import { createFlightSource } from '../sources/live/standalone.js';
 import * as militaryRegistry from './militaryRegistry.js';
 
+// Track-history fallback (issue #446): OpenSky /tracks first, FlightAware
+// AeroAPI (keyed, server-brokered) when the primary history is empty.
 const flightsLayer = createApplicationFlights({
   surface: defaultSurface,
+  source: composeSource(createOpenSkySource(), createAeroApiSource()),
   source: createFlightSource(),
   militaryRegistry,
 });

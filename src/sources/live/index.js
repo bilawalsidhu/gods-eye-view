@@ -3,6 +3,8 @@ export {
   normalizeOpenSkyAircraft,
   normalizeReadsbAircraft,
   normalizeAircraftTrack,
+  normalizeAeroApiTrackPosition,
+  normalizeAeroApiTrack,
   openSkySnapshot,
   readsbSnapshot,
   readsbIdentities,
@@ -13,6 +15,10 @@ export {
   vesselSnapshot,
 } from './vessels.js';
 export {
+  createOpenSkySource,
+  createAdsbLolSource,
+  createAeroApiSource,
+  createAisStreamSource,
   createFlightSource,
   createMilitarySource,
   createVesselSource,

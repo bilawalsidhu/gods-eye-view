@@ -1,5 +1,12 @@
 # Changelog
 
+- Add optional FlightAware AeroAPI historical flight tracks (issue #446): with
+  `FLIGHTAWARE_AEROAPI_KEY` configured, tracking an aircraft now backfills up
+  to 10 days of observed history into its trail when the keyless OpenSky/adsb.lol
+  history is empty, via a server-side `/api/aeroapi` proxy that keeps the key
+  off the browser, allowlists the two read paths and their query parameters,
+  caches responses for 5 minutes, and registers the required FlightAware
+  attribution when the data is shown. Without the key, behavior is unchanged.
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 
