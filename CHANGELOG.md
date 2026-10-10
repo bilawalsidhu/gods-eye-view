@@ -95,6 +95,11 @@
 
 ## [Unreleased]
 
+- Cross-site browser requests can no longer spend the TomTom traffic-tile
+  budget through `/api/tomtom/*`. The shared same-site gate runs before status,
+  cache, and upstream work; same-origin app requests and non-browser local
+  callers remain supported.
+
 - Add an experimental ChatGPT/Codex OAuth option for cloud voice in Provider
   Settings. API-key voice remains the default. Local sign-in can start from
   the auth button and reports completion, failure, timeout, or expired

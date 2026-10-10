@@ -123,7 +123,12 @@
   "traffic-provider": {
     "runtime": "node",
     "exports": ["./server/providers/traffic"],
-    "modules": ["server/providers/traffic.js", "src/data/tomtomTiles.js"],
+    "modules": [
+      "server/providers/traffic.js",
+      "src/data/tomtomTiles.js",
+      "server/providers/common/same-site.js",
+      "src/localRequestGate.mjs"
+    ],
     "external": []
   },
   "traffic-source": {
