@@ -64,8 +64,9 @@ test('the separately licensed pack has unique typed identities, areas, names and
   ).split(' ')[0];
   assert.equal(createHash('sha256').update(raw).digest('hex'), hash);
   assert.ok(gzipSync(raw, { level: 9 }).length <= 2_000_000);
+  assert.equal(JSON.parse(raw).records.length, 36466);
   const names = await loadMilitaryNames();
-  assert.equal(names.records.length, 36466);
+  assert.equal(names.records.length, 36466 + 10);
   assert.equal(names.byId.size, names.records.length);
   assert.ok(
     names.records.every(
@@ -226,4 +227,43 @@ test('queries can take every named site in a box instead of one per display cell
   assert.equal(all.count, thinned.count);
   assert.equal(all.records.length, all.count);
   assert.ok(all.records.length > thinned.records.length);
+});
+
+test('the Norwegian supplement names unnamed mapped areas and places sites with none', async () => {
+  const raw = readFileSync(
+    new URL('./local_data/osm_military_names/norway.json', import.meta.url),
+  );
+  const hash = readFileSync(
+    new URL('./local_data/osm_military_names/norway.sha256', import.meta.url),
+    'utf8',
+  ).split(' ')[0];
+  assert.equal(createHash('sha256').update(raw).digest('hex'), hash);
+  const pack = JSON.parse(raw);
+  const overture = JSON.parse(
+    readFileSync(
+      new URL('./local_data/osm_military_names/names.json', import.meta.url),
+    ),
+  );
+  assert.deepEqual(pack.classes, overture.classes);
+  const packKeys = new Set(overture.records.map((r) => r[0]));
+  for (const [osmKey, , lon, lat, west, south, east, north, , area, qid] of pack.records) {
+    assert.match(qid, /^Q\d+$/);
+    assert.ok(lon >= 4 && lon <= 31.5 && lat >= 57.9 && lat <= 71.2);
+    assert.ok(west <= lon && lon <= east && south <= lat && lat <= north);
+    assert.ok(area > 0);
+    if (osmKey) assert.ok(!packKeys.has(osmKey), `${osmKey} is already named`);
+  }
+  const names = await loadMilitaryNames();
+  const andoya = names.byId.get('w162902961');
+  assert.equal(andoya.name, 'Andøya flystasjon');
+  assert.equal(andoya.class, 'airfield');
+  assert.equal(andoya.standalone, undefined);
+  assert.deepEqual(andoya.sources, [
+    { name: 'OpenStreetMap', id: 'w162902961' },
+    { name: 'Wikidata', id: 'Q3271057' },
+  ]);
+  const setermoen = names.byId.get('Q19388269');
+  assert.equal(setermoen.id, 'wikidata:military:Q19388269');
+  assert.equal(setermoen.standalone, true);
+  assert.equal(names.byId.get('w561519525').name, 'Haakonsvern orlogsstasjon');
 });

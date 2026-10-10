@@ -1,0 +1,16 @@
+{
+  "about": "Curated Norwegian names for military areas that OpenStreetMap maps without a name, plus active Norwegian Armed Forces sites with no mapped military area. Names and every `point` (Wikidata P625) come from Wikidata (CC0); each row cites its item. A point-only row may borrow bounds and area from a co-located `site` (aerodrome). Rebuild with scripts/build-military-names-norway.py.",
+  "wikidataRetrieved": "2026-10-07",
+  "sites": [
+    { "osm": "w162902961", "wikidata": "Q3271057", "name": "Andøya flystasjon", "class": "airfield", "point": [16.14417, 69.2925] },
+    { "osm": "w1315767988", "wikidata": "Q17770259", "name": "Evenes flystasjon", "class": "airfield", "point": [16.69472, 68.48222] },
+    { "osm": "w918686469", "wikidata": "Q3275900", "name": "Gardermoen flystasjon", "class": "airfield", "point": [11.08417, 60.20222] },
+    { "osm": "r10264027", "wikidata": "Q19398493", "name": "Værnes garnison", "class": "base", "point": [10.93865, 63.4629] },
+    { "osm": "w25312357", "wikidata": "Q4573106", "name": "Luftkrigsskolen", "class": "base", "point": [10.43611, 63.42972] },
+    { "wikidata": "Q5524069", "name": "Høybuktmoen leir", "class": "base", "point": [29.89129, 69.72578] },
+    { "wikidata": "Q4353910", "name": "Ramsund orlogsstasjon", "class": "naval_base", "point": [16.5125, 68.49333] },
+    { "wikidata": "Q4380750", "name": "Luftforsvarsbase Bodø", "class": "airfield", "point": [14.36528, 67.26917], "site": "r17061527" },
+    { "wikidata": "Q6516685", "name": "Banak flystasjon", "class": "airfield", "point": [24.97389, 70.06667], "site": "w382910559" },
+    { "wikidata": "Q19388269", "name": "Setermoen leir", "class": "base", "point": [18.37335, 68.85451] }
+  ]
+}
