@@ -1,0 +1,21 @@
+services:
+  gods-eye-view:
+    build: .
+    # Everything the app writes (.env with your keys, .gev-cache, .gev-logs)
+    # lands in the bind-mounted repo, so run as you, not root. UID/GID are
+    # unset on Docker Desktop, where the 1000 fallback is ignored anyway.
+    user: "${UID:-1000}:${GID:-1000}"
+    ports:
+      # Publish to loopback only. Docker's default ("4173:4173") would bind
+      # every host interface, which quietly turns the LAN warning in the README
+      # into the default: this server brokers whatever provider keys you have
+      # configured to anyone who can reach it. Widen this deliberately, not by
+      # accident.
+      - "127.0.0.1:4173:4173"
+    volumes:
+      # Bind the source so edits hot-reload and so keys pasted into the setup
+      # UI land in the .env on your host instead of vanishing with the
+      # container. node_modules stays in the image: sharp and friends are
+      # compiled for Linux and must not be shadowed by a host install.
+      - .:/app
+      - /app/node_modules
