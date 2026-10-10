@@ -23,6 +23,47 @@ function bcycleEntry({
     ...buildBcycleUrls(systemId),
   };
 }
+function urbanSharingEntry({
+  id,
+  city,
+  centerLat,
+  centerLon,
+  systemId,
+  provider,
+  loadRadiusKm = 100,
+}) {
+  return {
+    id,
+    city,
+    centerLat,
+    centerLon,
+    loadRadiusKm,
+    provider,
+    stationInformationUrl: `https://gbfs.urbansharing.com/${systemId}/station_information.json`,
+    stationStatusUrl: `https://gbfs.urbansharing.com/${systemId}/station_status.json`,
+  };
+}
+function enturEntry({
+  id,
+  city,
+  centerLat,
+  centerLon,
+  systemId,
+  provider,
+  loadRadiusKm = 100,
+}) {
+  const base = `https://api.entur.io/mobility/v2/gbfs/v2/${systemId}`;
+  return {
+    id,
+    city,
+    centerLat,
+    centerLon,
+    loadRadiusKm,
+    provider,
+    stationInformationUrl: `${base}/station_information`,
+    stationStatusUrl: `${base}/station_status`,
+  };
+}
 const RAW_GBFS_CITY_REGISTRY = [
   {
     id: 'nyc-citibike',
@@ -318,6 +359,59 @@ const RAW_GBFS_CITY_REGISTRY = [
     centerLon: -119.6982,
     systemId: 'bcycle_santabarbara',
   }),
+  urbanSharingEntry({
+    id: 'oslo-bysykkel',
+    city: 'Oslo, Norway',
+    centerLat: 59.9139,
+    centerLon: 10.7522,
+    systemId: 'oslobysykkel.no',
+    provider: 'Oslo Bysykkel',
+  }),
+  urbanSharingEntry({
+    id: 'bergen-bysykkel',
+    city: 'Bergen, Norway',
+    centerLat: 60.3913,
+    centerLon: 5.3221,
+    systemId: 'bergenbysykkel.no',
+    provider: 'Bergen Bysykkel',
+  }),
+  urbanSharingEntry({
+    id: 'trondheim-bysykkel',
+    city: 'Trondheim, Norway',
+    centerLat: 63.4305,
+    centerLon: 10.3951,
+    systemId: 'trondheimbysykkel.no',
+    provider: 'Trondheim Bysykkel',
+  }),
+  enturEntry({
+    id: 'stavanger-kolumbus',
+    city: 'Stavanger, Norway',
+    centerLat: 58.9,
+    centerLon: 5.72,
+    systemId: 'kolumbusbysykkel',
+    provider: 'Kolumbus Bysykkel',
+  }),
+  enturEntry({
+    id: 'skien-farte',
+    city: 'Skien/Porsgrunn, Norway',
+    centerLat: 59.16,
+    centerLon: 9.64,
+    systemId: 'fartebysykkel',
+    provider: 'Farte Bysykkel',
+    loadRadiusKm: 40,
+  }),
+  {
+    id: 'lillestrom-bysykkel',
+    city: 'Lillestrøm, Norway',
+    centerLat: 59.9556,
+    centerLon: 11.0492,
+    loadRadiusKm: 40,
+    stationInformationUrl:
+      'https://api.cyclocity.fr/contracts/lillestrom/gbfs/station_information.json',
+    stationStatusUrl:
+      'https://api.cyclocity.fr/contracts/lillestrom/gbfs/station_status.json',
+    provider: 'Bysykkel Lillestrøm',
+  },
 ];
 function normalizeRegistryEntry(entry) {
   const id = String(entry?.id || '')
@@ -346,11 +440,13 @@ function normalizeRegistryEntry(entry) {
   ) {
     throw new Error(`GBFS entry "${id}" must use https URLs`);
   }
-  // Validate that URLs end with expected GBFS endpoint filenames
-  if (!/\/station_information\.json$/i.test(stationInformationUrl.pathname)) {
+  // Validate that URLs end with expected GBFS endpoint names (Entur omits .json)
+  if (
+    !/\/station_information(\.json)?$/i.test(stationInformationUrl.pathname)
+  ) {
     throw new Error(`GBFS entry "${id}" station_information URL is invalid`);
   }
-  if (!/\/station_status\.json$/i.test(stationStatusUrl.pathname)) {
+  if (!/\/station_status(\.json)?$/i.test(stationStatusUrl.pathname)) {
     throw new Error(`GBFS entry "${id}" station_status URL is invalid`);
   }
 
