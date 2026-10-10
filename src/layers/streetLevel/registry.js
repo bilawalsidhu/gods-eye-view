@@ -1,3 +1,5 @@
+import { encodeIdSwitches } from '../../data/idSwitches.js';
+
 /**
  * The contract an imagery provider registers with the Street Level layer.
  *
@@ -86,8 +88,8 @@ const ID_GRAMMAR = /^[a-z][a-z0-9-]*$/;
  * @returns {ReadonlyArray<StreetLevelProvider>}
  */
 export function validateProviders(providers) {
-  if (!Array.isArray(providers) || providers.length === 0)
-    throw new TypeError('Street Level needs at least one imagery provider');
+  if (!Array.isArray(providers))
+    throw new TypeError('Street Level providers must be an array');
   const ids = new Set();
   const prefixes = [];
   for (const provider of providers) {
@@ -124,6 +126,19 @@ export function validateProviders(providers) {
       );
     ids.add(provider.id);
     prefixes.push(provider.pickPrefix);
+  }
+  // Validate the complete bounded share field once, before any instance exists.
+  try {
+    encodeIdSwitches(
+      providers
+        .filter(({ id }) => id !== 'mapillary')
+        .map(({ id }) => [id, true]),
+    );
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    throw new RangeError(
+      'Street Level provider IDs cannot fit in the 256-character share-link field; use shorter IDs or fewer providers',
+    );
   }
   return Object.freeze([...providers]);
 }

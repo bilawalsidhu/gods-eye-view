@@ -9,6 +9,23 @@ import { providerSnapshot } from '../testSupport/streetLevelFakes.mjs';
 
 const provider = providerSnapshot;
 
+test('an empty composition explains unavailable imagery even while disabled', () => {
+  for (const enabled of [false, true]) {
+    const view = presentStreetLevelPanel(
+      snapshot({
+        enabled,
+        providers: [],
+        coverage: { hint: 'No street-level imagery providers configured' },
+        legend: [],
+      }),
+    );
+    assert.equal(view.controlsDisabled, true);
+    assert.equal(view.keyRequired, false);
+    assert.deepEqual(view.providers, []);
+    assert.equal(view.meta, 'No street-level imagery providers configured');
+  }
+});
+
 function snapshot(overrides = {}) {
   const base = {
     enabled: false,

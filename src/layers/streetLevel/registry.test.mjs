@@ -26,9 +26,14 @@ test('a valid list is frozen in registration order', () => {
   );
 });
 
-test('an empty list, duplicate ids and malformed ids are rejected', () => {
-  assert.throws(() => validateProviders([]), /at least one/);
-  assert.throws(() => validateProviders(null), /at least one/);
+test('an empty provider list is valid and has no key requirement', () => {
+  assert.deepEqual(validateProviders([]), []);
+  assert.ok(Object.isFrozen(validateProviders([])));
+  assert.equal(requiresKeyIdFor([]), null);
+});
+
+test('non-arrays, duplicate ids and malformed ids are rejected', () => {
+  assert.throws(() => validateProviders(null), /array/);
   assert.throws(() => validateProviders([def(), def()]), /Duplicate/);
   assert.throws(() => validateProviders([def({ id: 'Bad Id' })]), /slug/);
 });
