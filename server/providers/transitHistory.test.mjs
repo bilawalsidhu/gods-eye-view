@@ -142,9 +142,10 @@ test('three identical-order 15000-vehicle snapshots retain paths within a bounde
     const rows = Array.from({ length: 15000 }, (_, i) =>
       row(now, `vehicle-${i}`),
     );
-    const start = performance.now();
+    const start = process.cpuUsage();
     h.ingest(feed, rows, now);
-    times.push(performance.now() - start);
+    const usage = process.cpuUsage(start);
+    times.push((usage.user + usage.system) / 1000);
   }
   assert.equal(h.diagnostics().keys, 15000);
   for (let i = 0; i < 15000; i++) {
@@ -154,12 +155,12 @@ test('three identical-order 15000-vehicle snapshots retain paths within a bounde
   }
   assert.ok(h.diagnostics().allocatedBytes < 16 * 1024 * 1024);
   t.diagnostic(
-    `15000-vehicle ingestion ms: ${times.map((n) => n.toFixed(1)).join('/')}`,
+    `15000-vehicle ingestion CPU ms: ${times.map((n) => n.toFixed(1)).join('/')}`,
   );
-  // A ceiling that says "not quadratic", not a benchmark: 15,000 rows in
-  // well under two seconds on a loaded laptop or a slow CI runner. The
-  // per-run figure above is the diagnostic to read.
-  assert.ok(Math.max(...times) < 2000, `ingestion ms: ${times}`);
+  // CPU time measures ingestion work without counting scheduler delays on
+  // loaded runners. Keep the two-second ceiling as a guard against quadratic
+  // work, not a benchmark; the per-poll figures above show any slowdown.
+  assert.ok(Math.max(...times) < 2000, `ingestion CPU ms: ${times}`);
 });
 
 test('snapshot capacity pressure preserves members not yet visited and discloses recreated history', (t) => {

@@ -2398,10 +2398,13 @@ test('a newer absolute intent aborts a hung guard-compensation instead of starvi
   removeGuard();
   // The newest intent must be able to abort the hung compensation and run.
   const pendingFinalOn = mgr.setEnabled('flights', true, { origin: 'user' });
+  let giveUpTimer;
   const finalOn = await Promise.race([
     pendingFinalOn,
-    new Promise((resolve) => setTimeout(() => resolve('starved'), 2000)),
-  ]);
+    new Promise((resolve) => {
+      giveUpTimer = setTimeout(() => resolve('starved'), 2000);
+    }),
+  ]).finally(() => clearTimeout(giveUpTimer));
   assert.notEqual(finalOn, 'starved', 'newest intent must not starve behind the compensation');
   assert.equal(compensationAborted, true, 'the hung compensation was aborted');
   assert.equal(await pendingBlockedOn, false, 'the guard-blocked request stays unfulfilled');
@@ -2451,10 +2454,13 @@ test('re-entrant setEnabled from a blocked-adoption listener supersedes the comp
   releaseFirstDisable();
 
   const blockedOn = await pendingBlockedOn;
+  let giveUpTimer;
   const reentrant = await Promise.race([
     (async () => reentrantResult === null ? 'never-fired' : await reentrantResult)(),
-    new Promise((resolve) => setTimeout(() => resolve('starved'), 2000)),
-  ]);
+    new Promise((resolve) => {
+      giveUpTimer = setTimeout(() => resolve('starved'), 2000);
+    }),
+  ]).finally(() => clearTimeout(giveUpTimer));
   await pendingOff;
   await mgr.waitForLayerSettled('flights');
   unsubscribe();

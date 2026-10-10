@@ -357,10 +357,11 @@ test('WebUSB picker remains available when no authorized receiver matches', asyn
 
 /** Resolve with the promise's value, or 'timed out' after `ms`. */
 function within(promise, ms = 1_000) {
-  return Promise.race([
-    promise,
-    new Promise((resolve) => setTimeout(() => resolve('timed out'), ms)),
-  ]);
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve('timed out'), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 /**
