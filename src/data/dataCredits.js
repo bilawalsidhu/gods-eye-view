@@ -312,6 +312,13 @@ export const DATA_CREDITS = [
     html: 'Dams: Open Infrastructure Map',
   },
   {
+    key: 'gshhg-mask',
+    html:
+      'Land/sea mask: ' +
+      '<a href="https://www.soest.hawaii.edu/pwessel/gshhg/" target="_blank" rel="noopener">Wessel &amp; Smith, GSHHG</a> ' +
+      '(LGPL)',
+  },
+  {
     key: 'firms',
     html:
       'Active fires: NASA FIRMS — we acknowledge the use of data and/or imagery ' +
