@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -34,6 +34,9 @@
 
   <!-- gev:template hud-loading -->
 
+  <!-- 中文注入：在业务脚本前同步加载，保证首屏及动态 UI 均为中文（不改任何业务源码） -->
+  <script src="./src/i18n/zh-CN-map.js"></script>
+  <script src="./src/i18n/inject.js"></script>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
