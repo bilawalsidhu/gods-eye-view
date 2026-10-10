@@ -1,0 +1,12 @@
+{
+  "appId": "com.orailnoor.droideye",
+  "appName": "DroidEye",
+  "webDir": "droideye/www",
+  "server": {
+    "url": "http://192.168.1.10:4173",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

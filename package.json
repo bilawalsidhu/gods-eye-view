@@ -51,9 +51,15 @@
     "qa:street-level:fixtures": "node scripts/qa-street-level.mjs --fixtures",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
     "qa:transit": "node scripts/qa-transit.mjs",
-    "mcp": "node server/mcp/stdio.js"
+    "mcp": "node server/mcp/stdio.js",
+    "droideye:server": "node droideye/set-server.mjs",
+    "droideye:sync": "npx cap sync android",
+    "droideye:open": "npx cap open android",
+    "start:hosted": "vite build && GEV_ALLOWED_HOSTS=\"${GEV_ALLOWED_HOSTS:-$RENDER_EXTERNAL_HOSTNAME}\" vite preview --host 0.0.0.0 --port ${PORT:-4173} --strictPort"
   },
   "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3",
     "@jtarrio/signals": "^0.10.0",
     "@jtarrio/webrtlsdr": "^3.0.6",
     "@mapbox/vector-tile": "^3.0.0",
@@ -67,6 +73,7 @@
     "satellite.js": "^6.0.2"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.5.3",
     "prettier": "3.9.6",
     "puppeteer": "^25.10.0",
     "sharp": "^0.35.4",
