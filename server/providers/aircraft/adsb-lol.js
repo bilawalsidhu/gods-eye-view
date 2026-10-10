@@ -98,8 +98,11 @@ export function adsbLolProxy() {
           );
           return;
         }
+        // A stalled upstream otherwise holds this poll for undici's 300 s
+        // default; timing out lands in the catch, which serves the cache.
         const upstream = await fetch('https://api.adsb.lol/v2/mil', {
           headers: { 'User-Agent': 'gods-eye-view-adsblol-proxy/1.0' },
+          signal: AbortSignal.timeout(15_000),
         });
         if (upstream.ok) {
           const body = await upstream.text();
