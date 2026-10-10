@@ -914,6 +914,21 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+## Bucharest CCTV source pack
+
+`config/cctv_sources.bucharest.json` is an opt-in public-webcam catalog,
+including Piața Romană, Cocor and Elitte Inn Skybar from WebcamRomania. Set
+`CCTV_SOURCES_FILE=config/cctv_sources.bucharest.json` and
+`CCTV_FORCE_AUSTIN=1` together to merge it with the existing worldwide feeds.
+The cameras use native CCTV HLS playback and the existing bounded media relay;
+the repository contains no webcam frames or recordings.
+
+Romană and Cocor mount positions, facing, pitch, field of view and height are
+visually calibrated estimates, not surveyed camera specifications. Elitte's pose
+is uncalibrated. Publisher attribution and source
+pages accompany the catalog; provider terms still apply. See `DATA_SOURCES.md`
+for provenance and usage details.
+
 ## DriveBC CCTV source pack
 
 The CCTV catalog adds DriveBC highway cameras for British Columbia alongside the

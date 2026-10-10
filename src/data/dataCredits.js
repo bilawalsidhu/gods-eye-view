@@ -345,6 +345,13 @@ export const DATA_CREDITS = [
     html: 'Webcam (Warendorf): <a href="https://www.warendorf.de/" target="_blank" rel="noopener">Stadt Warendorf</a> (courtesy)',
   },
   {
+    key: 'bucharest-cctv',
+    html:
+      'Public webcams (Bucharest area): ' +
+      '<a href="https://webcamromania.ro/" target="_blank" rel="noopener">WebcamRomania</a> ' +
+      '— Piața Romană, Magazinul Cocor and Elitte Inn &amp; Suites; publisher terms apply.',
+  },
+  {
     key: 'nsw-cctv',
     html:
       'CCTV cameras &amp; frames (New South Wales): ' +
