@@ -18,6 +18,7 @@ How to read this:
 | **NOAA GFS (wind)** (`noaa-gfs-bdp-pds.s3.amazonaws.com`) | Global 10 m wind, optional 2 m temperature and mean sea-level pressure for Wind. Keyless; latest 6-hourly 0.25° cycle, byte-range GRIB2 reads, cached for an hour | U.S. public domain (NOAA); keyless via NOAA Open Data on AWS | "NOAA Global Forecast System (GFS)" (courtesy; not an endorsement) |
 | **ECMWF IFS (wind)** (`data.ecmwf.int/forecasts`, ECMWF Open Data) | The alternative Wind model: 10 m wind, optional 2 m temperature and mean sea-level pressure. Keyless; latest 6-hourly 0.25° run, byte-range GRIB2 reads, cached for an hour | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) plus the [ECMWF Terms of Use](https://apps.ecmwf.int/datasets/licences/general/) | "This service is based on data and products of the European Centre for Medium-Range Weather Forecasts (ECMWF)", with the CC BY 4.0 link, the modification notice and ECMWF's liability disclaimer — shown in-app |
 | **NOAA nowCOAST observed weather** (`nowcoast.noaa.gov/geoserver/observations/{weather_radar,satellite}/ows`, WMS 1.1.1) | Rain radar (MRMS base reflectivity, contiguous US, about 4-minute updates) and Satellite clouds (GOES-19/18 Band 14 regional infrared, about 5-minute updates; global infrared mosaic, hourly). Keyless; layer metadata refreshed every 2 minutes, exact-time images cached for up to 24 hours | [NOAA disclaimer](https://oceanservice.noaa.gov/disclaimer.html) | "NOAA nowCOAST · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners" |
+| **Hong Kong Observatory rain radar** (`www.hko.gov.hk/wxinfo/radars/R4_GIS_rad_128/…`) | HK rain radar: 128 km GroundOverlay mosaic (~20 PNG frames from public KML, about 6-minute updates). Keyless through `/api/hko-radar`; KML cached ~2.5 minutes; frames proxied at request time only | [DATA.GOV.HK Terms of Use](https://data.gov.hk/en/terms-and-conditions) — attribution REQUIRED; [HKO Open Data](https://www.hko.gov.hk/en/abouthko/opendata_intro.htm) | "Hong Kong Observatory / DATA.GOV.HK" |
 | **NOAA nowCOAST lightning density** (`nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows`) | Lightning density: 15-minute accumulated strike density on an approximately 8 km grid, Americas and Pacific. Keyless; layer metadata refreshed every 10 minutes, exact-time images cached for up to 24 hours | NOAA Level-5 derived product from Vaisala NLDN/GLD360; the [product description](https://ocean.weather.gov/lightning/lightning_pdd.php) permits public distribution of this density product, not of raw Vaisala detections | "NOAA/NWS nowCOAST; derived from Vaisala NLDN/GLD360" |
 | **NOAA NHC / CPHC advisories** (`www.nhc.noaa.gov/CurrentStorms.json` + the `mapservices.weather.noaa.gov` tropical weather summary MapServer) | Cyclone advisories: storm positions, forecast tracks, points and cones for the Atlantic and eastern/central North Pacific. Keyless through `/api/cyclones`; cached for 5 minutes | [NWS public-data terms](https://www.weather.gov/disclaimer); no endorsement implied | "NOAA/NWS NHC / CPHC" |
 | **Mapillary** (vector tiles, Graph API, MapillaryJS) | Street Level: coverage lines, image cones and the embedded viewer. Coverage tiles cached for 24 h | Imagery [CC BY-SA 4.0](https://www.mapillary.com/terms); API under the Mapillary terms with a client token | "© Mapillary contributors, CC BY-SA 4.0", shown on the globe while the provider is on |
@@ -240,6 +241,23 @@ This Wind prototype adds no cloud-volume or radar data. Mapped.earth's public
 bundles were studied for rendering ideas, but
 no code or assets were reused and no application licence granting reuse was
 found. Its presentation is not a weather-data source for this implementation.
+
+### Observed weather: Hong Kong Observatory rain radar
+
+The Weather section also provides keyless **HK rain radar** from the Hong Kong
+Observatory public 128 km GIS KML/PNG GroundOverlays
+(`https://www.hko.gov.hk/wxinfo/radars/R4_GIS_rad_128/R4_GIS_server_Radar_128.kml`).
+The local `/api/hko-radar` proxy parses GroundOverlay Icon hrefs that match
+`YYYYMMDDHHmmss_rad_128.png` on the pinned `www.hko.gov.hk` origin, returns a
+JSON frame manifest, and proxies PNGs by basename only (no client-supplied
+arbitrary URLs). Imagery is fetched at request time and never bundled. KML is
+cached in memory for about 2.5 minutes; frames use short cache headers. This is
+observed radar mosaic imagery for Hong Kong and vicinity, not a rainfall rate,
+nowcast grid, or warning product. A 256 km product is not wired yet.
+
+Credit: Hong Kong Observatory / DATA.GOV.HK.
+[DATA.GOV.HK Terms of Use](https://data.gov.hk/en/terms-and-conditions) —
+attribution required.
 
 ### Observed weather: NOAA nowCOAST
 

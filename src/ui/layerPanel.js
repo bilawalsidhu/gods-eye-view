@@ -53,6 +53,7 @@ const PANEL_GROUPS = [
     ids: [
       'wind',
       'weather-radar',
+      'weather-hko-radar',
       'weather-satellite',
       'weather-lightning',
       'weather-cyclones',
@@ -365,6 +366,7 @@ export class LayerPanel {
             [
               'wind',
               'weather-radar',
+              'weather-hko-radar',
               'weather-satellite',
               'weather-lightning',
               'weather-cyclones',

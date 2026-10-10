@@ -1,5 +1,11 @@
 # Changelog
 
+- Add Hong Kong Observatory 128 km rain radar as a Weather-panel layer
+  (`weather-hko-radar`): public KML/PNG GroundOverlays via `/api/hko-radar`,
+  draped on the advertised LatLonBox, with Soft/Vivid opacity and Prev/Latest
+  frame stepping. Runtime fetch only; attribute HKO / DATA.GOV.HK. NOAA Rain
+  radar remains the US MRMS product.
+
 - Expand the Hong Kong Transport Department CCTV pack toward the full TD
   catalog (~1,013 cameras; default cap 1,100) with New Territories anchors
   (Sha Tin, Tsuen Wan, Tai Po, Fanling, Tuen Mun, Yuen Long, Tseung Kwan O)

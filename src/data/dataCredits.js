@@ -186,6 +186,14 @@ export const DATA_CREDITS = [
       '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> — attribution required)',
   },
   {
+    key: 'hko-radar',
+    html:
+      'Hong Kong rain radar: ' +
+      '<a href="https://www.hko.gov.hk/en/abouthko/opendata_intro.htm" target="_blank" rel="noopener">Hong Kong Observatory</a> ' +
+      '/ <a href="https://data.gov.hk/" target="_blank" rel="noopener">DATA.GOV.HK</a> ' +
+      '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> — attribution required)',
+  },
+  {
     key: 'google-news-rss',
     html:
       'Cockpit regional headlines: ' +

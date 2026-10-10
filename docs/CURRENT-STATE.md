@@ -1,5 +1,13 @@
 # God's Eye View Current State
 
+Hong Kong Observatory 128 km rain radar is a separate Weather-panel layer
+(`weather-hko-radar`, share token `3`) fed by `/api/hko-radar`. The proxy parses
+pinned HKO KML GroundOverlays, allows only `YYYYMMDDHHmmss_rad_128.png`
+basenames, and proxies PNGs from `www.hko.gov.hk`. The client drapes the latest
+frame with Soft/Vivid opacity and optional Prev/Latest stepping; it does not
+join the NOAA observed-history clock. NOAA Rain radar / satellite / lightning
+are unchanged. 256 km HKO product and nowcast grids are not wired.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing
