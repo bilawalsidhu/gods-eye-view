@@ -245,7 +245,9 @@ export const DATA_CREDITS = [
     html:
       'Road cameras (Norway): contains data under the ' +
       '<a href="https://data.norge.no/nlod/en/2.0" target="_blank" rel="noopener">Norwegian licence for Open Government data (NLOD)</a> ' +
-      'distributed by Statens vegvesen',
+      'distributed by Statens vegvesen · camera ground heights © ' +
+      '<a href="https://kartverket.no/en/api-and-data/terrengdata" target="_blank" rel="noopener">Kartverket</a> ' +
+      '(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)',
   },
   {
     key: 'gbfs',
