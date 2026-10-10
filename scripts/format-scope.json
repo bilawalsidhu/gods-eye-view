@@ -615,6 +615,7 @@
   "src/voice/control.js",
   "src/voice/realtimeBackend.js",
   "src/voice/realtimeBackend.test.mjs",
+  "src/voice/perceptionPolicy.test.mjs",
   "src/voice/layerSummary.js",
   "build/application-html.js",
   "src/app/sourceSlot.js",

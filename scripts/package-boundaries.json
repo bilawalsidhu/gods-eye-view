@@ -1377,6 +1377,7 @@
       "src/voice/realtimeDiagnostics.js",
       "src/voice/realtimeViewport.js",
       "src/voice/realtimeInputPolicy.js",
+      "src/voice/perceptionPolicy.js",
       "src/voice/realtimeInput.js",
       "src/voice/realtimeCost.js",
       "src/voice/realtimeFacade.js",
