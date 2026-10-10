@@ -452,10 +452,7 @@ export function createDirectionsStepOverlayEntry(index, position, copy) {
  * @param {{lat:number, lon:number}} b
  * @returns {string}
  */
-export function directionsRequestUrl(mode, a, b) {
-  const coords = `${a.lon.toFixed(6)},${a.lat.toFixed(6)};${b.lon.toFixed(6)},${b.lat.toFixed(6)}`;
-  return `/api/route?profile=${encodeURIComponent(mode)}&coords=${encodeURIComponent(coords)}&steps=1`;
-}
+export { directionsRequestUrl } from './source.js';
 
 /**
  * Validate a proxy payload into the route record the layer keeps, or null.
@@ -509,10 +506,12 @@ export function normalizeRoutePayload(payload, mode) {
  * route, the markers, the pointer claim or the flight this layer owns. The
  * shared services are injected, which is what keeps this module's own imports
  * down to Cesium and the pure step formatter.
- * @param {{services: object}} options
+ * @param {{services: object, source: {getRoute: Function}}} options
  * @returns {object} The layer module the data manager registers.
  */
-export function createDirectionsLayer({ services }) {
+export function createDirectionsLayer({ services, source }) {
+  if (typeof source?.getRoute !== 'function')
+    throw new TypeError('Directions require a route source');
   /**
    * Where the maneuver card is drawn. Defaults to the shared world-overlay host;
    * tests swap it. Resolved on use, not at import, because the services arrive
@@ -695,6 +694,7 @@ export function createDirectionsLayer({ services }) {
   }
 
   function clearRouteGraphics() {
+    services.credits?.hideOsmCredit?.(_viewer, 'directions');
     _clearStepSelection();
     stopStepAnchoring();
     removeEntity(_routeEntity);
@@ -800,6 +800,7 @@ export function createDirectionsLayer({ services }) {
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       });
     }
+    services.credits?.showOsmCredit?.(_viewer, 'directions');
     services.ground.warmGroundFloor(cells);
     _anchorAttempts = 0;
     _anchorStartedAt = Date.now();
@@ -825,18 +826,12 @@ export function createDirectionsLayer({ services }) {
     _error = null;
     notifyRow();
     try {
-      const response = await fetch(directionsRequestUrl(mode, _a, _b), {
-        signal: controller.signal,
-        headers: { Accept: 'application/json' },
-      });
-      const payload = await response.json();
-      if (response.status === 429) {
-        throw new Error(
-          typeof payload?.error === 'string' && payload.error
-            ? `${payload.error} — try again in a moment`
-            : 'Routing is rate limited — try again in a moment',
-        );
-      }
+      const payload = await source.getRoute(
+        { mode, a: _a, b: _b },
+        {
+          signal: controller.signal,
+        },
+      );
       if (seq !== _routeSeq || !_enabled) return;
       const route = normalizeRoutePayload(payload, mode);
       if (!route) {
