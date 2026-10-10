@@ -72,6 +72,13 @@
 
 ## [Unreleased]
 
+- Refresh Norway's datacenters from a Geofabrik OpenStreetMap extract
+  (2026-10-05). Troll Housing joins the layer (4,352 features) and four
+  Norwegian sites pick up current OSM tags; no site moved or was removed.
+  `scripts/build-datacenters-norway.py` reproduces or `--verify`s the merge,
+  touching only features inside Geofabrik's Norway boundary, and the dataset
+  README records the extract, checksum and filter.
+
 - Add an experimental ChatGPT/Codex OAuth option for cloud voice in Provider
   Settings. API-key voice remains the default. Local sign-in can start from
   the auth button and reports completion, failure, timeout, or expired
