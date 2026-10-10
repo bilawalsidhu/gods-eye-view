@@ -1,3 +1,5 @@
+import { createDirectionsSource } from '../layers/directions/source.js';
+import { createRecentImagerySource } from '../layers/recentImagery/source.js';
 import { createOpenFreeMapSource } from '../sources/openFreeMap.js';
 import {
   createFlightSource,
@@ -22,10 +24,14 @@ import { createReferenceSources } from '../sources/reference.js';
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
 
 /** Select standalone providers without starting their acquisition. */
-export function createStandaloneLayerSources() {
+export function createStandaloneLayerSources(overrides = {}) {
+  if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides))
+    throw new TypeError('Source overrides must be an object');
   const mapTiles = createOpenFreeMapSource();
-  return {
+  const defaults = {
     ...createReferenceSources(),
+    directions: createDirectionsSource(),
+    'recent-imagery': createRecentImagerySource(),
     flights: createFlightSource(),
     military: createMilitarySource(),
     vessels: createVesselSource({
@@ -51,4 +57,9 @@ export function createStandaloneLayerSources() {
       token: import.meta.env?.MAPILLARY_CLIENT_TOKEN || '',
     }),
   };
+  for (const name of Object.keys(overrides)) {
+    if (!Object.hasOwn(defaults, name))
+      throw new TypeError(`Unknown source: ${name}`);
+  }
+  return { ...defaults, ...overrides };
 }

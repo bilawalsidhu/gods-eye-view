@@ -1,5 +1,49 @@
 # God's Eye View Current State
 
+Vessel sources can report healthy empty coverage using a current, complete
+snapshot with zero raw rows, a healthy transport and a positive last-message
+time. This clears obsolete contacts and settles startup without manufacturing
+position timestamps. Stale, incomplete and malformed empty results retain the
+existing recovery behavior.
+
+Catalog source contracts and their consuming layers are declared in
+`src/app/sourceComposition.js`. Omitted or null acquisition sources preserve layer
+registration and serialization, report unavailable, and are refused by the existing
+visibility lifecycle before initialization. Availability is held in an explicit
+catalog lookup supplied to the lifecycle, without modifying layer instances;
+unavailable reasons use the layer display name. Invalid supplied methods still fail
+construction. `createStandaloneApplication` and `createStandaloneCatalog` accept
+`sources` overrides; unspecified entries retain
+standalone defaults, and null entries explicitly remove a source. Street Level
+continues to accept an explicit provider list. An empty Street Level provider
+list uses the same unavailable lifecycle and disabled layer toggle. Directions (`getRoute`) and
+Recent Imagery (`searchHls`, `getThumbnail`, `getTileTemplate`) use the same source
+configuration boundary. Standalone selects their default adapters; layers retain
+route normalization, imagery selection and rendering. Recent Imagery adapters
+consume the existing HLS/VIIRS product schema and provide their own tile attribution.
+The source factories are exported at `layers/directions/source` and
+`layers/recent-imagery/source`. Configuration is applied at construction time;
+this does not introduce live source replacement.
+
+Application catalog composition accepts an optional `streetLevelProviders` list.
+An explicit list replaces the default Mapillary provider; an empty list removes
+all imagery providers. Without that option, Mapillary is registered only when
+`sources.mapillary` is supplied. An absent source leaves Street Level registered
+with a truthful no-provider state, preserving layer controls and share tokens.
+Malformed selected sources and provider definitions still fail validation.
+An explicit provider list bypasses the unused Mapillary source, including its
+validation. Layer share identities and the legacy Mapillary `m` option remain
+stable. Custom provider switches use the `r` option (`example-1*panoramax-0`),
+with URL-safe separators and a shared layer-neutral boolean-switch codec, sorted by provider ID rather
+than registration order, and round-trip through links and stored state. A receiver
+applies only switches for its registered providers; absent custom switches leave
+current defaults unchanged. Explicit provider toggles persist only their requested
+switch IDs through the state coordinator; unrelated live values remain transient.
+The custom switch field is bounded to 256 characters;
+provider registration rejects compositions that cannot fit rather than truncating
+identities. A malformed or duplicate entry invalidates the complete custom-switch
+field. Existing whole-link size limits still apply.
+
 ## God's Eye View in conversations — October 2, 2026
 
 Tool answers that can be shown in God's Eye View include a view: camera, layers,
@@ -396,7 +440,8 @@ the speaker (`mayVoiceClaimSpeaker()`). Progress lines stay outside the reply
 lifecycle and Radio handoff. `turn.span` debug records carry generation and
 playback latency, silence, preamble and word-count figures. Caption
 transcription (`OPENAI_REALTIME_TRANSCRIBE_MODEL`, default on) is metered into
-the session cost and cap. The debug log omits transcripts, text, tool arguments
+the session cost and cap in API-key sessions; ChatGPT OAuth sessions count
+captions without pricing them. The debug log omits transcripts, text, tool arguments
 and complete tool-result bodies (including serialized function outputs) unless
 `GEV_VOICE_LOG_CONTENT=1`.
 Tool names, call IDs, protocol event metadata and usage remain available.
@@ -4039,7 +4084,7 @@ and unreachable upstream (502/504) separately from road geometry.
 
 `GEV MIC` button (bottom UI) starts an OpenAI Realtime session over WebRTC:
 
-- **Token flow**: browser fetches a short-lived client secret from `/api/realtime/token`; the Vite middleware holds `OPENAI_API_KEY` and posts the full session config (instructions, tool schemas, VAD, truncation) to `api.openai.com/v1/realtime/client_secrets`. SDP exchange goes directly to `api.openai.com/v1/realtime/calls` with the ephemeral token.
+- **Token flow**: browser fetches a short-lived client secret from `/api/realtime/token`; the Vite middleware uses `OPENAI_API_KEY` by default, or the signed-in local ChatGPT/Codex OAuth access token when OAuth was explicitly selected in Provider Settings, and posts the full session config (instructions, tool schemas, VAD, truncation) to `api.openai.com/v1/realtime/client_secrets`. Both long-lived credentials stay server-side; OAuth minting is loopback-only. SDP exchange goes directly to `api.openai.com/v1/realtime/calls` with the ephemeral token.
 - **Session defaults** (env-tunable): model `gpt-realtime-2` (or `gpt-realtime-2.1-mini` when the MINI tier is selected — see the model-tier entry below), voice `marin`, reasoning effort `low`, semantic VAD with low eagerness, no response interruption, context window truncated to ~3,000 post-instruction tokens with 0.5 retention ratio — the conversational window stays short because map state is fetched live per turn.
 - **Thirty tools** (argument schemas in `src/voice/actionSchemas.js`, served with their descriptions by `server/providers/openai/tools.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_cyber_sonar`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, `next_iss_pass`, and `next_satellite_pass`.
 
@@ -4085,7 +4130,10 @@ and unreachable upstream (502/504) separately from road geometry.
   2. **Contacts OFF** → "nearby" means **in view**; "near \<place\>" means a radius around that place. A radius query with Contacts active and no explicit centre is centred on the **active contact**, not the camera.
   3. **Every count names its scope in words** — "42 in your window", "8 in view", "about 30 within 250 km of Austin" — never a bare number. `analyst_query` returns `scopeLabel` so this is mechanical. Two different numbers with named scopes are not a contradiction.
   4. **The loaded-data caveat is stated once when relevant**: counts cover loaded data, and the flights layer loads where you look (appended to `coverage.note` for radius/view scopes over viewport-loaded layers).
-- **Degradation**: without `OPENAI_API_KEY`, `/api/realtime/token` returns 503 and the mic button surfaces the error; the rest of the app is unaffected.
+- **Degradation**: API-key mode without `OPENAI_API_KEY` returns 503 as before. Selecting OAuth without a usable local ChatGPT/Codex sign-in starts the local `codex login` browser flow, polls for the resulting local token, and selects OAuth when sign-in completes. If the Codex login flow cannot start or does not complete, the rest of the app is unaffected.
+- **Login lifecycle and storage**: one pending Codex login is shared by the login and status routes. Process failure, success without readable credentials, and a two-minute timeout each report a clear failure; timeout and server shutdown cancel the owned process. The launcher resolves `CODEX_HOME` before changing directories and refuses a mismatched `CODEX_AUTH_JSON`. GEV reads file credentials only, never writes or refreshes them, and does not require the vendor refresh token. Expired access tokens report `CODEX_OAUTH_REAUTH_REQUIRED`. OAuth status and login routes also use the same-site request gate.
+- **Auth button focus**: changing voice auth updates the existing controls in place. Enter, Space, and mouse selection keep focus on the auth button; Tab then follows the normal control order. Pending sign-in blocks repeated activation without removing the button from the focus order. Completion does not take focus from another control or discard text in the key fields. `scripts/qa-voice-auth-focus.mjs` checks these paths in Chromium with fixture sign-in responses.
+- **Support boundary**: the local OAuth option is experimental. OpenAI's documented Sign in with ChatGPT plan-sharing inference endpoint is `/v1/responses`; support for third-party reuse of Codex credentials at `/v1/realtime/client_secrets` remains unconfirmed. Technical success does not establish a supported auth or billing contract.
 
 ### AI HUD Summary (June 2026)
 
@@ -4305,7 +4353,7 @@ are omitted rather than framing the wrong part of the globe.
 - GBFS proxy refuses upstream redirects (`redirect: 'manual'`; any 3xx becomes a 502 and the redirect target is logged server-side only) and enforces its 5 MB response cap while the body streams, cancelling the upstream read past the cap; CCTV health map is bounded.
 - Proxy error payloads are sanitized (no internal error details returned to clients).
 - That holds for the OpenAI and CCTV media paths too: `/api/openai/hud-summary` never relays OpenAI's own `error.message`, `/api/realtime/token` passes successful ephemeral-token responses through but answers with a fixed error when minting fails or upstream rejects the request, and a failed CCTV media fetch stores a fixed camera health `message` — `GET /api/cctv/health` serializes that field and the CCTV panel renders it as a status label, so it is a client surface as much as the response body is.
-- `OPENAI_API_KEY` is server-side only; the browser receives ephemeral Realtime client secrets from `/api/realtime/token`.
+- `OPENAI_API_KEY` remains server-side only and remains the default voice credential. The optional OAuth mode reads the local ChatGPT/Codex access token server-side on loopback only; the browser receives only ephemeral Realtime client secrets from `/api/realtime/token`.
 - `AISSTREAM_API_KEY` is server-side only; the browser reads the same-origin `/api/vessels` cache.
 - `/api/google/nearby-places` keeps the Google key out of Places requests issued for voice scene context.
 - `/api/google/text-search` keeps the Google key server-side for view-biased Places recovery used by annotation resolution.
@@ -4708,6 +4756,10 @@ easier to meet (detection is now on more often), but does not create it.
   shown dot against the allowed source classes and records phase timings.
   Positions and segment distances are precomputed, with no new animation-loop
   allocation. Visible-globe roads use cached terrain without offscreen mesh picks. The road-source label names the geometry being drawn, with partial/unavailable states shown plainly.
+- Vector tile sources accept tiles only from an allowed origin, which defaults
+  to the configured `tileJsonUrl` origin; an explicit `allowedOrigin` overrides
+  it. Repointing only `tileJsonUrl` loads tiles from that host or fails with an
+  origin error rather than silently falling back to OpenFreeMap.
 - TileJSON caches successful metadata. Transient failures retry after a
   five-second cooldown; invalid metadata/origins stay unavailable until the
   source is cleared. Clear resets metadata and cancels pending requests.

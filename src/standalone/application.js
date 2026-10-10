@@ -17,6 +17,8 @@ export function createStandaloneApplication({
   cesiumToken,
   geospatial = {},
   voice = {},
+  sources = {},
+  streetLevelProviders,
   allowQaRegistration = false,
 }) {
   if (constructed)
@@ -47,6 +49,8 @@ export function createStandaloneApplication({
         loaderStatus,
       });
       catalog = createStandaloneCatalog({
+        sources,
+        streetLevelProviders,
         nepalBoundaryResolver: (signal) =>
           scene.operations.annotationResolver.resolveRegionRingForQuery(
             'Nepal',
