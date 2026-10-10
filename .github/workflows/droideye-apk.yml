@@ -1,0 +1,33 @@
+name: DroidEye APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: "Server the app loads (e.g. https://droideye.onrender.com)"
+        required: true
+  push:
+    tags: ["droideye-v*"]
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - name: Point app at server
+        run: node droideye/set-server.mjs "${{ inputs.server_url || vars.DROIDEYE_SERVER_URL }}"
+      - run: npx cap sync android
+      - run: cd android && ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DroidEye-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk

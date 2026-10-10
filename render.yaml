@@ -1,0 +1,20 @@
+# DroidEye server on Render's free plan.
+# Render dashboard → New → Blueprint → pick this repo. It reads this file.
+services:
+  - type: web
+    name: droideye
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    # Serves the built app plus the /api data proxies (flights, satellites, weather...).
+    # Render sets PORT and RENDER_EXTERNAL_HOSTNAME automatically.
+    startCommand: GEV_ALLOWED_HOSTS="${GEV_ALLOWED_HOSTS:-$RENDER_EXTERNAL_HOSTNAME}" npx vite preview --host 0.0.0.0 --port "$PORT" --strictPort
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      # Optional free keys. Add values in the Render dashboard, never in this file.
+      - key: AISSTREAM_API_KEY
+        sync: false
+      - key: FIRMS_MAP_KEY
+        sync: false
