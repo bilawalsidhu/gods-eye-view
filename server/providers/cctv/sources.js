@@ -1821,7 +1821,7 @@ export async function loadHkSourcesFromOpenData() {
       process.env.CCTV_HK_MAX_SOURCES || DEFAULT_HK_MAX_SOURCES,
     );
     const maxCount = Number.isFinite(maxRaw)
-      ? Math.max(8, Math.min(400, Math.floor(maxRaw)))
+      ? Math.max(8, Math.min(1200, Math.floor(maxRaw)))
       : DEFAULT_HK_MAX_SOURCES;
     const prioritized = prioritizeSources(cameras, maxCount, HK_ANCHORS);
     console.log(

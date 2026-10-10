@@ -178,6 +178,14 @@ export const DATA_CREDITS = [
       '(CC BY 4.0)',
   },
   {
+    key: 'hko-weather',
+    html:
+      'Cockpit current conditions (Hong Kong): ' +
+      '<a href="https://www.hko.gov.hk/en/abouthko/opendata_intro.htm" target="_blank" rel="noopener">Hong Kong Observatory</a> ' +
+      '/ <a href="https://data.gov.hk/en-data/dataset/hk-hko-rss-current-weather-report" target="_blank" rel="noopener">DATA.GOV.HK</a> ' +
+      '(<a href="https://data.gov.hk/en/terms-and-conditions" target="_blank" rel="noopener">Terms of Use</a> — attribution required)',
+  },
+  {
     key: 'google-news-rss',
     html:
       'Cockpit regional headlines: ' +

@@ -1,5 +1,16 @@
 # Changelog
 
+- Expand the Hong Kong Transport Department CCTV pack toward the full TD
+  catalog (~1,013 cameras; default cap 1,100) with New Territories anchors
+  (Sha Tin, Tsuen Wan, Tai Po, Fanling, Tuen Mun, Yuen Long, Tseung Kwan O)
+  alongside Central and Tsim Sha Tsui. Catalog-wide round-robin still applies
+  when packs exceed the shared ceiling.
+
+- Prefer Hong Kong Observatory current weather (`rhrread`) for cockpit Local
+  Info when the aircraft is over or near Hong Kong; Open-Meteo remains the
+  global default and still drives cockpit atmospheric effects. HKO / DATA.GOV.HK
+  attribution is registered; observations are fetched at request time only.
+
 - Add Hong Kong Transport Department traffic snapshot cameras as a keyless CCTV
   source pack: the public DATA.GOV.HK English locations XML, frames pinned to
   `tdcctv.data.one.gov.hk`, with DATA.GOV.HK Terms of Use attribution.

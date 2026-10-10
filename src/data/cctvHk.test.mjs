@@ -13,10 +13,14 @@ import {
   DEFAULT_CCTV_MAX_SOURCES,
   DEFAULT_HK_CAMERAS_URL,
   DEFAULT_HK_MAX_SOURCES,
+  HK_ANCHORS,
   HK_IMAGE_ORIGIN,
   HK_MAX_CATALOG_BYTES,
 } from '../../server/providers/cctv/constants.js';
-import { CAMERA_CODE_MAX_CHARS } from '../../server/providers/cctv/normalize.js';
+import {
+  CAMERA_CODE_MAX_CHARS,
+  prioritizeSources,
+} from '../../server/providers/cctv/normalize.js';
 import { allocateSourceCap } from '../../server/providers/cctv/cap.js';
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
 
@@ -394,4 +398,67 @@ test('CCTV_HK_ENABLED=0 keeps the lane from being loaded at all', async (t) => {
 
 test('the shipped catalog ceiling is not raised to make room for this pack', () => {
   assert.equal(DEFAULT_CCTV_MAX_SOURCES, 4000);
+});
+
+test('the HK pack default sits above the full TD catalog and anchors the New Territories', () => {
+  assert.ok(
+    DEFAULT_HK_MAX_SOURCES >= 1013,
+    'default cap should keep nearly all published TD cameras',
+  );
+  assert.ok(
+    DEFAULT_HK_MAX_SOURCES <= DEFAULT_CCTV_MAX_SOURCES,
+    'a single pack must not outgrow the catalog-wide ceiling alone',
+  );
+  const places = HK_ANCHORS.map(
+    (a) => `${a.lat.toFixed(2)},${a.lon.toFixed(2)}`,
+  );
+  assert.ok(places.includes('22.38,114.19'), 'Sha Tin anchor');
+  assert.ok(places.includes('22.37,114.11'), 'Tsuen Wan anchor');
+  assert.ok(places.includes('22.45,114.17'), 'Tai Po anchor');
+  assert.ok(places.includes('22.49,114.14'), 'Fanling anchor');
+  assert.ok(places.includes('22.39,113.98'), 'Tuen Mun anchor');
+  assert.ok(places.includes('22.44,114.02'), 'Yuen Long anchor');
+  assert.ok(places.includes('22.31,114.26'), 'Tseung Kwan O anchor');
+  assert.ok(places.includes('22.28,114.16'), 'Central anchor');
+  assert.ok(places.includes('22.30,114.17'), 'Tsim Sha Tsui anchor');
+});
+
+test('a lowered HK cap still keeps Sha Tin when New Territories anchors are set', () => {
+  const cameras = [
+    hkCameraToSource(
+      row({
+        key: 'H001F',
+        region: 'Hong Kong Island',
+        district: 'Central & Western',
+        description: 'Central harbour [H001F]',
+        latitude: '22.2819',
+        longitude: '114.158',
+      }),
+    ),
+    hkCameraToSource(
+      row({
+        key: 'ST101F',
+        region: 'New Territories',
+        district: 'Sha Tin',
+        description: 'Sha Tin Road [ST101F]',
+        latitude: '22.3827',
+        longitude: '114.19',
+      }),
+    ),
+    hkCameraToSource(
+      row({
+        key: 'K999F',
+        region: 'Kowloon',
+        district: 'Yau Tsim Mong',
+        description: 'Far Kowloon filler [K999F]',
+        latitude: '22.32',
+        longitude: '114.18',
+      }),
+    ),
+  ].filter(Boolean);
+  const kept = prioritizeSources(cameras, 2, HK_ANCHORS);
+  assert.deepEqual(kept.map((camera) => camera.id).sort(), [
+    'hk-h001f',
+    'hk-st101f',
+  ]);
 });
