@@ -513,6 +513,7 @@
   "src/layers/cctv/ingestion.js",
   "src/layers/cctv/hover.js",
   "src/layers/cctv/navigation.js",
+  "src/layers/cctv/navigation.test.mjs",
   "src/layers/cctv/index.js",
   "src/layers/cctv/model.js",
   "src/layers/cctv/geometryQueue.js",
