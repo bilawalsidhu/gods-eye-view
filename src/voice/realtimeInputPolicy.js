@@ -142,6 +142,62 @@ export function resolveVoiceVisualizerSpeaker(
   return nextSpeaker === 'user' || nextSpeaker === 'ai' ? nextSpeaker : 'idle';
 }
 
+export const VOICE_PRESENTATION_STATES = Object.freeze([
+  'idle',
+  'connecting',
+  'ready',
+  'listening',
+  'working',
+  'executing',
+  'speaking',
+  'interrupted',
+  'error',
+]);
+
+/**
+ * Project existing voice/session owners into one truthful HUD state.
+ *
+ * The voice card separately owns captions, plan steps and results. This small
+ * projection only answers what interaction state should be visible now.
+ * `speaker === 'ai'` is not audible proof: Realtime assigns AI ownership on
+ * `response.created`, before output audio starts. Conversely, output can keep
+ * draining after `response.done`, so measurable audio remains `speaking` even
+ * when no response is active.
+ *
+ * A successful Space barge-in may briefly report `interrupted`. Once the new
+ * user speech event owns the turn, `speaker === 'user'` outranks lingering
+ * assistant audio and tool work; the card can continue showing those steps.
+ * Callers must not set `interrupted` merely because Space was pressed when
+ * Radio or another owner refused the barge-in.
+ *
+ * @param {object} input
+ * @param {string} [input.sessionState='idle'] Session/controller state.
+ * @param {'idle'|'user'|'ai'} [input.speaker='idle'] Current turn speaker owner.
+ * @param {boolean} [input.responseActive=false] A model response is in flight.
+ * @param {boolean} [input.actionActive=false] A typed GEV action is executing.
+ * @param {boolean} [input.outputAudible=false] Assistant output is measurably audible.
+ * @param {boolean} [input.interrupted=false] A barge-in actually succeeded.
+ * @returns {string} Presentation-only state.
+ */
+export function resolveVoicePresentationState({
+  sessionState = 'idle',
+  speaker = 'idle',
+  responseActive = false,
+  actionActive = false,
+  outputAudible = false,
+  interrupted = false,
+} = {}) {
+  if (sessionState === 'error') return 'error';
+  if (sessionState === 'idle') return 'idle';
+  if (sessionState === 'connecting') return 'connecting';
+  if (interrupted) return 'interrupted';
+  if (speaker === 'user') return 'listening';
+  if (actionActive || sessionState === 'executing') return 'executing';
+  if (outputAudible) return 'speaking';
+  if (responseActive) return 'working';
+  return 'ready';
+}
+
 /**
  * Resolves the in-app help tray copy for the current push-to-talk state.
  * @param {boolean} pushToTalkMode
