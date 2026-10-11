@@ -148,12 +148,14 @@ async function main() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   } catch (e) {
     console.error(`Dev server not reachable at ${APP_URL} (${e.message}).`);
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
   const status = await fetch(`${APP_URL}/api/tomtom/status`).then((r) => r.json()).catch(() => null);
   if (!status?.hasKey) {
     console.error('Server has no TomTom key — the A/B needs live flow.');
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
 
   fs.mkdirSync(OUT_DIR, { recursive: true });

@@ -116,14 +116,16 @@ async function main() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   } catch (e) {
     console.error(`\x1b[31mDev server not reachable at ${APP_URL} (${e.message}).\x1b[0m`);
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
 
   const statusBefore = FIXTURES ? {hasKey:true,dailyCount:0} : await fetch(`${APP_URL}/api/tomtom/status`).then((r) => r.json()).catch(() => null);
   if (FIXTURES) console.log('Source mode: synthetic roads and recorded flow tiles; live quota is not qualified.');
   if (!statusBefore?.hasKey) {
     console.error('\x1b[31mServer has no TomTom key — run against the keyed dev server (:4410).\x1b[0m');
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
 
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
