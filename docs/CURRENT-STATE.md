@@ -1,7 +1,7 @@
 # God's Eye View Current State
 
 In standalone development and preview servers, a missing Google tile-token
-provider returns an uncached \`204 No Content\` for \`GET /api/google/tiles-token\`
+provider returns an uncached `204 No Content` for `GET /api/google/tiles-token`
 (and HEAD) instead of a browser-visible 404. The fallback is registered after
 real token providers and before the unknown-API handler, so existing Google
 browser keys, provider-issued tokens, and unrelated API routes remain unchanged.
