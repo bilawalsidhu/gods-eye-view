@@ -5,6 +5,7 @@ import { createBrowserViteConfig } from '../../build/vite.js';
 import { localProviderPlugins } from '../providers/local.js';
 import { localMcpPlugin } from '../mcp/plugin.js';
 import { apiNotFoundPlugin } from './api-not-found.js';
+import { googleTokenUnavailablePlugin } from './google-token-unavailable.js';
 import { standaloneVoiceTools } from './voiceTools.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -19,6 +20,7 @@ export default defineConfig(({ command, mode }) => {
     plugins: [
       ...localProviderPlugins({ realtime: { tools: standaloneVoiceTools() } }),
       localMcpPlugin(),
+      googleTokenUnavailablePlugin(),
       apiNotFoundPlugin(),
     ],
     googleApiKey: process.env.GOOGLE_MAPS_API_KEY,
