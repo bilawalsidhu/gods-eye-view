@@ -290,6 +290,11 @@
     "runtime": "node",
     "exports": ["./server/providers/openai"],
     "modules": [
+      "server/providers/local-model.js",
+      "server/providers/common/http.js",
+      "src/sources/httpBody.js",
+      "src/localMcpGate.mjs",
+      "src/keySetupCore.mjs",
       "src/hudLayoutPolicy.js",
       "server/providers/common/rate-limit.js",
       "server/providers/common/request.js",

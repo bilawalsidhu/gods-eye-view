@@ -1,5 +1,12 @@
 # Changelog
 
+- Add an opt-in local hybrid Intelligence panel, World Monitor country/news
+  tools for MCP and text chat, and a launcher for isolated local services.
+- Add local Bifrost/OpenAI-compatible text inference and HUD summaries.
+  The local profile keeps credentials server-side, returns real tool results,
+  and disables cloud Realtime fallback. Local speech remains unconfigured.
+- Preserve the map action runner when a session adapter has no Realtime controller.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 

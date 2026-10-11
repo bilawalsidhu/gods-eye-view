@@ -11,6 +11,7 @@ export function createApplicationControls({
   services,
   catalog,
   placeSearch,
+  hudSummaryPolicy,
   defer,
 }) {
   // Initialize the style manager (post-processing, HUD, locations, share links)
@@ -26,6 +27,7 @@ export function createApplicationControls({
     requestServices: operations.requests,
     mapStackController,
     placeSearch,
+    hudSummaryPolicy,
   });
   defer(() => styleManager.orbitController.stop());
   defer(() => styleManager.hud.destroy());

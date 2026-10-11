@@ -106,6 +106,11 @@ export class IntelHUD {
   ) {
     this.summaryService = summaryService;
     this.summaryPolicy = summaryPolicy;
+    this._summaryTimeoutMs =
+      Number.isFinite(summaryPolicy.requestTimeoutMs) &&
+      summaryPolicy.requestTimeoutMs > 0
+        ? Math.min(summaryPolicy.requestTimeoutMs, 90_000)
+        : 5000;
     this.basemapContext = basemapContext;
     this.placeSearch = placeSearch;
     this.viewer = viewer;
@@ -732,7 +737,10 @@ export class IntelHUD {
     this._summaryDirty = false;
     this._lastSummarySignature = signature;
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 5000);
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      this._summaryTimeoutMs,
+    );
     this._summaryRequest = controller;
     try {
       this.summaryPolicy.onRequest?.();
@@ -755,13 +763,16 @@ export class IntelHUD {
         animate,
       );
     } catch (error) {
+      // A request from a previous view (or destroyed HUD) must not repaint its
+      // captured fallback over the current view's immediate telemetry line.
+      if (revision !== this._summaryRevision) return;
       if (error?.name !== 'AbortError') {
         console.warn('[HUD] AI summary unavailable:', error);
-        // Invalidate the committed signature so the next periodic tick
-        // retries instead of sticking on the fallback line forever.
-        this._lastSummarySignature = null;
-        this._summaryDirty = true;
       }
+      // Timeouts also retry on a later tick. Only one request may be active;
+      // increasing the local model's budget must not overlap periodic work.
+      this._lastSummarySignature = null;
+      this._summaryDirty = true;
       this._setSummaryText(fallbackText, animate);
     } finally {
       window.clearTimeout(timeout);
@@ -938,6 +949,7 @@ export class IntelHUD {
 
   /** Tear down all running intervals. Call when discarding the HUD instance. */
   destroy() {
+    this._summaryRevision++;
     clearInterval(this._updateInterval);
     clearInterval(this._recBlinkInterval);
     clearInterval(this._timestampInterval);

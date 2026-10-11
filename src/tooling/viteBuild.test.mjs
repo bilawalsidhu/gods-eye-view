@@ -90,7 +90,11 @@ test('root config retains existing named exports and standalone provider order',
   const config = standaloneConfig({ mode: 'test' });
   assert.deepEqual(
     config.plugins.slice(3, -4).map((plugin) => plugin.name),
-    providers.localProviderPlugins().map((plugin) => plugin.name),
+    [
+      'gev-local-model',
+      'local-world-monitor',
+      ...providers.localProviderPlugins().map((plugin) => plugin.name),
+    ],
   );
   assert.equal(config.plugins.at(-5).name, 'gev-key-setup');
   // The local MCP route follows every provider and precedes the API fallback.

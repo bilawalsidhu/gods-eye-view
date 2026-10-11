@@ -17,6 +17,8 @@ export function createStandaloneApplication({
   cesiumToken,
   geospatial = {},
   voice = {},
+  hybrid = {},
+  hudSummaryPolicy = {},
   sources = {},
   streetLevelProviders,
   allowQaRegistration = false,
@@ -70,10 +72,17 @@ export function createStandaloneApplication({
         loaderStatus,
         placeSearch,
         catalog,
+        hudSummaryPolicy,
       }),
     createData: (context) =>
       createStandaloneData({ ...context, allowQaRegistration, catalog }),
     createTools: (context) =>
-      createStandaloneTools({ ...context, loadingScreen, placeSearch, voice }),
+      createStandaloneTools({
+        ...context,
+        loadingScreen,
+        placeSearch,
+        voice,
+        hybrid,
+      }),
   });
 }

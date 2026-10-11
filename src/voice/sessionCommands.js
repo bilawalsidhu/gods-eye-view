@@ -57,6 +57,9 @@ export function createVoiceCommands({
   }
   // Retain the existing controller's inspection surface for browser tools.
   const controls = adapter.controller || session;
+  // Map links and other application surfaces share this protocol-neutral
+  // runner even when the adapter has no Realtime controller.
+  controls.runner = runner;
   controls.session = session;
   const updateStatus = session.subscribe((event) => {
     if (event.type !== 'state') return;

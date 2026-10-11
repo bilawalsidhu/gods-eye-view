@@ -5123,3 +5123,20 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+## Local hybrid extension
+
+The optional profile in [HYBRID_LOCAL_SETUP.md](HYBRID_LOCAL_SETUP.md) composes
+the current globe with a separately running local World Monitor backend.
+`GEV_HYBRID_ENABLED=true` mounts the native Intelligence panel. Selecting
+`GEV_LLM_PROVIDER` also enables it and selects the local text adapter.
+Credentials, provider URLs, and credential-file paths stay server-side.
+
+The MCP and browser tool catalogs add country headlines, deterministic country
+briefs, and a news digest. These preserve partial, stale, and unavailable states.
+Existing globe resources and camera/image tools retain their own transport.
+The text session executes the existing action runner and sends actual results
+back to the configured local model. An explicit local profile disables cloud
+Realtime token/login routes and uses the same model for HUD summaries.
+Speech input/output and complete World Monitor feature parity remain outside
+this extension. No World Monitor source or data snapshot is bundled here.

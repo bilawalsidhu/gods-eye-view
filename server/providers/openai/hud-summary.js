@@ -5,6 +5,12 @@ import {
 import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
 import { readRequestBody } from '../common/request.js';
 import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
+import {
+  isLocalModelSelected,
+  admitLocalModelRequest,
+  withLocalModelRequest,
+  completeLocalModel,
+} from '../local-model.js';
 
 function extractOpenAiResponseText(data) {
   if (typeof data?.output_text === 'string' && data.output_text.trim()) {
@@ -34,6 +40,30 @@ async function handleHudSummary(req, res) {
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ error: 'Method not allowed' }));
     return;
+  }
+
+  if (isLocalModelSelected()) {
+    if (!admitLocalModelRequest(req, res)) return;
+    return withLocalModelRequest(req, res, async (context, signal) => {
+      const result = await completeLocalModel(
+        {
+          messages: [{ role: 'user', content: JSON.stringify(context) }],
+          instructions: HUD_SUMMARY_INSTRUCTIONS,
+          signal,
+        },
+        { timeoutMs: 60_000 },
+      );
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+      });
+      res.end(
+        JSON.stringify({
+          summary: toFiveWordHudSummary(result.content) || null,
+          error: null,
+        }),
+      );
+    });
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
