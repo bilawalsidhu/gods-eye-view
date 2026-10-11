@@ -64,7 +64,8 @@
     "mapillary-js": "^4.1.2",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
-    "satellite.js": "^6.0.2"
+    "satellite.js": "^6.0.2",
+    "seek-bzip": "^2.0.0"
   },
   "devDependencies": {
     "prettier": "3.9.6",
