@@ -1,5 +1,7 @@
 # Changelog
 
+- Cancelled infrastructure requests discard late responses and leave the cache available for healthy retries.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 

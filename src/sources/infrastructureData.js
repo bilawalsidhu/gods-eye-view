@@ -135,29 +135,30 @@ export function createInfrastructureSource({
   const cache = new Map();
   return {
     async getRecords(layerId, { signal } = {}) {
+      signal?.throwIfAborted();
       const url = INFRASTRUCTURE_DATA_URLS[layerId];
       if (!url) throw new TypeError(`Unknown infrastructure layer: ${layerId}`);
       if (!cache.has(layerId)) {
         signal?.throwIfAborted();
         const response = await fetchImpl(url, { signal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const records = parseGeojsonLines(await response.text()).flatMap(
-          (feature) => {
-            const point = featurePoint(feature);
-            return point
-              ? [
-                  mapAnalystRecord(
-                    {
-                      id: feature.properties?.osm_id ?? feature.id,
-                      ...point,
-                      properties: feature.properties,
-                    },
-                    layerId,
-                  ),
-                ]
-              : [];
-          },
-        );
+        const text = await response.text();
+        signal?.throwIfAborted();
+        const records = parseGeojsonLines(text).flatMap((feature) => {
+          const point = featurePoint(feature);
+          return point
+            ? [
+                mapAnalystRecord(
+                  {
+                    id: feature.properties?.osm_id ?? feature.id,
+                    ...point,
+                    properties: feature.properties,
+                  },
+                  layerId,
+                ),
+              ]
+            : [];
+        });
         cache.set(layerId, records);
       }
       return cache.get(layerId);

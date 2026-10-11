@@ -5123,3 +5123,8 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+
+### fix(sources): honor late and cached infrastructure request cancellation
+
+Check cancellation before cache access and after body acquisition, so cancelled queries cannot return records or populate the cache. A later healthy caller can retry.
