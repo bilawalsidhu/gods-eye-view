@@ -153,7 +153,22 @@ export function normalizeOsrmSteps(route) {
       const location = raw?.maneuver?.location;
       const lon = Number(location?.[0]);
       const lat = Number(location?.[1]);
-      if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+      if (
+        !Array.isArray(location) ||
+        location
+          .slice(0, 2)
+          .some(
+            (value) =>
+              value == null ||
+              typeof value === 'boolean' ||
+              (typeof value === 'string' && !value.trim()),
+          ) ||
+        !Number.isFinite(lon) ||
+        !Number.isFinite(lat) ||
+        Math.abs(lon) > 180 ||
+        Math.abs(lat) > 90
+      )
+        continue;
       const type = cleanText(raw.maneuver?.type).toLowerCase() || 'continue';
       const step = {
         index: out.length,

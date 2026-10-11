@@ -5310,3 +5310,8 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+
+### fix(directions): discard impossible and absent maneuver coordinates
+
+Require numeric or nonempty numeric-string maneuver coordinates inside WGS84 longitude/latitude limits; skip bad rows without losing adjacent valid instructions.
