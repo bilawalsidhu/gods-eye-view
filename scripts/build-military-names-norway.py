@@ -135,7 +135,7 @@ def export(osmium, pbf, cache, ids):
     subprocess.run([osmium, 'export', '-O', '-f', 'geojsonseq', '--add-unique-id=type_id',
                     '-o', str(exported), str(picked)], check=True)
     areas = {}
-    for line in exported.read_text().splitlines():
+    for line in exported.read_text(encoding='utf-8').splitlines():
         line = line.lstrip('\x1e').strip()
         if not line:
             continue
@@ -211,7 +211,7 @@ def main():
     if actual != expected:
         raise RuntimeError('MD5 mismatch for %s: %s != %s' % (pbf.name, actual, expected))
     rings = read_poly(fetch(GEOFABRIK + 'norway.poly', args.cache / 'norway.poly'))
-    curated = json.loads(CURATED.read_text())
+    curated = json.loads(CURATED.read_text(encoding='utf-8'))
     ids = {s[k] for s in curated['sites'] for k in ('osm', 'site') if k in s}
     areas = export(args.osmium, pbf, args.cache, ids)
     pack = build(curated, areas, rings)
@@ -228,7 +228,7 @@ def main():
             raise SystemExit('Output SHA-256 mismatch: %s' % digest)
     else:
         (PACK / 'norway.json').write_bytes(raw)
-        (PACK / 'norway.sha256').write_text(digest + '  norway.json\n')
+        (PACK / 'norway.sha256').write_text(digest + '  norway.json\n', encoding='utf-8', newline='\n')
     print(json.dumps({'extract': EXTRACT, 'md5': actual, 'records': len(pack['records']),
                       'sha256': digest}))
 
