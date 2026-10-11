@@ -419,6 +419,27 @@ test('cyclones lead, and observed history owns one bordered group with only acti
   view.destroy();
 });
 
+test('bird migration joins observed history ahead of rain radar', () => {
+  const f = fixture();
+  const view = createWeatherPanel(f);
+  view.update([
+    radar,
+    wind,
+    {
+      id: 'bird-migration',
+      icon: '➶',
+      summary: { label: 'Bird migration · US' },
+    },
+  ]);
+  const group = f.find((n) => n.className === 'weather-observed-group');
+  assert.equal(group.children[1].textContent, 'Bird migration · Rain radar');
+  assert.deepEqual(
+    group.children[3].children.map((n) => n.dataset.cardId),
+    ['bird-migration', 'weather-radar'],
+  );
+  view.destroy();
+});
+
 test('accordion changes only on headers, newly enabled layers and loss of the open layer', () => {
   const f = fixture();
   const calls = [];

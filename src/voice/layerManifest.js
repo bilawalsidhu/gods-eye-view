@@ -207,6 +207,12 @@ const layers = [
     },
   },
   {
+    id: 'bird-migration',
+    aliases: ['bird migration', 'migration', 'birds'],
+    context: false,
+    noQuery: 'map overlay; no countable records',
+  },
+  {
     id: 'weather-radar',
     aliases: ['weather radar', 'radar', 'rain', 'weather'],
     context: false,

@@ -2,6 +2,7 @@ import { createWeatherClock } from '../layers/weather/clock.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
 import { createCyclonesLayer } from '../layers/cyclones/index.js';
 import { createWindLayer } from '../layers/wind/index.js';
+import { createBirdMigrationLayer } from '../layers/birdMigration/index.js';
 import { createLayerCatalog } from './catalog.js';
 import { MAPILLARY_SOURCE_METHODS } from '../layers/streetLevel/providers/mapillary/policy.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
@@ -53,6 +54,7 @@ const SOURCE_METHODS = Object.freeze({
   firms: ['getSnapshot'],
   wind: ['getSnapshot'],
   weather: ['getSnapshot'],
+  'bird-migration': ['getManifest', 'getMotion'],
   cyclones: ['getSnapshot'],
   earthquakes: ['getSnapshot'],
   'fire-perimeters': ['getSnapshot'],
@@ -173,6 +175,10 @@ export function createApplicationCatalog({
           installations,
         }),
         createWindLayer({ feed: sources.wind, clock: weatherClock }),
+        createBirdMigrationLayer({
+          source: sources['bird-migration'],
+          clock: weatherClock,
+        }),
         createWeatherLayer({
           feed: sources.weather,
           id: 'weather-radar',

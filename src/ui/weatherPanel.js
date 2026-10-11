@@ -1,17 +1,17 @@
 import { createRailCards } from './railCards.js';
 import { createRailTimeline } from './railTimeline.js';
+import { WEATHER_FAMILY, WEATHER_FAMILY_IDS } from './weatherFamily.js';
 
 // Remounting controls must not reopen a panel the user already collapsed.
 const appearedDocuments = new WeakSet();
 const openDocuments = new WeakMap();
-const ORDER = [
-  'weather-cyclones',
-  'wind',
-  'weather-radar',
-  'weather-satellite',
-  'weather-lightning',
-];
-const OBSERVED = new Set(ORDER.slice(2));
+const ORDER = WEATHER_FAMILY_IDS;
+const OBSERVED_NAMES = new Map(
+  WEATHER_FAMILY.filter(({ history }) => history === 'observed').map(
+    ({ id, name }) => [id, name],
+  ),
+);
+const OBSERVED = new Set(OBSERVED_NAMES.keys());
 const utc = (time) =>
   Number.isFinite(Date.parse(time))
     ? `${new Date(time).toISOString().slice(5, 16).replace('T', ' ')} UTC`
@@ -131,12 +131,11 @@ export function createWeatherPanel({
     const observed = active.filter(({ id }) => OBSERVED.has(id));
     const showTimeline = observed.length > 0;
     set(observedGroup, 'hidden', !showTimeline);
-    const names = {
-      'weather-radar': 'Rain radar',
-      'weather-satellite': 'Satellite clouds',
-      'weather-lightning': 'Lightning density',
-    };
-    set(scope, 'textContent', observed.map(({ id }) => names[id]).join(' · '));
+    set(
+      scope,
+      'textContent',
+      observed.map(({ id }) => OBSERVED_NAMES.get(id)).join(' · '),
+    );
     set(timelineHost, 'hidden', !showTimeline);
     const index =
       state.mode === 'latest'

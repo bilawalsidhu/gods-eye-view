@@ -31,6 +31,35 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
   assert.equal(order.filter(({ id }) => id === 'transit').length, 1);
 });
 
+test('the Weather group lists exactly the weather family, bird migration just before rain radar', async () => {
+  const { WEATHER_FAMILY } = await import('./weatherFamily.js');
+  const source = readFileSync(
+    new URL('./layerPanel.js', import.meta.url),
+    'utf8',
+  );
+  const declarations = source.slice(
+    source.indexOf('const PANEL_GROUPS ='),
+    source.indexOf('const PANEL_POSITIONS ='),
+  );
+  const weather = JSON.parse(
+    runInNewContext(
+      `${declarations}\nJSON.stringify(PANEL_GROUPS.find(({ label }) => label === 'Weather').ids)`,
+    ),
+  );
+  assert.deepEqual(weather, [
+    'wind',
+    'bird-migration',
+    'weather-radar',
+    'weather-satellite',
+    'weather-lightning',
+    'weather-cyclones',
+  ]);
+  assert.deepEqual(
+    [...weather].sort(),
+    WEATHER_FAMILY.map(({ id }) => id).sort(),
+  );
+});
+
 test('partial feed controls distinguish incomplete records from stale data and outages', async () => {
   const { LayerPanel, layerFeedState } = await import('./layerPanel.js');
   const classes = new Map();

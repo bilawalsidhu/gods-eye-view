@@ -9,6 +9,7 @@ import {
   routeWorldFocusRequest,
 } from '../worldFocus.js';
 import { registerNavigationAuthorityListener } from '../navigationPolicy.js';
+import { WEATHER_FAMILY_IDS } from './weatherFamily.js';
 /** Own manager subscriptions and the camera-entry events that outlive controls. */
 export class LayerBindings {
   constructor({
@@ -121,13 +122,7 @@ export class LayerBindings {
     for (const layer of this._weatherShellModules)
       layer.attachShellServices?.(null);
     this._weatherShellModules = [];
-    for (const id of [
-      'wind',
-      'weather-radar',
-      'weather-satellite',
-      'weather-lightning',
-      'weather-cyclones',
-    ]) {
+    for (const id of WEATHER_FAMILY_IDS) {
       const layer = this._dataManager?.layers?.get(id)?.module;
       if (typeof layer?.attachShellServices !== 'function') continue;
       layer.attachShellServices({

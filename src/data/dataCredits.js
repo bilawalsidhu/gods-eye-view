@@ -283,6 +283,10 @@ export const DATA_CREDITS = [
     html: 'Observed weather: <a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener">NOAA nowCOAST</a> · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners. <a href="https://oceanservice.noaa.gov/disclaimer.html" target="_blank" rel="noopener">Source disclaimer</a>.',
   },
   {
+    key: 'bird-migration',
+    html: 'Bird migration: <a href="https://www.weather.gov/" target="_blank" rel="noopener">NWS</a> NEXRAD Level III velocity and correlation; reflectivity tiles via <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">Iowa State IEM</a>. Not endorsed by NOAA.',
+  },
+  {
     key: 'weather-cyclones',
     html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific. Forecast center uncertainty, not storm size.',
   },

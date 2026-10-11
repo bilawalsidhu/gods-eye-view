@@ -5,6 +5,7 @@ export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
 import { keySetupRequirement } from '../keySetupCore.mjs';
 import { createWeatherPanel } from './weatherPanel.js';
+import { WEATHER_FAMILY_IDS } from './weatherFamily.js';
 const FEED_STATE_LABELS = Object.freeze({
   nominal: 'ON',
   loading: 'LOADING',
@@ -52,6 +53,7 @@ const PANEL_GROUPS = [
     label: 'Weather',
     ids: [
       'wind',
+      'bird-migration',
       'weather-radar',
       'weather-satellite',
       'weather-lightning',
@@ -360,15 +362,7 @@ export class LayerPanel {
     this._weatherPanel?.update(
       this.getAll()
         .filter(
-          (layer) =>
-            layer.enabled &&
-            [
-              'wind',
-              'weather-radar',
-              'weather-satellite',
-              'weather-lightning',
-              'weather-cyclones',
-            ].includes(layer.id),
+          (layer) => layer.enabled && WEATHER_FAMILY_IDS.includes(layer.id),
         )
         .map((layer) => ({
           id: layer.id,
