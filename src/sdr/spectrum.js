@@ -42,7 +42,13 @@ function fft(real, imag) {
 /** Create an FFT-shifted dB power spectrum from interleaved unsigned 8-bit IQ. */
 export function analyzeSpectrum(buffer, maxBins = 2_048) {
   const iq = new Uint8Array(buffer);
-  const length = Math.min(nextPowerOfTwo(Math.floor(iq.length / 2)), maxBins);
+  const samples = Math.floor(iq.length / 2);
+  if (samples < 2) return new Float32Array(0);
+  if (!Number.isFinite(maxBins) || maxBins < 2)
+    throw new RangeError(
+      'Spectrum bin limit must be a finite number of at least two',
+    );
+  const length = nextPowerOfTwo(Math.min(samples, Math.floor(maxBins)));
   const real = new Float32Array(length);
   const imag = new Float32Array(length);
   const sampleOffset = Math.max(0, Math.floor((iq.length / 2 - length) / 2));

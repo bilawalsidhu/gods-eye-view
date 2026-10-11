@@ -1,5 +1,7 @@
 # Changelog
 
+- SDR spectra use valid transform sizes within the available samples and requested bin budget.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 

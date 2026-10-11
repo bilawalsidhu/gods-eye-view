@@ -5123,3 +5123,8 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+
+### fix(sdr): keep spectrum transforms within valid radix-two sample sizes
+
+Choose the largest radix-two transform within both available complete IQ pairs and the finite bin budget; return an empty spectrum when no two-pair transform exists and refuse invalid limits.
