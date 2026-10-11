@@ -141,7 +141,10 @@ export const DATA_CREDITS = [
   },
   {
     key: 'usgs',
-    html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
+    html:
+      'Earthquakes: Data courtesy of the U.S. Geological Survey · ' +
+      '<a href="https://www.seismicportal.eu/" target="_blank" rel="noopener">EMSC</a>' +
+      ' (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>)',
   },
   {
     key: 'nasa-gibs',

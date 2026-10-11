@@ -361,6 +361,7 @@
   "src/layers/earthquakes/model.js",
   "src/layers/earthquakes/source.js",
   "src/layers/earthquakes/ownership.test.mjs",
+  "src/layers/earthquakes/emsc.test.mjs",
   "src/layers/perimeters/index.js",
   "src/layers/perimeters/records.js",
   "src/layers/perimeters/source.js",
