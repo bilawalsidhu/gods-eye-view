@@ -2,12 +2,17 @@ import { defaultSourceRoot } from './common/source-root.js';
 import { handleHudSummary } from './openai/hud-summary.js';
 import { createDebugLogHandler } from './openai/debug-log.js';
 import {
+  createRealtimeCallsRelayHandler,
   createRealtimeOAuthLoginHandler,
   createRealtimeOAuthStatusHandler,
   createRealtimeTokenHandler,
 } from './openai/realtime.js';
 import { sameSiteGated } from './common/same-site.js';
 import { createCodexOAuthLogin } from './openai/codex-auth.js';
+import {
+  REALTIME_CALLS_RELAY_PATH,
+  usesCustomOpenAiBaseUrl,
+} from './openai/endpoints.js';
 
 /**
  * Vite plugin: OpenAI Realtime ephemeral client secret.
@@ -37,6 +42,15 @@ function openAiRealtimeProxy({
         createRealtimeTokenHandler({ ...realtime, annotationGuidance }),
       ),
     );
+
+    // OPENAI_BASE_URL set: the browser's SDP offer comes back through here,
+    // because a gateway-minted secret is only valid at that gateway.
+    if (usesCustomOpenAiBaseUrl()) {
+      middlewares.use(
+        REALTIME_CALLS_RELAY_PATH,
+        sameSiteGated(createRealtimeCallsRelayHandler(realtime)),
+      );
+    }
 
     middlewares.use(
       '/api/realtime/oauth-status',

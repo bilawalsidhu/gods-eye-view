@@ -5,6 +5,7 @@ import {
 import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
 import { readRequestBody } from '../common/request.js';
 import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
+import { openAiEndpoint } from './endpoints.js';
 
 function extractOpenAiResponseText(data) {
   if (typeof data?.output_text === 'string' && data.output_text.trim()) {
@@ -54,7 +55,7 @@ async function handleHudSummary(req, res) {
   try {
     const body = await readRequestBody(req, 64 * 1024);
     const context = JSON.parse(body || '{}');
-    const response = await fetch('https://api.openai.com/v1/responses', {
+    const response = await fetch(openAiEndpoint('responses'), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
