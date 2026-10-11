@@ -58,6 +58,7 @@ factory and supplies its existing functions. Other consumers should use the pack
 exports, which do not import standalone application globals.
 
 Dataset files and source/license notices remain under `src/data/local_data/`.
-Their input counts are 4,351 datacenter features and 704 dam features. Cesium may
+Their input counts are 4,351 datacenter features and 4,846 dam features (704
+from OpenStreetMap worldwide and 4,142 from NVE's Norwegian register). Cesium may
 expand multipart geometries into multiple entities; entity and stem counts are
 different measurements. This change does not refresh or relicense the datasets.

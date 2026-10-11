@@ -1,5 +1,8 @@
 import { createLocalGeoJsonLayer } from './localGeojsonCore.js';
-import { INFRASTRUCTURE_DATA_URLS } from '../sources/infrastructureData.js';
+import {
+  INFRASTRUCTURE_DATA_URLS,
+  infrastructureDataUrls,
+} from '../sources/infrastructureData.js';
 
 /**
  * Create fresh datacenter and dam layers without starting or loading them.
@@ -8,7 +11,8 @@ import { INFRASTRUCTURE_DATA_URLS } from '../sources/infrastructureData.js';
  */
 export function createInfrastructureLayers(services) {
   const datacentersUrl = INFRASTRUCTURE_DATA_URLS['local-datacenters'];
-  const damsUrl = INFRASTRUCTURE_DATA_URLS['local-dams'];
+  // OpenStreetMap dams worldwide, then Norway's NVE register.
+  const damsUrl = infrastructureDataUrls('local-dams');
   const datacenters = createLocalGeoJsonLayer(
     {
       id: 'local-datacenters',
@@ -32,7 +36,7 @@ export function createInfrastructureLayers(services) {
       name: 'Dams',
       color: '#0088ff', // Blue
       icon: '▰',
-      source: 'USACE',
+      source: 'OpenInfraMap · NVE',
       osmDerived: true,
       labels: true,
       labelMax: 900,

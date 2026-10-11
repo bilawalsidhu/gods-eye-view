@@ -76,6 +76,27 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
       .join(' · ');
     if (line) details.push(clampCardLine(line));
   } else if (layerId === 'local-dams') {
+    // Norwegian register dams (NVE): purpose · type · year, then plant · place.
+    const nve = props.nve && typeof props.nve === 'object' ? props.nve : null;
+    if (nve) {
+      const purpose = Array.isArray(nve.purpose)
+        ? firstClean([nve.purpose.join(', ')])
+        : null;
+      const damType = firstClean([nve.damType]);
+      const built = Number.isFinite(nve.built) ? `built ${nve.built}` : null;
+      const facts = [
+        purpose,
+        damType && `${damType.toLocaleLowerCase('en')} dam`,
+        built,
+      ].filter(Boolean);
+      if (facts.length) details.push(clampCardLine(facts.join(' · ')));
+      const plant = firstClean([nve.powerPlant]);
+      const place = [
+        plant && `${plant} power plant`,
+        firstClean([nve.municipality]),
+      ].filter(Boolean);
+      if (place.length) details.push(clampCardLine(place.join(' · ')));
+    }
     const river = firstClean([
       tags.associated_river,
       props.associated_river,
@@ -586,18 +607,23 @@ export function createLocalGeoJsonLayer(
             try {
               let features = _cachedFeatures;
               if (!features) {
-                const response = await fetch(url, {
-                  signal: _loadController.signal,
-                });
-                if (_destroyed) return;
-                // A 404 returns an HTML body that would otherwise die in JSON.parse
-                // one line later, reported as a parse error for a missing file.
-                if (!response.ok) {
-                  throw new Error(`HTTP ${response.status ?? '?'}`);
+                // A layer may span several files (a main file plus regional
+                // supplements); all must load or the layer reports the error.
+                features = [];
+                for (const fileUrl of Array.isArray(url) ? url : [url]) {
+                  const response = await fetch(fileUrl, {
+                    signal: _loadController.signal,
+                  });
+                  if (_destroyed) return;
+                  // A 404 returns an HTML body that would otherwise die in JSON.parse
+                  // one line later, reported as a parse error for a missing file.
+                  if (!response.ok) {
+                    throw new Error(`HTTP ${response.status ?? '?'}`);
+                  }
+                  const text = await response.text();
+                  if (_destroyed) return;
+                  features.push(...parseGeojsonLines(text));
                 }
-                const text = await response.text();
-                if (_destroyed) return;
-                features = parseGeojsonLines(text);
                 _cachedFeatures = features;
               }
 

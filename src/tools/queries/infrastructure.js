@@ -17,7 +17,9 @@ const KINDS = {
 };
 const ATTRIBUTION = {
   datacenters: '© OpenStreetMap contributors (ODbL 1.0)',
-  dams: '© OpenStreetMap contributors (ODbL 1.0), via Open Infrastructure Map',
+  dams:
+    '© OpenStreetMap contributors (ODbL 1.0), via Open Infrastructure Map; ' +
+    'Norway: NVE (NLOD)',
 };
 
 const round = (value, digits) =>
@@ -28,7 +30,8 @@ export const findInfrastructure = defineTool({
   title: 'Datacenters and dams',
   description:
     'Datacenters (with operator and capacity) or dams (with river and power ' +
-    'output) mapped in OpenStreetMap within an area, nearest the center first.',
+    'output; in Norway also purpose, type, year built and power plant from ' +
+    "NVE's register) within an area, nearest the center first.",
   inputSchema: {
     type: 'object',
     properties: {
@@ -54,7 +57,19 @@ export const findInfrastructure = defineTool({
         operator: record.operator,
         ...(args.kind === 'datacenters'
           ? { capacity: record.capacity }
-          : { river: record.river, output: record.output }),
+          : {
+              river: record.river,
+              output: record.output,
+              ...(record.purpose || record.powerPlant
+                ? {
+                    purpose: record.purpose,
+                    dam_type: record.damType,
+                    built: record.built,
+                    power_plant: record.powerPlant,
+                    municipality: record.municipality,
+                  }
+                : {}),
+            }),
         lat: round(record.lat, 5),
         lon: round(record.lon, 5),
         distance_km: round(distanceKm(center, record), 1),
