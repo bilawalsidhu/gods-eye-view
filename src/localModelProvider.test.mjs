@@ -485,3 +485,87 @@ test('HUD accepts a local model response after five seconds and never falls back
   assert.equal((await post()).status, 503);
   assert.equal(calls, 1);
 });
+
+test('HUD model and output limit are server-owned while chat keeps its configured model', async (t) => {
+  const keys = [...Object.keys(config()), 'GEV_LLM_HUD_MODEL'];
+  const saved = Object.fromEntries(
+    keys.map((name) => [name, process.env[name]]),
+  );
+  t.after(() => {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+  const calls = [];
+  const upstream = await serve(t, async (req, res) => {
+    calls.push(JSON.parse(await body(req)));
+    respond(res, completion('Synthetic local summary with provenance'));
+  });
+  Object.assign(process.env, config(`${upstream}/v1`), {
+    GEV_LLM_HUD_MODEL: 'local/small-summary-model',
+  });
+  const chat = await proxy(t, { environment: process.env, tools });
+  const hud = await serve(t, handleHudSummary);
+  const post = (url, payload) =>
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  const untrusted = {
+    model: 'untrusted-model',
+    modelOverride: 'untrusted-override',
+    maxTokens: 100_000,
+    max_tokens: 100_000,
+  };
+  assert.equal(
+    (await post(`${chat}/api/local-model/chat`, { messages, ...untrusted }))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await post(hud, { place: 'Fixture', ...untrusted })).status,
+    200,
+  );
+  assert.equal(calls[0].model, 'local/test-model');
+  assert.equal(calls[0].max_tokens, 2048);
+  assert.ok(calls[0].tools.length);
+  assert.equal(calls[1].model, 'local/small-summary-model');
+  assert.equal(calls[1].max_tokens, 128);
+  assert.equal(calls[1].tools, undefined);
+
+  delete process.env.GEV_LLM_HUD_MODEL;
+  assert.equal((await post(hud, { place: 'Fixture' })).status, 200);
+  assert.equal(calls[2].model, 'local/test-model');
+  assert.equal(calls[2].max_tokens, 128);
+  process.env.GEV_LLM_HUD_MODEL = 'x'.repeat(201);
+  assert.equal((await post(hud, { place: 'Fixture' })).status, 503);
+  assert.equal(calls.length, 3, 'invalid HUD configuration must not fall back');
+  assert.equal(
+    (await post(`${chat}/api/local-model/chat`, { messages })).status,
+    200,
+  );
+  assert.equal(
+    calls[3].model,
+    'local/test-model',
+    'HUD configuration must not change chat',
+  );
+});
+
+test('server output limits reject invalid or excessive generation budgets', async () => {
+  for (const maxTokens of [0, -1, 1.5, 2049, Infinity, NaN, '128']) {
+    await assert.rejects(
+      completeLocalModel(
+        { messages },
+        {
+          environment: config(),
+          maxTokens,
+          fetchImpl: () =>
+            assert.fail('Invalid budget must not reach the model'),
+        },
+      ),
+      { status: 503 },
+    );
+  }
+});

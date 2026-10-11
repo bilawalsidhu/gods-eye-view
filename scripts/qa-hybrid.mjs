@@ -47,7 +47,18 @@ try {
   await page.waitForSelector('#hybrid-intelligence', { visible: true });
   if (process.env.QA_LIVE_LOCAL_MODEL === '1') {
     report.modelResponses = [];
+    report.hudResponses = [];
     page.on('response', async (response) => {
+      if (response.url().endsWith('/api/openai/hud-summary')) {
+        try {
+          const data = await response.json();
+          report.hudResponses.push({
+            status: response.status(),
+            summary: data.summary,
+          });
+        } catch {}
+        return;
+      }
       if (!response.url().endsWith('/api/local-model/chat')) return;
       try {
         const data = await response.json();

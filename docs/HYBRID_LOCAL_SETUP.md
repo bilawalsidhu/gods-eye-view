@@ -42,6 +42,21 @@ Any explicit `GEV_LLM_PROVIDER` selects local inference. Invalid configuration
 fails visibly. It does not fall back to OpenAI. In this profile the HUD uses
 the local model, and Realtime token/OAuth-login routes are disabled.
 
+Optionally set `GEV_LLM_HUD_MODEL=your-provider/your-small-local-model` for a
+faster local model to generate the HUD's five-word summaries. It uses the same
+gateway and credential; leave it empty to use `GEV_LLM_MODEL`. Chat and globe
+tool calls always use `GEV_LLM_MODEL`. These choices are server configuration,
+not browser request parameters. HUD output is capped at 128 tokens, so choose a
+model that can produce a short answer without a lengthy reasoning preamble.
+
+Within this God's Eye View server, requests to the same gateway run one at a
+time, with at most four chats waiting. A chat interrupts an active HUD summary;
+HUD requests skip while the gateway is busy and keep the immediate telemetry
+fallback. Chat requests have a 180-second deadline including queue time; HUD
+requests have 60 seconds. This scheduling does not cover World Monitor or other
+processes that use the gateway, and stopping remote inference depends on the
+provider honoring cancellation.
+
 ## Start the hybrid
 
 Use a local World Monitor checkout with the local-model gateway changes.
@@ -109,7 +124,8 @@ For clients that use stdio:
       "command": "/absolute/path/to/node",
       "args": [
         "/absolute/path/to/gods-eye-view/server/mcp/stdio.js",
-        "--api-base", "http://127.0.0.1:4173"
+        "--api-base",
+        "http://127.0.0.1:4173"
       ]
     }
   }

@@ -13,7 +13,7 @@ export function createLocalChatSession({
   fetchImpl = (...args) => fetch(...args),
   allowTools = true,
   // One turn may need several model requests with data/tool work between them.
-  // The server separately bounds each inference request to 90 seconds.
+  // The server separately bounds each inference request to 180 seconds including queue time.
   timeoutMs = 300_000,
 }) {
   let active = false;

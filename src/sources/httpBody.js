@@ -1,4 +1,40 @@
 /**
+ * Wait for transport cleanup, with a bound for broken/nonconforming streams.
+ * Native fetch cancellation closes this consumer's response stream; it is not
+ * an acknowledgement that a remote model has stopped executing the request.
+ */
+async function cancelReadableBounded(readable, timeoutMs = 1000) {
+  if (!readable) return;
+  let timer;
+  try {
+    const cancellation = Promise.resolve()
+      .then(() => readable.cancel())
+      .catch(() => {});
+    await Promise.race([
+      cancellation,
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              Object.assign(new Error('Upstream response cleanup timed out'), {
+                code: 'RESPONSE_CLEANUP_TIMEOUT',
+              }),
+            ),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Cancel an unread response body and wait for bounded transport cleanup. */
+export function cancelResponseBodyBounded(response, { timeoutMs = 1000 } = {}) {
+  return cancelReadableBounded(response.body, timeoutMs);
+}
+
+/**
  * Read a fetch() Response body as text with a hard byte cap. Rejects early on an
  * oversized Content-Length, then streams with a running cap so a chunked or
  * length-omitted response cannot blow past the limit. Throws { code:'RESPONSE_TOO_LARGE' }.
@@ -10,10 +46,13 @@ export async function readResponseTextCapped(response, maxBytes, signal) {
     });
   const declared = Number(response.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > maxBytes) {
-    void response.body?.cancel().catch(() => {});
+    await cancelResponseBodyBounded(response);
     throw tooLarge();
   }
-  signal?.throwIfAborted();
+  if (signal?.aborted) {
+    await cancelResponseBodyBounded(response);
+    signal.throwIfAborted();
+  }
   const reader = response.body?.getReader?.();
   if (!reader) {
     const text = await response.text();
@@ -21,8 +60,12 @@ export async function readResponseTextCapped(response, maxBytes, signal) {
     if (new TextEncoder().encode(text).byteLength > maxBytes) throw tooLarge();
     return text;
   }
+  let cancellation;
   const cancel = () => {
-    void reader.cancel().catch(() => {});
+    cancellation ??= cancelReadableBounded(reader);
+    // An abort event cannot await us; the read's catch below owns settlement.
+    void cancellation.catch(() => {});
+    return cancellation;
   };
   signal?.addEventListener('abort', cancel, { once: true });
   const decoder = new TextDecoder();
@@ -40,7 +83,7 @@ export async function readResponseTextCapped(response, maxBytes, signal) {
     }
     return out + decoder.decode();
   } catch (error) {
-    cancel();
+    await cancel();
     throw error;
   } finally {
     signal?.removeEventListener('abort', cancel);
@@ -65,10 +108,13 @@ export async function readResponseBytesCapped(response, maxBytes, signal) {
     });
   const declared = Number(response.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > maxBytes) {
-    await response.body?.cancel().catch(() => {});
+    await cancelResponseBodyBounded(response);
     throw tooLarge();
   }
-  signal?.throwIfAborted();
+  if (signal?.aborted) {
+    await cancelResponseBodyBounded(response);
+    signal.throwIfAborted();
+  }
   const reader = response.body?.getReader?.();
   if (!reader) {
     const bytes = new Uint8Array(await response.arrayBuffer());
@@ -76,8 +122,11 @@ export async function readResponseBytesCapped(response, maxBytes, signal) {
     if (bytes.byteLength > maxBytes) throw tooLarge();
     return bytes;
   }
+  let cancellation;
   const cancel = () => {
-    void reader.cancel().catch(() => {});
+    cancellation ??= cancelReadableBounded(reader);
+    void cancellation.catch(() => {});
+    return cancellation;
   };
   signal?.addEventListener('abort', cancel, { once: true });
   const chunks = [];
@@ -100,7 +149,7 @@ export async function readResponseBytesCapped(response, maxBytes, signal) {
     }
     return out;
   } catch (error) {
-    await reader.cancel().catch(() => {});
+    await cancel();
     throw error;
   } finally {
     signal?.removeEventListener('abort', cancel);

@@ -51,7 +51,12 @@ async function handleHudSummary(req, res) {
           instructions: HUD_SUMMARY_INSTRUCTIONS,
           signal,
         },
-        { timeoutMs: 60_000 },
+        {
+          timeoutMs: 60_000,
+          priority: 'background',
+          modelOverride: process.env.GEV_LLM_HUD_MODEL?.trim() || undefined,
+          maxTokens: 128,
+        },
       );
       res.writeHead(200, {
         'Content-Type': 'application/json',
