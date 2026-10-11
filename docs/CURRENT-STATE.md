@@ -1,5 +1,49 @@
 # God's Eye View Current State
 
+Vessel sources can report healthy empty coverage using a current, complete
+snapshot with zero raw rows, a healthy transport and a positive last-message
+time. This clears obsolete contacts and settles startup without manufacturing
+position timestamps. Stale, incomplete and malformed empty results retain the
+existing recovery behavior.
+
+Catalog source contracts and their consuming layers are declared in
+`src/app/sourceComposition.js`. Omitted or null acquisition sources preserve layer
+registration and serialization, report unavailable, and are refused by the existing
+visibility lifecycle before initialization. Availability is held in an explicit
+catalog lookup supplied to the lifecycle, without modifying layer instances;
+unavailable reasons use the layer display name. Invalid supplied methods still fail
+construction. `createStandaloneApplication` and `createStandaloneCatalog` accept
+`sources` overrides; unspecified entries retain
+standalone defaults, and null entries explicitly remove a source. Street Level
+continues to accept an explicit provider list. An empty Street Level provider
+list uses the same unavailable lifecycle and disabled layer toggle. Directions (`getRoute`) and
+Recent Imagery (`searchHls`, `getThumbnail`, `getTileTemplate`) use the same source
+configuration boundary. Standalone selects their default adapters; layers retain
+route normalization, imagery selection and rendering. Recent Imagery adapters
+consume the existing HLS/VIIRS product schema and provide their own tile attribution.
+The source factories are exported at `layers/directions/source` and
+`layers/recent-imagery/source`. Configuration is applied at construction time;
+this does not introduce live source replacement.
+
+Application catalog composition accepts an optional `streetLevelProviders` list.
+An explicit list replaces the default Mapillary provider; an empty list removes
+all imagery providers. Without that option, Mapillary is registered only when
+`sources.mapillary` is supplied. An absent source leaves Street Level registered
+with a truthful no-provider state, preserving layer controls and share tokens.
+Malformed selected sources and provider definitions still fail validation.
+An explicit provider list bypasses the unused Mapillary source, including its
+validation. Layer share identities and the legacy Mapillary `m` option remain
+stable. Custom provider switches use the `r` option (`example-1*panoramax-0`),
+with URL-safe separators and a shared layer-neutral boolean-switch codec, sorted by provider ID rather
+than registration order, and round-trip through links and stored state. A receiver
+applies only switches for its registered providers; absent custom switches leave
+current defaults unchanged. Explicit provider toggles persist only their requested
+switch IDs through the state coordinator; unrelated live values remain transient.
+The custom switch field is bounded to 256 characters;
+provider registration rejects compositions that cannot fit rather than truncating
+identities. A malformed or duplicate entry invalidates the complete custom-switch
+field. Existing whole-link size limits still apply.
+
 ## God's Eye View in conversations — October 2, 2026
 
 Tool answers that can be shown in God's Eye View include a view: camera, layers,

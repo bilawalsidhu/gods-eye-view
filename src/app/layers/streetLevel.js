@@ -5,10 +5,20 @@ import * as picking from '../../data/pickRegistry.js';
 import * as input from '../../data/inputOwnership.js';
 import * as render from '../../renderGovernor.js';
 
-/** A new provider registers here; its chip, credit and share bit follow. */
-export function createApplicationStreetLevel({ surface, sources }) {
+/**
+ * Inject providers, or use Mapillary only when its source is supplied.
+ * An explicit provider list replaces the default; unused sources.mapillary is
+ * neither constructed nor validated, including when the list is empty.
+ */
+export function createApplicationStreetLevel({
+  surface,
+  sources = {},
+  providers = sources.mapillary == null
+    ? []
+    : [createMapillaryProvider({ source: sources.mapillary })],
+}) {
   return createStreetLevelLayer({
-    providers: [createMapillaryProvider({ source: sources.mapillary })],
+    providers,
     services: {
       sprites,
       picking,
