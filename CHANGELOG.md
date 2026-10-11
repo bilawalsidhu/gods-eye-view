@@ -1,5 +1,7 @@
 # Changelog
 
+- Place searches keep cached results separate for different geographic viewport biases.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 

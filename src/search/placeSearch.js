@@ -26,7 +26,7 @@ export function createPlaceSearch({
       combined.throwIfAborted();
       const text = String(query ?? '').trim();
       if (!text) return { place: null, answered: true };
-      const key = `${bias || ''}\n${text.toLowerCase()}`;
+      const key = JSON.stringify([bias ?? null, text.toLowerCase()]);
       const cached = cache.get(key);
       if (cached && cached.expires > now()) return cached.result;
       cache.delete(key);
