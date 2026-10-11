@@ -115,6 +115,7 @@ export function createLifecycle({
       parts.launchPad.hideLaunchPadZone();
       parts.overlays.hideReplayVehicleOverlay();
       layerState._selectedLaunchId = null;
+      parts.selection.announceMission?.(null);
       parts.overlays.clearMissionOverlaySources();
       await parts.ingestion.restoreSatelliteDependency();
       parts.panel.renderMissionPanel();

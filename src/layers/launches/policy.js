@@ -92,6 +92,9 @@ export const LAUNCH_PAD_ZONE_MAX_CAMERA_HEIGHT_M = 120000;
 
 export const LAUNCH_PAD_ZONE_MAX_CAMERA_DISTANCE_M = 180000;
 
+/** Label color of launch markers; the Wikidata dossier matches it. */
+export const LAUNCH_MARKER_ACCENT = '#22e6e6';
+
 export const TRAJECTORY_STAGE_COLORS = [
   '#ff9f43',
   '#ff66c4',

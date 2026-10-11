@@ -58,6 +58,136 @@ the clips in `LOCK_SOUND_FILES` (`public/sounds/hud-lock.wav`, Kenney CC0, and
 event; `none` is silent. The clip is restarted on a quick retarget, any other
 clip is stopped, and autoplay refusals or a missing file are ignored.
 
+## Wikidata dossier (aircraft and Space Missions)
+
+`installWikidataDossier` (`src/overlays/wikidataDossier.js`, installed in
+`createApplicationScene`) shows a vertical column of facts about a clicked
+aircraft's type, a tracked satellite, or a selected launch beside it, typed out character by character in
+the subject's label color (instantly under reduced motion). The color is the
+tracked entity's `gevLabelModel.accent` (flights `#39d0ff`, military `#ffd166`,
+satellites `#ffd84d`) or the launch event's `accent` (`LAUNCH_MARKER_ACCENT`,
+`#22e6e6`). It is applied as an inline `--dossier-color` (only hex,
+`rgb()`/`hsl()` values are accepted) and defaults to `--secondary-accent`. The
+color drives a 2px edge rule matching the label card's top rule; the title and
+section headings use the card's white title color and the facts its gray detail
+color. It reacts to
+`gev:awareness-subject-selected` from the `flights` and `military` layers and
+reads the type from the shared context record's `properties.type` (adsbdb's
+type name, else the ICAO designator), waiting 700 ms for the type to settle
+because enrichment can land after the click. The panel follows the subject on
+`postRender` (the tracked entity when the camera follows it, otherwise the
+record's live latitude/longitude) and sits 168 px to the right in HUD Lock mode
+(past the reticle's arrows) or 140 px otherwise (past the tracked readout
+card), flipping to the left near the right edge. It clears when that layer
+deliberately clears the subject, when the record disappears, or when another
+layer's subject is selected. It shows "Query …" while loading, "No match" when
+nothing resolves, and "Unavailable" when Wikimedia fails or rate-limits.
+
+`createAircraftWikidataSource` (`src/sources/aircraftWikidata.js`) has no SPARQL
+dependency because Wikidata has no ICAO type-designator property. It:
+
+- searches English Wikipedia for the type text, retrying with trailing variant
+  tokens dropped (`Airbus A321 251NXSL` → `Airbus A321`, up to 3 searches);
+- takes the first linked item that is an aircraft family or model;
+- reads its claims with `wbgetentities`, filling gaps from its `P279` parents
+  (production counts are never inherited);
+- labels the manufacturer, engines and role classes;
+- counts fatal accidents linked to the type through `P121` (and sums their
+  `P1120` deaths) with `haswbstatement` search.
+
+The lines shown are:
+
+- Type and Class: `classifyAircraft` matches the labels of the type's and its
+  aircraft parents' `P279` (subclass of) and `P366` (has use) classes against
+  keyword categories, in priority order: Helicopter, Drone (each prefixed
+  "Military" when a military class is present), Military aircraft, Regional
+  airliner, Commercial airliner, Cargo aircraft, Business aircraft, Trainer
+  aircraft, Light / utility aircraft, Glider, Airship / balloon. Class is the
+  most specific matching label (for example "narrow-body airliner") and is
+  omitted when it repeats the type. Unmatched labels fall back to the first
+  class label.
+- Origin (`P495` country of origin) and Designation (`P798` military
+  designations, up to 4, from the type itself only)
+- Maker, Engines (with `P1114` counts), Wingspan, Length and Height (m and ft),
+  Wing area (`P2112`, m² and ft²)
+- Gross weight (`P2067` with a maximum take-off weight role, else unqualified
+  or loaded), Empty weight (empty-weight roles), Payload and Bomb load
+  (`P4519`), all in t and lb, and Passengers (`P1083`). Masses under 100 kg are
+  dropped as decimal-separator slips.
+- Airspeeds in km/h and kt, plus Mach where stated: Cruise (`P2217`, or
+  `P2052` with a cruise role), Max speed (`P2052` unqualified or with a
+  maximum-speed role), Never exceed (`P2052` never-exceed role) and Stall
+  speed (`P6510`)
+- Climb rate (`P2052` rate-of-climb role, m/s and ft/min), Power (`P2109`, kW
+  and hp), Range (km and nmi), Ceiling (`P2254`)
+- First flight, In service (`P729`–`P730` or "present"), Built (`P1092`)
+- Operators (`P137`): the first 4 labelled, then "+N more"
+- Safety
+- the Wikidata QID
+
+Above the lines, a 160 × 90 photo shows the type's `P18` image as a Commons
+`Special:FilePath` thumbnail (320 px wide), credited "Photo: Wikimedia Commons ·
+<file name>". The photo is hidden when the item has no image or it fails to
+load, and it is revealed without animation under reduced motion.
+
+Missing facts are omitted; many airliner items carry no mass or capacity. The
+safety count is a lower bound because many accidents link only to the
+individual airframe. Requests use the Action APIs with `origin=*`. Each has a
+12 s deadline and a 4 MiB body cap, and a 429 gets one retry after a back-off
+of up to 5 s. Requests run one after another, and results are cached per type
+in a 64-entry LRU (12 h, or 30 min for no match). The network client, cache
+and claim/unit/date helpers are shared with the space source in
+`src/sources/wikidataClient.js`.
+
+### Space Missions
+
+Satellites use the same lane as aircraft: `gev:awareness-subject-selected`
+from `satellites` with the context record's `properties.noradId` as the key.
+The panel follows the tracked entity whose `gevTrackedId` is
+`satellites:<norad>`, because satellites outrun the 5 km tracked-match radius.
+Launches have no awareness subject. `setSelectedMission`
+(`src/layers/launches/selection.js`) dispatches `gev:launch-mission-selected`
+with `{id, name, rocket, missionName, launchYear, lat, lon, accent}` when the selected
+launch changes, and `{id: null}` when it is cleared or the layer is disabled;
+the panel sits at the pad. The launch model's `rocket` is LL2's
+`rocket.configuration.full_name`, else the text before `|` in the launch name.
+
+`createSpaceWikidataSource` (`src/sources/spaceWikidata.js`) has two lookups:
+
+- `lookupSatellite({noradId, name})`: `haswbstatement:P377=<norad>`. With no
+  item, it searches Wikipedia for "<name> satellite", with a hyphenated serial
+  dropped ("STARLINK-1007" becomes "Starlink"). It accepts only spacecraft or
+  constellations, and adds a "Match" line saying it is a constellation or name
+  match. Lines:
+  - Type (`P31`), Program (`P361`), Operator, Maker, Origin, Bus (`P707`),
+    Crew (`P1029`)
+  - Launched (`P619`), Rocket (`P375`), Launch site (`P1427`), In service,
+    COSPAR (`P247`)
+  - Mass, Size (L/W/H/Ø)
+  - Orbit (`P522`), Perigee × apogee (`P2244`/`P2243`), Inclination, Period,
+    Orbits (`P1418`)
+  - Instruments (`P1202`)
+  - Status, from `P621` decay ("Re-entry expected 2030s") or `P730`.
+- `lookupLaunch({rocket, missionName, launchYear})`:
+  - **Rocket section.** Wikipedia search for "<rocket> rocket", accepting
+    only items whose `P31`/`P279` is a rocket model, series, family or
+    launch-vehicle class. Gaps are filled from up to 2 `P279` parents.
+    Heights outside 2–200 m and diameters outside 0.2–20 m are dropped as unit
+    slips; Falcon 9's diameter is stated in miles. Lines:
+    - Type: lift class plus "reusable"
+    - Maker, Origin, Operator, Height, Diameter, Mass
+    - Components, or Variants for a series/family (`P527`), Engines
+    - First flight, In service
+    - Payloads: `haswbstatement:P375=<rocket or parent>` total hits
+  - **Mission section.** Wikipedia search for the mission name, accepting a
+    spacecraft or spaceflight item only when one of its English label or
+    aliases contains every token of the name and any `P619` year is within 1
+    of the launch year. Uses the satellite lines.
+
+Each section starts with a `{section}` line (a full-width heading in the
+panel). The Source line lists every QID used. Results are cached per NORAD id,
+rocket phrase and mission name/year (96 entries each, same TTLs).
+
 ## Metro stations from Wikidata
 
 `createMetroLayer` (`src/layers/metro/`) has no palette row or share-link token
@@ -1565,10 +1695,10 @@ This is the current runtime/source-of-truth snapshot for the project.
 >     samples, `enabling` throughout, panel non-numeric) and across a failing
 >     one. Its `status: 'idle'` is not what saves it — the lifecycle is; the
 >     module has no `loading` status at all.
->   Any new dependency that can be slow must report `loading` and `lastUpdate`
->   honestly for the contract to hold, and must be pinned against the shape its
->   own module really returns — a fixture that invents a status the module cannot
->   emit guards nothing (that is exactly how a hole here survived a green suite).
+>     Any new dependency that can be slow must report `loading` and `lastUpdate`
+>     honestly for the contract to hold, and must be pinned against the shape its
+>     own module really returns — a fixture that invents a status the module cannot
+>     emit guards nothing (that is exactly how a hole here survived a green suite).
 > - **A held ground snap is dropped when measured ground contradicts it
 >   (2026-08-23):** the WARM hold described below answers on DISTANCE travelled,
 >   which is only a proxy for whether the value still describes the ground. A
@@ -3000,27 +3130,27 @@ nearby place—always use station selection. Unqualified “turn on/start the ra
 requests use Play; a qualified Play-shaped tool call is normalized to Select so
 its criteria cannot be silently ignored.
 
-| Layer                  | Source                                                                                                                                                                                          | File                                                  | Proxy                                                    | Update Interval                                                                   |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Live Flights ✈️        | OpenSky Network; bounded adsb.lol regional fallback                                                                                                                                             | `src/data/flights.js`                                 | `/api/flights` (OAuth + fallback)                        | 30s                                                                               |
-| Military Flights 🎖️    | adsb.lol /v2/mil                                                                                                                                                                                | `src/data/militaryFlights.js`                         | `/api/military`                                       | 15s                                                                               |
-| Live AIS Vessels 🚢    | AISStream websocket                                                                                                                                                                             | `src/data/aisLiveVessels.js`                          | `/api/vessels`                                          | 60s (+800ms visibility pass)                                                      |
-| Mapped Installations ⌖ | OpenFreeMap military areas; optional configured Overpass names and Google Places search | `src/data/militaryInstallations.js` | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search` | viewport-driven; transient errors back off, missing capability switches to tiles |
-| Earthquakes            | USGS                                                                                                                                                                                            | `src/data/earthquakes.js`                             | —                                                        | 60s                                                                               |
-| Satellites             | CelesTrak                                                                                                                                                                                       | `src/data/satellites.js`                              | `/api/celestrak`                                         | 120s                                                                              |
-| Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                    | `src/data/rocketLaunches.js`                          | `/api/launches` + `/api/celestrak/active`                | 5 min                                                                             |
-| Traffic | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK) | `src/data/traffic.js` | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow | viewport-driven; capped tile cache |
-| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS) + Street View fallback | `src/data/cctv.js`                                    | `/api/cctv`                                              | 10s (active)                                                                      |
-| Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                 | `src/data/radio.js`                                   | `/api/radio/stations`, `/api/radio/click/:uuid`          | 45 min directory refresh                                                          |
-| Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                         | `src/layers/transit/` via `src/app/layers/transit.js` | `/api/transit`                                           | 15s (poll + delayed playback)                                                     |
-| Bikeshare 🚲           | GBFS (Lyft + BCycle)                                                                                                                                                                            | `src/data/bikeshare.js`                               | `/api/gbfs`                                              | 60s                                                                               |
-| Directions 🧭          | OSRM on FOSSGIS servers (OpenStreetMap)                                                                                                                                                         | `src/data/directions.js`                              | `/api/route` (`steps=1`)                                 | on placement / mode change                                                        |
-| Datacenters ▣          | OSM extract (bundled)                                                                                                                                                                           | `src/data/localLayers.js`                             | —                                                        | static                                                                            |
-| Dams ▰                 | OpenInfraMap/OSM extract (bundled)                                                                                                                                                              | `src/data/localLayers.js`                             | —                                                        | static                                                                            |
-| Submarine Cables ◠     | TeleGeography public map (bundled)                                                                                                                                                              | `src/data/telegeographySubmarineCables.js`            | —                                                        | static                                                                            |
-| FIRMS Active Fires ▲   | NASA FIRMS live (VIIRS ×3 NRT + MODIS NRT, trailing 24h)                                                                                                                                        | `src/data/firmsHeatmap.js`                            | `/api/firms` (`FIRMS_MAP_KEY`)                           | 10 min (proxy TTL 30 min)                                                         |
-| Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                 | `src/data/wind.js`                                    | `/api/wind`                                              | 1 h (forecast cycle)                                                              |
-| Fire Perimeters 🔥 | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*` | 5 min (server caches: catalog 1 h; publication 30 min) |
+| Layer                  | Source                                                                                                                                                                                                                                     | File                                                        | Proxy                                                                       | Update Interval                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Live Flights ✈️        | OpenSky Network; bounded adsb.lol regional fallback                                                                                                                                                                                        | `src/data/flights.js`                                       | `/api/flights` (OAuth + fallback)                                           | 30s                                                                              |
+| Military Flights 🎖️    | adsb.lol /v2/mil                                                                                                                                                                                                                           | `src/data/militaryFlights.js`                               | `/api/military`                                                             | 15s                                                                              |
+| Live AIS Vessels 🚢    | AISStream websocket                                                                                                                                                                                                                        | `src/data/aisLiveVessels.js`                                | `/api/vessels`                                                              | 60s (+800ms visibility pass)                                                     |
+| Mapped Installations ⌖ | OpenFreeMap military areas; optional configured Overpass names and Google Places search                                                                                                                                                    | `src/data/militaryInstallations.js`                         | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search` | viewport-driven; transient errors back off, missing capability switches to tiles |
+| Earthquakes            | USGS                                                                                                                                                                                                                                       | `src/data/earthquakes.js`                                   | —                                                                           | 60s                                                                              |
+| Satellites             | CelesTrak                                                                                                                                                                                                                                  | `src/data/satellites.js`                                    | `/api/celestrak`                                                            | 120s                                                                             |
+| Space Missions (30d)   | Launch Library 2 + CelesTrak                                                                                                                                                                                                               | `src/data/rocketLaunches.js`                                | `/api/launches` + `/api/celestrak/active`                                   | 5 min                                                                            |
+| Traffic                | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK)                                                                                                                                                              | `src/data/traffic.js`                                       | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow                    | viewport-driven; capped tile cache                                               |
+| CCTV                   | Austin + Caltrans (CA) + TfL London + Ontario 511 + Fintraffic (FI) + DriveBC (BC) + TxDOT (TX) + Estonia (Tallinn, Tarktee) + Live Traffic NSW + Open Calgary Open Data + Statens vegvesen (NO, stills + live HLS) + Street View fallback | `src/data/cctv.js`                                          | `/api/cctv`                                                                 | 10s (active)                                                                     |
+| Radio                  | Radio Browser (public-domain station directory)                                                                                                                                                                                            | `src/data/radio.js`                                         | `/api/radio/stations`, `/api/radio/click/:uuid`                             | 45 min directory refresh                                                         |
+| Transit 🚌             | Operator GTFS-Realtime VehiclePositions (7 keyless regions, `src/data/transitFeeds.js`)                                                                                                                                                    | `src/layers/transit/` via `src/app/layers/transit.js`       | `/api/transit`                                                              | 15s (poll + delayed playback)                                                    |
+| Bikeshare 🚲           | GBFS (Lyft + BCycle)                                                                                                                                                                                                                       | `src/data/bikeshare.js`                                     | `/api/gbfs`                                                                 | 60s                                                                              |
+| Directions 🧭          | OSRM on FOSSGIS servers (OpenStreetMap)                                                                                                                                                                                                    | `src/data/directions.js`                                    | `/api/route` (`steps=1`)                                                    | on placement / mode change                                                       |
+| Datacenters ▣          | OSM extract (bundled)                                                                                                                                                                                                                      | `src/data/localLayers.js`                                   | —                                                                           | static                                                                           |
+| Dams ▰                 | OpenInfraMap/OSM extract (bundled)                                                                                                                                                                                                         | `src/data/localLayers.js`                                   | —                                                                           | static                                                                           |
+| Submarine Cables ◠     | TeleGeography public map (bundled)                                                                                                                                                                                                         | `src/data/telegeographySubmarineCables.js`                  | —                                                                           | static                                                                           |
+| FIRMS Active Fires ▲   | NASA FIRMS live (VIIRS ×3 NRT + MODIS NRT, trailing 24h)                                                                                                                                                                                   | `src/data/firmsHeatmap.js`                                  | `/api/firms` (`FIRMS_MAP_KEY`)                                              | 10 min (proxy TTL 30 min)                                                        |
+| Wind 🌬                 | NOAA GFS 10 m wind (keyless, 0.25°→1° grid; animated particles)                                                                                                                                                                            | `src/data/wind.js`                                          | `/api/wind`                                                                 | 1 h (forecast cycle)                                                             |
+| Fire Perimeters 🔥     | NIFC WFIGS current interagency perimeters (keyless, paged past the 2000-record cap); InciWeb catalog + incident page origin and update time checks for verified incident-page links                                                        | `src/layers/perimeters/` via `src/app/layers/perimeters.js` | `/api/fire-perimeters` + `/api/fire-perimeters/inciweb/*`                   | 5 min (server caches: catalog 1 h; publication 30 min)                           |
 
 Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
 
@@ -4944,7 +5074,6 @@ Desktop wind now allows 7,200 baked native GPU paths (narrow viewports remain at
 Temperature uses stronger fixed −40..50°C colors; the underlying 1° forecast and
 numeric inspection values are unchanged. No volumetric cloud height or local rain
 arrival prediction is claimed. NOAA source limits are documented in DATA_SOURCES.
-
 
 Traffic source refinements: ALPR admits z9-z12 detail only when the view fits 16 tiles,
 returning explicit zoom guidance before I/O and allowing the next smaller view to

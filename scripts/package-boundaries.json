@@ -2080,7 +2080,11 @@
       "src/layers/metro/model.js",
       "src/layers/metro/source.js",
       "src/overlays/selectionReticle.js",
-      "src/overlays/lockSound.js"
+      "src/overlays/lockSound.js",
+      "src/overlays/wikidataDossier.js",
+      "src/sources/aircraftWikidata.js",
+      "src/sources/spaceWikidata.js",
+      "src/sources/wikidataClient.js"
     ],
     "external": [
       "hls.js",

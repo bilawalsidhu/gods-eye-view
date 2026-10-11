@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+- Clicking an aircraft (Live Flights or Military) now types out a Wikidata
+  dossier for its type beside it, edged in the target label's color with the
+  label's white title and gray detail text. It shows the
+  following where Wikidata has them, plus the item's QID:
+  - aircraft type (commercial airliner, regional airliner, helicopter, military
+    aircraft, business, cargo, light/utility and more) and its Wikidata class
+  - a small photo from Wikimedia Commons, credited with its file name
+  - country of origin, military designations and operators
+  - maker and engines
+  - wingspan, length, height and wing area
+  - gross (max take-off) and empty weight, payload, bomb load and passengers
+  - cruise, maximum, never-exceed and stall speeds (with Mach where stated),
+    climb rate, power, range and ceiling
+  - first flight, years in service and number built
+  - a safety line counting fatal accidents linked to the type
+
+  It follows the aircraft, flips to the left near the screen edge, and shows
+  an "Unavailable" notice when Wikimedia is rate-limiting.
+
+- Space Missions now get the same Wikidata dossier:
+  - **Tracking a satellite** shows its type, program, operator, maker, origin,
+    bus, crew, launch date, rocket and site, COSPAR ID, mass, size, orbit
+    (perigee × apogee, inclination, period, orbits completed), instruments,
+    re-entry status and a photo. Satellites are matched exactly by NORAD
+    number. Satellites with no Wikidata item (most Starlink and OneWeb
+    spacecraft) fall back to their constellation, and are marked as such.
+  - **Selecting a launch** shows a Rocket section at the pad: lift class and
+    reusability, maker, origin, operator, height, diameter, mass, components
+    or variants, engines, first flight, service years and how many Wikidata
+    payloads flew on it.
+  - When Wikidata has the named mission, a Mission section follows the Rocket
+    section. A mission is matched only when its name and launch year agree,
+    so generic names such as "Starlink Group 10-12" are not misattributed.
+
 - Wikidata metro stations are now part of **Transit** instead of a separate
   Metro toggle: turning Transit on shows both live vehicles and metro stations,
   and turning it off hides both. The Transit row shows the station and city
@@ -491,6 +525,7 @@
 Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+
 - New Fire Perimeters layer (Events group): live NIFC WFIGS interagency
   wildfire incident perimeters as ground-clamped polygons with a
   containment-colored fire line, refreshed every 5 minutes from the public
@@ -766,7 +801,6 @@ This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
 ### Other changes
-
 
 - Add ECMWF IFS model selection to Wind (#464, thanks @beneduzi), with model-scoped forecast-step caches, cancellation of replaced requests, and separate issue/valid timestamps.
 
@@ -1576,4 +1610,3 @@ represent previously published GitHub Releases.
 ## [0.1.0] — 2026-02-09
 
 - Initial project version.
-

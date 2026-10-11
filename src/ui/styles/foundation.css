@@ -487,6 +487,175 @@ body {
   }
 }
 
+/* Wikidata dossier: facts typed out beside a selected aircraft, satellite or
+   launch, in the subject's label color (set inline as --dossier-color). */
+#wikidata-dossier-root {
+  --dossier-color: var(--secondary-accent);
+
+  /* Match the world-overlay label card (WORLD_OVERLAY_STYLE title/detail). */
+  --dossier-title: rgb(232 240 244 / 96%);
+  --dossier-text: rgb(147 161 173 / 92%);
+
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 160ms ease,
+    visibility 0s linear 160ms;
+  will-change: transform;
+}
+
+#wikidata-dossier-root.is-active {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 160ms ease;
+}
+
+.gev-dossier {
+  width: max-content;
+  max-width: 320px;
+  padding: 6px 10px;
+  background: linear-gradient(
+    90deg,
+    rgb(0 0 0 / 45%),
+    rgb(0 0 0 / 20%) 70%,
+    transparent
+  );
+  border-left: 2px solid
+    color-mix(in srgb, var(--dossier-color) 95%, transparent);
+  color: var(--dossier-text);
+  font-family: var(--font-mono, ui-monospace, 'Cascadia Mono', monospace);
+  font-size: 11px;
+  line-height: 1.35;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 85%);
+}
+
+#wikidata-dossier-root.is-left .gev-dossier {
+  background: linear-gradient(
+    270deg,
+    rgb(0 0 0 / 45%),
+    rgb(0 0 0 / 20%) 70%,
+    transparent
+  );
+  border-right: 2px solid
+    color-mix(in srgb, var(--dossier-color) 95%, transparent);
+  border-left: 0;
+  text-align: right;
+}
+
+.gev-dossier__title {
+  margin: 0 0 4px;
+  color: var(--dossier-title);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.gev-dossier__photo {
+  width: 160px;
+  margin: 0 0 6px;
+}
+
+.gev-dossier__photo[hidden] {
+  display: none;
+}
+
+#wikidata-dossier-root.is-left .gev-dossier__photo {
+  margin-left: auto;
+}
+
+.gev-dossier__photo img {
+  display: block;
+  width: 160px;
+  height: 90px;
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, var(--dossier-color) 60%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--dossier-color) 30%, transparent);
+  background: rgb(0 0 0 / 40%);
+  animation: gev-dossier-photo 420ms ease-out both;
+}
+
+.gev-dossier__credit {
+  overflow: hidden;
+  margin-top: 2px;
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes gev-dossier-photo {
+  from {
+    clip-path: inset(0 0 100% 0);
+    opacity: 0.2;
+  }
+  to {
+    clip-path: inset(0);
+    opacity: 1;
+  }
+}
+
+.gev-dossier__list {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 10px;
+  align-items: baseline;
+  margin: 0;
+}
+
+.gev-dossier__label {
+  margin: 0;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+}
+
+.gev-dossier__value {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.gev-dossier__section {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  padding-top: 3px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--dossier-color) 35%, transparent);
+  color: var(--dossier-title);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.gev-dossier__section:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.gev-dossier .is-cursor::after {
+  content: '▌';
+  margin-left: 1px;
+  animation: gev-dossier-cursor 0.6s steps(1) infinite;
+}
+
+@keyframes gev-dossier-cursor {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gev-dossier .is-cursor::after,
+  .gev-dossier__photo img {
+    animation: none;
+  }
+}
+
 #world-overlay-detection-surface,
 #world-overlay-canvas {
   position: absolute;

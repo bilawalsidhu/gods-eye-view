@@ -202,6 +202,13 @@ export function createModel({ state: layerState, services, parts, source }) {
           provider: launch.launch_service_provider?.name || null,
           mission: launch.mission?.description || null,
           missionName: launch.mission?.name || null,
+          rocket:
+            launch.rocket?.configuration?.full_name ||
+            launch.rocket?.configuration?.name ||
+            (String(launch.name || '').includes('|')
+              ? String(launch.name).split('|')[0].trim()
+              : '') ||
+            null,
           satelliteQuery: launch.mission?.name || launch.name || null,
           payloads,
           recoveryStages: normalizeRecoveryStages(launch, payloads),
