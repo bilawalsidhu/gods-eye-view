@@ -906,6 +906,8 @@
   "scripts/qa-street-level.mjs",
   "src/tooling/streetLevelQa.test.mjs",
   "scripts/qa-browserEvidence.mjs",
+  "scripts/qa-chrome.mjs",
+  "src/qaChrome.test.mjs",
   "scripts/fixtures/street-level/mapillaryGraph.mjs",
   "src/layers/streetLevel/filter.test.mjs",
   "src/layers/streetLevel/registry.test.mjs",
