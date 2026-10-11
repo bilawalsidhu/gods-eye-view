@@ -2,6 +2,94 @@
 
 ## [Unreleased]
 
+- Clicking an aircraft (Live Flights or Military) now types out a Wikidata
+  dossier for its type beside it, edged in the target label's color with the
+  label's white title and gray detail text. It shows the
+  following where Wikidata has them, plus the item's QID:
+  - aircraft type (commercial airliner, regional airliner, helicopter, military
+    aircraft, business, cargo, light/utility and more) and its Wikidata class
+  - a small photo from Wikimedia Commons, credited with its file name
+  - country of origin, military designations and operators
+  - maker and engines
+  - wingspan, length, height and wing area
+  - gross (max take-off) and empty weight, payload, bomb load and passengers
+  - cruise, maximum, never-exceed and stall speeds (with Mach where stated),
+    climb rate, power, range and ceiling
+  - first flight, years in service and number built
+  - a safety line counting fatal accidents linked to the type
+
+  It follows the aircraft, flips to the left near the screen edge, and shows
+  an "Unavailable" notice when Wikimedia is rate-limiting.
+
+- Space Missions now get the same Wikidata dossier:
+  - **Tracking a satellite** shows its type, program, operator, maker, origin,
+    bus, crew, launch date, rocket and site, COSPAR ID, mass, size, orbit
+    (perigee × apogee, inclination, period, orbits completed), instruments,
+    re-entry status and a photo. Satellites are matched exactly by NORAD
+    number. Satellites with no Wikidata item (most Starlink and OneWeb
+    spacecraft) fall back to their constellation, and are marked as such.
+  - **Selecting a launch** shows a Rocket section at the pad: lift class and
+    reusability, maker, origin, operator, height, diameter, mass, components
+    or variants, engines, first flight, service years and how many Wikidata
+    payloads flew on it.
+  - When Wikidata has the named mission, a Mission section follows the Rocket
+    section. A mission is matched only when its name and launch year agree,
+    so generic names such as "Starlink Group 10-12" are not misattributed.
+
+- Wikidata metro stations are now part of **Transit** instead of a separate
+  Metro toggle: turning Transit on shows both live vehicles and metro stations,
+  and turning it off hides both. The Transit row shows the station and city
+  count, the line legend and the selected station's Wikidata link, and where no
+  live feed covers the view it reports stations instead of asking you to zoom
+  in. The provisional Metro share-link token `0` is withdrawn before release.
+- The HUD **Lock** target now plays a sound each time it locks onto a new
+  subject. A **Target sound** option in the Display panel's HUD section picks
+  None, **HUD lock** (the default, a rising tone from Kenney's CC0 "Interface
+  Sounds", `public/sounds/hud-lock.wav`) or **Sci-fi click** (soundshelfstudio's
+  "Sci-Fi UI Click Sound" from Pixabay, `public/sounds/sci-fi-click.wav`, under
+  the Pixabay Content License). Provenance and the licence carve-out are in
+  `public/sounds/README.md`.
+- Add a **HUD** section to the Display panel. **Target** switches between
+  Default (each layer's own selection styling, the starting mode) and Lock (the
+  animated selection reticle). **Primary** sets `--accent` for the whole UI and
+  **Secondary** sets the new `--secondary-accent` variable (default `#ffd38a`,
+  which replaces the literal colour in the radio styles). These settings last
+  for the session only and are not saved in share links.
+- Fix aircraft needing two clicks to lock the HUD reticle: when a layer swaps
+  the clicked marker for its own tracked entity (Live Flights hides the
+  billboard and follows a new entity), the reticle now moves to that entity
+  instead of dropping the lock.
+- Add an animated **selection reticle** for anything selectable on the map,
+  shown when HUD Target is set to Lock.
+  Clicking a station, aircraft, vessel, camera or any other positioned marker
+  locks a HUD targeting reticle onto it: a red ring with rotating ticks over a
+  disc tinted in `--accent` with a radar sweep, and small arrows closing in from
+  both sides. On lock the disc flashes at a large size and then shrinks onto the
+  subject, the ring draws in the primary colour and turns red, and a single
+  tick on the ring splits into three that spread around it. A 36-segment ring
+  in `--accent` circles the red ring, turning counter-clockwise with the dotted
+  orbit (28 s per revolution); the ticks turn once every 14 s. It follows
+  moving subjects, lies flat on the ground at the camera's pitch, and clears on
+  an empty click, when the subject disappears, or when its layer deselects it.
+  Animation is skipped when reduced motion is requested.
+- Metro track lines are thinner and semi-transparent, and stops have a fine
+  black outline with a soft glow in their line colour.
+- Add a **Metro** layer (Movement group in Data Layers) that shows metro stations from Wikidata for the cities in view. After the
+  camera settles the layer asks the Wikidata Query Service for the most
+  populous cities (Q515, population ≥ 50,000) inside the view, then asks for
+  metro stations (Q928830) located in each city, coloured by their line's
+  P465 colour, with closed stations left out. Stations on the same line are
+  joined by line-coloured track segments draped on the ground, built from
+  Wikidata's adjacent-station (P197) statements and their line (P81)
+  qualifiers. Station names show through the
+  world-overlay host within 7 km; clicking a station selects it and lists its
+  lines with a link to Wikidata. Queries go straight from the browser to
+  `query.wikidata.org` (keyless, CC0), at most three cities per request, with
+  12-hour in-memory caches. Above 200 km the row asks you to zoom in.
+  Coverage follows Wikidata's modelling, so cities whose stations are filed
+  under districts that sit more than four levels below the city (London's
+  boroughs, for example) show only some of their stations.
+
 - Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
   list is one keyless GeoJSON request to the agency's OGC API view of its
   DATEX 3.1 CCTV table, so no DATEX account is needed. Every working camera
@@ -437,6 +525,7 @@
 Add feed provenance to analyst/view answers and HUD context while retaining existing response fields and runner ownership (Matt Van Horn, #347).
 
 Analyst records for loaded satellites, datacenters and dams, with explicit bounded count/rank coverage (Matt Van Horn, #351).
+
 - New Fire Perimeters layer (Events group): live NIFC WFIGS interagency
   wildfire incident perimeters as ground-clamped polygons with a
   containment-colored fire line, refreshed every 5 minutes from the public
@@ -712,7 +801,6 @@ This changelog records public product changes. For the authoritative description
 of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
 
 ### Other changes
-
 
 - Add ECMWF IFS model selection to Wind (#464, thanks @beneduzi), with model-scoped forecast-step caches, cancellation of replaced requests, and separate issue/valid timestamps.
 
@@ -1522,4 +1610,3 @@ represent previously published GitHub Releases.
 ## [0.1.0] — 2026-02-09
 
 - Initial project version.
-

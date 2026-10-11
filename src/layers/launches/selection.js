@@ -1,5 +1,9 @@
 import * as Cesium from 'cesium';
-import { MISSION_GLOBE_VIEW_RANGE_M, MISSION_FOCUS_RANGE_M } from './policy.js';
+import {
+  LAUNCH_MARKER_ACCENT,
+  MISSION_GLOBE_VIEW_RANGE_M,
+  MISSION_FOCUS_RANGE_M,
+} from './policy.js';
 
 export function createSelection({
   state: layerState,
@@ -54,6 +58,40 @@ export function createSelection({
     return match?.[1] || null;
   }
 
+  let announcedLaunchId = null;
+  /**
+   * Tell window listeners (the Wikidata dossier) which mission is selected;
+   * repeats for the same id (feed refreshes) are skipped.
+   */
+  function announceMission(launchId) {
+    const id = launchId || null;
+    if (id === announcedLaunchId) return;
+    announcedLaunchId = id;
+    if (typeof window === 'undefined' || !window.dispatchEvent) return;
+    const launch = id
+      ? layerState._launches?.find((item) => item.id === id)
+      : null;
+    const year = launch?.launchTime
+      ? new Date(launch.launchTime).getUTCFullYear()
+      : null;
+    window.dispatchEvent(
+      new CustomEvent('gev:launch-mission-selected', {
+        detail: launch
+          ? {
+              id,
+              name: launch.name,
+              rocket: launch.rocket,
+              missionName: launch.missionName,
+              launchYear: Number.isFinite(year) ? year : null,
+              lat: launch.lat,
+              lon: launch.lon,
+              accent: LAUNCH_MARKER_ACCENT,
+            }
+          : { id: null },
+      }),
+    );
+  }
+
   function setSelectedMission(launchId, isolate = true) {
     if (launchId) parts.panel.clearMissionRosterHover();
     if (
@@ -67,6 +105,7 @@ export function createSelection({
     )
       stopMissionZoomAnchor();
     layerState._selectedLaunchId = launchId;
+    announceMission(launchId);
     layerState._explicitSelection = Boolean(launchId && isolate);
     if (launchId) layerState._animationStarts.set(launchId, Date.now());
     if (!launchId && layerState._viewer) {
@@ -230,6 +269,7 @@ export function createSelection({
   return {
     focusFullGlobe,
     entityLaunchId,
+    announceMission,
     setSelectedMission,
     stopMissionZoomAnchor,
     startMissionZoomAnchor,

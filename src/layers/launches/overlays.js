@@ -4,6 +4,7 @@ import {
   isCyberContactSonarActive as isCyberSonarActive,
 } from '../../cyberSonar.js';
 import {
+  LAUNCH_MARKER_ACCENT,
   ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
   ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID,
   ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID,
@@ -129,7 +130,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       variant: 'label',
       title: mission,
       details,
-      accent: '#22e6e6',
+      accent: LAUNCH_MARKER_ACCENT,
       priority: selected
         ? Number.MAX_SAFE_INTEGER
         : Number.isFinite(launchTimeMs)

@@ -9,6 +9,9 @@ import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
 import { loadPhotorealisticTileset } from '../mapStartup.js';
 import { initLogoGaze } from '../logoGaze.js';
+import { installSelectionReticle } from '../overlays/selectionReticle.js';
+import { installLockSound } from '../overlays/lockSound.js';
+import { installWikidataDossier } from '../overlays/wikidataDossier.js';
 import {
   uninstallRenderGovernor,
   governorRequestRender,
@@ -57,6 +60,9 @@ export async function createApplicationScene({
     if (!viewer.isDestroyed()) viewer.destroy();
   });
   defer(installTrackpadPinchZoom(viewer));
+  defer(installSelectionReticle(viewer));
+  defer(installLockSound());
+  defer(installWikidataDossier(viewer));
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
   loaderStatus.textContent =

@@ -252,6 +252,17 @@ export const DATA_CREDITS = [
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },
   {
+    key: 'wikidata-metro',
+    html: 'Metro stations: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0) via the Wikidata Query Service',
+  },
+  {
+    key: 'wikidata-dossier',
+    html:
+      'Aircraft and space dossiers: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0), ' +
+      'resolved via English Wikipedia search; photos from ' +
+      '<a href="https://commons.wikimedia.org/" target="_blank" rel="noopener">Wikimedia Commons</a> (licence per file)',
+  },
+  {
     key: 'osrm-routing',
     // The service asks for its attribution to carry a "fix the map" link, so
     // a reader who spots a wrong turn can go and correct the data it came from.

@@ -51,6 +51,34 @@
         <span class="pp-slider-value" id="cyber-sonar-sector-value">24°</span>
       </div>
     </div>
+    <div class="pp-toggle-group" id="hud-appearance-group">
+      <div class="pp-slider-row visible hud-appearance-heading">
+        <span class="pp-slider-mini-label" id="hud-appearance-label">HUD</span>
+      </div>
+      <div class="pp-slider-row visible" id="hud-target-row">
+        <span class="pp-slider-mini-label" id="hud-target-label">Target</span>
+        <div class="pp-mode-seg" id="hud-target-seg" role="radiogroup" aria-labelledby="hud-target-label">
+          <button class="pp-mode-btn active" data-hud-target="default" role="radio" aria-checked="true" title="Each layer's own selection styling">Default</button>
+          <button class="pp-mode-btn" data-hud-target="lock" role="radio" aria-checked="false" title="Animated targeting lock on the selected element">Lock</button>
+        </div>
+      </div>
+      <div class="pp-slider-row visible" id="hud-lock-sound-row">
+        <label class="pp-slider-mini-label" for="hud-lock-sound-select">Target sound</label>
+        <select id="hud-lock-sound-select" class="pp-select" aria-label="Sound played when the Lock target acquires a subject">
+          <option value="none">None</option>
+          <option value="hud-lock" selected>HUD lock</option>
+          <option value="sci-fi-click">Sci-fi click</option>
+        </select>
+      </div>
+      <div class="pp-slider-row visible" id="hud-primary-row">
+        <label class="pp-slider-mini-label" for="hud-primary-color">Primary</label>
+        <input type="color" class="pp-color-input" id="hud-primary-color" value="#00d4ff" aria-label="HUD primary colour" />
+      </div>
+      <div class="pp-slider-row visible" id="hud-secondary-row">
+        <label class="pp-slider-mini-label" for="hud-secondary-color">Secondary</label>
+        <input type="color" class="pp-color-input" id="hud-secondary-color" value="#ffd38a" aria-label="HUD secondary colour" />
+      </div>
+    </div>
     <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="detection-toggle" title="Detection Overlay (D)" aria-label="Detection overlay" aria-pressed="false">
         <span class="pp-icon">&#x25A3;</span>

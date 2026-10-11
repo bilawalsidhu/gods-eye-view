@@ -936,7 +936,7 @@
   justify-content: space-between;
 }
 .sdr-radio-heading strong {
-  color: #ffd38a;
+  color: var(--secondary-accent);
   font: 9px/1 var(--font-mono);
   letter-spacing: 0.1em;
 }
@@ -970,7 +970,7 @@
 .sdr-radio-card button:hover:not(:disabled),
 .sdr-radio-card button:focus-visible:not(:disabled),
 .sdr-radio-card button.active {
-  border-color: #ffd38a;
+  border-color: var(--secondary-accent);
   color: #fff;
   outline: none;
   background: rgba(130, 83, 18, 0.28);

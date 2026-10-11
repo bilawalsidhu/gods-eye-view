@@ -1,6 +1,7 @@
 import { createFrameRateMonitor } from './frameRateMonitor.js';
 import { bindApplicationShortcuts } from './visualInput.js';
 import { bindDisplayControls } from './displayControls.js';
+import { bindHudAppearanceControls } from './hudAppearance.js';
 import { canonicalizeDensity } from '../data/detectionPolicy.js';
 
 /** Own keyboard/display event subscriptions; settings remain with their state owners. */
@@ -96,6 +97,11 @@ export class DisplayBindings {
       },
     });
 
+    this._hudAppearance?.destroy();
+    this._hudAppearance = bindHudAppearanceControls({
+      documentRef: document,
+      onChange: () => this.viewer?.scene?.requestRender?.(),
+    });
     this._displayControls?.destroy();
     this._displayControls = bindDisplayControls({
       elements: {
@@ -281,5 +287,7 @@ export class DisplayBindings {
     this._frameRateMonitor = null;
     this._displayControls?.destroy();
     this._displayControls = null;
+    this._hudAppearance?.destroy();
+    this._hudAppearance = null;
   }
 }
