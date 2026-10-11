@@ -338,3 +338,42 @@ NOAA density imagery with the raw GLM product.
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+
+## Area insights sources
+
+Area insights fetches observations at runtime through `/api/area-assessment`;
+provider datasets and local caches are not bundled or redistributed. Scores
+are application heuristics, with source dates, resolution and missing coverage
+shown in the panel. Housing measures differ between countries.
+
+- **Air quality:** [Open-Meteo Air Quality API](https://open-meteo.com/en/docs/air-quality-api),
+  using Copernicus Atmosphere Monitoring Service (CAMS) modeled concentrations
+  and US AQI. Attribution: Open-Meteo and CAMS; CC BY 4.0.
+- **Italian housing:** [Agenzia delle Entrate OMI](https://www1.agenziaentrate.gov.it/servizi/geopoi_omi/)
+  residential quotation ranges for the containing OMI zone, with semester and
+  valuation category. These are quotations rather than transaction prices.
+  OMI terms and attribution apply; original datasets are not redistributed.
+- **French housing:** [DGFiP DVF statistics](https://www.data.gouv.fr/datasets/statistiques-dvf),
+  municipal monthly residential sale medians, with departmental fallback.
+  Licence Ouverte 2.0; attribution: DGFiP / data.gouv.fr.
+- **UK housing:** [HM Land Registry UK HPI](https://landregistry.data.gov.uk/app/ukhpi/doc),
+  administrative district standardized average home prices. Open Government
+  Licence; attribution: HM Land Registry. Postcodes.io resolves districts.
+- **US housing:** [US Census ACS B25077 via Census Reporter](https://censusreporter.org/tables/B25077/),
+  reported median owner-occupied home values, with tract/county resolution and
+  margin of error. US Census data is public domain; this is not sale-price data.
+- **Services:** © OpenStreetMap contributors, ODbL, acquired through Overpass;
+  an operator-configured Nominatim search fallback is optional and sampled.
+  Straight-line proximity is not travel time; an empty sample is not proof
+  that a service does not exist. OMI municipality resolution shares the
+  application's bounded Nominatim queue; endpoint usage policies apply.
+- **Seismic hazard:** [GEM Global Seismic Hazard Map 2023.1](https://doi.org/10.5281/zenodo.8409647),
+  CC BY-NC-SA 4.0, noncommercial use. Optional operator-installed raster,
+  excluded from Git. Attribution: GEM Foundation. PGA on rock with 10%
+  probability of exceedance in 50 years is ground-shaking hazard, not
+  individual building risk or administrative zoning.
+
+Live Flights airline filtering additionally uses the existing adsbdb proxy's
+`airline` lookup, cached for 24 hours. It does not download or redistribute
+operator catalogs; IATA/ICAO mappings remain subject to community coverage
+and accuracy. The existing adsbdb terms above continue to apply.
