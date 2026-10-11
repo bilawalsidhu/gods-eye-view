@@ -5123,3 +5123,8 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+
+### fix(ais): decode fragmented websocket UTF-8 without corrupting vessel names
+
+Stream all byte-array fragments through one TextDecoder and flush once, preserving complete UTF-8 characters across fragment boundaries. Existing string-fragment fallback remains supported.

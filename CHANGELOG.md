@@ -1,5 +1,7 @@
 # Changelog
 
+- Vessel streams preserve Unicode names when WebSocket fragments split a UTF-8 character.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 

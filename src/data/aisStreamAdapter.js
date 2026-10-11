@@ -122,6 +122,25 @@ export function decodeAisFrameSync(data) {
   }
   if (Array.isArray(data)) {
     // ws delivers a fragmented message as an array of Buffers.
+    if (
+      data.every(
+        (part) => part instanceof ArrayBuffer || ArrayBuffer.isView(part),
+      )
+    ) {
+      const decoder = new TextDecoder();
+      return (
+        data
+          .map((part) =>
+            decoder.decode(
+              part instanceof ArrayBuffer
+                ? new Uint8Array(part)
+                : new Uint8Array(part.buffer, part.byteOffset, part.byteLength),
+              { stream: true },
+            ),
+          )
+          .join('') + decoder.decode()
+      );
+    }
     const parts = data.map(decodeAisFrameSync);
     return parts.some((part) => part === null) ? null : parts.join('');
   }
