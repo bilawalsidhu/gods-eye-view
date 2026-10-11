@@ -161,7 +161,7 @@ export function mergeEarthquakeSnapshots(usgsRows = [], emscRows = []) {
       const seconds = Math.abs(usgs.time - row.time) / 1000;
       const km = distanceKm(usgs, row);
       return DUPLICATE_WINDOWS.some(
-        (window) => seconds <= window.seconds && km <= window.km,
+        (limit) => seconds <= limit.seconds && km <= limit.km,
       );
     });
     if (!duplicate) merged.push(row);
