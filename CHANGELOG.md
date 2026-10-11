@@ -1,5 +1,10 @@
 # Changelog
 
+- Add a compact phone Nearby sheet with opt-in Jersey buses, stop departures,
+  parking, roadworks, weather, tides, public facilities and parish notices.
+  GPS and all twelve parish village presets support local browsing; a stationary
+  map hold hides or restores dashboards.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 
