@@ -123,7 +123,16 @@ export function featurePoint(feature) {
   );
   if (!points.length) return null;
   return {
-    lon: points.reduce((sum, point) => sum + point[0], 0) / points.length,
+    lon: (() => {
+      const reference = points[0][0];
+      const mean =
+        points.reduce((sum, point) => {
+          const delta =
+            ((((point[0] - reference + 540) % 360) + 360) % 360) - 180;
+          return sum + reference + delta;
+        }, 0) / points.length;
+      return ((((mean + 180) % 360) + 360) % 360) - 180;
+    })(),
     lat: points.reduce((sum, point) => sum + point[1], 0) / points.length,
   };
 }
