@@ -309,3 +309,43 @@ test('the browser honours a same-origin relay path and nothing else', async () =
     assert.equal(await negotiateWith(hostile), direct, hostile);
   }
 });
+
+test('the HUD reasoning effort defaults to minimal, takes a value, and off omits it', async (t) => {
+  const { hudSummaryReasoning } =
+    await import('../server/providers/openai/hud-summary.js');
+  assert.deepEqual(hudSummaryReasoning({}), {
+    reasoning: { effort: 'minimal' },
+  });
+  assert.deepEqual(
+    hudSummaryReasoning({ OPENAI_HUD_SUMMARY_REASONING_EFFORT: ' low ' }),
+    { reasoning: { effort: 'low' } },
+  );
+  for (const off of ['off', 'OFF', ' Off ']) {
+    assert.deepEqual(
+      hudSummaryReasoning({ OPENAI_HUD_SUMMARY_REASONING_EFFORT: off }),
+      {},
+      off,
+    );
+  }
+
+  // And the request body follows it.
+  env(t, 'OPENAI_BASE_URL', GATEWAY);
+  env(t, 'OPENAI_API_KEY', 'fixture-gateway-key');
+  env(t, 'OPENAI_HUD_SUMMARY_REASONING_EFFORT', 'off');
+  const original = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = original;
+  });
+  const bodies = [];
+  globalThis.fetch = async (url, init) => {
+    bodies.push(JSON.parse(init.body));
+    return Response.json({ output_text: 'Port of Rotterdam vessels nominal' });
+  };
+  const reply = await request(handleHudSummary, {
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(reply.status, 200);
+  assert.equal('reasoning' in bodies[0], false);
+  assert.equal(bodies[0].max_output_tokens, 100);
+});

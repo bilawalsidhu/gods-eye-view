@@ -4,7 +4,10 @@ import {
 } from '../../../src/hudSummaryResponse.js';
 import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
 import { readRequestBody } from '../common/request.js';
-import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
+import {
+  OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
+  OPENAI_HUD_SUMMARY_REASONING_DEFAULT,
+} from './constants.js';
 import { openAiEndpoint } from './endpoints.js';
 
 function extractOpenAiResponseText(data) {
@@ -27,6 +30,21 @@ function toFiveWordHudSummary(value) {
     .filter(Boolean)
     .slice(0, 5)
     .join(' ');
+}
+
+/**
+ * The `reasoning` member of the HUD request. `off` omits it: a model behind an
+ * OpenAI-compatible gateway may not know OpenAI's effort names, and a thinking
+ * model given `minimal` can spend the whole 100-token budget reasoning and
+ * return its reasoning as the summary.
+ * @param {Record<string, string|undefined>} [environment]
+ * @returns {{ reasoning?: { effort: string } }}
+ */
+function hudSummaryReasoning(environment = process.env) {
+  const effort =
+    String(environment.OPENAI_HUD_SUMMARY_REASONING_EFFORT ?? '').trim() ||
+    OPENAI_HUD_SUMMARY_REASONING_DEFAULT;
+  return effort.toLowerCase() === 'off' ? {} : { reasoning: { effort } };
 }
 
 async function handleHudSummary(req, res) {
@@ -67,7 +85,7 @@ async function handleHudSummary(req, res) {
           OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
         instructions: HUD_SUMMARY_INSTRUCTIONS,
         input: JSON.stringify(context),
-        reasoning: { effort: 'minimal' },
+        ...hudSummaryReasoning(),
         max_output_tokens: 100,
       }),
     });
@@ -98,4 +116,4 @@ async function handleHudSummary(req, res) {
   }
 }
 
-export { handleHudSummary };
+export { handleHudSummary, hudSummaryReasoning };
