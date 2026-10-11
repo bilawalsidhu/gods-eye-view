@@ -98,6 +98,12 @@ function withPublishedBase(
 }
 
 function writeCodecFixture(cwd, rows, entries) {
+  const providerCodec = path.join(cwd, 'src/data/idSwitches.js');
+  mkdirSync(path.dirname(providerCodec), { recursive: true });
+  writeFileSync(
+    providerCodec,
+    readFileSync(new URL('./idSwitches.js', import.meta.url)),
+  );
   const source = readFileSync(CODEC_SOURCE_PATH, 'utf8');
   const registryEnd = ']);\n\nexport const REGISTERED_LAYER_IDS';
   assert.equal(source.split(registryEnd).length, 2);
