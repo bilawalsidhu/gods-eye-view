@@ -11,7 +11,10 @@ import {
 } from '../../../src/hudSummaryResponse.js';
 import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
 import { readRequestBody } from '../common/request.js';
-import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
+import {
+  OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
+  OPENAI_HUD_SUMMARY_REASONING_DEFAULT,
+} from './constants.js';
 import { openAiEndpoint } from './endpoints.js';
 
 function extractOpenAiResponseText(data) {
@@ -80,6 +83,21 @@ function capAtWord(text, max, locale) {
   return text.slice(0, end).trim() || text.slice(0, cut);
 }
 
+/**
+ * The `reasoning` member of the HUD request. `off` omits it: a model behind an
+ * OpenAI-compatible gateway may not know OpenAI's effort names, and a thinking
+ * model given `minimal` can spend its whole output budget reasoning and
+ * return its reasoning as the summary.
+ * @param {Record<string, string|undefined>} [environment]
+ * @returns {{ reasoning?: { effort: string } }}
+ */
+function hudSummaryReasoning(environment = process.env) {
+  const effort =
+    String(environment.OPENAI_HUD_SUMMARY_REASONING_EFFORT ?? '').trim() ||
+    OPENAI_HUD_SUMMARY_REASONING_DEFAULT;
+  return effort.toLowerCase() === 'off' ? {} : { reasoning: { effort } };
+}
+
 async function handleHudSummary(req, res) {
   // Capability probe: lets the HUD skip its paid place lookups when there is
   // no summary to feed them to.
@@ -132,7 +150,7 @@ async function handleHudSummary(req, res) {
         instructions: hudSummaryInstructions(context?.locale),
         input: hudSummaryInput(context),
         text: { format: HUD_SUMMARY_RESPONSE_FORMAT },
-        reasoning: { effort: 'minimal' },
+        ...hudSummaryReasoning(),
         max_output_tokens: 200,
       }),
     });
@@ -167,4 +185,4 @@ async function handleHudSummary(req, res) {
   }
 }
 
-export { handleHudSummary, parseHudSummaryReply };
+export { handleHudSummary, hudSummaryReasoning, parseHudSummaryReply };
