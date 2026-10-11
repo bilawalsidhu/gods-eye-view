@@ -1,5 +1,7 @@
 # Changelog
 
+- Satellite look-angle calculations refuse missing or impossible observer coordinates.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 

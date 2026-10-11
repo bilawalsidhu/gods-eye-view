@@ -22,7 +22,14 @@ const AU_KM = 149597870.7;
  * @returns {{ elevDeg: number, azDeg: number, satECI: {x:number, y:number, z:number} } | null}
  */
 export function lookAnglesAt(satrec, dateMs, latDeg, lonDeg) {
+  if (
+    ![dateMs, latDeg, lonDeg].every(Number.isFinite) ||
+    Math.abs(latDeg) > 90 ||
+    Math.abs(lonDeg) > 180
+  )
+    return null;
   const date = new Date(dateMs);
+  if (!Number.isFinite(date.getTime())) return null;
   let pv;
   try {
     pv = propagate(satrec, date);

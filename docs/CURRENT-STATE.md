@@ -5123,3 +5123,8 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+
+### fix(satellites): refuse invalid observer coordinates before look-angle propagation
+
+Validate finite numeric observer coordinates, WGS84 ranges and a representable UTC instant before propagation; retain null as the helper’s unavailable outcome.
