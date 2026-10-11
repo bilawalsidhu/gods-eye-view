@@ -17,6 +17,7 @@ export function createQueries({
 }) {
   const { state } = vesselState;
   const { formatKnots } = services.labels;
+  const detectionObjects = new WeakMap();
 
   /**
    * Seconds until the server's next reconnect attempt, or 0 when none is
@@ -470,28 +471,40 @@ export function createQueries({
       const seed = Number.isFinite(options.seed) ? Math.floor(options.seed) : 0;
       // Deterministic stride: evenly space selections across the record list
       const stride = Math.max(1, Math.ceil(records.length / maxCount));
-      const start = seed % stride;
+      const start = ((seed % stride) + stride) % stride;
 
       const selected = state.selectedRecord;
       const result = [];
-      for (let idx = 0; idx < records.length; idx += 1) {
-        if ((idx - start) % stride !== 0) continue;
+      for (let idx = start; idx < records.length; idx += stride) {
         const record = records[idx];
         const visual = components.rendering.getVisual(record);
         if (visual.billboard && !visual.billboard.show) continue;
         const position = visual.billboard?.position || visual.position;
         if (!position) continue;
-        result.push({
-          position,
-          sourceId: record.mmsi,
-          id: record.name || record.mmsi || 'VESSEL',
-          type: 'SEA',
-          skipLabel: record === selected,
-          klass: record.type
+        let object = detectionObjects.get(record);
+        if (!object) {
+          object = {
+            type: 'SEA',
+            _speedKts: record.speed,
+            metric: formatKnots(record.speed),
+          };
+          detectionObjects.set(record, object);
+        }
+        object.position = position;
+        object.sourceId = record.mmsi;
+        object.id = record.name || record.mmsi || 'VESSEL';
+        object.skipLabel = record === selected;
+        if (object._shipType !== record.type) {
+          object._shipType = record.type;
+          object.klass = record.type
             ? String(record.type).toUpperCase().slice(0, 14)
-            : undefined,
-          metric: formatKnots(record.speed), // record.speed is knots
-        });
+            : undefined;
+        }
+        if (object._speedKts !== record.speed) {
+          object._speedKts = record.speed;
+          object.metric = formatKnots(record.speed);
+        }
+        result.push(object);
         if (result.length >= maxCount) break;
       }
       return result;

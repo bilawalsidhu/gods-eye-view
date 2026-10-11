@@ -25,6 +25,11 @@ const DEFAULT_CLOCK = Object.freeze({
   mono: () => performance.now(),
 });
 
+// decode() without stream:true resets between frames. Reuse the decoder and
+// use byte views so ws Buffers need neither a copied ArrayBuffer nor
+// a new decoder for every message.
+const AIS_TEXT_DECODER = new TextDecoder();
+
 /** Upstream text that identifies a credential rejection. */
 const AUTH_TEXT =
   /(unauthoriz|unauthoris|forbidden|invalid\s*api[\s_-]*key|invalid\s*key|bad\s*api[\s_-]*key|authentic|api\s*key\s*(is\s*)?(invalid|required|missing|not\s*valid))/i;
@@ -114,10 +119,10 @@ export function classifyAisFailure(input = {}) {
  */
 export function decodeAisFrameSync(data) {
   if (typeof data === 'string') return data;
-  if (data instanceof ArrayBuffer) return new TextDecoder().decode(data);
+  if (data instanceof ArrayBuffer) return AIS_TEXT_DECODER.decode(data);
   if (ArrayBuffer.isView(data)) {
-    return new TextDecoder().decode(
-      data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+    return AIS_TEXT_DECODER.decode(
+      new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
     );
   }
   if (Array.isArray(data)) {

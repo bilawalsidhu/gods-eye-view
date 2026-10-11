@@ -30,6 +30,7 @@ import {
   TRACKED_MODEL_MIN_PX,
   TRACKED_MODEL_MAX_PX,
   FLEET_DR_INTERVAL_MS,
+  RENDER_DELAY_SEC,
   COURSE_SLEW_DT_MAX_SEC,
   ROTATION_REFRESH_MS,
   COURSE_MAX_DPS,
@@ -410,7 +411,10 @@ export function createRendering({
       (!current && flightState._modelPending.has(icao24))
     ) {
       const bb = flightState._billboards.get(icao24);
-      if (bb && icao24 !== flightState._trackedIcao) bb.show = true;
+      if (bb && icao24 !== flightState._trackedIcao)
+        bb.show =
+          !parts.filters ||
+          parts.filters.matches(icao24, flightState.records.data.get(icao24));
       _releaseModel(icao24);
     }
     if (
@@ -441,7 +445,10 @@ export function createRendering({
       const model = flightState._models.get(icao);
       if (!model || model._gevIrBoost === flightState._irBoost) continue; // already right state
       const bb = flightState._billboards.get(icao);
-      if (bb && icao !== flightState._trackedIcao) bb.show = true;
+      if (bb && icao !== flightState._trackedIcao)
+        bb.show =
+          !parts.filters ||
+          parts.filters.matches(icao, flightState.records.data.get(icao));
       _releaseModel(icao);
     }
     if (flightState._irReloadQueue.length === 0)
@@ -833,6 +840,14 @@ export function createRendering({
         )
       : 0.08;
     flightState._lastFleetTickMs = nowMs;
+    // Sample the fleet clock once. Every contact advances at the existing
+    // cadence using the same instant; tracked/on-demand calls retain their own
+    // current clock and per-frame reconciliation path.
+    const sampleTime = Cesium.JulianDate.addSeconds(
+      Cesium.JulianDate.now(flightState._scratchFleetRenderTime),
+      -RENDER_DELAY_SEC,
+      flightState._scratchFleetRenderTime,
+    );
 
     _drainIrReloadQueue(); // bounded per-tick slice of any pending boost-flip reload
     if (flightState._cockpitContactMode)
@@ -888,6 +903,11 @@ export function createRendering({
       const cand = [];
       for (const [icao, bb] of flightState._billboards) {
         if (icao === flightState._trackedIcao) continue;
+        if (
+          parts.filters &&
+          !parts.filters.matches(icao, flightState.records.data.get(icao))
+        )
+          continue;
         // A converted TR-3B renders as a billboard and can never take a model, so
         // it must not occupy a CAP SLOT either — excluded here at selection time,
         // not just at the handoff below, or accumulated conversions would starve
@@ -936,7 +956,18 @@ export function createRendering({
 
       const info = flightState.records.data.get(icao24);
 
-      const dr = parts.motion._deadReckon(icao24, flightState._scratchFleetPos);
+      if (parts.filters && !parts.filters.matches(icao24, info)) {
+        bb.show = false;
+        const model = flightState._models.get(icao24);
+        if (model) model.show = false;
+        continue;
+      }
+
+      const dr = parts.motion._deadReckon(
+        icao24,
+        flightState._scratchFleetPos,
+        sampleTime,
+      );
       // The dead-reckoned point drifts away from the fix whose cell supplied the
       // height, so a grounded contact's sprite ends up under the mesh it taxied
       // (or coasted) over. Re-floor at the DISPLAYED coordinate — read-only, and

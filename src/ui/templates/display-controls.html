@@ -7,6 +7,17 @@
     </div>
     <div class="pp-panel-body" data-rail-scroller>
     <div class="pp-toggle-group">
+      <div class="pp-slider-row visible">
+        <label class="pp-slider-mini-label" for="performance-profile-select">Performance</label>
+        <select id="performance-profile-select" class="pp-select" aria-label="Rendering performance">
+          <option value="battery" selected>Battery saver</option>
+          <option value="balanced">Balanced</option>
+          <option value="quality">High quality</option>
+        </select>
+      </div>
+      <p id="performance-profile-status" role="status" style="font-size: 10px; padding: 0 10px; color: var(--text-secondary); line-height: 1.5;"></p>
+    </div>
+    <div class="pp-toggle-group">
       <button class="pp-toggle-btn" id="hud-toggle" title="Intelligence HUD (H)">
         <span class="pp-icon">&#x25CE;</span>
         <span class="pp-label">HUD</span>

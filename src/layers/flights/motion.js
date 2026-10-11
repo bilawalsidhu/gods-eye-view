@@ -59,6 +59,10 @@ export function createMotion({
     clearFocusTarget,
     publishFocusTargetFromCachedPosition,
   } = services.focus;
+  // A fix's local axes do not change between display ticks. Weak ownership
+  // releases old history with the record; coordinate checks cover re-flooring
+  // that edits an existing fix's Cartesian in place.
+  const fixFrames = new WeakMap();
 
   // Round 5: the old `_warmGroundedAircraftSurfaceCache` (global exact-5-decimal
   // warm for every grounded contact on Earth) is GONE. Parked-aircraft GPS
@@ -124,7 +128,7 @@ export function createMotion({
    * @returns {Cesium.Cartesian3|null} Estimated ECEF position, or null if no history exists.
    */
 
-  function _deadReckon(icao24, result) {
+  function _deadReckon(icao24, result, sampleTime) {
     const info = flightState.records.data.get(icao24);
     if (FOCUS_EVIDENCE_DEV && flightState._focusEvidenceIds.has(icao24)) {
       const position = flightState._billboards.get(icao24)?.position;
@@ -149,11 +153,13 @@ export function createMotion({
     const out = result || new Cesium.Cartesian3();
     // Render one poll interval behind real time so we interpolate between
     // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
-    const renderTime = Cesium.JulianDate.addSeconds(
-      Cesium.JulianDate.now(),
-      -RENDER_DELAY_SEC,
-      flightState._scratchRenderTime,
-    );
+    const renderTime =
+      sampleTime ||
+      Cesium.JulianDate.addSeconds(
+        Cesium.JulianDate.now(flightState._scratchRenderTime),
+        -RENDER_DELAY_SEC,
+        flightState._scratchRenderTime,
+      );
 
     // Bracketing pair: interpolate — no extrapolation error, no snap-back.
     for (let i = history.length - 1; i >= 1; i--) {
@@ -286,11 +292,26 @@ export function createMotion({
       0,
       flightState._scratchOffset,
     );
-    const enu = Cesium.Transforms.eastNorthUpToFixedFrame(
-      fix.position,
-      Cesium.Ellipsoid.WGS84,
-      flightState._scratchEnu,
-    );
+    const position = fix.position;
+    let cached = fixFrames.get(fix);
+    if (
+      !cached ||
+      cached.x !== position.x ||
+      cached.y !== position.y ||
+      cached.z !== position.z
+    ) {
+      cached ||= { matrix: new Cesium.Matrix4() };
+      Cesium.Transforms.eastNorthUpToFixedFrame(
+        position,
+        Cesium.Ellipsoid.WGS84,
+        cached.matrix,
+      );
+      cached.x = position.x;
+      cached.y = position.y;
+      cached.z = position.z;
+      fixFrames.set(fix, cached);
+    }
+    const enu = cached.matrix;
     return Cesium.Matrix4.multiplyByPoint(enu, flightState._scratchOffset, out);
   }
 

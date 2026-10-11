@@ -104,6 +104,9 @@ try {
   await page.setViewport({ width: 1440, height: 860 });
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!window.__godsEyeView?.viewer, { timeout: 90_000 });
+  // Preserve the original full-quality animation cadence gate. The battery
+  // rendering budget has its own comparison in qa-power-budget.mjs.
+  await page.evaluate(() => window.__godsEyeView.powerSavings?.setProfile('quality'));
   // Boot flyTo + tile warm + all deferred init.
   await new Promise((r) => setTimeout(r, 15_000));
 

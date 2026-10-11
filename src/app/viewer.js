@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { powerBudget } from '../powerBudget.js';
 import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
 
 const PINCH_ZOOM_MULTIPLIER = 8;
@@ -120,11 +121,12 @@ export function createApplicationViewer({ container, creditContainer }) {
     infoBox: false,
     baseLayer: false,
     creditContainer,
-    msaaSamples: 4,
+    msaaSamples: powerBudget().msaa,
     contextOptions: { webgl: { preserveDrawingBuffer: true } },
   });
   try {
-    viewer.targetFrameRate = 60;
+    viewer.targetFrameRate = powerBudget().fps;
+    viewer.resolutionScale = powerBudget().scale;
     // Before any tile builds a draw command: Cesium's per-vertex model
     // atmosphere fails to LINK on Apple's Metal backend and kills the
     // render loop. See app/atmosphereCompat.js.

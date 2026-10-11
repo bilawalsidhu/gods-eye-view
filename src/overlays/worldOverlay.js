@@ -97,6 +97,8 @@ const PAINT_LANE_INDEX = new Map(
  * backdrop-filled cockpit windows survive as exclusions.
  */
 export const WORLD_OVERLAY_OCCLUDER_SELECTORS = Object.freeze([
+  '#area-assessment-panel',
+  '#area-assessment-launcher',
   '#title-bar',
   '#style-indicator',
   '#top-center-actions',
@@ -1326,7 +1328,10 @@ function ensureCanvasSize() {
     0,
     Math.round(Number(_viewer.canvas.clientHeight) || 0),
   );
-  const dpr = Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1);
+  const dpr = Math.min(
+    Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1),
+    _viewer?.gevOverlayDprLimit || Infinity,
+  );
   const changed =
     _canvas.width !== Math.round(width * dpr) ||
     _canvas.height !== Math.round(height * dpr) ||

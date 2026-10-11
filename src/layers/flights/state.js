@@ -247,6 +247,7 @@ export function createFlightState({ source, services }) {
   flightState._scratchArc = { east: 0, north: 0, endCourseDeg: 0 };
 
   flightState._scratchRenderTime = new Cesium.JulianDate();
+  flightState._scratchFleetRenderTime = new Cesium.JulianDate();
 
   flightState._scratchFleetPos = new Cesium.Cartesian3();
 
