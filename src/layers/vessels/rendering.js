@@ -7,8 +7,14 @@ import {
   VESSEL_CARD_FADE_DISTANCE_M,
 } from '../../data/vesselLabels.js';
 import {
+  vesselIconFamily,
+  vesselIconSvg,
+  vesselIconScale,
+  vesselMotionCourse,
+} from '../../data/vesselIcons.js';
+import {
   cameraPoseSignature,
-  screenProjectedRotation,
+  perspectiveProjectedRotation,
 } from '../../data/iconOrientation.js';
 import {
   VESSEL_LIFT_M,
@@ -148,48 +154,41 @@ export function createRendering({
   }
 
   function shipScale(record) {
-    const speed = Number(record.speed || 0);
-    if (speed >= 18) return 0.78;
-    if (speed >= 8) return 0.68;
-    return 0.6;
+    return vesselIconScale(
+      record.type,
+      state.viewer?.camera?.positionCartographic?.height,
+    );
   }
 
   /**
    * Best available real-world direction of travel for a vessel, degrees
-   * clockwise from north (true heading preferred, course-over-ground fallback).
+   * clockwise from north (COG while moving, true heading while stationary).
    * Screen rotation is computed from this by the shared projected-rotation
    * pass in updateVisibility — never directly from the compass value.
    * @param {Object} record - Vessel record.
-   * @returns {number} Course in degrees (0 when unknown).
+   * @returns {number|null} Course in degrees (null when unknown).
    */
 
   function vesselCourseDeg(record) {
-    const direction = record.heading ?? record.course;
-    return Number.isFinite(direction) ? direction : 0;
+    return vesselMotionCourse(record);
   }
 
   /**
-   * Build (and cache) a chevron/delta-wing SVG data URL tinted for the vessel.
+   * Build (and cache) an AIS macro-type silhouette tinted for the vessel.
    * The shape points north (up) so billboard rotation maps directly to heading.
-   * One icon is generated per color+variant and reused across all billboards.
+   * One icon is generated per family+color+variant and reused across billboards.
    * @param {Object} record - Vessel record (drives per-type tint).
-   * @param {boolean} selected - True for the white/brighter selected variant.
+   * @param {boolean} selected - True for the white outline selected variant.
    * @returns {string} SVG data URL.
    */
 
   function shipIcon(record, selected) {
-    const cssColor = selected ? '#ffffff' : vesselTypeCss(record.type);
-    const key = `${cssColor}:${selected ? 'selected' : 'normal'}`;
+    const cssColor = vesselTypeCss(record.type);
+    const key = `${vesselIconFamily(record.type)}:${cssColor}:${selected ? 'selected' : 'normal'}`;
     if (vesselState.shipIconCache.has(key))
       return vesselState.shipIconCache.get(key);
 
-    const stroke = selected ? 'rgba(6,26,32,0.95)' : 'rgba(4,18,24,0.9)';
-    const strokeWidth = selected ? 1.1 : 0.7;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-    <g transform="translate(16,16)">
-      <path d="M0,-14 L11,10 L4,7 L0,14 L-4,7 L-11,10 Z" fill="${cssColor}" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linejoin="round"/>
-    </g>
-  </svg>`;
+    const svg = vesselIconSvg(record.type, selected);
     const icon = 'data:image/svg+xml;base64,' + btoa(svg);
     vesselState.shipIconCache.set(key, icon);
     return icon;
@@ -236,11 +235,23 @@ export function createRendering({
         const visible = isVisible(visual.surfacePosition, occluder);
         if (visual.billboard) {
           visual.billboard.show = visible;
-          if (visible && doRotations && scene) {
-            const rot = screenProjectedRotation(
+          if (visible) {
+            const scale =
+              shipScale(record) * (record === state.selectedRecord ? 1.2 : 1);
+            if (Math.abs(scale - visual.billboard.scale) > 0.001)
+              visual.billboard.scale = scale;
+          }
+          const course = vesselCourseDeg(record);
+          if (
+            visible &&
+            course !== null &&
+            scene &&
+            (doRotations || course !== visual.lastIconCourse)
+          ) {
+            const rot = perspectiveProjectedRotation(
               scene,
               visual.position,
-              vesselCourseDeg(record),
+              course,
               visual.billboard.rotation,
             );
             if (
@@ -249,6 +260,7 @@ export function createRendering({
             ) {
               visual.billboard.rotation = rot;
             }
+            visual.lastIconCourse = course;
           }
         }
         if (visible) labelCandidates.push(record);
@@ -309,10 +321,9 @@ export function createRendering({
         nowMs,
         target,
         params,
-        // Vessel artwork is 32 px before billboard scale. Including the
-        // ambient chevron's own rendered extent prevents edge-overlap misses.
-        spriteHalfWidthPx: (bb.width || 32) * (bb.scale || 1) * 0.5,
-        spriteHalfHeightPx: (bb.height || 32) * (bb.scale || 1) * 0.5,
+        // Include the enlarged artwork's rendered extent in focus overlap.
+        spriteHalfWidthPx: (bb.width || 64) * (bb.scale || 1) * 0.5,
+        spriteHalfHeightPx: (bb.height || 64) * (bb.scale || 1) * 0.5,
       });
       transitioning ||= focus.transitioning;
       if (focus.active) activeCount += 1;
@@ -438,14 +449,27 @@ export function createRendering({
     vesselState._vesselOverlayHost.setEntries(
       VESSEL_OVERLAY_SOURCE_ID,
       entries.map((entry) => {
+        const mmsi = String(entry.id || '').startsWith('vessel:')
+          ? entry.id.slice('vessel:'.length)
+          : '';
+        const record = state.records.byMmsi.get(mmsi);
+        // Clear the full rotated sprite, so labels cannot hide the silhouette.
+        const spacedEntry = record
+          ? {
+              ...entry,
+              gapPx: Math.ceil(
+                64 *
+                  shipScale(record) *
+                  (entry.selected ? 1.2 : 1) *
+                  Math.SQRT1_2,
+              ),
+            }
+          : entry;
         const card = applyVesselOverlayPolicy(
-          entry,
+          spacedEntry,
           VESSEL_CARD_FADE_DISTANCE_M,
         );
         if (!card.interactive) return card;
-        const mmsi = String(card.id || '').startsWith('vessel:')
-          ? card.id.slice('vessel:'.length)
-          : '';
         return {
           ...card,
           accessibilityLabel: `Focus vessel ${card.title}, MMSI ${mmsi}`,

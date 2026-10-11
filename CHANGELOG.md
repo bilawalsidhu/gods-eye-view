@@ -1,5 +1,15 @@
 # Changelog
 
+- Live vessels use distinct north-pointing silhouettes for AIS macro types
+  (cargo, tanker, passenger, fishing, sailing, pleasure, service and military).
+  Unknown types retain a generic vessel; selection preserves the family shape.
+  Zoom-dependent 14–44 px icons (22% larger tankers) use distinct outer contours, with labels
+  spaced beyond the rotated silhouette so the bow stays visible.
+  Each macro type has a distinct hue, shared with its card accent; selected
+  vessels retain their type color and gain a white outline.
+  Moving vessel icons follow AIS course over ground rather than a conflicting
+  hull heading, using perspective-aware projection in oblique views.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 
