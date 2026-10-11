@@ -5123,3 +5123,8 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+
+### fix(qa): refuse negative fleet timing and allocation evidence
+
+Require finite physically admissible timing and byte evidence across every sampled frame, and a nonnegative allocation value, before a fleet can pass acceptance.

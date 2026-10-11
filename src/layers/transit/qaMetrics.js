@@ -147,6 +147,15 @@ export function reduceFleet(
   return {
     pass:
       rows.length >= 300 &&
+      rows.every(
+        (row) =>
+          Number.isFinite(row.cpuMs) &&
+          row.cpuMs >= 0 &&
+          Number.isFinite(row.intervalMs) &&
+          row.intervalMs > 0 &&
+          Number.isFinite(row.uploadBytes) &&
+          row.uploadBytes >= 0,
+      ) &&
       motion.pass &&
       metrics.movingMin === count &&
       metrics.cpuP95 <= limits.cpuMs &&
@@ -154,6 +163,7 @@ export function reduceFleet(
       metrics.uploadMax > 0 &&
       metrics.uploadMax <= limits.uploadBytes &&
       Number.isFinite(allocationBytesPerFrame) &&
+      allocationBytesPerFrame >= 0 &&
       allocationBytesPerFrame <= limits.allocationBytes &&
       Number.isFinite(retainedBytes) &&
       retainedBytes > 0 &&

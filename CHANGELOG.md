@@ -1,5 +1,7 @@
 # Changelog
 
+- Fleet acceptance refuses negative timing, upload and allocation measurements.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 
