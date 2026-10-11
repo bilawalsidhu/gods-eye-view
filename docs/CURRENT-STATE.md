@@ -5123,3 +5123,8 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+
+### fix(traffic): isolate malformed flow polylines before spatial indexing
+
+Admit only flow polylines whose coordinates are finite WGS84 pairs before choosing the projection anchor or building the index. Drop a corrupt polyline as a unit so no synthetic segment bridges a missing vertex.

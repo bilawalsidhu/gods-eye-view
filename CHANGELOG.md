@@ -1,5 +1,7 @@
 # Changelog
 
+- Traffic matching skips invalid flow polylines without disrupting valid nearby road matches.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 

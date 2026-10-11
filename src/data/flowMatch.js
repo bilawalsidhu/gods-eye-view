@@ -94,9 +94,22 @@ function pointSegDist2(px, py, ax, ay, bx, by) {
  */
 export function createFlowSegmentIndex(flowSegments) {
   if (!Array.isArray(flowSegments)) return null;
+  const usable = flowSegments.filter(
+    (flow) =>
+      Array.isArray(flow?.coords) &&
+      flow.coords.length >= 2 &&
+      flow.coords.every(
+        (point) =>
+          Array.isArray(point) &&
+          Number.isFinite(point[0]) &&
+          Math.abs(point[0]) <= 180 &&
+          Number.isFinite(point[1]) &&
+          Math.abs(point[1]) <= 90,
+      ),
+  );
   // Local equirectangular projection anchored at the first flow coordinate —
   // over a ≤0.05° fetch box the distortion is negligible.
-  const anchor = flowSegments.find(
+  const anchor = usable.find(
     (f) => Array.isArray(f?.coords) && f.coords.length >= 2,
   );
   if (!anchor) return null;
@@ -110,7 +123,7 @@ export function createFlowSegmentIndex(flowSegments) {
   // Spatial hash of flow segments (midpoint-keyed 100 m cells).
   const grid = new Map();
   const cellKey = (cx, cy) => (cx + 0x8000) * 0x10000 + (cy + 0x8000);
-  for (const flow of flowSegments) {
+  for (const flow of usable) {
     const coords = flow?.coords;
     if (!Array.isArray(coords) || coords.length < 2) continue;
     const level = flow.trafficLevel;
