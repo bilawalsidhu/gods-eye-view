@@ -42,7 +42,7 @@ export function createVesselState({ source, services }) {
 
   vesselState._geoidReady = false;
 
-  /** @type {Map<string, string>} `${cssColor}:${variant}` -> chevron SVG data URL */
+  /** @type {Map<string, string>} `${family}:${cssColor}:${variant}` -> vessel SVG data URL */
 
   vesselState.shipIconCache = new Map();
 

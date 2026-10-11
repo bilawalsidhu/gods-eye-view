@@ -1,5 +1,33 @@
 # God's Eye View Current State
 
+Vessel billboards use AIS macro-type silhouettes from `src/data/vesselIcons.js`.
+Reported numeric and descriptive types select cargo, tanker, passenger, fishing,
+sailing, pleasure, service or military shapes. Missing and unrecognized types use
+a generic hull, without inferring a category from the name. Shapes point north
+and use perspective-aware screen projection. Moving vessels (at least 0.5 kt)
+point along valid AIS course over ground (COG), with heading as fallback;
+stationary contacts prefer heading. Missing direction retains the last rotation.
+Cards use the same direction policy. Changes of COG refresh rotation even when
+the camera stays still. Each macro type has its own color:
+cargo cyan, tanker orange, passenger pink, fishing green, sailing blue, pleasure
+violet, service yellow, military red and unknown gray. Selection keeps the type
+color and adds a white outline, with matching card accents.
+The icon cache includes family, color and selection; later static-type updates
+change existing billboards through snapshot reconciliation. Focused coverage:
+`src/data/vesselIcons.test.mjs` and the vessel labels and reconciliation tests.
+Icon size follows camera height with continuous logarithmic interpolation:
+14 px at 20,000 km, 18 px at 5,000 km, 24 px at 1,000 km, 32 px at 100 km,
+40 px at 10 km and a maximum of 44 px at 2 km. Tankers are 22% larger; selection
+adds 20%. The visibility pass updates existing sprites as the camera zooms,
+without regenerating artwork. Size stays independent of speed, and focus overlap
+uses the 64 px source artwork and its current billboard scale.
+Card spacing clears the rotated icon's bounding square. Hull contours distinguish
+the tanker with a full rounded bow and compact aft house from the tapered cargo
+bow, broad cargo holds and continuous passenger superstructure. Pictograms use
+large negative spaces instead of detailed deck drawings. The SVGs are original;
+visual references are the [VectorStock zenith-view vessel collection](https://www.vectorstock.com/royalty-free-vector/top-view-on-isolated-boats-or-ships-vector-18374749)
+and the [GrabCAD oil tanker plan](https://grabcad.com/library/oil-tanker-7).
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing

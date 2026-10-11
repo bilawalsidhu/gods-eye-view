@@ -32,12 +32,16 @@ const TYPE_STYLES = [
   },
   { pattern: /fishing/i, css: '#7cff9b', accent: '124, 255, 155' },
   {
-    pattern: /tug|tow|pilot|supply|service/i,
+    pattern:
+      /tug|tow|pilot|supply|service|sar|tender|dredg|dive|pollution|medical/i,
     css: '#f7f0a3',
     accent: '247, 240, 163',
   },
+  { pattern: /sailing/i, css: '#6f9bff', accent: '111, 155, 255' },
+  { pattern: /pleasure|yacht/i, css: '#c397ff', accent: '195, 151, 255' },
+  { pattern: /military|law enforce/i, css: '#ff646e', accent: '255, 100, 110' },
 ];
-const DEFAULT_STYLE = { css: '#39d5ff', accent: '57, 213, 255' };
+const DEFAULT_STYLE = { css: '#a8b5c2', accent: '168, 181, 194' };
 
 const NUMERIC_TYPE_SPECIALS = {
   30: 'FISHING',

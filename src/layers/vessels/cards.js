@@ -2,6 +2,7 @@ import {
   accentForVesselType,
   normalizeVesselType,
 } from '../../data/vesselLabels.js';
+import { vesselMotionCourse } from '../../data/vesselIcons.js';
 
 export function createCards({
   vesselState,
@@ -55,7 +56,7 @@ export function createCards({
     if (type) parts.push(type);
     if (record.speed !== null && record.speed !== undefined)
       parts.push(formatSpeed(record.speed));
-    const direction = record.heading ?? record.course;
+    const direction = vesselMotionCourse(record);
     if (Number.isFinite(direction)) parts.push(`${Math.round(direction)}°`);
     return {
       id: vesselOverlayEntryId(record),
@@ -82,7 +83,7 @@ export function createCards({
    */
 
   function buildSelectedVesselCard(record) {
-    const direction = record.heading ?? record.course;
+    const direction = vesselMotionCourse(record);
     const details = [
       [
         vesselTypeShort(record) || 'VESSEL',
