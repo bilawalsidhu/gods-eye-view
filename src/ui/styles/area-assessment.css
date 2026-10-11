@@ -1,0 +1,308 @@
+#area-assessment-launcher {
+  width: 100%;
+  text-align: left;
+  color: #a6e5dc;
+  background: rgba(12, 22, 28, 0.94);
+  border: 1px solid #36535b;
+  border-radius: 7px;
+  padding: 9px 13px;
+  font: 12px var(--font-sans, sans-serif);
+  cursor: pointer;
+}
+#area-assessment-panel {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  color: #e6edf0;
+  border: 0;
+  border-radius: 0;
+  font: 13px/1.5 var(--font-sans, sans-serif);
+  display: flex;
+  flex-direction: column;
+  text-transform: none;
+  letter-spacing: normal;
+}
+#area-assessment-panel[hidden] {
+  display: none;
+}
+#area-assessment-panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #2b3a43;
+}
+#area-assessment-panel h2 {
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+#area-assessment-panel .area-eyebrow {
+  color: #83c6be;
+  letter-spacing: 1.7px;
+  font-size: 10px;
+}
+#area-assessment-panel button {
+  cursor: pointer;
+  color: #dcebea;
+  background: #21353e;
+  border: 1px solid #3c5660;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: inherit;
+}
+#area-assessment-panel button[data-close] {
+  font-size: 24px;
+  background: transparent;
+  border: 0;
+  padding: 0 6px;
+}
+#area-assessment-panel .area-scroll {
+  overflow: visible;
+  padding: 0 0 12px;
+  min-height: 0;
+}
+#area-assessment-panel p {
+  margin: 8px 0;
+}
+#area-assessment-panel .area-intro {
+  color: #9dafb8;
+  font-size: 12px;
+  margin-top: 14px;
+}
+#area-assessment-panel .area-location {
+  display: grid;
+  gap: 3px;
+  margin: 16px 0 10px;
+}
+#area-assessment-panel .area-location span {
+  font-size: 11px;
+  color: #9dafb8;
+}
+#area-assessment-panel .area-actions {
+  display: flex;
+  gap: 8px;
+}
+#area-assessment-panel button[data-analyze] {
+  background: #294d49;
+  border-color: #45736d;
+  flex: 1;
+}
+#area-assessment-panel .area-index {
+  margin: 18px 0;
+  border: 1px solid #36544f;
+  border-radius: 8px;
+  background: linear-gradient(120deg, #183b35, #172931);
+  padding: 10px;
+}
+#area-assessment-panel .area-index > span {
+  color: #9ac8bf;
+  font-size: 10px;
+  letter-spacing: 1.2px;
+}
+#area-assessment-panel .area-index > strong {
+  display: block;
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+#area-assessment-panel .area-index p {
+  font-size: 11px;
+  color: #bbcec9;
+}
+#area-assessment-panel :is(.area-coverage-track, .area-score-track) {
+  background: #ffffff12;
+  height: 3px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+#area-assessment-panel :is(.area-coverage-track, .area-score-track) i {
+  display: block;
+  height: 100%;
+  background: #85d6bd;
+  transition: width 0.15s;
+}
+#area-assessment-panel .area-metric {
+  padding: 14px 0;
+  border-top: 1px solid #2b3a43;
+}
+#area-assessment-panel .area-metric-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+#area-assessment-panel .area-metric-heading label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+#area-assessment-panel .area-metric-heading i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--metric-color);
+  flex: 0 0 auto;
+}
+#area-assessment-panel .area-metric-heading strong {
+  color: var(--metric-color);
+  font-size: 15px;
+  white-space: nowrap;
+}
+#area-assessment-panel .area-weight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  color: #a6b8c2;
+  font-size: 11px;
+}
+#area-assessment-panel input[type='range'] {
+  accent-color: var(--metric-color);
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}
+#area-assessment-panel input[type='checkbox'] {
+  accent-color: var(--metric-color);
+  width: 15px;
+  height: 15px;
+}
+#area-assessment-panel output {
+  width: 35px;
+  text-align: right;
+}
+#area-assessment-panel [data-value] {
+  font-size: 12px;
+  color: #cfdae0;
+}
+#area-assessment-panel .area-score-track i {
+  background: var(--metric-color);
+}
+#area-assessment-panel .is-excluded {
+  opacity: 0.55;
+}
+#area-assessment-panel details {
+  font-size: 11px;
+  color: #97aab4;
+  margin-top: 8px;
+}
+#area-assessment-panel summary {
+  cursor: pointer;
+}
+#area-assessment-panel a {
+  color: #95c7f2;
+}
+#area-assessment-panel .area-budget {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  margin-top: 10px;
+  color: #b0c0c8;
+}
+#area-assessment-panel input[type='number'] {
+  width: 92px;
+  color: #e3e9ec;
+  background: #162831;
+  border: 1px solid #3b515c;
+  border-radius: 4px;
+  padding: 5px;
+}
+#area-assessment-panel .area-method {
+  border-top: 1px solid #2b3a43;
+  padding-top: 14px;
+}
+#area-assessment-panel :focus-visible,
+#area-assessment-launcher:focus-visible {
+  outline: 2px solid #91d9cb;
+  outline-offset: 3px;
+}
+
+#area-assessment-panel .area-map-legend {
+  font-size: 11px;
+  color: #b8c8d0;
+  margin: 12px 0;
+}
+#area-assessment-panel .area-map-legend span {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+#area-assessment-panel .area-map-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-left: 3px;
+}
+.area-low {
+  background: #f87171;
+}
+.area-mid {
+  background: #facc15;
+}
+.area-high {
+  background: #4ade80;
+}
+.area-unknown {
+  background: #94a3b8;
+}
+
+#area-assessment-panel .area-score {
+  text-align: right;
+  display: grid;
+  flex-shrink: 0;
+}
+#area-assessment-panel .area-score span {
+  color: #b8c8d0;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+#area-assessment-panel .area-nearby {
+  padding: 12px 0;
+  border-top: 1px solid #344b55;
+  border-bottom: 1px solid #344b55;
+  font-size: 12px;
+}
+#area-assessment-panel .area-nearby select {
+  background: #21353e;
+  color: #e6edf0;
+  border: 1px solid #3c5660;
+  border-radius: 5px;
+  padding: 5px;
+  margin: 0 8px;
+}
+#area-assessment-panel .area-nearby button {
+  margin-top: 8px;
+}
+#area-assessment-panel .area-nearby [data-search-status] {
+  color: #b8c8d0;
+}
+
+#area-assessment-group {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-bottom: 8px;
+}
+#area-assessment-launcher::after {
+  content: '+';
+  float: right;
+}
+#area-assessment-launcher[aria-expanded='true']::after {
+  content: '−';
+}
+
+#area-assessment-panel .area-service-legend {
+  margin-top: 8px;
+}
+#area-assessment-panel .area-service-legend > span {
+  display: inline-flex;
+  white-space: nowrap;
+}

@@ -82,7 +82,7 @@ function abandonedError() {
  * @param {() => Promise<unknown>} work
  * @param {{bounded?: boolean, signal?: AbortSignal}} [options]
  */
-function enqueueNominatim(work, { bounded = false, signal } = {}) {
+export function enqueueNominatim(work, { bounded = false, signal } = {}) {
   if (bounded && _nominatimPending >= NOMINATIM_MAX_PENDING)
     return Promise.reject(queueFullError());
   if (bounded) _nominatimPending += 1;
