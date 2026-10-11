@@ -22,7 +22,11 @@
   },
   "viewer": {
     "exports": ["./application/viewer"],
-    "modules": ["src/app/viewer.js", "src/app/atmosphereCompat.js"],
+    "modules": [
+      "src/app/viewer.js",
+      "src/app/atmosphereCompat.js",
+      "src/powerBudget.js"
+    ],
     "external": ["cesium"]
   },
   "vite-build": {
@@ -432,6 +436,7 @@
       "src/ui/railCardBlocks.js",
       "src/ui/chipGroup.js",
       "src/ui/rowList.js",
+      "src/ui/rowForm.js",
       "src/ui/railTimeline.js",
       "src/ui/clearLayersControl.js",
       "src/loadingFeedback.js",
@@ -618,6 +623,7 @@
       "src/ui/railCardBlocks.js",
       "src/ui/chipGroup.js",
       "src/ui/rowList.js",
+      "src/ui/rowForm.js",
       "src/ui/railTimeline.js",
       "src/ui/layers.js",
       "src/ui/leftPanelRail.js",
@@ -814,6 +820,7 @@
       "src/layers/flights/enrichment.js",
       "src/layers/flights/evidence.js",
       "src/layers/flights/index.js",
+      "src/layers/flights/filters.js",
       "src/layers/flights/ingestion.js",
       "src/layers/flights/lifecycle.js",
       "src/layers/flights/motion.js",
@@ -1696,6 +1703,7 @@
       "src/layers/flights/enrichment.js",
       "src/layers/flights/evidence.js",
       "src/layers/flights/index.js",
+      "src/layers/flights/filters.js",
       "src/layers/flights/ingestion.js",
       "src/layers/flights/lifecycle.js",
       "src/layers/flights/motion.js",
@@ -1933,6 +1941,7 @@
       "src/ui/railCardBlocks.js",
       "src/ui/chipGroup.js",
       "src/ui/rowList.js",
+      "src/ui/rowForm.js",
       "src/ui/railTimeline.js",
       "src/ui/layers.js",
       "src/ui/leftPanelRail.js",
@@ -2200,7 +2209,13 @@
       "src/tools/functions.js",
       "src/voice/actionSchemas.js",
       "src/view/index.js",
-      "src/app/embed.js"
+      "src/app/embed.js",
+      "src/ui/areaAssessment.js",
+      "src/sources/areaAssessment.js",
+      "src/data/areaAssessment.js",
+      "src/ui/areaAssessmentCopy.js",
+      "src/powerBudget.js",
+      "src/app/powerSaving.js"
     ],
     "external": [
       "hls.js",
@@ -2421,6 +2436,7 @@
       "src/layers/flights/enrichment.js",
       "src/layers/flights/evidence.js",
       "src/layers/flights/index.js",
+      "src/layers/flights/filters.js",
       "src/layers/flights/ingestion.js",
       "src/layers/flights/lifecycle.js",
       "src/layers/flights/motion.js",

@@ -108,7 +108,7 @@ export function createFlightSource({
       };
     },
     async getEnrichment(query, { signal } = {}) {
-      if (!['type', 'route'].includes(query.kind))
+      if (!['type', 'route', 'airline'].includes(query.kind))
         throw new LiveSourceError('unsupported', 'Enrichment unavailable');
       const { response, payload } = await readResponse(
         fetchImpl,

@@ -1,5 +1,20 @@
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
+
+/** Keep only bounded operator identities from the public adsbdb lookup. */
+export function parseAirlines(json) {
+  if (!Array.isArray(json?.response)) return null;
+  const rows = json.response
+    .slice(0, 20)
+    .filter((row) => /^[A-Z]{3}$/.test(row?.icao));
+  return rows.length
+    ? rows.map((row) => ({
+        name: String(row.name || row.icao).slice(0, 160),
+        icao: row.icao,
+        iata: /^[A-Z0-9]{2}$/.test(row.iata) ? row.iata : null,
+      }))
+    : null;
+}
 /**
  * adsbdb.com enrichment proxy: callsign → route (airline + origin/destination
  * airports) and hex → aircraft type/registration. Free community API — cached
@@ -10,7 +25,7 @@ import { promises as fsp } from 'node:fs';
 export function adsbdbProxy() {
   const TTL_MS = 24 * 3600_000;
   const CACHE_PATH = path.join(process.cwd(), '.gev-cache', 'adsbdb.json');
-  let cache = { routes: {}, aircraft: {} };
+  let cache = { routes: {}, aircraft: {}, airlines: {} };
   let dirty = false;
   let loaded = false;
   const inflight = new Map();
@@ -20,7 +35,11 @@ export function adsbdbProxy() {
     loaded = true;
     try {
       const parsed = JSON.parse(await fsp.readFile(CACHE_PATH, 'utf8'));
-      cache = { routes: parsed.routes ?? {}, aircraft: parsed.aircraft ?? {} };
+      cache = {
+        routes: parsed.routes ?? {},
+        aircraft: parsed.aircraft ?? {},
+        airlines: parsed.airlines ?? {},
+      };
     } catch {
       /* first run */
     }
@@ -49,6 +68,8 @@ export function adsbdbProxy() {
     });
     return {
       airline: fr.airline?.name || null,
+      callsignIcao: fr.callsign_icao || null,
+      callsignIata: fr.callsign_iata || null,
       origin: airport(fr.origin),
       destination: airport(fr.destination),
     };
@@ -68,7 +89,12 @@ export function adsbdbProxy() {
   }
 
   function lookup(kind, key) {
-    const store = kind === 'route' ? cache.routes : cache.aircraft;
+    const store =
+      kind === 'route'
+        ? cache.routes
+        : kind === 'airline'
+          ? cache.airlines
+          : cache.aircraft;
     if (fresh(store[key])) return Promise.resolve(store[key].data);
     const ik = `${kind}:${key}`;
     if (!inflight.has(ik)) {
@@ -79,13 +105,15 @@ export function adsbdbProxy() {
             const url =
               kind === 'route'
                 ? `https://api.adsbdb.com/v0/callsign/${encodeURIComponent(key)}`
-                : `https://api.adsbdb.com/v0/aircraft/${encodeURIComponent(key)}`;
+                : `https://api.adsbdb.com/v0/${kind === 'airline' ? 'airline' : 'aircraft'}/${encodeURIComponent(key)}`;
             const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
             if (res.ok) {
               const data =
                 kind === 'route'
                   ? parseRoute(await res.json())
-                  : parseAircraft(await res.json());
+                  : kind === 'airline'
+                    ? parseAirlines(await res.json())
+                    : parseAircraft(await res.json());
               store[key] = { at: Date.now(), data }; // data may be null — negative cache
               dirty = true;
               return data;
@@ -118,6 +146,16 @@ export function adsbdbProxy() {
         const [, kind, rawKey] = String(req.url || '')
           .split('?')[0]
           .split('/');
+        if (kind === 'airline') {
+          const code = String(rawKey || '').toUpperCase();
+          if (!/^(?:[A-Z0-9]{2}|[A-Z]{3})$/.test(code))
+            return send(400, { error: 'invalid airline code' });
+          const data = await lookup('airline', code);
+          return send(
+            200,
+            data ? { found: true, airlines: data } : { found: false },
+          );
+        }
         if (kind === 'route') {
           const cs = String(rawKey || '').toUpperCase();
           if (!/^[A-Z0-9]{2,8}$/.test(cs))

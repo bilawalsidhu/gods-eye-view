@@ -10,6 +10,7 @@ import { createLifecycle } from './lifecycle.js';
 import { createEvidence } from './evidence.js';
 import { createTesting } from './testing.js';
 import { createQueries } from './queries.js';
+import { createFlightFilters } from './filters.js';
 /** Compose one civil-flight layer with application-owned scene services. */
 export function createCivilFlightLayer({
   source,
@@ -28,6 +29,7 @@ export function createCivilFlightLayer({
   parts.lifecycle = createLifecycle(context);
   parts.evidence = createEvidence(context);
   parts.testing = createTesting(context);
+  parts.filters = createFlightFilters(context);
   parts.queries = createQueries(context);
   const applySnapshot = createFlightSnapshotRenderer({
     flightState,
@@ -40,6 +42,7 @@ export function createCivilFlightLayer({
     motion: parts.motion,
     enrichment: parts.enrichment,
     queries: parts.queries,
+    filters: parts.filters,
   });
   parts.ingestion = createIngestion({
     feed: flightState.feed,
@@ -58,6 +61,7 @@ export function createCivilFlightLayer({
     parts.queries.methods,
     parts.lifecycle.methods,
     parts.ingestion.methods,
+    parts.filters.methods,
   );
   Object.defineProperty(layer, 'testing', { value: parts.testing });
   return layer;
