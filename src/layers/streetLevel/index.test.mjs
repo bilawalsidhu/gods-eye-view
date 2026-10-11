@@ -482,3 +482,17 @@ test('switching a provider on while the layer is off activates nothing (M01)', a
   assert.equal(provider.calls.activate, 1);
   assert.equal(viewer.credits.length, 1);
 });
+
+test('an empty provider composition enables and tears down without acquiring imagery', async (t) => {
+  const { layer, viewer } = await enabledLayer(t, []);
+  assert.deepEqual(layer.providerIds, []);
+  assert.deepEqual(layer.getUIState().providers, []);
+  assert.equal(layer.getUIState().keyRequired, false);
+  assert.match(
+    layer.getUIState().coverage.hint,
+    /No street-level imagery providers/,
+  );
+  layer.disable();
+  layer.enable(viewer);
+  assert.deepEqual(layer.getUIState().providers, []);
+});

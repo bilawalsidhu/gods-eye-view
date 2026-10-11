@@ -65,13 +65,28 @@ test('data setup seals the caller catalog before controls can restore and drains
         },
       },
     },
-    catalog: createLayerCatalog(layers, metadata(layers)),
+    catalog: {
+      ...createLayerCatalog(layers, metadata(layers)),
+      getSourceAvailability: (id) =>
+        id === 'one'
+          ? {
+              available: false,
+              reason: 'One: data source not configured',
+            }
+          : undefined,
+    },
     defer: (release) => releases.push(release),
     onData: (manager) => {
       observed = manager;
     },
   });
   assert.equal(observed, dataManager);
+  assert.equal(await dataManager.setEnabled('one', true), false);
+  assert.equal(dataManager.layers.get('one').initialized, false);
+  assert.equal(
+    dataManager.getAll().find(({ id }) => id === 'one').stats.error,
+    'One: data source not configured',
+  );
   assert.deepEqual(attached, [['one', 'two']]);
   assert.deepEqual([...dataManager.layers.keys()], ['one', 'two']);
   assert.throws(() => dataManager.register({ id: 'late' }), /finalized/);

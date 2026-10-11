@@ -214,11 +214,18 @@ function decodeLayers(bytes, z, x, y, layerNames) {
   return { roads, military };
 }
 
-/** Construct an immutable-version road/military tile source without starting I/O. */
+/**
+ * Construct an immutable-version road/military tile source without starting I/O.
+ *
+ * `allowedOrigin` is deliberately not set here: `createVectorTileSource`
+ * derives it from whichever `tileJsonUrl` is in effect, so a caller that
+ * repoints only `tileJsonUrl` gets tiles from that host or a named error —
+ * never a silent fall back to the default host (#933). Passing
+ * `allowedOrigin` explicitly still overrides both.
+ */
 export function createOpenFreeMapSource(options = {}) {
   return createVectorTileSource({
     tileJsonUrl: 'https://tiles.openfreemap.org/planet',
-    allowedOrigin: 'https://tiles.openfreemap.org',
     decode: decodeOpenFreeMapTile,
     maxEntries: 192,
     maxCacheBytes: 64 * 1024 * 1024,

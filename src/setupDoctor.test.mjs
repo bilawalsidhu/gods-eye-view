@@ -274,6 +274,13 @@ test('doctor describes the credential ladder without exposing values', () => {
   );
   assert.match(capabilities.map, /Bing and world-terrain stacks/);
   assert.equal(capabilities.voice, 'available');
+  assert.equal(
+    buildCapabilitySummary({
+      ...credentials,
+      OPENAI_API_KEY: { configured: false },
+    }).voice,
+    'off until an OpenAI key is added, or a Codex ChatGPT sign-in is selected in Provider Settings (experimental)',
+  );
   assert.match(capabilities.missions, /token allowance/);
   assert.equal(
     capabilities.flights,
