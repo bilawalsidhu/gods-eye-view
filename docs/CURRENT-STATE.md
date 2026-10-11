@@ -1,5 +1,11 @@
 # God's Eye View Current State
 
+In standalone development and preview servers, a missing Google tile-token
+provider returns an uncached \`204 No Content\` for \`GET /api/google/tiles-token\`
+(and HEAD) instead of a browser-visible 404. The fallback is registered after
+real token providers and before the unknown-API handler, so existing Google
+browser keys, provider-issued tokens, and unrelated API routes remain unchanged.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing
