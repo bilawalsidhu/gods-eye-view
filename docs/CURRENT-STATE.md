@@ -1,5 +1,23 @@
 # God's Eye View Current State
 
+Avalanches is a keyless layer for Norway that plays Varsom danger forecasts and
+regObs observed avalanches over a ten-day window: seven observed days, the
+anchor day and Varsom's two forecast days. `/api/avalanches` trims and caches
+four upstreams (forecast windows, observation windows, weekly season counts and
+EAWS region outlines, whose ids match Varsom's). The playhead is continuous and
+animation-frame driven; region fills hold each day's rating and blend into the
+next, and an avalanche appears at its reported time, a front runs from release
+to runout over part of a day, and the path fades with age to a floor. Geometry is
+built once per window: every animated quantity is a colour, a `show` flag or a
+point position, so playback never rebuilds ground geometry. The on-map panel
+names the day and whether it is observed or forecast, holds play/pause and the
+day scale, and carries the danger-scale key. Off-season (no rating and no
+avalanche) it offers a replay of the last season, opening on the week with the
+most reported avalanches, with the season shown as a bar per week. Avalanche
+markers join the pick-ownership registry; region fills deliberately do not, so
+other layers' markers stay clickable over the mountains. Cards go through the
+world-overlay host, and an avalanche card links to its regObs report.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing

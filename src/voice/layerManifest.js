@@ -193,6 +193,12 @@ const layers = [
     },
   },
   {
+    id: 'avalanches',
+    aliases: ['avalanche', 'avalanche danger', 'avalanche forecast'],
+    context: false,
+    noQuery: 'forecast map and observation timeline; read on the map panel',
+  },
+  {
     id: 'weather-cyclones',
     aliases: ['cyclones', 'hurricanes', 'typhoons', 'tropical storms'],
     context: false,
