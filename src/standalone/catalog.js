@@ -1,5 +1,6 @@
 import { createSurfaceServices } from '../app/surfaceServices.js';
 import { createApplicationRequestServices } from '../services/requests.js';
+import { endpointSet, storedApiBase } from '../mobile/runtimeConfig.js';
 import { createApplicationCatalog } from '../app/constructCatalog.js';
 import { createStandaloneLayerSources } from './layerSources.js';
 export { createStandaloneReferenceSources } from './layerSources.js';
@@ -11,7 +12,9 @@ export function createStandaloneCatalog({
   streetLevelProviders,
   signal = new AbortController().signal,
   surface = createSurfaceServices({
-    terrainSource: createApplicationRequestServices().terrain,
+    terrainSource: createApplicationRequestServices({
+      endpoints: endpointSet(storedApiBase()),
+    }).terrain,
     signal,
   }),
 } = {}) {
