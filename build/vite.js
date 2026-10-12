@@ -52,7 +52,8 @@ export function createBrowserViteConfig({
   publicDir,
   googleApiKey,
   cesiumToken,
-  mapillaryToken,
+  defaultLocale = '',
+  secondaryLocale = '',
   host = 'localhost',
   port = 4173,
   allowedHosts = DEFAULT_ALLOWED_HOSTS,
@@ -107,10 +108,14 @@ export function createBrowserViteConfig({
     define: {
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
-      // Mapillary client tokens are public by design (see SECURITY.md).
-      'import.meta.env.MAPILLARY_CLIENT_TOKEN': JSON.stringify(
-        mapillaryToken ?? '',
-      ),
+      // Locale pair (i18n): the client's default + secondary UI locale. These
+      // are NOT secrets and are read by src/i18n/locale.js, which validates
+      // them against the shipped catalogs and falls back to the built-in
+      // en-only pair (while English is the only shipped catalog) for
+      // empty/invalid/unshipped values. Explicit define entries are required
+      // because Vite only auto-exposes VITE_-prefixed vars on import.meta.env.
+      'import.meta.env.GEV_DEFAULT_LOCALE': JSON.stringify(defaultLocale),
+      'import.meta.env.GEV_SECONDARY_LOCALE': JSON.stringify(secondaryLocale),
     },
     build: { chunkSizeWarningLimit: 1500 },
   };

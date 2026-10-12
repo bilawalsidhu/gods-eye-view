@@ -1,5 +1,7 @@
 /** Pure proximity helpers for Global Context. No capability modeling. */
 
+import { t } from '../i18n/index.js';
+
 export const AWARENESS_RADIUS_M = 250000;
 export const AWARENESS_MAX_FLIGHT_SEARCH_RADIUS_M = 16000000;
 export const AWARENESS_RELATIONSHIP = Object.freeze({
@@ -82,14 +84,14 @@ export function summarizeAwarenessCohort(
       relationship: AWARENESS_RELATIONSHIP.UNKNOWN,
       count: null,
       nearest: [],
-      reason: 'feed unavailable',
+      reason: t('layers.awareness.reason.feedUnavailable'),
     };
   if (stale)
     return {
       relationship: AWARENESS_RELATIONSHIP.UNKNOWN,
       count: null,
       nearest: [],
-      reason: 'feed stale',
+      reason: t('layers.awareness.reason.feedStale'),
     };
   const normalized = (Array.isArray(items) ? items : [])
     .filter(
@@ -106,8 +108,8 @@ export function summarizeAwarenessCohort(
     count: normalized.length,
     nearest: normalized.slice(0, limit),
     reason: normalized.length
-      ? 'observed or mapped nearby context'
-      : 'no observed or mapped objects in current feeds',
+      ? t('layers.awareness.reason.nearby')
+      : t('layers.awareness.reason.none'),
   };
 }
 
