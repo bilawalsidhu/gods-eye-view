@@ -15,7 +15,7 @@ export async function cameraImageCapability(signal) {
     reasoning: status.reasoning,
     warning: status.warning,
     access: status.access,
-    async ask({ original, question, marks, signal }) {
+    async ask({ original, question, marks, focus, selectedRegion, signal }) {
       const image = original.toDataURL('image/png');
       if (image.length > 7 * 1024 * 1024)
         throw new Error(
@@ -32,6 +32,8 @@ export async function cameraImageCapability(signal) {
           image,
           question,
           marks,
+          focus,
+          selectedRegion,
         }),
       });
       const data = await response.json();

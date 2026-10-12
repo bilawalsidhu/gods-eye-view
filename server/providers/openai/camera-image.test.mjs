@@ -2,7 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import { EventEmitter } from 'node:events';
-import { createCameraImageHandler, readCameraBody } from './camera-image.js';
+import {
+  createCameraImageHandler,
+  readCameraBody,
+  losslessOriginalCrop,
+} from './camera-image.js';
+import sharp from 'sharp';
 import { sameSiteGated } from '../common/same-site.js';
 
 async function invoke(handler, method = 'GET', body = null, headers = {}) {
@@ -35,6 +40,7 @@ function fixture(models = ['gpt-6-astra', 'gpt-6.1-sol']) {
   const handler = createCameraImageHandler({
     resolveApiKey: () => 'fixture-only',
     rateLimit: () => true,
+    cropOriginal: async () => Buffer.from('lossless-fixture'),
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
       return new Response(
@@ -141,6 +147,11 @@ test('single image request uses original PNG, high reasoning, no tools/store, un
   assert.equal(payload.reasoning.effort, 'high');
   assert.equal(payload.max_output_tokens, 16384);
   assert.equal(payload.input[0].content[1].image_url, image);
+  assert.equal(
+    payload.input[0].content.filter((c) => c.type === 'input_image').length,
+    1,
+  );
+  assert.match(payload.instructions, /year ranges|model-year ranges/);
   assert.equal(payload.tools, undefined);
   assert.match(payload.instructions, /untrusted/);
   assert.match(payload.instructions, /not validated accuracy/);
@@ -164,6 +175,104 @@ test('stalled request body cancellation releases buffers and listeners', async (
   for (const event of ['data', 'end', 'error'])
     assert.equal(req.listenerCount(event), 0);
   req.destroy();
+});
+
+test('selected area and all sanitized marks reach upstream while original pixels remain the image evidence', async () => {
+  const { handler, calls } = fixture(),
+    png = Buffer.alloc(24);
+  Buffer.from('89504e470d0a1a0a', 'hex').copy(png);
+  png.writeUInt32BE(320, 16);
+  png.writeUInt32BE(244, 20);
+  const image = 'data:image/png;base64,' + png.toString('base64');
+  const response = await invoke(handler, 'POST', {
+    confirmOriginal: true,
+    provider: 'OpenAI',
+    model: 'gpt-6.1-sol',
+    image,
+    question: 'Describe the circled object',
+    focus: 'selected-region',
+    selectedRegion: { x: 99, privateText: 'must not be forwarded' },
+    marks: [
+      {
+        mode: 'circle',
+        points: [
+          { x: 0.2, y: 0.3 },
+          { x: 0.8, y: 0.7 },
+        ],
+      },
+    ],
+  });
+  assert.equal(response.statusCode, 200);
+  const payload = JSON.parse(
+      calls.find((c) => c.url.endsWith('/responses')).options.body,
+    ),
+    guidance = JSON.parse(payload.input[0].content[0].text);
+  assert.equal(guidance.analysisFocus, 'selected-region');
+  assert.deepEqual(guidance.selectedRegion.pixelBounds, {
+    x: 64,
+    y: 73,
+    width: 192,
+    height: 98,
+  });
+  assert.equal(guidance.normalizedMarks.length, 1);
+  assert.equal(guidance.normalizedMarks[0].points.length, 2);
+  assert.equal(payload.input[0].content[1].image_url, image);
+  assert.equal(
+    payload.input[0].content.filter((c) => c.type === 'input_image').length,
+    2,
+  );
+  assert.match(
+    payload.instructions,
+    /focus the answer on that bounding rectangle/,
+  );
+  assert.ok(!JSON.stringify(payload).includes('must not be forwarded'));
+});
+
+test('server crop retains precisely the selected original pixels', async () => {
+  const pixels = Buffer.from(
+    Array.from({ length: 24 * 20 * 3 }, (_, i) => (i * 17) % 256),
+  );
+  const original = await sharp(pixels, {
+    raw: { width: 24, height: 20, channels: 3 },
+  })
+    .png()
+    .toBuffer();
+  const crop = await losslessOriginalCrop(original, {
+    x: 5,
+    y: 4,
+    width: 10,
+    height: 8,
+  });
+  const { data, info } = await sharp(crop)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  assert.equal(info.width, 10);
+  assert.equal(info.height, 8);
+  assert.equal(info.channels, 3);
+  for (let y = 0; y < 8; y++)
+    assert.deepEqual(
+      data.subarray(y * 30, (y + 1) * 30),
+      pixels.subarray(((y + 4) * 24 + 5) * 3, ((y + 4) * 24 + 15) * 3),
+    );
+});
+
+test('an explicitly selected target without a usable area fails before inference', async () => {
+  const { handler, calls } = fixture(),
+    png = Buffer.alloc(24);
+  Buffer.from('89504e470d0a1a0a', 'hex').copy(png);
+  png.writeUInt32BE(320, 16);
+  png.writeUInt32BE(244, 20);
+  const response = await invoke(handler, 'POST', {
+    confirmOriginal: true,
+    provider: 'OpenAI',
+    model: 'gpt-6.1-sol',
+    image: 'data:image/png;base64,' + png.toString('base64'),
+    question: 'Selected object?',
+    focus: 'selected-region',
+    marks: [],
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(calls.filter((c) => c.url.endsWith('/responses')).length, 0);
 });
 test('oversized streaming body fails at byte cap and retains no input listener', async () => {
   const req = new Readable({ read() {} }),

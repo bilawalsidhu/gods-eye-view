@@ -5,6 +5,30 @@ import { createStreetLevelLayer } from './index.js';
 import { MAPILLARY_CREDIT_HTML } from './providers/mapillary/policy.js';
 import { createMapillaryProvider } from './providers/mapillary/index.js';
 import { fakeStreetLevelProvider as fakeProvider } from '../../testSupport/streetLevelFakes.mjs';
+import { NEAREST_RADIUS_M } from './policy.js';
+
+test('nearest API wording does not claim absent coverage for an empty result', async (t) => {
+  const { layer } = await enabledLayer(t);
+  assert.equal(await layer.openNearest({ lat: 1.25, lon: 2.5 }), false);
+  assert.equal(
+    layer.getUIState().street.error,
+    `No photos returned by the configured API within ${NEAREST_RADIUS_M} m. This does not establish missing coverage; retry or check Mapillary.`,
+  );
+  assert.equal(layer.getUIState().street.loading, false);
+});
+
+test('nearest API wording preserves a provider service or malformed error', async (t) => {
+  const message =
+    'Mapillary returned a malformed image list (missing data array)';
+  const provider = fakeProvider({
+    nearestImage: async () => {
+      throw new Error(message);
+    },
+  });
+  const { layer } = await enabledLayer(t, [provider]);
+  assert.equal(await layer.openNearest({ lat: 1.26, lon: 2.51 }), false);
+  assert.equal(layer.getUIState().street.error, message);
+});
 
 /**
  * A stand-in Cesium viewer the layer can be enabled on: a canvas for the

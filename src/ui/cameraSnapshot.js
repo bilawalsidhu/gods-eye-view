@@ -1,4 +1,7 @@
 /** Local, user-triggered camera capture and pixel-preserving annotation. */
+import { snapshotSelection } from '../cameraSnapshotSelection.js';
+import { enhanceSnapshotPixels } from './cameraSnapshotEnhancement.js';
+import { CameraReconstructionUI } from './cameraReconstructionUI.js';
 export function snapshotFilename(id, date = new Date()) {
   return `camera-${String(id || 'frame')
     .replace(/[^a-z0-9_-]/gi, '-')
@@ -29,6 +32,7 @@ export class CameraSnapshot {
     readState,
     showToast,
     readAi = () => null,
+    enhancePixels = enhanceSnapshotPixels,
     documentRef = document,
   }) {
     Object.assign(this, {
@@ -39,6 +43,7 @@ export class CameraSnapshot {
       readState,
       showToast,
       readAi,
+      enhancePixels,
       doc: documentRef,
     });
     this.strokes = [];
@@ -52,7 +57,7 @@ export class CameraSnapshot {
     this.dialog = this.doc.createElement('dialog');
     this.dialog.id = 'cctv-snapshot-preview';
     this.dialog.setAttribute('aria-labelledby', 'snapshot-title');
-    this.dialog.innerHTML = `<header><h2 id="snapshot-title">Camera snapshot</h2><button type="button" data-action="close" aria-label="Close snapshot preview">CLOSE</button></header><p class="snapshot-caption"></p><canvas class="snapshot-canvas" aria-label="Snapshot annotation canvas"></canvas><div class="snapshot-tools"><button type="button" data-action="marker" aria-pressed="true">MARKER</button><button type="button" data-action="circle" aria-pressed="false">CIRCLE</button><button type="button" data-action="region" aria-pressed="false">REGION</button><button type="button" data-action="undo">UNDO</button><button type="button" data-action="clear">CLEAR</button><button type="button" data-action="save-original">SAVE ORIGINAL</button><button type="button" data-action="save-marked">SAVE MARKED</button><button type="button" data-action="enhance">ENHANCE REGION</button><button type="button" data-action="ask">ASK AI</button></div><section class="snapshot-enhance" hidden><h3>Non-generative region enhancement</h3><p>Crop, zoom, contrast and sharpening change the display. They cannot recover missing details or prove a make, model or year.</p><div class="snapshot-tools"><button type="button" data-action="compare">COMPARE ORIGINAL</button><button type="button" data-action="reset-enhance">RESET</button><button type="button" data-action="save-enhanced">SAVE DERIVATIVE</button></div><canvas class="snapshot-enhanced-canvas" aria-label="Enhanced region comparison"></canvas><label>Research note (unverified hypothesis)<textarea class="snapshot-note" maxlength="1500" rows="2" placeholder="Your tentative description or research notes"></textarea></label><p>This note does not alter pixels or turn a hypothesis into evidence.</p><button type="button" data-action="use-description">USE SUGGESTED DESCRIPTION</button><button type="button" data-action="save-note">SAVE NOTE</button></section><section class="snapshot-ai" hidden><h3>Ask about this snapshot</h3><div class="snapshot-suggestions"></div><label>Your question<textarea class="snapshot-question" maxlength="2000" rows="3" placeholder="Describe the object or visible details you want to understand"></textarea></label><p>Send the ORIGINAL snapshot to OpenAI for factual analysis. Marker/circle coordinates may be included as guidance. Enhanced pixels are never sent as evidence.</p><p class="snapshot-model"></p><p>Vehicle make/model may be unknown. Any confidence percentage is a model self-estimate, not validated accuracy. No person or plate identification or cross-camera matching.</p><button type="button" data-action="send">SEND ORIGINAL TO OPENAI</button><button type="button" data-action="cancel-send">CANCEL REQUEST</button><pre class="snapshot-answer"></pre></section><p class="snapshot-status" role="status" aria-live="polite"></p>`;
+    this.dialog.innerHTML = `<header><h2 id="snapshot-title">Camera snapshot</h2><button type="button" data-action="close" aria-label="Close snapshot preview">CLOSE</button></header><p class="snapshot-caption"></p><canvas class="snapshot-canvas" aria-label="Snapshot annotation canvas"></canvas><p class="snapshot-selection-summary" role="status" aria-live="polite"></p><div class="snapshot-tools"><button type="button" data-action="marker" aria-pressed="true">MARKER</button><button type="button" data-action="circle" aria-pressed="false">CIRCLE</button><button type="button" data-action="region" aria-pressed="false">REGION</button><button type="button" data-action="undo">UNDO</button><button type="button" data-action="clear">CLEAR</button><button type="button" data-action="save-original">SAVE ORIGINAL</button><button type="button" data-action="save-marked">SAVE MARKED</button><button type="button" data-action="enhance">ENHANCE REGION (LOCAL)</button><button type="button" data-action="ask">ASK AI</button></div><section class="snapshot-enhance" hidden><h3 tabindex="-1">Local region enhancement</h3><p>Choose an area, then click Apply. This runs on your device: crop, zoom, contrast and sharpening only. No AI generation or upload. It cannot recover missing details or prove a make/model/year.</p><p class="snapshot-enhance-selection"></p><div class="snapshot-tools"><button type="button" data-action="apply-enhance" disabled>APPLY LOCAL ENHANCEMENT</button><button type="button" data-action="select-enhance">SELECT AREA</button><button type="button" data-action="cancel-enhance" disabled>CANCEL ENHANCEMENT</button><button type="button" data-action="reset-enhance">RESET ENHANCEMENT</button></div><p class="snapshot-enhance-status" role="status" aria-live="polite"></p><progress class="snapshot-enhance-progress" max="100" value="0" aria-label="Local enhancement progress" hidden></progress><canvas class="snapshot-enhance-source-preview" aria-label="Original selected area preview" hidden></canvas><div class="snapshot-enhance-result" hidden><h4 tabindex="-1">Local enhancement result</h4><p class="snapshot-enhance-result-caption"></p><canvas class="snapshot-enhanced-canvas" aria-label="Local enhanced result or original comparison"></canvas><div class="snapshot-tools"><button type="button" data-action="compare" disabled>COMPARE ORIGINAL AREA</button><button type="button" data-action="save-enhanced" disabled>SAVE ENHANCED PNG</button></div></div><label>Optional research note (unverified hypothesis)<textarea class="snapshot-note" maxlength="1500" rows="2" placeholder="Your tentative description or research notes"></textarea></label><p>Notes are saved separately. They do not change pixels or control enhancement.</p><button type="button" data-action="use-description">USE SUGGESTED DESCRIPTION</button><button type="button" data-action="save-note">SAVE NOTE</button></section><section class="snapshot-ai" hidden><h3 tabindex="-1">Ask about this snapshot</h3><p class="snapshot-ai-selection"></p><canvas class="snapshot-ai-preview" aria-label="Selected original area preview for AI guidance" hidden></canvas><p class="snapshot-ai-evidence">Sending uploads the full unchanged ORIGINAL. For a selected area, the server also sends a lossless crop of those same original pixels plus mark coordinates as focus guidance. No red marks, enhanced pixels or AI reconstructions are sent as evidence.</p><div class="snapshot-suggestions"></div><label>Your question<textarea class="snapshot-question" maxlength="2000" rows="3" placeholder="Ask about the selected object or visible details"></textarea></label><p class="snapshot-model"></p><p>Vehicle make/model may be unknown. Any confidence percentage is a model self-estimate, not validated accuracy. No person or plate identification or cross-camera matching.</p><button type="button" data-action="send">SEND ORIGINAL TO SOL</button><button type="button" data-action="cancel-send">CANCEL REQUEST</button><p class="snapshot-ai-status" role="status" aria-live="polite"></p><pre class="snapshot-answer" tabindex="-1"></pre></section><p class="snapshot-status" role="status" aria-live="polite"></p>`;
     this.doc.body.append(this.dialog);
     this.canvas = this.dialog.querySelector('.snapshot-canvas');
     this.bindTouchActivation(this.dialog);
@@ -60,8 +65,14 @@ export class CameraSnapshot {
     this.enhancedCanvas = this.dialog.querySelector(
       '.snapshot-enhanced-canvas',
     );
+    const reconstructionButton = this.doc.createElement('button');
+    reconstructionButton.type = 'button';
+    reconstructionButton.dataset.action = 'open-generate';
+    reconstructionButton.textContent = 'AI RECONSTRUCTION';
+    this.dialog.querySelector('.snapshot-tools').append(reconstructionButton);
+    this.reconstruction = new CameraReconstructionUI(this);
     for (const text of [
-      'What make/model might this be?',
+      'What year range, make and model are plausible?',
       'Describe its color and body style',
       'What visible details support that answer?',
     ]) {
@@ -71,9 +82,17 @@ export class CameraSnapshot {
       this.dialog.querySelector('.snapshot-suggestions').append(b);
       this.listen(b, 'click', () => {
         this.dialog.querySelector('.snapshot-question').value = text;
+        this.invalidateAiAnswer(
+          'Question changed. Send again to get an answer for this question.',
+        );
       });
     }
     this.listen(button, 'click', () => void this.capture());
+    this.listen(this.dialog.querySelector('.snapshot-question'), 'input', () =>
+      this.invalidateAiAnswer(
+        'Question changed. Send again to get an answer for this question.',
+      ),
+    );
     this.listen(
       this.dialog,
       'click',
@@ -100,6 +119,7 @@ export class CameraSnapshot {
       if (
         !this.original ||
         this.pending ||
+        this.reconstruction?.pending ||
         this.activeStroke ||
         (e.button !== 0 && e.pointerType !== 'touch')
       )
@@ -128,6 +148,7 @@ export class CameraSnapshot {
       this.activeStroke = null;
       this.pointerId = null;
       this.render();
+      this.syncSelection();
     });
     this.listen(this.canvas, 'pointercancel', () => {
       this.activeStroke = null;
@@ -213,11 +234,154 @@ export class CameraSnapshot {
       signal: this.listeners.signal,
     });
   }
-  status(text) {
+  status(text, section) {
     this.dialog.querySelector('.snapshot-status').textContent = text;
+    if (section)
+      this.dialog.querySelector(`.snapshot-${section}-status`).textContent =
+        text;
+  }
+  reveal(selector) {
+    const target = this.dialog.querySelector(selector);
+    target?.scrollIntoView?.({ block: 'start', behavior: 'instant' });
+    target?.focus?.({ preventScroll: true });
+  }
+  getSelection() {
+    return snapshotSelection(
+      this.strokes,
+      this.original?.width,
+      this.original?.height,
+    );
+  }
+  drawSelectionPreview(canvas, selection) {
+    canvas.hidden = !selection;
+    if (!selection) return;
+    const b = selection.pixelBounds,
+      scale = Math.min(1, 320 / b.width, 240 / b.height);
+    canvas.width = Math.max(1, Math.round(b.width * scale));
+    canvas.height = Math.max(1, Math.round(b.height * scale));
+    canvas
+      .getContext('2d')
+      .drawImage(
+        this.original,
+        b.x,
+        b.y,
+        b.width,
+        b.height,
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
+  }
+  syncSelection() {
+    const selection = this.getSelection(),
+      key = JSON.stringify(selection);
+    if (key !== this.selectionKey) {
+      this.invalidateAiAnswer(
+        'Selected area changed. Send again for the current target.',
+      );
+      this.cancelEnhancement(false);
+      this.derivative = this.regionOriginal = null;
+      this.dialog.querySelector('.snapshot-enhance-result').hidden = true;
+      this.selectionKey = key;
+      if (!this.dialog.querySelector('.snapshot-enhance').hidden)
+        this.status(
+          selection
+            ? 'Selected area ready. Click APPLY LOCAL ENHANCEMENT to create a result.'
+            : 'Draw a circle, rectangle or marker area on the snapshot first.',
+          'enhance',
+        );
+    }
+    const description = selection
+      ? `Selected area: ${selection.mode} ${selection.markIndex + 1}, ${selection.pixelBounds.width} × ${selection.pixelBounds.height} source pixels. The latest valid mark sets the focus; circles and drawings use their bounding rectangle.`
+      : this.strokes.length
+        ? 'No usable area selected. Draw an area at least 3 × 3 source pixels. AI can still examine the full original with your marks.'
+        : 'No area selected. Draw a circle, rectangle or marker area to focus on it. Ask AI can also examine the whole snapshot.';
+    this.dialog.querySelector('.snapshot-selection-summary').textContent =
+      description;
+    this.dialog.querySelector('.snapshot-enhance-selection').textContent =
+      selection
+        ? `Selected original crop: ${selection.pixelBounds.width} × ${selection.pixelBounds.height} pixels, from your latest ${selection.mode} area.`
+        : 'No area selected. Choose SELECT AREA and drag on the original snapshot.';
+    this.dialog.querySelector('.snapshot-ai-selection').textContent = selection
+      ? description
+      : 'Analysis target: whole snapshot. No usable area is selected.';
+    this.dialog.querySelector('.snapshot-ai h3').textContent = selection
+      ? 'Ask about the selected area'
+      : 'Ask about the whole snapshot';
+    this.dialog.querySelector('[data-action="send"]').textContent = selection
+      ? 'SEND ORIGINAL + SELECTED AREA GUIDANCE'
+      : 'SEND WHOLE SNAPSHOT TO SOL';
+    this.drawSelectionPreview(
+      this.dialog.querySelector('.snapshot-ai-preview'),
+      selection,
+    );
+    this.drawSelectionPreview(
+      this.dialog.querySelector('.snapshot-enhance-source-preview'),
+      selection,
+    );
+    this.syncEnhancementControls();
+    this.syncAiControls();
+    this.reconstruction?.syncTarget();
+  }
+  syncAiControls() {
+    this.dialog.querySelector('[data-action="send"]').disabled =
+      this.pending || typeof this.ai?.ask !== 'function';
+    for (const action of ['marker', 'circle', 'region', 'undo', 'clear'])
+      this.dialog.querySelector(`[data-action="${action}"]`).disabled =
+        !!this.pending || !!this.reconstruction?.pending;
+    this.dialog.querySelector('.snapshot-question').disabled = !!this.pending;
+    for (const button of this.dialog.querySelectorAll(
+      '.snapshot-suggestions button',
+    ))
+      button.disabled = !!this.pending;
+  }
+  invalidateAiAnswer(message) {
+    const answer = this.dialog.querySelector('.snapshot-answer'),
+      request = this.request;
+    const hadAnswer = !!answer.textContent;
+    request?.abort();
+    this.request = null;
+    this.pending = false;
+    answer.textContent = '';
+    if (request || hadAnswer)
+      this.status(
+        request
+          ? message +
+              ' Previous request canceled; a sent image cannot be recalled.'
+          : message,
+        'ai',
+      );
+    this.syncAiControls();
+  }
+  syncEnhancementControls() {
+    const busy = !!this.enhancementRequest;
+    this.dialog.querySelector('[data-action="apply-enhance"]').disabled =
+      busy || !this.getSelection();
+    this.dialog.querySelector('[data-action="cancel-enhance"]').disabled =
+      !busy;
+    for (const action of ['compare', 'save-enhanced'])
+      this.dialog.querySelector(`[data-action="${action}"]`).disabled =
+        busy || !this.derivative;
+    this.dialog
+      .querySelector('.snapshot-enhance')
+      .setAttribute('aria-busy', String(busy));
+    this.dialog.querySelector('.snapshot-enhance-progress').hidden = !busy;
+  }
+  cancelEnhancement(feedback = true) {
+    const request = this.enhancementRequest;
+    request?.abort();
+    this.enhancementRequest = null;
+    if (request && feedback)
+      this.status(
+        'Local enhancement canceled. No new result was applied; the original is unchanged.',
+        'enhance',
+      );
+    if (this.dialog) this.syncEnhancementControls();
   }
   async capture() {
     if (this.busy || this.destroyed) return;
+    this.cancelEnhancement();
     this.busy = true;
     const epoch = ++this.epoch;
     try {
@@ -272,6 +436,10 @@ export class CameraSnapshot {
       this.caption = caption;
       this.original = c;
       this.originalBlob = blob;
+      this.frameHeight = c.height - 64;
+      this.reconstruction.reset();
+      this.cancelEnhancement(false);
+      this.ai = null;
       this.strokes = [];
       this.activeStroke = null;
       this.derivative = null;
@@ -285,6 +453,10 @@ export class CameraSnapshot {
       this.dialog.querySelector('.snapshot-ai').hidden = true;
       this.dialog.querySelector('.snapshot-enhance').hidden = true;
       this.dialog.querySelector('.snapshot-answer').textContent = '';
+      this.dialog.querySelector('.snapshot-ai-status').textContent = '';
+      this.dialog.querySelector('.snapshot-enhance-result').hidden = true;
+      this.selectionKey = undefined;
+      this.syncSelection();
       const parent = this.doc.fullscreenElement || this.doc.body;
       if (this.dialog.parentNode !== parent) parent.append(this.dialog);
       if (!this.dialog.open) this.dialog.showModal();
@@ -372,55 +544,94 @@ export class CameraSnapshot {
     }
   }
   enhance() {
-    const s = this.strokes.at(-1);
-    if (!s) {
-      this.status('Mark or select a region first.');
-      return;
-    }
-    const b = regionBounds(s.points),
-      src = this.original,
-      sx = Math.floor(b.x * src.width),
-      sy = Math.floor(b.y * src.height),
-      sw = Math.max(1, Math.floor(b.w * src.width)),
-      sh = Math.max(1, Math.floor(b.h * src.height));
-    if (sw < 3 || sh < 3) {
-      this.status('Select a larger region.');
-      return;
-    }
-    const c = this.doc.createElement('canvas'),
-      scale = Math.min(720 / sw, 720 / sh, 4);
-    c.width = Math.max(1, Math.round(sw * scale));
-    c.height = Math.max(1, Math.round(sh * scale));
-    const ctx = c.getContext('2d');
-    ctx.drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
-    this.regionOriginal = c;
-    const pixels = ctx.getImageData(0, 0, c.width, c.height),
-      copy = new Uint8ClampedArray(pixels.data);
-    for (let y = 1; y < c.height - 1; y++)
-      for (let x = 1; x < c.width - 1; x++) {
-        const i = (y * c.width + x) * 4;
-        for (let k = 0; k < 3; k++) {
-          const sharp =
-            1.8 * copy[i + k] -
-            0.2 *
-              (copy[i - 4 + k] +
-                copy[i + 4 + k] +
-                copy[i - c.width * 4 + k] +
-                copy[i + c.width * 4 + k]);
-          pixels.data[i + k] = (sharp - 128) * 1.15 + 128;
-        }
-      }
-    const enhanced = this.doc.createElement('canvas');
-    enhanced.width = c.width;
-    enhanced.height = c.height;
-    enhanced.getContext('2d').putImageData(pixels, 0, 0);
-    this.derivative = enhanced;
-    this.comparing = false;
-    this.showEnhance();
     this.dialog.querySelector('.snapshot-enhance').hidden = false;
+    this.syncSelection();
     this.status(
-      'Enhanced derivative: crop, zoom, contrast and sharpening only. Original remains unchanged.',
+      this.getSelection()
+        ? 'Selected original area preview. Click APPLY LOCAL ENHANCEMENT to create a result.'
+        : 'Draw a circle, rectangle or marker area first, then click Apply.',
+      'enhance',
     );
+    this.reveal('.snapshot-enhance h3');
+  }
+  async applyEnhancement() {
+    if (this.enhancementRequest || !this.original) return;
+    const selection = this.getSelection();
+    if (!selection) {
+      this.status(
+        'Draw an area at least 3 × 3 source pixels before applying enhancement.',
+        'enhance',
+      );
+      this.reveal('.snapshot-enhance h3');
+      return;
+    }
+    const controller = new AbortController(),
+      epoch = this.epoch,
+      key = this.selectionKey;
+    this.enhancementRequest = controller;
+    this.dialog.querySelector('.snapshot-enhance-progress').value = 0;
+    this.status(
+      'Applying local crop, zoom, contrast and sharpening… No image is uploaded.',
+      'enhance',
+    );
+    this.syncEnhancementControls();
+    this.reveal('[data-action="apply-enhance"]');
+    try {
+      const { x: sx, y: sy, width: sw, height: sh } = selection.pixelBounds,
+        src = this.original;
+      const c = this.doc.createElement('canvas'),
+        scale = Math.min(720 / sw, 720 / sh, 4);
+      c.width = Math.max(1, Math.round(sw * scale));
+      c.height = Math.max(1, Math.round(sh * scale));
+      const ctx = c.getContext('2d');
+      ctx.drawImage(src, sx, sy, sw, sh, 0, 0, c.width, c.height);
+      const pixels = ctx.getImageData(0, 0, c.width, c.height);
+      pixels.data.set(
+        await this.enhancePixels(pixels.data, c.width, c.height, {
+          signal: controller.signal,
+          progress: (value) => {
+            if (this.enhancementRequest === controller) {
+              this.dialog.querySelector('.snapshot-enhance-progress').value =
+                value;
+              this.status(`Applying local enhancement: ${value}%`, 'enhance');
+            }
+          },
+        }),
+      );
+      if (
+        controller.signal.aborted ||
+        this.enhancementRequest !== controller ||
+        epoch !== this.epoch ||
+        key !== this.selectionKey
+      )
+        return;
+      const enhanced = this.doc.createElement('canvas');
+      enhanced.width = c.width;
+      enhanced.height = c.height;
+      enhanced.getContext('2d').putImageData(pixels, 0, 0);
+      this.derivative = enhanced;
+      this.regionOriginal = c;
+      this.comparing = false;
+      this.showEnhance();
+      this.status(
+        'Local enhancement applied. Result shown below; compare it with the original area or save a separate PNG. Original unchanged.',
+        'enhance',
+      );
+      this.reveal('.snapshot-enhance-result h4');
+    } catch (e) {
+      if (this.enhancementRequest === controller)
+        this.status(
+          e.name === 'AbortError'
+            ? 'Local enhancement canceled. Original unchanged.'
+            : 'Local enhancement failed. Your original and any prior result are unchanged. Try applying again.',
+          'enhance',
+        );
+    } finally {
+      if (this.enhancementRequest === controller) {
+        this.enhancementRequest = null;
+        this.syncEnhancementControls();
+      }
+    }
   }
   showEnhance() {
     const s = this.comparing ? this.regionOriginal : this.derivative;
@@ -428,13 +639,32 @@ export class CameraSnapshot {
     this.enhancedCanvas.width = s.width;
     this.enhancedCanvas.height = s.height;
     this.enhancedCanvas.getContext('2d').drawImage(s, 0, 0);
+    this.dialog.querySelector('.snapshot-enhance-result').hidden = false;
+    this.dialog.querySelector('.snapshot-enhance-result h4').textContent = this
+      .comparing
+      ? 'Original selected area — comparison'
+      : 'Local enhancement result';
+    this.dialog.querySelector('.snapshot-enhance-result-caption').textContent =
+      this.comparing
+        ? 'Unfiltered original area, at the same display size. Your full original remains unchanged.'
+        : `${s.width} × ${s.height} derivative: crop/zoom/contrast/sharpening only. No generated or recovered detail.`;
     this.dialog.querySelector('[data-action="compare"]').textContent = this
       .comparing
       ? 'SHOW ENHANCED'
-      : 'COMPARE ORIGINAL';
+      : 'COMPARE ORIGINAL AREA';
   }
   async action(action) {
     if (!action || this.destroyed) return;
+    if (
+      [
+        'open-generate',
+        'generate',
+        'cancel-generate',
+        'reset-generation',
+        'save-generated',
+      ].includes(action)
+    )
+      return this.reconstruction.action(action);
     if (action === 'close') return this.close();
     if (['marker', 'circle', 'region'].includes(action)) {
       this.mode = action;
@@ -447,17 +677,37 @@ export class CameraSnapshot {
     if (['undo', 'clear'].includes(action)) {
       this.activeStroke = null;
       this.render();
+      this.syncSelection();
       return;
     }
     if (action === 'enhance') return this.enhance();
+    if (action === 'apply-enhance') return this.applyEnhancement();
+    if (action === 'cancel-enhance') return this.cancelEnhancement();
+    if (action === 'select-enhance') {
+      await this.action('region');
+      this.status(
+        'Drag a rectangle on the original snapshot, then return to APPLY LOCAL ENHANCEMENT.',
+        'enhance',
+      );
+      this.reveal('.snapshot-canvas');
+      return;
+    }
     if (action === 'compare') {
       this.comparing = !this.comparing;
       return this.showEnhance();
     }
     if (action === 'reset-enhance') {
+      this.cancelEnhancement(false);
       this.derivative = null;
       this.regionOriginal = null;
-      this.dialog.querySelector('.snapshot-enhance').hidden = true;
+      this.comparing = false;
+      this.dialog.querySelector('.snapshot-enhance-result').hidden = true;
+      this.syncEnhancementControls();
+      this.status(
+        'Enhancement reset. The selected original area and research note remain; click Apply for a new result.',
+        'enhance',
+      );
+      this.reveal('.snapshot-enhance h3');
       return;
     }
     if (action === 'save-original' && this.originalBlob)
@@ -477,7 +727,20 @@ export class CameraSnapshot {
         '.png',
         '-enhanced-derivative.png',
       );
-      return this.download(await this.blob(this.derivative), filename);
+      this.status('Preparing the enhanced PNG download…', 'enhance');
+      try {
+        this.download(await this.blob(this.derivative), filename);
+        this.status(
+          'Enhanced PNG download requested. It is a separate derivative; your original is unchanged.',
+          'enhance',
+        );
+      } catch {
+        this.status(
+          'Enhanced PNG export failed. The original and local result remain available; try saving again.',
+          'enhance',
+        );
+      }
+      return;
     }
     if (action === 'use-description') {
       const text = this.dialog.querySelector('.snapshot-answer').textContent;
@@ -511,6 +774,15 @@ export class CameraSnapshot {
     }
     if (action === 'ask') {
       this.dialog.querySelector('.snapshot-ai').hidden = false;
+      this.ai = null;
+      this.syncSelection();
+      this.status(
+        this.getSelection()
+          ? 'Selected area confirmed below. Enter a question, then send the original plus selected-area guidance.'
+          : 'No area selected: AI will examine the whole original snapshot.',
+        'ai',
+      );
+      this.reveal('.snapshot-ai h3');
       this.dialog.querySelector('[data-action="send"]').disabled = true;
       this.dialog.querySelector('.snapshot-model').textContent =
         'Checking existing OpenAI image access… No image is sent by this check.';
@@ -540,9 +812,11 @@ export class CameraSnapshot {
         `OpenAI model: ${ai?.model || 'Unavailable'}${ai?.ask ? ' reasoning: ' + (ai.reasoning || 'Unavailable') : ''}. ${ai?.access || ''} ${ai?.warning || ai?.error || 'No image-capable connection available.'} Existing server credential only; no new connection or key will be created.`;
       this.dialog.querySelector('[data-action="send"]').disabled =
         typeof ai?.ask !== 'function';
+      this.syncAiControls();
       if (typeof ai?.ask !== 'function')
         this.status(
           'Snapshot is saved. Single-image Q&A is unavailable in the current AI connection; no upload has occurred.',
+          'ai',
         );
       return;
     }
@@ -552,8 +826,10 @@ export class CameraSnapshot {
       this.request?.abort();
       this.request = null;
       this.pending = false;
+      this.syncAiControls();
       this.status(
         'Request canceled. An image already sent to OpenAI cannot be recalled.',
+        'ai',
       );
       return;
     }
@@ -564,27 +840,40 @@ export class CameraSnapshot {
     const ai = this.ai,
       question = this.dialog.querySelector('.snapshot-question').value.trim();
     if (!question) {
-      this.status('Enter a question first.');
+      this.status('Enter a question first.', 'ai');
+      this.reveal('.snapshot-question');
       return;
     }
     if (typeof ai?.ask !== 'function') {
       this.status(
         'No existing image-capable OpenAI connection is available. Nothing was uploaded.',
+        'ai',
       );
       return;
     }
     const epoch = this.epoch;
     this.pending = true;
+    this.syncAiControls();
+    this.dialog.querySelector('.snapshot-answer').textContent = '';
+    const selection = this.getSelection();
     const request = new AbortController();
     this.request = request;
     this.status(
-      'Sending the original snapshot and question to OpenAI. Enhanced pixels are excluded.',
+      selection
+        ? 'Asking Sol about the selected area. Uploading the unchanged original and mark/area coordinates; enhanced pixels are excluded.'
+        : 'Asking Sol about the whole original snapshot. Enhanced pixels are excluded.',
+      'ai',
     );
     try {
       const answer = await ai.ask({
         original: this.original,
         question,
-        marks: this.strokes.map((s) => ({ mode: s.mode, points: s.points })),
+        marks: this.strokes.map((s) => ({
+          mode: s.mode,
+          points: s.points.map((p) => ({ x: p.x, y: p.y })),
+        })),
+        focus: selection ? 'selected-region' : 'whole-frame',
+        selectedRegion: selection,
         signal: request.signal,
       });
       if (
@@ -596,7 +885,9 @@ export class CameraSnapshot {
           String(answer);
         this.status(
           'OpenAI answer received. Treat identification as a hypothesis; verify visible details against the original.',
+          'ai',
         );
+        this.reveal('.snapshot-answer');
       }
     } catch (e) {
       if (epoch === this.epoch && this.request === request)
@@ -604,16 +895,21 @@ export class CameraSnapshot {
           e.name === 'AbortError'
             ? 'Request canceled. An image already sent to OpenAI cannot be recalled.'
             : `${e.message || 'OpenAI image Q&A failed.'} Your saved original is unchanged.`,
+          'ai',
         );
     } finally {
       if (this.request === request) {
         this.pending = false;
         this.request = null;
+        this.syncAiControls();
       }
     }
   }
   close() {
     this.cancelTouchActivation();
+    this.reconstruction?.cancel(false);
+    this.reconstruction?.lookup?.abort();
+    this.cancelEnhancement(false);
     this.epoch++;
     this.request?.abort();
     this.request = null;

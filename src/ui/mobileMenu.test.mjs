@@ -1,6 +1,64 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MobileCameraVisibility, MobileMenu } from './mobileMenu.js';
+
+test('Street reveal opens Active details and resizes only its viewer; desktop remains untouched', () => {
+  let opens = 0,
+    moves = 0,
+    resizes = 0,
+    scrolls = 0;
+  const frames = [];
+  const controller = {
+    mobile: true,
+    destroyed: false,
+    sections: new Map([
+      ['layers', { details: { open: true } }],
+      ['details', { details: { open: false } }],
+    ]),
+    dialog: { open: false },
+    moveLateControls() {
+      moves++;
+    },
+    open() {
+      opens++;
+      this.dialog.open = true;
+    },
+    win: {
+      requestAnimationFrame(fn) {
+        frames.push(fn);
+      },
+    },
+    doc: {
+      getElementById(id) {
+        assert.equal(id, 'street-level-panel');
+        return {
+          scrollIntoView() {
+            scrolls++;
+          },
+        };
+      },
+    },
+    shell: {
+      _streetLevelControls: {
+        onPanelResized() {
+          resizes++;
+        },
+      },
+    },
+  };
+  MobileMenu.prototype.revealStreetLevel.call(controller);
+  assert.equal(controller.sections.get('layers').details.open, false);
+  assert.equal(controller.sections.get('details').details.open, true);
+  frames.shift()();
+  assert.equal(opens, 1);
+  assert.equal(moves, 1);
+  assert.equal(resizes, 1);
+  assert.equal(scrolls, 1);
+  controller.mobile = false;
+  MobileMenu.prototype.revealStreetLevel.call(controller);
+  assert.equal(opens, 1);
+  assert.equal(moves, 1);
+});
 test('restored and automatic camera selections keep the map clear until explicitly opened', () => {
   const state = new MobileCameraVisibility();
   state.update('saved');

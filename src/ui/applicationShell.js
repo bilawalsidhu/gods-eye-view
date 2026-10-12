@@ -2,6 +2,7 @@ import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
 import { MobileMenu } from './mobileMenu.js';
 import { LocateControls } from './locateControls.js';
+import { SunNewsTools } from './sunNewsTools.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { LayerBindings } from './layerBindings.js';
 import { PanelChrome } from './panelChrome.js';
@@ -575,6 +576,12 @@ export class StyleManager extends ShellFacade {
     this._initCctvPanel();
     this._initStreetLevelPanel();
     this._initGlobalContextPanel();
+    this._sunNewsTools = new SunNewsTools({
+      button: document.getElementById('sun-news-tools-btn'),
+      viewer: this.viewer,
+      closeMenu: () => this._mobileMenu?.close(),
+      requestRender: (reason) => this.services.governorRequestRender?.(reason),
+    });
     this._initLocationBar();
     this._locateControls = new LocateControls({
       button: this._locateMeBtn,
@@ -1616,6 +1623,7 @@ export class StyleManager extends ShellFacade {
     this._disposed = true;
     this._mobileMenu?.destroy();
     this._locateControls?.destroy();
+    this._sunNewsTools?.destroy();
     this._navigation.stop();
     this._shareState.destroy();
     this._locationNavigation.destroy();

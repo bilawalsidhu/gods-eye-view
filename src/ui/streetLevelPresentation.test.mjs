@@ -4,8 +4,53 @@ import {
   presentStreetLevelPanel,
   SINCE_STOPS,
   sinceStopIndex,
+  streetLevelFallbacks,
 } from './streetLevelPresentation.js';
 import { providerSnapshot } from '../testSupport/streetLevelFakes.mjs';
+
+test('external alternatives use only validated selected coordinates and returned photo IDs', () => {
+  const point = { lat: 33.916, lon: -84.84 };
+  const state = snapshot({
+    enabled: true,
+    sequence: {
+      point,
+      lastRequestedId: 'route',
+      fallbackPhotoId: '123456',
+      rawCount: 4,
+      usableCount: 0,
+      images: 0,
+    },
+  });
+  const view = presentStreetLevelPanel(state);
+  const google = new URL(view.fallbacks.google);
+  assert.equal(google.origin, 'https://www.google.com');
+  assert.equal(google.searchParams.get('api'), '1');
+  assert.equal(google.searchParams.get('map_action'), 'pano');
+  assert.equal(google.searchParams.get('viewpoint'), '33.916,-84.84');
+  assert.match(view.fallbacks.mapillary, /pKey=123456/);
+  assert.equal(view.fallbacks.retry, true);
+  assert.match(
+    view.meta,
+    /4 photos returned; 0 with map coordinates; 0 markers/,
+  );
+  for (const point of [
+    { lat: 91, lon: 0 },
+    { lat: 0, lon: -181 },
+    { lat: NaN, lon: 2 },
+    { lat: '33', lon: -84 },
+  ])
+    assert.equal(
+      streetLevelFallbacks({ sequence: { point }, street: {} }).google,
+      null,
+    );
+  assert.equal(
+    streetLevelFallbacks({
+      sequence: { fallbackPhotoId: 'javascript:bad' },
+      street: {},
+    }).mapillary,
+    null,
+  );
+});
 
 const provider = providerSnapshot;
 

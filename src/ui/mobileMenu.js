@@ -1,5 +1,9 @@
 export const MOBILE_MENU_QUERY =
   '(pointer: coarse) and (max-width: 900px), (pointer: coarse) and (max-height: 600px)';
+import {
+  STREET_LEVEL_REVEAL_EVENT,
+  STREET_LEVEL_MAP_PICK_EVENT,
+} from './streetLevelControls.js';
 
 /** One camera surface; minimizing never changes playback or desktop disclosure. */
 export class MobileCameraVisibility {
@@ -274,6 +278,12 @@ export class MobileMenu {
         this.camera.show();
         this.syncCamera();
       }
+    });
+    this.listen(documentRef, STREET_LEVEL_REVEAL_EVENT, () =>
+      this.revealStreetLevel(),
+    );
+    this.listen(documentRef, STREET_LEVEL_MAP_PICK_EVENT, () => {
+      if (this.mobile) this.close();
     });
     this.listen(this.minimizeButton, 'click', () => {
       const exiting = this.exitCameraFullscreen({ focus: false });
@@ -655,6 +665,21 @@ export class MobileMenu {
       .then(() => {
         returnFocus();
       });
+  }
+  /** Reveal a Street action's actual mobile accordion, not only its panel. */
+  revealStreetLevel() {
+    if (!this.mobile || this.destroyed) return;
+    this.moveLateControls();
+    for (const [id, section] of this.sections)
+      section.details.open = id === 'details';
+    this.open();
+    this.win.requestAnimationFrame(() => {
+      if (!this.mobile || this.destroyed || !this.dialog.open) return;
+      this.doc
+        .getElementById('street-level-panel')
+        ?.scrollIntoView?.({ block: 'nearest' });
+      this.shell._streetLevelControls?.onPanelResized?.();
+    });
   }
   open() {
     if (!this.mobile || this.dialog.open) return;

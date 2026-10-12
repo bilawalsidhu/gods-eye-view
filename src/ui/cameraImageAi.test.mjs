@@ -31,7 +31,17 @@ test('image capability exposes exact Sol model and high effort; explicit Send pr
       await capability.ask({
         original: { toDataURL: () => image },
         question: 'Visible details?',
-        marks: [],
+        marks: [
+          {
+            mode: 'circle',
+            points: [
+              { x: 0.2, y: 0.3 },
+              { x: 0.8, y: 0.7 },
+            ],
+          },
+        ],
+        focus: 'selected-region',
+        selectedRegion: { x: 0.2, y: 0.3, w: 0.6, h: 0.4 },
         signal: controller.signal,
       }),
       'Fixture answer',
@@ -40,6 +50,14 @@ test('image capability exposes exact Sol model and high effort; explicit Send pr
     assert.equal(payload.model, 'gpt-6.1-sol');
     assert.equal(payload.image, image);
     assert.equal(payload.confirmOriginal, true);
+    assert.equal(payload.focus, 'selected-region');
+    assert.equal(payload.marks[0].points.length, 2);
+    assert.deepEqual(payload.selectedRegion, {
+      x: 0.2,
+      y: 0.3,
+      w: 0.6,
+      h: 0.4,
+    });
     assert.equal(calls[1].options.signal, controller.signal);
   } finally {
     globalThis.fetch = originalFetch;

@@ -13,10 +13,10 @@ const origin = 'https://desktop.example.ts.net';
 const good = {
   remoteAddress: '127.0.0.1',
   configuredOrigin: origin,
-  ownerLogin: 'owner@example.invalid',
+  ownerLogin: 'owner@example.com',
   headers: {
     host: 'desktop.example.ts.net',
-    'tailscale-user-login': 'owner@example.invalid',
+    'tailscale-user-login': 'owner@example.com',
     'x-forwarded-proto': 'https',
     'x-forwarded-for': '100.100.100.1',
     origin,
@@ -39,15 +39,15 @@ for (const [name, patch] of Object.entries({
   'wildcard origin': { configuredOrigin: 'https://*.ts.net' },
   'remote socket': { remoteAddress: '100.100.100.1' },
   'missing owner': { ownerLogin: '' },
-  'wrong owner': { ownerLogin: 'other@example.invalid' },
+  'wrong owner': { ownerLogin: 'other@example.com' },
 }))
   test(`private Serve rejects ${name}`, () =>
     assert.equal(admitTrustedTailnetRequest({ ...good, ...patch }).ok, false));
 for (const [name, headers] of Object.entries({
   'missing identity / Funnel': { 'tailscale-user-login': undefined },
-  'wrong identity': { 'tailscale-user-login': 'other@example.invalid' },
+  'wrong identity': { 'tailscale-user-login': 'other@example.com' },
   'multiple identities': {
-    'tailscale-user-login': ['owner@example.invalid', 'other@example.invalid'],
+    'tailscale-user-login': ['owner@example.com', 'other@example.com'],
   },
   'foreign host': { host: 'foreign.example.ts.net' },
   'host userinfo': { host: 'user@desktop.example.ts.net' },
@@ -143,7 +143,7 @@ test('verified owner can open the app by clicking a cross-site link, then reload
 });
 test('document navigation never relaxes owner, TLS, Origin, API, method or WebSocket boundaries', () => {
   const denied = [
-    { ...linkedDocument, ownerLogin: 'another@example.invalid' },
+    { ...linkedDocument, ownerLogin: 'another@example.com' },
     {
       ...linkedDocument,
       headers: { ...linkedDocument.headers, 'tailscale-user-login': undefined },

@@ -46,7 +46,7 @@ function fixture(t, options = {}) {
     },
   };
 }
-const fix = { coords: { latitude: 1.25, longitude: 2.5, accuracy: 12 } };
+const fix = { coords: { latitude: 33.909, longitude: -84.825, accuracy: 12 } };
 test('map gestures invalidate pending fixes and destruction removes gesture listeners', (t) => {
   for (const type of ['pointerdown', 'wheel']) {
     const f = fixture(t);
@@ -77,7 +77,7 @@ test('construction is inert; click requests exactly one current viewing-device f
   assert.equal(f.status.dataset.state, 'loading');
   f.requests[0][0](fix);
   assert.equal(f.flights.length, 1);
-  assert.deepEqual(f.flights[0].slice(0, 3), [1.25, 2.5, 12]);
+  assert.deepEqual(f.flights[0].slice(0, 3), [33.909, -84.825, 12]);
   assert.equal(f.attributes.get('aria-busy'), 'false');
   assert.equal(f.status.dataset.state, 'ready');
   assert.equal(Object.values(f.controls).includes(fix), false);

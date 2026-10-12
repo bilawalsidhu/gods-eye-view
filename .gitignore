@@ -28,3 +28,12 @@ browser-profiles/
 3d-models/
 pinokio/ENVIRONMENT
 pinokio/.installed
+verification/
+.gev-private/
+.local-state/
+credential-isolation/
+
+verification/
+.gev-private/
+.local-state/
+credential-isolation/

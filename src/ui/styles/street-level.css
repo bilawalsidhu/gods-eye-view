@@ -480,8 +480,10 @@ button.sl-status:focus-visible {
 /* A dragged window keeps its natural height, so bound it to the viewport:
    the rail's max-height: 100% does not bind an auto-height parent.
    Id-qualified to outrank that rule. */
-#right-context-rail > #street-level-panel.panel-floating > .street-level-panel-inner {
-  max-height: calc(100vh - 12px);
+#right-context-rail
+  > #street-level-panel.panel-floating:not([style*='height'])
+  > .street-level-panel-inner {
+  max-height: min(70vh, 620px);
   overflow-y: auto;
 }
 
@@ -520,6 +522,11 @@ button.sl-status:focus-visible {
   flex: 0 1 auto;
   overflow-y: auto;
   scrollbar-width: thin;
+}
+
+/* Keep added provider tools from consuming the image's resize space. */
+.panel-floating[style*='height'] .sl-viewer-wrap:not([hidden]) + .sl-settings {
+  max-height: 35%;
 }
 
 /* ── Expanded viewer ─────────────────────────────────────────────────────── */
@@ -602,5 +609,72 @@ button.sl-status:focus-visible {
     aspect-ratio: auto;
     height: clamp(110px, calc(48vh - 8px - 7.5rem - 150px), 320px);
     min-height: 0;
+  }
+}
+.sl-fallbacks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.sl-fallbacks > button,
+.sl-fallbacks > a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px;
+  box-sizing: border-box;
+  white-space: normal;
+}
+.sl-fallbacks > [hidden] {
+  display: none;
+}
+.sl-fallbacks > .sl-meta {
+  flex-basis: 100%;
+}
+.sl-public-embed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(110, 180, 220, 0.25);
+  border-radius: 6px;
+}
+.sl-public-embed label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+}
+.sl-public-embed input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px;
+  color: inherit;
+  background: #08121e;
+  border: 1px solid rgba(110, 180, 220, 0.35);
+  border-radius: 4px;
+}
+.sl-public-stage {
+  min-width: 0;
+}
+.sl-public-stage iframe {
+  display: block;
+  width: 100%;
+  height: 320px;
+  border: 0;
+  background: #08121e;
+}
+.sl-public-stage[hidden] {
+  display: none;
+}
+.sl-public-embed [hidden] {
+  display: none;
+}
+@media (max-width: 640px) {
+  .sl-public-stage iframe {
+    height: 260px;
   }
 }

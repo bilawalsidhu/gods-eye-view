@@ -1,4 +1,5 @@
 import { syncChipGroup } from './chipGroup.js';
+import { MapillaryPublicEmbed } from './mapillaryEmbed.js';
 import { isExplicitLayerStateOrigin } from '../data/layerState.js';
 import {
   presentStreetLevelPanel,
@@ -6,6 +7,8 @@ import {
 } from './streetLevelPresentation.js';
 
 const RENDER_MODE_KEY = 'gev:street-level:render-mode';
+export const STREET_LEVEL_REVEAL_EVENT = 'gev:street-level-reveal';
+export const STREET_LEVEL_MAP_PICK_EVENT = 'gev:street-level-map-pick';
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 const RADIO_STEPS = Object.freeze({
@@ -55,6 +58,10 @@ export class StreetLevelControls {
     this._modalObserver = null;
     this._elements = this._collect();
     this._bind();
+    this.publicEmbed = new MapillaryPublicEmbed({
+      root: root?.querySelector('.sl-public-embed'),
+      listen: (...args) => this.listen(...args),
+    });
   }
 
   _collect() {
@@ -81,6 +88,12 @@ export class StreetLevelControls {
       imageWhen: byId('sl-image-when'),
       imageLink: byId('sl-image-link'),
       coverageMeta: byId('sl-coverage-meta'),
+      retry: byId('sl-retry'),
+      nearest: byId('sl-nearest'),
+      mapillaryFallback: byId('sl-mapillary-fallback'),
+      googleFallback: byId('sl-google-fallback'),
+      externalHint: byId('sl-external-hint'),
+      pickPoint: byId('sl-pick-point'),
       panoButtons: all('[data-sl-pano]'),
       // Held, not re-queried: EXPAND moves them to <body> with the viewer.
       renderButtons: all('[data-sl-render]'),
@@ -100,6 +113,20 @@ export class StreetLevelControls {
     this.layer.attachViewerHost?.(el.viewer);
 
     this.listen(el.status, 'click', () => this._toggleEnabled());
+    this.listen(el.retry, 'click', () => this.layer.retryStreetLevel?.());
+    this.listen(el.pickPoint, 'click', () => {
+      const picking = this._view?.fallbacks.picking === true;
+      if (picking) this.layer.cancelMapPointSelection?.();
+      else if (this.layer.beginMapPointSelection?.() === false) {
+        this.actions.showToast?.('The map is not ready for point selection.');
+        return;
+      }
+      this.setCollapsed(false, { persist: false, explicit: true });
+      if (!picking) this._emit(STREET_LEVEL_MAP_PICK_EVENT);
+    });
+    this.listen(el.nearest, 'click', () =>
+      this.layer.openNearest?.(this._view?.fallbacks.point),
+    );
     this.listen(el.providerChips, 'click', (event) => {
       const button = event.target?.closest?.('.data-toggle-chip');
       if (!button || button.disabled) return;
@@ -283,6 +310,13 @@ export class StreetLevelControls {
   setCollapsed(collapsed, options = {}) {
     this.actions.setPanelCollapsed?.(collapsed, options);
     if (!collapsed) this._requestResize();
+    if (!collapsed && options.explicit) this._emit(STREET_LEVEL_REVEAL_EVENT);
+  }
+
+  /** Shell coordination contains no selected coordinates or image payloads. */
+  _emit(type) {
+    if (typeof CustomEvent === 'function')
+      this.root?.dispatchEvent?.(new CustomEvent(type, { bubbles: true }));
   }
 
   isViewerExpanded() {
@@ -415,6 +449,19 @@ export class StreetLevelControls {
 
   _onDialogKey(event) {
     if (event.key !== 'Escape' && event.key !== 'Tab') return;
+    if (
+      event.key === 'Escape' &&
+      this._view?.fallbacks.picking &&
+      !event.target?.isContentEditable &&
+      !event.target?.closest?.(
+        'input, textarea, select, [contenteditable="true"]',
+      )
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.layer.cancelMapPointSelection?.();
+      return;
+    }
     if (!this._syncModal()) return;
     // Only keys meant for the viewer: from inside it, from nowhere (<body>)
     // or from the globe. A field elsewhere (search) keeps its Esc and Tab.
@@ -590,6 +637,46 @@ export class StreetLevelControls {
 
   _renderMeta(view) {
     setProp(this._elements.coverageMeta, 'textContent', view.meta);
+    const el = this._elements;
+    const fallback = view.fallbacks;
+    setProp(
+      el.pickPoint,
+      'textContent',
+      fallback.picking
+        ? 'Cancel map point selection (Esc)'
+        : 'Pick map point for Street View',
+    );
+    setProp(el.retry, 'hidden', !view.enabled || !fallback.retry);
+    setProp(el.retry, 'disabled', fallback.busy || view.controlsDisabled);
+    setProp(el.nearest, 'hidden', !view.enabled || !fallback.point);
+    setProp(el.nearest, 'disabled', fallback.busy || view.controlsDisabled);
+    for (const [node, url] of [
+      [el.mapillaryFallback, fallback.mapillary],
+      [el.googleFallback, fallback.google],
+    ]) {
+      setProp(
+        node,
+        'hidden',
+        (!view.enabled && !fallback.selectedMapPoint) || !url,
+      );
+      if (url) setAttr(node, 'href', url);
+      else node?.removeAttribute('href');
+    }
+    setProp(el.mapillaryFallback, 'textContent', fallback.mapillaryLabel);
+    setProp(
+      el.externalHint,
+      'hidden',
+      !fallback.picking &&
+        ((!view.enabled && !fallback.selectedMapPoint) ||
+          !(fallback.mapillary || fallback.google)),
+    );
+    setProp(
+      el.externalHint,
+      'textContent',
+      fallback.picking
+        ? 'Click or tap any visible road or ground point on the map. Esc cancels. No imagery request is sent until you open an external link.'
+        : `${fallback.point ? `Selected point: ${fallback.point.lat.toFixed(5)}, ${fallback.point.lon.toFixed(5)}. ` : ''}External sites open only when clicked. Nearby imagery coverage is not guaranteed.`,
+    );
   }
 
   /**
@@ -607,7 +694,8 @@ export class StreetLevelControls {
           ? this._restoreWindow &&
             (preference === 'stored' || preference === 'share')
           : !this._explicitEnable;
-      if (!restoring) this.setCollapsed(false, { persist: false });
+      if (!restoring)
+        this.setCollapsed(false, { persist: false, explicit: true });
       this._restoreWindow = false;
       this._explicitEnable = this._explicitEnable === null ? null : false;
     }
@@ -616,13 +704,26 @@ export class StreetLevelControls {
     // asks for one resize because the element may not have a size yet.
     const open = state.street.open === true;
     if (open && !this._wasStreetOpen)
-      this.setCollapsed(false, { persist: false });
+      this.setCollapsed(false, { persist: false, explicit: true });
+    const sequenceId =
+      state.sequence?.lastRequestedId || state.sequence?.selectedId;
+    if (sequenceId && sequenceId !== this._wasSequenceId)
+      this.setCollapsed(false, { persist: false, explicit: true });
+    this._wasSequenceId = sequenceId;
+    if (
+      this._wasPointPicking &&
+      !state.street.pointPicking &&
+      state.street.selectedMapPoint
+    )
+      this._emit(STREET_LEVEL_REVEAL_EVENT);
+    this._wasPointPicking = state.street.pointPicking === true;
     this._wasStreetOpen = open;
   }
 
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.publicEmbed?.destroy();
     this.setViewerExpanded(false);
     this._watchModal(false);
     this.listeners.abort();

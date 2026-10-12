@@ -72,6 +72,11 @@ test('picks route sequences to selection and images to the core opener', () => {
     selectedId: null,
     images: 0,
     loading: false,
+    lastRequestedId: null,
+    rawCount: null,
+    usableCount: null,
+    fallbackPhotoId: null,
+    point: null,
   });
 });
 

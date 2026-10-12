@@ -199,3 +199,7 @@ install one. Screenshots, its private profile and downloads go to ignored
 `qa-artifacts/local-observation/`. They are not contribution files. This gate
 covers presentation, Refresh, Close, locate privacy and snapshot/Q&A interaction;
 server provider and permission failures are also covered by the unit tests.
+
+## Additional optional tools
+
+See [local image workflow](LOCAL-IMAGE-WORKFLOW.md) for crop analysis and explicit paid reconstruction allowance setup, and [sun and limited news](SUN-AND-NEWS.md) for local time/shadows and provider limitations. Geographic news remains unavailable; no news pins are included.

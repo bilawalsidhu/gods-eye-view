@@ -20,3 +20,4 @@ node_modules
 .vite
 .vite-*
 *.min.js
+src/vendor/suncalc/

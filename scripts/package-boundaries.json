@@ -323,9 +323,12 @@
       "src/sources/rateLimit.js",
       "server/providers/openai/camera-image.js",
       "server/providers/common/http.js",
-      "src/sources/httpBody.js"
+      "src/sources/httpBody.js",
+      "src/cameraSnapshotSelection.js",
+      "server/providers/camera-reconstruction.js",
+      "server/providers/openai/camera-reconstruction.js"
     ],
-    "external": []
+    "external": ["sharp"]
   },
   "standalone-key-setup": {
     "runtime": "node",
@@ -485,7 +488,11 @@
       "src/ui/cctvVideo.js",
       "src/ui/cctvPresentation.js",
       "src/ui/cameraSnapshot.js",
-      "src/ui/cameraImageAi.js"
+      "src/ui/cameraImageAi.js",
+      "src/cameraSnapshotSelection.js",
+      "src/ui/cameraSnapshotEnhancement.js",
+      "src/ui/cameraReconstruction.js",
+      "src/ui/cameraReconstructionUI.js"
     ],
     "external": []
   },
@@ -683,7 +690,17 @@
       "src/ui/localSdrPresentation.js",
       "src/data/cameraArrival.js",
       "src/ui/cameraSnapshot.js",
-      "src/ui/cameraImageAi.js"
+      "src/ui/cameraImageAi.js",
+      "src/cameraSnapshotSelection.js",
+      "src/ui/cameraSnapshotEnhancement.js",
+      "src/ui/cameraReconstruction.js",
+      "src/ui/cameraReconstructionUI.js",
+      "src/ui/sunNewsTools.js",
+      "src/analysis/solar.js",
+      "src/analysis/areaNews.js",
+      "src/vendor/suncalc/index.js",
+      "src/ui/mapillaryEmbed.js",
+      "src/data/inputOwnership.js"
     ],
     "external": ["cesium"]
   },
@@ -2212,7 +2229,6 @@
       "src/data/cameraArrival.js",
       "src/layers/alpr/floors.js",
       "src/data/militaryNames.js",
-      "src/sources/requestDeadline.js",
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
@@ -2224,7 +2240,16 @@
       "src/ui/cameraSnapshot.js",
       "src/data/publicInfrastructure.js",
       "src/ui/cameraImageAi.js",
-      "src/ui/infrastructureDetails.js"
+      "src/ui/infrastructureDetails.js",
+      "src/cameraSnapshotSelection.js",
+      "src/ui/cameraSnapshotEnhancement.js",
+      "src/ui/cameraReconstruction.js",
+      "src/ui/cameraReconstructionUI.js",
+      "src/ui/sunNewsTools.js",
+      "src/analysis/solar.js",
+      "src/analysis/areaNews.js",
+      "src/vendor/suncalc/index.js",
+      "src/ui/mapillaryEmbed.js"
     ],
     "external": [
       "hls.js",

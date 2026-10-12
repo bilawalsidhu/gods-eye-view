@@ -76,4 +76,4 @@ export function mapillaryImageUrl(imageId) {
 export const IMAGE_FIELDS =
   'id,captured_at,compass_angle,computed_compass_angle,geometry,computed_geometry,computed_altitude,is_pano,sequence,thumb_256_url,creator,quality_score';
 export const SEQUENCE_IMAGE_FIELDS =
-  'id,captured_at,compass_angle,geometry,is_pano,computed_altitude';
+  'id,captured_at,compass_angle,geometry,computed_geometry,is_pano,computed_altitude';

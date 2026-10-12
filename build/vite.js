@@ -7,8 +7,9 @@ import { panelBuildPlugin } from './panel.js';
 /**
  * Content-Security-Policy for every document the dev/preview server serves.
  * No inline script is permitted, and the only foreign script origins are the
- * three that the Bhote Koshi event's embedded media needs (YouTube, Facebook
- * and X), which frame-src matches for their players and posts. 'unsafe-eval' is
+ * origins that the Bhote Koshi event's embedded media needs (YouTube, Facebook
+ * and X). frame-src also admits Mapillary's official public photo embed.
+ * 'unsafe-eval' is
  * required: Knockout (bundled inside @cesium/widgets) resolves the global
  * object with `(0, eval)("this")` at module load, and without it the Cesium
  * widget never initializes (verified in headless Chrome). It also covers
@@ -30,7 +31,7 @@ export const BROWSER_CSP = [
   "worker-src 'self' blob:",
   "child-src 'self' blob:",
   // The same media's players and posts, which load in frames.
-  "frame-src 'self' blob: https://www.youtube-nocookie.com https://www.youtube.com https://www.facebook.com https://platform.twitter.com",
+  "frame-src 'self' blob: https://www.youtube-nocookie.com https://www.youtube.com https://www.facebook.com https://platform.twitter.com https://www.mapillary.com",
   "manifest-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",
@@ -93,7 +94,17 @@ export function createBrowserViteConfig({
       // build/allowedHosts.js); IP addresses are always accepted.
       allowedHosts: [...allowedHosts],
       fs: {
-        deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/ENVIRONMENT'],
+        deny: [
+          '.env',
+          '.env.*',
+          '*.{crt,pem}',
+          '**/.git/**',
+          '**/ENVIRONMENT',
+          '**/.gev-private/**',
+          '**/.local-state/**',
+          '**/private-images/**',
+          '**/browser-profiles/**',
+        ],
       },
       // These headers protect the document containing Provider Settings and
       // give the whole page a real Content-Security-Policy (BROWSER_CSP).

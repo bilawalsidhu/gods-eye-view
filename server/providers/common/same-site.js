@@ -10,6 +10,8 @@ const tailnetCostPaths = new Set([
   '/api/realtime/token',
   '/api/openai/hud-summary',
   '/api/openai/camera-image',
+  '/api/camera-reconstruction',
+  '/api/area-news',
   '/api/google/nearby-places',
   '/api/google/text-search',
   '/api/mapillary/status',

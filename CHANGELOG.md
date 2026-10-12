@@ -1684,3 +1684,7 @@ represent previously published GitHub Releases.
 ## [0.1.0] — 2026-02-09
 
 - Initial project version.
+
+## Contribution: local image, street imagery, sun and limited news tools
+
+Adds original/crop Sol Q&A, opt-in labeled Flare reconstruction with persistent owner allowance, Street Level point picking and official Mapillary embeds, local SunCalc time/shadows, and explicit bounded DOC2 place-name news cards. Geographic news retrieval remains unavailable; no news pins. See docs/LOCAL-IMAGE-WORKFLOW.md and docs/SUN-AND-NEWS.md.

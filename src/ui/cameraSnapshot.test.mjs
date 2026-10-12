@@ -135,3 +135,23 @@ test('out-and-back touch drag and cancellation never activate a button', async (
   assert.equal(f.clicks(), 0);
   f.snapshot.destroy();
 });
+
+test('changing the AI target clears old answers and aborts ownership of pending replies', () => {
+  const snapshot = new CameraSnapshot({ documentRef: {}, button: null });
+  const answer = { textContent: 'Previous-area answer' },
+    controller = new AbortController(),
+    messages = [];
+  snapshot.dialog = { querySelector: () => answer };
+  snapshot.request = controller;
+  snapshot.pending = true;
+  snapshot.syncAiControls = () => {};
+  snapshot.status = (message) => messages.push(message);
+  snapshot.invalidateAiAnswer('Selected area changed.');
+  assert.equal(answer.textContent, '');
+  assert.equal(controller.signal.aborted, true);
+  assert.equal(snapshot.request, null);
+  assert.equal(snapshot.pending, false);
+  assert.match(messages[0], /cannot be recalled/);
+  snapshot.dialog = null;
+  snapshot.destroy();
+});
