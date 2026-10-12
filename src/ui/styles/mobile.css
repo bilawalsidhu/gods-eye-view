@@ -1,0 +1,485 @@
+/* Phone overrides come after the desktop dock/theme passes. */
+#cctv-close-btn {
+  display: none;
+}
+
+@media (max-width: 720px),
+  (pointer: coarse) and (max-width: 900px),
+  (pointer: coarse) and (max-height: 600px) {
+  #title-bar {
+    top: max(12px, env(safe-area-inset-top));
+    left: 12px;
+  }
+  #title-bar h1 > span:last-child,
+  #title-bar .subtitle,
+  #style-indicator {
+    display: none;
+  }
+  #top-center-actions {
+    top: max(12px, env(safe-area-inset-top));
+    left: auto;
+    right: 12px;
+    transform: none;
+    gap: 5px;
+  }
+  #top-center-actions button {
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  #left-panel-stack {
+    top: max(64px, calc(env(safe-area-inset-top) + 56px));
+    right: auto;
+    left: 12px;
+    bottom: auto;
+    width: min(240px, calc(100vw - 24px));
+    height: auto;
+    max-height: min(
+      32dvh,
+      max(
+        64px,
+        calc(
+          52dvh - max(208px, calc(4.4rem + 138px)) - env(safe-area-inset-bottom)
+        )
+      )
+    );
+    overflow-x: hidden;
+    overflow-y: auto;
+    pointer-events: auto;
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+  }
+  #left-panel-stack > [data-panel-id] {
+    width: 100%;
+  }
+  #left-panel-stack .data-panel-inner,
+  #left-panel-stack .scene-panel-inner {
+    padding: 8px 10px;
+  }
+  #left-panel-stack .panel-header {
+    min-height: 48px;
+  }
+  #left-panel-stack .panel-title {
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+
+  #right-context-rail {
+    top: auto;
+    right: 12px;
+    left: 12px;
+    bottom: calc(max(132px, calc(4.4rem + 62px)) + env(safe-area-inset-bottom));
+    width: auto;
+    height: auto;
+    max-height: 48dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  #right-context-rail > [data-panel-id]:not(.panel-floating) {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: auto;
+    max-height: 48dvh;
+    flex: 0 0 auto;
+  }
+  #right-context-rail > #cctv-panel.panel-floating {
+    top: auto !important;
+    left: 12px !important;
+    right: 12px !important;
+    bottom: calc(
+      max(132px, calc(4.4rem + 62px)) + env(safe-area-inset-bottom)
+    ) !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: 48dvh;
+  }
+  #right-context-rail #cctv-panel:not(.collapsed) .cctv-panel-inner {
+    height: auto;
+    max-height: 48dvh;
+    padding: 10px;
+    gap: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(8, 20, 30, 0.96);
+  }
+  #cctv-panel .panel-header {
+    flex: 0 0 auto;
+    min-height: 36px;
+    margin-bottom: 0;
+  }
+  #cctv-panel:not(.collapsed) #cctv-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    flex: 0 0 auto;
+    padding: 6px 10px;
+  }
+  #cctv-panel:not(.collapsed) .cyber-panel-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    gap: 8px;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+  }
+  #cctv-panel .cyber-panel-body > * {
+    flex-shrink: 0;
+  }
+  #cctv-panel .cctv-frame-wrap {
+    min-height: 0;
+    height: min(22dvh, 160px);
+    flex: 0 0 auto;
+  }
+  #cctv-panel #cctv-frame,
+  #cctv-panel #cctv-video {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    object-fit: contain;
+  }
+  #cctv-panel .cctv-controls {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  #cctv-panel .cctv-controls .scene-btn {
+    min-height: 48px;
+    font-size: 10px;
+  }
+  #cctv-camera-select {
+    min-height: 48px;
+    font-size: 16px;
+    flex: 1 1 100%;
+    order: -1;
+    max-width: 100%;
+  }
+  #cctv-panel .cctv-controls:has(#cctv-camera-select) {
+    order: -1;
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) 48px;
+  }
+  #cctv-panel #cctv-camera-select {
+    order: 0;
+    width: 100%;
+    min-width: 0;
+  }
+  #cctv-prev-btn,
+  #cctv-next-btn {
+    padding: 4px;
+    min-width: 0;
+  }
+  #cctv-meta {
+    overflow-wrap: anywhere;
+    font-size: 10px;
+    letter-spacing: 0.2px;
+  }
+  #left-panel-stack .panel-glow,
+  #right-context-rail .panel-glow {
+    inset: 0;
+  }
+  .panel-collapse-btn {
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  #command-dock {
+    --dock-voice-width: 164px;
+    --dock-side-compact: calc((100vw - 32px - var(--dock-voice-width)) / 2);
+    --dock-popover-mobile-width: calc(100vw - 24px);
+    left: 12px;
+    right: 12px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: auto;
+    max-width: none;
+    min-height: 66px;
+    box-sizing: border-box;
+    padding: 2px;
+    gap: 0;
+  }
+  #command-dock,
+  #command-dock:has(#location-bar:not(.collapsed)),
+  #command-dock:has(#control-panel:not(.collapsed)) {
+    transform: none;
+  }
+  #command-dock > #location-bar,
+  #command-dock > #control-panel,
+  #command-dock > #location-bar:not(.collapsed),
+  #command-dock > #control-panel:not(.collapsed) {
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+  }
+  #command-dock .location-inner,
+  #command-dock .panel-inner {
+    padding: 6px;
+  }
+  #command-dock .panel-header,
+  #command-dock .location-toolbar {
+    min-width: 0;
+  }
+  #command-dock #control-panel .panel-header,
+  #command-dock #control-panel.collapsed .panel-header,
+  #command-dock #location-bar .location-toolbar {
+    min-width: 0;
+    width: 100%;
+    min-height: 48px;
+    box-sizing: border-box;
+  }
+  #command-dock .dock-tray-toggle {
+    min-height: 48px;
+  }
+  #command-dock .panel-title,
+  #command-dock .location-toolbar-label {
+    max-width: none;
+    width: auto;
+    font-size: 9px;
+    letter-spacing: 0.2px;
+    white-space: normal;
+    overflow: visible;
+    text-align: center;
+  }
+  #command-dock #control-panel .panel-title {
+    max-width: 100%;
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    overflow-wrap: anywhere;
+    font-size: 9px;
+    letter-spacing: 0.2px;
+    white-space: normal;
+  }
+  #command-dock .dock-label-icon {
+    display: none;
+  }
+  #command-dock > #gev-voice-control {
+    flex: 0 0 164px;
+    width: 164px;
+    height: 66px;
+    margin: 0;
+    grid-template-rows: 16px 26px 14px;
+    grid-template-columns: 48px minmax(0, 1fr) 44px;
+    padding: 4px 6px;
+    gap: 0 3px;
+  }
+  #command-dock #gev-voice-button {
+    min-width: 48px;
+    width: 48px;
+    height: 56px;
+  }
+  #command-dock .gev-mic-label,
+  #command-dock #gev-voice-detail {
+    font-size: 7px;
+    line-height: 10px;
+    letter-spacing: 0.2px;
+  }
+  #command-dock .gev-voice-visualizer {
+    height: 24px;
+    padding: 2px 0;
+  }
+  #command-dock .gev-voice-visualizer span {
+    max-height: 20px;
+  }
+  #command-dock #location-bar .dock-popover-content {
+    left: -8px;
+  }
+  #command-dock #control-panel .dock-popover-content {
+    right: -8px;
+  }
+  #command-dock .dock-popover-content {
+    max-height: 50dvh;
+    overflow-y: auto;
+    box-sizing: border-box;
+  }
+  #command-dock.dock-has-pinned-tray
+    #location-bar:not(.collapsed):not(.dock-pinned)
+    .dock-popover-content,
+  #command-dock.dock-has-pinned-tray
+    #control-panel:not(.collapsed):not(.dock-pinned)
+    .dock-popover-content {
+    max-height: min(
+      50dvh,
+      max(
+        64px,
+        calc(
+          100dvh - max(132px, calc(4.4rem + 62px)) -
+            var(--dock-pinned-stack-height) - 12px
+        )
+      )
+    );
+  }
+  #command-dock.dock-has-two-pinned-trays
+    #location-bar.dock-pinned-top.dock-pinned:not(.collapsed)
+    .dock-popover-content,
+  #command-dock.dock-has-two-pinned-trays
+    #control-panel.dock-pinned-top.dock-pinned:not(.collapsed)
+    .dock-popover-content {
+    max-height: min(
+      50dvh,
+      max(
+        64px,
+        calc(
+          100dvh - max(132px, calc(4.4rem + 62px)) -
+            var(--dock-lower-pinned-height) - 12px
+        )
+      )
+    );
+  }
+  #command-dock #location-search {
+    font-size: 16px;
+  }
+  #command-dock .location-search-wrap {
+    flex-basis: 140px;
+  }
+  #command-dock .button-grid {
+    flex-wrap: wrap;
+  }
+  #command-dock .style-btn {
+    min-height: 44px;
+  }
+  body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
+  body:not(.ui-clean-view):not(.recording-mode):has(
+      #intel-hud[data-variant='minimal'].active
+    )
+    #cesium-credits {
+    bottom: calc(max(84px, calc(4.4rem + 14px)) + env(safe-area-inset-bottom));
+    left: 12px;
+    max-width: calc(100vw - 24px);
+    width: calc(100vw - 24px) !important;
+    min-height: 28px;
+    background: rgba(8, 20, 30, 0.9);
+    border-radius: 4px;
+    padding: 2px 4px;
+    box-sizing: border-box;
+  }
+  #cesium-credits .cesium-credit-logoContainer img {
+    max-height: 18px;
+  }
+  #cesium-credits .cesium-credit-textContainer {
+    font-size: 9px;
+    white-space: normal;
+  }
+  #cesium-credits .cesium-widget-credits {
+    position: static;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    white-space: normal;
+  }
+  #cesium-credits .cesium-credit-logoContainer {
+    flex: 0 0 auto;
+  }
+  #cesium-credits .cesium-credit-textContainer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    line-height: 12px;
+  }
+  #cesium-credits .cesium-credit-expand-link {
+    white-space: nowrap;
+    font-size: 9px;
+    line-height: 20px;
+  }
+  #global-loading-status,
+  #traffic-sync-chip,
+  #cctv-sync-chip {
+    left: auto;
+    right: 12px;
+    width: 128px;
+    max-width: 128px;
+    padding: 4px 6px;
+    gap: 4px;
+    font-size: 7px;
+    letter-spacing: 0.3px;
+    transform: none;
+  }
+  #global-loading-status {
+    top: 72px;
+  }
+  #cctv-sync-chip {
+    top: 112px;
+  }
+  #traffic-sync-chip {
+    top: 152px;
+  }
+  #traffic-sync-chip.visible,
+  #cctv-sync-chip.visible {
+    transform: none;
+  }
+  #intel-hud .hud-top-left,
+  #intel-hud .hud-top-right,
+  #intel-hud .hud-bottom-left,
+  #intel-hud .hud-bottom-right,
+  #intel-hud .hud-bottom-bar,
+  #intel-hud .hud-left-edge,
+  #intel-hud .hud-right-edge,
+  #intel-hud .hud-top-bar {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 900px) and (orientation: landscape),
+  (pointer: coarse) and (max-height: 600px) and (orientation: landscape) {
+  #left-panel-stack {
+    width: 200px;
+    max-height: calc(100dvh - max(208px, calc(4.4rem + 138px)));
+  }
+  #right-context-rail {
+    top: max(60px, env(safe-area-inset-top));
+    left: auto;
+    width: min(340px, 44vw);
+    bottom: max(8px, env(safe-area-inset-bottom));
+    max-height: none;
+  }
+  #right-context-rail > [data-panel-id]:not(.panel-floating),
+  #right-context-rail #cctv-panel:not(.collapsed) .cctv-panel-inner {
+    max-height: calc(100dvh - 68px - env(safe-area-inset-bottom));
+  }
+  #right-context-rail > #cctv-panel.panel-floating {
+    top: 60px !important;
+    left: auto !important;
+    width: min(340px, 44vw) !important;
+    bottom: max(8px, env(safe-area-inset-bottom)) !important;
+    max-height: calc(100dvh - 68px);
+  }
+  #cctv-panel .cctv-frame-wrap {
+    height: 100px;
+  }
+  #command-dock {
+    left: 12px;
+    right: auto;
+    width: min(460px, 48vw);
+    --dock-popover-mobile-width: min(460px, 48vw);
+  }
+  #command-dock #location-bar .dock-popover-content {
+    left: 0;
+  }
+  #command-dock #control-panel .dock-popover-content {
+    right: 0;
+  }
+  body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
+  body:not(.ui-clean-view):not(.recording-mode):has(
+      #intel-hud[data-variant='minimal'].active
+    )
+    #cesium-credits {
+    width: min(460px, 48vw) !important;
+    max-width: min(460px, 48vw);
+  }
+  #global-loading-status,
+  #traffic-sync-chip,
+  #cctv-sync-chip {
+    left: 224px;
+    right: auto;
+    width: min(240px, calc(56vw - 248px));
+    max-width: min(240px, calc(56vw - 248px));
+  }
+}

@@ -45,3 +45,9 @@ Street Level viewer; the complete resolved dependency inventory remains in
 - Source: <https://github.com/mrdoob/three.js>
 - License: MIT
 - License text: <https://github.com/mrdoob/three.js/blob/dev/LICENSE>
+
+## SunCalc 2.1.1
+
+Source: https://github.com/mourner/suncalc/tree/21449f34820c3c80a27a78cdc940747ff19ca1e3
+
+Copyright (c) 2026, Volodymyr Agafonkin. BSD-2-Clause. Unmodified math source is in src/vendor/suncalc/index.js; the full license is retained in src/vendor/suncalc/LICENSE and distributed at public/licenses/suncalc.txt.

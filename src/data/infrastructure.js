@@ -1,5 +1,6 @@
 import { createLocalGeoJsonLayer } from './localGeojsonCore.js';
 import { INFRASTRUCTURE_DATA_URLS } from '../sources/infrastructureData.js';
+import { createPublicInfrastructureLayers } from './publicInfrastructure.js';
 
 /**
  * Create fresh datacenter and dam layers without starting or loading them.
@@ -41,5 +42,5 @@ export function createInfrastructureLayers(services) {
     services,
   );
 
-  return [datacenters, dams];
+  return [datacenters, dams, ...createPublicInfrastructureLayers(services)];
 }

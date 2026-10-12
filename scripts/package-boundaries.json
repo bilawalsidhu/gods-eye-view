@@ -11,7 +11,8 @@
       "src/data/localGeojsonLod.js",
       "src/data/inputOwnership.js",
       "src/data/infrastructureOverlayEntry.js",
-      "src/sources/infrastructureData.js"
+      "src/sources/infrastructureData.js",
+      "src/data/publicInfrastructure.js"
     ],
     "external": ["cesium"]
   },
@@ -22,7 +23,11 @@
   },
   "viewer": {
     "exports": ["./application/viewer"],
-    "modules": ["src/app/viewer.js", "src/app/atmosphereCompat.js"],
+    "modules": [
+      "src/mobileResourcePolicy.js",
+      "src/app/viewer.js",
+      "src/app/atmosphereCompat.js"
+    ],
     "external": ["cesium"]
   },
   "vite-build": {
@@ -165,6 +170,7 @@
       "server/providers/cctv.js",
       "server/providers/cctv/cap.js",
       "server/providers/cctv/groundHeights.js",
+      "server/providers/cctv/georgia511.js",
       "server/providers/cctv/catalog.js",
       "server/providers/cctv/constants.js",
       "server/providers/cctv/media.js",
@@ -314,9 +320,15 @@
       "src/voice/actionSchemas.js",
       "src/voice/layerManifest.js",
       "server/providers/openai/toolDescriptions.js",
-      "src/sources/rateLimit.js"
+      "src/sources/rateLimit.js",
+      "server/providers/openai/camera-image.js",
+      "server/providers/common/http.js",
+      "src/sources/httpBody.js",
+      "src/cameraSnapshotSelection.js",
+      "server/providers/camera-reconstruction.js",
+      "server/providers/openai/camera-reconstruction.js"
     ],
-    "external": []
+    "external": ["sharp"]
   },
   "standalone-key-setup": {
     "runtime": "node",
@@ -474,7 +486,13 @@
       "src/ui/cctvControls.js",
       "src/ui/cctvFrames.js",
       "src/ui/cctvVideo.js",
-      "src/ui/cctvPresentation.js"
+      "src/ui/cctvPresentation.js",
+      "src/ui/cameraSnapshot.js",
+      "src/ui/cameraImageAi.js",
+      "src/cameraSnapshotSelection.js",
+      "src/ui/cameraSnapshotEnhancement.js",
+      "src/ui/cameraReconstruction.js",
+      "src/ui/cameraReconstructionUI.js"
     ],
     "external": []
   },
@@ -574,6 +592,8 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/mobileMenu.js",
+      "src/ui/locateControls.js",
       "src/ui/cyberSonarControls.js",
       "src/ui/locationNavigation.js",
       "src/ui/cockpitCoordinator.js",
@@ -668,7 +688,19 @@
       "src/ui/localSdrControls.js",
       "src/layers/localAdsb/feedNames.js",
       "src/ui/localSdrPresentation.js",
-      "src/data/cameraArrival.js"
+      "src/data/cameraArrival.js",
+      "src/ui/cameraSnapshot.js",
+      "src/ui/cameraImageAi.js",
+      "src/cameraSnapshotSelection.js",
+      "src/ui/cameraSnapshotEnhancement.js",
+      "src/ui/cameraReconstruction.js",
+      "src/ui/cameraReconstructionUI.js",
+      "src/ui/sunNewsTools.js",
+      "src/analysis/solar.js",
+      "src/analysis/areaNews.js",
+      "src/vendor/suncalc/index.js",
+      "src/ui/mapillaryEmbed.js",
+      "src/data/inputOwnership.js"
     ],
     "external": ["cesium"]
   },
@@ -1152,6 +1184,7 @@
   "cctv-layer": {
     "exports": ["./layers/cctv"],
     "modules": [
+      "src/mobileResourcePolicy.js",
       "src/data/cctvCards.js",
       "src/data/cctvGizmo.js",
       "src/data/cctvLod.js",
@@ -1178,6 +1211,7 @@
       "src/layers/cctv/presentation.js",
       "src/layers/cctv/projection.js",
       "src/layers/cctv/videoPlayback.js",
+      "src/layers/cctv/retry.js",
       "src/layers/cctv/rendering.js",
       "src/layers/cctv/selection.js",
       "src/layers/cctv/source.js",
@@ -1334,6 +1368,7 @@
       "./maps/defaults"
     ],
     "modules": [
+      "src/mobileResourcePolicy.js",
       "src/maps/availability.js",
       "src/maps/catalog.js",
       "src/maps/controller.js",
@@ -1418,6 +1453,7 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/mobileResourcePolicy.js",
       "src/cyberSonarScene.js",
       "src/cyberSonar.js",
       "src/hudLayouts.js",
@@ -1670,6 +1706,7 @@
       "src/layers/cctv/projection.js",
       "src/layers/cctv/videoPlayback.js",
       "src/layers/cctv/rendering.js",
+      "src/layers/cctv/retry.js",
       "src/layers/cctv/selection.js",
       "src/layers/cctv/source.js",
       "src/layers/cctv/state.js",
@@ -1886,6 +1923,8 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/ui/mobileMenu.js",
+      "src/ui/locateControls.js",
       "src/ui/cyberSonarControls.js",
       "src/ui/locationNavigation.js",
       "src/ui/cockpitCoordinator.js",
@@ -2190,7 +2229,6 @@
       "src/data/cameraArrival.js",
       "src/layers/alpr/floors.js",
       "src/data/militaryNames.js",
-      "src/sources/requestDeadline.js",
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
@@ -2198,7 +2236,20 @@
       "src/tools/functions.js",
       "src/voice/actionSchemas.js",
       "src/view/index.js",
-      "src/app/embed.js"
+      "src/app/embed.js",
+      "src/ui/cameraSnapshot.js",
+      "src/data/publicInfrastructure.js",
+      "src/ui/cameraImageAi.js",
+      "src/ui/infrastructureDetails.js",
+      "src/cameraSnapshotSelection.js",
+      "src/ui/cameraSnapshotEnhancement.js",
+      "src/ui/cameraReconstruction.js",
+      "src/ui/cameraReconstructionUI.js",
+      "src/ui/sunNewsTools.js",
+      "src/analysis/solar.js",
+      "src/analysis/areaNews.js",
+      "src/vendor/suncalc/index.js",
+      "src/ui/mapillaryEmbed.js"
     ],
     "external": [
       "hls.js",
@@ -2220,6 +2271,7 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/mobileResourcePolicy.js",
       "src/cyberSonar.js",
       "src/data/bhoteKoshiEvent.js",
       "src/ui/imagerySplit.js",
@@ -2394,6 +2446,7 @@
       "src/layers/cctv/projection.js",
       "src/layers/cctv/videoPlayback.js",
       "src/layers/cctv/rendering.js",
+      "src/layers/cctv/retry.js",
       "src/layers/cctv/selection.js",
       "src/layers/cctv/source.js",
       "src/layers/cctv/state.js",
@@ -2720,7 +2773,9 @@
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
-      "src/sources/infrastructureData.js"
+      "src/sources/infrastructureData.js",
+      "src/data/publicInfrastructure.js",
+      "src/ui/infrastructureDetails.js"
     ],
     "external": [
       "hls.js",

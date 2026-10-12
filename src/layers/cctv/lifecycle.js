@@ -391,6 +391,7 @@ export function createLifecycle({
 
     /** Disables the layer: hides entities, stops the projection loop and load queue. */
     disable() {
+      parts.projection.cancelCameraRetry();
       services.credits?.hideOsmCredit?.(layerState._viewer, 'cctv');
       layerState._enabled = false;
       unregisterPickOwner('cctv');
@@ -415,6 +416,7 @@ export function createLifecycle({
      * @param {Cesium.Viewer} [viewer] - Viewer instance (falls back to stored ref).
      */
     destroy(viewer) {
+      parts.projection.cancelCameraRetry();
       services.credits?.hideOsmCredit?.(layerState._viewer, 'cctv');
       layerState._sourceAbort?.abort();
       if (typeof document !== 'undefined')

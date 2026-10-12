@@ -1,5 +1,8 @@
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
+import { MobileMenu } from './mobileMenu.js';
+import { LocateControls } from './locateControls.js';
+import { SunNewsTools } from './sunNewsTools.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
 import { LayerBindings } from './layerBindings.js';
 import { PanelChrome } from './panelChrome.js';
@@ -573,7 +576,44 @@ export class StyleManager extends ShellFacade {
     this._initCctvPanel();
     this._initStreetLevelPanel();
     this._initGlobalContextPanel();
+    this._sunNewsTools = new SunNewsTools({
+      button: document.getElementById('sun-news-tools-btn'),
+      viewer: this.viewer,
+      closeMenu: () => this._mobileMenu?.close(),
+      requestRender: (reason) => this.services.governorRequestRender?.(reason),
+    });
     this._initLocationBar();
+    this._locateControls = new LocateControls({
+      button: this._locateMeBtn,
+      status: this._locateMeStatus,
+      gestureTarget: this.viewer.canvas,
+      begin: () => this._beginDeferredNavigation('device location'),
+      isCurrent: (generation) =>
+        !this._disposed &&
+        generation === this._navigation._navigationGeneration,
+      subscribeAuthority: (listener) =>
+        this._navigation.subscribeCameraHandoff(listener),
+      center: (latitude, longitude, accuracy, generation) => {
+        if (!this._reassertNavigationHandoff(generation)) return false;
+        this.shareLinkManager.protectDeviceLocation();
+        this._shareBtn.title =
+          'Copy share link with globe view; device location excluded';
+        // A broad desktop fix stays broad; no reverse lookup or saved GPS target.
+        const height = Math.min(
+          50000,
+          Math.max(1600, (Number.isFinite(accuracy) ? accuracy : 0) * 4),
+        );
+        this.viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(
+            longitude,
+            latitude,
+            height,
+          ),
+          orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+          duration: 1.4,
+        });
+      },
+    });
     this._initShareButton();
     this._initCameraOrientationControls();
     this._initClearSelectedLayersButton();
@@ -604,6 +644,7 @@ export class StyleManager extends ShellFacade {
     // re-arms its own ticker if the batch is still running.
     this._feedback.observeVisibility();
     this._layerBindings.observeCamera();
+    this._mobileMenu = new MobileMenu({ shell: this });
   }
 
   // Compatibility reads for existing controls, scene snapshots and Cockpit.
@@ -986,6 +1027,8 @@ export class StyleManager extends ShellFacade {
         _cctvCalibSaveBtn: this._cctvCalibSaveBtn,
         _cctvCoverageBtn: this._cctvCoverageBtn,
         _cctvEnableBtn: this._cctvEnableBtn,
+        _cctvRefreshBtn: this._cctvRefreshBtn,
+        _cctvRetryStatus: this._cctvRetryStatus,
         _cctvFocusBtn: this._cctvFocusBtn,
         _cctvFrame: this._cctvFrame,
         _cctvFrameWrap: this._cctvFrameWrap,
@@ -1478,7 +1521,13 @@ export class StyleManager extends ShellFacade {
     this._lifetime.listen(this._shareBtn, 'click', async () => {
       const success = await this.shareLinkManager.copyLink();
       if (!this._disposed)
-        this._showToast(success ? 'Link copied!' : 'Copy failed');
+        this._showToast(
+          success
+            ? this.shareLinkManager.deviceLocationPrivate
+              ? 'Link copied with globe view; device location excluded.'
+              : 'Link copied!'
+            : 'Copy failed',
+        );
     });
   }
 
@@ -1572,6 +1621,9 @@ export class StyleManager extends ShellFacade {
     this._feedback._globalStatusNotice = null;
     if (this._globalLoadingStatus) this._globalLoadingStatus.hidden = true;
     this._disposed = true;
+    this._mobileMenu?.destroy();
+    this._locateControls?.destroy();
+    this._sunNewsTools?.destroy();
     this._navigation.stop();
     this._shareState.destroy();
     this._locationNavigation.destroy();

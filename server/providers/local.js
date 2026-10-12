@@ -26,12 +26,15 @@ import { weatherProxy } from './weather.js';
 import { firePerimetersProxy } from './firePerimeters.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { cameraReconstructionProxy } from './camera-reconstruction.js';
+import { createOpenAiReconstructionProvider } from './openai/camera-reconstruction.js';
+import { areaNewsProxy } from './area-news.js';
 
 /**
  * Construct the local provider plugins in their established order.
  * `realtime` configures the voice session token endpoint.
  */
-function localProviderPlugins({ realtime } = {}) {
+function localProviderPlugins({ realtime, imageGeneration } = {}) {
   return [
     openSkyProxy(),
     celestrakProxy(),
@@ -54,12 +57,16 @@ function localProviderPlugins({ realtime } = {}) {
     aisLiveProxy(),
     trackBackfillProxies(),
     openAiRealtimeProxy({ realtime }),
+    cameraReconstructionProxy({
+      provider: imageGeneration || createOpenAiReconstructionProvider(),
+    }),
     googlePlacesContextProxy(),
     windProxy(),
     weatherProxy(),
     cycloneProxy(),
     mapillaryProxy(),
     firePerimetersProxy(),
+    areaNewsProxy(),
     keySetupEndpoint(),
   ];
 }

@@ -3,6 +3,7 @@ export function _clearCctvFrame() {
   if (this._cctvFramePreloader) {
     this._cctvFramePreloader.onload = null;
     this._cctvFramePreloader.onerror = null;
+    this._cctvFramePreloader.removeAttribute?.('src');
   }
   this._cctvFramePreloader = null;
   if (this._cctvFrame) {
@@ -30,6 +31,7 @@ export function _queueCctvFrame(src, cameraId, cameraChanged) {
   if (this._cctvFramePreloader) {
     this._cctvFramePreloader.onload = null;
     this._cctvFramePreloader.onerror = null;
+    this._cctvFramePreloader.removeAttribute?.('src');
   }
   const token = ++this._cctvFrameRequestToken;
   this._cctvFrame.dataset.cameraId = cameraId;
@@ -88,6 +90,18 @@ export function _syncCctvSourceBadge(activeCamera, enabled) {
   if (!enabled || !activeCamera) {
     this._cctvSourceBadge.textContent = 'SOURCE · UNKNOWN';
     this._cctvSourceBadge.dataset.frameState = 'idle';
+    return;
+  }
+  const connection = activeCamera.connection;
+  if (connection?.status === 'loading' || connection?.status === 'error') {
+    const reconnecting = activeCamera.retry?.status === 'loading';
+    this._cctvSourceBadge.textContent =
+      connection.status === 'error'
+        ? 'CAMERA · UNAVAILABLE'
+        : reconnecting
+          ? 'CAMERA · RECONNECTING'
+          : 'CAMERA · CONNECTING';
+    this._cctvSourceBadge.dataset.frameState = connection.status;
     return;
   }
   const hasDisplayedFrame =

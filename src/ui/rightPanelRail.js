@@ -104,7 +104,9 @@ export function layoutRightPanelRail({
       onCollapse(panel);
     }
   }
-  const isMobile = windowRef.matchMedia('(max-width: 720px)').matches;
+  const isMobile = windowRef.matchMedia(
+    '(max-width: 720px), (pointer: coarse) and (max-width: 900px), (pointer: coarse) and (max-height: 600px)',
+  ).matches;
   const hasExpandedPanel = panels.some(
     (panel) =>
       !panel.classList.contains('collapsed') &&

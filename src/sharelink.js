@@ -124,6 +124,7 @@ export class ShareLinkManager {
     this._panelStateProvider = null;
     this._styleParamStateProvider = null;
     this._initialRestorePending = false;
+    this.deviceLocationPrivate = false;
     this._restoreAuthority = {
       visual: 0,
       map: 0,
@@ -520,6 +521,15 @@ export class ShareLinkManager {
     }
   }
 
+  /** Keep device-derived camera positions out of URLs for the rest of this page. */
+  protectDeviceLocation() {
+    this.deviceLocationPrivate = true;
+    // Clear a queued pre-flight snapshot before the camera can move to the fix.
+    clearTimeout(this._debounceTimer);
+    this._debounceTimer = null;
+    this._updateHash();
+  }
+
   _scheduleUpdate() {
     if (this._destroyed || this._initialRestorePending) return;
     clearTimeout(this._debounceTimer);
@@ -543,7 +553,11 @@ export class ShareLinkManager {
   _buildHashParams() {
     if (this._destroyed) return null;
     const camera = this.viewer.camera;
-    const carto = camera.positionCartographic;
+    // A fixed globe overview preserves share preferences without capturing a
+    // device fix or a later pan near it. Only a fresh page resets this guard.
+    const carto = this.deviceLocationPrivate
+      ? { latitude: 0, longitude: 0, height: 40000000 }
+      : camera.positionCartographic;
     if (!carto) return null;
 
     const params = new URLSearchParams();
@@ -553,15 +567,21 @@ export class ShareLinkManager {
     params.set('alt', Math.round(carto.height).toString());
     params.set(
       'heading',
-      Math.round(Cesium.Math.toDegrees(camera.heading)).toString(),
+      this.deviceLocationPrivate
+        ? '0'
+        : Math.round(Cesium.Math.toDegrees(camera.heading)).toString(),
     );
     params.set(
       'pitch',
-      Math.round(Cesium.Math.toDegrees(camera.pitch)).toString(),
+      this.deviceLocationPrivate
+        ? '-90'
+        : Math.round(Cesium.Math.toDegrees(camera.pitch)).toString(),
     );
     params.set(
       'roll',
-      Math.round(Cesium.Math.toDegrees(camera.roll)).toString(),
+      this.deviceLocationPrivate
+        ? '0'
+        : Math.round(Cesium.Math.toDegrees(camera.roll)).toString(),
     );
     params.set('style', STYLE_TO_URL[this._currentStyle] || 'normal');
     params.set('bloom', this._bloomEnabled ? '1' : '0');

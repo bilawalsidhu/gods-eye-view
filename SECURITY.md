@@ -113,3 +113,25 @@ God's Eye View's tools are also served to MCP clients: over stdio (`npm run mcp`
 ## Responsible use
 
 This is an interface for signals that are **already public**. Use it accordingly: respect privacy, follow data providers' terms, and don't represent public-data inference as authoritative intelligence.
+
+## Optional local observation tools
+
+Owner-only Tailscale Serve support is opt-in through ignored local configuration.
+No owner, tailnet host, certificate, identity token or authentication change is
+shipped. A validated loopback Serve request must match configured HTTPS origin,
+Host and owner identity; forwarding headers alone cannot mint the internal trust
+marker. Other proxy signals and foreign origins remain refused. Credential setup,
+OAuth sign-in, debug logs and MCP remain desktop-only. Local programs/proxy
+configuration remain a trust boundary. Do not use public Funnel for this broker.
+
+The image Q&A route is same-site gated and uses the existing server credential,
+fixed OpenAI endpoints, one active request per peer, the shared rate limiter,
+bounded image/request/response sizes and cancellation. It sends no image on
+capability lookup; inference requires explicit original-image confirmation. Keys,
+images, questions, authorization URLs and internal errors are never logged or
+echoed. High reasoning can incur API charges; provider budgets are the backstop.
+
+Georgia media use only server-registered metadata and pinned hosts/paths, bounded
+HLS stores/timeouts, coalesced expiring issuance and cross-retry 429 cooldown. No
+cookie or header impersonation is added. Unavailable video has no paid-image
+fallback. Operator-supplied catalogs/packs require their own source/rights review.

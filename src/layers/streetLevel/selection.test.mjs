@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
 import * as Cesium from 'cesium';
-import { createSelection } from './selection.js';
+import { createSelection, selectedMapPoint } from './selection.js';
 
 /**
  * The selection installed on a stand-in viewer. Animation frames queue until
@@ -60,6 +60,7 @@ function harness({ selected = false } = {}) {
     enabled: true,
     clickHandler: null,
     services: { picking: null, input: null },
+    street: { pointPicking: false, selectedMapPoint: null },
   };
   const selection = createSelection({
     state,
@@ -78,6 +79,7 @@ function harness({ selected = false } = {}) {
   );
   return {
     state,
+    selection,
     sequences,
     /** A keydown reaching the document from `target`; the event as handled. */
     key(key, target, { defaultPrevented = false } = {}) {
@@ -95,6 +97,10 @@ function harness({ selected = false } = {}) {
     scene,
     canvas,
     camera,
+    click: () =>
+      state.clickHandler?.getInputAction(
+        Cesium.ScreenSpaceEventType.LEFT_CLICK,
+      )({ position: { x: 10, y: 10 } }),
     picks,
     move: (x) => onMove({ endPosition: { x, y: 10 } }),
     frame() {
@@ -252,6 +258,68 @@ test('Esc in a text field or rich-text editor keeps the selection (M61)', () => 
     // A <div contenteditable> (or anything inside one) is a text field too.
     h.key('Escape', element('div', { isContentEditable: true }));
     assert.equal(h.sequences.cleared, 0, 'typing in a contenteditable');
+  } finally {
+    h.restore();
+  }
+});
+
+test('a selected road/map point uses mesh, terrain or globe position without imagery requests', () => {
+  const screen = { x: 10, y: 20 };
+  const at = Cesium.Cartesian3.fromDegrees(-84.84, 33.91, 100);
+  for (const viewer of [
+    { scene: { pickPositionSupported: true, pickPosition: () => at } },
+    {
+      scene: { globe: { pick: () => at } },
+      camera: { getPickRay: () => ({}) },
+    },
+    { scene: {}, camera: { pickEllipsoid: () => at } },
+  ]) {
+    const point = selectedMapPoint(viewer, screen);
+    assert.ok(Math.abs(point.lat - 33.91) < 1e-8);
+    assert.ok(Math.abs(point.lon + 84.84) < 1e-8);
+  }
+  assert.equal(
+    selectedMapPoint(
+      { scene: {}, camera: { pickEllipsoid: () => null } },
+      screen,
+    ),
+    null,
+  );
+});
+
+test('one-shot map selection works with Mapillary off and cancels without a provider request', () => {
+  const h = harness();
+  try {
+    h.state.enabled = false;
+    h.state.viewer.camera.pickEllipsoid = () =>
+      Cesium.Cartesian3.fromDegrees(-84, 34);
+    assert.equal(h.selection.beginPointPick(), true);
+    assert.equal(h.canvas.style.cursor, 'crosshair');
+    h.click();
+    assert.equal(h.state.street.pointPicking, false);
+    assert.ok(Math.abs(h.state.street.selectedMapPoint.lat - 34) < 1e-8);
+    assert.equal(h.state.enabled, false, 'keyed Mapillary layer stays off');
+    assert.equal(h.state.clickHandler, null, 'one-shot handler removed');
+    assert.equal(h.picks.length, 0, 'no provider/photo pick or network access');
+    h.selection.beginPointPick();
+    h.key('Escape', element('canvas'));
+    assert.equal(h.state.street.pointPicking, false);
+    assert.equal(h.state.street.selectedMapPoint, null);
+    assert.equal(h.canvas.style.cursor, '');
+  } finally {
+    h.restore();
+  }
+});
+
+test('a sky miss remains armed and explains the missing map position', () => {
+  const h = harness();
+  try {
+    h.selection.beginPointPick();
+    h.click();
+    assert.equal(h.state.street.pointPicking, true);
+    assert.equal(h.state.street.selectedMapPoint, null);
+    assert.match(h.state.street.error, /sky has no map position/);
+    h.selection.cancelPointPick();
   } finally {
     h.restore();
   }

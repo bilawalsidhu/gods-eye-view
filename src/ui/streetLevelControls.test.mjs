@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { StreetLevelControls } from './streetLevelControls.js';
+import {
+  STREET_LEVEL_REVEAL_EVENT,
+  STREET_LEVEL_MAP_PICK_EVENT,
+} from './streetLevelControls.js';
 import { createStreetLevelLayer } from '../layers/streetLevel/index.js';
 import { DataLayerManager } from '../data/manager.js';
 import { LayerStateCoordinator } from '../data/layerStateCoordinator.js';
@@ -233,6 +237,7 @@ class FakeNode {
     let stopped = false;
     const delivered = {
       type: event.type,
+      detail: event.detail,
       target: this,
       bubbles: event.bubbles,
       key: event.key,
@@ -313,6 +318,15 @@ function panelDom() {
   add(controls, 'output', { id: 'sl-since-label' });
   add(settings, 'ul', { id: 'sl-legend' });
   add(settings, 'div', { id: 'sl-coverage-meta' });
+  for (const id of ['sl-retry', 'sl-nearest', 'sl-pick-point'])
+    add(settings, 'button', { id });
+  for (const id of ['sl-mapillary-fallback', 'sl-google-fallback']) {
+    const link = add(settings, 'a', { id });
+    link.setAttribute('target', '_blank');
+    link.setAttribute('rel', 'noopener noreferrer');
+    link.setAttribute('referrerpolicy', 'no-referrer');
+  }
+  add(settings, 'span', { id: 'sl-external-hint' });
   // The globe's canvas is focusable too (tabindex=0).
   const globe = add(
     add(document.body, 'div', { id: 'cesiumContainer' }),
@@ -479,6 +493,155 @@ function stubLayer() {
     attachViewerHost() {},
   };
 }
+
+test('selected-route retry and alternatives render truthfully and obey busy/clear states', () =>
+  withDom(async (dom) => {
+    const layer = stubLayer();
+    let retries = 0,
+      nearest = null;
+    layer.retryStreetLevel = () => retries++;
+    layer.openNearest = (point) => {
+      nearest = point;
+    };
+    const collapsed = [];
+    const controls = new StreetLevelControls({
+      root: dom.root,
+      layer,
+      actions: { setPanelCollapsed: (...args) => collapsed.push(args) },
+    });
+    controls.connect();
+    const state = uiState();
+    state.sequence = {
+      selectedId: 'A',
+      lastRequestedId: 'A',
+      images: 0,
+      loading: false,
+      rawCount: 2,
+      usableCount: 0,
+      fallbackPhotoId: '1234',
+      point: { lat: 33, lon: -84 },
+    };
+    layer.publish(state);
+    const get = (id) => dom.root.querySelector(`#${id}`);
+    assert.equal(get('sl-retry').hidden, false);
+    get('sl-retry').click();
+    assert.equal(retries, 1);
+    get('sl-nearest').click();
+    assert.deepEqual(nearest, { lat: 33, lon: -84 });
+    assert.match(
+      get('sl-mapillary-fallback').getAttribute('href'),
+      /pKey=1234/,
+    );
+    assert.equal(
+      get('sl-google-fallback').getAttribute('rel'),
+      'noopener noreferrer',
+    );
+    assert.equal(
+      get('sl-google-fallback').getAttribute('referrerpolicy'),
+      'no-referrer',
+    );
+    assert.deepEqual(collapsed.at(-1), [
+      false,
+      { persist: false, explicit: true },
+    ]);
+    state.sequence.loading = true;
+    layer.publish(state);
+    assert.equal(get('sl-retry').disabled, true);
+    assert.equal(get('sl-nearest').disabled, true);
+    layer.publish(uiState());
+    assert.equal(get('sl-google-fallback').hidden, true);
+    assert.equal(get('sl-google-fallback').getAttribute('href'), null);
+    controls.destroy();
+  }));
+
+test('keyless arbitrary point selection works while the Mapillary layer is off', () =>
+  withDom(async (dom) => {
+    const layer = stubLayer();
+    let picks = 0,
+      cancels = 0;
+    layer.beginMapPointSelection = () => picks++;
+    layer.cancelMapPointSelection = () => cancels++;
+    const controls = new StreetLevelControls({
+      root: dom.root,
+      layer,
+      actions: { setPanelCollapsed() {} },
+    });
+    controls.connect();
+    const state = uiState({ enabled: false, keyRequired: true });
+    layer.publish(state);
+    const pick = dom.root.querySelector('#sl-pick-point');
+    assert.equal(pick.disabled, false);
+    pick.click();
+    assert.equal(picks, 1);
+    state.street.pointPicking = true;
+    layer.publish(state);
+    assert.match(pick.textContent, /Cancel map point/);
+    pick.click();
+    assert.equal(cancels, 1);
+    let prevented = false;
+    controls._onDialogKey({
+      key: 'Escape',
+      target: pick,
+      preventDefault() {
+        prevented = true;
+      },
+      stopPropagation() {},
+    });
+    assert.equal(
+      cancels,
+      2,
+      'Esc cancels while the picker button retains focus',
+    );
+    assert.equal(prevented, true);
+    state.street.pointPicking = false;
+    state.street.selectedMapPoint = { lat: 34, lon: -84 };
+    layer.publish(state);
+    const google = dom.root.querySelector('#sl-google-fallback');
+    assert.equal(google.hidden, false);
+    assert.match(google.getAttribute('href'), /viewpoint=34%2C-84/);
+    assert.match(
+      dom.root.querySelector('#sl-external-hint').textContent,
+      /Selected point: 34.00000, -84.00000/,
+    );
+    assert.equal(
+      picks,
+      1,
+      'rendering does not trigger a request or another pick',
+    );
+    controls.destroy();
+  }));
+
+test('mobile coordination reveals details, releases the map for a point pick, then reveals its result without coordinate events', () =>
+  withDom(async (dom) => {
+    const events = [];
+    for (const name of [STREET_LEVEL_REVEAL_EVENT, STREET_LEVEL_MAP_PICK_EVENT])
+      dom.document.addEventListener(name, (event) =>
+        events.push({ type: event.type, detail: event.detail }),
+      );
+    const layer = stubLayer();
+    layer.beginMapPointSelection = () => true;
+    const controls = new StreetLevelControls({
+      root: dom.root,
+      layer,
+      actions: { setPanelCollapsed() {} },
+    });
+    controls.connect();
+    layer.publish(uiState({ enabled: false }));
+    dom.root.querySelector('#sl-pick-point').click();
+    assert.deepEqual(
+      events.map((event) => event.type),
+      [STREET_LEVEL_REVEAL_EVENT, STREET_LEVEL_MAP_PICK_EVENT],
+    );
+    const state = uiState({ enabled: false });
+    state.street.pointPicking = true;
+    layer.publish(state);
+    state.street.pointPicking = false;
+    state.street.selectedMapPoint = { lat: 34, lon: -84 };
+    layer.publish(state);
+    assert.equal(events.at(-1).type, STREET_LEVEL_REVEAL_EVENT);
+    assert.ok(events.every((event) => event.detail === null));
+    controls.destroy();
+  }));
 
 function uiState({
   enabled = true,
@@ -719,9 +882,14 @@ test('a restored layer does not reopen a panel the user collapsed, and automatic
     dom.document.body.dispatchEvent({ type: 'pointerdown', bubbles: true });
     layer.publish(uiState({ enabled: false }));
     layer.publish(uiState({ enabled: true }));
-    assert.deepEqual(calls.collapsed, [[false, { persist: false }]]);
+    assert.deepEqual(calls.collapsed, [
+      [false, { persist: false, explicit: true }],
+    ]);
     layer.publish(uiState({ enabled: true, open: true }));
-    assert.deepEqual(calls.collapsed.at(-1), [false, { persist: false }]);
+    assert.deepEqual(calls.collapsed.at(-1), [
+      false,
+      { persist: false, explicit: true },
+    ]);
     controls.destroy();
   }));
 
@@ -733,7 +901,9 @@ test('without a stored choice, a restored layer still opens its panel, unstored 
       uiState({ enabled: false }),
     );
     layer.publish(uiState({ enabled: true }));
-    assert.deepEqual(calls.collapsed, [[false, { persist: false }]]);
+    assert.deepEqual(calls.collapsed, [
+      [false, { persist: false, explicit: true }],
+    ]);
     controls.destroy();
   }));
 
@@ -760,7 +930,9 @@ test('with request origins, only a user switch-on opens the panel; a restore nev
     layer.publish(uiState({ enabled: false }));
     announce('user');
     layer.publish(uiState({ enabled: true }));
-    assert.deepEqual(calls.collapsed, [[false, { persist: false }]]);
+    assert.deepEqual(calls.collapsed, [
+      [false, { persist: false, explicit: true }],
+    ]);
     controls.destroy();
     assert.equal(announce, null, 'destroy unsubscribes');
   }));

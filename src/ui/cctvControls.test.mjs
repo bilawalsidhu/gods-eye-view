@@ -46,6 +46,124 @@ function fixture(t) {
   t.after(() => controls.destroy());
   return { controls, requests };
 }
+test('current connection feedback overrides stale successful source health while loading or unavailable', (t) => {
+  const { controls } = fixture(t);
+  controls._cctvSourceBadge = { dataset: {} };
+  const camera = {
+    sourceKind: 'live',
+    sourceStatus: 'ok',
+    retry: { status: 'loading' },
+    connection: { status: 'loading' },
+  };
+  controls._syncCctvSourceBadge(camera, true);
+  assert.match(controls._cctvSourceBadge.textContent, /RECONNECTING/);
+  assert.equal(controls._cctvSourceBadge.dataset.frameState, 'loading');
+  camera.connection.status = 'error';
+  controls._syncCctvSourceBadge(camera, true);
+  assert.match(controls._cctvSourceBadge.textContent, /UNAVAILABLE/);
+  assert.equal(controls._cctvSourceBadge.dataset.frameState, 'error');
+});
+test('Refresh announces acquisition, preserves keyboard target during cooldown and clears its timer at Close/disposal', (t) => {
+  const { controls } = fixture(t);
+  const attributes = new Map();
+  controls._cctvRefreshBtn = { setAttribute: (k, v) => attributes.set(k, v) };
+  controls._cctvRetryStatus = { dataset: {} };
+  controls.actions.setPanelCollapsed = () => {};
+  const state = {
+    enabled: true,
+    activeCameraId: 'a',
+    activeCamera: {
+      id: 'a',
+      retry: {
+        attempt: 1,
+        status: 'loading',
+        nextAllowedAt: Date.now() + 5000,
+      },
+      connection: { status: 'loading', message: 'Reconnecting' },
+    },
+  };
+  controls._renderCctvState(state);
+  assert.equal(attributes.get('aria-busy'), 'true');
+  assert.equal(attributes.get('aria-disabled'), 'true');
+  assert.equal(controls._cctvRefreshBtn.disabled, false);
+  assert.equal(controls._cctvRetryStatus.textContent, 'Reconnecting');
+  state.activeCamera.retry.status = 'ready';
+  state.activeCamera.connection = { status: 'ready', message: 'Connected' };
+  controls._renderCctvState(state);
+  assert.ok(controls._cctvRetryTimer);
+  assert.match(attributes.get('aria-label'), /wait/);
+  controls._renderCctvState({ enabled: true, activeCameraId: null });
+  assert.equal(controls._cctvRetryTimer, null);
+  assert.equal(controls._cctvRetryStatus.hidden, true);
+  assert.equal(controls._cctvRefreshBtn.disabled, true);
+});
+
+test('mobile expanded and compact viewers paint despite desktop rail collapse; hidden viewers release only the surface', (t) => {
+  const { controls } = fixture(t);
+  const prior = {
+    document: globalThis.document,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+    cancelAnimationFrame: globalThis.cancelAnimationFrame,
+  };
+  let expanded = true,
+    mapFirst = true,
+    cameraOpen = true,
+    cancelled = 0;
+  globalThis.document = {
+    hidden: false,
+    body: {
+      classList: {
+        contains: (name) =>
+          name === 'mobile-map-first' ? mapFirst : cameraOpen,
+      },
+    },
+  };
+  globalThis.requestAnimationFrame = () => 1;
+  globalThis.cancelAnimationFrame = () => cancelled++;
+  t.after(() => Object.assign(globalThis, prior));
+  controls._cctvPanel = {
+    classList: { contains: () => true },
+    closest: () => (expanded ? {} : null),
+  };
+  controls._cctvVideo = {
+    width: 1,
+    height: 1,
+    getContext: () => ({ clearRect() {}, drawImage() {} }),
+  };
+  controls.actions.setPanelCollapsed = () => {};
+  const decoder = {};
+  controls.cctv.getActiveVideoElement = () => decoder;
+  const state = {
+    enabled: true,
+    activeCameraId: 'live',
+    activeCamera: { id: 'live', isVideo: true },
+  };
+  controls._renderCctvState(state);
+  const surface = controls._cctvVideoSurface;
+  assert.ok(surface);
+  expanded = false;
+  controls._renderCctvState(state);
+  assert.equal(controls._cctvVideoSurface, surface);
+  cameraOpen = false;
+  controls._renderCctvState(state);
+  assert.equal(controls._cctvVideoSurface, null);
+  assert.equal(cancelled, 1);
+  assert.equal(controls.cctv.getActiveVideoElement(), decoder);
+  cameraOpen = true;
+  controls._renderCctvState(state);
+  assert.ok(controls._cctvVideoSurface);
+  globalThis.document.hidden = true;
+  controls._renderCctvState(state);
+  assert.equal(controls._cctvVideoSurface, null);
+  globalThis.document.hidden = false;
+  mapFirst = false;
+  controls._renderCctvState(state);
+  assert.equal(
+    controls._cctvVideoSurface,
+    null,
+    'desktop collapsed policy remains',
+  );
+});
 
 test('a late image completion cannot replace a newer camera preview', (t) => {
   const { controls, requests } = fixture(t);
@@ -217,4 +335,46 @@ test('disposing during camera enable prevents the delayed focus and future click
   button.dispatchEvent(new Event('click'));
   assert.equal(enables, 1);
   assert.equal(focuses, 0);
+});
+
+test('Close deselects the stream and cancels a pending camera focus without disabling the catalog', async () => {
+  const close = new EventTarget(),
+    next = new EventTarget();
+  let resolveEnable,
+    deactivated = 0,
+    focused = 0;
+  const collapses = [];
+  const controls = new CctvControls({
+    elements: {
+      _cctvPanel: { querySelector: () => close },
+      _cctvNextBtn: next,
+    },
+    cctv: {
+      deactivateActiveCamera() {
+        deactivated++;
+      },
+    },
+    actions: {
+      isEnabled: () => true,
+      syncViewport() {},
+      toggleEnabled: () =>
+        new Promise((resolve) => {
+          resolveEnable = resolve;
+        }),
+      runExplicitFocus() {
+        focused++;
+      },
+      setPanelCollapsed: (...args) => collapses.push(args),
+    },
+  });
+  next.dispatchEvent(new Event('click'));
+  close.dispatchEvent(new Event('click'));
+  resolveEnable(true);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(deactivated, 1);
+  assert.equal(focused, 0);
+  assert.deepEqual(collapses, [['cctv-panel', true, { explicit: true }]]);
+  controls.destroy();
+  close.dispatchEvent(new Event('click'));
+  assert.equal(deactivated, 1);
 });

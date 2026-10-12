@@ -23,6 +23,9 @@ export function freshStreet() {
     externalUrl: null,
     loading: false,
     error: null,
+    pointPicking: false,
+    selectedMapPoint: null,
+    lookupPoint: null,
   };
 }
 

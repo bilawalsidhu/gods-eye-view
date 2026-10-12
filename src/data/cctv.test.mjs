@@ -796,7 +796,12 @@ test('real active monitor plane owns one protected host label and no native labe
       showProjection: false,
     });
     refreshCoverageStyles();
-    assert.equal(runtime.planeEntity.show, false);
+    assert.equal(
+      runtime.planeEntity,
+      null,
+      'disable releases the monitor plane',
+    );
+    assert.equal(record.projection, null);
     assert.deepEqual(calls.slice(-2), [
       ['clear', 'cctv-projection'],
       ['visible', 'cctv-projection', false],
@@ -1207,7 +1212,12 @@ test('CCTV deselect publishes one null state and leaves the complete camera pose
     assert.equal(publications.at(-1).activeCameraId, null);
     assert.equal(publications.at(-1).activeCamera, null);
     assert.equal(publications.at(-1).enabled, true);
-    assert.equal(runtime.planeEntity.show, false);
+    assert.equal(
+      runtime.planeEntity,
+      null,
+      'deselect releases the monitor plane',
+    );
+    assert.equal(record.projection, null);
     assert.equal(record.probeClampRangeM, null);
     assert.equal(record.activationDone, false);
     assert.deepEqual(viewer.camera.positionWC, pose.positionWC);

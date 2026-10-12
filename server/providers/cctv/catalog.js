@@ -4,6 +4,7 @@ import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
 import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { cameraRegion, normalizeSourceItem } from './normalize.js';
+import { loadGeorgiaSources } from './georgia511.js';
 import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
@@ -239,11 +240,20 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     ];
     const maxCount = resolveCatalogCap(process.env.CCTV_MAX_SOURCES);
     const allocation = allocateSourceCap(packs, maxCount);
+    // Reserve a separate bounded 1,450-camera local pack AFTER the unchanged
+    // baseline allocation. Adding Georgia cannot displace an existing camera,
+    // and custom file/env packs retain their existing override behavior.
+    const georgia = await loadGeorgiaSources({ sourceRoot });
     // Shipped ground heights (src/data/local_data/cctv_ground_heights/, produced by
     // scripts/precompute-cctv-heights.mjs) ride along on the served source so
     // the client can place a camera and its monitor plane with zero sampling.
     const capped = joinGroundHeights(
-      allocation.sources,
+      [
+        ...allocation.sources,
+        ...georgia.filter(
+          (s) => !allocation.sources.some((old) => old.id === s.id),
+        ),
+      ],
       loadGroundHeights(sourceRoot),
     );
     const trimmed = allocation.packs.filter((pack) => pack.kept < pack.offered);

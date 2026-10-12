@@ -411,6 +411,7 @@ export function initFirstRunExperience({
    */
   const isTopmost = () =>
     root.isConnected &&
+    !root.closest?.('#mobile-map-menu') &&
     root.classList.contains('visible') &&
     root.getClientRects().length > 0 &&
     !coveredByOverlay();

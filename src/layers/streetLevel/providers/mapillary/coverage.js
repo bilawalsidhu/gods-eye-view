@@ -913,5 +913,14 @@ export function createCoverage({ state, source }) {
     setSurface,
     recolorSequence,
     sequenceCount,
+    /** A known point on a user-selected route, never a guessed image ID. */
+    sequencePoint(id) {
+      for (const entry of drawnEntries()) {
+        const part = entry.sequences?.get(id)?.parts?.find((p) => p.length);
+        const coordinates = part?.[Math.floor(part.length / 2)];
+        if (coordinates) return { lon: coordinates[0], lat: coordinates[1] };
+      }
+      return null;
+    },
   };
 }

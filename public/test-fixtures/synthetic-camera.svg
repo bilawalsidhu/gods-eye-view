@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <rect width="640" height="360" fill="#152b39"/>
+  <rect y="180" width="640" height="180" fill="#49605e"/>
+  <path d="M210 360L305 180H335L430 360Z" fill="#293840"/>
+  <path d="M320 210V240M320 265V310M320 330V360" stroke="#e8dab1" stroke-width="5"/>
+  <rect x="355" y="245" width="82" height="34" rx="8" fill="#55bddd"/>
+  <rect x="370" y="231" width="46" height="22" rx="5" fill="#87e0ed"/>
+  <circle cx="372" cy="279" r="9" fill="#10202a"/><circle cx="420" cy="279" r="9" fill="#10202a"/>
+  <text x="16" y="34" fill="#edf7ff" font-family="sans-serif" font-size="18">SYNTHETIC TEST SCENE</text>
+  <text x="16" y="338" fill="#edf7ff" font-family="sans-serif" font-size="13">Invented pixels — no camera footage, people or license plates</text>
+</svg>

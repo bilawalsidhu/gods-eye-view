@@ -18,8 +18,18 @@ const SEQUENCE_CACHE_SIZE = 40;
 
 /** Normalize a graph image record into the shape the cones use. */
 export function normalizeSequenceImage(record) {
-  const coordinates = record?.geometry?.coordinates;
+  const coordinates = (record?.computed_geometry || record?.geometry)
+    ?.coordinates;
   if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+  const [lon, lat] = coordinates;
+  if (
+    !record?.id ||
+    !Number.isFinite(lon) ||
+    !Number.isFinite(lat) ||
+    Math.abs(lon) > 180 ||
+    Math.abs(lat) > 90
+  )
+    return null;
   return {
     id: String(record.id),
     lon: Number(coordinates[0]),
@@ -205,10 +215,12 @@ export function createSequences({ state, source, parts }) {
   }
 
   /** Select a sequence: highlight its line and load its image cones. */
-  async function select(sequenceId) {
+  async function select(sequenceId, { retry = false } = {}) {
     if (!sequenceId || !state.viewer) return;
+    if (retry) state.sequence.cache.delete(sequenceId);
     // Already on screen, or already on its way.
     if (
+      !retry &&
       state.sequence.selectedId === sequenceId &&
       (state.sequence.images.length || state.sequence.abort)
     )
@@ -217,9 +229,14 @@ export function createSequences({ state, source, parts }) {
       parts.coverage.recolorSequence(state.sequence.selectedId, false);
     state.sequence.abort?.abort();
     state.sequence.selectedId = sequenceId;
+    state.sequence.lastRequestedId = sequenceId;
+    state.sequence.point = parts.coverage.sequencePoint?.(sequenceId) || null;
+    state.sequence.rawCount = null;
+    state.sequence.usableCount = null;
+    state.sequence.fallbackPhotoId = null;
     parts.coverage.recolorSequence(sequenceId, true);
     const cached = state.sequence.cache.get(sequenceId);
-    if (cached) {
+    if (cached?.length) {
       state.sequence.abort = null;
       state.sequence.loading = false;
       state.sequence.images = cached;
@@ -235,22 +252,39 @@ export function createSequences({ state, source, parts }) {
     const controller = new AbortController();
     state.sequence.abort = controller;
     state.sequence.loading = true;
+    state.context.actions.reportError(null);
     notify();
     try {
       const records = await source.getSequenceImages(sequenceId, {
         signal: controller.signal,
       });
       if (controller.signal.aborted) return;
+      const usable = records.map(normalizeSequenceImage).filter(Boolean);
+      state.sequence.rawCount = records.length;
+      state.sequence.usableCount = usable.length;
+      // IDs come from this response; no guessed image or sequence deep links.
+      state.sequence.fallbackPhotoId =
+        records.find((record) => /^\d+$/.test(String(record?.id || '')))?.id ||
+        null;
+      state.sequence.point ||= usable[0]
+        ? { lat: usable[0].lat, lon: usable[0].lon }
+        : null;
       const images = thinImages(
-        records
-          .map(normalizeSequenceImage)
-          .filter(Boolean)
-          .sort((a, b) => a.capturedAt - b.capturedAt),
+        usable.sort((a, b) => a.capturedAt - b.capturedAt),
       );
-      remember(sequenceId, images);
+      // Empty results may be transient; neither an empty nor unlocated list
+      // should become a permanent cache hit.
+      if (images.length) remember(sequenceId, images);
+      else state.sequence.cache.delete(sequenceId);
       state.sequence.images = images;
       renderCones(images);
-      state.context.actions.reportError(null);
+      state.context.actions.reportError(
+        records.length && !usable.length
+          ? `Mapillary returned ${records.length} photos, but none have usable map coordinates. Open the first returned photo externally or retry.`
+          : !records.length
+            ? 'Mapillary returned an empty photo list for this route. Retry or try imagery near the selected route.'
+            : null,
+      );
     } catch (error) {
       if (!controller.signal.aborted) {
         // Nothing to show: drop the highlight, so a click asks again.
@@ -275,6 +309,11 @@ export function createSequences({ state, source, parts }) {
     if (state.sequence.selectedId)
       parts.coverage.recolorSequence(state.sequence.selectedId, false);
     state.sequence.selectedId = null;
+    state.sequence.lastRequestedId = null;
+    state.sequence.point = null;
+    state.sequence.rawCount = null;
+    state.sequence.usableCount = null;
+    state.sequence.fallbackPhotoId = null;
     state.sequence.loading = false;
     clearCones();
     // An error about the sequence goes with it.
@@ -314,6 +353,7 @@ export function createSequences({ state, source, parts }) {
   return {
     ensureCollections,
     select,
+    retry: () => select(state.sequence.lastRequestedId, { retry: true }),
     clearSelection,
     rerender,
     setVisible,

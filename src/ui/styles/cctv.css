@@ -10,6 +10,403 @@
   width: var(--panel-expanded-width);
   max-height: calc(100vh - 24px);
 }
+#cctv-snapshot-btn {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 4;
+  width: 48px;
+  height: 48px;
+  border: 1px solid #70bdce;
+  border-radius: 10px;
+  background: rgba(7, 18, 27, 0.92);
+  color: #effaff;
+  font-size: 23px;
+  cursor: pointer;
+}
+#cctv-snapshot-preview {
+  box-sizing: border-box;
+  width: min(960px, calc(100dvw - 24px));
+  max-width: none;
+  max-height: calc(100dvh - 24px);
+  margin: auto;
+  padding: 16px;
+  border: 1px solid #4f8295;
+  border-radius: 12px;
+  overflow: auto;
+  scroll-padding-block-start: 76px;
+  background: #081620;
+  color: #eaf7ff;
+  font: 14px/1.5 var(--font-sans);
+}
+#cctv-snapshot-preview:not([open]) {
+  display: none;
+}
+#cctv-snapshot-preview::backdrop {
+  background: rgba(0, 0, 0, 0.72);
+}
+#cctv-snapshot-preview header,
+.snapshot-tools,
+.snapshot-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+#cctv-snapshot-preview header {
+  position: sticky;
+  top: -16px;
+  z-index: 2;
+  padding: 8px 0;
+  background: #081620;
+  justify-content: space-between;
+}
+#cctv-snapshot-preview h2 {
+  margin: 0;
+  font-size: 20px;
+}
+#cctv-snapshot-preview button {
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid #507d90;
+  border-radius: 8px;
+  background: #142d3d;
+  color: #eaf7ff;
+  font-size: 12px;
+  cursor: pointer;
+}
+#cctv-snapshot-preview button[aria-pressed='true'] {
+  border-color: #34dbf0;
+  background: #164455;
+}
+#cctv-snapshot-preview button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.snapshot-canvas,
+.snapshot-enhanced-canvas {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 48dvh;
+  margin: 12px auto;
+  background: #000;
+}
+.snapshot-canvas {
+  touch-action: none;
+  cursor: crosshair;
+}
+.snapshot-caption,
+.snapshot-status,
+.snapshot-model {
+  overflow-wrap: anywhere;
+}
+#cctv-snapshot-preview textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 8px 0;
+  padding: 10px;
+  color: #eaf7ff;
+  background: #102838;
+  border: 1px solid #507d90;
+  border-radius: 8px;
+  font: inherit;
+}
+.snapshot-answer {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+.snapshot-ai[hidden],
+.snapshot-enhance[hidden] {
+  display: none;
+}
+
+#cctv-snapshot-preview button {
+  box-sizing: border-box;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.snapshot-ai-preview,
+.snapshot-enhance-source-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 28dvh;
+  width: auto;
+  height: auto;
+  margin: 12px auto;
+  border: 1px solid #507d90;
+}
+.snapshot-selection-summary,
+.snapshot-ai-selection,
+.snapshot-enhance-selection,
+.snapshot-ai-status,
+.snapshot-enhance-status,
+.snapshot-enhance-result-caption {
+  overflow-wrap: anywhere;
+}
+.snapshot-ai-status,
+.snapshot-enhance-status {
+  padding: 10px;
+  border-left: 3px solid #34dbf0;
+  background: #102733;
+}
+.snapshot-ai h3,
+.snapshot-enhance h3,
+.snapshot-enhance-result h4,
+.snapshot-enhance-status,
+.snapshot-answer,
+.snapshot-canvas,
+.snapshot-question {
+  scroll-margin-block-start: 76px;
+}
+.snapshot-enhance-result {
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid #34dbf0;
+  border-radius: 8px;
+}
+.snapshot-enhance-progress {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+}
+.snapshot-ai-preview[hidden],
+.snapshot-enhance-source-preview[hidden],
+.snapshot-enhance-result[hidden],
+.snapshot-enhance-progress[hidden] {
+  display: none;
+}
+
+.snapshot-generation[hidden],
+.snapshot-generation-result[hidden],
+.snapshot-generation-progress[hidden] {
+  display: none;
+}
+.snapshot-generation h3,
+.snapshot-generation-comparison {
+  scroll-margin-block-start: 76px;
+}
+.snapshot-generation-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.snapshot-generation-comparison figure {
+  min-width: 0;
+  margin: 0;
+}
+.snapshot-generation-comparison figcaption {
+  font-weight: bold;
+  overflow-wrap: anywhere;
+}
+.snapshot-generation-comparison canvas {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 40dvh;
+  display: block;
+  margin: 8px auto;
+}
+.snapshot-generation-status {
+  padding: 10px;
+  border-left: 3px solid #34dbf0;
+  background: #102733;
+  overflow-wrap: anywhere;
+}
+.snapshot-generation select {
+  display: block;
+  max-width: 100%;
+  min-height: 48px;
+  padding: 8px;
+  color: #eaf7ff;
+  background: #142d3d;
+}
+.snapshot-generation-model,
+.snapshot-generation-target,
+.snapshot-generation-result-label {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .snapshot-generation-comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+body.mobile-map-first #desktop-camera-expand {
+  display: none !important;
+}
+#desktop-camera-expand {
+  flex: 0 0 auto;
+}
+#mobile-camera-expanded.desktop-camera-expanded[open] {
+  display: block;
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  width: 100dvw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  overflow: hidden;
+  color: #eaf7ff;
+  background: #050a10;
+}
+.desktop-camera-expanded .mobile-camera-expanded-surface {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: 12px;
+  background: #050a10;
+}
+.desktop-camera-expanded #cctv-panel {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  display: flex !important;
+  flex: 1 1 0;
+  min-height: 0;
+  height: 0 !important;
+  max-height: none !important;
+  width: 100% !important;
+  margin: 0;
+  border: 0;
+}
+.desktop-camera-expanded .cctv-panel-inner {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100% !important;
+  max-height: none !important;
+  width: 100%;
+  padding: 0;
+  gap: 8px;
+  overflow: hidden;
+}
+.desktop-camera-expanded .panel-header {
+  flex: 0 0 auto;
+  min-height: 44px;
+  margin: 0;
+  gap: 8px;
+  cursor: default;
+  /* Expanded page chrome must not drag the saved floating preview position. */
+  pointer-events: none;
+}
+.desktop-camera-expanded .panel-header .panel-collapse-btn,
+.desktop-camera-expanded .panel-glow,
+.desktop-camera-expanded .panel-resize-grip,
+.desktop-camera-expanded .panel-resize-edge {
+  display: none !important;
+}
+.desktop-camera-expanded
+  .panel-header
+  :is(#desktop-camera-expand, #cctv-refresh-btn, #cctv-close-btn) {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 44px;
+  min-width: 72px;
+  padding: 8px 12px;
+  pointer-events: auto;
+}
+.desktop-camera-expanded #cctv-panel .cyber-panel-body {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 8px;
+  overflow: hidden;
+}
+.desktop-camera-expanded
+  .cyber-panel-body
+  > :not(#cctv-frame-wrap):not(.cctv-controls:has(#cctv-camera-select)) {
+  display: none !important;
+}
+#mobile-camera-expanded.desktop-camera-expanded #cctv-frame-wrap {
+  flex: 1 1 0;
+  height: 0;
+  min-height: 0;
+  border-radius: 0;
+  background: #000;
+}
+.desktop-camera-expanded :is(#cctv-frame, #cctv-video) {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  object-fit: contain;
+}
+#mobile-camera-expanded.desktop-camera-expanded
+  .cctv-controls:has(#cctv-camera-select) {
+  display: grid !important;
+  flex: 0 0 auto;
+  grid-template-columns: 96px minmax(0, 1fr) 96px;
+  gap: 8px;
+  order: 0;
+}
+.desktop-camera-expanded
+  :is(#cctv-camera-select, #cctv-prev-btn, #cctv-next-btn) {
+  min-height: 40px;
+  min-width: 0;
+}
+.desktop-camera-expanded .mobile-camera-expanded-credits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  flex: 0 0 auto;
+  padding-top: 8px;
+  pointer-events: auto;
+}
+.desktop-camera-expanded #cesium-credits {
+  position: static !important;
+  inset: auto !important;
+  margin: 0 !important;
+  width: 100% !important;
+  flex: 0 0 100%;
+  min-height: 24px;
+  display: block !important;
+}
+.desktop-camera-expanded #cesium-credits .cesium-widget-credits {
+  position: static !important;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  white-space: normal;
+}
+.desktop-camera-expanded #cctv-source-badge {
+  display: block !important;
+  overflow-wrap: anywhere;
+}
+.desktop-camera-expanded #cctv-retry-status:not([hidden]) {
+  display: block !important;
+  margin: 0;
+}
+
+#cctv-retry-status {
+  flex: 0 0 auto;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #b8edff;
+  overflow-wrap: anywhere;
+}
+#cctv-retry-status[data-state='error'] {
+  color: #ffc68f;
+}
+#cctv-refresh-btn[aria-disabled='true'] {
+  opacity: 0.65;
+  cursor: progress;
+}
 
 #cctv-panel .panel-glow {
   position: absolute;

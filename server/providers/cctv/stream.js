@@ -42,8 +42,17 @@ export async function fetchHlsBytes(
       !response.ok ||
       response.redirected ||
       (response.url && new URL(response.url).href !== new URL(url).href)
-    )
-      throw new Error('HLS upstream refused');
+    ) {
+      const retry = response.headers.get('retry-after');
+      const seconds = /^\d+$/.test(retry || '')
+        ? Number(retry)
+        : Math.ceil((Date.parse(retry) - Date.now()) / 1000);
+      throw Object.assign(new Error('HLS upstream refused'), {
+        status: response.status,
+        retryAfterSeconds:
+          Number.isFinite(seconds) && seconds > 0 ? seconds : 60,
+      });
+    }
     if (Number(response.headers.get('content-length')) > maxBytes)
       throw new Error('HLS response too large');
     reader = response.body?.getReader?.();
@@ -131,6 +140,10 @@ export function createHlsPuller({
     active.delete(cameraId);
     entry.stopping = true;
     entry.controller.abort();
+    entry.readController.abort();
+    entry.options.dispose?.();
+    entry.url = null;
+    entry.chunklistUrl = null;
     clearTimeout(entry.timer);
     for (const lease of entry.leases.values()) clearTimeout(lease.timer);
     entry.leases.clear();
@@ -161,15 +174,32 @@ export function createHlsPuller({
     );
     lease.timer.unref?.();
   };
-  const read = (entry, url, maxBytes) =>
-    fetchHlsBytes(url, {
+  const read = (entry, url, maxBytes) => {
+    entry.options.validateUrl?.(url);
+    return fetchHlsBytes(url, {
       fetchImpl,
-      signal: entry.controller.signal,
+      signal: entry.readController.signal,
       maxBytes,
       timeoutMs: limits.timeoutMs,
     });
+  };
   const poll = async (entry) => {
     try {
+      if (entry.options.resolveUrl) {
+        const fresh = await entry.options.resolveUrl({
+          signal: entry.controller.signal,
+        });
+        if (entry.stopping) return;
+        if (fresh !== entry.url) {
+          entry.readController.abort();
+          entry.readController = new AbortController();
+          entry.pendingDiscontinuity = entry.nextSeq > 0;
+          entry.url = fresh;
+          entry.chunklistUrl = null;
+          entry.upstream.clear();
+          entry.upstreamNewest = -1;
+        }
+      }
       let base = entry.chunklistUrl || entry.url;
       let text = (await read(entry, base, limits.playlistBytes)).toString(
         'utf8',
@@ -232,10 +262,22 @@ export function createHlsPuller({
         entry.bytes += body.length;
       }
       entry.failures = 0;
-    } catch {
+      entry.safeError = null;
+    } catch (error) {
+      // Cancellation is ownership teardown, not an upstream camera fault.
+      if (entry.stopping) return;
       entry.chunklistUrl = null;
       entry.failures++;
-      if (entry.failures >= 3) {
+      entry.safeError = {
+        status: [401, 403, 429].includes(error.status) ? error.status : 503,
+        retryAfterSeconds: error.retryAfterSeconds || 2,
+      };
+      if (
+        entry.failures >= 3 ||
+        (entry.options.resolveUrl &&
+          (error.fatal || [401, 403, 429].includes(error.status)))
+      ) {
+        entry.options.onError?.(entry.safeError);
         stop(entry.cameraId, entry.token);
         return;
       }
@@ -248,11 +290,11 @@ export function createHlsPuller({
       }
     }
   };
-  const ensure = async (cameraId, url, leaseId = 'legacy') => {
+  const ensure = async (cameraId, url, leaseId = 'legacy', options = {}) => {
     if (closed) throw new Error('HLS service closed');
     sameOriginHlsUrl(url, url);
     let entry = active.get(cameraId);
-    if (entry && entry.url !== url) {
+    if (entry && entry.sourceUrl !== url) {
       stop(cameraId);
       entry = null;
     }
@@ -265,9 +307,12 @@ export function createHlsPuller({
       throw new Error('HLS session capacity reached');
     entry = {
       cameraId,
-      url,
+      sourceUrl: url,
+      url: options.resolveUrl ? null : url,
+      options,
       token: randomUUID(),
       controller: new AbortController(),
+      readController: new AbortController(),
       segments: new Map(),
       bytes: 0,
       stopping: false,

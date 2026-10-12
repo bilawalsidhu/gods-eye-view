@@ -1,0 +1,23 @@
+{
+  "fixtureOnly": true,
+  "cameras": [
+    {
+      "id": "42",
+      "county": "Cobb",
+      "viewerUrl": "https://511ga.org/map#camera-42",
+      "location": "Synthetic QA road (Cobb)",
+      "wkt": "POINT (-84.0 33.0)",
+      "name": "synthetic_qa_camera",
+      "views": [
+        {
+          "id": 43,
+          "disabled": false,
+          "blocked": false,
+          "videoDisabled": false,
+          "videoType": "application/x-mpegURL",
+          "videoHost": "sfs-msc-pub-lq-01.navigator.dot.ga.gov"
+        }
+      ]
+    }
+  ]
+}

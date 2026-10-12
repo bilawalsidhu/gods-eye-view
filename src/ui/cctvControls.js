@@ -17,6 +17,8 @@ import {
   _updateCctvSyncChip,
 } from './cctvPresentation.js';
 import { _initCctvPanel } from './cctvBindings.js';
+import { CameraSnapshot } from './cameraSnapshot.js';
+import { cameraImageCapability } from './cameraImageAi.js';
 
 /** Own camera-panel interaction and presentation; receive the camera port and application actions. */
 export class CctvControls {
@@ -38,6 +40,17 @@ export class CctvControls {
     this._calibrationEdit = null;
     this._actionGeneration = 0;
     this._initCctvPanel();
+    if (typeof document !== 'undefined')
+      this._snapshot = new CameraSnapshot({
+        button: this._cctvPanel?.querySelector?.('#cctv-snapshot-btn'),
+        video: this._cctvVideo,
+        getVideo: () => this.cctv.getActiveVideoElement?.(),
+        image: this._cctvFrame,
+        readState: () => this._cctvState,
+        showToast: (text) => this.actions.showToast(text),
+        readAi: (signal) =>
+          this.actions.snapshotAi?.(signal) || cameraImageCapability(signal),
+      });
     if (this._cctvVideo && typeof MutationObserver !== 'undefined') {
       this._videoVisibilityObserver = new MutationObserver(() =>
         this._renderCctvState(this._cctvState),
@@ -46,6 +59,11 @@ export class CctvControls {
         this._videoVisibilityObserver.observe(this._cctvPanel, {
           attributes: true,
           attributeFilter: ['class', 'hidden'],
+        });
+      if (document.body)
+        this._videoVisibilityObserver.observe(document.body, {
+          attributes: true,
+          attributeFilter: ['class'],
         });
       this.listen(document, 'visibilitychange', () =>
         this._renderCctvState(this._cctvState),
@@ -112,6 +130,7 @@ export class CctvControls {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._snapshot?.destroy();
     this._cctvVideoSurface?.stop();
     this._videoVisibilityObserver?.disconnect();
     this._actionGeneration++;
@@ -122,6 +141,7 @@ export class CctvControls {
     this._clearCctvFrame();
     clearInterval(this._cctvSummaryTypingTimer);
     clearTimeout(this._cctvChipHideTimer);
+    clearTimeout(this._cctvRetryTimer);
     this._cctvSummaryTypingTimer = null;
     this._cctvChipHideTimer = null;
     this._cctvSyncChip?.classList.remove('visible');

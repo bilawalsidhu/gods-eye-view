@@ -81,6 +81,7 @@ export function createSelection({
     ) {
       return CCTV_ACTIVATION_RESULT.UNCHANGED;
     }
+    parts.projection.cancelCameraRetry();
     layerState._activeCameraId = cameraId;
     layerState._autoHopSuspended = false;
     // A real activation creates projection work — wake the self-stopping loop.
@@ -158,6 +159,7 @@ export function createSelection({
    */
 
   function deactivateActiveCamera() {
+    parts.projection.cancelCameraRetry();
     const record = layerState._activeCameraId
       ? layerState._recordById.get(layerState._activeCameraId)
       : null;

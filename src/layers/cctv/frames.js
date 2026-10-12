@@ -237,7 +237,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
     const sep = frameUrl.includes('?') ? '&' : '?';
     runtime.imageLoading = true;
     runtime.imageReady = false;
-    runtime.image.src = `${frameUrl}${sep}projTs=${Math.floor(now / refreshMs)}`;
+    runtime.image.src = `${frameUrl}${sep}projTs=${Math.floor(now / refreshMs)}${record.retry ? `&retry=${record.retry.attempt}` : ''}`;
   }
 
   /**

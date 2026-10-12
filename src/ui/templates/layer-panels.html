@@ -1,4 +1,4 @@
-  <div id="left-panel-stack">
+<div id="left-panel-stack">
   <!-- Data Layer Toggle Panel -->
   <div id="data-panel" class="panel-collapsible collapsed active" data-panel-id="data-panel">
     <div class="panel-glow"></div>
@@ -6,7 +6,9 @@
       <div class="panel-header">
         <span class="panel-title">DATA LAYERS</span>
         <span class="panel-divider"></span>
-        <button class="panel-collapse-btn" data-collapse-target="data-panel" title="Collapse panel">+</button>
+        <button class="panel-collapse-btn" data-collapse-target="data-panel" title="Collapse panel">
+          +
+        </button>
       </div>
       <div id="data-toggles" class="data-toggle-list"></div>
     </div>
@@ -19,54 +21,90 @@
       <div class="panel-header">
         <span class="panel-title">CCTV</span>
         <span class="panel-divider"></span>
-        <button class="panel-collapse-btn" data-collapse-target="cctv-panel" title="Collapse panel">+</button>
+        <button id="cctv-refresh-btn" class="scene-btn" type="button" aria-label="Refresh selected camera connection" aria-controls="cctv-frame-wrap" title="Reconnect this camera">
+          REFRESH
+        </button>
+        <button id="cctv-close-btn" class="scene-btn" type="button" aria-label="Close camera and stop its stream" title="Close camera and stop its stream">
+          CLOSE
+        </button>
+        <button class="panel-collapse-btn" data-collapse-target="cctv-panel" title="Collapse panel">
+          +
+        </button>
       </div>
       <div class="cyber-panel-body" data-rail-scroller>
-      <div id="cctv-frame-wrap" class="cctv-frame-wrap">
-        <img id="cctv-frame" alt="CCTV feed frame" />
-        <canvas id="cctv-video" class="cctv-frame" hidden></canvas>
-      </div>
-      <div id="cctv-source-badge" role="status" aria-live="polite">SOURCE · UNKNOWN</div>
-      <div id="cctv-meta">Enable CCTV to load camera intersections</div>
-      <div class="cctv-controls">
-        <button id="cctv-enable-btn" class="scene-btn">CCTV OFF</button>
-        <button id="cctv-nearest-btn" class="scene-btn">NEAREST</button>
-      </div>
-      <div class="cctv-controls">
-        <button id="cctv-prev-btn" class="scene-btn">PREV</button>
-        <select id="cctv-camera-select" aria-label="CCTV camera"></select>
-        <button id="cctv-next-btn" class="scene-btn">NEXT</button>
-      </div>
-      <div class="cctv-controls">
-        <button id="cctv-focus-btn" class="scene-btn">FOCUS</button>
-        <button id="cctv-coverage-btn" class="scene-btn">COVERAGE OFF</button>
-        <button id="cctv-auto-hop-btn" class="scene-btn">AUTO HOP OFF</button>
-      </div>
-      <div class="cctv-controls">
-        <button id="cctv-projection-btn" class="scene-btn">PROJECTION ON</button>
-        <span id="cctv-quality-chip">CAL · --</span>
-      </div>
-      <div class="cctv-calibration-block">
-        <div class="cctv-calibration-header">
-          <div class="cctv-summary-label">CALIBRATION</div>
-          <button id="cctv-adjust-btn" class="scene-btn" title="Drag the camera in the world: rings rotate, arrows move, handles set range/FOV">ADJUST</button>
+        <div id="cctv-frame-wrap" class="cctv-frame-wrap">
+          <img id="cctv-frame" alt="CCTV feed frame" />
+          <canvas id="cctv-video" class="cctv-frame" hidden></canvas>
+          <button id="cctv-snapshot-btn" type="button" aria-label="Save camera snapshot and open preview" title="Save snapshot on this device and open preview">
+            &#128247;
+          </button>
         </div>
-        <div id="cctv-cal-readout" class="cctv-cal-readout" aria-label="Camera pose — click a value to type">
-          <button class="cctv-cal-value" data-cal-field="heading" title="Heading (compass °) — click to type">HDG --</button>
-          <button class="cctv-cal-value" data-cal-field="pitch" title="Pitch (° up/down) — click to type">PITCH --</button>
-          <button class="cctv-cal-value" data-cal-field="fov" title="Horizontal FOV (°) — click to type">FOV --</button>
-          <button class="cctv-cal-value" data-cal-field="range" title="Range / monitor-plane distance (m) — click to type">RANGE --</button>
-          <button class="cctv-cal-value" data-cal-field="height" title="Mount height above ground (m) — click to type">HGT --</button>
-          <button class="cctv-cal-value" data-cal-field="north" title="North offset from catalog position (m) — click to type">ΔN --</button>
-          <button class="cctv-cal-value" data-cal-field="east" title="East offset from catalog position (m) — click to type">ΔE --</button>
+        <div id="cctv-source-badge" role="status" aria-live="polite">
+          SOURCE · UNKNOWN
         </div>
-        <div class="cctv-controls cctv-calibration-actions">
-          <button id="cctv-calib-save-btn" class="scene-btn">SAVE CAL</button>
-          <button id="cctv-calib-reset-btn" class="scene-btn">RESET CAL</button>
+        <div id="cctv-retry-status" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+        <div id="cctv-meta">Enable CCTV to load camera intersections</div>
+        <div class="cctv-controls">
+          <button id="cctv-enable-btn" class="scene-btn">CCTV OFF</button>
+          <button id="cctv-nearest-btn" class="scene-btn">NEAREST</button>
         </div>
-      </div>
-      <div class="cctv-summary-label">SCENE SUMMARY</div>
-      <div id="cctv-summary">Enable CCTV to start camera-linked intelligence summaries.</div>
+        <div class="cctv-controls">
+          <button id="cctv-prev-btn" class="scene-btn">PREV</button>
+          <select id="cctv-camera-select" aria-label="CCTV camera"></select>
+          <button id="cctv-next-btn" class="scene-btn">NEXT</button>
+        </div>
+        <div class="cctv-controls">
+          <button id="cctv-focus-btn" class="scene-btn">FOCUS</button>
+          <button id="cctv-coverage-btn" class="scene-btn">COVERAGE OFF</button>
+          <button id="cctv-auto-hop-btn" class="scene-btn">AUTO HOP OFF</button>
+        </div>
+        <div class="cctv-controls">
+          <button id="cctv-projection-btn" class="scene-btn">
+            PROJECTION ON
+          </button>
+          <span id="cctv-quality-chip">CAL · --</span>
+        </div>
+        <div class="cctv-calibration-block">
+          <div class="cctv-calibration-header">
+            <div class="cctv-summary-label">CALIBRATION</div>
+            <button id="cctv-adjust-btn" class="scene-btn" title="Drag the camera in the world: rings rotate, arrows move, handles set range/FOV">
+              ADJUST
+            </button>
+          </div>
+          <div id="cctv-cal-readout" class="cctv-cal-readout" aria-label="Camera pose — click a value to type">
+            <button class="cctv-cal-value" data-cal-field="heading" title="Heading (compass °) — click to type">
+              HDG --
+            </button>
+            <button class="cctv-cal-value" data-cal-field="pitch" title="Pitch (° up/down) — click to type">
+              PITCH --
+            </button>
+            <button class="cctv-cal-value" data-cal-field="fov" title="Horizontal FOV (°) — click to type">
+              FOV --
+            </button>
+            <button class="cctv-cal-value" data-cal-field="range" title="Range / monitor-plane distance (m) — click to type">
+              RANGE --
+            </button>
+            <button class="cctv-cal-value" data-cal-field="height" title="Mount height above ground (m) — click to type">
+              HGT --
+            </button>
+            <button class="cctv-cal-value" data-cal-field="north" title="North offset from catalog position (m) — click to type">
+              ΔN --
+            </button>
+            <button class="cctv-cal-value" data-cal-field="east" title="East offset from catalog position (m) — click to type">
+              ΔE --
+            </button>
+          </div>
+          <div class="cctv-controls cctv-calibration-actions">
+            <button id="cctv-calib-save-btn" class="scene-btn">SAVE CAL</button>
+            <button id="cctv-calib-reset-btn" class="scene-btn">
+              RESET CAL
+            </button>
+          </div>
+        </div>
+        <div class="cctv-summary-label">SCENE SUMMARY</div>
+        <div id="cctv-summary">
+          Enable CCTV to start camera-linked intelligence summaries.
+        </div>
       </div>
     </div>
   </div>
@@ -78,23 +116,37 @@
       <div class="panel-header">
         <span class="panel-title">STREET LEVEL</span>
         <span class="panel-divider"></span>
-        <button id="sl-status" class="sl-status" type="button" aria-pressed="false" title="Turn Street Level on or off">OFF</button>
-        <button class="panel-collapse-btn" data-collapse-target="street-level-panel" title="Expand panel">◀</button>
+        <button id="sl-status" class="sl-status" type="button" aria-pressed="false" title="Turn Street Level on or off">
+          OFF
+        </button>
+        <button class="panel-collapse-btn" data-collapse-target="street-level-panel" title="Expand panel">
+          ◀
+        </button>
       </div>
       <div id="sl-body" class="sl-body">
         <div class="sl-main">
           <div id="sl-viewer-wrap" class="sl-viewer-wrap" hidden>
             <div class="sl-viewer-bar">
               <div class="sl-viewer-tools">
-                <button id="sl-viewer-expand" class="scene-btn" type="button" aria-pressed="false" title="Expand the street-level view (Esc shrinks it)"><span class="sl-btn-icon" aria-hidden="true">⤢</span><span class="sl-btn-text">EXPAND</span></button>
+                <button id="sl-viewer-expand" class="scene-btn" type="button" aria-pressed="false" title="Expand the street-level view (Esc shrinks it)">
+                  <span class="sl-btn-icon" aria-hidden="true">⤢</span><span class="sl-btn-text">EXPAND</span>
+                </button>
                 <div class="sl-seg" role="radiogroup" aria-label="Image fit">
-                  <button type="button" class="sl-seg-btn is-active" data-sl-render="letterbox" role="radio" aria-checked="true" title="Fit: show the whole photo, with dark bars where its shape differs from the frame">FIT</button>
-                  <button type="button" class="sl-seg-btn" data-sl-render="fill" role="radio" aria-checked="false" tabindex="-1" title="Fill: fill the frame edge to edge, cropping the photo">FILL</button>
+                  <button type="button" class="sl-seg-btn is-active" data-sl-render="letterbox" role="radio" aria-checked="true" title="Fit: show the whole photo, with dark bars where its shape differs from the frame">
+                    FIT
+                  </button>
+                  <button type="button" class="sl-seg-btn" data-sl-render="fill" role="radio" aria-checked="false" tabindex="-1" title="Fill: fill the frame edge to edge, cropping the photo">
+                    FILL
+                  </button>
                 </div>
-                <button id="sl-follow-btn" class="scene-btn" type="button" aria-pressed="false" aria-label="Camera follows view" title="Camera follows view: move the globe camera wherever the street-level view looks"><span class="sl-btn-icon" aria-hidden="true">⌖</span><span class="sl-btn-text">FOLLOW</span></button>
+                <button id="sl-follow-btn" class="scene-btn" type="button" aria-pressed="false" aria-label="Camera follows view" title="Camera follows view: move the globe camera wherever the street-level view looks">
+                  <span class="sl-btn-icon" aria-hidden="true">⌖</span><span class="sl-btn-text">FOLLOW</span>
+                </button>
               </div>
               <div class="sl-viewer-tools sl-viewer-tools-right">
-                <button id="sl-viewer-close" class="sl-viewer-x" type="button" title="Close the image and deselect it on the map" aria-label="Close the street-level image">×</button>
+                <button id="sl-viewer-close" class="sl-viewer-x" type="button" title="Close the image and deselect it on the map" aria-label="Close the street-level image">
+                  ×
+                </button>
               </div>
             </div>
             <div class="sl-viewer-stage">
@@ -110,20 +162,42 @@
             </div>
           </div>
           <div class="sl-settings">
+          <section class="sl-public-embed" aria-label="Public Mapillary image">
+            <label>Mapillary photo link or image ID<input type="text" autocomplete="off" maxlength="500" placeholder="Paste a public Mapillary photo link" /></label>
+            <div class="sl-viewer-tools">
+              <button type="button" class="scene-btn" data-sl-public-open>
+                VIEW MAPILLARY PHOTO</button><button type="button" class="scene-btn" data-sl-public-close hidden>
+                CLOSE PHOTO
+              </button>
+            </div>
+            <p class="sl-meta" role="status">
+              Opens Mapillary's official viewer here when clicked. Provider
+              attribution is retained.
+            </p>
+            <div class="sl-public-stage" hidden></div>
+            <a class="sl-image-link" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" hidden>Open on Mapillary</a>
+          </section>
             <div class="sl-providers" role="group" aria-label="Imagery providers">
               <span class="cctv-summary-label">PROVIDERS</span>
               <div id="sl-provider-chips" class="sl-chips"></div>
             </div>
-            <div id="sl-error" class="sl-error" role="alert" hidden><span aria-hidden="true">⚠</span> <span id="sl-error-text"></span></div>
-            <!-- A missing key gates the filters only: the chips above stay
-                 focusable so their tooltip can say how to add the key. -->
+            <div id="sl-error" class="sl-error" role="alert" hidden>
+              <span aria-hidden="true">⚠</span> <span id="sl-error-text"></span>
+            </div>
+            <!-- A missing key gates the filters only: the chips above stay focusable so their tooltip can say how to add the key. -->
             <fieldset id="sl-controls" class="sl-controls">
               <div class="sl-filters" role="group" aria-label="Imagery filters">
                 <span class="cctv-summary-label">IMAGERY</span>
                 <div class="sl-seg" role="radiogroup" aria-label="Panorama filter">
-                  <button type="button" class="sl-seg-btn is-active" data-sl-pano="all" role="radio" aria-checked="true">ALL</button>
-                  <button type="button" class="sl-seg-btn" data-sl-pano="pano" role="radio" aria-checked="false" tabindex="-1">360°</button>
-                  <button type="button" class="sl-seg-btn" data-sl-pano="flat" role="radio" aria-checked="false" tabindex="-1">FLAT</button>
+                  <button type="button" class="sl-seg-btn is-active" data-sl-pano="all" role="radio" aria-checked="true">
+                    ALL
+                  </button>
+                  <button type="button" class="sl-seg-btn" data-sl-pano="pano" role="radio" aria-checked="false" tabindex="-1">
+                    360°
+                  </button>
+                  <button type="button" class="sl-seg-btn" data-sl-pano="flat" role="radio" aria-checked="false" tabindex="-1">
+                    FLAT
+                  </button>
                 </div>
               </div>
               <div class="sl-since">
@@ -134,6 +208,21 @@
             </fieldset>
             <ul id="sl-legend" class="sl-legend" aria-label="Coverage colours"></ul>
             <div id="sl-coverage-meta" class="sl-meta"></div>
+            <div class="sl-fallbacks" aria-label="Street imagery alternatives">
+              <button id="sl-pick-point" class="scene-btn" type="button">
+                Pick map point for Street View
+              </button>
+              <button id="sl-retry" class="scene-btn" type="button" hidden>
+                Retry photos
+              </button>
+              <button id="sl-nearest" class="scene-btn" type="button" hidden>
+                Find nearby Mapillary photo
+              </button>
+              <a id="sl-mapillary-fallback" class="sl-image-link" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" hidden>Open selected route in Mapillary</a>
+              <a id="sl-google-fallback" class="sl-image-link" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" hidden>Open nearby Google Street View</a>
+              <span id="sl-external-hint" class="sl-meta" hidden>External sites open only when clicked. Nearby imagery coverage
+                is not guaranteed.</span>
+            </div>
           </div>
         </div>
       </div>
@@ -147,21 +236,29 @@
       <div class="panel-header">
         <span class="panel-title">SCENES</span>
         <span class="panel-divider"></span>
-        <button class="panel-collapse-btn" data-collapse-target="scene-panel" title="Collapse panel">+</button>
+        <button class="panel-collapse-btn" data-collapse-target="scene-panel" title="Collapse panel">
+          +
+        </button>
       </div>
       <div class="scene-controls">
         <select id="scene-select" aria-label="Scene recipe"></select>
         <button id="scene-new-btn" class="scene-btn">NEW</button>
-        <button id="scene-delete-btn" class="scene-btn scene-btn-danger">DEL</button>
+        <button id="scene-delete-btn" class="scene-btn scene-btn-danger">
+          DEL
+        </button>
       </div>
       <div class="scene-controls">
         <button id="scene-capture-btn" class="scene-btn">CAPTURE SHOT</button>
-        <button id="scene-update-shot-btn" class="scene-btn">UPDATE SHOT</button>
+        <button id="scene-update-shot-btn" class="scene-btn">
+          UPDATE SHOT
+        </button>
       </div>
       <div id="scene-shot-list" class="scene-shot-list"></div>
       <div class="scene-controls">
         <button id="scene-start-btn" class="scene-btn">START</button>
-        <button id="scene-stop-btn" class="scene-btn scene-btn-danger">STOP</button>
+        <button id="scene-stop-btn" class="scene-btn scene-btn-danger">
+          STOP
+        </button>
         <button id="scene-next-btn" class="scene-btn">NEXT</button>
       </div>
       <div class="scene-controls">
@@ -176,5 +273,4 @@
       <div id="scene-status">Ready</div>
     </div>
   </div>
-
-  </div>
+</div>

@@ -58,9 +58,10 @@ export function createStreetLevelLayer({
   });
   parts.viewerHost = createViewerHost(context);
   parts.hasSelectedSequence = () =>
-    [...state.providers.values()].some(
-      (entry) => entry.instance.sequenceStats?.()?.selectedId,
-    );
+    [...state.providers.values()].some((entry) => {
+      const sequence = entry.instance.sequenceStats?.();
+      return sequence?.selectedId || sequence?.lastRequestedId;
+    });
   parts.clearSequences = () => {
     for (const entry of state.providers.values())
       entry.instance.clearSequence?.();
@@ -243,6 +244,8 @@ export function createStreetLevelLayer({
 
   function openImage(providerId, imageId) {
     abortNearest();
+    parts.selection.cancelPointPick();
+    state.street.selectedMapPoint = null;
     return parts.viewerHost.open(providerId, imageId);
   }
 
@@ -300,12 +303,17 @@ export function createStreetLevelLayer({
       : [...state.providers.values()];
     for (const entry of candidates) {
       const stats = entry.instance.sequenceStats?.();
-      if (stats?.selectedId || stats?.loading)
+      if (stats?.selectedId || stats?.lastRequestedId || stats?.loading)
         return {
           providerId: entry.def.id,
           selectedId: stats.selectedId || null,
           images: stats.images || 0,
           loading: stats.loading === true,
+          lastRequestedId: stats.lastRequestedId || null,
+          rawCount: stats.rawCount ?? null,
+          usableCount: stats.usableCount ?? null,
+          fallbackPhotoId: stats.fallbackPhotoId || null,
+          point: stats.point || null,
         };
     }
     return { providerId: null, selectedId: null, images: 0, loading: false };
@@ -371,6 +379,7 @@ export function createStreetLevelLayer({
 
     disable() {
       state.enabled = false;
+      parts.selection.cancelPointPick();
       abortNearest();
       unwatchSurface();
       parts.viewerHost.unmount();
@@ -482,11 +491,20 @@ export function createStreetLevelLayer({
     /** Imagery filter for coverage, cones and nearest-image lookups. */
     setCoverageFilter,
     openImage,
+    beginMapPointSelection() {
+      abortNearest();
+      parts.viewerHost.close();
+      parts.clearSequences();
+      return parts.selection.beginPointPick();
+    },
+    cancelMapPointSelection: () => parts.selection.cancelPointPick(),
     /** Open the nearest image any active provider has around a point. */
     async openNearest(point) {
       const view = point || viewCentre(state.viewer);
       if (!Number.isFinite(view?.lat) || !Number.isFinite(view?.lon))
         return false;
+      if (Math.abs(view.lat) > 90 || Math.abs(view.lon) > 180) return false;
+      state.street.lookupPoint = { lat: view.lat, lon: view.lon };
       abortNearest();
       const lookup = new AbortController();
       nearestLookup = lookup;
@@ -521,7 +539,7 @@ export function createStreetLevelLayer({
       if (state.enabled && activeEntries().length)
         state.street.error =
           lastError?.message ||
-          `No street-level imagery within ${NEAREST_RADIUS_M} m of the view centre`;
+          `No photos returned by the configured API within ${NEAREST_RADIUS_M} m. This does not establish missing coverage; retry or check Mapillary.`;
       state.street.loading = false;
       notify();
       return false;
@@ -529,6 +547,7 @@ export function createStreetLevelLayer({
     /** Close the image and deselect it everywhere on the map. */
     closeViewer() {
       abortNearest();
+      parts.selection.cancelPointPick();
       parts.viewerHost.close();
       parts.clearSequences();
     },
@@ -539,9 +558,22 @@ export function createStreetLevelLayer({
       sequenceId,
       providerId = state.providers.keys().next().value,
     ) {
+      parts.selection.cancelPointPick();
+      state.street.selectedMapPoint = null;
       return state.providers
         .get(providerId)
         ?.instance.selectSequence?.(sequenceId);
+    },
+    /** Explicit retry invalidates the selected route's cached image list. */
+    retryStreetLevel() {
+      const sequence = sequenceSnapshot();
+      if (sequence.lastRequestedId)
+        return state.providers
+          .get(sequence.providerId)
+          ?.instance.retrySequence?.();
+      return layer.openNearest(
+        state.street.lookupPoint || state.street.position,
+      );
     },
     clearSequence: () => parts.clearSequences(),
     refreshCoverage() {

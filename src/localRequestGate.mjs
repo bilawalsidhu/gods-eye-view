@@ -152,3 +152,127 @@ export function admitSameSiteRequest({
   }
   return { ok: true };
 }
+
+/** Private Serve admission. Forwarding headers alone never establish trust. */
+export function admitTrustedTailnetRequest({
+  remoteAddress,
+  headers = {},
+  configuredOrigin,
+  ownerLogin,
+  method,
+  requestUrl,
+} = {}) {
+  const deny = () => ({
+    ok: false,
+    status: 403,
+    error: 'Private owner access required',
+  });
+  if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remoteAddress))
+    return deny();
+  let expected;
+  try {
+    expected = new URL(configuredOrigin);
+  } catch {
+    return deny();
+  }
+  if (
+    expected.protocol !== 'https:' ||
+    !expected.hostname.endsWith('.ts.net') ||
+    !/^[a-z0-9][a-z0-9.-]+$/.test(expected.hostname) ||
+    expected.origin !== configuredOrigin ||
+    expected.username ||
+    expected.password ||
+    expected.port ||
+    expected.pathname !== '/' ||
+    expected.search ||
+    expected.hash
+  )
+    return deny();
+  if (
+    !ownerLogin ||
+    typeof headers['tailscale-user-login'] !== 'string' ||
+    headers['tailscale-user-login'] !== ownerLogin
+  )
+    return deny();
+  if (headers['x-forwarded-proto'] !== 'https') return deny();
+  if (
+    PROXY_SIGNALS.some(
+      (name) =>
+        !['x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-host'].includes(
+          name,
+        ) && headers[name],
+    )
+  )
+    return deny();
+  if (
+    headers['x-forwarded-host'] &&
+    headers['x-forwarded-host'] !== headers.host
+  )
+    return deny();
+  let authority;
+  try {
+    authority = new URL(`https://${headers.host}`);
+  } catch {
+    return deny();
+  }
+  if (
+    authority.origin !== expected.origin ||
+    /[\s/?#@]/.test(headers.host || '')
+  )
+    return deny();
+  // Clicking the app link in another app/site produces a cross-site top-level
+  // navigation, with no Origin. This is safe only for the already authenticated
+  // owner's GET of the app document, never APIs, frames, POSTs or WebSockets.
+  // Match the raw pathname; normalization must not turn an API prefix with
+  // dot segments into a document-navigation exception.
+  const pathname =
+    typeof requestUrl === 'string' ? requestUrl.split(/[?#]/, 1)[0] : '';
+  const appDocument = pathname === '/' || pathname === '/index.html';
+  const ownerDocumentNavigation =
+    method === 'GET' &&
+    appDocument &&
+    headers['sec-fetch-mode'] === 'navigate' &&
+    headers['sec-fetch-dest'] === 'document' &&
+    !headers.upgrade &&
+    !headers['sec-websocket-key'];
+  return admitSameSiteRequest({
+    hostHeader: headers.host,
+    protocol: 'https:',
+    origin: headers.origin,
+    secFetchSite: ownerDocumentNavigation ? 'none' : headers['sec-fetch-site'],
+  });
+}
+
+/** Routes that remain on the desktop, including encoded path spellings. */
+export function isDesktopOnlyTailnetPath(requestUrl = '/') {
+  if (typeof requestUrl !== 'string' || !requestUrl.startsWith('/'))
+    return true;
+  let url;
+  try {
+    url = new URL(`http://localhost${requestUrl}`);
+  } catch {
+    return true;
+  }
+  let pathname = url.pathname;
+  try {
+    for (let n = 0; n < 3 && pathname.includes('%'); n++)
+      pathname = decodeURIComponent(pathname);
+  } catch {
+    return true;
+  }
+  if (pathname.includes('%') || pathname.includes('\\')) return true;
+  pathname = new URL(
+    `http://localhost${pathname.replace(/\/+/g, '/')}`,
+  ).pathname.toLowerCase();
+  if (
+    /^\/(?:mcp(?:\/|$)|api\/setup(?:\/|$)|api\/realtime\/(?:oauth-[^/]*|debug-log)(?:\/|$))/.test(
+      pathname,
+    )
+  )
+    return true;
+  return (
+    pathname === '/api/realtime/token' &&
+    url.searchParams.has('auth') &&
+    url.searchParams.get('auth') !== 'api-key'
+  );
+}

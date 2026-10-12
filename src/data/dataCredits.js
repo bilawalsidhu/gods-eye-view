@@ -92,6 +92,10 @@ export function hideOsmCredit(viewer, owner) {
 }
 
 export const DATA_CREDITS = [
+  {
+    key: 'georgia511-operator',
+    html: 'Optional camera source: <a href="https://511ga.org/" target="_blank" rel="noopener">Georgia511 / Georgia Department of Transportation</a>; operator-supplied permitted metadata, provider terms apply. No catalog or media license grant is implied.',
+  },
   // ── Live sources ────────────────────────────────────────────────
   {
     key: 'opensky',

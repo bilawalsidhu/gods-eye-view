@@ -1,3 +1,4 @@
+import { PUBLIC_INFRASTRUCTURE } from './publicInfrastructure.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -66,16 +67,22 @@ test('infrastructure factory preserves identity and creates independent state wi
     [
       { id: 'local-datacenters', name: 'Datacenters', source: 'Local' },
       { id: 'local-dams', name: 'Dams', source: 'USACE' },
+      ...PUBLIC_INFRASTRUCTURE.map(({ id, name, source }) => ({
+        id,
+        name,
+        source,
+      })),
     ],
   );
   first.forEach((layer, index) => {
     assert.notEqual(layer, second[index]);
     layer.destroy();
-    assert.deepEqual(second[index].getStats(), {
-      count: 0,
-      lastUpdate: null,
-      error: null,
-    });
+    if (index < 2)
+      assert.deepEqual(second[index].getStats(), {
+        count: 0,
+        lastUpdate: null,
+        error: null,
+      });
     second[index].destroy();
   });
 });
@@ -196,6 +203,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'infrastructureOverlayEntry.js',
     'localGeojsonCore.js',
     'localGeojsonLod.js',
+    'publicInfrastructure.js',
   ]);
   assert.deepEqual(
     entry.imports,

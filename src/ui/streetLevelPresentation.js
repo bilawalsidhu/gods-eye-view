@@ -127,13 +127,55 @@ function presentViewer(state) {
 function presentMeta(state) {
   if (state.providers.length === 0) return state.coverage.hint || '';
   if (!state.enabled) return 'Switch a provider on to draw its coverage.';
-  if (state.sequence.selectedId)
+  if (state.sequence.selectedId || state.sequence.lastRequestedId)
     return state.sequence.loading
-      ? 'Loading this sequence…'
-      : `${state.sequence.images.toLocaleString()} images in this sequence · Esc clears`;
+      ? 'Loading this sequence.'
+      : state.sequence.rawCount != null
+        ? `${state.sequence.rawCount.toLocaleString()} photos returned; ${state.sequence.usableCount.toLocaleString()} with map coordinates; ${state.sequence.images.toLocaleString()} markers shown; Esc clears`
+        : `${state.sequence.images.toLocaleString()} images in this sequence · Esc clears`;
   if (state.coverage.count > 0)
     return `${state.coverage.count.toLocaleString()} sequences in view · click a line for its photos`;
   return state.coverage.hint || '';
+}
+
+/** External links are inert until clicked; no iframe, SDK or API key. */
+export function streetLevelFallbacks(state) {
+  const candidate =
+    state.street?.selectedMapPoint ||
+    state.sequence?.point ||
+    state.street?.position ||
+    state.street?.lookupPoint;
+  const point =
+    Number.isFinite(candidate?.lat) &&
+    Number.isFinite(candidate?.lon) &&
+    Math.abs(candidate.lat) <= 90 &&
+    Math.abs(candidate.lon) <= 180
+      ? candidate
+      : null;
+  const photo = String(state.sequence?.fallbackPhotoId || '');
+  return {
+    point,
+    google: point
+      ? `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${encodeURIComponent(`${point.lat},${point.lon}`)}`
+      : null,
+    mapillary: /^\d+$/.test(photo)
+      ? `https://www.mapillary.com/app/?pKey=${encodeURIComponent(photo)}&focus=photo`
+      : point
+        ? `https://www.mapillary.com/app/?lat=${point.lat}&lng=${point.lon}&z=17`
+        : null,
+    mapillaryLabel: /^\d+$/.test(photo)
+      ? 'Open first returned Mapillary photo'
+      : 'Open selected route in Mapillary',
+    retry: Boolean(
+      state.sequence?.lastRequestedId ||
+      state.street?.lookupPoint ||
+      state.street?.error ||
+      state.coverage?.error,
+    ),
+    busy: state.sequence?.loading === true || state.street?.loading === true,
+    picking: state.street?.pointPicking === true,
+    selectedMapPoint: Boolean(state.street?.selectedMapPoint),
+  };
 }
 
 /** @param {{now?: number}} [options] Clock for the SINCE readout. */
@@ -150,14 +192,16 @@ export function presentStreetLevelPanel(state, { now = Date.now() } = {}) {
     status: presentStatus(state),
     controlsDisabled: keyRequired || state.providers.length === 0,
     providers: presentProviders(state),
-    error: keyMissing
-      ? null
-      : state.street.error || state.coverage.error || null,
+    error:
+      keyMissing && !state.street.pointPicking
+        ? null
+        : state.street.error || state.coverage.error || null,
     filter: { pano: filter.pano, sinceDays: Number(filter.sinceDays) || 0 },
     since: presentSince(filter.sinceDays, now),
     legend: state.legend || [],
     viewer: presentViewer(state),
     meta: presentMeta(state),
     wantsOpen: state.street.open === true,
+    fallbacks: streetLevelFallbacks(state),
   };
 }

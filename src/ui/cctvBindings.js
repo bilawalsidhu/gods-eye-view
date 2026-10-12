@@ -1,6 +1,22 @@
 export function _initCctvPanel() {
   if (!this._cctvPanel) return;
 
+  this.listen(this._cctvRefreshBtn, 'click', () => {
+    if (this._cctvRefreshBtn.getAttribute('aria-disabled') === 'true') return;
+    this._actionGeneration++;
+    void this.cctv.retryActiveCamera?.();
+  });
+
+  this.listen(
+    this._cctvPanel.querySelector?.('#cctv-close-btn'),
+    'click',
+    () => {
+      this._actionGeneration++;
+      this.cctv.deactivateActiveCamera();
+      this.actions.setPanelCollapsed('cctv-panel', true, { explicit: true });
+    },
+  );
+
   this.listen(this._cctvEnableBtn, 'click', async () => {
     this._actionGeneration++;
     await this.actions.toggleEnabled();

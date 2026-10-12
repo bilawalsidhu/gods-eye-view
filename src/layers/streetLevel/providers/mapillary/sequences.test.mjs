@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 import { MESH_CELL_DEG } from '../../meshSampler.js';
-import { createSequences } from './sequences.js';
+import { createSequences, normalizeSequenceImage } from './sequences.js';
 
 // The cone glyphs draw on a canvas; Node has none, so any drawing is a no-op.
 const noop = () => {};
@@ -106,7 +106,7 @@ test('a failed sequence load leaves no stale cones and can be retried', async ()
   assert.equal(state.sequence.loading, false);
   assert.equal(state.sequence.selectedId, null, 'B is not left highlighted');
   assert.deepEqual(colours.at(-1), ['B', false]);
-  assert.deepEqual(errors, [null, 'Sequence images unavailable']);
+  assert.equal(errors.at(-1), 'Sequence images unavailable');
 
   // Clicking B again asks again.
   sequences.select('B');
@@ -154,6 +154,67 @@ test('a cached sequence is re-selected without a lookup', async () => {
   assert.deepEqual(drawn(), ['A-0', 'A-1'], 'drawn at once');
   assert.equal(state.sequence.loading, false);
   assert.equal(state.sequence.selectedId, 'A');
+});
+
+test('empty routes remain retryable and do not persist in the cache', async () => {
+  const { state, source, sequences, errors } = setup();
+  sequences.select('A');
+  source.last('A').resolve([]);
+  await settle();
+  assert.equal(state.sequence.cache.has('A'), false);
+  assert.equal(state.sequence.rawCount, 0);
+  assert.match(errors.at(-1), /empty photo list/);
+  sequences.select('A');
+  assert.equal(source.calls.length, 2);
+  source.last('A').resolve(records('A'));
+  await settle();
+  sequences.retry();
+  assert.equal(
+    source.calls.length,
+    3,
+    'explicit retry also refreshes a successful cached route',
+  );
+  assert.equal(state.sequence.cache.has('A'), false);
+  source.last('A').resolve(records('A'));
+  await settle();
+  assert.equal(errors.at(-1), null);
+});
+
+test('unlocated returned photos retain counts and a verified external fallback', async () => {
+  const { state, source, sequences, errors } = setup();
+  sequences.select('A');
+  source
+    .last('A')
+    .resolve([
+      { id: '12345' },
+      { id: '67890', geometry: { coordinates: [NaN, 2] } },
+    ]);
+  await settle();
+  assert.equal(state.sequence.rawCount, 2);
+  assert.equal(state.sequence.usableCount, 0);
+  assert.equal(state.sequence.images.length, 0);
+  assert.equal(state.sequence.fallbackPhotoId, '12345');
+  assert.equal(state.sequence.cache.has('A'), false);
+  assert.match(errors.at(-1), /returned 2 photos.*none have usable/);
+  sequences.clearSelection();
+  assert.equal(state.sequence.fallbackPhotoId, null);
+  assert.equal(state.sequence.lastRequestedId, null);
+});
+
+test('coordinate normalization accepts computed positions and rejects invalid ranges or IDs', () => {
+  assert.equal(
+    normalizeSequenceImage({
+      id: '12',
+      computed_geometry: { coordinates: [-84, 34] },
+    }).lat,
+    34,
+  );
+  for (const record of [
+    { geometry: { coordinates: [1, 2] } },
+    { id: '12', geometry: { coordinates: [181, 2] } },
+    { id: '12', geometry: { coordinates: [1, Infinity] } },
+  ])
+    assert.equal(normalizeSequenceImage(record), null);
 });
 
 test('clearSelection cancels the lookup and uncolours the sequence', async () => {

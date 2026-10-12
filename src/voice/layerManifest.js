@@ -370,6 +370,11 @@ const layers = [
  * pair belong to a scripted scene and are driven by `control_scene`.
  */
 export const VOICE_OFF_LAYERS = Object.freeze({
+  'public-power-plants': 'operator-supplied local inventory; UI controls only',
+  'mapped-mobile-sites': 'operator-supplied local metadata; UI controls only',
+  'mapped-power-plants': 'operator-supplied local metadata; UI controls only',
+  'mapped-substations': 'operator-supplied local metadata; UI controls only',
+  'mapped-telecom-lines': 'operator-supplied local metadata; UI controls only',
   'bhote-koshi-2026': 'scene-driven event layer (control_scene)',
   'bhote-koshi-locator': 'scene-driven event layer (control_scene)',
 });

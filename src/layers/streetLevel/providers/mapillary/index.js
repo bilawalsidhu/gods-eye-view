@@ -176,11 +176,17 @@ export function createMapillaryProvider({ source }) {
         },
 
         selectSequence: (sequenceId) => parts.sequences.select(sequenceId),
+        retrySequence: () => parts.sequences.retry(),
         clearSequence: () => parts.sequences.clearSelection(),
         sequenceStats: () => ({
           selectedId: state.sequence.selectedId,
           images: state.sequence.images.length,
           loading: state.sequence.loading,
+          lastRequestedId: state.sequence.lastRequestedId || null,
+          rawCount: state.sequence.rawCount ?? null,
+          usableCount: state.sequence.usableCount ?? null,
+          fallbackPhotoId: state.sequence.fallbackPhotoId || null,
+          point: state.sequence.point || null,
         }),
 
         /**

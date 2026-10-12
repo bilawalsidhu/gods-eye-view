@@ -1,0 +1,570 @@
+/* All product overrides require the touch-only controller's body class. */
+body.mobile-map-first #mobile-map-menu #top-center-actions button {
+  flex-direction: column;
+  gap: 6px;
+}
+body.mobile-map-first #mobile-map-menu #clear-selected-layers::after {
+  content: 'Clear layers';
+}
+body.mobile-map-first #mobile-map-menu #share-btn::after {
+  content: 'Share view';
+}
+body.mobile-map-first #mobile-map-menu #tilt-map-view::after {
+  content: 'Tilt view';
+}
+body.mobile-map-first #mobile-map-menu #north-up-view::after {
+  content: 'North up';
+}
+body.mobile-map-first #mobile-map-menu #reset-globe-view::after {
+  content: 'Globe';
+}
+body.mobile-map-first
+  #first-run-launcher:not(#mobile-map-menu #first-run-launcher) {
+  display: none;
+}
+body.mobile-map-first #mobile-map-menu #first-run-launcher.visible {
+  display: block;
+  position: static;
+  inset: auto;
+  width: 100%;
+  max-height: none;
+  transform: none;
+  margin: 0 0 12px;
+  opacity: 1;
+}
+body.mobile-map-first .mobile-menu-credit-slot {
+  flex: 0 0 auto;
+  padding: 8px 12px max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid #345260;
+}
+body.mobile-map-first.mobile-menu-open #mobile-map-menu #cesium-credits {
+  position: static !important;
+  width: 100% !important;
+  margin: 0 !important;
+}
+body.mobile-map-first #mobile-map-menu :is(.scene-progress, #scene-status) {
+  display: block !important;
+}
+#mobile-map-toolbar[hidden],
+#mobile-camera-minimize {
+  display: none;
+}
+#mobile-map-menu:not([open]) {
+  display: none;
+}
+body.mobile-map-first #title-bar,
+body.mobile-map-first #left-panel-stack,
+body.mobile-map-first #command-dock,
+body.mobile-map-first #global-loading-status,
+body.mobile-map-first #traffic-sync-chip,
+body.mobile-map-first #cctv-sync-chip,
+body.mobile-map-first #style-indicator {
+  display: none !important;
+}
+body.mobile-map-first:not(.mobile-show-readouts) #intel-hud {
+  visibility: hidden !important;
+}
+body.mobile-map-first.mobile-show-readouts
+  #intel-hud
+  :is(
+    .hud-top-left,
+    .hud-top-right,
+    .hud-bottom-left,
+    .hud-bottom-right,
+    .hud-bottom-bar,
+    .hud-left-edge,
+    .hud-right-edge,
+    .hud-top-bar
+  ) {
+  display: flex;
+}
+body.mobile-map-first #mobile-map-toolbar {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  display: flex;
+  gap: 8px;
+  z-index: 110;
+  max-width: calc(100vw - 24px);
+}
+body.mobile-map-first #mobile-map-toolbar button,
+body.mobile-map-first #mobile-map-menu button,
+body.mobile-map-first #mobile-map-menu select,
+body.mobile-map-first #mobile-map-menu summary {
+  min-height: 48px;
+}
+body.mobile-map-first #mobile-map-toolbar button {
+  min-width: 48px;
+  padding: 8px 12px;
+  border: 1px solid #3c7183;
+  border-radius: 12px;
+  background: rgba(8, 20, 30, 0.95);
+  color: #e4f8ff;
+  font: 600 13px var(--font-mono);
+  cursor: pointer;
+}
+body.mobile-map-first #mobile-map-toolbar button[hidden] {
+  display: none;
+}
+body.mobile-map-first #mobile-map-menu[open] {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  inset: 0 auto 0 0;
+  margin: 0;
+  width: min(420px, 100vw);
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  padding: 0;
+  box-sizing: border-box;
+  border: 0;
+  background: #0b1720;
+  color: #e4f8ff;
+  overflow: hidden;
+  font: 14px/1.5 var(--font-mono);
+}
+body.mobile-map-first #mobile-map-menu::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+body.mobile-map-first .mobile-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: max(12px, env(safe-area-inset-top)) 12px 12px;
+  border-bottom: 1px solid #345260;
+}
+body.mobile-map-first .mobile-menu-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: 0;
+}
+body.mobile-map-first #mobile-map-menu button {
+  border: 1px solid #386275;
+  border-radius: 8px;
+  background: #152c3b;
+  color: #e4f8ff;
+  padding: 8px 10px;
+  font-size: 13px;
+  white-space: normal;
+}
+body.mobile-map-first
+  #mobile-map-menu
+  :is(button, input, select, summary):focus-visible {
+  outline: 2px solid #60e5ff;
+  outline-offset: 2px;
+}
+body.mobile-map-first .mobile-menu-sections {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 12px max(16px, env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+}
+body.mobile-map-first .mobile-menu-sections summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 4px;
+  cursor: pointer;
+  border-bottom: 1px solid #294350;
+  box-sizing: border-box;
+}
+body.mobile-map-first .mobile-menu-sections summary::after {
+  content: '+';
+  font-size: 20px;
+}
+body.mobile-map-first .mobile-menu-sections details[open] > summary::after {
+  content: '−';
+}
+body.mobile-map-first .mobile-menu-section-body {
+  padding: 12px 0 16px;
+}
+body.mobile-map-first
+  #mobile-map-menu
+  :is(
+    .dock-popover-content,
+    #top-center-actions,
+    #scene-panel,
+    #pp-toggles,
+    #gev-voice-control,
+    [data-panel-id]
+  ) {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  margin: 0 !important;
+  box-sizing: border-box;
+}
+body.mobile-map-first #mobile-map-menu .dock-popover-content {
+  display: block !important;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+body.mobile-map-first
+  #mobile-map-menu
+  :is(
+    .dock-pin-btn,
+    .panel-glow,
+    #scene-panel .panel-header,
+    .pp-header-row,
+    #hud-toggle,
+    #clean-view-toggle
+  ) {
+  display: none !important;
+}
+body.mobile-map-first #mobile-map-menu #top-center-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px !important;
+}
+body.mobile-map-first #mobile-map-menu #top-center-actions button {
+  flex: 1 1 100px;
+  border-radius: 8px;
+}
+body.mobile-map-first #mobile-map-menu #data-toggles {
+  display: flex !important;
+  flex-direction: column;
+  max-height: none;
+  overflow: visible;
+  gap: 8px;
+}
+body.mobile-map-first #mobile-map-menu :is(.data-toggle, .data-toggle-row) {
+  min-height: 48px;
+}
+body.mobile-map-first #mobile-map-menu :is(#scene-panel, #pp-toggles) {
+  display: block !important;
+  background: none;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+body.mobile-map-first
+  #mobile-map-menu
+  :is(.scene-panel-inner, .pp-panel-body, .scene-controls, .scene-shot-list) {
+  display: flex !important;
+  max-height: none;
+  height: auto;
+  overflow: visible;
+}
+body.mobile-map-first #mobile-map-menu :is(.scene-panel-inner, .pp-panel-body) {
+  flex-direction: column;
+  padding: 0;
+  gap: 12px;
+}
+body.mobile-map-first #mobile-map-menu :is(input[type='text'], select) {
+  max-width: 100%;
+  min-width: 0;
+  font-size: 16px;
+}
+body.mobile-map-first
+  #mobile-map-menu
+  :is(
+    .location-city-row,
+    .location-pills,
+    .poi-row-container,
+    .button-grid,
+    .map-stack-chip-row,
+    .cctv-controls
+  ) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+body.mobile-map-first #mobile-map-menu .location-search-wrap {
+  flex: 1 1 100%;
+}
+body.mobile-map-first #mobile-map-menu #location-search {
+  width: 100%;
+  height: 48px;
+}
+body.mobile-map-first #mobile-map-menu .mobile-readouts-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  margin-bottom: 12px;
+}
+body.mobile-map-first #mobile-map-menu input[type='checkbox'] {
+  width: 24px;
+  height: 24px;
+}
+body.mobile-map-first #mobile-map-menu #gev-voice-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #132c3c;
+}
+body.mobile-map-first #mobile-map-menu #gev-voice-button {
+  width: 60px;
+  height: 60px;
+}
+body.mobile-map-first #mobile-map-menu [data-panel-id][hidden] {
+  display: none !important;
+}
+body.mobile-map-first #right-context-rail {
+  display: none !important;
+}
+body.mobile-map-first.mobile-camera-open:not(.mobile-menu-open)
+  #right-context-rail {
+  display: block !important;
+  position: fixed;
+  top: auto;
+  left: 12px;
+  right: 12px;
+  bottom: calc(60px + env(safe-area-inset-bottom));
+  width: auto;
+  height: auto;
+  max-height: min(40dvh, 300px);
+  overflow: hidden;
+  pointer-events: auto;
+}
+body.mobile-map-first #right-context-rail > #cctv-panel {
+  display: block !important;
+  position: relative !important;
+  inset: auto !important;
+  width: 100% !important;
+  height: auto !important;
+  max-height: min(40dvh, 300px) !important;
+}
+body.mobile-map-first #right-context-rail #cctv-panel .cctv-panel-inner {
+  display: flex !important;
+  flex-direction: column;
+  max-height: min(40dvh, 300px) !important;
+  height: auto;
+  padding: 8px;
+  gap: 8px;
+}
+body.mobile-map-first #cctv-panel .panel-header {
+  min-height: 48px;
+  padding: 0;
+  gap: 6px;
+}
+body.mobile-map-first #cctv-panel .panel-header .panel-title {
+  display: none;
+}
+body.mobile-map-first
+  #cctv-panel
+  .panel-header
+  :is(.panel-divider, .panel-collapse-btn) {
+  display: none;
+}
+body.mobile-map-first
+  #cctv-panel
+  :is(#mobile-camera-minimize, #cctv-close-btn, #cctv-refresh-btn) {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+
+#mobile-camera-fullscreen,
+#mobile-camera-expanded:not([open]) {
+  display: none;
+}
+body.mobile-map-first #mobile-camera-fullscreen {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+body.mobile-map-first #mobile-camera-expanded[open] {
+  display: block;
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  width: 100dvw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  color: #eaf7ff;
+  background: #050a10;
+  overflow: hidden;
+}
+body.mobile-map-first .mobile-camera-expanded-surface {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  padding: max(8px, env(safe-area-inset-top))
+    max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
+  background: #050a10;
+}
+body.mobile-map-first #mobile-camera-expanded #cctv-panel {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+  display: flex !important;
+  flex: 1 1 0;
+  min-height: 0;
+  height: 0 !important;
+  max-height: none !important;
+  width: 100% !important;
+  margin: 0;
+  border: 0;
+}
+body.mobile-map-first #mobile-camera-expanded .cctv-panel-inner {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100% !important;
+  max-height: none !important;
+  width: 100%;
+  padding: 0;
+  gap: 8px;
+}
+body.mobile-map-first #mobile-camera-expanded .panel-header {
+  flex: 0 0 auto;
+}
+body.mobile-map-first #mobile-camera-expanded .cyber-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+body.mobile-map-first #mobile-camera-expanded #cctv-frame-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  height: 0;
+  border-radius: 0;
+  background: #000;
+}
+body.mobile-map-first #mobile-camera-expanded :is(#cctv-frame, #cctv-video) {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  object-fit: contain;
+}
+body.mobile-map-first .mobile-camera-expanded-credits {
+  flex: 0 0 auto;
+  font-size: 11px;
+  line-height: 1.4;
+  padding-top: 8px;
+}
+body.mobile-map-first .mobile-camera-expanded-credits #cctv-source-badge {
+  display: block !important;
+  overflow-wrap: anywhere;
+}
+body.mobile-map-first
+  .mobile-camera-expanded-credits
+  #cctv-retry-status:not([hidden]) {
+  display: block !important;
+  margin: 0;
+}
+body.mobile-map-first .mobile-camera-expanded-credits #cesium-credits {
+  position: static !important;
+  inset: auto !important;
+  margin: 0 !important;
+  width: 100%;
+  display: block !important;
+}
+body.mobile-map-first #cctv-panel .cyber-panel-body {
+  display: flex !important;
+  flex-direction: column;
+  overflow-y: auto;
+  min-height: 0;
+  gap: 8px;
+}
+body.mobile-map-first #cctv-panel #cctv-retry-status {
+  order: -2;
+}
+body.mobile-map-first #cctv-panel .cctv-controls:has(#cctv-camera-select) {
+  display: grid !important;
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
+  order: -1;
+}
+body.mobile-map-first #cctv-panel .cctv-frame-wrap {
+  display: block !important;
+  height: min(18dvh, 140px);
+  flex: 0 0 auto;
+}
+body.mobile-map-first:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
+body.mobile-map-first:not(.ui-clean-view):not(.recording-mode):has(
+    #intel-hud[data-variant='minimal'].active
+  )
+  #cesium-credits {
+  bottom: max(12px, env(safe-area-inset-bottom));
+}
+@media (orientation: landscape) {
+  body.mobile-map-first #mobile-camera-expanded .cctv-panel-inner {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 160px;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  body.mobile-map-first #mobile-camera-expanded .panel-header {
+    grid-column: 2;
+    grid-row: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-self: start;
+  }
+  body.mobile-map-first #mobile-camera-expanded .panel-title {
+    display: none;
+  }
+  body.mobile-map-first #mobile-camera-expanded #cctv-close-btn {
+    grid-column: auto;
+  }
+  body.mobile-map-first #mobile-camera-expanded .cyber-panel-body {
+    display: contents !important;
+  }
+  body.mobile-map-first #mobile-camera-expanded #cctv-frame-wrap {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    height: 100%;
+  }
+  body.mobile-map-first
+    #mobile-camera-expanded
+    .cctv-controls:has(#cctv-camera-select) {
+    grid-column: 2;
+    grid-row: 2;
+    grid-template-columns: 1fr 1fr;
+    align-self: start;
+  }
+  body.mobile-map-first #mobile-camera-expanded #cctv-camera-select {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  body.mobile-map-first
+    #mobile-camera-expanded
+    :is(#cctv-prev-btn, #cctv-next-btn) {
+    grid-row: 2;
+  }
+  body.mobile-map-first.mobile-camera-open:not(.mobile-menu-open)
+    #right-context-rail {
+    left: auto;
+    width: min(340px, 44vw);
+    max-height: calc(100dvh - 128px) !important;
+  }
+  body.mobile-map-first #right-context-rail > #cctv-panel,
+  body.mobile-map-first #right-context-rail #cctv-panel .cctv-panel-inner {
+    max-height: calc(100dvh - 128px) !important;
+  }
+  body.mobile-map-first #cctv-panel .cctv-frame-wrap {
+    height: min(16dvh, 110px);
+  }
+}

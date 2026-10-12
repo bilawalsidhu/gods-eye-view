@@ -1,5 +1,12 @@
 # Changelog
 
+- Add map-first mobile navigation and bounded rendering/media budgets, camera
+  Refresh/Close and shared-surface page/native expansion, one-shot locate with
+  share-coordinate protection, local snapshot annotation/derivatives/research notes,
+  explicit original-image Sol/high Q&A, optional owner-only Serve admission,
+  operator-supplied Georgia camera and local public-infrastructure adapters.
+  Include loopback launch/setup guidance; personal data/media/settings are excluded.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 
@@ -1681,3 +1688,7 @@ represent previously published GitHub Releases.
 ## [0.1.0] — 2026-02-09
 
 - Initial project version.
+
+## Contribution: local image, street imagery, sun and limited news tools
+
+Adds original/crop Sol Q&A, opt-in labeled Flare reconstruction with persistent owner allowance, Street Level point picking and official Mapillary embeds, local SunCalc time/shadows, and explicit bounded DOC2 place-name news cards. Geographic news retrieval remains unavailable; no news pins. See docs/LOCAL-IMAGE-WORKFLOW.md and docs/SUN-AND-NEWS.md.

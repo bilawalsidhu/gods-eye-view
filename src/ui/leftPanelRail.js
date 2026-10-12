@@ -49,7 +49,11 @@ export function layoutLeftPanelRail({
 
   // The existing narrow-screen composition has its own full-width stack.
   // Keep this desktop lane engine from fighting those dedicated rules.
-  if (windowRef.matchMedia('(max-width: 720px)').matches) {
+  if (
+    windowRef.matchMedia(
+      '(max-width: 720px), (pointer: coarse) and (max-width: 900px), (pointer: coarse) and (max-height: 600px)',
+    ).matches
+  ) {
     stack.classList.remove('layout-focus');
     stack.classList.remove('layout-tail');
     stack.style.removeProperty('--left-stack-safe-top');

@@ -2,10 +2,12 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 import { resolveAllowedHosts } from '../../build/allowedHosts.js';
 import { createBrowserViteConfig } from '../../build/vite.js';
+import { configuredImageProvider } from '../providers/openai/image-policy.js';
 import { localProviderPlugins } from '../providers/local.js';
 import { localMcpPlugin } from '../mcp/plugin.js';
 import { apiNotFoundPlugin } from './api-not-found.js';
 import { standaloneVoiceTools } from './voiceTools.js';
+import { privateTailnetPlugin } from './tailnet-access.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -17,10 +19,17 @@ export default defineConfig(({ command, mode }) => {
   }
   return createBrowserViteConfig({
     plugins: [
-      ...localProviderPlugins({ realtime: { tools: standaloneVoiceTools() } }),
+      privateTailnetPlugin({
+        origin: process.env.GEV_TRUSTED_TAILSCALE_ORIGIN,
+        ownerLogin: process.env.GEV_TRUSTED_TAILSCALE_LOGIN,
+      }),
+      ...localProviderPlugins({
+        realtime: { tools: standaloneVoiceTools() },
+        imageGeneration: configuredImageProvider(),
+      }),
       localMcpPlugin(),
       apiNotFoundPlugin(),
-    ],
+    ].filter(Boolean),
     googleApiKey: process.env.GOOGLE_MAPS_API_KEY,
     cesiumToken: process.env.CESIUM_ION_TOKEN,
     mapillaryToken: process.env.MAPILLARY_CLIENT_TOKEN,

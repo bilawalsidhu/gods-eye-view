@@ -9,7 +9,10 @@ import { readStylesheet } from './testSupport/readStylesheet.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
 
-const html = expandApplicationHtml(read('index.html'));
+// Structural assertions should tolerate formatted, multiline attributes.
+const html = expandApplicationHtml(read('index.html'))
+  .replace(/\s+/g, ' ')
+  .replace(/\s+>/g, '>');
 const css = readStylesheet(path.join(ROOT, 'style.css'));
 const panelChrome = read('src/ui/panelChrome.js');
 const layoutController = read('src/ui/panelLayoutController.js');

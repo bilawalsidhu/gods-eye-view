@@ -26,6 +26,48 @@ export function _renderCctvState(state) {
   const enabled = !!state?.enabled && !!this.actions.isEnabled();
   const activeId = state?.activeCameraId || '';
   const activeCamera = state?.activeCamera || null;
+  const retry = activeCamera?.retry;
+  const attemptKey = enabled ? `${activeId}:${retry?.attempt || 0}` : '';
+  if (attemptKey !== this._cctvRetryAttemptKey) {
+    this._cctvRetryAttemptKey = attemptKey;
+    this._cctvVideoSurface?.stop();
+    this._cctvVideoSurface = null;
+    this._clearCctvFrame();
+  }
+  clearTimeout(this._cctvRetryTimer);
+  this._cctvRetryTimer = null;
+  const remaining = Math.max(0, (retry?.nextAllowedAt || 0) - Date.now());
+  const busy = retry?.status === 'loading';
+  if (this._cctvRefreshBtn) {
+    this._cctvRefreshBtn.disabled = !enabled || !activeId;
+    this._cctvRefreshBtn.setAttribute(
+      'aria-disabled',
+      String(busy || remaining > 0),
+    );
+    this._cctvRefreshBtn.setAttribute('aria-busy', String(busy));
+    this._cctvRefreshBtn.setAttribute('aria-describedby', 'cctv-retry-status');
+    const label = busy
+      ? 'Camera reconnection in progress'
+      : remaining > 0
+        ? 'Refresh selected camera connection. Please wait a few seconds before retrying.'
+        : 'Refresh selected camera connection';
+    this._cctvRefreshBtn.setAttribute('aria-label', label);
+    this._cctvRefreshBtn.title = label;
+    this._cctvRefreshBtn.textContent = busy ? 'RETRYING' : 'REFRESH';
+  }
+  if (this._cctvRetryStatus) {
+    const connection = enabled && activeId ? activeCamera?.connection : null;
+    this._cctvRetryStatus.hidden = !connection;
+    this._cctvRetryStatus.dataset.state = connection?.status || 'idle';
+    const message = connection?.message || '';
+    if (this._cctvRetryStatus.textContent !== message)
+      this._cctvRetryStatus.textContent = message;
+  }
+  if (remaining && !busy)
+    this._cctvRetryTimer = setTimeout(
+      () => this._renderCctvState(this._cctvState),
+      remaining + 20,
+    );
 
   // Auto-expand the panel when the active camera CHANGES to a new non-null
   // id while the layer is enabled. Covers click-on-globe, panel controls,
@@ -172,7 +214,10 @@ export function _renderCctvState(state) {
     const visible =
       liveIntent &&
       !document.hidden &&
-      !this._cctvPanel?.classList.contains('collapsed');
+      (!!this._cctvPanel?.closest?.('#mobile-camera-expanded[open]') ||
+        (document.body?.classList.contains('mobile-map-first')
+          ? document.body.classList.contains('mobile-camera-open')
+          : !this._cctvPanel?.classList.contains('collapsed')));
     if (!visible || this._cctvVideoCameraId !== activeId) {
       this._cctvVideoSurface?.stop();
       this._cctvVideoSurface = null;

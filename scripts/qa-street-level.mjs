@@ -1546,6 +1546,13 @@ async function main() {
         async () => {
           await openById(firstImageId);
           await floatPanel();
+          // This gate exercises resize, independently of where the earlier
+          // drag ended. Added settings can put the lower grip offscreen.
+          await page.evaluate(() => {
+            const panel = document.getElementById('street-level-panel');
+            panel.style.top = '20px';
+            panel.style.left = '300px';
+          });
           const viewerHeight = () =>
             page.$eval('#sl-viewer', (node) =>
               Math.round(node.getBoundingClientRect().height),
@@ -1565,9 +1572,37 @@ async function main() {
             before,
           );
           const after = await viewerHeight();
+          const resizeDiagnostics = await page.evaluate(() => {
+            const panel = document.getElementById('street-level-panel');
+            return {
+              panelClass: panel.className,
+              panelStyle: panel.getAttribute('style'),
+              elements: [
+                '.street-level-panel-inner',
+                '.sl-body',
+                '.sl-main',
+                '.sl-viewer-wrap',
+                '.sl-viewer-stage',
+                '#sl-viewer',
+                '.sl-settings',
+              ].map((selector) => {
+                const node = panel.querySelector(selector),
+                  css = getComputedStyle(node),
+                  box = node.getBoundingClientRect();
+                return {
+                  selector,
+                  height: box.height,
+                  width: box.width,
+                  flex: css.flex,
+                  maxHeight: css.maxHeight,
+                  overflow: css.overflowY,
+                };
+              }),
+            };
+          });
           assert.ok(
             after > before + 60,
-            `viewer grew with the window (${before} → ${after}px)`,
+            `viewer grew with the window (${before} → ${after}px): ${JSON.stringify(resizeDiagnostics)}`,
           );
           assert.equal(
             await page.$eval(
