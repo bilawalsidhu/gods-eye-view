@@ -1325,3 +1325,92 @@
     line-height: 1.4;
   }
 }
+
+/*
+ * Touch targets on phones: enlarge the tappable area of compact controls to
+ * at least 44px with an invisible hit-slop layer, so the visual design stays
+ * unchanged. ::after is used because the Cyber theme decorates ::before.
+ */
+@media (max-width: 720px) and (pointer: coarse) {
+  #top-center-actions button,
+  #reset-globe-view,
+  .panel-collapse-btn,
+  .hud-widget-toggle,
+  .hud-widget-chip,
+  .hud-group-toggle,
+  .hud-group-chip,
+  .data-toggle-btn,
+  .dock-pin-btn,
+  .my-location-recenter,
+  #search-toggle {
+    position: relative;
+  }
+
+  /* 40px buttons on a 44px pitch: each hit area reaches 44px without
+     overlapping its neighbour. */
+  #top-center-actions {
+    gap: 4px;
+  }
+
+  #top-center-actions button,
+  #reset-globe-view {
+    width: 40px;
+    height: 40px;
+  }
+
+  #top-center-actions button::after,
+  #reset-globe-view::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+  }
+
+  .cesium-widget-credits a,
+  .cesium-credit-expand-link {
+    position: relative;
+  }
+
+  .cesium-widget-credits a::after,
+  .cesium-credit-expand-link::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 44px;
+    transform: translateY(-50%);
+  }
+
+  .panel-collapse-btn::after,
+  .hud-widget-toggle::after,
+  .hud-widget-chip::after,
+  .hud-group-toggle::after,
+  .hud-group-chip::after,
+  .dock-pin-btn::after,
+  .my-location-recenter::after,
+  #search-toggle::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+
+  .data-toggle-btn::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 48px);
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+
+  /* A 16px input avoids focus auto-zoom and gives a 44px touch row. */
+  #location-search {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}
