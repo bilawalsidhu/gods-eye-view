@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { createGoogleTokenSource } from '../../src/maps/googleTokens.js';
-import { googleTokenUnavailablePlugin } from './google-token-unavailable.js';
+import { createGoogleTokenSource } from '../maps/googleTokens.js';
+import { googleTokenUnavailablePlugin } from '../../server/standalone/google-token-unavailable.js';
 
 async function withServer({ beforeFallback } = {}, check) {
   const middlewares = [];
