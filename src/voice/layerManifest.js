@@ -328,6 +328,30 @@ const layers = [
     query: { fields: { name: ['t'], class: ['t'], kind: ['t'] } },
   },
   {
+    id: 'drone-airspace',
+    aliases: [
+      'drone restrictions',
+      'drone airspace',
+      'no-fly zones',
+      'no fly zones',
+      'drones',
+    ],
+    context: false,
+    query: {
+      fields: {
+        name: ['t'],
+        typeCode: ['t'],
+        type: ['t'],
+        lowerDesc: ['t'],
+        upperDesc: ['t'],
+        timesOfUse: ['t'],
+        agency: ['t'],
+        city: ['t'],
+        state: ['t'],
+      },
+    },
+  },
+  {
     id: 'local-datacenters',
     aliases: ['datacenters', 'data centers', 'data centres'],
     context: true,

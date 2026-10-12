@@ -2023,6 +2023,11 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/droneAirspace.js",
+      "src/layers/droneAirspace/index.js",
+      "src/layers/droneAirspace/source.js",
+      "src/layers/droneAirspace/records.js",
+      "src/layers/droneAirspace/cards.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -2602,6 +2607,11 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/droneAirspace.js",
+      "src/layers/droneAirspace/index.js",
+      "src/layers/droneAirspace/source.js",
+      "src/layers/droneAirspace/records.js",
+      "src/layers/droneAirspace/cards.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -3097,6 +3107,8 @@
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
+      "src/layers/droneAirspace/source.js",
+      "src/layers/droneAirspace/records.js",
       "src/layers/submarineCables/bundledSource.js"
     ],
     "external": []
@@ -3314,6 +3326,26 @@
       "src/layers/perimeters/records.js",
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js"
+    ],
+    "external": []
+  },
+  "drone-airspace": {
+    "exports": ["./layers/drone-airspace"],
+    "modules": [
+      "src/layers/droneAirspace/index.js",
+      "src/sources/httpBody.js",
+      "src/layers/droneAirspace/source.js",
+      "src/layers/droneAirspace/records.js",
+      "src/layers/droneAirspace/cards.js"
+    ],
+    "external": ["cesium"]
+  },
+  "drone-airspace-source": {
+    "exports": ["./layers/drone-airspace/source"],
+    "modules": [
+      "src/layers/droneAirspace/records.js",
+      "src/sources/httpBody.js",
+      "src/layers/droneAirspace/source.js"
     ],
     "external": []
   },

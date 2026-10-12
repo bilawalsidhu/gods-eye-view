@@ -160,6 +160,13 @@ export const DATA_CREDITS = [
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
+  {
+    key: 'faa-sua',
+    html:
+      'Drone restrictions: ' +
+      '<a href="https://adds-faa.opendata.arcgis.com/" target="_blank" rel="noopener">FAA Special Use Airspace</a>' +
+      ' (prohibited and restricted zones; informational only)',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {

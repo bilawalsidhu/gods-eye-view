@@ -1,5 +1,13 @@
 # Changelog
 
+- Add a Drone Restrictions layer for FAA prohibited (P) and restricted (R)
+  special-use airspace. The keyless `/api/drone-airspace` proxy pages the
+  public SUA FeatureServer, keeps a one-hour snapshot, and serves stale data
+  when a refresh fails. Zones draw as ground polygons (red prohibited, orange
+  restricted), selection shows name, altitudes, times of use and agency, and
+  the row legend states the layer is informational only. Off by default;
+  share-link token `3`.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 

@@ -10,6 +10,7 @@ import { makeFixtureRoot } from './fixtureRoot.mjs';
 test('data providers have both hooks; credential editing stays development-only', () => {
   const plugins = localProviderPlugins();
   assert.ok(plugins.some(({ name }) => name === 'fire-perimeters'));
+  assert.ok(plugins.some(({ name }) => name === 'drone-airspace'));
   for (const plugin of plugins) {
     if (plugin.name === 'gev-key-setup') {
       assert.equal(plugin.configurePreviewServer, undefined);
