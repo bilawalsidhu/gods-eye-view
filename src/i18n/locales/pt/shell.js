@@ -1,0 +1,45 @@
+// Catálogo em português — namespace shell (chrome do app, status global, seletor de idioma).
+export const NAMESPACE = 'shell';
+
+export default {
+  'title.subtitle': 'NENHUM LUGAR ESQUECIDO',
+  'loading.initialStatus': 'Inicializando o mundo fotorrealista...',
+  'loading.status.configuring': 'Configurando o visualizador...',
+  'loading.status.tilesUnavailable':
+    'Google 3D Tiles indisponível ({detail}). Carregando o globo sem chave...',
+  'loading.status.flying': 'Voando para Austin, TX...',
+  'loading.status.restoring': 'Restaurando a vista compartilhada...',
+  'status.loadingLiveData': 'CARREGANDO DADOS AO VIVO',
+  'status.loadComplete': 'CARGA CONCLUÍDA',
+  'status.loadFailed': 'FALHA NA CARGA',
+  'status.loadCancelled': 'CARGA CANCELADA',
+  'status.trafficSyncing': 'sincronizando malha viária',
+  'status.retryingIn': 'nova tentativa em {seconds}s',
+  'status.retryPending': 'nova tentativa pendente',
+  'actions.clearLayers.ariaLabel': 'Limpar camadas de dados selecionadas',
+  'actions.clearLayers.title':
+    'Desativar todas as camadas de dados selecionadas',
+  'actions.share.ariaLabel': 'Copiar link de compartilhamento',
+  'actions.resetView.ariaLabel': 'Voltar à vista do globo completo',
+  'panels.dataLayers': 'CAMADAS DE DADOS',
+  'panels.collapseTitle': 'Recolher painel',
+  'dock.ariaLabel': 'Controles de navegação, voz e predefinições visuais',
+  'actions.navAriaLabel': 'Ações do globo',
+  'actions.share.title': 'Copiar link de compartilhamento',
+  'actions.resetView.title':
+    'Redefinir a câmera e voltar à vista do globo completo',
+  'status.framesLoading': 'carregando quadros',
+  'locale.groupAriaLabel': 'Idioma',
+  'loading.status.tilesGoogle': 'Carregando Google 3D Tiles...',
+  'loading.status.tilesKeyless': 'Carregando o globo sem chave...',
+  'loading.status.systems': 'Inicializando sistemas...',
+  'status.liveDataOff': 'DADOS AO VIVO DESLIGADOS',
+  'status.mappedSitesLoaded': 'LOCAIS MAPEADOS CARREGADOS',
+  'status.retryingMappedSites': 'REPETINDO BUSCA DE LOCAIS MAPEADOS',
+  'status.fetchingMappedSites': 'BUSCANDO LOCAIS MAPEADOS',
+  'status.turningOffLiveData': 'DESLIGANDO DADOS AO VIVO',
+  'status.refreshingLiveData': 'ATUALIZANDO DADOS AO VIVO',
+  'credits.closeAria': 'Fechar atribuição de dados',
+  'locale.en.ariaLabel': 'Mudar idioma: inglês',
+  'locale.pt.ariaLabel': 'Mudar idioma: português',
+};
