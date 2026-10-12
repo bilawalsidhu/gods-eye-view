@@ -1,6 +1,40 @@
 import { admitSameSiteRequest } from '../../../src/localRequestGate.mjs';
 
 /**
+ * Describe a request for `admitSameSiteRequest`. The hosted entry point
+ * (server.js) sets GEV_TRUSTED_PROXY=1 only after its password gate is active;
+ * then the host's own reverse-proxy headers are expected rather than refused,
+ * and the browser-facing scheme comes from X-Forwarded-Proto. Origin and
+ * Sec-Fetch-Site checks still apply unchanged.
+ * @param {import('node:http').IncomingMessage} req
+ * @param {Record<string, string|undefined>} [env]
+ */
+export function sameSiteRequestShape(req, env = process.env) {
+  const headers = req.headers || {};
+  const trusted = env.GEV_TRUSTED_PROXY === '1';
+  const forwardedProto = String(headers['x-forwarded-proto'] || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase();
+  const protocol =
+    trusted && (forwardedProto === 'https' || forwardedProto === 'http')
+      ? `${forwardedProto}:`
+      : req.socket?.encrypted
+        ? 'https:'
+        : 'http:';
+  return {
+    hostHeader:
+      headers['x-forwarded-host'] && trusted
+        ? String(headers['x-forwarded-host']).split(',')[0].trim()
+        : headers.host,
+    protocol,
+    origin: headers.origin,
+    secFetchSite: headers['sec-fetch-site'],
+    proxyHeaders: trusted ? {} : headers,
+  };
+}
+
+/**
  * Cross-site request gate for cost-bearing and log endpoints. Feeds the
  * request to the pure, unit-tested `admitSameSiteRequest` and answers 403
  * itself when the request is refused. Returns true when it has already
@@ -13,13 +47,7 @@ import { admitSameSiteRequest } from '../../../src/localRequestGate.mjs';
  * @returns {boolean} True when a 403 was sent.
  */
 export function admitSameSite(req, res) {
-  const verdict = admitSameSiteRequest({
-    hostHeader: req.headers?.host,
-    protocol: req.socket?.encrypted ? 'https:' : 'http:',
-    origin: req.headers?.origin,
-    secFetchSite: req.headers?.['sec-fetch-site'],
-    proxyHeaders: req.headers || {},
-  });
+  const verdict = admitSameSiteRequest(sameSiteRequestShape(req));
   if (verdict.ok) return false;
   res.statusCode = verdict.status;
   res.setHeader('Content-Type', 'application/json');
