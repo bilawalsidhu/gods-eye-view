@@ -1,4 +1,4 @@
-package com.getcapacitor.myapp;
+package ai.halfpixel.gev;
 
 import static org.junit.Assert.*;
 

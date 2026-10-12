@@ -38,8 +38,10 @@ node scripts/mobile/smoke-check.mjs [--require-apk]
 ```
 
 Without flags it asserts the static surface: `dist/index.html` exists, the
-`android/` project exists, the 37/37/24 SDK pins, and the `INTERNET`
-permission. With `--require-apk` (or automatically when an Android SDK is
+`android/` project exists, the 37/37/24 SDK pins, the `INTERNET`
+permission, and the Fold resizability contract (no `screenOrientation`, no
+`maxAspectRatio`, no `resizeableActivity=false`, `configChanges` with the
+unfold tokens on the launcher activity). With `--require-apk` (or automatically when an Android SDK is
 detected) it additionally requires
 `android/app/build/outputs/apk/debug/app-debug.apk` to exist.
 
@@ -107,16 +109,22 @@ metered source off when bandwidth matters.
 
 ## Permissions
 
-| Permission | Manifest entry | Used for |
+The manifest declares the following (runtime behavior on-device is not
+verified in this branch — see the caveat below):
+
+| Permission | Manifest entry | Declared for |
 | --- | --- | --- |
 | Internet | `android.permission.INTERNET` | Tile, feed, and backend requests |
 | Microphone | `android.permission.RECORD_AUDIO` | Voice control (push-to-talk) |
 | Location | `android.permission.ACCESS_FINE_LOCATION` | Location search and nearby layers |
 
-Microphone and location hardware are `required="false"`, so the app
-installs on devices without them; the corresponding features refuse with an
-honest unavailable state instead of crashing. Deny either permission at
-runtime and voice/location report the denial rather than hanging.
+Microphone and location hardware are declared `required="false"`, so the
+manifest permits install on devices without them. Graceful handling beyond
+that is designed but unverified live: mic-denial surfacing is covered only
+at stub level (`src/mobile/reviewGates.test.mjs` drives the voice error
+state with a fake UI and no hardware), and runtime-denial or
+hardware-absent paths for location have no coverage yet. No branch hunk
+exercises a real permission grant or denial on-device.
 
 ## Known gaps
 

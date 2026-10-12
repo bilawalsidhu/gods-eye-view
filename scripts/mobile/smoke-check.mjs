@@ -5,8 +5,10 @@
  * Run: `node scripts/mobile/smoke-check.mjs [--require-apk]`.
  *
  * Asserts `dist/index.html` exists, the pinned SDK versions
- * (`compileSdk`/`targetSdk` 37, `minSdk` 24), and the `INTERNET`
- * permission in `AndroidManifest.xml`. The debug APK assertion is
+ * (`compileSdk`/`targetSdk` 37, `minSdk` 24), the `INTERNET`
+ * permission, and the static Fold resizability surface in
+ * `AndroidManifest.xml` (no orientation/aspect locks, `configChanges`
+ * present on the launcher activity). The debug APK assertion is
  * conditional: it runs only when `--require-apk` is passed or an
  * Android SDK is present (`ANDROID_HOME`/`ANDROID_SDK_ROOT`); on an
  * SDK-less box only project structure and manifest pins are asserted.
@@ -106,7 +108,50 @@ check(
   manifestRel,
 );
 
-// 5. Debug APK: conditional on an SDK build having run.
+// 5. Fold resizability (static): no orientation/aspect locks, and the
+// launcher activity opts into in-place resize via `configChanges` so an
+// unfold/refold resizes instead of recreating the activity.
+check(
+  'no screenOrientation lock',
+  manifest !== null && !/screenOrientation/.test(manifest),
+  manifestRel,
+);
+check(
+  'no maxAspectRatio lock',
+  manifest !== null && !/maxAspectRatio/.test(manifest),
+  manifestRel,
+);
+check(
+  'no resizeableActivity=false lock',
+  manifest !== null &&
+    !/resizeableActivity\s*=\s*["']false["']/.test(manifest),
+  manifestRel,
+);
+const configMatch =
+  manifest !== null
+    ? manifest.match(/<activity[\s\S]*?android:configChanges="([^"]*)"/)
+    : null;
+const configTokens = configMatch ? configMatch[1].split('|') : [];
+check(
+  'activity declares configChanges',
+  configMatch !== null,
+  `${manifestRel} activity needs android:configChanges`,
+);
+for (const token of [
+  'orientation',
+  'screenSize',
+  'smallestScreenSize',
+  'screenLayout',
+  'density',
+]) {
+  check(
+    `configChanges handles ${token}`,
+    configTokens.includes(token),
+    manifestRel,
+  );
+}
+
+// 6. Debug APK: conditional on an SDK build having run.
 const apkRel = path.join(
   'android',
   'app',
