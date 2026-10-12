@@ -1275,7 +1275,7 @@ resolving environment overrides per variable; its explicit `--key` wins.
 
 ## Infrastructure marker visibility
 
-Outline-derived representative anchors average longitudes around the first valid vertex across the dateline, keeping the marker near the feature; they remain representative vertex means rather than geometric centroids.
+For future data refreshes, outline-derived representative anchors average longitudes around the first valid vertex across the dateline. Current bundled datacenter and dam features do not cross it. These anchors remain representative vertex means rather than geometric centroids; single Point coordinates, including longitude 180, stay unchanged.
 
 Datacenter/dam registration uses fresh reusable factories with the application's
 existing context, overlay and render functions. The scoped package exports do

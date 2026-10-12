@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { areaContains } from '../tools/area.js';
 import { featurePoint } from './infrastructureData.js';
 test('outline representative points stay at the antimeridian', () => {
   for (const coordinates of [
@@ -32,6 +33,16 @@ test('outline representative points stay at the antimeridian', () => {
   );
   assert.deepEqual(
     featurePoint({ geometry: { type: 'Point', coordinates: [180, 0] } }),
-    { lon: -180, lat: 0 },
+    { lon: 180, lat: 0 },
+  );
+});
+
+test('a Point at 180 preserves inclusion in an area ending at 180', () => {
+  const point = featurePoint({
+    geometry: { type: 'Point', coordinates: [180, 0] },
+  });
+  assert.equal(
+    areaContains({ west: 170, east: 180, south: -1, north: 1 }, point),
+    true,
   );
 });

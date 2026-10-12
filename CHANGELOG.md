@@ -17,6 +17,8 @@
 
 - Infrastructure features crossing the dateline retain a representative position near their geometry.
 
+- Harden infrastructure outline anchors for future data refreshes that cross the dateline; current bundled datacenter and dam features do not cross it.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 

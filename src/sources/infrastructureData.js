@@ -105,6 +105,17 @@ export function mapAnalystRecord(raw, layerId = '') {
   };
 }
 
+/** Average outline longitudes in the first vertex's unwrapped frame. */
+function meanOutlineLongitude(points) {
+  const reference = points[0][0];
+  const mean =
+    points.reduce((sum, point) => {
+      const delta = ((((point[0] - reference + 540) % 360) + 360) % 360) - 180;
+      return sum + reference + delta;
+    }, 0) / points.length;
+  return ((((mean + 180) % 360) + 360) % 360) - 180;
+}
+
 /** A representative point for a feature: its point, or its outline's average vertex. */
 export function featurePoint(feature) {
   const geometry = feature?.geometry;
@@ -123,16 +134,8 @@ export function featurePoint(feature) {
   );
   if (!points.length) return null;
   return {
-    lon: (() => {
-      const reference = points[0][0];
-      const mean =
-        points.reduce((sum, point) => {
-          const delta =
-            ((((point[0] - reference + 540) % 360) + 360) % 360) - 180;
-          return sum + reference + delta;
-        }, 0) / points.length;
-      return ((((mean + 180) % 360) + 360) % 360) - 180;
-    })(),
+    lon:
+      geometry.type === 'Point' ? points[0][0] : meanOutlineLongitude(points),
     lat: points.reduce((sum, point) => sum + point[1], 0) / points.length,
   };
 }
