@@ -9,7 +9,11 @@ import { railFixture } from './railTestFixture.mjs';
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const json = (value, status = 200) => Response.json(value, { status });
-const ready = { selected: true, configured: true, model: 'local-model' };
+const ready = {
+  selected: true,
+  configured: true,
+  model: 'openrouter/openrouter/free',
+};
 const briefing = {
   status: 'partial',
   source: 'World Monitor (local)',
@@ -111,7 +115,7 @@ test('unselected or missing local inference disables chat without cloud fallback
     f.view.open();
     await flush();
     assert.equal(f.named('Send').disabled, true);
-    assert.ok(f.contains('Local model unavailable'));
+    assert.ok(f.contains('Model gateway unavailable'));
     assert.deepEqual(calls, ['/api/local-model/status']);
     f.view.destroy();
   }
@@ -170,19 +174,26 @@ test('news refresh acquires feeds before rereading the country cache without req
   const f = fixture();
   assert.equal(f.named('Send').disabled, true);
   await f.view.loadCountry('US', { refresh: true });
-  assert.deepEqual(f.requests.map(request => request.url), [
-    '/api/worldmonitor/feed-digest?variant=full&limit=1',
-    '/api/worldmonitor/country-brief?country=US',
-  ]);
+  assert.deepEqual(
+    f.requests.map((request) => request.url),
+    [
+      '/api/worldmonitor/feed-digest?variant=full&limit=1',
+      '/api/worldmonitor/country-brief?country=US',
+    ],
+  );
   assert.ok(f.contains('United States'));
   assert.equal(f.named('Refresh news').disabled, false);
   f.view.destroy();
 });
 
 test('failed news refresh reports unavailable and releases its controls', async () => {
-  const f = fixture({ fetchImpl: async () => json({ status: 'unavailable' }, 503) });
+  const f = fixture({
+    fetchImpl: async () => json({ status: 'unavailable' }, 503),
+  });
   await f.view.loadCountry('US', { refresh: true });
-  assert.ok(f.contains('The local World Monitor service could not provide a briefing.'));
+  assert.ok(
+    f.contains('The local World Monitor service could not provide a briefing.'),
+  );
   assert.equal(f.named('Refresh news').disabled, false);
   f.view.destroy();
 });
@@ -238,6 +249,7 @@ test('text chat reuses its session, includes source state and renders all turns 
             type: 'transcript',
             role: 'assistant',
             text: '<script>bad()</script>',
+            model: 'fixture/served-free-model',
             final: true,
           });
           return '<script>bad()</script>';
@@ -268,6 +280,10 @@ test('text chat reuses its session, includes source state and renders all turns 
     null,
   );
   assert.ok(f.contains('<script>bad()</script>'));
+  assert.ok(f.contains('Assistant · fixture/served-free-model'));
+  assert.ok(
+    f.contains('Model gateway configured · openrouter/openrouter/free'),
+  );
   f.view.destroy();
 });
 
@@ -317,4 +333,30 @@ test('stop and lifetime disposal silence late model events and cancel requests',
   lifetime.abort();
   assert.equal(options.signal.aborted, true);
   assert.equal(f.container.children.length, 0);
+});
+
+test('a throttled assistant keeps the sanitized gateway error visible without retry', async () => {
+  const requests = [];
+  const f = fixture({
+    fetchImpl: async (url) => {
+      requests.push(url);
+      return url.endsWith('/status')
+        ? json(ready)
+        : json({ error: 'Model route is rate limited. Try again later.' }, 429);
+    },
+  });
+  f.view.open();
+  await flush();
+  f.byId('hybrid-chat-question').value = 'A fixture question';
+  f.find((node) => node.className === 'hybrid-chat-form').dispatchEvent(
+    new Event('submit', { cancelable: true }),
+  );
+  await flush();
+  assert.ok(f.contains('Model route is rate limited. Try again later.'));
+  assert.deepEqual(requests, [
+    '/api/local-model/status',
+    '/api/local-model/chat',
+  ]);
+  assert.equal(f.named('Send').disabled, false);
+  f.view.destroy();
 });

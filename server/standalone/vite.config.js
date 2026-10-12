@@ -34,12 +34,18 @@ export default defineConfig(({ command, mode }) => {
     allowedHosts: resolveAllowedHosts(process.env.GEV_ALLOWED_HOSTS),
     command,
   });
-  // Only public feature switches enter the browser bundle. Provider URLs,
-  // credentials, and credential-file paths remain on the local server.
+  // Only public feature switches and bounded timing values enter the browser bundle.
+  // Provider URLs, credentials, and credential-file paths remain on the local server.
   config.define['import.meta.env.GEV_HYBRID_ENABLED'] = JSON.stringify(
     process.env.GEV_HYBRID_ENABLED === 'true' || localModelSelected,
   );
   config.define['import.meta.env.GEV_LOCAL_MODEL_SELECTED'] =
     JSON.stringify(localModelSelected);
+  const hudMinIntervalMs = Number(process.env.GEV_LLM_HUD_MIN_INTERVAL_MS ?? 0);
+  config.define['import.meta.env.GEV_LLM_HUD_MIN_INTERVAL_MS'] = JSON.stringify(
+    Number.isFinite(hudMinIntervalMs) && hudMinIntervalMs > 0
+      ? Math.min(hudMinIntervalMs, 86_400_000)
+      : 0,
+  );
   return config;
 });

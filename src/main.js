@@ -8,7 +8,10 @@ const application = createStandaloneApplication({
   cesiumToken: import.meta.env.CESIUM_ION_TOKEN,
   allowQaRegistration: import.meta.env.DEV,
   hudSummaryPolicy: import.meta.env.GEV_LOCAL_MODEL_SELECTED
-    ? { requestTimeoutMs: 65_000 }
+    ? {
+        requestTimeoutMs: 65_000,
+        minIntervalMs: import.meta.env.GEV_LLM_HUD_MIN_INTERVAL_MS,
+      }
     : {},
   hybrid: { enabled: import.meta.env.GEV_HYBRID_ENABLED },
   voice: import.meta.env.GEV_LOCAL_MODEL_SELECTED

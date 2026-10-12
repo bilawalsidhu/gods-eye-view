@@ -32,7 +32,7 @@ export function createLocalChatSession({
     announce({
       type: 'state',
       state: 'idle',
-      detail: 'Local text assistant stopped',
+      detail: 'Text assistant stopped',
     });
   }
   lifetime?.addEventListener('abort', stop, { once: true });
@@ -44,21 +44,19 @@ export function createLocalChatSession({
       announce({
         type: 'state',
         state: 'listening',
-        detail: 'Local text assistant ready',
+        detail: 'Text assistant ready',
       });
     },
     stop,
     sendMapEvent(event) {
       const value = JSON.stringify(event);
       if (value.length > MAX_CONTEXT_CHARS)
-        throw new Error(
-          'Selected context is too large for the local assistant.',
-        );
+        throw new Error('Selected context is too large for the assistant.');
       context = value;
     },
     async sendText(text) {
       lifetime?.throwIfAborted();
-      if (!active) throw new Error('Start the local text assistant first.');
+      if (!active) throw new Error('Start the text assistant first.');
       if (typeof text !== 'string' || !text.trim() || text.length > 8000)
         throw new Error('Enter a message of at most 8000 characters.');
       pending?.abort();
@@ -92,7 +90,7 @@ export function createLocalChatSession({
       announce({
         type: 'state',
         state: 'executing',
-        detail: 'Asking the local model',
+        detail: 'Asking the model gateway',
       });
       try {
         for (let round = 0; round <= MAX_ROUNDS; round++) {
@@ -118,21 +116,21 @@ export function createLocalChatSession({
             throw new Error(
               typeof result?.error === 'string'
                 ? result.error
-                : 'Local model request failed.',
+                : 'Model gateway request failed.',
             );
           if (
             !result ||
             typeof result.content !== 'string' ||
             !Array.isArray(result.toolCalls)
           )
-            throw new Error('Invalid local model response.');
+            throw new Error('Invalid model gateway response.');
           if (result.toolCalls.length) {
             if (!allowTools || typeof runAction !== 'function')
               throw new Error(
                 'Map controls are unavailable in this text panel.',
               );
             if (round === MAX_ROUNDS || result.toolCalls.length > 4)
-              throw new Error('Local model reached the tool-call limit.');
+              throw new Error('Model gateway reached the tool-call limit.');
             const ids = new Set();
             for (const call of result.toolCalls) {
               if (
@@ -144,10 +142,10 @@ export function createLocalChatSession({
                 typeof call.arguments !== 'object' ||
                 Array.isArray(call.arguments)
               )
-                throw new Error('Invalid local tool call.');
+                throw new Error('Invalid tool call.');
               ids.add(call.id);
             }
-            // Local providers may reuse IDs such as call_0 in every response.
+            // Providers may reuse IDs such as call_0 in every response.
             // Own the conversation IDs so later turns remain unambiguous.
             const calls = result.toolCalls.map((call, index) => ({
               ...call,
@@ -190,14 +188,14 @@ export function createLocalChatSession({
                   ok: output?.ok === true,
                   truncated: true,
                   error:
-                    'Action ran, but its result exceeds the local context limit. Do not invent omitted details.',
+                    'Action ran, but its result exceeds the context limit. Do not invent omitted details.',
                 });
               turn.push({ role: 'tool', tool_call_id: call.id, content });
             }
             continue;
           }
           if (!result.content.trim())
-            throw new Error('Local model returned an empty answer.');
+            throw new Error('Model gateway returned an empty answer.');
           turn.push({ role: 'assistant', content: result.content });
           turns.push(turn);
           while (
@@ -209,13 +207,17 @@ export function createLocalChatSession({
             type: 'transcript',
             role: 'assistant',
             text: result.content,
+            model:
+              typeof result.model === 'string' && result.model.length <= 200
+                ? result.model.trim()
+                : null,
             final: true,
           });
           announce({ type: 'completion', status: 'completed' });
           announce({
             type: 'state',
             state: 'listening',
-            detail: 'Local text assistant ready',
+            detail: 'Text assistant ready',
           });
           return result.content;
         }
@@ -226,7 +228,7 @@ export function createLocalChatSession({
             type: 'state',
             state: 'error',
             detail: signal.aborted
-              ? 'Local request cancelled or timed out.'
+              ? 'Request cancelled or timed out.'
               : error.message,
           });
         }

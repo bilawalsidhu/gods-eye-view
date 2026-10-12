@@ -80,7 +80,7 @@ for (const mode of [
       status:
         mode === 'caller abort during body read'
           ? 504
-          : mode === 'HUD preemption during body read'
+          : ['HUD preemption during body read', 'non-2xx'].includes(mode)
             ? 503
             : 502,
     });

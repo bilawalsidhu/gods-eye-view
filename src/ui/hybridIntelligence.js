@@ -133,7 +133,7 @@ export function createHybridIntelligence({
 
   const chatSection = make('section', 'hybrid-intelligence-section');
   chatSection.setAttribute('aria-labelledby', 'hybrid-chat-title');
-  const chatTitle = make('h3', '', 'Local text assistant');
+  const chatTitle = make('h3', '', 'Text assistant');
   chatTitle.id = 'hybrid-chat-title';
   const chatHelp = make(
     'p',
@@ -145,14 +145,14 @@ export function createHybridIntelligence({
   const modelStatus = make(
     'p',
     'hybrid-intelligence-status',
-    'Local model has not been checked.',
+    'Model gateway has not been checked.',
   );
   modelStatus.setAttribute('role', 'status');
   modelStatus.setAttribute('aria-live', 'polite');
   const retryButton = button('Check model');
   const transcript = make('div', 'hybrid-chat-transcript');
   transcript.setAttribute('role', 'log');
-  transcript.setAttribute('aria-label', 'Local text conversation');
+  transcript.setAttribute('aria-label', 'Text conversation');
   transcript.setAttribute('aria-live', 'polite');
   transcript.setAttribute('aria-relevant', 'additions text');
   const chatForm = make('form', 'hybrid-chat-form');
@@ -199,12 +199,18 @@ export function createHybridIntelligence({
     question.disabled = chatBusy;
     chatForm.setAttribute('aria-busy', String(chatBusy));
   };
-  const addMessage = (role, content) => {
+  const addMessage = (role, content, model) => {
     if (!text(content)) return;
     const message = make('article', 'hybrid-chat-message');
     message.dataset.role = role;
     message.append(
-      make('h4', '', role === 'user' ? 'You' : 'Local assistant'),
+      make(
+        'h4',
+        '',
+        role === 'user'
+          ? 'You'
+          : `Assistant${text(model) && model.length <= 200 ? ` · ${model}` : ''}`,
+      ),
       make('p', '', content),
     );
     transcript.append(message);
@@ -379,7 +385,7 @@ export function createHybridIntelligence({
     checkingModel = true;
     modelChecked = true;
     retryButton.disabled = true;
-    modelStatus.textContent = 'Checking local model configuration…';
+    modelStatus.textContent = 'Checking model gateway configuration…';
     try {
       const requestSignal = AbortSignal.any([
         lifetime.signal,
@@ -397,13 +403,13 @@ export function createHybridIntelligence({
       modelReady =
         response.ok && data?.selected === true && data?.configured === true;
       modelStatus.textContent = modelReady
-        ? `Local model configured${text(data.model) ? ` · ${data.model}` : ''}. Connection is checked when you send.`
-        : 'Local model unavailable. Configure the local inference service to enable text chat.';
+        ? `Model gateway configured${text(data.model) ? ` · ${data.model}` : ''}. Connection is checked when you send.`
+        : 'Model gateway unavailable. Configure the model gateway to enable text chat.';
     } catch {
       if (disposed) return;
       modelReady = false;
       modelStatus.textContent =
-        'Local model status unavailable. Check the local inference service, then retry.';
+        'Model gateway status unavailable. Check the model gateway, then retry.';
     } finally {
       checkingModel = false;
       if (!disposed) {
@@ -428,16 +434,16 @@ export function createHybridIntelligence({
         emit(event) {
           if (disposed || epoch !== sessionEpoch) return;
           if (event.type === 'transcript' && event.final)
-            addMessage(event.role, event.text);
+            addMessage(event.role, event.text, event.model);
           if (event.type === 'state') {
             const stateDescription =
               event.state === 'error'
                 ? text(
                     event.detail,
-                    'The local model could not complete this answer.',
+                    'The model gateway could not complete this answer.',
                   )
                 : event.state === 'executing'
-                  ? 'Local assistant is working…'
+                  ? 'Assistant is working…'
                   : 'Ready for a text question.';
             chatStatus.textContent = stateDescription;
           }
@@ -446,7 +452,7 @@ export function createHybridIntelligence({
     }
     const activeSession = session;
     const submitted = question.value.trim();
-    chatStatus.textContent = 'Local assistant is working…';
+    chatStatus.textContent = 'Assistant is working…';
     try {
       await activeSession.start();
       if (disposed || current !== generation) return;
@@ -483,10 +489,12 @@ export function createHybridIntelligence({
         chatStatus.textContent =
           'Answer complete. Check the cited source coverage and dates.';
       }
-    } catch {
+    } catch (error) {
       if (!disposed && current === generation)
-        chatStatus.textContent =
-          'The local assistant could not complete the answer. Check the local model and try again.';
+        chatStatus.textContent = text(
+          error?.message,
+          'The assistant could not complete the answer. Check the model gateway and try again.',
+        );
     } finally {
       if (!disposed && current === generation) {
         chatBusy = false;

@@ -17,8 +17,8 @@ const MAX_WAITING_COMPLETIONS = 4;
 // Process-local capacity, shared by chat and HUD even when model aliases differ.
 // Keys contain only gateway origins; idle entries and all job references are removed.
 const completionUpstreams = new Map();
-const LOCAL_TEXT_INSTRUCTIONS = [
-  "You are the local text assistant for God's Eye View.",
+const TEXT_INSTRUCTIONS = [
+  "You are the text assistant for God's Eye View.",
   'Use the provided tools for current data and requested globe actions. Follow their schemas; never invent a tool, coordinate, observation, or successful action.',
   'For questions about the current selection or view, read get_entity_context first. For other factual queries use the relevant data tool and answer from its actual result.',
   'Preserve source attribution, observation times, and partial, stale, or unavailable coverage. feedCached and feedTotal count feeds, not headlines. Empty results do not establish that nothing happened.',
@@ -28,6 +28,35 @@ const LOCAL_TEXT_INSTRUCTIONS = [
 ].join('\n');
 const failure = (status, message) =>
   Object.assign(new Error(message), { status });
+
+function upstreamFailure(response) {
+  const status = response.status;
+  let error;
+  if (status === 429)
+    error = failure(429, 'Model route is rate limited. Try again later.');
+  else if (status === 402)
+    error = failure(
+      503,
+      'Model route quota is unavailable. Check the gateway account limits.',
+    );
+  else if ([502, 503, 504].includes(status))
+    error = failure(
+      503,
+      'Model route is temporarily unavailable. Try again later.',
+    );
+  else if ([401, 403].includes(status))
+    error = failure(
+      502,
+      'Model gateway rejected access. Check the server configuration.',
+    );
+  else error = failure(502, `Model gateway returned HTTP ${status}.`);
+
+  // Forward only bounded numeric retry guidance, never the upstream body.
+  const raw = response.headers?.get?.('retry-after');
+  if ([429, 503].includes(error.status) && /^\d{1,8}$/.test(raw ?? ''))
+    error.retryAfterSeconds = Math.min(86400, Math.max(1, Number(raw)));
+  return error;
+}
 
 function scheduleCompletion(upstream, priority, signal, operation) {
   signal.throwIfAborted();
@@ -39,11 +68,11 @@ function scheduleCompletion(upstream, priority, signal, operation) {
   // HUD is opportunistic: never retain stale background work behind a chat.
   if (priority === 'background' && (state.active || state.waiting.length))
     return Promise.reject(
-      failure(503, 'Local model is busy; HUD summary skipped.'),
+      failure(503, 'Model gateway is busy; HUD summary skipped.'),
     );
   if (state.active && state.waiting.length >= MAX_WAITING_COMPLETIONS)
     return Promise.reject(
-      failure(503, 'Local model queue is full. Try again shortly.'),
+      failure(503, 'Model gateway queue is full. Try again shortly.'),
     );
 
   const drain = () => {
@@ -93,13 +122,13 @@ function scheduleCompletion(upstream, priority, signal, operation) {
     state.waiting.push(job);
     if (priority === 'foreground' && state.active?.priority === 'background')
       state.active.controller.abort(
-        failure(503, 'Local model HUD summary interrupted for chat.'),
+        failure(503, 'Model gateway HUD summary interrupted for chat.'),
       );
     drain();
   });
 }
 
-/** Any explicit setting claims local inference, including invalid settings. */
+/** Any explicit setting selects the loopback text gateway, including invalid settings. */
 export function isLocalModelSelected(environment = process.env) {
   return Boolean(environment.GEV_LLM_PROVIDER?.trim());
 }
@@ -175,7 +204,7 @@ export async function resolveLocalModelConfig(environment = process.env) {
   } catch {
     throw failure(
       503,
-      'Local model is not configured. Check the server configuration.',
+      'Model gateway is not configured. Check the server configuration.',
     );
   }
 }
@@ -268,7 +297,7 @@ function normalizeMessages(messages, names) {
   return out;
 }
 
-/** Complete one bounded local text/tool turn. There is no cloud fallback. */
+/** Complete one bounded text/tool turn through the loopback gateway, with no retry or fallback. */
 export async function completeLocalModel(
   { messages, tools = [], instructions, signal },
   {
@@ -285,7 +314,7 @@ export async function completeLocalModel(
     [signal, AbortSignal.timeout(timeoutMs)].filter(Boolean),
   );
   if (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 2048)
-    throw failure(503, 'Invalid local model output limit.');
+    throw failure(503, 'Invalid model gateway output limit.');
   // Overrides are supplied by server callers only, never browser request JSON.
   const config = await resolveLocalModelConfig(
     modelOverride === undefined
@@ -297,7 +326,7 @@ export async function completeLocalModel(
   try {
     history = normalizeMessages(messages, names);
   } catch {
-    throw failure(400, 'Invalid local model conversation.');
+    throw failure(400, 'Invalid model gateway conversation.');
   }
   try {
     return await scheduleCompletion(
@@ -337,7 +366,7 @@ export async function completeLocalModel(
         });
         if (!response.ok) {
           await cancelResponseBodyBounded(response);
-          throw failure(502, `Local model returned HTTP ${response.status}.`);
+          throw upstreamFailure(response);
         }
         const data = await readResponseJsonCapped(
           response,
@@ -378,11 +407,11 @@ export async function completeLocalModel(
     );
   } catch (error) {
     if (signal.aborted)
-      throw failure(504, 'Local model request cancelled or timed out.');
+      throw failure(504, 'Model gateway request cancelled or timed out.');
     if (error.status) throw error;
     throw failure(
       502,
-      'Local model request failed or returned an invalid response.',
+      'Model gateway request failed or returned an invalid response.',
     );
   }
 }
@@ -410,7 +439,7 @@ export function admitLocalModelRequest(req, res, environment = process.env) {
     !['cross-site', 'same-site'].includes(req.headers?.['sec-fetch-site']);
   if (!allowed)
     json(res, 403, {
-      error: 'Local model access requires a direct local request.',
+      error: 'Model gateway access requires a direct local request.',
     });
   return allowed;
 }
@@ -436,7 +465,7 @@ export async function withLocalModelRequest(
       readRequestBody(req, REQUEST_BYTES),
       new Promise((_, reject) => {
         timer = setTimeout(
-          () => reject(failure(408, 'Local model request body timed out.')),
+          () => reject(failure(408, 'Model gateway request body timed out.')),
           bodyTimeoutMs,
         );
       }),
@@ -455,8 +484,10 @@ export async function withLocalModelRequest(
     }
     return await callback(input, disconnect.signal);
   } catch (error) {
+    if (error.retryAfterSeconds && !res.destroyed && !res.writableEnded)
+      res.setHeader('Retry-After', String(error.retryAfterSeconds));
     json(res, error.code === 'BODY_TOO_LARGE' ? 413 : error.status || 502, {
-      error: error.status ? error.message : 'Local model request failed.',
+      error: error.status ? error.message : 'Model gateway request failed.',
     });
   } finally {
     clearTimeout(timer);
@@ -478,7 +509,7 @@ export function localModelProxy({
         if (!isLocalModelSelected(environment)) return next();
         if (!admitLocalModelRequest(req, res, environment)) return;
         json(res, 503, {
-          error: 'Local text profile selected; speech is not configured.',
+          error: 'Text gateway profile selected; speech is not configured.',
         });
       });
     }
@@ -503,14 +534,14 @@ export function localModelProxy({
         res,
         async (input, signal) => {
           if (!input || typeof input !== 'object' || Array.isArray(input))
-            throw failure(400, 'Invalid local model request.');
+            throw failure(400, 'Invalid model gateway request.');
           const allowTools = input.tools !== false;
           const result = await completeLocalModel(
             {
               messages: input.messages,
               tools: allowTools ? tools : [],
               signal,
-              instructions: allowTools ? LOCAL_TEXT_INSTRUCTIONS : undefined,
+              instructions: allowTools ? TEXT_INSTRUCTIONS : undefined,
             },
             { environment, ...deps },
           );

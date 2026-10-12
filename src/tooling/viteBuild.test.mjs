@@ -231,3 +231,28 @@ test('the CSP admits the event media embeds, and no other script origin', async 
   // X posts load in X's own frames.
   assert.ok(frames.includes('https://platform.twitter.com'));
 });
+
+test('standalone HUD interval exposes only a bounded number from the server configuration', () => {
+  const key = 'GEV_LLM_HUD_MIN_INTERVAL_MS';
+  const saved = process.env[key];
+  try {
+    for (const [value, expected] of [
+      ['300000', '300000'],
+      ['', '0'],
+      ['-1', '0'],
+      ['Infinity', '0'],
+      ['not-a-number-fixture', '0'],
+      ['9999999999', '86400000'],
+    ]) {
+      process.env[key] = value;
+      const config = standaloneConfig({ mode: 'test' });
+      assert.equal(
+        config.define['import.meta.env.GEV_LLM_HUD_MIN_INTERVAL_MS'],
+        expected,
+      );
+    }
+  } finally {
+    if (saved === undefined) delete process.env[key];
+    else process.env[key] = saved;
+  }
+});

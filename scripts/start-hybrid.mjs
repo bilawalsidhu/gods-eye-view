@@ -128,6 +128,11 @@ try {
     LLM_API_URL: model.url,
     LLM_API_KEY: model.apiKey,
     LLM_MODEL: model.model,
+    // Saved tier overrides must not bypass the selected gateway/model.
+    LLM_TOOL_PROVIDER: 'generic',
+    LLM_TOOL_MODEL: model.model,
+    LLM_REASONING_PROVIDER: 'generic',
+    LLM_REASONING_MODEL: model.model,
     LLM_API_AUTH_TYPE: model.provider === 'bifrost' ? 'x-bf-vk' : 'bearer',
   };
   // Legacy direct-provider paths must report unavailable in this profile.

@@ -5129,14 +5129,27 @@ when their footprints touch or contain one another, never across a seam toleranc
 The optional profile in [HYBRID_LOCAL_SETUP.md](HYBRID_LOCAL_SETUP.md) composes
 the current globe with a separately running local World Monitor backend.
 `GEV_HYBRID_ENABLED=true` mounts the native Intelligence panel. Selecting
-`GEV_LLM_PROVIDER` also enables it and selects the local text adapter.
+`GEV_LLM_PROVIDER` also enables it and selects the loopback text gateway adapter.
 Credentials, provider URLs, and credential-file paths stay server-side.
 
 The MCP and browser tool catalogs add country headlines, deterministic country
 briefs, and a news digest. These preserve partial, stale, and unavailable states.
 Existing globe resources and camera/image tools retain their own transport.
 The text session executes the existing action runner and sends actual results
-back to the configured local model. An explicit local profile disables cloud
-Realtime token/login routes and uses the same model for HUD summaries.
+back to the configured model. The gateway can use local inference or an
+explicitly configured remote upstream. Bifrost
+`openrouter/openrouter/free` addresses the exact upstream ID `openrouter/free`;
+provider credentials and the virtual-key allowlist must be configured in Bifrost.
+Chat preserves the returned model identity, which may differ between free-route
+requests. Rate limits remain HTTP 429; quota and temporary upstream unavailability
+are surfaced safely, with bounded numeric retry guidance and no adapter retry or
+alternate-model fallback. Raw upstream errors are not exposed.
+An explicit text gateway profile disables Realtime token/login routes and uses
+the same model for HUD summaries unless a server-owned HUD override is set.
+Each assistant answer displays the actual returned model, and the HUD response
+also includes it. `GEV_LLM_HUD_MIN_INTERVAL_MS` supplies a bounded public timing
+value to space HUD attempts, including failures and forced refreshes. It defaults
+to zero; use `300000` for five-minute pacing per page while deterministic telemetry
+remains available. It is not a shared account quota or a cross-tab limit.
 Speech input/output and complete World Monitor feature parity remain outside
 this extension. No World Monitor source or data snapshot is bundled here.

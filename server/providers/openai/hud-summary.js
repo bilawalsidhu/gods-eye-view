@@ -65,6 +65,7 @@ async function handleHudSummary(req, res) {
       res.end(
         JSON.stringify({
           summary: toFiveWordHudSummary(result.content) || null,
+          model: result.model,
           error: null,
         }),
       );

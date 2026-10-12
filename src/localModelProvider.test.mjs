@@ -199,7 +199,7 @@ test('external, credential-bearing and malformed upstream configurations fail cl
   );
 });
 
-test('production HTTP handler sends Bifrost key and server-owned tools, then accepts real tool history', async (t) => {
+test('production HTTP handler retains the free route, actual model and real tool history', async (t) => {
   const calls = [];
   const upstream = await serve(t, async (req, res) => {
     calls.push({
@@ -211,6 +211,7 @@ test('production HTTP handler sends Bifrost key and server-owned tools, then acc
       res,
       calls.length === 1
         ? {
+            model: 'fixture/free-tool-model',
             choices: [
               {
                 finish_reason: 'tool_calls',
@@ -230,10 +231,18 @@ test('production HTTP handler sends Bifrost key and server-owned tools, then acc
               },
             ],
           }
-        : completion('The view is London.'),
+        : {
+            ...completion('The view is London.'),
+            model: 'fixture/free-continuation-model',
+          },
     );
   });
-  const base = await proxy(t, { environment: config(`${upstream}/v1`), tools });
+  const environment = {
+    ...config(`${upstream}/v1`),
+    GEV_LLM_MODEL: 'openrouter/openrouter/free',
+    OPENAI_API_KEY: 'unused-paid-provider-key',
+  };
+  const base = await proxy(t, { environment, tools });
   const first = await fetch(`${base}/api/local-model/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -245,6 +254,7 @@ test('production HTTP handler sends Bifrost key and server-owned tools, then acc
   });
   const result = await first.json();
   assert.equal(first.status, 200);
+  assert.equal(result.model, 'fixture/free-tool-model');
   assert.deepEqual(result.toolCalls, [
     { id: 'view-1', name: 'get_current_view_state', arguments: {} },
   ]);
@@ -268,15 +278,108 @@ test('production HTTP handler sends Bifrost key and server-owned tools, then acc
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages: history }),
   });
-  assert.equal((await second.json()).content, 'The view is London.');
+  const continuation = await second.json();
+  assert.equal(continuation.content, 'The view is London.');
+  assert.equal(continuation.model, 'fixture/free-continuation-model');
   assert.equal(calls.length, 2);
   assert.equal(calls[0].path, '/v1/chat/completions');
   assert.equal(calls[0].headers['x-bf-vk'], key);
   assert.equal(calls[0].headers.authorization, undefined);
-  assert.equal(calls[0].body.model, 'local/test-model');
+  assert.deepEqual(
+    calls.map((call) => call.body.model),
+    ['openrouter/openrouter/free', 'openrouter/openrouter/free'],
+  );
   assert.equal(calls[0].body.messages[0].role, 'system');
+  assert.doesNotMatch(
+    calls[0].body.messages[0].content,
+    /local text assistant/,
+  );
   assert.equal(calls[0].body.tools[0].function.name, tools[0].name);
   assert.equal(calls[1].body.messages.at(-1).content, '{"city":"London"}');
+});
+
+test('gateway throttling, quota and unavailability stay visible without payload disclosure or fallback', async (t) => {
+  let fixture;
+  const calls = [];
+  const base = await proxy(t, {
+    environment: {
+      ...config(),
+      GEV_LLM_MODEL: 'openrouter/openrouter/free',
+      OPENAI_API_KEY: 'unused-paid-provider-key',
+    },
+    fetchImpl: async (url, options) => {
+      calls.push({ url, request: JSON.parse(options.body) });
+      return new Response(`${key}: private provider diagnostics`, {
+        status: fixture.upstream,
+        headers: { 'Retry-After': '37' },
+      });
+    },
+  });
+  const fixtures = [
+    { upstream: 429, status: 429, message: /rate limited/ },
+    { upstream: 402, status: 503, message: /quota is unavailable/ },
+    { upstream: 502, status: 503, message: /temporarily unavailable/ },
+    { upstream: 503, status: 503, message: /temporarily unavailable/ },
+    { upstream: 504, status: 503, message: /temporarily unavailable/ },
+    { upstream: 401, status: 502, message: /rejected access/ },
+    { upstream: 403, status: 502, message: /rejected access/ },
+  ];
+  for (fixture of fixtures) {
+    const before = calls.length;
+    const response = await fetch(`${base}/api/local-model/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages }),
+    });
+    const payload = await response.json();
+    assert.equal(response.status, fixture.status);
+    assert.match(payload.error, fixture.message);
+    assert.doesNotMatch(JSON.stringify(payload), /synthetic|private provider/);
+    assert.equal(
+      response.headers.get('Retry-After'),
+      fixture.status === 502 ? null : '37',
+    );
+    assert.equal(
+      calls.length,
+      before + 1,
+      'one request, with no retry or fallback',
+    );
+    assert.equal(
+      calls.at(-1).url,
+      'http://127.0.0.1:4043/openai/v1/chat/completions',
+    );
+    assert.equal(calls.at(-1).request.model, 'openrouter/openrouter/free');
+  }
+});
+
+test('upstream retry guidance is bounded and never reflects arbitrary headers', async () => {
+  for (const [header, expected] of [
+    ['0', 1],
+    ['99999999', 86400],
+    ['private-provider-token', undefined],
+    ['-10', undefined],
+    ['2.5', undefined],
+  ]) {
+    await assert.rejects(
+      completeLocalModel(
+        { messages },
+        {
+          environment: config(),
+          fetchImpl: async () =>
+            new Response(key, {
+              status: 429,
+              headers: { 'Retry-After': header },
+            }),
+        },
+      ),
+      (error) => {
+        assert.equal(error.status, 429);
+        assert.equal(error.retryAfterSeconds, expected);
+        assert.doesNotMatch(error.message, /synthetic|private-provider/);
+        return true;
+      },
+    );
+  }
 });
 
 test('HTTP307 cannot forward virtual key or prompt to a second origin', async (t) => {
@@ -479,6 +582,7 @@ test('HUD accepts a local model response after five seconds and never falls back
     });
   assert.deepEqual(await (await post()).json(), {
     summary: 'London aircraft observed with uncertainty',
+    model: 'local/served-model',
     error: null,
   });
   process.env.GEV_LLM_BASE_URL = 'https://outside.test/v1';

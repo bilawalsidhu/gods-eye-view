@@ -106,6 +106,12 @@ export class IntelHUD {
   ) {
     this.summaryService = summaryService;
     this.summaryPolicy = summaryPolicy;
+    this._summaryMinIntervalMs =
+      Number.isFinite(summaryPolicy.minIntervalMs) &&
+      summaryPolicy.minIntervalMs > 0
+        ? Math.min(summaryPolicy.minIntervalMs, 86_400_000)
+        : 0;
+    this._lastSummaryAttemptAt = -Infinity;
     this._summaryTimeoutMs =
       Number.isFinite(summaryPolicy.requestTimeoutMs) &&
       summaryPolicy.requestTimeoutMs > 0
@@ -732,6 +738,10 @@ export class IntelHUD {
       return;
     }
     if (this._summaryRequest) return;
+    if (Date.now() - this._lastSummaryAttemptAt < this._summaryMinIntervalMs) {
+      this._setSummaryText(fallbackText, animate);
+      return;
+    }
 
     if (force) this._setSummaryText(fallbackText, false);
     this._summaryDirty = false;
@@ -742,6 +752,8 @@ export class IntelHUD {
       this._summaryTimeoutMs,
     );
     this._summaryRequest = controller;
+    // Failures, timeouts and forced refreshes share the same attempt spacing.
+    this._lastSummaryAttemptAt = Date.now();
     try {
       this.summaryPolicy.onRequest?.();
       const response = await this.summaryService.summarize(context, {

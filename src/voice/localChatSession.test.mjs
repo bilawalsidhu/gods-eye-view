@@ -70,6 +70,12 @@ test('local text adapter executes a real action, continues with its actual resul
       (event) => event.type === 'completion' && event.status === 'completed',
     ),
   );
+  assert.equal(
+    events.find(
+      (event) => event.type === 'transcript' && event.role === 'assistant',
+    ).model,
+    'local/model',
+  );
   session.destroy();
 });
 
@@ -300,7 +306,7 @@ test('oversized context, malformed results and disposed sessions fail without cl
     /too large/,
   );
   adapter.start();
-  await assert.rejects(adapter.sendText('Try a tool'), /Invalid local tool/);
+  await assert.rejects(adapter.sendText('Try a tool'), /Invalid tool/);
   lifetime.abort();
   assert.throws(() => adapter.start(), { name: 'AbortError' });
   assert.equal(

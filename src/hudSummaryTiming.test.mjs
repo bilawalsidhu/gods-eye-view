@@ -28,7 +28,7 @@ const flush = async () => {
 };
 
 function fixture(t, summaryPolicy = {}, { ignoreAbort = false } = {}) {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1_000_000 });
   t.mock.method(IntelHUD.prototype, '_buildDOM', () => {});
   t.mock.method(IntelHUD.prototype, '_startTimers', () => {});
   const originalWindow = globalThis.window;
@@ -144,4 +144,73 @@ test('destroy aborts local inference and discards a provider that resolves after
   f.complete();
   await pending;
   assert.deepEqual(f.painted, ['London telemetry']);
+});
+
+for (const outcome of [
+  'success',
+  '429',
+  '503',
+  'timeout',
+  'transport failure',
+]) {
+  test(`HUD minimum interval prevents repeated requests after ${outcome}, including forced refreshes`, async (t) => {
+    const f = fixture(t, { minIntervalMs: 300_000 });
+    t.mock.method(console, 'warn', () => {});
+    const startedAt = Date.now();
+    const first = f.hud._updateSummary(false, true);
+    await flush();
+    assert.equal(f.requests.length, 1);
+    if (outcome === 'success') f.complete();
+    else if (outcome === 'timeout') t.mock.timers.tick(5000);
+    else if (outcome === 'transport failure')
+      f.requests[0].reject(new Error('Fixture transport failure'));
+    else
+      f.requests[0].resolve({
+        ok: false,
+        status: Number(outcome),
+        data: { error: 'Fixture provider unavailable' },
+      });
+    await first;
+
+    f.hud._composeSummary = () => 'Paris telemetry';
+    f.hud._markSummaryDirty();
+    await f.hud._updateSummary(false, true);
+    assert.equal(
+      f.requests.length,
+      1,
+      'force cannot bypass the attempt interval',
+    );
+    assert.equal(f.painted.at(-1), 'Paris telemetry');
+    assert.equal(f.hud._summaryDirty, true);
+    t.mock.timers.tick(299_999 - (Date.now() - startedAt));
+    await f.hud._updateSummary(false, true);
+    assert.equal(f.requests.length, 1);
+    t.mock.timers.tick(1);
+    const next = f.hud._updateSummary(false, true);
+    await flush();
+    assert.equal(f.requests.length, 2);
+    f.complete(1);
+    await next;
+  });
+}
+
+test('HUD interval is checked after asynchronous context creation', async (t) => {
+  const f = fixture(t, { minIntervalMs: 300_000 });
+  let releaseContext;
+  const first = f.hud._updateSummary(false, true);
+  await flush();
+  f.hud._summaryContext = () =>
+    new Promise((resolve) => {
+      releaseContext = resolve;
+    });
+  const overlapping = f.hud._updateSummary(false, true);
+  f.complete();
+  await first;
+  releaseContext({ placeLabels: ['Paris'] });
+  await overlapping;
+  assert.equal(
+    f.requests.length,
+    1,
+    'an older pending context cannot bypass the interval',
+  );
 });
