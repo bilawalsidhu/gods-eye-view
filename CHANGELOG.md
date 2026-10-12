@@ -1,5 +1,12 @@
 # Changelog
 
+- Add map-first mobile navigation and bounded rendering/media budgets, camera
+  Refresh/Close and shared-surface page/native expansion, one-shot locate with
+  share-coordinate protection, local snapshot annotation/derivatives/research notes,
+  explicit original-image Sol/high Q&A, optional owner-only Serve admission,
+  operator-supplied Georgia camera and local public-infrastructure adapters.
+  Include loopback launch/setup guidance; personal data/media/settings are excluded.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 

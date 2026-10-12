@@ -1,5 +1,14 @@
 # God's Eye View Current State
 
+The optional local observation tools are described in
+[`docs/LOCAL-FEATURES-SETUP.md`](LOCAL-FEATURES-SETUP.md): map-first mobile controls,
+bounded camera/render resources, Refresh/Close and page/native expansion, one-shot
+Locate me with page-lifetime URL/copy coordinate protection, local snapshots and
+non-generative derivatives/notes, and explicit original-image Sol/high Q&A.
+Georgia and infrastructure records require operator-supplied permitted metadata;
+missing packs remain unavailable. Private Serve admission is disabled unless both
+origin and owner are explicitly configured; setup/OAuth/log/MCP routes stay local.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing

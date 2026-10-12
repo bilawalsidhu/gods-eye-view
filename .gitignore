@@ -16,6 +16,13 @@ output/
 .gev-cache/
 # Browser QA gate evidence (screenshots, console and network dumps).
 qa-artifacts/
+# Personal public-data snapshots are installed locally, not contribution files.
+public/infrastructure/
+# Never commit captured camera photos, derivatives or personal research notes.
+private-images/
+# Operator-supplied GDOT metadata and private validation/browser output.
+config/cctv_sources.georgia511.json
+browser-profiles/
 .DS_Store
 .gstack/
 3d-models/

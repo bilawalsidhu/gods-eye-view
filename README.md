@@ -585,3 +585,10 @@ One heads-up from the inside: build in this space for a week and you learn that 
 **🌐 God's Eye View. No place left behind.**
 
 </div>
+
+### Optional local observation tools
+
+See [the mobile/camera/infrastructure setup guide](docs/LOCAL-FEATURES-SETUP.md)
+for loopback launch, snapshots/annotation, Sol/high image Q&A, permitted local
+source packs and optional private owner access. Personal credentials, camera
+images and generated deployment datasets are not included.
