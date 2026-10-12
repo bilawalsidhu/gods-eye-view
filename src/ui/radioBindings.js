@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import {
   radioTunerSlot,
   radioTunerCommitSlot,
@@ -47,22 +48,36 @@ export function bindRadioControls() {
     );
     if (displayOpen) this.actions.revealStyleParameters();
     if (this._cockpitDisplayToggleBtn) {
-      const action = displayOpen ? 'Collapse' : 'Expand';
       this._cockpitDisplayToggleBtn.textContent = displayOpen ? '▶' : '◀';
       this._cockpitDisplayToggleBtn.setAttribute(
         'aria-label',
-        `${action} Cockpit display options`,
+        t(
+          displayOpen
+            ? 'cockpit.utility.displayToggleCollapseAriaLabel'
+            : 'cockpit.utility.displayToggleAriaLabel',
+        ),
       );
-      this._cockpitDisplayToggleBtn.title = `${action} Cockpit display options`;
+      this._cockpitDisplayToggleBtn.title = t(
+        displayOpen
+          ? 'cockpit.utility.displayToggleCollapseAriaLabel'
+          : 'cockpit.utility.displayToggleAriaLabel',
+      );
     }
     if (this._cockpitRadioToggleBtn) {
-      const action = radioOpen ? 'Collapse' : 'Expand';
       this._cockpitRadioToggleBtn.textContent = radioOpen ? '▶' : '◀';
       this._cockpitRadioToggleBtn.setAttribute(
         'aria-label',
-        `${action} Cockpit Radio controls`,
+        t(
+          radioOpen
+            ? 'cockpit.utility.radioToggleCollapseAriaLabel'
+            : 'cockpit.utility.radioToggleAriaLabel',
+        ),
       );
-      this._cockpitRadioToggleBtn.title = `${action} Cockpit Radio controls`;
+      this._cockpitRadioToggleBtn.title = t(
+        radioOpen
+          ? 'cockpit.utility.radioToggleCollapseAriaLabel'
+          : 'cockpit.utility.radioToggleAriaLabel',
+      );
     }
     if (!expanded && returnFocus) {
       (kind === 'display'
@@ -140,17 +155,21 @@ export function bindRadioControls() {
     if (this._radioTunerValue) {
       this._radioTunerValue.textContent = station
         ? `CH ${String(slot.stationIndex + 1).padStart(2, '0')} / ${String(this._radioTunerStations.length).padStart(2, '0')}`
-        : 'NO STATIONS';
+        : t('cockpit.radio.tunerNoStations');
     }
     if (this._radioTunerStation)
       this._radioTunerStation.textContent =
-        station?.name || 'NO STATION AVAILABLE';
+        station?.name || t('layers.radio.noStationAvailable');
     if (this._radioTunerSlider) {
       this._radioTunerSlider.setAttribute(
         'aria-valuetext',
         station
-          ? `${station.name}, station ${slot.stationIndex + 1} of ${this._radioTunerStations.length}`
-          : 'No station available',
+          ? t('cockpit.radio.tunerStationAria', {
+              name: station.name,
+              index: slot.stationIndex + 1,
+              total: this._radioTunerStations.length,
+            })
+          : t('cockpit.radio.tunerNoStationAria'),
       );
     }
     if (syncStatic)
@@ -301,9 +320,11 @@ export function bindRadioControls() {
       this._radioTunerBandPinnedForNavigation = false;
       if (result.reason === 'station-unavailable') {
         if (this._radioTunerValue)
-          this._radioTunerValue.textContent = 'OFF AIR';
+          this._radioTunerValue.textContent = t('cockpit.radio.tunerOffAir');
         if (this._radioTunerStation)
-          this._radioTunerStation.textContent = 'STATION UNAVAILABLE';
+          this._radioTunerStation.textContent = t(
+            'cockpit.radio.tunerStationUnavailable',
+          );
         this._radioTunerSlider?.setAttribute(
           'aria-valuetext',
           'Station unavailable after directory refresh',
@@ -340,7 +361,18 @@ export function bindRadioControls() {
             origin: 'user',
             notificationToken,
           }),
+        // Lifecycle toast copy: the English template below is pinned
+        // verbatim by contextSessionOrdering.test.mjs, so it stays the
+        // argument and localizedMessage rewrites it at the toast boundary
+        // (identical value under 'en').
         `Radio could not ${enabling ? 'start' : 'stop'} cleanly`,
+        {
+          localizedMessage: t('cockpit.radio.toastLifecycleFailed', {
+            action: enabling
+              ? t('cockpit.context.actionStart')
+              : t('cockpit.context.actionStop'),
+          }),
+        },
       );
       if (this.destroyed || toggled === false) return;
       if (

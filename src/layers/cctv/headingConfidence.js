@@ -1,3 +1,5 @@
+import { t } from '../../i18n/index.js';
+
 /**
  * @module headingConfidence
  *
@@ -43,5 +45,9 @@ export function isHeadingEstimated(camera) {
  */
 export function headingHudToken(camera) {
   const hdg = Math.round(Number(camera?.headingDeg) || 0);
-  return `HDG ${hdg}°${isHeadingEstimated(camera) ? ' (ESTIMATED)' : ''}`;
+  // The token copy lives in the layers catalog (en is byte-identical to the
+  // literals these replace); presentation stays here, translation at read.
+  return isHeadingEstimated(camera)
+    ? t('layers.cctv.summary.hdgEstimated', { value: hdg })
+    : t('layers.cctv.summary.hdg', { value: hdg });
 }
