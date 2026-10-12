@@ -1,6 +1,8 @@
 import { createSurfaceServices } from '../app/surfaceServices.js';
 import { createApplicationRequestServices } from '../services/requests.js';
 import { endpointSet, storedApiBase } from '../mobile/runtimeConfig.js';
+import { shouldUseDirect } from '../mobile/sourcePolicy.js';
+import { createTerrainDirectSource } from '../mobile/adapters/tileFeedsDirect.js';
 import { createApplicationCatalog } from '../app/constructCatalog.js';
 import { createStandaloneLayerSources } from './layerSources.js';
 export { createStandaloneReferenceSources } from './layerSources.js';
@@ -11,17 +13,30 @@ export function createStandaloneCatalog({
   sources = {},
   streetLevelProviders,
   signal = new AbortController().signal,
-  surface = createSurfaceServices({
-    terrainSource: createApplicationRequestServices({
-      endpoints: endpointSet(storedApiBase()),
-    }).terrain,
-    signal,
-  }),
+  surface,
+  fetchImpl,
+  getKey,
+  direct,
 } = {}) {
+  const useDirect = direct ?? shouldUseDirect();
+  if (surface === undefined) {
+    surface = createSurfaceServices({
+      terrainSource: useDirect
+        ? createTerrainDirectSource(fetchImpl ? { fetchImpl } : {})
+        : createApplicationRequestServices({
+            endpoints: endpointSet(storedApiBase()),
+          }).terrain,
+      signal,
+    });
+  }
   return createApplicationCatalog({
     nepalBoundaryResolver,
     surface,
-    sources: createStandaloneLayerSources(sources),
+    sources: createStandaloneLayerSources(sources, {
+      fetchImpl,
+      getKey,
+      direct: useDirect,
+    }),
     streetLevelProviders,
     signal,
     vesselOptions: {

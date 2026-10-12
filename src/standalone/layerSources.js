@@ -21,16 +21,36 @@ import { createWindSource } from '../layers/wind/source.js';
 import { createFirmsSource } from '../layers/firms/source.js';
 import { createMapillarySource } from '../layers/streetLevel/providers/mapillary/source.js';
 import { createReferenceSources } from '../sources/reference.js';
+import { shouldUseDirect } from '../mobile/sourcePolicy.js';
+import { createWeatherDirectSource } from '../mobile/adapters/weatherDirect.js';
+import { createRouteDirectSource } from '../mobile/adapters/geocodeDirect.js';
+import {
+  createCycloneDirectSource,
+  createFirmsDirectSource,
+  createGbfsDirectSource,
+  createRadioDirectSource,
+} from '../mobile/adapters/staticFeedsDirect.js';
+import { createMapillaryDirectSource } from '../mobile/adapters/tileFeedsDirect.js';
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
 
 /** Select standalone providers without starting their acquisition. */
-export function createStandaloneLayerSources(overrides = {}) {
+export function createStandaloneLayerSources(overrides = {}, options = {}) {
   if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides))
     throw new TypeError('Source overrides must be an object');
+  const { fetchImpl, getKey, direct } = options ?? {};
+  // On-device without a backend, keyless sources fetch upstreams directly;
+  // everywhere else the legacy same-origin proxies are built untouched.
+  const useDirect = direct ?? shouldUseDirect();
+  const transport = fetchImpl ? { fetchImpl } : {};
+  const mapillaryToken = import.meta.env?.MAPILLARY_CLIENT_TOKEN || '';
+  const firmsKey =
+    typeof getKey === 'function' ? () => getKey('FIRMS_MAP_KEY') : undefined;
   const mapTiles = createOpenFreeMapSource();
   const defaults = {
     ...createReferenceSources(),
-    directions: createDirectionsSource(),
+    directions: useDirect
+      ? createRouteDirectSource(transport)
+      : createDirectionsSource(transport),
     'recent-imagery': createRecentImagerySource(),
     flights: createFlightSource(),
     military: createMilitarySource(),
@@ -41,21 +61,33 @@ export function createStandaloneLayerSources(overrides = {}) {
       origin: () => globalThis.document?.baseURI ?? 'http://localhost',
     }),
     cctv: createCctvSource(),
-    radio: createRadioSource(),
+    radio: useDirect
+      ? createRadioDirectSource(transport)
+      : createRadioSource(transport),
     traffic: createTrafficSource({ mapTiles }),
     transit: createTransitSource(),
-    bikeshare: createBikeshareSource(),
+    bikeshare: useDirect
+      ? createGbfsDirectSource(transport)
+      : createBikeshareSource(transport),
     installations: createInstallationSource({ mapTiles }),
     satellites: createSatelliteSource(),
     launches: createLaunchSource(),
     alpr: createAlprTileSource(),
-    firms: createFirmsSource(),
+    firms: useDirect
+      ? createFirmsDirectSource({ ...transport, getKey: firmsKey })
+      : createFirmsSource(transport),
     wind: createWindSource(),
-    weather: createWeatherSource(),
-    cyclones: createCycloneSource(),
-    mapillary: createMapillarySource({
-      token: import.meta.env?.MAPILLARY_CLIENT_TOKEN || '',
-    }),
+    weather: useDirect
+      ? createWeatherDirectSource(transport)
+      : createWeatherSource(transport),
+    cyclones: useDirect
+      ? createCycloneDirectSource(transport)
+      : createCycloneSource(transport),
+    mapillary: useDirect
+      ? createMapillaryDirectSource({ ...transport, token: mapillaryToken })
+      : createMapillarySource({
+          token: mapillaryToken,
+        }),
   };
   for (const name of Object.keys(overrides)) {
     if (!Object.hasOwn(defaults, name))
