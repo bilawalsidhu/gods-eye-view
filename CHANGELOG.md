@@ -105,6 +105,10 @@
   cites its Wikidata item; OSM names always win. Operators with Overpass
   configured get the same names. `scripts/build-military-names-norway.py`
   rebuilds or `--verify`s the supplement from a pinned Geofabrik extract.
+- Keep later satellites when a TLE catalog entry is missing an orbital line.
+  The parser skips the incomplete set and resumes at the next complete named
+  set, instead of losing the rest of the group (#906).
+
 - Add an experimental ChatGPT/Codex OAuth option for cloud voice in Provider
   Settings. API-key voice remains the default. Local sign-in can start from
   the auth button and reports completion, failure, timeout, or expired
