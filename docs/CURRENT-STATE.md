@@ -1275,6 +1275,8 @@ resolving environment overrides per variable; its explicit `--key` wins.
 
 ## Infrastructure marker visibility
 
+Outline-derived representative anchors average longitudes around the first valid vertex across the dateline, keeping the marker near the feature; they remain representative vertex means rather than geometric centroids.
+
 Datacenter/dam registration uses fresh reusable factories with the application's
 existing context, overlay and render functions. The scoped package exports do
 not import standalone application globals; see
@@ -5310,8 +5312,3 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
-
-
-### fix(infrastructure): keep dateline-spanning feature anchors near their geometry
-
-Unwrap outline longitudes around the first valid vertex before averaging and wrap the result back into WGS84. This retains the existing representative-vertex mean, rather than claiming a geometric centroid.
