@@ -136,6 +136,10 @@ export class LocationNavigation {
         resetButtons: [this._resetGlobeBtn, this._cockpitResetGlobeBtn],
         statusCity: this._locationMiniCity,
         statusPoi: this._locationMiniPoi,
+        myLocationOn: this._myLocationOn,
+        myLocationOff: this._myLocationOff,
+        myLocationRecenter: this._myLocationRecenter,
+        myLocationStatus: this._myLocationStatus,
       },
       cities: CITY_POIS,
       getExpandedCity: () => this._expandedCityId,
@@ -143,7 +147,17 @@ export class LocationNavigation {
       onPoi: (id, index) => this._onPoiClick(id, index),
       onSearch: (query) => this._locationLookup.run(query),
       onReset: () => this.resetToGlobeView(),
+      onMyLocationMode: (mode) => this.onMyLocationMode?.(mode),
+      onMyLocationRecenter: () => this.onMyLocationRecenter?.(),
     });
+    if (this._lastMyLocationState)
+      this._locationControls.renderMyLocation(this._lastMyLocationState);
+  }
+
+  /** Mirror the shared My Location state into the location tray controls. */
+  renderMyLocation(state) {
+    this._lastMyLocationState = state;
+    this._locationControls?.renderMyLocation(state);
   }
 
   _beginWorldJumpTransition() {

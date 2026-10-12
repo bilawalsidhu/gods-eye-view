@@ -176,6 +176,70 @@
   gap: 8px;
 }
 
+.my-location-section {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 4px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.my-location-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.my-location-recenter {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.my-location-recenter:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--glass-border-hover);
+  color: var(--text-primary);
+}
+
+.my-location-recenter:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+.my-location-status {
+  min-height: 14px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.7px;
+  line-height: 1.5;
+}
+
+.my-location-status[data-state='denied'],
+.my-location-status[data-state='error'],
+.my-location-status[data-state='timeout'],
+.my-location-status[data-state='unavailable'],
+.my-location-status[data-state='unsupported'] {
+  color: #ffd27d;
+}
+
+.my-location-status[data-state='ready'] {
+  color: #bdefff;
+}
+
 .poi-pill {
   display: inline-flex;
   align-items: center;

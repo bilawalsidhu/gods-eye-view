@@ -11,6 +11,8 @@ export class LocationControls {
     onPoi,
     onSearch,
     onReset,
+    onMyLocationMode,
+    onMyLocationRecenter,
     doc = document,
     requestFrame = (callback) => requestAnimationFrame(callback),
     cancelFrame = (id) => cancelAnimationFrame(id),
@@ -23,6 +25,8 @@ export class LocationControls {
       onPoi,
       onSearch,
       onReset,
+      onMyLocationMode,
+      onMyLocationRecenter,
       doc,
       requestFrame,
       cancelFrame,
@@ -64,6 +68,11 @@ export class LocationControls {
     });
     for (const button of elements.resetButtons)
       this.bind(button, 'click', onReset);
+    this.bind(elements.myLocationOn, 'click', () => onMyLocationMode?.('on'));
+    this.bind(elements.myLocationOff, 'click', () => onMyLocationMode?.('off'));
+    this.bind(elements.myLocationRecenter, 'click', () =>
+      onMyLocationRecenter?.(),
+    );
   }
   bind(element, event, handler, removers = this.removers) {
     if (!element) return;
@@ -135,6 +144,38 @@ export class LocationControls {
     const lines = locationMiniStatus(state);
     this.elements.statusCity.textContent = lines.city;
     this.elements.statusPoi.textContent = lines.poi;
+  }
+  renderMyLocation(state = {}) {
+    if (this.destroyed) return;
+    const enabled = state.enabled === true;
+    const ready = state.status === 'ready' && state.position;
+    const setMode = (button, active) => {
+      if (!button) return;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-checked', active ? 'true' : 'false');
+      button.tabIndex = active ? 0 : -1;
+    };
+    setMode(this.elements.myLocationOn, enabled);
+    setMode(this.elements.myLocationOff, !enabled);
+    if (this.elements.myLocationRecenter) {
+      this.elements.myLocationRecenter.hidden = !ready;
+      this.elements.myLocationRecenter.disabled = !ready;
+    }
+    if (!this.elements.myLocationStatus) return;
+    const accuracyM = Number(state.position?.accuracy);
+    const label =
+      state.status === 'ready'
+        ? Number.isFinite(accuracyM)
+          ? `Accuracy radius ${Math.round(accuracyM)} m`
+          : 'Location active.'
+        : state.status === 'requesting'
+          ? 'Awaiting location permission…'
+          : state.message || 'Location sharing is off.';
+    this.elements.myLocationStatus.textContent = label;
+    this.elements.myLocationStatus.setAttribute(
+      'data-state',
+      state.status || 'off',
+    );
   }
   createOrbitIndicator() {
     if (this.destroyed) return null;

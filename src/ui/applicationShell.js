@@ -19,6 +19,11 @@ import { StreetLevelControls } from './streetLevelControls.js';
 import { RadioControls } from './radio.js';
 import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
+import { MyLocationController } from './myLocationController.js';
+import {
+  readMyLocationState,
+  subscribeMyLocationState,
+} from '../myLocationState.js';
 import { bindClearLayersControl } from './layers.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
 import { createMapSourceControls } from './mapSource.js';
@@ -327,8 +332,17 @@ export class StyleManager extends ShellFacade {
         _cockpitResetGlobeBtn: this._cockpitResetGlobeBtn,
         _locationMiniCity: this._locationMiniCity,
         _locationMiniPoi: this._locationMiniPoi,
+        _myLocationOn: this._myLocationOn,
+        _myLocationOff: this._myLocationOff,
+        _myLocationRecenter: this._myLocationRecenter,
+        _myLocationStatus: this._myLocationStatus,
       },
       operations: {
+        onMyLocationMode: (mode) =>
+          mode === 'on'
+            ? this._myLocationController?.enable()
+            : this._myLocationController?.disable(),
+        onMyLocationRecenter: () => this._myLocationController?.recenter(),
         _beginDeferredNavigation: (...args) =>
           this._beginDeferredNavigation(...args),
         _reassertNavigationHandoff: (...args) =>
@@ -481,6 +495,14 @@ export class StyleManager extends ShellFacade {
       },
     );
     initTrackedReadout(viewer);
+    this._myLocationController = new MyLocationController({
+      viewer,
+      render: { governorRequestRender: this.services?.governorRequestRender },
+    });
+    this._myLocationUnsubscribe = subscribeMyLocationState(({ state }) => {
+      this._locationNavigation?.renderMyLocation(state);
+    });
+    this._locationNavigation?.renderMyLocation(readMyLocationState());
     setDetectionStyle(this.activeStyle);
     this._applyDetectionDensityFromUi();
 
@@ -1574,6 +1596,10 @@ export class StyleManager extends ShellFacade {
     this._disposed = true;
     this._navigation.stop();
     this._shareState.destroy();
+    this._myLocationUnsubscribe?.();
+    this._myLocationUnsubscribe = null;
+    this._myLocationController?.destroy();
+    this._myLocationController = null;
     this._locationNavigation.destroy();
     this._lifetime.destroy();
     this._recording.destroy();

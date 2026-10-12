@@ -668,7 +668,10 @@
       "src/ui/localSdrControls.js",
       "src/layers/localAdsb/feedNames.js",
       "src/ui/localSdrPresentation.js",
-      "src/data/cameraArrival.js"
+      "src/data/cameraArrival.js",
+      "src/geo/distance.js",
+      "src/myLocationState.js",
+      "src/ui/myLocationController.js"
     ],
     "external": ["cesium"]
   },
@@ -2198,7 +2201,10 @@
       "src/tools/functions.js",
       "src/voice/actionSchemas.js",
       "src/view/index.js",
-      "src/app/embed.js"
+      "src/app/embed.js",
+      "src/geo/distance.js",
+      "src/myLocationState.js",
+      "src/ui/myLocationController.js"
     ],
     "external": [
       "hls.js",

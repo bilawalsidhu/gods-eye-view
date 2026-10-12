@@ -91,6 +91,53 @@
             <input type="text" id="location-search" placeholder="Search any location..." autocomplete="off" spellcheck="false" aria-label="Search location by name or coordinates" />
           </div>
         </div>
+        <section
+          class="my-location-section"
+          aria-labelledby="my-location-label"
+        >
+          <div class="my-location-header">
+            <span id="my-location-label" class="pp-slider-mini-label"
+              >MY LOCATION</span
+            >
+            <button
+              id="my-location-recenter"
+              class="my-location-recenter"
+              type="button"
+              hidden
+            >
+              RECENTER
+            </button>
+          </div>
+          <div class="pp-mode-seg" role="radiogroup" aria-label="My location">
+            <button
+              class="pp-mode-btn"
+              id="my-location-off"
+              data-mode="off"
+              role="radio"
+              aria-checked="true"
+              tabindex="0"
+            >
+              OFF
+            </button>
+            <button
+              class="pp-mode-btn"
+              id="my-location-on"
+              data-mode="on"
+              role="radio"
+              aria-checked="false"
+              tabindex="-1"
+            >
+              ON
+            </button>
+          </div>
+          <div
+            id="my-location-status"
+            class="my-location-status"
+            aria-live="polite"
+          >
+            Location sharing is off.
+          </div>
+        </section>
       </div>
     </div>
   </div>
