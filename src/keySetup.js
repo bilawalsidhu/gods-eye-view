@@ -5,6 +5,8 @@ import {
   storedApiBase,
 } from './mobile/runtimeConfig.js';
 import { readApiBase, writeApiBase } from './mobile/keyStore.js';
+import { KEY_IDS, createVault } from './mobile/vault.js';
+import { insecureBridge } from './mobile/secureStorage.js';
 import {
   readStoredCloudVoiceAuthMode,
   writeStoredCloudVoiceAuthMode,
@@ -407,6 +409,85 @@ export function buildBackendUrlRow(documentRef, currentBase = '') {
 }
 
 /**
+ * Build one read-only vault presence row. Presence only: the row carries
+ * the key id and its set/unset state, never an input and never a value.
+ * @param {Document} documentRef Document used to create elements.
+ * @param {string} id Vault key id.
+ * @param {boolean} set Whether the key is stored on this device.
+ * @returns {HTMLElement} The row element.
+ */
+export function buildVaultStatusRow(documentRef, id, set = false) {
+  const row = documentRef.createElement('section');
+  row.className = 'key-setup-row';
+  row.dataset.keyId = `vault:${id}`;
+  row.dataset.set = String(Boolean(set));
+  row.dataset.vault = 'true';
+  const head = documentRef.createElement('div');
+  head.className = 'key-setup-row-head';
+  const title = documentRef.createElement('strong');
+  title.textContent = id;
+  const state = documentRef.createElement('span');
+  state.className = 'key-setup-vault-state';
+  state.textContent = set ? 'SET' : 'NOT SET';
+  state.title = set
+    ? 'Stored on this device only'
+    : 'Not stored on this device';
+  head.append(title, state);
+  row.append(head);
+  return row;
+}
+
+/**
+ * Build the read-only vault status section: one presence row per vault key
+ * plus a banner while the backend is not Keystore-backed. All text is
+ * static; values never appear.
+ * @param {Document} documentRef Document used to create elements.
+ * @param {Record<string, { set: boolean, backend: string }>|null} status Presence record from the vault.
+ * @returns {HTMLElement} The section element.
+ */
+export function buildVaultStatusSection(documentRef, status) {
+  const section = documentRef.createElement('div');
+  section.className = 'key-setup-vault';
+  section.dataset.vaultSection = 'true';
+  const note = documentRef.createElement('p');
+  note.className = 'key-setup-vault-note';
+  note.textContent =
+    'On-device provider keys (presence only — values are never shown).';
+  section.append(note);
+  for (const id of KEY_IDS)
+    section.append(buildVaultStatusRow(documentRef, id, status?.[id]?.set));
+  const backend = status?.[KEY_IDS[0]]?.backend ?? 'insecure';
+  if (backend !== 'secure') {
+    const banner = documentRef.createElement('p');
+    banner.className = 'key-setup-vault-banner';
+    banner.dataset.vaultBanner = 'true';
+    banner.textContent =
+      'Device storage is not Keystore-backed yet — keys live in app preferences.';
+    section.append(banner);
+  }
+  return section;
+}
+
+/**
+ * Read the on-device vault presence snapshot for display. Fail-closed:
+ * any failure resolves to null so the dialog still renders.
+ * @param {{ get: Function, set: Function, remove: Function }|null} storage Injected Preferences-shaped store.
+ * @returns {Promise<Record<string, { set: boolean, backend: string }>|null>} Presence record, or null when unreadable.
+ */
+export async function readVaultSnapshot(storage) {
+  try {
+    if (!storage) return null;
+    const vault = createVault({
+      storage: insecureBridge(storage),
+      insecureOk: true,
+    });
+    return await vault.keyStatus();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Render the Capacitor-only backend URL surface: the dev-server status fetch
  * cannot succeed inside the shell, so instead of removing Provider Settings
  * outright, show just the `GEV_API_BASE` field. Saving persists via the
@@ -420,6 +501,7 @@ export function buildBackendUrlRow(documentRef, currentBase = '') {
  * @param {() => void} [options.reload] Reload hook (defaults to page reload).
  * @param {Function} [options.readImpl] `readApiBase` override for tests.
  * @param {Function} [options.writeImpl] `writeApiBase` override for tests.
+ * @param {Function} [options.vaultImpl] `readVaultSnapshot` override for tests.
  * @returns {Promise<{ open: Function, close: Function, dispose: Function }|null>} Controls, or null when there is no surface to wire.
  */
 export async function initCapacitorBackendSetup({
@@ -430,6 +512,7 @@ export async function initCapacitorBackendSetup({
   reload = () => globalThis.location?.reload?.(),
   readImpl = readApiBase,
   writeImpl = writeApiBase,
+  vaultImpl = readVaultSnapshot,
 } = {}) {
   if (!chip || !root || !storage) return null;
   const current = await resolveBackendBase(storage, readImpl);
@@ -449,6 +532,15 @@ export async function initCapacitorBackendSetup({
   if (rowsHost) {
     rowsHost.textContent = '';
     rowsHost.append(buildBackendUrlRow(documentRef, current));
+    // Read-only vault presence rides along: no inputs, no values, and an
+    // insecure-backend banner while Preferences is the only store.
+    try {
+      const snapshot = await vaultImpl(storage);
+      if (snapshot)
+        rowsHost.append(buildVaultStatusSection(documentRef, snapshot));
+    } catch {
+      // Presence is a nicety; the backend field must still render.
+    }
   }
   let open = false;
   let busy = false;
@@ -620,6 +712,7 @@ export async function initKeySetup({
   // '') means the backend URL row rides along with the key rows.
   let backendBase = null;
   let backendStorage = null;
+  let vaultSnapshot = null;
   const reloadPage = reloadImpl ?? (() => globalThis.location?.reload?.());
 
   const render = (nextStatus) => {
@@ -650,6 +743,10 @@ export async function initKeySetup({
           typeof pendingBase === 'string' ? pendingBase : backendBase,
         ),
       );
+      // Read-only vault presence, Capacitor only: the web dialog below never
+      // takes this branch, so its bytes are unchanged.
+      if (vaultSnapshot)
+        rowsHost.append(buildVaultStatusSection(documentRef, vaultSnapshot));
     }
     syncCloudVoiceAuth();
   };
@@ -936,6 +1033,9 @@ export async function initKeySetup({
   if (isCapacitorHost(documentRef?.defaultView ?? globalThis.window)) {
     backendStorage = apiBaseStorage ?? (await loadDefaultCapacitorStorage());
     backendBase = await resolveBackendBase(backendStorage);
+    // Presence is static for a read-only dialog session, so one snapshot
+    // per dialog is enough; a failure simply omits the section.
+    vaultSnapshot = await readVaultSnapshot(backendStorage);
   }
   render(status);
 

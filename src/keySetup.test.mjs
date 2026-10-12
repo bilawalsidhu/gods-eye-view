@@ -2,12 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildBackendUrlRow,
+  buildVaultStatusRow,
+  buildVaultStatusSection,
   collectKeyUpdates,
   initCapacitorBackendSetup,
   isCapacitorHost,
   keySetupChipLabel,
   localApiBaseStorage,
   mirrorApiBaseToLocalStorage,
+  readVaultSnapshot,
   resolveBackendBase,
   stripKeylessBasemapFromHash,
   bindKeySetupPlacement,
@@ -750,6 +753,121 @@ test('web success path renders keys with no backend row', async () => {
     harness.root.querySelector('input[data-env-var="GOOGLE_MAPS_API_KEY"]'),
   );
   assert.equal(findBackendInput(harness.root), null);
+  assert.equal(
+    harness.root.querySelector('[data-vault-section="true"]'),
+    null,
+    'web dialog carries no vault section',
+  );
   controls.destroy();
   assert.equal(reloads, 0);
+});
+
+test('buildVaultStatusRow is presence-only with no inputs', () => {
+  const documentRef = fakeBackendDocument();
+  const row = buildVaultStatusRow(documentRef, 'OPENAI_API_KEY', true);
+  assert.equal(row.dataset.keyId, 'vault:OPENAI_API_KEY');
+  assert.equal(row.dataset.set, 'true');
+  assert.equal(row.querySelectorAll('input').length, 0);
+  assert.equal(row.querySelector('strong').textContent, 'OPENAI_API_KEY');
+  assert.equal(row.querySelector('span').textContent, 'SET');
+  const unset = buildVaultStatusRow(documentRef, 'FIRMS_MAP_KEY', false);
+  assert.equal(unset.dataset.set, 'false');
+  assert.equal(unset.querySelector('span').textContent, 'NOT SET');
+});
+
+test('buildVaultStatusSection lists every vault key plus an insecure banner', async () => {
+  const { KEY_IDS } = await import('./mobile/vault.js');
+  const documentRef = fakeBackendDocument();
+  const status = {};
+  for (const id of KEY_IDS) status[id] = { set: false, backend: 'insecure' };
+  const section = buildVaultStatusSection(documentRef, status);
+  assert.equal(section.dataset.vaultSection, 'true');
+  for (const id of KEY_IDS)
+    assert.ok(
+      section.querySelector(`section[data-key-id="vault:${id}"]`),
+      `presence row for ${id}`,
+    );
+  assert.equal(section.querySelectorAll('input').length, 0);
+  const banner = section.querySelector('[data-vault-banner="true"]');
+  assert.ok(banner, 'insecure backend shows a banner');
+  const secureStatus = {};
+  for (const id of KEY_IDS) secureStatus[id] = { set: true, backend: 'secure' };
+  const secureSection = buildVaultStatusSection(documentRef, secureStatus);
+  assert.equal(
+    secureSection.querySelector('[data-vault-banner="true"]'),
+    null,
+    'secure backend shows no banner',
+  );
+});
+
+test('readVaultSnapshot reports presence fail-closed', async () => {
+  const harness = makeBackendHarness({ stored: null });
+  await harness.storage.set({
+    key: 'TOMTOM_API_KEY',
+    value: 'probe-value',
+  });
+  const snapshot = await readVaultSnapshot(harness.storage);
+  assert.equal(snapshot.TOMTOM_API_KEY.set, true);
+  assert.equal(snapshot.TOMTOM_API_KEY.backend, 'insecure');
+  assert.equal(snapshot.OPENAI_API_KEY.set, false);
+  assert.equal(await readVaultSnapshot(null), null);
+  assert.deepEqual(
+    await readVaultSnapshot({
+      get: async () => {
+        throw new Error('locked');
+      },
+      set: async () => {},
+      remove: async () => {},
+    }),
+    Object.fromEntries(
+      [
+        'OPENAI_API_KEY',
+        'AISSTREAM_API_KEY',
+        'FIRMS_MAP_KEY',
+        'TOMTOM_API_KEY',
+        'OPENSKY_CLIENT_ID',
+        'OPENSKY_CLIENT_SECRET',
+        'GOOGLE_MAPS_API_KEY',
+      ].map((id) => [id, { set: false, backend: 'insecure' }]),
+    ),
+  );
+});
+
+test('capacitor backend surface renders vault presence with a banner', async () => {
+  const harness = makeBackendHarness({ stored: null });
+  const controls = await initCapacitorBackendSetup({
+    documentRef: harness.documentRef,
+    chip: harness.chip,
+    root: harness.root,
+    storage: harness.storage,
+    reload: () => {},
+  });
+  assert.ok(controls);
+  const section = harness.root.querySelector('[data-vault-section="true"]');
+  assert.ok(section, 'vault section rides along with the backend row');
+  assert.ok(
+    section.querySelector('section[data-key-id="vault:OPENAI_API_KEY"]'),
+  );
+  assert.ok(section.querySelector('[data-vault-banner="true"]'));
+  assert.ok(
+    harness.root.querySelector('input[data-env-var="GEV_API_BASE"]'),
+    'backend field still present',
+  );
+  controls.dispose();
+});
+
+test('capacitor merged dialog renders vault presence with a banner', async () => {
+  const { initKeySetup } = await import('./keySetup.js');
+  const harness = makeMergedHarness({ stored: 'https://home:4173' });
+  const controls = await initKeySetup({
+    documentRef: harness.documentRef,
+    fetchImpl: harness.fetchImpl,
+    apiBaseStorage: harness.storage,
+    reloadImpl: () => {},
+  });
+  assert.ok(controls);
+  const section = harness.root.querySelector('[data-vault-section="true"]');
+  assert.ok(section, 'vault section merged alongside keys');
+  assert.ok(section.querySelector('[data-vault-banner="true"]'));
+  controls.destroy();
 });

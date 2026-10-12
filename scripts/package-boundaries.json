@@ -1617,6 +1617,8 @@
       "src/localRequestGate.mjs",
       "src/mobile/keyStore.js",
       "src/mobile/runtimeConfig.js",
+      "src/mobile/secureStorage.js",
+      "src/mobile/vault.js",
       "src/mobile/webglSupport.js",
       "src/keylessGeocoder.js",
       "src/layers/aircraft/classification.js",
