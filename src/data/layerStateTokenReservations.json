@@ -1,4 +1,9 @@
 [
+  ["public-power-plants", "3"],
+  ["mapped-mobile-sites", "4"],
+  ["mapped-power-plants", "5"],
+  ["mapped-substations", "6"],
+  ["mapped-telecom-lines", "7"],
   ["ais-live-vessels", "a"],
   ["alpr-cameras", "p"],
   ["bhote-koshi-2026", "h"],

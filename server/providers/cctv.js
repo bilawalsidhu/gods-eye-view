@@ -18,6 +18,10 @@ import {
 } from './cctv/constants.js';
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { createHlsPuller } from './cctv/stream.js';
+import {
+  createGeorgiaSession,
+  GEORGIA_MAX_SOURCES,
+} from './cctv/georgia511.js';
 import { googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
@@ -40,7 +44,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   /** Cap on health map entries to prevent unbounded growth. Sized to the
    * CCTV_MAX_SOURCES ceiling so health/status observability is never evicted
    * for any catalog the proxy can actually serve. */
-  const HEALTH_MAX_ENTRIES = CCTV_MAX_SOURCES_CEILING;
+  const HEALTH_MAX_ENTRIES = CCTV_MAX_SOURCES_CEILING + GEORGIA_MAX_SOURCES;
   /** Live HLS strategies (see ./cctv/stream.js). Shared across dev and preview. */
   const puller = createHlsPuller();
 
@@ -167,6 +171,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               license: source.license,
               credit: source.credit || '',
               code: source.code || '',
+              county: source.county || '',
+              viewerUrl: source.viewerUrl || '',
+              availability: source.availability || '',
               groundHeights: source.groundHeights || null,
             })),
           };
@@ -212,6 +219,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           }
           const cameraId = decodeURIComponent(match[1]);
           const source = sourceById.get(cameraId);
+          const isGeorgia = source?.pack === 'georgia511';
           const mediaUrl = source?.url || '';
           const feedType = normalizeFeedType(source?.feedType || 'image');
           const leaseId = url.searchParams.get('lease');
@@ -233,8 +241,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           }
           if (feedType === 'hls') {
             if (
-              !/^https?:\/\//i.test(mediaUrl) ||
-              !/\.m3u8(?:\?|$)/i.test(mediaUrl)
+              !isGeorgia &&
+              (!/^https?:\/\//i.test(mediaUrl) ||
+                !/\.m3u8(?:\?|$)/i.test(mediaUrl))
             ) {
               res.writeHead(503, { 'Content-Type': 'application/json' });
               res.end(
@@ -265,7 +274,25 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               if (entry) puller.release(cameraId, leaseId);
             };
             try {
-              entry = await puller.ensure(cameraId, mediaUrl, leaseId);
+              const strategy = isGeorgia ? createGeorgiaSession(source) : {};
+              if (isGeorgia) {
+                const noteError = strategy.onError;
+                strategy.onError = (error) => {
+                  noteError(error);
+                  setHealth(cameraId, {
+                    status: 'degraded',
+                    sourceKind: 'unavailable',
+                    label: source.provider,
+                    message: 'Georgia public video unavailable',
+                  });
+                };
+              }
+              entry = await puller.ensure(
+                cameraId,
+                mediaUrl,
+                leaseId,
+                strategy,
+              );
               if (downstream.closed) {
                 cancelPending();
                 return;
@@ -298,15 +325,17 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             } catch {
               setHealth(cameraId, {
                 status: 'degraded',
-                sourceKind: 'fallback',
+                sourceKind: isGeorgia ? 'unavailable' : 'fallback',
                 label: source?.provider || 'Configured source',
                 message: 'Live HLS unavailable',
               });
               if (!downstream.closed) {
-                res.writeHead(503, {
+                res.writeHead(entry?.safeError?.status || 503, {
                   'Content-Type': 'application/json',
                   'Cache-Control': 'no-store',
-                  'Retry-After': '2',
+                  'Retry-After': String(
+                    entry?.safeError?.retryAfterSeconds || 2,
+                  ),
                 });
                 res.end(JSON.stringify({ error: 'Live stream unavailable' }));
               }
@@ -469,6 +498,22 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           decodeURIComponent(url.pathname.replace('/frame/', '').trim()) ||
           'camera';
         const source = sourceById.get(cameraId);
+        // A failed Georgia video is an honest unavailable state. Never spend a
+        // Street View request or present a synthetic image as this camera.
+        if (source?.pack === 'georgia511') {
+          res.writeHead(503, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+          });
+          res.end(
+            JSON.stringify({
+              error:
+                'Georgia camera snapshot unavailable; open live video or the official viewer',
+              viewerUrl: source.viewerUrl,
+            }),
+          );
+          return;
+        }
         const label = url.searchParams.get('label') || source?.name || cameraId;
         const city = url.searchParams.get('city') || source?.city || '';
         const lat = Number(url.searchParams.get('lat') || source?.lat);
@@ -555,7 +600,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         });
         res.end(svg);
       } catch (error) {
-        console.error('[CCTV Proxy]', error?.message || String(error));
+        console.error('[CCTV Proxy] request failed');
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'CCTV proxy error' }));
       }

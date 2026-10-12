@@ -1,5 +1,21 @@
 import { admitSameSiteRequest } from '../../../src/localRequestGate.mjs';
 
+// Only the first server middleware can mark a request after validating Serve.
+// No request header is interpreted as this marker.
+const trustedTailnetRequests = new WeakSet();
+export function markTrustedTailnetRequest(req) {
+  trustedTailnetRequests.add(req);
+}
+const tailnetCostPaths = new Set([
+  '/api/realtime/token',
+  '/api/openai/hud-summary',
+  '/api/openai/camera-image',
+  '/api/google/nearby-places',
+  '/api/google/text-search',
+  '/api/mapillary/status',
+  '/api/mapillary/tiles',
+]);
+
 /**
  * Cross-site request gate for cost-bearing and log endpoints. Feeds the
  * request to the pure, unit-tested `admitSameSiteRequest` and answers 403
@@ -13,12 +29,20 @@ import { admitSameSiteRequest } from '../../../src/localRequestGate.mjs';
  * @returns {boolean} True when a 403 was sent.
  */
 export function admitSameSite(req, res) {
+  const pathname = new URL(
+    req.originalUrl || req.url || '/',
+    'http://localhost',
+  ).pathname;
+  const trusted =
+    trustedTailnetRequests.has(req) &&
+    (tailnetCostPaths.has(pathname) ||
+      pathname.startsWith('/api/mapillary/tiles/'));
   const verdict = admitSameSiteRequest({
     hostHeader: req.headers?.host,
-    protocol: req.socket?.encrypted ? 'https:' : 'http:',
+    protocol: trusted || req.socket?.encrypted ? 'https:' : 'http:',
     origin: req.headers?.origin,
     secFetchSite: req.headers?.['sec-fetch-site'],
-    proxyHeaders: req.headers || {},
+    proxyHeaders: trusted ? {} : req.headers || {},
   });
   if (verdict.ok) return false;
   res.statusCode = verdict.status;

@@ -42,6 +42,11 @@ const PANEL_GROUPS = [
       'local-datacenters',
       'telegeography-submarine-cables',
       'local-dams',
+      'public-power-plants',
+      'mapped-mobile-sites',
+      'mapped-power-plants',
+      'mapped-substations',
+      'mapped-telecom-lines',
     ],
   },
   {

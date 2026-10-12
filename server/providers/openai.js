@@ -1,5 +1,6 @@
 import { defaultSourceRoot } from './common/source-root.js';
 import { handleHudSummary } from './openai/hud-summary.js';
+import { createCameraImageHandler } from './openai/camera-image.js';
 import { createDebugLogHandler } from './openai/debug-log.js';
 import {
   createRealtimeOAuthLoginHandler,
@@ -21,10 +22,12 @@ function openAiRealtimeProxy({
   realtime = {},
 } = {}) {
   const oauthLogin = createCodexOAuthLogin(realtime);
+  const cameraImage = createCameraImageHandler();
   function install(middlewares) {
     // Cost-bearing and log endpoints refuse cross-site browser requests
     // (see server/providers/common/same-site.js and SECURITY.md).
     middlewares.use('/api/openai/hud-summary', sameSiteGated(handleHudSummary));
+    middlewares.use('/api/openai/camera-image', sameSiteGated(cameraImage));
 
     middlewares.use(
       '/api/realtime/debug-log',

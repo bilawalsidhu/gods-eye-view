@@ -968,5 +968,22 @@
   "src/tools/views.test.mjs",
   "src/app/embed.test.mjs",
   "src/tools/globePanel.test.mjs",
-  "src/costEndpointThrottle.test.mjs"
+  "src/costEndpointThrottle.test.mjs",
+  "src/data/cctvGeorgia511.test.mjs",
+  "src/layers/cctv/projectionCleanup.test.mjs",
+  "src/layers/cctv/retry.test.mjs",
+  "src/localRequestTailnet.test.mjs",
+  "src/mobileResourcePolicy.test.mjs",
+  "src/ui/locateControls.test.mjs",
+  "src/ui/mobileMenu.test.mjs",
+  "src/ui/cameraSnapshot.test.mjs",
+  "src/ui/cameraImageAi.test.mjs",
+  "src/ui/infrastructureDetails.test.mjs",
+  "src/data/publicInfrastructure.test.mjs",
+  "server/providers/openai/camera-image.test.mjs",
+  "scripts/launch-local.mjs",
+  "scripts/prepare-local-infrastructure.mjs",
+  "src/localTailnetPlugin.test.mjs",
+  "src/tooling/localInfrastructurePacking.test.mjs",
+  "src/tooling/cameraImageProvider.test.mjs"
 ]

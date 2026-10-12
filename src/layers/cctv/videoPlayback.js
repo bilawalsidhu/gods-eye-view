@@ -1,3 +1,5 @@
+import { isMobileResourceConstrained } from '../../mobileResourcePolicy.js';
+
 /** One decoder per active camera; both surfaces consume this video element. */
 export function attachCctvVideo(
   video,
@@ -6,7 +8,10 @@ export function attachCctvVideo(
   {
     loadHls = () => import('hls.js'),
     onFailure = () => {},
+    onReady = () => {},
     fetchImpl = globalThis.fetch,
+    constrained = isMobileResourceConstrained(),
+    lifecycleTarget = globalThis.window,
   } = {},
 ) {
   // Preserve replay for existing finite video feeds; live HLS must not loop.
@@ -22,15 +27,36 @@ export function attachCctvVideo(
   let startup = null;
   let governor = null;
   let retries = 0;
+  let releasePending = null;
+  let released = feedType !== 'hls';
+  const pagehide = (event) => {
+    if (!event.persisted) dispose();
+  };
   const release = () => {
-    if (feedType === 'hls') {
-      void fetchImpl?.(mediaUrl, { method: 'DELETE', keepalive: true }).catch(
-        () => {},
-      );
+    if (released) return Promise.resolve(true);
+    if (releasePending) return releasePending;
+    // Await this acknowledgement before replacing our lease. Failure stays
+    // retryable; normal fire-and-forget teardown never rejects a promise.
+    let request;
+    try {
+      request = fetchImpl(mediaUrl, {
+        method: 'DELETE',
+        keepalive: true,
+        signal: AbortSignal.timeout(8000),
+      });
+    } catch {
+      request = Promise.reject(new Error('Release unavailable'));
     }
+    releasePending = Promise.resolve(request)
+      .then((response) => (released = response?.ok === true))
+      .catch(() => false)
+      .finally(() => {
+        releasePending = null;
+      });
+    return releasePending;
   };
   const dispose = () => {
-    if (disposed) return;
+    if (disposed) return release();
     disposed = true;
     clearTimeout(timer);
     clearTimeout(startup);
@@ -39,10 +65,11 @@ export function attachCctvVideo(
     hls = null;
     video.removeEventListener('canplay', play);
     video.removeEventListener('error', fail);
+    lifecycleTarget?.removeEventListener('pagehide', pagehide);
     video.pause();
     video.removeAttribute('src');
     video.load();
-    release();
+    return release();
   };
   const fail = () => {
     if (disposed) return;
@@ -53,9 +80,11 @@ export function attachCctvVideo(
     if (disposed) return;
     clearTimeout(startup);
     video.play().catch(() => {});
+    onReady();
   };
   video.addEventListener('canplay', play);
   video.addEventListener('error', fail);
+  lifecycleTarget?.addEventListener('pagehide', pagehide);
   startup = setTimeout(fail, 30000);
   const ready = (async () => {
     if (feedType !== 'hls') {
@@ -73,10 +102,10 @@ export function attachCctvVideo(
       }
       hls = new Hls({
         enableWorker: true,
-        maxBufferLength: 24,
-        maxMaxBufferLength: 30,
+        maxBufferLength: constrained ? 8 : 24,
+        maxMaxBufferLength: constrained ? 10 : 30,
         backBufferLength: 0,
-        maxBufferSize: 16 * 1024 * 1024,
+        maxBufferSize: (constrained ? 4 : 16) * 1024 * 1024,
         liveSyncDurationCount: 3,
       });
       hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -98,8 +127,21 @@ export function attachCctvVideo(
           video.buffered.end(video.buffered.length - 1) - video.currentTime;
         // Some agency encoders publish less media time than wall time. Bound
         // correction rather than repeatedly draining the live buffer at 1x.
-        video.playbackRate =
-          ahead < 6 ? 0.8 : ahead < 12 ? 0.9 : ahead > 24 ? 1.05 : 1;
+        video.playbackRate = constrained
+          ? ahead < 2
+            ? 0.8
+            : ahead < 4
+              ? 0.9
+              : ahead > 8
+                ? 1.05
+                : 1
+          : ahead < 6
+            ? 0.8
+            : ahead < 12
+              ? 0.9
+              : ahead > 24
+                ? 1.05
+                : 1;
       }, 1000);
       hls.attachMedia(video);
       hls.loadSource(mediaUrl);
@@ -107,5 +149,5 @@ export function attachCctvVideo(
       fail();
     }
   })();
-  return { dispose, ready };
+  return { dispose, release, ready };
 }

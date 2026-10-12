@@ -37,4 +37,6 @@ test('second surface uses shared decoder, caps draws, clears switch and cancels 
   callback(200);
   assert.equal(cancelled, 1);
   assert.equal(draws, 2);
+  assert.equal(canvas.width, 1);
+  assert.equal(canvas.height, 1);
 });

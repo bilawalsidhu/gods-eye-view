@@ -9,6 +9,50 @@
   max-width: 720px;
 }
 
+#locate-me-status[hidden] {
+  display: none;
+}
+#locate-me-status {
+  position: fixed;
+  top: 82px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 115;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 10px 12px;
+  box-sizing: border-box;
+  border: 1px solid #3c7183;
+  border-radius: 10px;
+  background: rgba(8, 20, 30, 0.96);
+  color: #e4f8ff;
+  font: 12px/1.45 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+#locate-me-status[data-state='error'] {
+  color: #ffc68f;
+}
+#locate-me-btn[data-state='loading'] {
+  opacity: 0.65;
+  cursor: progress;
+}
+#locate-me-btn:focus-visible {
+  outline: 2px solid #60e5ff;
+  outline-offset: 2px;
+}
+body.mobile-map-first #locate-me-status {
+  top: calc(max(12px, env(safe-area-inset-top)) + 56px);
+  left: max(12px, env(safe-area-inset-left));
+  transform: none;
+}
+body.mobile-map-first #mobile-map-toolbar #locate-me-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 48px;
+  padding: 8px;
+}
+
 #location-bar .panel-glow {
   position: absolute;
   inset: -20px;

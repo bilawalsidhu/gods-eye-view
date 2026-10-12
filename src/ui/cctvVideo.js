@@ -54,6 +54,8 @@ export function createCctvVideoSurface(
       stopped = true;
       cancelFrame(handle);
       ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.width = canvas.height = 1;
+      previous = null;
     },
   };
 }

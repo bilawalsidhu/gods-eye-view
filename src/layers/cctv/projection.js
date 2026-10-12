@@ -1,4 +1,5 @@
 import { attachCctvVideo } from './videoPlayback.js';
+import { createCameraRetry } from './retry.js';
 import * as Cesium from 'cesium';
 import {
   CCTV_PROJECTION_OVERLAY_SOURCE_ID,
@@ -15,6 +16,25 @@ export function createProjection({
   source,
 }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
+  const retry = createCameraRetry({
+    getActive: () => parts.selection.getActiveRecord(),
+    isEnabled: () => layerState._enabled,
+    ownsRecord: (record) =>
+      layerState._recordById.get(record.camera.id) === record,
+    destroy: (runtime) => {
+      const released = destroyProjectionRuntime(runtime);
+      layerState._projectionEntities = layerState._projectionEntities.filter(
+        (entry) => entry !== runtime,
+      );
+      return released;
+    },
+    create: (record) => {
+      ensureProjectionRuntime(record);
+      parts.frames.refreshProjectionImage(record, true);
+      startProjectionLoop();
+    },
+    notify: () => parts.presentation.notifyListeners(),
+  });
 
   /**
    * Build the protected label associated with one active monitor plane.
@@ -32,7 +52,10 @@ export function createProjection({
       paintLane: 'selected',
       collisionGroup: 'ambient-card',
       priority: Number.MAX_SAFE_INTEGER - 1,
-      title: String(name || cameraId || 'CAMERA'),
+      title:
+        PROJECTION_CANVAS_WIDTH <= 640
+          ? String(name || cameraId || 'CAMERA').slice(0, 30)
+          : String(name || cameraId || 'CAMERA'),
       details: [],
       accent: '#6be8ff',
       interactive: false,
@@ -171,6 +194,11 @@ export function createProjection({
 
   function createProjectionRuntime(record) {
     if (!layerState._viewer) return null;
+    record.connection = {
+      status: 'loading',
+      message:
+        record.retry?.status === 'loading' ? 'Reconnecting…' : 'Connecting…',
+    };
     const canvas = document.createElement('canvas');
     canvas.width = PROJECTION_CANVAS_WIDTH;
     canvas.height = PROJECTION_CANVAS_HEIGHT;
@@ -232,14 +260,29 @@ export function createProjection({
       };
       video.addEventListener('loadedmetadata', bindVideoTexture);
       video.addEventListener('resize', bindVideoTexture);
+      runtime.unbindVideoTexture = () => {
+        video.removeEventListener('loadedmetadata', bindVideoTexture);
+        video.removeEventListener('resize', bindVideoTexture);
+      };
       runtime.video = video;
       runtime.playback = attachCctvVideo(
         video,
         parts.frames.mediaUrlFor(record.camera),
         feedType,
         {
+          onReady: () => {
+            if (!runtime.disposed)
+              retry.settle(record, 'ready', 'Live camera connected.');
+          },
           onFailure: () => {
             if (runtime.disposed) return;
+            retry.settle(
+              record,
+              'error',
+              'Live camera unavailable. Press Refresh to retry.',
+            );
+            runtime.unbindVideoTexture?.();
+            runtime.unbindVideoTexture = null;
             runtime.video = null;
             runtime.mode = 'image';
             runtime.image = new Image();
@@ -264,13 +307,21 @@ export function createProjection({
       img.decoding = 'async';
       img.crossOrigin = 'anonymous';
       img.onload = () => {
+        if (runtime.disposed) return;
         runtime.imageLoading = false;
         runtime.imageReady = true;
         runtime.imageStamp = Date.now();
+        retry.settle(record, 'ready', 'Camera frame refreshed.');
       };
       img.onerror = () => {
+        if (runtime.disposed) return;
         runtime.imageLoading = false;
         runtime.imageReady = false;
+        retry.settle(
+          record,
+          'error',
+          'Camera frame unavailable. Press Refresh to retry.',
+        );
       };
       runtime.image = img;
     }
@@ -305,7 +356,7 @@ export function createProjection({
    */
 
   function ensureProjectionRuntime(record) {
-    if (!record) return null;
+    if (!record || record.releaseBlocked) return null;
     if (record.projection && !record.projection.disposed)
       return record.projection;
     const runtime = createProjectionRuntime(record);
@@ -323,9 +374,12 @@ export function createProjection({
    */
 
   function destroyProjectionRuntime(runtime) {
-    if (!runtime || runtime.disposed) return;
+    if (!runtime) return;
+    if (runtime.disposed) return runtime.releasePromise;
     runtime.disposed = true;
-    runtime.playback?.dispose();
+    runtime.unbindVideoTexture?.();
+    runtime.unbindVideoTexture = null;
+    runtime.releasePromise = runtime.playback?.dispose();
     runtime.playback = null;
     if (runtime.image) {
       runtime.image.onload = null;
@@ -346,6 +400,19 @@ export function createProjection({
     runtime.overlayEntry = null;
     runtime.labelPosition = null;
     runtime.planeMaterial = null;
+    // Release native pixel stores promptly; a pending listener can otherwise
+    // keep retired camera canvases alive until the next garbage collection.
+    for (const canvas of [
+      runtime.canvas,
+      runtime.signatureCanvas,
+      ...(runtime.buffers || []),
+    ]) {
+      if (canvas) canvas.width = canvas.height = 1;
+    }
+    runtime.buffers = null;
+    runtime.video = null;
+    runtime.image = null;
+    return runtime.releasePromise;
   }
 
   function startProjectionLoop() {
@@ -408,9 +475,9 @@ export function createProjection({
 
   function pauseInactiveProjectionFeeds(activeId) {
     for (const record of layerState._records) {
-      if (!record.projection?.video) continue;
+      if (!record.projection) continue;
       if (record.camera.id === activeId && layerState._enabled) {
-        record.projection.video.play().catch(() => {});
+        record.projection.video?.play().catch(() => {});
       } else {
         const runtime = record.projection;
         destroyProjectionRuntime(runtime);
@@ -422,6 +489,8 @@ export function createProjection({
     }
   }
   return {
+    retryActiveCamera: retry.retry,
+    cancelCameraRetry: retry.cancel,
     createCctvProjectionOverlayEntry,
     getActiveVideoElement,
     updatePlanePlacement,

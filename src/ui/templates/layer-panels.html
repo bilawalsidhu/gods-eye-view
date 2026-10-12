@@ -19,14 +19,18 @@
       <div class="panel-header">
         <span class="panel-title">CCTV</span>
         <span class="panel-divider"></span>
+        <button id="cctv-refresh-btn" class="scene-btn" type="button" aria-label="Refresh selected camera connection" aria-controls="cctv-frame-wrap" title="Reconnect this camera">REFRESH</button>
+        <button id="cctv-close-btn" class="scene-btn" type="button" aria-label="Close camera and stop its stream" title="Close camera and stop its stream">CLOSE</button>
         <button class="panel-collapse-btn" data-collapse-target="cctv-panel" title="Collapse panel">+</button>
       </div>
       <div class="cyber-panel-body" data-rail-scroller>
       <div id="cctv-frame-wrap" class="cctv-frame-wrap">
         <img id="cctv-frame" alt="CCTV feed frame" />
         <canvas id="cctv-video" class="cctv-frame" hidden></canvas>
+        <button id="cctv-snapshot-btn" type="button" aria-label="Save camera snapshot and open preview" title="Save snapshot on this device and open preview">&#128247;</button>
       </div>
       <div id="cctv-source-badge" role="status" aria-live="polite">SOURCE · UNKNOWN</div>
+      <div id="cctv-retry-status" role="status" aria-live="polite" aria-atomic="true" hidden></div>
       <div id="cctv-meta">Enable CCTV to load camera intersections</div>
       <div class="cctv-controls">
         <button id="cctv-enable-btn" class="scene-btn">CCTV OFF</button>

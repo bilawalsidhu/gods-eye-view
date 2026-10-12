@@ -1,3 +1,5 @@
+import { mobileTilesetOptions } from '../mobileResourcePolicy.js';
+
 const clean = (value) => String(value || '').trim();
 
 /**
@@ -69,7 +71,7 @@ export function createGoogleDirectTileset(Cesium, key) {
   // Tiles keep drawing their own texture while draped weather loads.
   return Cesium.createGooglePhotorealistic3DTileset(
     { key, onlyUsingWithGoogleGeocoder: true },
-    { asynchronouslyLoadImagery: true },
+    { asynchronouslyLoadImagery: true, ...mobileTilesetOptions() },
   );
 }
 
@@ -103,6 +105,7 @@ export async function createGoogleTokenTileset(Cesium, tokens) {
     enableCollision: true,
     // Tiles keep drawing their own texture while draped weather loads.
     asynchronouslyLoadImagery: true,
+    ...mobileTilesetOptions(),
   });
 }
 
@@ -126,5 +129,6 @@ export async function createGoogleIonTileset(
     enableCollision: true,
     // Tiles keep drawing their own texture while draped weather loads.
     asynchronouslyLoadImagery: true,
+    ...mobileTilesetOptions(),
   });
 }

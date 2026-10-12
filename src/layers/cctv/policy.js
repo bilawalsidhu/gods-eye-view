@@ -6,6 +6,7 @@ export {
   ACTIVE_FRAME_REFRESH_MS,
 } from './sourcePolicy.js';
 import * as Cesium from 'cesium';
+import { isMobileResourceConstrained } from '../../mobileResourcePolicy.js';
 import { CCTV_CARD_FETCH_BURST_SPACING_MS } from '../../data/cctvCards.js';
 import { CCTV_AMBIENT_CARD_MAX } from '../../data/cctvLod.js';
 
@@ -31,9 +32,11 @@ export const PROJECTION_ACTIVE_REFRESH_MS = 10000;
 
 export const PROJECTION_IDLE_REFRESH_MS = 60000;
 
-export const PROJECTION_CANVAS_WIDTH = 1920;
+export const PROJECTION_CANVAS_WIDTH = isMobileResourceConstrained()
+  ? 640
+  : 1920;
 
-export const PROJECTION_CANVAS_HEIGHT = 1080;
+export const PROJECTION_CANVAS_HEIGHT = (PROJECTION_CANVAS_WIDTH * 9) / 16;
 
 // Downsample grid for the unchanged-frame signature (drawProjectionFrame).
 // 64x36 keeps the 16:9 aspect and reads ~9 KB per check versus the 8.3 MB a

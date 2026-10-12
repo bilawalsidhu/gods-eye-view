@@ -91,6 +91,15 @@ export function createPresentation({
       mountHeightM: camera.mountHeightM,
       active: isActive,
       feedType: camera.feedType,
+      connection: record.connection ? { ...record.connection } : null,
+      retry: record.retry
+        ? {
+            attempt: record.retry.attempt,
+            status: record.retry.status,
+            message: record.retry.message,
+            nextAllowedAt: record.retry.nextAllowedAt,
+          }
+        : null,
       isVideo:
         parts.model.isVideoFeedType(camera.feedType) &&
         record.projection?.mode !== 'image',
@@ -129,7 +138,9 @@ export function createPresentation({
       calBadge: parts.calibration.deriveCalBadge(camera),
       poseSource: camera.poseSource || null,
       basePose: camera.basePose ? { ...camera.basePose } : null,
-      frameUrl: parts.frames.frameUrlFor(camera, refreshMs),
+      frameUrl:
+        parts.frames.frameUrlFor(camera, refreshMs) +
+        (record.retry ? `&retry=${record.retry.attempt}` : ''),
       mediaUrl: parts.frames.mediaUrlFor(camera),
     };
   }
