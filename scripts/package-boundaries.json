@@ -671,7 +671,8 @@
       "src/data/cameraArrival.js",
       "src/geo/distance.js",
       "src/myLocationState.js",
-      "src/ui/myLocationController.js"
+      "src/ui/myLocationController.js",
+      "src/ui/layoutBreakpoints.js"
     ],
     "external": ["cesium"]
   },
@@ -2204,7 +2205,8 @@
       "src/app/embed.js",
       "src/geo/distance.js",
       "src/myLocationState.js",
-      "src/ui/myLocationController.js"
+      "src/ui/myLocationController.js",
+      "src/ui/layoutBreakpoints.js"
     ],
     "external": [
       "hls.js",
@@ -2876,7 +2878,8 @@
       "src/ui/panelRailGeometry.js",
       "src/ui/panelRails.js",
       "src/ui/rightPanelRail.js",
-      "src/ui/uiLifetime.js"
+      "src/ui/uiLifetime.js",
+      "src/ui/layoutBreakpoints.js"
     ],
     "external": []
   },

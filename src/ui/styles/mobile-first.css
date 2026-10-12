@@ -1,0 +1,1326 @@
+@media (max-width: 720px) {
+  :root {
+    --mobile-safe-top: max(12px, env(safe-area-inset-top));
+    --mobile-safe-bottom: max(10px, env(safe-area-inset-bottom));
+    --mobile-nav-height: 66px;
+    --mobile-nav-gap: 10px;
+    --mobile-panel-side-gap: 12px;
+    --mobile-panel-width: calc(100vw - (var(--mobile-panel-side-gap) * 2));
+    --mobile-panel-max-width: 30rem;
+    --mobile-panel-viewport-gap: 12px;
+    --mobile-attribution-zone-bottom: calc(
+      var(--mobile-safe-bottom) + var(--mobile-nav-height) + 8px
+    );
+    --mobile-attribution-zone-height: clamp(24px, 4.4vh, 34px);
+    --mobile-attribution-zone-top: calc(
+      var(--mobile-attribution-zone-bottom) +
+        var(--mobile-attribution-zone-height)
+    );
+    --mobile-panel-bottom: calc(
+      var(--mobile-safe-bottom) + var(--mobile-nav-height) +
+        var(--mobile-nav-gap)
+    );
+    --mobile-panel-safe-bottom: calc(var(--mobile-attribution-zone-top) + 8px);
+    --mobile-panel-max-height: calc(
+      100dvh - var(--mobile-safe-top) - var(--mobile-panel-bottom) -
+        var(--mobile-panel-viewport-gap)
+    );
+    --mobile-panel-safe-max-height: calc(
+      100dvh - var(--mobile-safe-top) - var(--mobile-panel-safe-bottom) -
+        var(--mobile-panel-viewport-gap)
+    );
+  }
+
+  #intel-hud {
+    --hud-mobile-telemetry-color: #ffd166;
+    --hud-mobile-telemetry-shadow:
+      1px 0 0 rgba(0, 0, 0, 0.9), -1px 0 0 rgba(0, 0, 0, 0.9),
+      0 1px 0 rgba(0, 0, 0, 0.9), 0 -1px 0 rgba(0, 0, 0, 0.9);
+    --hud-mobile-telemetry-backing: rgba(5, 8, 12, 0.76);
+  }
+
+  #intel-hud .hud-classification,
+  #intel-hud .hud-system,
+  #intel-hud .hud-mode,
+  #intel-hud .hud-summary-label,
+  #intel-hud .hud-summary,
+  #intel-hud .hud-rec,
+  #intel-hud #hud-timestamp,
+  #intel-hud .hud-orbital,
+  #intel-hud #hud-mgrs,
+  #intel-hud #hud-latlon,
+  #intel-hud #hud-gsd,
+  #intel-hud #hud-alt,
+  #intel-hud .hud-ais-vessel,
+  #intel-hud #hud-coll,
+  #intel-hud #hud-ona,
+  #intel-hud .hud-left-edge > div,
+  #intel-hud .hud-right-edge > div,
+  #intel-hud .hud-top-bar > *,
+  #intel-hud .hud-bottom-bar > * {
+    color: var(--hud-mobile-telemetry-color);
+    text-shadow: var(--hud-mobile-telemetry-shadow);
+  }
+
+  #intel-hud .hud-content,
+  #intel-hud .hud-edge {
+    padding: 5px 8px;
+    border-radius: 6px;
+    background: var(--hud-mobile-telemetry-backing);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.48);
+  }
+
+  #intel-hud .hud-content {
+    position: relative;
+    padding-right: 26px;
+  }
+
+  #intel-hud .hud-mode {
+    font-weight: 700;
+    opacity: 1;
+  }
+
+  #intel-hud .hud-summary-label {
+    opacity: 0.74;
+  }
+
+  #intel-hud .hud-summary {
+    opacity: 0.92;
+  }
+
+  #hud-mgrs {
+    font-weight: 600;
+    opacity: 0.98;
+  }
+
+  #hud-latlon {
+    opacity: 0.88;
+  }
+
+  #hud-mgrs + #hud-latlon,
+  #hud-gsd + #hud-alt {
+    margin-top: 4px;
+  }
+
+  #intel-hud .hud-widget-toggle,
+  #intel-hud .hud-widget-chip {
+    pointer-events: auto;
+    border: 1px solid rgba(255, 209, 102, 0.45);
+    color: var(--hud-mobile-telemetry-color);
+    text-shadow: var(--hud-mobile-telemetry-shadow);
+    font-family: var(--font-mono);
+    line-height: 1;
+  }
+
+  #intel-hud .hud-widget-toggle {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 7px;
+    padding: 0;
+    background: rgba(7, 10, 14, 0.82);
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  #intel-hud .hud-widget-chip {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    min-height: 34px;
+    border-radius: 12px;
+    padding: 0 8px;
+    background: rgba(6, 9, 13, 0.8);
+    font-size: 13px;
+    letter-spacing: 0.4px;
+    cursor: pointer;
+  }
+
+  #intel-hud[data-hud-status-collapsed='true'] .hud-top-left .hud-content,
+  #intel-hud[data-hud-status-collapsed='true'] .hud-top-left .hud-bracket,
+  #intel-hud[data-hud-coordinates-collapsed='true']
+    .hud-bottom-left
+    .hud-content,
+  #intel-hud[data-hud-coordinates-collapsed='true']
+    .hud-bottom-left
+    .hud-bracket {
+    display: none;
+  }
+
+  #intel-hud[data-hud-status-collapsed='true'] .hud-top-left .hud-widget-chip,
+  #intel-hud[data-hud-coordinates-collapsed='true']
+    .hud-bottom-left
+    .hud-widget-chip {
+    display: inline-flex;
+  }
+
+  html,
+  body,
+  #cesiumContainer {
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  body {
+    overflow-x: hidden;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+  }
+
+  #title-bar {
+    top: var(--mobile-safe-top);
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+
+  #title-bar .title-glow,
+  #title-bar .subtitle,
+  #style-indicator {
+    display: none;
+  }
+
+  #title-bar .title-bar-shell {
+    width: 100%;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 18px;
+  }
+
+  #title-bar .title-logo {
+    width: 48px;
+    height: 48px;
+  }
+
+  #top-center-actions {
+    gap: 6px;
+  }
+
+  #top-center-actions button {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+  }
+
+  #traffic-sync-chip,
+  #cctv-sync-chip,
+  #location-bar.collapsed .location-mini-status,
+  #context-radio-dock,
+  #right-context-rail > #pp-toggles.collapsed,
+  #right-context-rail > #cctv-panel.collapsed,
+  #right-context-rail > #global-context-panel.collapsed,
+  #left-panel-stack > [data-panel-id].collapsed {
+    display: none !important;
+  }
+
+  #mobile-bottom-nav {
+    position: fixed;
+    right: 12px;
+    bottom: calc(var(--mobile-safe-bottom) - 2px);
+    left: 12px;
+    z-index: 165;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+    padding: 6px 9px calc(var(--mobile-safe-bottom) + 6px);
+    background: rgba(7, 18, 27, 0.92);
+    border: 1px solid rgba(123, 189, 211, 0.24);
+    border-radius: 20px;
+    box-shadow:
+      0 14px 40px rgba(0, 0, 0, 0.52),
+      0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+    backdrop-filter: blur(28px) saturate(1.35);
+    -webkit-backdrop-filter: blur(28px) saturate(1.35);
+  }
+
+  .mobile-nav-btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 50px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 4px 5px;
+    color: rgba(214, 241, 247, 0.74);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 16px;
+    font: 500 10px/1 var(--font-sans);
+    letter-spacing: 0.25px;
+    text-align: center;
+    justify-self: stretch;
+  }
+
+  .mobile-nav-btn .mobile-nav-icon.material-symbols-outlined {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    overflow: hidden;
+    font-family: 'Material Symbols Outlined';
+    font-size: 19px;
+    line-height: 1;
+    letter-spacing: normal;
+    font-variation-settings:
+      'FILL' 1,
+      'wght' 500,
+      'GRAD' 0,
+      'opsz' 24;
+  }
+
+  .mobile-nav-btn .mobile-nav-label {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.1;
+  }
+
+  .mobile-nav-btn[aria-pressed='true'] {
+    color: #f4fdff;
+    background: linear-gradient(
+      180deg,
+      rgba(0, 212, 255, 0.3),
+      rgba(0, 212, 255, 0.12)
+    );
+    border-color: rgba(0, 212, 255, 0.56);
+    box-shadow:
+      0 0 20px rgba(0, 212, 255, 0.2),
+      inset 0 0 0 1px rgba(170, 244, 255, 0.18);
+    text-shadow: 0 0 7px rgba(0, 212, 255, 0.38);
+  }
+
+  #left-panel-stack {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 155;
+    width: 100%;
+    max-height: none;
+    pointer-events: none;
+  }
+
+  #right-context-rail {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 155;
+    width: 100%;
+    max-height: none;
+    pointer-events: none;
+  }
+
+  #data-panel,
+  #scene-panel,
+  #cctv-panel,
+  #global-context-panel {
+    position: fixed !important;
+    top: auto !important;
+    right: auto;
+    bottom: var(--mobile-panel-safe-bottom);
+    left: 50%;
+    z-index: 155;
+    width: var(--mobile-panel-width) !important;
+    max-width: min(
+      var(--mobile-panel-max-width),
+      var(--mobile-panel-width)
+    ) !important;
+    max-height: var(--mobile-panel-safe-max-height);
+    margin: 0;
+    box-sizing: border-box;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translate(-50%, calc(100% + 32px));
+    transition:
+      opacity 180ms ease,
+      visibility 0s linear 180ms,
+      transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  #data-panel:not(.collapsed),
+  #scene-panel:not(.collapsed),
+  #cctv-panel:not(.collapsed),
+  #global-context-panel:not(.collapsed) {
+    height: auto !important;
+    max-height: var(--mobile-panel-safe-max-height) !important;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translate(-50%, 0);
+    transition-delay: 0s;
+  }
+
+  #left-panel-stack > #data-panel:not(.collapsed),
+  #left-panel-stack > #scene-panel:not(.collapsed),
+  #right-context-rail > #cctv-panel:not(.collapsed),
+  #right-context-rail > #global-context-panel:not(.collapsed) {
+    height: auto !important;
+    max-height: var(--mobile-panel-safe-max-height) !important;
+    flex: 0 0 auto;
+  }
+
+  #left-panel-stack > #data-panel,
+  #left-panel-stack > #scene-panel,
+  #right-context-rail > #cctv-panel,
+  #right-context-rail > #global-context-panel {
+    position: fixed !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: var(--mobile-panel-safe-bottom) !important;
+    left: 50% !important;
+    width: var(--mobile-panel-width) !important;
+    max-width: min(
+      var(--mobile-panel-max-width),
+      var(--mobile-panel-width)
+    ) !important;
+  }
+
+  #data-panel .data-panel-inner,
+  #scene-panel .scene-panel-inner,
+  #cctv-panel .cctv-panel-inner,
+  #global-context-panel .global-context-panel-inner {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    max-height: var(--mobile-panel-safe-max-height);
+    box-sizing: border-box;
+    border-radius: 28px 28px 18px 18px;
+    padding: 14px 14px 16px;
+    overflow-x: hidden;
+  }
+
+  #left-panel-stack > #data-panel:not(.collapsed) .data-panel-inner,
+  #left-panel-stack > #scene-panel:not(.collapsed) .scene-panel-inner,
+  #right-context-rail > #cctv-panel:not(.collapsed) .cctv-panel-inner,
+  #right-context-rail
+    > #global-context-panel:not(.collapsed)
+    .global-context-panel-inner {
+    height: auto;
+    max-height: var(--mobile-panel-safe-max-height);
+  }
+
+  #data-panel .data-panel-inner,
+  #scene-panel .scene-panel-inner,
+  #cctv-panel .cctv-panel-inner {
+    display: flex;
+    flex-direction: column;
+  }
+
+  #data-panel .data-toggle-list,
+  #scene-panel .scene-shot-list,
+  #cctv-panel .cctv-panel-inner,
+  #global-context-panel .global-context-panel-inner,
+  #radio-panel .radio-panel-inner,
+  #military-awareness-panel {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #data-panel .data-toggle-list,
+  #scene-panel .scene-shot-list,
+  #cctv-panel .cctv-panel-inner,
+  #global-context-panel .global-context-panel-inner {
+    min-height: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  #scene-panel .scene-shot-list {
+    max-height: none;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .button-grid {
+    max-height: 10rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  #global-context-panel .global-context-panel-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #global-context-panel .context-mode-view[hidden] {
+    display: none !important;
+  }
+
+  #global-context-panel #radio-panel {
+    margin-top: 0;
+    padding-top: 12px;
+  }
+
+  :is(#data-panel, #scene-panel, #cctv-panel, #global-context-panel)
+    .panel-header::before,
+  #mobile-command-sheet-header .mobile-sheet-handle {
+    content: '';
+    width: 46px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(201, 230, 236, 0.28);
+    display: block;
+    margin: 0 auto 10px;
+  }
+
+  :is(#data-panel, #scene-panel, #cctv-panel, #global-context-panel)
+    .panel-header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    margin-bottom: 10px;
+    padding-bottom: 2px;
+    background: linear-gradient(
+      180deg,
+      rgba(12, 12, 20, 0.96) 0%,
+      rgba(12, 12, 20, 0.78) 100%
+    );
+  }
+
+  :is(#data-panel, #scene-panel, #cctv-panel, #global-context-panel)
+    .panel-collapse-btn {
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 12px;
+    font-size: 18px;
+  }
+
+  #command-dock {
+    position: fixed;
+    top: auto;
+    right: auto;
+    bottom: 8px;
+    left: 50%;
+    z-index: 155;
+    width: var(--mobile-panel-width);
+    max-width: min(var(--mobile-panel-max-width), var(--mobile-panel-width));
+    min-height: 0;
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-sizing: border-box;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  #mobile-command-sheet-header {
+    display: none;
+  }
+
+  #command-dock > #location-bar,
+  #command-dock > #control-panel {
+    display: none;
+  }
+
+  #command-dock > #gev-voice-control {
+    position: fixed;
+    right: 12px;
+    bottom: calc(var(--mobile-attribution-zone-top) + 10px);
+    z-index: 160;
+    width: 58px;
+    min-width: 58px;
+    height: 58px;
+    min-height: 58px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    border-radius: 50%;
+    pointer-events: auto;
+  }
+
+  #command-dock > #gev-voice-control .gev-voice-heading,
+  #command-dock > #gev-voice-control .gev-voice-visualizer,
+  #command-dock > #gev-voice-control .gev-voice-readout,
+  #command-dock > #gev-voice-control .gev-voice-help-tray {
+    display: none;
+  }
+
+  #command-dock > #gev-voice-control #gev-voice-button {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+  }
+
+  #command-dock > #gev-voice-control .gev-mic-label {
+    display: none;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock {
+    --mobile-controls-popover-position: static;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 0 10px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: rgba(8, 20, 30, 0.96);
+    border: 1px solid rgba(123, 189, 211, 0.28);
+    border-radius: 28px 28px 18px 18px;
+    box-shadow:
+      0 18px 42px rgba(0, 0, 0, 0.58),
+      0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+      0 0 22px rgba(0, 212, 255, 0.06);
+    pointer-events: auto;
+  }
+
+  body[data-mobile-panel='controls'] #mobile-command-sheet-header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px 0;
+    background: linear-gradient(
+      180deg,
+      rgba(8, 20, 30, 0.98) 0%,
+      rgba(8, 20, 30, 0.82) 100%
+    );
+  }
+
+  #mobile-command-sheet-header .mobile-sheet-header-copy {
+    min-width: 0;
+    flex: 1;
+  }
+
+  #mobile-command-sheet-header strong,
+  #mobile-command-sheet-header span:last-child {
+    display: block;
+    font-family: var(--font-mono);
+  }
+
+  #mobile-command-sheet-header strong {
+    font-size: 12px;
+    letter-spacing: 1.6px;
+  }
+
+  #mobile-command-sheet-header span:last-child {
+    margin-top: 4px;
+    color: var(--text-secondary);
+    font-size: 9px;
+    letter-spacing: 0.8px;
+  }
+
+  #mobile-command-sheet-close {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    border-radius: 12px;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock > #location-bar,
+  body[data-mobile-panel='controls'] #command-dock > #control-panel {
+    display: block;
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    border: 0;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock > #gev-voice-control {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: calc(100% - 28px);
+    max-width: calc(100% - 28px);
+    min-width: calc(100% - 28px);
+    height: auto;
+    min-height: 0;
+    margin: 0 14px;
+    padding: 10px 12px;
+    gap: 8px;
+    border-radius: 18px;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  body:not([data-mobile-panel='controls'])
+    #command-dock
+    > #gev-voice-control:not([data-status='idle']) {
+    position: fixed;
+    right: 12px;
+    bottom: calc(var(--mobile-attribution-zone-top) + 10px);
+    left: 12px;
+    width: auto;
+    min-width: 0;
+    height: auto;
+    min-height: 0;
+    padding: 12px 14px;
+    gap: 10px;
+    border-radius: 18px;
+  }
+
+  body[data-mobile-panel='controls']
+    #command-dock
+    > #gev-voice-control
+    .gev-voice-heading,
+  body[data-mobile-panel='controls']
+    #command-dock
+    > #gev-voice-control
+    .gev-voice-readout,
+  body[data-mobile-panel='controls']
+    #command-dock
+    > #gev-voice-control
+    .gev-voice-help-tray,
+  #command-dock
+    > #gev-voice-control:not([data-status='idle'])
+    .gev-voice-heading,
+  #command-dock
+    > #gev-voice-control:not([data-status='idle'])
+    .gev-voice-readout {
+    display: block;
+  }
+
+  body[data-mobile-panel='controls']
+    #command-dock
+    > #gev-voice-control
+    .gev-voice-visualizer,
+  #command-dock
+    > #gev-voice-control:not([data-status='idle'])
+    .gev-voice-visualizer {
+    display: flex;
+  }
+
+  body[data-mobile-panel='controls']
+    #command-dock
+    > #gev-voice-control
+    #gev-voice-button,
+  #command-dock
+    > #gev-voice-control:not([data-status='idle'])
+    #gev-voice-button {
+    width: 72px;
+    height: 40px;
+    border-radius: 14px;
+  }
+
+  body[data-mobile-panel='controls']
+    #command-dock
+    > #gev-voice-control
+    .gev-mic-label,
+  #command-dock > #gev-voice-control:not([data-status='idle']) .gev-mic-label {
+    display: inline;
+  }
+
+  body[data-mobile-panel='controls']
+    #command-dock
+    > #gev-voice-control:not([data-status='idle']) {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: calc(100% - 28px);
+    max-width: calc(100% - 28px);
+    min-width: calc(100% - 28px);
+    margin: 0 14px;
+    box-sizing: border-box;
+  }
+
+  body[data-mobile-panel='controls']
+    #command-dock
+    > #gev-voice-control[data-status='error'] {
+    width: calc(100% - 28px);
+    max-width: calc(100% - 28px);
+    min-width: calc(100% - 28px);
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .location-inner,
+  body[data-mobile-panel='controls'] #command-dock .panel-inner {
+    padding: 0 14px;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .location-toolbar,
+  body[data-mobile-panel='controls'] #command-dock .panel-header {
+    margin: 0 0 6px;
+    padding: 0;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .panel-title,
+  body[data-mobile-panel='controls'] #command-dock .location-toolbar-label {
+    font-size: 10px;
+    letter-spacing: 1.4px;
+    color: #d8f9ff;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .panel-title::after,
+  body[data-mobile-panel='controls']
+    #command-dock
+    .location-toolbar-label::after,
+  body[data-mobile-panel='controls'] #command-dock .panel-collapse-btn,
+  body[data-mobile-panel='controls'] #command-dock .dock-pin-btn,
+  body[data-mobile-panel='controls'] #command-dock .panel-mini-status,
+  body[data-mobile-panel='controls'] #command-dock .location-mini-status {
+    display: none !important;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .dock-popover-content {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  #command-dock #location-bar .dock-popover-content,
+  #command-dock #control-panel .dock-popover-content {
+    position: var(--mobile-controls-popover-position, absolute);
+  }
+
+  body[data-mobile-panel='controls']
+    #command-dock
+    #location-bar
+    .dock-popover-content,
+  body[data-mobile-panel='controls']
+    #command-dock
+    #control-panel
+    .dock-popover-content {
+    right: auto;
+    left: auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+
+  body[data-mobile-panel='controls']
+    #command-dock
+    .dock-popover-content::after {
+    display: none;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .location-city-row,
+  body[data-mobile-panel='controls'] #command-dock .poi-row-container.expanded,
+  body[data-mobile-panel='controls'] #command-dock .poi-row-container {
+    display: flex !important;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .location-city-row,
+  body[data-mobile-panel='controls'] #command-dock .poi-row-container {
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+    overflow: visible;
+    max-height: none;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock #control-panel .button-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    min-width: 0;
+    max-height: min(27vh, 11rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .location-search-wrap {
+    order: -1;
+    flex: 1 1 100%;
+    padding-right: 0;
+    border-right: 0;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .location-pills {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    max-height: min(4.5rem, 12vh);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock #location-search,
+  body[data-mobile-panel='controls'] #command-dock #location-search.expanded {
+    width: 100%;
+  }
+
+  :is(
+      #data-panel,
+      #scene-panel,
+      #cctv-panel,
+      #global-context-panel,
+      #command-dock
+    )
+    :is(
+      .panel-header,
+      .panel-title,
+      .panel-divider,
+      .button-grid,
+      .location-city-row,
+      .cctv-controls,
+      .scene-controls,
+      .global-context-actions,
+      .global-context-modes,
+      .radio-directory-row,
+      .radio-transport,
+      .radio-volume-row,
+      .data-toggle-top,
+      .data-toggle-right,
+      .data-toggle-controls,
+      .map-stack-chip-row
+    ) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  #cctv-panel .cctv-controls,
+  #global-context-panel .data-toggle-top,
+  #global-context-panel .data-toggle-right,
+  #global-context-panel .military-awareness-target {
+    flex-wrap: wrap;
+  }
+
+  :is(#data-panel, #global-context-panel) .data-toggle-right {
+    justify-content: flex-end;
+  }
+
+  :is(#data-panel, #global-context-panel)
+    :is(.data-count, .data-toggle-btn, .data-toggle-chip),
+  :is(#scene-panel, #cctv-panel, #global-context-panel, #command-dock)
+    :is(.scene-btn, .panel-layer-toggle, .context-mode-button, .map-stack-chip),
+  :is(#command-dock, #location-bar) :is(.style-btn, .location-pill, .poi-pill),
+  #scene-panel .scene-controls > *,
+  #global-context-panel .radio-directory-row > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  :is(#scene-panel, #cctv-panel, #global-context-panel, #command-dock)
+    :is(.scene-btn, .panel-layer-toggle, .context-mode-button, .map-stack-chip),
+  :is(#command-dock, #location-bar) :is(.style-btn, .location-pill, .poi-pill) {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  #scene-panel .scene-panel-inner {
+    overflow: hidden;
+    overscroll-behavior: contain;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .style-btn,
+  body[data-mobile-panel='controls'] #command-dock .location-pill,
+  body[data-mobile-panel='controls'] #command-dock .poi-pill {
+    min-height: 44px;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .style-btn {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .gev-voice-error-tray {
+    right: 0;
+    left: 0;
+    width: auto;
+    max-width: 100%;
+    transform: translateY(0.55rem) scale(0.985);
+    transition:
+      opacity 180ms ease,
+      visibility 180ms ease,
+      transform 180ms ease;
+  }
+
+  body[data-mobile-panel='controls']
+    #command-dock
+    #gev-voice-control[data-status='error']:not(.error-dismissed)
+    .gev-voice-error-tray {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+  }
+
+  body[data-mobile-panel='controls'] #command-dock #gev-voice-error-detail,
+  body[data-mobile-panel='controls'] #command-dock .gev-voice-error-hint {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .map-source-section {
+    margin-top: 10px;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .my-location-header,
+  body[data-mobile-panel='controls'] #command-dock .my-location-section {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .my-location-header {
+    flex-wrap: wrap;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .my-location-recenter {
+    width: 100%;
+    min-height: 40px;
+  }
+
+  #cesium-credits {
+    bottom: var(--mobile-attribution-zone-bottom);
+    left: 12px;
+    z-index: 167;
+    max-width: calc(100vw - 118px);
+    font-size: 9px;
+  }
+
+  #toast {
+    bottom: calc(var(--mobile-panel-bottom) + 12px);
+  }
+
+  #scene-runtime {
+    top: calc(var(--mobile-safe-top) + 44px);
+    max-width: calc(100vw - 24px);
+  }
+
+  #global-loading-status {
+    top: calc(var(--mobile-safe-top) + 44px);
+    bottom: auto;
+    max-width: calc(100vw - 24px);
+  }
+
+  body.mobile-panel-open #clean-view-exit {
+    bottom: calc(var(--mobile-panel-bottom) + 12px);
+  }
+
+  body.cockpit-mode #mobile-bottom-nav,
+  body.cockpit-mode #command-dock > #location-bar,
+  body.cockpit-mode #command-dock > #control-panel,
+  body.cockpit-mode #command-dock > #gev-voice-control {
+    display: none !important;
+  }
+
+  #command-dock .dock-popover-content {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: auto;
+    margin-top: 0;
+    margin-right: 0;
+    margin-bottom: 0;
+    margin-left: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    transform: none;
+  }
+}
+
+@media (max-width: 480px) {
+  #mobile-bottom-nav {
+    gap: 6px;
+    padding-inline: 8px;
+  }
+
+  .mobile-nav-btn {
+    min-height: 48px;
+    font-size: 9px;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .style-btn {
+    flex-basis: auto;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 390px) {
+  #title-bar .title-bar-shell {
+    gap: 8px;
+    padding-inline: 8px;
+  }
+
+  #title-bar .title-logo {
+    width: 46px;
+    height: 46px;
+  }
+
+  #top-center-actions {
+    gap: 5px;
+  }
+
+  #top-center-actions button {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+  }
+}
+
+@media (max-width: 430px) and (orientation: portrait) {
+  #intel-hud.active .hud-top-bar,
+  #intel-hud.active .hud-bottom-bar,
+  #intel-hud .hud-top-right,
+  #intel-hud .hud-bottom-right,
+  #intel-hud .hud-group-toggle,
+  #intel-hud .hud-group-chip,
+  #intel-hud .hud-left-edge,
+  #intel-hud .hud-right-edge,
+  #intel-hud .hud-classification,
+  #intel-hud .hud-system,
+  #intel-hud .hud-orbital,
+  #intel-hud .hud-ais-vessel {
+    display: none;
+  }
+
+  #intel-hud .hud-corner {
+    gap: 3px;
+    padding: 1px 0;
+  }
+
+  #intel-hud .hud-bracket {
+    font-size: 18px;
+    opacity: 0.45;
+  }
+
+  #intel-hud .hud-content {
+    font-size: 12px;
+    letter-spacing: 1.3px;
+  }
+
+  #intel-hud .hud-top-left {
+    top: calc(var(--mobile-safe-top) + 42px);
+    right: auto;
+    left: 10px;
+    width: max-content;
+    max-width: min(72vw, 22rem);
+  }
+
+  #intel-hud .hud-top-left,
+  #intel-hud .hud-bottom-left {
+    max-width: calc(100vw - 20px);
+  }
+
+  #intel-hud .hud-mode {
+    font-size: 15px;
+    letter-spacing: 2.2px;
+  }
+
+  #intel-hud .hud-summary-wrap {
+    max-width: none;
+    margin-top: 6px;
+  }
+
+  #intel-hud .hud-summary-label {
+    font-size: 8px;
+    letter-spacing: 1.4px;
+  }
+
+  #intel-hud .hud-summary {
+    display: -webkit-box;
+    margin-top: 4px;
+    overflow: hidden;
+    font-size: 10px;
+    line-height: 1.5;
+    letter-spacing: 0.9px;
+    white-space: normal;
+    text-overflow: clip;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  #intel-hud .hud-rec {
+    font-size: 10px;
+    letter-spacing: 1.2px;
+  }
+
+  #intel-hud .hud-bottom-left {
+    right: auto;
+    bottom: calc(var(--mobile-attribution-zone-top) + 56px);
+  }
+
+  #intel-hud .hud-bottom-left {
+    left: 10px;
+    max-width: min(76vw, 19rem);
+  }
+
+  #hud-mgrs,
+  #hud-latlon,
+  #hud-gsd,
+  #hud-alt {
+    font-size: 10px;
+    line-height: 1.35;
+    letter-spacing: 0.75px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #hud-gsd {
+    opacity: 0.74;
+  }
+
+  body:not([data-mobile-panel='controls'])
+    #command-dock
+    > #gev-voice-control:not([data-status='idle']) {
+    left: auto;
+    width: min(15rem, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+  }
+
+  body[data-mobile-panel='controls'] #command-dock > #location-bar,
+  body[data-mobile-panel='controls'] #command-dock > #control-panel,
+  body[data-mobile-panel='controls'] #command-dock > #gev-voice-control,
+  body[data-mobile-panel='controls'] #command-dock .dock-popover-content {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .location-city-row,
+  body[data-mobile-panel='controls'] #command-dock .poi-row-container,
+  body[data-mobile-panel='controls'] #command-dock .map-source-heading {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 8px;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .button-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .style-btn {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body[data-mobile-panel='controls'] #command-dock .map-stack-chip-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body[data-mobile-panel='controls'] #command-dock > #gev-voice-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    width: calc(100% - 28px);
+    max-width: calc(100% - 28px);
+    min-width: calc(100% - 28px);
+  }
+
+  body[data-mobile-panel='controls']
+    #command-dock
+    > #gev-voice-control
+    #gev-voice-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  body[data-mobile-panel='controls']
+    #command-dock
+    > #gev-voice-control
+    .gev-voice-readout {
+    width: 100%;
+    min-width: 0;
+  }
+
+  body[data-mobile-panel='controls']
+    #command-dock
+    > #gev-voice-control
+    #gev-voice-detail {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  #command-dock
+    > #gev-voice-control:not([data-status='idle'])
+    .gev-voice-readout {
+    text-align: left;
+  }
+
+  #command-dock
+    > #gev-voice-control:not([data-status='idle'])
+    #gev-voice-detail {
+    max-width: none;
+    white-space: normal;
+  }
+
+  #first-run-launcher {
+    bottom: calc(var(--mobile-panel-bottom) + 12px);
+    width: min(27rem, calc(100vw - 1.25rem));
+    max-height: calc(
+      100dvh - var(--mobile-safe-top) - var(--mobile-panel-bottom) - 44px
+    );
+    padding: 0.76rem 0.82rem;
+  }
+}
+
+@media (max-width: 720px) and (orientation: portrait) {
+  :root {
+    --mobile-panel-max-height: min(
+      calc(
+        100dvh - var(--mobile-safe-top) - var(--mobile-panel-bottom) -
+          var(--mobile-panel-viewport-gap)
+      ),
+      75dvh
+    );
+    --mobile-panel-safe-max-height: min(
+      calc(
+        100dvh - var(--mobile-safe-top) - var(--mobile-panel-safe-bottom) -
+          var(--mobile-panel-viewport-gap)
+      ),
+      75dvh
+    );
+  }
+}
+
+@media (max-width: 390px) and (orientation: portrait) {
+  #hud-gsd {
+    display: none;
+  }
+
+  #intel-hud .hud-bottom-left {
+    max-width: min(70vw, 15rem);
+  }
+
+  body:not([data-mobile-panel='controls'])
+    #command-dock
+    > #gev-voice-control:not([data-status='idle']) {
+    width: min(13.5rem, calc(100vw - 24px));
+  }
+
+  #first-run-launcher {
+    padding: 0.72rem 0.78rem;
+  }
+
+  #first-run-description {
+    font-size: 0.68rem;
+    line-height: 1.4;
+  }
+}

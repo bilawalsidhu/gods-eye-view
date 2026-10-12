@@ -169,6 +169,13 @@ export function readShellElements(document = globalThis.document) {
     _globalLoadingStatus: document.getElementById('global-loading-status'),
     _globalLoadingLabel: document.getElementById('global-loading-label'),
     _globalLoadingDetail: document.getElementById('global-loading-detail'),
+    _mobileBottomNav: document.getElementById('mobile-bottom-nav'),
+    _mobileNavButtons: document.querySelectorAll(
+      '.mobile-nav-btn[data-mobile-panel]',
+    ),
+    _mobileCommandSheetCloseBtn: document.getElementById(
+      'mobile-command-sheet-close',
+    ),
     _resetGlobeBtn: document.getElementById('reset-globe-view'),
     _cockpitResetGlobeBtn: document.getElementById('cockpit-reset-globe'),
     _styleButtons: document.getElementById('style-buttons'),

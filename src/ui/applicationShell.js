@@ -42,6 +42,8 @@ import { ShellFeedback } from './shellFeedback.js';
 
 import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
 
+const HUD_MOBILE_WIDGET_STORAGE_KEY = 'gev:hud-mobile-widgets:v1';
+
 /**
  * Central UI orchestrator for the God's Eye View application.
  *
@@ -103,6 +105,9 @@ export class StyleManager extends ShellFacade {
         _contextRadioDock: this._contextRadioDock,
         _leftPanelStack: this._leftPanelStack,
         _locationSearch: this._locationSearch,
+        _mobileBottomNav: this._mobileBottomNav,
+        _mobileCommandSheetCloseBtn: this._mobileCommandSheetCloseBtn,
+        _mobileNavButtons: this._mobileNavButtons,
         _ppToggles: this._ppToggles,
         _rightPanelStack: this._rightPanelStack,
       },
@@ -1528,6 +1533,12 @@ export class StyleManager extends ShellFacade {
     }
     this._setHudVariant('tactical');
     this.hud.setMode('on');
+    this.hud.setWidgetCollapseState?.(this._readHudMobileWidgetPreference());
+    this._lifetime.listen(window, 'gev:hud-widget-state-change', (event) => {
+      const state = event?.detail?.state;
+      if (!state || typeof state !== 'object') return;
+      this._persistHudMobileWidgetPreference(state);
+    });
     this._updateHudButtonState();
 
     this._lifetime.listen(this._cockpitDisplayToggleBtn, 'click', () => {
@@ -1536,6 +1547,39 @@ export class StyleManager extends ShellFacade {
       this._setCockpitDisclosure?.('display', !open);
     });
     this._initCockpitDisplayPortal();
+  }
+
+  _readHudMobileWidgetPreference() {
+    try {
+      const parsed = JSON.parse(
+        localStorage.getItem(HUD_MOBILE_WIDGET_STORAGE_KEY) || 'null',
+      );
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { status: false, coordinates: false };
+      }
+      return {
+        status: !!parsed.status,
+        coordinates: !!parsed.coordinates,
+      };
+    } catch {
+      /* best effort */
+    }
+    return { status: false, coordinates: false };
+  }
+
+  _persistHudMobileWidgetPreference(state) {
+    const normalized = {
+      status: !!state?.status,
+      coordinates: !!state?.coordinates,
+    };
+    try {
+      localStorage.setItem(
+        HUD_MOBILE_WIDGET_STORAGE_KEY,
+        JSON.stringify(normalized),
+      );
+    } catch {
+      /* best effort */
+    }
   }
 
   /** A portable panel was resized or docked: refit any viewport inside it. */
