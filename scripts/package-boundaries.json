@@ -1615,6 +1615,9 @@
       "src/keySetup.js",
       "src/keySetupCore.mjs",
       "src/localRequestGate.mjs",
+      "src/mobile/keyStore.js",
+      "src/mobile/runtimeConfig.js",
+      "src/mobile/webglSupport.js",
       "src/keylessGeocoder.js",
       "src/layers/aircraft/classification.js",
       "src/layers/alpr/index.js",
@@ -2220,7 +2223,8 @@
       "pbf",
       "satellite.js",
       "mapillary-js",
-      "@jtarrio/webrtlsdr"
+      "@jtarrio/webrtlsdr",
+      "@capacitor/preferences"
     ]
   },
   "application-catalog": {
