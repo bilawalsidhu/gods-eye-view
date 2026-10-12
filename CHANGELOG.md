@@ -95,52 +95,9 @@
 
 ## [Unreleased]
 
-- Add an experimental ChatGPT/Codex OAuth option for cloud voice in Provider
-  Settings. API-key voice remains the default. Local sign-in can start from
-  the auth button and reports completion, failure, timeout, or expired
-  credentials. OAuth credentials stay on the server; local routes require
-  loopback access and same-site requests. OAuth sessions retain usage data
-  and show unknown cost; caption transcriptions are counted rather than
-  priced into the API-key cap. The auth button keeps keyboard focus after a
-  mode change, and pending sign-in does not discard text in the key fields.
-  Thanks to [Shayan Khan](https://github.com/devv-shayan) for #621 and
-  [TheSmokeDev](https://github.com/TheSmokeDev) for the credential handling
-  from #653.
-
-- Stdio servers from one install share a panel key so a page read from one
-  process can make requests through another. Concurrent malformed-key repairs
-  now select one winner; unavailable storage or a busy repair retains the
-  logged per-process fallback. Thanks to [Jibran Tahir](https://github.com/jibraaan)
-  for #958, [MarvinNL046](https://github.com/MarvinNL046) for the report and
-  proposed diagnosis in #927, and [kvnloo](https://github.com/kvnloo) for identifying
-  the repair race. Windows/Claude Desktop Cowork confirmation remains outstanding.
-
-- Street Level: a street-level imagery layer modelled on the iD editor's photo
-  overlay, with Mapillary as its first provider (free client token, CC BY-SA 4.0
-  imagery). One right-rail panel holds a chip per provider, shared 360°/flat and
-  captured-since filters, and an embedded viewer with EXPAND, FIT/FILL and
-  FOLLOW (Google 3D only). Coverage lines and image cones are drawn from orbit
-  down to a single street; on Google 3D they sit on the bare earth, refined
-  against the rendered mesh near the camera, so trees and buildings hide them.
-  Share links carry the provider switches, the filters and the panel's collapsed
-  state. A server proxy caches Mapillary coverage tiles (24 h, 1 GiB on disk),
-  refuses cross-site requests, rate-limits per IP and backs off when Mapillary
-  rejects the token or rate-limits.
-
-- The CCTV and Street Level panels are portable: drag the header to float the
-  panel, resize it from any edge or corner, and double-click the header to dock
-  it again. The position persists across reloads.
-
-- Add Norway's road cameras from Statens vegvesen as a CCTV pack. The camera
-  list is one keyless GeoJSON request to the agency's OGC API view of its
-  DATEX 3.1 CCTV table, so no DATEX account is needed. Every working camera
-  loads (~850; faulty ones are dropped) under one "Norway" category, and the
-  ~135 working cameras that publish HLS play as live video through the existing in-memory
-  relay with the still as fallback. Frames and manifests are pinned to each
-  camera's own path on the agency hosts. `CCTV_VEGVESEN_ENABLED=0` disables
-  the pack, `CCTV_VEGVESEN_MAX_SOURCES` caps it (keeping cameras nearest the
-  largest cities) and `CCTV_VEGVESEN_VIDEO=0` keeps stills only. Attributed
-  under NLOD 2.0.
+- Update the transitive `dompurify` dependency from 3.4.15 to 3.4.16 to clear
+  advisory GHSA-p98j-92pf-mc4p (DOM XSS through a node-removing `afterSanitize`
+  hook with `IN_PLACE`). `npm audit` now reports no vulnerabilities.
 
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
