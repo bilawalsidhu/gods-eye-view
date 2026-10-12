@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   SATELLITE_STANDALONE_DEFAULTS,
   LAUNCH_PAD_ZONE_MAX_CAMERA_HEIGHT_M,
@@ -76,14 +77,14 @@ export function createPolicyHelpers({
       : 0;
     return {
       orbit: orbitName
-        ? `${orbitAllowed ? '' : 'PLANNED · '}${orbitName}`
+        ? `${orbitAllowed ? '' : t('layers.missions.rows.plannedPrefix')}${orbitName}`
         : null,
       ascent:
         suppliedTrajectoryPoints > 1
-          ? 'SUPPLIED TRAJECTORY POINTS'
+          ? t('layers.missions.rows.suppliedTrajectory')
           : replayAvailable
-            ? 'RECONSTRUCTED ESTIMATE'
-            : 'UNAVAILABLE',
+            ? t('layers.missions.rows.reconstructedEstimate')
+            : t('layers.missions.rows.unavailable'),
       replayAvailable: Boolean(replayAvailable),
     };
   }
@@ -196,7 +197,8 @@ export function createPolicyHelpers({
 
   function formatMissionEventTime(launchTime) {
     const date = new Date(launchTime);
-    if (!launchTime || !Number.isFinite(date.getTime())) return 'UNAVAILABLE';
+    if (!launchTime || !Number.isFinite(date.getTime()))
+      return t('layers.missions.rows.unavailable');
     return `${date.toISOString().slice(0, 10)}\n${date.toISOString().slice(11, 19)} UTC`;
   }
 
