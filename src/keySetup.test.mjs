@@ -871,3 +871,173 @@ test('capacitor merged dialog renders vault presence with a banner', async () =>
   assert.ok(section.querySelector('[data-vault-banner="true"]'));
   controls.destroy();
 });
+
+test('buildVaultKeyRow is editable, password-masked, and write-only', async () => {
+  const { KEY_IDS } = await import('./mobile/vault.js');
+  const { buildVaultKeyRow } = await import('./keySetup.js');
+  const documentRef = fakeBackendDocument();
+  const row = buildVaultKeyRow(documentRef, 'OPENAI_API_KEY', true);
+  assert.equal(row.dataset.keyId, 'vault:OPENAI_API_KEY');
+  assert.equal(row.dataset.set, 'true');
+  const input = row.querySelector('input');
+  assert.ok(input, 'editable row carries an input');
+  assert.equal(input.type, 'password');
+  assert.equal(input.value, '', 'inputs are never prefilled');
+  assert.equal(input.dataset.vaultKey, 'OPENAI_API_KEY');
+  assert.ok(row.querySelector('[data-vault-save="OPENAI_API_KEY"]'), 'SAVE button');
+  assert.equal(row.querySelector('[data-vault-remove="OPENAI_API_KEY"]').hidden, false);
+  const unset = buildVaultKeyRow(documentRef, 'FIRMS_MAP_KEY', false);
+  assert.equal(unset.dataset.set, 'false');
+  assert.equal(unset.querySelector('[data-vault-state]').textContent, 'NOT SET');
+  assert.equal(
+    unset.querySelector('[data-vault-remove="FIRMS_MAP_KEY"]').hidden,
+    true,
+    'REMOVE hides until the key is set',
+  );
+  assert.ok(KEY_IDS.length > 0);
+});
+
+test('buildVaultKeySection lists every vault key plus an insecure banner', async () => {
+  const { KEY_IDS } = await import('./mobile/vault.js');
+  const { buildVaultKeySection } = await import('./keySetup.js');
+  const documentRef = fakeBackendDocument();
+  const status = {};
+  for (const id of KEY_IDS) status[id] = { set: false, backend: 'insecure' };
+  const section = buildVaultKeySection(documentRef, status);
+  assert.equal(section.dataset.vaultSection, 'true');
+  assert.equal(section.dataset.vaultEditable, 'true');
+  for (const id of KEY_IDS) {
+    const row = section.querySelector(`section[data-key-id="vault:${id}"]`);
+    assert.ok(row, `editable row for ${id}`);
+    assert.ok(row.querySelector('input'), 'row carries a paste field');
+  }
+  assert.ok(section.querySelector('[data-vault-banner="true"]'), 'insecure banner');
+  const secureStatus = {};
+  for (const id of KEY_IDS) secureStatus[id] = { set: true, backend: 'secure' };
+  const secureSection = buildVaultKeySection(documentRef, secureStatus);
+  assert.equal(
+    secureSection.querySelector('[data-vault-banner="true"]'),
+    null,
+    'secure backend shows no banner',
+  );
+});
+
+test('vault SAVE writes through the vault and updates its row in place', async () => {
+  const { buildVaultKeySection, wireVaultKeySection } = await import('./keySetup.js');
+  const documentRef = fakeBackendDocument();
+  const written = new Map();
+  const vault = {
+    writeKey: async (id, value) => {
+      written.set(id, value);
+    },
+    removeKey: async () => {},
+    keyStatus: async () => ({}),
+  };
+  const said = [];
+  const section = buildVaultKeySection(documentRef, {
+    OPENAI_API_KEY: { set: false, backend: 'insecure' },
+  });
+  wireVaultKeySection({ section, vault, say: (text) => said.push(text) });
+  const row = section.querySelector('section[data-key-id="vault:OPENAI_API_KEY"]');
+  row.querySelector('input').value = '  pasted-key  ';
+  row.querySelector('[data-vault-save="OPENAI_API_KEY"]').fire('click');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(written.get('OPENAI_API_KEY'), 'pasted-key');
+  assert.equal(row.dataset.set, 'true');
+  assert.equal(row.querySelector('[data-vault-state]').textContent, 'SET');
+  assert.equal(row.querySelector('input').value, '', 'paste field clears after save');
+  assert.equal(row.querySelector('[data-vault-remove="OPENAI_API_KEY"]').hidden, false);
+  assert.ok(said.some((text) => text.includes('saved on this device')));
+  assert.ok(said.every((text) => !text.includes('pasted-key')), 'status never echoes the value');
+});
+
+test('vault SAVE with an empty field and failed writes never touch the vault', async () => {
+  const { buildVaultKeySection, wireVaultKeySection } = await import('./keySetup.js');
+  const documentRef = fakeBackendDocument();
+  let writes = 0;
+  const vault = {
+    writeKey: async () => {
+      writes += 1;
+      throw new Error('vault write failed for OPENAI_API_KEY');
+    },
+    removeKey: async () => {},
+    keyStatus: async () => ({}),
+  };
+  const said = [];
+  const section = buildVaultKeySection(documentRef, {
+    OPENAI_API_KEY: { set: false, backend: 'insecure' },
+  });
+  wireVaultKeySection({ section, vault, say: (text) => said.push(text) });
+  const row = section.querySelector('section[data-key-id="vault:OPENAI_API_KEY"]');
+  row.querySelector('[data-vault-save="OPENAI_API_KEY"]').fire('click');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(writes, 0, 'empty paste never reaches the vault');
+  assert.ok(said.some((text) => text.includes('Paste a key first')));
+  row.querySelector('input').value = 'something';
+  row.querySelector('[data-vault-save="OPENAI_API_KEY"]').fire('click');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(writes, 1);
+  assert.equal(row.dataset.set, 'false', 'failed write leaves presence alone');
+  assert.ok(said.some((text) => text.includes('vault write failed for OPENAI_API_KEY')));
+});
+
+test('vault REMOVE deletes through the vault and hides its button', async () => {
+  const { buildVaultKeySection, wireVaultKeySection } = await import('./keySetup.js');
+  const documentRef = fakeBackendDocument();
+  const removed = [];
+  const vault = {
+    writeKey: async () => {},
+    removeKey: async (id) => {
+      removed.push(id);
+    },
+    keyStatus: async () => ({}),
+  };
+  const said = [];
+  const section = buildVaultKeySection(documentRef, {
+    TOMTOM_API_KEY: { set: true, backend: 'insecure' },
+  });
+  wireVaultKeySection({ section, vault, say: (text) => said.push(text) });
+  const row = section.querySelector('section[data-key-id="vault:TOMTOM_API_KEY"]');
+  row.querySelector('[data-vault-remove="TOMTOM_API_KEY"]').fire('click');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(removed, ['TOMTOM_API_KEY']);
+  assert.equal(row.dataset.set, 'false');
+  assert.equal(row.querySelector('[data-vault-state]').textContent, 'NOT SET');
+  assert.equal(row.querySelector('[data-vault-remove="TOMTOM_API_KEY"]').hidden, true);
+});
+
+test('loadSetupVault passes the explicit insecure opt-in on the fallback', async () => {
+  const { loadSetupVault } = await import('./keySetup.js');
+  const harness = makeBackendHarness({ stored: null });
+  const fallback = await loadSetupVault(harness.storage, {
+    loadSecure: async () => null,
+  });
+  assert.equal(fallback.backend, 'insecure');
+  await fallback.vault.writeKey('OPENAI_API_KEY', 'device-key');
+  assert.equal(await fallback.vault.readKey('OPENAI_API_KEY'), 'device-key');
+  await fallback.vault.removeKey('OPENAI_API_KEY');
+  assert.equal(await fallback.vault.readKey('OPENAI_API_KEY'), null);
+});
+
+test('capacitor backend surface renders editable vault rows with a banner', async () => {
+  const harness = makeBackendHarness({ stored: null });
+  const controls = await initCapacitorBackendSetup({
+    documentRef: harness.documentRef,
+    chip: harness.chip,
+    root: harness.root,
+    storage: harness.storage,
+    reload: () => {},
+  });
+  assert.ok(controls);
+  const section = harness.root.querySelector('[data-vault-section="true"]');
+  assert.ok(section, 'vault section rides along with the backend row');
+  assert.equal(section.dataset.vaultEditable, 'true');
+  const openaiRow = section.querySelector('section[data-key-id="vault:OPENAI_API_KEY"]');
+  assert.ok(openaiRow && openaiRow.querySelector('input'), 'editable row carries a paste field');
+  assert.ok(section.querySelector('[data-vault-banner="true"]'));
+  controls.dispose();
+});

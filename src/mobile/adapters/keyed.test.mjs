@@ -77,6 +77,50 @@ async function assertDiscardsLateResponse(invoke) {
   });
 }
 
+/**
+ * Socket variant: the adapter must discard late socket events after abort.
+ * The stub socket delays its 'open' until the gate resolves.
+ */
+async function assertSocketDiscardsLateResponse(invoke) {
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const createSocket = (url) => {
+    const socket = {
+      url: String(url),
+      sent: [],
+      closed: false,
+      handlers: new Map(),
+      on(event, handler) {
+        const list = socket.handlers.get(event) || [];
+        list.push(handler);
+        socket.handlers.set(event, list);
+        return socket;
+      },
+      send(text) {
+        socket.sent.push(String(text));
+      },
+      close() {
+        socket.closed = true;
+      },
+      async emitOpen() {
+        await gate;
+        for (const handler of socket.handlers.get('open') || []) handler();
+      },
+    };
+    return socket;
+  };
+  const controller = new AbortController();
+  const pending = invoke(createSocket, controller.signal);
+  controller.abort();
+  release();
+  await assert.rejects(pending, (error) => {
+    assert.equal(error.name, 'AbortError');
+    return true;
+  });
+}
+
 const OPENSKY_STATES_FIXTURE = {
   time: 1_790_000_000,
   states: [
@@ -364,6 +408,16 @@ test('vessels live refuses a keyed socket URL over plain ws', async () => {
     return true;
   });
   assert.equal(host.sockets.length, 0);
+});
+
+test('vessels live discards a late response after abort', async () => {
+  await assertSocketDiscardsLateResponse((createSocket, signal) => {
+    const source = createVesselsLiveSource({
+      getKey: async () => 'vault-secret',
+      createSocket,
+    });
+    return source.connect({ signal });
+  });
 });
 
 // ---------------------------------------------------------------------------

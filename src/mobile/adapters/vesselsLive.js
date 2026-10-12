@@ -248,9 +248,13 @@ export function createVesselsLiveSource({
     /**
      * Connect with the vault key. Resolves honest `{ unavailable:
      * 'KEY_REQUIRED' }` without touching a socket when keyless.
+     * Late responses after abort are discarded (CapacitorHttp/WS cannot
+     * cancel in flight).
+     * @param {{ signal?: AbortSignal }} options Caller signal.
      * @returns {Promise<{ status: string }|{ unavailable: string }>} Status, or the keyless marker.
      */
-    async connect() {
+    async connect({ signal } = {}) {
+      signal?.throwIfAborted();
       if (disposed) return { status };
       if (socket) return { status };
       let candidate = null;
@@ -259,6 +263,7 @@ export function createVesselsLiveSource({
       } catch {
         candidate = null;
       }
+      signal?.throwIfAborted();
       if (typeof candidate !== 'string' || !candidate) {
         setStatus('missing-key');
         return { unavailable: 'KEY_REQUIRED' };
