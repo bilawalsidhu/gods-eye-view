@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { PACK_LIMITS, validateDataPack } from './manifest.js';
 
 // Also settle adapters that fail to observe abort; dispose any late resource they return.
@@ -66,7 +67,7 @@ export function createDataPackSession({
     async load(packs, { anchors = [], signal } = {}) {
       clear();
       if (!Array.isArray(packs) || packs.length > PACK_LIMITS.packs)
-        throw new Error('Too many data packs');
+        throw new Error(t('director.session.tooManyPacks'));
       const anchorIds = new Set(anchors.map((anchor) => anchor.id));
       packs.forEach((pack, i) =>
         validateDataPack(pack, `packs[${i}]`, anchorIds),
@@ -150,9 +151,7 @@ export function createDataPackSession({
         if (active === run) clear();
         if (superseded) return false;
         // Source errors may include URLs; only stable messages reach the UI.
-        throw new Error(
-          'Data pack could not load: check its source, format, size or integrity',
-        );
+        throw new Error(t('director.session.loadFailed'));
       }
     },
   };

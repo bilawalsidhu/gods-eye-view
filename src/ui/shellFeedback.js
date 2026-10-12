@@ -9,10 +9,17 @@ import {
   reduceTrafficSyncFeedback,
 } from '../loadingFeedback.js';
 import { setSplitFlapText, disposeSplitFlap } from '../splitFlap.js';
+import { subscribeLocale } from '../i18n/index.js';
 export class ShellFeedback {
   constructor({ readLayers }) {
     this.readLayers = readLayers;
     this.destroyed = false;
+    // Labels are composed at present time, so a locale switch re-presents the
+    // current chip state through the same update paths the tickers use.
+    this._unsubscribeLocale = subscribeLocale(() => {
+      this._updateGlobalLoadingFeedback();
+      this._updateTrafficSyncChip(false);
+    });
     this._loadingFeedbackState = createLoadingFeedbackState();
     this._trafficSyncFeedbackState = createTrafficSyncFeedbackState();
     this._loadingFeedbackEvent = null;
@@ -206,6 +213,8 @@ export class ShellFeedback {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._unsubscribeLocale?.();
+    this._unsubscribeLocale = null;
     this._stopLoadingFeedbackTicker();
     clearInterval(this._trafficChipTicker);
     clearTimeout(this._toastTimer);

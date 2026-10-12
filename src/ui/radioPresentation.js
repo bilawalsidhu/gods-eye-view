@@ -1,4 +1,11 @@
 /** Render Radio state without making playback or Context decisions. */
+import { t } from '../i18n/index.js';
+
+const lifecycleWord = (lifecycleState) =>
+  lifecycleState === 'enabling'
+    ? t('radio.lifecycle.enabling')
+    : t('radio.lifecycle.disabling');
+
 export function renderRadioState(state) {
   if (this.destroyed || !state || !this._radioPanel) return;
   const lifecycle = this.actions.getLifecycle() || null;
@@ -19,6 +26,22 @@ export function renderRadioState(state) {
   const selected = state.selected || null;
   const hasStations = state.filteredCount > 0;
   const activePlayback = ['playing', 'buffering'].includes(state.audioState);
+  const enableText = transitioning
+    ? lifecycleWord(lifecycleState)
+    : t(
+        uncertain
+          ? 'radio.lifecycle.reconcile'
+          : enabled
+            ? 'common.disabled'
+            : 'common.enabled',
+      );
+  const enableAria = t(
+    uncertain
+      ? 'radio.lifecycle.reconcileAria'
+      : enabled
+        ? 'radio.lifecycle.disableAria'
+        : 'radio.lifecycle.enableAria',
+  );
   document
     .getElementById('title-bar')
     ?.classList.toggle('radio-broadcasting', state.audioState === 'playing');
@@ -32,31 +55,20 @@ export function renderRadioState(state) {
   this._radioLayerState?.classList.toggle('active', enabled);
   if (this._radioLayerState) {
     this._radioLayerState.textContent = transitioning
-      ? lifecycleState.toUpperCase()
+      ? lifecycleWord(lifecycleState)
       : uncertain
-        ? 'UNCERTAIN'
+        ? t('radio.layerState.uncertain')
         : state.loading
-          ? 'SYNC'
+          ? t('radio.layerState.syncing')
           : enabled
             ? `${state.filteredCount}/${state.stationCount}`
-            : 'OFF';
+            : t('common.off');
   }
   if (this._radioEnableBtn) {
     this._radioEnableBtn.classList.toggle('active', enabled);
     this._radioEnableBtn.setAttribute('aria-pressed', String(enabled));
-    this._radioEnableBtn.textContent = transitioning
-      ? lifecycleState.toUpperCase()
-      : uncertain
-        ? 'RECONCILE'
-        : enabled
-          ? 'DISABLE'
-          : 'ENABLE';
-    this._radioEnableBtn.setAttribute(
-      'aria-label',
-      uncertain
-        ? 'Reconcile Radio — lifecycle uncertain'
-        : `${enabled ? 'Disable' : 'Enable'} Radio`,
-    );
+    this._radioEnableBtn.textContent = enableText;
+    this._radioEnableBtn.setAttribute('aria-label', enableAria);
     this._radioEnableBtn.disabled = false;
     this._radioEnableBtn.setAttribute('aria-disabled', String(transitioning));
     this._radioEnableBtn.setAttribute('aria-busy', String(transitioning));
@@ -67,19 +79,8 @@ export function renderRadioState(state) {
       'aria-pressed',
       String(enabled),
     );
-    this._contextRadioMiniEnableBtn.textContent = transitioning
-      ? lifecycleState.toUpperCase()
-      : uncertain
-        ? 'RECONCILE'
-        : enabled
-          ? 'DISABLE'
-          : 'ENABLE';
-    this._contextRadioMiniEnableBtn.setAttribute(
-      'aria-label',
-      uncertain
-        ? 'Reconcile Radio — lifecycle uncertain'
-        : `${enabled ? 'Disable' : 'Enable'} Radio`,
-    );
+    this._contextRadioMiniEnableBtn.textContent = enableText;
+    this._contextRadioMiniEnableBtn.setAttribute('aria-label', enableAria);
     this._contextRadioMiniEnableBtn.disabled = false;
     this._contextRadioMiniEnableBtn.setAttribute(
       'aria-disabled',
@@ -93,19 +94,8 @@ export function renderRadioState(state) {
   if (this._cockpitRadioEnableBtn) {
     this._cockpitRadioEnableBtn.classList.toggle('active', enabled);
     this._cockpitRadioEnableBtn.setAttribute('aria-pressed', String(enabled));
-    this._cockpitRadioEnableBtn.textContent = transitioning
-      ? lifecycleState.toUpperCase()
-      : uncertain
-        ? 'RECONCILE'
-        : enabled
-          ? 'DISABLE'
-          : 'ENABLE';
-    this._cockpitRadioEnableBtn.setAttribute(
-      'aria-label',
-      uncertain
-        ? 'Reconcile Radio — lifecycle uncertain'
-        : `${enabled ? 'Disable' : 'Enable'} Radio`,
-    );
+    this._cockpitRadioEnableBtn.textContent = enableText;
+    this._cockpitRadioEnableBtn.setAttribute('aria-label', enableAria);
     this._cockpitRadioEnableBtn.disabled = false;
     this._cockpitRadioEnableBtn.setAttribute(
       'aria-disabled',
@@ -156,8 +146,10 @@ export function renderRadioState(state) {
     );
     this._radioTunerBandLabel.textContent =
       state.filter === 'all'
-        ? 'DIRECTORY BAND'
-        : `${String(activeCategory?.label || state.filter).toUpperCase()} BAND`;
+        ? t('radio.tuner.directoryBand')
+        : t('radio.tuner.categoryBand', {
+            band: String(activeCategory?.label || state.filter).toUpperCase(),
+          });
   }
   this._radioTuner?.classList.toggle('is-static', Boolean(state.tuningStatic));
   if (tunerAvailable) this._refreshRadioTunerBand?.();
@@ -176,7 +168,7 @@ export function renderRadioState(state) {
 
   if (this._radioStationName)
     this._radioStationName.textContent =
-      selected?.name || 'NO STATION SELECTED';
+      selected?.name || t('radio.station.none');
   if (this._radioStationMeta) {
     const place = selected
       ? [selected.state, selected.countryCode].filter(Boolean).join(' · ')
@@ -188,15 +180,15 @@ export function renderRadioState(state) {
       : '';
     this._radioStationMeta.textContent = selected
       ? [place, signal].filter(Boolean).join('  /  ') ||
-        'Directory metadata only'
+        t('radio.station.metadataOnly')
       : state.loading
-        ? 'Loading station directory…'
-        : 'Choose a globe marker or use next.';
+        ? t('radio.station.loadingDirectory')
+        : t('radio.station.pickHint');
   }
   if (this._radioStationTags) {
     const tags = Array.isArray(selected?.tags) ? selected.tags.slice(0, 8) : [];
     this._radioStationTags.textContent = tags.length
-      ? `TAGS · ${tags.join(' · ')}`
+      ? t('radio.station.tags', { tags: tags.join(' · ') })
       : '';
   }
   if (this._radioStationHomepage) {
@@ -218,49 +210,34 @@ export function renderRadioState(state) {
     this._cockpitRadioPrevBtn.disabled = !interactive || !hasStations;
   if (this._cockpitRadioNextBtn)
     this._cockpitRadioNextBtn.disabled = !interactive || !hasStations;
+  const playbackAction = activePlayback
+    ? t('common.pause')
+    : state.audioState === 'paused'
+      ? t('radio.transport.resume')
+      : t('common.play');
+  const playbackAria = t(
+    selected ? 'radio.transport.playSelected' : 'radio.transport.playNearest',
+    { action: playbackAction },
+  );
   if (this._radioPlayBtn) {
-    const action = activePlayback
-      ? 'Pause'
-      : state.audioState === 'paused'
-        ? 'Resume'
-        : 'Play';
     this._radioPlayBtn.disabled = !interactive || !hasStations;
     this._radioPlayBtn.classList.toggle('active', activePlayback);
-    this._radioPlayBtn.textContent = action.toUpperCase();
-    this._radioPlayBtn.setAttribute(
-      'aria-label',
-      `${action} ${selected ? 'selected' : 'nearest'} radio station`,
-    );
+    this._radioPlayBtn.textContent = playbackAction.toUpperCase();
+    this._radioPlayBtn.setAttribute('aria-label', playbackAria);
   }
   if (this._contextRadioMiniPlayBtn) {
-    const action = activePlayback
-      ? 'Pause'
-      : state.audioState === 'paused'
-        ? 'Resume'
-        : 'Play';
     this._contextRadioMiniPlayBtn.disabled = !interactive || !hasStations;
     this._contextRadioMiniPlayBtn.classList.toggle('active', activePlayback);
     this._contextRadioMiniPlayBtn.textContent = activePlayback ? 'Ⅱ' : '▶';
-    this._contextRadioMiniPlayBtn.setAttribute(
-      'aria-label',
-      `${action} ${selected ? 'selected' : 'nearest'} radio station`,
-    );
-    this._contextRadioMiniPlayBtn.title = action;
+    this._contextRadioMiniPlayBtn.setAttribute('aria-label', playbackAria);
+    this._contextRadioMiniPlayBtn.title = playbackAction;
   }
   if (this._cockpitRadioPlayBtn) {
-    const action = activePlayback
-      ? 'Pause'
-      : state.audioState === 'paused'
-        ? 'Resume'
-        : 'Play';
     this._cockpitRadioPlayBtn.disabled = !interactive || !hasStations;
     this._cockpitRadioPlayBtn.classList.toggle('active', activePlayback);
     this._cockpitRadioPlayBtn.textContent = activePlayback ? 'Ⅱ' : '▶';
-    this._cockpitRadioPlayBtn.setAttribute(
-      'aria-label',
-      `${action} ${selected ? 'selected' : 'nearest'} radio station`,
-    );
-    this._cockpitRadioPlayBtn.title = action;
+    this._cockpitRadioPlayBtn.setAttribute('aria-label', playbackAria);
+    this._cockpitRadioPlayBtn.title = playbackAction;
   }
   if (this._radioStopBtn)
     this._radioStopBtn.disabled =
@@ -295,56 +272,57 @@ export function renderRadioState(state) {
   }
   if (this._contextRadioMiniStation) {
     this._contextRadioMiniStation.textContent = uncertain
-      ? 'RADIO STATE UNCERTAIN'
-      : selected?.name || (state.loading ? 'SYNCING DIRECTORY' : 'RADIO READY');
+      ? t('radio.mini.uncertain')
+      : selected?.name ||
+        (state.loading ? t('radio.mini.syncing') : t('radio.mini.ready'));
   }
   if (this._cockpitRadioStation) {
     this._cockpitRadioStation.textContent = uncertain
-      ? 'UNCERTAIN'
-      : selected?.name || (state.loading ? 'SYNCING' : 'READY');
+      ? t('radio.cockpit.uncertain')
+      : selected?.name ||
+        (state.loading ? t('radio.cockpit.syncing') : t('radio.cockpit.ready'));
   }
   if (this._radioPlaybackState) {
     const catalogSuffix = state.degraded
       ? state.stale
-        ? ' · stale/degraded directory'
-        : ' · degraded directory'
+        ? t('radio.state.staleDegraded')
+        : t('radio.state.degraded')
       : state.stale
-        ? ' · stale directory'
+        ? t('radio.state.stale')
         : '';
     const outsideFilter =
-      selected && state.selectedIndex < 0 ? ' · outside current filter' : '';
+      selected && state.selectedIndex < 0 ? t('radio.state.outsideFilter') : '';
+    const stationName = selected?.name || t('radio.station.fallbackName');
     const messages = {
-      stopped: enabled
-        ? 'Ready — playback starts only from your action'
-        : 'Radio off',
-      loading: 'Connecting directly to broadcaster…',
-      buffering: 'Buffering broadcaster stream…',
-      playing: `Playing ${selected?.name || 'station'}`,
-      paused: `Paused ${selected?.name || 'station'}`,
-      error: state.audioError || 'Broadcaster stream unavailable',
+      stopped: enabled ? t('radio.state.readyStopped') : t('radio.state.off'),
+      loading: t('radio.state.connecting'),
+      buffering: t('radio.state.buffering'),
+      playing: t('radio.state.playing', { name: stationName }),
+      paused: t('radio.state.paused', { name: stationName }),
+      error: state.audioError || t('radio.state.broadcasterUnavailable'),
     };
     const voiceSuffix = state.voiceDucked
-      ? ' · muted during voice interaction'
+      ? t('radio.state.voiceDucked')
       : state.voiceRestoring
-        ? ' · restoring volume after voice'
+        ? t('radio.state.voiceRestoring')
         : '';
     const tuningSuffix = state.tuningAwaitingStationId
       ? state.audioState === 'error'
-        ? ' · static indicates no broadcaster audio'
-        : ' · tuning static until broadcaster starts'
+        ? t('radio.state.staticNoAudio')
+        : t('radio.state.tuningStatic')
       : '';
     const unavailable = state.tuningUnavailableStationId
-      ? 'Station unavailable after directory refresh — choose another channel'
+      ? t('radio.state.stationUnavailable')
       : null;
     const lifecycleMessage = transitioning
       ? lifecycleState === 'enabling'
-        ? 'Radio is enabling…'
-        : 'Radio is disabling…'
+        ? t('radio.lifecycle.enablingMessage')
+        : t('radio.lifecycle.disablingMessage')
       : null;
     const uncertainMessage = uncertain
-      ? 'Radio lifecycle is uncertain — use Enable or Disable to reconcile'
+      ? t('radio.lifecycle.uncertainMessage')
       : null;
-    this._radioPlaybackState.textContent = `${uncertainMessage || unavailable || lifecycleMessage || state.error || messages[state.audioState] || 'Ready'}${tuningSuffix}${voiceSuffix}${catalogSuffix}${outsideFilter}`;
+    this._radioPlaybackState.textContent = `${uncertainMessage || unavailable || lifecycleMessage || state.error || messages[state.audioState] || t('common.ready')}${tuningSuffix}${voiceSuffix}${catalogSuffix}${outsideFilter}`;
     this._radioPlaybackState.classList.toggle(
       'error',
       Boolean(

@@ -9,6 +9,8 @@ const BHOTE_KOSHI_NEPAL_BASE_RECIPE = Object.freeze({
   id: 'bhote-koshi-nepal-evidence-pack',
   version: 12,
   title: 'Bhote Koshi Evidence Sequence',
+  // Display title only; the English `title` stays the data-side identity.
+  titleKey: 'director.recipes.bhoteKoshiEvidence',
   style: 'normal',
   ui: { hidePanels: false, hudMode: 'full', safeFrame: '16:9' },
   layers: {
@@ -23,6 +25,9 @@ const BHOTE_KOSHI_NEPAL_BASE_RECIPE = Object.freeze({
   },
   legacySceneBootstrap: {
     targetSceneTitle: 'Nepal Flood Incident',
+    // The seeded scene is created with this translated display title, so
+    // legacy bootstrap matching accepts either spelling.
+    targetSceneTitleKey: 'director.recipes.nepalFloodIncident',
     fromShotTitles: ['Shot 1', 'Shot 2', 'Shot 3'],
     cameraPath: [
       {
@@ -570,6 +575,7 @@ const BHOTE_KOSHI_NEPAL_BOOTSTRAP_RECIPE = BHOTE_KOSHI_NEPAL_APPEND_RECIPE
   ? Object.freeze({
       id: 'bhote-koshi-nepal-scene',
       title: 'Nepal Flood Incident',
+      titleKey: 'director.recipes.nepalFloodIncident',
       durationSec: 15,
       style: BHOTE_KOSHI_NEPAL_APPEND_RECIPE.style,
       ui: BHOTE_KOSHI_NEPAL_APPEND_RECIPE.ui,
@@ -594,6 +600,7 @@ const PUBLIC_SCENE_RECIPES = [
   {
     id: 'flights-radar',
     title: 'Global Flights Radar',
+    titleKey: 'director.recipes.flightsRadar',
     durationSec: 30,
     style: 'retro',
     ui: { hidePanels: true, hudMode: 'minimal', safeFrame: '16:9' },
@@ -664,6 +671,7 @@ const PUBLIC_SCENE_RECIPES = [
   {
     id: 'orbital-watch',
     title: 'Orbital Watch',
+    titleKey: 'director.recipes.orbitalWatch',
     durationSec: 32,
     style: 'surveillance',
     ui: { hidePanels: true, hudMode: 'full', safeFrame: '16:9' },
@@ -742,6 +750,7 @@ const PUBLIC_SCENE_RECIPES = [
   {
     id: 'thermal-threats',
     title: 'Thermal Threat Board',
+    titleKey: 'director.recipes.thermalThreats',
     durationSec: 26,
     style: 'thermal',
     ui: { hidePanels: true, hudMode: 'full', safeFrame: '16:9' },
@@ -810,6 +819,7 @@ const PUBLIC_SCENE_RECIPES = [
   {
     id: 'city-overload',
     title: 'City Overload',
+    titleKey: 'director.recipes.cityOverload',
     durationSec: 30,
     style: 'surveillance',
     ui: { hidePanels: true, hudMode: 'minimal', safeFrame: '9:16' },
@@ -888,6 +898,7 @@ const PUBLIC_SCENE_RECIPES = [
   {
     id: 'omniscience-pullback',
     title: 'Omniscience Pullback',
+    titleKey: 'director.recipes.omnisciencePullback',
     durationSec: 36,
     style: 'retro',
     ui: { hidePanels: true, hudMode: 'full', safeFrame: '16:9' },

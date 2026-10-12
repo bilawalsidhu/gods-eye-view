@@ -31,6 +31,7 @@
  */
 import * as Cesium from 'cesium';
 import { pickWorldFromScreen } from './annotationResolver.js';
+import { subscribeLocale, t } from '../i18n/index.js';
 import {
   claimPointer,
   pointerOwner,
@@ -113,6 +114,10 @@ export function initDrawTool({ viewer, annotations }) {
   const setHint = (text) => {
     if (hint) hint.textContent = text;
   };
+  // A locale switch repaints whatever the current state says now.
+  const unsubscribeLocale = subscribeLocale(() => {
+    if (!destroyed) setHint(drawHint(session));
+  });
 
   // ---- preview ---------------------------------------------------------
   const vertexPositions = () =>
@@ -195,12 +200,8 @@ export function initDrawTool({ viewer, annotations }) {
     }
     // A click that changed nothing still deserves an answer when the reason is
     // a limit rather than the harmless tail of a double-click.
-    if (reason === 'full')
-      setHint(
-        `That shape already has ${MAX_VERTICES} points — finish it or press Backspace.`,
-      );
-    else if (reason === 'invalid')
-      setHint('That point is off the globe — click on the world.');
+    if (reason === 'full') setHint(t('draw.hint.full', { max: MAX_VERTICES }));
+    else if (reason === 'invalid') setHint(t('draw.hint.offGlobe'));
   };
   const onMove = (event) => {
     if (!session || session.shape === 'pin' || destroyed) return;
@@ -236,11 +237,11 @@ export function initDrawTool({ viewer, annotations }) {
         flyTo: false,
       });
       if (destroyed || attempt !== generation) return result;
-      if (result?.drawn === 0) setHint('That shape could not be placed.');
+      if (result?.drawn === 0) setHint(t('draw.hint.notPlaced'));
       return result;
     } catch (error) {
       if (destroyed || attempt !== generation) return null;
-      setHint(`Could not place the shape: ${error?.message || error}`);
+      setHint(t('draw.hint.placeFailed', { error: error?.message || error }));
       return null;
     }
   };
@@ -258,7 +259,7 @@ export function initDrawTool({ viewer, annotations }) {
     if (session) session = createDrawSession(shape);
     annotations.clear();
     syncPreview();
-    if (!destroyed && !active) setHint('Board cleared.');
+    if (!destroyed && !active) setHint(t('draw.hint.boardCleared'));
   };
 
   // ---- keys: only while drawing, never while typing in another field ----
@@ -324,7 +325,7 @@ export function initDrawTool({ viewer, annotations }) {
         // Somebody else is using the pointer — possibly an older instance of
         // this same tool that has not finished tearing down. Say so instead of
         // half-starting.
-        setHint(`${pointerOwner()} is using the pointer — close it first.`);
+        setHint(t('draw.hint.pointerBusy', { owner: pointerOwner() }));
         return active;
       }
     }
@@ -500,6 +501,7 @@ export function initDrawTool({ viewer, annotations }) {
       if (destroyed) return attaching;
       // Supersede any finish still in flight before anything is torn down.
       generation += 1;
+      unsubscribeLocale();
       if (active) setActive(false);
       destroyed = true;
       releaseSceneHandler();

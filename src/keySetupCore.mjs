@@ -31,12 +31,20 @@ export const KEY_SETUP_APPEND_HEADER =
  * `clientExposed` marks the keys that are injected into the browser
  * bundle by design (restrict them at the provider, per SECURITY.md).
  * `hidden` keeps advanced configuration out of the panel and missing-key count.
+ *
+ * `title`/`unlocks` are the stable English strings used by tests, the server
+ * payload, and setup doctor; `titleKey`/`unlocksKey` are the parallel i18n
+ * message paths the browser panel resolves through `t()` at render time
+ * (see src/i18n/locales/en/settings.js). Both name the same meaning; the
+ * English fields never change wording.
  */
 export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'google-maps',
     title: 'GOOGLE MAPS',
+    titleKey: 'settings.keys.googleMaps.title',
     unlocks: 'The photorealistic 3D planet + place search',
+    unlocksKey: 'settings.keys.googleMaps.unlocks',
     getUrl: 'https://developers.google.com/maps/documentation/tile/get-api-key',
     envVars: Object.freeze(['GOOGLE_MAPS_API_KEY']),
     tier: 'metered',
@@ -45,7 +53,9 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'google-maps-server',
     title: 'GOOGLE MAPS — SERVER',
+    titleKey: 'settings.keys.googleMapsServer.title',
     unlocks: 'Places context + Street View fallback; optional separate key',
+    unlocksKey: 'settings.keys.googleMapsServer.unlocks',
     getUrl:
       'https://developers.google.com/maps/documentation/places/web-service/get-api-key',
     envVars: Object.freeze(['GOOGLE_MAPS_SERVER_API_KEY']),
@@ -55,7 +65,9 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'openai',
     title: 'OPENAI',
+    titleKey: 'settings.keys.openai.title',
     unlocks: 'Voice control — API key or ChatGPT OAuth',
+    unlocksKey: 'settings.keys.openai.unlocks',
     getUrl: 'https://platform.openai.com/api-keys',
     envVars: Object.freeze(['OPENAI_API_KEY']),
     tier: 'metered',
@@ -63,7 +75,9 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'aisstream',
     title: 'AISSTREAM',
+    titleKey: 'settings.keys.aisstream.title',
     unlocks: 'Live ships, worldwide',
+    unlocksKey: 'settings.keys.aisstream.unlocks',
     getUrl: 'https://aisstream.io',
     envVars: Object.freeze(['AISSTREAM_API_KEY']),
     tier: 'free',
@@ -71,7 +85,9 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'firms',
     title: 'NASA FIRMS',
+    titleKey: 'settings.keys.firms.title',
     unlocks: 'Live active-fire detections',
+    unlocksKey: 'settings.keys.firms.unlocks',
     getUrl: 'https://firms.modaps.eosdis.nasa.gov/api/map_key/',
     envVars: Object.freeze(['FIRMS_MAP_KEY']),
     tier: 'free',
@@ -79,7 +95,9 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'tomtom',
     title: 'TOMTOM',
+    titleKey: 'settings.keys.tomtom.title',
     unlocks: 'Real live traffic (keyless runs a simulation)',
+    unlocksKey: 'settings.keys.tomtom.unlocks',
     getUrl: 'https://my.tomtom.com/keys',
     envVars: Object.freeze(['TOMTOM_API_KEY']),
     tier: 'free',
@@ -87,7 +105,9 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'cesium-ion',
     title: 'CESIUM ION',
+    titleKey: 'settings.keys.cesiumIon.title',
     unlocks: 'Bing imagery map stacks + world terrain',
+    unlocksKey: 'settings.keys.cesiumIon.unlocks',
     getUrl: 'https://ion.cesium.com/tokens',
     envVars: Object.freeze(['CESIUM_ION_TOKEN']),
     tier: 'free',
@@ -96,7 +116,9 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'opensky',
     title: 'OPENSKY',
+    titleKey: 'settings.keys.opensky.title',
     unlocks: 'More flight-polling credits (anonymous works without)',
+    unlocksKey: 'settings.keys.opensky.unlocks',
     getUrl: 'https://opensky-network.org',
     envVars: Object.freeze(['OPENSKY_CLIENT_ID', 'OPENSKY_CLIENT_SECRET']),
     tier: 'free',
@@ -104,8 +126,10 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'mapillary',
     title: 'MAPILLARY',
+    titleKey: 'settings.keys.mapillary.title',
     unlocks:
       'Street-level imagery and coverage in the Street Level layer. Free: register an app in the Mapillary developer dashboard and paste its Client Token',
+    unlocksKey: 'settings.keys.mapillary.unlocks',
     getUrl: 'https://www.mapillary.com/dashboard/developers',
     envVars: Object.freeze(['MAPILLARY_CLIENT_TOKEN']),
     tier: 'free',
@@ -114,7 +138,9 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'launch-library',
     title: 'LAUNCH LIBRARY',
+    titleKey: 'settings.keys.launchLibrary.title',
     unlocks: 'Higher space-missions request allowance',
+    unlocksKey: 'settings.keys.launchLibrary.unlocks',
     getUrl: 'https://thespacedevs.com',
     envVars: Object.freeze(['LL2_API_TOKEN']),
     tier: 'free',
@@ -353,6 +379,23 @@ export function keySetupRequirement(id) {
 }
 
 /**
+ * Locale-independent shape of the same tooltip, for presentation edges that
+ * translate at paint: resolve `message.key` through `t()` with
+ * `message.params`. Null for unknown or hidden entries, mirroring the empty
+ * string above. Portable graphs keep calling `keySetupRequirement` for their
+ * stable English text; only translating renderers need this.
+ * @returns {{key: string, params: {envVars: string}}|null}
+ */
+export function keySetupRequirementMessage(id) {
+  const entry = KEY_SETUP_KEYS.find((candidate) => candidate.id === id);
+  if (!entry || entry.hidden) return null;
+  return {
+    key: 'settings.requirement.tooltip',
+    params: { envVars: entry.envVars.join(' + ') },
+  };
+}
+
+/**
  * Decide whether a live provider value belongs to a source outside the store
  * Provider Settings is allowed to edit. `wasExternalAtBoot` carries source
  * provenance without carrying the credential itself; it closes the otherwise
@@ -383,7 +426,9 @@ export function keySetupStatus(env = {}) {
     return {
       id: entry.id,
       title: entry.title,
+      titleKey: entry.titleKey,
       unlocks: entry.unlocks,
+      unlocksKey: entry.unlocksKey,
       getUrl: entry.getUrl,
       envVars: [...entry.envVars],
       tier: entry.tier,

@@ -16,7 +16,9 @@ test('panel presentation places Transit between Street Traffic and Bike Share in
     runInNewContext(`${declarations}\nJSON.stringify(PANEL_ORDER)`),
   );
   assert.deepEqual(
-    order.filter(({ label }) => label === 'Movement').map(({ id }) => id),
+    order
+      .filter(({ key }) => key === 'layers.group.movement')
+      .map(({ id }) => id),
     [
       'satellites',
       'flights',

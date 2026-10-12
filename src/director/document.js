@@ -1,4 +1,5 @@
 /** Bounded, renderer-independent validation for authored scene documents. */
+import { t } from '../i18n/index.js';
 import {
   SCENE_DOCUMENT_LIMITS,
   fail,
@@ -68,7 +69,7 @@ export function validateSceneDocument(project) {
   ]);
   const version = Object.hasOwn(project, 'version') ? project.version : 1;
   if (![1, 2, 3, 4, 5, 6].includes(version))
-    fail('$.version', 'unsupported scene project version');
+    fail('$.version', t('director.document.unsupportedVersion'));
   const legacy = version < 3;
   for (const key of ['createdAt', 'updatedAt'])
     optional(project, key, '$', string);
@@ -111,7 +112,7 @@ export function validateSceneDocument(project) {
     array(scene.shots, `${path}.shots`);
     shotCount += scene.shots.length;
     if (shotCount > SCENE_DOCUMENT_LIMITS.shots)
-      fail(`${path}.shots`, 'too many shots in project');
+      fail(`${path}.shots`, t('director.document.tooManyShots'));
     const shotIds = new Set();
     scene.shots.forEach((shot, i) => {
       const at = `${path}.shots[${i}]`;
@@ -167,12 +168,12 @@ export function parseSceneDocument(text) {
     text.length > SCENE_DOCUMENT_LIMITS.bytes ||
     new TextEncoder().encode(text).byteLength > SCENE_DOCUMENT_LIMITS.bytes
   )
-    fail('$', 'file exceeds 5 MiB');
+    fail('$', t('director.document.fileTooLarge'));
   let parsed;
   try {
     parsed = JSON.parse(text);
   } catch {
-    fail('$', 'invalid JSON');
+    fail('$', t('director.document.invalidJson'));
   }
   return validateSceneDocument(parsed);
 }

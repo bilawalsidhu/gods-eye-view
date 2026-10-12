@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { subscribeLocale, t } from '../../i18n/index.js';
 import {
   PERIMETER_OVERLAY_SOURCE_ID,
   perimeterAnchorDegrees,
@@ -68,10 +69,25 @@ export function createFirePerimetersLayer({
   // Link → currency verdict from the publication check; unknown links are
   // absent. Failed checks are not cached so a transient outage retries.
   const _linkVerdicts = new Map();
+  let destroyed = false;
+  // The selected incident card persists between refreshes; republish it on a
+  // locale switch so its text follows the active language.
+  const unsubscribeLocale = subscribeLocale(() => {
+    if (_enabled && !destroyed) publishSelectedCard();
+  });
   function abortLinkVerification() {
     _linkRequest?.controller.abort();
     _linkRequest = null;
   }
+
+  // Stored failure messages are closed tokens; unknown provider text passes
+  // through verbatim.
+  const errorText = (value) =>
+    !value
+      ? null
+      : value === 'source'
+        ? t('hazard.perimeters.error.source')
+        : value;
 
   const canSelect = () =>
     overlayHost && screenSpaceEventHandlerFactory && picking;
@@ -364,7 +380,7 @@ export function createFirePerimetersLayer({
         if (request.signal.aborted || _request !== request || !_enabled)
           return false;
         console.warn('[Data:FirePerimeters] Fetch error:', e);
-        _lastError = e?.message || 'Perimeter source unavailable';
+        _lastError = e?.message || 'source';
         return false;
       } finally {
         if (_request === request) _request = null;
@@ -372,6 +388,9 @@ export function createFirePerimetersLayer({
     },
 
     destroy(viewer = _viewer) {
+      if (destroyed) return;
+      destroyed = true;
+      unsubscribeLocale?.();
       _request?.abort();
       _request = null;
       removeClickHandler();
@@ -414,10 +433,22 @@ export function createFirePerimetersLayer({
 
     getRowControls() {
       const bands = [
-        { label: 'Not contained or unknown', color: containmentAccent(0) },
-        { label: 'Under 50% contained', color: containmentAccent(1) },
-        { label: '50–99% contained', color: containmentAccent(50) },
-        { label: 'Fully contained', color: containmentAccent(100) },
+        {
+          label: t('hazard.perimeters.legend.none'),
+          color: containmentAccent(0),
+        },
+        {
+          label: t('hazard.perimeters.legend.under50'),
+          color: containmentAccent(1),
+        },
+        {
+          label: t('hazard.perimeters.legend.mid'),
+          color: containmentAccent(50),
+        },
+        {
+          label: t('hazard.perimeters.legend.full'),
+          color: containmentAccent(100),
+        },
       ];
       return {
         chips: [],
@@ -428,8 +459,7 @@ export function createFirePerimetersLayer({
           ).length,
           ...(index === 0
             ? {
-                blurb:
-                  'Colour shows reported containment. Perimeters are simplified to about 100 m.',
+                blurb: t('hazard.perimeters.legend.blurb'),
               }
             : {}),
         })),
@@ -440,7 +470,7 @@ export function createFirePerimetersLayer({
       return {
         count: _count,
         lastUpdate: _lastUpdate,
-        error: _lastError,
+        error: errorText(_lastError),
       };
     },
   };

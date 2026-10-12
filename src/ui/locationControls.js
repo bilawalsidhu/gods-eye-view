@@ -1,5 +1,22 @@
 import { locationMiniStatus } from '../locationStatus.js';
+import { subscribeLocale, t } from '../i18n/index.js';
 const POI_KEYS = ['Q', 'W', 'E', 'R', 'T'];
+
+/**
+ * Resolve a `location.cities` pack label for a curated record; records outside
+ * the pack (tests, future cities) keep their own `name` field.
+ */
+function cityLabel(id, fallback) {
+  const key = `location.cities.${id}.name`;
+  const translated = t(key);
+  return translated === key ? fallback : translated;
+}
+
+function poiLabel(id, index, fallback) {
+  const key = `location.cities.${id}.pois.${index}`;
+  const translated = t(key);
+  return translated === key ? fallback : translated;
+}
 
 /** Location DOM, keyboard handling and pending row animation over supplied actions. */
 export class LocationControls {
@@ -32,13 +49,16 @@ export class LocationControls {
     this.frame = null;
     this.destroyed = false;
     this.rowGeneration = 0;
+    this.expandedCityId = null;
+    // Repaint the pill labels (and the open POI row) after a locale switch.
+    this._unsubscribeLocale = subscribeLocale(() => this.refreshLabels());
     elements.pills.replaceChildren();
     for (const [id, city] of Object.entries(cities)) {
       const pill = doc.createElement('button');
       pill.type = 'button';
       pill.className = 'location-pill';
       pill.dataset.locationId = id;
-      pill.textContent = city.name;
+      pill.textContent = cityLabel(id, city.name);
       this.bind(pill, 'click', () => onCity(id));
       elements.pills.appendChild(pill);
     }
@@ -82,6 +102,7 @@ export class LocationControls {
     if (this.destroyed) return;
     const city = this.cities[cityId];
     if (!city) return;
+    this.expandedCityId = cityId;
     this.cancelExpansion();
     const generation = this.rowGeneration;
     for (const remove of this.poiRemovers.splice(0)) remove();
@@ -96,7 +117,7 @@ export class LocationControls {
       key.textContent = POI_KEYS[index] || index + 1;
       const label = this.doc.createElement('span');
       label.className = 'poi-pill-name';
-      label.textContent = poi.name;
+      label.textContent = poiLabel(cityId, index, poi.name);
       pill.append(key, label);
       this.bind(
         pill,
@@ -116,8 +137,19 @@ export class LocationControls {
   hidePois() {
     if (this.destroyed) return;
     this.cancelExpansion();
+    this.expandedCityId = null;
     this.elements.poiRow.classList.remove('expanded');
     this.elements.divider.classList.remove('visible');
+  }
+  /** Repaint the localized city/POI pill labels in place. */
+  refreshLabels() {
+    if (this.destroyed) return;
+    for (const pill of this.elements.pills.querySelectorAll('.location-pill'))
+      pill.textContent = cityLabel(
+        pill.dataset.locationId,
+        this.cities[pill.dataset.locationId]?.name || '',
+      );
+    if (this.expandedCityId) this.showPois(this.expandedCityId);
   }
   highlightPoi(index) {
     if (this.destroyed) return;
@@ -144,7 +176,7 @@ export class LocationControls {
       const icon = this.doc.createElement('span');
       icon.className = 'orbit-icon';
       icon.textContent = '↻';
-      this.orbitIndicator.append(icon, ' ORBIT');
+      this.orbitIndicator.append(icon, ` ${t('location.orbit.label')}`);
       this.doc.body.appendChild(this.orbitIndicator);
     }
     return this.orbitIndicator;
@@ -152,6 +184,8 @@ export class LocationControls {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._unsubscribeLocale?.();
+    this._unsubscribeLocale = null;
     this.cancelExpansion();
     for (const remove of [
       ...this.poiRemovers.splice(0),

@@ -4,6 +4,7 @@ import {
   localSdrFeedLine,
   localSdrFmAudioActive,
 } from './localSdrPresentation.js';
+import { subscribeLocale } from '../i18n/index.js';
 
 const ELEMENT_IDS = Object.freeze({
   card: 'sdr-radio-card',
@@ -85,6 +86,8 @@ export class LocalSdrControls {
       radio?.subscribe?.((state) => this._onRadioState(state)) || null;
     this._feedsUnsubscribe =
       feeds?.subscribe?.(() => this._scheduleRender()) || null;
+    // Repaint the current snapshot when the interface language changes.
+    this._localeUnsubscribe = subscribeLocale(() => this._scheduleRender());
     // One request, no polling: learn whether the server has decoder feeds.
     void feeds?.probe?.()?.catch?.(() => {});
     this._render();
@@ -281,6 +284,8 @@ export class LocalSdrControls {
   destroy() {
     this._destroyed = true;
     this._listeners.abort();
+    this._localeUnsubscribe?.();
+    this._localeUnsubscribe = null;
     this._receiverUnsubscribe?.();
     this._radioUnsubscribe?.();
     this._feedsUnsubscribe?.();

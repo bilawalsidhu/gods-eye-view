@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { parseSceneDocument, stringifySceneDocument } from '../document.js';
 import { withShareSignal } from './lifetime.js';
 import { fields, array, fail } from '../documentFields.js';
@@ -42,7 +43,7 @@ function decode(value) {
     /[^A-Za-z0-9+/=]/.test(value) ||
     (value.includes('=') && !/^[A-Za-z0-9+/]+={1,2}$/.test(value))
   )
-    fail('assets', 'invalid or oversized base64 asset');
+    fail('assets', t('director.bundle.invalidAsset'));
   return Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
 }
 function checkBytes(bytes, total) {
@@ -52,10 +53,11 @@ function checkBytes(bytes, total) {
     bytes.length > PACK_LIMITS.bytes ||
     total > PACK_LIMITS.totalBytes
   )
-    fail('assets', 'asset byte limit exceeded');
+    fail('assets', t('director.bundle.assetTooLarge'));
 }
 function checkMime(mimeType) {
-  if (!MIME.has(mimeType)) fail('assets', 'unsupported media type');
+  if (!MIME.has(mimeType))
+    fail('assets', t('director.bundle.unsupportedMedia'));
 }
 
 /** Read inert scene JSON or a bounded asset bundle, verifying bytes before admission. */
@@ -66,17 +68,18 @@ export async function parseSceneShare(text, { signal } = {}) {
     text.length > SHARE_LIMITS.bytes ||
     new TextEncoder().encode(text).length > SHARE_LIMITS.bytes
   )
-    fail('$', 'share exceeds 50 MiB');
+    fail('$', t('director.bundle.shareTooLarge'));
   let input;
   try {
     input = JSON.parse(text);
   } catch {
-    fail('$', 'invalid JSON');
+    fail('$', t('director.bundle.invalidJson'));
   }
   if (input?.format !== 'gev-scene-bundle')
     return { project: parseSceneDocument(text), assets: new Map() };
   fields(input, '$', ['format', 'version', 'project', 'assets']);
-  if (input.version !== 1) fail('version', 'unsupported bundle version');
+  if (input.version !== 1)
+    fail('version', t('director.bundle.unsupportedVersion'));
   const project = parseSceneDocument(JSON.stringify(input.project));
   array(input.assets, 'assets', SHARE_LIMITS.assets);
   const assets = new Map();
@@ -86,19 +89,21 @@ export async function parseSceneShare(text, { signal } = {}) {
     fields(entry, 'assets', ['path', 'mimeType', 'base64', 'sha256']);
     validateAssetPath(entry.path);
     checkMime(entry.mimeType);
-    if (assets.has(entry.path)) fail('assets', 'duplicate asset path');
+    if (assets.has(entry.path))
+      fail('assets', t('director.bundle.duplicatePath'));
     const bytes = decode(entry.base64);
     total += bytes.length;
     checkBytes(bytes, total);
     const hash = await digest(bytes);
     checkAbort(signal);
-    if (entry.sha256 !== hash) fail('assets', 'asset integrity mismatch');
+    if (entry.sha256 !== hash)
+      fail('assets', t('director.bundle.integrityMismatch'));
     assets.set(entry.path, { bytes, mimeType: entry.mimeType, sha256: hash });
   }
   const used = new Set();
   for (const pack of packsOf(project)) {
     if (pack.source.adapter !== BUNDLE_SOURCE)
-      fail('project', 'bundle must include every declared pack');
+      fail('project', t('director.bundle.incompletePack'));
     const asset = assets.get(pack.source.path);
     used.add(pack.source.path);
     if (
@@ -106,9 +111,10 @@ export async function parseSceneShare(text, { signal } = {}) {
       pack.byteLength !== asset.bytes.length ||
       pack.sha256 !== asset.sha256
     )
-      fail('project', 'missing or mismatched bundle asset');
+      fail('project', t('director.bundle.missingAsset'));
   }
-  if (used.size !== assets.size) fail('assets', 'unreferenced bundle asset');
+  if (used.size !== assets.size)
+    fail('assets', t('director.bundle.unreferencedAsset'));
   return { project, assets };
 }
 
@@ -121,8 +127,8 @@ export async function readSceneShare(file, options) {
     fail(
       '$',
       limit === SHARE_LIMITS.bytes
-        ? 'share exceeds 50 MiB'
-        : 'file exceeds 5 MiB',
+        ? t('director.bundle.shareTooLarge')
+        : t('director.document.fileTooLarge'),
     );
   checkAbort(options?.signal);
   const text = await withShareSignal(file.text(), options?.signal);
@@ -146,13 +152,13 @@ export async function createSceneBundle(
     let entry = known.get(key);
     if (!entry) {
       if (assets.length >= SHARE_LIMITS.assets)
-        fail('assets', 'too many bundled assets');
+        fail('assets', t('director.bundle.tooManyAssets'));
       const asset = await withShareSignal(
         resolveAsset(pack, { signal }),
         signal,
       );
       checkAbort(signal);
-      if (!asset) fail('assets', 'select a file for every declared data pack');
+      if (!asset) fail('assets', t('director.bundle.selectFiles'));
       const bytes = asset.bytes;
       total += bytes?.length || 0;
       checkBytes(bytes, total);
@@ -163,7 +169,7 @@ export async function createSceneBundle(
         (pack.byteLength && pack.byteLength !== bytes.length) ||
         (pack.sha256 && pack.sha256 !== sha256)
       )
-        fail('assets', 'selected file does not match declared integrity');
+        fail('assets', t('director.bundle.fileMismatch'));
       const path = `files/${assets.length}-${pack.source.path.split('/').at(-1).slice(0, 160)}`;
       entry = {
         path,
@@ -178,7 +184,7 @@ export async function createSceneBundle(
       (pack.byteLength && pack.byteLength !== entry.byteLength) ||
       (pack.sha256 && pack.sha256 !== entry.sha256)
     )
-      fail('assets', 'conflicting shared asset integrity');
+      fail('assets', t('director.bundle.conflictingIntegrity'));
     pack.source = { adapter: BUNDLE_SOURCE, path: entry.path };
     pack.byteLength = entry.byteLength;
     pack.sha256 = entry.sha256;
@@ -190,7 +196,7 @@ export async function createSceneBundle(
     assets: assets.map(({ byteLength, ...entry }) => entry),
   });
   if (new TextEncoder().encode(text).length > SHARE_LIMITS.bytes)
-    fail('$', 'share exceeds 50 MiB');
+    fail('$', t('director.bundle.shareTooLarge'));
   return text;
 }
 
@@ -214,7 +220,7 @@ export function createBundleAssets() {
       validateAssetPath(path);
       const asset = assets.get(path);
       if (!asset || asset.bytes.length > maxBytes)
-        throw new Error('Bundle asset unavailable — reimport the bundle');
+        throw new Error(t('director.bundle.unavailable'));
       return { bytes: asset.bytes.slice(), mimeType: asset.mimeType };
     },
   };

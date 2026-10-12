@@ -1,10 +1,15 @@
-import { AIRCRAFT_CLASS_LABELS } from '../../data/aircraftClass.js';
+import {
+  AIRCRAFT_CLASS_LABELS,
+  AIRCRAFT_CLASS_LABEL_KEYS,
+} from '../../data/aircraftClass.js';
 import {
   BAND_LABELS,
-  HEARD_BY_RECEIVER,
+  HEARD_BY_RECEIVER_KEY,
   LOCAL_ADSB_COLOR,
+  SOURCE_LABEL_KEYS,
   SOURCE_LABELS,
 } from './policy.js';
+import { t } from '../../i18n/index.js';
 
 const DASH = '—';
 
@@ -59,9 +64,12 @@ export function localAdsbReceiverLine(record) {
     .map((band) => BAND_LABELS[band])
     .filter(Boolean);
   const sources = recordSources(record)
-    .map((source) => SOURCE_LABELS[source])
+    .map((source) => {
+      const key = SOURCE_LABEL_KEYS[source];
+      return key ? t(key) : SOURCE_LABELS[source];
+    })
     .filter(Boolean);
-  return [HEARD_BY_RECEIVER, bands.join(' + '), sources.join(' + ')]
+  return [t(HEARD_BY_RECEIVER_KEY), bands.join(' + '), sources.join(' + ')]
     .filter(Boolean)
     .join(' · ');
 }
@@ -74,9 +82,9 @@ export function localAdsbReceiverLine(record) {
 export function localAdsbSourceText(record) {
   const sources = recordSources(record);
   if (sources.includes('webusb') && sources.includes('feed'))
-    return 'Your RTL-SDR receiver and decoder feed';
-  if (sources.includes('feed')) return 'Your decoder feed';
-  return 'Your RTL-SDR receiver';
+    return t('sensors.localAdsb.card.receiverAndFeed');
+  if (sources.includes('feed')) return t('sensors.localAdsb.card.receiverFeed');
+  return t('sensors.localAdsb.card.receiver');
 }
 
 /**
@@ -88,7 +96,8 @@ export function localAdsbSourceText(record) {
  */
 export function localAdsbClassLine(record, aircraftClass = {}) {
   if (!aircraftClass.evidence) return '';
-  const label = AIRCRAFT_CLASS_LABELS[aircraftClass.klass];
+  const key = AIRCRAFT_CLASS_LABEL_KEYS[aircraftClass.klass];
+  const label = key ? t(key) : AIRCRAFT_CLASS_LABELS[aircraftClass.klass] || '';
   return [label, record?.category].filter(Boolean).join(' · ');
 }
 
@@ -129,13 +138,20 @@ export function localAdsbCardModel(
   return {
     title: localAdsbTitle(record),
     details: [
-      `ICAO ${icao} · ${record?.callsign || 'NO CALLSIGN'}`,
+      `ICAO ${icao} · ${record?.callsign || t('sensors.localAdsb.card.noCallsign')}`,
       localAdsbClassLine(record, aircraftClass || {}),
       identity,
       routeLine,
       `ALT ${grouped(altitude)} FT · GS ${speed === null ? DASH : speed} KT · TRK ${track === null ? DASH : `${track}°`}`,
       `V/S ${vertical === null ? DASH : `${vertical > 0 ? '+' : ''}${grouped(vertical)} FPM`}`,
-      `POSITION ${ageS === null ? DASH : `${ageS} S AGO`} · ${messages} ${messages === 1 ? 'MSG' : 'MSGS'}`,
+      t('sensors.localAdsb.card.position', {
+        pos:
+          ageS === null
+            ? DASH
+            : t('sensors.localAdsb.card.ageValue', { n: ageS }),
+        messages,
+        count: messages,
+      }),
       localAdsbReceiverLine(record),
     ].filter(Boolean),
     accent: LOCAL_ADSB_COLOR,

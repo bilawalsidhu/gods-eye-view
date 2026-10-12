@@ -54,13 +54,15 @@ export {
 } from './realtimeInputPolicy.js';
 
 import { createRealtimeBackend } from './realtimeBackend.js';
+import { subscribeLocale, t } from '../i18n/index.js';
 
-const STATUS = {
-  idle: 'OFF',
-  connecting: 'CONNECTING',
-  listening: 'LISTENING',
-  executing: 'EXECUTING',
-  error: 'ERROR',
+/** Status chip words, keyed by state (I18N.md: translate at render time). */
+const STATUS_KEYS = {
+  idle: 'voice.status.idle',
+  connecting: 'voice.status.connecting',
+  listening: 'voice.status.listening',
+  executing: 'voice.status.executing',
+  error: 'voice.status.error',
 };
 
 /** Compose voice state owners and coordinate ordered session startup/teardown. */
@@ -241,6 +243,12 @@ export class GevRealtimeController extends RealtimeFacade {
       },
     });
     this._radio.observe();
+    // Locale switches repaint the current status readout in place (I18N.md
+    // rule 6); the subscription is released in the removeUi teardown path.
+    this._localeTeardown = false;
+    this._unsubscribeLocale = subscribeLocale(() => {
+      if (!this._localeTeardown) this.paintStatusUi();
+    });
     this.debugLog('controller.created', { status: this.status });
   }
 
@@ -408,11 +416,16 @@ export class GevRealtimeController extends RealtimeFacade {
       this.annotationEventUnsubscribe = null;
     }
     if (removeUi) this._radio.detachObservers();
+    if (removeUi && this._unsubscribeLocale) {
+      this._unsubscribeLocale();
+      this._unsubscribeLocale = null;
+      this._localeTeardown = true;
+    }
     if (removeUi && this.ui?.root) {
       this.ui.root.remove();
     }
     if (!preserveStatus && !removeUi) {
-      this.setStatus('idle', 'Voice off');
+      this.setStatus('idle', t('voice.status.offDetail'));
     }
     this.setRadioVoiceDucking(false);
     if (removeUi) this.emitSessionEvent({ type: 'disposed' });
@@ -426,32 +439,18 @@ export class GevRealtimeController extends RealtimeFacade {
     }
   }
 
+  /**
+   * Record a state transition and repaint its readout. `detail` is the final
+   * display string, composed by the caller through `t()` at compose time
+   * (I18N.md rule 5); the raw value is kept so a locale switch can repaint the
+   * fixed status words without re-emitting the transition.
+   */
   setStatus(status, detail) {
     this.status = status;
+    this.lastStatusDetail = detail ?? null;
     this.emitSessionEvent({ type: 'state', state: status, detail });
     this.ui.root.dataset.status = status;
     if (status === 'error') this.ui.root.classList.remove('error-dismissed');
-    this.updateVoiceButtonLabel();
-    this.ui.status.textContent = STATUS[status] || STATUS.idle;
-    const resolvedDetail =
-      status === 'listening' && this.pushToTalkMode
-        ? this.pushToTalkKeyHeld
-          ? 'Release Space to send'
-          : 'Hold Space to talk'
-        : detail;
-    const primaryDetail =
-      status === 'error'
-        ? 'VOICE UNAVAILABLE'
-        : resolvedDetail ||
-          (status === 'idle' ? 'VOICE STANDBY' : 'VOICE ACTIVE');
-    this.ui.detail.textContent = primaryDetail;
-    this.ui.detail.title = primaryDetail;
-    if (this.ui.errorDetail) {
-      this.ui.errorDetail.textContent =
-        status === 'error'
-          ? resolvedDetail || 'Voice session could not be started.'
-          : '';
-    }
     if (status === 'idle' || status === 'connecting' || status === 'error') {
       this.setVoiceSpeaker('idle');
     }
@@ -462,6 +461,38 @@ export class GevRealtimeController extends RealtimeFacade {
       })
     ) {
       this.pauseRadioForVoice();
+    }
+    this.paintStatusUi();
+  }
+
+  /**
+   * DOM-only repaint of the current status (locale switches). Emits nothing
+   * and touches no session state, so it is safe to run at any time.
+   */
+  paintStatusUi() {
+    const status = this.status;
+    this.updateVoiceButtonLabel();
+    this.ui.status.textContent = t(STATUS_KEYS[status] || STATUS_KEYS.idle);
+    const resolvedDetail =
+      status === 'listening' && this.pushToTalkMode
+        ? this.pushToTalkKeyHeld
+          ? t('voice.hint.release')
+          : t('voice.hint.holdTalk')
+        : this.lastStatusDetail;
+    const primaryDetail =
+      status === 'error'
+        ? t('voice.status.unavailable')
+        : resolvedDetail ||
+          (status === 'idle'
+            ? t('voice.status.standby')
+            : t('voice.status.active'));
+    this.ui.detail.textContent = primaryDetail;
+    this.ui.detail.title = primaryDetail;
+    if (this.ui.errorDetail) {
+      this.ui.errorDetail.textContent =
+        status === 'error'
+          ? resolvedDetail || t('voice.status.startFailed')
+          : '';
     }
   }
 

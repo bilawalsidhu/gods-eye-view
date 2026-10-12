@@ -2,6 +2,7 @@ import {
   RADIO_DIRECTORY_STALE_MS,
   RADIO_DIRECTORY_FUTURE_SKEW_MS,
 } from './policy.js';
+import { t } from '../../i18n/index.js';
 
 export function createIngestion({
   state: layerState,
@@ -136,9 +137,9 @@ export function createIngestion({
         layerState._degraded = body.degraded;
         layerState._stale = body.stale;
         layerState._error = preservingWarmCatalog
-          ? 'Directory refresh degraded; showing the previous station catalog.'
+          ? t('airwaves.radio.status.degradedPrevious')
           : layerState._degraded
-            ? 'Radio directory coverage is degraded.'
+            ? t('airwaves.radio.status.degraded')
             : null;
       } catch (error) {
         if (
@@ -153,8 +154,8 @@ export function createIngestion({
         )
           return;
         layerState._error = layerState._stations.length
-          ? 'Directory refresh failed; showing the previous station catalog.'
-          : 'Radio directory is temporarily unavailable.';
+          ? t('airwaves.radio.status.failedPrevious')
+          : t('airwaves.radio.status.unavailable');
         layerState._stale = layerState._stations.length > 0;
         layerState._degraded = layerState._stations.length > 0;
       } finally {

@@ -162,7 +162,9 @@ test('the sensor model keeps the ellipsoidal height it was tuned against', () =>
     'GSD must keep reading the raw camera height',
   );
   assert.equal(
-    has(/const band = this\._viewBand\(m\.altM\);/),
+    has(
+      /const band = translateEnumLabel\(this\._viewBand\(m\.altM\), HUD_BAND_KEYS\);/,
+    ),
     true,
     'the view band must keep reading the raw camera height',
   );

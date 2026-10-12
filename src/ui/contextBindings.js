@@ -1,4 +1,5 @@
 import { shouldExpandGlobalContextPanel } from '../rightRailPolicy.js';
+import { t } from '../i18n/index.js';
 
 export function _initGlobalContextPanel() {
   const contextTabs = [
@@ -32,7 +33,7 @@ export function _initGlobalContextPanel() {
     void this._runUserFacingContextAction(
       (notificationToken) =>
         this._selectContextMode(nextMode, { notificationToken }),
-      'Contacts could not complete the requested transition; try again',
+      t('context.toast.contactsTransition'),
     ).then((succeeded) => {
       if (
         !this.destroyed &&
@@ -61,7 +62,7 @@ export function _initGlobalContextPanel() {
     void this._runUserFacingContextAction(
       (notificationToken) =>
         this._selectContextMode(nextMode, { notificationToken }),
-      'Space Missions could not complete the requested transition; try again',
+      t('context.toast.missionsTransition'),
     ).then((succeeded) => {
       if (
         !this.destroyed &&
@@ -108,11 +109,11 @@ export function _initGlobalContextPanel() {
       this.showToast(
         stats?.statusMessage ||
           (stats?.status === 'zoom-in'
-            ? 'Zoom in to search mapped installations'
-            : 'Nearby installations refreshed'),
+            ? t('context.toast.zoomIn')
+            : t('context.toast.installationsRefreshed')),
       );
       return true;
-    }, 'Nearby installations could not be refreshed; try again').finally(() => {
+    }, t('context.toast.installationsFailed')).finally(() => {
       if (this.destroyed) return;
       button.setAttribute('aria-disabled', 'false');
       button.setAttribute('aria-busy', 'false');

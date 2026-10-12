@@ -1,25 +1,36 @@
-/** Explain mapped-site availability without claiming an unobserved overload. */
+/** Explain mapped-site availability without claiming an unobserved overload.
+ *
+ *  Translated at compose time through the `feedback.install` pack. The retry
+ *  copy keeps the "reason — follow-up" shape in every locale: the loading
+ *  chip splits the message on " — " into label + detail.
+ */
+import { t } from '../i18n/index.js';
+
 export function installationFeedback(stats = {}, now = Date.now()) {
-  const reasons = {
-    rate_limited: 'Overpass rate-limited',
-    timeout: 'Overpass timed out',
-    query_failed: 'Overpass could not complete the query',
-    tiles_unavailable: 'Map tiles temporarily unavailable',
-    names_unavailable: 'Mapped names temporarily unavailable',
-  };
+  // Only known failure reasons get specific attribution; an unknown reason
+  // falls back to the honest generic copy (the pack lookup returns the key).
+  const reasonKey = stats.failureReason
+    ? `feedback.install.${stats.failureReason}`
+    : 'feedback.install.unavailable';
+  const translatedReason = t(reasonKey);
   const reason =
-    reasons[stats.failureReason] || 'Overpass temporarily unavailable';
+    translatedReason === reasonKey
+      ? t('feedback.install.unavailable')
+      : translatedReason;
   if (stats.loading)
-    return stats.retrying ? 'Retrying mapped sites…' : 'Fetching mapped sites…';
+    return stats.retrying
+      ? t('feedback.install.retrying')
+      : t('feedback.install.fetching');
   if (stats.retryAt > 0) {
     const seconds = Math.max(0, Math.ceil((stats.retryAt - now) / 1000));
-    return `${reason} — ${seconds ? `retrying in ${seconds}s` : 'retry pending'}`;
+    return seconds
+      ? t('feedback.install.retryingIn', { reason, seconds })
+      : t('feedback.install.retryPending', { reason });
   }
   if (stats.status === 'unavailable') return reason;
-  if (stats.status === 'zoom-in')
-    return 'Zoom in to search mapped installations';
-  if (stats.stale) return 'Showing cached mapped sites';
-  if (stats.status === 'idle') return 'Mapped sites not loaded';
+  if (stats.status === 'zoom-in') return t('feedback.install.zoomIn');
+  if (stats.stale) return t('feedback.install.stale');
+  if (stats.status === 'idle') return t('feedback.install.idle');
   // With a count, say what was found and where; an empty area is not "loaded".
   if (Number.isFinite(stats.count)) {
     const km =
@@ -27,9 +38,12 @@ export function installationFeedback(stats = {}, now = Date.now()) {
       Number.isFinite(stats.coverage.radiusM)
         ? Math.round(stats.coverage.radiusM / 1000)
         : null;
-    const where = km ? ` within ${km} km of the contact` : ' in view';
-    if (stats.count === 0) return `No mapped sites${where}`;
-    return `${stats.count} mapped site${stats.count === 1 ? '' : 's'}${where}`;
+    const where = km
+      ? t('feedback.install.whereNear', { km })
+      : t('feedback.install.whereInView');
+    if (stats.count === 0)
+      return t('feedback.install.noSites', { count: stats.count, where });
+    return t('feedback.install.sites', { count: stats.count, where });
   }
-  return 'Mapped sites loaded';
+  return t('feedback.install.loaded');
 }

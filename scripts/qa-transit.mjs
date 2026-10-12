@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { runTransitHeadingRegression } from './qa-transit-heading.mjs';
+import { existsSync } from 'node:fs';
 import {
   boundPageEvaluations,
   reportTransitVisibility,
@@ -259,11 +260,20 @@ check(
 historyProbe.clear();
 await mkdir(SHOTS, { recursive: true });
 
+// The historical executablePath was macOS-only and broke the gate on other
+// platforms. Use it when it exists, honor GEV_QA_CHROME, otherwise let
+// puppeteer resolve the installed Chrome like every other qa-* gate.
+function resolveChromeExecutable() {
+  if (process.env.GEV_QA_CHROME) return process.env.GEV_QA_CHROME;
+  const macChrome =
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  return existsSync(macChrome) ? macChrome : undefined;
+}
+
 const browser = await puppeteer.launch({
   headless: false,
   protocolTimeout: 150000,
-  executablePath:
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: resolveChromeExecutable(),
   args: [
     '--no-sandbox',
     '--disable-background-timer-throttling',

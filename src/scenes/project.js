@@ -1,4 +1,5 @@
 /** Authored project defaults and legacy migrations; no editor or playback state. */
+import { t } from '../i18n/index.js';
 import { SCENE_DOCUMENT_VERSION } from '../director/document.js';
 import { SCENE_RECIPES } from './recipes.js';
 import { MAP_STACKS } from '../maps/catalog.js';
@@ -122,7 +123,14 @@ export function recipeToScene(recipe) {
     const mapStack = keyframe.mapStack || post.mapStack;
     return {
       id: uid('shot'),
-      title: keyframe.title || `Shot ${idx + 1}`,
+      // Recipe shot titles (and this fallback) stay localizable at creation,
+      // but the built-in packs always author explicit English titles because
+      // append packs match them as join keys.
+      title:
+        keyframe.title ||
+        t('director.titles.defaultShot', {
+          n: idx + 1,
+        }),
       durationSec: Math.max(
         0.2,
         keyframe.duration || DEFAULT_SHOT_DURATION_SEC,
@@ -171,7 +179,11 @@ export function recipeToScene(recipe) {
 
   return {
     id: recipe.id || uid('scene'),
-    title: recipe.title || 'Untitled Scene',
+    // `titleKey` translates a built-in scene's display title at creation; the
+    // English recipe title stays the data-side identity.
+    title: recipe.titleKey
+      ? t(recipe.titleKey)
+      : recipe.title || t('director.titles.untitledScene'),
     releaseLayerIds: [
       ...new Set(
         (Array.isArray(recipe.releaseLayerIds)
@@ -225,7 +237,11 @@ export function normalizeShot(
 
   return {
     id: rawShot?.id || uid('shot'),
-    title: rawShot?.title || `Shot ${index + 1}`,
+    title:
+      rawShot?.title ||
+      t('director.titles.defaultShot', {
+        n: index + 1,
+      }),
     durationSec: Math.max(
       0.2,
       Number(rawShot?.durationSec) || DEFAULT_SHOT_DURATION_SEC,
@@ -349,7 +365,8 @@ export function normalizeProject(rawProject) {
       );
       return {
         id: scene?.id || uid('scene'),
-        title: scene?.title || `Scene ${sceneIdx + 1}`,
+        title:
+          scene?.title || t('scenes.prompt.defaultName', { n: sceneIdx + 1 }),
         ...(scene?.dataPacks ? { dataPacks: deepClone(scene.dataPacks) } : {}),
         ...(scene?.anchors ? { anchors: deepClone(scene.anchors) } : {}),
         releaseLayerIds: [

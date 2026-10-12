@@ -1,14 +1,15 @@
 import { createCctvVideoSurface } from './cctvVideo.js';
+import { t } from '../i18n/index.js';
 export function _calBadgeLabel(badge) {
   switch (badge) {
     case 'calibrated':
-      return 'CALIBRATED';
+      return t('cctv.badge.calibrated');
     case 'curated':
-      return 'CURATED';
+      return t('cctv.badge.curated');
     case 'raw-prior':
-      return 'RAW PRIOR';
+      return t('cctv.badge.rawPrior');
     default:
-      return '--';
+      return t('cctv.badge.none');
   }
 }
 
@@ -51,7 +52,9 @@ export function _renderCctvState(state) {
 
   if (this._cctvEnableBtn) {
     this._cctvEnableBtn.classList.toggle('active', enabled);
-    this._cctvEnableBtn.textContent = enabled ? 'CCTV ON' : 'CCTV OFF';
+    this._cctvEnableBtn.textContent = enabled
+      ? t('cctv.toggle.on')
+      : t('cctv.toggle.off');
   }
 
   if (this._cctvSelect) {
@@ -99,17 +102,19 @@ export function _renderCctvState(state) {
     this._cctvCoverageBtn.classList.toggle('active', mode !== 'off');
     this._cctvCoverageBtn.textContent =
       mode === 'viewshed'
-        ? 'VIEWSHED ON'
+        ? t('cctv.coverage.viewshed')
         : mode === 'on'
-          ? 'COVERAGE ON'
-          : 'COVERAGE OFF';
+          ? t('cctv.coverage.on')
+          : t('cctv.coverage.off');
     this._cctvCoverageBtn.disabled = !enabled;
   }
 
   if (this._cctvAutoHopBtn) {
     const autoHop = !!state?.autoHop;
     this._cctvAutoHopBtn.classList.toggle('active', autoHop);
-    this._cctvAutoHopBtn.textContent = autoHop ? 'AUTO HOP ON' : 'AUTO HOP OFF';
+    this._cctvAutoHopBtn.textContent = autoHop
+      ? t('cctv.autoHop.on')
+      : t('cctv.autoHop.off');
     this._cctvAutoHopBtn.disabled = !enabled;
   }
 
@@ -117,8 +122,8 @@ export function _renderCctvState(state) {
     const showProjection = state?.showProjection !== false;
     this._cctvProjectionBtn.classList.toggle('active', showProjection);
     this._cctvProjectionBtn.textContent = showProjection
-      ? 'PROJECTION ON'
-      : 'PROJECTION OFF';
+      ? t('cctv.projection.on')
+      : t('cctv.projection.off');
     this._cctvProjectionBtn.disabled = !enabled;
   }
 
@@ -133,8 +138,8 @@ export function _renderCctvState(state) {
     const badge = activeCamera?.calBadge || null;
     const dirty = !!activeCamera?.calDirty;
     this._cctvQualityChip.textContent = dirty
-      ? 'CAL · EDITED (UNSAVED)'
-      : `CAL · ${this._calBadgeLabel(badge)}`;
+      ? t('cctv.cal.edited')
+      : t('cctv.cal.chip', { badge: this._calBadgeLabel(badge) });
     this._cctvQualityChip.dataset.calBadge = dirty ? 'edited' : badge || '';
   }
 
@@ -145,7 +150,7 @@ export function _renderCctvState(state) {
       const provider =
         activeCamera.sourceLabel ||
         activeCamera.provider ||
-        'Configured Source';
+        t('cctv.meta.configuredSource');
       const statusMsg = activeCamera.sourceMessage
         ? ` · ${activeCamera.sourceMessage}`
         : '';
@@ -154,14 +159,17 @@ export function _renderCctvState(state) {
       const calBadge = activeCamera.calBadge
         ? this._calBadgeLabel(activeCamera.calBadge)
         : '';
-      const projLabel = state?.showProjection !== false ? 'MONITOR' : 'OFF';
+      const projLabel =
+        state?.showProjection !== false
+          ? t('cctv.meta.monitor')
+          : t('cctv.meta.off');
       this._cctvMeta.textContent = `${activeCamera.city} · HDG ${Math.round(activeCamera.headingDeg)}° · FOV ${Math.round(activeCamera.fovDeg)}° · RANGE ${Math.round(activeCamera.rangeM)}m · ${projLabel}${calBadge ? ` · ${calBadge}` : ''} · ${provider}${credit}${statusMsg}`;
     } else if (cameras.length > 0) {
       this._cctvMeta.textContent = enabled
-        ? `${cameras.length} cameras loaded · click a camera to activate`
-        : `${cameras.length} cameras loaded · enable CCTV to activate`;
+        ? t('cctv.meta.loadedClick', { n: cameras.length })
+        : t('cctv.meta.loadedEnable', { n: cameras.length });
     } else {
-      this._cctvMeta.textContent = 'Enable CCTV to load camera intersections';
+      this._cctvMeta.textContent = t('cctv.meta.idle');
     }
   }
 
@@ -209,15 +217,12 @@ export function _renderCctvState(state) {
   }
 
   this._syncCctvSourceBadge(activeCamera, enabled);
-  this._typeCctvSummary(
-    state?.summary ||
-      'Enable CCTV to start camera-linked intelligence summaries.',
-  );
+  this._typeCctvSummary(state?.summary || t('cctv.summary.idle'));
 }
 
 export function _typeCctvSummary(text) {
   if (this.destroyed || !this._cctvSummary) return;
-  const nextText = String(text || '').trim() || 'No summary available.';
+  const nextText = String(text || '').trim() || t('cctv.summary.empty');
   if (nextText === this._lastCctvSummaryText) return;
   this._lastCctvSummaryText = nextText;
 
@@ -241,6 +246,11 @@ export function _updateCctvSyncChip(loading, enabled) {
   if (this.destroyed) return;
   if (!this._cctvSyncChip || !this._cctvSyncLabel || !this._cctvSyncProgress)
     return;
+  // The chip mode (loading / ready) is what lets a locale switch re-translate
+  // the visible label (repaintCctvSyncChipLabel). It is ONLY reassigned when
+  // the chip actually transitions below — in particular the no-op tick while
+  // the completion dwell timer runs must keep the ready mode, because the
+  // real locale subscription renders state BEFORE repainting the label.
   const total = Number(loading?.total) || 0;
   const loaded = Math.max(0, Math.min(Number(loading?.loaded) || 0, total));
   const busy = !!enabled && !!loading?.active && total > 0;
@@ -249,24 +259,33 @@ export function _updateCctvSyncChip(loading, enabled) {
     clearTimeout(this._cctvChipHideTimer);
     this._cctvChipHideTimer = null;
     this._cctvChipWasBusy = true;
-    this.actions.setSplitFlapText(this._cctvSyncLabel, 'loading frames');
+    this.actions.setSplitFlapText(
+      this._cctvSyncLabel,
+      t('chrome.chips.cctvSync'),
+    );
     // The counter is left plain on purpose: it ticks every few frames
     // during a grid load, and flapping it would read as a slot machine.
     this._cctvSyncProgress.textContent = `${loaded}/${total}`;
     this._cctvSyncChip.classList.add('visible');
+    this._cctvChipMode = 'loading';
     return;
   }
 
   if (this._cctvChipWasBusy && enabled && total > 0) {
     // Load just completed — flash the final count, then auto-hide.
     this._cctvChipWasBusy = false;
-    this.actions.setSplitFlapText(this._cctvSyncLabel, 'camera grid ready');
+    this.actions.setSplitFlapText(
+      this._cctvSyncLabel,
+      t('cctv.sync.gridReady'),
+    );
     this._cctvSyncProgress.textContent = `${total}/${total}`;
     this._cctvSyncChip.classList.add('visible');
+    this._cctvChipMode = 'ready';
     clearTimeout(this._cctvChipHideTimer);
     this._cctvChipHideTimer = window.setTimeout(() => {
       if (this.destroyed) return;
       this._cctvChipHideTimer = null;
+      this._cctvChipMode = null;
       this._cctvSyncChip.classList.remove('visible');
     }, 1500);
     return;
@@ -274,6 +293,25 @@ export function _updateCctvSyncChip(loading, enabled) {
 
   if (!this._cctvChipHideTimer) {
     this._cctvChipWasBusy = false;
+    this._cctvChipMode = null;
     this._cctvSyncChip.classList.remove('visible');
   }
+}
+
+/**
+ * Re-translate the visible sync-chip label for the active locale. Owners call
+ * this from their locale subscription: it only rewrites the TEXT of whatever
+ * state the chip is in (loading / grid-ready) and never changes visibility or
+ * the completion dwell timer, so a mid-dwell switch keeps the completion
+ * semantics instead of flashing the loading copy.
+ */
+export function repaintCctvSyncChipLabel() {
+  if (this.destroyed || !this._cctvSyncLabel || !this._cctvChipMode) return;
+  const key =
+    this._cctvChipMode === 'ready'
+      ? 'cctv.sync.gridReady'
+      : 'chrome.chips.cctvSync';
+  this.actions.setSplitFlapText(this._cctvSyncLabel, t(key), {
+    immediate: true,
+  });
 }

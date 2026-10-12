@@ -323,6 +323,16 @@ async function main() {
 
     // ---- Install the synthetic-fetch shim BEFORE any app code runs ----------
     // Must be in place before the layers' first update() fires fetch(API_URL).
+    // The visible-text assertions below pin the ENGLISH UI (' · STALE' cue),
+    // so the harness pins the English locale before the app resolves one —
+    // a zh-locale machine would otherwise boot the app in Chinese.
+    await page.evaluateOnNewDocument(() => {
+      try {
+        localStorage.setItem('gods-eye-view.locale', 'en');
+      } catch {
+        // The suite asserts English text; a blocked store cannot provide it.
+      }
+    });
     await page.evaluateOnNewDocument((synth, appOrigin) => {
       // Stash the planes so the page can mutate them later (e.g. to advance
       // positions), and so we can confirm the shim is live.

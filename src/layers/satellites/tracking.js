@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import { satelliteClassLabel } from '../../data/satelliteClass.js';
 import {
   ISS_NORAD,
@@ -369,7 +370,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
     if (companions.length > 0) {
       const extra = companions.length - 1;
       details.push(
-        `DOCKED · ${companions[0]}${extra > 0 ? ` · +${extra}` : ''}`,
+        `${t('space.tracking.docked', { name: companions[0] })}${extra > 0 ? ` · +${extra}` : ''}`,
       );
     }
     const current = layerState._trackedEntity.gevLabelModel;

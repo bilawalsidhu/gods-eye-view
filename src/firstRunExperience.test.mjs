@@ -564,16 +564,17 @@ test('markup, startup ordering and accessibility remain pinned', () => {
   // half of what it does is the defect this replaced. Only the VISIBLE <small>
   // text counts; the comment beside it naturally says the words too.
   const envTile = html.slice(html.indexOf('data-first-run-choice="environmental"'));
-  const visible = envTile.slice(envTile.indexOf('<small>'), envTile.indexOf('</small>'));
+  const smallOpen = envTile.match(/<small[^>]*>/).index;
+  const visible = envTile.slice(smallOpen, envTile.indexOf('</small>'));
   assert.match(visible, /earthquakes/i);
   assert.match(visible, /fires?/i, 'the tile must promise the fires it enables');
 
   // The card's one persuasive line is OWNER-AUTHORED and pinned verbatim,
   // unspaced em dash included. This is copy, not prose to be improved in a
   // passing edit — changing it needs the owner, not a nicer-sounding rewrite.
-  assert.ok(
-    html.includes('<p id="first-run-description">It feels like a forbidden cockpit'
-      + '—then you realize the sources are public and the data is real.</p>'),
+  assert.match(
+    html,
+    /<p id="first-run-description"[^>]*>It feels like a forbidden cockpit—then you realize the sources are public and the data is real\.<\/p>/,
     'the owner-authored first-run line must ship exactly as written',
   );
 

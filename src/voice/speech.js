@@ -16,22 +16,29 @@
  *
  * Builders are small pure functions keyed by tool name. Tools without one are
  * returned unchanged.
+ *
+ * These lines are the app's OWN spoken replies and card lines: they are
+ * composed after the model has spoken, then read aloud and painted, so they
+ * translate through `t()` at compose time (I18N.md rule 5). Translation never
+ * changes what the model hears or says — only what GEV says back and shows.
  */
 
 import { analystHeadline } from './resultDisplay.js';
+import { t } from '../i18n/index.js';
 
-const LAYER_NOUNS = Object.freeze({
-  flights: 'aircraft',
-  military: 'military aircraft',
-  'ais-live-vessels': 'ships',
-  satellites: 'satellites',
+/** Layer nouns, as message keys resolved at compose time. */
+const LAYER_NOUN_KEYS = Object.freeze({
+  flights: 'voice.noun.aircraft',
+  military: 'voice.noun.militaryAircraft',
+  'ais-live-vessels': 'voice.noun.ships',
+  satellites: 'voice.noun.satellites',
 });
 
-/** Feed states that change what a spoken answer means. */
-const MATERIAL_FEED_TAGS = Object.freeze({
-  stale: 'stale',
-  degraded: 'degraded',
-  unavailable: 'feed unavailable',
+/** Feed states that change what a spoken answer means (keys, not text). */
+const MATERIAL_FEED_TAG_KEYS = Object.freeze({
+  stale: 'voice.tag.stale',
+  degraded: 'voice.tag.degraded',
+  unavailable: 'voice.tag.feedUnavailable',
 });
 
 const MAX_LABEL = 48;
@@ -49,15 +56,26 @@ export function spokenLabel(value, max = MAX_LABEL) {
 function listPhrase(items) {
   const list = items.filter(Boolean);
   if (list.length <= 1) return list[0] || '';
-  if (list.length === 2) return `${list[0]} and ${list[1]}`;
-  return `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`;
+  if (list.length === 2) {
+    return `${list[0]}${t('voice.speech.and')}${list[1]}`;
+  }
+  return `${list
+    .slice(0, -1)
+    .join(
+      t('voice.speech.listSeparator'),
+    )}${t('voice.speech.and')}${list.at(-1)}`;
+}
+
+/** Join clause fragments ('Selected X', '12 km from Y') for speaking. */
+function commaPhrase(parts) {
+  return parts.filter(Boolean).join(t('voice.speech.commaSeparator'));
 }
 
 function feet(meters) {
   const value = Number(meters);
   if (!Number.isFinite(value)) return null;
   const rounded = Math.round((value * 3.28084) / 100) * 100;
-  return `${rounded.toLocaleString('en-US')} feet`;
+  return t('voice.unit.feet', { n: rounded.toLocaleString('en-US') });
 }
 
 function kilometers(km) {
@@ -69,11 +87,14 @@ function kilometers(km) {
 function sentence(text) {
   const trimmed = String(text || '').trim();
   if (!trimmed) return null;
-  return /[.!?…]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+  return /[.!?…。！？]$/.test(trimmed)
+    ? trimmed
+    : `${trimmed}${t('voice.speech.fullStop')}`;
 }
 
 function feedTag(state) {
-  return MATERIAL_FEED_TAGS[state] || null;
+  const key = MATERIAL_FEED_TAG_KEYS[state];
+  return key ? t(key) : null;
 }
 
 /** A feed chip only when the state is worth seeing; nominal is the default. */
@@ -92,8 +113,13 @@ function displayName(value, max) {
     : label;
 }
 
+function layerNoun(layerId, fallbackKey) {
+  const key = LAYER_NOUN_KEYS[layerId];
+  return t(key || fallbackKey);
+}
+
 function layerLabel(result) {
-  return spokenLabel(result?.label || result?.layerId || 'Layer');
+  return spokenLabel(result?.label || result?.layerId || t('voice.noun.layer'));
 }
 
 /* ---------------- per-tool builders ---------------- */
@@ -102,22 +128,26 @@ function setLayerVisibility(result, args = {}) {
   const label = layerLabel(result);
   if (result?.cancelled) return null;
   if (!result?.ok) {
-    const wanted = args.enabled === false ? 'off' : 'on';
+    const wanted = args.enabled === false ? 'layerOffFailed' : 'layerOnFailed';
     return {
-      say: `Couldn't turn ${wanted} ${label}.`,
+      say: t(`voice.speech.${wanted}`, { label }),
       display: { title: label, lines: [result?.error].filter(Boolean) },
     };
   }
   const on = result.enabled !== false;
   const tag = on ? feedTag(result.feedState) : null;
   const say =
-    tag === 'feed unavailable'
-      ? `${label} on, but its feed is unavailable.`
-      : sentence(`${label} ${on ? 'on' : 'off'}${tag ? `, ${tag}` : ''}`);
+    on && result.feedState === 'unavailable'
+      ? t('voice.speech.layerOnFeedUnavailable', { label })
+      : sentence(
+          `${t(on ? 'voice.speech.layerOn' : 'voice.speech.layerOff', { label })}${tag ? t('voice.speech.tagSuffix', { tag }) : ''}`,
+        );
   return {
     say,
     display: {
-      title: `${label} ${on ? 'on' : 'off'}`,
+      title: t(on ? 'voice.speech.layerOn' : 'voice.speech.layerOff', {
+        label,
+      }),
       chips: on ? feedChips(result.feedState) : [],
       sources: result.source ? [{ label: result.source }] : [],
     },
@@ -125,27 +155,37 @@ function setLayerVisibility(result, args = {}) {
 }
 
 function flyToLocation(result) {
-  const label = spokenLabel(result?.label || result?.query || 'there');
+  const label = spokenLabel(
+    result?.label || result?.query || t('voice.common.there'),
+  );
   if (result?.cancelled) return null;
   if (!result?.ok) {
     return {
-      say: sentence(`Couldn't find ${label}`),
+      say: sentence(t('voice.speech.findFailed', { label })),
       display: { title: label, lines: [result?.error].filter(Boolean) },
     };
   }
   return {
-    say: sentence(result.arrived ? `Over ${label}` : `Flying to ${label}`),
+    say: sentence(
+      t(result.arrived ? 'voice.speech.arrived' : 'voice.speech.flyingTo', {
+        label,
+      }),
+    ),
     display: {
       title: label,
       lines: result.rangeM
-        ? [`Camera range ${kilometers(result.rangeM / 1000)}`]
+        ? [
+            t('voice.speech.cameraRange', {
+              range: kilometers(result.rangeM / 1000),
+            }),
+          ]
         : [],
     },
   };
 }
 
 function frameOverhead(result) {
-  const noun = LAYER_NOUNS[result?.layerId] || 'contacts';
+  const noun = layerNoun(result?.layerId, 'voice.noun.contacts');
   const radius = kilometers(result?.radiusKm);
   if (result?.cancelled) return null;
   if (!result?.ok) {
@@ -154,22 +194,24 @@ function frameOverhead(result) {
     const error = result?.error || '';
     let say;
     if (/not enabled/i.test(error))
-      say = `The ${noun} layer is off. Turn it on?`;
+      say = t('voice.speech.layerOffFrame', { noun });
     else if (result?.count === 0 && radius)
-      say = `No ${noun} within ${radius}.`;
-    else if (/unknown target/i.test(error)) say = "I can't frame that layer.";
-    else say = `Couldn't frame the ${noun} right now.`;
+      say = t('voice.speech.noneWithin', { noun, radius });
+    else if (/unknown target/i.test(error))
+      say = t('voice.speech.cannotFrameLayer');
+    else say = t('voice.speech.frameFailed', { noun });
     return {
       say,
       display: {
-        title: `Frame ${noun}`,
+        title: t('voice.speech.frameTitle', { noun }),
         lines: [result?.error].filter(Boolean),
       },
     };
   }
   // The layer query returns at most 80, so a full page is a lower bound.
   const count = Number(result.count) || 0;
-  const countText = count >= 80 ? `at least ${count}` : String(count);
+  const countText =
+    count >= 80 ? t('voice.speech.atLeast', { count }) : String(count);
   const referents = (result.nearest || [])
     .filter((entry) => entry?.label || entry?.id)
     .map((entry, index) => ({
@@ -179,14 +221,14 @@ function frameOverhead(result) {
       layerId: result.layerId,
     }));
   return {
-    say: sentence(`Framed ${countText} ${noun} within ${radius}`),
+    say: sentence(t('voice.speech.framed', { count: countText, noun, radius })),
     display: {
-      title: `${count} ${noun} in frame`,
+      title: t('voice.speech.inFrameTitle', { count, noun }),
       lines: [
-        `Within ${radius} of the view`,
-        result.detectionEnabled ? 'Labels on' : null,
+        radius ? t('voice.speech.withinView', { radius }) : null,
+        result.detectionEnabled ? t('voice.speech.labelsOn') : null,
       ].filter(Boolean),
-      notes: count >= 80 ? ['Framing uses the nearest 80 loaded contacts'] : [],
+      notes: count >= 80 ? [t('voice.speech.frameNote')] : [],
     },
     referents,
   };
@@ -194,25 +236,27 @@ function frameOverhead(result) {
 
 function selectNearestAircraft(result) {
   const location = spokenLabel(
-    result?.location?.label || result?.location || 'there',
+    result?.location?.label || result?.location || t('voice.common.there'),
   );
-  const noun = LAYER_NOUNS[result?.layerId] || 'aircraft';
+  const noun = layerNoun(result?.layerId, 'voice.noun.aircraft');
   const feed = result?.feed || {};
   const sources = feed.source ? [{ label: feed.source }] : [];
   if (result?.cancelled) return null;
   if (!result?.ok) {
     let say;
-    if (result?.stage === 'location') say = `Couldn't get to ${location}.`;
+    if (result?.stage === 'location')
+      say = t('voice.speech.cannotReach', { location });
     else if (feed.state === 'unavailable')
-      say = 'The aircraft feed is unavailable.';
+      say = t('voice.speech.aircraftFeedUnavailable');
     else if (result?.stage === 'nearest')
-      say = `No airborne ${noun} loaded near ${location} yet.`;
-    else if (result?.stage === 'layer') say = `Couldn't turn on ${noun}.`;
-    else say = `Couldn't select the nearest ${noun}.`;
+      say = t('voice.speech.noneLoadedNear', { noun, location });
+    else if (result?.stage === 'layer')
+      say = t('voice.speech.nounOnFailed', { noun });
+    else say = t('voice.speech.nearestFailed', { noun });
     return {
       say,
       display: {
-        title: `Nearest ${noun}`,
+        title: t('voice.speech.nearestTitle', { noun }),
         lines: [result?.error].filter(Boolean),
         chips: feedChips(feed.state),
         sources,
@@ -225,22 +269,22 @@ function selectNearestAircraft(result) {
   const altitude = feet(aircraft.altitudeM);
   const tag = feedTag(feed.state);
   const say = sentence(
-    [
-      `Selected ${name}`,
-      distance ? `${distance} from ${location}` : null,
+    commaPhrase([
+      t('voice.speech.selected', { name }),
+      distance ? t('voice.speech.distanceFrom', { distance, location }) : null,
       altitude,
       tag,
-    ]
-      .filter(Boolean)
-      .join(', '),
+    ]),
   );
   return {
     say,
     display: {
       title: name,
       lines: [
-        distance ? `${distance} from ${location}` : null,
-        altitude ? `Altitude ${altitude}` : null,
+        distance
+          ? t('voice.speech.distanceFrom', { distance, location })
+          : null,
+        altitude ? t('voice.speech.altitudeLine', { altitude }) : null,
       ].filter(Boolean),
       chips: feedChips(feed.state),
       sources,
@@ -253,12 +297,14 @@ function selectNearestAircraft(result) {
 
 function routeText(properties) {
   const route = spokenLabel(properties.route || '', 40);
-  if (route) return route.replace(/\s*(?:-|→|>)\s*/g, ' to ');
+  if (route)
+    return route.replace(/\s*(?:-|→|>)\s*/g, t('voice.speech.routeTo'));
   const origin = spokenLabel(properties.routeOrigin || '', 12);
   const destination = spokenLabel(properties.routeDestination || '', 12);
-  if (origin && destination) return `${origin} to ${destination}`;
-  if (origin) return `from ${origin}`;
-  if (destination) return `to ${destination}`;
+  if (origin && destination)
+    return t('voice.speech.routeOriginDestination', { origin, destination });
+  if (origin) return t('voice.speech.routeFromOrigin', { origin });
+  if (destination) return t('voice.speech.routeToDestination', { destination });
   return null;
 }
 
@@ -269,7 +315,10 @@ function getEntityContext(result) {
   const isAircraft =
     selected.layerId === 'flights' || selected.layerId === 'military';
   const title = spokenLabel(
-    properties.callsign || selected.name || selected.id || 'Selection',
+    properties.callsign ||
+      selected.name ||
+      selected.id ||
+      t('voice.common.selection'),
   );
   if (!isAircraft) {
     return {
@@ -287,12 +336,13 @@ function getEntityContext(result) {
   // selection (altitude, speed, registration) answer from its properties.
   const route = routeText(properties);
   const identityLine = sentence(
-    [
+    commaPhrase([
       title,
-      spokenLabel(properties.operator || '', 32) || 'operator unknown',
-      spokenLabel(properties.type || '', 32) || 'type unknown',
-      route || 'no route on file',
-    ].join(', '),
+      spokenLabel(properties.operator || '', 32) ||
+        t('voice.speech.operatorUnknown'),
+      spokenLabel(properties.type || '', 32) || t('voice.speech.typeUnknown'),
+      route || t('voice.speech.noRoute'),
+    ]),
   );
   return {
     say: null,
@@ -301,9 +351,11 @@ function getEntityContext(result) {
       title,
       lines: [
         properties.registration
-          ? `Registration ${spokenLabel(properties.registration, 16)}`
+          ? t('voice.speech.registrationLine', {
+              reg: spokenLabel(properties.registration, 16),
+            })
           : null,
-        route ? `Route ${route}` : null,
+        route ? t('voice.speech.routeLine', { route }) : null,
       ].filter(Boolean),
       sources: selected.source ? [{ label: selected.source }] : [],
     },
@@ -323,8 +375,10 @@ function getCurrentViewState(result) {
   const heightM = Number(result.camera?.heightM);
   const height = Number.isFinite(heightM)
     ? heightM >= 1000
-      ? `${Math.round(heightM / 1000).toLocaleString('en-US')} km up`
-      : `${Math.round(heightM)} m up`
+      ? t('voice.speech.kmUp', {
+          n: Math.round(heightM / 1000).toLocaleString('en-US'),
+        })
+      : t('voice.speech.mUp', { n: Math.round(heightM) })
     : null;
   const layers = Array.isArray(result.layers) ? result.layers : [];
   const enabled = layers.filter((layer) => layer.enabled !== false);
@@ -337,20 +391,27 @@ function getCurrentViewState(result) {
     );
   const style = spokenLabel(result.style || 'normal', 20);
   const parts = [
-    height ? `Camera ${height}` : null,
-    `${style} style`,
+    height ? t('voice.speech.cameraHeight', { height }) : null,
+    t('voice.speech.styleLine', { style }),
     names.length
-      ? `${listPhrase(names.slice(0, 4))}${names.length > 4 ? ` and ${names.length - 4} more` : ''} on`
-      : 'no layers on',
+      ? t('voice.speech.layersOn', {
+          layers:
+            listPhrase(names.slice(0, 4)) +
+            (names.length > 4
+              ? t('voice.speech.andMore', { count: names.length - 4 })
+              : ''),
+        })
+      : t('voice.speech.noLayersOn'),
     tagged.length ? listPhrase(tagged.slice(0, 2)) : null,
   ];
+  const sentenceSeparator = t('voice.speech.sentenceSeparator');
   return {
     say: parts
       .filter(Boolean)
       .map((part) => sentence(part[0].toUpperCase() + part.slice(1)))
-      .join(' '),
+      .join(sentenceSeparator),
     display: {
-      title: 'View state',
+      title: t('voice.speech.viewStateTitle'),
       lines: enabled.map(
         (layer) =>
           `${spokenLabel(layer.name || layer.id, 32)} · ${layer.count ?? 0} · ${layer.feedState || 'nominal'}`,
@@ -376,24 +437,35 @@ function annotateMap(result) {
     latitude: item.latitude,
     longitude: item.longitude,
   }));
+  const sentenceSeparator = t('voice.speech.sentenceSeparator');
   const parts = [];
   if (failed.length)
-    parts.push(`Couldn't place ${listPhrase(failed.slice(0, 3))}.`);
+    parts.push(
+      t('voice.speech.placeFailed', {
+        labels: listPhrase(failed.slice(0, 3)),
+      }),
+    );
   if (result?.ok && result.routeFallback)
-    parts.push('That line is straight-line distance, not a street route.');
-  if (result?.capped) parts.push('The map is full. Clear it first?');
+    parts.push(t('voice.speech.straightLineNote'));
+  if (result?.capped) parts.push(t('voice.speech.mapFull'));
   return {
     // Successful marks are not announced; the model keeps explaining.
-    say: parts.length ? parts.join(' ') : null,
+    say: parts.length ? parts.join(sentenceSeparator) : null,
     display: {
       title: result?.ok
-        ? `Marked ${drawn.length} ${drawn.length === 1 ? 'place' : 'places'}`
-        : 'Nothing marked',
+        ? t('voice.speech.marked', { count: drawn.length })
+        : t('voice.speech.nothingMarked'),
       // The numbered referents list the marks; lines stay for extra facts.
       lines: [],
       notes: [
-        ...(failed.length ? [`Not found: ${failed.join(', ')}`] : []),
-        ...(result?.outlinePending ? ['Tracing outlines'] : []),
+        ...(failed.length
+          ? [
+              t('voice.speech.notFound', {
+                labels: failed.join(t('voice.speech.listSeparator')),
+              }),
+            ]
+          : []),
+        ...(result?.outlinePending ? [t('voice.speech.tracingOutlines')] : []),
       ],
     },
     referents,
@@ -410,19 +482,31 @@ function analystQuery(result) {
   const tag = feedTag(state);
   const scope = spokenLabel(result.scopeLabel || '', 96);
   const answer =
-    tag === 'feed unavailable'
+    state === 'unavailable'
       ? sentence(
-          `Feed unavailable${scope ? ` ${scope}` : ''}; no authoritative count${result.complete === false ? ', retained coverage is a lower bound' : ''}`,
+          t('voice.speech.feedUnavailableHead', {
+            scope: scope ? ` ${scope}` : '',
+            tail:
+              result.complete === false ? t('voice.speech.lowerBoundTail') : '',
+          }),
         )
-      : sentence(`${headline}${tag ? `, ${tag}` : ''}`);
+      : sentence(
+          `${headline}${tag ? t('voice.speech.tagSuffix', { tag }) : ''}`,
+        );
   const unanswered = (Array.isArray(result.unanswered) ? result.unanswered : [])
     .map((layer) => spokenLabel(layer, 24))
     .filter(Boolean);
   const missing = unanswered.length
-    ? `Partial; ${listPhrase(unanswered.slice(0, 2))}${unanswered.length > 2 ? ` and ${unanswered.length - 2} more` : ''} not answered.`
-    : 'Partial answer.';
+    ? t('voice.speech.partialMissing', {
+        layers:
+          listPhrase(unanswered.slice(0, 2)) +
+          (unanswered.length > 2
+            ? t('voice.speech.andMore', { count: unanswered.length - 2 })
+            : ''),
+      })
+    : t('voice.speech.partialAnswer');
   return {
-    say: `${answer}${result.partial ? ` ${missing}` : ''}`,
+    say: `${answer}${result.partial ? `${t('voice.speech.sentenceSeparator')}${missing}` : ''}`,
   };
 }
 
@@ -493,23 +577,51 @@ export function planStepLabel(name, args = {}) {
     case 'annotate_map': {
       const targets = annotationTargets(args);
       return targets.length
-        ? `Mark ${listPhrase(targets.slice(0, 2))}${targets.length > 2 ? ` +${targets.length - 2}` : ''}`
-        : 'Mark the map';
+        ? t('voice.plan.markTargets', {
+            targets: listPhrase(targets.slice(0, 2)),
+            extra:
+              targets.length > 2
+                ? t('voice.plan.markMore', { count: targets.length - 2 })
+                : '',
+          })
+        : t('voice.plan.markMap');
     }
     case 'fly_to_location':
-      return `Fly to ${displayName(args.query || args.locationId || 'location', 40)}`;
+      return t('voice.plan.flyTo', {
+        target: displayName(
+          args.query || args.locationId || t('voice.noun.location'),
+          40,
+        ),
+      });
     case 'select_nearest_aircraft':
-      return `Nearest aircraft to ${displayName(args.locationQuery || args.locationId || 'here', 32)}`;
+      return t('voice.plan.nearestTo', {
+        target: displayName(
+          args.locationQuery || args.locationId || t('voice.common.here'),
+          32,
+        ),
+      });
     case 'set_layer_visibility':
-      return `${displayName(args.layerId || 'Layer', 32)} ${args.enabled === false ? 'off' : 'on'}`;
+      return t(
+        args.enabled === false
+          ? 'voice.speech.layerOff'
+          : 'voice.speech.layerOn',
+        {
+          label: displayName(args.layerId || t('voice.noun.layer'), 32),
+        },
+      );
     case 'get_entity_context':
-      return 'Read the view';
+      return t('voice.plan.readView');
     case 'get_current_view_state':
-      return 'Check view state';
+      return t('voice.plan.checkViewState');
     case 'frame_overhead':
-      return `Frame ${spokenLabel(args.target || 'flights', 24)}`;
+      return t('voice.plan.frame', {
+        target: spokenLabel(args.target || 'flights', 24),
+      });
     default:
-      return spokenLabel(String(name || 'Action').replace(/_/g, ' '), 40);
+      return spokenLabel(
+        String(name || t('voice.plan.fallback')).replace(/_/g, ' '),
+        40,
+      );
   }
 }
 
@@ -530,21 +642,26 @@ export function narrationLabel(name, args = {}) {
   }
 }
 
-/** On-screen labels for progress steps. */
-const STEP_LABELS = Object.freeze({
-  resolve: 'Finding places',
-  outline: 'Tracing outline',
-  search: 'Looking up place',
-  fly: 'Flying',
-  layer: 'Turning on layer',
-  refresh: 'Loading aircraft',
-  nearest: 'Picking nearest',
+/** On-screen labels for progress steps (message keys). */
+const STEP_LABEL_KEYS = Object.freeze({
+  resolve: 'voice.progress.resolve',
+  outline: 'voice.progress.outline',
+  search: 'voice.progress.search',
+  fly: 'voice.progress.fly',
+  layer: 'voice.progress.layer',
+  refresh: 'voice.progress.refresh',
+  nearest: 'voice.progress.nearest',
 });
 
 /** On-screen label for a progress step. */
 export function progressStepLabel(step, label) {
-  const base = STEP_LABELS[step] || spokenLabel(step || 'Working', 24);
-  return label ? `${base}: ${spokenLabel(label, 32)}` : base;
+  const key = STEP_LABEL_KEYS[step];
+  const base = key
+    ? t(key)
+    : spokenLabel(step || t('voice.progress.working'), 24);
+  return label
+    ? `${base}${t('voice.progress.separator')}${spokenLabel(label, 32)}`
+    : base;
 }
 
 /**
@@ -555,19 +672,23 @@ export function progressLine(step, label) {
   const place = spokenLabel(label, 32);
   switch (step) {
     case 'resolve':
-      return place ? `Finding ${place} on the map.` : 'Finding those places.';
+      return place
+        ? t('voice.spoken.findingPlace', { place })
+        : t('voice.spoken.findingPlaces');
     case 'search':
-      return place ? `Looking up ${place}.` : null;
+      return place ? t('voice.spoken.lookingUp', { place }) : null;
     case 'fly':
-      return place ? `Heading to ${place}.` : null;
+      return place ? t('voice.spoken.headingTo', { place }) : null;
     case 'layer':
-      return place ? `Turning on ${place}.` : null;
+      return place ? t('voice.spoken.turningOn', { place }) : null;
     case 'refresh':
-      return 'Loading aircraft there.';
+      return t('voice.spoken.loadingAircraft');
     case 'nearest':
-      return 'Picking the nearest aircraft.';
+      return t('voice.spoken.pickingNearest');
     case 'still':
-      return place ? `Still working on ${place}.` : 'Still working on it.';
+      return place
+        ? t('voice.spoken.stillWorkingPlace', { place })
+        : t('voice.spoken.stillWorking');
     default:
       return null;
   }

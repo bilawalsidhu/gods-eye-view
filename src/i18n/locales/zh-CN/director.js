@@ -1,0 +1,168 @@
+/**
+ * Simplified Chinese pack — 场景导演、创作、分享与文档流程消息。
+ * 术语基准见 docs/I18N.md；字段级文档校验（documentFields.js 与
+ * packs/cameras/interactions 校验器）保留英文，属于诊断文本。
+ */
+export default {
+  status: {
+    storageCorrupt:
+      '已保存的项目无法读取；存储已保留。请导入有效文件以恢复保存。',
+    loaded: '已载入：{scene} / {shot}',
+    seeked: '已定位：{scene} / {shot}',
+    cannotLeaveScene: '无法离开场景：{scene}',
+    cameraNotReady: '无法采集镜头：相机未就绪',
+    captured: '已采集：{scene} / {shot}',
+    selectShotFirst: '请先选择一个镜头',
+    updated: '已更新：{scene} / {shot}',
+    cameraUnavailable: '相机不可用——请先退出驾驶舱',
+    noShots: '没有可运行的镜头',
+    runError: '错误：{message}',
+    runFailed: '运行失败',
+    exportFailed: '导出失败：{message}',
+    projectExported: '项目已导出',
+    imported: '已导入 {file}',
+    importFailed: '导入失败：{message}',
+    importFailedJson: '导入失败（无法读取 JSON 文件）',
+    layersRefused: '被拒绝的图层：{layers}',
+    contextExitFailed: '无法退出 {mode}——场景图层可能被拒绝',
+    transitionLimit: '已达到场景切换上限——请载入一个镜头以重置',
+    // 导演自身产生的停止原因。它们是状态保持文本；在产生时翻译即可让
+    // 面板在两种语言下都正确（界面给出的原因到达时已被翻译）。
+    stoppedCameraOwnership: '相机所有权已变更',
+    stoppedLayerOff: '场景图层已关闭',
+    stoppedImporting: '正在导入项目',
+    stoppedSeeking: '正在定位场景时钟',
+    stoppedCameraMove: '相机移动被中断',
+    stoppedMediaTimeout: '场景媒体播放超时',
+  },
+  storage: {
+    notSavedStorage: '场景未保存——浏览器存储不可用',
+    notSavedCorrupt:
+      '场景未保存——已保存的项目无法读取。请先导出修改或导入有效文件。',
+    notSaved: '场景未保存——{message}',
+  },
+  titles: {
+    untitledScene: '未命名场景',
+    defaultShot: '镜头 {n}',
+  },
+  run: {
+    editableTitle: '可编辑场景运行',
+  },
+  media: {
+    windowExceeded: '场景媒体未能在限定的播放窗口内完成',
+  },
+  append: {
+    updateInventoryMismatch: '无法更新 {title}：镜头清单已变化',
+    updateBeatsMismatch: '无法更新 {title}：证据节拍已变化',
+    updateBindingsIncomplete: '无法更新 {title}：镜头绑定不完整',
+    updatedShots: {
+      one: '已更新 {count} 个镜头：{title}',
+      other: '已更新 {count} 个镜头：{title}',
+    },
+    appendedShots: '已追加 {count} 个镜头：{title}',
+  },
+  authoring: {
+    selectSceneShot: '请先选择场景和镜头',
+    selectScene: '请先选择一个场景',
+    unsupportedSceneDetail: '不支持的场景字段',
+    unsupportedShotDetail: '不支持的镜头字段',
+  },
+  document: {
+    unsupportedVersion: '不支持的场景项目版本',
+    tooManyShots: '项目中的镜头过多',
+    fileTooLarge: '文件超过 5 MiB',
+    invalidJson: '无效的 JSON',
+  },
+  bundle: {
+    shareTooLarge: '共享包超过 50 MiB',
+    invalidJson: '无效的 JSON',
+    unsupportedVersion: '不支持的资源包版本',
+    invalidAsset: '无效或超大的 base64 资源',
+    assetTooLarge: '资源字节数超出限制',
+    unsupportedMedia: '不支持的媒体类型',
+    duplicatePath: '资源路径重复',
+    integrityMismatch: '资源完整性校验不匹配',
+    incompletePack: '资源包必须包含声明的全部数据包',
+    missingAsset: '资源包缺失或不匹配',
+    unreferencedAsset: '存在未被引用的资源包资源',
+    tooManyAssets: '打包资源过多',
+    selectFiles: '请为每个声明的数据包选择文件',
+    fileMismatch: '所选文件与声明的完整性不匹配',
+    conflictingIntegrity: '共享资源的完整性声明冲突',
+    unavailable: '资源包资源不可用——请重新导入资源包',
+  },
+  preview: {
+    includedInBundle: '已包含在资源包中',
+    missingBundleFile: '缺少资源包文件——请重新导入其资源包',
+    sourceConfigured: '数据源已配置；文件在加载时校验',
+    sourceUnavailable: '数据源不可用',
+  },
+  sharing: {
+    genericFailure: '无法完成此操作。请检查文件、引用和所选资源。',
+    inventorySummary: '{scenes} 个场景 · {shots} 个镜头 · {packs} 个数据包',
+    packLine:
+      '{scene} / {id}：{status}。文件：{path}。{attribution} · {license}',
+    unavailableLayers: '不可用图层：{layers}',
+    externalContent:
+      '此场景使用了已注册的内容或外链媒体。这些外部文件不会包含在场景资源包中。其原始声明仍然适用。',
+    bundledBytes:
+      '已校验 {bytes} 个打包字节。文件仅保留在本次会话的内存中。重新加载应用后请再次导入资源包。',
+    reviewTitle: '审查场景导入',
+    nothingApplied: '在你应用此文件之前，不会载入或更改任何内容。',
+    readyToImport: '可以导入',
+    applyWarning: '应用后将替换当前项目。如需同时保留两者，请先导出当前项目。',
+    applyImport: '应用导入',
+    projectChanged: '项目已发生变化',
+    notApplied: '导入未应用。当前项目可能已发生变化。',
+    editTitle: '编辑场景详情',
+    editIntro:
+      '相机位置使用度与椭球面上的米数。草稿在替换已保存场景之前会先进行校验。',
+    anchorsInput: '锚点与数据包',
+    shotInput: '镜头相机、时序、数据包与动作',
+    anchorIdInput: '新锚点 ID',
+    captureAnchor: '将当前相机采集为锚点',
+    cameraUnavailable: '相机不可用',
+    duplicateAnchor: '锚点 ID 重复',
+    anchorAdded: '锚点已加入草稿',
+    setMoveStart: '将运动起点设为当前相机',
+    moveAdded: '运动已加入草稿；终点仍为镜头相机',
+    ordinaryFlight: '使用普通飞行',
+    invalidShotJson: '镜头 JSON 无效',
+    applyDetails: '应用详情',
+    shareTitle: '分享所选场景',
+    shareIntro:
+      '场景 JSON 保留创作设置与署名信息。它不包含资源文件。资源包仅包含你在此选择的包文件或先前导入的资源包文件。',
+    downloadJson: '下载场景 JSON',
+    chooseFiles: '选择数据包文件',
+    chooseFolder: '或选择数据包文件夹',
+    downloadBundle: '下载资源包',
+    missingFile: '文件缺失或存在歧义',
+    assetSizeLimit: '资源大小超出限制',
+    bundleDownloaded: '资源包已下载',
+    detailsName: '场景详情',
+  },
+  interactions: {
+    title: '场景动作',
+    hint: '选择一个要素，或使用 Tab 和 Enter 选择动作。',
+    selectedFeature: '已选要素：{feature}。请选择动作。',
+    complete: '动作已完成',
+    unavailable: '动作不可用或已取消',
+    missingFeature: '已加载数据包中缺少该交互要素',
+  },
+  session: {
+    tooManyPacks: '数据包过多',
+    loadFailed: '数据包无法加载：请检查其来源、格式、大小或完整性',
+  },
+  labels: {
+    source: '来源',
+  },
+  recipes: {
+    nepalFloodIncident: '尼泊尔洪水事件',
+    bhoteKoshiEvidence: 'Bhote Koshi 证据序列',
+    flightsRadar: '全球航班雷达',
+    orbitalWatch: '轨道监视',
+    thermalThreats: '热成像威胁看板',
+    cityOverload: '城市过载',
+    omnisciencePullback: '全知视点拉远',
+  },
+};

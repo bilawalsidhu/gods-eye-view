@@ -1,8 +1,9 @@
 import {
   RADIO_CATEGORY_COLORS,
-  RADIO_CLUSTER_LABELS,
+  RADIO_CLUSTER_LABEL_KEYS,
   RADIO_MARKER_CATEGORY_ORDER,
 } from './policy.js';
+import { t } from '../../i18n/index.js';
 
 export function createModel({ state: layerState, services, parts, source }) {
   /** Return the shared CSS color for a canonical or detected-genre category. */
@@ -18,7 +19,9 @@ export function createModel({ state: layerState, services, parts, source }) {
   function radioClusterBadgeText(categoryId = 'other', count = 0) {
     const normalized = String(categoryId || 'other');
     const canonical = normalized.startsWith('genre:') ? 'music' : normalized;
-    const label = RADIO_CLUSTER_LABELS[canonical] || RADIO_CLUSTER_LABELS.other;
+    const key =
+      RADIO_CLUSTER_LABEL_KEYS[canonical] || RADIO_CLUSTER_LABEL_KEYS.other;
+    const label = t(key);
     const stationCount = Math.max(0, Math.floor(Number(count) || 0));
     return `${stationCount} ${label}`;
   }

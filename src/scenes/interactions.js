@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../data/inputOwnership.js';
+import { subscribeLocale, t } from '../i18n/index.js';
 import { createInteractionSession } from '../director/interactions/session.js';
 
 /** Own the active shot's pick handler, accessible actions and plain-text feedback. */
@@ -14,6 +15,26 @@ export function createSceneInteractions(
     items = [],
     targets = new Map();
   const buttons = new Map();
+  // The last status the panel showed, as key + params, so a locale switch can
+  // repaint it; null means the initial hint is showing.
+  let statusState = null;
+  let unsubscribeLocale = null;
+  const setStatus = (key, params) => {
+    statusState = { key, params };
+    if (status) status.textContent = t(key, params);
+  };
+  const repaintStaticText = () => {
+    if (!panel) return;
+    const title = t('director.interactions.title');
+    const heading = panel.querySelector('strong');
+    if (heading) heading.textContent = title;
+    panel.setAttribute('aria-label', title);
+    if (status) {
+      status.textContent = statusState
+        ? t(statusState.key, statusState.params)
+        : t('director.interactions.hint');
+    }
+  };
   const session = createInteractionSession({
     execute: (item, signal) => {
       if (!isPointerFree() || !available()) return false;
@@ -24,7 +45,7 @@ export function createSceneInteractions(
         card.append(text);
         if (item.action.url) {
           const link = document.createElement('a');
-          link.textContent = 'Source';
+          link.textContent = t('director.labels.source');
           link.style.color = '#6eeaff';
           link.href = item.action.url;
           link.target = '_blank';
@@ -54,14 +75,19 @@ export function createSceneInteractions(
     buttons.clear();
     items = [];
     targets.clear();
+    statusState = null;
+    unsubscribeLocale?.();
+    unsubscribeLocale = null;
   }
   async function dispatch(id) {
     const current = panel;
     const ok = await session.dispatch(id);
     if (current && current === panel && status)
-      status.textContent = ok
-        ? 'Action complete'
-        : 'Action unavailable or cancelled';
+      setStatus(
+        ok
+          ? 'director.interactions.complete'
+          : 'director.interactions.unavailable',
+      );
     return ok;
   }
   return {
@@ -83,11 +109,11 @@ export function createSceneInteractions(
       ) {
         items = [];
         targets.clear();
-        throw new Error('Interaction feature is missing from the loaded pack');
+        throw new Error(t('director.interactions.missingFeature'));
       }
       panel = document.createElement('section');
       panel.dataset.directorInteractions = '';
-      panel.setAttribute('aria-label', 'Scene actions');
+      panel.setAttribute('aria-label', t('director.interactions.title'));
       Object.assign(panel.style, {
         position: 'absolute',
         left: '12px',
@@ -104,12 +130,11 @@ export function createSceneInteractions(
       });
       const owner = panel;
       const title = document.createElement('strong');
-      title.textContent = 'Scene actions';
+      title.textContent = t('director.interactions.title');
       panel.append(title);
       status = document.createElement('p');
       status.setAttribute('role', 'status');
-      status.textContent =
-        'Select a feature or use Tab and Enter to choose an action.';
+      status.textContent = t('director.interactions.hint');
       panel.append(status);
       for (const item of items) {
         const button = document.createElement('button');
@@ -140,6 +165,8 @@ export function createSceneInteractions(
       panel.append(card);
       viewer.container.append(panel);
       session.activate(items);
+      unsubscribeLocale?.();
+      unsubscribeLocale = subscribeLocale(repaintStaticText);
       handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
       handler.setInputAction((event) => {
         if (panel !== owner || !isPointerFree() || !available()) return;
@@ -157,7 +184,9 @@ export function createSceneInteractions(
             ? '2px solid #6eeaff'
             : '';
         }
-        status.textContent = `Selected feature: ${matches[0].target.featureId}. Choose an action.`;
+        setStatus('director.interactions.selectedFeature', {
+          feature: matches[0].target.featureId,
+        });
         buttons.get(matches[0].id)?.focus({ preventScroll: true });
       }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
     },

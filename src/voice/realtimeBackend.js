@@ -1,4 +1,5 @@
 import { DEFAULT_VOICE_TIER, resolveVoiceModel } from './voiceCost.js';
+import { t } from '../i18n/index.js';
 
 /** Realtime-compatible token and SDP requests, independent of microphone/UI ownership. */
 export function createRealtimeBackend({
@@ -40,23 +41,19 @@ export function createRealtimeBackend({
         const reason =
           typeof data?.error === 'string' ? data.error : data?.error?.message;
         throw new Error(
-          reason || `Realtime token failed: HTTP ${response.status}`,
+          reason || t('voice.backend.tokenFailed', { status: response.status }),
         );
       }
       const token =
         data?.value || data?.client_secret?.value || data?.client_secret;
       if (typeof token !== 'string' || !token)
-        throw new Error(
-          'Realtime token response did not include a client secret',
-        );
+        throw new Error(t('voice.backend.tokenNoSecret'));
       const expiresAt = data?.expires_at ?? data?.client_secret?.expires_at;
       if (
         expiresAt != null &&
         (!Number.isFinite(expiresAt) || expiresAt * 1000 <= Date.now())
       )
-        throw new Error(
-          'Realtime client secret has expired; reconnect to request a new one',
-        );
+        throw new Error(t('voice.backend.secretExpired'));
       return {
         token,
         model:
@@ -76,9 +73,7 @@ export function createRealtimeBackend({
         credential.expiresAt != null &&
         credential.expiresAt * 1000 <= Date.now()
       )
-        throw new Error(
-          'Realtime client secret has expired; reconnect to request a new one',
-        );
+        throw new Error(t('voice.backend.secretExpired'));
       const response = await connectionTransport(callsEndpoint, {
         method: 'POST',
         body: offerSdp,
@@ -93,7 +88,9 @@ export function createRealtimeBackend({
       signal.throwIfAborted();
       if (!response.ok) {
         await response.body?.cancel?.().catch(() => {});
-        throw new Error(`Realtime SDP failed: HTTP ${response.status}`);
+        throw new Error(
+          t('voice.backend.sdpFailed', { status: response.status }),
+        );
       }
       const answer = await response.text();
       signal.throwIfAborted();

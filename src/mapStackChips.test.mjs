@@ -495,7 +495,8 @@ test('the Visual Presets tray owns Map Source and the retired left panel is abse
   );
   assert.match(
     html,
-    /<section class="map-source-section"[\s\S]*?<div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source"><\/div>/,
+    // data-i18n-attr localizes the static group label (src/ui/staticI18n.js).
+    /<section class="map-source-section"[\s\S]*?<div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source"[^>]*><\/div>/,
   );
   assert.doesNotMatch(
     html,
@@ -504,7 +505,8 @@ test('the Visual Presets tray owns Map Source and the retired left panel is abse
   );
   assert.match(
     html,
-    /id="map-source-label">MAP SOURCE<[\s\S]*?id="map-stack-status"/,
+    // data-i18n keys the static heading text (src/ui/staticI18n.js).
+    /id="map-source-label"[^>]*>MAP SOURCE<[\s\S]*?id="map-stack-status"/,
   );
   assert.match(
     html,

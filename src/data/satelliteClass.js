@@ -19,8 +19,11 @@
 
 /**
  * Class registry. `label` is the card/legend token, `color` the point color,
- * `blurb` the plain-language gloss for the legend tooltip.
- * @type {Readonly<Record<string, { label: string, color: string, blurb: string }>>}
+ * `blurb` the plain-language English gloss for the legend tooltip, and
+ * `blurbKey` its i18n message key — presentation edges resolve `blurbKey`
+ * through the active locale at paint time and keep `blurb` as the verbatim
+ * fallback (this module is a portable data graph and stays browser-free).
+ * @type {Readonly<Record<string, { label: string, color: string, blurb: string, blurbKey: string }>>}
  */
 export const SATELLITE_CLASSES = Object.freeze({
   station: Object.freeze({
@@ -32,6 +35,7 @@ export const SATELLITE_CLASSES = Object.freeze({
     // pure white the civilian air fleet draws in.
     color: '#fff6e5',
     blurb: 'Crewed stations and their visiting vehicles',
+    blurbKey: 'space.class.station.blurb',
   }),
   nav: Object.freeze({
     label: 'NAV',
@@ -40,6 +44,7 @@ export const SATELLITE_CLASSES = Object.freeze({
     // VISUAL group used to occupy, so this adds no new hue to the app.
     color: '#4fd8ff',
     blurb: 'GNSS navigation — GPS, GLONASS, Galileo',
+    blurbKey: 'space.class.nav.blurb',
   }),
   geo: Object.freeze({
     label: 'GEO',
@@ -48,6 +53,7 @@ export const SATELLITE_CLASSES = Object.freeze({
     // as one clean equatorial ring at globe scale.
     color: '#c89bff',
     blurb: 'Geostationary belt — comms and weather, fixed over the equator',
+    blurbKey: 'space.class.geo.blurb',
   }),
   visual: Object.freeze({
     label: 'VISUAL',
@@ -56,6 +62,7 @@ export const SATELLITE_CLASSES = Object.freeze({
     // something. Still well clear of the dense shell by luminance.
     color: '#9fb3c4',
     blurb: 'Brightest naked-eye objects — CelesTrak visual group',
+    blurbKey: 'space.class.visual.blurb',
   }),
   comms: Object.freeze({
     label: 'COMMS',
@@ -65,6 +72,7 @@ export const SATELLITE_CLASSES = Object.freeze({
     // NVG/FLIR shaders collapse the scene to a single channel.
     color: '#54697f',
     blurb: 'Broadband constellation shell — shown only in DENSE mode',
+    blurbKey: 'space.class.comms.blurb',
   }),
 });
 
@@ -171,7 +179,7 @@ export function tallySatelliteClasses(entries) {
  * Classes with no members are omitted so the legend never advertises a class
  * that is not on screen (COMMS only appears once DENSE is on).
  * @param {Record<string, number>} counts Class key → count (see tallySatelliteClasses).
- * @returns {Array<{ klass: string, label: string, color: string, blurb: string, count: number }>}
+ * @returns {Array<{ klass: string, label: string, color: string, blurb: string, blurbKey: string, count: number }>}
  *   Present classes in legend order.
  */
 export function satelliteClassLegend(counts) {
@@ -185,6 +193,7 @@ export function satelliteClassLegend(counts) {
       label: spec.label,
       color: spec.color,
       blurb: spec.blurb,
+      blurbKey: spec.blurbKey,
       count,
     });
   }

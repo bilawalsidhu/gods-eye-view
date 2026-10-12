@@ -1,21 +1,66 @@
 import { keySetupRequirement } from '../keySetupCore.mjs';
+import { t } from '../i18n/index.js';
 
 // Street Level UI state to panel strings and flags. Pure, so it is testable.
+// The `label` fields stay English (stable data); display text resolves
+// through `labelKey` at paint so a locale switch re-renders.
 
 const DAY_MS = 86_400_000;
 
 /** SINCE slider stops, in relative days so a share link keeps its meaning. */
 export const SINCE_STOPS = Object.freeze([
-  Object.freeze({ days: 0, label: 'ANY DATE' }),
-  Object.freeze({ days: 3652, label: 'LAST 10 YEARS' }),
-  Object.freeze({ days: 1826, label: 'LAST 5 YEARS' }),
-  Object.freeze({ days: 1095, label: 'LAST 3 YEARS' }),
-  Object.freeze({ days: 730, label: 'LAST 2 YEARS' }),
-  Object.freeze({ days: 365, label: 'LAST YEAR' }),
-  Object.freeze({ days: 182, label: 'LAST 6 MONTHS' }),
-  Object.freeze({ days: 91, label: 'LAST 3 MONTHS' }),
-  Object.freeze({ days: 30, label: 'LAST MONTH' }),
+  Object.freeze({
+    days: 0,
+    label: 'ANY DATE',
+    labelKey: 'streetlevel.since.any',
+  }),
+  Object.freeze({
+    days: 3652,
+    label: 'LAST 10 YEARS',
+    labelKey: 'streetlevel.since.last10Years',
+  }),
+  Object.freeze({
+    days: 1826,
+    label: 'LAST 5 YEARS',
+    labelKey: 'streetlevel.since.last5Years',
+  }),
+  Object.freeze({
+    days: 1095,
+    label: 'LAST 3 YEARS',
+    labelKey: 'streetlevel.since.last3Years',
+  }),
+  Object.freeze({
+    days: 730,
+    label: 'LAST 2 YEARS',
+    labelKey: 'streetlevel.since.last2Years',
+  }),
+  Object.freeze({
+    days: 365,
+    label: 'LAST YEAR',
+    labelKey: 'streetlevel.since.lastYear',
+  }),
+  Object.freeze({
+    days: 182,
+    label: 'LAST 6 MONTHS',
+    labelKey: 'streetlevel.since.last6Months',
+  }),
+  Object.freeze({
+    days: 91,
+    label: 'LAST 3 MONTHS',
+    labelKey: 'streetlevel.since.last3Months',
+  }),
+  Object.freeze({
+    days: 30,
+    label: 'LAST MONTH',
+    labelKey: 'streetlevel.since.lastMonth',
+  }),
 ]);
+
+/** The display label for a SINCE stop index, in the active locale. */
+export function sinceStopLabel(index) {
+  const stop = SINCE_STOPS[index];
+  return stop ? t(stop.labelKey) : '';
+}
 
 /** The exact stop for a day count, else the nearest one. */
 export function sinceStopIndex(days) {
@@ -34,13 +79,19 @@ export function sinceStopIndex(days) {
 function presentSince(days, now) {
   const value = Number(days) || 0;
   const index = sinceStopIndex(value);
-  if (value <= 0) return { index, days: 0, label: 'ANY DATE' };
+  if (value <= 0) return { index, days: 0, label: t('streetlevel.since.any') };
   const stop = SINCE_STOPS[index];
-  const window = stop.days === value ? stop.label : `LAST ${value} DAYS`;
+  const window =
+    stop.days === value
+      ? t(stop.labelKey)
+      : t('streetlevel.since.lastDays', { n: value });
   return {
     index,
     days: value,
-    label: `${window} · SINCE ${formatDate(now - value * DAY_MS)}`,
+    label: t('streetlevel.since.readout', {
+      window,
+      date: formatDate(now - value * DAY_MS),
+    }),
   };
 }
 
@@ -55,16 +106,33 @@ function formatDate(ms) {
 
 function presentStatus(state) {
   const pressed = state.enabled === true;
-  const title = pressed ? 'Turn Street Level off' : 'Turn Street Level on';
+  const title = t(
+    pressed ? 'streetlevel.status.titleOn' : 'streetlevel.status.titleOff',
+  );
   if (state.keyRejected)
-    return { text: 'KEY REJECTED', tone: 'warn', pressed, title };
+    return {
+      text: t('streetlevel.status.keyRejected'),
+      tone: 'warn',
+      pressed,
+      title,
+    };
   if (state.keyRequired)
-    return { text: 'KEY REQUIRED', tone: 'warn', pressed, title };
+    return {
+      text: t('streetlevel.status.keyRequired'),
+      tone: 'warn',
+      pressed,
+      title,
+    };
   if (state.coverage.loading)
-    return { text: 'LOADING', tone: 'busy', pressed, title };
+    return {
+      text: t('streetlevel.status.loading'),
+      tone: 'busy',
+      pressed,
+      title,
+    };
   return pressed
-    ? { text: 'ON', tone: 'on', pressed, title }
-    : { text: 'OFF', tone: '', pressed, title };
+    ? { text: t('streetlevel.status.on'), tone: 'on', pressed, title }
+    : { text: t('streetlevel.status.off'), tone: '', pressed, title };
 }
 
 /** A chip is lit only while the layer and its provider are both on. */
@@ -73,12 +141,24 @@ function presentProviders(state) {
   return (state.providers || []).map((provider) => {
     const keyRequired = provider.keyRequired === true;
     const on = enabled && provider.on === true;
-    let title = `${provider.name} imagery ${on ? 'on' : 'off'}`;
+    let title = t(on ? 'streetlevel.chip.on' : 'streetlevel.chip.off', {
+      name: provider.name,
+    });
     if (provider.keyRejected && provider.error)
-      title = `${provider.name}: ${provider.error}`;
+      title = t('streetlevel.chip.error', {
+        name: provider.name,
+        error: provider.error,
+      });
     else if (keyRequired && provider.requiresKeyId)
-      title = `${provider.name}: ${keySetupRequirement(provider.requiresKeyId)}`;
-    else if (provider.error) title = `${provider.name}: ${provider.error}`;
+      title = t('streetlevel.chip.error', {
+        name: provider.name,
+        error: keySetupRequirement(provider.requiresKeyId),
+      });
+    else if (provider.error)
+      title = t('streetlevel.chip.error', {
+        name: provider.name,
+        error: provider.error,
+      });
     return {
       id: provider.id,
       label: provider.label,
@@ -109,7 +189,9 @@ function presentViewer(state) {
     open: street.open === true,
     loading: street.loading === true && !street.imageId,
     renderMode: street.renderMode === 'fill' ? 'fill' : 'letterbox',
-    captionLeft: street.creator ? `Image by ${street.creator}` : '',
+    captionLeft: street.creator
+      ? t('streetlevel.viewer.imageBy', { name: street.creator })
+      : '',
     captionRight: right.join(' · '),
     link: street.externalUrl || null,
     linkLabel: street.providerLabel ? `${street.providerLabel} ↗` : '',
@@ -118,21 +200,25 @@ function presentViewer(state) {
       disabled: street.open !== true || street.followAvailable !== true,
       title:
         street.followAvailable === true
-          ? 'Camera follows view: move the globe camera wherever the street-level view looks'
-          : 'Camera follow needs the Google 3D map: choose Google 3D under MAP SOURCE',
+          ? t('streetlevel.viewer.followTooltip')
+          : t('streetlevel.viewer.followNeedsGoogle'),
     },
   };
 }
 
 function presentMeta(state) {
   if (state.providers.length === 0) return state.coverage.hint || '';
-  if (!state.enabled) return 'Switch a provider on to draw its coverage.';
+  if (!state.enabled) return t('streetlevel.meta.off');
   if (state.sequence.selectedId)
     return state.sequence.loading
-      ? 'Loading this sequence…'
-      : `${state.sequence.images.toLocaleString()} images in this sequence · Esc clears`;
+      ? t('streetlevel.meta.sequenceLoading')
+      : t('streetlevel.meta.sequence', {
+          n: state.sequence.images.toLocaleString(),
+        });
   if (state.coverage.count > 0)
-    return `${state.coverage.count.toLocaleString()} sequences in view · click a line for its photos`;
+    return t('streetlevel.meta.coverage', {
+      n: state.coverage.count.toLocaleString(),
+    });
   return state.coverage.hint || '';
 }
 
@@ -155,7 +241,11 @@ export function presentStreetLevelPanel(state, { now = Date.now() } = {}) {
       : state.street.error || state.coverage.error || null,
     filter: { pano: filter.pano, sinceDays: Number(filter.sinceDays) || 0 },
     since: presentSince(filter.sinceDays, now),
-    legend: state.legend || [],
+    legend: (state.legend || []).map((entry) =>
+      entry.label === 'Selected'
+        ? { ...entry, label: t('streetlevel.legend.selected') }
+        : entry,
+    ),
     viewer: presentViewer(state),
     meta: presentMeta(state),
     wantsOpen: state.street.open === true,

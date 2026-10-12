@@ -9,6 +9,7 @@ import {
   CONTACT_MATCH_TIER,
 } from '../../data/contactMatch.js';
 import { LANDED_ALT_MAX_FT, LANDED_SPEED_MAX_MPS } from './policy.js';
+import { t } from '../../i18n/index.js';
 
 export function createQueries({
   flightState,
@@ -54,7 +55,8 @@ export function createQueries({
    */
 
   function _formatAltitude(altitudeFt) {
-    if (!Number.isFinite(altitudeFt)) return 'Alt unknown';
+    if (!Number.isFinite(altitudeFt))
+      return t('fleet.aircraft.altitudeUnknown');
     return `${Math.round(altitudeFt)} ft`;
   }
 

@@ -1,4 +1,5 @@
 import { installationFeedback } from './data/installationFeedback.js';
+import { t } from './i18n/index.js';
 
 export const LOADING_REVEAL_DELAY_MS = 160;
 export const LOADING_TERMINAL_DWELL_MS = 2200;
@@ -49,7 +50,7 @@ export function normalizeLayerLoading(layer = {}) {
   const accepted = Boolean(stats.lastUpdate) || count > 0;
   return {
     id: String(layer.id || ''),
-    label: String(layer.name || layer.id || 'Layer'),
+    label: String(layer.name || layer.id || t('feedback.layerFallback')),
     loading,
     disabling,
     refresh:
@@ -244,7 +245,7 @@ export function reduceTrafficSyncFeedback(
       // Neutral default: the layer always supplies its own LIVE/SIMULATED
       // label, and a fallback string must never claim a live feed on a
       // keyless build.
-      label: label || 'syncing road network',
+      label: label || t('feedback.trafficFallback'),
       progressText: hasProgress ? `${progressPct}%` : '...',
     };
   }
@@ -393,9 +394,11 @@ export function presentLoadingFeedback(state, summary, nowMs) {
     return {
       state: 'retry',
       label: (
-        camera.cameraRetry.error || 'Overpass temporarily unavailable'
+        camera.cameraRetry.error || t('feedback.overpassUnavailable')
       ).toUpperCase(),
-      detail: `ALPR cameras · ${seconds ? `retrying in ${seconds}s` : 'retry pending'}`,
+      detail: seconds
+        ? t('feedback.camera.retryIn', { seconds })
+        : t('feedback.camera.retryPending'),
     };
   }
 
@@ -420,18 +423,18 @@ export function presentLoadingFeedback(state, summary, nowMs) {
   if (!state?.visible) return null;
   if (state.phase === 'terminal') {
     const labels = {
-      complete: 'LOAD COMPLETE',
-      cancelled: 'LOAD CANCELLED',
-      error: 'LOAD FAILED',
+      complete: t('feedback.batch.complete'),
+      cancelled: t('feedback.batch.cancelled'),
+      error: t('feedback.batch.failed'),
     };
     const label =
       state.operation === 'disabling' && state.terminal === 'complete'
-        ? 'LIVE DATA OFF'
+        ? t('feedback.batch.liveOff')
         : state.terminal === 'complete' &&
             state.activeIds?.length === 1 &&
             state.activeIds[0] === 'military-installations'
-          ? 'MAPPED SITES LOADED'
-          : labels[state.terminal] || 'LOAD COMPLETE';
+          ? t('feedback.batch.sitesLoaded')
+          : labels[state.terminal] || t('feedback.batch.complete');
     return { state: state.terminal, label, detail: '' };
   }
   const active = summary.active;
@@ -439,9 +442,9 @@ export function presentLoadingFeedback(state, summary, nowMs) {
     return {
       state: 'loading',
       label: active[0].cameraRetry.retrying
-        ? 'RETRYING ALPR CAMERAS'
-        : 'FETCHING ALPR CAMERAS',
-      detail: 'OpenStreetMap · Overpass',
+        ? t('feedback.camera.retrying')
+        : t('feedback.camera.fetching'),
+      detail: t('feedback.overpassDetail'),
     };
   }
 
@@ -453,17 +456,17 @@ export function presentLoadingFeedback(state, summary, nowMs) {
     return {
       state: 'loading',
       label: active[0].installationRetry.retrying
-        ? 'RETRYING MAPPED SITES'
-        : 'FETCHING MAPPED SITES',
-      detail: 'OpenStreetMap · Overpass',
+        ? t('feedback.sites.retrying')
+        : t('feedback.sites.fetching'),
+      detail: t('feedback.overpassDetail'),
     };
   }
   const elapsed = Math.max(0, nowMs - state.startedAt);
   const label = summary.disabling
-    ? 'TURNING OFF LIVE DATA'
+    ? t('feedback.batch.turningOff')
     : summary.refresh
-      ? 'REFRESHING LIVE DATA'
-      : 'LOADING LIVE DATA';
+      ? t('feedback.batch.refreshing')
+      : t('feedback.batch.loading');
   const names = active
     .slice(0, 2)
     .map((record) => record.label)

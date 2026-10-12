@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 import { sampleWind, windSpeed } from './model.js';
 import { sampleScalar } from './fields.js';
 
@@ -56,13 +57,12 @@ export function inspectWindAtCenter(
       ));
   if (!point || !snapshot?.u || !snapshot?.v)
     return {
-      coordinates: 'No surface reading',
-      wind: 'Aim the map center at Earth',
+      coordinates: t('atmos.wind.noReading.coordinates'),
+      wind: t('atmos.wind.noReading.wind'),
       model,
       validTime,
       status,
-      explanation:
-        'A location reading needs a loaded forecast and the Earth at the center of the view.',
+      explanation: t('atmos.wind.noReading.explanation'),
     };
   const location = cesium.Cartographic.fromCartesian(point, ellipsoid);
   const lon = cesium.Math.toDegrees(location.longitude);
@@ -83,15 +83,21 @@ export function inspectWindAtCenter(
     from,
     units,
     coordinates: `${Math.abs(lat).toFixed(2)}°${lat < 0 ? 'S' : 'N'} · ${Math.abs(lon).toFixed(2)}°${lon < 0 ? 'W' : 'E'}`,
-    wind: `${formatWindSpeed(speed, units)}${from === 'Calm' ? ' · calm' : ` from ${from}`}`,
+    wind:
+      from === 'Calm'
+        ? t('atmos.wind.reading.calm', { speed: formatWindSpeed(speed, units) })
+        : t('atmos.wind.reading.from', {
+            speed: formatWindSpeed(speed, units),
+            bearing: from,
+          }),
     scalarKind: overlay,
     scalarLabel:
       overlay === 'speed'
-        ? 'Wind speed'
+        ? t('atmos.wind.overlay.speed')
         : overlay === 'temperature'
-          ? 'Air temperature · 2 m'
+          ? t('atmos.wind.overlay.temperature')
           : overlay === 'pressure'
-            ? 'Sea-level pressure'
+            ? t('atmos.wind.overlay.pressure')
             : null,
     scalarValue:
       overlay === 'speed'
@@ -102,8 +108,7 @@ export function inspectWindAtCenter(
     model,
     validTime,
     status,
-    explanation:
-      'Interpolated model forecast on an approximately 1° grid. Broad weather patterns, not a street-level measurement.',
+    explanation: t('atmos.wind.explanation'),
   };
 }
 

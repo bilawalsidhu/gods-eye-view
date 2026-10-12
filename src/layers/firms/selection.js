@@ -4,6 +4,7 @@ import {
 } from '../../data/firmsLabels.js';
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import { t } from '../../i18n/index.js';
 import { CONTEXT_TOP_N } from './policy.js';
 
 export function createSelection({
@@ -80,7 +81,7 @@ export function createSelection({
     requestWorldFocus({
       kind: 'fire',
       id: fireDetectionKey(fire),
-      label: 'FIRE',
+      label: t('hazard.firms.fire'),
       position: components.model.firePosition(fire),
     });
   }
@@ -192,17 +193,19 @@ export function createSelection({
       layerName: name,
       source: 'NASA FIRMS',
       dataSource: layerState._dataSource,
-      label: `Fire · FRP ${components.model.formatFrp(fire.frp)} MW`,
+      label: t('hazard.firms.label', {
+        frp: components.model.formatFrp(fire.frp),
+      }),
       latitude: fire.lat,
       longitude: fire.lon,
       properties: {
         frp: fire.frp,
-        confidence: components.model.confidenceBucket(fire.confidence),
+        confidence: components.model.confidenceLabel(fire.confidence),
         age:
           fire.acqMs > 0
             ? components.model.formatAge(Date.now() - fire.acqMs)
-            : 'unknown',
-        sensor: fire.sensor || 'unknown',
+            : t('hazard.firms.unknown'),
+        sensor: fire.sensor || t('hazard.firms.unknown'),
       },
     });
     return recordId;

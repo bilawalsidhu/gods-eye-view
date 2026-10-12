@@ -1,14 +1,38 @@
 /** Regional briefing requests, pages and rotation for the Cockpit controller. */
 import {
   COCKPIT_BRIEF_ROTATE_MS,
-  COCKPIT_BRIEF_CYCLE_OFF_HELP,
-  COCKPIT_BRIEF_CYCLE_ON_HELP,
+  COCKPIT_BRIEF_CYCLE_OFF_HELP_KEY,
+  COCKPIT_BRIEF_CYCLE_ON_HELP_KEY,
   COCKPIT_REGIONAL_REFRESH_MS,
   COCKPIT_REGIONAL_REFRESH_DISTANCE_M,
   COCKPIT_BRIEF_PAGES,
   formatCockpitBriefAge,
   formatCockpitWindDirection,
 } from './cockpitPresentation.js';
+import { t } from '../i18n/index.js';
+
+// The weather-code labels arrive as stable English strings from the portable
+// regional model (src/data/regionalModel.js); the presentation edge translates
+// the known messages (docs/I18N.md rule 8) and passes unknown ones through.
+const WEATHER_CODE_LABEL_KEYS = {
+  'CONDITIONS UNKNOWN': 'cockpit.local.conditions.unknown',
+  CLEAR: 'cockpit.local.conditions.clear',
+  'PARTLY CLOUDY': 'cockpit.local.conditions.partlyCloudy',
+  OVERCAST: 'cockpit.local.conditions.overcast',
+  FOG: 'cockpit.local.conditions.fog',
+  DRIZZLE: 'cockpit.local.conditions.drizzle',
+  RAIN: 'cockpit.local.conditions.rain',
+  SNOW: 'cockpit.local.conditions.snow',
+  'RAIN SHOWERS': 'cockpit.local.conditions.rainShowers',
+  'SNOW SHOWERS': 'cockpit.local.conditions.snowShowers',
+  THUNDERSTORM: 'cockpit.local.conditions.thunderstorm',
+  'MIXED CONDITIONS': 'cockpit.local.conditions.mixed',
+};
+
+function translateWeatherCodeLabel(label) {
+  const key = WEATHER_CODE_LABEL_KEYS[label];
+  return key ? t(key) : label;
+}
 
 export function showBriefPage(index, { manual = false } = {}) {
   if (this.destroyed) return;
@@ -26,15 +50,15 @@ export function showBriefPage(index, { manual = false } = {}) {
   if (this.briefKicker) {
     const indicator = this.briefKicker.querySelector('i');
     this.briefKicker.replaceChildren(
-      ...[indicator, document.createTextNode(` ${page.kicker}`)].filter(
+      ...[indicator, document.createTextNode(` ${t(page.kickerKey)}`)].filter(
         Boolean,
       ),
     );
   }
-  if (this.briefSubtitle) this.briefSubtitle.textContent = page.subtitle;
+  if (this.briefSubtitle) this.briefSubtitle.textContent = t(page.subtitleKey);
   if (this.briefPosition)
     this.briefPosition.textContent = `${this.briefPageIndex + 1} / ${count}`;
-  if (this.briefSource) this.briefSource.textContent = page.source;
+  if (this.briefSource) this.briefSource.textContent = t(page.sourceKey);
   if (this.signalStream) this.signalStream.dataset.briefPage = page.id;
   if (manual && this.briefAutoRotateEnabled)
     this.startBriefRotation({ reset: true });
@@ -49,11 +73,13 @@ export function setBriefAutoRotate(enabled) {
       'aria-pressed',
       String(this.briefAutoRotateEnabled),
     );
-    const label = this.briefAutoRotateEnabled ? 'CYCLE ON' : 'CYCLE OFF';
+    const label = this.briefAutoRotateEnabled
+      ? t('cockpit.brief.cycleOn')
+      : t('cockpit.brief.cycleOff');
     this.briefAutoToggle.textContent = label;
     const help = this.briefAutoRotateEnabled
-      ? COCKPIT_BRIEF_CYCLE_ON_HELP
-      : COCKPIT_BRIEF_CYCLE_OFF_HELP;
+      ? t(COCKPIT_BRIEF_CYCLE_ON_HELP_KEY)
+      : t(COCKPIT_BRIEF_CYCLE_OFF_HELP_KEY);
     this.briefAutoToggle.setAttribute('aria-label', label);
     this.briefAutoToggle.title = help;
   }
@@ -94,7 +120,7 @@ export function stopBriefRotation() {
 export function updateLocalPosition(info) {
   if (!this.localCoordinates) return;
   if (!Number.isFinite(info.latitude) || !Number.isFinite(info.longitude)) {
-    this.localCoordinates.textContent = 'POSITION UNAVAILABLE';
+    this.localCoordinates.textContent = t('cockpit.brief.positionUnavailable');
     return;
   }
   const lat = `${Math.abs(info.latitude).toFixed(3)}°${info.latitude >= 0 ? 'N' : 'S'}`;
@@ -175,14 +201,14 @@ export function renderRegionalBriefStatus(status, info) {
     this.newsStatus.dataset.state = status;
     this.newsStatus.textContent =
       status === 'loading'
-        ? 'ACQUIRING REGIONAL NEWS'
-        : 'REGIONAL NEWS UNAVAILABLE';
+        ? t('cockpit.brief.acquiringNews')
+        : t('cockpit.brief.newsUnavailable');
   }
   if (status === 'unavailable') this.newsList?.replaceChildren();
   if (this.localPlace && status === 'loading')
-    this.localPlace.textContent = 'RESOLVING REGION';
+    this.localPlace.textContent = t('cockpit.brief.resolvingRegion');
   if (this.localPlace && status === 'unavailable')
-    this.localPlace.textContent = 'REGION UNAVAILABLE';
+    this.localPlace.textContent = t('cockpit.brief.regionUnavailable');
   this.updateLocalPosition(info);
 }
 
@@ -193,8 +219,8 @@ export function renderRegionalBrief(payload, info) {
     this.newsStatus.dataset.state = payload?.newsStatus || 'unavailable';
     this.newsStatus.textContent =
       payload?.newsStatus === 'empty'
-        ? 'NO RECENT LOCATION MATCHES'
-        : 'REGIONAL NEWS UNAVAILABLE';
+        ? t('cockpit.brief.noNewsMatches')
+        : t('cockpit.brief.newsUnavailable');
   }
   if (this.newsList) {
     this.newsList.replaceChildren(
@@ -207,7 +233,10 @@ export function renderRegionalBrief(payload, info) {
         const title = document.createElement('strong');
         title.textContent = article.title;
         const metadata = document.createElement('span');
-        metadata.textContent = `${article.domain || 'SOURCE'} · ${formatCockpitBriefAge(article.publishedAt)}`;
+        metadata.textContent = t('cockpit.brief.newsMeta', {
+          source: article.domain || t('cockpit.brief.sourceFallback'),
+          age: formatCockpitBriefAge(article.publishedAt),
+        });
         link.append(title, metadata);
         entry.append(link);
         return entry;
@@ -216,7 +245,9 @@ export function renderRegionalBrief(payload, info) {
   }
 
   const placeLabel =
-    payload?.place?.label || payload?.place?.country || 'REGION UNAVAILABLE';
+    payload?.place?.label ||
+    payload?.place?.country ||
+    t('cockpit.brief.regionUnavailable');
   if (this.localPlace) this.localPlace.textContent = placeLabel.toUpperCase();
   this.updateLocalPosition(info);
   const weather = payload?.weather;
@@ -236,13 +267,13 @@ export function renderRegionalBrief(payload, info) {
     );
   }
   if (this.localCondition)
-    this.localCondition.textContent = this.services.weatherCodeLabel(
-      weather?.weatherCode,
+    this.localCondition.textContent = translateWeatherCodeLabel(
+      this.services.weatherCodeLabel(weather?.weatherCode),
     );
   if (this.localCloud) {
     this.localCloud.textContent = Number.isFinite(weather?.cloudCoverPct)
-      ? `CLOUD ${Math.round(weather.cloudCoverPct)}%`
-      : 'CLOUD UNKNOWN';
+      ? t('cockpit.local.cloud', { n: Math.round(weather.cloudCoverPct) })
+      : t('cockpit.local.cloudUnknown');
   }
   if (this.localPrecipitation) {
     this.localPrecipitation.textContent = Number.isFinite(
@@ -254,7 +285,11 @@ export function renderRegionalBrief(payload, info) {
   if (this.signalStream)
     this.signalStream.dataset.regionalStatus = payload?.status || 'partial';
   if (this.briefPageIndex === 1 && this.briefSource) {
-    this.briefSource.textContent = `${String(payload?.newsSource || 'REGIONAL NEWS').toUpperCase()} · LOCATION QUERY`;
+    this.briefSource.textContent = t('cockpit.brief.newsSourceLine', {
+      source: String(
+        payload?.newsSource || t('cockpit.brief.newsSourceFallback'),
+      ).toUpperCase(),
+    });
   }
   this.scheduleContextLayout();
 }

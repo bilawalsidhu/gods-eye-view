@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+
 export const ERROR_LOG_LIMIT = 30;
 
 export const ERROR_STORAGE_KEY = 'gev-realtime-errors';
@@ -81,7 +83,7 @@ export function createErrorRecord(source, error, extra = {}) {
       rtcError?.message ||
       extra.errorText ||
       String(error?.message || '').trim() ||
-      'No browser error message supplied',
+      t('voice.error.noBrowserMessage'),
     errorDetail: rtcError?.errorDetail || null,
     sctpCauseCode: rtcError?.sctpCauseCode ?? null,
     receivedAlert: rtcError?.receivedAlert ?? null,

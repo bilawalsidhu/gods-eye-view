@@ -257,6 +257,16 @@ try {
   // This harness owns the Map Source keyboard. Suppress the separate first-run
   // launcher on every navigation so its Escape/Space handlers cannot turn a
   // tray assertion into a mission or voice action in a pristine browser.
+  // The visible-text assertions below pin the ENGLISH baseline, so the gate
+  // pins the English locale before the app resolves one — on a zh-locale
+  // machine the app would otherwise boot (correctly) in Chinese.
+  await page.evaluateOnNewDocument(() => {
+    try {
+      localStorage.setItem('gods-eye-view.locale', 'en');
+    } catch {
+      // Assertions need English; a blocked store cannot provide it.
+    }
+  });
   await page.goto(`${appUrl}/?welcome=0`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 60_000 });
   await page.waitForFunction(

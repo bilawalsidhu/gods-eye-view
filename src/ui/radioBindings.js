@@ -4,6 +4,7 @@ import {
   radioTunerPointerPosition,
   buildRadioTunerTicks,
 } from './radioTunerModel.js';
+import { subscribeLocale, t } from '../i18n/index.js';
 
 /** Bind Radio input using a RadioControls receiver and supplied actions. */
 export function bindRadioControls() {
@@ -47,22 +48,26 @@ export function bindRadioControls() {
     );
     if (displayOpen) this.actions.revealStyleParameters();
     if (this._cockpitDisplayToggleBtn) {
-      const action = displayOpen ? 'Collapse' : 'Expand';
+      const action = displayOpen ? t('common.collapse') : t('common.expand');
       this._cockpitDisplayToggleBtn.textContent = displayOpen ? '▶' : '◀';
       this._cockpitDisplayToggleBtn.setAttribute(
         'aria-label',
-        `${action} Cockpit display options`,
+        t('radio.cockpit.displayOptions', { action }),
       );
-      this._cockpitDisplayToggleBtn.title = `${action} Cockpit display options`;
+      this._cockpitDisplayToggleBtn.title = t('radio.cockpit.displayOptions', {
+        action,
+      });
     }
     if (this._cockpitRadioToggleBtn) {
-      const action = radioOpen ? 'Collapse' : 'Expand';
+      const action = radioOpen ? t('common.collapse') : t('common.expand');
       this._cockpitRadioToggleBtn.textContent = radioOpen ? '▶' : '◀';
       this._cockpitRadioToggleBtn.setAttribute(
         'aria-label',
-        `${action} Cockpit Radio controls`,
+        t('radio.cockpit.radioControls', { action }),
       );
-      this._cockpitRadioToggleBtn.title = `${action} Cockpit Radio controls`;
+      this._cockpitRadioToggleBtn.title = t('radio.cockpit.radioControls', {
+        action,
+      });
     }
     if (!expanded && returnFocus) {
       (kind === 'display'
@@ -139,18 +144,25 @@ export function bindRadioControls() {
     syncTunerTape(resolvedCoordinate);
     if (this._radioTunerValue) {
       this._radioTunerValue.textContent = station
-        ? `CH ${String(slot.stationIndex + 1).padStart(2, '0')} / ${String(this._radioTunerStations.length).padStart(2, '0')}`
-        : 'NO STATIONS';
+        ? t('radio.tuner.channel', {
+            index: String(slot.stationIndex + 1).padStart(2, '0'),
+            total: String(this._radioTunerStations.length).padStart(2, '0'),
+          })
+        : t('radio.tuner.noStations');
     }
     if (this._radioTunerStation)
       this._radioTunerStation.textContent =
-        station?.name || 'NO STATION AVAILABLE';
+        station?.name || t('radio.tuner.noStationAvailable');
     if (this._radioTunerSlider) {
       this._radioTunerSlider.setAttribute(
         'aria-valuetext',
         station
-          ? `${station.name}, station ${slot.stationIndex + 1} of ${this._radioTunerStations.length}`
-          : 'No station available',
+          ? t('radio.tuner.stationValue', {
+              name: station.name,
+              index: slot.stationIndex + 1,
+              total: this._radioTunerStations.length,
+            })
+          : t('radio.tuner.noStationValue'),
       );
     }
     if (syncStatic)
@@ -301,12 +313,14 @@ export function bindRadioControls() {
       this._radioTunerBandPinnedForNavigation = false;
       if (result.reason === 'station-unavailable') {
         if (this._radioTunerValue)
-          this._radioTunerValue.textContent = 'OFF AIR';
+          this._radioTunerValue.textContent = t('radio.tuner.offAir');
         if (this._radioTunerStation)
-          this._radioTunerStation.textContent = 'STATION UNAVAILABLE';
+          this._radioTunerStation.textContent = t(
+            'radio.tuner.stationUnavailableLabel',
+          );
         this._radioTunerSlider?.setAttribute(
           'aria-valuetext',
-          'Station unavailable after directory refresh',
+          t('radio.tuner.stationUnavailableValue'),
         );
       }
     }
@@ -340,7 +354,7 @@ export function bindRadioControls() {
             origin: 'user',
             notificationToken,
           }),
-        `Radio could not ${enabling ? 'start' : 'stop'} cleanly`,
+        t(enabling ? 'radio.toast.startFailed' : 'radio.toast.stopFailed'),
       );
       if (this.destroyed || toggled === false) return;
       if (
@@ -807,4 +821,11 @@ export function bindRadioControls() {
   this._radioSelectedHandler = () =>
     this.actions.setPanelCollapsed('radio-panel', false);
   this.listen(document, 'gev:radio-selected', this._radioSelectedHandler);
+  // A locale switch repaints the cached Radio state in place; the tuner band
+  // refresh is forced so its channel readout and aria-valuetext re-resolve.
+  this._localeUnsubscribe = subscribeLocale(() => {
+    if (this.destroyed || !this._radioState) return;
+    this._renderRadioState(this._radioState);
+    this._refreshRadioTunerBand?.({ force: true });
+  });
 }

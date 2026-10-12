@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import {
   REPLAY_ASCENT_FALLBACK_SEC,
   REPLAY_ASCENT_MIN_SEC,
@@ -200,10 +201,10 @@ export function createReplay({ state: layerState, services, parts, source }) {
     if (speedControl) speedControl.hidden = !replayAvailable;
     button.hidden = active || !replayAvailable;
     button.disabled = !replayAvailable;
-    button.textContent = 'REPLAY ASCENT';
+    button.textContent = t('space.replay.ascent');
     button.classList.remove('active');
     button.setAttribute('aria-pressed', String(active));
-    button.title = 'Replay the estimated ascent with a following camera';
+    button.title = t('space.replay.ascentTooltip');
     if (transport) {
       transport.hidden = !active;
       transport.classList.toggle(
@@ -216,13 +217,14 @@ export function createReplay({ state: layerState, services, parts, source }) {
       if (toggleButton) {
         toggleButton.disabled = !active;
         toggleButton.textContent = layerState._replayPaused ? '▶' : 'Ⅱ';
+        const paused = layerState._replayPaused;
         toggleButton.setAttribute(
           'aria-label',
-          layerState._replayPaused ? 'Resume replay' : 'Pause replay',
+          paused ? t('space.replay.resume') : t('space.replay.pause'),
         );
-        toggleButton.title = layerState._replayPaused
-          ? 'Resume replay'
-          : 'Pause replay';
+        toggleButton.title = paused
+          ? t('space.replay.resume')
+          : t('space.replay.pause');
       }
     }
   }
@@ -233,17 +235,19 @@ export function createReplay({ state: layerState, services, parts, source }) {
     );
     if (!transport || !layerState._replayCameraLaunchId) return;
     const phase = state.countdownActive
-      ? `T minus ${state.countdownSeconds}`
+      ? t('space.replay.tMinus', { n: state.countdownSeconds })
       : state.preCountdownActive
-        ? 'Preparing launch site'
+        ? t('space.replay.preparing')
         : state.elapsedSinceStart < 1
-          ? 'Liftoff'
+          ? t('space.replay.liftoff')
           : state.ascending
-            ? 'Ascent replay'
-            : 'Orbit replay';
+            ? t('space.replay.phaseAscent')
+            : t('space.replay.phaseOrbit');
     transport.setAttribute(
       'aria-label',
-      `${phase}${layerState._replayPaused ? ', paused' : ''}`,
+      layerState._replayPaused
+        ? t('space.replay.pausedSuffix', { phase })
+        : phase,
     );
   }
 

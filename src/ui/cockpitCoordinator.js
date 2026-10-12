@@ -1,4 +1,6 @@
 import { CockpitViewController, CockpitDisplayPortal } from './cockpit.js';
+import { subscribeLocale, t } from '../i18n/index.js';
+import { paintVisionModePresentation } from './cockpitInstruments.js';
 import { cockpitEntryAllowed } from '../contextModePolicy.js';
 import { formatAwarenessLabel } from '../data/militaryAwarenessEngine.js';
 import { enterCockpitWithTracking } from '../cockpitTracking.js';
@@ -97,6 +99,31 @@ export class CockpitCoordinator {
         return false;
       },
     });
+    // The cockpit controller paints many of its labels at runtime and only
+    // repaints them on state changes (brief page headers, cycle/vision/weather
+    // toggles, collapse buttons, the cached regional brief). While the cockpit
+    // is open its 100-250ms update cadence self-heals most text, but these
+    // state-held labels need an explicit re-assert on a locale switch. The
+    // initial call paints the pre-entry defaults in the active locale, too.
+    // Released in stop().
+    this._unsubscribeCockpitLocale = subscribeLocale(() =>
+      this._repaintCockpitLocaleText(),
+    );
+    this._repaintCockpitLocaleText();
+  }
+  _repaintCockpitLocaleText() {
+    const view = this.cockpitView;
+    if (!view || view.destroyed) return;
+    paintVisionModePresentation.call(view, view.visionMode || 'optical');
+    view.syncWeatherToggle(
+      view.weatherToggle?.getAttribute('aria-pressed') === 'true',
+    );
+    view.setBriefAutoRotate(view.briefAutoRotateEnabled);
+    view.setContextCollapsed(view.contextCollapsed);
+    view.setSignalCollapsed(view.signalCollapsed);
+    view.showBriefPage(view.briefPageIndex);
+    if (view.regionalBrief && view.lastAircraftInfo)
+      view.renderRegionalBrief(view.regionalBrief, view.lastAircraftInfo);
   }
   get _dataManager() {
     return this.readDataManager();
@@ -199,7 +226,7 @@ export class CockpitCoordinator {
     if (!['flights', 'military'].includes(targetLayer)) {
       return {
         ok: false,
-        error: `Cockpit flies aircraft only — ${targetLayer} contacts cannot be entered`,
+        error: t('cockpit.voice.aircraftOnly', { layer: targetLayer }),
       };
     }
     const activeLayer =
@@ -218,11 +245,17 @@ export class CockpitCoordinator {
     // A filter that matched nothing still enters, as long as the layer is
     // already right — the operator asked for that layer and is on it.
     if (alreadyOnLayer) return { ok: true, retargeted: false };
-    const label = targetLayer === 'military' ? 'military' : 'civilian';
+    const label =
+      targetLayer === 'military'
+        ? t('cockpit.voice.military')
+        : t('cockpit.voice.civilian');
     const filtered = aircraftClass ? `${aircraftClass} ` : '';
     return {
       ok: false,
-      error: `No ${filtered}${label} contact is available to enter — track one first, or say "next ${label}"`,
+      error: t('cockpit.voice.noContact', {
+        query: `${filtered}${label}`,
+        label,
+      }),
     };
   }
 
@@ -242,7 +275,7 @@ export class CockpitCoordinator {
       return {
         ok: false,
         action: 'control_cockpit',
-        error: 'Cockpit controller unavailable',
+        error: t('cockpit.voice.controllerUnavailable'),
         state: this.getCockpitState(),
       };
     }
@@ -264,8 +297,8 @@ export class CockpitCoordinator {
           ok: false,
           action: 'control_cockpit',
           error: this._contextModeChanging
-            ? 'Contacts is still starting up — try Cockpit again in a moment'
-            : 'Contacts must be active to enter Cockpit — say "open contacts" first',
+            ? t('cockpit.voice.contactsStarting')
+            : t('cockpit.voice.contactsInactive'),
           state: this.getCockpitState(),
         };
       }
@@ -334,7 +367,7 @@ export class CockpitCoordinator {
         ok: exited,
         action: 'control_cockpit',
         state: this.getCockpitState(),
-        error: exited ? null : 'Cockpit was already inactive',
+        error: exited ? null : t('cockpit.voice.alreadyInactive'),
       };
     }
     if (normalized === 'next' || normalized === 'previous') {
@@ -350,13 +383,13 @@ export class CockpitCoordinator {
         ok: changed,
         action: 'control_cockpit',
         state: this.getCockpitState(),
-        error: changed ? null : 'No further context target was available',
+        error: changed ? null : t('cockpit.voice.noFurtherTarget'),
       };
     }
     return {
       ok: false,
       action: 'control_cockpit',
-      error: `Unknown cockpit action: ${action}`,
+      error: t('cockpit.voice.unknownAction', { action }),
       state: this.getCockpitState(),
     };
   }
@@ -395,6 +428,8 @@ export class CockpitCoordinator {
     return this._cockpitDisplayPortal?.standardScrollTop ?? 0;
   }
   stop() {
+    this._unsubscribeCockpitLocale?.();
+    this._unsubscribeCockpitLocale = null;
     this.cockpitView?.stop();
     this._cockpitDisplayPortal?.stop();
   }

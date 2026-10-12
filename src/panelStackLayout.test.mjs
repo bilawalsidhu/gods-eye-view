@@ -282,7 +282,7 @@ test('expanded right panels highlight the title divider without changing collaps
 
   assert.match(
     html,
-    /class="compact pp-header-row"[\s\S]*?class="pp-header-label">DISPLAY<\/span>[\s\S]*?class="panel-divider"/,
+    /class="compact pp-header-row"[\s\S]*?class="pp-header-label"[^>]*>DISPLAY<\/span>[\s\S]*?class="panel-divider"/,
   );
   assert.match(
     css,

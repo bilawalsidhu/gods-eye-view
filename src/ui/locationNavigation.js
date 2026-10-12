@@ -1,6 +1,29 @@
 import * as Cesium from 'cesium';
 import { createStateChannel } from '../app/stateChannel.js';
+import { subscribeLocale, t } from '../i18n/index.js';
 import { LocationControls } from './location.js';
+
+/**
+ * Resolve the `location.cities` pack label for a curated record; records
+ * outside the pack (tests, future cities) keep their own `name` field.
+ */
+function packLabel(key, fallback) {
+  const translated = t(key);
+  return translated === key ? fallback : translated;
+}
+
+/** Localized shallow copy of a CITY_POIS record for display surfaces. */
+function localizedCity(cityId, city) {
+  if (!city) return city;
+  return {
+    ...city,
+    name: packLabel(`location.cities.${cityId}.name`, city.name),
+    pois: (city.pois || []).map((poi, index) => ({
+      ...poi,
+      name: packLabel(`location.cities.${cityId}.pois.${index}`, poi.name),
+    })),
+  };
+}
 
 /** Own destination selection, lookup, orbit and world-jump lifetime. */
 export class LocationNavigation {
@@ -38,6 +61,11 @@ export class LocationNavigation {
     this._locationState.subscribe(
       ({ state, change }) => this._handleLocationSearchState(state, change),
       { emitCurrent: false },
+    );
+    // The mini-status is painted from feature state, so a locale switch has to
+    // re-present it here (destroy releases this subscription).
+    this._unsubscribeLocale = subscribeLocale(() =>
+      this._updateLocationMiniStatus(),
     );
   }
   get cockpitView() {
@@ -87,8 +115,10 @@ export class LocationNavigation {
       this._currentPoi = null;
       this._collapsePOIRow();
       this._updateLocationMiniStatus();
-    } else if (change.type === 'missing') this._showToast('Location not found');
-    else if (change.type === 'failed') this._showToast('Search failed');
+    } else if (change.type === 'missing')
+      this._showToast(t('location.toast.notFound'));
+    else if (change.type === 'failed')
+      this._showToast(t('location.toast.searchFailed'));
     else if (change.type === 'settled')
       this._settleLocationSearchUi(change.generation);
     else if (
@@ -117,7 +147,7 @@ export class LocationNavigation {
         }),
       onResult: (destination) => {
         if (destination.outlineUnavailable)
-          this._showToast('Detailed outline unavailable');
+          this._showToast(t('location.toast.outlineUnavailable'));
       },
       onError: (error) => console.error('[Search] Geocoding failed:', error),
     });
@@ -262,11 +292,27 @@ export class LocationNavigation {
     this._updateLocationMiniStatus();
   }
 
+  /** Localized copy of the currently framed POI record (falls back to its own
+   *  name when the record no longer matches the curated preset). */
+  _localizedCurrentPoi() {
+    const { CITY_POIS } = this.services;
+    const cityId = this._activeLocationId;
+    const index = this._activePoiIndex ?? 0;
+    const poi = cityId != null ? CITY_POIS[cityId]?.pois?.[index] : null;
+    if (!poi || poi !== this._currentPoi) return this._currentPoi;
+    return {
+      ...poi,
+      name: packLabel(`location.cities.${cityId}.pois.${index}`, poi.name),
+    };
+  }
+
   _updateLocationMiniStatus() {
     const { CITY_POIS } = this.services;
+    const cityId = this._activeLocationId;
+    const city = cityId ? CITY_POIS[cityId] : null;
     this._locationControls?.renderStatus({
-      city: this._activeLocationId ? CITY_POIS[this._activeLocationId] : null,
-      currentPoi: this._currentPoi,
+      city: city ? localizedCity(cityId, city) : null,
+      currentPoi: this._currentPoi ? this._localizedCurrentPoi() : null,
       searchedLabel: this._searchedLocationLabel,
     });
   }
@@ -277,7 +323,7 @@ export class LocationNavigation {
 
   _toggleOrbit() {
     if (!this._currentTarget) {
-      this._showToast('Fly to a POI first');
+      this._showToast(t('location.orbit.first'));
       return;
     }
 
@@ -379,11 +425,11 @@ export class LocationNavigation {
       };
       this._resetGlobeBtn?.setAttribute(
         'aria-label',
-        'Reset to full globe view',
+        t('chrome.actions.resetGlobe'),
       );
       this._cockpitResetGlobeBtn?.setAttribute(
         'aria-label',
-        'Reset cockpit to full globe view',
+        t('location.aria.resetCockpit'),
       );
       this._globeResetPromise = null;
       this._cancelGlobeReset = null;
@@ -399,11 +445,11 @@ export class LocationNavigation {
     }, 4200);
     this._resetGlobeBtn?.setAttribute(
       'aria-label',
-      'Resetting to full globe view',
+      t('location.aria.resettingGlobe'),
     );
     this._cockpitResetGlobeBtn?.setAttribute(
       'aria-label',
-      'Resetting cockpit to full globe view',
+      t('location.aria.resettingCockpit'),
     );
     const target = flyToGlobeView(this.viewer, {
       onComplete: () => finish(false),
@@ -417,6 +463,8 @@ export class LocationNavigation {
   destroy() {
     if (this._disposed) return;
     this._disposed = true;
+    this._unsubscribeLocale?.();
+    this._unsubscribeLocale = null;
     this._locationState.destroy();
     this._locationLookupUnsubscribe?.();
     this._locationLookupUnsubscribe = null;

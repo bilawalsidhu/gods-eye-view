@@ -1,6 +1,7 @@
 import { MAP_STACKS } from './catalog.js';
 import { photorealUnavailableReason } from './availability.js';
 import { keySetupRequirement } from '../keySetupCore.mjs';
+import { t } from '../i18n/index.js';
 import {
   createOsmImagery,
   createEsriImagery,
@@ -59,12 +60,12 @@ export function createDefaultMapSources({
               credit: ESRI_ATTRIBUTION_HTML,
               constructionFallback: {
                 id: 'osm',
-                message: 'Esri Satellite is unavailable; using OSM',
+                message: t('mapsource.esri.fallback'),
               },
               tileFailureFallback: {
                 id: 'osm',
                 threshold: 2,
-                message: 'Esri Satellite tile requests failed; using OSM',
+                message: t('mapsource.esri.tileFallback'),
               },
             }
           : {}),

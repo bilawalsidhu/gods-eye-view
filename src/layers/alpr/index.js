@@ -18,6 +18,7 @@ import {
   alprCreditMarkup,
 } from './model.js';
 import { createAlprPresentation } from './presentation.js';
+import { t } from '../../i18n/index.js';
 
 /**
  * Own one layer's requests, records, display and viewer subscriptions.
@@ -372,10 +373,10 @@ export function createAlprCamerasLayer({ source, services } = {}) {
         chips: [
           {
             id: 'find-camera',
-            label: 'SHOW NEAREST',
+            label: t('sensors.alpr.chipShowNearest'),
             title: state.viewer?.trackedEntity
-              ? 'Stop following the current object before navigating to a camera'
-              : 'Move to the nearest loaded camera and show its details',
+              ? t('sensors.alpr.chipTitleBlocked')
+              : t('sensors.alpr.chipTitle'),
             disabled:
               !state.enabled || !count || Boolean(state.viewer?.trackedEntity),
             onClick: focusNearest,
@@ -383,11 +384,10 @@ export function createAlprCamerasLayer({ source, services } = {}) {
         ],
         legend: [
           {
-            label: 'Camera badges',
+            label: t('sensors.alpr.legendLabel'),
             color: ALPR_COLOR,
             count,
-            blurb:
-              'Cyan cameras turn coral when selected. Wedges illustrate mapped direction, not measured coverage. Nearby cameras may be outside the screen.',
+            blurb: t('sensors.alpr.legendBlurb'),
           },
         ],
       };
@@ -451,20 +451,20 @@ export function createAlprCamerasLayer({ source, services } = {}) {
           : 0,
         loadingLabel: state.loading
           ? state.retrying
-            ? 'retrying mapped ALPR cameras'
-            : 'loading mapped ALPR cameras'
+            ? t('sensors.alpr.retrying')
+            : t('sensors.alpr.loading')
           : state.noCoverage
-            ? 'No ALPR data for this area — US and Canada only'
+            ? t('sensors.alpr.noDataArea')
             : state.status === 'zoom-in'
-              ? 'Zoom in to load mapped cameras'
+              ? t('sensors.alpr.zoomIn')
               : [
-                  state.stale ? 'Showing cached locations' : '',
+                  state.stale ? t('sensors.alpr.cached') : '',
                   state.saturated || state.renderSaturated
-                    ? 'Coverage limited — zoom in'
+                    ? t('sensors.alpr.coverageLimited')
                     : '',
-                  state.status === 'empty' ? 'No ALPR data for this area' : '',
+                  state.status === 'empty' ? t('sensors.alpr.noData') : '',
                   state.status === 'ready' && state.onScreen === 0
-                    ? 'None on screen — nearby cameras are outside the view'
+                    ? t('sensors.alpr.noneOnScreen')
                     : '',
                 ]
                   .filter(Boolean)

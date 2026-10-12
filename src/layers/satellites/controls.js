@@ -4,6 +4,7 @@ import {
   satelliteClassLegend,
 } from '../../data/satelliteClass.js';
 import * as Cesium from 'cesium';
+import { t } from '../../i18n/index.js';
 import { ISS_NORAD, POINT_STYLES } from './policy.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
@@ -493,18 +494,19 @@ export function createControls({ state: layerState, services, parts, source }) {
       const active =
         layerState._params.catalog === 'dense' &&
         layerState._denseStatus === 'ready';
-      let title =
-        'Add the full Starlink broadband shell (thousands of extra points)';
-      if (loading) title = 'Loading the Starlink shell…';
+      let title = t('space.dense.addTooltip');
+      if (loading) title = t('space.dense.loadingTooltip');
       else if (failed)
-        title = `Starlink ${layerState._denseError || 'load failed'} — click to retry`;
-      else if (active)
-        title =
-          'Showing the full Starlink shell — click for the core catalog only';
+        title = t('space.dense.failedTooltip', {
+          detail: layerState._denseError || t('space.dense.loadFailed'),
+        });
+      else if (active) title = t('space.dense.activeTooltip');
       return {
         chips: [
           {
             id: 'catalog',
+            // DENSE is a mode token shared with the Space Missions snapshot
+            // path; the tooltip (not the chip) carries the localized gloss.
             label: loading ? 'DENSE ···' : failed ? 'DENSE ✕' : 'DENSE',
             active,
             busy: loading,
@@ -520,7 +522,12 @@ export function createControls({ state: layerState, services, parts, source }) {
             params: { catalog: active ? 'core' : 'dense' },
           },
         ],
-        legend: satelliteClassLegend(_classTally()),
+        // Legend blurbs resolve through the pack at read time, so a locale
+        // switch restyles the row on the manager's next panel refresh.
+        legend: satelliteClassLegend(_classTally()).map((item) => ({
+          ...item,
+          blurb: item.blurbKey ? t(item.blurbKey) : item.blurb,
+        })),
       };
     },
 

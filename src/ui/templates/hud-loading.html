@@ -6,6 +6,9 @@
     <div class="loader-content">
       <span class="loader-logo brand-logo" data-logo-gaze data-logo-src="/logo.svg" aria-hidden="true"><img src="/logo.svg" alt="" /></span>
       <h2>GOD'S EYE <span class="title-accent">VIEW</span></h2>
-      <p class="loader-status">Initializing photorealistic world...</p>
+      <!-- English text stays in the markup as the source of truth; the zh-CN
+           pre-paint bootstrap in index.html swaps it before first paint and
+           src/ui/staticI18n.js keeps the active locale applied. -->
+      <p class="loader-status" data-i18n="boot.loader.status">Initializing photorealistic world...</p>
     </div>
   </div>

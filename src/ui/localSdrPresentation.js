@@ -1,8 +1,11 @@
 import { localReceiverFeedName } from '../layers/localAdsb/feedNames.js';
+import { t } from '../i18n/index.js';
 
 /**
  * Pure presentation of the Local RTL-SDR card in the Radio panel. Receives the
- * receiver session snapshot and returns what each control should show.
+ * receiver session snapshot and returns what each control should show. Labels
+ * resolve through the shared translator on every call, so owners repaint on a
+ * locale switch by simply re-rendering.
  */
 
 function formatGain(gain) {
@@ -20,10 +23,10 @@ function statusText(state) {
   const iqStatus =
     state.samplesPerSecond > 0
       ? `${(state.samplesPerSecond / 1_000_000).toFixed(2)} MS/s IQ`
-      : 'waiting for IQ';
+      : t('sdr.status.waitingIq');
   const device = state.deviceLabel ? ` · ${state.deviceLabel}` : '';
   if (state.connected && !fmActive) {
-    return `${state.message}${device} · ${iqStatus} · ${state.decodedMessages} messages`;
+    return `${state.message}${device} · ${iqStatus} · ${t('sdr.status.messages', { count: state.decodedMessages })}`;
   }
   const detail = state.seeking
     ? state.seekMessage
@@ -31,15 +34,26 @@ function statusText(state) {
   if (state.connected && fmActive) {
     const workerStatus =
       state.workerBlocks > 0
-        ? `DSP ${state.workerBlocks} blocks`
-        : 'DSP waiting';
+        ? t('sdr.status.dspBlocks', { count: state.workerBlocks })
+        : t('sdr.status.dspWaiting');
     const rfStatus = `RF ${formatIq(state)}`;
     const audioSignal = Number.isFinite(state.audioLevelDbfs)
       ? `${state.audioLevelDbfs.toFixed(1)} dBFS audio`
-      : 'audio signal --';
-    return `${detail}${device} · ${iqStatus} · ${workerStatus} · ${rfStatus} · ${audioSignal} · audio ${state.audioState}`;
+      : t('sdr.status.audioSignal');
+    return `${detail}${device} · ${iqStatus} · ${workerStatus} · ${rfStatus} · ${audioSignal} · ${t('sdr.status.audioState', { state: state.audioState })}`;
   }
   return detail;
+}
+
+/** Known transitional statuses translate; unknown statuses keep their raw word. */
+const STATUS_LABEL_KEYS = {
+  connecting: 'sdr.connect.transitionalConnecting',
+  tuning: 'sdr.connect.transitionalTuning',
+};
+
+function connectionStatusLabel(status) {
+  const key = STATUS_LABEL_KEYS[status];
+  return key ? t(key) : String(status || 'idle').toUpperCase();
 }
 
 /**
@@ -57,15 +71,15 @@ export function localSdrCardView(state) {
   return {
     connectionLabel: state.connected
       ? adsbActive
-        ? `${state.aircraftHeard || 0} HEARD`
-        : 'STREAMING'
-      : String(state.status || 'idle').toUpperCase(),
+        ? t('sdr.connection.heard', { count: state.aircraftHeard || 0 })
+        : t('sdr.connection.streaming')
+      : connectionStatusLabel(state.status),
     connectionActive: Boolean(state.connected),
     connectLabel: transitional
-      ? String(state.status).toUpperCase()
+      ? connectionStatusLabel(state.status)
       : state.connected
-        ? 'DISCONNECT'
-        : 'CONNECT',
+        ? t('sdr.connect.disconnect')
+        : t('sdr.connect.connect'),
     connectDisabled: transitional || !state.webUsbSupported,
     connectPressed: Boolean(state.connected),
     fmActive,
@@ -73,10 +87,10 @@ export function localSdrCardView(state) {
     modeDisabled: transitional,
     locateLabel:
       state.locationStatus === 'requesting'
-        ? 'LOCATING…'
+        ? t('sdr.locate.locating')
         : state.locationStatus === 'ready'
-          ? 'LOCATED'
-          : 'LOCATE',
+          ? t('sdr.locate.located')
+          : t('sdr.locate.locate'),
     locateDisabled: state.locationStatus === 'requesting',
     locateActive: state.locationStatus === 'ready',
     changeDeviceDisabled: transitional || !state.webUsbSupported,
@@ -141,6 +155,6 @@ export function localSdrFeedLine(feedState) {
       ? `${name} ${feed?.status || 'unreachable'}`
       : name;
   });
-  const suffix = feedState.polling ? '' : ' · read while Local ADS-B is on';
-  return `Decoder feeds: ${names.join(' · ')}${suffix}`;
+  const suffix = feedState.polling ? '' : t('sdr.feed.suffix');
+  return `${t('sdr.feed.prefix')} ${names.join(' · ')}${suffix}`;
 }

@@ -312,10 +312,13 @@ test('Contacts live repaint restores only stable identity and never retargets an
 
 test('Contacts continuation target is the visible explanatory note', () => {
   const source = readLayerSource(new URL('./militaryAwareness.js', import.meta.url));
+  // The note copy resolves through the awareness pack at paint time
+  // (`awareness.note.disclaimer`); the guard checks the paint seam instead.
   assert.match(
     source,
-    /<p class="military-awareness-note" tabindex="-1" data-awareness-focus-continuation>Open-source mapped\/observed context\./,
+    /<p class="military-awareness-note" tabindex="-1" data-awareness-focus-continuation>/,
   );
+  assert.match(source, /awareness\.note\.disclaimer/);
   assert.doesNotMatch(source, /<span[^>]*data-awareness-focus-continuation/);
 });
 
@@ -1682,7 +1685,9 @@ test('expanded Context results omit the redundant status heading', () => {
   assert.doesNotMatch(militaryAwarenessSource, /military-awareness-heading/);
   assert.doesNotMatch(militaryAwarenessSource, /GLOBAL CONTEXT <span>CONTEXT ONLY<\/span>/);
   assert.match(militaryAwarenessSource, /military-awareness-subject/);
-  assert.match(militaryAwarenessSource, /FLIGHT \/ VESSEL WINDOW/);
+  // The window copy resolves through the awareness pack at paint time
+  // (`awareness.subject.window`), so the guard checks the paint seam.
+  assert.match(militaryAwarenessSource, /awareness\.subject\.window/);
   assert.match(militaryAwarenessSource, /military-awareness-controls/);
 });
 

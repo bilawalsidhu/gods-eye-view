@@ -1,4 +1,5 @@
 /** Card model for one selected fire-perimeter incident. Pure — no Cesium types. */
+import { formatNumber, t } from '../../i18n/index.js';
 
 export const PERIMETER_OVERLAY_SOURCE_ID = 'fire-perimeters';
 
@@ -81,9 +82,12 @@ function titleCase(name) {
 function formatAge(deltaMs) {
   if (!Number.isFinite(deltaMs) || deltaMs < 0) return null;
   const hours = Math.floor(deltaMs / 3600000);
-  if (hours < 1) return `${Math.max(1, Math.floor(deltaMs / 60000))}m`;
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
+  if (hours < 1)
+    return t('hazard.perimeters.age.minutes', {
+      m: Math.max(1, Math.floor(deltaMs / 60000)),
+    });
+  if (hours < 24) return t('hazard.perimeters.age.hours', { h: hours });
+  return t('hazard.perimeters.age.days', { n: Math.floor(hours / 24) });
 }
 
 /**
@@ -97,46 +101,64 @@ function formatAge(deltaMs) {
 export function buildIncidentCard(row, nowMs, { link = null } = {}) {
   const facts = [];
   if (Number.isFinite(row.acres))
-    facts.push(`${Math.round(row.acres).toLocaleString('en-US')} ac`);
+    facts.push(
+      t('hazard.perimeters.card.acres', {
+        acres: formatNumber(Math.round(row.acres)),
+      }),
+    );
   facts.push(
     Number.isFinite(row.containedPct)
-      ? `${Math.round(row.containedPct)}% contained`
-      : 'containment unknown',
+      ? t('hazard.perimeters.card.contained', {
+          pct: Math.round(row.containedPct),
+        })
+      : t('hazard.perimeters.card.containmentUnknown'),
   );
   if (row.state) facts.push(row.state);
   else if (row.category) facts.push(row.category);
 
   const situation = [];
-  if (row.cause) situation.push(`${row.cause} cause`);
+  if (row.cause)
+    situation.push(t('hazard.perimeters.card.cause', { cause: row.cause }));
   if (row.behavior) situation.push(row.behavior);
   if (row.complexity) situation.push(row.complexity);
 
   const response = [];
   if (Number.isFinite(row.personnel))
     response.push(
-      `${Math.round(row.personnel).toLocaleString('en-US')} personnel`,
+      t('hazard.perimeters.card.personnel', {
+        n: formatNumber(Math.round(row.personnel)),
+      }),
     );
-  if (row.county) response.push(`${row.county} County`);
+  if (row.county)
+    response.push(t('hazard.perimeters.card.county', { county: row.county }));
   if (Number.isFinite(row.costToDate)) {
     const cost = formatCost(row.costToDate);
-    if (cost) response.push(`${cost} to date`);
+    if (cost) response.push(t('hazard.perimeters.card.costToDate', { cost }));
   }
 
   const ages = [];
   const discovered = formatAge(nowMs - row.discoveredTime);
   if (row.discoveredTime != null && discovered)
-    ages.push(`discovered ${discovered} ago`);
+    ages.push(t('hazard.perimeters.card.discovered', { age: discovered }));
   const updated = formatAge(nowMs - row.updatedTime);
-  if (row.updatedTime != null && updated) ages.push(`updated ${updated} ago`);
+  if (row.updatedTime != null && updated)
+    ages.push(t('hazard.perimeters.card.updated', { age: updated }));
 
   const details = [facts.join(' · ')];
-  if (row.complexName) details.push(`part of ${titleCase(row.complexName)}`);
+  if (row.complexName)
+    details.push(
+      t('hazard.perimeters.card.partOf', {
+        name: titleCase(row.complexName),
+      }),
+    );
   if (situation.length) details.push(situation.join(' · '));
   if (response.length) details.push(response.join(' · '));
   if (ages.length) details.push(ages.join(' · '));
-  if (link) details.push('InciWeb ↗ · click card to open');
+  if (link) details.push(t('hazard.perimeters.card.inciweb'));
 
-  const title = `FIRE · ${row.name || 'Unnamed incident'}`;
+  const title = t('hazard.perimeters.card.title', {
+    name: row.name || t('hazard.perimeters.card.unnamed'),
+  });
   return {
     id: `fire-perimeter-card:${row.stableId}`,
     // `selected` picks the paint lane and collision protection; an explicit
@@ -145,7 +167,13 @@ export function buildIncidentCard(row, nowMs, { link = null } = {}) {
     // Only a linked card is clickable — the overlay host registers hit
     // rectangles solely for interactive entries.
     interactive: Boolean(link),
-    ...(link ? { accessibilityLabel: `Open ${title} on InciWeb` } : undefined),
+    ...(link
+      ? {
+          accessibilityLabel: t('hazard.perimeters.card.openAria', {
+            title,
+          }),
+        }
+      : undefined),
     title,
     details,
     accent: containmentAccent(row.containedPct),

@@ -83,12 +83,15 @@ export function hudSummaryLayerContext(layers = [], options) {
 }
 
 /**
- * Deterministic telemetry suffix when an enabled feed is not nominal.
+ * Structured provenance suffix when an enabled feed is not nominal. This
+ * module stays portable (it is imported by the server's OpenAI provider), so
+ * it returns the raw feed-state enum and unresolved layer labels (`null`
+ * means "no name or id"); the HUD translates them at the display edge.
  * @param {Array<object>} [layers]
  * @param {{ now?: number }} [options]
- * @returns {string|null}
+ * @returns {{ state: string, names: Array<string|null> }|null}
  */
-export function hudTelemetryProvenanceTag(layers = [], options) {
+export function hudTelemetryProvenanceParts(layers = [], options) {
   const snapshots = layerSnapshots(layers, options).filter((s) => s.enabled);
   const envelope = feedProvenanceEnvelope(snapshots, options);
   if (!envelope.overall || envelope.overall === 'nominal') return null;
@@ -96,9 +99,23 @@ export function hudTelemetryProvenanceTag(layers = [], options) {
     .filter(
       (s) => s.feedState && s.feedState !== 'nominal' && s.feedState !== 'off',
     )
-    .map((s) => String(s.name || s.id || 'LAYER').toUpperCase())
+    .map((s) => (s.name || s.id ? String(s.name || s.id).toUpperCase() : null))
     .slice(0, 2);
-  return `${envelope.overall.toUpperCase()}${names.length ? ` ${names.join('/')}` : ''}`;
+  return { state: envelope.overall, names };
+}
+
+/**
+ * Deterministic telemetry suffix when an enabled feed is not nominal.
+ * English display form; the localized form is composed by the Intel HUD from
+ * {@link hudTelemetryProvenanceParts}.
+ * @param {Array<object>} [layers]
+ * @param {{ now?: number }} [options]
+ * @returns {string|null}
+ */
+export function hudTelemetryProvenanceTag(layers = [], options) {
+  const parts = hudTelemetryProvenanceParts(layers, options);
+  if (!parts) return null;
+  return `${parts.state.toUpperCase()}${parts.names.length ? ` ${parts.names.map((name) => name ?? 'LAYER').join('/')}` : ''}`;
 }
 
 /** Require the supplied non-nominal state before showing an AI summary. */

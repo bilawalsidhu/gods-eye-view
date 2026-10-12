@@ -1,4 +1,6 @@
 /** Pure formatting and fixed presentation constants used by Cockpit components. */
+import { t } from '../i18n/index.js';
+
 export const COCKPIT_HEADING_SLEW_DPS = 28;
 
 export const COCKPIT_FORWARD_OFFSET_M = 7;
@@ -31,34 +33,37 @@ export const COCKPIT_GROUND_WAIT_TIMEOUT_MS = 5000;
 
 export const COCKPIT_BRIEF_ROTATE_MS = 9000;
 
-export const COCKPIT_BRIEF_CYCLE_OFF_HELP =
-  'Cycle briefing pages automatically every 9 seconds (Signals → News → Local). Pauses while you hover or focus the panel. Live signal data refreshes continuously either way.';
+// Locale-independent MESSAGE KEYS, resolved through t() at paint time (rule:
+// never build translated label maps at module top level — that would freeze
+// English). cockpitBriefing.js resolves them inside its render paths.
+export const COCKPIT_BRIEF_CYCLE_OFF_HELP_KEY = 'cockpit.brief.cycleOffHelp';
 
-export const COCKPIT_BRIEF_CYCLE_ON_HELP =
-  'Stop automatic page cycling. Previous, Next, and the SIG/NEWS/LOCAL tabs stay available.';
+export const COCKPIT_BRIEF_CYCLE_ON_HELP_KEY = 'cockpit.brief.cycleOnHelp';
 
 export const COCKPIT_REGIONAL_REFRESH_MS = 5 * 60_000;
 
 export const COCKPIT_REGIONAL_REFRESH_DISTANCE_M = 25_000;
 
+// Kicker/subtitle/source are KEYS here; showBriefPage() resolves them through
+// t() on every page paint so a locale switch repaints on the next render.
 export const COCKPIT_BRIEF_PAGES = [
   {
     id: 'signals',
-    kicker: 'LIVE SIGNALS',
-    subtitle: 'OBSERVED / MAPPED PINGS',
-    source: 'SOURCE-BACKED EVENTS · NO SYNTHETIC NEWS',
+    kickerKey: 'cockpit.brief.pages.signals.kicker',
+    subtitleKey: 'cockpit.brief.pages.signals.subtitle',
+    sourceKey: 'cockpit.brief.pages.signals.source',
   },
   {
     id: 'news',
-    kicker: 'REGIONAL NEWS',
-    subtitle: 'LATEST LOCATION-MATCHED REPORTING',
-    source: 'GOOGLE NEWS RSS · LOCATION QUERY · RECENT',
+    kickerKey: 'cockpit.brief.pages.news.kicker',
+    subtitleKey: 'cockpit.brief.pages.news.subtitle',
+    sourceKey: 'cockpit.brief.pages.news.source',
   },
   {
     id: 'local',
-    kicker: 'LOCAL INFO',
-    subtitle: 'PLACE / CONDITIONS / POSITION',
-    source: 'NATURAL EARTH · OPEN-METEO · UTC',
+    kickerKey: 'cockpit.brief.pages.local.kicker',
+    subtitleKey: 'cockpit.brief.pages.local.subtitle',
+    sourceKey: 'cockpit.brief.pages.local.source',
   },
 ];
 
@@ -80,15 +85,18 @@ export function isRenderedOnScreen(element) {
 
 export function formatCockpitBriefAge(value) {
   const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return 'TIME UNKNOWN';
+  if (!Number.isFinite(timestamp)) return t('cockpit.brief.age.unknown');
   const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60_000));
-  if (minutes < 60) return `${minutes}M AGO`;
+  if (minutes < 60) return t('cockpit.brief.age.minutes', { n: minutes });
   const hours = Math.round(minutes / 60);
-  return hours < 48 ? `${hours}H AGO` : `${Math.round(hours / 24)}D AGO`;
+  return hours < 48
+    ? t('cockpit.brief.age.hours', { n: hours })
+    : t('cockpit.brief.age.days', { n: Math.round(hours / 24) });
 }
 
 export function formatCockpitWindDirection(value) {
-  if (!Number.isFinite(value)) return 'DIR UNKNOWN';
+  if (!Number.isFinite(value)) return t('cockpit.brief.windDirectionUnknown');
+  // Compass points are international abbreviations and stay verbatim.
   const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   const normalized = ((value % 360) + 360) % 360;
   return `${labels[Math.round(normalized / 45) % labels.length]} · ${Math.round(normalized)}°`;

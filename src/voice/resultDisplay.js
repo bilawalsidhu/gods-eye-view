@@ -14,16 +14,18 @@
  */
 
 import { voiceLayer } from './layerManifest.js';
+import { t } from '../i18n/index.js';
 
-const LAYER_NOUNS = Object.freeze({
-  flights: 'aircraft',
-  military: 'military aircraft',
-  'local-adsb': 'aircraft',
-  'ais-live-vessels': 'ships',
-  satellites: 'satellites',
-  'rocket-launches': 'launches',
-  earthquakes: 'earthquakes',
-  'local-firms': 'fires',
+/** Layer nouns, as message keys resolved at compose time. */
+const LAYER_NOUN_KEYS = Object.freeze({
+  flights: 'voice.noun.aircraft',
+  military: 'voice.noun.militaryAircraft',
+  'local-adsb': 'voice.noun.aircraft',
+  'ais-live-vessels': 'voice.noun.ships',
+  satellites: 'voice.noun.satellites',
+  'rocket-launches': 'voice.noun.launches',
+  earthquakes: 'voice.noun.earthquakes',
+  'local-firms': 'voice.noun.fires',
 });
 
 /** Split "a; b" caveat text into separate notes. */
@@ -45,9 +47,11 @@ function notesOf(...values) {
 
 export function analystNounFor(layerKeys) {
   const keys = [...new Set(layerKeys.filter(Boolean))];
-  if (keys.length !== 1) return 'results';
+  if (keys.length !== 1) return t('voice.noun.results');
   const key = keys[0];
-  return LAYER_NOUNS[key] || voiceLayer(key)?.aliases?.[0] || 'results';
+  const nounKey = LAYER_NOUN_KEYS[key];
+  if (nounKey) return t(nounKey);
+  return voiceLayer(key)?.aliases?.[0] || t('voice.noun.results');
 }
 
 /** The count/scope headline shared by the analyst card and spoken answer. */
@@ -66,9 +70,13 @@ export function analystHeadline(result) {
     (layer) => layer.layerKey,
   );
   const count = Number(result?.count) || 0;
-  const floor = result?.complete === false ? 'At least ' : '';
+  const countText = `${result?.complete === false ? t('voice.result.atLeast') : ''}${count.toLocaleString('en-US')}`;
   return boundedHeadline(
-    `${floor}${count.toLocaleString('en-US')} ${analystNounFor(keys)} ${result?.scopeLabel || ''}`,
+    t('voice.result.headline', {
+      count: countText,
+      noun: analystNounFor(keys),
+      scope: result?.scopeLabel || '',
+    }),
   );
 }
 
@@ -101,7 +109,7 @@ function analystCard(result) {
         ...(result.feedState && result.feedState !== 'nominal'
           ? [{ label: result.feedState }]
           : []),
-        ...(result.partial ? [{ label: 'partial' }] : []),
+        ...(result.partial ? [{ label: t('voice.result.partialChip') }] : []),
       ],
       // Coverage qualifications lead the feed detail. The bounded card groups
       // overflow in its existing Notes disclosure rather than dropping them.
@@ -109,7 +117,11 @@ function analystCard(result) {
       notes: [
         ...notesOf(result.coverage?.note, display.caveat),
         ...(unanswered.length
-          ? [`Not answered: ${unanswered.join(', ')}`]
+          ? [
+              t('voice.result.notAnswered', {
+                layers: unanswered.join(t('voice.speech.listSeparator')),
+              }),
+            ]
           : []),
       ],
       sources,

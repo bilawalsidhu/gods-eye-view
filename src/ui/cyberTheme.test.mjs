@@ -617,7 +617,8 @@ test('the Display selector, voice schema and final stylesheet expose Cyber', () 
   const militaryRendering = read('../layers/military/rendering.js');
   const setHud = GEV_ACTION_SCHEMAS.find((schema) => schema.name === 'set_hud');
 
-  assert.match(display, /<option value="cyber">Cyber<\/option>/);
+  // data-i18n keys the option's static text (src/ui/staticI18n.js).
+  assert.match(display, /<option value="cyber"[^>]*>Cyber<\/option>/);
   assert.match(display, /id="cyber-sonar-toggle"/);
   assert.match(
     display,

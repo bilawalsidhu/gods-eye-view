@@ -1,0 +1,85 @@
+/** Street Level panel (templates/layer-panels.html + streetLevel controls/presentation). */
+export default {
+  panel: {
+    title: 'STREET LEVEL',
+  },
+  status: {
+    on: 'ON',
+    off: 'OFF',
+    loading: 'LOADING',
+    keyRejected: 'KEY REJECTED',
+    keyRequired: 'KEY REQUIRED',
+    titleOn: 'Turn Street Level off',
+    titleOff: 'Turn Street Level on',
+  },
+  meta: {
+    loadingCoverage: 'loading coverage...',
+    off: 'Switch a provider on to draw its coverage.',
+    sequenceLoading: 'Loading this sequence…',
+    sequence: '{n} images in this sequence · Esc clears',
+    coverage: '{n} sequences in view · click a line for its photos',
+  },
+  legend: {
+    aria: 'Coverage colours',
+    selected: 'Selected',
+  },
+  providers: {
+    title: 'PROVIDERS',
+    groupAria: 'Imagery providers',
+  },
+  chip: {
+    on: '{name} imagery on',
+    off: '{name} imagery off',
+    error: '{name}: {error}',
+  },
+  imagery: {
+    title: 'IMAGERY',
+    groupAria: 'Imagery filters',
+    panoAria: 'Panorama filter',
+    all: 'ALL',
+    flat: 'FLAT',
+  },
+  since: {
+    label: 'SINCE',
+    any: 'ANY DATE',
+    last10Years: 'LAST 10 YEARS',
+    last5Years: 'LAST 5 YEARS',
+    last3Years: 'LAST 3 YEARS',
+    last2Years: 'LAST 2 YEARS',
+    lastYear: 'LAST YEAR',
+    last6Months: 'LAST 6 MONTHS',
+    last3Months: 'LAST 3 MONTHS',
+    lastMonth: 'LAST MONTH',
+    lastDays: 'LAST {n} DAYS',
+    readout: '{window} · SINCE {date}',
+  },
+  viewer: {
+    expand: 'EXPAND',
+    shrink: 'SHRINK',
+    expandAria: 'Expand',
+    shrinkAria: 'Shrink',
+    expandTooltip: 'Expand the street-level view (Esc shrinks it)',
+    fitAria: 'Image fit',
+    fit: 'FIT',
+    fill: 'FILL',
+    fitTooltip:
+      'Fit: show the whole photo, with dark bars where its shape differs from the frame',
+    fillTooltip: 'Fill: fill the frame edge to edge, cropping the photo',
+    follow: 'FOLLOW',
+    followAria: 'Camera follows view',
+    followTooltip:
+      'Camera follows view: move the globe camera wherever the street-level view looks',
+    followNeedsGoogle:
+      'Camera follow needs the Google 3D map: choose Google 3D under MAP SOURCE',
+    closeTitle: 'Close the image and deselect it on the map',
+    closeAria: 'Close the street-level image',
+    viewerAria: 'Street-level viewer',
+    imageAria: 'Street-level image',
+    linkTitle: "Open this image on the provider's site",
+    imageBy: 'Image by {name}',
+  },
+  toast: {
+    startFailed: 'Street Level could not start',
+    toggleFailed: 'Street Level toggle failed',
+  },
+};

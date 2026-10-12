@@ -38,6 +38,14 @@ _“pretty cool”_ — [Brendan Eich](https://x.com/BrendanEich/status/20945920
 
 ---
 
+<div align="center">
+
+🌐 **English · [简体中文](README.zh-CN.md)** — the UI ships in English and Simplified Chinese; switch in the Display panel (**Language**), or see the [i18n guide](docs/I18N.md).
+
+</div>
+
+---
+
 ## 🌍 Why This Exists
 
 God's Eye View brings public signals into one explorable globe. Track the world live. Talk to it. Break it. Extend it.

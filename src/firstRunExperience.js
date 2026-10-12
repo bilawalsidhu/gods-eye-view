@@ -1,4 +1,5 @@
 import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
+import { subscribeLocale, t } from './i18n/index.js';
 
 // First-run mission launcher.
 //
@@ -35,9 +36,18 @@ export const FIRST_RUN_SESSION_KEY = 'gev:first-run-mission-session:v1';
 export const ENVIRONMENTAL_LABEL_CHOICE = 'ENVIRONMENTAL';
 
 const ENVIRONMENTAL_LABELS = Object.freeze({
-  ENVIRONMENTAL: Object.freeze({ title: 'ENVIRONMENTAL' }),
-  EARTH_WATCH: Object.freeze({ title: 'EARTH WATCH' }),
-  ACTIVE_EVENTS: Object.freeze({ title: 'ACTIVE EVENTS' }),
+  ENVIRONMENTAL: Object.freeze({
+    title: 'ENVIRONMENTAL',
+    titleKey: 'welcome.missions.environmental.choices.environmental',
+  }),
+  EARTH_WATCH: Object.freeze({
+    title: 'EARTH WATCH',
+    titleKey: 'welcome.missions.environmental.choices.earthWatch',
+  }),
+  ACTIVE_EVENTS: Object.freeze({
+    title: 'ACTIVE EVENTS',
+    titleKey: 'welcome.missions.environmental.choices.activeEvents',
+  }),
 });
 
 /**
@@ -92,12 +102,12 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
   contacts: Object.freeze({
     kind: 'context',
     contextMode: 'contacts',
-    busyText: 'Starting live contacts…',
+    busyKey: 'welcome.busy.contacts',
   }),
   'space-missions': Object.freeze({
     kind: 'context',
     contextMode: 'space-missions',
-    busyText: 'Opening space missions…',
+    busyKey: 'welcome.busy.spaceMissions',
   }),
   environmental: Object.freeze({
     kind: 'globe',
@@ -115,7 +125,7 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
     // before a launch. LEDGERED post-launch. Until it lands, keyless visitors
     // are judged on the layer row, which tells them the truth.
     layerIds: Object.freeze(['earthquakes', 'local-firms']),
-    busyText: 'Scanning active events…',
+    busyKey: 'welcome.busy.environmental',
   }),
   explore: Object.freeze({ kind: 'none' }),
 });
@@ -359,15 +369,26 @@ export function initFirstRunExperience({
   const environmentalTitle = root.querySelector(
     '[data-first-run-environmental-title]',
   );
-  if (environmentalTitle)
-    environmentalTitle.textContent = environmentalLabel().title;
+  const paintEnvironmentalTitle = () => {
+    if (environmentalTitle)
+      environmentalTitle.textContent = t(environmentalLabel().titleKey);
+  };
+  paintEnvironmentalTitle();
 
   const status = root.querySelector('[data-first-run-status]');
   const suppressBox = root.querySelector('[data-first-run-suppress]');
   const buttons = [...root.querySelectorAll('[data-first-run-choice]')];
-  const defaultStatus = status?.textContent || '';
+  const defaultStatus = () => t('welcome.tip');
   let busy = false;
   let closing = false;
+
+  // A live locale switch re-translates the painted tile title and restores
+  // the default status line (busy/sticky text re-renders on its own path).
+  const unsubscribeLocale = subscribeLocale(() => {
+    paintEnvironmentalTitle();
+    if (status && status.dataset.sticky !== 'true')
+      status.textContent = defaultStatus();
+  });
 
   /**
    * Is something painted OVER the card? A measurable box is not a visible card.
@@ -442,10 +463,13 @@ export function initFirstRunExperience({
     for (const button of buttons)
       button.setAttribute('aria-disabled', String(next));
     if (!status) return;
-    if (next)
-      status.textContent = FIRST_RUN_MISSIONS[choice]?.busyText || 'Working…';
-    else if (status.dataset.sticky !== 'true')
-      status.textContent = defaultStatus;
+    if (next) {
+      const mission = FIRST_RUN_MISSIONS[choice];
+      status.textContent = mission?.busyKey
+        ? t(mission.busyKey)
+        : t('welcome.busy.fallback');
+    } else if (status.dataset.sticky !== 'true')
+      status.textContent = defaultStatus();
   };
 
   const onChoice = async (event) => {
@@ -493,7 +517,7 @@ export function initFirstRunExperience({
       Array.isArray(failed) && failed.length ? ` (${failed.join(', ')})` : '';
     if (status) {
       status.dataset.sticky = 'true';
-      status.textContent = `Could not open that mission${detail}. Retry or explore manually.`;
+      status.textContent = t('welcome.failure.missionOpen', { detail });
     }
     setBusy(false);
   };
@@ -509,8 +533,7 @@ export function initFirstRunExperience({
     if (box) box.checked = !wanted;
     if (!status) return;
     status.dataset.sticky = 'true';
-    status.textContent =
-      'This browser is blocking storage, so that could not be saved.';
+    status.textContent = t('welcome.failure.storageBlocked');
   };
 
   const keyboard = createSurfaceKeyboard({
@@ -633,6 +656,7 @@ export function initFirstRunExperience({
   // Teardown is not a user dismissal and must not change the show preference.
   const destroy = () => {
     closing = true;
+    unsubscribeLocale();
     keyboard.destroy();
     globalThis.removeEventListener?.('resize', onViewportResize);
     surfaceObserver?.disconnect();

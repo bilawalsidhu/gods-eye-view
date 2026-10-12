@@ -1,5 +1,6 @@
 import { syncChipGroup } from './chipGroup.js';
 import { syncRowList } from './rowList.js';
+import { subscribeLocale, t } from '../i18n/index.js';
 
 const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
@@ -17,6 +18,16 @@ const order = (parent, nodes) =>
 export function createRailCardBlocks({ container, cardId, onParams }) {
   const document = container.ownerDocument;
   const blocks = new Map();
+  // Result blocks own a static 'clear reading' button whose label must follow
+  // the active locale, so created buttons are tracked and repainted on switch.
+  const clearButtons = new Set();
+  const clearLabel = () => t('weather.clearReading');
+  const unsubscribeLocale = subscribeLocale(() => {
+    for (const button of clearButtons) {
+      button.setAttribute('aria-label', clearLabel());
+      button.title = clearLabel();
+    }
+  });
   const make = (tag, className, parent) => {
     const node = document.createElement(tag);
     node.className = className;
@@ -29,6 +40,7 @@ export function createRailCardBlocks({ container, cardId, onParams }) {
     else props.onClick?.();
   };
   const dispose = (block) => {
+    if (block.clear) clearButtons.delete(block.clear);
     block.removeClick?.();
     block.children?.destroy();
     block.root.remove();
@@ -98,8 +110,9 @@ export function createRailCardBlocks({ container, cardId, onParams }) {
             block.clear.type = 'button';
             block.clear.dataset.actionId = 'clear';
             block.clear.textContent = '×';
-            block.clear.setAttribute('aria-label', 'Clear reading');
-            block.clear.title = 'Clear reading';
+            block.clear.setAttribute('aria-label', clearLabel());
+            block.clear.title = clearLabel();
+            clearButtons.add(block.clear);
             bind((event) => {
               if (event.target === block.clear) dispatch(block.props.clear);
             });
@@ -288,6 +301,7 @@ export function createRailCardBlocks({ container, cardId, onParams }) {
       );
     },
     destroy() {
+      unsubscribeLocale();
       for (const block of blocks.values()) dispose(block);
       blocks.clear();
     },

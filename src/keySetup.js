@@ -1,4 +1,5 @@
 import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
+import { currentLocale, subscribeLocale, t } from './i18n/index.js';
 import {
   readStoredCloudVoiceAuthMode,
   writeStoredCloudVoiceAuthMode,
@@ -18,14 +19,32 @@ import {
  * The surface self-destructs where it cannot work: a prod build (no endpoint)
  * or a LAN visitor (loopback-only endpoint) fails the status fetch, and both
  * the chip and the dialog are removed outright.
+ *
+ * Every user-facing string translates at render through the `settings` pack
+ * (src/i18n/locales/<locale>/settings.js); a locale switch repaints the chip
+ * and default status live, and rows rebuild at the next open. Server error
+ * strings carried in payloads are protocol responses and stay verbatim.
  */
 
-/** Chip label — pure, exported for tests. */
+/** Chip label — pure, exported for tests. English; the panel paints via i18n. */
 export function keySetupChipLabel(status) {
-  const missing = Math.max(0, (status?.total || 0) - (status?.setCount || 0));
+  const missing = keySetupMissingCount(status);
   return missing > 0
     ? `POWER UP · ${missing} ${missing === 1 ? 'KEY' : 'KEYS'} WAITING`
     : 'POWERED UP';
+}
+
+/** Missing (non-hidden) key count shared by the English and translated labels. */
+function keySetupMissingCount(status) {
+  return Math.max(0, (status?.total || 0) - (status?.setCount || 0));
+}
+
+/** Same label, translated at paint from the `settings` pack. */
+function localizedChipLabel(status) {
+  const missing = keySetupMissingCount(status);
+  return missing > 0
+    ? t('settings.chip.waiting', { count: missing })
+    : t('settings.chip.ready');
 }
 
 /**
@@ -78,9 +97,9 @@ export async function waitForChatGptOAuth({
     if (signal?.aborted) return false;
     if (response.ok && payload.available) return true;
     if (!response.ok || payload.loginFailed) {
-      throw new Error(
-        payload.error || 'Could not check ChatGPT sign-in. Try again.',
-      );
+      // A provider/server error string arrives in payload.error and stays
+      // verbatim; only our own fallback is translated.
+      throw new Error(payload.error || t('settings.oauth.checkFailedRetry'));
     }
     if (now() >= deadline) break;
     await sleep(Math.max(0, pollMs), signal);
@@ -116,12 +135,17 @@ function updateCloudVoiceAuthControl(auth, busy = false) {
   const state = auth.querySelector('.key-setup-cloud-auth-state');
   const toggle = auth.querySelector('[data-cloud-voice-auth-toggle]');
   state.textContent =
-    mode === 'oauth' ? 'VOICE AUTH · CHATGPT OAUTH' : 'VOICE AUTH · API KEY';
-  toggle.textContent = mode === 'oauth' ? 'USE API KEY' : 'USE CHATGPT OAUTH';
+    mode === 'oauth'
+      ? t('settings.voiceAuth.stateOauth')
+      : t('settings.voiceAuth.stateApiKey');
+  toggle.textContent =
+    mode === 'oauth'
+      ? t('settings.voiceAuth.useApiKey')
+      : t('settings.voiceAuth.useOauth');
   toggle.title =
     mode === 'oauth'
-      ? 'Use OPENAI_API_KEY for the next cloud voice session'
-      : 'Use the signed-in local ChatGPT/Codex OAuth session for the next cloud voice session';
+      ? t('settings.voiceAuth.useApiKeyTip')
+      : t('settings.voiceAuth.useOauthTip');
   // Keep the control focusable while the delegated handler blocks repeats.
   toggle.setAttribute('aria-disabled', String(busy));
 }
@@ -134,6 +158,10 @@ function buildRow(documentRef, key) {
   row.dataset.set = String(Boolean(key.set));
   if (key.managed) row.dataset.managed = key.managed;
   const external = key.managed === 'external';
+  // Registry text translates at render; the English fields stay the fallback
+  // for payloads that predate the parallel message keys.
+  const titleText = key.titleKey ? t(key.titleKey) : key.title;
+  const unlocksText = key.unlocksKey ? t(key.unlocksKey) : key.unlocks;
 
   const head = documentRef.createElement('div');
   head.className = 'key-setup-row-head';
@@ -141,21 +169,20 @@ function buildRow(documentRef, key) {
   led.className = 'key-setup-led';
   led.setAttribute('aria-hidden', 'true');
   const title = documentRef.createElement('strong');
-  title.textContent = key.title;
+  title.textContent = titleText;
   const tier = documentRef.createElement('span');
   tier.className = 'key-setup-tier';
   tier.textContent = TIER_DOTS[key.tier] || '';
   tier.title =
     key.tier === 'metered'
-      ? 'Metered — a billing-enabled account'
-      : 'Free key — register, paste, done';
+      ? t('settings.tier.metered')
+      : t('settings.tier.free');
   head.append(led, title, tier);
   if (key.clientExposed) {
     const exposed = documentRef.createElement('span');
     exposed.className = 'key-setup-exposed';
-    exposed.textContent = 'browser-side';
-    exposed.title =
-      'This key runs in the browser by design — restrict it at the provider (see SECURITY.md)';
+    exposed.textContent = t('settings.badge.browserSide');
+    exposed.title = t('settings.badge.browserSideTip');
     head.append(exposed);
   }
   if (external) {
@@ -163,9 +190,8 @@ function buildRow(documentRef, key) {
     // facts this panel reports, never values it rewrites or deletes.
     const badge = documentRef.createElement('span');
     badge.className = 'key-setup-external';
-    badge.textContent = 'configured externally';
-    badge.title =
-      'Supplied by your environment, Keychain, or launcher — change it where it was set';
+    badge.textContent = t('settings.badge.external');
+    badge.title = t('settings.badge.externalTip');
     head.append(badge);
   }
   const get = documentRef.createElement('a');
@@ -173,12 +199,14 @@ function buildRow(documentRef, key) {
   get.href = key.getUrl;
   get.target = '_blank';
   get.rel = 'noopener noreferrer';
-  get.textContent = key.set ? 'MANAGE ↗' : 'GET KEY ↗';
+  get.textContent = key.set
+    ? t('settings.row.manage')
+    : t('settings.row.getKey');
   head.append(get);
 
   const unlocks = documentRef.createElement('p');
   unlocks.className = 'key-setup-unlocks';
-  unlocks.textContent = key.unlocks;
+  unlocks.textContent = unlocksText;
 
   row.append(head, unlocks);
   if (!external) {
@@ -192,10 +220,11 @@ function buildRow(documentRef, key) {
       input.autocomplete = 'off';
       input.spellcheck = false;
       input.dataset.envVar = envVar;
+      // The identifier itself is the accessible name — never translated.
       input.setAttribute('aria-label', envVar);
       input.placeholder = key.set
-        ? `${envVar} saved — paste to replace`
-        : `paste ${envVar}`;
+        ? t('settings.field.replace', { envVar })
+        : t('settings.field.paste', { envVar });
       fields.append(input);
     }
     if (key.managed === 'file') {
@@ -203,8 +232,8 @@ function buildRow(documentRef, key) {
       remove.type = 'button';
       remove.className = 'key-setup-remove';
       remove.dataset.keySetupRemove = JSON.stringify(key.envVars);
-      remove.textContent = 'REMOVE';
-      remove.title = `Remove ${key.title} from this app's saved keys`;
+      remove.textContent = t('settings.row.remove');
+      remove.title = t('settings.row.removeTip', { title: titleText });
       fields.append(remove);
     }
     row.append(fields);
@@ -261,11 +290,14 @@ export async function initKeySetup({
   let disposed = false;
   let disposeControls = () => {};
   let disposePlacement = () => {};
+  // Assigned once the surface is up; a no-op until then (destroy may run first).
+  let unsubscribeLocale = () => {};
   const destroy = () => {
     if (disposed) return;
     disposed = true;
     lifetime.abort();
     signal?.removeEventListener('abort', destroy);
+    unsubscribeLocale();
     disposeControls();
     disposePlacement();
     chip.remove();
@@ -300,7 +332,13 @@ export async function initKeySetup({
   const closeButton = root.querySelector('[data-key-setup-close]');
   const chipLabel = chip.querySelector('[data-key-setup-chip-label]') || chip;
   const statusLine = root.querySelector('[data-key-setup-status]');
-  const defaultStatusText = statusLine?.textContent || '';
+  // The status line and chip label are repainted at runtime, so the static
+  // binder never owns them: this module translates at paint instead.
+  const defaultStatus = () => t('settings.status.default');
+  let statusIsTransient = false;
+  // Which locale the rendered rows were built in — rows only rebuild at the
+  // next open after a switch (see openDialog), never mid-typing.
+  let renderedLocale = currentLocale();
   let busy = false;
   let oauthBusy = false;
   let open = false;
@@ -310,12 +348,17 @@ export async function initKeySetup({
       updateCloudVoiceAuthControl(auth, oauthBusy);
   };
 
+  const paintChip = () => {
+    const label = localizedChipLabel(status);
+    chipLabel.textContent = label;
+    chip.title = t('settings.chip.projectKeys', { label });
+    chip.setAttribute('aria-label', chip.title);
+  };
+
   const render = (nextStatus) => {
     if (disposed) return;
     status = nextStatus;
-    chipLabel.textContent = keySetupChipLabel(status);
-    chip.title = `Project keys: ${keySetupChipLabel(status)}`;
-    chip.setAttribute('aria-label', chip.title);
+    paintChip();
     // Fully powered is the owner's clean screen: the chip retires. The dialog
     // stays reachable this session (and via ?setup=1) to swap or verify keys.
     chip.hidden = status.setCount >= status.total;
@@ -323,8 +366,20 @@ export async function initKeySetup({
     rowsHost.textContent = '';
     for (const key of status.keys || [])
       rowsHost.append(buildRow(documentRef, key));
+    renderedLocale = currentLocale();
     syncCloudVoiceAuth();
+    if (statusLine && !statusIsTransient)
+      statusLine.textContent = defaultStatus();
   };
+
+  // A live locale switch re-translates the chip and the default status line.
+  // Rows translate at render; rebuilding them under an open dialog would wipe
+  // a half-pasted key, so they pick up the new language at the next open.
+  unsubscribeLocale = subscribeLocale(() => {
+    paintChip();
+    if (statusLine && !statusIsTransient)
+      statusLine.textContent = defaultStatus();
+  });
 
   const visible = () =>
     root.isConnected &&
@@ -340,6 +395,9 @@ export async function initKeySetup({
 
   const openDialog = () => {
     if (disposed || open) return;
+    // A switch while the dialog was closed left the rows in the old language;
+    // reopening is the safe repaint point (no half-typed input to wipe).
+    if (status && currentLocale() !== renderedLocale) render(status);
     open = true;
     keyboard.activate();
     root.hidden = false;
@@ -359,27 +417,33 @@ export async function initKeySetup({
     };
     root.addEventListener('transitionend', hide, { once: true });
     globalThis.setTimeout?.(hide, 400);
-    if (statusLine) statusLine.textContent = defaultStatusText;
+    if (statusLine) {
+      statusLine.textContent = defaultStatus();
+      statusIsTransient = false;
+    }
     keyboard.deactivate({ restoreFocus: true });
   };
 
   const say = (text) => {
-    if (statusLine) statusLine.textContent = text;
+    if (statusLine) {
+      statusIsTransient = true;
+      statusLine.textContent = text;
+    }
   };
 
   const storeLabel = () =>
     status?.store === 'pinokio-environment'
-      ? 'your app configuration'
-      : 'your local .env';
+      ? t('settings.store.appConfig')
+      : t('settings.store.localEnv');
 
-  const submitUpdates = async (updates, doneVerb) => {
+  const submitUpdates = async (updates, doneKey) => {
     if (disposed || busy) return;
     const googleWasUnset = !status?.keys?.find(
       (key) => key.id === 'google-maps',
     )?.set;
     busy = true;
     applyButton?.setAttribute('aria-disabled', 'true');
-    say('Saving…');
+    say(t('settings.save.saving'));
     try {
       const response = await doFetch('/api/setup/keys', {
         method: 'POST',
@@ -390,7 +454,12 @@ export async function initKeySetup({
       const payload = await response.json().catch(() => ({}));
       if (disposed) return;
       if (!response.ok || !payload.ok) {
-        say(payload.error || `Save failed (${response.status}).`);
+        // A server refusal is protocol text and stays verbatim; the local
+        // HTTP-status fallback is ours to translate.
+        say(
+          payload.error ||
+            t('settings.save.failedStatus', { status: response.status }),
+        );
         return;
       }
       for (const input of root.querySelectorAll('input[data-env-var]'))
@@ -420,11 +489,11 @@ export async function initKeySetup({
           signal: lifetime.signal,
         });
       }
-      say(
-        `${doneVerb} ${storeLabel()}. Restarting — this page reloads itself.`,
-      );
+      say(t(doneKey, { store: storeLabel() }));
     } catch (error) {
-      say(`Save failed: ${error?.message || error}`);
+      say(
+        t('settings.save.failedMessage', { message: error?.message || error }),
+      );
     } finally {
       busy = false;
       applyButton?.setAttribute('aria-disabled', 'false');
@@ -441,10 +510,10 @@ export async function initKeySetup({
       })),
     );
     if (!Object.keys(updates).length) {
-      say('Paste at least one key first.');
+      say(t('settings.save.pasteFirst'));
       return;
     }
-    await submitUpdates(updates, 'Saved to');
+    await submitUpdates(updates, 'settings.save.savedTo');
   };
 
   chip.addEventListener('click', openDialog);
@@ -462,12 +531,12 @@ export async function initKeySetup({
         if (current === 'oauth') {
           writeStoredCloudVoiceAuthMode('api-key');
           syncCloudVoiceAuth();
-          say('Cloud voice will use OPENAI_API_KEY on the next session.');
+          say(t('settings.voiceAuth.switchedToApiKey'));
           return;
         }
         oauthBusy = true;
         syncCloudVoiceAuth();
-        say('Checking local ChatGPT OAuth sign-in…');
+        say(t('settings.oauth.checking'));
         try {
           const response = await doFetch('/api/realtime/oauth-status', {
             cache: 'no-store',
@@ -477,21 +546,19 @@ export async function initKeySetup({
           if (lifetime.signal.aborted) return;
           if (!response.ok)
             throw new Error(
-              payload.error || 'Could not check ChatGPT sign-in.',
+              payload.error || t('settings.oauth.checkFailedShort'),
             );
           if (payload.available) {
             writeStoredCloudVoiceAuthMode('oauth');
             syncCloudVoiceAuth();
-            say(
-              'ChatGPT OAuth selected for cloud voice. Your API key stays saved and available.',
-            );
+            say(t('settings.oauth.selected'));
             return;
           }
 
           say(
             payload.code === 'CODEX_OAUTH_REAUTH_REQUIRED'
-              ? 'ChatGPT sign-in expired. Opening sign-in again…'
-              : 'Opening ChatGPT sign-in in your browser…',
+              ? t('settings.oauth.expired')
+              : t('settings.oauth.opening'),
           );
           const loginResponse = await doFetch('/api/realtime/oauth-login', {
             method: 'POST',
@@ -501,25 +568,22 @@ export async function initKeySetup({
           const loginPayload = await loginResponse.json().catch(() => ({}));
           if (lifetime.signal.aborted) return;
           if (!loginResponse.ok) {
+            // Server-provided error text stays verbatim (protocol response).
             say(
               loginPayload.error ||
                 payload.error ||
-                'Could not start ChatGPT sign-in on this machine.',
+                t('settings.oauth.startFailed'),
             );
             return;
           }
           if (loginPayload.available) {
             writeStoredCloudVoiceAuthMode('oauth');
             syncCloudVoiceAuth();
-            say(
-              'ChatGPT OAuth selected for cloud voice. Your API key stays saved and available.',
-            );
+            say(t('settings.oauth.selected'));
             return;
           }
 
-          say(
-            'Finish ChatGPT sign-in in the browser. Waiting for it to complete…',
-          );
+          say(t('settings.oauth.waiting'));
           const available = await waitForChatGptOAuth({
             fetchImpl: doFetch,
             signal: lifetime.signal,
@@ -527,18 +591,22 @@ export async function initKeySetup({
           if (lifetime.signal.aborted) return;
           if (!available) {
             say(
-              'ChatGPT sign-in timed out. Click USE CHATGPT OAUTH to try again.',
+              t('settings.oauth.timedOut', {
+                button: t('settings.voiceAuth.useOauth'),
+              }),
             );
             return;
           }
           writeStoredCloudVoiceAuthMode('oauth');
           syncCloudVoiceAuth();
-          say(
-            'ChatGPT sign-in complete. OAuth will be used for the next cloud voice session.',
-          );
+          say(t('settings.oauth.complete'));
         } catch (error) {
           if (lifetime.signal.aborted) return;
-          say(`OAuth check failed: ${error?.message || error}`);
+          say(
+            t('settings.oauth.checkFailed', {
+              message: error?.message || error,
+            }),
+          );
         } finally {
           oauthBusy = false;
           if (!disposed) syncCloudVoiceAuth();
@@ -560,11 +628,11 @@ export async function initKeySetup({
     // a deliberate two-step the lure cannot pre-satisfy.
     const ok =
       typeof globalThis.confirm !== 'function' ||
-      globalThis.confirm('Remove this key from your saved configuration?');
+      globalThis.confirm(t('settings.remove.confirm'));
     if (!ok) return;
     void submitUpdates(
       Object.fromEntries(envVars.map((name) => [name, null])),
-      'Removed from',
+      'settings.save.removedFrom',
     );
   });
 

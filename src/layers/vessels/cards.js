@@ -1,7 +1,9 @@
 import {
   accentForVesselType,
   normalizeVesselType,
+  vesselTypeLabelKey,
 } from '../../data/vesselLabels.js';
+import { t } from '../../i18n/index.js';
 
 export function createCards({
   vesselState,
@@ -20,9 +22,11 @@ export function createCards({
     const stale = (record.missedRefreshes || 0) > 0;
     el.classList.add('active');
     el.textContent = [
-      `AIS: ${trimHudValue(record.name, 32)}`,
-      `${trimHudValue(record.type || 'VESSEL', 24)}  SPD: ${formatSpeed(record.speed)}  HDG: ${formatHeading(record.heading ?? record.course)}`,
-      `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? '  · STALE' : ''}`,
+      t('fleet.vessels.hud.line', {
+        name: trimHudValue(record.name, 32),
+      }),
+      `${trimHudValue(record.type || t('fleet.vessels.hud.typeFallback'), 24)}  SPD: ${formatSpeed(record.speed)}  HDG: ${formatHeading(record.heading ?? record.course)}`,
+      `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? `  · ${t('fleet.vessels.hud.stale')}` : ''}`,
     ].join('\n');
   }
 
@@ -30,7 +34,7 @@ export function createCards({
     const el = document.getElementById('hud-ais-vessel');
     if (!el) return;
     el.classList.remove('active');
-    el.textContent = 'AIS: --';
+    el.textContent = t('fleet.vessels.hud.idle');
   }
 
   function trimHudValue(value, maxLength) {
@@ -85,7 +89,7 @@ export function createCards({
     const direction = record.heading ?? record.course;
     const details = [
       [
-        vesselTypeShort(record) || 'VESSEL',
+        vesselTypeShort(record) || t('fleet.vessels.card.typeFallback'),
         formatSpeed(record.speed),
         Number.isFinite(direction) ? `${Math.round(direction)}°` : '--°',
       ].join(' · '),
@@ -94,7 +98,7 @@ export function createCards({
     if (destination) details.push(`→ ${trimHudValue(destination, 24)}`);
     const stale = (record.missedRefreshes || 0) > 0;
     details.push(
-      `MMSI ${record.mmsi || '--'} · ${formatPositionTime(record)}${stale ? ' · STALE' : ''}`,
+      `MMSI ${record.mmsi || '--'} · ${formatPositionTime(record)}${stale ? ` · ${t('fleet.vessels.card.stale')}` : ''}`,
     );
     return {
       id: vesselOverlayEntryId(record),
@@ -122,9 +126,13 @@ export function createCards({
     return `vessel:unkeyed:${name}:${lat}:${lon}`;
   }
 
-  /** Uppercased, card-width-bounded AIS type (empty string when unknown). */
+  /** Uppercased, card-width-bounded AIS type (empty string when unknown).
+   *  Known family/special tokens resolve through the fleet.aisType pack at
+   *  this edge; free-text types from the source display as-is. */
 
   function vesselTypeShort(record) {
+    const key = vesselTypeLabelKey(record.type);
+    if (key) return t(key).toUpperCase().slice(0, 14);
     return normalizeVesselType(record.type).toUpperCase().slice(0, 14);
   }
 
@@ -150,8 +158,12 @@ export function createCards({
 
   function displayVesselName(record) {
     const name = String(record.name || '').trim();
+    // 'VESSEL' is the external sentinel the feed sends; the comparison stays
+    // on it while the DISPLAY fallback localizes.
     if (name && name !== 'VESSEL' && name !== record.mmsi) return name;
-    return record.mmsi ? `MMSI ${record.mmsi}` : 'VESSEL';
+    return record.mmsi
+      ? `MMSI ${record.mmsi}`
+      : t('fleet.vessels.card.unnamed');
   }
 
   function formatSpeed(speed) {

@@ -79,6 +79,45 @@ export function normalizeVesselType(type) {
   return NUMERIC_TYPE_FAMILIES[Math.floor(code / 10)] || 'OTHER';
 }
 
+/**
+ * AIS display token → `fleet.aisType.*` i18n key, resolved with `t()` at the
+ * card edge (vessels/cards.js). The tokens above stay byte-identical — they
+ * are pinned by source tests and matched against external AIS text — so
+ * localization rides on this parallel map instead of the token values.
+ */
+const TYPE_LABEL_KEYS = Object.freeze({
+  FISHING: 'fleet.aisType.fishing',
+  TOWING: 'fleet.aisType.towing',
+  DREDGER: 'fleet.aisType.dredger',
+  'DIVE OPS': 'fleet.aisType.diveOps',
+  MILITARY: 'fleet.aisType.military',
+  SAILING: 'fleet.aisType.sailing',
+  PLEASURE: 'fleet.aisType.pleasure',
+  PILOT: 'fleet.aisType.pilot',
+  SAR: 'fleet.aisType.sar',
+  TUG: 'fleet.aisType.tug',
+  'PORT TENDER': 'fleet.aisType.portTender',
+  'ANTI-POLLUTION': 'fleet.aisType.antiPollution',
+  'LAW ENFORCE': 'fleet.aisType.lawEnforce',
+  MEDICAL: 'fleet.aisType.medical',
+  'HIGH-SPEED': 'fleet.aisType.highSpeed',
+  PASSENGER: 'fleet.aisType.passenger',
+  CARGO: 'fleet.aisType.cargo',
+  TANKER: 'fleet.aisType.tanker',
+  OTHER: 'fleet.aisType.other',
+});
+
+/**
+ * i18n key for a known AIS type token, or null when the type is free text
+ * from the source (which displays as-is).
+ * @param {string} type Raw AIS type.
+ * @returns {string|null}
+ */
+export function vesselTypeLabelKey(type) {
+  const token = normalizeVesselType(type);
+  return token ? TYPE_LABEL_KEYS[token] || null : null;
+}
+
 /** AIS ship type → CSS hex hue for the billboard chevron. */
 export function vesselTypeCss(type) {
   return styleForType(type).css;

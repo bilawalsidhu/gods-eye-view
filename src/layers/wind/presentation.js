@@ -1,8 +1,12 @@
+import { t } from '../../i18n/index.js';
 import { formatWindSpeed, WIND_UNITS } from './inspection.js';
 
 /** Reformat a captured sample; changing units never samples the map again. */
 export function formatWindReading(reading, units) {
   if (!reading) return null;
+  const speed = Number.isFinite(reading.speed)
+    ? formatWindSpeed(reading.speed, units)
+    : null;
   return {
     ...reading,
     units,
@@ -10,8 +14,10 @@ export function formatWindReading(reading, units) {
       reading.scalarKind === 'speed'
         ? formatWindSpeed(reading.speed, units)
         : reading.scalarValue,
-    wind: Number.isFinite(reading.speed)
-      ? `${formatWindSpeed(reading.speed, units)}${reading.from === 'Calm' ? ' · calm' : ` from ${reading.from}`}`
+    wind: speed
+      ? reading.from === 'Calm'
+        ? t('atmos.wind.reading.calm', { speed })
+        : t('atmos.wind.reading.from', { speed, bearing: reading.from })
       : reading.wind,
   };
 }
@@ -22,7 +28,7 @@ export function windUnitChips(units) {
     label: value,
     active: units === value,
     params: { units: value },
-    title: 'Wind speed units',
+    title: t('atmos.wind.chips.unitsTitle'),
   }));
 }
 
@@ -30,7 +36,9 @@ export function windUnitChips(units) {
 export function windReadingResult(reading) {
   return {
     id: 'reading',
-    label: `WIND AT ${reading.coordinates.replace(' · ', ' ')}`,
+    label: t('atmos.wind.reading.label', {
+      coordinates: reading.coordinates.replace(' · ', ' '),
+    }),
     lines: [
       {
         id: 'wind',
@@ -38,13 +46,19 @@ export function windReadingResult(reading) {
       },
       {
         id: 'meta',
-        text: `${reading.model} · valid ${reading.validTime?.replace(/^\d{4}-/, '')}`,
+        text: t('atmos.wind.reading.meta', {
+          model: reading.model,
+          time: reading.validTime?.replace(/^\d{4}-/, ''),
+        }),
       },
       ...(reading.scalarValue
         ? [
             {
               id: 'scalar',
-              text: `${reading.scalarLabel} · ${reading.scalarValue}`,
+              text: t('atmos.wind.reading.scalar', {
+                scalarLabel: reading.scalarLabel,
+                scalarValue: reading.scalarValue,
+              }),
             },
           ]
         : []),

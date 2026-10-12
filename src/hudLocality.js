@@ -6,6 +6,7 @@
  * Split out of `hud.js` purely so it is unit-testable: `hud.js` pulls in the `mgrs`
  * CommonJS package, which Vite resolves but plain Node cannot import by named export.
  */
+import { t } from './i18n/index.js';
 
 /**
  * Maximum distance to a curated POI that still reads as "NEAR" it.
@@ -48,7 +49,15 @@ function coordinateTag(value, positive, negative) {
 export function composeLocalityTag(nearest, latDeg, lonDeg) {
   const distKm = Number(nearest?.distKm);
   if (nearest && Number.isFinite(distKm) && distKm <= NEAR_POI_MAX_KM) {
-    return `NEAR ${String(nearest.poi).toUpperCase()} (${String(nearest.city).toUpperCase()}) ${Math.round(distKm)}KM`;
+    // POI and city names are catalogued proper nouns and stay verbatim.
+    return t('hud.locality.near', {
+      poi: String(nearest.poi).toUpperCase(),
+      city: String(nearest.city).toUpperCase(),
+      n: Math.round(distKm),
+    });
   }
-  return `SECTOR ${coordinateTag(latDeg, 'N', 'S')} ${coordinateTag(lonDeg, 'E', 'W')}`;
+  return t('hud.locality.sector', {
+    lat: coordinateTag(latDeg, 'N', 'S'),
+    lon: coordinateTag(lonDeg, 'E', 'W'),
+  });
 }

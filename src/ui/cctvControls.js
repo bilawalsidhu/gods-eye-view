@@ -15,8 +15,10 @@ import {
   _renderCctvState,
   _typeCctvSummary,
   _updateCctvSyncChip,
+  repaintCctvSyncChipLabel,
 } from './cctvPresentation.js';
 import { _initCctvPanel } from './cctvBindings.js';
+import { subscribeLocale } from '../i18n/index.js';
 
 /** Own camera-panel interaction and presentation; receive the camera port and application actions. */
 export class CctvControls {
@@ -37,6 +39,13 @@ export class CctvControls {
     this._cctvFramePreloader = null;
     this._calibrationEdit = null;
     this._actionGeneration = 0;
+    // A locale switch re-paints the whole panel from the last known state.
+    this._unsubscribeLocale = subscribeLocale(() => {
+      if (!this.destroyed) {
+        this._renderCctvState(this._cctvState);
+        this.repaintCctvSyncChipLabel();
+      }
+    });
     this._initCctvPanel();
     if (this._cctvVideo && typeof MutationObserver !== 'undefined') {
       this._videoVisibilityObserver = new MutationObserver(() =>
@@ -106,12 +115,18 @@ export class CctvControls {
   _updateCctvSyncChip(...args) {
     return _updateCctvSyncChip.call(this, ...args);
   }
+
+  repaintCctvSyncChipLabel() {
+    return repaintCctvSyncChipLabel.call(this);
+  }
   _initCctvPanel(...args) {
     return _initCctvPanel.call(this, ...args);
   }
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this._unsubscribeLocale?.();
+    this._unsubscribeLocale = null;
     this._cctvVideoSurface?.stop();
     this._videoVisibilityObserver?.disconnect();
     this._actionGeneration++;

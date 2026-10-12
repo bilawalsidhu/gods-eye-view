@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { createWeatherRendering } from './rendering.js';
-import { imageryHostStatus } from './imageryHost.js';
+import { imageryHostStatus, NO_IMAGERY_HOST } from './imageryHost.js';
+import { subscribeLocale, t } from '../../i18n/index.js';
 import {
   RADAR_MAX_GAP_MS,
   REGIONAL_INFRARED_MAX_GAP_MS,
@@ -29,7 +30,31 @@ const LIGHTNING_STOPS = [
   ['300+', '#00FF00'],
 ];
 const utc = (value) =>
-  value ? `${value.slice(5, 16).replace('T', ' ')} UTC` : 'Unavailable';
+  value
+    ? `${value.slice(5, 16).replace('T', ' ')} UTC`
+    : t('common.unavailable');
+// Own status messages are stored as closed tokens and translated at paint, so
+// a locale switch repaints persisted state. Unknown values stay verbatim.
+const WEATHER_ERROR_KEYS = Object.freeze({
+  frame: 'atmos.weather.error.frame',
+  imagery: 'atmos.weather.error.imagery',
+  source: 'atmos.weather.error.source',
+  generic: 'atmos.weather.error.generic',
+});
+// Stable rendering-module messages, named at this presentation edge.
+const KNOWN_DIAGNOSTIC_ERRORS = new Map([
+  [NO_IMAGERY_HOST, 'atmos.weather.error.hostHidden'],
+  [
+    'Weather tiles unavailable · previous frame retained',
+    'atmos.weather.error.tiles',
+  ],
+  ['Some weather tiles unavailable', 'atmos.weather.error.someTiles'],
+]);
+const messageText = (value) => {
+  if (!value) return null;
+  const key = WEATHER_ERROR_KEYS[value] || KNOWN_DIAGNOSTIC_ERRORS.get(value);
+  return key ? t(key) : value;
+};
 
 /** A per-application observation layer, using the existing layer lifecycle and
  * row controls. History is transient: shared links always open latest imagery. */
@@ -91,6 +116,8 @@ export function createWeatherLayer({
     if (!clock.getState().playing || suspended()) rendering?.cancelPrefetch?.();
     notify();
   });
+  // Row summaries persist between data ticks; repaint them on a locale switch.
+  const unsubscribeLocale = subscribeLocale(() => notify());
   const observationDelayed = () =>
     manifest?.latest &&
     Date.now() - Date.parse(manifest.latest) >
@@ -227,12 +254,12 @@ export function createWeatherLayer({
         rendering.setHidden?.(false);
         void warmNext(time);
       }
-      error = ok ? null : 'Frame unavailable; previous observation retained';
+      error = ok ? null : 'frame';
       if (!ok) stop();
       return ok;
     } catch {
       if (owner === generation && !controller.signal.aborted) {
-        error = 'Weather imagery unavailable';
+        error = 'imagery';
         stop();
       }
       return false;
@@ -338,7 +365,7 @@ export function createWeatherLayer({
         if (!enabled || controller.signal.aborted || request !== controller)
           return false;
         if (snapshot.unavailable) {
-          error = 'Weather source unavailable; previous observation retained';
+          error = 'source';
           stop();
           return true;
         }
@@ -368,7 +395,7 @@ export function createWeatherLayer({
         return !controller.signal.aborted && request === controller && enabled;
       } catch (cause) {
         if (controller.signal.aborted || request !== controller) return false;
-        error = cause?.message || 'Weather unavailable';
+        error = cause?.message || 'generic';
         stop();
         return true;
       } finally {
@@ -487,15 +514,21 @@ export function createWeatherLayer({
         noFrame &&
         shared?.mode === 'history' &&
         shared.products.find((entry) => entry.id === id)?.selected === null
-          ? `No frame within ${maxGap() / 60_000 < 60 ? `${maxGap() / 60_000} min` : `${maxGap() / 3600_000} h`} of ${utc(shared.target)}`
+          ? t('weather.noFrame', {
+              gap:
+                maxGap() / 60_000 < 60
+                  ? t('weather.gap.minutes', { gap: maxGap() / 60_000 })
+                  : t('weather.gap.hours', { gap: maxGap() / 3600_000 }),
+              time: utc(shared.target),
+            })
           : null;
       const time = shownTime();
       const relation =
         shared?.mode === 'history' && time
           ? Date.parse(time) === Date.parse(shared.target)
-            ? ' · synced'
+            ? t('weather.synced')
             : Date.parse(time) < Date.parse(shared.target)
-              ? ' · nearest'
+              ? t('weather.nearest')
               : ''
           : '';
       const times = manifest?.times || [];
@@ -508,8 +541,11 @@ export function createWeatherLayer({
         age === null
           ? ''
           : age >= 60
-            ? `${Math.floor(age / 60)}h ${age % 60}m ago`
-            : `${age}m ago`;
+            ? t('weather.age.hoursMinutes', {
+                h: Math.floor(age / 60),
+                m: age % 60,
+              })
+            : t('weather.age.minutes', { m: age });
       const diagnostic = rendering?.getDiagnostics();
       const b = manifest?.bounds;
       const canvas = viewer?.scene?.canvas;
@@ -539,89 +575,98 @@ export function createWeatherLayer({
         readout: true,
         summary: {
           label: radar
-            ? 'Rain radar · US'
+            ? t('atmos.weather.summary.radar')
             : lightning
-              ? 'Lightning density · 15 min'
-              : 'Satellite clouds',
+              ? t('atmos.weather.summary.lightning')
+              : t('atmos.weather.summary.satellite'),
           coverage: radar
-            ? 'CONUS'
+            ? t('atmos.weather.summary.coverage.conus')
             : lightning
-              ? 'Americas + Pacific'
+              ? t('atmos.weather.summary.coverage.lightning')
               : product === 'clouds'
-                ? 'Global · 60°S–60°N'
-                : 'North America',
+                ? t('atmos.weather.summary.coverage.global')
+                : t('atmos.weather.summary.coverage.northAmerica'),
           shownTime: time,
           maxGapMinutes: maxGap() / 60_000,
           detail: time
-            ? `${followLatest ? 'Observed' : 'History'} · ${utc(time)} · ${lag}${relation}`
+            ? t('atmos.weather.summary.detail', {
+                mode: followLatest
+                  ? t('atmos.weather.observed')
+                  : t('atmos.weather.history'),
+                time: utc(time),
+                lag,
+                relation,
+              })
             : missing
-              ? 'Observation unavailable'
-              : 'Waiting for observation',
+              ? t('atmos.weather.summary.observationUnavailable')
+              : t('atmos.weather.summary.waitingForObservation'),
           status:
             missing ||
-            hostStatus ||
-            error ||
-            diagnostic?.error ||
+            messageText(hostStatus) ||
+            messageText(error) ||
+            messageText(diagnostic?.error) ||
             (observationDelayed()
-              ? 'Source observations delayed'
+              ? t('atmos.weather.summary.delayed')
               : manifest?.stale
-                ? 'Stale source'
+                ? t('atmos.weather.summary.stale')
                 : loading
-                  ? 'Loading next frame…'
+                  ? t('atmos.weather.summary.loading')
                   : outside
-                    ? 'Map center outside coverage'
+                    ? t('atmos.weather.summary.outside')
                     : null),
           units: radar ? 'dBZ' : lightning ? 'strikes/km²/min ×10³' : '',
         },
         chips: [
           ...(satellite
             ? [
-                ['clouds-regional', 'N. America'],
-                ['clouds', 'Global'],
-              ].map(([value, label]) => ({
+                ['clouds-regional', 'atmos.weather.chips.northAmerica'],
+                ['clouds', 'atmos.weather.chips.global'],
+              ].map(([value, key]) => ({
                 id: value,
-                label,
+                label: t(key),
                 active: product === value,
                 params: { product: value },
                 title:
                   value === 'clouds'
-                    ? 'Hourly global mosaic; usually 2–3 hours delayed'
-                    : 'GOES regional clouds; approximately 5-minute updates',
+                    ? t('atmos.weather.chips.globalMosaicTitle')
+                    : t('atmos.weather.chips.regionalCloudsTitle'),
               }))
             : []),
           ...(satellite
             ? [
                 {
                   id: 'filtered',
-                  label: 'Clouds only',
+                  label: t('atmos.weather.chips.cloudsOnly'),
                   active: infrared === 'filtered',
                   params: { infrared: 'filtered' },
-                  title:
-                    'Dim everything but the bright, cold cloud tops; a brightness filter, not a cloud mask',
+                  title: t('atmos.weather.chips.cloudsOnlyTitle'),
                 },
                 {
                   id: 'full',
-                  label: 'Full',
+                  label: t('atmos.weather.chips.full'),
                   active: infrared === 'full',
                   params: { infrared: 'full' },
-                  title: 'The complete infrared image at the chosen opacity',
+                  title: t('atmos.weather.chips.fullTitle'),
                 },
               ]
             : []),
           ...['light', 'strong'].map((value) => ({
             id: `opacity-${value}`,
-            label: value === 'light' ? 'Soft' : 'Vivid',
+            label:
+              value === 'light'
+                ? t('atmos.weather.chips.soft')
+                : t('atmos.weather.chips.vivid'),
             active: opacity === value,
             params: { opacity: value },
-            title: 'Image opacity; does not alter the observed values',
+            title: t('atmos.weather.chips.opacityTitle'),
           })),
           {
             id: 'coverage',
             label: radar
-              ? 'View US radar'
+              ? t('atmos.weather.chips.viewRadar')
               : lightning
-                ? 'View Americas & Pacific'
-                : 'View coverage',
+                ? t('atmos.weather.chips.viewLightning')
+                : t('atmos.weather.chips.viewCoverage'),
             disabled: !manifest || !runNavigation,
             params: { focus: true },
           },
@@ -632,37 +677,39 @@ export function createWeatherLayer({
                 label: String(label),
                 color,
                 blurb: lightning
-                  ? `${label} strikes/km²/min ×10³ (15-minute density)`
-                  : `${label} dBZ radar reflectivity`,
+                  ? t('atmos.weather.legend.lightning', { label })
+                  : t('atmos.weather.legend.radar', { label }),
               }))
             : [],
         info: hostHidden
-          ? hostStatus
-          : `${radar ? 'RADAR REFLECTIVITY · dBZ' : lightning ? 'LIGHTNING DENSITY · 15 min accumulation' : product === 'clouds' ? 'GLOBAL INFRARED · hourly' : 'GOES INFRARED · ~5 min'}\n${time ? `${followLatest ? 'Latest observation' : 'History'}: ${utc(time)}\n${lag}${current && !followLatest ? ` · frame ${index + 1}/${times.length}` : ''}${loading ? ' · loading' : ''}` : `Observation: unavailable${loading ? ' · loading' : ''}`}${missing ? `\n${missing}` : ''}${manifest?.stale ? '\nSTALE · cached source metadata' : ''}${error || diagnostic?.error ? '\n' + (error || diagnostic.error) : ''}\n${radar ? 'Contiguous US · gaps ≠ no rain' : lightning ? 'Americas + Pacific · not individual strikes\nColor: strikes/km²/min ×10³' : product === 'clouds' ? '60°S–60°N · typically 2–3 h delayed' : 'North America · infrared imagery'}${outside ? '\nMap center is outside source coverage' : ''}${motion?.matches ? (clock ? '\nReduced motion · history playback unavailable' : '\nReduced motion · manual history available') : ''}`,
-        infoTitle: lightning
-          ? 'NOAA/NWS 15-minute lightning density derived from Vaisala NLDN/GLD360. Coverage 110°E across the Pacific/Americas to 0°, 25°S–80°N. Not a live strike count, global coverage or a safety warning.'
-          : radar
-            ? 'NOAA MRMS radar echoes indicate precipitation patterns, not rain rate, a storm warning or a future forecast. Native source approximately 1 km; display is limited to level 6. Frames use exact advertised observation times.'
-            : 'GOES-19/18 longwave infrared Band 14 regional; NESDIS global longwave mosaic. Clouds only dims everything but bright, cold cloud tops; a brightness filter, not a cloud mask. Coverage and freshness differ by region.',
+          ? messageText(hostStatus)
+          : `${radar ? t('atmos.weather.info.radar') : lightning ? t('atmos.weather.info.lightning') : product === 'clouds' ? t('atmos.weather.info.globalInfrared') : t('atmos.weather.info.goesInfrared')}\n${time ? `${followLatest ? t('atmos.weather.info.latest') : t('atmos.weather.history')}: ${utc(time)}\n${lag}${current && !followLatest ? t('atmos.weather.info.frame', { i: index + 1, n: times.length }) : ''}${loading ? t('atmos.weather.info.loading') : ''}` : `${t('atmos.weather.info.observationUnavailable')}${loading ? t('atmos.weather.info.loading') : ''}`}${missing ? `\n${missing}` : ''}${manifest?.stale ? `\n${t('atmos.weather.info.stale')}` : ''}${error || diagnostic?.error ? '\n' + messageText(error || diagnostic.error) : ''}\n${radar ? t('atmos.weather.info.radarScope') : lightning ? `${t('atmos.weather.info.lightningScope')}\n${t('atmos.weather.info.lightningColor')}` : product === 'clouds' ? t('atmos.weather.info.globalScope') : t('atmos.weather.info.regionalScope')}${outside ? `\n${t('atmos.weather.info.outside')}` : ''}${motion?.matches ? (clock ? `\n${t('atmos.weather.info.reducedMotionClock')}` : `\n${t('atmos.weather.info.reducedMotionManual')}`) : ''}`,
+        infoTitle: t(
+          lightning
+            ? 'atmos.weather.infoTitle.lightning'
+            : radar
+              ? 'atmos.weather.infoTitle.radar'
+              : 'atmos.weather.infoTitle.satellite',
+        ),
       };
       controls.summary.settings = [
         ...(satellite
           ? [
               {
                 id: 'region',
-                label: 'REGION',
+                label: t('atmos.weather.settings.region'),
                 chips: controls.chips.filter(({ params }) => params.product),
               },
               {
                 id: 'image',
-                label: 'IMAGE',
+                label: t('atmos.weather.settings.image'),
                 chips: controls.chips.filter(({ params }) => params.infrared),
               },
             ]
           : []),
         {
           id: 'opacity',
-          label: 'OPACITY',
+          label: t('atmos.weather.settings.opacity'),
           chips: controls.chips.filter(({ params }) => params.opacity),
         },
       ];
@@ -677,10 +724,15 @@ export function createWeatherLayer({
     getStats() {
       return {
         count: shownTime() ? 1 : 0,
-        countLabel: isLatest() ? 'Observed' : 'History',
+        countLabel: isLatest()
+          ? t('atmos.weather.observed')
+          : t('atmos.weather.history'),
         lastUpdate: shownTime() ? Date.parse(shownTime()) : null,
         loading,
-        error: error || rendering?.getDiagnostics().error || null,
+        error:
+          messageText(error) ||
+          messageText(rendering?.getDiagnostics().error) ||
+          null,
         stale: Boolean(manifest?.stale || observationDelayed()),
         source: 'NOAA nowCOAST',
         observedAt: shownTime(),
@@ -708,6 +760,7 @@ export function createWeatherLayer({
     destroy() {
       layer.disable();
       unsubscribeClock?.();
+      unsubscribeLocale?.();
       removeCamera?.();
       removeCamera = null;
       motion?.removeEventListener?.('change', onVisibility);
