@@ -3,15 +3,14 @@ import assert from 'node:assert/strict';
 import { normalizeOsrmSteps } from './routeSteps.js';
 test('bad upstream step coordinates never invent a location', () => {
   const positions = [
-    [null, 30],
-    [0, null],
-    ['', 30],
-    [false, 30],
     [181, 30],
     [0, 91],
     [NaN, 0],
+    [0, Infinity],
+    [0],
+    null,
     [0, 0],
-    ['-97', '30'],
+    [-97, 30],
   ];
   const route = {
     legs: [

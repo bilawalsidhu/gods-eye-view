@@ -151,18 +151,9 @@ export function normalizeOsrmSteps(route) {
   for (const leg of route?.legs || []) {
     for (const raw of leg?.steps || []) {
       const location = raw?.maneuver?.location;
-      const lon = Number(location?.[0]);
-      const lat = Number(location?.[1]);
+      if (!Array.isArray(location)) continue;
+      const [lon, lat] = location;
       if (
-        !Array.isArray(location) ||
-        location
-          .slice(0, 2)
-          .some(
-            (value) =>
-              value == null ||
-              typeof value === 'boolean' ||
-              (typeof value === 'string' && !value.trim()),
-          ) ||
         !Number.isFinite(lon) ||
         !Number.isFinite(lat) ||
         Math.abs(lon) > 180 ||

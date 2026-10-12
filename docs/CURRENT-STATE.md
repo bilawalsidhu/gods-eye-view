@@ -3386,7 +3386,9 @@ service's usage policy states; past a bounded queue the answer is a 429 with a
 `Retry-After` rather than a queue that grows until everything times out. The
 upstream host is pinned and a redirect is refused rather than followed, and a
 rate limit from the routing service is reported as one instead of as "no route
-found". `src/data/routeSteps.js` turns OSRM maneuver type / modifier / exit /
+found". Maneuvers require a numeric coordinate pair within WGS84 bounds; invalid steps are skipped while valid neighboring maneuvers retain contiguous indices.
+
+`src/data/routeSteps.js` turns OSRM maneuver type / modifier / exit /
 road name into one plain-English sentence per decision, folding
 `exit roundabout` steps into the roundabout they leave, and caps one route at
 200 maneuvers — a route past that cap is reported as cut off, in the row
@@ -5310,8 +5312,3 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
-
-
-### fix(directions): discard impossible and absent maneuver coordinates
-
-Require numeric or nonempty numeric-string maneuver coordinates inside WGS84 longitude/latitude limits; skip bad rows without losing adjacent valid instructions.
