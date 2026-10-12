@@ -619,6 +619,7 @@ test('selection publishes one protected card, then the admitted descriptor and l
   assert.deepEqual(plain.layer.getStats().features, {
     heads: false,
     provenance: false,
+    revision: false,
     select: false,
     status: false,
   });

@@ -182,17 +182,25 @@ export function createEmbeddedApplication(options = {}) {
     ...app,
     /**
      * Open one simulation run (DWM-196): every panel row the run has a
-     * product for is pointed at its head and time and switched on. Resolves
-     * to what opened and what has nothing to draw (see `worldRuns.js`).
+     * product for is pointed at its head and time and switched on, pinned to
+     * the receipt's revision when one is given (GEN-299). Resolves to what
+     * opened and what has nothing to draw, or rejects with a RunOpenError
+     * the host can show (see `worldRuns.js`).
      * @param {string} head A `sim/` head.
-     * @param {{validAt?: string|null}} [options]
+     * @param {{validAt?: string|null, revisionId?: string|null,
+     *   compare?: {head: string, revisionId?: string|null}|null}} [options]
      */
-    openRun: (head, { validAt = null } = {}) =>
+    openRun: (
+      head,
+      { validAt = null, revisionId = null, compare = null } = {},
+    ) =>
       openRun({
         manager: app.getComponents().data?.dataManager,
         source: worldModelSource,
         head,
         validAt,
+        revisionId,
+        compare,
       }),
   });
 }

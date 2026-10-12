@@ -88,6 +88,7 @@ test('reads the chain and projects one demand by revision id', async () => {
   assert.deepEqual(sourceFeatures(source), {
     heads: true,
     provenance: true,
+    revision: true,
     select: true,
     status: true,
   });
@@ -255,6 +256,7 @@ test('any object with the two required methods is a ProjectionSource; the rest i
   assert.deepEqual(sourceFeatures(memory), {
     heads: false,
     provenance: false,
+    revision: false,
     select: false,
     status: false,
   });
@@ -274,4 +276,46 @@ test('any object with the two required methods is a ProjectionSource; the rest i
     revisions.revisions.length,
   );
   assert.throws(() => validateRevisions({}, 'h'), /revisions array/);
+});
+
+test("one revision by id: its bindings and the descriptors that carry its products' headers (GEN-299)", async () => {
+  const revision = {
+    id: 'rev-9',
+    parent_id: 'rev-8',
+    created_at: '2026-10-12T00:00:00+00:00',
+    metadata: {},
+    bindings: [],
+    descriptors: {
+      'simulation.rf.communications': {
+        semantic: {
+          metadata: { model: { calibration_status: 'illustrative' } },
+        },
+      },
+    },
+  };
+  const calls = [];
+  const answer = (body) => async (url) => {
+    calls.push(url);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => body,
+      text: async () => JSON.stringify(body),
+    };
+  };
+  const source = createHttpProjectionSource({
+    baseUrl: '/x',
+    fetchImpl: answer(revision),
+  });
+  assert.deepEqual(await source.getRevision({ revisionId: 'rev-9' }), revision);
+  assert.equal(calls[0], '/x/revisions/rev-9');
+  const liar = createHttpProjectionSource({
+    baseUrl: '/x',
+    fetchImpl: answer({ ...revision, id: 'rev-1' }),
+  });
+  await assert.rejects(
+    liar.getRevision({ revisionId: 'rev-9' }),
+    (e) => e.code === 'malformed',
+  );
+  await assert.rejects(source.getRevision({}), TypeError);
 });

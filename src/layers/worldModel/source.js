@@ -14,6 +14,7 @@
  *   getHeads({ signal })                          -> Promise<{ [head]: revisionId }>
  *   getProvenance({ ref, follow, depth, signal })  -> Promise<ProvenanceReport>
  *   getStatus({ head, signal })                    -> Promise<Status>   (facts, never a verdict)
+ *   getRevision({ revisionId, signal })            -> Promise<Revision> (its bindings and their descriptors, GEN-299)
  *   select({ revisionId | head, query, signal })   -> Promise<Selection>
  *       `POST /select` with values: products the projection does not draw
  *       (a sample series has no position), read by a layer adapter as numbers
@@ -70,6 +71,7 @@ export function sourceFeatures(source) {
     provenance: typeof source?.getProvenance === 'function',
     status: typeof source?.getStatus === 'function',
     select: typeof source?.select === 'function',
+    revision: typeof source?.getRevision === 'function',
   });
 }
 
@@ -332,6 +334,23 @@ export function createHttpProjectionSource({
         `/provenance/${encodeURIComponent(text)}${searchOf({ follow, depth })}`,
         { signal },
       );
+    },
+    async getRevision({ revisionId, signal } = {}) {
+      if (typeof revisionId !== 'string' || !revisionId)
+        throw new TypeError('getRevision requires a revisionId');
+      const payload = await request(
+        `/revisions/${encodeURIComponent(revisionId)}`,
+        {
+          signal,
+        },
+      );
+      if (payload?.id !== revisionId) {
+        throw new ProjectionSourceError(
+          'malformed',
+          `Revision ${payload?.id} does not match the requested ${revisionId}`,
+        );
+      }
+      return payload;
     },
     async getStatus({ head: name = head, signal } = {}) {
       return request(`/status${searchOf({ head: name })}`, { signal });

@@ -42,3 +42,28 @@ test('no enabled layer on a run: no player', () => {
   assert.equal(runOnScreen([layer('track', { head: RUN }, false)]), null);
   assert.equal(runOnScreen([]), null);
 });
+
+test('a pinned layer gives its revision, and the host\'s focus adds the comparison (GEN-299)', () => {
+  const focus = { head: RUN, revisionId: 'rev-1', headAdvanced: true, source, compare: { head: 'sim/n', revisionId: 'rev-n' } };
+  const run = runOnScreen(
+    [layer('track', { head: RUN, layers: ['simulation.rf.receiver_track'], follow: 'pinned', revisionId: 'rev-1' })],
+    focus,
+  );
+  assert.equal(run.revisionId, 'rev-1');
+  assert.deepEqual(run.compare, focus.compare);
+  assert.equal(run.headAdvanced, true);
+  // A focus on another head does not leak into the run on screen.
+  const other = runOnScreen([layer('track', { head: RUN })], { ...focus, head: 'sim/other' });
+  assert.equal(other.compare, null);
+  assert.equal(other.revisionId, null);
+});
+
+test('a focused run with no layer on screen (mission effects only) is still the run', () => {
+  const focus = { head: RUN, revisionId: 'rev-1', headAdvanced: false, source, compare: null };
+  const run = runOnScreen([layer('world-model', { head: 'world/main' })], focus);
+  assert.equal(run.head, RUN);
+  assert.equal(run.revisionId, 'rev-1');
+  assert.deepEqual(run.layerIds, []);
+  assert.equal(run.source, source);
+  assert.equal(runOnScreen([], null), null);
+});

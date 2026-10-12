@@ -115,3 +115,101 @@ test('only a run head is opened, and a row that refuses the head fails loudly', 
     /refused head/,
   );
 });
+
+// --- GEN-299: the receipt's revision, exactly ---------------------------------------------------
+
+const chainOf = (...ids) => ({
+  head: runHead,
+  revisions: ids.map((id) => ({ id, parent_id: null, created_at: '2026-10-08T00:00:00Z', bindings: [] })),
+});
+
+test("a receipt's revision pins every row to it, and the run's interval is reported", async () => {
+  const manager = managerFor(runStatus);
+  const result = await openRun({
+    manager,
+    source: { ...source(runStatus), getRevisions: async () => chainOf('rev-1') },
+    head: runHead,
+    revisionId: 'rev-1',
+  });
+  assert.equal(result.revisionId, 'rev-1');
+  assert.equal(result.headAdvanced, false);
+  for (const { layerId } of result.opened) {
+    const { params } = manager.layers.get(layerId);
+    assert.equal(params.follow, 'pinned');
+    assert.equal(params.revisionId, 'rev-1');
+    assert.equal(params.head, runHead);
+  }
+  const simulated = runStatus.bindings.filter((b) => b.modality === 'simulated');
+  const earliest = simulated.map((b) => Date.parse(b.valid.earliest));
+  const latest = simulated.map((b) => Date.parse(b.valid.latest));
+  assert.equal(Date.parse(result.interval.start), Math.min(...earliest));
+  assert.equal(Date.parse(result.interval.end), Math.max(...latest));
+});
+
+test('a head that has moved past the receipt is reported, and the receipt is still what opens', async () => {
+  const manager = managerFor(runStatus);
+  const result = await openRun({
+    manager,
+    source: { ...source(runStatus), getRevisions: async () => chainOf('rev-2', 'rev-1') },
+    head: runHead,
+    revisionId: 'rev-1',
+  });
+  assert.equal(result.headAdvanced, true);
+  assert.ok(result.opened.every(({ layerId }) => manager.layers.get(layerId).params.revisionId === 'rev-1'));
+});
+
+test('a revision that is not on the head is refused with a reason, and nothing moves', async () => {
+  const manager = managerFor(runStatus);
+  await assert.rejects(
+    openRun({
+      manager,
+      source: { ...source(runStatus), getRevisions: async () => chainOf('rev-2') },
+      head: runHead,
+      revisionId: 'rev-1',
+    }),
+    (error) => error.code === 'revision-not-on-head' && /is not on sim\//.test(error.message),
+  );
+  assert.ok([...manager.layers.values()].every((row) => !row.enabled));
+});
+
+test('a head with no simulated product is refused rather than shown as an empty globe', async () => {
+  const observedOnly = {
+    ...runStatus,
+    bindings: runStatus.bindings.filter((b) => b.modality !== 'simulated'),
+  };
+  await assert.rejects(
+    openRun({ manager: managerFor(runStatus), source: source(observedOnly), head: runHead }),
+    (error) => error.code === 'no-simulated-products' && /Retry the publication/.test(error.message),
+  );
+});
+
+test('the pair\'s nominal case is focused for comparison, and a bad one is reported without blocking the run', async () => {
+  const { runFocus } = await import('../layers/worldModel/runFocus.js');
+  const nominalHead = 'sim/sha256:' + 'ab'.repeat(32);
+  const revisions = { [runHead]: chainOf('rev-1'), [nominalHead]: chainOf('rev-n') };
+  const pairSource = { ...source(runStatus), getRevisions: async ({ head }) => revisions[head] };
+  const result = await openRun({
+    manager: managerFor(runStatus),
+    source: pairSource,
+    head: runHead,
+    revisionId: 'rev-1',
+    compare: { head: nominalHead, revisionId: 'rev-n' },
+  });
+  assert.equal(result.compareError, null);
+  assert.deepEqual(
+    { head: runFocus().head, revisionId: runFocus().revisionId, compare: { ...runFocus().compare } },
+    { head: runHead, revisionId: 'rev-1', compare: { head: nominalHead, revisionId: 'rev-n', label: 'nominal' } },
+  );
+  assert.equal(runFocus().source, pairSource);
+
+  const stale = await openRun({
+    manager: managerFor(runStatus),
+    source: pairSource,
+    head: runHead,
+    revisionId: 'rev-1',
+    compare: { head: nominalHead, revisionId: 'rev-gone' },
+  });
+  assert.ok(stale.opened.length > 0, 'the run itself still opens');
+  assert.match(stale.compareError, /nominal run cannot be compared: Revision rev-gone is not on/);
+  assert.equal(runFocus().compare, null);
+});

@@ -11,6 +11,15 @@
  * The player owns no query state: it writes `validAt` through the manager
  * like the row chips do, and reads it back. A time set from elsewhere (the
  * host's typed time, a row chip) pauses the player and moves its cursor.
+ *
+ * Under the strip, the run's mission effects (GEN-299): one lane each for
+ * communications, collection and navigation, a cell per published row,
+ * coloured by its state. Unknown is hatched, never drawn as an outage;
+ * opportunities sharing an epoch keep their own cells. When the host opened
+ * the run with its pair's nominal case, each lane has the nominal lane under
+ * it and a row marks every cell whose state differs. The models the effects
+ * came from, and whether any is validated, are said under the lanes. A run
+ * with effects but no receiver track plays at the effects' own epochs.
  */
 import { SIM_HEAD_PREFIX } from '../layers/worldModel/simulationRuns.js';
 import { RECEIVER_TRACK_BINDING } from '../layers/worldModel/receiverPass.js';
@@ -23,6 +32,14 @@ import {
   rowAt,
   stripGeometry,
 } from '../layers/worldModel/runTimeline.js';
+import {
+  compareLanes,
+  createRunEffects,
+  effectsBannerText,
+  effectsTimeline,
+  lanesGeometry,
+} from '../layers/worldModel/runEffects.js';
+import { runFocus } from '../layers/worldModel/runFocus.js';
 
 const TICK_MS = 100;
 const STRIP = Object.freeze({ width: 480, height: 56 });
@@ -66,6 +83,16 @@ const STYLE = `
 .${ROOT_CLASS} .rp-play { min-width: 64px; }
 .${ROOT_CLASS} .rp-spacer { flex: 1; }
 .${ROOT_CLASS} .rp-note { color: #6fa9b8; }
+.${ROOT_CLASS} .rp-lanes { display: grid; grid-template-columns: 68px 1fr; column-gap: 6px; margin-top: 6px; }
+.${ROOT_CLASS} .rp-lanes[hidden] { display: none; }
+.${ROOT_CLASS} .rp-lane-labels { position: relative; color: #6fa9b8; font-size: 9px; }
+.${ROOT_CLASS} .rp-lane-labels span { position: absolute; right: 0; white-space: nowrap; line-height: 8px; }
+.${ROOT_CLASS} .rp-lane-labels span.rp-sub { color: #4f7f8c; }
+.${ROOT_CLASS} .rp-strip[hidden] { display: none; }
+.${ROOT_CLASS} .rp-lanes svg { height: auto; }
+.${ROOT_CLASS} .rp-model { margin-top: 4px; color: #6fa9b8; font-size: 10px; }
+.${ROOT_CLASS} .rp-model[hidden] { display: none; }
+.${ROOT_CLASS} .rp-model .rp-warn { color: #ffb84d; }
 `;
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -92,6 +119,11 @@ function clockText(ms) {
   return `${new Date(ms).toISOString().slice(11, 19)}Z`;
 }
 
+/** What the player shows: the run, its revision and its comparison. */
+function runKey(run) {
+  return [run.head, run.revisionId ?? '', run.compare?.head ?? '', run.compare?.revisionId ?? ''].join('|');
+}
+
 /** World-model layers (they expose their projection source) and their params. */
 function worldModelLayers(dataManager) {
   const out = [];
@@ -113,9 +145,34 @@ function worldModelLayers(dataManager) {
  * The run on screen: the head of an enabled world-model layer on a `sim/`
  * head (the receiver track's layer first) and every layer on that head.
  * The revision is the player's to resolve: the layer's drawn revision can
- * still be the head it just left.
+ * still be the head it just left -- unless the layer is pinned to the one a
+ * receipt named. A run the host opened (`focus`) that put no layer on screen,
+ * such as one with mission effects only, is on screen too (GEN-299).
  */
-export function runOnScreen(layers) {
+export function runOnScreen(layers, focus = null) {
+  const run = layerRun(layers);
+  if (run) {
+    const focused = focus?.head === run.head ? focus : null;
+    return {
+      ...run,
+      revisionId: run.revisionId ?? focused?.revisionId ?? null,
+      compare: focused?.compare ?? null,
+      headAdvanced: focused?.headAdvanced ?? false,
+    };
+  }
+  if (!focus?.head || !focus.source) return null;
+  return {
+    head: focus.head,
+    validAt: null,
+    source: focus.source,
+    layerIds: [],
+    revisionId: focus.revisionId,
+    compare: focus.compare,
+    headAdvanced: focus.headAdvanced,
+  };
+}
+
+function layerRun(layers) {
   const onRun = layers.filter(
     (layer) =>
       layer.entry.enabled && layer.params.head?.startsWith(SIM_HEAD_PREFIX),
@@ -129,6 +186,8 @@ export function runOnScreen(layers) {
   return {
     head,
     validAt: lead.params.validAt ?? null,
+    revisionId:
+      lead.params.follow === 'pinned' ? (lead.params.revisionId ?? null) : null,
     source: lead.module.getProjectionSource(),
     layerIds: layers
       .filter((layer) => layer.params.head === head)
@@ -159,6 +218,9 @@ export function mountRunPlayer({ dataManager, container }) {
     <div class="rp-strip"><svg viewBox="0 0 ${STRIP.width} ${STRIP.height}" preserveAspectRatio="none" tabindex="0"
       role="slider" aria-label="Run time (SINR over the run)"></svg></div>
     <div class="rp-axis"><span class="rp-start"></span><span class="rp-range"></span><span class="rp-end"></span></div>
+    <div class="rp-lanes" hidden><div class="rp-lane-labels"></div>
+      <svg class="rp-lane-svg" preserveAspectRatio="none" role="img" aria-label="Mission effects over the run"></svg></div>
+    <div class="rp-model" hidden></div>
     <div class="rp-controls">
       <button type="button" class="rp-back" title="Back one epoch" aria-label="Back one epoch">◀◀</button>
       <button type="button" class="rp-play">▶ PLAY</button>
@@ -170,8 +232,10 @@ export function mountRunPlayer({ dataManager, container }) {
   container.appendChild(root);
   const $ = (selector) => root.querySelector(selector);
   const strip = $('svg');
+  const laneSvg = $('.rp-lane-svg');
 
   const readers = new WeakMap(); // source -> timeline reader
+  const effectReaders = new WeakMap(); // source -> effects reader
   const state = {
     key: null, // the run head the timeline belongs to
     run: null,
@@ -182,11 +246,20 @@ export function mountRunPlayer({ dataManager, container }) {
     lastTick: performance.now(),
     loading: null,
     dragging: false,
+    effects: null, // {lanes, card} of the run
+    compared: null, // {lanes} of the pair's nominal case, when the host named it
+    differences: [],
   };
 
   function readerFor(source) {
     if (!readers.has(source)) readers.set(source, createRunTimelines(source));
     return readers.get(source);
+  }
+
+  function effectsReaderFor(source) {
+    if (!effectReaders.has(source))
+      effectReaders.set(source, createRunEffects(source));
+    return effectReaders.get(source);
   }
 
   /** Every world-model layer on the run's head goes to `validAt`. */
@@ -281,10 +354,135 @@ export function mountRunPlayer({ dataManager, container }) {
     strip.appendChild(cursor);
     $('.rp-start').textContent = clockText(timeline.start);
     $('.rp-end').textContent = clockText(timeline.end);
-    $('.rp-range').textContent =
-      `SINR ${sinr(geometry.sinrMinDb)}…${sinr(geometry.sinrMaxDb)} dB` +
-      (geometry.windows.length ? ' · shaded: jammer active' : '');
+    // A run with mission effects but no receiver track has no SINR to draw.
+    $('.rp-strip').hidden = !timeline.binding;
+    $('.rp-range').textContent = timeline.binding
+      ? `SINR ${sinr(geometry.sinrMinDb)}…${sinr(geometry.sinrMaxDb)} dB` +
+        (geometry.windows.length ? ' · shaded: jammer active' : '')
+      : 'no receiver track: mission effects only';
     state.geometry = geometry;
+    drawLanes();
+  }
+
+  function laneRows() {
+    const rows = [];
+    const nominal = new Map(
+      (state.compared?.lanes ?? []).map((lane) => [lane.family, lane]),
+    );
+    for (const lane of state.effects?.lanes ?? []) {
+      rows.push({ lane, label: lane.label, run: 'contested' });
+      const twin = nominal.get(lane.family);
+      if (twin) rows.push({ lane: twin, label: 'nominal', run: 'nominal' });
+    }
+    return rows;
+  }
+
+  function drawLanes() {
+    laneSvg.replaceChildren();
+    const labels = $('.rp-lane-labels');
+    labels.replaceChildren();
+    const rows = laneRows();
+    const lanes = $('.rp-lanes');
+    lanes.hidden = !rows.length || !state.geometry;
+    if (lanes.hidden) return;
+    const geometry = lanesGeometry(rows, {
+      x: state.geometry.x,
+      cadenceMs: state.timeline.cadenceMs ?? 1000,
+    });
+    const diffHeight = state.compared ? 6 : 0;
+    const height = geometry.height + (diffHeight ? diffHeight + 3 : 0);
+    laneSvg.setAttribute('viewBox', `0 0 ${STRIP.width} ${height}`);
+    laneSvg.style.height = `${height}px`;
+    labels.style.height = `${height}px`;
+    const defs = svg('defs');
+    const hatch = svg('pattern', { id: 'rp-unknown-hatch', width: 4, height: 4, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' });
+    hatch.appendChild(svg('rect', { width: 4, height: 4, fill: 'rgba(150, 150, 150, 0.25)' }));
+    hatch.appendChild(svg('line', { x1: 0, y1: 0, x2: 0, y2: 4, stroke: 'rgba(200, 200, 200, 0.8)', 'stroke-width': 1.5 }));
+    defs.appendChild(hatch);
+    laneSvg.appendChild(defs);
+    for (const row of geometry.rows) {
+      const tag = document.createElement('span');
+      tag.style.top = `${row.y}px`;
+      tag.textContent = row.label;
+      if (row.run === 'nominal') tag.className = 'rp-sub';
+      labels.appendChild(tag);
+      for (const box of row.cells) {
+        const { cell } = box;
+        const rect = svg('rect', {
+          x: box.x,
+          y: box.y,
+          width: box.width,
+          height: box.height,
+          fill: cell.unknown ? 'url(#rp-unknown-hatch)' : rgb(RECEIVER_STATES[cell.state].colorRgb, row.run === 'nominal' ? 0.55 : 0.9),
+        });
+        const title = svg('title');
+        title.textContent =
+          `${row.run === 'nominal' ? `${row.family} (nominal)` : row.label} · ${cell.opportunity} · ${clockText(cell.at)}: ${cell.stateName}` +
+          (cell.reason ? ` (${cell.reason})` : '') +
+          (cell.outcome ? ` · ${cell.outcome}` : '');
+        rect.appendChild(title);
+        laneSvg.appendChild(rect);
+      }
+    }
+    if (state.compared) {
+      const y = geometry.height + 3;
+      const tag = document.createElement('span');
+      tag.style.top = `${y}px`;
+      tag.textContent = state.differences.length ? 'differs' : 'no difference';
+      labels.appendChild(tag);
+      const seen = new Set();
+      for (const difference of state.differences) {
+        if (seen.has(difference.at)) continue;
+        seen.add(difference.at);
+        const mark = svg('rect', {
+          x: state.geometry.x(difference.at),
+          y,
+          width: 3,
+          height: diffHeight,
+          fill: '#ffffff',
+        });
+        const title = svg('title');
+        title.textContent = state.differences
+          .filter((d) => d.at === difference.at)
+          .map((d) => `${d.family} ${d.opportunity}: ${d.contested} (nominal: ${d.nominal})`)
+          .join('\n');
+        mark.appendChild(title);
+        laneSvg.appendChild(mark);
+      }
+    }
+    const cursor = svg('line', {
+      class: 'rp-lane-cursor',
+      y1: 0,
+      y2: height,
+      stroke: '#ffffff',
+      'stroke-width': 1,
+      'vector-effect': 'non-scaling-stroke',
+    });
+    laneSvg.appendChild(cursor);
+  }
+
+  function renderModel() {
+    const model = $('.rp-model');
+    const card = state.effects?.card;
+    const notes = [];
+    if (state.effects?.lanes.length) {
+      if (!card)
+        notes.push('<span class="rp-warn">Effects model unknown: the run\'s headers could not be read.</span>');
+      else {
+        const statuses = [...new Set(card.models.map((m) => m.calibrationStatus))].join(', ');
+        notes.push(
+          card.uncalibrated
+            ? `<span class="rp-warn">Effects models ${statuses}, not validated</span>`
+            : `Effects models ${statuses}`,
+        );
+        if (card.assumptions.length) notes.push(`${card.assumptions.length} assumptions (hover)`);
+        model.title = card.assumptions.join('\n');
+      }
+    }
+    if (state.run?.headAdvanced)
+      notes.push('<span class="rp-warn">This head has a newer revision; showing the published one.</span>');
+    model.hidden = !notes.length;
+    model.innerHTML = notes.join(' · ');
   }
 
   function render() {
@@ -307,12 +505,19 @@ export function mountRunPlayer({ dataManager, container }) {
           ? 'Run timeline unavailable'
           : state.loading
             ? 'Reading the run…'
-            : 'This run has no receiver track to play';
+            : 'This run has no receiver track or mission effects to play';
       $('.rp-time').textContent = '';
+      renderModel();
       return;
     }
+    renderModel();
     const ms = state.cursorMs ?? timeline.rows[clock.index].at;
-    const banner = bannerOf(rowAt(timeline, ms) ?? timeline.rows[0]);
+    const banner = timeline.binding
+      ? bannerOf(rowAt(timeline, ms) ?? timeline.rows[0])
+      : {
+          colorRgb: [0.56, 0.86, 0.94],
+          text: effectsBannerText(state.effects?.lanes ?? [], ms) || 'No effect at this time',
+        };
     $('.rp-swatch').style.background = rgb(banner.colorRgb);
     $('.rp-banner-text').textContent = banner.text;
     $('.rp-banner-text').style.color = rgb(banner.colorRgb);
@@ -322,9 +527,10 @@ export function mountRunPlayer({ dataManager, container }) {
     const x = state.geometry?.x(
       Math.min(timeline.end, Math.max(timeline.start, ms)),
     );
-    const cursor = strip.querySelector('.rp-cursor');
-    cursor?.setAttribute('x1', x);
-    cursor?.setAttribute('x2', x);
+    for (const cursor of root.querySelectorAll('.rp-cursor, .rp-lane-cursor')) {
+      cursor.setAttribute('x1', x);
+      cursor.setAttribute('x2', x);
+    }
     strip.setAttribute('aria-valuemin', String(0));
     strip.setAttribute('aria-valuemax', String(timeline.rows.length - 1));
     strip.setAttribute('aria-valuenow', String(clock.index));
@@ -342,23 +548,36 @@ export function mountRunPlayer({ dataManager, container }) {
   }
 
   async function load(run) {
-    const key = run.head;
+    const key = runKey(run);
     state.key = key;
     state.timeline = null;
     state.clock = null;
     state.geometry = null;
+    state.effects = null;
+    state.compared = null;
+    state.differences = [];
     strip.replaceChildren();
     state.loading = true;
     render();
     try {
-      const revisionId = await revisionOf(run);
+      const revisionId = run.revisionId ?? (await revisionOf(run));
       if (state.key !== key) return;
-      const timeline = await readerFor(run.source).read({
-        revisionId,
-        head: run.head,
-      });
+      const at = { revisionId, head: run.head };
+      const [track, effects, compared] = await Promise.all([
+        readerFor(run.source).read(at),
+        effectsReaderFor(run.source).read(at),
+        run.compare
+          ? effectsReaderFor(run.source).read(run.compare)
+          : Promise.resolve(null),
+      ]);
       if (state.key !== key) return;
       state.loading = null;
+      state.effects = effects;
+      state.compared = compared?.lanes.length ? compared : null;
+      state.differences = state.compared
+        ? compareLanes(effects.lanes, state.compared.lanes)
+        : [];
+      const timeline = track ?? effectsTimeline(effects.lanes);
       state.timeline = timeline;
       if (timeline?.cadenceMs) {
         const at = Date.parse(run.validAt);
@@ -383,7 +602,7 @@ export function mountRunPlayer({ dataManager, container }) {
     const now = performance.now();
     const elapsed = now - state.lastTick;
     state.lastTick = now;
-    const run = runOnScreen(worldModelLayers(dataManager));
+    const run = runOnScreen(worldModelLayers(dataManager), runFocus());
     state.run = run;
     if (!run) {
       state.clock?.pause();
@@ -392,7 +611,7 @@ export function mountRunPlayer({ dataManager, container }) {
       render();
       return;
     }
-    if (run.head !== state.key) void load(run);
+    if (runKey(run) !== state.key) void load(run);
     const { timeline, clock } = state;
     if (!timeline || !clock) {
       render();
@@ -412,10 +631,10 @@ export function mountRunPlayer({ dataManager, container }) {
     render();
   }
 
-  function seekToClientX(clientX) {
+  function seekToClientX(clientX, surface = strip) {
     const { timeline, clock } = state;
     if (!timeline || !clock) return;
-    const box = strip.getBoundingClientRect();
+    const box = surface.getBoundingClientRect();
     const fraction = Math.min(1, Math.max(0, (clientX - box.left) / box.width));
     const ms = timeline.start + fraction * (timeline.end - timeline.start);
     const index = nearestIndex(timeline, ms);
@@ -472,6 +691,7 @@ export function mountRunPlayer({ dataManager, container }) {
   };
   on(strip, 'pointerup', endDrag);
   on(strip, 'pointercancel', endDrag);
+  on(laneSvg, 'pointerdown', (event) => seekToClientX(event.clientX, laneSvg));
   on(strip, 'keydown', (event) => {
     if (!state.clock) return;
     const delta = { ArrowLeft: -1, ArrowRight: 1 }[event.key];

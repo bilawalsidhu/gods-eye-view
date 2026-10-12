@@ -1,0 +1,1153 @@
+{
+ "_comment": "GEN-299: the mission effects of Foundation examples/ground-rf-mission/contested.sexpr (both cases of one pair), as World Model /select and /revisions/{id} answer them. Generated from the Foundation run, not hand-written.",
+ "contested": {
+  "head": "sim/sha256:20e844b5984672f6b6c474059ccede3e9c2f3e1b1902c79164e4957bfaf42365",
+  "revision_id": "rev-contested",
+  "selections": {
+   "simulation.rf.communications": {
+    "revision_id": "rev-contested",
+    "query": {
+     "requested_layers": [
+      "simulation.rf.communications"
+     ]
+    },
+    "products": [
+     {
+      "product_ref": "simulation.rf.communications@contested",
+      "descriptor_id": "foundation-rf-communications",
+      "values_ref": null,
+      "metadata": {
+       "selected": 7,
+       "of": 7
+      },
+      "values": [
+       {
+        "ordinal": 0,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T01:59:42+00:00",
+        "knowledge_time": "2026-08-12T01:59:42+00:00",
+        "series_key": {
+         "opportunity": "exchange-0"
+        },
+        "value": {
+         "attempted_bytes": 100,
+         "available": true,
+         "delivered_bytes": 100,
+         "delivery_fraction": 1.0,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "communications.json#0"
+       },
+       {
+        "ordinal": 1,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:12+00:00",
+        "knowledge_time": "2026-08-12T02:00:12+00:00",
+        "series_key": {
+         "opportunity": "exchange-1"
+        },
+        "value": {
+         "attempted_bytes": 100,
+         "available": true,
+         "delivered_bytes": 50,
+         "delivery_fraction": 0.5,
+         "reason_code": 0,
+         "state_code": 1
+        },
+        "source_ref": "communications.json#1"
+       },
+       {
+        "ordinal": 2,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:12+00:00",
+        "knowledge_time": "2026-08-12T02:00:12+00:00",
+        "series_key": {
+         "opportunity": "parallel-exchange"
+        },
+        "value": {
+         "attempted_bytes": 3,
+         "available": true,
+         "delivered_bytes": 1,
+         "delivery_fraction": 0.3333333333333333,
+         "reason_code": 0,
+         "state_code": 1
+        },
+        "source_ref": "communications.json#2"
+       },
+       {
+        "ordinal": 3,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:42+00:00",
+        "knowledge_time": "2026-08-12T02:00:42+00:00",
+        "series_key": {
+         "opportunity": "exchange-2"
+        },
+        "value": {
+         "attempted_bytes": 100,
+         "available": false,
+         "delivered_bytes": 0,
+         "delivery_fraction": 0.0,
+         "reason_code": 1,
+         "state_code": 2
+        },
+        "source_ref": "communications.json#3"
+       },
+       {
+        "ordinal": 4,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:01:12+00:00",
+        "knowledge_time": "2026-08-12T02:01:12+00:00",
+        "series_key": {
+         "opportunity": "exchange-3"
+        },
+        "value": {
+         "attempted_bytes": 100,
+         "available": false,
+         "delivered_bytes": 0,
+         "delivery_fraction": 0.0,
+         "reason_code": 4,
+         "state_code": 3
+        },
+        "source_ref": "communications.json#4"
+       },
+       {
+        "ordinal": 5,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:01:42+00:00",
+        "knowledge_time": "2026-08-12T02:01:42+00:00",
+        "series_key": {
+         "opportunity": "exchange-4"
+        },
+        "value": {
+         "attempted_bytes": 100,
+         "available": false,
+         "delivered_bytes": 0,
+         "delivery_fraction": 0.0,
+         "reason_code": 4,
+         "state_code": 3
+        },
+        "source_ref": "communications.json#5"
+       },
+       {
+        "ordinal": 6,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:02:12+00:00",
+        "knowledge_time": "2026-08-12T02:02:12+00:00",
+        "series_key": {
+         "opportunity": "exchange-5"
+        },
+        "value": {
+         "attempted_bytes": 100,
+         "available": true,
+         "delivered_bytes": 100,
+         "delivery_fraction": 1.0,
+         "reason_code": 3,
+         "state_code": 0
+        },
+        "source_ref": "communications.json#6"
+       }
+      ]
+     }
+    ],
+    "plan": {},
+    "omissions": []
+   },
+   "simulation.rf.collection": {
+    "revision_id": "rev-contested",
+    "query": {
+     "requested_layers": [
+      "simulation.rf.collection"
+     ]
+    },
+    "products": [
+     {
+      "product_ref": "simulation.rf.collection@contested",
+      "descriptor_id": "foundation-rf-collection",
+      "values_ref": null,
+      "metadata": {
+       "selected": 7,
+       "of": 7
+      },
+      "values": [
+       {
+        "ordinal": 0,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T01:59:42+00:00",
+        "knowledge_time": "2026-08-12T01:59:42+00:00",
+        "series_key": {
+         "opportunity": "observation-0"
+        },
+        "value": {
+         "available": true,
+         "observation_retained": true,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "collection.json#0"
+       },
+       {
+        "ordinal": 1,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:12+00:00",
+        "knowledge_time": "2026-08-12T02:00:12+00:00",
+        "series_key": {
+         "opportunity": "observation-1"
+        },
+        "value": {
+         "available": true,
+         "observation_retained": false,
+         "reason_code": 0,
+         "state_code": 1
+        },
+        "source_ref": "collection.json#1"
+       },
+       {
+        "ordinal": 2,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:27+00:00",
+        "knowledge_time": "2026-08-12T02:00:27+00:00",
+        "series_key": {
+         "opportunity": "off-grid-observation"
+        },
+        "value": {
+         "available": null,
+         "observation_retained": null,
+         "reason_code": 6,
+         "state_code": 4
+        },
+        "source_ref": "collection.json#2"
+       },
+       {
+        "ordinal": 3,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:42+00:00",
+        "knowledge_time": "2026-08-12T02:00:42+00:00",
+        "series_key": {
+         "opportunity": "observation-2"
+        },
+        "value": {
+         "available": false,
+         "observation_retained": false,
+         "reason_code": 1,
+         "state_code": 2
+        },
+        "source_ref": "collection.json#3"
+       },
+       {
+        "ordinal": 4,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:01:12+00:00",
+        "knowledge_time": "2026-08-12T02:01:12+00:00",
+        "series_key": {
+         "opportunity": "observation-3"
+        },
+        "value": {
+         "available": false,
+         "observation_retained": false,
+         "reason_code": 4,
+         "state_code": 3
+        },
+        "source_ref": "collection.json#4"
+       },
+       {
+        "ordinal": 5,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:01:42+00:00",
+        "knowledge_time": "2026-08-12T02:01:42+00:00",
+        "series_key": {
+         "opportunity": "observation-4"
+        },
+        "value": {
+         "available": false,
+         "observation_retained": false,
+         "reason_code": 4,
+         "state_code": 3
+        },
+        "source_ref": "collection.json#5"
+       },
+       {
+        "ordinal": 6,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:02:12+00:00",
+        "knowledge_time": "2026-08-12T02:02:12+00:00",
+        "series_key": {
+         "opportunity": "observation-5"
+        },
+        "value": {
+         "available": true,
+         "observation_retained": true,
+         "reason_code": 3,
+         "state_code": 0
+        },
+        "source_ref": "collection.json#6"
+       }
+      ]
+     }
+    ],
+    "plan": {},
+    "omissions": []
+   },
+   "simulation.rf.navigation": {
+    "revision_id": "rev-contested",
+    "query": {
+     "requested_layers": [
+      "simulation.rf.navigation"
+     ]
+    },
+    "products": [
+     {
+      "product_ref": "simulation.rf.navigation@contested",
+      "descriptor_id": "foundation-rf-navigation",
+      "values_ref": null,
+      "metadata": {
+       "selected": 6,
+       "of": 6
+      },
+      "values": [
+       {
+        "ordinal": 0,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T01:59:42+00:00",
+        "knowledge_time": "2026-08-12T01:59:42+00:00",
+        "series_key": {
+         "opportunity": "navigation-0"
+        },
+        "value": {
+         "available": true,
+         "geolocation_sigma_m": 3.361092540783338,
+         "position_sigma_m": 3.694845773602185,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "navigation.json#0"
+       },
+       {
+        "ordinal": 1,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:12+00:00",
+        "knowledge_time": "2026-08-12T02:00:12+00:00",
+        "series_key": {
+         "opportunity": "navigation-1"
+        },
+        "value": {
+         "available": true,
+         "geolocation_sigma_m": 13.853085302198945,
+         "position_sigma_m": 17.898983661442795,
+         "reason_code": 0,
+         "state_code": 1
+        },
+        "source_ref": "navigation.json#1"
+       },
+       {
+        "ordinal": 2,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:42+00:00",
+        "knowledge_time": "2026-08-12T02:00:42+00:00",
+        "series_key": {
+         "opportunity": "navigation-2"
+        },
+        "value": {
+         "available": false,
+         "geolocation_sigma_m": null,
+         "position_sigma_m": null,
+         "reason_code": 1,
+         "state_code": 2
+        },
+        "source_ref": "navigation.json#2"
+       },
+       {
+        "ordinal": 3,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:01:12+00:00",
+        "knowledge_time": "2026-08-12T02:01:12+00:00",
+        "series_key": {
+         "opportunity": "navigation-3"
+        },
+        "value": {
+         "available": false,
+         "geolocation_sigma_m": null,
+         "position_sigma_m": null,
+         "reason_code": 4,
+         "state_code": 3
+        },
+        "source_ref": "navigation.json#3"
+       },
+       {
+        "ordinal": 4,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:01:42+00:00",
+        "knowledge_time": "2026-08-12T02:01:42+00:00",
+        "series_key": {
+         "opportunity": "navigation-4"
+        },
+        "value": {
+         "available": false,
+         "geolocation_sigma_m": null,
+         "position_sigma_m": null,
+         "reason_code": 4,
+         "state_code": 3
+        },
+        "source_ref": "navigation.json#4"
+       },
+       {
+        "ordinal": 5,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:02:12+00:00",
+        "knowledge_time": "2026-08-12T02:02:12+00:00",
+        "series_key": {
+         "opportunity": "navigation-5"
+        },
+        "value": {
+         "available": true,
+         "geolocation_sigma_m": 4.064365989942721,
+         "position_sigma_m": 3.763498091634204,
+         "reason_code": 3,
+         "state_code": 0
+        },
+        "source_ref": "navigation.json#5"
+       }
+      ]
+     }
+    ],
+    "plan": {},
+    "omissions": []
+   }
+  },
+  "revision": {
+   "id": "rev-contested",
+   "parent_id": null,
+   "created_at": "2026-10-12T00:00:00+00:00",
+   "metadata": {},
+   "bindings": [
+    {
+     "name": "simulation.rf.communications",
+     "ref": {
+      "type_id": "t",
+      "content_id": "c"
+     }
+    },
+    {
+     "name": "simulation.rf.collection",
+     "ref": {
+      "type_id": "t",
+      "content_id": "c"
+     }
+    },
+    {
+     "name": "simulation.rf.navigation",
+     "ref": {
+      "type_id": "t",
+      "content_id": "c"
+     }
+    }
+   ],
+   "descriptors": {
+    "simulation.rf.communications": {
+     "semantic": {
+      "metadata": {
+       "state_codes": {
+        "0": "nominal",
+        "1": "degraded",
+        "2": "unavailable",
+        "3": "recovering",
+        "4": "unknown"
+       },
+       "reason_codes": {
+        "0": "below_nominal_threshold",
+        "1": "below_unavailable_threshold",
+        "2": "nominal_threshold_met",
+        "3": "reacquisition_complete",
+        "4": "reacquisition_delay",
+        "5": "unknown_rf_environment",
+        "6": "missing_receiver_sample"
+       },
+       "model": {
+        "calibration_status": "illustrative",
+        "id": "dataforge.scheduled-state-mapping.communications",
+        "validation_report_content_id": null,
+        "version": "1"
+       },
+       "assumptions": [
+        "Illustrative scheduled state mapping; no empirical packet delivery or observation-quality claim.",
+        "Each opportunity is instantaneous; exact UTC receiver samples only, with no interpolation or hold-last-value.",
+        "Missing receiver samples and unknown RF evidence yield null outcomes, never an inferred outage.",
+        "Delivery is floor(attempted bytes times configured state fraction), with no retries or shared capacity model.",
+        "Collection retention is a separate nominal/degraded policy; no continuous observation quality is justified."
+       ],
+       "uncertainty": null,
+       "run_content_id": "sha256:20e844b5984672f6b6c474059ccede3e9c2f3e1b1902c79164e4957bfaf42365",
+       "source_run_label": "contested",
+       "pair_content_id": "sha256:bc9b8337869288687e3ac723289d43fc13f908f7120a3a39080538ccae3f7cf7"
+      }
+     }
+    },
+    "simulation.rf.collection": {
+     "semantic": {
+      "metadata": {
+       "state_codes": {
+        "0": "nominal",
+        "1": "degraded",
+        "2": "unavailable",
+        "3": "recovering",
+        "4": "unknown"
+       },
+       "reason_codes": {
+        "0": "below_nominal_threshold",
+        "1": "below_unavailable_threshold",
+        "2": "nominal_threshold_met",
+        "3": "reacquisition_complete",
+        "4": "reacquisition_delay",
+        "5": "unknown_rf_environment",
+        "6": "missing_receiver_sample"
+       },
+       "model": {
+        "calibration_status": "illustrative",
+        "id": "dataforge.scheduled-state-mapping.collection",
+        "validation_report_content_id": null,
+        "version": "1"
+       },
+       "assumptions": [
+        "Illustrative scheduled state mapping; no empirical packet delivery or observation-quality claim.",
+        "Each opportunity is instantaneous; exact UTC receiver samples only, with no interpolation or hold-last-value.",
+        "Missing receiver samples and unknown RF evidence yield null outcomes, never an inferred outage.",
+        "Delivery is floor(attempted bytes times configured state fraction), with no retries or shared capacity model.",
+        "Collection retention is a separate nominal/degraded policy; no continuous observation quality is justified."
+       ],
+       "uncertainty": null,
+       "run_content_id": "sha256:20e844b5984672f6b6c474059ccede3e9c2f3e1b1902c79164e4957bfaf42365",
+       "source_run_label": "contested",
+       "pair_content_id": "sha256:bc9b8337869288687e3ac723289d43fc13f908f7120a3a39080538ccae3f7cf7"
+      }
+     }
+    },
+    "simulation.rf.navigation": {
+     "semantic": {
+      "metadata": {
+       "state_codes": {
+        "0": "nominal",
+        "1": "degraded",
+        "2": "unavailable",
+        "3": "recovering",
+        "4": "unknown"
+       },
+       "reason_codes": {
+        "0": "below_nominal_threshold",
+        "1": "below_unavailable_threshold",
+        "2": "nominal_threshold_met",
+        "3": "reacquisition_complete",
+        "4": "reacquisition_delay",
+        "5": "unknown_rf_environment",
+        "6": "missing_receiver_sample",
+        "7": "insufficient_satellites",
+        "8": "ill_conditioned_geometry",
+        "9": "insufficient_orbit_support"
+       },
+       "model": {
+        "calibration_status": "illustrative",
+        "id": "dataforge.gnss-snapshot-navigation/1",
+        "validation_report_content_id": null,
+        "version": "1"
+       },
+       "assumptions": [
+        "Snapshot weighted least squares at each receiver epoch; no filter, propagation or coasting between fixes.",
+        "Satellite positions are recorded IGS final orbits interpolated under the declared Lagrange policy; receiver positions are the scenario states rotated ECI to ECEF by GMST.",
+        "One equal-variance measurement per usable satellite; satellite clock, ionosphere, troposphere and multipath are folded into the declared user-equivalent range error.",
+        "Interference is a single aggregate receiver-plane SINR applied equally to every satellite.",
+        "Degraded variance scales as 10^((nominal_min_sinr_db - sinr_db)/10), first-order code-tracking behaviour; illustrative until calibrated (GEN-273).",
+        "Recovering and unavailable receivers produce no fix; reception resuming is not nominal accuracy.",
+        "position_sigma_m is sqrt(trace(P_pos)/3), an isotropic per-axis ECEF value.",
+        "geolocation_sigma_m is the navigation-induced horizontal error of a declared ground target located by pointing: the platform position error moves along the fixed line of sight onto the target's local horizontal plane, delta_t = (I - d n^T / n^T d) delta_r; sqrt((C_EE+C_NN)/2) of that covariance.",
+        "Geolocation excludes attitude/pointing, time-tag, terrain-height and sensor errors; it is the navigation contribution only. A target below the minimum elevation has no geolocation."
+       ],
+       "uncertainty": {
+        "geolocation_frame": "ENU",
+        "geolocation_vertical_included": false,
+        "position_frame": "ECEF",
+        "statistic": "isotropic-per-axis-one-sigma"
+       },
+       "run_content_id": "sha256:20e844b5984672f6b6c474059ccede3e9c2f3e1b1902c79164e4957bfaf42365",
+       "source_run_label": "contested",
+       "pair_content_id": "sha256:bc9b8337869288687e3ac723289d43fc13f908f7120a3a39080538ccae3f7cf7"
+      }
+     }
+    }
+   }
+  }
+ },
+ "nominal": {
+  "head": "sim/sha256:70bafd91bbac674b32ebd2cc7f2b2fbd2d89476b7f5aa20a46779be7ad6ec847",
+  "revision_id": "rev-nominal",
+  "selections": {
+   "simulation.rf.communications": {
+    "revision_id": "rev-nominal",
+    "query": {
+     "requested_layers": [
+      "simulation.rf.communications"
+     ]
+    },
+    "products": [
+     {
+      "product_ref": "simulation.rf.communications@nominal",
+      "descriptor_id": "foundation-rf-communications",
+      "values_ref": null,
+      "metadata": {
+       "selected": 7,
+       "of": 7
+      },
+      "values": [
+       {
+        "ordinal": 0,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T01:59:42+00:00",
+        "knowledge_time": "2026-08-12T01:59:42+00:00",
+        "series_key": {
+         "opportunity": "exchange-0"
+        },
+        "value": {
+         "attempted_bytes": 100,
+         "available": true,
+         "delivered_bytes": 100,
+         "delivery_fraction": 1.0,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "communications.json#0"
+       },
+       {
+        "ordinal": 1,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:12+00:00",
+        "knowledge_time": "2026-08-12T02:00:12+00:00",
+        "series_key": {
+         "opportunity": "exchange-1"
+        },
+        "value": {
+         "attempted_bytes": 100,
+         "available": true,
+         "delivered_bytes": 100,
+         "delivery_fraction": 1.0,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "communications.json#1"
+       },
+       {
+        "ordinal": 2,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:12+00:00",
+        "knowledge_time": "2026-08-12T02:00:12+00:00",
+        "series_key": {
+         "opportunity": "parallel-exchange"
+        },
+        "value": {
+         "attempted_bytes": 3,
+         "available": true,
+         "delivered_bytes": 3,
+         "delivery_fraction": 1.0,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "communications.json#2"
+       },
+       {
+        "ordinal": 3,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:42+00:00",
+        "knowledge_time": "2026-08-12T02:00:42+00:00",
+        "series_key": {
+         "opportunity": "exchange-2"
+        },
+        "value": {
+         "attempted_bytes": 100,
+         "available": true,
+         "delivered_bytes": 100,
+         "delivery_fraction": 1.0,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "communications.json#3"
+       },
+       {
+        "ordinal": 4,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:01:12+00:00",
+        "knowledge_time": "2026-08-12T02:01:12+00:00",
+        "series_key": {
+         "opportunity": "exchange-3"
+        },
+        "value": {
+         "attempted_bytes": 100,
+         "available": true,
+         "delivered_bytes": 100,
+         "delivery_fraction": 1.0,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "communications.json#4"
+       },
+       {
+        "ordinal": 5,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:01:42+00:00",
+        "knowledge_time": "2026-08-12T02:01:42+00:00",
+        "series_key": {
+         "opportunity": "exchange-4"
+        },
+        "value": {
+         "attempted_bytes": 100,
+         "available": true,
+         "delivered_bytes": 100,
+         "delivery_fraction": 1.0,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "communications.json#5"
+       },
+       {
+        "ordinal": 6,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:02:12+00:00",
+        "knowledge_time": "2026-08-12T02:02:12+00:00",
+        "series_key": {
+         "opportunity": "exchange-5"
+        },
+        "value": {
+         "attempted_bytes": 100,
+         "available": true,
+         "delivered_bytes": 100,
+         "delivery_fraction": 1.0,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "communications.json#6"
+       }
+      ]
+     }
+    ],
+    "plan": {},
+    "omissions": []
+   },
+   "simulation.rf.collection": {
+    "revision_id": "rev-nominal",
+    "query": {
+     "requested_layers": [
+      "simulation.rf.collection"
+     ]
+    },
+    "products": [
+     {
+      "product_ref": "simulation.rf.collection@nominal",
+      "descriptor_id": "foundation-rf-collection",
+      "values_ref": null,
+      "metadata": {
+       "selected": 7,
+       "of": 7
+      },
+      "values": [
+       {
+        "ordinal": 0,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T01:59:42+00:00",
+        "knowledge_time": "2026-08-12T01:59:42+00:00",
+        "series_key": {
+         "opportunity": "observation-0"
+        },
+        "value": {
+         "available": true,
+         "observation_retained": true,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "collection.json#0"
+       },
+       {
+        "ordinal": 1,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:12+00:00",
+        "knowledge_time": "2026-08-12T02:00:12+00:00",
+        "series_key": {
+         "opportunity": "observation-1"
+        },
+        "value": {
+         "available": true,
+         "observation_retained": true,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "collection.json#1"
+       },
+       {
+        "ordinal": 2,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:27+00:00",
+        "knowledge_time": "2026-08-12T02:00:27+00:00",
+        "series_key": {
+         "opportunity": "off-grid-observation"
+        },
+        "value": {
+         "available": null,
+         "observation_retained": null,
+         "reason_code": 6,
+         "state_code": 4
+        },
+        "source_ref": "collection.json#2"
+       },
+       {
+        "ordinal": 3,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:42+00:00",
+        "knowledge_time": "2026-08-12T02:00:42+00:00",
+        "series_key": {
+         "opportunity": "observation-2"
+        },
+        "value": {
+         "available": true,
+         "observation_retained": true,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "collection.json#3"
+       },
+       {
+        "ordinal": 4,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:01:12+00:00",
+        "knowledge_time": "2026-08-12T02:01:12+00:00",
+        "series_key": {
+         "opportunity": "observation-3"
+        },
+        "value": {
+         "available": true,
+         "observation_retained": true,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "collection.json#4"
+       },
+       {
+        "ordinal": 5,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:01:42+00:00",
+        "knowledge_time": "2026-08-12T02:01:42+00:00",
+        "series_key": {
+         "opportunity": "observation-4"
+        },
+        "value": {
+         "available": true,
+         "observation_retained": true,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "collection.json#5"
+       },
+       {
+        "ordinal": 6,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:02:12+00:00",
+        "knowledge_time": "2026-08-12T02:02:12+00:00",
+        "series_key": {
+         "opportunity": "observation-5"
+        },
+        "value": {
+         "available": true,
+         "observation_retained": true,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "collection.json#6"
+       }
+      ]
+     }
+    ],
+    "plan": {},
+    "omissions": []
+   },
+   "simulation.rf.navigation": {
+    "revision_id": "rev-nominal",
+    "query": {
+     "requested_layers": [
+      "simulation.rf.navigation"
+     ]
+    },
+    "products": [
+     {
+      "product_ref": "simulation.rf.navigation@nominal",
+      "descriptor_id": "foundation-rf-navigation",
+      "values_ref": null,
+      "metadata": {
+       "selected": 6,
+       "of": 6
+      },
+      "values": [
+       {
+        "ordinal": 0,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T01:59:42+00:00",
+        "knowledge_time": "2026-08-12T01:59:42+00:00",
+        "series_key": {
+         "opportunity": "navigation-0"
+        },
+        "value": {
+         "available": true,
+         "geolocation_sigma_m": 3.361092540783338,
+         "position_sigma_m": 3.694845773602185,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "navigation.json#0"
+       },
+       {
+        "ordinal": 1,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:12+00:00",
+        "knowledge_time": "2026-08-12T02:00:12+00:00",
+        "series_key": {
+         "opportunity": "navigation-1"
+        },
+        "value": {
+         "available": true,
+         "geolocation_sigma_m": 2.5235070778298674,
+         "position_sigma_m": 3.2605164099034574,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "navigation.json#1"
+       },
+       {
+        "ordinal": 2,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:00:42+00:00",
+        "knowledge_time": "2026-08-12T02:00:42+00:00",
+        "series_key": {
+         "opportunity": "navigation-2"
+        },
+        "value": {
+         "available": true,
+         "geolocation_sigma_m": 2.239902880982847,
+         "position_sigma_m": 3.0648362461272014,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "navigation.json#2"
+       },
+       {
+        "ordinal": 3,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:01:12+00:00",
+        "knowledge_time": "2026-08-12T02:01:12+00:00",
+        "series_key": {
+         "opportunity": "navigation-3"
+        },
+        "value": {
+         "available": true,
+         "geolocation_sigma_m": 2.5701350999316164,
+         "position_sigma_m": 3.3542859679150423,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "navigation.json#3"
+       },
+       {
+        "ordinal": 4,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:01:42+00:00",
+        "knowledge_time": "2026-08-12T02:01:42+00:00",
+        "series_key": {
+         "opportunity": "navigation-4"
+        },
+        "value": {
+         "available": true,
+         "geolocation_sigma_m": 3.104807943945808,
+         "position_sigma_m": 3.348748675067756,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "navigation.json#4"
+       },
+       {
+        "ordinal": 5,
+        "semantic_identity": "receiver:foundation:synthetic-spacecraft-gnss",
+        "valid_time": "2026-08-12T02:02:12+00:00",
+        "knowledge_time": "2026-08-12T02:02:12+00:00",
+        "series_key": {
+         "opportunity": "navigation-5"
+        },
+        "value": {
+         "available": true,
+         "geolocation_sigma_m": 4.064365989942721,
+         "position_sigma_m": 3.763498091634204,
+         "reason_code": 2,
+         "state_code": 0
+        },
+        "source_ref": "navigation.json#5"
+       }
+      ]
+     }
+    ],
+    "plan": {},
+    "omissions": []
+   }
+  },
+  "revision": {
+   "id": "rev-nominal",
+   "parent_id": null,
+   "created_at": "2026-10-12T00:00:00+00:00",
+   "metadata": {},
+   "bindings": [
+    {
+     "name": "simulation.rf.communications",
+     "ref": {
+      "type_id": "t",
+      "content_id": "c"
+     }
+    },
+    {
+     "name": "simulation.rf.collection",
+     "ref": {
+      "type_id": "t",
+      "content_id": "c"
+     }
+    },
+    {
+     "name": "simulation.rf.navigation",
+     "ref": {
+      "type_id": "t",
+      "content_id": "c"
+     }
+    }
+   ],
+   "descriptors": {
+    "simulation.rf.communications": {
+     "semantic": {
+      "metadata": {
+       "state_codes": {
+        "0": "nominal",
+        "1": "degraded",
+        "2": "unavailable",
+        "3": "recovering",
+        "4": "unknown"
+       },
+       "reason_codes": {
+        "0": "below_nominal_threshold",
+        "1": "below_unavailable_threshold",
+        "2": "nominal_threshold_met",
+        "3": "reacquisition_complete",
+        "4": "reacquisition_delay",
+        "5": "unknown_rf_environment",
+        "6": "missing_receiver_sample"
+       },
+       "model": {
+        "calibration_status": "illustrative",
+        "id": "dataforge.scheduled-state-mapping.communications",
+        "validation_report_content_id": null,
+        "version": "1"
+       },
+       "assumptions": [
+        "Illustrative scheduled state mapping; no empirical packet delivery or observation-quality claim.",
+        "Each opportunity is instantaneous; exact UTC receiver samples only, with no interpolation or hold-last-value.",
+        "Missing receiver samples and unknown RF evidence yield null outcomes, never an inferred outage.",
+        "Delivery is floor(attempted bytes times configured state fraction), with no retries or shared capacity model.",
+        "Collection retention is a separate nominal/degraded policy; no continuous observation quality is justified."
+       ],
+       "uncertainty": null,
+       "run_content_id": "sha256:70bafd91bbac674b32ebd2cc7f2b2fbd2d89476b7f5aa20a46779be7ad6ec847",
+       "source_run_label": "nominal",
+       "pair_content_id": "sha256:bc9b8337869288687e3ac723289d43fc13f908f7120a3a39080538ccae3f7cf7"
+      }
+     }
+    },
+    "simulation.rf.collection": {
+     "semantic": {
+      "metadata": {
+       "state_codes": {
+        "0": "nominal",
+        "1": "degraded",
+        "2": "unavailable",
+        "3": "recovering",
+        "4": "unknown"
+       },
+       "reason_codes": {
+        "0": "below_nominal_threshold",
+        "1": "below_unavailable_threshold",
+        "2": "nominal_threshold_met",
+        "3": "reacquisition_complete",
+        "4": "reacquisition_delay",
+        "5": "unknown_rf_environment",
+        "6": "missing_receiver_sample"
+       },
+       "model": {
+        "calibration_status": "illustrative",
+        "id": "dataforge.scheduled-state-mapping.collection",
+        "validation_report_content_id": null,
+        "version": "1"
+       },
+       "assumptions": [
+        "Illustrative scheduled state mapping; no empirical packet delivery or observation-quality claim.",
+        "Each opportunity is instantaneous; exact UTC receiver samples only, with no interpolation or hold-last-value.",
+        "Missing receiver samples and unknown RF evidence yield null outcomes, never an inferred outage.",
+        "Delivery is floor(attempted bytes times configured state fraction), with no retries or shared capacity model.",
+        "Collection retention is a separate nominal/degraded policy; no continuous observation quality is justified."
+       ],
+       "uncertainty": null,
+       "run_content_id": "sha256:70bafd91bbac674b32ebd2cc7f2b2fbd2d89476b7f5aa20a46779be7ad6ec847",
+       "source_run_label": "nominal",
+       "pair_content_id": "sha256:bc9b8337869288687e3ac723289d43fc13f908f7120a3a39080538ccae3f7cf7"
+      }
+     }
+    },
+    "simulation.rf.navigation": {
+     "semantic": {
+      "metadata": {
+       "state_codes": {
+        "0": "nominal",
+        "1": "degraded",
+        "2": "unavailable",
+        "3": "recovering",
+        "4": "unknown"
+       },
+       "reason_codes": {
+        "0": "below_nominal_threshold",
+        "1": "below_unavailable_threshold",
+        "2": "nominal_threshold_met",
+        "3": "reacquisition_complete",
+        "4": "reacquisition_delay",
+        "5": "unknown_rf_environment",
+        "6": "missing_receiver_sample",
+        "7": "insufficient_satellites",
+        "8": "ill_conditioned_geometry",
+        "9": "insufficient_orbit_support"
+       },
+       "model": {
+        "calibration_status": "illustrative",
+        "id": "dataforge.gnss-snapshot-navigation/1",
+        "validation_report_content_id": null,
+        "version": "1"
+       },
+       "assumptions": [
+        "Snapshot weighted least squares at each receiver epoch; no filter, propagation or coasting between fixes.",
+        "Satellite positions are recorded IGS final orbits interpolated under the declared Lagrange policy; receiver positions are the scenario states rotated ECI to ECEF by GMST.",
+        "One equal-variance measurement per usable satellite; satellite clock, ionosphere, troposphere and multipath are folded into the declared user-equivalent range error.",
+        "Interference is a single aggregate receiver-plane SINR applied equally to every satellite.",
+        "Degraded variance scales as 10^((nominal_min_sinr_db - sinr_db)/10), first-order code-tracking behaviour; illustrative until calibrated (GEN-273).",
+        "Recovering and unavailable receivers produce no fix; reception resuming is not nominal accuracy.",
+        "position_sigma_m is sqrt(trace(P_pos)/3), an isotropic per-axis ECEF value.",
+        "geolocation_sigma_m is the navigation-induced horizontal error of a declared ground target located by pointing: the platform position error moves along the fixed line of sight onto the target's local horizontal plane, delta_t = (I - d n^T / n^T d) delta_r; sqrt((C_EE+C_NN)/2) of that covariance.",
+        "Geolocation excludes attitude/pointing, time-tag, terrain-height and sensor errors; it is the navigation contribution only. A target below the minimum elevation has no geolocation."
+       ],
+       "uncertainty": {
+        "geolocation_frame": "ENU",
+        "geolocation_vertical_included": false,
+        "position_frame": "ECEF",
+        "statistic": "isotropic-per-axis-one-sigma"
+       },
+       "run_content_id": "sha256:70bafd91bbac674b32ebd2cc7f2b2fbd2d89476b7f5aa20a46779be7ad6ec847",
+       "source_run_label": "nominal",
+       "pair_content_id": "sha256:bc9b8337869288687e3ac723289d43fc13f908f7120a3a39080538ccae3f7cf7"
+      }
+     }
+    }
+   }
+  }
+ }
+}

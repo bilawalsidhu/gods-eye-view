@@ -332,6 +332,8 @@
       "src/layers/worldModel/index.js",
       "src/layers/worldModel/receiverPass.js",
       "src/layers/worldModel/runClock.js",
+      "src/layers/worldModel/runEffects.js",
+      "src/layers/worldModel/runFocus.js",
       "src/layers/worldModel/runTimeline.js",
       "src/layers/worldModel/selection.js",
       "src/layers/worldModel/simulationRuns.js",

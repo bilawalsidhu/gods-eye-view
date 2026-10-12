@@ -12,16 +12,65 @@ import { createHttpProjectionSource } from '../../src/layers/worldModel/source.j
 import projection from '../../src/layers/worldModel/fixtures/experiment-002.projection.json';
 import revisions from '../../src/layers/worldModel/fixtures/experiment-002.revisions.json';
 import status from '../../src/layers/worldModel/fixtures/experiment-002.status.json';
+import effectsPair from '../../src/layers/worldModel/fixtures/run-effects.pair.json';
+
+// GEN-299: both cases of Foundation's ground-rf-mission run, mission effects only
+// (the runs World Model holds before DWM-218), served beside Experiment 002.
+const runs = new Map(
+  ['contested', 'nominal'].map((label) => [
+    effectsPair[label].head,
+    effectsPair[label],
+  ]),
+);
+const byRevision = new Map(
+  [...runs.values()].map((run) => [run.revision_id, run]),
+);
+
+function runStatus(run) {
+  const bindings = Object.entries(run.selections).map(
+    ([binding, selection]) => {
+      const times = selection.products[0].values
+        .map((row) => row.valid_time)
+        .sort();
+      return {
+        binding,
+        modality: 'simulated',
+        representations: [{ kind: 'sample_series/v1' }],
+        valid: { earliest: times[0], latest: times.at(-1) },
+      };
+    },
+  );
+  return { ...structuredClone(status), head: { name: run.head }, bindings };
+}
 
 const fixtureSource = {
+  async getHeads() {
+    return {
+      'world/main': revisions.revisions[0].id,
+      ...Object.fromEntries(
+        [...runs.values()].map((run) => [run.head, run.revision_id]),
+      ),
+    };
+  },
   async getRevisions({ head, limit = 10 }) {
+    const run = runs.get(head);
+    if (run) return { head, revisions: [structuredClone(run.revision)] };
     return { head, revisions: revisions.revisions.slice(0, limit) };
+  },
+  async getRevision({ revisionId }) {
+    return structuredClone(byRevision.get(revisionId).revision);
   },
   async getProjection() {
     return structuredClone(projection);
   },
-  async getStatus() {
-    return structuredClone(status);
+  async getStatus({ head } = {}) {
+    const run = runs.get(head);
+    return run ? runStatus(run) : structuredClone(status);
+  },
+  async select({ revisionId, head, query }) {
+    const run = byRevision.get(revisionId) ?? runs.get(head);
+    const binding = query?.requested_layers?.[0];
+    return structuredClone(run?.selections[binding] ?? { products: [] });
   },
 };
 
@@ -75,6 +124,14 @@ window.__embeddedQa = {
       }
     }
     return outcomes;
+  },
+  /** GEN-299: open the contested run of the effects pair, compared with its nominal case. */
+  async openEffectsPair() {
+    const { contested, nominal } = effectsPair;
+    return app.openRun(contested.head, {
+      revisionId: contested.revision_id,
+      compare: { head: nominal.head, revisionId: nominal.revision_id },
+    });
   },
   renderedIds() {
     const layer = app
