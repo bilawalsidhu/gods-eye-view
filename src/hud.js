@@ -24,7 +24,17 @@ import {
   geoidHeight,
 } from './data/geoid.js';
 import { getBasemapLabelContext } from './voice/gevActions.js';
-import { isHudSummaryUnconfigured } from './hudSummaryResponse.js';
+import {
+  hudSummaryMatchesProvenance,
+  hudSummaryLayerContext,
+  hudTelemetryProvenanceTag,
+  isHudSummaryUnconfigured,
+} from './hudSummaryResponse.js';
+import {
+  applyHudUiTheme,
+  DEFAULT_HUD_LAYOUT,
+  normalizeHudLayout,
+} from './hudLayouts.js';
 import { MOBILE_LAYOUT_MEDIA_QUERY } from './ui/layoutBreakpoints.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
@@ -54,8 +64,6 @@ const HUD_COLORS = {
 /** Shader modes that automatically show the HUD overlay. */
 const MILITARY_STYLES = new Set(['retro', 'surveillance', 'thermal']);
 
-/** Allowed HUD layout variants. */
-const HUD_VARIANTS = new Set(['tactical', 'operator', 'minimal']);
 const HUD_WIDGETS = new Set(['status', 'coordinates']);
 const HUD_SUMMARY_INTERVAL_MS = 15000;
 
@@ -107,7 +115,7 @@ export class IntelHUD {
     this._autoMode = true; // auto show/hide based on style
     this._currentStyle = 'normal';
     this._el = null;
-    this._variant = 'tactical';
+    this._variant = DEFAULT_HUD_LAYOUT;
     this._recBlinkState = true;
     this._updateInterval = null;
     this._recBlinkInterval = null;
@@ -195,6 +203,8 @@ export class IntelHUD {
     if (!this._el) return;
 
     this._el.innerHTML = `
+      <div class="hud-sonar" aria-hidden="true"></div>
+
       <div class="hud-top-bar">
         <span class="hud-top-bar-left">TOP SECRET // SI-TK // NOFORN</span>
         <span class="hud-top-bar-center">${this._missionId}</span>
@@ -308,7 +318,9 @@ export class IntelHUD {
       const toggle = this._el.querySelector(
         `[data-hud-widget-toggle="${widget}"]`,
       );
-      const chip = this._el.querySelector(`[data-hud-widget-restore="${widget}"]`);
+      const chip = this._el.querySelector(
+        `[data-hud-widget-restore="${widget}"]`,
+      );
       if (toggle) {
         const onClick = (event) => {
           event.preventDefault();
@@ -327,7 +339,9 @@ export class IntelHUD {
           this._setWidgetCollapsed(widget, false);
         };
         chip.addEventListener('click', onClick);
-        this._widgetHandlers.push(() => chip.removeEventListener('click', onClick));
+        this._widgetHandlers.push(() =>
+          chip.removeEventListener('click', onClick),
+        );
       }
     }
     const telemetryToggle = this._el.querySelector('[data-hud-right-toggle]');
@@ -365,8 +379,11 @@ export class IntelHUD {
       const toggle = this._el.querySelector(
         `[data-hud-widget-toggle="${widget}"]`,
       );
-      const chip = this._el.querySelector(`[data-hud-widget-restore="${widget}"]`);
-      const widgetLabel = widget === 'status' ? 'status HUD' : 'coordinates HUD';
+      const chip = this._el.querySelector(
+        `[data-hud-widget-restore="${widget}"]`,
+      );
+      const widgetLabel =
+        widget === 'status' ? 'status HUD' : 'coordinates HUD';
       if (toggle) {
         toggle.setAttribute('aria-expanded', String(!collapsed));
         toggle.setAttribute(
@@ -851,7 +868,11 @@ export class IntelHUD {
     // NEAR the nearest catalogued POI at metro range; otherwise the lat/lon sector.
     const localityTag = composeLocalityTag(nearest, m.latDeg, m.lonDeg);
 
-    return `${modeLabel} ${band} ${localityTag} | ${region} | ALT ${altTag} | WINDOW ${winTag} | SUN ${m.sunEl.toFixed(0)}° | ONA ${m.ona.toFixed(0)}° | ${localTag}`;
+    const provenance = hudTelemetryProvenanceTag(
+      this._dataManager?.getAll?.() || [],
+    );
+    const line = `${modeLabel} ${band} ${localityTag} | ${region} | ALT ${altTag} | WINDOW ${winTag} | SUN ${m.sunEl.toFixed(0)}° | ONA ${m.ona.toFixed(0)}° | ${localTag}`;
+    return provenance ? `${line} | ${provenance}` : line;
   }
 
   /**
@@ -936,7 +957,12 @@ export class IntelHUD {
       if (!response.ok || !data?.summary) {
         throw new Error(data?.error || `HTTP ${response.status}`);
       }
-      this._setSummaryText(data.summary, animate);
+      this._setSummaryText(
+        hudSummaryMatchesProvenance(data.summary, context.feedProvenance)
+          ? data.summary
+          : fallbackText,
+        animate,
+      );
     } catch (error) {
       if (error?.name !== 'AbortError') {
         console.warn('[HUD] AI summary unavailable:', error);
@@ -977,6 +1003,7 @@ export class IntelHUD {
       streetLabels: labels.streetLabels,
       nearbyPlaceLabels: labels.nearbyPlaceLabels,
       enabledLayerLabels: enabledLayers,
+      ...hudSummaryLayerContext(this._dataManager?.getAll?.() || []),
     };
   }
 
@@ -1066,15 +1093,16 @@ export class IntelHUD {
 
   /**
    * Switch the HUD layout variant. Falls back to `'tactical'` if the
-   * name is unrecognized.
-   * @param {string} variantName - One of `'tactical'`, `'operator'`, `'minimal'`.
+   * name is unrecognized. Cyber also applies a coordinated skin to the full
+   * application shell; leaving Cyber restores the standard shell tokens.
+   * @param {string} variantName - One of `'tactical'`, `'operator'`, `'minimal'`, `'cyber'`.
    */
   setVariant(variantName) {
-    const normalized = String(variantName || '').toLowerCase();
-    this._variant = HUD_VARIANTS.has(normalized) ? normalized : 'tactical';
+    this._variant = normalizeHudLayout(variantName);
     if (this._el) {
       this._el.dataset.variant = this._variant;
     }
+    applyHudUiTheme(document.documentElement, this._variant);
   }
 
   /**
@@ -1138,7 +1166,12 @@ export class IntelHUD {
     this._dataManager = dataManager || null;
     if (typeof this._dataManager?.subscribe === 'function') {
       this._dataManagerUnsubscribe = this._dataManager.subscribe((change) => {
-        if (change?.type === 'visibility') this._markSummaryDirty();
+        if (
+          ['visibility', 'refresh-transition', 'refresh-cancelled'].includes(
+            change?.type,
+          )
+        )
+          this._markSummaryDirty();
       });
     }
     this._markSummaryDirty();

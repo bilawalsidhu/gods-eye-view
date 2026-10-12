@@ -10,9 +10,6 @@ function node() {
     listeners: new Map(),
     className: '',
     textContent: '',
-    hidden: false,
-    disabled: false,
-    attributes: new Map(),
     classList: {
       add: (...names) => names.forEach((name) => classes.add(name)),
       remove: (...names) => names.forEach((name) => classes.delete(name)),
@@ -39,12 +36,6 @@ function node() {
     append(...children) {
       for (const child of children)
         if (typeof child !== 'string') this.appendChild(child);
-    },
-    setAttribute(name, value) {
-      this.attributes.set(name, String(value));
-    },
-    getAttribute(name) {
-      return this.attributes.get(name) ?? null;
     },
     replaceChildren() {
       this.children = [];
@@ -76,10 +67,6 @@ function fixture() {
     resetButtons: [node(), node()],
     statusCity: node(),
     statusPoi: node(),
-    myLocationOn: node(),
-    myLocationOff: node(),
-    myLocationRecenter: node(),
-    myLocationStatus: node(),
   };
   const doc = node();
   doc.createElement = node;
@@ -100,8 +87,6 @@ function fixture() {
     onPoi: (id, index) => calls.push(['poi', id, index]),
     onSearch: (query) => calls.push(['search', query]),
     onReset: () => calls.push(['reset']),
-    onMyLocationMode: (mode) => calls.push(['my-location-mode', mode]),
-    onMyLocationRecenter: () => calls.push(['my-location-recenter']),
     doc,
     requestFrame: (fn) => {
       const id = next++;
@@ -161,24 +146,4 @@ test('location and POI keys route once while form controls retain typing', () =>
   f.doc.fire('keydown', { key: 'Q', target: { matches: () => true } });
   f.elements.resetButtons[1].fire('click');
   assert.deepEqual(f.calls, [['poi', 'a', 1], ['reset']]);
-});
-
-test('my location controls render ON/OFF state, status copy, and recenter availability', () => {
-  const f = fixture();
-  f.controls.renderMyLocation({
-    enabled: true,
-    status: 'ready',
-    position: { accuracy: 27 },
-  });
-  assert.equal(f.elements.myLocationOn.classList.contains('active'), true);
-  assert.equal(f.elements.myLocationOff.classList.contains('active'), false);
-  assert.equal(f.elements.myLocationRecenter.hidden, false);
-  assert.equal(f.elements.myLocationStatus.textContent, 'Accuracy radius 27 m');
-
-  f.elements.myLocationOff.fire('click');
-  f.elements.myLocationRecenter.fire('click');
-  assert.deepEqual(f.calls, [
-    ['my-location-mode', 'off'],
-    ['my-location-recenter'],
-  ]);
 });

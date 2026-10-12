@@ -32,6 +32,14 @@ export function createState({ services }) {
     clickHandler: null,
     timer: null,
     googleSearchRequested: false,
+    /** Contacts subject position; when set, it replaces the camera viewport. */
+    contextAnchor: null,
+    /** Latest subject centre, independent of the retained tile-fetch anchor. */
+    contextPosition: null,
+    /** Coverage of the last successful load: viewport, or radius around a subject. */
+    coverage: { kind: 'viewport' },
+    /** Per-record geometry keys of the rendered entities, for in-place updates. */
+    renderedKeys: new Map(),
   });
   return state;
 }

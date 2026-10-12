@@ -1,3 +1,4 @@
+import { LayerBindings } from './ui/layerBindings.js';
 import { readShellSource, shellMethod } from './testSupport/readShellSource.mjs';
 import { readLayerSource } from './testSupport/readLayerSource.mjs';
 import { StyleManager } from './ui/applicationShell.js';
@@ -302,8 +303,8 @@ test('newer navigation, reset, Cockpit, and teardown share one generation', () =
   const dispose = body(ui, /async dispose\(\) \{([\s\S]*?)\n  \}/, 'dispose');
   ordered(dispose, [
     'this._disposed = true;',
+    'this._layerBindings.stop();',
     'this._navigation.destroy();',
-    'this._removeWorldRequestFocusListener?.();',
     'await this._contextControls.restoreForDisposal();',
   ], 'dispose invalidation');
   assert.match(shellMethod('destroy').toString(), /this\._stampNavigation\(\)/);
@@ -313,11 +314,15 @@ test('teardown synchronously closes immediate camera entry points', () => {
   const dispose = body(ui, /async dispose\(\) \{([\s\S]*?)\n  \}/, 'dispose');
   ordered(dispose, [
     'this._disposed = true;',
+    'this._layerBindings.stop();',
+    'await this._contextControls.restoreForDisposal();',
+  ], 'synchronous teardown barrier');
+  ordered(LayerBindings.prototype.stop.toString(), [
+    'this._disposed = true;',
     'this._removeCctvRequestFocusListener?.();',
     'this._removeWorldRequestFocusListener?.();',
     'this._navigationOwnerChangedRemover?.();',
-    'await this._contextControls.restoreForDisposal();',
-  ], 'synchronous teardown barrier');
+  ], 'camera bindings close synchronously');
 
   const navigation = body(
     ui,

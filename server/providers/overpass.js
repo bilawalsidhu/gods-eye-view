@@ -3,9 +3,7 @@ import { readRequestBodyCapped } from './common/request.js';
 import {
   OVERPASS_MAX_BODY_BYTES,
   OVERPASS_MAX_CONCURRENT,
-  OVERPASS_MAX_RESPONSE_BYTES,
-  OVERPASS_TIMEOUT_MS,
-  OVERPASS_UPSTREAMS,
+  resolveOverpassUpstreams,
 } from './overpass/constants.js';
 import { sanitizeOverpassBody } from './overpass/query.js';
 import {
@@ -20,16 +18,9 @@ import {
 import {
   overpassPayloadIsData,
   fetchOverpassPayload,
-  sanitizeOverpassProviderText,
+  overpassNotConfigured,
 } from './overpass/transport.js';
 import { installRouteMiddleware } from './places/routes.js';
-import { encodeOverpassFormBody } from '../../src/sources/overpass.js';
-import { readResponseTextCapped } from './common/http.js';
-import { CATEGORY_ORDER } from '../../src/layers/securityPoints/policy.js';
-import {
-  buildSecurityPointsOverpassQuery,
-  formatSecurityPointViewportValue,
-} from '../../src/layers/securityPoints/overpassQuery.js';
 
 /** @type {Map<string,Promise>} In-flight Overpass requests keyed by normalized query body. */
 const _overpassInFlight = new Map();
@@ -42,144 +33,6 @@ const _overpassRateLimiter = makeRateLimiter({
   globalMax: 300,
 });
 
-const OVERPASS_HEALTH_DEFAULTS = Object.freeze({
-  south: 30.267,
-  west: -97.744,
-  north: 30.268,
-  east: -97.742,
-});
-
-function overpassEndpointDetail(endpoint) {
-  try {
-    const target = new URL(String(endpoint || ''));
-    return {
-      hostname: target.hostname || null,
-      path: target.pathname || null,
-    };
-  } catch {
-    return { hostname: null, path: null };
-  }
-}
-
-function clampCoordinate(value, fallback, min, max) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return fallback;
-  return Math.max(min, Math.min(max, numeric));
-}
-
-function overpassHealthQuery(box) {
-  return buildSecurityPointsOverpassQuery(box, CATEGORY_ORDER);
-}
-
-function overpassTinyHealthQuery({ south, west, north, east }) {
-  return `[out:json][timeout:10];node["amenity"="police"](${south},${west},${north},${east});out tags 1;`;
-}
-
-function overpassPrimaryHealthEndpoint() {
-  return String(OVERPASS_UPSTREAMS?.[0] || '');
-}
-
-async function fetchOverpassGetDataProbe(body) {
-  const endpoint = overpassPrimaryHealthEndpoint();
-  const upstreamTarget = new URL(endpoint);
-  const target = new URL(`${upstreamTarget.origin}${upstreamTarget.pathname}`);
-  const params = new URLSearchParams(String(body || ''));
-  target.search = params.toString();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
-  const startedAt = Date.now();
-  try {
-    const upstream = await fetch(target, {
-      method: 'GET',
-      signal: controller.signal,
-    });
-    const responseBody = await readResponseTextCapped(
-      upstream,
-      OVERPASS_MAX_RESPONSE_BYTES,
-    );
-    const contentType =
-      upstream.headers.get('content-type') || 'application/json';
-    const status = upstream.status;
-    const providerError = sanitizeOverpassProviderText(responseBody, contentType);
-    return {
-      status,
-      body: responseBody,
-      contentType,
-      endpoint,
-      providerError,
-      attempts: [
-        {
-          endpoint,
-          method: 'GET',
-          status,
-          latencyMs: Date.now() - startedAt,
-          timeoutTriggered: false,
-          providerError,
-        },
-      ],
-      fallbackAttempted: false,
-      finalEndpoint: status >= 200 && status < 300 ? endpoint : null,
-    };
-  } catch (error) {
-    throw Object.assign(error, {
-      attempts: [
-        {
-          endpoint,
-          method: 'GET',
-          status: null,
-          latencyMs: Date.now() - startedAt,
-          timeoutTriggered:
-            error?.name === 'AbortError' || error?.name === 'TimeoutError',
-          providerError: String(error?.message || '').trim().slice(0, 240) || null,
-        },
-      ],
-      fallbackAttempted: false,
-      providerError: String(error?.message || '').trim().slice(0, 240) || null,
-    });
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-function overpassTimeoutTriggered(error, payload = null) {
-  if (payload?.runtimeError) return true;
-  const name = String(error?.name || '').toLowerCase();
-  const message = String(error?.message || '').toLowerCase();
-  return (
-    name === 'aborterror' ||
-    name === 'timeouterror' ||
-    message.includes('timed out') ||
-    message.includes('timeout')
-  );
-}
-
-function overpassResultCount(payload) {
-  try {
-    const parsed = JSON.parse(String(payload?.body || '{}'));
-    return Array.isArray(parsed?.elements) ? parsed.elements.length : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function sanitizeOverpassError(error) {
-  const message = String(error?.message || '').trim();
-  return message ? message.slice(0, 240) : null;
-}
-
-function summarizeOverpassAttempts(attempts = []) {
-  return attempts.map((attempt) => ({
-    endpoint: overpassEndpointDetail(attempt?.endpoint),
-    method: String(attempt?.method || 'POST'),
-    httpStatus: Number.isFinite(attempt?.status) ? Number(attempt.status) : null,
-    latencyMs: Number.isFinite(attempt?.latencyMs)
-      ? Number(attempt.latencyMs)
-      : null,
-    timeoutTriggered: attempt?.timeoutTriggered === true,
-    providerError: String(attempt?.providerError || '').trim() || null,
-  }));
-}
-
 /**
  * Write a completed Overpass payload to the HTTP response.
  *
@@ -190,9 +43,16 @@ function summarizeOverpassAttempts(attempts = []) {
 function sendOverpassResponse(res, payload, cacheStatus = 'MISS') {
   res.writeHead(payload.status, {
     'Content-Type': payload.contentType || 'application/json',
-    'Cache-Control': 'public, max-age=15',
+    'Cache-Control': overpassPayloadIsData(payload)
+      ? 'public, max-age=15'
+      : 'no-store',
     'X-Overpass-Cache': cacheStatus,
-    'X-Overpass-Upstream': payload.endpoint || 'unknown',
+    ...(Number.isFinite(payload.cachedAt)
+      ? { 'X-Overpass-Cached-At': new Date(payload.cachedAt).toISOString() }
+      : {}),
+    ...(payload.retryAfterMs
+      ? { 'Retry-After': String(Math.ceil(payload.retryAfterMs / 1000)) }
+      : {}),
   });
   res.end(payload.body || '');
 }
@@ -201,7 +61,7 @@ function sendOverpassResponse(res, payload, cacheStatus = 'MISS') {
  * Vite plugin: Overpass API proxy with response caching and request coalescing.
  *
  * Accepts POST requests at /api/overpass, normalizes the query body for
- * cache keying, and fans out to multiple Overpass mirrors with per-upstream
+ * cache keying, and uses only operator-configured endpoints with per-upstream
  * timeout and rate-limit detection. Successful responses are cached for
  * OVERPASS_CACHE_MS. Concurrent identical queries share a single upstream
  * request via the in-flight map.
@@ -210,130 +70,24 @@ function sendOverpassResponse(res, payload, cacheStatus = 'MISS') {
  */
 function overpassProxy({ routing = {} } = {}) {
   const installMiddleware = (server) => {
-    server.middlewares.use('/api/overpass/health', async (req, res) => {
-      if (req.method !== 'GET') {
-        res.writeHead(405, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Method Not Allowed' }));
-        return;
-      }
-      const requestUrl = new URL(req.url || '', 'http://localhost');
-      const south = clampCoordinate(
-        requestUrl.searchParams.get('south'),
-        OVERPASS_HEALTH_DEFAULTS.south,
-        -90,
-        90,
-      );
-      const west = clampCoordinate(
-        requestUrl.searchParams.get('west'),
-        OVERPASS_HEALTH_DEFAULTS.west,
-        -180,
-        180,
-      );
-      const north = clampCoordinate(
-        requestUrl.searchParams.get('north'),
-        OVERPASS_HEALTH_DEFAULTS.north,
-        -90,
-        90,
-      );
-      const east = clampCoordinate(
-        requestUrl.searchParams.get('east'),
-        OVERPASS_HEALTH_DEFAULTS.east,
-        -180,
-        180,
-      );
-      const [safeSouth, safeNorth] =
-        south <= north ? [south, north] : [north, south];
-      const [safeWest, safeEast] = west <= east ? [west, east] : [east, west];
-      const probe = requestUrl.searchParams.get('probe') === 'tiny'
-        ? 'tiny'
-        : 'security-points';
-      const requestForm = requestUrl.searchParams.get('requestForm') === 'get-data'
-        ? 'get-data'
-        : null;
-      const effectiveProbe = requestForm ? 'tiny' : probe;
-      const box = {
-        south: Number(formatSecurityPointViewportValue(safeSouth)),
-        west: Number(formatSecurityPointViewportValue(safeWest)),
-        north: Number(formatSecurityPointViewportValue(safeNorth)),
-        east: Number(formatSecurityPointViewportValue(safeEast)),
-      };
-      const query =
-        effectiveProbe === 'tiny'
-          ? overpassTinyHealthQuery(box)
-          : overpassHealthQuery(box);
-      const body = encodeOverpassFormBody(query);
-      const startedAt = Date.now();
-      const responseBody = {
-        probe: effectiveProbe,
-        requestForm,
-        reachable: false,
-        method: requestForm === 'get-data' ? 'GET' : 'POST',
-        endpoint: { hostname: null, path: null },
-        httpStatus: null,
-        latencyMs: null,
-        timeoutTriggered: false,
-        resultCount: 0,
-        providerError: null,
-        fallbackAttempted: false,
-        finalSuccessfulEndpoint: null,
-        attempts: [],
-      };
-      try {
-        const payload =
-          requestForm === 'get-data'
-            ? await fetchOverpassGetDataProbe(body)
-            : await fetchOverpassPayload(body);
-        const latencyMs = Date.now() - startedAt;
-        const attempts = summarizeOverpassAttempts(payload?.attempts);
-        res.writeHead(200, {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store',
-        });
-        res.end(
-          JSON.stringify({
-            ...responseBody,
-            reachable: overpassPayloadIsData(payload),
-            endpoint: overpassEndpointDetail(payload?.endpoint),
-            httpStatus: Number(payload?.status) || null,
-            latencyMs,
-            timeoutTriggered: overpassTimeoutTriggered(null, payload),
-            resultCount: overpassResultCount(payload),
-            providerError: String(payload?.providerError || '').trim() || null,
-            fallbackAttempted: payload?.fallbackAttempted === true,
-            finalSuccessfulEndpoint: overpassPayloadIsData(payload)
-              ? overpassEndpointDetail(payload?.finalEndpoint || payload?.endpoint)
-              : null,
-            attempts,
-          }),
-        );
-      } catch (error) {
-        const attempts = summarizeOverpassAttempts(error?.attempts);
-        res.writeHead(200, {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store',
-        });
-        res.end(
-          JSON.stringify({
-            ...responseBody,
-            latencyMs: Date.now() - startedAt,
-            timeoutTriggered: overpassTimeoutTriggered(error),
-            providerError:
-              String(error?.providerError || '').trim()
-              || sanitizeOverpassError(error),
-            fallbackAttempted: error?.fallbackAttempted === true,
-            attempts,
-            endpoint: attempts.at(-1)?.endpoint || responseBody.endpoint,
-            httpStatus: attempts.at(-1)?.httpStatus ?? responseBody.httpStatus,
-          }),
-        );
-      }
-    });
-
     server.middlewares.use('/api/overpass', async (req, res) => {
       // Hoisted out of the try so the catch's serve-stale lookup can see it
       // (a body-read failure would otherwise hit an out-of-scope reference).
       let cacheKey = null;
       try {
+        // Capability probe: lets clients skip queries when nothing is configured.
+        if (req.method === 'GET' && req.url?.split('?')[0] === '/status') {
+          res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+          });
+          res.end(
+            JSON.stringify({
+              configured: resolveOverpassUpstreams().length > 0,
+            }),
+          );
+          return;
+        }
         if (req.method !== 'POST') {
           res.writeHead(405, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Method Not Allowed' }));
@@ -372,12 +126,21 @@ function overpassProxy({ routing = {} } = {}) {
 
         // Normalize whitespace so semantically identical Overpass QL queries share cache entries
         cacheKey = safeBody.replace(/\s+/g, ' ').trim();
+        if (!resolveOverpassUpstreams().length) {
+          const cached = await readStaleOverpass(cacheKey);
+          sendOverpassResponse(
+            res,
+            cached || overpassNotConfigured(),
+            cached ? 'STALE' : 'DISABLED',
+          );
+          return;
+        }
         const preflight = await resolveOverpassPreflight({
           cacheKey,
           memoryCache: _overpassCache,
           inFlight: _overpassInFlight,
-          // Fresh-enough disk entries survive restarts and skip the public
-          // mirrors; boundary-class queries keep their month-long TTL.
+          // Fresh-enough disk entries survive restarts and skip upstream
+          // requests; boundary-class queries keep their month-long TTL.
           readDisk: () =>
             readOverpassDisk(cacheKey, overpassDiskTtlMs(cacheKey)),
           allowUpstream: () => _overpassRateLimiter(clientKey(req)),
@@ -462,7 +225,7 @@ function overpassProxy({ routing = {} } = {}) {
           sendOverpassResponse(res, stale, 'STALE');
           return;
         }
-        console.error('[Overpass Proxy]', e.message);
+        console.error('[Overpass Proxy] request failed');
         res.writeHead(502, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Overpass proxy error' }));
       }

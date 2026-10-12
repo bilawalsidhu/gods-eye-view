@@ -435,3 +435,407 @@ test('a failed recovery reports its error and leaves switching settled', async (
   assert.equal(env.imagery.length, 0);
   env.controller.destroy();
 });
+
+test('imagery host tileset follows supplied, owned and globe map sources', async () => {
+  const supplied = { show: true };
+  const owned = { show: false };
+  const registry = {
+    defaultId: 'supplied',
+    sources: [
+      { descriptor: descriptor('supplied'), tileset: supplied },
+      { descriptor: descriptor('owned'), createTileset: async () => owned },
+      { descriptor: descriptor('globe'), imagery: async () => ({}) },
+    ],
+  };
+  const { controller } = fixture(registry);
+  assert.equal(controller.getImageryHostTileset(), supplied);
+  await controller.setStack('owned');
+  assert.equal(controller.getImageryHostTileset(), owned);
+  await controller.setStack('globe');
+  assert.equal(controller.getImageryHostTileset(), null);
+  await controller.setStack('supplied');
+  assert.equal(controller.getImageryHostTileset(), supplied);
+  controller.destroy();
+  assert.equal(controller.getImageryHostTileset(), null);
+});
+
+function leaseFixture() {
+  const env = publicFixture();
+  const switches = [];
+  const setStack = env.controller.setStack.bind(env.controller);
+  env.controller.setStack = (id, options) => {
+    switches.push(id);
+    return setStack(id, options);
+  };
+  return { ...env, switches };
+}
+
+test('an imagery comparison lease rejects a second owner synchronously until released', async () => {
+  const env = leaseFixture();
+  const lease = env.controller.acquireImageryComparison({
+    owner: 'nepal',
+    switchPolicy: 'preserve',
+  });
+  assert.throws(
+    () => env.controller.acquireImageryComparison({ owner: 'recent' }),
+    /held by nepal/,
+  );
+  assert.deepEqual(await lease.ready, {
+    status: 'ready',
+    activeId: 'photoreal',
+  });
+  await lease.release();
+  const next = env.controller.acquireImageryComparison({ owner: 'recent' });
+  assert.deepEqual(await next.ready, {
+    status: 'ready',
+    activeId: 'photoreal',
+  });
+  await next.release();
+  assert.deepEqual(env.switches, []);
+  env.controller.destroy();
+});
+
+test("the 'esri' policy switches from any other stack and release restores it", async () => {
+  for (const initial of ['photoreal', 'osm']) {
+    const env = leaseFixture();
+    if (initial !== env.controller.getActiveId())
+      await env.controller.setStack(initial);
+    env.switches.length = 0;
+    const lease = env.controller.acquireImageryComparison({
+      owner: 'nepal',
+      switchPolicy: 'esri',
+    });
+    assert.deepEqual(await lease.ready, {
+      status: 'ready',
+      activeId: 'esri-imagery',
+    });
+    assert.equal(env.controller.getActiveId(), 'esri-imagery');
+    await lease.release();
+    assert.equal(env.controller.getActiveId(), initial);
+    assert.deepEqual(env.switches, ['esri-imagery', initial]);
+    env.controller.destroy();
+  }
+});
+
+test("the 'esri-if-photoreal' policy leaves any 2D basemap alone", async () => {
+  const photoreal = leaseFixture();
+  const fromPhotoreal = photoreal.controller.acquireImageryComparison({
+    owner: 'recent',
+    switchPolicy: 'esri-if-photoreal',
+  });
+  assert.equal((await fromPhotoreal.ready).activeId, 'esri-imagery');
+  await fromPhotoreal.release();
+  assert.deepEqual(photoreal.switches, ['esri-imagery', 'photoreal']);
+  photoreal.controller.destroy();
+
+  const osm = leaseFixture();
+  await osm.controller.setStack('osm');
+  osm.switches.length = 0;
+  const fromOsm = osm.controller.acquireImageryComparison({
+    owner: 'recent',
+    switchPolicy: 'esri-if-photoreal',
+  });
+  assert.deepEqual(await fromOsm.ready, { status: 'ready', activeId: 'osm' });
+  await fromOsm.release();
+  assert.equal(osm.controller.getActiveId(), 'osm');
+  assert.deepEqual(osm.switches, []);
+  osm.controller.destroy();
+});
+
+test("the 'preserve' policy never switches, whatever is active", async () => {
+  for (const initial of ['photoreal', 'esri-imagery', 'osm']) {
+    const env = leaseFixture();
+    if (initial !== env.controller.getActiveId())
+      await env.controller.setStack(initial);
+    env.switches.length = 0;
+    const lease = env.controller.acquireImageryComparison({
+      owner: 'nepal',
+    });
+    assert.deepEqual(await lease.ready, { status: 'ready', activeId: initial });
+    await lease.release();
+    assert.equal(env.controller.getActiveId(), initial);
+    assert.deepEqual(env.switches, []);
+    env.controller.destroy();
+  }
+});
+
+test('release keeps an operator choice made while the comparison was open', async () => {
+  const env = leaseFixture();
+  const lease = env.controller.acquireImageryComparison({
+    owner: 'nepal',
+    switchPolicy: 'esri',
+  });
+  await lease.ready;
+  await env.controller.setStack('osm');
+  await lease.release();
+  assert.equal(env.controller.getActiveId(), 'osm');
+  assert.deepEqual(env.switches, ['esri-imagery', 'osm']);
+  env.controller.destroy();
+});
+
+test('release keeps a fallback that replaced the comparison stack', async () => {
+  const env = leaseFixture();
+  const lease = env.controller.acquireImageryComparison({
+    owner: 'nepal',
+    switchPolicy: 'esri',
+  });
+  await lease.ready;
+  const errors = env.providers.get('esri-imagery').errorEvent;
+  errors.raise();
+  errors.raise();
+  await settle();
+  assert.equal(env.controller.getActiveId(), 'osm');
+  await lease.release();
+  assert.equal(env.controller.getActiveId(), 'osm');
+  assert.deepEqual(env.switches, ['esri-imagery', 'osm']);
+  env.controller.destroy();
+});
+
+test('release during acquisition lets no late activation survive', async () => {
+  const env = leaseFixture();
+  let resolve;
+  env.registry.sources.find(
+    (source) => source.descriptor.id === 'esri-imagery',
+  ).imagery = () =>
+    new Promise((done) => {
+      resolve = done;
+    });
+  const lease = env.controller.acquireImageryComparison({
+    owner: 'nepal',
+    switchPolicy: 'esri',
+  });
+  await settle();
+  const releasing = lease.release();
+  resolve(env.providers.get('esri-imagery'));
+  assert.deepEqual(await lease.ready, {
+    status: 'superseded',
+    activeId: 'photoreal',
+  });
+  await releasing;
+  await settle();
+  assert.equal(env.controller.getActiveId(), 'photoreal');
+  assert.equal(env.viewer.scene.globe.show, false);
+  assert.equal(env.imagery.length, 0);
+  assert.equal(env.tileset.show, true);
+  assert.deepEqual(env.switches, ['esri-imagery', 'photoreal']);
+  env.controller.destroy();
+});
+
+test('release is idempotent and frees the lease for the next owner', async () => {
+  const env = leaseFixture();
+  const lease = env.controller.acquireImageryComparison({
+    owner: 'nepal',
+    switchPolicy: 'esri',
+  });
+  await lease.ready;
+  const first = lease.release();
+  assert.equal(lease.release(), first);
+  await first;
+  await lease.release();
+  assert.deepEqual(env.switches, ['esri-imagery', 'photoreal']);
+  const next = env.controller.acquireImageryComparison({
+    owner: 'recent',
+    switchPolicy: 'esri',
+  });
+  assert.equal((await next.ready).status, 'ready');
+  await next.release();
+  assert.deepEqual(env.switches, [
+    'esri-imagery',
+    'photoreal',
+    'esri-imagery',
+    'photoreal',
+  ]);
+  env.controller.destroy();
+});
+
+test('an unavailable comparison stack reports failure and release leaves the map alone', async () => {
+  const env = leaseFixture();
+  const errors = [];
+  env.controller._onError = (message) => errors.push(message);
+  const esri = env.controller._sources.get('esri-imagery');
+  esri.available = false;
+  esri.unavailableReason = 'Esri offline';
+  const lease = env.controller.acquireImageryComparison({
+    owner: 'nepal',
+    switchPolicy: 'esri',
+  });
+  assert.deepEqual(await lease.ready, {
+    status: 'failed',
+    activeId: 'photoreal',
+  });
+  await lease.release();
+  assert.deepEqual(env.switches, ['esri-imagery']);
+  assert.deepEqual(errors, ['Esri offline']);
+  assert.equal(env.controller.getActiveId(), 'photoreal');
+  env.controller.destroy();
+});
+
+test('a lease stays owned until its restoration settles, so a rival cannot read the comparison stack as its own', async () => {
+  const env = leaseFixture();
+  const lease = env.controller.acquireImageryComparison({
+    owner: 'recent',
+    switchPolicy: 'esri-if-photoreal',
+  });
+  assert.equal((await lease.ready).activeId, 'esri-imagery');
+  // Hold the restore switch open: the map is still on Esri while it runs.
+  const setStack = env.controller.setStack;
+  let finishRestore;
+  env.controller.setStack = (id, options) =>
+    new Promise((resolve) => {
+      finishRestore = () => resolve(setStack(id, options));
+    });
+  const releasing = lease.release();
+  assert.equal(typeof finishRestore, 'function', 'the restore was issued');
+  assert.throws(
+    () =>
+      env.controller.acquireImageryComparison({
+        owner: 'nepal',
+        switchPolicy: 'esri',
+      }),
+    /held by recent/,
+    'the pending restoration still owns the lease',
+  );
+  finishRestore();
+  await releasing;
+  assert.equal(env.controller.getActiveId(), 'photoreal');
+  env.controller.setStack = setStack;
+  const next = env.controller.acquireImageryComparison({
+    owner: 'nepal',
+    switchPolicy: 'esri',
+  });
+  assert.deepEqual(await next.ready, {
+    status: 'ready',
+    activeId: 'esri-imagery',
+  });
+  await next.release();
+  assert.equal(env.controller.getActiveId(), 'photoreal');
+  assert.deepEqual(env.switches, [
+    'esri-imagery',
+    'photoreal',
+    'esri-imagery',
+    'photoreal',
+  ]);
+  env.controller.destroy();
+});
+
+test('subscribe hears every settled activation — silent switches, fallbacks and recoveries — until unsubscribed or destroyed', async () => {
+  const env = publicFixture();
+  const heard = [];
+  const off = env.controller.subscribe((state) =>
+    heard.push([state.activeId, state.status]),
+  );
+  assert.equal(typeof off, 'function');
+  assert.equal(typeof env.controller.subscribe(null), 'function');
+  await env.controller.setStack('esri-imagery');
+  assert.deepEqual(heard, [['esri-imagery', 'ready']]);
+  // A silent switch mutes onChange but not the subscription.
+  const changesBefore = env.changes.length;
+  await env.controller.setStack('photoreal', { silent: true });
+  assert.equal(env.changes.length, changesBefore, 'onChange stays silent');
+  assert.deepEqual(heard.at(-1), ['photoreal', 'ready']);
+  // A subscriber that throws does not stop the others.
+  const noisy = env.controller.subscribe(() => {
+    throw new Error('listener failed');
+  });
+  const warn = console.warn;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args);
+  try {
+    await env.controller.setStack('esri-imagery');
+  } finally {
+    console.warn = warn;
+  }
+  assert.equal(warnings.length, 1);
+  assert.deepEqual(heard.at(-1), ['esri-imagery', 'ready']);
+  noisy();
+  off();
+  await env.controller.setStack('photoreal');
+  assert.equal(heard.length, 3, 'unsubscribed listeners hear nothing');
+  env.controller.destroy();
+
+  // A failed activation that recovers still settles once, on the recovery.
+  const recovering = fixture(
+    {
+      defaultId: 'first',
+      recoveryId: 'recovery',
+      sources: [
+        {
+          descriptor: descriptor('first'),
+          imagery: async () => {
+            throw new Error('first offline');
+          },
+        },
+        { descriptor: descriptor('recovery'), imagery: async () => ({}) },
+      ],
+    },
+    { onError: () => {} },
+  );
+  const recovered = [];
+  recovering.controller.subscribe((state) => recovered.push(state.activeId));
+  await recovering.controller.setStack('first');
+  assert.deepEqual(recovered, ['recovery']);
+  recovering.controller.destroy();
+  await recovering.controller.setStack('first');
+  assert.deepEqual(recovered, ['recovery'], 'a destroyed controller is mute');
+});
+
+test('each switch generation reports its origin: an outside setStack is manual, a fallback or recovery automatic', async () => {
+  const env = publicFixture();
+  const heard = [];
+  env.controller.subscribe((state) =>
+    heard.push([state.activeId, state.switchOrigin]),
+  );
+  await env.controller.setStack('esri-imagery');
+  assert.equal(env.controller.getSwitchOrigin(), 'manual');
+  const generation = env.controller.getSwitchGeneration();
+  // Two tile failures: the controller falls back to OSM on its own.
+  const errors = env.providers.get('esri-imagery').errorEvent;
+  errors.raise();
+  errors.raise();
+  await settle();
+  assert.equal(env.controller.getActiveId(), 'osm');
+  assert.equal(env.controller.getSwitchGeneration(), generation + 1);
+  assert.equal(env.controller.getSwitchOrigin(), 'automatic');
+  assert.equal(env.controller.getState().switchOrigin, 'automatic');
+  // A silent switch from outside is still the caller's choice.
+  await env.controller.setStack('photoreal', { silent: true });
+  assert.equal(env.controller.getSwitchOrigin(), 'manual');
+  assert.deepEqual(heard, [
+    ['esri-imagery', 'manual'],
+    ['osm', 'automatic'],
+    ['photoreal', 'manual'],
+  ]);
+  env.controller.destroy();
+
+  // A failed activation that recovers settles as automatic.
+  const recovering = fixture(
+    {
+      defaultId: 'first',
+      recoveryId: 'recovery',
+      sources: [
+        {
+          descriptor: descriptor('first'),
+          imagery: async () => {
+            throw new Error('first offline');
+          },
+        },
+        { descriptor: descriptor('recovery'), imagery: async () => ({}) },
+      ],
+    },
+    { onError: () => {} },
+  );
+  const recovered = [];
+  recovering.controller.subscribe((state) =>
+    recovered.push([state.activeId, state.switchOrigin]),
+  );
+  await recovering.controller.setStack('first');
+  assert.equal(recovering.controller.getActiveId(), 'recovery');
+  assert.equal(recovering.controller.getSwitchOrigin(), 'automatic');
+  await recovering.controller.setStack('recovery');
+  assert.equal(recovering.controller.getSwitchOrigin(), 'manual');
+  assert.deepEqual(recovered, [
+    ['recovery', 'automatic'],
+    ['recovery', 'manual'],
+  ]);
+  recovering.controller.destroy();
+});

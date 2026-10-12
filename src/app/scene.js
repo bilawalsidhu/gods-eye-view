@@ -1,6 +1,9 @@
 import { createApplicationOperations } from './operations.js';
 import * as Cesium from 'cesium';
-import { createApplicationViewer } from '../app/viewer.js';
+import {
+  createApplicationViewer,
+  installTrackpadPinchZoom,
+} from '../app/viewer.js';
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
@@ -16,6 +19,7 @@ import { describeError } from './errors.js';
 export async function createApplicationScene({
   requestServices,
   googleApiKey,
+  googleTokens = null,
   cesiumToken,
   credits,
   MapController = MapStackController,
@@ -52,14 +56,16 @@ export async function createApplicationScene({
     uninstallRenderGovernor(viewer);
     if (!viewer.isDestroyed()) viewer.destroy();
   });
+  defer(installTrackpadPinchZoom(viewer));
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
   loaderStatus.textContent =
-    googleApiKey || cesiumToken
+    googleApiKey || googleTokens || cesiumToken
       ? 'Loading Google 3D Tiles...'
       : 'Loading the keyless globe...';
   const photoreal = await loadPhotorealisticTileset(Cesium, {
     googleApiKey,
+    googleTokens,
     cesiumToken,
   });
   const tileset = photoreal.tileset;
@@ -96,7 +102,7 @@ export async function createApplicationScene({
     ...mapOptions,
     googleTileset: tileset,
     cesiumToken,
-    initialStack: tileset ? 'photoreal' : 'road',
+    initialStack: tileset ? 'photoreal' : 'esri-imagery',
     // Task 5 (height-datum fix): rebroadcast stack changes as a window
     // CustomEvent so data layers (CCTV per-regime ground resolution) can
     // react without coupling MapStackController to layer modules. Fires on
@@ -110,7 +116,7 @@ export async function createApplicationScene({
     onError: (message) => console.warn('[MapStack]', message),
   });
   defer(() => mapStackController.destroy());
-  await mapStackController.setStack(tileset ? 'photoreal' : 'road', {
+  await mapStackController.setStack(tileset ? 'photoreal' : 'esri-imagery', {
     silent: true,
   });
 

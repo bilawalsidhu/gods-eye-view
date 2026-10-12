@@ -3,7 +3,7 @@ import { shouldExpandGlobalContextPanel } from '../rightRailPolicy.js';
 export function _initGlobalContextPanel() {
   const contextTabs = [
     this._globalContextFlightsBtn,
-    this._globalContextCamerasBtn,
+    this._globalContextMissionsBtn,
   ].filter(Boolean);
   contextTabs.forEach((tab, index) =>
     this.listen(tab, 'keydown', (event) => {
@@ -27,7 +27,6 @@ export function _initGlobalContextPanel() {
       this._clearSelectedLayersPromise
     )
       return;
-    this.setContextSection('contacts');
     const nextMode = this._contextMode === 'flights' ? null : 'flights';
     this._claimContextVisualAuthority();
     void this._runUserFacingContextAction(
@@ -49,13 +48,35 @@ export function _initGlobalContextPanel() {
         });
     });
   });
-  if (this._globalContextCamerasBtn) {
-    this.listen(this._globalContextCamerasBtn, 'click', () => {
-      if (this.destroyed) return;
-      this._claimContextVisualAuthority();
-      this.revealCameras({ explicit: true });
+  this.listen(this._globalContextMissionsBtn, 'click', () => {
+    if (
+      this.destroyed ||
+      this._contextModeChanging ||
+      this._clearSelectedLayersPromise
+    )
+      return;
+    const nextMode =
+      this._contextMode === 'space-missions' ? null : 'space-missions';
+    this._claimContextVisualAuthority();
+    void this._runUserFacingContextAction(
+      (notificationToken) =>
+        this._selectContextMode(nextMode, { notificationToken }),
+      'Space Missions could not complete the requested transition; try again',
+    ).then((succeeded) => {
+      if (
+        !this.destroyed &&
+        nextMode &&
+        shouldExpandGlobalContextPanel({
+          action: 'space-missions',
+          explicitUserAction: true,
+          succeeded: succeeded === true,
+        })
+      )
+        this.actions.setPanelCollapsed('global-context-panel', false, {
+          explicit: true,
+        });
     });
-  }
+  });
   this.listen(this._installationsSearchBtn, 'click', () => {
     if (
       this.destroyed ||

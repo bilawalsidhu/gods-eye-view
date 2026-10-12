@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { runTransitHeadingRegression } from './qa-transit-heading.mjs';
 import {
   boundPageEvaluations,
   reportTransitVisibility,
@@ -16,6 +17,7 @@ import {
   runFleetBudgets,
   runBostonMatrix,
   runBostonLive,
+  runTrailVisibility,
 } from './qa-transit-scenes.mjs';
 /**
  * Browser proof for the Transit layer against a running app.
@@ -78,6 +80,18 @@ const check = (
     failures += 1;
   } else if (!passed) failures += 1;
 };
+// A focused deterministic regression can run independently of live-feed QA.
+if (process.argv.includes('--heading-only')) {
+  try {
+    await runTransitHeadingRegression(BASE, check);
+  } catch (error) {
+    check('heading regression completed', false, error.stack || error.message);
+  }
+  console.log(`HEADING: ${failures ? 'FAIL' : 'PASS'} (${failures} failed)`);
+  process.exit(failures ? 1 : 0);
+}
+if (runs('heading')) await runTransitHeadingRegression(BASE, check);
+
 const renderingSource = await readFile(
   new URL('../src/layers/transit/rendering.js', import.meta.url),
   'utf8',
@@ -1774,6 +1788,13 @@ try {
     selectStyle,
     sampleRendered,
   };
+  if (runs('trail-visible'))
+    for (const [altitude, pitch] of [
+      [300, 55],
+      [600, 45],
+      [900, 45],
+    ])
+      await runTrailVisibility({ ...sceneQA, altitude, pitch });
   if (runs('budgets')) await runFleetBudgets(sceneQA);
   if (runs('matrix')) await runBostonMatrix(sceneQA);
   if (runs('boston-live')) await runBostonLive(sceneQA);

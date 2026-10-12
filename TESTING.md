@@ -210,6 +210,18 @@ While recording, call out anything in these areas — this is the feedback I mos
   happened? Any command it misunderstood?
 - **Anything that looks wrong, janky, or surprising** — screenshot it; that's the gold.
 
+---
+
+## 6. Live video CCTV (HTTPS HLS) — soak, no mic
+
+> Requires the DelDOT pack (loads by default; `CCTV_DELDOT_ENABLED=0` disables it).
+
+1. Turn on **CCTV**, fly to Dover, DE, and activate **DE 1 @ Main Toll Plaza**. ✅ Within ~30 s the monitor plane and the panel preview both show moving video,.
+2. Leave it for **five minutes**. ✅ Continuous playback; at most a short hitch about once a minute (the agency restarts its stream on a timer). ❌ A freeze that does not recover, or the panel picture stopping while the plane keeps moving.
+3. Toggle **PROJECTION** off. ✅ The panel keeps playing; the plane and the active camera's cone hide.
+4. Switch to **DE 8 @ Saulsbury Rd**, then back. ✅ Each switch resumes within ~10 s with no stale frame from the previous camera.
+5. Optional: DevTools → Network, filter `media/`. ✅ Playlist responses carry `X-CCTV-Source: hls-pull`; segments return `video/mp2t`.
+
 ## If something looks off
 
 - **Grey globe / slow tiles:** wait a few seconds after a camera flight; photoreal streams in.
@@ -237,3 +249,8 @@ FIRMS refactoring can be checked without a configured server key using
 fixture mode exercises populated display, aggregation, cards, keyless and stale
 responses, and selection/camera handoff. It does not establish live-source
 acceptance; omit `--fixtures` with a configured FIRMS key for that check.
+
+Director authoring and sharing acceptance: `node scripts/qa-director-sharing.mjs`
+checks installed import previews, draft validation, file-bundle round trips,
+cancellation, resource ownership and narrow-screen controls. Run alongside the
+scene-controls, camera, pack, interaction and timing harnesses.

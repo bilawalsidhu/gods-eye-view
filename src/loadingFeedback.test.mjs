@@ -206,10 +206,7 @@ test('universal notice lifecycle clears on dispose and uses the one top-center l
   assert.match(dispose, /this\._feedback\._globalStatusNotice = null;/);
   assert.match(dispose, /this\._shareRestoration\.destroy\(\)/);
   assert.match(ShareRestoration.prototype.destroy.toString(), /this\._shareTrackingNoticeGeneration \+= 1;/);
-  assert.match(
-    html,
-    /<div\s+id="global-loading-status"[\s\S]*?role="status"[\s\S]*?aria-live="polite"[\s\S]*?aria-atomic="true"[\s\S]*?hidden[\s\S]*?>/,
-  );
+  assert.match(html, /<div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" hidden>/);
 });
 
 test('normalizes lifecycle and refresh loading without owning manager state', () => {
@@ -249,18 +246,6 @@ test('terminal loading feedback centers its label without an empty detail slot',
   assert.match(
     css,
     /#global-loading-status:is\(\s*\[data-state='complete'\],\s*\[data-state='cancelled'\],\s*\[data-state='error'\]\s*\)\s*#global-loading-detail\s*\{\s*display:\s*none;/,
-  );
-});
-
-test('mobile loading status stays top-anchored instead of stretching between top and bottom', () => {
-  const css = readStylesheet(new URL('../style.css', import.meta.url));
-  assert.match(
-    css,
-    /#global-loading-status\s*\{[\s\S]*?top:\s*calc\(var\(--mobile-safe-top\)\s*\+\s*44px\);[\s\S]*?bottom:\s*auto;[\s\S]*?max-width:\s*calc\(100vw\s*-\s*24px\);/,
-  );
-  assert.doesNotMatch(
-    css,
-    /body\.mobile-panel-open\s+#global-loading-status\s*\{/,
   );
 });
 

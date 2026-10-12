@@ -107,85 +107,21 @@
   border-radius: 999px;
 }
 
-.data-layer-section {
-  padding-top: 8px;
+.data-layer-group-heading {
+  margin: 8px 10px 2px;
+  padding-top: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.data-layer-section:first-child {
-  padding-top: 0;
-  border-top: 0;
-}
-
-.data-layer-section-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 4px 10px 6px;
-  border: 0;
-  background: transparent;
   color: var(--text-secondary);
-  font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 1.4px;
   text-transform: uppercase;
-  text-align: left;
-  cursor: pointer;
 }
 
-.data-layer-section-toggle:hover,
-.data-layer-section-toggle:focus-visible {
-  color: var(--text-primary);
-}
-
-.data-layer-section-title {
-  min-width: 0;
-}
-
-.data-layer-section-chevron {
-  flex: 0 0 auto;
-  color: rgba(191, 244, 255, 0.86);
-  font-size: 12px;
-  line-height: 1;
-  transition: transform var(--transition-fast);
-}
-
-.data-layer-section.collapsed .data-layer-section-chevron {
-  transform: rotate(-90deg);
-}
-
-.data-layer-section-body {
-  display: grid;
-  gap: 2px;
-  transform-origin: top center;
-  opacity: 1;
-  transition:
-    opacity 0.12s ease,
-    transform 0.16s ease;
-}
-
-.data-layer-section.collapsed .data-layer-section-body {
-  opacity: 0;
-  transform: translateY(-4px) scaleY(0.98);
-  pointer-events: none;
-}
-
-.data-layer-section-body[hidden] {
-  display: none;
-}
-
-.data-layer-empty-state {
-  margin: 0 10px 8px;
-  padding: 8px 10px;
-  border: 1px dashed rgba(98, 181, 255, 0.18);
-  border-radius: 8px;
-  color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 1.35;
-  background: rgba(255, 255, 255, 0.02);
+.data-layer-group-heading:first-child {
+  margin-top: 0;
+  padding-top: 4px;
+  border-top: 0;
 }
 
 .data-toggle-row {
@@ -225,7 +161,10 @@
     max-height var(--transition-fast);
 }
 #right-context-rail > #pp-toggles,
-#right-context-rail > #cctv-panel,
+#right-context-rail > #cctv-panel:not(.panel-floating),
+#right-context-rail > #street-level-panel:not(.panel-floating),
+#right-context-rail > #weather-panel,
+#right-context-rail > #recent-imagery-panel,
 #right-context-rail > #global-context-panel {
   position: relative;
   inset: auto;
@@ -237,12 +176,26 @@
   max-height: 100%;
   pointer-events: auto;
 }
-#right-context-rail #cctv-panel {
+#right-context-rail #cctv-panel:not(.panel-floating),
+#right-context-rail #street-level-panel:not(.panel-floating),
+#right-context-rail #weather-panel,
+#right-context-rail #recent-imagery-panel {
   width: 100%;
   max-height: 100%;
   pointer-events: auto;
 }
-#right-context-rail #cctv-panel.collapsed {
+#right-context-rail > #weather-panel,
+/* Collapsed, it must stay hideable by the rail's exclusive layout. */
+#right-context-rail > #recent-imagery-panel:not(.collapsed) {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 1;
+  min-height: 0;
+}
+#right-context-rail #cctv-panel.collapsed:not(.panel-floating),
+#right-context-rail #street-level-panel.collapsed:not(.panel-floating),
+#right-context-rail #weather-panel.collapsed,
+#right-context-rail #recent-imagery-panel.collapsed {
   width: var(--right-display-collapsed-width);
   margin-left: auto;
 }
@@ -255,6 +208,9 @@
 }
 #right-context-rail > #pp-toggles.collapsed .pp-header-row,
 #right-context-rail #cctv-panel.collapsed .cctv-panel-inner,
+#right-context-rail #street-level-panel.collapsed .street-level-panel-inner,
+#right-context-rail #weather-panel.collapsed .weather-panel-inner,
+#right-context-rail #recent-imagery-panel.collapsed .recent-imagery-panel-inner,
 #right-context-rail
   #global-context-panel.collapsed
   .global-context-panel-inner {
@@ -262,7 +218,10 @@
   min-height: 50px;
   box-sizing: border-box;
 }
-#right-context-rail #cctv-panel:not(.collapsed) .cctv-panel-inner {
+#right-context-rail #cctv-panel:not(.collapsed) .cctv-panel-inner,
+#right-context-rail
+  #street-level-panel:not(.collapsed)
+  .street-level-panel-inner {
   max-height: 100%;
   overflow-y: auto;
   scrollbar-gutter: stable;
@@ -298,18 +257,26 @@
 #right-context-rail.layout-focus {
   height: var(--right-stack-max-height);
 }
-#right-context-rail.layout-exclusive > [data-panel-id].collapsed {
+#right-context-rail.layout-exclusive
+  > [data-panel-id].collapsed:not(.panel-floating) {
   display: none;
 }
-#right-context-rail.layout-focus > [data-panel-id].collapsed {
+#right-context-rail.layout-focus
+  > [data-panel-id].collapsed:not(.panel-floating) {
   display: block;
   flex: 0 0 auto;
 }
-#right-context-rail.layout-focus.layout-exclusive > [data-panel-id].collapsed {
+#right-context-rail.layout-focus.layout-exclusive
+  > [data-panel-id].collapsed:not(.panel-floating) {
   display: none;
 }
 #right-context-rail.layout-focus > #pp-toggles:not(.collapsed),
-#right-context-rail.layout-focus > #cctv-panel:not(.collapsed),
+#right-context-rail.layout-focus
+  > #cctv-panel:not(.collapsed):not(.panel-floating),
+#right-context-rail.layout-focus
+  > #street-level-panel:not(.collapsed):not(.panel-floating),
+#right-context-rail.layout-focus > #weather-panel:not(.collapsed),
+#right-context-rail.layout-focus > #recent-imagery-panel:not(.collapsed),
 #right-context-rail.layout-focus > #global-context-panel:not(.collapsed) {
   flex: 0 1 var(--right-panel-allocated-height);
   height: var(--right-panel-allocated-height);
@@ -323,8 +290,17 @@
   scrollbar-color: rgba(0, 212, 255, 0.4) transparent;
 }
 #right-context-rail.layout-focus
-  > #cctv-panel:not(.collapsed)
+  > #weather-panel:not(.collapsed)
+  .weather-panel-inner,
+#right-context-rail.layout-focus
+  > #cctv-panel:not(.collapsed):not(.panel-floating)
   .cctv-panel-inner,
+#right-context-rail.layout-focus
+  > #street-level-panel:not(.collapsed):not(.panel-floating)
+  .street-level-panel-inner,
+#right-context-rail.layout-focus
+  > #recent-imagery-panel:not(.collapsed)
+  .recent-imagery-panel-inner,
 #right-context-rail.layout-focus
   > #global-context-panel:not(.collapsed)
   .global-context-panel-inner {
@@ -346,6 +322,46 @@
 #right-context-rail.layout-focus .space-mission-roster-list {
   flex: 1 1 auto;
   max-height: none;
+}
+/* Synchronous intrinsic measurement, independent of focus and allocation.
+   This attribute is not observed by the rail's layout scheduler. */
+#right-context-rail[data-rail-measuring] {
+  height: auto !important;
+  max-height: none !important;
+  transition: none !important;
+}
+#right-context-rail[data-rail-measuring] > [data-panel-id]:not([hidden]) {
+  --right-panel-allocated-height: initial !important;
+  flex: 0 0 auto !important;
+  height: auto !important;
+  max-height: none !important;
+  transition: none !important;
+}
+#right-context-rail[data-rail-measuring]
+  > [data-panel-id].collapsed:not([hidden]) {
+  display: block !important;
+}
+#right-context-rail[data-rail-measuring]
+  > [data-panel-id]:not(.collapsed)
+  > .cctv-panel-inner,
+#right-context-rail[data-rail-measuring]
+  > [data-panel-id]:not(.collapsed)
+  > .street-level-panel-inner,
+#right-context-rail[data-rail-measuring]
+  > [data-panel-id]:not(.collapsed)
+  > .weather-panel-inner,
+#right-context-rail[data-rail-measuring]
+  > [data-panel-id]:not(.collapsed)
+  > .recent-imagery-panel-inner,
+#right-context-rail[data-rail-measuring]
+  > [data-panel-id]:not(.collapsed)
+  > .global-context-panel-inner {
+  height: auto !important;
+  max-height: none !important;
+}
+#right-context-rail[data-rail-measuring] [data-rail-scroller],
+#right-context-rail[data-rail-measuring] .space-mission-roster-list {
+  max-height: none !important;
 }
 #space-mission-panel {
   width: 100%;
@@ -1360,9 +1376,9 @@
   .data-toggle-right:has(
     .data-toggle-btn:is(
       .feed-loading,
-      .feed-partial,
       .feed-degraded,
       .feed-stale,
+      .feed-partial,
       .feed-fallback,
       .feed-unavailable
     )
@@ -1371,95 +1387,17 @@
   display: none;
 }
 
-#security-point-card {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 170;
-  width: min(22rem, calc(100vw - 36px));
-  pointer-events: auto;
+body.ui-clean-view #right-context-rail,
+body.recording-mode #right-context-rail,
+body.ui-clean-view #right-context-rail > [data-panel-id],
+body.recording-mode #right-context-rail > [data-panel-id] {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
-
-#security-point-card .security-point-card-inner {
-  background: rgba(8, 20, 30, 0.94);
-  border: 1px solid rgba(123, 189, 211, 0.3);
-  border-radius: 18px;
-  box-shadow:
-    0 18px 44px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
-  padding: 12px 14px;
-  backdrop-filter: blur(20px) saturate(1.2);
-  -webkit-backdrop-filter: blur(20px) saturate(1.2);
-}
-
-.security-point-card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.security-point-card-header strong,
-.security-point-card-row strong,
-.security-point-card-row a {
-  display: block;
-  font-family: var(--font-mono);
-}
-
-.security-point-card-kicker {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--text-secondary);
-  font-size: 10px;
-  letter-spacing: 1.2px;
-}
-
-.security-point-card-close {
-  border: 0;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
-  border-radius: 10px;
-  width: 34px;
-  height: 34px;
-  font-size: 20px;
-  line-height: 1;
-}
-
-.security-point-card-row {
-  display: grid;
-  grid-template-columns: minmax(0, 7.2rem) minmax(0, 1fr);
-  gap: 10px;
-  margin-top: 8px;
-  color: var(--text-primary);
-}
-
-.security-point-card-row span {
-  color: var(--text-secondary);
-  font-size: 11px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
-
-.security-point-card-row strong,
-.security-point-card-phone {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--text-primary);
-  text-decoration: none;
-}
-
-.security-point-card-phone:hover,
-.security-point-card-phone:focus-visible {
-  text-decoration: underline;
-}
-
-.security-point-card-footer {
-  margin-top: 10px;
-  color: var(--text-secondary);
-  font-size: 11px;
-}
-
-.security-point-card-footer a {
-  color: inherit;
+@media (max-width: 720px) {
+  #right-context-rail #weather-panel.collapsed,
+  #right-context-rail #recent-imagery-panel.collapsed {
+    width: 100%;
+  }
 }

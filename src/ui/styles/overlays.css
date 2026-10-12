@@ -199,55 +199,6 @@
   letter-spacing: 2px;
 }
 
-#intel-hud .hud-group-toggle,
-#intel-hud .hud-group-chip {
-  pointer-events: auto;
-  border: 1px solid var(--hud-border);
-  color: var(--hud-color);
-  text-shadow: 0 0 4px var(--hud-glow);
-  font-family: var(--font-mono);
-  line-height: 1;
-  background: rgba(0, 0, 0, 0.68);
-  cursor: pointer;
-}
-
-#intel-hud .hud-group-toggle {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  padding: 0;
-  font-size: 14px;
-}
-
-#intel-hud .hud-group-chip {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  min-width: 42px;
-  min-height: 28px;
-  border-radius: 999px;
-  padding: 0 10px;
-  font-size: 11px;
-  letter-spacing: 1.6px;
-}
-
-.hud-top-right.hud-collapsed .hud-content,
-.hud-top-right.hud-collapsed .hud-bracket,
-.hud-top-right.hud-collapsed .hud-group-toggle,
-.hud-bottom-right.hud-collapsed {
-  display: none;
-}
-
-.hud-top-right.hud-collapsed .hud-group-chip {
-  display: inline-flex;
-}
-
 .hud-ais-vessel {
   margin-top: 6px;
   max-width: 340px;
@@ -401,11 +352,6 @@
 #intel-hud[data-variant='minimal'] .hud-right-edge,
 #intel-hud[data-variant='minimal'] .hud-classification,
 #intel-hud[data-variant='minimal'] .hud-system {
-  display: none;
-}
-
-#intel-hud[data-variant='minimal'] .hud-group-toggle,
-#intel-hud[data-variant='minimal'] .hud-group-chip {
   display: none;
 }
 

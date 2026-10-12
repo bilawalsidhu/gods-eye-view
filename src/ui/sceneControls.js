@@ -50,7 +50,10 @@ export class SceneControls {
     this.listen(elements.file, 'change', async () => {
       const file = elements.file?.files?.[0];
       if (!file) return;
-      await this.run('import', file);
+      await this.run(
+        this.actions.reviewImport ? 'reviewImport' : 'import',
+        file,
+      );
       if (!this.destroyed) elements.file.value = '';
     });
     if (!subscribe) {

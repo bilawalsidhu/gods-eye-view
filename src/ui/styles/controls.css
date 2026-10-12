@@ -103,6 +103,115 @@
   opacity: 0.96;
 }
 
+/* ── Portable rail panels ────────────────────
+   Rail placement in layers.css is guarded with :not(.panel-floating), so
+   these rules only have to beat a panel's base placement (one id). */
+.panel-portable .panel-header {
+  cursor: grab;
+}
+.panel-portable.panel-dragging .panel-header {
+  cursor: grabbing;
+}
+#right-context-rail > .panel-floating {
+  position: fixed;
+  inset: auto;
+  /* Above every docked rail panel; keep in step with PANEL_Z_FLOATING_FLOOR. */
+  z-index: 111;
+  max-height: calc(100vh - 12px);
+  margin: 0;
+  flex: none;
+  pointer-events: auto;
+}
+/* A collapsed window shows only its header strip; its inline height stays. */
+#right-context-rail > .panel-floating.collapsed {
+  max-height: max-content;
+}
+.panel-floating[style*='height'] > .cctv-panel-inner {
+  box-sizing: border-box;
+  height: 100%;
+  max-height: none;
+}
+.panel-resize-edge,
+.panel-resize-grip {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+}
+.panel-resize-edge[data-dir='n'],
+.panel-resize-edge[data-dir='s'] {
+  left: 10px;
+  right: 10px;
+  height: 7px;
+  cursor: ns-resize;
+}
+.panel-resize-edge[data-dir='n'] {
+  top: -3px;
+}
+.panel-resize-edge[data-dir='s'] {
+  bottom: -3px;
+}
+.panel-resize-edge[data-dir='e'],
+.panel-resize-edge[data-dir='w'] {
+  top: 10px;
+  bottom: 10px;
+  width: 7px;
+  cursor: ew-resize;
+}
+.panel-resize-edge[data-dir='e'] {
+  right: -3px;
+}
+.panel-resize-edge[data-dir='w'] {
+  left: -3px;
+}
+.panel-resize-edge[data-dir='ne'],
+.panel-resize-edge[data-dir='nw'],
+.panel-resize-edge[data-dir='sw'] {
+  width: 14px;
+  height: 14px;
+}
+.panel-resize-edge[data-dir='ne'] {
+  top: -3px;
+  right: -3px;
+  cursor: nesw-resize;
+}
+.panel-resize-edge[data-dir='nw'] {
+  top: -3px;
+  left: -3px;
+  cursor: nwse-resize;
+}
+.panel-resize-edge[data-dir='sw'] {
+  bottom: -3px;
+  left: -3px;
+  cursor: nesw-resize;
+}
+.panel-resize-grip {
+  right: 3px;
+  bottom: 3px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  opacity: 0.55;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 3px,
+    rgba(0, 212, 255, 0.6) 3px 4px
+  );
+  transition: opacity var(--transition-fast);
+}
+.panel-portable:hover .panel-resize-grip,
+.panel-resizing .panel-resize-grip {
+  opacity: 1;
+}
+.panel-collapsible.collapsed > .panel-resize-edge,
+.panel-collapsible.collapsed > .panel-resize-grip {
+  display: none;
+}
+.panel-resizing,
+.panel-resizing * {
+  user-select: none;
+}
+
 .panel-title {
   font-family: var(--font-mono);
   font-size: 9px;
@@ -268,61 +377,13 @@
   position: fixed;
   inset: 0;
   z-index: 1000;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 50% 110%, rgba(59, 130, 246, 0.2), transparent 28%),
-    linear-gradient(180deg, #060a12 0%, var(--brand-midnight) 42%, #04070d 100%);
+  background: var(--bg-dark);
   display: flex;
   align-items: center;
   justify-content: center;
   transition:
     opacity 0.8s ease,
     visibility 0.8s ease;
-}
-
-#loading-screen::before,
-#loading-screen::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-#loading-screen::before {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.04) 0,
-      rgba(255, 255, 255, 0.04) 1px,
-      transparent 1px,
-      transparent 62px
-    ),
-    linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.03) 0,
-      rgba(255, 255, 255, 0.03) 1px,
-      transparent 1px,
-      transparent 62px
-    );
-  background-size: 100% 62px, 62px 100%;
-  opacity: 0.16;
-  mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.9) 24%);
-}
-
-#loading-screen::after {
-  top: auto;
-  bottom: -34vh;
-  left: 50%;
-  width: 130vmax;
-  height: 78vmax;
-  inset: auto auto -34vh 50%;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  border-top: 1px solid rgba(34, 211, 238, 0.16);
-  box-shadow:
-    0 -18px 90px rgba(59, 130, 246, 0.16),
-    inset 0 24px 110px rgba(255, 255, 255, 0.015);
-  opacity: 0.85;
 }
 
 #loading-screen.hidden {
@@ -332,19 +393,15 @@
 }
 
 .loader-content {
-  position: relative;
-  z-index: 1;
-  width: min(100%, 34rem);
-  padding: 2rem 1.5rem;
   text-align: center;
 }
 
 .loader-logo {
   display: block;
-  width: clamp(5rem, 18vw, 8rem);
-  height: clamp(5rem, 18vw, 8rem);
-  margin: 0 auto;
-  filter: drop-shadow(0 0 30px rgba(34, 211, 238, 0.22));
+  width: 128px;
+  height: auto;
+  margin: 0 auto 24px;
+  filter: drop-shadow(0 0 24px rgba(0, 246, 255, 0.42));
   animation: logo-pulse 2s ease-in-out infinite;
 }
 
@@ -361,60 +418,18 @@
 }
 
 .loader-content h2 {
-  font-family: var(--font-brand);
+  font-family: var(--font-mono);
   font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.38em;
+  font-weight: 600;
+  letter-spacing: 6px;
   color: var(--text-primary);
-  text-transform: uppercase;
+  margin-bottom: 12px;
 }
 
-.loader-progress {
-  margin: 1.5rem auto 0;
-  width: min(100%, 20rem);
-}
-
-.loader-progress-track {
-  display: block;
-  position: relative;
-  height: 2px;
-  overflow: hidden;
-  background: rgba(72, 85, 99, 0.68);
-}
-
-.loader-progress-bar {
-  position: absolute;
-  inset: 0 auto 0 -38%;
-  width: 38%;
-  background: linear-gradient(90deg, var(--accent-strong), var(--accent));
-  box-shadow: 0 0 14px rgba(34, 211, 238, 0.28);
-  animation: loader-sweep 1.45s ease-in-out infinite;
-}
-
-@keyframes loader-sweep {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(360%);
-  }
-}
-
-.loader-status-label,
-.loader-status-detail {
-  font-family: var(--font-brand);
+.loader-status {
+  font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-}
-
-.loader-status-label {
-  margin-top: 1.2rem;
-  color: rgba(229, 231, 235, 0.84);
-}
-
-.loader-status-detail {
-  margin-top: 0.55rem;
+  letter-spacing: 2px;
   color: var(--text-dim);
   animation: pulse 2s ease-in-out infinite;
 }
@@ -426,14 +441,6 @@
   }
   50% {
     opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .loader-logo,
-  .loader-progress-bar,
-  .loader-status-detail {
-    animation: none;
   }
 }
 
@@ -464,9 +471,18 @@
 }
 
 #pp-toggles:not(.collapsed) > .pp-header-row,
-#pp-toggles:not(.collapsed) > .pp-toggle-group,
-#pp-toggles:not(.collapsed) > #clean-view-toggle {
+#pp-toggles:not(.collapsed) > .pp-panel-body > .pp-toggle-group,
+#pp-toggles:not(.collapsed) > .pp-panel-body > #clean-view-toggle {
   width: 100%;
+}
+
+.pp-panel-body,
+.cyber-panel-body {
+  display: contents;
+}
+
+.panel-collapsible.collapsed > .global-context-panel-inner > .cyber-panel-body {
+  display: none;
 }
 
 .pp-toggle-btn {
@@ -785,13 +801,26 @@
   min-width: 200px;
 }
 
-#hud-overlay-row {
-  min-width: 200px;
-  gap: 10px;
+.cyber-sonar-control {
+  display: none;
 }
 
-#hud-overlay-row .pp-slider-mini-label {
-  min-width: 92px;
+:root[data-ui-theme='cyber'] .cyber-sonar-control {
+  display: flex;
+}
+
+.cyber-sonar-toggle-row,
+.cyber-sonar-setting {
+  min-width: 200px;
+}
+
+.cyber-sonar-toggle-row .pp-mode-btn {
+  margin-left: auto;
+  min-width: 48px;
+}
+
+:root[data-cyber-sonar='off'] .cyber-sonar-setting {
+  display: none;
 }
 
 /* Map Source tiles live with Visual Presets in the bottom command tray. */
@@ -1076,7 +1105,9 @@ body.ui-clean-view #data-panel,
 body.ui-clean-view #cctv-panel,
 body.ui-clean-view #radio-panel,
 body.ui-clean-view #global-context-panel,
-body.ui-clean-view #scene-panel {
+body.ui-clean-view #scene-panel,
+/* The expanded viewer lives on <body>, outside every panel. */
+body.ui-clean-view .sl-viewer-wrap-expanded {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
@@ -1166,7 +1197,7 @@ body.ui-clean-view #scene-runtime.active {
 /* Display owns the constrained desktop scroll surface. Keeping Parameters as
  * a second scroll container traps wheel/touch input at its boundary and lets
  * the flex column compress newly added preset rows below the visible panel. */
-#pp-toggles:not(.collapsed) > #param-slider-panel.active {
+#pp-toggles:not(.collapsed) > .pp-panel-body > #param-slider-panel.active {
   flex: 0 0 auto;
   max-height: none;
   overflow-y: visible;

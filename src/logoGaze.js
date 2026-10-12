@@ -2,11 +2,10 @@ const MAX_GAZE_SVG_UNITS = 34;
 const FULL_GAZE_DISTANCE_PX = 320;
 const GAZE_EASING = 0.2;
 const GAZE_EPSILON = 0.08;
-export const LOGO_PART_SELECTORS = ['#upper-ribbon', '#lower-ribbon'];
 
 /**
- * Convert a viewport pointer position into a bounded SVG-space logo offset.
- * The response ramps up near the mark, then caps so the central ribbon stays within the ring.
+ * Convert a viewport pointer position into a bounded SVG-space gaze offset.
+ * The response ramps up near the logo, then caps so the globe stays in the eye.
  *
  * @param {number} clientX - Pointer x coordinate in CSS pixels.
  * @param {number} clientY - Pointer y coordinate in CSS pixels.
@@ -50,8 +49,8 @@ export function calculateLogoGaze(
 
 /**
  * Make every same-origin logo object marked with `data-logo-gaze` follow the
- * pointer. Only the central S ribbons move; the orientation ring remains fixed.
- * Returns a cleanup callback.
+ * pointer. Only the globe and its latitude/longitude cage move; the eye shell
+ * remains fixed. Returns a cleanup callback.
  *
  * @param {Document|Element} [root=document] - DOM root to search.
  * @returns {() => void}
@@ -132,15 +131,11 @@ export function initLogoGaze(root = document) {
         svg.setAttribute('aria-hidden', 'true');
         svg.setAttribute('focusable', 'false');
         svg.querySelector('title')?.remove();
-        state.currentX = 0;
-        state.currentY = 0;
-        state.targetX = 0;
-        state.targetY = 0;
-        applyTransform(state);
         state.element.replaceChildren(svg);
-        state.parts = LOGO_PART_SELECTORS.map((selector) =>
-          svg.querySelector(selector),
-        ).filter(Boolean);
+        state.parts = [
+          svg.querySelector('#globe'),
+          svg.querySelector('#globe_cage'),
+        ].filter(Boolean);
         applyTransform(state);
       }
     } catch {

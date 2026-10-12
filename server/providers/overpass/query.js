@@ -1,7 +1,4 @@
-import {
-  encodeOverpassFormBody,
-  stripOverpassNoise,
-} from '../../../src/sources/overpass.js';
+import { stripOverpassNoise } from '../../../src/sources/overpass.js';
 import {
   OVERPASS_MAX_AROUND_M,
   OVERPASS_MAX_BBOX_DEG,
@@ -148,7 +145,7 @@ function sanitizeOverpassBody(rawBody) {
     (_, n) =>
       `[timeout:${Math.min(Number(n) || OVERPASS_MAX_QL_TIMEOUT, OVERPASS_MAX_QL_TIMEOUT)}]`,
   );
-  return { ok: true, body: encodeOverpassFormBody(clamped) };
+  return { ok: true, body: `data=${encodeURIComponent(clamped)}` };
 }
 
 export { isOverpassBoundaryQuery, sanitizeOverpassBody };

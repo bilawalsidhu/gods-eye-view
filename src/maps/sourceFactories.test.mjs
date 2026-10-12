@@ -2,14 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createIonImagery } from './imagery.js';
-import {
-  createWorldTerrain,
-  createKeylessTerrain,
-  createFallbackEllipsoidTerrain,
-} from './terrain.js';
+import { createWorldTerrain, createKeylessTerrain } from './terrain.js';
 import { createDefaultMapSources } from './defaultSources.js';
 
-test('default sources keep road flat and reserve relief terrain for terrain mode', async () => {
+test('Esri uses Re:Earth without keys and preserves ion terrain when configured', async () => {
   const originalTerrain = Cesium.CesiumTerrainProvider.fromUrl;
   const originalResource = Cesium.IonResource.fromAssetId;
   const calls = [];
@@ -21,20 +17,22 @@ test('default sources keep road flat and reserve relief terrain for terrain mode
     Cesium.IonResource.fromAssetId = async () =>
       assert.fail('keyless mode must not acquire ion terrain');
     const keyless = createDefaultMapSources();
-    const road = keyless.sources.find(
-      ({ descriptor }) => descriptor.id === 'road',
+    const esri = keyless.sources.find(
+      ({ descriptor }) => descriptor.id === 'esri-imagery',
     );
-    const terrain = keyless.sources.find(
-      ({ descriptor }) => descriptor.id === 'terrain',
-    );
-    assert.equal(road.available, true);
-    assert.equal(road.terrain.id, 'ellipsoid');
-    assert.equal(terrain.terrain.id, 'keyless');
-    assert.equal(terrain.terrain.create, createKeylessTerrain);
-    await terrain.terrain.create();
-    assert.deepEqual(calls, [
+    assert.equal(esri.available, true);
+    assert.equal(esri.terrain.id, 'keyless');
+    assert.equal(esri.terrain.create, createKeylessTerrain);
+    await esri.terrain.create();
+    // A Resource, not a bare URL: the retry policy rides on it (terrainRetry.js).
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0] instanceof Cesium.Resource);
+    assert.equal(
+      calls[0].url,
       'https://terrain.reearth.land/cesium-mesh/ellipsoid',
-    ]);
+    );
+    assert.equal(calls[0].retryAttempts, 3);
+    assert.equal(typeof calls[0].retryCallback, 'function');
     assert.equal(
       keyless.sources.find(({ descriptor }) => descriptor.id === 'photoreal')
         .available,
@@ -54,7 +52,7 @@ test('default sources keep road flat and reserve relief terrain for terrain mode
         true,
       );
       assert.equal(
-        keyed.sources.find(({ descriptor }) => descriptor.id === 'terrain')
+        keyed.sources.find(({ descriptor }) => descriptor.id === 'esri-imagery')
           .terrain.id,
         credentials.cesiumToken ? 'world' : 'keyless',
       );
@@ -135,38 +133,31 @@ test('credentialed source factories reject an omitted token instead of consuming
   await assert.rejects(createWorldTerrain(' '), /explicit ion token/);
 });
 
-test('ion imagery and terrain failures surface provider-specific 403 guidance', async () => {
-  const originalImagery = Cesium.IonImageryProvider.fromAssetId;
-  const originalResource = Cesium.IonResource.fromAssetId;
-  try {
-    Cesium.IonImageryProvider.fromAssetId = async () => {
-      throw new Error('Request has failed. Status Code: 403');
-    };
-    Cesium.IonResource.fromAssetId = async () => {
-      throw new Error('Request has failed. Status Code: 403');
-    };
-    await assert.rejects(
-      createIonImagery(Cesium.IonWorldImageryStyle.AERIAL, 'token'),
-      /Cesium ion imagery was denied \(HTTP 403\)/,
-    );
-    await assert.rejects(
-      createWorldTerrain('token'),
-      /Cesium ion terrain metadata was denied \(HTTP 403\)/,
-    );
-  } finally {
-    Cesium.IonImageryProvider.fromAssetId = originalImagery;
-    Cesium.IonResource.fromAssetId = originalResource;
-  }
-});
-
-test('terrain source exposes optional flat fallback contract', async () => {
-  const registry = createDefaultMapSources({ cesiumToken: 'token' });
-  const terrain = registry.sources.find(
-    ({ descriptor }) => descriptor.id === 'terrain',
-  ).terrain;
-  assert.equal(terrain.optional, true);
-  assert.equal(terrain.fallback, createFallbackEllipsoidTerrain);
-  const fallback = await terrain.fallback({ statusCode: 403 });
-  assert.equal(fallback.terrainId, 'ellipsoid');
-  assert.match(fallback.warning, /using flat globe/);
+test('both Google 3D routes keep tiles drawing while draped imagery loads', async () => {
+  const { createGoogleDirectTileset, createGoogleIonTileset } =
+    await import('./google3d.js');
+  const calls = [];
+  const sdk = {
+    createGooglePhotorealistic3DTileset: async (...args) => {
+      calls.push(args);
+      return 'direct';
+    },
+    IonResource: { fromAssetId: async (id, options) => ({ id, ...options }) },
+    Cesium3DTileset: {
+      fromUrl: async (...args) => {
+        calls.push(args);
+        return 'ion';
+      },
+    },
+  };
+  assert.equal(await createGoogleDirectTileset(sdk, 'key'), 'direct');
+  assert.equal(await createGoogleIonTileset(sdk, 'token'), 'ion');
+  assert.deepEqual(calls[0], [
+    { key: 'key', onlyUsingWithGoogleGeocoder: true },
+    { asynchronouslyLoadImagery: true },
+  ]);
+  assert.equal(calls[1][0].id, 2275207);
+  assert.equal(calls[1][0].accessToken, 'token');
+  assert.equal(calls[1][1].asynchronouslyLoadImagery, true);
+  assert.equal(calls[1][1].enableCollision, true);
 });

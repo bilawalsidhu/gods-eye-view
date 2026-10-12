@@ -1,0 +1,385 @@
+/* The rail owns placement and height; only the product body scrolls. */
+.weather-panel-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  max-height: 100%;
+  box-sizing: border-box;
+  padding: 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+#weather-panel .panel-glow {
+  position: absolute;
+  inset: -18px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 212, 255, 0.16) 0%,
+    transparent 65%
+  );
+  filter: blur(16px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+#weather-panel .panel-header {
+  flex: 0 0 auto;
+}
+#weather-panel-count {
+  color: var(--text-secondary);
+  font: 9px var(--font-mono);
+}
+#weather-panel-body {
+  min-height: 0;
+  max-height: calc(var(--right-stack-max-height, 50svh) - 64px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.46) transparent;
+}
+#weather-panel.collapsed #weather-panel-body,
+#weather-panel[hidden],
+.weather-readout[hidden] {
+  display: none !important;
+}
+#weather-panel.collapsed .panel-title {
+  font-size: 8px;
+  letter-spacing: 1.8px;
+}
+#weather-panel.collapsed .panel-header {
+  margin-bottom: 2px;
+}
+#weather-panel.collapsed .weather-panel-inner {
+  padding-bottom: 10px;
+}
+/* Card typography follows the layer rows and app tokens. */
+.weather-readout,
+.rail-card,
+.rail-timeline {
+  min-width: 0;
+  color: var(--text-dim);
+  font: 9px/1.45 var(--font-mono);
+  letter-spacing: 0.5px;
+}
+.weather-readout {
+  --weather-card-border: rgba(98, 181, 255, 0.28);
+}
+.rail-card {
+  padding: 0;
+  overflow-wrap: anywhere;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+.rail-card + .rail-card {
+  border-top-color: var(--weather-card-border);
+}
+.rail-card:not(.is-open):hover,
+.rail-card:not(.is-open):focus-within {
+  border-color: #79c2ff;
+}
+.rail-card.is-open {
+  border-color: rgba(0, 212, 255, 0.55);
+  background: rgba(42, 113, 171, 0.09);
+}
+.rail-card-labels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}
+.rail-card-heading {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.rail-card-heading .data-icon {
+  color: var(--text-primary);
+}
+.rail-card-disclosure {
+  color: var(--text-dim);
+  font: 9px/1.45 var(--font-mono);
+}
+.rail-card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+.rail-card.is-open .rail-card-title {
+  color: #e8feff;
+}
+.rail-card-nowrap {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rail-card-badge {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  text-align: right;
+}
+.rail-card-badge,
+.rail-card-line,
+.rail-timeline-readout {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+.rail-card-lines {
+  margin-top: 4px;
+}
+.rail-card-line {
+  white-space: pre-line;
+}
+.weather-card [data-line-id='status'] {
+  height: 1.45em;
+  overflow-y: auto;
+  color: var(--accent);
+}
+.rail-card-ramp {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  margin-top: 5px;
+}
+.rail-card-scale {
+  text-align: right;
+  font: 9px/1.45 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.rail-card-actions,
+.rail-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  min-width: 0;
+}
+.rail-card .data-toggle-chip {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.rail-card .data-row-list {
+  padding-left: 0;
+  margin-left: 0;
+}
+.rail-card .data-row-list-item {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+.rail-card [hidden],
+.weather-timeline-block[hidden],
+.weather-observed-group[hidden] {
+  display: none !important;
+}
+.rail-timeline {
+  padding: 5px;
+  border-bottom: 1px solid var(--weather-card-border);
+}
+.rail-timeline-track {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px 8px;
+  margin-top: 6px;
+}
+.rail-timeline-track input {
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+}
+.rail-timeline-endpoints {
+  display: flex;
+  grid-column: 2;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  font: 8px/1.45 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.rail-timeline-endpoints span {
+  white-space: nowrap;
+}
+.rail-timeline-endpoints span:last-child {
+  margin-left: auto;
+}
+.rail-timeline-controls .data-toggle-chip {
+  flex: 0 0 auto;
+}
+.rail-timeline-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.rail-timeline-readout {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+body.ui-clean-view .gev-wind-inspection-marker,
+body.recording-mode .gev-wind-inspection-marker {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+.rail-card-zero {
+  position: absolute;
+  top: -2px;
+  height: 8px;
+  border-left: 1px solid var(--text-primary);
+}
+.rail-card-zero::after {
+  content: '0°C';
+  position: absolute;
+  top: 8px;
+  left: 0;
+  transform: translateX(-50%);
+  font: 9px/1.45 var(--font-mono);
+  color: var(--text-dim);
+}
+
+.weather-observed-group {
+  border: 1px solid var(--weather-card-border);
+  border-radius: 6px;
+  padding: 6px;
+  margin-top: 6px;
+  min-width: 0;
+}
+.weather-observed-group > .panel-title {
+  margin: 0;
+}
+.weather-observed-scope {
+  margin-top: 4px;
+  color: var(--text-dim);
+}
+.rail-card-header {
+  width: 100%;
+  padding: 8px 5px;
+  align-items: baseline;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  color: inherit;
+}
+.rail-card-header:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+.rail-card-badge {
+  text-transform: uppercase;
+}
+.rail-card-compact {
+  grid-column: 1 / -1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Dim and secondary fall below 4.5:1 over bright imagery through glass. */
+  color: var(--text-primary);
+  font: 9px/1.45 var(--font-mono);
+  letter-spacing: 0.5px;
+}
+.rail-card-compact.status {
+  color: var(--accent);
+}
+.rail-card-setting {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 6px;
+}
+.rail-card-setting-label {
+  color: var(--text-dim);
+  font: 9px var(--font-mono);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+.rail-card-setting .rail-card-chips {
+  margin-top: 0;
+}
+.rail-card-result {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  border: 1px solid rgba(65, 220, 231, 0.18);
+  border-radius: 7px;
+  background: rgba(2, 15, 20, 0.48);
+  padding: 10px;
+}
+.rail-card-result-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.rail-card-result-header .panel-title {
+  white-space: normal;
+  flex: 1;
+  min-width: 0;
+  color: var(--text-dim);
+  font: 9px/1.45 var(--font-mono);
+  letter-spacing: 0.5px;
+}
+.rail-card-result .rail-card-lines {
+  display: grid;
+  gap: 4px;
+  margin-top: 0;
+}
+.rail-card-result [data-line-id='wind'] {
+  color: #e8feff;
+  font: 13px/1.25 var(--font-mono);
+}
+.rail-card-result [data-line-id='explanation'] {
+  font: 8px/1.35 var(--font-mono);
+}
+.rail-card-actions {
+  align-items: center;
+}
+
+.rail-card-legend-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+.rail-card-legend-swatch {
+  width: 12px;
+  height: 4px;
+  flex: 0 0 12px;
+}
+
+.rail-card-body {
+  padding: 0 5px 8px;
+}
+.rail-card[data-open='true'] > .rail-card-header {
+  padding-bottom: 0;
+}

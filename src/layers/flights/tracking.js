@@ -43,13 +43,10 @@ export function createTracking({
     services.groundFloor;
   const { clearFocusTarget } = services.focus;
   const { isMilitaryLayerActive, isMilitaryIcao } = services.militaryRegistry;
-  const { refreshTrackedReadout } = services.readout;
+  const { trackedLabelModelFromText, refreshTrackedReadout } = services.readout;
   const { applyTrackedCameraFrame } = services.camera;
   const { resolvePickId, isOwnedByOtherLayer } = services.picking;
   const flightsLayer = layer;
-  const M_TO_FT = 3.28084;
-  const MPS_TO_KTS = 1.943844;
-  const MPS_TO_FPM = 196.850394;
 
   function _emitAwarenessEvent(type, detail) {
     if (
@@ -735,133 +732,44 @@ export function createTracking({
     flightState._pendingTrackingRestore = null;
   }
 
-  function _cleanText(value) {
-    const text = String(value ?? '').trim();
-    return text || null;
-  }
+  /** Multi-line tracked presentation text: "CS · FL · kts" + "Airline · Type" +
+   *  "ORIG → DEST". The route line is gated by
+   *  routePlausible so a wrong-leg adsbdb route is hidden, not displayed.
+   *  While the plane is in its missed-poll grace (coasting on dead reckoning
+   *  with sticky metadata), the first line carries a "· STALE" cue — the fleet's
+   *  45%-alpha billboard fade doesn't apply to the tracked plane (its entity
+   *  owns the visual), so without this the readout would present last-known
+   *  velocity/altitude as live. */
 
-  function _truncateText(value, maxChars = 24) {
-    const text = _cleanText(value);
-    if (!text || text.length <= maxChars) return text;
-    return `${text.slice(0, Math.max(1, maxChars - 1)).trimEnd()}…`;
-  }
-
-  function _formatAirportLabel(airport) {
-    const code = _cleanText(airport?.code);
-    const name = _truncateText(airport?.name, 22);
-    if (name && code && name.toUpperCase() !== code.toUpperCase()) {
-      return `${name} (${code})`;
-    }
-    return code || name || '--';
-  }
-
-  function _formatRelativeAge(epochMs) {
-    if (!Number.isFinite(epochMs) || epochMs <= 0) return null;
-    const ageMs = Math.max(0, Date.now() - epochMs);
-    if (ageMs < 90_000) return `${Math.round(ageMs / 1000)}s ago`;
-    if (ageMs < 90 * 60_000) return `${Math.round(ageMs / 60_000)}m ago`;
-    return `${Math.round(ageMs / 3_600_000)}h ago`;
-  }
-
-  function _formatUtcTime(epochMs) {
-    if (!Number.isFinite(epochMs) || epochMs <= 0) return '--';
-    return new Date(epochMs).toISOString().slice(11, 19) + 'Z';
-  }
-
-  function _formatAltitudeSummary(info) {
-    if (info?.onGround === true) return 'GROUND';
-    if (!Number.isFinite(info?.altitude)) return '--';
-    const altitudeFt = Math.round(info.altitude * M_TO_FT);
-    if (altitudeFt >= 18_000) return `FL${String(Math.round(altitudeFt / 100)).padStart(3, '0')}`;
-    return `${altitudeFt.toLocaleString('en-US')} ft`;
-  }
-
-  function _formatSpeedSummary(speedMps) {
-    if (!Number.isFinite(speedMps) || speedMps <= 0) return '--';
-    return `${Math.round(speedMps * MPS_TO_KTS)} kts`;
-  }
-
-  function _formatHeadingSummary(trackDeg) {
-    if (!Number.isFinite(trackDeg)) return '--';
-    return `${String(Math.round(((trackDeg % 360) + 360) % 360)).padStart(3, '0')}°`;
-  }
-
-  function _formatVerticalStatus(info) {
-    if (info?.onGround === true) return null;
-    if (!Number.isFinite(info?.verticalRate)) return null;
-    const rateFpm = Math.round(Math.abs(info.verticalRate) * MPS_TO_FPM);
-    if (rateFpm < 100) return 'Level';
-    return info.verticalRate > 0
-      ? `Climb ${rateFpm.toLocaleString('en-US')} fpm`
-      : `Desc ${rateFpm.toLocaleString('en-US')} fpm`;
-  }
-
-  function _trackedCardModel(icao24) {
+  function _trackedLabelText(icao24) {
     const info = flightState.records.data.get(icao24);
-    if (!info) {
-      return {
-        title: icao24.toUpperCase(),
-        details: ['Alt -- · GS -- · HDG --', 'Status unavailable'],
-        accent: '#39d0ff',
-        selected: true,
-      };
-    }
-    const callsign = _cleanText(info.callsign);
-    const registration = _cleanText(info.registration);
-    const type = isTr3b(icao24)
+    if (!info) return icao24;
+    // A whitespace-only callsign ("   ") is truthy, so `(info.callsign || icao24)`
+    // kept it, then .trim() emptied it → the callsign slot dropped out of the
+    // readout. `_contactLabel` trims FIRST, then falls through registration to
+    // the ICAO hex, so a callsign-less enriched contact heads its readout with
+    // the tail number rather than raw hex.
+    const cs = parts.queries._contactLabel(icao24, info);
+    const altFt = Math.round((info.altitude || 0) * 3.28084);
+    const fl = altFt >= 18000 ? `FL${Math.round(altFt / 100)}` : `${altFt} ft`;
+    const spd = info.velocity ? `${Math.round(info.velocity * 1.944)} kts` : '';
+    const stale =
+      flightState.records.missingPolls.get(icao24) || flightState.feed._backoff
+        ? 'STALE'
+        : '';
+    const lines = [[cs, fl, spd, stale].filter(Boolean).join(' · ')];
+    // Converted contacts report their class as TR-3B and nothing else — the
+    // operator/type identity is exactly what the Easter egg is replacing.
+    const ident = isTr3b(icao24)
       ? tr3bTypeLabel(icao24)
-      : _cleanText(info.typeName) || _cleanText(info.typeCode);
-    const operator = _cleanText(info.airline) || _cleanText(info.operator);
-    const stale = Boolean(
-      flightState.records.missingPolls.get(icao24) || flightState.feed._backoff,
-    );
-    const details = [];
-    const ident = [
-      operator,
-      type,
-      registration ? `Tail ${registration}` : null,
-    ].filter(Boolean);
-    if (ident.length) details.push(ident.join(' · '));
-    else if (callsign || registration) details.push(`ICAO ${icao24.toUpperCase()}`);
+      : [info.airline, info.typeName || info.typeCode]
+          .filter(Boolean)
+          .join(' · ');
+    if (ident) lines.push(ident);
     if (info.route && _routeIsPlausible(icao24, info.route)) {
-      details.push(`From ${_formatAirportLabel(info.route.origin)}`);
-      details.push(`To ${_formatAirportLabel(info.route.destination)}`);
+      lines.push(`${info.route.origin.code} → ${info.route.destination.code}`);
     }
-    details.push(
-      [
-        `Alt ${_formatAltitudeSummary(info)}`,
-        `GS ${_formatSpeedSummary(info.velocity)}`,
-        `HDG ${_formatHeadingSummary(
-          info.trackKnown === false ? null : info.true_track,
-        )}`,
-      ].join(' · '),
-    );
-    details.push(
-      [
-        stale ? 'Status Stale' : info.onGround ? 'Status On ground' : 'Status Airborne',
-        _formatVerticalStatus(info),
-      ]
-        .filter(Boolean)
-        .join(' · '),
-    );
-    const contactAge =
-      _formatRelativeAge(info.lastContactEpochMs) ||
-      _formatRelativeAge(info.observedReceiptMs);
-    if (contactAge) details.push(`Contact ${contactAge}`);
-    details.push(
-      [
-        flightState.feed._lastSource || null,
-        `Upd ${_formatUtcTime(flightState.feed._lastUpdate)}`,
-      ]
-        .filter(Boolean)
-        .join(' · '),
-    );
-    return {
-      title: callsign || registration || icao24.toUpperCase(),
-      details,
-      accent: '#39d0ff',
-      selected: true,
-    };
+    return lines.join('\n');
   }
 
   /** Write the explicit tracked presentation model and refresh its host entry. */
@@ -869,7 +777,10 @@ export function createTracking({
   function _updateTrackedLabelModel(icao24) {
     if (!flightState._trackedEntity || icao24 !== flightState._trackedIcao)
       return;
-    flightState._trackedEntity.gevLabelModel = _trackedCardModel(icao24);
+    flightState._trackedEntity.gevLabelModel = trackedLabelModelFromText(
+      _trackedLabelText(icao24),
+      '#39d0ff',
+    );
     refreshTrackedReadout(flightState._trackedEntity);
     // The readout and the context slot describe the same contact — refresh them
     // together so voice never narrates a fix the card has already replaced.
@@ -1087,7 +998,10 @@ export function createTracking({
     });
     flightState._trackedEntity.gevSelectionOrigin = origin;
     flightState._trackedEntity.gevTrackedId = `flights:${icao24}`;
-    flightState._trackedEntity.gevLabelModel = _trackedCardModel(icao24);
+    flightState._trackedEntity.gevLabelModel = trackedLabelModelFromText(
+      _trackedLabelText(icao24),
+      '#39d0ff',
+    );
 
     // A billboard has a ~zero bounding sphere, so Cesium's default follow distance is
     // far too tight (the user had to scroll out to read the plane). Give the entity a
@@ -1337,6 +1251,7 @@ export function createTracking({
     _militaryLayerSuppresses,
     _applyPendingTrackingRestore,
     _cancelPendingTrackingRestore,
+    _trackedLabelText,
     _updateTrackedLabelModel,
     _syncTrackedBillboardImage,
     _refreshTr3bContact,

@@ -15,9 +15,9 @@ import { keySetupRequirement } from './keySetupCore.mjs';
 export const MAP_STACK_CHIP_CLASS = 'map-stack-chip';
 export const PRESENTED_MAP_STACK_IDS = Object.freeze([
   'photoreal',
-  'road',
-  'hybrid',
-  'terrain',
+  'bing-aerial',
+  'bing-labels',
+  'esri-imagery',
   'osm',
 ]);
 

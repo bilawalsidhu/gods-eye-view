@@ -1,565 +1,180 @@
-<div id="left-panel-stack">
+  <div id="left-panel-stack">
   <!-- Data Layer Toggle Panel -->
-  <div
-    id="data-panel"
-    class="panel-collapsible collapsed active"
-    data-panel-id="data-panel"
-  >
+  <div id="data-panel" class="panel-collapsible collapsed active" data-panel-id="data-panel">
     <div class="panel-glow"></div>
     <div class="data-panel-inner">
       <div class="panel-header">
-        <span class="panel-title">LAYERS</span>
+        <span class="panel-title">DATA LAYERS</span>
         <span class="panel-divider"></span>
-        <button
-          class="panel-collapse-btn"
-          data-collapse-target="data-panel"
-          title="Collapse panel"
-        >
-          +
-        </button>
+        <button class="panel-collapse-btn" data-collapse-target="data-panel" title="Collapse panel">+</button>
       </div>
       <div id="data-toggles" class="data-toggle-list"></div>
     </div>
   </div>
 
   <!-- CCTV Coverage Panel -->
-  <div
-    id="cctv-panel"
-    class="panel-collapsible collapsed"
-    data-panel-id="cctv-panel"
-    hidden
-    aria-hidden="true"
-  ></div>
+  <div id="cctv-panel" class="panel-collapsible collapsed" data-panel-id="cctv-panel">
+    <div class="panel-glow"></div>
+    <div class="cctv-panel-inner" data-rail-scroller>
+      <div class="panel-header">
+        <span class="panel-title">CCTV</span>
+        <span class="panel-divider"></span>
+        <button class="panel-collapse-btn" data-collapse-target="cctv-panel" title="Collapse panel">+</button>
+      </div>
+      <div class="cyber-panel-body" data-rail-scroller>
+      <div id="cctv-frame-wrap" class="cctv-frame-wrap">
+        <img id="cctv-frame" alt="CCTV feed frame" />
+        <canvas id="cctv-video" class="cctv-frame" hidden></canvas>
+      </div>
+      <div id="cctv-source-badge" role="status" aria-live="polite">SOURCE · UNKNOWN</div>
+      <div id="cctv-meta">Enable CCTV to load camera intersections</div>
+      <div class="cctv-controls">
+        <button id="cctv-enable-btn" class="scene-btn">CCTV OFF</button>
+        <button id="cctv-nearest-btn" class="scene-btn">NEAREST</button>
+      </div>
+      <div class="cctv-controls">
+        <button id="cctv-prev-btn" class="scene-btn">PREV</button>
+        <select id="cctv-camera-select" aria-label="CCTV camera"></select>
+        <button id="cctv-next-btn" class="scene-btn">NEXT</button>
+      </div>
+      <div class="cctv-controls">
+        <button id="cctv-focus-btn" class="scene-btn">FOCUS</button>
+        <button id="cctv-coverage-btn" class="scene-btn">COVERAGE OFF</button>
+        <button id="cctv-auto-hop-btn" class="scene-btn">AUTO HOP OFF</button>
+      </div>
+      <div class="cctv-controls">
+        <button id="cctv-projection-btn" class="scene-btn">PROJECTION ON</button>
+        <span id="cctv-quality-chip">CAL · --</span>
+      </div>
+      <div class="cctv-calibration-block">
+        <div class="cctv-calibration-header">
+          <div class="cctv-summary-label">CALIBRATION</div>
+          <button id="cctv-adjust-btn" class="scene-btn" title="Drag the camera in the world: rings rotate, arrows move, handles set range/FOV">ADJUST</button>
+        </div>
+        <div id="cctv-cal-readout" class="cctv-cal-readout" aria-label="Camera pose — click a value to type">
+          <button class="cctv-cal-value" data-cal-field="heading" title="Heading (compass °) — click to type">HDG --</button>
+          <button class="cctv-cal-value" data-cal-field="pitch" title="Pitch (° up/down) — click to type">PITCH --</button>
+          <button class="cctv-cal-value" data-cal-field="fov" title="Horizontal FOV (°) — click to type">FOV --</button>
+          <button class="cctv-cal-value" data-cal-field="range" title="Range / monitor-plane distance (m) — click to type">RANGE --</button>
+          <button class="cctv-cal-value" data-cal-field="height" title="Mount height above ground (m) — click to type">HGT --</button>
+          <button class="cctv-cal-value" data-cal-field="north" title="North offset from catalog position (m) — click to type">ΔN --</button>
+          <button class="cctv-cal-value" data-cal-field="east" title="East offset from catalog position (m) — click to type">ΔE --</button>
+        </div>
+        <div class="cctv-controls cctv-calibration-actions">
+          <button id="cctv-calib-save-btn" class="scene-btn">SAVE CAL</button>
+          <button id="cctv-calib-reset-btn" class="scene-btn">RESET CAL</button>
+        </div>
+      </div>
+      <div class="cctv-summary-label">SCENE SUMMARY</div>
+      <div id="cctv-summary">Enable CCTV to start camera-linked intelligence summaries.</div>
+      </div>
+    </div>
+  </div>
 
-  <!-- Markup Panel -->
-  <div
-    id="scene-panel"
-    class="panel-collapsible collapsed"
-    data-panel-id="scene-panel"
-  >
+  <!-- Street Level Panel (moved into #right-context-rail at runtime) -->
+  <div id="street-level-panel" class="panel-collapsible collapsed" data-panel-id="street-level-panel">
+    <div class="panel-glow"></div>
+    <div class="street-level-panel-inner" data-rail-scroller>
+      <div class="panel-header">
+        <span class="panel-title">STREET LEVEL</span>
+        <span class="panel-divider"></span>
+        <button id="sl-status" class="sl-status" type="button" aria-pressed="false" title="Turn Street Level on or off">OFF</button>
+        <button class="panel-collapse-btn" data-collapse-target="street-level-panel" title="Expand panel">◀</button>
+      </div>
+      <div id="sl-body" class="sl-body">
+        <div class="sl-main">
+          <div id="sl-viewer-wrap" class="sl-viewer-wrap" hidden>
+            <div class="sl-viewer-bar">
+              <div class="sl-viewer-tools">
+                <button id="sl-viewer-expand" class="scene-btn" type="button" aria-pressed="false" title="Expand the street-level view (Esc shrinks it)"><span class="sl-btn-icon" aria-hidden="true">⤢</span><span class="sl-btn-text">EXPAND</span></button>
+                <div class="sl-seg" role="radiogroup" aria-label="Image fit">
+                  <button type="button" class="sl-seg-btn is-active" data-sl-render="letterbox" role="radio" aria-checked="true" title="Fit: show the whole photo, with dark bars where its shape differs from the frame">FIT</button>
+                  <button type="button" class="sl-seg-btn" data-sl-render="fill" role="radio" aria-checked="false" tabindex="-1" title="Fill: fill the frame edge to edge, cropping the photo">FILL</button>
+                </div>
+                <button id="sl-follow-btn" class="scene-btn" type="button" aria-pressed="false" aria-label="Camera follows view" title="Camera follows view: move the globe camera wherever the street-level view looks"><span class="sl-btn-icon" aria-hidden="true">⌖</span><span class="sl-btn-text">FOLLOW</span></button>
+              </div>
+              <div class="sl-viewer-tools sl-viewer-tools-right">
+                <button id="sl-viewer-close" class="sl-viewer-x" type="button" title="Close the image and deselect it on the map" aria-label="Close the street-level image">×</button>
+              </div>
+            </div>
+            <div class="sl-viewer-stage">
+              <div id="sl-viewer-placeholder" class="sl-viewer-placeholder" hidden></div>
+              <div id="sl-viewer" class="sl-viewer" aria-label="Street-level viewer"></div>
+            </div>
+            <div id="sl-image-meta" class="sl-image-meta">
+              <span id="sl-image-by" class="sl-image-by"></span>
+              <span class="sl-image-right">
+                <span id="sl-image-when" class="sl-image-when"></span>
+                <a id="sl-image-link" class="sl-image-link" href="#" target="_blank" rel="noopener noreferrer" title="Open this image on the provider's site" hidden></a>
+              </span>
+            </div>
+          </div>
+          <div class="sl-settings">
+            <div class="sl-providers" role="group" aria-label="Imagery providers">
+              <span class="cctv-summary-label">PROVIDERS</span>
+              <div id="sl-provider-chips" class="sl-chips"></div>
+            </div>
+            <div id="sl-error" class="sl-error" role="alert" hidden><span aria-hidden="true">⚠</span> <span id="sl-error-text"></span></div>
+            <!-- A missing key gates the filters only: the chips above stay
+                 focusable so their tooltip can say how to add the key. -->
+            <fieldset id="sl-controls" class="sl-controls">
+              <div class="sl-filters" role="group" aria-label="Imagery filters">
+                <span class="cctv-summary-label">IMAGERY</span>
+                <div class="sl-seg" role="radiogroup" aria-label="Panorama filter">
+                  <button type="button" class="sl-seg-btn is-active" data-sl-pano="all" role="radio" aria-checked="true">ALL</button>
+                  <button type="button" class="sl-seg-btn" data-sl-pano="pano" role="radio" aria-checked="false" tabindex="-1">360°</button>
+                  <button type="button" class="sl-seg-btn" data-sl-pano="flat" role="radio" aria-checked="false" tabindex="-1">FLAT</button>
+                </div>
+              </div>
+              <div class="sl-since">
+                <label class="cctv-summary-label" for="sl-since">SINCE</label>
+                <input id="sl-since" class="sl-range" type="range" min="0" max="8" step="1" value="0" aria-valuetext="ANY DATE" aria-describedby="sl-since-label" />
+                <output id="sl-since-label" class="sl-since-label" for="sl-since">ANY DATE</output>
+              </div>
+            </fieldset>
+            <ul id="sl-legend" class="sl-legend" aria-label="Coverage colours"></ul>
+            <div id="sl-coverage-meta" class="sl-meta"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scene Director Panel -->
+  <div id="scene-panel" class="panel-collapsible collapsed" data-panel-id="scene-panel">
     <div class="panel-glow"></div>
     <div class="scene-panel-inner">
       <div class="panel-header">
-        <span class="panel-title">MARKUP</span>
+        <span class="panel-title">SCENES</span>
         <span class="panel-divider"></span>
-        <button
-          id="markup-compact-toggle-btn"
-          class="panel-collapse-btn markup-compact-toggle-btn"
-          type="button"
-          title="Collapse drawing panel"
-          aria-label="Collapse drawing panel"
-          aria-pressed="false"
-          hidden
-        >
-          ▾
-        </button>
-        <button
-          class="panel-collapse-btn"
-          data-collapse-target="scene-panel"
-          title="Collapse panel"
-        >
-          +
-        </button>
+        <button class="panel-collapse-btn" data-collapse-target="scene-panel" title="Collapse panel">+</button>
       </div>
-      <div id="markup-panel-content" class="markup-panel-content">
-        <div id="markup-home" class="markup-home">
-          <div class="markup-home-actions">
-            <button id="markup-new-btn" class="scene-btn">+ NEW MARKUP</button>
-            <button id="markup-import-btn" class="scene-btn">
-              IMPORT JSON
-            </button>
-          </div>
-          <form
-            id="markup-new-inline"
-            class="markup-new-inline"
-            aria-labelledby="markup-new-inline-title"
-            hidden
-          >
-            <div id="markup-new-inline-title" class="markup-new-inline-title">
-              NEW MARKUP
-            </div>
-            <label class="markup-new-inline-field" for="markup-new-name">
-              <span>Name *</span>
-              <input id="markup-new-name" type="text" autocomplete="off" />
-            </label>
-            <label class="markup-new-inline-field" for="markup-new-description">
-              <span>Description (optional)</span>
-              <input
-                id="markup-new-description"
-                type="text"
-                autocomplete="off"
-              />
-            </label>
-            <div class="markup-new-inline-actions">
-              <button
-                id="markup-new-cancel-btn"
-                class="scene-btn"
-                type="button"
-              >
-                CANCEL
-              </button>
-              <button
-                id="markup-new-create-btn"
-                class="scene-btn"
-                type="submit"
-              >
-                CREATE
-              </button>
-            </div>
-          </form>
-          <div id="markup-empty-state" class="markup-empty-state">
-            Markup lets you annotate and save operational maps for later reuse.
-          </div>
-          <div
-            id="markup-saved-list"
-            class="markup-saved-list"
-            aria-live="polite"
-          ></div>
-        </div>
-        <div id="markup-editor" class="markup-editor" hidden>
-          <div id="markup-editing-chip" class="markup-editing-chip">
-            MARKUP MODE ACTIVE
-          </div>
-          <div
-            class="markup-toolbar markup-tool-grid"
-            role="group"
-            aria-label="Markup tools"
-          >
-            <button class="scene-btn markup-tool-btn" data-markup-tool="marker">
-              MARKER
-            </button>
-            <button class="scene-btn markup-tool-btn" data-markup-tool="route">
-              ROUTE
-            </button>
-            <button class="scene-btn markup-tool-btn" data-markup-tool="area">
-              AREA
-            </button>
-            <button class="scene-btn markup-tool-btn" data-markup-tool="radius">
-              RADIUS
-            </button>
-            <button
-              class="scene-btn markup-tool-btn scene-btn-danger"
-              data-markup-tool="delete"
-            >
-              DELETE
-            </button>
-          </div>
-          <div
-            id="markup-route-mode-row"
-            class="markup-route-mode-row"
-            role="group"
-            aria-label="Route drawing mode"
-            hidden
-          >
-            <button
-              class="scene-btn markup-route-mode-btn"
-              data-route-mode="free"
-            >
-              FREE DRAW
-            </button>
-            <button
-              class="scene-btn markup-route-mode-btn"
-              data-route-mode="points"
-            >
-              POINTS
-            </button>
-          </div>
-          <div class="markup-editor-actions">
-            <button id="markup-undo-btn" class="scene-btn">UNDO</button>
-            <button id="markup-save-btn" class="scene-btn">DETAILS</button>
-            <button id="markup-exit-btn" class="scene-btn">DONE</button>
-          </div>
-          <div id="markup-tool-hint" class="markup-tool-hint">
-            Select a tool to start editing.
-          </div>
-          <div id="markup-status" class="markup-status">Ready</div>
-        </div>
+      <div class="scene-controls">
+        <select id="scene-select" aria-label="Scene recipe"></select>
+        <button id="scene-new-btn" class="scene-btn">NEW</button>
+        <button id="scene-delete-btn" class="scene-btn scene-btn-danger">DEL</button>
       </div>
-      <div id="markup-mobile-overlay" class="markup-mobile-overlay" hidden>
-        <div class="markup-mobile-overlay-top">
-          <button
-            id="markup-active-control"
-            class="markup-active-control"
-            type="button"
-            aria-haspopup="dialog"
-            aria-expanded="false"
-          >
-            <span id="markup-active-name">SELECT MARKUP</span>
-            <span class="markup-active-caret" aria-hidden="true">⌄</span>
-          </button>
-          <button
-            id="markup-mobile-done-btn"
-            class="markup-mobile-done-btn"
-            type="button"
-            aria-label="Exit markup mode"
-          >
-            <span class="material-symbols-outlined" aria-hidden="true"
-              >close</span
-            >
-          </button>
-        </div>
-        <div class="markup-mobile-floating">
-          <div
-            class="markup-mobile-toolbar"
-            role="group"
-            aria-label="Mobile markup tools"
-          >
-            <button
-              class="markup-mobile-tool markup-tool-btn"
-              data-markup-tool="marker"
-              type="button"
-              aria-label="Marker"
-              title="Marker"
-            >
-              <span class="material-symbols-outlined" aria-hidden="true"
-                >my_location</span
-              >
-            </button>
-            <button
-              class="markup-mobile-tool markup-tool-btn"
-              data-markup-tool="route"
-              type="button"
-              aria-label="Route"
-              title="Route"
-            >
-              <span class="material-symbols-outlined" aria-hidden="true"
-                >navigation</span
-              >
-            </button>
-            <button
-              class="markup-mobile-tool markup-tool-btn"
-              data-markup-tool="area"
-              type="button"
-              aria-label="Area"
-              title="Area"
-            >
-              <span class="material-symbols-outlined" aria-hidden="true"
-                >open_in_full</span
-              >
-            </button>
-            <button
-              class="markup-mobile-tool markup-tool-btn"
-              data-markup-tool="radius"
-              type="button"
-              aria-label="Radius"
-              title="Radius"
-            >
-              <span class="material-symbols-outlined" aria-hidden="true"
-                >radar</span
-              >
-            </button>
-            <button
-              class="markup-mobile-tool markup-tool-btn scene-btn-danger"
-              data-markup-tool="delete"
-              type="button"
-              aria-label="Delete"
-              title="Delete"
-            >
-              ×
-            </button>
-            <button
-              id="markup-mobile-undo-btn"
-              class="markup-mobile-tool"
-              type="button"
-              aria-label="Undo"
-              title="Undo"
-            >
-              ↶
-            </button>
-          </div>
-          <div id="markup-drawing-status" class="markup-drawing-status" hidden>
-            <div class="markup-drawing-status-copy">
-              <div
-                id="markup-drawing-status-title"
-                class="markup-drawing-status-title"
-              >
-                MARKUP
-              </div>
-              <div
-                id="markup-drawing-status-detail"
-                class="markup-drawing-status-detail"
-              ></div>
-            </div>
-            <div
-              id="markup-mobile-route-mode-row"
-              class="markup-route-mode-row markup-route-mode-row-mobile"
-              role="group"
-              aria-label="Mobile route drawing mode"
-              hidden
-            >
-              <button
-                class="scene-btn markup-route-mode-btn"
-                data-route-mode="free"
-                type="button"
-              >
-                FREE DRAW
-              </button>
-              <button
-                class="scene-btn markup-route-mode-btn"
-                data-route-mode="points"
-                type="button"
-              >
-                POINTS
-              </button>
-            </div>
-            <div class="markup-drawing-status-actions">
-              <button
-                id="markup-status-undo-btn"
-                class="scene-btn"
-                type="button"
-                hidden
-              >
-                UNDO
-              </button>
-              <button
-                id="markup-status-redraw-btn"
-                class="scene-btn"
-                type="button"
-                hidden
-              >
-                REDRAW
-              </button>
-              <button
-                id="markup-status-finish-btn"
-                class="scene-btn"
-                type="button"
-                hidden
-              >
-                FINISH
-              </button>
-              <button
-                id="markup-status-cancel-btn"
-                class="scene-btn scene-btn-danger"
-                type="button"
-                hidden
-              >
-                CANCEL
-              </button>
-            </div>
-          </div>
-        </div>
+      <div class="scene-controls">
+        <button id="scene-capture-btn" class="scene-btn">CAPTURE SHOT</button>
+        <button id="scene-update-shot-btn" class="scene-btn">UPDATE SHOT</button>
       </div>
-      <section id="markup-manager-sheet" class="markup-bottom-sheet" hidden>
-        <div class="markup-sheet-handle" aria-hidden="true"></div>
-        <div class="markup-sheet-header">
-          <div class="markup-sheet-header-copy">
-            <div class="markup-sheet-title">MARKUPS</div>
-            <div class="markup-sheet-subtitle">
-              Switch, create, rename, export, or manage visibility.
-            </div>
-          </div>
-          <button
-            id="markup-manager-close-btn"
-            class="scene-btn markup-sheet-header-action markup-sheet-close-btn"
-            type="button"
-            aria-label="Close markups"
-            title="Close markups"
-          >
-            <span aria-hidden="true">×</span>
-          </button>
-        </div>
-        <div class="markup-sheet-actions">
-          <button id="markup-manager-new-btn" class="scene-btn" type="button">
-            NEW
-          </button>
-          <button
-            id="markup-manager-import-btn"
-            class="scene-btn"
-            type="button"
-          >
-            IMPORT JSON
-          </button>
-        </div>
-        <div id="markup-manager-empty-state" class="markup-empty-state" hidden>
-          Create a markup to start drawing directly on the map.
-        </div>
-        <div id="markup-manager-list" class="markup-manager-list"></div>
-      </section>
-      <form id="markup-metadata-sheet" class="markup-bottom-sheet" hidden>
-        <div class="markup-sheet-handle" aria-hidden="true"></div>
-        <div id="markup-metadata-sheet-title" class="markup-sheet-title">
-          NEW MARKUP
-        </div>
-        <label class="markup-sheet-field" for="markup-metadata-name">
-          <span>Name *</span>
-          <input id="markup-metadata-name" type="text" autocomplete="off" />
-        </label>
-        <label class="markup-sheet-field" for="markup-metadata-description">
-          <span>Description (optional)</span>
-          <input
-            id="markup-metadata-description"
-            type="text"
-            autocomplete="off"
-          />
-        </label>
-        <div class="markup-sheet-footer">
-          <button
-            id="markup-metadata-cancel-btn"
-            class="scene-btn"
-            type="button"
-          >
-            CANCEL
-          </button>
-          <button
-            id="markup-metadata-submit-btn"
-            class="scene-btn"
-            type="submit"
-          >
-            CREATE
-          </button>
-        </div>
-      </form>
-      <form
-        id="markup-object-sheet"
-        class="markup-bottom-sheet markup-object-sheet"
-        hidden
-      >
-        <div class="markup-sheet-handle" aria-hidden="true"></div>
-        <div class="markup-sheet-header">
-          <div class="markup-sheet-header-copy">
-            <div id="markup-object-sheet-title" class="markup-sheet-title">
-              NEW MARKER
-            </div>
-          </div>
-          <button
-            id="markup-object-minimize-btn"
-            class="scene-btn markup-sheet-header-action"
-            type="button"
-            hidden
-            aria-expanded="true"
-            aria-label="Minimize details"
-          >
-            ˅
-          </button>
-          <button
-            id="markup-object-delete-secondary-btn"
-            class="scene-btn scene-btn-danger markup-sheet-header-action"
-            type="button"
-            hidden
-          >
-            DELETE
-          </button>
-        </div>
-        <div
-          id="markup-object-sheet-content"
-          class="markup-object-sheet-content"
-        >
-          <div class="markup-object-sheet-body">
-            <label class="markup-sheet-field" for="markup-object-name">
-              <span id="markup-object-name-label">Title *</span>
-              <input id="markup-object-name" type="text" autocomplete="off" />
-            </label>
-            <label class="markup-sheet-field" for="markup-object-category">
-              <span id="markup-object-category-label">Category</span>
-              <select id="markup-object-category"></select>
-            </label>
-            <label class="markup-sheet-field" for="markup-object-description">
-              <span id="markup-object-description-label">Description</span>
-              <input
-                id="markup-object-description"
-                type="text"
-                autocomplete="off"
-              />
-            </label>
-            <button
-              id="markup-object-more-btn"
-              class="scene-btn markup-sheet-more-btn"
-              type="button"
-            >
-              MORE DETAILS
-            </button>
-            <div id="markup-object-more-fields" hidden>
-              <label
-                id="markup-object-custom-wrap"
-                class="markup-sheet-field"
-                for="markup-object-custom-category"
-                hidden
-              >
-                <span>Custom Category</span>
-                <input
-                  id="markup-object-custom-category"
-                  type="text"
-                  autocomplete="off"
-                />
-              </label>
-              <label class="markup-sheet-field" for="markup-object-notes">
-                <span>Detailed Notes</span>
-                <textarea id="markup-object-notes" rows="3"></textarea>
-              </label>
-            </div>
-          </div>
-          <div class="markup-sheet-footer markup-sheet-footer-sticky">
-            <button
-              id="markup-object-cancel-btn"
-              class="scene-btn"
-              type="button"
-            >
-              CANCEL
-            </button>
-            <button
-              id="markup-object-submit-btn"
-              class="scene-btn"
-              type="submit"
-            >
-              ADD
-            </button>
-          </div>
-        </div>
-      </form>
-      <section id="markup-object-card" class="markup-context-card" hidden>
-        <div class="markup-context-card-copy">
-          <div
-            id="markup-object-card-title"
-            class="markup-context-card-title"
-          ></div>
-          <div
-            id="markup-object-card-subtitle"
-            class="markup-context-card-subtitle"
-          ></div>
-        </div>
-        <div class="markup-context-card-actions">
-          <button id="markup-object-edit-btn" class="scene-btn" type="button">
-            EDIT
-          </button>
-          <button id="markup-object-hide-btn" class="scene-btn" type="button">
-            HIDE
-          </button>
-          <button
-            id="markup-object-delete-btn"
-            class="scene-btn scene-btn-danger"
-            type="button"
-          >
-            DELETE
-          </button>
-        </div>
-      </section>
-      <section id="markup-confirm-sheet" class="markup-bottom-sheet" hidden>
-        <div class="markup-sheet-handle" aria-hidden="true"></div>
-        <div id="markup-confirm-title" class="markup-sheet-title"></div>
-        <div id="markup-confirm-message" class="markup-sheet-subtitle"></div>
-        <div class="markup-sheet-footer">
-          <button
-            id="markup-confirm-cancel-btn"
-            class="scene-btn"
-            type="button"
-          >
-            CANCEL
-          </button>
-          <button
-            id="markup-confirm-submit-btn"
-            class="scene-btn scene-btn-danger"
-            type="button"
-          >
-            DELETE
-          </button>
-        </div>
-      </section>
-      <input
-        type="file"
-        id="markup-import-file"
-        accept="application/json,.json"
-        hidden
-      />
+      <div id="scene-shot-list" class="scene-shot-list"></div>
+      <div class="scene-controls">
+        <button id="scene-start-btn" class="scene-btn">START</button>
+        <button id="scene-stop-btn" class="scene-btn scene-btn-danger">STOP</button>
+        <button id="scene-next-btn" class="scene-btn">NEXT</button>
+      </div>
+      <div class="scene-controls">
+        <button id="scene-export-btn" class="scene-btn">EXPORT PRESETS</button>
+        <button id="scene-import-btn" class="scene-btn">IMPORT</button>
+        <button id="scene-download-btn" class="scene-btn">RUN LOG</button>
+        <input type="file" id="scene-import-file" accept="application/json,.json" hidden />
+      </div>
+      <div class="scene-progress">
+        <div id="scene-progress-fill">0%</div>
+      </div>
+      <div id="scene-status">Ready</div>
     </div>
   </div>
-</div>
+
+  </div>

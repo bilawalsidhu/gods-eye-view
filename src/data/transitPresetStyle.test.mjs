@@ -45,13 +45,13 @@ test('mono: every mode is a white core, larger, with a dark halo in screen pixel
         `${style} ${mode}`,
       );
     }
-    assert.ok(presetSpriteScale(style) === 1.5, `${style} is drawn larger`);
-    // At least a whole screen pixel and a half of ring around a five-pixel
-    // body: thinner than that vanishes through blur and pixelation.
-    assert.ok(
-      presetSpriteOutlinePx(style) >= 1.5,
-      `${style} halo is ${presetSpriteOutlinePx(style)} px`,
-    );
+    for (const selected of [false, true]) {
+      assert.equal(
+        presetSpriteScale(style, selected),
+        presetSpriteScale('retro', selected),
+      );
+      assert.equal(presetSpriteOutlinePx(style, selected), 2);
+    }
   }
 });
 

@@ -81,30 +81,6 @@ test('nearby labels rank landmarks, deduplicate names/addresses and bound the pr
   assert.deepEqual(projectNearbyPlaces({}, 0, 0), []);
 });
 
-test('nearby projections return only initial discovery fields', () => {
-  const result = projectNearbyPlaces(
-    {
-      places: [
-        {
-          displayName: { text: 'Hospital' },
-          location: { latitude: 30, longitude: -97 },
-          formattedAddress: '101 Main',
-          nationalPhoneNumber: '+1 512-555-0100',
-          googleMapsUri: 'https://maps.google.test/place/1',
-          types: ['hospital'],
-        },
-      ],
-    },
-    30,
-    -97,
-  );
-  assert.equal(result[0].name, 'Hospital');
-  assert.equal(result[0].address, '101 Main');
-  assert.equal(result[0].primaryType, null);
-  assert.equal('phone' in result[0], false);
-  assert.equal('googleMapsUri' in result[0], false);
-});
-
 test('text search preserves bounds, rejects malformed bounds and tolerates absent locations', () => {
   const viewport = {
     low: { latitude: 1, longitude: 2 },
@@ -149,168 +125,47 @@ for (const preview of [false, true]) {
           {
             displayName: { text: 'Museum' },
             location: { latitude: 30, longitude: -97 },
-            nationalPhoneNumber: '+1 512-555-0101',
-            googleMapsUri: 'https://maps.google.test/place/nearby',
           },
         ],
       });
     });
     const nearby = '/api/google/nearby-places';
-    const details = '/api/google/place-details';
     const search = '/api/google/text-search';
-    const health = '/api/google/health';
     assert.equal(
       (await request(nearby, '?lat=30&lon=-97')).body.configured,
       false,
     );
     assert.equal(calls.length, 0);
     key = 'fixture-server-key';
-    const result = await request(
-      nearby,
-      '?lat=30&lon=-97&radiusM=9000&includedTypes=police,fire_station&maxResultCount=5',
-    );
+    const result = await request(nearby, '?lat=30&lon=-97&radiusM=9000');
     assert.equal(result.statusCode, 200);
     assert.equal(result.body.places[0].name, 'Museum');
     assert.equal(
       JSON.parse(calls[0].options.body).locationRestriction.circle.radius,
       5000,
     );
-    assert.deepEqual(JSON.parse(calls[0].options.body).includedTypes, [
-      'police',
-      'fire_station',
-    ]);
-    assert.equal(JSON.parse(calls[0].options.body).maxResultCount, 5);
-    assert.equal(
-      calls[0].options.headers['X-Goog-FieldMask'],
-      'places.id,places.displayName,places.formattedAddress,places.shortFormattedAddress,places.location,places.primaryType,places.primaryTypeDisplayName,places.types',
-    );
     assert.equal(result.headers['cache-control'], 'private, max-age=300');
-    t.mock.method(globalThis, 'fetch', async (url, options) => {
-      calls.push({ url, options });
-      if (String(url).includes('/v1/places/')) {
-        assert.equal(options.method, 'GET');
-        return Response.json({
-          id: 'abc123',
-          displayName: { text: 'Museum' },
-          formattedAddress: '101 Main',
-          nationalPhoneNumber: '+1 512-555-0101',
-          googleMapsUri: 'https://maps.google.test/place/abc123',
-          primaryType: 'police',
-        });
-      }
-      return Response.json({ places: [] });
-    });
-    const detailResult = await request(details, '?placeId=abc123');
-    assert.equal(detailResult.statusCode, 200);
-    assert.equal(detailResult.body.place.phone, '+1 512-555-0101');
-    assert.equal(detailResult.body.place.id, 'abc123');
     key = 'rotated-fixture-key';
     assert.equal(
-      (
-        await request(
-          search,
-          '?q=museum&lat=30&lon=-97&radiusM=1&maxResultCount=9',
-        )
-      ).statusCode,
+      (await request(search, '?q=museum&lat=30&lon=-97&radiusM=1')).statusCode,
       200,
     );
-    const searchBody = JSON.parse(
-      calls.find((entry) =>
-        String(entry.url).includes('/v1/places:searchText'),
-      ).options.body,
+    assert.equal(
+      JSON.parse(calls[1].options.body).locationBias.circle.radius,
+      50,
     );
-    assert.equal(searchBody.locationBias.circle.radius, 50);
-    assert.equal(searchBody.maxResultCount, 9);
     assert.equal((await request(search, '?lat=30&lon=-97')).statusCode, 400);
     assert.equal((await request(nearby, '?lat=bad&lon=-97')).statusCode, 400);
     assert.equal((await request(nearby, '', 'POST')).statusCode, 405);
-    assert.equal((await request(health, '')).body.httpStatus, 200);
     t.mock.method(globalThis, 'fetch', async () =>
       Response.json({ error: { message: 'Denied' } }, { status: 403 }),
     );
     assert.deepEqual((await request(search, '?q=museum&lat=30&lon=-97')).body, {
       places: [],
       error: 'Denied',
-      providerError: { code: null, status: null, message: 'Denied' },
     });
   });
 }
-
-test('Google health reports probe status without exposing credentials', async (t) => {
-  const plugin = googlePlacesContextProxy({
-    resolveApiKey: () => 'fixture-server-key',
-  });
-  const request = install((middlewares) =>
-    plugin.configureServer({
-      middlewares,
-    }),
-  );
-  let logged = '';
-  t.mock.method(console, 'info', (...args) => {
-    logged += JSON.stringify(args);
-  });
-  t.mock.method(globalThis, 'fetch', async (url, options) => {
-    assert.equal(
-      String(url),
-      'https://places.googleapis.com/v1/places:searchNearby',
-    );
-    assert.equal(options.method, 'POST');
-    assert.equal(options.headers['X-Goog-FieldMask'], 'places.id');
-    assert.equal(
-      JSON.parse(options.body).locationRestriction.circle.radius,
-      50,
-    );
-    return Response.json({ places: [] }, { status: 200 });
-  });
-  const result = await request('/api/google/health', '?lat=30&lon=-97');
-  assert.equal(result.statusCode, 200);
-  assert.deepEqual(result.body.endpoint, {
-    hostname: 'places.googleapis.com',
-    path: '/v1/places:searchNearby',
-  });
-  assert.equal(result.body.method, 'POST');
-  assert.equal(
-    result.body.serverKeyConfigured,
-    Boolean(process.env.GOOGLE_MAPS_SERVER_API_KEY?.trim()),
-  );
-  assert.equal(result.body.reachable, true);
-  assert.equal(result.body.httpStatus, 200);
-  assert.equal(result.body.timeoutTriggered, false);
-  assert.ok(Number.isFinite(result.body.latencyMs));
-  assert.equal(result.body.providerError, null);
-  assert.doesNotMatch(JSON.stringify(result.body), /fixture-server-key/);
-  assert.doesNotMatch(logged, /fixture-server-key/);
-});
-
-test('Google nearby timeout surfaces a sanitized upstream timeout', async (t) => {
-  const plugin = googlePlacesContextProxy({
-    resolveApiKey: () => 'fixture-server-key',
-  });
-  const request = install((middlewares) =>
-    plugin.configureServer({
-      middlewares,
-    }),
-  );
-  t.mock.method(globalThis, 'setTimeout', (fn) => {
-    fn();
-    return 1;
-  });
-  t.mock.method(globalThis, 'clearTimeout', () => {});
-  t.mock.method(globalThis, 'fetch', async (_url, options) => {
-    assert.equal(options.signal.aborted, true);
-    throw new DOMException('signal timed out', 'AbortError');
-  });
-  const response = await request(
-    '/api/google/nearby-places',
-    '?lat=30&lon=-97',
-  );
-  assert.equal(response.statusCode, 504);
-  assert.deepEqual(response.body, {
-    error: 'Google Places upstream timeout',
-    places: [],
-    providerError: null,
-  });
-});
 
 test('OSRM routing preserves aliases, cache, span guards and upstream failure behavior', async (t) => {
   const request = install(installRouteMiddleware);
@@ -626,4 +481,65 @@ test('the upstream host is pinned: a redirect is refused, not followed', async (
   });
   await request('/api/route', '?profile=car&coords=-97,30;-97.01,30.01');
   assert.deepEqual(seen, ['error'], 'a redirect would escape the pinned host');
+});
+
+test('both paid Google routes refuse cross-site requests before calling Google', async (t) => {
+  const plugin = googlePlacesContextProxy({ resolveApiKey: () => 'key' });
+  const routes = new Map();
+  plugin.configureServer({
+    middlewares: { use: (route, handler) => routes.set(route, handler) },
+  });
+  let upstream = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    upstream += 1;
+    return Response.json({ places: [] });
+  });
+  const call = async (route, url, headers) => {
+    const res = {
+      statusCode: 200,
+      headers: {},
+      setHeader(name, value) {
+        this.headers[name.toLowerCase()] = value;
+      },
+      writeHead(status) {
+        this.statusCode = status;
+      },
+      end() {},
+    };
+    await routes.get(route)(
+      {
+        url,
+        method: 'GET',
+        headers: { host: 'localhost:4173', ...headers },
+        socket: { remoteAddress: '127.0.0.1' },
+      },
+      res,
+    );
+    return res.statusCode;
+  };
+  const crossSite = {
+    origin: 'https://attacker.example',
+    'sec-fetch-site': 'cross-site',
+  };
+  for (const [route, url] of [
+    ['/api/google/nearby-places', '?lat=30&lon=-97'],
+    ['/api/google/text-search', '?q=museum&lat=30&lon=-97'],
+  ]) {
+    assert.equal(await call(route, url, crossSite), 403, route);
+    assert.equal(
+      await call(route, url, { 'sec-fetch-site': 'cross-site' }),
+      403,
+      route,
+    );
+  }
+  assert.equal(upstream, 0, 'a refused request never reaches Google');
+  // The app's own page still gets answers.
+  assert.equal(
+    await call('/api/google/text-search', '?q=museum&lat=30&lon=-97', {
+      origin: 'http://localhost:4173',
+      'sec-fetch-site': 'same-origin',
+    }),
+    200,
+  );
+  assert.equal(upstream, 1);
 });

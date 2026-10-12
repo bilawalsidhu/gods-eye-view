@@ -1,8 +1,10 @@
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
-import { initMarkupPanel } from '../ui/markupPanel.js';
+import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
+import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
+import { installViews, isEmbeddedInline } from './embed.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import {
   installRenderGovernor,
@@ -13,7 +15,7 @@ import {
 } from '../renderGovernor.js';
 
 /** Attach scene tools, rendering listeners and the application debug handle. */
-export async function createApplicationTools({
+export function createApplicationTools({
   scene,
   controls,
   data,
@@ -22,6 +24,7 @@ export async function createApplicationTools({
   voice = {},
   startChrome,
   onSceneDirector,
+  sceneDataPacks,
   signal,
   defer,
 }) {
@@ -29,6 +32,7 @@ export async function createApplicationTools({
   const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
   const { dataManager } = data;
   const sceneDirector = new SceneDirector(viewer, styleManager, dataManager, {
+    dataPacks: sceneDataPacks,
     isMapStackAvailable: (id) =>
       mapStackController?.isStackAvailable(id) === true,
   });
@@ -52,11 +56,43 @@ export async function createApplicationTools({
   // lifetime rather than to whoever last pressed the button.
   const drawTool = initDrawTool({ viewer, annotations });
   defer(() => drawTool?.destroy());
-  const markupPanel = await initMarkupPanel({
-    viewer,
-    showToast: (text) => styleManager?._showToast?.(text),
-  });
-  defer(() => markupPanel?.destroy?.());
+  // DATA ▸ Recent Imagery: the box tool claims the pointer like Draw and the
+  // panel lives on the right rail, so both belong to the application
+  // lifetime. The tileset lets the layer drape while the globe is hidden.
+  const recentImagery = dataManager.layers.get('recent-imagery')?.module;
+  if (recentImagery) {
+    recentImagery.attachTileset(tileset);
+    const imageryBoxTool = initImageryBoxTool({
+      viewer,
+      onBox: (box) => recentImagery.setBox(box),
+      onCancel: (reason, message, box) => {
+        if (message) recentImagery.reportBoxRefusal(message, box);
+      },
+      onActive: (active) => recentImagery.setToolActive(active),
+      // The tool takes Escape in a capture listener, so the panel's order
+      // (clear a preview before cancelling the tool) is applied here.
+      onEscape: () => recentImagery.clearPreview(),
+    });
+    // The readout mounts in its rail body through the layer panel, like the
+    // weather readout.
+    data.presentation.attachRecentImagery((container) =>
+      createRecentImageryPanel({
+        container,
+        viewer,
+        layer: recentImagery,
+        tool: imageryBoxTool,
+      }),
+    );
+    // The live gate's handle (scripts/qa-recent-imagery.mjs).
+    const recentImageryHandle = { layer: recentImagery, tool: imageryBoxTool };
+    window.__gevRecentImagery = recentImageryHandle;
+    defer(() => {
+      if (window.__gevRecentImagery === recentImageryHandle)
+        delete window.__gevRecentImagery;
+      data.presentation.attachRecentImagery(null);
+      imageryBoxTool?.destroy();
+    });
+  }
   if (startChrome)
     defer(startChrome({ loadingScreen, styleManager, dataManager, signal }));
   // Idle render governor: flips the scene into requestRenderMode whenever
@@ -83,7 +119,9 @@ export async function createApplicationTools({
   // GPU. Holder/data state is untouched, so return is seamless: restore
   // the loop, refresh the one DOM surface we gated, render a frame.
   const syncVisibilitySuspension = () => {
-    const hidden = document.hidden;
+    // A panel's host may report it hidden while it is on screen; the panel
+    // keeps drawing itself (see keepPanelRendering in embed.js).
+    const hidden = document.hidden && !isEmbeddedInline();
     viewer.useDefaultRenderLoop = !hidden;
     cockpitCloudEffects?.setSuspended?.(hidden);
     if (!hidden) {
@@ -141,5 +179,14 @@ export async function createApplicationTools({
       delete window.__gevVoiceCommands;
   });
   debug.voiceCommands = voiceCommands;
+  defer(
+    installViews({
+      shell: styleManager,
+      viewer,
+      dataManager,
+      run: (name, args) => voiceCommands.runner(name, args, { signal }),
+      signal,
+    }),
+  );
   return { sceneDirector, annotations, voiceCommands };
 }

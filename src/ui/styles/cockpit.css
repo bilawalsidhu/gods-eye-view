@@ -1942,13 +1942,15 @@ body.cockpit-mode
     #command-dock,
     #military-awareness-panel,
     #military-awareness-direction-overlay,
-    #cockpit-entry
+    #cockpit-entry,
+    .sl-viewer-wrap-expanded
   ) {
   display: none !important;
 }
 body.cockpit-mode
   :is(
     #clear-selected-layers,
+    #share-btn,
     #tilt-map-view,
     #north-up-view,
     #reset-globe-view
@@ -2183,37 +2185,5 @@ body.cockpit-mode #intel-hud .hud-right-edge {
   }
   [data-cockpit-brief-page] {
     animation: none;
-  }
-}
-/* Mobile cockpit usability refinements */
-@media (max-width: 760px) {
-  body.cockpit-mode .cockpit-utility-controls {
-    left: 12px;
-    right: 12px;
-    bottom: max(88px, calc(env(safe-area-inset-bottom) + 76px));
-    max-width: none;
-    width: auto;
-    gap: 8px;
-  }
-
-  body.cockpit-mode .cockpit-utility-launcher {
-    width: calc((100% - 8px) / 2);
-    min-width: 0;
-  }
-
-  body.cockpit-mode .cockpit-utility-control.is-expanded {
-    top: max(72px, calc(env(safe-area-inset-top) + 56px));
-    left: 12px;
-    right: 12px;
-    width: auto;
-    max-height: calc(
-      100dvh - max(72px, calc(env(safe-area-inset-top) + 56px)) - 100px
-    );
-    overflow-y: auto;
-  }
-
-  body.cockpit-mode .cockpit-utility-popover {
-    width: 100%;
-    max-width: 100%;
   }
 }

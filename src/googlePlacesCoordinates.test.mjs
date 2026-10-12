@@ -102,14 +102,5 @@ test('preview validates both Places routes and keeps the keyless response', asyn
       assert.deepEqual(result.body.places, []);
       if (!key) assert.equal(result.body.configured, false);
     }
-    const details = await invokeRoute(routes.get('/api/google/place-details'), {
-      url: '/?placeId=test-place',
-      remoteAddress: 'preview-test',
-    });
-    assert.equal(details.statusCode, key ? 502 : 200);
-    if (!key) {
-      assert.equal(details.body.configured, false);
-      assert.equal(details.body.place, null);
-    }
   }
 });

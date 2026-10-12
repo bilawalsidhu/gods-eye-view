@@ -1,3 +1,4 @@
+import { createCctvVideoSurface } from './cctvVideo.js';
 export function _calBadgeLabel(badge) {
   switch (badge) {
     case 'calibrated':
@@ -26,13 +27,13 @@ export function _renderCctvState(state) {
   const activeId = state?.activeCameraId || '';
   const activeCamera = state?.activeCamera || null;
 
-  // Auto-expand the Cameras view inside Context when the active camera CHANGES
-  // to a new non-null id while the layer is enabled. Covers click-on-globe,
-  // panel controls, and voice (selectCamera/cycleCamera/focusNearest all
-  // notify through this subscription). The last-seen guard keeps routine
-  // notifications from re-expanding a panel the user deliberately collapsed,
-  // and timed auto-hop transitions only expand on the first activation so the
-  // panel does not pop open on every hop.
+  // Auto-expand the panel when the active camera CHANGES to a new non-null
+  // id while the layer is enabled. Covers click-on-globe, panel controls,
+  // and voice (selectCamera/cycleCamera/focusNearest all notify through
+  // this subscription). The last-seen guard keeps routine notifications
+  // from re-expanding a panel the user deliberately collapsed, and timed
+  // auto-hop transitions only expand on the first activation so the panel
+  // does not pop open on every hop.
   const effectiveActiveId = enabled ? activeId || null : null;
   const isFirstActivation = this._lastSeenCctvActiveId === null;
   if (
@@ -40,7 +41,7 @@ export function _renderCctvState(state) {
     effectiveActiveId !== this._lastSeenCctvActiveId &&
     (!state?.autoHop || isFirstActivation)
   ) {
-    this.actions.revealCameras?.({
+    this.actions.setPanelCollapsed('cctv-panel', false, {
       explicit: Boolean(state?.explicitSelection),
     });
   }
@@ -164,7 +165,27 @@ export function _renderCctvState(state) {
     }
   }
 
-  if (this._cctvFrame) {
+  const liveIntent = enabled && !!activeCamera?.isVideo;
+  if (this._cctvVideo) {
+    this._cctvVideo.hidden = !liveIntent;
+    if (this._cctvFrame) this._cctvFrame.hidden = liveIntent;
+    const visible =
+      liveIntent &&
+      !document.hidden &&
+      !this._cctvPanel?.classList.contains('collapsed');
+    if (!visible || this._cctvVideoCameraId !== activeId) {
+      this._cctvVideoSurface?.stop();
+      this._cctvVideoSurface = null;
+    }
+    this._cctvVideoCameraId = activeId;
+    if (visible && !this._cctvVideoSurface) {
+      this._cctvVideoSurface = createCctvVideoSurface(this._cctvVideo, () =>
+        this.cctv.getActiveVideoElement?.(),
+      );
+    }
+  }
+
+  if (this._cctvFrame && !liveIntent) {
     const nextSrc = enabled ? activeCamera?.frameUrl : null;
     const nextCameraId = enabled ? activeCamera?.id || '' : '';
     const cameraChanged = this._cctvFrame.dataset.cameraId !== nextCameraId;
@@ -183,6 +204,8 @@ export function _renderCctvState(state) {
     if (!nextSrc) {
       this._clearCctvFrame();
     }
+  } else if (liveIntent) {
+    this._clearCctvFrame();
   }
 
   this._syncCctvSourceBadge(activeCamera, enabled);

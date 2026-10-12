@@ -10,10 +10,13 @@ const panelChrome = fs.readFileSync(
   new URL('./ui/panelChrome.js', import.meta.url),
   'utf8',
 );
-const MOBILE_QUERY = '@media (max-width: 1024px)';
-const MOBILE_PORTRAIT_QUERY = '@media (max-width: 1024px) and (orientation: portrait)';
-const PORTRAIT_430_QUERY = '@media (max-width: 430px) and (orientation: portrait)';
-const PORTRAIT_390_QUERY = '@media (max-width: 390px) and (orientation: portrait)';
+const MOBILE_QUERY = '@media (max-width: 720px)';
+const MOBILE_PORTRAIT_QUERY =
+  '@media (max-width: 720px) and (orientation: portrait)';
+const PORTRAIT_430_QUERY =
+  '@media (max-width: 430px) and (orientation: portrait)';
+const PORTRAIT_390_QUERY =
+  '@media (max-width: 390px) and (orientation: portrait)';
 
 function mediaBlock(query) {
   const start = css.indexOf(query);
@@ -46,7 +49,7 @@ function mediaBlock(query) {
       index += 1;
       continue;
     }
-    if (char === '"' || char === '\'') {
+    if (char === '"' || char === "'") {
       quote = char;
       continue;
     }
@@ -67,10 +70,7 @@ test('narrow portrait phones simplify and reflow the fixed HUD readouts', () => 
     portrait430,
     /#intel-hud\.active \.hud-top-bar,[\s\S]*?#intel-hud \.hud-ais-vessel \{\s*display: none;/,
   );
-  assert.match(
-    portrait430,
-    /#intel-hud \.hud-bottom-right,/,
-  );
+  assert.match(portrait430, /#intel-hud \.hud-bottom-right,/);
   assert.match(
     portrait430,
     /#intel-hud \.hud-top-left \{[\s\S]*?top: calc\(var\(--mobile-safe-top\) \+ 42px\);[\s\S]*?right: auto;[\s\S]*?left: 10px;[\s\S]*?width: max-content;[\s\S]*?max-width: min\(72vw, 22rem\);/,
@@ -122,10 +122,7 @@ test('narrow portrait phones keep the floating mic and first-run launcher out of
     portrait430,
     /#first-run-launcher \{[\s\S]*?bottom: calc\(var\(--mobile-panel-bottom\) \+ 12px\);[\s\S]*?max-height: calc\(/,
   );
-  assert.match(
-    portrait390,
-    /#hud-gsd \{\s*display: none;/,
-  );
+  assert.match(portrait390, /#hud-gsd \{\s*display: none;/);
   assert.match(
     portrait390,
     /body:not\(\[data-mobile-panel='controls'\]\)[\s\S]*?#command-dock[\s\S]*?> #gev-voice-control:not\(\[data-status='idle'\]\) \{[\s\S]*?width: min\(13\.5rem, calc\(100vw - 24px\)\);/,

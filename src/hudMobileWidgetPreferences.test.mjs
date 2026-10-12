@@ -13,7 +13,8 @@ registerHooks({
       return {
         format: 'module',
         shortCircuit: true,
-        source: 'export function forward() { return "10SEG55776339"; }\nexport default { forward };\n',
+        source:
+          'export function forward() { return "10SEG55776339"; }\nexport default { forward };\n',
       };
     }
     return next(url, context);
@@ -105,28 +106,4 @@ test('right HUD telemetry collapse setter syncs the grouped state', () => {
     false,
   );
   assert.deepEqual(calls, [true, false]);
-});
-
-test('startup defaults do not override an explicit persisted HUD overlay mode', () => {
-  const calls = [];
-  StyleManager.prototype._applyGlobalPostDefaults.call({
-    _visualSettings: {
-      _applyGlobalPostDefaults() {
-        calls.push('defaults');
-      },
-    },
-    _initialShareState: null,
-    _readHudOverlayTextPreference() {
-      return 'off';
-    },
-    hud: {
-      setMode(mode) {
-        calls.push(['mode', mode]);
-      },
-    },
-    _updateHudButtonState() {
-      calls.push('buttons');
-    },
-  });
-  assert.deepEqual(calls, ['defaults', ['mode', 'off'], 'buttons']);
 });

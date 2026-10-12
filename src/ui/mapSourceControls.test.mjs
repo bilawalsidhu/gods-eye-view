@@ -67,11 +67,10 @@ function fixture() {
   const statusElement = makeElement();
   const sources = [
     { id: 'osm', label: 'OSM' },
-    { id: 'road', label: 'Road Map' },
-    { id: 'terrain', label: 'Terrain' },
+    { id: 'esri-imagery', label: 'Esri' },
     {
-      id: 'hybrid',
-      label: 'Hybrid',
+      id: 'bing-aerial',
+      label: 'Bing',
       available: false,
       unavailableReason: 'Unavailable for this test',
     },
@@ -135,7 +134,7 @@ test('initial presentation uses actual state and retains unavailable chip semant
   const f = fixture();
   assert.equal(f.chip('osm').getAttribute('aria-pressed'), 'true');
   assert.equal(f.statusElement.textContent, 'OSM');
-  const unavailable = f.chip('hybrid');
+  const unavailable = f.chip('bing-aerial');
   assert.equal(
     unavailable.disabled,
     false,
@@ -149,20 +148,20 @@ test('initial presentation uses actual state and retains unavailable chip semant
 
 test('selection claims authority before requesting and never lights a pending source optimistically', async () => {
   const f = fixture();
-  const pending = f.controls.select('road');
-  assert.deepEqual(f.calls, [['claim'], ['select', 'road']]);
+  const pending = f.controls.select('esri-imagery');
+  assert.deepEqual(f.calls, [['claim'], ['select', 'esri-imagery']]);
   assert.equal(f.statusElement.textContent, '...');
   assert.equal(f.chip('osm').getAttribute('aria-pressed'), 'true');
-  f.requests[0].resolve(f.change('road'));
+  f.requests[0].resolve(f.change('esri-imagery'));
   await pending;
-  assert.equal(f.chip('road').getAttribute('aria-pressed'), 'true');
-  assert.equal(f.statusElement.textContent, 'Road Map');
+  assert.equal(f.chip('esri-imagery').getAttribute('aria-pressed'), 'true');
+  assert.equal(f.statusElement.textContent, 'Esri');
   f.controls.destroy();
 });
 
 test('provider-driven fallback updates the active chip and durable state notification', () => {
   const f = fixture();
-  f.change('road');
+  f.change('esri-imagery');
   f.emit();
   f.change('osm', 'Source unavailable; using OSM');
   f.emit();
@@ -175,13 +174,13 @@ test('provider-driven fallback updates the active chip and durable state notific
 
 test('a late superseded response cannot overwrite the latest displayed selection', async () => {
   const f = fixture();
-  const first = f.controls.select('road');
+  const first = f.controls.select('esri-imagery');
   const second = f.controls.select('osm');
   f.requests[1].resolve(f.change('osm'));
   await second;
   const count = f.calls.length;
   f.requests[0].resolve({
-    activeId: 'road',
+    activeId: 'esri-imagery',
     activeStack: { label: 'old' },
     lastError: 'obsolete failure',
   });
@@ -193,7 +192,7 @@ test('a late superseded response cannot overwrite the latest displayed selection
 
 test('failed selection keeps the real source lit and reports its error', async () => {
   const f = fixture();
-  const pending = f.controls.select('road');
+  const pending = f.controls.select('esri-imagery');
   f.requests[0].resolve(f.change('osm', 'Unavailable'));
   await pending;
   assert.equal(f.chip('osm').getAttribute('aria-pressed'), 'true');
@@ -206,7 +205,7 @@ test('failed selection keeps the real source lit and reports its error', async (
 
 test('rejected selection leaves switching presentation and propagates a useful error', async () => {
   const f = fixture();
-  const pending = f.controls.select('road');
+  const pending = f.controls.select('esri-imagery');
   f.requests[0].reject(new Error('Request failed'));
   await assert.rejects(pending, /Request failed/);
   assert.equal(f.statusElement.textContent, 'OSM');
@@ -218,20 +217,20 @@ test('rejected selection leaves switching presentation and propagates a useful e
 
 test('restoration may select without claiming or publishing a user gesture', async () => {
   const f = fixture();
-  const pending = f.controls.select('road', { syncShare: false });
-  f.requests[0].resolve(f.change('road'));
+  const pending = f.controls.select('esri-imagery', { syncShare: false });
+  f.requests[0].resolve(f.change('esri-imagery'));
   await pending;
-  assert.deepEqual(f.calls, [['select', 'road']]);
+  assert.deepEqual(f.calls, [['select', 'esri-imagery']]);
   f.controls.destroy();
 });
 
 test('refresh removes detached chip listeners and destruction removes all subscriptions', () => {
   const f = fixture();
-  const old = f.chip('road');
+  const old = f.chip('esri-imagery');
   f.controls.refresh();
   old.click();
   assert.equal(f.requests.length, 0);
-  const current = f.chip('road');
+  const current = f.chip('esri-imagery');
   f.controls.destroy();
   f.controls.destroy();
   current.click();
@@ -241,11 +240,11 @@ test('refresh removes detached chip listeners and destruction removes all subscr
 
 test('completion after destruction cannot paint or notify', async () => {
   const f = fixture();
-  const pending = f.controls.select('road');
+  const pending = f.controls.select('esri-imagery');
   f.controls.destroy();
   const count = f.calls.length;
   const label = f.statusElement.textContent;
-  f.requests[0].resolve(f.change('road'));
+  f.requests[0].resolve(f.change('esri-imagery'));
   await pending;
   assert.equal(f.calls.length, count);
   assert.equal(f.statusElement.textContent, label);

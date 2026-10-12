@@ -63,19 +63,6 @@ export function projectNearbyPlaces(data, latitude, longitude) {
   return places;
 }
 
-export function projectPlaceDetails(data) {
-  if (!data || typeof data !== 'object') return null;
-  return {
-    id: data.id || null,
-    name: data.displayName?.text || null,
-    address: data.shortFormattedAddress || data.formattedAddress || null,
-    phone: data.nationalPhoneNumber || data.internationalPhoneNumber || null,
-    googleMapsUri: data.googleMapsUri || null,
-    primaryType:
-      data.primaryTypeDisplayName?.text || data.primaryType || null,
-  };
-}
-
 export function projectTextSearchPlaces(data, latitude, longitude) {
   const places = Array.isArray(data.places)
     ? data.places

@@ -56,6 +56,15 @@ import {
   CALGARY_DOWNTOWN,
   CALGARY_MAX_CATALOG_BYTES,
   CCTV_SOURCE_FETCH_TIMEOUT_MS,
+  DELDOT_CCTV_URL,
+  DEFAULT_DELDOT_MAX_SOURCES,
+  DELDOT_ANCHORS,
+  DEFAULT_VEGVESEN_CCTV_URL,
+  VEGVESEN_IMAGE_ORIGIN,
+  VEGVESEN_VIDEO_URL,
+  DEFAULT_VEGVESEN_MAX_SOURCES,
+  VEGVESEN_MAX_CATALOG_BYTES,
+  NORWAY_ANCHORS,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -73,6 +82,7 @@ import {
   isLikelyTexasCoordinate,
   isLikelyNswCoordinate,
   isLikelyCalgaryCoordinate,
+  isLikelyNorwayCoordinate,
   cameraDisplayCode,
   rowArrayToObject,
   prioritizeSources,
@@ -1589,6 +1599,265 @@ export async function loadCalgarySourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] Calgary camera download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+export async function loadDelDOTSourcesFromOpenData() {
+  try {
+    const resp = await fetch(DELDOT_CCTV_URL, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+      redirect: 'error',
+    });
+    if (!resp.ok) {
+      console.warn('[CCTV] DelDOT source download failed:', resp.status);
+      return [];
+    }
+    const payload = await readResponseJsonCapped(resp, 2 * 1024 * 1024);
+    const rows = Array.isArray(payload?.videoCameras)
+      ? payload.videoCameras
+      : [];
+    if (!rows.length) return [];
+
+    const cameras = [];
+    for (const row of rows) {
+      if (String(row?.status).toLowerCase() !== 'active') continue;
+      const lat = toFiniteNumber(row?.lat);
+      const lon = toFiniteNumber(row?.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      // Delaware bounding box — a bad upstream coord can't place a camera out of state.
+      if (lat < 38.4 || lat > 39.9 || lon < -75.85 || lon > -75.0) continue;
+
+      // Prefer the catalog's HTTPS HLS transport; no subprocess is required.
+      let stream;
+      try {
+        stream = new URL(String(row?.urls?.m3u8s || ''));
+      } catch {
+        continue;
+      }
+      if (
+        stream.origin !== 'https://video.deldot.gov' ||
+        stream.username ||
+        stream.password ||
+        !/^\/live\/[A-Za-z0-9_.-]+\/playlist\.m3u8$/.test(stream.pathname)
+      )
+        continue;
+      const streamUrl = stream.href;
+
+      const id = String(row?.id || '').trim();
+      if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) continue;
+      const cameraId = `deldot-${id.toLowerCase()}`;
+      const title = String(row?.title || '').trim();
+
+      // Title carries an unambiguous travel token for ~1 in 5 cameras
+      // ("US 13 SB @ ..."). directionToHeading (allowBare=false) matches only
+      // NB/SB/EB/WB, never a bare "W"/"N" street prefix — "W NORTH ST" yields
+      // no heading and falls back.
+      const heading = directionToHeading(title);
+      const hasHeading = Number.isFinite(heading);
+
+      cameras.push({
+        id: cameraId,
+        name: title || `DelDOT ${id}`,
+        city: String(row?.county ? `${row.county} County` : 'Delaware'),
+        cityId: `deldot-${String(row?.county || 'de')
+          .toLowerCase()
+          .replace(/\s+/g, '-')}`,
+        provider: 'DelDOT',
+        lat,
+        lon,
+        headingDeg: hasHeading ? heading : fallbackHeadingFromId(cameraId),
+        headingConfidence: hasHeading ? 'high' : 'low',
+        // Fabricated RAW PRIOR poses (same personalities as Austin/Caltrans);
+        // the client ground-snap + manual calibration own the truth.
+        pitchDeg: hasHeading ? -24 : -18,
+        fovDeg: hasHeading ? 56 : 44,
+        rangeM: hasHeading ? 210 : 145,
+        mountHeightM: hasHeading ? 10 : 8,
+        groundElevationM: 10, // Estimated prior; client ground resolution owns placement.
+        feedType: 'hls',
+        url: streamUrl,
+        snapshotUrl: '',
+        sourceKind: 'deldot-open-data',
+        license: 'Public DelDOT traffic camera',
+      });
+    }
+
+    const unique = Array.from(
+      new Map(cameras.map((camera) => [camera.id, camera])).values(),
+    );
+    const maxRaw = Number(
+      process.env.CCTV_DELDOT_MAX_SOURCES || DEFAULT_DELDOT_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(400, Math.floor(maxRaw)))
+      : DEFAULT_DELDOT_MAX_SOURCES;
+    const prioritized = prioritizeSources(unique, maxCount, DELDOT_ANCHORS);
+    console.log(
+      `[CCTV] Loaded DelDOT camera sources: ${unique.length} Active (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] DelDOT source download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/**
+ * One Statens vegvesen `CctvSimple` feature -> one catalog source, or null.
+ *
+ * `orientationDescription` names the place the camera looks towards
+ * ("Svelgen"), not a bearing, so it goes into the label and the heading uses
+ * the shared id-hash fallback at low confidence, like Calgary and Fintraffic.
+ * Cameras the feed reports as faulty are dropped. Cameras that publish HLS
+ * get live video, with the still as the snapshot fallback.
+ *
+ * @param {object} feature - GeoJSON feature from the OGC items response.
+ * @returns {?object}
+ */
+export function vegvesenCameraToSource(feature) {
+  if (!feature || typeof feature !== 'object') return null;
+  const props = feature.properties;
+  if (!props || typeof props !== 'object') return null;
+  const availability = String(
+    props['status.stillImageAvailability'] ?? '',
+  ).trim();
+  if (availability && availability !== 'videoOrImagesAvailable') return null;
+
+  const coordinates = feature?.geometry?.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+  const lon = toFiniteNumber(coordinates[0]);
+  const lat = toFiniteNumber(coordinates[1]);
+  if (!isLikelyNorwayCoordinate(lat, lon)) return null;
+
+  const rawId = String(props.cameraId ?? '').trim();
+  if (!/^[A-Za-z0-9_-]{1,40}$/.test(rawId)) return null;
+  let image;
+  try {
+    image = new URL(String(props.stillImageUrl ?? ''));
+  } catch {
+    return null;
+  }
+  if (image.username || image.password) return null;
+  const imageUrl = image.href;
+  if (imageUrl !== `${VEGVESEN_IMAGE_ORIGIN}${rawId}`) return null;
+
+  const cameraId = `no-vegvesen-${rawId.toLowerCase()}`;
+  const place = String(props.description ?? '').trim() || `Kamera ${rawId}`;
+  const towards = String(props.orientationDescription ?? '').trim();
+  const road = String(props.roadNumber ?? '').trim();
+  const name = towards && towards !== place ? `${place} → ${towards}` : place;
+  // Live video when the camera publishes HLS on the agency's own host; the
+  // still stays the snapshot fallback. CCTV_VEGVESEN_VIDEO=0 keeps stills only.
+  const videoUrl =
+    String(process.env.CCTV_VEGVESEN_VIDEO || '1').trim() !== '0' &&
+    Number(props.videoServiceLevel) > 0 &&
+    String(props.videoEncodingStandard ?? '').toLowerCase() === 'hls' &&
+    String(props.videoUrl ?? '').trim() === VEGVESEN_VIDEO_URL(rawId)
+      ? VEGVESEN_VIDEO_URL(rawId)
+      : '';
+
+  return {
+    id: cameraId,
+    name: road ? `${road} ${name}` : name,
+    // One country-wide category in the camera picker, like Finland; the
+    // place itself is already in the name.
+    city: 'Norway',
+    cityId: 'norway',
+    provider: 'Statens vegvesen',
+    lat,
+    lon,
+    headingDeg: fallbackHeadingFromId(cameraId),
+    headingConfidence: 'low',
+    pitchDeg: -18,
+    fovDeg: 44,
+    rangeM: 145,
+    mountHeightM: 8,
+    // KNOWN LIMITATION: the feed's coordinates are 2D, so this is one flat
+    // prior for the whole country, while cameras run from sea level to
+    // mountain passes near 1,000 m (Haukelifjell, Sjonfjellet, Rugeldalen).
+    // The point-height prior and the client's one-shot ground snap correct it
+    // where they resolve; on a stack where neither does (no 3D tiles), a pass
+    // camera stays hundreds of metres below the terrain, the same risk the
+    // Caltrans pack documents. A per-camera height (e.g. Kartverket's keyless
+    // point-height API) would remove it.
+    groundElevationM: 150,
+    feedType: videoUrl ? 'hls' : 'image',
+    url: videoUrl || imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'vegvesen-datex',
+    license:
+      'Contains data under the Norwegian licence for Open Government data (NLOD) distributed by Statens vegvesen',
+    code: cameraDisplayCode(place.toUpperCase()),
+  };
+}
+
+/**
+ * Fetch Statens vegvesen (Norway) road cameras from the keyless OGC API
+ * Features view of the DATEX 3.1 CCTV table. Frames are stills on
+ * kamera.atlas.vegvesen.no.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadVegvesenSourcesFromOpenData() {
+  try {
+    const endpoint = process.env.CCTV_VEGVESEN_URL || DEFAULT_VEGVESEN_CCTV_URL;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: 'application/geo+json,application/json' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn(
+        '[CCTV] Vegvesen catalog redirected; redirects are not followed',
+      );
+      return discard();
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] Vegvesen camera download failed:', resp.status);
+      return discard();
+    }
+    const payload = await readResponseJsonCapped(
+      resp,
+      VEGVESEN_MAX_CATALOG_BYTES,
+    );
+    const features = Array.isArray(payload?.features) ? payload.features : [];
+    const cameras = [];
+    const seen = new Set();
+    for (const feature of features) {
+      const camera = vegvesenCameraToSource(feature);
+      if (!camera || seen.has(camera.id)) continue;
+      seen.add(camera.id);
+      cameras.push(camera);
+    }
+    const maxRaw = Number(
+      process.env.CCTV_VEGVESEN_MAX_SOURCES || DEFAULT_VEGVESEN_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(1000, Math.floor(maxRaw)))
+      : DEFAULT_VEGVESEN_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, NORWAY_ANCHORS);
+    console.log(
+      `[CCTV] Loaded Vegvesen camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Vegvesen camera download error:',
       error?.message || error,
     );
     return [];

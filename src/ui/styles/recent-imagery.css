@@ -1,0 +1,483 @@
+/* Recent Imagery: a right-rail readout laid out by the rail like WEATHER; only
+   the body scrolls. Every block has a fixed height, so no click moves a
+   control. Card typography comes from the rail-card rules in weather.css. */
+.recent-imagery-panel-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  max-height: 100%;
+  box-sizing: border-box;
+  padding: 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+#recent-imagery-panel .panel-glow {
+  position: absolute;
+  inset: -18px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 212, 255, 0.16) 0%,
+    transparent 65%
+  );
+  filter: blur(16px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+#recent-imagery-panel .panel-header {
+  flex: 0 0 auto;
+}
+#recent-imagery-panel-count {
+  color: var(--text-secondary);
+  font: 9px var(--font-mono);
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+#recent-imagery-panel-body {
+  min-height: 0;
+  max-height: calc(var(--right-stack-max-height, 50svh) - 64px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.46) transparent;
+}
+#recent-imagery-panel.collapsed #recent-imagery-panel-body,
+#recent-imagery-panel.collapsed #recent-imagery-panel-count,
+#recent-imagery-panel[hidden],
+#recent-imagery-panel [hidden],
+#recent-imagery-split-line[hidden] {
+  display: none !important;
+}
+#recent-imagery-panel.collapsed .panel-title {
+  font-size: 8px;
+  letter-spacing: 1.8px;
+}
+#recent-imagery-panel.collapsed .panel-header {
+  margin-bottom: 2px;
+}
+#recent-imagery-panel.collapsed .recent-imagery-panel-inner {
+  padding-bottom: 10px;
+}
+
+/* ---- the fixed stack ---------------------------------------------------- */
+.recent-imagery-readout {
+  --weather-card-border: rgba(98, 181, 255, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-dim);
+  font: 9px/1.45 var(--font-mono);
+  letter-spacing: 0.5px;
+}
+.recent-imagery-readout .ri-block {
+  flex: 0 0 auto;
+  min-width: 0;
+  box-sizing: border-box;
+}
+/* Reserved controls keep their box; they are only invisible. */
+.recent-imagery-readout .is-reserved {
+  visibility: hidden;
+  pointer-events: none;
+}
+.recent-imagery-readout .data-toggle-chip {
+  box-sizing: border-box;
+  min-width: 0;
+  height: 22px;
+  padding: 0 4px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-imagery-readout .data-toggle-chip:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* 1. SELECT BOX · USE VIEW · CLEAR, three equal cells. */
+.recent-imagery-readout .ri-actions-row {
+  height: 22px;
+}
+.recent-imagery-readout .ri-actions-row .rail-card-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+.recent-imagery-readout .ri-actions-row .data-toggle-chip {
+  height: 22px;
+}
+
+/* 2 and 3b. One-line notice and hint: always there, empty or not. */
+.recent-imagery-readout .ri-line {
+  height: 14px;
+  line-height: 14px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* The notice text yields room to ZOOM IN only while it shows; the chip sits
+   in a fixed slot at the line's right end either way. The ellipsis is a
+   safety net: every notice is written to fit the panel. */
+.recent-imagery-readout .ri-notice {
+  position: relative;
+}
+.recent-imagery-readout .ri-notice-text {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.recent-imagery-readout .ri-notice.has-action .ri-notice-text {
+  padding-right: 52px;
+}
+.recent-imagery-readout .ri-zoom-in {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 46px;
+  height: 14px;
+  padding: 0 3px;
+  font-size: 8px;
+  line-height: 12px;
+  letter-spacing: 0.4px;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.recent-imagery-readout .ri-notice.warn {
+  color: rgba(255, 196, 120, 0.95);
+}
+.recent-imagery-readout .ri-notice.info {
+  color: var(--accent);
+}
+.recent-imagery-readout .ri-hint {
+  color: var(--text-secondary);
+}
+
+/* 3. The strip: fixed height, newest day first. */
+.recent-imagery-readout .ri-strip {
+  display: flex;
+  gap: 6px;
+  height: 120px;
+  padding: 2px 2px 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  outline: none;
+  border-radius: 6px;
+}
+.recent-imagery-readout .ri-strip:focus-visible {
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.recent-imagery-readout .ri-strip.searching {
+  opacity: 0.7;
+}
+.recent-imagery-readout .ri-strip-empty {
+  flex: 1 0 100%;
+  align-self: center;
+  text-align: center;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.recent-imagery-readout .ri-card {
+  position: relative;
+  flex: 0 0 94px;
+  height: 112px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: 42px 13px 11px 11px 18px;
+  row-gap: 2px;
+  padding: 3px 2px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  cursor: pointer;
+  scroll-snap-align: start;
+  transition:
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+.recent-imagery-readout .ri-card:hover {
+  border-color: var(--glass-border-hover);
+}
+.recent-imagery-readout .ri-card.focused {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.recent-imagery-readout .ri-card.preview {
+  box-shadow: inset 0 0 0 1px rgba(139, 233, 255, 0.35);
+}
+.recent-imagery-readout .ri-card.pinned {
+  box-shadow: inset 0 0 0 1px rgba(139, 233, 255, 0.75);
+}
+.recent-imagery-readout .ri-thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 4px;
+  background: rgba(120, 130, 140, 0.18);
+}
+.recent-imagery-readout .ri-thumb[data-status='empty'] {
+  background: rgba(90, 96, 104, 0.22);
+}
+.recent-imagery-readout .ri-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.recent-imagery-readout .ri-thumb-text {
+  padding: 0 4px;
+  text-align: center;
+  font-size: 8px;
+}
+.recent-imagery-readout .ri-card-flag,
+.recent-imagery-readout .ri-card-start {
+  position: absolute;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(4, 17, 27, 0.9);
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 12px;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+}
+.recent-imagery-readout .ri-card-flag {
+  top: 3px;
+  left: 3px;
+  color: var(--accent);
+}
+.recent-imagery-readout .ri-card-start {
+  right: 3px;
+  bottom: 3px;
+  color: rgba(255, 196, 120, 0.95);
+}
+.recent-imagery-readout .ri-card-date,
+.recent-imagery-readout .ri-card-sensor,
+.recent-imagery-readout .ri-card-cloud {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.recent-imagery-readout .ri-card-date {
+  font-size: 10px;
+  line-height: 13px;
+  color: var(--text-primary);
+}
+.recent-imagery-readout .ri-card-sensor,
+.recent-imagery-readout .ri-card-cloud {
+  font-size: 8px;
+  line-height: 11px;
+  letter-spacing: 0;
+  color: var(--text-dim);
+}
+.recent-imagery-readout .ri-card-chips {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+.recent-imagery-readout .ri-card-chips .data-toggle-chip {
+  height: 18px;
+  font-weight: 700;
+}
+
+/* 4. The selection bar: mode, then two rows that are always there. */
+.recent-imagery-readout .ri-selection {
+  display: grid;
+  grid-template-rows: 20px 20px 20px;
+  row-gap: 4px;
+  padding: 5px;
+  border: 1px solid var(--weather-card-border);
+  border-radius: 6px;
+}
+.recent-imagery-readout .ri-mode {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+.recent-imagery-readout .ri-selection .data-toggle-chip {
+  height: 20px;
+}
+.recent-imagery-readout .ri-slot {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 22px;
+  align-items: center;
+  column-gap: 6px;
+  height: 20px;
+}
+.recent-imagery-readout .ri-slot-tag {
+  height: 16px;
+  line-height: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  text-align: center;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.recent-imagery-readout .ri-slot.lit .ri-slot-tag {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.recent-imagery-readout .ri-slot-value {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  letter-spacing: 0;
+  color: var(--text-dim);
+}
+.recent-imagery-readout .ri-slot.lit .ri-slot-value {
+  color: var(--text-primary);
+}
+.recent-imagery-readout .ri-slot[data-state='preview'] .ri-slot-value {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+.recent-imagery-readout .ri-unpin {
+  width: 22px;
+  padding: 0;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+/* 5. Opacity (both images), SWAP and export, one row. SWAP keeps its slot
+   while no swipe is live. */
+.recent-imagery-readout .ri-controls {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 40px 128px;
+  align-items: center;
+  column-gap: 6px;
+  height: 22px;
+}
+.recent-imagery-readout .ri-opacity-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 8px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.recent-imagery-readout .ri-opacity-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+.recent-imagery-readout .ri-opacity {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.recent-imagery-readout .ri-opacity:disabled {
+  opacity: 0.35;
+}
+.recent-imagery-readout .ri-swap {
+  width: 40px;
+  padding: 0 2px;
+}
+.recent-imagery-readout .ri-exports .rail-card-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0;
+}
+
+/* 6. DETAILS: a collapsed rail card at the bottom, for every note. */
+.recent-imagery-readout .ri-details .rail-card {
+  border-color: var(--weather-card-border);
+}
+.recent-imagery-readout .ri-details .rail-card-title {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.recent-imagery-readout .ri-details .rail-card-line.muted {
+  color: var(--text-dim);
+}
+.recent-imagery-readout .ri-details .rail-card-actions .data-toggle-chip {
+  height: 20px;
+  padding: 0 7px;
+}
+
+/* ---- box tool cursor ---------------------------------------------------- */
+body.gev-imagery-box #cesium-container canvas,
+body.gev-imagery-box .cesium-widget canvas {
+  cursor: crosshair;
+}
+
+/* ---- split line --------------------------------------------------------- */
+/* Above the right rail (z-index 110) so the handle can always be grabbed. */
+#recent-imagery-split-line {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: var(--recent-imagery-split, 50%);
+  z-index: 130;
+  width: 1px;
+  pointer-events: none;
+  background: rgba(218, 241, 247, 0.76);
+  box-shadow: 0 0 12px rgba(94, 216, 239, 0.72);
+}
+#recent-imagery-split-line span {
+  position: absolute;
+  top: 14px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(4, 17, 27, 0.82);
+  color: rgba(239, 247, 249, 0.92);
+  font: 700 9px/1.4 var(--font-mono);
+  letter-spacing: 1.2px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+#recent-imagery-split-line span.before {
+  right: 8px;
+}
+#recent-imagery-split-line span.after {
+  left: 8px;
+}
+#recent-imagery-split-line .recent-imagery-split-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(180, 215, 222, 0.72);
+  border-radius: 50%;
+  outline: 0;
+  color: rgba(239, 247, 249, 0.96);
+  background: rgba(4, 17, 27, 0.96);
+  box-shadow:
+    0 0 0 5px rgba(62, 112, 125, 0.3),
+    0 0 13px rgba(94, 216, 239, 0.3);
+  font: 700 14px/1 var(--font-mono);
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  touch-action: none;
+  cursor: ew-resize;
+}
+#recent-imagery-split-line .recent-imagery-split-handle:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+}
+
+@media (max-width: 720px) {
+  #recent-imagery-panel-body {
+    max-height: 48vh;
+  }
+}

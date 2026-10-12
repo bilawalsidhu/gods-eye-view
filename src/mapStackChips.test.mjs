@@ -86,28 +86,28 @@ const chipText = (chip) =>
 const CONTROLLER_STACKS = [
   {
     id: 'photoreal',
-    label: 'Google Satellite / 3D',
+    label: 'Google 3D',
     requiresIon: false,
     available: true,
     unavailableReason: null,
   },
   {
-    id: 'road',
-    label: 'Road Map',
-    requiresIon: false,
+    id: 'bing-aerial',
+    label: 'Bing Aerial',
+    requiresIon: true,
     available: true,
     unavailableReason: null,
   },
   {
-    id: 'hybrid',
-    label: 'Hybrid',
-    requiresIon: false,
+    id: 'bing-labels',
+    label: 'Bing Labels',
+    requiresIon: true,
     available: true,
     unavailableReason: null,
   },
   {
-    id: 'terrain',
-    label: 'Terrain',
+    id: 'esri-imagery',
+    label: 'Esri Satellite',
     requiresIon: false,
     available: true,
     unavailableReason: null,
@@ -130,20 +130,20 @@ test('the row renders exactly the five owner-approved sources', () => {
 
   assert.deepEqual(
     container.children.map((chip) => chip.dataset.stackId),
-    ['photoreal', 'road', 'hybrid', 'terrain', 'osm'],
+    ['photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm'],
   );
   assert.deepEqual(container.children.map(chipText), [
-    'Google Satellite / 3D',
-    'Road Map',
-    'Hybrid',
-    'Terrain',
+    'Google 3D',
+    'Bing Aerial',
+    'Bing Labels',
+    'Esri Satellite',
     'OSM',
   ]);
   assert.deepEqual(PRESENTED_MAP_STACK_IDS, [
     'photoreal',
-    'road',
-    'hybrid',
-    'terrain',
+    'bing-aerial',
+    'bing-labels',
+    'esri-imagery',
     'osm',
   ]);
   assert.ok(
@@ -158,21 +158,18 @@ test('the row renders exactly the five owner-approved sources', () => {
   );
 });
 
-test('internal and legacy stacks stay outside the approved presentation set', () => {
+test('internal and future stacks stay outside the approved presentation set', () => {
   const container = makeElement();
-  const withLegacy = [
+  // A future Hybrid stack may land in the controller, but it must not appear
+  // until the owner-approved presentation allowlist explicitly includes it.
+  const withHybrid = [
     ...CONTROLLER_STACKS,
-    {
-      id: 'bing-aerial',
-      label: 'Bing Aerial',
-      available: true,
-      requiresIon: true,
-    },
+    { id: 'hybrid', label: 'Hybrid', available: true },
   ];
-  renderMapStackChips(container, withLegacy, { activeId: 'photoreal', doc });
+  renderMapStackChips(container, withHybrid, { activeId: 'photoreal', doc });
 
   assert.equal(container.children.length, 5);
-  assert.doesNotMatch(container.children.map(chipText).join(' '), /Bing/);
+  assert.doesNotMatch(container.children.map(chipText).join(' '), /Hybrid/);
 });
 
 test('re-rendering replaces the previous chips instead of stacking a second row', () => {
@@ -198,13 +195,13 @@ test('clicking a chip dispatches that stack id — the same selection the dropdo
   container.children[4].click();
   container.children[3].click();
   container.children[1].click();
-  assert.deepEqual(selected, ['osm', 'terrain', 'road']);
+  assert.deepEqual(selected, ['osm', 'esri-imagery', 'bing-aerial']);
 });
 
 test('the active chip is the pressed chip, and exactly one is pressed', () => {
   const container = makeElement();
   renderMapStackChips(container, CONTROLLER_STACKS, {
-    activeId: 'hybrid',
+    activeId: 'bing-labels',
     doc,
   });
 
@@ -213,12 +210,12 @@ test('the active chip is the pressed chip, and exactly one is pressed', () => {
   );
   assert.deepEqual(
     pressed.map((chip) => chip.dataset.stackId),
-    ['hybrid'],
+    ['bing-labels'],
   );
   assert.ok(pressed[0].classList.contains('active'));
   assert.ok(
     container.children
-      .filter((chip) => chip.dataset.stackId !== 'hybrid')
+      .filter((chip) => chip.dataset.stackId !== 'bing-labels')
       .every((chip) => !chip.classList.contains('active')),
   );
 });
@@ -243,40 +240,44 @@ test('the lit chip tracks controller state, not the click', () => {
   assert.equal(container.children[0].getAttribute('aria-pressed'), 'false');
 });
 
-test('unavailable presented stacks stay focusable, aria-disabled, and say why', () => {
+test('keyless ion stacks stay focusable, aria-disabled, and say why', () => {
   const container = makeElement();
-  const unavailable = CONTROLLER_STACKS.map((stack) =>
-    stack.id === 'hybrid'
+  const keyless = CONTROLLER_STACKS.map((stack) =>
+    stack.requiresIon
       ? {
           ...stack,
           available: false,
-          unavailableReason: 'Hybrid map temporarily unavailable',
+          unavailableReason:
+            'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
         }
       : stack,
   );
   const selected = [];
-  renderMapStackChips(container, unavailable, {
+  renderMapStackChips(container, keyless, {
     activeId: 'photoreal',
     onSelect: (stackId) => selected.push(stackId),
     doc,
   });
 
-  const hybrid = container.children[2];
+  const bingAerial = container.children[1];
   assert.equal(
-    hybrid.disabled,
+    bingAerial.disabled,
     false,
     'unavailable sources remain keyboard-reachable',
   );
-  assert.equal(hybrid.getAttribute('aria-disabled'), 'true');
+  assert.equal(bingAerial.getAttribute('aria-disabled'), 'true');
   assert.equal(
-    hybrid.getAttribute('aria-label'),
-    'Hybrid unavailable: Hybrid map temporarily unavailable',
+    bingAerial.getAttribute('aria-label'),
+    'Bing Aerial unavailable: Needs CESIUM_ION_TOKEN — add it in Provider Settings',
   );
-  assert.ok(hybrid.classList.contains('unavailable'));
-  assert.equal(hybrid.title, 'Hybrid map temporarily unavailable');
-  assert.equal(chipText(hybrid), 'Hybrid');
+  assert.ok(bingAerial.classList.contains('unavailable'));
+  assert.equal(
+    bingAerial.title,
+    'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
+  );
+  assert.equal(chipText(bingAerial), 'Bing Aerial ION');
 
-  hybrid.click();
+  bingAerial.click();
   assert.deepEqual(
     selected,
     [],
@@ -284,7 +285,7 @@ test('unavailable presented stacks stay focusable, aria-disabled, and say why', 
   );
 
   assert.equal(
-    container.children[4].getAttribute('aria-disabled'),
+    container.children[3].getAttribute('aria-disabled'),
     'false',
     'OSM stays selectable',
   );
@@ -310,11 +311,11 @@ test('a non-ion stack that fails never claims an ion token is required', () => {
   assert.equal(google.getAttribute('aria-disabled'), 'true');
   assert.equal(
     google.getAttribute('aria-label'),
-    'Google Satellite / 3D unavailable: Needs GOOGLE_MAPS_API_KEY — add it in Provider Settings',
+    'Google 3D unavailable: Needs GOOGLE_MAPS_API_KEY — add it in Provider Settings',
   );
   assert.equal(
     chipText(google),
-    'Google Satellite / 3D',
+    'Google 3D',
     'no ION badge on a stack that does not need ion',
   );
   assert.equal(
@@ -323,8 +324,8 @@ test('a non-ion stack that fails never claims an ion token is required', () => {
   );
   assert.equal(
     chipText(container.children[1]),
-    'Road Map',
-    'available non-ion stacks stay unbadged',
+    'Bing Aerial',
+    'available ion stacks stay unbadged',
   );
 });
 

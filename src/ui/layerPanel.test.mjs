@@ -1,535 +1,260 @@
-import test, { afterEach } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LayerPanel, LAYER_PANEL_SECTIONS } from './layerPanel.js';
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 
-const previousDocument = globalThis.document;
-const previousWindow = globalThis.window;
-
-afterEach(() => {
-  globalThis.document = previousDocument;
-  globalThis.window = previousWindow;
-});
-
-function selectorToDatasetKey(attribute) {
-  return attribute
-    .replace(/^data-/, '')
-    .replace(/-([a-z])/g, (_, char) => char.toUpperCase());
-}
-
-function createFixture({
-  layers = [],
-  markups = [],
-  onToggle = async () => {},
-  onMarkupToggle = async () => {},
-  subscribeRowControls = () => () => {},
-} = {}) {
-  class Node {
-    constructor(tagName, ownerDocument) {
-      this.tagName = tagName.toUpperCase();
-      this.ownerDocument = ownerDocument;
-      this.children = [];
-      this.parentNode = null;
-      this.dataset = {};
-      this.attributes = new Map();
-      this.className = '';
-      this.id = '';
-      this.hidden = false;
-      this.disabled = false;
-      this.type = '';
-      this.title = '';
-      this.style = {};
-      this._text = '';
-      this._listeners = new Map();
-      this.classList = {
-        add: (...names) => {
-          const next = new Set(this.className.split(/\s+/).filter(Boolean));
-          for (const name of names) next.add(name);
-          this.className = [...next].join(' ');
-        },
-        remove: (...names) => {
-          const next = new Set(this.className.split(/\s+/).filter(Boolean));
-          for (const name of names) next.delete(name);
-          this.className = [...next].join(' ');
-        },
-        contains: (name) => this.className.split(/\s+/).includes(name),
-        toggle: (name, force) => {
-          const active = this.className.split(/\s+/).includes(name);
-          const next = force ?? !active;
-          if (next) this.classList.add(name);
-          else this.classList.remove(name);
-          return next;
-        },
-      };
-    }
-    appendChild(node) {
-      return this.insertBefore(node, null);
-    }
-    append(...nodes) {
-      for (const node of nodes) this.insertBefore(node, null);
-    }
-    insertBefore(node, anchor) {
-      if (node.parentNode) node.remove();
-      const index =
-        anchor == null ? this.children.length : this.children.indexOf(anchor);
-      this.children.splice(index, 0, node);
-      node.parentNode = this;
-      return node;
-    }
-    removeChild(node) {
-      const index = this.children.indexOf(node);
-      if (index >= 0) {
-        this.children.splice(index, 1);
-        node.parentNode = null;
-      }
-      return node;
-    }
-    remove() {
-      this.parentNode?.removeChild(this);
-    }
-    replaceChildren(...nodes) {
-      for (const child of [...this.children]) child.remove();
-      this._text = '';
-      this.append(...nodes);
-    }
-    addEventListener(type, listener) {
-      if (!this._listeners.has(type)) this._listeners.set(type, new Set());
-      this._listeners.get(type).add(listener);
-    }
-    removeEventListener(type, listener) {
-      this._listeners.get(type)?.delete(listener);
-    }
-    async dispatchEvent(event) {
-      event.target ??= this;
-      event.currentTarget = this;
-      const listeners = [...(this._listeners.get(event.type) || [])];
-      for (const listener of listeners) await listener(event);
-      return !event.defaultPrevented;
-    }
-    click() {
-      return this.dispatchEvent({
-        type: 'click',
-        target: this,
-        currentTarget: this,
-        defaultPrevented: false,
-        preventDefault() {
-          this.defaultPrevented = true;
-        },
-      });
-    }
-    scrollIntoView() {}
-    setAttribute(name, value) {
-      const stringValue = String(value);
-      this.attributes.set(name, stringValue);
-      if (name === 'id') this.id = stringValue;
-      if (name === 'class') this.className = stringValue;
-      if (name.startsWith('data-')) {
-        this.dataset[selectorToDatasetKey(name)] = stringValue;
-      }
-    }
-    getAttribute(name) {
-      if (name === 'id') return this.id || null;
-      if (name === 'class') return this.className || null;
-      if (name.startsWith('data-')) {
-        const key = selectorToDatasetKey(name);
-        return this.dataset[key] ?? this.attributes.get(name) ?? null;
-      }
-      return this.attributes.get(name) ?? null;
-    }
-    get textContent() {
-      return `${this._text}${this.children.map((child) => child.textContent).join('')}`;
-    }
-    set textContent(value) {
-      this.replaceChildren();
-      this._text = String(value);
-    }
-    set innerHTML(value) {
-      if (value === '') this.replaceChildren();
-    }
-    get firstChild() {
-      return this.children[0] || null;
-    }
-    contains(node) {
-      return (
-        this === node || this.children.some((child) => child.contains(node))
-      );
-    }
-    matches(selector) {
-      const classMatches = [...selector.matchAll(/\.([a-zA-Z0-9_-]+)/g)].map(
-        (match) => match[1],
-      );
-      const idMatch = selector.match(/#([a-zA-Z0-9_-]+)/);
-      const attrMatches = [
-        ...selector.matchAll(/\[([^\]=]+)(?:="([^"]*)")?\]/g),
-      ];
-      const tagMatch = selector.match(/^[a-zA-Z][a-zA-Z0-9-]*/);
-      if (tagMatch && this.tagName !== tagMatch[0].toUpperCase()) return false;
-      if (idMatch && this.id !== idMatch[1]) return false;
-      for (const className of classMatches) {
-        if (!this.classList.contains(className)) return false;
-      }
-      for (const [, attr, expected] of attrMatches) {
-        let actual = null;
-        if (attr === 'id') actual = this.id;
-        else if (attr === 'class') actual = this.className;
-        else if (attr.startsWith('data-'))
-          actual = this.dataset[selectorToDatasetKey(attr)] ?? null;
-        else actual = this.attributes.get(attr) ?? null;
-        if (expected == null) {
-          if (actual == null) return false;
-        } else if (String(actual) !== expected) {
-          return false;
-        }
-      }
-      return true;
-    }
-    closest(selector) {
-      for (let node = this; node; node = node.parentNode) {
-        if (node.matches(selector)) return node;
-      }
-      return null;
-    }
-    querySelector(selector) {
-      return this.querySelectorAll(selector)[0] || null;
-    }
-    querySelectorAll(selector) {
-      const matches = [];
-      for (const child of this.children) {
-        if (child.matches(selector)) matches.push(child);
-        matches.push(...child.querySelectorAll(selector));
-      }
-      return matches;
-    }
-  }
-
-  const document = {
-    body: null,
-    createElement(tagName) {
-      return new Node(tagName, document);
-    },
-  };
-  document.body = new Node('body', document);
-  globalThis.document = document;
-  globalThis.window = {
-    __gevMarkupsLayerApi: {
-      list: () => markups.map((markup) => ({ ...markup })),
-      setVisible: onMarkupToggle,
-    },
-  };
-
-  let currentLayers = layers.map((layer) => ({
-    ...layer,
-    stats: { source: 'Test', ...(layer.stats || {}) },
-  }));
-  const panel = new LayerPanel({
-    getLayers: () => currentLayers,
-    isEnabled: (id) => currentLayers.find((layer) => layer.id === id)?.enabled,
-    setEnabled: async (id, enabled, options) => {
-      currentLayers = currentLayers.map((layer) =>
-        layer.id === id ? { ...layer, enabled } : layer,
-      );
-      return onToggle(id, enabled, options);
-    },
-    setLayerParams: () => {},
-    getRowControls: (id) =>
-      id === 'security-points'
-        ? {
-            chips: [
-              { id: 'police', label: 'POLICE', active: true, params: {} },
-            ],
-            legend: [{ label: 'Police', color: '#3b82f6', count: 2 }],
-          }
-        : null,
-    hasRowControls: (id) => id === 'security-points',
-    subscribeRowControls,
-  });
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  return { panel, container };
-}
-
-test('section configuration matches the requested grouping and defaults', () => {
+test('panel presentation places Transit between Street Traffic and Bike Share in Movement', () => {
+  const source = readFileSync(
+    new URL('./layerPanel.js', import.meta.url),
+    'utf8',
+  );
+  const declarations = source.slice(
+    source.indexOf('const PANEL_GROUPS ='),
+    source.indexOf('const PANEL_POSITIONS ='),
+  );
+  const order = JSON.parse(
+    runInNewContext(`${declarations}\nJSON.stringify(PANEL_ORDER)`),
+  );
   assert.deepEqual(
-    LAYER_PANEL_SECTIONS.map(({ id, label, defaultExpanded, ids }) => ({
-      id,
-      label,
-      defaultExpanded,
-      ids,
-    })),
+    order.filter(({ label }) => label === 'Movement').map(({ id }) => id),
     [
-      { id: 'my-layers', label: 'MY LAYERS', defaultExpanded: true, ids: [] },
-      {
-        id: 'security-emergency',
-        label: 'EMERGENCY POINTS',
-        defaultExpanded: true,
-        ids: [
-          'security-points',
-          'security-points-police',
-          'security-points-fire-ems',
-          'security-points-hospitals',
-          'security-points-urgent-care',
-          'security-points-airports',
-          'security-points-pharmacies',
-        ],
-      },
-      {
-        id: 'movement-transit',
-        label: 'MOVEMENT & TRANSIT',
-        defaultExpanded: false,
-        ids: [
-          'flights',
-          'military',
-          'ais-live-vessels',
-          'traffic',
-          'transit',
-          'directions',
-        ],
-      },
-      {
-        id: 'cameras-monitoring',
-        label: 'CAMERAS & MONITORING',
-        defaultExpanded: false,
-        ids: ['cctv', 'alpr-cameras'],
-      },
-      {
-        id: 'hazards-events',
-        label: 'HAZARDS & EVENTS',
-        defaultExpanded: false,
-        ids: ['local-firms', 'earthquakes'],
-      },
-      {
-        id: 'infrastructure',
-        label: 'INFRASTRUCTURE',
-        defaultExpanded: false,
-        ids: ['military-installations', 'local-datacenters', 'local-dams'],
-      },
-      {
-        id: 'communications',
-        label: 'COMMUNICATIONS',
-        defaultExpanded: false,
-        ids: ['radio'],
-      },
+      'satellites',
+      'flights',
+      'military',
+      'local-adsb',
+      'ais-live-vessels',
+      'traffic',
+      'transit',
+      'bikeshare',
     ],
   );
+  assert.equal(order.filter(({ id }) => id === 'transit').length, 1);
 });
 
-test('renders My Layers first with an empty state and the requested default disclosure states', () => {
-  const { panel, container } = createFixture({
-    layers: [
-      {
-        id: 'flights',
-        name: 'Live Flights',
-        icon: '✈',
-        enabled: false,
-        showInTogglePanel: true,
-        stats: { count: 12 },
-      },
-      {
-        id: 'security-points',
-        name: 'Security Points',
-        icon: '🛡',
-        enabled: true,
-        showInTogglePanel: true,
-        stats: { count: 4 },
-      },
-      {
-        id: 'radio',
-        name: 'Radio',
-        icon: '📻',
-        enabled: false,
-        showInTogglePanel: true,
-        stats: { count: 1 },
-      },
-    ],
-  });
-  panel.mount(container);
-
-  const sections = container.querySelectorAll('.data-layer-section');
-  assert.deepEqual(
-    sections.map((section) => section.dataset.layerSection),
-    ['my-layers', 'security-emergency', 'movement-transit', 'communications'],
-  );
-
-  const myLayers = container.querySelector('[data-layer-section="my-layers"]');
-  assert.equal(
-    myLayers.querySelector('.data-layer-empty-state')?.textContent,
-    'No custom layers yet.',
-  );
-  assert.equal(
-    myLayers
-      .querySelector('.data-layer-section-toggle')
-      ?.getAttribute('aria-expanded'),
-    'true',
-  );
-  assert.equal(
-    container
-      .querySelector('[data-layer-section="security-emergency"]')
-      ?.querySelector('.data-layer-section-toggle')
-      ?.getAttribute('aria-expanded'),
-    'true',
-  );
-  assert.equal(
-    container
-      .querySelector('[data-layer-section="movement-transit"]')
-      ?.querySelector('.data-layer-section-toggle')
-      ?.getAttribute('aria-expanded'),
-    'false',
-  );
-});
-
-test('renders saved markups in My Layers and preserves layer and markup toggles', async () => {
-  const layerToggles = [];
-  const markupToggles = [];
-  const { panel, container } = createFixture({
-    layers: [
-      {
-        id: 'security-points',
-        name: 'Security Points',
-        icon: '🛡',
-        enabled: true,
-        showInTogglePanel: true,
-        stats: { count: 4 },
-      },
-      {
-        id: 'flights',
-        name: 'Live Flights',
-        icon: '✈',
-        enabled: false,
-        showInTogglePanel: true,
-        stats: { count: 12 },
-      },
-    ],
-    markups: [{ id: 'alpha', name: 'Alpha Overlay', visible: true }],
-    onToggle: async (...args) => layerToggles.push(args),
-    onMarkupToggle: async (...args) => markupToggles.push(args),
-  });
-  panel.mount(container);
-
-  const markupSection = container.querySelector(
-    '[data-layer-section="my-layers"]',
-  );
-  const markupRow = markupSection.querySelector('.data-toggle-row-markup');
-  assert.match(markupRow.textContent, /Alpha Overlay/);
-
-  const [markupButton] = markupRow.querySelectorAll('.data-toggle-btn');
-  await markupButton.click();
-  assert.deepEqual(markupToggles, [['alpha', false]]);
-
-  const flightsRow = container.querySelector('[data-layer-id="flights"]');
-  assert.ok(flightsRow, 'existing layers should still be rendered');
-  const flightsButton = flightsRow.querySelector('.data-toggle-btn');
-  await flightsButton.click();
-  assert.deepEqual(layerToggles, [['flights', true, { origin: 'user' }]]);
-
-  const securityRow = container.querySelector(
-    '[data-layer-id="security-points"]',
-  );
-  assert.equal(securityRow.querySelectorAll('.data-toggle-chip').length, 1);
-});
-
-test('section headers toggle only their own section visibility state', async () => {
-  const { panel, container } = createFixture({
-    layers: [
-      {
-        id: 'flights',
-        name: 'Live Flights',
-        icon: '✈',
-        enabled: false,
-        showInTogglePanel: true,
-        stats: { count: 12 },
-      },
-      {
-        id: 'security-points',
-        name: 'Security Points',
-        icon: '🛡',
-        enabled: true,
-        showInTogglePanel: true,
-        stats: { count: 4 },
-      },
-    ],
-  });
-   panel.mount(container);
-
-  const movementSection = container.querySelector(
-    '[data-layer-section="movement-transit"]',
-  );
-  const movementHeader = movementSection.querySelector('.data-layer-section-toggle');
-  const movementBody = movementSection.querySelector('.data-layer-section-body');
-  assert.equal(movementHeader.getAttribute('aria-expanded'), 'false');
-  assert.equal(movementBody.getAttribute('aria-hidden'), 'true');
-  assert.equal(movementBody.inert, true);
-  assert.equal(movementBody.hidden, true);
-  assert.ok(movementBody.querySelector('[data-layer-id="flights"]'));
-
-  const securitySection = container.querySelector(
-    '[data-layer-section="security-emergency"]',
-  );
-  const securityHeader = securitySection.querySelector('.data-layer-section-toggle');
-  const securityBody = securitySection.querySelector('.data-layer-section-body');
-  assert.equal(securityHeader.getAttribute('aria-expanded'), 'true');
-  assert.equal(securityBody.getAttribute('aria-hidden'), 'false');
-  assert.equal(securityBody.inert, false);
-  assert.equal(securityBody.hidden, false);
-
-  await movementHeader.click();
-  assert.equal(movementHeader.getAttribute('aria-expanded'), 'true');
-  assert.equal(movementBody.getAttribute('aria-hidden'), 'false');
-  assert.equal(movementBody.inert, false);
-  assert.equal(movementBody.hidden, false);
-
-  await securityHeader.click();
-  assert.equal(securityHeader.getAttribute('aria-expanded'), 'false');
-  assert.equal(securityBody.getAttribute('aria-hidden'), 'true');
-  assert.equal(securityBody.inert, true);
-  await new Promise((resolve) => setTimeout(resolve, 170));
-  assert.equal(securityBody.hidden, true);
-  assert.equal(movementHeader.getAttribute('aria-expanded'), 'true');
-});
-
-test('row-control subscriptions are not duplicated during panel refreshes', () => {
-  let subscriptions = 0;
-  const { panel, container } = createFixture({
-    layers: [
-      {
-        id: 'security-points',
-        name: 'Security Points',
-        icon: '🛡',
-        enabled: true,
-        showInTogglePanel: true,
-        stats: { count: 4 },
-      },
-    ],
-    subscribeRowControls: () => {
-      subscriptions += 1;
-      return () => {};
+test('partial feed controls distinguish incomplete records from stale data and outages', async () => {
+  const { LayerPanel, layerFeedState } = await import('./layerPanel.js');
+  const classes = new Map();
+  const attrs = new Map();
+  const button = {
+    classList: { toggle: (key, value) => classes.set(key, value) },
+    dataset: {},
+    setAttribute: (key, value) => attrs.set(key, value),
+  };
+  const layer = {
+    id: 'ais-live-vessels',
+    name: 'Live Vessels',
+    source: 'AISStream',
+    enabled: true,
+    stats: {
+      partial: true,
+      stale: false,
+      count: 2,
+      acceptedRowCount: 2,
+      rawRowCount: 3,
+      lastUpdate: Date.now(),
     },
-  });
-  panel.mount(container);
-  panel._refreshTogglePanel();
-  panel._refreshTogglePanel();
-  assert.equal(subscriptions, 1);
+  };
+  const panel = LayerPanel.prototype;
+  panel._syncToggleButton(button, layer);
+  assert.equal(button.textContent, 'PARTIAL');
+  assert.equal(button.dataset.feedState, 'partial');
+  assert.equal(classes.get('feed-partial'), true);
+  assert.equal(classes.get('feed-stale'), false);
+  assert.match(attrs.get('aria-label'), /PARTIAL/);
+  assert.match(
+    panel._buildMetaText(layer),
+    /^PARTIAL · AISStream · 2 of 3 records accepted · /,
+  );
+  assert.match(
+    panel._buildMetaText({
+      ...layer,
+      stats: { ...layer.stats, rawRowCount: 2 },
+    }),
+    /incomplete snapshot/,
+  );
+  assert.equal(layerFeedState({ ...layer.stats, stale: true }), 'stale');
+  assert.equal(
+    layerFeedState({ ...layer.stats, error: 'Connection lost' }),
+    'degraded',
+  );
+  assert.equal(
+    layerFeedState({ ...layer.stats, status: 'unavailable' }),
+    'unavailable',
+  );
+  assert.equal(layerFeedState({ ...layer.stats, loading: true }), 'loading');
+  layer.stats = { ...layer.stats, partial: false };
+  panel._syncToggleButton(button, layer);
+  assert.equal(button.textContent, 'ON');
+  assert.equal(classes.get('feed-partial'), false);
+  layer.enabled = false;
+  panel._syncToggleButton(button, layer);
+  assert.equal(button.textContent, 'OFF');
 });
 
-test('panel-specific toggle handlers are used for virtual emergency rows', async () => {
+test('readout rows contain only toggles and metadata; ordinary rows retain controls', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const { railFixture } = await import('./railTestFixture.mjs');
+  const f = railFixture();
+  const previousDocument = globalThis.document;
+  globalThis.document = f.document;
+  const ids = [
+    'wind',
+    'weather-radar',
+    'weather-satellite',
+    'weather-lightning',
+    'weather-cyclones',
+    'other',
+  ];
+  let refresh;
+  const layers = ids.map((id) => ({
+    id,
+    name: id,
+    icon: '*',
+    source: 'Source',
+    enabled: true,
+    showInTogglePanel: true,
+    stats: {},
+  }));
   const calls = [];
-  const { panel, container } = createFixture({
-    layers: [
-      {
-        id: 'security-points-police',
-        name: 'Police',
-        icon: '🚓',
-        enabled: false,
-        showInTogglePanel: true,
-        source: 'Google Maps Places',
-        stats: { count: 4, source: 'Google Maps Places' },
-        panelToggle: async (enabled, options) => {
-          calls.push({ enabled, options });
-        },
+  const panel = new LayerPanel({
+    getLayers: () => layers,
+    isEnabled: () => true,
+    setEnabled: (...args) => calls.push(args),
+    setLayerParams: (...args) => calls.push(args),
+    hasRowControls: () => true,
+    subscribeRowControls: (_id, callback) => {
+      refresh = callback;
+    },
+    getRowControls: (id) => ({
+      readout: id !== 'other',
+      summary: { status: 'Loading' },
+      info: 'Detailed time',
+      chips: [{ id: 'config', label: 'Soft', params: { opacity: 'light' } }],
+      legend: [{ label: 'Rain', color: '#abcdef' }],
+      list: {
+        items: [{ id: 'storm', text: 'Storm', params: { focus: true } }],
       },
-    ],
+    }),
   });
-  panel.mount(container);
+  try {
+    panel.mount(f.container);
+    for (const id of ids.slice(0, -1)) {
+      const row = f.find((n) => n.dataset.layerId === id);
+      assert.equal(row.children.length, 2);
+      assert.ok(row.querySelector('.data-name'));
+      assert.ok(row.querySelector('.data-toggle-meta'));
+      for (const cls of [
+        'data-toggle-chip',
+        'data-count',
+        'data-toggle-controls',
+        'data-toggle-controls-status',
+        'data-row-list',
+      ])
+        assert.equal(row.querySelector(`.${cls}`), null);
+      row.querySelector('.data-toggle-btn').click();
+    }
+    assert.deepEqual(
+      calls.map(([id]) => id),
+      ids.slice(0, -1),
+    );
+    const ordinary = f.find((n) => n.dataset.layerId === 'other');
+    assert.equal(
+      ordinary.querySelector('.data-toggle-controls-info').textContent,
+      'Detailed time',
+    );
+    assert.ok(ordinary.querySelector('.data-toggle-legend-item'));
+    ordinary.querySelector('.data-toggle-chip').click();
+    assert.deepEqual(calls.at(-1), [
+      'other',
+      { opacity: 'light' },
+      { origin: 'user' },
+    ]);
+    assert.equal(typeof refresh, 'function');
+  } finally {
+    panel.destroy();
+    globalThis.document = previousDocument;
+  }
+});
 
-  const toggle = container.querySelector('.data-toggle-btn');
-  await toggle.click();
-  assert.deepEqual(calls, [{ enabled: true, options: { origin: 'user' } }]);
+test('the Recent Imagery readout mounts in its rail body like the weather readout and is rebuilt or released with the panel', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const { railFixture } = await import('./railTestFixture.mjs');
+  const f = railFixture();
+  const body = f.document.createElement('div');
+  f.document.getElementById = (id) =>
+    id === 'recent-imagery-panel-body' ? body : null;
+  const previousDocument = globalThis.document;
+  globalThis.document = f.document;
+  const mounted = [];
+  const factory = (container) => {
+    const readout = {
+      container,
+      destroyed: false,
+      destroy() {
+        this.destroyed = true;
+      },
+    };
+    mounted.push(readout);
+    return readout;
+  };
+  const panel = new LayerPanel({
+    getLayers: () => [],
+    isEnabled: () => false,
+    setEnabled() {},
+    setLayerParams() {},
+    hasRowControls: () => false,
+    subscribeRowControls() {},
+    getRowControls: () => null,
+  });
+  try {
+    panel.attachRecentImagery(factory);
+    assert.equal(mounted.length, 0, 'no body before the panel mounts');
+    panel.mount(f.container);
+    assert.equal(mounted.length, 1);
+    assert.equal(mounted[0].container, body);
+    panel.mount(f.container);
+    assert.equal(mounted[0].destroyed, true, 'a remount rebuilds it');
+    assert.equal(mounted.length, 2);
+    panel.attachRecentImagery(null);
+    assert.equal(mounted[1].destroyed, true);
+    panel.attachRecentImagery(factory);
+    assert.equal(mounted.length, 3);
+    panel.destroy();
+    assert.equal(mounted[2].destroyed, true);
+    panel.attachRecentImagery(factory);
+    assert.equal(mounted.length, 3, 'a destroyed panel mounts nothing');
+  } finally {
+    panel.destroy();
+    globalThis.document = previousDocument;
+  }
+});
+
+test('an omitted source is visibly unavailable and cannot be toggled on', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const attrs = new Map();
+  const button = {
+    classList: { toggle() {} },
+    dataset: {},
+    setAttribute: (key, value) => attrs.set(key, value),
+  };
+  const layer = {
+    id: 'flights',
+    name: 'Flights',
+    enabled: false,
+    stats: {
+      sourceUnavailable: true,
+      status: 'unavailable',
+      error: 'Data source not configured: flights',
+    },
+  };
+  LayerPanel.prototype._syncToggleButton(button, layer);
+  assert.equal(button.textContent, 'UNAVAILABLE');
+  assert.equal(attrs.get('aria-disabled'), 'true');
+  assert.match(button.title, /not configured/);
+  LayerPanel.prototype._syncToggleButton(button, { ...layer, enabled: true });
+  assert.equal(
+    attrs.get('aria-disabled'),
+    'false',
+    'an active layer can always be switched off',
+  );
 });

@@ -210,9 +210,9 @@
        dock bottom + dock height 62px + offset − (credit bottom + 28px).
      Across 721–900px the dock is anchored at 2vh and the credit at
      calc(2vh + 5rem), so those terms cancel and 3rem + the tray's own 10px
-     margin leaves a flat 12px. That cancellation is NOT universal: at 1024px
+     margin leaves a flat 12px. That cancellation is NOT universal: at 720px
      and below the dock re-anchors to a flat 8px while the credit keeps its
-     2vh base, which is what the max-width:1024px override further down
+     2vh base, which is what the max-width:720px override further down
      repairs. Nothing here may be reasoned about "at every viewport height"
      without checking the dock anchor that actually applies.
 
@@ -251,12 +251,12 @@
 }
 
 /* The dock re-anchors from 2vh to a flat 8px at this width (see the
-   max-width:1024px block above), while the credit keeps its 2vh base — so the
+   max-width:720px block above), while the credit keeps its 2vh base — so the
    clearance above stops being height-independent and goes negative on tall
    narrow viewports (0 at 1000px high, −4px at 1200px). Carrying the 2vh back
    into the tray's own offset restores the same flat 12px the wider band gets.
    This block must stay AFTER the max-width:900px rules to win the cascade. */
-@media (max-width: 1024px) {
+@media (max-width: 720px) {
   #command-dock #location-bar .dock-popover-content,
   #command-dock #control-panel .dock-popover-content {
     bottom: calc(100% + 2vh + 2.5rem);

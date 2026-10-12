@@ -282,10 +282,8 @@ test('Location markup provides one named native disclosure linked to its popover
   assert.match(locationToggleAttributes.class, /(?:^|\s)dock-tray-toggle(?:\s|$)/);
   assert.match(locationToggleMarkup[2], /class="location-toolbar-label"/);
   assert.doesNotMatch(locationToggleMarkup[2], /<button\b/);
-  assert.match(
-    locationMarkup.slice(locationToggleMarkup.index + locationToggleMarkup[0].length),
-    /^\s*<button\b[\s\S]*?class="panel-collapse-btn"[\s\S]*?data-collapse-target="location-bar"/,
-  );
+  assert.match(locationMarkup.slice(locationToggleMarkup.index + locationToggleMarkup[0].length),
+    /^\s*<button class="panel-collapse-btn" data-collapse-target="location-bar"/);
   assert.match(locationMarkup, /<div id="location-bar-popover" class="dock-popover-content">/);
 });
 

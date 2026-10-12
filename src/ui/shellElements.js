@@ -17,9 +17,21 @@ export function readShellElements(document = globalThis.document) {
     _hudBtn: document.getElementById('hud-toggle'),
     _hudLayoutRow: document.getElementById('hud-layout-row'),
     _hudLayoutSelect: document.getElementById('hud-layout-select'),
-    _hudOverlayRow: document.getElementById('hud-overlay-row'),
-    _hudOverlayOnBtn: document.getElementById('hud-overlay-on'),
-    _hudOverlayOffBtn: document.getElementById('hud-overlay-off'),
+    _cyberSonarBtn: document.getElementById('cyber-sonar-toggle'),
+    _cyberSonarRings: document.getElementById('cyber-sonar-rings'),
+    _cyberSonarRingsValue: document.getElementById('cyber-sonar-rings-value'),
+    _cyberSonarRange: document.getElementById('cyber-sonar-range'),
+    _cyberSonarRangeValue: document.getElementById('cyber-sonar-range-value'),
+    _cyberSonarIntensity: document.getElementById('cyber-sonar-intensity'),
+    _cyberSonarIntensityValue: document.getElementById(
+      'cyber-sonar-intensity-value',
+    ),
+    _cyberSonarOpacity: document.getElementById('cyber-sonar-opacity'),
+    _cyberSonarOpacityValue: document.getElementById(
+      'cyber-sonar-opacity-value',
+    ),
+    _cyberSonarSector: document.getElementById('cyber-sonar-sector'),
+    _cyberSonarSectorValue: document.getElementById('cyber-sonar-sector-value'),
     _detectionSliderRow: document.getElementById('detection-slider-row'),
     _detectionDensitySlider: document.getElementById(
       'detection-density-slider',
@@ -46,9 +58,8 @@ export function readShellElements(document = globalThis.document) {
     _cleanViewExitBtn: document.getElementById('clean-view-exit'),
     _dataPanel: document.getElementById('data-panel'),
     _scenePanel: document.getElementById('scene-panel'),
-    _cctvPanel:
-      document.getElementById('context-cameras-panel') ||
-      document.getElementById('cctv-panel'),
+    _cctvPanel: document.getElementById('cctv-panel'),
+    _streetLevelPanel: document.getElementById('street-level-panel'),
     _radioPanel: document.getElementById('radio-panel'),
     _contextRadioDock: document.getElementById('context-radio-dock'),
     _contextRadioToggleBtn: document.getElementById('context-radio-toggle-btn'),
@@ -121,15 +132,11 @@ export function readShellElements(document = globalThis.document) {
     _globalContextFlightsBtn: document.getElementById(
       'global-context-flights-btn',
     ),
-    _globalContextCamerasBtn: document.getElementById(
-      'global-context-cameras-btn',
-    ),
     _globalContextMissionsBtn: document.getElementById(
       'global-context-missions-btn',
     ),
     _contextModeStandby: document.getElementById('context-mode-standby'),
     _contextFlightsView: document.getElementById('context-flights-view'),
-    _contextCamerasView: document.getElementById('context-cameras-view'),
     _contextMissionsView: document.getElementById('context-missions-view'),
     _installationsSearchBtn: document.getElementById(
       'installations-search-btn',
@@ -151,9 +158,11 @@ export function readShellElements(document = globalThis.document) {
     _cctvCalibResetBtn: document.getElementById('cctv-calib-reset-btn'),
     _cctvFrame: document.getElementById('cctv-frame'),
     _cctvFrameWrap: document.getElementById('cctv-frame-wrap'),
+    _cctvVideo: document.getElementById('cctv-video'),
     _cctvSourceBadge: document.getElementById('cctv-source-badge'),
     _cctvMeta: document.getElementById('cctv-meta'),
     _cctvSummary: document.getElementById('cctv-summary'),
+    _shareBtn: document.getElementById('share-btn'),
     _tiltMapBtn: document.getElementById('tilt-map-view'),
     _northUpBtn: document.getElementById('north-up-view'),
     _clearSelectedLayersBtn: document.getElementById('clear-selected-layers'),

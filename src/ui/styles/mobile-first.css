@@ -1,4 +1,4 @@
-@media (max-width: 1024px) {
+@media (max-width: 720px) {
   :root {
     --mobile-safe-top: max(12px, env(safe-area-inset-top));
     --mobile-safe-bottom: max(10px, env(safe-area-inset-bottom));
@@ -195,33 +195,9 @@
     border-radius: 18px;
   }
 
-  #title-bar .brand-heading {
-    font-size: 15px;
-    letter-spacing: 0.22em;
-  }
-
   #title-bar .title-logo {
     width: 48px;
     height: 48px;
-  }
-
-  #title-bar .brand-lockup-compact {
-    gap: 9px;
-  }
-
-  .brand-wordmark-compact {
-    font-size: 0.9em;
-    letter-spacing: 0.22em;
-  }
-
-  .brand-subhead-compact {
-    font-size: 0.46rem;
-    letter-spacing: 0.25em;
-  }
-
-  .brand-byline-compact {
-    font-size: 0.42rem;
-    letter-spacing: 0.2em;
   }
 
   #top-center-actions {
@@ -342,7 +318,6 @@
     position: fixed;
     top: 0;
     right: 0;
-    bottom: calc(2vh + 7.5rem);
     left: 0;
     z-index: 155;
     width: 100%;
@@ -918,7 +893,6 @@
   }
 
   #cctv-panel .cctv-controls,
-  #context-cameras-panel .cctv-controls,
   #global-context-panel .data-toggle-top,
   #global-context-panel .data-toggle-right,
   #global-context-panel .military-awareness-target {
@@ -934,7 +908,6 @@
   :is(#scene-panel, #cctv-panel, #global-context-panel, #command-dock)
     :is(.scene-btn, .panel-layer-toggle, .context-mode-button, .map-stack-chip),
   :is(#command-dock, #location-bar) :is(.style-btn, .location-pill, .poi-pill),
-  :is(#cctv-panel, #context-cameras-panel) .cctv-controls > *,
   #scene-panel .scene-controls > *,
   #global-context-panel .radio-directory-row > * {
     min-width: 0;
@@ -948,143 +921,9 @@
     overflow-wrap: anywhere;
   }
 
-  #scene-panel
-    :is(.markup-home-actions, .markup-tool-grid, .markup-editor-actions) {
-    display: grid;
-    gap: 8px;
-  }
-
-  #scene-panel .markup-home-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  #scene-panel .markup-tool-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  #scene-panel .markup-editor-actions {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  #scene-panel
-    :is(.markup-home-actions, .markup-tool-grid, .markup-editor-actions)
-    .scene-btn {
-    width: 100%;
-    min-height: 42px;
-    white-space: nowrap;
-    overflow-wrap: normal;
-  }
-
   #scene-panel .scene-panel-inner {
     overflow: hidden;
     overscroll-behavior: contain;
-  }
-
-  #scene-panel .markup-panel-content {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding-right: 2px;
-    padding-bottom: calc(var(--mobile-attribution-zone-height) + 8px);
-  }
-
-  #scene-panel .markup-compact-toggle-btn {
-    min-width: 34px;
-    padding: 0;
-  }
-
-  #scene-panel :is(.markup-tool-hint, .markup-status) {
-    white-space: normal;
-    overflow-wrap: break-word;
-  }
-
-  #scene-panel.markup-mobile-mode {
-    top: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    z-index: 165;
-    width: 100vw !important;
-    max-width: none !important;
-    max-height: none !important;
-    transform: none !important;
-    pointer-events: none;
-  }
-
-  #scene-panel.markup-mobile-mode .scene-panel-inner {
-    height: 100%;
-    max-height: none;
-    padding-top: 0;
-    padding-right: 0;
-    padding-bottom: 0;
-    padding-left: 0;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    overflow: visible;
-    pointer-events: none;
-  }
-
-  #scene-panel.markup-mobile-mode .panel-glow,
-  #scene-panel.markup-mobile-mode .panel-header,
-  #scene-panel.markup-mobile-mode #markup-panel-content {
-    display: none;
-  }
-
-  #scene-panel.markup-mobile-mode .markup-mobile-overlay {
-    position: fixed;
-    top: calc(var(--mobile-safe-top) + 56px);
-    left: 12px;
-    z-index: 168;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    pointer-events: none;
-  }
-
-  #scene-panel.markup-mobile-mode .markup-bottom-sheet {
-    position: fixed;
-    right: auto;
-    bottom: var(--mobile-panel-safe-bottom);
-    left: 50%;
-    z-index: 168;
-    display: block;
-    max-height: var(--mobile-panel-safe-max-height);
-    overflow-x: hidden;
-    overflow-y: auto;
-    pointer-events: auto;
-    transform: translateX(-50%);
-  }
-
-  #scene-panel.markup-mobile-mode .markup-object-sheet {
-    overflow: hidden;
-  }
-
-  #scene-panel.markup-mobile-mode .markup-context-card {
-    position: fixed;
-    right: auto;
-    bottom: var(--mobile-panel-safe-bottom);
-    left: 50%;
-    z-index: 168;
-    display: block;
-    pointer-events: auto;
-    transform: translateX(-50%);
-  }
-
-  #scene-panel.markup-mobile-mode .markup-status,
-  #scene-panel.markup-mobile-mode .markup-tool-hint,
-  #scene-panel.markup-mobile-mode .markup-editor,
-  #scene-panel.markup-mobile-mode .markup-home {
-    display: none;
-  }
-
-  #scene-panel.markup-mobile-mode .markup-mobile-tool,
-  #scene-panel.markup-mobile-mode .markup-mobile-done-btn,
-  #scene-panel.markup-mobile-mode .markup-active-control {
-    min-height: 44px;
   }
 
   body[data-mobile-panel='controls'] #command-dock .style-btn,
@@ -1175,17 +1014,6 @@
     bottom: calc(var(--mobile-panel-bottom) + 12px);
   }
 
-  #security-point-card {
-    right: var(--mobile-panel-side-gap);
-    left: var(--mobile-panel-side-gap);
-    bottom: calc(var(--mobile-panel-bottom) + 12px);
-    width: auto;
-  }
-
-  #security-point-card .security-point-card-inner {
-    border-radius: 22px;
-  }
-
   body.cockpit-mode #mobile-bottom-nav,
   body.cockpit-mode #command-dock > #location-bar,
   body.cockpit-mode #command-dock > #control-panel,
@@ -1224,66 +1052,9 @@
     font-size: 9px;
   }
 
-  #scene-panel .markup-tool-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  #scene-panel .markup-editor-actions {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
   body[data-mobile-panel='controls'] #command-dock .style-btn {
     flex-basis: auto;
     min-width: 0;
-  }
-}
-
-@media (max-width: 430px) {
-  .brand-byline-compact {
-    display: none;
-  }
-
-  #scene-panel .markup-manager-row .markup-row-top {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  #scene-panel .markup-manager-row :is(.markup-row-title-wrap, .markup-row-actions) {
-    width: 100%;
-    flex: 0 0 auto;
-  }
-
-  #scene-panel .markup-manager-row .markup-row-actions {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    justify-content: normal;
-    justify-items: stretch;
-    align-items: start;
-    margin-left: 0;
-  }
-
-  #scene-panel .markup-manager-row .markup-row-actions .scene-btn {
-    width: 100%;
-    min-width: 0;
-    min-height: 46px;
-    padding-inline: 8px;
-    white-space: nowrap;
-    overflow-wrap: normal;
-    word-break: normal;
-  }
-
-  #scene-panel
-    .markup-manager-row
-    .markup-row-actions
-    .scene-btn[data-action='export'] {
-    grid-column: 1;
-  }
-
-  #scene-panel
-    .markup-manager-row
-    .markup-row-actions
-    .scene-btn[data-action='delete'] {
-    grid-column: 2;
   }
 }
 
@@ -1293,18 +1064,9 @@
     padding-inline: 8px;
   }
 
-  #title-bar .brand-heading {
-    font-size: 14px;
-    letter-spacing: 0.18em;
-  }
-
   #title-bar .title-logo {
     width: 46px;
     height: 46px;
-  }
-
-  .brand-subhead-compact {
-    display: none;
   }
 
   #top-center-actions {
@@ -1519,7 +1281,7 @@
   }
 }
 
-@media (max-width: 1024px) and (orientation: portrait) {
+@media (max-width: 720px) and (orientation: portrait) {
   :root {
     --mobile-panel-max-height: min(
       calc(

@@ -5,18 +5,24 @@ import { configureAlprSource } from '../data/alprCameras.js';
 import { configureCctvSource } from '../data/cctv.js';
 import { configureRadioSource } from '../data/radio.js';
 import { configureTrafficSource } from '../data/traffic.js';
+import { configureBikeshareSource } from '../data/bikeshare.js';
 import { configureInstallationSource } from '../data/militaryInstallations.js';
-import { configureSecurityPointSource } from '../data/securityPoints.js';
+import { configureSatelliteSource } from '../data/satellites.js';
+import { configureLaunchSource } from '../data/rocketLaunches.js';
 import { configureFirmsSource } from '../data/firmsHeatmap.js';
+import { configureWindSource } from '../data/wind.js';
 import { configureMilitaryRegistrySource } from '../data/militaryRegistry.js';
 const configure = {
   alpr: configureAlprSource,
   cctv: configureCctvSource,
   radio: configureRadioSource,
   traffic: configureTrafficSource,
+  bikeshare: configureBikeshareSource,
   installations: configureInstallationSource,
-  securityPoints: configureSecurityPointSource,
+  satellites: configureSatelliteSource,
+  launches: configureLaunchSource,
   firms: configureFirmsSource,
+  wind: configureWindSource,
 };
 /** Configure sources before any registration or state restoration starts. */
 export function configureApplicationSources({

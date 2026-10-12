@@ -45,18 +45,6 @@
     0 1px 0 rgba(255, 255, 255, 0.06) inset;
 }
 
-#context-cameras-panel {
-  max-height: none;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  overflow: visible;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
 .cctv-panel-inner::-webkit-scrollbar {
   width: 8px;
 }
@@ -153,9 +141,9 @@
   margin-top: 8px;
 }
 
-:is(#cctv-panel, #context-cameras-panel) input:disabled,
-:is(#cctv-panel, #context-cameras-panel) button:disabled,
-:is(#cctv-panel, #context-cameras-panel) select:disabled {
+#cctv-panel input:disabled,
+#cctv-panel button:disabled,
+#cctv-panel select:disabled {
   opacity: 0.45;
 }
 
@@ -310,8 +298,24 @@
   transition: opacity 180ms ease;
 }
 
+#cctv-video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
 #cctv-frame.active {
   opacity: 1;
+}
+
+#cctv-video:not([hidden]) {
+  opacity: 1;
+}
+
+#cctv-frame[hidden],
+#cctv-video[hidden] {
+  display: none;
 }
 
 #cctv-meta {

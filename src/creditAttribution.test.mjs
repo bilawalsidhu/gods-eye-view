@@ -205,6 +205,7 @@ const RECOGNIZED = new Set([
   // rail
   '#right-context-rail',
   '#right-context-rail.layout-focus',
+  '#right-context-rail[data-rail-measuring]',
   // tray
   '#command-dock .dock-popover-content',
   '#command-dock #location-bar .dock-popover-content',
@@ -324,25 +325,7 @@ function toPx(value, viewportHeight, where) {
   return total;
 }
 
-const MOBILE_LAYOUT_MAX_WIDTH = 1024;
-const WIDTHS = [
-  1440,
-  1280,
-  1100,
-  1025,
-  1024,
-  980,
-  900,
-  883,
-  830,
-  800,
-  760,
-  700,
-  640,
-  600,
-  480,
-  375,
-];
+const WIDTHS = [1440, 1024, 980, 900, 830, 800, 760, 721, 720, 700, 640, 600, 480, 375];
 const HEIGHTS = [500, 560, 640, 700, 800, 900, 1000, 1080, 1200, 1440, 1600];
 
 const CREDIT_SELECTORS = ['#cesium-credits', 'body:not(.ui-clean-view):not(.recording-mode) #cesium-credits'];
@@ -418,20 +401,26 @@ test('the model refuses every cascade construct it cannot resolve', () => {
       complaints.push(`nested media queries on "${part}": ${rule.media.join(' && ')}`);
     }
     for (const decl of guarded) {
-      if (decl.important) complaints.push(`!important on ${decl.prop} of "${part}"`);
+      // Measurement is synchronous and restored before returning or painting.
+      // Only these two exact declarations earn the exemption tested below.
+      const railMeasurement = part === '#right-context-rail[data-rail-measuring]'
+        && ((decl.prop === 'height' && decl.value === 'auto')
+          || (decl.prop === 'max-height' && decl.value === 'none'));
+      if (decl.important && !railMeasurement) complaints.push(`!important on ${decl.prop} of "${part}"`);
       if (decl.prop === 'inset' || decl.prop === 'margin' || decl.prop === 'all'
         || decl.prop.startsWith('inset-') || decl.prop.startsWith('margin-block')) {
         complaints.push(`shorthand ${decl.prop} on "${part}" — the model reads longhands only`);
       }
       if (decl.prop === 'height' || decl.prop === 'max-height') {
         // A capped height can override `bottom` and invalidate the measured
-        // dock/credit constants. Two exemptions, each earned by a test below:
+        // dock/credit constants. Exemptions are each earned by a test below:
         // the rail's own max-height (resolved to `none` across the whole
         // modelled band by the rail clearance test) and `.layout-focus`
-        // (proven inapplicable at <=1024px by the mobile-mode test).
+        // (proven inapplicable at <=720px by the mobile-mode test), plus
+        // synchronous measurement, which is removed before any paint.
         const railOwn = part === '#right-context-rail' && decl.prop === 'max-height';
         const railFocus = part === '#right-context-rail.layout-focus';
-        if (!railOwn && !railFocus) complaints.push(`${decl.prop}: ${decl.value} on "${part}"`);
+        if (!railOwn && !railFocus && !railMeasurement) complaints.push(`${decl.prop}: ${decl.value} on "${part}"`);
       }
       if (decl.prop === 'transform' && /translateY|translate3d|matrix|scale\(/.test(decl.value)) {
         const identity = decl.value === 'translateY(0) scale(1)';
@@ -496,19 +485,27 @@ test('the inputs behind the measured constants are unchanged', () => {
 
 test('the full-width rail cannot inherit a height that overrides its floor', () => {
   // `#right-context-rail.layout-focus { height: … }` is a base rule with more
-  // specificity than the <=1024px floor, and height + top + bottom is
+  // specificity than the <=720px floor, and height + top + bottom is
   // over-constrained. It is safe only because the rail's layout pass switches
   // to a mobile mode at the SAME breakpoint and removes both the class and the
   // custom property. Pin that, or the exemption above is unearned.
   const rail = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'rightPanelRail.js'), 'utf8');
-  const gate = rail.indexOf("windowRef.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY)");
-  assert.ok(
-    gate > 0,
-    'the rail layout pass no longer keys off MOBILE_LAYOUT_MEDIA_QUERY',
-  );
+  const gate = rail.indexOf("windowRef.matchMedia('(max-width: 720px)')");
+  assert.ok(gate > 0, 'the rail layout pass no longer keys off (max-width: 720px)');
   const mobileBranch = rail.slice(gate, rail.indexOf("layoutMode = 'mobile'", gate) + 40);
   assert.match(mobileBranch, /stack\.classList\.remove\('layout-focus'\)/);
   assert.match(mobileBranch, /stack\.style\.removeProperty\('--right-stack-max-height'\)/);
+});
+
+test('right rail measurement cannot persist into a painted attribution layout', () => {
+  const rail = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'rightPanelRail.js'), 'utf8');
+  const start = rail.indexOf("stack.setAttribute('data-rail-measuring', '')");
+  const end = rail.indexOf("stack.removeAttribute('data-rail-measuring')", start);
+  assert.ok(start > rail.indexOf("layoutMode = 'mobile'"));
+  assert.ok(end > start);
+  const measurement = rail.slice(start, end);
+  assert.match(measurement, /try \{[\s\S]*\} finally \{/);
+  assert.doesNotMatch(measurement, /\b(?:await|return|yield)\b|requestAnimationFrame|setTimeout/);
 });
 
 // ── Clearance ───────────────────────────────────────────────────────────────
@@ -517,7 +514,7 @@ test('every open dock tray clears the required credit at every modelled viewport
   // Below 900px the tray widens to nearly the viewport and lands on the
   // bottom-left corner where the credit lives. The clearance is NOT one fixed
   // number: the dock is anchored at 2vh down to 721px and re-anchors to a flat
-  // 8px at 1024px, while the credit keeps its 2vh base throughout.
+  // 8px at 720px, while the credit keeps its 2vh base throughout.
   const failures = [];
   for (const scenario of TRAY_SCENARIOS) {
     for (const width of WIDTHS.filter((w) => w <= 900)) {
@@ -536,7 +533,7 @@ test('a pinned tray still stacks above its sibling at narrow widths', () => {
   // The stock two-pinned selector carries one ID against five classes, so the
   // ordinary narrow rule (two IDs) outranks it and the upper tray silently
   // drops var(--dock-lower-pinned-height), landing on top of the lower one.
-  for (const width of [1440, 1100, 1024, 900, 883, 700, 600]) {
+  for (const width of [1440, 900, 800, 720, 700, 600]) {
     for (const scenario of TRAY_SCENARIOS) {
       if (!scenario.stackVar) continue;
       const resolved = resolve(scenario.offset, 'bottom', width, scenario.name);
@@ -557,14 +554,10 @@ test('the full-width context rail clears the required credit at every modelled v
     }
   }
   assert.equal(anchors.length, 1, 'the rail has exactly one bottom anchor to reason about');
-  assert.equal(
-    parseMediaCondition(anchors[0].rule.media[0]),
-    MOBILE_LAYOUT_MAX_WIDTH,
-    'the rail only goes full-width below the mobile-layout breakpoint',
-  );
+  assert.equal(parseMediaCondition(anchors[0].rule.media[0]), 720, 'the rail only goes full-width below 720px');
 
   const failures = [];
-  for (const width of WIDTHS.filter((w) => w <= MOBILE_LAYOUT_MAX_WIDTH)) {
+  for (const width of WIDTHS.filter((w) => w <= 720)) {
     // `bottom` only governs the floor while the box is not height-capped:
     // top + bottom + a resolved height is over-constrained and drops `bottom`.
     assert.equal(
@@ -581,16 +574,13 @@ test('the full-width context rail clears the required credit at every modelled v
   assert.deepEqual(failures, [], `context rail re-enters the credit band at ${failures.join(', ')}`);
 });
 
-test('the dock anchor changes at 1024px and keeps an explicit credit offset', () => {
-  assert.equal(resolve(['#command-dock'], 'bottom', 1100, 'dock').decl.value, '2vh');
+test('the dock anchor changes at 720px — the 2vh cancellation is band-limited', () => {
+  assert.equal(resolve(['#command-dock'], 'bottom', 800, 'dock').decl.value, '2vh');
+  assert.equal(resolve(['#command-dock'], 'bottom', 720, 'dock').decl.value, '8px');
   assert.equal(
-    resolve(['#command-dock'], 'bottom', MOBILE_LAYOUT_MAX_WIDTH, 'dock').decl.value,
-    '8px',
-  );
-  assert.equal(
-    resolve(CREDIT_SELECTORS, 'bottom', MOBILE_LAYOUT_MAX_WIDTH, 'credit').decl.value,
-    '0.75rem',
-    'the credit remains explicitly offset at the mobile-layout breakpoint',
+    resolve(CREDIT_SELECTORS, 'bottom', 720, 'credit').decl.value,
+    'calc(2vh + 5rem)',
+    'the credit keeps its 2vh base below 720px — that asymmetry is the whole hazard',
   );
 });
 
@@ -623,4 +613,10 @@ test('the credit line is never suppressed to make room', () => {
     assert.doesNotMatch(block, /opacity\s*:\s*0(\D|$)/, 'the credit must never be faded out');
   }
   assert.match(css, /body\.ui-clean-view #cesium-credits,\s*\n\s*body\.recording-mode #cesium-credits \{[^}]*bottom: 36px;/);
+});
+
+
+test('OSM-derived layers never force the desktop credit row into a stack', () => {
+  assert.doesNotMatch(css, /body:has\([^)]*alpr-cameras[^}]*#cesium-credits/);
+  assert.doesNotMatch(css, /#cesium-credits\s+\.cesium-credit-expand-link\s*\{[^}]*display:\s*block/);
 });

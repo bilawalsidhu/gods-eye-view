@@ -141,7 +141,7 @@ test('Pinokio menu resolves the nested install marker and exposes each lifecycle
     running: 'start.js',
     url: 'http://127.0.0.1:4173/',
   }), [
-    { text: 'Open SAUGOPS', href: 'http://127.0.0.1:4173/', default: true },
+    { text: "Open God's Eye View", href: 'http://127.0.0.1:4173/', default: true },
     { text: 'Server', href: 'start.js', default: false },
   ]);
   assert.ok(existsCalls.length >= 7);

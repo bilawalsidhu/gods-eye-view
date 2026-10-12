@@ -37,6 +37,7 @@ export function createTesting({
     state.feed.loaded = options.loaded === true;
     state.feed.loading = options.loading === true;
     state.feed.stale = options.stale === true;
+    state.feed.partial = options.partial === true;
     state.feed.error = options.error || null;
     state.feed.lastUpdate = options.lastUpdate ?? null;
     state.records.all = records;

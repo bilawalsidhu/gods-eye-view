@@ -31,7 +31,6 @@ export class ContextControls {
     this.listeners = new AbortController();
     this.destroyed = false;
     this._dataManager = null;
-    this._contextSection = 'contacts';
     this._contextMode = null;
     this._contextModeChanging = false;
     this._contextModeGeneration = 0;
@@ -135,17 +134,5 @@ export class ContextControls {
   }
   clearSelectedLayers(...args) {
     return clearSelectedLayers.call(this, ...args);
-  }
-  setContextSection(section) {
-    if (this.destroyed) return;
-    const next = section === 'cameras' ? 'cameras' : 'contacts';
-    if (this._contextSection === next) return;
-    this._contextSection = next;
-    this._syncContextModeButtons();
-  }
-  revealCameras(options = {}) {
-    if (this.destroyed) return;
-    this.setContextSection('cameras');
-    this.actions.setPanelCollapsed('global-context-panel', false, options);
   }
 }

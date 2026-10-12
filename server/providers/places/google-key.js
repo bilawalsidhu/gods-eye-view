@@ -24,10 +24,3 @@ export function keylessGooglePlacesResponse(apiKey) {
 export function googleServerApiKey() {
   return resolveGoogleServerKey(process.env);
 }
-
-export function googleServerKeyMode(environment = process.env) {
-  const server = String(environment?.GOOGLE_MAPS_SERVER_API_KEY || '').trim();
-  if (server) return 'server-key';
-  const browser = String(environment?.GOOGLE_MAPS_API_KEY || '').trim();
-  return browser ? 'browser-key-fallback' : 'unconfigured';
-}

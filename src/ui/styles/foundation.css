@@ -1,32 +1,23 @@
 /* ═══════════════════════════════════════════════
-   SAUGOPS — Operational UI Foundation
+   GOD'S EYE VIEW — Dark Sci-Fi UI
+   Apple meets Blade Runner
    ═══════════════════════════════════════════════ */
 
 :root {
-  --bg-dark: #0a0f1a;
+  --bg-dark: #0a0a0f;
   --glass-bg: rgba(12, 12, 20, 0.72);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-border-hover: rgba(255, 255, 255, 0.15);
-  --accent: #22d3ee;
-  --accent-strong: #3b82f6;
-  --accent-dim: rgba(34, 211, 238, 0.16);
-  --accent-glow: rgba(59, 130, 246, 0.36);
-  --brand-midnight: #0a0f1a;
-  --brand-graphite: #1f2937;
-  --brand-steel: #485563;
-  --brand-ice: #e5e7eb;
+  --accent: #00d4ff;
+  --accent-dim: rgba(0, 212, 255, 0.15);
+  --accent-glow: rgba(0, 212, 255, 0.4);
   --text-primary: #e8eaed;
   --text-secondary: rgba(232, 234, 237, 0.5);
   --text-dim: rgba(232, 234, 237, 0.3);
-  --font-mono:
-    'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    sans-serif;
-  --font-sans:
-    'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    sans-serif;
-  --font-brand:
-    'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    sans-serif;
+  /* Opaque surface for browser-painted menus, which cannot use --glass-bg. */
+  --menu-bg: #12121c;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --panel-radius: 16px;
   --btn-radius: 10px;
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -78,6 +69,26 @@
 ):focus-visible {
   outline: 2px solid var(--text-primary) !important;
   outline-offset: 2px;
+}
+
+/* Native `<select>` popups are painted by the browser, not by this sheet: the
+   closed control inherits its panel skin, but the option list falls back to the
+   platform's light palette unless the control declares a scheme. Declare it on
+   the controls rather than on :root so the app keeps its own hand-tuned
+   scrollbar and input skins, and set the option colors explicitly because the
+   popup surface is not themed on every platform. */
+select {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  background-color: var(--menu-bg);
+  color: var(--text-primary);
+}
+
+select option:disabled {
+  color: var(--text-dim);
 }
 
 html,
@@ -310,25 +321,6 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   color: rgba(232, 234, 237, 0.7);
 }
 
-/* Keep the ALPR source overflow reachable even after its brief on-map credit
-   collapses. Wrap whole entries only while the optional layer is on. */
-body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
-  #cesium-credits {
-  white-space: normal;
-}
-body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
-  #cesium-credits
-  .cesium-credit-wrapper {
-  display: inline-block !important;
-  white-space: nowrap;
-}
-body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
-  #cesium-credits
-  .cesium-credit-expand-link {
-  /* Keep the complete link at the left edge, clear of the Power Up button. */
-  display: block !important;
-}
-
 /* Cesium's stock attribution lightbox grows with every registered data source.
    Keep the title and close affordance fixed while the complete, unabridged
    credit list wraps and scrolls inside a compact panel. */
@@ -501,77 +493,41 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   position: fixed;
   top: 32px;
   left: 36px;
-  width: min(calc(100vw - 72px), 780px);
   z-index: 100;
   pointer-events: none;
   user-select: none;
-}
-
-#title-bar .title-bar-shell {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid rgba(123, 189, 211, 0.2);
-  border-radius: 22px;
-  background: linear-gradient(
-    180deg,
-    rgba(31, 41, 55, 0.82),
-    rgba(10, 15, 26, 0.72)
-  );
-  box-shadow:
-    0 14px 36px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(22px) saturate(1.15);
-  -webkit-backdrop-filter: blur(22px) saturate(1.15);
-  overflow: hidden;
-  pointer-events: auto;
-}
-
-#title-bar [data-brand-surface='compact'] {
-  min-width: 0;
-  flex: 1 1 auto;
 }
 
 #title-bar .title-glow {
   position: absolute;
   top: -20px;
   left: -20px;
-  width: 220px;
+  width: 200px;
   height: 80px;
   background: radial-gradient(ellipse, var(--accent-dim) 0%, transparent 70%);
   filter: blur(20px);
-  opacity: 0.72;
+  opacity: 0.6;
 }
 
-#title-bar .brand-heading {
-  font-family: var(--font-brand);
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: 0.36em;
-  color: var(--text-primary);
-  text-shadow: 0 0 24px var(--accent-glow);
-  position: relative;
-  text-transform: uppercase;
-}
-
-#title-bar .brand-lockup-compact {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+#title-bar h1 {
+  display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 8px;
+  color: var(--text-primary);
+  text-shadow: 0 0 30px var(--accent-glow);
+  position: relative;
 }
 
 #title-bar .title-logo {
   position: relative;
   display: block;
   width: 52px;
-  height: 52px;
-  filter: drop-shadow(0 0 12px rgba(34, 211, 238, 0.38));
+  height: auto;
+  filter: drop-shadow(0 0 12px rgba(0, 246, 255, 0.5));
 }
 
 #title-bar .title-logo::before,
@@ -584,7 +540,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   top: -9px;
   width: 13px;
   height: 7px;
-  border: 1px solid rgba(34, 211, 238, 0.7);
+  border: 1px solid var(--accent);
   border-bottom: 0;
   border-radius: 999px 999px 0 0;
   opacity: 0;
@@ -630,6 +586,7 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
 }
 
 .brand-logo {
+  aspect-ratio: 775 / 520;
   overflow: visible;
   pointer-events: none;
 }
@@ -641,98 +598,19 @@ body:has(.data-toggle-row[data-layer-id='alpr-cameras'] .data-toggle-btn.active)
   height: 100%;
 }
 
-.brand-lockup {
-  display: grid;
-  justify-items: center;
-  gap: 0.85rem;
-}
-
-.brand-lockup-compact {
-  justify-items: stretch;
-  gap: 0.65rem;
-}
-
-.brand-mark {
-  display: block;
-}
-
-.brand-copy {
-  display: grid;
-  gap: 0.16rem;
-  min-width: 0;
-}
-
-.brand-wordmark {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0;
-  font-family: var(--font-brand);
-  font-weight: 700;
-  line-height: 0.95;
-  text-transform: uppercase;
-}
-
-.brand-wordmark-saug {
-  color: var(--brand-ice);
-}
-
-.brand-wordmark-ops {
+#title-bar .title-accent,
+.loader-content .title-accent {
   color: var(--accent);
-}
-
-.brand-wordmark-compact {
-  font-size: 0.96em;
-  letter-spacing: 0.28em;
-  white-space: nowrap;
-}
-
-.brand-wordmark-stacked {
-  font-size: clamp(2rem, 4vw, 3.1rem);
-  letter-spacing: 0.34em;
-}
-
-.brand-subhead {
-  font-family: var(--font-brand);
-  font-size: 0.78rem;
-  font-weight: 500;
-  letter-spacing: 0.42em;
-  color: rgba(229, 231, 235, 0.84);
-  text-transform: uppercase;
-}
-
-.brand-byline {
-  font-family: var(--font-brand);
-  font-size: 0.84rem;
-  font-weight: 500;
-  letter-spacing: 0.18em;
-  color: rgba(229, 231, 235, 0.6);
-}
-
-.brand-subhead-compact {
-  font-size: 0.5rem;
-  letter-spacing: 0.3em;
-  line-height: 1.1;
-  white-space: nowrap;
-}
-
-.brand-byline-compact {
-  font-size: 0.45rem;
-  letter-spacing: 0.22em;
-  line-height: 1.1;
-  white-space: nowrap;
-}
-
-.brand-byline strong {
-  color: rgba(229, 231, 235, 0.88);
-  font-weight: 500;
-}
-
-#title-bar .brand-wordmark {
-  text-shadow: 0 0 18px rgba(10, 15, 26, 0.4);
+  font-weight: 300;
 }
 
 #title-bar .subtitle {
-  display: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 5px;
+  color: var(--text-dim);
+  margin-top: 8px;
+  text-transform: uppercase;
 }
 
 #title-bar .frame-rate-readout {

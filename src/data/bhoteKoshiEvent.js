@@ -22,6 +22,8 @@ import {
   createBhoteKoshiEmbeddedMedia,
   resolveEmbeddedMediaSource,
 } from './bhoteKoshiEmbeddedMedia.js';
+import { acquireImageryComparison } from '../maps/imageryComparison.js';
+import { createImagerySplit } from '../ui/imagerySplit.js';
 
 export const BHOTE_KOSHI_LAYER_ID = 'bhote-koshi-2026';
 export const BHOTE_KOSHI_OVERLAY_SOURCE_ID = 'bhote-koshi-witnesses';
@@ -964,10 +966,7 @@ export function createBhoteKoshiEventLayer({
   let _enabled = false;
   let _panel = null;
   let _panelRefs = null;
-  let _splitLine = null;
-  let _splitHandle = null;
-  let _splitDragging = false;
-  let _splitPointerId = null;
+  let _splitControl = null;
   let _beforeLayer = null;
   let _afterLayer = null;
   let _imageryLayerCollection = null;
@@ -1000,6 +999,8 @@ export function createBhoteKoshiEventLayer({
   let _sceneMediaPlaybackBeatId = null;
   let _sceneMediaPlaybackCompletedBeatId = null;
   let _sceneMediaPlaybackTimer = null;
+  let _sceneMediaOwner = null;
+  let _removeSceneMediaAbort = null;
   let _witnessEmbedActive = false;
   let _sceneRevealAnimationFrame = null;
   let _sceneRevealHoldActive = false;
@@ -1020,14 +1021,11 @@ export function createBhoteKoshiEventLayer({
   let _playStartedAt = 0;
   let _playStartProgress = 0;
   let _animationFrame = null;
-  let _previousMapStack = null;
-  let _eventMapGeneration = null;
-  let _previousSplitPosition = null;
+  let _comparisonLease = null;
   let _introTimer = null;
   let _introGeneration = 0;
   let _lastSurgePosition = null;
   let _lastSurgeVisible = null;
-  let _lastSplitCssValue = null;
   let _presentation = 'standalone';
   let _sceneBeatId = null;
   let _sceneBeatReveal = 0.36;
@@ -1261,8 +1259,41 @@ export function createBhoteKoshiEventLayer({
     return true;
   }
 
+  // Playback authority is supplied by the Director, never restored from params.
+  function setSceneMediaPlayback(owner = null) {
+    _removeSceneMediaAbort?.();
+    _removeSceneMediaAbort = null;
+    _sceneMediaOwner = owner;
+    stopSceneMediaPlayback();
+    releaseEvidenceVideo({ restorePoster: false });
+    _embeddedMedia?.hide?.({ immediate: true });
+    _embeddedEvidenceIndex = -1;
+    _sceneMediaPlaybackCompletedBeatId = null;
+    if (owner?.token?.signal) {
+      const signal = owner.token.signal;
+      const cancel = () => setSceneMediaPlayback();
+      if (signal.aborted) cancel();
+      else {
+        signal.addEventListener('abort', cancel, { once: true });
+        _removeSceneMediaAbort = () =>
+          signal.removeEventListener('abort', cancel);
+      }
+    }
+  }
+
+  function sceneMediaPlaybackActive() {
+    return (
+      _sceneMediaOwner != null &&
+      !_sceneMediaOwner.token.cancelled &&
+      !_sceneMediaOwner.token.signal?.aborted &&
+      _sceneMediaOwner.sceneId === _sceneContext?.sceneId &&
+      _sceneMediaOwner.shotId === _sceneContext?.shotId
+    );
+  }
+
   function sceneEvidenceMediaAutoplays() {
     return (
+      sceneMediaPlaybackActive() &&
       _presentation === BHOTE_KOSHI_SCENE_PRESENTATION &&
       _sceneSurface === BHOTE_KOSHI_SCENE_EVIDENCE_BEAT &&
       _sceneControls.evidenceMediaAutoplay === true &&
@@ -1333,7 +1364,7 @@ export function createBhoteKoshiEventLayer({
     stopSceneMediaPlayback({ pauseMedia: false });
     _sceneMediaPlaybackBeatId = beatId;
     _embeddedMedia?.play?.();
-    if (sceneUsesTrimmedMedia(beatId)) {
+    if (sceneUsesTrimmedMedia(beatId) && _embeddedEvidenceIndex === index) {
       const deadline = Date.now() + 18000;
       const check = () => {
         if (
@@ -1414,6 +1445,14 @@ export function createBhoteKoshiEventLayer({
       !sceneEvidenceMediaAutoplays() ||
       !sceneUsesTrimmedMedia(beatId)
     )
+      return null;
+    const media = _evidenceTimeline.find(
+      (item) => item.observation?.id === beatId,
+    )?.observation?.media;
+    // Deliberate provider suppression is a source card, not a player waiting
+    // to load. Returning no gate selects the Director's authored card dwell.
+    // A local clip still owns playback; a starting supported provider still waits.
+    if (_embeddedMedia?.supportsPlayback === false && !media?.videoPath)
       return null;
     return {
       pending:
@@ -2103,6 +2142,7 @@ export function createBhoteKoshiEventLayer({
       releaseEvidenceVideo();
       _embeddedEvidenceIndex = -1;
       const warmingEvidence =
+        sceneMediaPlaybackActive() &&
         _presentation === BHOTE_KOSHI_SCENE_PRESENTATION &&
         _sceneSurface === BHOTE_KOSHI_SCENE_EVIDENCE_BEAT;
       // Keep the same preload across camera frames; stop/disable still cancels it.
@@ -2512,79 +2552,20 @@ export function createBhoteKoshiEventLayer({
     createFloodDataSource();
   }
 
-  function ensureSplitLine(event) {
-    _splitLine = document.createElement('div');
-    _splitLine.id = 'bhote-koshi-split-line';
-    const beforeLabel = document.createElement('span');
-    const afterLabel = document.createElement('span');
-    const splitHandle = document.createElement('button');
-    beforeLabel.className = 'before';
-    afterLabel.className = 'after';
-    beforeLabel.textContent = 'A';
-    beforeLabel.title = event.imagery.before.label;
-    afterLabel.textContent = 'B';
-    afterLabel.title = event.imagery.after.label;
-    splitHandle.type = 'button';
-    splitHandle.className = 'bhote-koshi-split-handle';
-    splitHandle.setAttribute('role', 'slider');
-    splitHandle.setAttribute(
-      'aria-label',
-      'Historical reference and post-event image divider',
-    );
-    splitHandle.setAttribute('aria-valuemin', '0');
-    splitHandle.setAttribute('aria-valuemax', '100');
-    splitHandle.setAttribute('aria-orientation', 'horizontal');
-    splitHandle.textContent = '↔';
-    splitHandle.addEventListener('pointerdown', handleSplitPointerDown);
-    splitHandle.addEventListener('pointermove', handleSplitPointerMove);
-    splitHandle.addEventListener('pointerup', finishSplitPointerDrag);
-    splitHandle.addEventListener('pointercancel', finishSplitPointerDrag);
-    splitHandle.addEventListener('keydown', handleSplitKeyDown);
-    _splitHandle = splitHandle;
-    _splitLine.append(beforeLabel, splitHandle, afterLabel);
-    document.body.appendChild(_splitLine);
-  }
-
-  function setSplitFromClientX(clientX) {
-    const viewportWidth =
-      Number(document.documentElement?.clientWidth) ||
-      Number(window.innerWidth) ||
-      0;
-    if (viewportWidth <= 0 || !Number.isFinite(Number(clientX))) return;
-    setSplit(Number(clientX) / viewportWidth);
-  }
-
-  function handleSplitPointerDown(event) {
-    if (event.button != null && event.button !== 0) return;
-    event.preventDefault?.();
-    _splitDragging = true;
-    _splitPointerId = event.pointerId ?? null;
-    _splitHandle?.setPointerCapture?.(event.pointerId);
-    setSplitFromClientX(event.clientX);
-  }
-
-  function handleSplitPointerMove(event) {
-    if (!_splitDragging) return;
-    if (_splitPointerId != null && event.pointerId !== _splitPointerId) return;
-    event.preventDefault?.();
-    setSplitFromClientX(event.clientX);
-  }
-
-  function finishSplitPointerDrag(event) {
-    if (!_splitDragging) return;
-    if (_splitPointerId != null && event.pointerId !== _splitPointerId) return;
-    _splitHandle?.releasePointerCapture?.(event.pointerId);
-    _splitDragging = false;
-    _splitPointerId = null;
-  }
-
-  function handleSplitKeyDown(event) {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-    event.preventDefault?.();
-    const step = event.shiftKey ? 0.05 : 0.01;
-    if (event.key === 'Home') setSplit(0);
-    else if (event.key === 'End') setSplit(1);
-    else setSplit(_split + (event.key === 'ArrowRight' ? step : -step));
+  function createSplitControl(event) {
+    _splitControl = createImagerySplit({
+      scene: _viewer.scene,
+      initialValue: _split,
+      id: 'bhote-koshi-split-line',
+      handleClass: 'bhote-koshi-split-handle',
+      cssProperty: '--bhote-koshi-split',
+      beforeTitle: event.imagery.before.label,
+      afterTitle: event.imagery.after.label,
+      ariaLabel: 'Historical reference and post-event image divider',
+      formatValueText: (beforePercent, afterPercent) =>
+        `A historical reference ${beforePercent} percent, B post-event ${afterPercent} percent`,
+      onChange: setSplit,
+    });
   }
 
   function applyCinematicCamera() {
@@ -3167,7 +3148,7 @@ export function createBhoteKoshiEventLayer({
       _panelRefs.observedStatus.hidden = !imageryAvailable;
     if (_panelRefs?.progressInput)
       _panelRefs.progressInput.hidden = !scrubberAvailable;
-    if (_splitLine) _splitLine.hidden = !imageryAvailable;
+    _splitControl?.setVisible(imageryAvailable);
     if (_beforeLayer) _beforeLayer.show = imageryAvailable;
     if (_afterLayer) _afterLayer.show = imageryAvailable;
     if (_panelRefs?.caveat) {
@@ -3284,24 +3265,7 @@ export function createBhoteKoshiEventLayer({
 
   function setSplit(split) {
     _split = clampUnit(split);
-    if (_viewer && _viewer.scene.splitPosition !== _split)
-      _viewer.scene.splitPosition = _split;
-    const cssValue = `${_split * 100}%`;
-    if (_lastSplitCssValue !== cssValue) {
-      document.documentElement.style.setProperty(
-        '--bhote-koshi-split',
-        cssValue,
-      );
-      _lastSplitCssValue = cssValue;
-    }
-    if (_splitHandle) {
-      const beforePercent = Math.round(_split * 100);
-      _splitHandle.setAttribute('aria-valuenow', String(beforePercent));
-      _splitHandle.setAttribute(
-        'aria-valuetext',
-        `A historical reference ${beforePercent} percent, B post-event ${100 - beforePercent} percent`,
-      );
-    }
+    _splitControl?.setValue(_split);
     syncPanel();
     renderHost.request('bhote-koshi-split');
   }
@@ -3384,7 +3348,6 @@ export function createBhoteKoshiEventLayer({
   async function enable(viewer, { origin = 'local-restore', signal } = {}) {
     _viewer = viewer;
     _enabled = true;
-    _previousSplitPosition = viewer.scene.splitPosition;
     // Public lifecycle passes signal, not intent origin, to enable. Its atomic
     // restore has already applied the scene parameters; those own presentation.
     // A missing origin is passive, never authority to focus or start playback.
@@ -3393,24 +3356,20 @@ export function createBhoteKoshiEventLayer({
       const event = await loadEvent();
       throwIfEnableCancelled(signal, _enabled);
       registerDynamicCredit(viewer, BHOTE_KOSHI_CREDIT);
-      _previousMapStack = _mapStackController?.getActiveId?.() || null;
-      if (
-        !sceneDirected &&
-        _mapStackController &&
-        _previousMapStack !== 'esri-imagery'
-      ) {
-        await _mapStackController.setStack('esri-imagery');
+      if (_mapStackController) {
+        _comparisonLease = acquireImageryComparison(_mapStackController, {
+          owner: BHOTE_KOSHI_LAYER_ID,
+          switchPolicy: sceneDirected ? 'preserve' : 'esri',
+        });
+        await _comparisonLease.ready;
       }
-      _eventMapGeneration = sceneDirected
-        ? null
-        : (_mapStackController?.getSwitchGeneration?.() ?? null);
       throwIfEnableCancelled(signal, _enabled);
       await createImagery(event);
       throwIfEnableCancelled(signal, _enabled);
       await syncTerrainComparison();
       throwIfEnableCancelled(signal, _enabled);
       createFloodDataSource();
-      ensureSplitLine(event);
+      createSplitControl(event);
       const panelView = createPanel(event, {
         close: () =>
           _dataManager?.setEnabled(BHOTE_KOSHI_LAYER_ID, false, {
@@ -3476,6 +3435,7 @@ export function createBhoteKoshiEventLayer({
   }
 
   async function disable() {
+    setSceneMediaPlayback();
     _enabled = false;
     ++_comparisonSurfaceGeneration;
     _mapStackController?.clearTerrainComparison?.();
@@ -3528,17 +3488,8 @@ export function createBhoteKoshiEventLayer({
       ?.classList.remove('bhote-event-active');
     _panel = null;
     _panelRefs = null;
-    _splitDragging = false;
-    _splitPointerId = null;
-    _splitLine?.remove();
-    _splitLine = null;
-    _splitHandle = null;
-    document.documentElement.style.removeProperty('--bhote-koshi-split');
-    _lastSplitCssValue = null;
-    if (_viewer?.scene && _previousSplitPosition != null) {
-      _viewer.scene.splitPosition = _previousSplitPosition;
-    }
-    _previousSplitPosition = null;
+    _splitControl?.destroy();
+    _splitControl = null;
     _progress = 0;
     _split = 0.5;
     _presentation = 'standalone';
@@ -3556,20 +3507,10 @@ export function createBhoteKoshiEventLayer({
       cancel?.(_sceneSeekFrame);
       _sceneSeekFrame = null;
     }
-    const previousMapStack = _previousMapStack;
-    const eventMapGeneration = _eventMapGeneration;
-    _previousMapStack = null;
-    _eventMapGeneration = null;
+    const comparisonLease = _comparisonLease;
+    _comparisonLease = null;
     try {
-      if (
-        _mapStackController &&
-        previousMapStack &&
-        previousMapStack !== 'esri-imagery' &&
-        _mapStackController.getActiveId?.() === 'esri-imagery' &&
-        _mapStackController.getSwitchGeneration?.() === eventMapGeneration
-      ) {
-        await _mapStackController.setStack(previousMapStack);
-      }
+      await comparisonLease?.release();
     } finally {
       renderHost.request('bhote-koshi-disable');
     }
@@ -3770,6 +3711,7 @@ export function createBhoteKoshiEventLayer({
     setParams,
     getParams,
     getSceneShotMediaHold,
+    setSceneMediaPlayback,
     getStats() {
       return {
         count: _enabled ? 1 : 0,

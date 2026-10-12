@@ -1,22 +1,24 @@
-/* ── Header Globe Actions ───────────────────── */
+/* ── Top-center Globe Actions ────────────────── */
 #top-center-actions {
+  position: fixed;
+  top: 32px;
+  left: 50%;
+  z-index: 100;
   display: flex;
-  flex: 0 0 auto;
-  align-items: center;
   gap: 8px;
-  margin-left: auto;
+  transform: translateX(-50%);
 }
 
 #top-center-actions button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   padding: 0;
-  background: rgba(10, 15, 26, 0.92);
-  border: 1px solid rgba(123, 189, 211, 0.22);
-  border-radius: 14px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
   color: var(--text-secondary);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -32,13 +34,13 @@
 
 #top-center-actions button:hover,
 #top-center-actions button:focus-visible {
-  border-color: rgba(123, 189, 211, 0.42);
-  background: rgba(31, 41, 55, 0.96);
-  transform: translateY(-1px);
+  border-color: var(--glass-border-hover);
+  background: rgba(255, 255, 255, 0.06);
+  transform: scale(1.1);
 }
 
 #top-center-actions button:active {
-  transform: translateY(-1px) scale(0.96);
+  transform: scale(0.95);
 }
 
 #top-center-actions button:disabled {

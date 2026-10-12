@@ -37,50 +37,93 @@ export function createSubject({ state: layerState, services, parts, source }) {
     const militaryState = sourceStates.military;
     const vesselsState = sourceStates['ais-live-vessels'];
     const installationsState = sourceStates['military-installations'];
+    const evaluatedAt = Date.now();
+    const retainedProvenance = (id, label, sourceState, fallbackSource) => {
+      const retainedSource = sourceState.stats.source || fallbackSource;
+      return {
+        id,
+        name: label,
+        enabled: sourceState.enabled,
+        source: retainedSource,
+        stats: { ...sourceState.stats, source: retainedSource },
+      };
+    };
     // Same engine the voice analyst calls — see collectAircraftProximityWindow.
-    const { flights, military } = parts.queries.collectAircraftProximityWindow(
+    const aircraftWindow = parts.queries.collectAircraftProximityWindow(
       position,
       { subject },
     );
+    const { flights, military, completeByLayer } = aircraftWindow;
     const vessels = aisLiveVesselsLayer
       .getNearby(position, AWARENESS_RADIUS_M, AWARENESS_QUERY_LIMIT)
       .filter(
         (item) =>
           !parts.queries.isSame(subject, item, 'ais-live-vessels', 'mmsi'),
       );
+    const coverage = installationsState.stats?.coverage;
+    const installationRadius =
+      coverage?.kind === 'subject' && Number.isFinite(coverage.radiusM)
+        ? coverage.radiusM
+        : AWARENESS_RADIUS_M;
     const installations = militaryInstallationsLayer
-      .getNearby(position, AWARENESS_RADIUS_M, AWARENESS_QUERY_LIMIT)
+      .getNearby(position, installationRadius, AWARENESS_QUERY_LIMIT)
       .filter(
         (item) =>
           !parts.queries.isSame(subject, item, 'military-installations', 'id'),
       );
     return {
       subject,
-      evaluatedAt: Date.now(),
+      evaluatedAt,
       radiusM: AWARENESS_RADIUS_M,
       cohorts: [
         {
           id: 'flights',
           label: 'Flights',
           source: flightsState.stats.source || SOURCE_LABEL.flights,
+          provenance: retainedProvenance(
+            'flights',
+            'Flights',
+            flightsState,
+            SOURCE_LABEL.flights,
+          ),
           summary: parts.navigation.summarizeAwarenessCohortForNavigation(
             flights,
             flightsState,
+            {
+              navigationLimit: AWARENESS_QUERY_LIMIT,
+              complete: completeByLayer.flights,
+            },
           ),
         },
         {
           id: 'military',
           label: 'Military flights',
           source: militaryState.stats.source || SOURCE_LABEL.military,
+          provenance: retainedProvenance(
+            'military',
+            'Military flights',
+            militaryState,
+            SOURCE_LABEL.military,
+          ),
           summary: parts.navigation.summarizeAwarenessCohortForNavigation(
             military,
             militaryState,
+            {
+              navigationLimit: AWARENESS_QUERY_LIMIT,
+              complete: completeByLayer.military,
+            },
           ),
         },
         {
           id: 'ais-live-vessels',
           label: 'AIS vessels',
           source: vesselsState.stats.source || SOURCE_LABEL['ais-live-vessels'],
+          provenance: retainedProvenance(
+            'ais-live-vessels',
+            'AIS vessels',
+            vesselsState,
+            SOURCE_LABEL['ais-live-vessels'],
+          ),
           summary: parts.navigation.summarizeAwarenessCohortForNavigation(
             vessels,
             vesselsState,
@@ -92,7 +135,14 @@ export function createSubject({ state: layerState, services, parts, source }) {
           source:
             installationsState.stats.source ||
             SOURCE_LABEL['military-installations'],
-          coverage: 'CURRENT VIEWPORT ONLY',
+          provenance: retainedProvenance(
+            'military-installations',
+            'Mapped installations',
+            installationsState,
+            SOURCE_LABEL['military-installations'],
+          ),
+          coverage:
+            installationsState.stats.coverageLabel || 'CURRENT VIEWPORT ONLY',
           summary: parts.queries.summarizeInstallationViewport(
             installations,
             installationsState,
@@ -326,6 +376,11 @@ export function createSubject({ state: layerState, services, parts, source }) {
     });
     if (!resolved) return;
     const { position, presence } = resolved;
+    // Mapped installations load around the subject, not the (follow/Cockpit)
+    // camera view. The installation layer moves its window only after the
+    // subject travels far enough, so this per-refresh call is cheap.
+    if (!layerState.passive)
+      militaryInstallationsLayer.setContextAnchor?.(position);
     // UNCHECKED leaves the verdict alone: this tick simply did not look.
     if (presence === SUBJECT_PRESENCE.LIVE) layerState.subjectMissing = false;
     else if (presence === SUBJECT_PRESENCE.MISSING)
@@ -392,6 +447,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
       layerId: record.layerId,
       id: record.properties?.mmsi || record.id,
       label: record.label || record.id,
+      memberNames: record.properties?.memberNames || [],
       position: Cesium.Cartesian3.fromDegrees(longitude, latitude, 0),
     };
   }
@@ -411,6 +467,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
   }
 
   function clearAwarenessSubject() {
+    militaryInstallationsLayer.setContextAnchor?.(null);
     layerState.autoFocusRetryPending = false;
     layerState.subject = null;
     layerState.subjectMissing = false;

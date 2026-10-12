@@ -17,9 +17,9 @@
  * `fetch` shim in the page that intercepts the poll endpoints and returns
  * SYNTHETIC aircraft positioned near the camera, in the EXACT upstream payload
  * shapes the layers parse:
- *   - flights  → GET /api/opensky      → { states: [ <state-vector[]> ] }
- *   - military → GET /api/adsblol/mil  → { ac: [ <adsblol-aircraft{}> ] }
- *   - vessels  → GET /api/ais-live     → connected, zero-row snapshot
+ *   - flights  → GET /api/flights      → { states: [ <state-vector[]> ] }
+ *   - military → GET /api/military  → { ac: [ <adsblol-aircraft{}> ] }
+ *   - vessels  → GET /api/vessels     → connected, zero-row snapshot
  * The shim stays installed so the layers' setInterval pollers keep the
  * synthetic planes alive (under MISSING_POLL_LIMIT=3 so they're never pruned).
  *
@@ -88,6 +88,7 @@
  *   --source-base <path>  Browser module prefix (default /src)
  *   --url <url>        App URL (default http://localhost:4173)
  *   --headful          Show the browser (debugging)
+ *   --offline-imagery  Use bundled texture for known Esri/OSM tile images only
  *   --keep-open        Leave the browser open after the run (debugging)
  */
 
@@ -110,6 +111,7 @@ const SOURCE_BASE = getOpt('--source-base', '/src').replace(/\/$/, '');
 const APP_URL = getOpt('--url', 'http://localhost:4173');
 const APP_ORIGIN = new URL(APP_URL).origin;
 const HEADFUL = getFlag('--headful');
+const OFFLINE_IMAGERY = getFlag('--offline-imagery');
 const KEEP_OPEN = getFlag('--keep-open');
 
 const CHROME_EXECUTABLE_CANDIDATES = [
@@ -201,6 +203,15 @@ async function main() {
   console.log(`  App URL : ${APP_URL}`);
   console.log(`  Mode    : ${HEADFUL ? 'headful' : 'headless'}\n`);
 
+  // Tracking does not assert imagery geography. This optional fixture leaves
+  // provider metadata, terrain, models and every tracking assertion untouched.
+  // Read before launching so a missing bundled asset fails explicitly.
+  const offlineImageryTile = OFFLINE_IMAGERY
+    ? fs.readFileSync(new URL('../node_modules/cesium/Build/Cesium/Assets/Textures/NaturalEarthII/0/0/0.jpg', import.meta.url))
+    : null;
+  let offlineImageryRequests = 0;
+  if (OFFLINE_IMAGERY) console.log('  Imagery : bundled NaturalEarthII fixture (tile images only)');
+
   // Verify the dev server is up before launching a browser.
   try {
     const res = await fetch(APP_URL, { method: 'GET' });
@@ -256,6 +267,25 @@ async function main() {
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       const url = new URL(request.url());
+      // Reuse the one existing interceptor; do not install competing handlers.
+      // Exact HTTPS origins and image paths only: metadata, feature queries,
+      // other providers, terrain and local/model resources continue normally.
+      const knownImageryTile = request.method() === 'GET' && (
+        (url.origin === 'https://services.arcgisonline.com'
+          && /^\/ArcGIS\/rest\/services\/World_Imagery\/MapServer\/tile\/\d+\/\d+\/\d+$/.test(url.pathname))
+        || (url.origin === 'https://tile.openstreetmap.org'
+          && /^\/\d+\/\d+\/\d+\.png$/.test(url.pathname))
+      );
+      if (OFFLINE_IMAGERY && knownImageryTile) {
+        offlineImageryRequests++;
+        request.respond({
+          status: 200,
+          contentType: 'image/jpeg',
+          headers: { 'Access-Control-Allow-Origin': '*' },
+          body: offlineImageryTile,
+        });
+        return;
+      }
       if (url.origin === APP_ORIGIN && url.pathname === '/api/openai/hud-summary') {
         request.respond({
           status: 200,
@@ -313,7 +343,7 @@ async function main() {
         const url = new URL(requestUrl, window.location.href);
         const isAppRequest = url.origin === appOrigin;
         // OpenSky (commercial flights): { states: [ state-vector[] ] }
-        if (isAppRequest && url.pathname === '/api/opensky') {
+        if (isAppRequest && url.pathname === '/api/flights') {
           window.__SYNTH_HITS.opensky++;
           // A withheld contact models the ordinary case where the recipient's
           // first authoritative refresh does not yet carry the shared aircraft.
@@ -341,11 +371,11 @@ async function main() {
         // Trail backfill (fires on trackById). Stub with valid-but-empty
         // payloads so the deterministic run never 404s against the dev proxy.
         // flights: { path: [ [time, lat, lon, baroAlt, true_track, on_ground] ] }
-        if (isAppRequest && url.pathname === '/api/opensky-track') {
+        if (isAppRequest && url.pathname === '/api/flights/track') {
           return Promise.resolve(jsonResponse({ path: [] }));
         }
         // military: { timestamp: <epochSec>, trace: [ [secAfter, lat, lon, ...] ] }
-        if (isAppRequest && url.pathname === '/api/adsblol/trace') {
+        if (isAppRequest && url.pathname === '/api/military/track') {
           return Promise.resolve(jsonResponse({ timestamp: Math.floor(Date.now() / 1000), trace: [] }));
         }
         // adsbdb enrichment (fires for tracked/model-eligible planes): empty
@@ -358,11 +388,24 @@ async function main() {
         // Contacts enables the optional AIS source alongside aircraft. Keep
         // this tracking harness independent of local AIS credentials while
         // preserving the truthful "awaiting first message" lifecycle.
-        if (isAppRequest && url.pathname === '/api/ais-live') {
+        if (isAppRequest && url.pathname === '/api/vessels') {
           return Promise.resolve(jsonResponse({
             status: 'connected',
             rows: [],
             lastMessageAt: null,
+          }));
+        }
+        // Contacts also enables mapped installations. This tracking harness
+        // does not test installation acquisition; a valid empty viewport keeps
+        // public Overpass outages out of aircraft/satellite tracking results.
+        // Preserve the real response shape and all console-error assertions.
+        if (isAppRequest && url.pathname === '/api/military-installations') {
+          return Promise.resolve(jsonResponse({
+            elements: [],
+            saturated: false,
+            elementCap: 700,
+            retrievedAt: new Date().toISOString(),
+            status: 'ready',
           }));
         }
         // CelesTrak TLE groups. Served from a fixed two-satellite catalog so
@@ -407,7 +450,7 @@ async function main() {
           return Promise.resolve(jsonResponse({ places: [] }));
         }
         // adsb.lol military: { ac: [ aircraft{} ] }  (must come AFTER /trace check)
-        if (isAppRequest && url.pathname === '/api/adsblol/mil') {
+        if (isAppRequest && url.pathname === '/api/military') {
           window.__SYNTH_HITS.mil++;
           const ac = window.__SYNTH.military.map((m) => ({
             hex: m.hex,
@@ -4082,6 +4125,7 @@ async function main() {
 
     finishAndExit();
   } finally {
+    if (OFFLINE_IMAGERY) console.log(`  Bundled imagery tiles served: ${offlineImageryRequests}`);
     if (!KEEP_OPEN) {
       await browser.close();
     } else {

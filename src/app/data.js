@@ -1,5 +1,6 @@
 import { LayerLifecycle } from '../data/lifecycle.js';
 import { LayerPresentation } from './layerPresentation.js';
+import { createCyberSonarScene } from '../cyberSonarScene.js';
 /** Register the application layer catalog before allowing state restoration. */
 export function createApplicationData({
   scene: { viewer, mapStackController },
@@ -12,6 +13,7 @@ export function createApplicationData({
   // Initialize data layer manager
   const dataManager = new LayerLifecycle(viewer, {
     allowQaRegistration,
+    getSourceAvailability: catalog?.getSourceAvailability,
   });
   defer(async () => {
     await dataManager.destroyAll();
@@ -20,12 +22,10 @@ export function createApplicationData({
         `Data layers could not be destroyed: ${[...dataManager.layers.keys()].join(', ')}`,
       );
   });
-  const presentation = new LayerPresentation(dataManager);
-  defer(() => presentation.destroy());
-  window.__gevLayerPanelRefresh = () => presentation.refresh();
-  defer(() => {
-    if (window.__gevLayerPanelRefresh) delete window.__gevLayerPanelRefresh;
+  const presentation = new LayerPresentation(dataManager, {
+    weatherClock: catalog?.weatherClock,
   });
+  defer(() => presentation.destroy());
   onData?.(dataManager);
   if (!catalog?.layers || !catalog?.metadata)
     throw new TypeError('An application layer catalog is required');
@@ -57,6 +57,7 @@ export function createApplicationData({
   }
   presentation.mount(document.getElementById('data-toggles'));
   styleManager.attachDataManager(dataManager);
+  defer(createCyberSonarScene(viewer, dataManager));
 
   return { dataManager, catalog, presentation };
 }

@@ -214,8 +214,6 @@ export class FlightRecords {
       wasAirborne: prevMeta?.wasAirborne === true || !onGround,
       velocity: stickyNumber(velocity, prevMeta?.velocity, 0),
       true_track: stickyNumber(true_track, prevMeta?.true_track, 0),
-      trackKnown:
-        Number.isFinite(true_track) || prevMeta?.trackKnown === true,
       category: cat,
       // An adsbdb-enriched type code outranks the coarse OpenSky category.
       klass: classifyAircraft({
@@ -241,8 +239,6 @@ export class FlightRecords {
       typeCode: prevMeta?.typeCode ?? null,
       typeName: prevMeta?.typeName ?? null,
       registration: prevMeta?.registration ?? null,
-      operator:
-        stickyText(observation.operator, prevMeta?.operator) || null,
       airline: prevMeta?.airline ?? null,
       route: prevMeta?.route ?? null,
       // The RAW poll fix lat/lon (this tick's OpenSky state-vector

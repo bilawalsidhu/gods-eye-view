@@ -1,5 +1,9 @@
 import * as Cesium from 'cesium';
-import { wrapProviderError } from './providerErrors.js';
+import { createTerrainRetryPolicy } from './terrainRetry.js';
+
+/** Re:Earth / Mapterhorn ellipsoidal quantized mesh, CC BY 4.0. */
+export const KEYLESS_TERRAIN_URL =
+  'https://terrain.reearth.land/cesium-mesh/ellipsoid';
 
 /** These factories are lazy: a hidden globe must not trigger terrain loading. */
 export async function createWorldTerrain(accessToken, { signal } = {}) {
@@ -7,37 +11,47 @@ export async function createWorldTerrain(accessToken, { signal } = {}) {
   if (!accessToken)
     throw new Error('World terrain requires an explicit ion token');
   signal?.throwIfAborted();
-  const resource = await Cesium.IonResource.fromAssetId(1, {
-    accessToken,
-  }).catch((error) => {
-    throw wrapProviderError(
-      error,
-      'Cesium ion terrain metadata was denied',
-      'check CESIUM_ION_TOKEN URL restrictions, asset access, and quota for the production origin',
-    );
-  });
+  const resource = await Cesium.IonResource.fromAssetId(1, { accessToken });
   signal?.throwIfAborted();
   return {
     provider: await Cesium.CesiumTerrainProvider.fromUrl(resource, {
       requestVertexNormals: true,
       requestWaterMask: false,
       ellipsoid: Cesium.Ellipsoid.WGS84,
-    }).catch((error) => {
-      throw wrapProviderError(
-        error,
-        'Cesium ion terrain request failed',
-        'check CESIUM_ION_TOKEN asset access and provider availability for the production origin',
-      );
     }),
   };
 }
 
+function logThrottle({ statusCode, delayMs, inWindow }) {
+  // One line per cooldown window, not per tile: a burst throttles dozens.
+  if (inWindow !== 1) return;
+  console.warn(
+    `[MapStack] Re:Earth terrain answered ${statusCode}; retrying throttled tiles after ${Math.round(delayMs)} ms`,
+  );
+}
+
+/**
+ * The Re:Earth resource with the tile retry policy attached. Cesium copies
+ * `retryCallback`/`retryAttempts` onto every derived resource, so layer.json
+ * and each `{z}/{x}/{y}.terrain` fetch inherit it (see `terrainRetry.js`).
+ * @param {ReturnType<typeof createTerrainRetryPolicy>} [policy]
+ * @returns {Cesium.Resource}
+ */
+export function createKeylessTerrainResource(
+  policy = createTerrainRetryPolicy({ onThrottle: logThrottle }),
+) {
+  return new Cesium.Resource({
+    url: KEYLESS_TERRAIN_URL,
+    retryCallback: policy.retryCallback,
+    retryAttempts: policy.retryAttempts,
+  });
+}
+
 export async function createKeylessTerrain() {
   try {
-    // Re:Earth / Mapterhorn ellipsoidal quantized mesh, CC BY 4.0.
     return {
       provider: await Cesium.CesiumTerrainProvider.fromUrl(
-        'https://terrain.reearth.land/cesium-mesh/ellipsoid',
+        createKeylessTerrainResource(),
       ),
     };
   } catch (error) {
@@ -47,19 +61,4 @@ export async function createKeylessTerrain() {
     );
     return { provider: new Cesium.EllipsoidTerrainProvider() };
   }
-}
-
-export function createEllipsoidTerrain() {
-  return { provider: new Cesium.EllipsoidTerrainProvider() };
-}
-
-export async function createFallbackEllipsoidTerrain(error) {
-  const status = Number(error?.statusCode);
-  const detail =
-    Number.isFinite(status) && status > 0 ? `HTTP ${status}` : 'unavailable';
-  return {
-    ...createEllipsoidTerrain(),
-    terrainId: 'ellipsoid',
-    warning: `Optional terrain ${detail}; using flat globe`,
-  };
 }

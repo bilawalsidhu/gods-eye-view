@@ -167,7 +167,6 @@ export function createQueries({
         flightState.records.missingPolls.get(icao24) ||
         flightState.feed._backoff,
       ),
-      operator: info?.operator ?? null,
       airline: info?.airline ?? null,
       // CLASS label follows the TR-3B conversion so every downstream card
       // (cockpit, Contacts, analyst) agrees with the triangle on screen.

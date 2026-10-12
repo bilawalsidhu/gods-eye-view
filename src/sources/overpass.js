@@ -46,8 +46,3 @@ export function stripOverpassNoise(src) {
   }
   return out;
 }
-
-/** Encode an Overpass QL query in the conventional single-field form body. */
-export function encodeOverpassFormBody(query) {
-  return new URLSearchParams({ data: String(query || '') }).toString();
-}

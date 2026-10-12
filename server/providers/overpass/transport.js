@@ -1,6 +1,6 @@
 import {
   OVERPASS_MAX_RESPONSE_BYTES,
-  OVERPASS_UPSTREAMS,
+  resolveOverpassUpstreams,
   OVERPASS_USER_AGENT,
   OVERPASS_TIMEOUT_MS,
 } from './constants.js';
@@ -40,42 +40,6 @@ function overpassLooksRuntimeError(bodyText) {
   );
 }
 
-function sanitizeOverpassProviderText(bodyText, contentType = '') {
-  const type = String(contentType || '').toLowerCase();
-  const raw = String(bodyText || '');
-  let text = '';
-  let parsedJson = false;
-  if (type.includes('json')) {
-    try {
-      parsedJson = true;
-      const parsed = JSON.parse(raw);
-      text =
-        String(
-          parsed?.remark
-          || parsed?.error
-          || parsed?.message
-          || parsed?.remarks?.[0]
-          || '',
-        ).trim();
-    } catch {
-      /* fall through */
-    }
-  }
-  if (parsedJson && !text) return null;
-  if (!text) {
-    text = raw
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&nbsp;/gi, ' ')
-      .replace(/&amp;/gi, '&')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-  if (!text) text = raw.replace(/\s+/g, ' ').trim();
-  return text ? text.slice(0, 240) : null;
-}
-
 /**
  * True only for an upstream response that is actually Overpass data.
  *
@@ -96,150 +60,147 @@ function overpassPayloadIsData(payload) {
   );
 }
 
+const cooldowns = new Map();
+
+/** A stable, non-retryable capability response shared by every Overpass route. */
+export function overpassNotConfigured() {
+  return {
+    status: 503,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      error: 'Detailed OpenStreetMap queries are not configured',
+      code: 'OVERPASS_NOT_CONFIGURED',
+      retryable: false,
+    }),
+  };
+}
+
+/** Honor Retry-After dates/seconds; absent values use bounded exponential backoff. */
+function retryDelay(value, failures, now) {
+  const seconds = Number(value);
+  const explicit =
+    value && Number.isFinite(seconds)
+      ? seconds * 1000
+      : Date.parse(value) - now;
+  return Number.isFinite(explicit)
+    ? Math.max(1000, explicit)
+    : Math.min(300_000, 30_000 * 2 ** Math.min(failures, 4));
+}
+
+function refusal(status, retryAfterMs) {
+  return {
+    status,
+    contentType: 'application/json',
+    rateLimited: status === 429 || status === 406,
+    retryAfterMs,
+    body: JSON.stringify({
+      error: 'Configured Overpass upstream unavailable',
+      code: 'OVERPASS_UNAVAILABLE',
+      retryable: true,
+      retryAfterMs,
+    }),
+  };
+}
+
 /**
- * Try each mirror once, retaining response-size and per-mirror timeout caps.
- * Refusals and body-level failures rotate; total failure returns the last
- * rate-limit payload, otherwise the first refusal, or throws a network error.
- * @param {string} body URL-encoded Overpass QL query body.
- * @param {number} [maxResponseBytes] Endpoint-specific response cap.
- * @param {object} [options] Server-only endpoint and I/O overrides for tests.
- * @returns {Promise<{status:number,body:string,contentType:string,endpoint:string,rateLimited:boolean}>}
+ * Query only the configured chain with capped reads, timeouts and per-endpoint cooldowns.
+ * Explicit endpoint/I/O overrides are server-only test seams. Empty data is valid.
  */
 async function fetchOverpassPayload(
   body,
   maxResponseBytes = OVERPASS_MAX_RESPONSE_BYTES,
   {
-    endpoints = OVERPASS_UPSTREAMS,
+    endpoints = resolveOverpassUpstreams(),
     fetchImpl = fetch,
     readBody = readResponseTextCapped,
     simplify = simplifyOverpassPayloadBody,
+    now = Date.now,
   } = {},
 ) {
-  let lastError = null;
-  let lastRateLimitPayload = null;
-  let lastRefusalPayload = null;
-  const attempts = [];
-
+  if (!endpoints.length) return overpassNotConfigured();
+  let failure = refusal(502, 30_000);
   for (const endpoint of endpoints) {
+    const previous = cooldowns.get(endpoint);
+    if (previous?.until > now()) {
+      failure = refusal(previous.status, previous.until - now());
+      continue;
+    }
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
-    const startedAt = Date.now();
-
     try {
-      const upstream = await fetchImpl(endpoint, {
+      const requestUrl = new URL(endpoint);
+      const authorization =
+        requestUrl.username || requestUrl.password
+          ? 'Basic ' +
+            Buffer.from(
+              `${decodeURIComponent(requestUrl.username)}:${decodeURIComponent(requestUrl.password)}`,
+            ).toString('base64')
+          : null;
+      requestUrl.username = '';
+      requestUrl.password = '';
+      const upstream = await fetchImpl(requestUrl.href, {
         method: 'POST',
+        redirect: 'error',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'User-Agent': OVERPASS_USER_AGENT,
+          ...(authorization ? { Authorization: authorization } : {}),
         },
         body,
         signal: controller.signal,
       });
-
       const responseBody = await readBody(upstream, maxResponseBytes);
-      const contentType =
-        upstream.headers.get('content-type') || 'application/json';
-      const status = upstream.status;
       const rateLimited =
-        status === 429 || overpassLooksRateLimited(responseBody);
-      const runtimeError = overpassLooksRuntimeError(responseBody);
-      const providerError = sanitizeOverpassProviderText(
-        responseBody,
-        contentType,
-      );
-      const payload = {
-        status,
-        body: responseBody,
-        contentType,
-        endpoint,
-        rateLimited,
-        runtimeError,
-        providerError,
-      };
-      attempts.push({
-        endpoint,
-        method: 'POST',
-        status,
-        latencyMs: Date.now() - startedAt,
-        timeoutTriggered: status === 504 || runtimeError,
-        providerError,
-      });
-
-      if (rateLimited) {
-        lastRateLimitPayload = payload;
-        continue;
-      }
-      // A 200 body carrying a runtime error / timeout is a transient upstream
-      // failure — skip to the next mirror rather than returning or caching it.
-      if (runtimeError) {
-        lastError = new Error(`Overpass runtime error (${endpoint})`);
-        continue;
-      }
-      // Anything but 2xx is this mirror declining, not an answer. Only 5xx used
-      // to rotate, so a 4xx ended the fan-out and was returned — and cached —
-      // as data: a mirror refusing this client answers 406 while the others
-      // answer 200 to the very same request, so every Overpass-backed layer
-      // failed on an error page with healthy mirrors untried. The first
-      // refusal is kept so a genuinely bad query still reports what upstream
-      // said, but only after every mirror has had the chance to answer it.
-      if (status < 200 || status >= 300) {
-        if (!lastRefusalPayload) lastRefusalPayload = payload;
-        lastError = new Error(
-          `Overpass upstream returned ${status} (${endpoint})`,
+        upstream.status === 429 ||
+        upstream.status === 406 ||
+        overpassLooksRateLimited(responseBody);
+      if (
+        rateLimited ||
+        upstream.status < 200 ||
+        upstream.status >= 300 ||
+        overpassLooksRuntimeError(responseBody)
+      ) {
+        const failures = (previous?.failures || 0) + 1;
+        const delay = retryDelay(
+          upstream.headers.get('retry-after'),
+          failures - 1,
+          now(),
         );
+        const status = rateLimited
+          ? upstream.status === 406
+            ? 406
+            : 429
+          : 502;
+        cooldowns.set(endpoint, { until: now() + delay, failures, status });
+        while (cooldowns.size > 64)
+          cooldowns.delete(cooldowns.keys().next().value);
+        failure = refusal(status, delay);
         continue;
       }
-
-      // Success: decimate giant boundary geometry before it reaches the cache,
-      // the disk, or the client (what makes the 32 MB read cap safe to hold).
-      payload.body = simplify(payload.body);
+      const parsed = JSON.parse(responseBody);
+      if (!Array.isArray(parsed?.elements) || parsed.remark)
+        throw new Error('Malformed Overpass response');
+      cooldowns.delete(endpoint);
       return {
-        ...payload,
-        attempts,
-        fallbackAttempted: attempts.length > 1,
-        finalEndpoint: endpoint,
+        status: upstream.status,
+        body: simplify(responseBody),
+        contentType: 'application/json',
+        // Never retain a secret-bearing endpoint in cache or response metadata.
+        endpoint: 'configured',
+        rateLimited: false,
       };
-    } catch (error) {
-      lastError = error;
-      attempts.push({
-        endpoint,
-        method: 'POST',
-        status: null,
-        latencyMs: Date.now() - startedAt,
-        timeoutTriggered:
-          error?.name === 'AbortError' || error?.name === 'TimeoutError',
-        providerError: String(error?.message || '').trim().slice(0, 240) || null,
-      });
+    } catch {
+      const failures = (previous?.failures || 0) + 1;
+      const delay = retryDelay(null, failures - 1, now());
+      cooldowns.set(endpoint, { until: now() + delay, failures, status: 502 });
+      while (cooldowns.size > 64)
+        cooldowns.delete(cooldowns.keys().next().value);
+      failure = refusal(502, delay);
     } finally {
       clearTimeout(timeoutId);
     }
   }
-
-  if (lastRateLimitPayload) {
-    return {
-      ...lastRateLimitPayload,
-      attempts,
-      fallbackAttempted: attempts.length > 1,
-      finalEndpoint: null,
-    };
-  }
-  if (lastRefusalPayload) {
-    return {
-      ...lastRefusalPayload,
-      attempts,
-      fallbackAttempted: attempts.length > 1,
-      finalEndpoint: null,
-    };
-  }
-  throw Object.assign(lastError || new Error('All Overpass upstreams failed'), {
-    attempts,
-    fallbackAttempted: attempts.length > 1,
-    providerError: attempts.at(-1)?.providerError || null,
-  });
+  return failure;
 }
 
-export {
-  overpassPayloadIsData,
-  fetchOverpassPayload,
-  sanitizeOverpassProviderText,
-};
+export { overpassPayloadIsData, fetchOverpassPayload };
