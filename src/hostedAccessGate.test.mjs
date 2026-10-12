@@ -264,3 +264,19 @@ test('service worker never caches api or auth routes and manifest is GEV-branded
   assert.ok(manifest.icons.some((icon) => icon.purpose === 'maskable'));
   assert.doesNotMatch(JSON.stringify(manifest), /saug/i);
 });
+
+test('Hostinger entry is a CommonJS shim that import()s the ESM server', () => {
+  const entry = readFileSync(
+    new URL('../hostinger-entry.cjs', import.meta.url),
+    'utf8',
+  );
+  assert.match(entry, /import\('\.\/server\.js'\)/);
+  assert.doesNotMatch(entry, /^\s*(import|export)\s/m);
+  const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  assert.equal(
+    (server.match(/\.listen\(|preview\(\{/g) || []).length,
+    1,
+    'server.js must start exactly one HTTP server (lsnode allows one listen)',
+  );
+  assert.match(server, /process\.env|env\.PORT/);
+});

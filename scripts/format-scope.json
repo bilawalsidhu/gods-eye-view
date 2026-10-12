@@ -1,6 +1,9 @@
 [
   ".prettierrc.json",
   "package.json",
+  "hostinger-entry.cjs",
+  "server.js",
+  "server/hosted/accessGate.js",
   "scripts/format-scope.json",
   "scripts/package-boundaries.json",
   "scripts/format.mjs",
