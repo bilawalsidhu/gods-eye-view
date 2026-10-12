@@ -28,112 +28,112 @@
       <div class="panel-glow"></div>
       <div class="global-context-panel-inner" data-rail-scroller>
         <div class="panel-header">
-          <span class="panel-title">CONTEXT</span>
+          <span class="panel-title"  data-i18n="cockpit.context.panelTitle">CONTEXT</span>
           <span class="panel-divider"></span>
           <div id="context-radio-dock" class="context-radio-dock">
-            <button id="context-radio-toggle-btn" class="context-radio-toggle" type="button" aria-expanded="false" aria-controls="context-radio-mini" aria-label="Open compact Radio controls" title="Open compact Radio controls">
+            <button id="context-radio-toggle-btn" class="context-radio-toggle" type="button" aria-expanded="false" aria-controls="context-radio-mini" aria-label="Open compact Radio controls" title="Open compact Radio controls"  data-i18n-aria-label="cockpit.context.radioToggleAriaLabel"  data-i18n-title="cockpit.context.radioToggleTitle">
               <span class="material-symbols-outlined" aria-hidden="true">radio</span>
             </button>
-            <div id="context-radio-mini" class="context-radio-mini" role="group" aria-label="Compact Radio controls" hidden>
+            <div id="context-radio-mini" class="context-radio-mini" role="group" aria-label="Compact Radio controls" hidden  data-i18n-aria-label="cockpit.context.radioMiniGroupAriaLabel">
               <div class="context-radio-mini-heading">
-                <span>RADIO</span>
-                <strong id="context-radio-mini-station">RADIO READY</strong>
+                <span  data-i18n="cockpit.context.radioMiniTitle">RADIO</span>
+                <strong id="context-radio-mini-station"  data-i18n="cockpit.context.radioMiniReady">RADIO READY</strong>
                 <span class="context-radio-mini-actions">
-                  <button id="context-radio-details-btn" type="button" aria-label="Open detailed Radio controls" aria-expanded="false" aria-controls="radio-panel" title="Open detailed Radio controls">
+                  <button id="context-radio-details-btn" type="button" aria-label="Open detailed Radio controls" aria-expanded="false" aria-controls="radio-panel" title="Open detailed Radio controls"  data-i18n-aria-label="cockpit.context.radioDetailsAriaLabel"  data-i18n-title="cockpit.context.radioDetailsTitle">
                     <span class="material-symbols-outlined" aria-hidden="true">open_in_full</span>
                   </button>
-                  <button id="context-radio-mini-close-btn" type="button" aria-label="Close compact Radio controls" title="Close compact Radio controls">
+                  <button id="context-radio-mini-close-btn" type="button" aria-label="Close compact Radio controls" title="Close compact Radio controls"  data-i18n-aria-label="cockpit.context.radioCloseAriaLabel"  data-i18n-title="cockpit.context.radioCloseTitle">
                     <span class="material-symbols-outlined" aria-hidden="true">close</span>
                   </button>
                 </span>
               </div>
-              <button id="context-radio-mini-enable-btn" class="panel-layer-toggle" type="button" aria-pressed="false">ENABLE</button>
+              <button id="context-radio-mini-enable-btn" class="panel-layer-toggle" type="button" aria-pressed="false"  data-i18n="cockpit.context.radioMiniEnable">ENABLE</button>
               <div class="context-radio-mini-transport">
-                <button id="context-radio-mini-prev-btn" type="button" aria-label="Previous filtered radio station" title="Previous station" disabled>◀◀</button>
-                <button id="context-radio-mini-play-btn" type="button" aria-label="Play selected radio station" title="Play" disabled>▶</button>
-                <button id="context-radio-mini-next-btn" type="button" aria-label="Next filtered radio station" title="Next station" disabled>▶▶</button>
+                <button id="context-radio-mini-prev-btn" type="button" aria-label="Previous filtered radio station" title="Previous station" disabled  data-i18n-aria-label="cockpit.context.radioMiniPrevAriaLabel"  data-i18n-title="cockpit.context.radioMiniPrevTitle">◀◀</button>
+                <button id="context-radio-mini-play-btn" type="button" aria-label="Play selected radio station" title="Play" disabled  data-i18n-aria-label="cockpit.context.radioMiniPlayAriaLabel"  data-i18n-title="cockpit.context.radioMiniPlayTitle">▶</button>
+                <button id="context-radio-mini-next-btn" type="button" aria-label="Next filtered radio station" title="Next station" disabled  data-i18n-aria-label="cockpit.context.radioMiniNextAriaLabel"  data-i18n-title="cockpit.context.radioMiniNextTitle">▶▶</button>
               </div>
               <label class="context-radio-mini-volume" for="context-radio-mini-volume">
-                <span>VOLUME</span>
-                <input id="context-radio-mini-volume" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Compact Radio volume" disabled />
+                <span  data-i18n="cockpit.context.radioMiniVolumeLabel">VOLUME</span>
+                <input id="context-radio-mini-volume" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Compact Radio volume" disabled  data-i18n-aria-label="cockpit.context.radioMiniVolumeAriaLabel" />
                 <output id="context-radio-mini-volume-value" class="gev-slider-value" for="context-radio-mini-volume">80%</output>
               </label>
             </div>
           </div>
-          <button class="panel-collapse-btn" data-collapse-target="global-context-panel" title="Expand panel">▶</button>
+          <button class="panel-collapse-btn" data-collapse-target="global-context-panel" title="Expand panel"  data-i18n-title="cockpit.context.collapseTitle">▶</button>
         </div>
         <div class="cyber-panel-body" data-rail-scroller>
-        <div class="global-context-modes" role="tablist" aria-label="Context mode">
-          <button id="global-context-flights-btn" class="context-mode-button" type="button" role="tab" tabindex="0" aria-selected="false" aria-controls="context-flights-view" aria-label="CONTACTS" title="Cycles the nearest contacts of whatever type you select — planes, vessels, installations. Satellites track independently.">
+        <div class="global-context-modes" role="tablist" aria-label="Context mode"  data-i18n-aria-label="cockpit.context.modesAriaLabel">
+          <button id="global-context-flights-btn" class="context-mode-button" type="button" role="tab" tabindex="0" aria-selected="false" aria-controls="context-flights-view" aria-label="CONTACTS" title="Cycles the nearest contacts of whatever type you select — planes, vessels, installations. Satellites track independently."  data-i18n-aria-label="cockpit.context.contactsTabAriaLabel"  data-i18n-title="cockpit.context.contactsTabTitle">
             <span class="material-symbols-outlined" aria-hidden="true">radar</span>
-            <span>CONTACTS</span>
+            <span  data-i18n="cockpit.context.contactsTabLabel">CONTACTS</span>
           </button>
           <button id="global-context-missions-btn" class="context-mode-button" type="button" role="tab" tabindex="0" aria-selected="false" aria-controls="context-missions-view">
             <span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span>
-            <span>SPACE MISSIONS</span>
+            <span  data-i18n="cockpit.context.missionsTabLabel">SPACE MISSIONS</span>
           </button>
         </div>
         <div id="context-mode-standby" class="context-mode-standby">
-          <strong>SELECT CONTEXT</strong>
+          <strong  data-i18n="cockpit.context.standbyTitle">SELECT CONTEXT</strong>
           <span>CONTACTS — nearest planes · vessels · sites<br>SPACE MISSIONS — launches &amp; orbital assets</span>
         </div>
         <section id="context-flights-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-flights-btn" hidden>
-          <div class="global-context-actions" aria-label="Contact Context actions">
+          <div class="global-context-actions" aria-label="Contact Context actions"  data-i18n-aria-label="cockpit.context.actionsAriaLabel">
             <button id="cockpit-entry" type="button" hidden>
               <span class="material-symbols-outlined" aria-hidden="true">flight</span>
-              <span>COCKPIT</span>
+              <span  data-i18n="cockpit.context.cockpitEntryLabel">COCKPIT</span>
             </button>
-            <button id="installations-search-btn" class="panel-layer-toggle" type="button">SEARCH NEARBY SITES</button>
-            <button id="tr3b-toggle" class="tr3b-toggle" type="button" aria-pressed="false" hidden aria-label="Reclassify tracked contact as TR-3B" title="Reclassify as TR-3B">🛸</button>
+            <button id="installations-search-btn" class="panel-layer-toggle" type="button"  data-i18n="cockpit.context.searchNearbyLabel">SEARCH NEARBY SITES</button>
+            <button id="tr3b-toggle" class="tr3b-toggle" type="button" aria-pressed="false" hidden aria-label="Reclassify tracked contact as TR-3B" title="Reclassify as TR-3B"  data-i18n-aria-label="cockpit.context.tr3bAriaLabel"  data-i18n-title="cockpit.context.tr3bTitle">🛸</button>
           </div>
           <aside id="military-awareness-panel">
             <div class="military-awareness-standby">
-              <strong>CONTACTS CONTEXT OFF</strong>
-              <span>SELECT CONTACTS TO LOAD OBSERVED / MAPPED PROXIMITY</span>
+              <strong  data-i18n="cockpit.context.awarenessOffTitle">CONTACTS CONTEXT OFF</strong>
+              <span  data-i18n="cockpit.context.awarenessOffHint">SELECT CONTACTS TO LOAD OBSERVED / MAPPED PROXIMITY</span>
             </div>
           </aside>
         </section>
         <section id="context-missions-view" class="context-mode-view" role="tabpanel" aria-labelledby="global-context-missions-btn" hidden>
           <div id="space-mission-panel-host">
-            <div id="space-mission-roster" class="space-mission-roster" aria-label="Available Space Missions">
+            <div id="space-mission-roster" class="space-mission-roster" aria-label="Available Space Missions"  data-i18n-aria-label="cockpit.context.rosterAriaLabel">
               <div class="space-mission-roster-header">
                 <div>
-                  <strong>AVAILABLE MISSIONS</strong>
-                  <span>SELECT A MISSION TO INSPECT</span>
+                  <strong  data-i18n="cockpit.context.rosterTitle">AVAILABLE MISSIONS</strong>
+                  <span  data-i18n="cockpit.context.rosterHint">SELECT A MISSION TO INSPECT</span>
                 </div>
                 <output data-mission-roster-count>—</output>
               </div>
               <div class="space-mission-roster-list" data-mission-roster-list>
-                <div class="space-mission-roster-empty">LOADING 30-DAY MISSION INDEX</div>
+                <div class="space-mission-roster-empty"  data-i18n="cockpit.context.rosterLoading">LOADING 30-DAY MISSION INDEX</div>
               </div>
-              <p class="space-mission-roster-focus-continuation" tabindex="-1" data-mission-roster-focus-continuation>TAB PREVIEWS · ENTER / SPACE SELECTS</p>
+              <p class="space-mission-roster-focus-continuation" tabindex="-1" data-mission-roster-focus-continuation  data-i18n="layers.missions.roster.keyboardHint">TAB PREVIEWS · ENTER / SPACE SELECTS</p>
             </div>
           </div>
         </section>
-        <section id="radio-panel" class="panel-collapsible collapsed" data-panel-id="radio-panel" aria-label="Internet radio and local SDR">
+        <section id="radio-panel" class="panel-collapsible collapsed" data-panel-id="radio-panel" aria-label="Internet radio and local SDR"  data-i18n-aria-label="layers.radio.panelAriaLabel">
           <div class="radio-panel-inner">
             <div class="panel-header">
-              <span class="panel-title">RADIO</span>
+              <span class="panel-title"  data-i18n="layers.radio.panelTitle">RADIO</span>
               <span id="radio-layer-state" class="radio-layer-state">OFF</span>
               <span class="panel-divider"></span>
-              <button class="panel-collapse-btn" data-collapse-target="radio-panel" title="Expand Radio" aria-label="Expand Radio section">+</button>
+              <button class="panel-collapse-btn" data-collapse-target="radio-panel" title="Expand Radio" aria-label="Expand Radio section"  data-i18n-title="layers.radio.expandTitle"  data-i18n-aria-label="layers.radio.expandAriaLabel">+</button>
             </div>
             <div class="radio-directory-row">
-              <button id="radio-enable-btn" class="panel-layer-toggle" type="button" aria-pressed="false">ENABLE</button>
-              <label class="radio-filter-label" for="radio-filter">STATION TAG</label>
-              <select id="radio-filter" aria-label="Filter stations by station tag" disabled>
-                <option value="all">All</option>
+              <button id="radio-enable-btn" class="panel-layer-toggle" type="button" aria-pressed="false"  data-i18n="layers.radio.enable">ENABLE</button>
+              <label class="radio-filter-label" for="radio-filter"  data-i18n="layers.radio.stationTagLabel">STATION TAG</label>
+              <select id="radio-filter" aria-label="Filter stations by station tag" disabled  data-i18n-aria-label="layers.radio.filterAriaLabel">
+                <option value="all"  data-i18n="layers.radio.filterAll">All</option>
               </select>
             </div>
             <div id="radio-station-card" class="radio-station-card" aria-live="polite">
-              <strong id="radio-station-name">NO STATION SELECTED</strong>
-              <span id="radio-station-meta">Enable Radio, then choose a globe marker or use next.</span>
+              <strong id="radio-station-name"  data-i18n="layers.radio.noStation">NO STATION SELECTED</strong>
+              <span id="radio-station-meta"  data-i18n="layers.radio.stationHint">Enable Radio, then choose a globe marker or use next.</span>
               <span id="radio-station-tags"></span>
             </div>
             <div id="radio-tuner" class="radio-tuner" hidden>
               <div class="radio-tuner-header">
                 <span id="radio-tuner-band-label">DIRECTORY BAND</span>
-                <output id="radio-tuner-value" for="radio-tuner-slider">DRAG TO TUNE</output>
+                <output id="radio-tuner-value" for="radio-tuner-slider"  data-i18n="layers.radio.dragToTune">DRAG TO TUNE</output>
               </div>
               <div class="radio-tuner-dial">
                 <div class="radio-tuner-scale" aria-hidden="true"></div>
@@ -142,26 +142,27 @@
                   aria-label="Tune available internet radio stations" aria-valuetext="No station available" disabled />
               </div>
               <div class="radio-tuner-readout">
-                <span id="radio-tuner-station">ALL · DRAG THE NEEDLE</span>
-                <span>SNAPS TO AVAILABLE STATIONS</span>
+                <span id="radio-tuner-station"  data-i18n="layers.radio.tunerIdle">ALL · DRAG THE NEEDLE</span>
+                <span  data-i18n="layers.radio.snapsNote">SNAPS TO AVAILABLE STATIONS</span>
               </div>
             </div>
-            <div class="radio-transport" role="group" aria-label="Radio playback">
-              <button id="radio-prev-btn" type="button" aria-label="Previous filtered station" disabled>PREV</button>
-              <button id="radio-play-btn" type="button" aria-label="Play selected station" disabled>PLAY</button>
-              <button id="radio-next-btn" type="button" aria-label="Next filtered station" disabled>NEXT</button>
-              <button id="radio-stop-btn" type="button" aria-label="Stop radio playback" disabled>STOP</button>
+            <div class="radio-transport" role="group" aria-label="Radio playback"  data-i18n-aria-label="layers.radio.transportAriaLabel">
+              <button id="radio-prev-btn" type="button" aria-label="Previous filtered station" disabled  data-i18n-aria-label="layers.radio.prevAriaLabel"  data-i18n="layers.radio.prev">PREV</button>
+              <button id="radio-play-btn" type="button" aria-label="Play selected station" disabled  data-i18n-aria-label="layers.radio.playAriaLabel"  data-i18n="layers.radio.play">PLAY</button>
+              <button id="radio-next-btn" type="button" aria-label="Next filtered station" disabled  data-i18n-aria-label="layers.radio.nextAriaLabel"  data-i18n="layers.radio.next">NEXT</button>
+              <button id="radio-stop-btn" type="button" aria-label="Stop radio playback" disabled  data-i18n-aria-label="layers.radio.stopAriaLabel"  data-i18n="layers.radio.stop">STOP</button>
             </div>
             <label class="radio-volume-row" for="radio-volume">
-              <span>VOLUME</span>
-              <input id="radio-volume" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Radio volume" />
+              <span  data-i18n="layers.radio.volumeLabel">VOLUME</span>
+              <input id="radio-volume" class="gev-quantitative-slider" type="range" min="0" max="100" value="80" aria-label="Radio volume"  data-i18n-aria-label="layers.radio.volumeAriaLabel" />
               <output id="radio-volume-value" class="gev-slider-value" for="radio-volume">80%</output>
             </label>
-            <div id="radio-playback-state" class="radio-playback-state" role="status" aria-live="polite">Radio off</div>
+            <div id="radio-playback-state" class="radio-playback-state" role="status" aria-live="polite"  data-i18n="layers.radio.playbackOff">Radio off</div>
             <div class="radio-links">
-              <a id="radio-station-homepage" href="#" target="_blank" rel="noopener noreferrer" hidden>STATION SITE</a>
+              <a id="radio-station-homepage" href="#" target="_blank" rel="noopener noreferrer" hidden  data-i18n="layers.radio.stationSite">STATION SITE</a>
               <a href="https://www.radio-browser.info/" target="_blank" rel="noopener noreferrer">DIRECTORY: RADIO BROWSER</a>
             </div>
+            <p class="radio-privacy"  data-i18n="layers.radio.privacyNote">Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.</p>
             <p class="radio-privacy">Audio connects directly to the broadcaster after you press play. Your IP is visible to that broadcaster.</p>
             <div id="sdr-radio-card" class="sdr-radio-card" role="group" aria-label="Local RTL-SDR receiver">
               <div class="sdr-radio-heading">
