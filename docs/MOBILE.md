@@ -18,6 +18,10 @@ native shell under `android/`.
 
 ## Build and sideload
 
+Toolchain note: `package.json` pins Capacitor `^8.5.3` (not 7). The
+`android/` shell was generated against the SDK-37-era toolchain, so
+downgrading to 7 would re-work `android/` for no functional gain.
+
 Prerequisites: JDK, and (once published) the Android SDK with platform-37
 plus build-tools (`ANDROID_HOME` or `ANDROID_SDK_ROOT`).
 
@@ -84,14 +88,25 @@ observed yet — do not claim otherwise.
 
 The app talks to a God's Eye View server (same-origin by default). Point it
 elsewhere in Provider Settings: the Capacitor branch adds a Backend URL row
-(same row styling as the key rows) that persists an `https://host` base via
-`src/mobile/keyStore.js` (`readApiBase`/`writeApiBase`, storage key
-`GEV_API_BASE`). Only `https://host[:port]` values persist; anything else
-clears the override and the app falls back to same-origin. The production
+(same row styling as the key rows) that persists an `http(s)://host[:port]`
+base via `src/mobile/keyStore.js` (`readApiBase`/`writeApiBase`, storage key
+`GEV_API_BASE`). Plain `http://` stays allowed because a home server on LAN
+Wi-Fi is typically plain HTTP. Validation is strict (`resolveApiBase` in
+`src/mobile/runtimeConfig.js`, parsed with `new URL`): only `http:`/`https:`
+with a host and no path, userinfo, query, fragment, or whitespace persists —
+`https://host?x`, `http://user@host`, `https://ho st`, and
+`https://host/evil` all clear the override and the app falls back to
+same-origin. The production
 store is the Capacitor Preferences plugin, dynamically imported so the web
 bundle never fetches it; outside Capacitor it falls back to a `localStorage`
 mirror. Values are never logged. Boot reads the override first through
 `src/mobile/runtimeConfig.js` (`storedApiBase`, `endpointSet`).
+
+Cleartext stance: the manifest declares no `usesCleartextTraffic` (the
+secure default stays), and the WebView blocks cleartext by default — so an
+`http://` LAN backend needs an explicit dev-only override (`adb reverse` or
+serving the backend over local https) before it will load. Do not set
+`usesCleartextTraffic="true"` outside local development.
 
 ## Key model (BYOK)
 

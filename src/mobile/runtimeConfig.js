@@ -11,16 +11,33 @@ const SERVICE_PATHS = {
 };
 
 /**
- * Normalize a raw API base into `''` (same-origin) or `https://host[:port]`.
+ * Normalize a raw API base into `''` (same-origin) or `http(s)://host[:port]`.
+ * Plain `http://` stays allowed: a home server on LAN Wi-Fi is typically
+ * plain HTTP. Strict-parse with `new URL`: only `http:`/`https:` with a host
+ * and no path, userinfo, query, fragment, or whitespace is accepted;
+ * everything else resolves to `''`.
  * @param {string | undefined} raw Untrusted base value.
- * @returns {string} Trimmed base with no trailing slash, or `''` when unset
- * or not an http(s) host.
+ * @returns {string} Normalized `protocol//host` base, or `''` when unset
+ * or invalid.
  */
 export function resolveApiBase(raw) {
   if (typeof raw !== 'string') return '';
   const trimmed = raw.trim().replace(/\/+$/, '');
-  if (!/^https?:\/\/[^/]+$/i.test(trimmed)) return '';
-  return trimmed;
+  if (!trimmed || /\s/.test(trimmed)) return '';
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return '';
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return '';
+  }
+  if (!parsed.hostname) return '';
+  if (parsed.username || parsed.password) return '';
+  if (parsed.search || parsed.hash) return '';
+  if (parsed.pathname !== '/' && parsed.pathname !== '') return '';
+  return `${parsed.protocol}//${parsed.host}`;
 }
 
 /**
@@ -66,8 +83,12 @@ function readStoredValue(key) {
 }
 
 /**
- * Read the stored API base override and resolve it. Build env wins, then
- * Node env, then `localStorage`; unset or invalid means same-origin.
+ * Read the stored API base override and resolve it. The `import.meta.env`
+ * lookup is effectively dead in the browser bundle: Vite only inlines
+ * `VITE_`-prefixed keys, and `GEV_API_BASE` is not one, so the browser path
+ * resolves from the `localStorage`/Preferences mirror below. Node env still
+ * applies outside the browser (SSR, tests), then `localStorage`; unset or
+ * invalid means same-origin.
  * @returns {string} Resolved base, or `''` (same-origin) when unset.
  */
 export function storedApiBase() {

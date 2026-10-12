@@ -16,8 +16,9 @@ import { API_BASE_STORAGE_KEY, resolveApiBase } from './runtimeConfig.js';
  * }
  * ```
  *
- * Validation always delegates to `resolveApiBase`, so only `https://host`
- * bases persist and anything else fails closed to `''` (same-origin). Values
+ * Validation always delegates to `resolveApiBase`, so only
+ * `http(s)://host[:port]` bases persist and anything else fails closed to
+ * `''` (same-origin). Values
  * are never logged.
  *
  * @module mobile/keyStore

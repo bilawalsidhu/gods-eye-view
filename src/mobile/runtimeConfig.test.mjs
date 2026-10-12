@@ -28,6 +28,25 @@ test('resolveApiBase trims the host base with no trailing slash', () => {
   assert.equal(resolveApiBase('https://home:4173/'), 'https://home:4173');
 });
 
+test('resolveApiBase accepts a plain-http LAN host', () => {
+  assert.equal(
+    resolveApiBase('http://192.168.1.10:4173'),
+    'http://192.168.1.10:4173',
+  );
+});
+
+test('resolveApiBase rejects userinfo, query, fragment, spaces, and paths', () => {
+  assert.equal(resolveApiBase('http://user@home:4173'), '');
+  assert.equal(resolveApiBase('https://home:4173?x=1'), '');
+  assert.equal(resolveApiBase('https://host?x'), '');
+  assert.equal(resolveApiBase('https://home:4173#frag'), '');
+  assert.equal(resolveApiBase('https://ho st:4173'), '');
+  assert.equal(resolveApiBase('https://home:4173/evil'), '');
+  assert.equal(resolveApiBase('http://localhost:9999/evil?.js'), '');
+  assert.equal(resolveApiBase('ftp://home:4173'), '');
+  assert.equal(resolveApiBase('home:4173'), '');
+});
+
 test('joinApi prefixes service paths with the base', () => {
   assert.equal(joinApi('', '/api/terrain/heights'), '/api/terrain/heights');
   assert.equal(

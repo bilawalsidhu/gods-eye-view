@@ -51,7 +51,8 @@
     "qa:street-level:fixtures": "node scripts/qa-street-level.mjs --fixtures",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
     "qa:transit": "node scripts/qa-transit.mjs",
-    "mcp": "node server/mcp/stdio.js"
+    "mcp": "node server/mcp/stdio.js",
+    "smoke:mobile": "node scripts/mobile/smoke-check.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
