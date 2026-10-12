@@ -1,0 +1,36 @@
+[
+  {
+    "id": "synthetic-1",
+    "name": "Invented QA camera 1",
+    "lat": 1.251,
+    "lon": 2.501,
+    "url": "http://127.0.0.1:4173/test-fixtures/synthetic-camera.svg",
+    "provider": "Synthetic fixture (not an observation)",
+    "credit": "Original MIT test drawing",
+    "license": "MIT synthetic fixture",
+    "feedType": "image",
+    "sourceKind": "synthetic-test",
+    "headingDeg": 90,
+    "pitchDeg": -20,
+    "fovDeg": 45,
+    "rangeM": 160,
+    "mountHeightM": 8
+  },
+  {
+    "id": "synthetic-2",
+    "name": "Invented QA camera 2",
+    "lat": 1.252,
+    "lon": 2.502,
+    "url": "http://127.0.0.1:4173/test-fixtures/synthetic-camera.svg",
+    "provider": "Synthetic fixture (not an observation)",
+    "credit": "Original MIT test drawing",
+    "license": "MIT synthetic fixture",
+    "feedType": "image",
+    "sourceKind": "synthetic-test",
+    "headingDeg": 90,
+    "pitchDeg": -20,
+    "fovDeg": 45,
+    "rangeM": 160,
+    "mountHeightM": 8
+  }
+]

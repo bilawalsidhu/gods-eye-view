@@ -164,3 +164,38 @@ enable a layer, zoom in, then select a rendered record to inspect source-reporte
 fields. Technology filters select explicit tags only; missing metadata is Unknown.
 See the [synthetic screenshot gallery](media/local-features/README.md) for the
 phone menu, camera presentation and snapshot controls.
+
+## Reproduce the synthetic UI gate
+
+Use a separate keyless checkout with no deployment `.env`. The synthetic example
+contains two invented cameras and fetches only the bundled original drawing on
+loopback port 4173. It is test data, not an operational source catalog. In one
+PowerShell terminal, start that fixture server:
+
+```powershell
+$env:CCTV_SOURCES_FILE = (Resolve-Path config/cctv_sources.synthetic.example.json).Path
+$env:CCTV_GEORGIA511_ENABLED = '0'
+npm run start:local
+```
+
+For a POSIX shell, use:
+
+```sh
+CCTV_SOURCES_FILE="$PWD/config/cctv_sources.synthetic.example.json" CCTV_GEORGIA511_ENABLED=0 npm run start:local
+```
+
+Require port 4173 for this example; if it is busy, stop the fixture server and
+choose another checkout/port explicitly, updating only the invented example's
+loopback frame URLs. In another terminal, run:
+
+```sh
+node scripts/qa-local-observation.mjs --url http://127.0.0.1:4173
+```
+
+The gate uses a new headless profile, invented location and mocked OpenAI requests.
+If the configured Puppeteer browser is not already present, set
+`PUPPETEER_EXECUTABLE_PATH` to your installed supported browser; this gate does not
+install one. Screenshots, its private profile and downloads go to ignored
+`qa-artifacts/local-observation/`. They are not contribution files. This gate
+covers presentation, Refresh, Close, locate privacy and snapshot/Q&A interaction;
+server provider and permission failures are also covered by the unit tests.
