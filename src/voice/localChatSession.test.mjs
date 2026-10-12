@@ -316,3 +316,308 @@ test('oversized context, malformed results and disposed sessions fail without cl
     false,
   );
 });
+
+const flushStream = () => new Promise((resolve) => setImmediate(resolve));
+const encodeEvent = (event) =>
+  new TextEncoder().encode(JSON.stringify(event) + '\n');
+const terminal = (content = 'A complete answer', toolCalls = []) => ({
+  type: 'complete',
+  content,
+  model: 'fixture/actual-model',
+  toolCalls,
+  finishReason: toolCalls.length ? 'tool_calls' : 'stop',
+});
+function streamFixture() {
+  let controller;
+  let cancelled = 0;
+  const response = new Response(
+    new ReadableStream({
+      start(value) {
+        controller = value;
+      },
+      cancel() {
+        cancelled++;
+      },
+    }),
+    { headers: { 'Content-Type': 'application/x-ndjson' } },
+  );
+  return {
+    response,
+    event: (value) => controller.enqueue(encodeEvent(value)),
+    bytes: (value) => controller.enqueue(value),
+    close: () => controller.close(),
+    get cancelled() {
+      return cancelled;
+    },
+  };
+}
+
+test('streaming emits UTF-8 text before completion, preserves IDs and waits for EOF to confirm', async () => {
+  const stream = streamFixture();
+  const events = [];
+  const session = createLocalChatSession({
+    emit: (event) => events.push(event),
+    allowTools: false,
+    fetchImpl: async (_url, init) => {
+      assert.equal(JSON.parse(init.body).stream, true);
+      return stream.response;
+    },
+  });
+  session.start();
+  const pending = session.sendText('Fixture');
+  const bytes = encodeEvent({
+    type: 'delta',
+    content: '東京 🌍',
+    model: 'fixture/first-model',
+  });
+  for (const byte of bytes) stream.bytes(Uint8Array.of(byte));
+  await flushStream();
+  let assistant = events.filter(
+    (event) => event.type === 'transcript' && event.role === 'assistant',
+  );
+  assert.equal(assistant.length, 1);
+  assert.equal(assistant[0].text, '東京 🌍');
+  assert.equal(assistant[0].final, false);
+  stream.event({
+    type: 'delta',
+    content: ' live',
+    model: 'fixture/actual-model',
+  });
+  stream.event(terminal('東京 🌍 live'));
+  await flushStream();
+  assert.equal(
+    events.some((event) => event.type === 'completion'),
+    false,
+  );
+  stream.close();
+  assert.equal(await pending, '東京 🌍 live');
+  assistant = events.filter(
+    (event) => event.type === 'transcript' && event.role === 'assistant',
+  );
+  assert.equal(new Set(assistant.map((event) => event.itemId)).size, 1);
+  assert.equal(assistant.at(-1).text, '東京 🌍 live');
+  assert.equal(assistant.at(-1).model, 'fixture/actual-model');
+  assert.equal(assistant.at(-1).final, true);
+  session.stop();
+});
+
+test('streamed tool prefaces are discarded and tools wait for the terminal event and EOF', async () => {
+  const stream = streamFixture();
+  const events = [];
+  const actions = [];
+  const requests = [];
+  const session = createLocalChatSession({
+    emit: (event) => events.push(event),
+    runAction: async (name) => {
+      actions.push(name);
+      return { ok: true, observed: 'fixture-result' };
+    },
+    fetchImpl: async (_url, init) => {
+      requests.push(JSON.parse(init.body));
+      return requests.length === 1
+        ? stream.response
+        : reply('Confirmed fixture-result');
+    },
+  });
+  session.start();
+  const pending = session.sendText('Read view');
+  stream.event({ type: 'delta', content: 'Reading the view…' });
+  await flushStream();
+  assert.deepEqual(actions, []);
+  stream.event(
+    terminal('Reading the view…', [
+      { id: 't1', name: 'get_current_view_state', arguments: {} },
+    ]),
+  );
+  await flushStream();
+  assert.deepEqual(actions, []);
+  stream.close();
+  assert.equal(await pending, 'Confirmed fixture-result');
+  assert.deepEqual(actions, ['get_current_view_state']);
+  assert.equal(
+    JSON.parse(requests[1].messages.at(-1).content).observed,
+    'fixture-result',
+  );
+  const assistant = events.filter((event) => event.role === 'assistant');
+  assert.equal(assistant[1].discard, true);
+  assert.equal(assistant[1].itemId, assistant[0].itemId);
+  assert.notEqual(assistant.at(-1).itemId, assistant[0].itemId);
+  session.stop();
+});
+
+for (const kind of [
+  'truncated',
+  'error',
+  'duplicate terminal',
+  'delta after terminal',
+  'malformed terminal',
+]) {
+  test(`a ${kind} stream cannot execute tools or claim a complete answer`, async () => {
+    const stream = streamFixture();
+    const events = [];
+    const session = createLocalChatSession({
+      emit: (event) => events.push(event),
+      runAction: () => assert.fail('No unverified tool execution'),
+      fetchImpl: async () => stream.response,
+    });
+    session.start();
+    const pending = session.sendText('Fixture');
+    const rejection = assert.rejects(
+      pending,
+      kind === 'error' ? /rate limited/ : /stream/,
+    );
+    stream.event({ type: 'delta', content: 'Partial evidence' });
+    if (kind === 'error')
+      stream.event({
+        type: 'error',
+        error: 'Model route is rate limited.',
+        retryAfterSeconds: 60,
+      });
+    if (['duplicate terminal', 'delta after terminal'].includes(kind))
+      stream.event(
+        terminal('', [
+          { id: 't1', name: 'get_current_view_state', arguments: {} },
+        ]),
+      );
+    if (kind === 'duplicate terminal') stream.event(terminal());
+    if (kind === 'delta after terminal')
+      stream.event({ type: 'delta', content: 'late' });
+    if (kind === 'malformed terminal')
+      stream.bytes(new TextEncoder().encode('{"type":"complete"'));
+    stream.close();
+    await rejection;
+    assert.equal(
+      events.filter((event) => event.type === 'transcript').at(-1).incomplete,
+      true,
+    );
+    assert.equal(
+      events.some(
+        (event) => event.type === 'completion' && event.status === 'completed',
+      ),
+      false,
+    );
+    session.stop();
+  });
+}
+
+test('stop cancels a streaming reader and marks the existing partial incomplete without late actions', async () => {
+  const stream = streamFixture();
+  const events = [];
+  const session = createLocalChatSession({
+    emit: (event) => events.push(event),
+    runAction: () => assert.fail('No action after cancellation'),
+    fetchImpl: async () => stream.response,
+  });
+  session.start();
+  const pending = session.sendText('Fixture');
+  const rejection = assert.rejects(pending, { name: 'AbortError' });
+  stream.event({ type: 'delta', content: 'Unfinished response' });
+  await flushStream();
+  session.stop();
+  await rejection;
+  assert.equal(stream.cancelled, 1);
+  const assistant = events.filter((event) => event.role === 'assistant');
+  assert.equal(assistant.length, 2);
+  assert.equal(assistant[1].incomplete, true);
+  assert.equal(assistant[1].itemId, assistant[0].itemId);
+});
+
+test('stream byte caps and invalid UTF-8 fail closed and cancel the response', async () => {
+  for (const bytes of [new Uint8Array(1024 * 1024 + 1), Uint8Array.of(0xff)]) {
+    const stream = streamFixture();
+    const session = createLocalChatSession({
+      fetchImpl: async () => stream.response,
+    });
+    session.start();
+    const rejection = assert.rejects(session.sendText('Fixture'));
+    stream.bytes(bytes);
+    await rejection;
+    assert.equal(stream.cancelled, 1);
+    session.stop();
+  }
+});
+
+test('a late streaming response after Stop is cancelled before any delta is emitted', async () => {
+  const stream = streamFixture();
+  const events = [];
+  let release;
+  const session = createLocalChatSession({
+    emit: (event) => events.push(event),
+    fetchImpl: () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  });
+  session.start();
+  const rejection = assert.rejects(session.sendText('Fixture'), {
+    name: 'AbortError',
+  });
+  session.stop();
+  stream.event({ type: 'delta', content: 'Late untrusted output' });
+  release(stream.response);
+  await rejection;
+  assert.equal(stream.cancelled, 1);
+  assert.equal(
+    events.some((event) => event.role === 'assistant'),
+    false,
+  );
+});
+
+test('a declared oversized stream is cancelled without reading its body', async () => {
+  let cancelled = 0;
+  const response = new Response(
+    new ReadableStream({
+      cancel() {
+        cancelled++;
+      },
+    }),
+    {
+      headers: {
+        'Content-Type': 'application/x-ndjson',
+        'Content-Length': String(1024 * 1024 + 1),
+      },
+    },
+  );
+  const session = createLocalChatSession({ fetchImpl: async () => response });
+  session.start();
+  await assert.rejects(session.sendText('Fixture'), /stream/);
+  assert.equal(cancelled, 1);
+  session.stop();
+});
+
+test('abort wins even if a nonconforming reader does not settle its pending read on cancellation', async () => {
+  let started;
+  const reading = new Promise((resolve) => {
+    started = resolve;
+  });
+  let cancelled = 0;
+  let released = 0;
+  const response = {
+    ok: true,
+    headers: new Headers({ 'Content-Type': 'application/x-ndjson' }),
+    body: {
+      getReader: () => ({
+        read() {
+          started();
+          return new Promise(() => {});
+        },
+        async cancel() {
+          cancelled++;
+        },
+        releaseLock() {
+          released++;
+        },
+      }),
+    },
+  };
+  const session = createLocalChatSession({ fetchImpl: async () => response });
+  session.start();
+  const rejection = assert.rejects(session.sendText('Fixture'), {
+    name: 'AbortError',
+  });
+  await reading;
+  session.stop();
+  await rejection;
+  assert.equal(cancelled, 1);
+  assert.equal(released, 1);
+});

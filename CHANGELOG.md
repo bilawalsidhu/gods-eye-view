@@ -1,5 +1,9 @@
 # Changelog
 
+- Stream gateway chat text into the Intelligence panel as it arrives. Preserve
+  validated tool-call continuation, cancellation and bounded responses; label
+  interrupted partial answers as incomplete. HUD summaries remain buffered.
+
 - Support an explicitly configured OpenRouter free route through the loopback
   Bifrost gateway while retaining local-model configuration. Preserve actual
   returned model identity and surface rate limits, quota and availability errors

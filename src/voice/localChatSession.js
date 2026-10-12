@@ -1,5 +1,6 @@
-import { readResponseJsonCapped } from '../sources/httpBody.js';
+import { readLocalChatResponse } from './localChatStream.js';
 
+let nextSessionId = 0;
 const MAX_ROUNDS = 4;
 const MAX_CONTEXT_CHARS = 24000;
 const MAX_RESULT_CHARS = 16000;
@@ -16,13 +17,32 @@ export function createLocalChatSession({
   // The server separately bounds each inference request to 180 seconds including queue time.
   timeoutMs = 300_000,
 }) {
+  const sessionId = ++nextSessionId;
   let active = false;
   let generation = 0;
   let pending = null;
   let context = null;
   let turns = [];
+  let partial = null;
   const announce = (event) => emit?.(event);
+  const modelName = (value) =>
+    typeof value === 'string' && value.length <= 200 ? value.trim() : null;
+  const settlePartial = (options = {}) => {
+    if (partial?.text)
+      announce({
+        type: 'transcript',
+        role: 'assistant',
+        text: partial.text,
+        itemId: partial.itemId,
+        responseId: partial.itemId,
+        model: partial.model,
+        final: true,
+        ...options,
+      });
+    partial = null;
+  };
   function stop() {
+    settlePartial({ incomplete: true });
     active = false;
     generation++;
     pending?.abort();
@@ -59,6 +79,7 @@ export function createLocalChatSession({
       if (!active) throw new Error('Start the text assistant first.');
       if (typeof text !== 'string' || !text.trim() || text.length > 8000)
         throw new Error('Enter a message of at most 8000 characters.');
+      settlePartial({ incomplete: true });
       pending?.abort();
       const owner = ++generation;
       const controller = new AbortController();
@@ -95,6 +116,8 @@ export function createLocalChatSession({
       try {
         for (let round = 0; round <= MAX_ROUNDS; round++) {
           check();
+          const itemId = `gev-text-${sessionId}-${owner}-${round}`;
+          partial = { owner, itemId, text: '', model: null };
           const response = await fetchImpl(endpoint, {
             method: 'POST',
             redirect: 'error',
@@ -103,21 +126,28 @@ export function createLocalChatSession({
             body: JSON.stringify({
               messages: [...turns.flat(), ...turn],
               tools: allowTools,
+              stream: true,
             }),
           });
-          check();
-          const result = await readResponseJsonCapped(
-            response,
-            1024 * 1024,
+          // The reader also cancels a late response body if this turn was stopped.
+          const result = await readLocalChatResponse(response, {
             signal,
-          );
+            onDelta(event) {
+              check();
+              partial.text += event.content;
+              partial.model = modelName(event.model) || partial.model;
+              announce({
+                type: 'transcript',
+                role: 'assistant',
+                text: event.content,
+                itemId,
+                responseId: itemId,
+                model: partial.model,
+                final: false,
+              });
+            },
+          });
           check();
-          if (!response.ok)
-            throw new Error(
-              typeof result?.error === 'string'
-                ? result.error
-                : 'Model gateway request failed.',
-            );
           if (
             !result ||
             typeof result.content !== 'string' ||
@@ -145,6 +175,7 @@ export function createLocalChatSession({
                 throw new Error('Invalid tool call.');
               ids.add(call.id);
             }
+            settlePartial({ discard: true });
             // Providers may reuse IDs such as call_0 in every response.
             // Own the conversation IDs so later turns remain unambiguous.
             const calls = result.toolCalls.map((call, index) => ({
@@ -207,12 +238,12 @@ export function createLocalChatSession({
             type: 'transcript',
             role: 'assistant',
             text: result.content,
-            model:
-              typeof result.model === 'string' && result.model.length <= 200
-                ? result.model.trim()
-                : null,
+            itemId,
+            responseId: itemId,
+            model: modelName(result.model),
             final: true,
           });
+          partial = null;
           announce({ type: 'completion', status: 'completed' });
           announce({
             type: 'state',
@@ -222,6 +253,7 @@ export function createLocalChatSession({
           return result.content;
         }
       } catch (error) {
+        if (partial?.owner === owner) settlePartial({ incomplete: true });
         if (owner === generation && active) {
           announce({ type: 'completion', status: 'error' });
           announce({

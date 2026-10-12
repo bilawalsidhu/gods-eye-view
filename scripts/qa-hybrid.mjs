@@ -61,8 +61,19 @@ try {
       }
       if (!response.url().endsWith('/api/local-model/chat')) return;
       try {
-        const data = await response.json();
+        const body = await response.text();
+        const events = response
+          .headers()
+          ['content-type']?.includes('application/x-ndjson')
+          ? body
+              .trim()
+              .split('\n')
+              .map((line) => JSON.parse(line))
+          : [];
+        const data = events.length ? events.at(-1) : JSON.parse(body);
         report.modelResponses.push({
+          streamed: events.some((event) => event.type === 'delta'),
+          terminal: data.type || null,
           status: response.status(),
           model: data.model,
           toolNames: (data.toolCalls || []).map((call) => call.name),
@@ -88,7 +99,34 @@ try {
       '#hybrid-chat-question',
       'Call world_monitor_country_headlines for country US, then state its coverage status in one sentence. Use the tool before answering.',
     );
+    await page.evaluate(() => {
+      window.__hybridStreamTiming = { start: performance.now(), samples: [] };
+      const observer = new MutationObserver(() => {
+        const row = document.querySelector(
+          '.hybrid-chat-message[data-state="receiving"]',
+        );
+        if (row)
+          window.__hybridStreamTiming.samples.push({
+            ms: Math.round(
+              performance.now() - window.__hybridStreamTiming.start,
+            ),
+            characters: row.querySelector('p').textContent.length,
+            busy: document
+              .querySelector('.hybrid-chat-form')
+              .getAttribute('aria-busy'),
+          });
+      });
+      observer.observe(document.querySelector('.hybrid-chat-transcript'), {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+    });
     await page.click('.hybrid-chat-form button[type="submit"]');
+    await page.waitForSelector('.hybrid-chat-message[data-state="receiving"]', {
+      timeout: 185000,
+    });
+    await page.screenshot({ path: new URL('streaming.png', output).pathname });
     await page.waitForFunction(
       () =>
         document
@@ -102,6 +140,18 @@ try {
     );
     if (!replies.length) throw new Error('No local assistant response');
     report.assistantReply = replies.at(-1);
+    report.streaming = await page.evaluate(() => ({
+      ...window.__hybridStreamTiming,
+      completedMs: Math.round(
+        performance.now() - window.__hybridStreamTiming.start,
+      ),
+    }));
+    if (!report.streaming.samples.some((sample) => sample.busy === 'true'))
+      throw new Error('No visible text before answer completion');
+    report.checks.push({
+      name: 'text-visible-during-generation',
+      passed: true,
+    });
     if (
       !report.modelResponses.some((response) =>
         response.toolNames.includes('world_monitor_country_headlines'),

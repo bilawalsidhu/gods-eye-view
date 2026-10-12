@@ -199,22 +199,44 @@ export function createHybridIntelligence({
     question.disabled = chatBusy;
     chatForm.setAttribute('aria-busy', String(chatBusy));
   };
-  const addMessage = (role, content, model) => {
-    if (!text(content)) return;
-    const message = make('article', 'hybrid-chat-message');
-    message.dataset.role = role;
-    message.append(
-      make(
-        'h4',
-        '',
-        role === 'user'
-          ? 'You'
-          : `Assistant${text(model) && model.length <= 200 ? ` · ${model}` : ''}`,
-      ),
-      make('p', '', content),
-    );
-    transcript.append(message);
-    while (transcript.children.length > 24) transcript.children[0].remove();
+  const transcriptItems = new Map();
+  const addMessage = (event) => {
+    const { role, text: content, model, itemId } = event;
+    let item = itemId ? transcriptItems.get(itemId) : null;
+    if (event.discard) {
+      item?.node.remove();
+      transcriptItems.delete(itemId);
+      return;
+    }
+    if ((typeof content !== 'string' || !content.length) && !item) return;
+    if (!item) {
+      const node = make('article', 'hybrid-chat-message');
+      node.dataset.role = role;
+      const title = make('h4', '');
+      const body = make('p', '');
+      node.append(title, body);
+      item = { node, title, body, content: '', model: null };
+      if (itemId) transcriptItems.set(itemId, item);
+      transcript.append(node);
+    }
+    item.content = event.final ? content : item.content + content;
+    item.model = text(model) && model.length <= 200 ? model : item.model;
+    item.title.textContent =
+      role === 'user'
+        ? 'You'
+        : `Assistant${item.model ? ` · ${item.model}` : ''}${event.incomplete ? ' · Incomplete' : event.final ? '' : ' · Receiving…'}`;
+    item.body.textContent = item.content;
+    item.node.dataset.state = event.incomplete
+      ? 'incomplete'
+      : event.final
+        ? 'complete'
+        : 'receiving';
+    while (transcript.children.length > 24) {
+      const oldest = transcript.children[0];
+      for (const [id, value] of transcriptItems)
+        if (value.node === oldest) transcriptItems.delete(id);
+      oldest.remove();
+    }
     transcript.scrollTop = transcript.scrollHeight;
   };
   const showCountry = (data) => {
@@ -433,8 +455,7 @@ export function createHybridIntelligence({
         allowTools: Boolean(runAction),
         emit(event) {
           if (disposed || epoch !== sessionEpoch) return;
-          if (event.type === 'transcript' && event.final)
-            addMessage(event.role, event.text, event.model);
+          if (event.type === 'transcript') addMessage(event);
           if (event.type === 'state') {
             const stateDescription =
               event.state === 'error'
@@ -554,8 +575,8 @@ export function createHybridIntelligence({
   });
   listen(stopButton, 'click', () => {
     generation++;
-    sessionEpoch++;
     session?.stop();
+    sessionEpoch++;
     session = null;
     chatBusy = false;
     chatStatus.textContent =

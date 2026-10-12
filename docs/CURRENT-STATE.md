@@ -5144,6 +5144,21 @@ Chat preserves the returned model identity, which may differ between free-route
 requests. Rate limits remain HTTP 429; quota and temporary upstream unavailability
 are surfaced safely, with bounded numeric retry guidance and no adapter retry or
 alternate-model fallback. Raw upstream errors are not exposed.
+Chat requests set `stream: true`. The server parses bounded OpenAI-compatible SSE,
+forwards text deltas as NDJSON, and emits a validated completion before the client
+runs any tools. Fragmented tool arguments stay server-side until complete. The
+Intelligence panel updates one row during generation and labels interrupted text
+as incomplete; partial turns never enter subsequent conversation history. Early
+provider failures retain their HTTP status; failures after streaming starts use
+a sanitized terminal error event. No automatic retry is added. Streaming reduces
+the wait for visible text, but cannot eliminate provider queue or first-token
+latency. Non-streaming API callers and HUD summaries retain JSON responses.
+`npm run qa:hybrid` with `QA_LIVE_LOCAL_MODEL=1` checks text visibility during
+generation, live tool continuation, and desktop/mobile layouts.
+`node scripts/qa-hybrid-stream.mjs` holds synthetic chat streams open to verify
+visible partial text, Stop, incomplete marking, and mobile recovery without
+spending model requests.
+
 An explicit text gateway profile disables Realtime token/login routes and uses
 the same model for HUD summaries unless a server-owned HUD override is set.
 Each assistant answer displays the actual returned model, and the HUD response

@@ -1,4 +1,6 @@
 import { open } from 'node:fs/promises';
+import { once } from 'node:events';
+import { readLocalModelStream } from './local-model-stream.js';
 import { constants } from 'node:fs';
 import { isLocalMcpRequest } from '../../src/localMcpGate.mjs';
 import { readRequestBody } from './common/request.js';
@@ -299,7 +301,7 @@ function normalizeMessages(messages, names) {
 
 /** Complete one bounded text/tool turn through the loopback gateway, with no retry or fallback. */
 export async function completeLocalModel(
-  { messages, tools = [], instructions, signal },
+  { messages, tools = [], instructions, signal, onDelta },
   {
     environment = process.env,
     fetchImpl = (...args) => fetch(...args),
@@ -352,7 +354,7 @@ export async function completeLocalModel(
             ],
             max_tokens: maxTokens,
             temperature: 0.2,
-            stream: false,
+            stream: typeof onDelta === 'function',
             ...(tools.length
               ? {
                   tools: tools.map(({ name, description, parameters }) => ({
@@ -368,15 +370,19 @@ export async function completeLocalModel(
           await cancelResponseBodyBounded(response);
           throw upstreamFailure(response);
         }
-        const data = await readResponseJsonCapped(
-          response,
-          RESPONSE_BYTES,
-          signal,
-        );
+        const data =
+          typeof onDelta === 'function'
+            ? await readLocalModelStream(response, {
+                signal,
+                onDelta,
+                model: config.model,
+                maxBytes: RESPONSE_BYTES,
+              })
+            : await readResponseJsonCapped(response, RESPONSE_BYTES, signal);
         const choice = data?.choices?.[0];
         if (
           !choice?.message ||
-          ['length', 'content_filter'].includes(choice.finish_reason)
+          ['length', 'content_filter', 'error'].includes(choice.finish_reason)
         )
           throw new Error('Incomplete response');
         const content = choice.message.content ?? '';
@@ -484,6 +490,21 @@ export async function withLocalModelRequest(
     }
     return await callback(input, disconnect.signal);
   } catch (error) {
+    if (res.headersSent) {
+      if (!res.destroyed && !res.writableEnded)
+        res.end(
+          JSON.stringify({
+            type: 'error',
+            error: error.status
+              ? error.message
+              : 'Model gateway request failed.',
+            ...(error.retryAfterSeconds
+              ? { retryAfterSeconds: error.retryAfterSeconds }
+              : {}),
+          }) + '\n',
+        );
+      return;
+    }
     if (error.retryAfterSeconds && !res.destroyed && !res.writableEnded)
       res.setHeader('Retry-After', String(error.retryAfterSeconds));
     json(res, error.code === 'BODY_TOO_LARGE' ? 413 : error.status || 502, {
@@ -536,16 +557,45 @@ export function localModelProxy({
           if (!input || typeof input !== 'object' || Array.isArray(input))
             throw failure(400, 'Invalid model gateway request.');
           const allowTools = input.tools !== false;
+          const streaming = input.stream === true;
+          const writeEvent = async (
+            event,
+            writeSignal = AbortSignal.any([
+              signal,
+              AbortSignal.timeout(deps.timeoutMs || 180_000),
+            ]),
+          ) => {
+            signal.throwIfAborted();
+            if (res.destroyed || res.writableEnded)
+              throw failure(499, 'Local request cancelled.');
+            if (!res.headersSent)
+              res.writeHead(200, {
+                'Content-Type': 'application/x-ndjson; charset=utf-8',
+                'Cache-Control': 'no-store, no-transform',
+                'X-Accel-Buffering': 'no',
+              });
+            if (!res.write(JSON.stringify(event) + '\n'))
+              await once(res, 'drain', { signal: writeSignal });
+          };
           const result = await completeLocalModel(
             {
               messages: input.messages,
               tools: allowTools ? tools : [],
               signal,
               instructions: allowTools ? TEXT_INSTRUCTIONS : undefined,
+              ...(streaming
+                ? {
+                    onDelta: (delta, streamSignal) =>
+                      writeEvent({ type: 'delta', ...delta }, streamSignal),
+                  }
+                : {}),
             },
             { environment, ...deps },
           );
-          json(res, 200, result);
+          if (streaming) {
+            await writeEvent({ type: 'complete', ...result });
+            res.end();
+          } else json(res, 200, result);
         },
         deps,
       );

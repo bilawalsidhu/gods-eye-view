@@ -360,3 +360,162 @@ test('a throttled assistant keeps the sanitized gateway error visible without re
   assert.equal(f.named('Send').disabled, false);
   f.view.destroy();
 });
+
+test('streaming updates one assistant row and confirms it in place with the actual model', async () => {
+  let emit;
+  let finish;
+  const f = fixture({
+    createSession: (options) => {
+      emit = options.emit;
+      return {
+        start() {},
+        stop() {},
+        sendMapEvent() {},
+        sendText: () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      };
+    },
+  });
+  f.view.open();
+  await flush();
+  f.byId('hybrid-chat-question').value = 'Fixture';
+  f.find((node) => node.className === 'hybrid-chat-form').dispatchEvent(
+    new Event('submit'),
+  );
+  await flush();
+  const base = {
+    type: 'transcript',
+    role: 'assistant',
+    itemId: 'round-1',
+    final: false,
+  };
+  emit({ ...base, text: 'First ', model: 'fixture/initial-model' });
+  const transcript = f.find(
+    (node) => node.className === 'hybrid-chat-transcript',
+  );
+  const row = transcript.children[0];
+  assert.equal(row.dataset.state, 'receiving');
+  emit({ ...base, text: '<img src=x>', model: 'fixture/actual-model' });
+  assert.equal(transcript.children.length, 1);
+  assert.equal(row.children[1].textContent, 'First <img src=x>');
+  emit({
+    ...base,
+    text: 'Final answer',
+    model: 'fixture/actual-model',
+    final: true,
+  });
+  assert.equal(transcript.children[0], row);
+  assert.equal(row.children[1].textContent, 'Final answer');
+  assert.equal(row.children[0].textContent, 'Assistant · fixture/actual-model');
+  assert.equal(row.dataset.state, 'complete');
+  finish('Final answer');
+  await flush();
+  f.view.destroy();
+});
+
+test('a streamed tool preface is removed before the answer row', async () => {
+  let emit;
+  let finish;
+  const f = fixture({
+    createSession: (options) => {
+      emit = options.emit;
+      return {
+        start() {},
+        stop() {},
+        sendMapEvent() {},
+        sendText: () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      };
+    },
+  });
+  f.view.open();
+  await flush();
+  f.byId('hybrid-chat-question').value = 'Fixture';
+  f.find((node) => node.className === 'hybrid-chat-form').dispatchEvent(
+    new Event('submit'),
+  );
+  await flush();
+  const base = { type: 'transcript', role: 'assistant', itemId: 'tool-round' };
+  emit({ ...base, text: 'Reading data', final: false });
+  emit({ ...base, text: 'Reading data', final: true, discard: true });
+  const transcript = f.find(
+    (node) => node.className === 'hybrid-chat-transcript',
+  );
+  assert.equal(transcript.children.length, 0);
+  emit({
+    ...base,
+    itemId: 'answer-round',
+    text: 'Verified answer',
+    final: true,
+  });
+  assert.equal(transcript.children.length, 1);
+  assert.equal(
+    transcript.children[0].children[1].textContent,
+    'Verified answer',
+  );
+  finish('Verified answer');
+  await flush();
+  f.view.destroy();
+});
+
+test('stopping an actual stream marks its row incomplete and a new session keeps that row', async () => {
+  const controllers = [];
+  const f = fixture({
+    fetchImpl: async (url) => {
+      if (url.endsWith('/status')) return json(ready);
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controllers.push(controller);
+          },
+        }),
+        { headers: { 'Content-Type': 'application/x-ndjson' } },
+      );
+    },
+  });
+  const send = async () => {
+    f.byId('hybrid-chat-question').value = 'Fixture';
+    f.find((node) => node.className === 'hybrid-chat-form').dispatchEvent(
+      new Event('submit'),
+    );
+    await flush();
+  };
+  f.view.open();
+  await flush();
+  await send();
+  const event = (index, value) =>
+    controllers[index].enqueue(
+      new TextEncoder().encode(JSON.stringify(value) + '\n'),
+    );
+  event(0, { type: 'delta', content: 'Partial answer' });
+  await flush();
+  f.named('Stop').click();
+  await flush();
+  const transcript = f.find(
+    (node) => node.className === 'hybrid-chat-transcript',
+  );
+  const partial = transcript.children[1];
+  assert.equal(partial.dataset.state, 'incomplete');
+  assert.match(partial.children[0].textContent, /Incomplete/);
+  await send();
+  event(1, {
+    type: 'complete',
+    content: 'New complete answer',
+    model: 'fixture/model',
+    toolCalls: [],
+  });
+  controllers[1].close();
+  await flush();
+  assert.equal(transcript.children.length, 4);
+  assert.equal(transcript.children[1], partial);
+  assert.equal(partial.children[1].textContent, 'Partial answer');
+  assert.equal(
+    transcript.children[3].children[1].textContent,
+    'New complete answer',
+  );
+  f.view.destroy();
+});
