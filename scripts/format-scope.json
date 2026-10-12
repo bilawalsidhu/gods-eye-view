@@ -668,6 +668,7 @@
   "src/app/layerPresentation.js",
   "src/ui/navigationController.js",
   "src/ui/shareRestoration.js",
+  "src/ui/shareInvalidLayerNotice.test.mjs",
   "src/ui/visualSettings.js",
   "src/ui/panelChrome.js",
   "src/testSupport/readShellSource.mjs",

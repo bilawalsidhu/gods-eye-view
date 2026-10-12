@@ -115,3 +115,43 @@ test('valid layer state stays quiet and disposal suppresses a pending invalid no
   await flushDeferredNotice();
   assert.deepEqual(disposedNotices, []);
 });
+
+test('share-follow startup notices ignore superseded tracking results', async (t) => {
+  installBrowserGlobals(t);
+  const cover = new EventTarget();
+  globalThis.document = {
+    getElementById: (id) => (id === 'loading-screen' ? cover : null),
+  };
+  const priorGetComputedStyle = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = () => ({ visibility: 'visible' });
+  t.after(() => {
+    if (priorGetComputedStyle === undefined)
+      delete globalThis.getComputedStyle;
+    else globalThis.getComputedStyle = priorGetComputedStyle;
+  });
+
+  const notices = [];
+  const owner = createOwner(null, notices);
+  owner.start();
+  owner._handleShareTrackingRestoreStatus({
+    classification: 'expired',
+    label: 'flight',
+    targetId: 'first',
+  });
+  await flushDeferredNotice();
+  assert.deepEqual(notices, []);
+
+  owner._handleShareTrackingRestoreStatus({
+    classification: 'source-unavailable',
+    label: 'flight',
+    targetId: 'second',
+  });
+  await flushDeferredNotice();
+  assert.deepEqual(notices, []);
+
+  cover.dispatchEvent(new Event('transitionend'));
+  assert.deepEqual(notices, [
+    'Shared flight could not be restored — feed unavailable',
+  ]);
+  owner.destroy();
+});
