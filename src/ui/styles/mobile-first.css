@@ -217,6 +217,7 @@
   #right-context-rail > #pp-toggles.collapsed,
   #right-context-rail > #cctv-panel.collapsed,
   #right-context-rail > #global-context-panel.collapsed,
+  #right-context-rail > #street-level-panel.collapsed,
   #left-panel-stack > [data-panel-id].collapsed {
     display: none !important;
   }
