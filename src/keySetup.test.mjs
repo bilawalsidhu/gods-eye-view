@@ -8,6 +8,7 @@ import {
   keySetupChipLabel,
   localApiBaseStorage,
   mirrorApiBaseToLocalStorage,
+  resolveBackendBase,
   stripKeylessBasemapFromHash,
   bindKeySetupPlacement,
   waitForChatGptOAuth,
@@ -250,12 +251,22 @@ function fakeBackendElement(tag = 'div') {
     children: [],
     dataset: {},
     hidden: true,
-    textContent: '',
     value: '',
     title: '',
     placeholder: '',
     type: '',
+    inputMode: '',
     spellcheck: false,
+    _text: '',
+    // Setting text replaces children, like the real DOM: render() clears the
+    // rows host this way, so re-renders must not duplicate rows.
+    get textContent() {
+      return el._text;
+    },
+    set textContent(value) {
+      el._text = String(value ?? '');
+      el.children.length = 0;
+    },
     isConnected: true,
     _removed: false,
     _classes: new Set(),
@@ -438,7 +449,23 @@ test('buildBackendUrlRow carries the GEV_API_BASE field prefilled', () => {
   assert.equal(row.dataset.set, 'true');
   const input = row.querySelector('input[data-env-var="GEV_API_BASE"]');
   assert.equal(input.value, 'https://home:4173');
+  assert.equal(input.type, 'text');
+  assert.equal(input.inputMode, 'url');
   assert.equal(buildBackendUrlRow(documentRef).dataset.set, 'false');
+});
+
+test('resolveBackendBase prefers the store and falls back to the boot seam', async () => {
+  const { values, ...storage } = makeBackendHarness({
+    stored: 'https://home:4173',
+  }).storage;
+  assert.equal(await resolveBackendBase(storage), 'https://home:4173');
+  assert.equal(
+    await resolveBackendBase({
+      get: async () => ({ value: null }),
+    }),
+    '',
+    'empty store with no boot seam reads same-origin',
+  );
 });
 
 test('localApiBaseStorage mirrors the Preferences shape over localStorage', async () => {
@@ -595,4 +622,134 @@ test('initCapacitorBackendSetup falls back to the boot seam when storage is empt
     if (globalThis.process?.env && previousEnv !== undefined)
       globalThis.process.env.GEV_API_BASE = previousEnv;
   }
+});
+
+/** Status payload with a metered key for the merged-dialog tests. */
+function makeMergedStatus() {
+  return {
+    setCount: 0,
+    total: 1,
+    store: 'dev',
+    keys: [
+      {
+        id: 'google-maps',
+        title: 'Google Maps',
+        tier: 'metered',
+        getUrl: 'https://developers.google.com/maps',
+        unlocks: 'Switches on the photorealistic planet.',
+        envVars: ['GOOGLE_MAPS_API_KEY'],
+        set: false,
+      },
+    ],
+  };
+}
+
+/** initKeySetup harness where /api/setup/status succeeds (LAN-server flow). */
+function makeMergedHarness({ stored = null, capacitor = true } = {}) {
+  const harness = makeBackendHarness({ stored, capacitor });
+  const calls = [];
+  const status = makeMergedStatus();
+  const fetchImpl = async (url, init = {}) => {
+    calls.push({ url, init });
+    if (init.method === 'POST')
+      return { ok: true, json: async () => ({ ok: true, status }) };
+    return { ok: true, json: async () => status };
+  };
+  return { ...harness, calls, fetchImpl };
+}
+
+const findBackendInput = (root) =>
+  root.querySelector('input[data-env-var="GEV_API_BASE"]');
+
+test('capacitor merges the backend row into the keys dialog when status succeeds', async () => {
+  const { initKeySetup } = await import('./keySetup.js');
+  const harness = makeMergedHarness({ stored: 'https://home:4173' });
+  let reloads = 0;
+  const controls = await initKeySetup({
+    documentRef: harness.documentRef,
+    fetchImpl: harness.fetchImpl,
+    apiBaseStorage: harness.storage,
+    reloadImpl: () => {
+      reloads += 1;
+    },
+  });
+  assert.ok(controls, 'surface survives with keys available');
+  // The metered key row (with its cost notice) sits next to the backend row.
+  const keyInput = harness.root.querySelector(
+    'input[data-env-var="GOOGLE_MAPS_API_KEY"]',
+  );
+  assert.ok(keyInput, 'key row rendered');
+  const metered = harness.root
+    .querySelectorAll('span')
+    .find((node) => node.textContent === '🔴');
+  assert.ok(metered, 'metered-cost notice rendered');
+  assert.match(metered.title, /Metered/);
+  const backendInput = findBackendInput(harness.root);
+  assert.ok(backendInput, 'backend row merged alongside keys');
+  assert.equal(backendInput.value, 'https://home:4173');
+  assert.equal(backendInput.type, 'text');
+  assert.equal(backendInput.inputMode, 'url');
+
+  // Saving a key plus a new backend persists both, without POSTing the base.
+  keyInput.value = 'AIza-test';
+  backendInput.value = 'https://lan-backend.example:4173/';
+  harness.applyButton.fire('click');
+  await flushAsyncHandlers();
+  const posts = harness.calls.filter((call) => call.init.method === 'POST');
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].url, '/api/setup/keys');
+  const body = JSON.parse(posts[0].init.body);
+  assert.equal(body.GOOGLE_MAPS_API_KEY, 'AIza-test');
+  assert.equal(
+    'GEV_API_BASE' in body,
+    false,
+    'device backend never leaves the device',
+  );
+  assert.equal(
+    harness.storage.values.get('GEV_API_BASE'),
+    'https://lan-backend.example:4173',
+  );
+  assert.equal(reloads, 0, 'key-save restart owns the reload');
+
+  // A backend-only edit saves on-device and reloads, with no server POST.
+  const freshBackend = findBackendInput(harness.root);
+  assert.equal(
+    freshBackend.value,
+    'https://lan-backend.example:4173/',
+    'in-progress backend edit survives the key-save re-render',
+  );
+  freshBackend.value = 'https://other-backend.example';
+  harness.applyButton.fire('click');
+  await flushAsyncHandlers();
+  assert.equal(
+    harness.calls.filter((call) => call.init.method === 'POST').length,
+    1,
+    'no second POST for a backend-only save',
+  );
+  assert.equal(
+    harness.storage.values.get('GEV_API_BASE'),
+    'https://other-backend.example',
+  );
+  assert.equal(reloads, 1);
+  controls.destroy();
+});
+
+test('web success path renders keys with no backend row', async () => {
+  const { initKeySetup } = await import('./keySetup.js');
+  const harness = makeMergedHarness({ capacitor: false });
+  let reloads = 0;
+  const controls = await initKeySetup({
+    documentRef: harness.documentRef,
+    fetchImpl: harness.fetchImpl,
+    reloadImpl: () => {
+      reloads += 1;
+    },
+  });
+  assert.ok(controls);
+  assert.ok(
+    harness.root.querySelector('input[data-env-var="GOOGLE_MAPS_API_KEY"]'),
+  );
+  assert.equal(findBackendInput(harness.root), null);
+  controls.destroy();
+  assert.equal(reloads, 0);
 });
