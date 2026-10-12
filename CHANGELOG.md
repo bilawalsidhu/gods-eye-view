@@ -2,6 +2,33 @@
 
 - Malformed v2 share links now display `Shared layer selection could not be restored` after startup instead of silently falling back to defaults. Thanks to [daikaginza](https://github.com/daikaginza) for reporting #776 and [KnottyDyes](https://github.com/KnottyDyes) for independently identifying the silent layer-state drop.
 
+- Treat explicitly current, complete empty vessel coverage as a successful update,
+  clearing obsolete contacts while retaining stale or incomplete snapshots.
+
+- Custom Street Level provider switches survive share links and stored state
+  using URL-safe stable provider IDs and a shared boolean-switch codec; existing
+  Mapillary links keep their meaning. Explicit provider toggles reach durable
+  state without adopting unrelated live switch changes.
+
+- Directions and Recent Imagery accept replaceable acquisition sources, including
+  route transport, imagery catalog, thumbnails, tile templates and attribution.
+  Explicitly removing either source leaves its layer unavailable; standalone
+  defaults preserve the existing providers.
+
+- Catalog source availability no longer modifies layer objects; unavailable
+  tooltips use layer display names.
+
+- Street Level with no providers uses the shared unavailable state and refuses
+  activation before initialization, while keeping its layer identity visible.
+
+- Application source configuration accepts replacements and explicit removal.
+  Missing catalog feeds leave their layers unavailable without blocking startup
+  or making fallback requests; malformed supplied feeds remain configuration errors.
+
+- Street Level providers are optional in application composition. Omitting a
+  Mapillary source no longer prevents startup; callers can inject a different
+  provider list or an empty list without changing layer identities or share links.
+
 - Vector tile sources take their allowed tile origin from the configured
   `tileJsonUrl`, so repointing only that URL at a mirror loads tiles from the
   mirror or fails visibly instead of silently using OpenFreeMap. Thanks to
@@ -69,6 +96,10 @@
   stale, moved-camera, invalid and oversized captures still fail closed.
 
 ## [Unreleased]
+
+- Keep later satellites when a TLE catalog entry is missing an orbital line.
+  The parser skips the incomplete set and resumes at the next complete named
+  set, instead of losing the rest of the group (#906).
 
 - Add an experimental ChatGPT/Codex OAuth option for cloud voice in Provider
   Settings. API-key voice remains the default. Local sign-in can start from

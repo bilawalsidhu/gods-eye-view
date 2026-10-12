@@ -622,11 +622,17 @@ async function main() {
       await target.click(
         '.panel-collapse-btn[data-collapse-target="street-level-panel"]',
       );
-      await settle(
-        target,
-        () =>
-          getComputedStyle(document.getElementById('sl-body')).display ===
-          'flex',
+      assert.ok(
+        await settle(
+          target,
+          () =>
+            !document
+              .getElementById('street-level-panel')
+              .classList.contains('collapsed') &&
+            getComputedStyle(document.getElementById('sl-body')).display ===
+              'flex',
+        ),
+        'Street Level panel did not expand before the timeout',
       );
     };
     await expandStrip();
