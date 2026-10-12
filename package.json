@@ -55,6 +55,7 @@
     "smoke:mobile": "node scripts/mobile/smoke-check.mjs"
   },
   "dependencies": {
+    "@aparajita/capacitor-secure-storage": "^8.0.1",
     "@capacitor/android": "^8.5.3",
     "@capacitor/cli": "^8.5.3",
     "@capacitor/core": "^8.5.3",

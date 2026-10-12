@@ -6,7 +6,11 @@ import {
 } from './mobile/runtimeConfig.js';
 import { readApiBase, writeApiBase } from './mobile/keyStore.js';
 import { KEY_IDS, createVault } from './mobile/vault.js';
-import { insecureBridge } from './mobile/secureStorage.js';
+import {
+  SECURE_BACKEND,
+  insecureBridge,
+  loadVaultStorage,
+} from './mobile/secureStorage.js';
 import {
   readStoredCloudVoiceAuthMode,
   writeStoredCloudVoiceAuthMode,
@@ -488,6 +492,233 @@ export async function readVaultSnapshot(storage) {
 }
 
 /**
+ * Load the writable on-device vault for the Capacitor surfaces: the secure
+ * store when it loads, otherwise the injected Preferences fallback (still
+ * flagged insecure and bannered). The insecure fallback passes `insecureOk`
+ * explicitly — a deliberate, visible opt-in until the device reports
+ * Keystore-backed storage.
+ * @param {{ get: Function, set: Function, remove: Function }|null} preferences Injected Preferences-shaped fallback.
+ * @param {{ loadSecure?: Function }} options Secure-loader seam for tests.
+ * @returns {Promise<{ vault: object, backend: string }|null>} Vault plus its backend label, or null when no store resolves.
+ */
+export async function loadSetupVault(preferences, { loadSecure } = {}) {
+  const { store, backend } = await loadVaultStorage(preferences, {
+    loadSecure,
+  });
+  if (!store) return null;
+  const vault = createVault({
+    storage: store,
+    insecureOk: backend !== SECURE_BACKEND,
+  });
+  return { vault, backend };
+}
+
+/**
+ * Load the writable vault plus its presence snapshot for display.
+ * Fail-closed: any failure resolves to null so the dialog still renders.
+ * @param {{ get: Function, set: Function, remove: Function }|null} preferences Injected Preferences-shaped fallback.
+ * @param {{ loadSecure?: Function }} options Secure-loader seam for tests.
+ * @returns {Promise<{ vault: object, backend: string, snapshot: Record<string, { set: boolean, backend: string }>|null }|null>} Vault, backend, and presence record.
+ */
+export async function readSetupVaultSnapshot(preferences, options) {
+  const setup = await loadSetupVault(preferences, options);
+  if (!setup) return null;
+  let snapshot = null;
+  try {
+    snapshot = await setup.vault.keyStatus();
+  } catch {
+    snapshot = null;
+  }
+  return { ...setup, snapshot };
+}
+
+/**
+ * Build one editable vault key row (Capacitor only). Presence plus a
+ * password input, SAVE, and REMOVE (hidden until set): values are
+ * write-only — the input is never prefilled and the row carries no value.
+ * @param {Document} documentRef Document used to create elements.
+ * @param {string} id Vault key id.
+ * @param {boolean} set Whether the key is stored on this device.
+ * @returns {HTMLElement} The row element, carrying its input and buttons.
+ */
+export function buildVaultKeyRow(documentRef, id, set = false) {
+  const row = documentRef.createElement('section');
+  row.className = 'key-setup-row';
+  row.dataset.keyId = `vault:${id}`;
+  row.dataset.set = String(Boolean(set));
+  row.dataset.vault = 'true';
+  const head = documentRef.createElement('div');
+  head.className = 'key-setup-row-head';
+  const title = documentRef.createElement('strong');
+  title.textContent = id;
+  const state = documentRef.createElement('span');
+  state.className = 'key-setup-vault-state';
+  state.dataset.vaultState = 'true';
+  state.textContent = set ? 'SET' : 'NOT SET';
+  state.title = set
+    ? 'Stored on this device only'
+    : 'Not stored on this device';
+  head.append(title, state);
+  const fields = documentRef.createElement('div');
+  fields.className = 'key-setup-fields';
+  const input = documentRef.createElement('input');
+  // Passwords-style so a pasted key never shows on a shared or recorded
+  // screen — this app gets screen-recorded a lot. Never prefilled: the row
+  // carries presence, never a value.
+  input.type = 'password';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.dataset.vaultKey = id;
+  input.setAttribute('aria-label', id);
+  input.placeholder = set ? `${id} saved — paste to replace` : `paste ${id}`;
+  const save = documentRef.createElement('button');
+  save.type = 'button';
+  save.className = 'key-setup-vault-save';
+  save.dataset.vaultSave = id;
+  save.textContent = 'SAVE';
+  save.title = `Save ${id} on this device only`;
+  const remove = documentRef.createElement('button');
+  remove.type = 'button';
+  remove.className = 'key-setup-vault-remove';
+  remove.dataset.vaultRemove = id;
+  remove.textContent = 'REMOVE';
+  remove.title = `Remove ${id} from this device`;
+  remove.hidden = !set;
+  fields.append(input, save, remove);
+  row.append(head, fields);
+  return row;
+}
+
+/**
+ * Build the editable vault section for the Capacitor surfaces: one
+ * write/remove row per vault key plus the insecure-backend banner while the
+ * store is not Keystore-backed. All text is static; values never appear.
+ * @param {Document} documentRef Document used to create elements.
+ * @param {Record<string, { set: boolean, backend: string }>|null} status Presence record from the vault.
+ * @returns {HTMLElement} The section element.
+ */
+export function buildVaultKeySection(documentRef, status) {
+  const section = documentRef.createElement('div');
+  section.className = 'key-setup-vault';
+  section.dataset.vaultSection = 'true';
+  section.dataset.vaultEditable = 'true';
+  const note = documentRef.createElement('p');
+  note.className = 'key-setup-vault-note';
+  note.textContent =
+    'On-device provider keys — paste to save on this device only. Values are never shown.';
+  section.append(note);
+  for (const id of KEY_IDS)
+    section.append(buildVaultKeyRow(documentRef, id, status?.[id]?.set));
+  const backend = status?.[KEY_IDS[0]]?.backend ?? 'insecure';
+  if (backend !== 'secure') {
+    const banner = documentRef.createElement('p');
+    banner.className = 'key-setup-vault-banner';
+    banner.dataset.vaultBanner = 'true';
+    banner.textContent =
+      'Device storage is not Keystore-backed yet — keys live in app preferences.';
+    section.append(banner);
+  }
+  return section;
+}
+
+/**
+ * Wire SAVE/REMOVE buttons in an editable vault section. Buttons are wired
+ * directly (no delegation), and a successful write/remove updates its own
+ * row in place — presence text, REMOVE visibility, cleared input — so no
+ * re-render (and no backend-URL edit loss) is needed. Vault errors are
+ * sanitized by the vault itself (they name only the key id).
+ * @param {{ section: HTMLElement|null, vault: { writeKey: Function, removeKey: Function, keyStatus: Function }|null, say?: Function, onChanged?: Function|null }} options Section, vault, status-line hook, and post-change hook.
+ * @returns {void}
+ */
+export function wireVaultKeySection({
+  section,
+  vault,
+  say = () => {},
+  onChanged = null,
+} = {}) {
+  if (!section || !vault) return;
+  const sayIt = (text) => {
+    try {
+      say(text);
+    } catch {
+      // A status line is a nicety; the write already landed or failed loudly.
+    }
+  };
+  const rowFor = (id) =>
+    section.querySelector(`section[data-key-id="vault:${id}"]`);
+  const syncRow = (id, set) => {
+    const row = rowFor(id);
+    if (!row) return;
+    row.dataset.set = String(Boolean(set));
+    const state = row.querySelector('[data-vault-state]');
+    if (state) {
+      state.textContent = set ? 'SET' : 'NOT SET';
+      state.title = set
+        ? 'Stored on this device only'
+        : 'Not stored on this device';
+    }
+    const input = row.querySelector('input');
+    if (input) input.value = '';
+    const remove = row.querySelector('[data-vault-remove]');
+    if (remove) remove.hidden = !set;
+  };
+  const changed = async () => {
+    if (typeof onChanged !== 'function') return;
+    try {
+      onChanged(await vault.keyStatus());
+    } catch {
+      // Presence refresh is a nicety; the row already shows the new state.
+    }
+  };
+  for (const save of section.querySelectorAll('[data-vault-save]')) {
+    const id = save.dataset?.vaultSave;
+    if (!id) continue;
+    save.addEventListener?.('click', () => {
+      void (async () => {
+        const row = rowFor(id);
+        const value = String(row?.querySelector('input')?.value ?? '').trim();
+        if (!value) {
+          sayIt('Paste a key first.');
+          return;
+        }
+        sayIt('Saving…');
+        try {
+          await vault.writeKey(id, value);
+        } catch (error) {
+          sayIt(`Save failed: ${error?.message || error}`);
+          return;
+        }
+        syncRow(id, true);
+        sayIt(`${id} saved on this device.`);
+        await changed();
+      })();
+    });
+  }
+  for (const remove of section.querySelectorAll('[data-vault-remove]')) {
+    const id = remove.dataset?.vaultRemove;
+    if (!id) continue;
+    remove.addEventListener?.('click', () => {
+      void (async () => {
+        const ok =
+          typeof globalThis.confirm !== 'function' ||
+          globalThis.confirm(`Remove ${id} from this device?`);
+        if (!ok) return;
+        sayIt('Removing…');
+        try {
+          await vault.removeKey(id);
+        } catch (error) {
+          sayIt(`Remove failed: ${error?.message || error}`);
+          return;
+        }
+        syncRow(id, false);
+        sayIt(`${id} removed from this device.`);
+        await changed();
+      })();
+    });
+  }
+}
+
+/**
  * Render the Capacitor-only backend URL surface: the dev-server status fetch
  * cannot succeed inside the shell, so instead of removing Provider Settings
  * outright, show just the `GEV_API_BASE` field. Saving persists via the
@@ -501,7 +732,7 @@ export async function readVaultSnapshot(storage) {
  * @param {() => void} [options.reload] Reload hook (defaults to page reload).
  * @param {Function} [options.readImpl] `readApiBase` override for tests.
  * @param {Function} [options.writeImpl] `writeApiBase` override for tests.
- * @param {Function} [options.vaultImpl] `readVaultSnapshot` override for tests.
+ * @param {Function} [options.setupVaultImpl] `readSetupVaultSnapshot` override for tests.
  * @returns {Promise<{ open: Function, close: Function, dispose: Function }|null>} Controls, or null when there is no surface to wire.
  */
 export async function initCapacitorBackendSetup({
@@ -512,7 +743,7 @@ export async function initCapacitorBackendSetup({
   reload = () => globalThis.location?.reload?.(),
   readImpl = readApiBase,
   writeImpl = writeApiBase,
-  vaultImpl = readVaultSnapshot,
+  setupVaultImpl = readSetupVaultSnapshot,
 } = {}) {
   if (!chip || !root || !storage) return null;
   const current = await resolveBackendBase(storage, readImpl);
@@ -532,12 +763,22 @@ export async function initCapacitorBackendSetup({
   if (rowsHost) {
     rowsHost.textContent = '';
     rowsHost.append(buildBackendUrlRow(documentRef, current));
-    // Read-only vault presence rides along: no inputs, no values, and an
-    // insecure-backend banner while Preferences is the only store.
+    // Editable per-key vault rows ride along: presence plus SAVE/REMOVE on
+    // the writable vault (secure store when it loads, bannered Preferences
+    // fallback otherwise). Values are write-only and never shown.
     try {
-      const snapshot = await vaultImpl(storage);
-      if (snapshot)
-        rowsHost.append(buildVaultStatusSection(documentRef, snapshot));
+      const setup = await setupVaultImpl(storage);
+      if (setup?.snapshot) {
+        const section = buildVaultKeySection(documentRef, setup.snapshot);
+        rowsHost.append(section);
+        wireVaultKeySection({
+          section,
+          vault: setup.vault,
+          say: (text) => {
+            if (statusLine) statusLine.textContent = text;
+          },
+        });
+      }
     } catch {
       // Presence is a nicety; the backend field must still render.
     }
@@ -713,6 +954,7 @@ export async function initKeySetup({
   let backendBase = null;
   let backendStorage = null;
   let vaultSnapshot = null;
+  let setupVault = null;
   const reloadPage = reloadImpl ?? (() => globalThis.location?.reload?.());
 
   const render = (nextStatus) => {
@@ -743,10 +985,21 @@ export async function initKeySetup({
           typeof pendingBase === 'string' ? pendingBase : backendBase,
         ),
       );
-      // Read-only vault presence, Capacitor only: the web dialog below never
-      // takes this branch, so its bytes are unchanged.
-      if (vaultSnapshot)
-        rowsHost.append(buildVaultStatusSection(documentRef, vaultSnapshot));
+      // Editable per-key vault rows, Capacitor only: the web dialog below
+      // never takes this branch, so its bytes are unchanged.
+      if (vaultSnapshot && setupVault) {
+        const section = buildVaultKeySection(documentRef, vaultSnapshot);
+        rowsHost.append(section);
+        wireVaultKeySection({
+          section,
+          vault: setupVault,
+          say,
+          onChanged: (snapshot) => {
+            vaultSnapshot = snapshot;
+            render(status);
+          },
+        });
+      }
     }
     syncCloudVoiceAuth();
   };
@@ -1033,9 +1286,12 @@ export async function initKeySetup({
   if (isCapacitorHost(documentRef?.defaultView ?? globalThis.window)) {
     backendStorage = apiBaseStorage ?? (await loadDefaultCapacitorStorage());
     backendBase = await resolveBackendBase(backendStorage);
-    // Presence is static for a read-only dialog session, so one snapshot
-    // per dialog is enough; a failure simply omits the section.
-    vaultSnapshot = await readVaultSnapshot(backendStorage);
+    // The vault is writable here (secure store when it loads, bannered
+    // Preferences fallback otherwise). Presence is one snapshot per dialog,
+    // refreshed after each write/remove via the section's onChanged hook.
+    const setup = await readSetupVaultSnapshot(backendStorage);
+    setupVault = setup?.vault ?? null;
+    vaultSnapshot = setup?.snapshot ?? null;
   }
   render(status);
 

@@ -219,3 +219,97 @@ test('secureStorage bridge tags backends and passes values through', async () =>
   });
   assert.throws(() => withBackend(inner, 'vault'), /backend/);
 });
+
+test('secureStoreFromPlugin wraps the string API and tags it secure', async () => {
+  const { secureStoreFromPlugin } = await import('./secureStorage.js');
+  const values = new Map();
+  const plugin = {
+    getItem: async (key) => (values.has(key) ? values.get(key) : null),
+    setItem: async (key, value) => {
+      values.set(key, String(value));
+    },
+    removeItem: async (key) => {
+      values.delete(key);
+    },
+  };
+  const store = secureStoreFromPlugin(plugin);
+  assert.equal(storageBackend(store), 'secure');
+  await store.set({ key: 'OPENAI_API_KEY', value: CANARY });
+  assert.deepEqual(await store.get({ key: 'OPENAI_API_KEY' }), {
+    value: CANARY,
+  });
+  await store.remove({ key: 'OPENAI_API_KEY' });
+  assert.deepEqual(await store.get({ key: 'OPENAI_API_KEY' }), {
+    value: null,
+  });
+  assert.throws(() => secureStoreFromPlugin({}), /getItem/);
+  assert.throws(() => secureStoreFromPlugin(null), /getItem/);
+});
+
+test('loadSecureStore refuses off-device and survives plugin failures', async () => {
+  const { loadSecureStore } = await import('./secureStorage.js');
+  let imports = 0;
+  const countingImport = async () => {
+    imports += 1;
+    return { SecureStorage: { getKeyPrefix: async () => 'x' } };
+  };
+  assert.equal(await loadSecureStore({ isNative: false, importPlugin: countingImport }), null);
+  assert.equal(imports, 0, 'off-device never imports the plugin');
+  assert.equal(
+    await loadSecureStore({
+      isNative: true,
+      importPlugin: async () => {
+        throw new Error('unsynced');
+      },
+    }),
+    null,
+  );
+  assert.equal(await loadSecureStore({ isNative: true, importPlugin: async () => ({}) }), null);
+  const values = new Map();
+  const secure = await loadSecureStore({
+    isNative: true,
+    importPlugin: async () => ({
+      SecureStorage: {
+        getKeyPrefix: async () => 'capacitor-storage_',
+        getItem: async (key) => (values.has(key) ? values.get(key) : null),
+        setItem: async (key, value) => {
+          values.set(key, String(value));
+        },
+        removeItem: async (key) => {
+          values.delete(key);
+        },
+      },
+    }),
+  });
+  assert.equal(storageBackend(secure), 'secure');
+});
+
+test('loadVaultStorage prefers secure and falls back insecure-flagged', async () => {
+  const { loadVaultStorage } = await import('./secureStorage.js');
+  const preferences = createStubStorage();
+  const secureValues = new Map();
+  const securePlugin = {
+    getKeyPrefix: async () => 'capacitor-storage_',
+    getItem: async (key) => (secureValues.has(key) ? secureValues.get(key) : null),
+    setItem: async (key, value) => {
+      secureValues.set(key, String(value));
+    },
+    removeItem: async (key) => {
+      secureValues.delete(key);
+    },
+  };
+  const { secureStoreFromPlugin } = await import('./secureStorage.js');
+  const secure = secureStoreFromPlugin(securePlugin);
+  const first = await loadVaultStorage(preferences, {
+    loadSecure: async () => secure,
+  });
+  assert.equal(first.backend, 'secure');
+  assert.equal(first.store, secure);
+  const fallback = await loadVaultStorage(preferences, {
+    loadSecure: async () => null,
+  });
+  assert.equal(fallback.backend, 'insecure');
+  assert.equal(storageBackend(fallback.store), 'insecure');
+  const none = await loadVaultStorage(null, { loadSecure: async () => null });
+  assert.deepEqual(none, { store: null, backend: 'insecure' });
+});

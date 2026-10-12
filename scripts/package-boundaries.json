@@ -2242,6 +2242,8 @@
       "satellite.js",
       "mapillary-js",
       "@jtarrio/webrtlsdr",
+      "@aparajita/capacitor-secure-storage",
+      "@capacitor/core",
       "@capacitor/preferences"
     ]
   },
