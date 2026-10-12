@@ -1,5 +1,11 @@
 import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
 import {
+  API_BASE_STORAGE_KEY,
+  resolveApiBase,
+  storedApiBase,
+} from './mobile/runtimeConfig.js';
+import { readApiBase, writeApiBase } from './mobile/keyStore.js';
+import {
   readStoredCloudVoiceAuthMode,
   writeStoredCloudVoiceAuthMode,
 } from './voice/cloudVoiceAuth.js';
@@ -247,11 +253,275 @@ export function bindKeySetupPlacement(documentRef, chip, root) {
   return () => observer.disconnect();
 }
 
+/** Capacitor branch of Provider Settings — the backend URL field. */
+
+const BACKEND_URL_PLACEHOLDER = 'https://gev-backend.example';
+
+/**
+ * Whether the app runs inside a Capacitor shell. The native shell injects
+ * `window.Capacitor`; plain web never has it, so web behavior stays identical.
+ * @param {object|null|undefined} host `window`-like host (`document.defaultView`).
+ * @returns {boolean} True only under Capacitor.
+ */
+export function isCapacitorHost(host = globalThis.window) {
+  return Boolean(host?.Capacitor);
+}
+
+/**
+ * `localStorage`-backed adapter with the Capacitor Preferences shape, used
+ * when the Preferences plugin cannot load. The WebView keeps `localStorage`,
+ * and the boot seam (`storedApiBase`) reads it, so this is a safe fallback.
+ * @returns {{ get: Function, set: Function, remove: Function }} Preferences-shaped store.
+ */
+export function localApiBaseStorage() {
+  const readLocal = () => {
+    try {
+      const storage = globalThis.localStorage;
+      if (!storage || typeof storage.getItem !== 'function') return null;
+      return storage.getItem(API_BASE_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  };
+  return {
+    get: async ({ key }) =>
+      key === API_BASE_STORAGE_KEY ? { value: readLocal() } : { value: null },
+    set: async ({ key, value }) => {
+      if (key !== API_BASE_STORAGE_KEY) return;
+      try {
+        globalThis.localStorage?.setItem?.(key, String(value));
+      } catch {
+        // A locked-down WebView stays Preferences-only; the write above either
+        // landed in Preferences already or the caller surfaces the failure.
+      }
+    },
+    remove: async ({ key }) => {
+      if (key !== API_BASE_STORAGE_KEY) return;
+      try {
+        globalThis.localStorage?.removeItem?.(key);
+      } catch {
+        // Same as set: never let a mirror failure mask the primary write.
+      }
+    },
+  };
+}
+
+/**
+ * Load the production store for the Capacitor branch: the real Preferences
+ * plugin (dynamically imported so the web bundle never fetches it), falling
+ * back to the `localStorage` adapter.
+ * @returns {Promise<{ get: Function, set: Function, remove: Function }>} Preferences-shaped store.
+ */
+async function loadDefaultCapacitorStorage() {
+  try {
+    const { Preferences } = await import('@capacitor/preferences');
+    if (
+      Preferences &&
+      typeof Preferences.get === 'function' &&
+      typeof Preferences.set === 'function' &&
+      typeof Preferences.remove === 'function'
+    )
+      return Preferences;
+  } catch {
+    // Gated import failure (tests, SSR): fall through to the local adapter.
+  }
+  return localApiBaseStorage();
+}
+
+/**
+ * Mirror the resolved backend base into `localStorage` so the existing boot
+ * seam (`storedApiBase`, read by the standalone catalog/scene) picks it up on
+ * reload without any change to those call sites.
+ * @param {string} resolved Base already resolved via `resolveApiBase`.
+ * @returns {void}
+ */
+export function mirrorApiBaseToLocalStorage(resolved) {
+  try {
+    const storage = globalThis.localStorage;
+    if (!storage) return;
+    if (typeof storage.setItem !== 'function') return;
+    if (resolved) storage.setItem(API_BASE_STORAGE_KEY, resolved);
+    else storage.removeItem?.(API_BASE_STORAGE_KEY);
+  } catch {
+    // Private-mode WebViews stay Preferences-only; boot still reads '' there.
+  }
+}
+
+/**
+ * Build the backend URL row for the Capacitor branch. Same row CSS as key
+ * rows, but it is a device setting (no provider link, no REMOVE button).
+ * @param {Document} documentRef Document used to create elements.
+ * @param {string} currentBase Currently stored base, or `''` when unset.
+ * @returns {HTMLElement} The row element, carrying its input.
+ */
+export function buildBackendUrlRow(documentRef, currentBase = '') {
+  const row = documentRef.createElement('section');
+  row.className = 'key-setup-row';
+  row.dataset.keyId = 'backend-url';
+  row.dataset.set = String(Boolean(currentBase));
+  const head = documentRef.createElement('div');
+  head.className = 'key-setup-row-head';
+  const title = documentRef.createElement('strong');
+  title.textContent = 'Backend URL';
+  head.append(title);
+  const unlocks = documentRef.createElement('p');
+  unlocks.className = 'key-setup-unlocks';
+  unlocks.textContent =
+    'The server this app talks to — your home machine or LAN host. Saved on this device only, never bundled.';
+  const fields = documentRef.createElement('div');
+  fields.className = 'key-setup-fields';
+  const input = documentRef.createElement('input');
+  input.type = 'password';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.dataset.envVar = API_BASE_STORAGE_KEY;
+  input.setAttribute('aria-label', API_BASE_STORAGE_KEY);
+  input.placeholder = BACKEND_URL_PLACEHOLDER;
+  input.value = currentBase;
+  fields.append(input);
+  row.append(head, unlocks, fields);
+  return row;
+}
+
+/**
+ * Render the Capacitor-only backend URL surface: the dev-server status fetch
+ * cannot succeed inside the shell, so instead of removing Provider Settings
+ * outright, show just the `GEV_API_BASE` field. Saving persists via the
+ * injected Preferences-shaped store, mirrors to `localStorage` for the boot
+ * seam, and reloads so services rebuild with the new endpoints.
+ * @param {object} options
+ * @param {Document} [options.documentRef] Document hosting the surface.
+ * @param {HTMLElement} [options.chip] Setup chip button.
+ * @param {HTMLElement} [options.root] Setup dialog root.
+ * @param {{ get: Function, set: Function, remove: Function }} options.storage Injected Preferences-shaped store.
+ * @param {() => void} [options.reload] Reload hook (defaults to page reload).
+ * @param {Function} [options.readImpl] `readApiBase` override for tests.
+ * @param {Function} [options.writeImpl] `writeApiBase` override for tests.
+ * @returns {Promise<{ open: Function, close: Function, dispose: Function }|null>} Controls, or null when there is no surface to wire.
+ */
+export async function initCapacitorBackendSetup({
+  documentRef = globalThis.document,
+  chip = documentRef?.getElementById?.('key-setup-chip'),
+  root = documentRef?.getElementById?.('key-setup'),
+  storage,
+  reload = () => globalThis.location?.reload?.(),
+  readImpl = readApiBase,
+  writeImpl = writeApiBase,
+} = {}) {
+  if (!chip || !root || !storage) return null;
+  let current = '';
+  try {
+    current = await readImpl(storage);
+  } catch {
+    current = '';
+  }
+  if (!current) {
+    try {
+      current = storedApiBase();
+    } catch {
+      current = '';
+    }
+  }
+  const chipLabel = chip.querySelector?.('[data-key-setup-chip-label]') || chip;
+  if (chipLabel) chipLabel.textContent = 'SET BACKEND';
+  chip.title = 'Backend URL: the server this app talks to';
+  chip.setAttribute?.(
+    'aria-label',
+    'Backend URL: the server this app talks to',
+  );
+  chip.hidden = false;
+  const rowsHost = root.querySelector?.('[data-key-setup-rows]');
+  const applyButton = root.querySelector?.('[data-key-setup-apply]');
+  const closeButton = root.querySelector?.('[data-key-setup-close]');
+  const statusLine = root.querySelector?.('[data-key-setup-status]');
+  const defaultStatusText = statusLine?.textContent || '';
+  if (rowsHost) {
+    rowsHost.textContent = '';
+    rowsHost.append(buildBackendUrlRow(documentRef, current));
+  }
+  let open = false;
+  let busy = false;
+  const say = (text) => {
+    if (statusLine) statusLine.textContent = text;
+  };
+  const visible = () =>
+    root.isConnected &&
+    root.classList.contains('visible') &&
+    root.getClientRects().length > 0;
+  const keyboard = createSurfaceKeyboard({
+    root,
+    documentRef,
+    isActive: () => open && visible(),
+    onEscape: () => close(),
+  });
+  const openDialog = () => {
+    if (open) return;
+    open = true;
+    keyboard.activate();
+    root.hidden = false;
+    globalThis.requestAnimationFrame?.(() => {
+      if (!open) return;
+      root.classList.add('visible');
+      root.querySelector('input')?.focus?.({ preventScroll: true });
+    });
+  };
+  const close = () => {
+    if (!open) return;
+    open = false;
+    root.classList.remove('visible');
+    const hide = () => {
+      if (!open) root.hidden = true;
+    };
+    root.addEventListener('transitionend', hide, { once: true });
+    globalThis.setTimeout?.(hide, 400);
+    if (statusLine) statusLine.textContent = defaultStatusText;
+    keyboard.deactivate({ restoreFocus: true });
+  };
+  const onApply = async () => {
+    if (busy) return;
+    const input = root.querySelector?.(
+      `input[data-env-var="${API_BASE_STORAGE_KEY}"]`,
+    );
+    const value = String(input?.value ?? '').trim();
+    busy = true;
+    applyButton?.setAttribute?.('aria-disabled', 'true');
+    say('Saving…');
+    try {
+      await writeImpl(storage, value);
+      mirrorApiBaseToLocalStorage(resolveApiBase(value));
+      say('Backend saved — reloading against it.');
+      reload();
+    } catch (error) {
+      say(`Save failed: ${error?.message || error}`);
+    } finally {
+      busy = false;
+      applyButton?.setAttribute?.('aria-disabled', 'false');
+    }
+  };
+  chip.addEventListener?.('click', openDialog);
+  closeButton?.addEventListener?.('click', close);
+  applyButton?.addEventListener?.('click', onApply);
+  say(
+    defaultStatusText ||
+      'Set the server URL, save, and the app reloads against it.',
+  );
+  const dispose = () => {
+    open = false;
+    keyboard.destroy?.();
+    chip.removeEventListener?.('click', openDialog);
+    closeButton?.removeEventListener?.('click', close);
+    applyButton?.removeEventListener?.('click', onApply);
+  };
+  return { open: openDialog, close, dispose };
+}
+
 /** Wire the dev-only setup surface; unavailable endpoints remove it entirely. */
 export async function initKeySetup({
   documentRef = globalThis.document,
   fetchImpl,
   signal,
+  apiBaseStorage = null,
+  reloadImpl = null,
 } = {}) {
   const chip = documentRef?.getElementById?.('key-setup-chip');
   const root = documentRef?.getElementById?.('key-setup');
@@ -288,6 +558,31 @@ export async function initKeySetup({
     status = await response.json();
     if (disposed) return null;
   } catch {
+    // Under Capacitor there is no dev server to answer /api/setup/status, so
+    // a failed status fetch is expected: offer just the backend URL field
+    // instead of removing Provider Settings. Web behavior is unchanged (the
+    // surface is removed outright).
+    if (isCapacitorHost(documentRef?.defaultView ?? globalThis.window)) {
+      let backend = null;
+      try {
+        backend = await initCapacitorBackendSetup({
+          documentRef,
+          chip,
+          root,
+          storage: apiBaseStorage ?? (await loadDefaultCapacitorStorage()),
+          reload: reloadImpl ?? (() => globalThis.location?.reload?.()),
+        });
+      } catch {
+        backend = null;
+      }
+      if (!backend) {
+        destroy();
+        return null;
+      }
+      disposeControls = backend.dispose;
+      disposePlacement = bindKeySetupPlacement(documentRef, chip, root);
+      return { open: backend.open, close: backend.close, destroy };
+    }
     // Prod build or non-loopback visitor: the surface cannot function, so it
     // does not exist. (The README covers .env for headless/self-host setups.)
     destroy();
