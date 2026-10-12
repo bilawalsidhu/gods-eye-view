@@ -22,8 +22,17 @@ domain.
 | Root directory   | `/`                                                                                                                       |
 | Build script     | `build` (runs `vite build` → `dist/`)                                                                                     |
 | Output directory | leave empty (ignored when an entry file is set)                                                                           |
-| Entry file       | `server.js`                                                                                                               |
+| Entry file       | `hostinger-entry.cjs`                                                                                                     |
 | Package manager  | npm (from `package-lock.json`)                                                                                            |
+
+**Why `hostinger-entry.cjs`:** Hostinger runs Node apps through LiteSpeed's
+launcher (`/usr/local/lsws/fcgi-bin/lsnode.js`), which loads the entry file
+with `require()`. `server.js` is an ES module with top-level `await`, so
+requiring it directly crashes with `ERR_REQUIRE_ASYNC_MODULE`. The `.cjs` shim
+loads it with `import()`. lsnode also replaces `http.Server.listen`: the first
+call is bound to LiteSpeed's own socket (the port/host passed are ignored) and
+a second call throws — `server.js` starts exactly one HTTP server, so this is
+fine. Outside Hostinger, `npm start` (`node server.js`) still works.
 
 `server.js` serves the built app plus the same `/api/*` provider routes the
 local dev server has, binds `0.0.0.0` and the `PORT` Hostinger provides, and
@@ -64,7 +73,7 @@ Hostinger facts this relies on (official docs, checked 2026-10-12):
    `Saugops`. (Only one GitHub account can be connected at a time.)
 4. Select `joefel1661/gods-eye-view`, branch `main`.
 5. Set the build settings from the table in §1 (Framework **Other**, Node
-   **24**, build `build`, entry `server.js`).
+   **24**, build `build`, entry `hostinger-entry.cjs`).
 6. Under **Set environment variables**, add the variables in §3. At minimum:
    `GEV_ACCESS_PASSWORD`, `GEV_SESSION_SECRET`, `GEV_ALLOWED_HOSTS`.
    **Do not set `NODE_ENV=production`**: the build and `server.js` need Vite
