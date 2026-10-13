@@ -285,7 +285,6 @@ export function createAeroApiSource({ fetchImpl = defaultFetch } = {}) {
   };
 }
 
-export function createAisStreamSource({
 export function createVesselSource({
   fetchImpl = defaultFetch,
   apiUrl = '/api/vessels',
