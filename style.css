@@ -4647,6 +4647,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 
 .health-nominal { border-left-color: #55d68a; }
 .health-fallback { border-left-color: #e5c15b; }
+.health-key-required { border-left-color: #d58aff; }
 .health-loading { border-left-color: var(--accent); }
 .health-degraded,
 .health-stale { border-left-color: #f0a45d; }
