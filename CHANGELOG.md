@@ -1,5 +1,10 @@
 # Changelog
 
+- Provider Settings destructive actions (vault row removal, server-key removal)
+  confirm inline with a two-click arm/disarm control instead of the blocking
+  `globalThis.confirm` dialog, so removal works the same on web and in the
+  Capacitor shell.
+
 - On-device heavy feed adapters: transit decodes GTFS-RT VehiclePositions via
   `pbf`, wind decodes GFS GRIB2 via `eccodes-wasm`, CCTV decodes TxDOT
   base64-JSON snapshots and serves HLS through in-memory 15 s leases,

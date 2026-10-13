@@ -1060,9 +1060,12 @@ export function createHlsPuller({
         (previous !== undefined && segment.seq !== previous + 1)
       )
         lines.push('#EXT-X-DISCONTINUITY');
+      // On-device there is no proxy to serve rewritten segment paths: emit the
+      // absolute upstream URI (same-origin-pinned at parse time), so the
+      // playlist contains zero `/api` paths.
       lines.push(
         `#EXTINF:${segment.duration.toFixed(3)},`,
-        `/api/cctv/media/${encodeURIComponent(cameraId)}/seg_${segment.seq}.ts?session=${entry.token}&lease=${encodeURIComponent(leaseId)}`,
+        sameOriginHlsUrl(segment.uri, segment.uri),
       );
       previous = segment.seq;
     }

@@ -93,7 +93,8 @@ export function createTomtomDirectSource({
   return {
     /**
      * Fetch one flow tile as bytes (Mapbox Vector Tile, layer
-     * "Traffic flow"), spending one budget unit first.
+     * "Traffic flow"), spending one budget unit on success. The spend happens
+     * AFTER the upstream answers OK, so failed requests never burn allowance.
      * @param {number} z Zoom level.
      * @param {number} x Tile column.
      * @param {number} y Tile row.
@@ -115,16 +116,6 @@ export function createTomtomDirectSource({
           },
         );
       }
-      if (
-        budget &&
-        typeof budget.trySpend === 'function' &&
-        !(await budget.trySpend())
-      ) {
-        throw Object.assign(new Error("Today's TomTom tile budget is spent"), {
-          code: TOMTOM_BUDGET_EXHAUSTED,
-          unavailable: TOMTOM_BUDGET_EXHAUSTED,
-        });
-      }
       // TomTom flow tiles accept the API key only as a query parameter (no header
       // auth on this endpoint). The key is validated to HTTPS by assertKeyedHttps
       // before use. This is an accepted risk: the query string may appear in
@@ -135,6 +126,16 @@ export function createTomtomDirectSource({
       const response = await fetchImpl(url, { signal });
       signal?.throwIfAborted();
       if (!response.ok) throw new Error(`TomTom tile HTTP ${response.status}`);
+      if (
+        budget &&
+        typeof budget.trySpend === 'function' &&
+        !(await budget.trySpend())
+      ) {
+        throw Object.assign(new Error("Today's TomTom tile budget is spent"), {
+          code: TOMTOM_BUDGET_EXHAUSTED,
+          unavailable: TOMTOM_BUDGET_EXHAUSTED,
+        });
+      }
       const bytes = new Uint8Array(await response.arrayBuffer());
       signal?.throwIfAborted();
       return bytes;

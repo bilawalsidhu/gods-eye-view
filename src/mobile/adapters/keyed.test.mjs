@@ -492,6 +492,52 @@ test('voice negotiate posts the ephemeral SDP answer flow', async () => {
   assertNoSecretLeak([...calls, ...seen]);
 });
 
+test('tomtom tile spends the budget only after an OK response', async () => {
+  let spends = 0;
+  const spending = () => ({
+    trySpend: async () => {
+      spends++;
+      return true;
+    },
+  });
+  // A failed upstream burns no allowance.
+  const failing = createTomtomDirectSource({
+    fetchImpl: async () => new Response(new Uint8Array(), { status: 500 }),
+    getKey: async () => 'vault-secret',
+    budget: spending(),
+  });
+  await assert.rejects(failing.getFlowTile(12, 1, 2), /TomTom tile HTTP 500/);
+  assert.equal(spends, 0);
+  // Success spends exactly once.
+  const succeeding = createTomtomDirectSource({
+    fetchImpl: async () => new Response(new Uint8Array([7]), { status: 200 }),
+    getKey: async () => 'vault-secret',
+    budget: spending(),
+  });
+  assert.ok((await succeeding.getFlowTile(12, 1, 2)) instanceof Uint8Array);
+  assert.equal(spends, 1);
+});
+
+test('voice negotiate maps transport failures to VOICE UNAVAILABLE', async () => {
+  const backend = createVoiceBackend({
+    getKey: async () => 'vault-secret',
+    fetchImpl: async () => {
+      throw new Error('radio silence');
+    },
+  });
+  await assert.rejects(
+    backend.negotiate({
+      offerSdp: 'v=0\r\noffer',
+      credential: { token: 'ephemeral', expiresAt: 1_800_000_000 },
+    }),
+    (error) => {
+      assert.equal(error.code, 'VOICE_UNAVAILABLE');
+      assert.match(error.message, /VOICE UNAVAILABLE/);
+      return true;
+    },
+  );
+});
+
 test('voice token discards a late response after abort', async () => {
   await assertDiscardsLateResponse((fetchImpl, signal) =>
     createVoiceBackend({
@@ -546,11 +592,13 @@ test('tomtom tile validates coords, requires a key, and honors the budget', asyn
   await assert.rejects(source.getFlowTile(12, 4096, 0), /tile/);
   assert.equal(calls.length, 0);
   await source.getFlowTile(12, 0, 0);
+  // Spend happens after an OK response, so the exhausted call still fetches
+  // (proving the failure path burns no allowance) and then rejects.
   await assert.rejects(source.getFlowTile(12, 0, 1), (error) => {
     assert.equal(error.code, 'BUDGET_EXHAUSTED');
     return true;
   });
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
   const keyless = createTomtomDirectSource({
     fetchImpl,
     getKey: async () => null,

@@ -5,6 +5,7 @@ import { createRasterTileProvider } from './rasterTiles.js';
 import { createWeatherShell } from './shellRendering.js';
 import { readResponseBytesCapped } from '../../sources/httpBody.js';
 import { shouldUseDirect } from '../../mobile/sourcePolicy.js';
+import { createDeviceFetch } from '../../mobile/deviceFetch.js';
 import { createNoaaTilesDirectSource } from '../../mobile/adapters/noaaTilesDirect.js';
 import {
   acquireInfraredMosaic,
@@ -104,7 +105,10 @@ function createGlobeRendering({
   function directTiles() {
     if (tilesSource) return tilesSource;
     if (!shouldUseDirect()) return null;
-    if (!directCache) directCache = createNoaaTilesDirectSource({ fetchImpl });
+    if (!directCache)
+      directCache = createNoaaTilesDirectSource({
+        fetchImpl: createDeviceFetch(),
+      });
     return directCache;
   }
 

@@ -2,6 +2,7 @@ import { acquireWeatherImage } from './infraredImage.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
 import { shouldUseDirect } from '../../mobile/sourcePolicy.js';
+import { createDeviceFetch } from '../../mobile/deviceFetch.js';
 import { createNoaaTilesDirectSource } from '../../mobile/adapters/noaaTilesDirect.js';
 
 /** Metres above the ellipsoid. Lower shells draw first, so lightning draws last. */
@@ -443,7 +444,10 @@ export function createWeatherShell({
   function directImages() {
     if (imageSource) return imageSource;
     if (!shouldUseDirect()) return null;
-    if (!directCache) directCache = createNoaaTilesDirectSource({ fetchImpl });
+    if (!directCache)
+      directCache = createNoaaTilesDirectSource({
+        fetchImpl: createDeviceFetch(),
+      });
     return directCache;
   }
 

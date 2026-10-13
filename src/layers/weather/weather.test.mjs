@@ -2293,37 +2293,51 @@ const directTime = new Date(Date.now() - 3600_000).toISOString();
 
 test('direct mode prefetches tiles through the NOAA adapter, never /api URLs', async (t) => {
   const time = directTime;
-  const fetched = [];
+  const transported = [];
   const decoded = [];
   let host;
   const h = renderingHarness({
     getHost: () => host,
-    fetchImpl: async (url, init = {}) => {
-      fetched.push(String(url));
-      if (String(url).includes('GetCapabilities')) {
-        return new Response(directCapabilities(time), {
-          status: 200,
-          headers: { 'content-type': 'application/xml' },
-        });
-      }
-      if (String(url).includes('GetMap')) {
-        const params = new URL(String(url)).searchParams;
-        return new Response(
-          directTilePng(
-            Number(params.get('width')),
-            Number(params.get('height')),
-          ),
-          { status: 200, headers: { 'content-type': 'image/png' } },
-        );
-      }
-      return new Response('{}', { status: 404 });
-    },
+    fetchImpl: async () => assert.fail('legacy fetch must not run on-device'),
     decodeImage: async (bytes) => {
       decoded.push(bytes);
       return mockCanvas();
     },
   });
-  globalThis.Capacitor = { isNativePlatform: () => true };
+  globalThis.Capacitor = {
+    isNativePlatform: () => true,
+    Http: {
+      request: async ({ url }) => {
+        transported.push(String(url));
+        if (String(url).includes('GetCapabilities')) {
+          return {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+            data: new TextEncoder().encode(directCapabilities(time)),
+            url: String(url),
+          };
+        }
+        if (String(url).includes('GetMap')) {
+          const params = new URL(String(url)).searchParams;
+          return {
+            status: 200,
+            headers: { 'content-type': 'image/png' },
+            data: directTilePng(
+              Number(params.get('width')),
+              Number(params.get('height')),
+            ),
+            url: String(url),
+          };
+        }
+        return {
+          status: 404,
+          headers: {},
+          data: new Uint8Array(0),
+          url: String(url),
+        };
+      },
+    },
+  };
   t.after(() => {
     delete globalThis.Capacitor;
   });
@@ -2333,10 +2347,10 @@ test('direct mode prefetches tiles through the NOAA adapter, never /api URLs', a
       await h.rendering.prefetch({ ...snapshot, times: [time] }, time),
       true,
     );
-    assert.ok(fetched.some((url) => url.includes('GetCapabilities')));
-    assert.ok(fetched.some((url) => url.includes('GetMap')));
+    assert.ok(transported.some((url) => url.includes('GetCapabilities')));
+    assert.ok(transported.some((url) => url.includes('GetMap')));
     assert.ok(
-      fetched.every((url) => !url.includes('/api/')),
+      transported.every((url) => !url.includes('/api/')),
       'no /api proxy URLs on-device',
     );
   } finally {
@@ -2346,31 +2360,45 @@ test('direct mode prefetches tiles through the NOAA adapter, never /api URLs', a
 
 test('direct mode stages frames through an adapter-backed provider', async (t) => {
   const time = directTime;
-  const fetched = [];
+  const transported = [];
   const h = renderingHarness({
-    fetchImpl: async (url) => {
-      fetched.push(String(url));
-      if (String(url).includes('GetCapabilities')) {
-        return new Response(directCapabilities(time), {
-          status: 200,
-          headers: { 'content-type': 'application/xml' },
-        });
-      }
-      if (String(url).includes('GetMap')) {
-        const params = new URL(String(url)).searchParams;
-        return new Response(
-          directTilePng(
-            Number(params.get('width')),
-            Number(params.get('height')),
-          ),
-          { status: 200, headers: { 'content-type': 'image/png' } },
-        );
-      }
-      return new Response('{}', { status: 404 });
-    },
+    fetchImpl: async () => assert.fail('legacy fetch must not run on-device'),
     decodeImage: async () => mockCanvas(),
   });
-  globalThis.Capacitor = { isNativePlatform: () => true };
+  globalThis.Capacitor = {
+    isNativePlatform: () => true,
+    Http: {
+      request: async ({ url }) => {
+        transported.push(String(url));
+        if (String(url).includes('GetCapabilities')) {
+          return {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+            data: new TextEncoder().encode(directCapabilities(time)),
+            url: String(url),
+          };
+        }
+        if (String(url).includes('GetMap')) {
+          const params = new URL(String(url)).searchParams;
+          return {
+            status: 200,
+            headers: { 'content-type': 'image/png' },
+            data: directTilePng(
+              Number(params.get('width')),
+              Number(params.get('height')),
+            ),
+            url: String(url),
+          };
+        }
+        return {
+          status: 404,
+          headers: {},
+          data: new Uint8Array(0),
+          url: String(url),
+        };
+      },
+    },
+  };
   t.after(() => {
     delete globalThis.Capacitor;
   });
@@ -2386,8 +2414,8 @@ test('direct mode stages frames through an adapter-backed provider', async (t) =
     );
     const image = await provider.requestImage(0, 0, 2);
     assert.ok(image);
-    assert.ok(fetched.some((url) => url.includes('GetMap')));
-    assert.ok(fetched.every((url) => !url.includes('/api/')));
+    assert.ok(transported.some((url) => url.includes('GetMap')));
+    assert.ok(transported.every((url) => !url.includes('/api/')));
   } finally {
     h.rendering.clear();
   }

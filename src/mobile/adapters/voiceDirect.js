@@ -135,17 +135,23 @@ export function createVoiceBackend({
         throw voiceUnavailableError('secret already expired');
       }
       assertKeyedHttps(callsUrl);
-      const response = await fetchImpl(callsUrl, {
-        method: 'POST',
-        body: offerSdp,
-        signal,
-        redirect: 'error',
-        cache: 'no-store',
-        headers: {
-          Authorization: `Bearer ${credential.token}`,
-          'Content-Type': 'application/sdp',
-        },
-      });
+      let response;
+      try {
+        response = await fetchImpl(callsUrl, {
+          method: 'POST',
+          body: offerSdp,
+          signal,
+          redirect: 'error',
+          cache: 'no-store',
+          headers: {
+            Authorization: `Bearer ${credential.token}`,
+            'Content-Type': 'application/sdp',
+          },
+        });
+      } catch {
+        signal?.throwIfAborted();
+        throw voiceUnavailableError('SDP exchange failed');
+      }
       signal?.throwIfAborted();
       if (!response.ok) {
         await response.body?.cancel?.().catch(() => {});

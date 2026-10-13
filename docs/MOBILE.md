@@ -175,6 +175,9 @@ each line has been observed on-device.
 - **Secure storage on Android** — `@aparajita/capacitor-secure-storage` loads,
   `loadVaultStorage` returns `backend: 'secure'`, writes/reads persist across
   app restarts, Preferences fallback never silently promotes to secure.
+  Named gate: `storageBackend()` must report `'secure'` AND a vault
+  write/read round-trip must succeed through the secure backend (load
+  success alone does not pass).
 
 - **OpenSky credit governor with real credentials** — `flightsDirect` uses the
   vault `OPENSKY_CLIENT_ID/SECRET` (or anon); adaptive polling 30/90/300 s
@@ -231,3 +234,29 @@ baked default). On-device outputs never emit `/api` proxy paths: CCTV stream
 info and the NOAA manifest carry direct upstream URLs (or null). Web defaults
 are unchanged. Remaining device-matrix work is the live proof checklist above
 (real feeds, HLS playback, Fold survival).
+
+### Parked on-device wirings (final review — evidence, not roadmap wishes)
+
+- **Vessels** — `createVesselsLiveSource` is a push socket (`connect`/`tick`;
+  `snapshot()` reports feed health, not vessel rows) while the layer polls
+  `getSnapshot` for rows. No lossless mapping exists; the slot stays proxy.
+- **Military** — no direct equivalent exists at all; stays proxy.
+- **Voice token backend** — `createVoiceBackend` has no boot composition
+  point (sessions construct it on demand with vault key + `fetchImpl`
+  parameter); nothing to select at boot. Transport failures now map to
+  `VOICE UNAVAILABLE` like token failures.
+- **Google Places / TomTom / HUD summary** — no layer/composition slot
+  consumes these factories (`grep` for callers outside `adapters/` is empty);
+  HUD summary additionally needs vault-key threading at the service layer,
+  beyond what a fetch seam can provide.
+- **Local receivers** — the legacy `createLocalReceiverFeeds` polls one
+  server route while the direct source reads explicit user LAN feed URLs;
+  no feed plumbing passes user feeds, and LAN hosts cannot be statically
+  allowlisted. Stays proxy.
+- **Overpass boundary source** — the factory is exported and tested, but no
+  standalone slot consumes a boundaries source and the app-level
+  `services.boundaries` contract is proxy-shaped (probe/status/remark
+  handling) with no operator-mirrors config channel. Stays proxy pending
+  mirrors plumbing.
+- **Flight tracks** — the direct module exposes states + enrichment only;
+  `getTrack` rejects honestly unavailable (never fake data).

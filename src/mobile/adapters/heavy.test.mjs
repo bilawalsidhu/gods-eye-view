@@ -49,6 +49,7 @@ import {
 } from './noaaTilesDirect.js';
 import { createTransitDirectSource } from './transitDirect.js';
 import { createWindDirectSource } from './windDirect.js';
+import { createFlightsDirectLayerSource } from './heavyLayerSources.js';
 import {
   createCctvDirectSource,
   setCctvCatalog,
@@ -511,6 +512,9 @@ test('cctvDirect port: HLS lease lifecycle with 15s abandoned expiry', async () 
   assert.equal(await puller.waitReady(entry), true);
   const built = await puller.buildPlaylist(entry, cameraId, leaseId);
   assert.ok(built.includes('#EXTM3U'));
+  assert.ok(!built.includes('/api/'));
+  assert.ok(built.includes('https://cam.example/seg0.ts'));
+  assert.ok(built.includes('https://cam.example/seg1.ts'));
   assert.deepEqual(
     Array.from(puller.getSegment(cameraId, entry.token, 0, leaseId)),
     [1, 2, 3],
@@ -803,6 +807,63 @@ test('overpassDirect factory: planet-scan QL refused without any fetch', async (
   assert.equal(fetched, 1);
 });
 
+test('overpassDirect factory: every query consults the courtesy pacer', async () => {
+  let waits = 0;
+  const source = createOverpassDirectSource({
+    fetchImpl: async () => jsonResponse({ elements: [] }),
+    pacer: {
+      wait: async () => {
+        waits++;
+      },
+    },
+    mirrors: ['https://o.example/api/interpreter'],
+  });
+  const ql =
+    '[out:json];node["amenity"="restaurant"](around:1000,51.5,-0.1);out;';
+  await source.query(ql);
+  await source.query(ql);
+  assert.equal(waits, 2);
+});
+
+test('overpassDirect factory: transport failures fail over, 4xx does not', async () => {
+  const seen = [];
+  const source = createOverpassDirectSource({
+    fetchImpl: async (url) => {
+      seen.push(String(url));
+      if (seen.length === 1) throw new TypeError('network down');
+      return jsonResponse({ elements: [{ type: 'node' }] });
+    },
+    pacer: { wait: async () => {} },
+    mirrors: [
+      'https://o1.example/api/interpreter',
+      'https://o2.example/api/interpreter',
+    ],
+  });
+  const ql =
+    '[out:json];node["amenity"="restaurant"](around:1000,51.5,-0.1);out;';
+  assert.deepEqual(await source.query(ql), { elements: [{ type: 'node' }] });
+  assert.deepEqual(seen, [
+    'https://o1.example/api/interpreter',
+    'https://o2.example/api/interpreter',
+  ]);
+
+  // 4xx-non-429 fails fast without touching the next mirror.
+  const seen400 = [];
+  const strict = createOverpassDirectSource({
+    fetchImpl: async (url) => {
+      seen400.push(String(url));
+      return textResponse('bad request', 400);
+    },
+    pacer: { wait: async () => {} },
+    mirrors: [
+      'https://o1.example/api/interpreter',
+      'https://o2.example/api/interpreter',
+    ],
+  });
+  await assert.rejects(strict.query(ql), /Overpass query failed \(400\)/);
+  assert.deepEqual(seen400, ['https://o1.example/api/interpreter']);
+});
+
 test('cctvDirect factory: stream info carries direct upstream URLs, never /api', async () => {
   setCctvCatalog([
     {
@@ -886,12 +947,108 @@ test('noaaTilesDirect factory: manifest carries direct URLs, never /api', async 
 // layer-shaped adapters, with identical keys on both paths.
 // ---------------------------------------------------------------------------
 
-test('standalone selection: web keeps legacy sources, direct selects adapters', async () => {
-  const calls = [];
+test('flightsDirect layer source: snapshot, enrichment, honest tracks', async () => {
+  const liveTime = Math.floor(Date.now() / 1000);
+  const vector = [
+    'abc123',
+    'TEST1 ',
+    'Testland',
+    liveTime,
+    liveTime,
+    -97.7431,
+    30.2672,
+    1000,
+    false,
+    100,
+    90,
+    0,
+    null,
+    1010,
+    null,
+    null,
+    null,
+    1,
+  ];
+  const { fetchImpl } = stubFetch((url) => {
+    if (url.includes('api.adsbdb.com/v0/callsign/')) {
+      return jsonResponse({
+        response: {
+          flightroute: {
+            airline: { name: 'Test Air' },
+            origin: { icao_code: 'KAUS' },
+            destination: { icao_code: 'KJFK' },
+          },
+        },
+      });
+    }
+    if (url.includes('api.adsbdb.com/v0/aircraft/')) {
+      return jsonResponse({
+        response: {
+          aircraft: { icao_type: 'B738', manufacturer: 'Boeing', type: '737' },
+        },
+      });
+    }
+    return jsonResponse({ time: liveTime, states: [vector] });
+  });
+  const source = createFlightsDirectLayerSource({ fetchImpl });
+  assert.equal(source.label, 'Flights');
+  const snapshot = await source.getSnapshot(
+    { latitude: 30.2672, longitude: -97.7431 },
+    {},
+  );
+  assert.equal(snapshot.status, 200);
+  assert.ok(Array.isArray(snapshot.records));
+  assert.equal(snapshot.records[0].id, 'abc123');
+
+  const route = await source.getEnrichment(
+    { kind: 'route', id: 'TEST1' },
+    {},
+  );
+  assert.equal(route.found, true);
+  assert.equal(route.origin.code, 'KAUS');
+  assert.equal(route.destination.code, 'KJFK');
+  const type = await source.getEnrichment({ kind: 'type', id: 'abc123' }, {});
+  assert.equal(type.found, true);
+  assert.equal(type.typeCode, 'B738');
+  await assert.rejects(
+    source.getEnrichment({ kind: 'bogus', id: 'x' }, {}),
+    /Enrichment unavailable/,
+  );
+  // No direct track endpoint exists: honest unavailability, never fake data.
+  await assert.rejects(source.getTrack('abc123', {}), (error) => {
+    assert.equal(error.code, 'UPSTREAM_NOT_ALLOWED');
+    return true;
+  });
+});
+
+test('standalone direct without a transport defaults to the device fetch', async (t) => {
+  globalThis.Capacitor = { isNativePlatform: () => true };
+  t.after(() => {
+    delete globalThis.Capacitor;
+  });
+  // No explicit fetchImpl: construction alone must succeed (the native fetch
+  // is built but makes no requests until a source polls).
+  const sources = createStandaloneLayerSources({}, { direct: true });
+  assert.deepEqual(Object.keys(sources.flights).sort(), [
+    'getEnrichment',
+    'getSnapshot',
+    'getTrack',
+    'label',
+  ]);
+  assert.deepEqual(Object.keys(sources.transit).sort(), [
+    'getFeeds',
+    'getHistory',
+    'requestSnapshot',
+  ]);
+});
+
+test('standalone selection: web keeps legacy sources, direct selects adapters', async () => {  const calls = [];
   const fetchImpl = async (url, init = {}) => {
     calls.push(String(url));
-    if (String(url).includes('/api/weather/manifest')) {
-      return jsonResponse({
+    if (String(url).includes('opensky-network.org')) {
+      return jsonResponse({ time: Math.floor(Date.now() / 1000), states: [] });
+    }
+    if (String(url).includes('/api/weather/manifest')) {      return jsonResponse({
         schemaVersion: 1,
         product: 'radar',
         bounds: { west: -130, south: 20, east: -60, north: 55 },
@@ -954,10 +1111,17 @@ test('standalone selection: web keeps legacy sources, direct selects adapters', 
     Object.keys(direct.wind).sort(),
     Object.keys(web.wind).sort(),
   );
+  assert.deepEqual(
+    Object.keys(direct.flights).sort(),
+    Object.keys(web.flights).sort(),
+  );
   await assert.rejects(
     direct.transit.requestSnapshot('unknown-feed'),
     /Unknown transit feed/,
   );
-  assert.ok(!calls.some((url) => url.includes('/api/')));
+  const flightSnapshot = await direct.flights.getSnapshot({}, {});
+  assert.equal(flightSnapshot.status, 200);
+  assert.deepEqual(flightSnapshot.records, []);
+  assert.ok(!calls.some((url) => url.startsWith('/api/')));
   assert.equal(direct.cctv.getFrameUrl(probeCamera), null);
 });

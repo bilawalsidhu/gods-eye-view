@@ -89,7 +89,9 @@ export function createOverpassDirectSource({
       throw new Error(`Overpass query rejected: ${sanitized.error}`);
     }
 
-    // 2. Wait for concurrency slot
+    // 2. Courtesy pacer (90/min shared with the server proxy budget), then
+    // wait for a concurrency slot
+    await pacer.wait({ signal });
     await waitForSlot(signal);
 
     concurrent++;
@@ -118,10 +120,11 @@ export function createOverpassDirectSource({
               lastError = new Error(`Mirror error: ${response.status}`);
               continue;
             }
-            // 4xx — don't retry other mirrors
+            // 4xx (non-429) — don't retry other mirrors
             const text = await response.text();
-            throw new Error(
-              `Overpass query failed (${response.status}): ${text}`,
+            throw Object.assign(
+              new Error(`Overpass query failed (${response.status}): ${text}`),
+              { status: response.status, noFailover: true },
             );
           }
 
@@ -154,12 +157,12 @@ export function createOverpassDirectSource({
           return parsed;
         } catch (error) {
           lastError = error;
-          // Continue to next mirror on network/timeout errors
-          if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-            continue;
-          }
-          // For other errors, don't retry other mirrors
-          break;
+          // Fail fast only on caller aborts and 4xx-non-429 rejections (marked
+          // noFailover at the throw site); transport-level failures, 429s, 5xx,
+          // and bad payloads fail over to the next mirror.
+          if (error?.noFailover) break;
+          if (error?.name === 'AbortError' && signal?.aborted) break;
+          continue;
         }
       }
 

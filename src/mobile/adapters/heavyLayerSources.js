@@ -4,6 +4,11 @@ import { createWindDirectSource } from './windDirect.js';
 import { createCctvDirectSource, setCctvCatalog } from './cctvDirect.js';
 import { createOverpassDirectSource } from './overpassDirect.js';
 import { createNoaaTilesDirectSource } from './noaaTilesDirect.js';
+import { createFlightsDirectSource } from './flightsDirect.js';
+import { createAdsbdbDirectSource } from './adsbdbDirect.js';
+import { createCreditGovernor } from '../governors.js';
+import { openSkySnapshot } from '../../sources/live/aircraft.js';
+import { LiveSourceError } from '../../sources/live/contract.js';
 import { validateWeatherSnapshot } from '../../layers/weather/source.js';
 
 /**
@@ -289,3 +294,82 @@ export function createOverpassDirectBoundarySource({
 }
 
 export { setCctvCatalog };
+
+/**
+ * Flights layer source backed by direct OpenSky (+ adsb.lol fallback) reads.
+ * Legacy shape: `{ label, getSnapshot, getTrack, getEnrichment }`.
+ * Tracks have no direct endpoint: `getTrack` rejects honestly unavailable
+ * (the direct module exposes states + enrichment only).
+ * @param {{ fetchImpl?: Function, getClientId?: Function|null, getClientSecret?: Function|null, governor?: object|null }} transport Caller-owned transport, vault readers, and credit governor.
+ * @returns {{ label: string, getSnapshot: Function, getTrack: Function, getEnrichment: Function }}
+ */
+export function createFlightsDirectLayerSource({
+  fetchImpl,
+  getClientId = null,
+  getClientSecret = null,
+  governor = null,
+} = {}) {
+  const direct = createFlightsDirectSource({
+    ...(fetchImpl ? { fetchImpl } : {}),
+    getClientId,
+    getClientSecret,
+    governor: governor ?? createCreditGovernor(),
+  });
+  const adsbdb = createAdsbdbDirectSource(fetchImpl ? { fetchImpl } : {});
+  return {
+    label: 'Flights',
+    /**
+     * Read the current airborne snapshot around an optional anchor.
+     * @param {{ latitude?: number, longitude?: number }} query View anchor.
+     * @param {{ signal?: AbortSignal }} options Caller signal.
+     * @returns {Promise<object>} Normalized OpenSky-shaped snapshot.
+     */
+    async getSnapshot(query = {}, { signal } = {}) {
+      const states = await direct.getStates({
+        lat: Number.isFinite(query.latitude) ? query.latitude : null,
+        lon: Number.isFinite(query.longitude) ? query.longitude : null,
+        signal,
+      });
+      signal?.throwIfAborted();
+      return {
+        ...openSkySnapshot(
+          { time: states.time, states: states.states },
+          {
+            source: states.source,
+            coverage: 'worldwide upstream snapshot',
+            now: Date.now(),
+          },
+        ),
+        status: 200,
+      };
+    },
+    /**
+     * Flight tracks have no direct endpoint (needs the backend archive).
+     * @returns {Promise<never>} Always rejects with `unavailable` attached.
+     */
+    async getTrack() {
+      throw asUnavailable(
+        new Error('Flight tracks need the application backend'),
+      );
+    },
+    /**
+     * Enrich via direct adsbdb lookups, normalized with the `found` flag the
+     * layers consume.
+     * @param {{ kind: string, id: string }} query Enrichment query.
+     * @param {{ signal?: AbortSignal }} options Caller signal.
+     * @returns {Promise<object|null>} Enrichment, or null when unknown.
+     */
+    async getEnrichment(query, { signal } = {}) {
+      if (!['type', 'route'].includes(query?.kind)) {
+        throw new LiveSourceError('unsupported', 'Enrichment unavailable');
+      }
+      const result =
+        query.kind === 'route'
+          ? await adsbdb.lookupRoute(query.id, { signal })
+          : await adsbdb.lookupAircraft(query.id, { signal });
+      signal?.throwIfAborted();
+      if (!result || result.unavailable) return result ?? null;
+      return { ...result, found: true };
+    },
+  };
+}

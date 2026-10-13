@@ -22,9 +22,11 @@ import { createFirmsSource } from '../layers/firms/source.js';
 import { createMapillarySource } from '../layers/streetLevel/providers/mapillary/source.js';
 import { createReferenceSources } from '../sources/reference.js';
 import { shouldUseDirect } from '../mobile/sourcePolicy.js';
+import { createDeviceFetch } from '../mobile/deviceFetch.js';
 import { createRouteDirectSource } from '../mobile/adapters/geocodeDirect.js';
 import {
   createCctvDirectLayerSource,
+  createFlightsDirectLayerSource,
   createTransitDirectLayerSource,
   createWeatherDirectLayerSource,
   createWindDirectLayerSource,
@@ -46,10 +48,18 @@ export function createStandaloneLayerSources(overrides = {}, options = {}) {
   // On-device without a backend, keyless sources fetch upstreams directly;
   // everywhere else the legacy same-origin proxies are built untouched.
   const useDirect = direct ?? shouldUseDirect();
-  const transport = fetchImpl ? { fetchImpl } : {};
+  // Without an explicit transport, on-device sources share the native
+  // registry-enforced device fetch; web/backend callers are unaffected.
+  const deviceFetch =
+    fetchImpl ?? (useDirect ? createDeviceFetch() : undefined);
+  const transport = deviceFetch ? { fetchImpl: deviceFetch } : {};
   const mapillaryToken = import.meta.env?.MAPILLARY_CLIENT_TOKEN || '';
   const firmsKey =
     typeof getKey === 'function' ? () => getKey('FIRMS_MAP_KEY') : undefined;
+  const openskyId =
+    typeof getKey === 'function' ? () => getKey('OPENSKY_CLIENT_ID') : null;
+  const openskySecret =
+    typeof getKey === 'function' ? () => getKey('OPENSKY_CLIENT_SECRET') : null;
   const mapTiles = createOpenFreeMapSource();
   const defaults = {
     ...createReferenceSources(),
@@ -57,9 +67,18 @@ export function createStandaloneLayerSources(overrides = {}, options = {}) {
       ? createRouteDirectSource(transport)
       : createDirectionsSource(transport),
     'recent-imagery': createRecentImagerySource(),
-    flights: createFlightSource(),
+    flights: useDirect
+      ? createFlightsDirectLayerSource({
+          ...transport,
+          getClientId: openskyId,
+          getClientSecret: openskySecret,
+        })
+      : createFlightSource(),
     military: createMilitarySource(),
     vessels: createVesselSource({
+      // Parked on direct: vesselsLive is a push socket (connect/tick plus a
+      // health-only snapshot), not pollable vessel rows — no lossless mapping
+      // to getSnapshot exists. See docs/MOBILE.md parked wirings.
       apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/vessels',
       // Resolved against the document's address, which a panel host may
       // serve from its own scheme.
