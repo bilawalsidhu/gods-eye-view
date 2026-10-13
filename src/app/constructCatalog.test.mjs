@@ -40,12 +40,26 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 30);
+  assert.equal(first.layers.length, 31);
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
   assert.deepEqual(
     first.metadata.find(({ id }) => id === 'local-adsb'),
     { id: 'local-adsb', disposition: 'local-only' },
     'the hardware-local layer is never serialized into links',
+  );
+  assert.equal(
+    typeof first.get('reception-horizon')?.getRowControls,
+    'function',
+    'Reception Horizon is registered over Local ADS-B',
+  );
+  assert.deepEqual(
+    first.metadata.find(({ id }) => id === 'reception-horizon'),
+    { id: 'reception-horizon', disposition: 'local-only' },
+    'a horizon measured by this antenna is never serialized into links',
+  );
+  assert.notEqual(
+    first.get('reception-horizon'),
+    second.get('reception-horizon'),
   );
   assert.notEqual(first.weatherClock, second.weatherClock);
   await first.weatherClock.setTarget('2026-09-21T12:00:00.000Z');
@@ -153,7 +167,7 @@ test('Mapillary can be omitted or replaced without changing catalog membership',
     surface: fixtureSurface(lifetime.signal),
   };
   const catalog = createApplicationCatalog(options);
-  assert.equal(catalog.layers.length, 30);
+  assert.equal(catalog.layers.length, 31);
   assert.deepEqual(catalog.get('street-level').providerIds, []);
   assert.equal(
     catalogControlServices(catalog).streetLevelLayer,

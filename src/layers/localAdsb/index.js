@@ -147,6 +147,7 @@ export function createLocalAdsbLayer({
   let rejectedFixes = 0;
   let state = receiver.getState();
   const markers = new Map();
+  const fixListeners = new Set();
   // Per-ICAO receptions (band|source -> last message) across merges.
   const heardBy = new Map();
   const enrichment = createLocalAdsbEnrichment({
@@ -408,6 +409,31 @@ export function createLocalAdsbLayer({
 
   // ── Markers ─────────────────────────────────────────────────────────────
 
+  /**
+   * Publish a fix the speed check accepted against this aircraft's previous
+   * accepted fix. A first fix (or the first after a re-anchor) has nothing to
+   * be checked against, so a lone corrupt frame never reaches listeners.
+   */
+  function publishFix(record, motion) {
+    if (!fixListeners.size || motion.fixes.length < 2) return;
+    const fix = motion.fixes.at(-1);
+    const heard = Object.freeze({
+      icao: record.icao,
+      lat: fix.lat,
+      lon: fix.lon,
+      altitudeFt: fix.altitudeFt,
+      onGround: Boolean(record.onGround),
+      at: fix.at,
+    });
+    for (const listener of fixListeners) {
+      try {
+        listener(heard);
+      } catch (error) {
+        console.warn('[Local ADS-B] Fix listener failed:', error);
+      }
+    }
+  }
+
   function upsertMarker(record, at) {
     const id = `${ENTITY_PREFIX}${record.icao}`;
     let marker = markers.get(id);
@@ -437,6 +463,7 @@ export function createLocalAdsbLayer({
     const rejectedBefore = marker.motion.rejectedFixes;
     const newFix = marker.motion.observe(record, at);
     rejectedFixes += marker.motion.rejectedFixes - rejectedBefore;
+    if (newFix) publishFix(record, marker.motion);
     updateDisplay(marker, at);
     if (!marker.entity) {
       marker.entity = dataSource.entities.add({
@@ -778,6 +805,7 @@ export function createLocalAdsbLayer({
       unsubscribe = null;
       unsubscribeFeeds?.();
       unsubscribeFeeds = null;
+      fixListeners.clear();
       feeds?.destroy?.();
       enrichment.destroy();
       clearSelection();
@@ -826,6 +854,20 @@ export function createLocalAdsbLayer({
      */
     selectAircraft(icao) {
       return enabled && selectMarker(`${ENTITY_PREFIX}${icao}`);
+    },
+
+    /**
+     * Subscribe to positions heard while this layer is on. Only fixes that
+     * passed the speed check against the same aircraft's previous accepted
+     * fix are published, as `{ icao, lat, lon, altitudeFt, onGround, at }`
+     * (barometric feet, browser-clock ms).
+     * @param {(fix: object) => void} listener
+     * @returns {() => void} Unsubscribe.
+     */
+    subscribeHeardFixes(listener) {
+      if (typeof listener !== 'function') return () => {};
+      fixListeners.add(listener);
+      return () => fixListeners.delete(listener);
     },
 
     /**

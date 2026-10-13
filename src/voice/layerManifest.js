@@ -80,6 +80,18 @@ const layers = [
     },
   },
   {
+    id: 'reception-horizon',
+    aliases: [
+      'reception horizon',
+      'my coverage',
+      'antenna coverage',
+      'receiver coverage',
+      'receiver range',
+    ],
+    context: false,
+    noQuery: 'coverage shell; no countable records',
+  },
+  {
     id: 'ais-live-vessels',
     track: true,
     aliases: ['ships', 'vessels', 'boats', 'ais', 'live vessels'],

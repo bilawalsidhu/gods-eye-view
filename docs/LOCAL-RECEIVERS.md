@@ -80,3 +80,46 @@ dump978-fa. `rtl_test` lists the indexes.
 A tar1090 or readsb install on a Raspberry Pi already serves
 `http://<pi-address>/tar1090/data/aircraft.json`. Use the Pi's private address
 or its `.local` name.
+
+## Reception horizon: what your antenna can hear
+
+Turn on **Reception Horizon** (Data Layers → Movement, under Local ADS-B)
+while Local ADS-B is on. For each altitude band it draws the farthest position
+your receiver has heard in each direction, as a stepped shell around the
+antenna: low traffic inside, high traffic reaching farther. A ridge, a
+building or a mast shadowing the antenna shows as a shorter or open side.
+
+It is built only from this page session's positions, kept in memory and
+never shared, stored or sent. Positions count from page load, even before the
+layer is turned on, and only positions confirmed by the same aircraft's
+previous fix are used, so a corrupt frame cannot stretch the shell. Coverage
+fills in as traffic passes: minutes for the overall shape, hours for a
+complete picture.
+
+It needs to know where the antenna is. In order, it uses:
+
+1. a spot you click after **SET ANTENNA** (kept until you press **AUTO** or
+   reload);
+2. the location in your decoder's `receiver.json`, which dump1090-fa, readsb
+   and tar1090 write beside `aircraft.json` when they are given one (for
+   example `--lat`/`--lon`, or the location set in PiAware or the readsb
+   config). The server reads it from the same address as the configured
+   feed, refuses cross-site requests for it, and passes on only the latitude
+   and longitude;
+3. **LOCATE** in the Local RTL-SDR card (browser location).
+
+**HEIGHT ×10** stretches the drawn heights so the steps read in 3D; ranges
+are unchanged. **RESET** starts the session's horizon again.
+
+## Trying it without a radio
+
+`scripts/fake-adsb-feed.mjs` serves a synthetic sky the way dump1090-fa does:
+
+```sh
+node scripts/fake-adsb-feed.mjs --speed 20
+LOCAL_RECEIVER_FEEDS=1090=http://127.0.0.1:8090/data/aircraft.json npm run dev
+```
+
+`--speed 20` plays the sky twenty times faster so the horizon fills in
+minutes, `--lat`/`--lon` move the antenna, and `--no-location` leaves the
+location out of `receiver.json` to try LOCATE and SET ANTENNA instead.

@@ -399,6 +399,53 @@ test('an implausible jump in a feed record is ignored by the display', async (t)
   assert.equal(layer.getStats().rejectedPositions, 1);
 });
 
+test('only fixes confirmed by the previous accepted fix reach fix listeners', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer } = await enabledLayer(receiver, clock);
+  t.after(() => layer.destroy());
+  const heard = [];
+  const unsubscribe = layer.subscribeHeardFixes((fix) => heard.push(fix));
+  const at = (ms, lat) => {
+    clock.now = ms;
+    receiver.set({
+      aircraft: [
+        record({
+          lat,
+          lastPositionAt: ms,
+          lastMessageAt: ms,
+          groundSpeedKt: 180,
+        }),
+      ],
+    });
+    return layer.update();
+  };
+  await at(100_000, 0);
+  assert.equal(
+    heard.length,
+    0,
+    'a first fix has nothing to be checked against',
+  );
+  await at(101_000, 0.005);
+  assert.equal(heard.length, 1);
+  assert.deepEqual(heard[0], {
+    icao: 'abc123',
+    lat: 0.005,
+    lon: 0,
+    altitudeFt: 10_000,
+    onGround: false,
+    at: 101_000,
+  });
+  assert.ok(Object.isFrozen(heard[0]));
+  await at(101_500, 0.005);
+  assert.equal(heard.length, 1, 'a re-read of the same fix is not new');
+  await at(102_000, 0.5);
+  assert.equal(heard.length, 1, 'an implausible jump is refused');
+  unsubscribe();
+  await at(103_000, 0.015);
+  assert.equal(heard.length, 1, 'unsubscribed');
+});
+
 test('selecting an aircraft draws a magenta trail of the fixes the receiver heard', async (t) => {
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };

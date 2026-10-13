@@ -3,6 +3,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { Readable } from 'node:stream';
 import { coalesceProxyRequest, readResponseTextCapped } from './common/http.js';
+import { sameSiteGated } from './common/same-site.js';
 import { isLocalIpv4, parseTapAddress } from '../../src/data/tapAddress.js';
 import { normalizeDump1090Aircraft } from '../../src/sources/adsbRecords.js';
 
@@ -24,9 +25,19 @@ import { normalizeDump1090Aircraft } from '../../src/sources/adsbRecords.js';
  * it resolves to must itself be loopback or RFC1918, and the connection is
  * pinned to exactly those validated addresses, so a later re-resolution
  * cannot redirect it anywhere else.
+ *
+ * A second route returns each feed's antenna position for the Reception
+ * Horizon layer. It reads the `receiver.json` that the same decoders write
+ * beside `aircraft.json` (same validated origin and directory, same transport
+ * rules) and returns only its latitude and longitude. That is the operator's
+ * location, so the route refuses cross-site requests.
  */
 
 export const LOCAL_RECEIVERS_ROUTE = '/api/local-receivers/aircraft';
+export const LOCAL_RECEIVER_POSITION_ROUTE = '/api/local-receivers/receiver';
+/** An antenna rarely moves: its position is read at most once a minute. */
+export const LOCAL_RECEIVER_POSITION_CACHE_MS = 60_000;
+export const LOCAL_RECEIVER_POSITION_MAX_BYTES = 64 * 1024;
 export const LOCAL_RECEIVER_FEEDS_ENV = 'LOCAL_RECEIVER_FEEDS';
 export const LOCAL_RECEIVER_BANDS = Object.freeze(['1090', '978']);
 export const LOCAL_RECEIVER_TIMEOUT_MS = 2_000;
@@ -124,6 +135,42 @@ export function parseLocalReceiverFeeds(value) {
       feed.label = `${feed.label} #1`;
   }
   return { configured: feeds.length > 0, feeds };
+}
+
+/**
+ * The decoder's `receiver.json` beside a validated feed URL: same origin and
+ * directory, only the file name differs.
+ * @param {string} feedUrl Validated URL ending in `aircraft.json`.
+ * @returns {string}
+ */
+export function receiverDocumentUrl(feedUrl) {
+  return String(feedUrl).replace(/aircraft\.json$/, 'receiver.json');
+}
+
+/**
+ * The antenna position in a dump1090-fa, readsb or skyaware978
+ * `receiver.json`, or null when the decoder was given no location (it then
+ * omits `lat`/`lon` or writes 0, 0).
+ * @param {object} json Parsed `receiver.json`.
+ * @returns {{lat:number, lon:number}|null}
+ */
+export function receiverJsonPosition(json) {
+  const { lat, lon } = json || {};
+  if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  if (lat === 0 && lon === 0) return null;
+  return { lat, lon };
+}
+
+function isAircraftDocument(json) {
+  return (
+    Boolean(json) && typeof json === 'object' && Array.isArray(json.aircraft)
+  );
+}
+
+function isObjectDocument(json) {
+  return Boolean(json) && typeof json === 'object' && !Array.isArray(json);
 }
 
 class FeedError extends Error {
@@ -271,7 +318,8 @@ function fetchLocalReceiverFeed(url, options) {
  * Fetch one validated feed document without following redirects and with the
  * body cap enforced while it streams.
  * @param {string} url Validated feed URL.
- * @param {object} options
+ * @param {object} options `accept` checks the parsed document (default: an
+ *   `aircraft.json` with an `aircraft` array).
  * @returns {Promise<object>} Parsed JSON document.
  */
 export async function fetchLocalReceiverDocument(
@@ -281,6 +329,7 @@ export async function fetchLocalReceiverDocument(
     lookupImpl = dnsLookup,
     timeoutMs = LOCAL_RECEIVER_TIMEOUT_MS,
     maxBytes = LOCAL_RECEIVER_MAX_BODY_BYTES,
+    accept = isAircraftDocument,
   } = {},
 ) {
   const controller = new AbortController();
@@ -324,8 +373,7 @@ export async function fetchLocalReceiverDocument(
     } catch {
       throw new FeedError('BAD_JSON');
     }
-    if (!json || typeof json !== 'object' || !Array.isArray(json.aircraft))
-      throw new FeedError('BAD_DOCUMENT');
+    if (!accept(json)) throw new FeedError('BAD_DOCUMENT');
     return json;
   } catch (error) {
     controller.abort();
@@ -392,7 +440,38 @@ async function readFeed(
 }
 
 /**
- * Build the route handler. Exposed for tests; the plugin wraps it.
+ * Read one feed's `receiver.json` and describe its antenna position.
+ * `located` carries a position; `unlocated` means the decoder was given no
+ * location; `unreachable` covers every read or parse failure.
+ * @returns {Promise<object>}
+ */
+async function readFeedPosition(feed, { fetchImpl, lookupImpl, timeoutMs }) {
+  const summary = { band: feed.band, label: feed.label };
+  if (!feed.url) return { ...summary, status: 'invalid', position: null };
+  try {
+    const json = await fetchLocalReceiverDocument(
+      receiverDocumentUrl(feed.url),
+      {
+        fetchImpl,
+        lookupImpl,
+        timeoutMs,
+        maxBytes: LOCAL_RECEIVER_POSITION_MAX_BYTES,
+        accept: isObjectDocument,
+      },
+    );
+    const position = receiverJsonPosition(json);
+    return {
+      ...summary,
+      status: position ? 'located' : 'unlocated',
+      position,
+    };
+  } catch {
+    return { ...summary, status: 'unreachable', position: null };
+  }
+}
+
+/**
+ * Build the route handlers. Exposed for tests; the plugin wraps them.
  * @param {object} [options]
  * @param {string} [options.feedsValue] `LOCAL_RECEIVER_FEEDS` value.
  * @param {typeof fetch} [options.fetchImpl] Receives `options.lookup` when
@@ -400,7 +479,7 @@ async function readFeed(
  * @param {Function} [options.lookupImpl] `dns.promises.lookup`-compatible.
  * @param {() => number} [options.now]
  * @param {{warn:Function, info?:Function}} [options.logger]
- * @returns {{handle:Function, config:object}}
+ * @returns {{handle:Function, handlePosition:Function, config:object}}
  */
 export function createLocalReceiversHandler({
   feedsValue = process.env[LOCAL_RECEIVER_FEEDS_ENV],
@@ -411,6 +490,7 @@ export function createLocalReceiversHandler({
   timeoutMs = LOCAL_RECEIVER_TIMEOUT_MS,
   maxBytes = LOCAL_RECEIVER_MAX_BODY_BYTES,
   cacheMs = LOCAL_RECEIVER_CACHE_MS,
+  positionCacheMs = LOCAL_RECEIVER_POSITION_CACHE_MS,
 } = {}) {
   const config = parseLocalReceiverFeeds(feedsValue);
   for (const feed of config.feeds) {
@@ -465,36 +545,79 @@ export function createLocalReceiversHandler({
     return result;
   }
 
-  async function handle(req, res) {
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      res.writeHead(405, {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store',
-      });
-      res.end(JSON.stringify({ error: 'Method Not Allowed' }));
-      return;
-    }
-    try {
-      const body = await payload();
-      res.writeHead(200, {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store',
-      });
-      res.end(JSON.stringify(body));
-    } catch {
-      res.writeHead(502, {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store',
-      });
-      res.end(JSON.stringify({ error: 'Local receiver feeds unavailable' }));
-    }
+  let cachedPositions = null;
+
+  async function positionsPayload() {
+    if (!config.configured) return { configured: false, receivers: [] };
+    if (cachedPositions && now() - cachedPositions.at < positionCacheMs)
+      return cachedPositions.payload;
+    const { promise } = coalesceProxyRequest(
+      inFlight,
+      'positions',
+      async () => ({
+        configured: true,
+        generatedAt: now(),
+        receivers: await Promise.all(
+          config.feeds.map((feed) =>
+            readFeedPosition(feed, { fetchImpl, lookupImpl, timeoutMs }),
+          ),
+        ),
+      }),
+    );
+    const result = await promise;
+    cachedPositions = { at: now(), payload: result };
+    return result;
   }
 
-  return { handle, config };
+  function route(load) {
+    return async function respond(req, res) {
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.writeHead(405, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+        });
+        res.end(JSON.stringify({ error: 'Method Not Allowed' }));
+        return;
+      }
+      try {
+        const body = await load();
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+        });
+        res.end(JSON.stringify(body));
+      } catch {
+        res.writeHead(502, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+        });
+        res.end(JSON.stringify({ error: 'Local receiver feeds unavailable' }));
+      }
+    };
+  }
+
+  return {
+    handle: route(payload),
+    handlePosition: route(positionsPayload),
+    config,
+  };
+}
+
+/** Serve only the mount path itself; anything below it falls through. */
+function exactMount(handler) {
+  return (req, res, next) => {
+    const path = new URL(req.url || '/', 'http://localhost').pathname;
+    if (path !== '/' && path !== '') {
+      if (typeof next === 'function') return next();
+      return undefined;
+    }
+    return handler(req, res);
+  };
 }
 
 /**
- * Vite plugin mounting `GET /api/local-receivers/aircraft`.
+ * Vite plugin mounting `GET /api/local-receivers/aircraft` and the
+ * same-site-only `GET /api/local-receivers/receiver`.
  *
  * The environment is read when the server starts, so construction alone
  * neither parses configuration nor fetches anything.
@@ -503,15 +626,12 @@ export function createLocalReceiversHandler({
  */
 export function localReceiversProxy(options = {}) {
   const install = (server) => {
-    const { handle } = createLocalReceiversHandler(options);
-    server.middlewares.use(LOCAL_RECEIVERS_ROUTE, (req, res, next) => {
-      const path = new URL(req.url || '/', 'http://localhost').pathname;
-      if (path !== '/' && path !== '') {
-        if (typeof next === 'function') return next();
-        return undefined;
-      }
-      return handle(req, res);
-    });
+    const { handle, handlePosition } = createLocalReceiversHandler(options);
+    server.middlewares.use(LOCAL_RECEIVERS_ROUTE, exactMount(handle));
+    server.middlewares.use(
+      LOCAL_RECEIVER_POSITION_ROUTE,
+      sameSiteGated(exactMount(handlePosition)),
+    );
   };
   return {
     name: 'local-receivers-proxy',

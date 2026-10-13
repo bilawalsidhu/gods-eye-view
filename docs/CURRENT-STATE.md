@@ -5044,6 +5044,76 @@ nothing producing, every readable feed stale reads STALE and anything else is
 an error. Without feeds it keeps the WebUSB statuses. See
 `docs/LOCAL-RECEIVERS.md`.
 
+The layer publishes accepted positions to `subscribeHeardFixes(listener)` as
+`{ icao, lat, lon, altitudeFt, onGround, at }`, only while it is on and only
+for a fix that passed the speed check against the same aircraft's previous
+accepted fix: an aircraft's first fix, and the first after a re-anchor, are
+never published.
+
+## Reception Horizon
+
+The Reception Horizon layer (`reception-horizon`,
+`src/layers/receptionHorizon/`) answers "what can my antenna hear from here".
+It sits under Local ADS-B in Data Layers → Movement, is off by default and is
+registered as local-only: it never enters share links or stored layer state.
+
+- **Measurement.** Per altitude band (below 5,000 ft, 5,000–15,000,
+  15,000–25,000, 25,000–35,000 and 35,000 ft and above; barometric, lower
+  bound inclusive), the farthest accepted position heard in each 5° direction
+  from the antenna. Input is Local ADS-B's `subscribeHeardFixes`, so it
+  inherits the speed check and the confirmed-fix rule; ground positions and
+  positions without an altitude are ignored. A position more than 800 km
+  from the antenna (beyond any line of sight: a 45,000 ft aircraft and a
+  1,500 m mountaintop antenna are about 640 km apart at the 4/3-Earth radio
+  horizon) is counted as implausible and never drawn.
+- **Session only.** Positions are buffered from page load, whether or not the
+  layer is on (only while Local ADS-B is on, since that is when it publishes),
+  and kept in memory only: nothing is stored, shared or sent. The newest
+  20,000 positions are kept for rebuilding when the antenna position arrives
+  or moves by 25 m or more; RESET forgets them all.
+- **Antenna position.** In order: a spot the user clicks after SET ANTENNA
+  (memory only; AUTO clears it), the first decoder feed whose `receiver.json`
+  carries a location, then the Radio card's LOCATE (the SDR session's
+  `receiverLocation`). `0, 0` is treated as unset. Without any of them the
+  row asks for one and positions wait. SET ANTENNA is a pointer tool: it
+  claims the pointer through `src/data/inputOwnership.js`, refuses (and says
+  so) while another tool holds it, releases after the placing click has
+  dispatched, and Esc or a second press cancels.
+- **Drawing.** Per band, directions join into outline runs while neighbours
+  are at most 30° apart; a wider unheard sector leaves the shell open rather
+  than bridging it, and a band draws once it has three directions. Between
+  neighbouring directions the outline sweeps in 1° steps with range linear in
+  bearing. Each run is a translucent wall from the band floor to its ceiling
+  (the top band draws to 45,000 ft) with a bright rim along the ceiling, plus
+  a white mast at the antenna and a drop line under the farthest position.
+  All primitives are built with `allowPicking: false`, so clicks reach the
+  aircraft inside the shell. Redraws are coalesced to at most one a second.
+  HEIGHT ×10 stretches drawn heights for display only (ranges are never
+  scaled) and the row says so while it is on.
+- **Row.** The count shows the farthest range; the legend shows each band's
+  farthest range (its tooltip, the share of directions heard); the info line
+  names the antenna source, positions and aircraft counted, the farthest
+  position (range in km and NM, bearing, altitude) and any implausible
+  positions ignored.
+- **Voice.** `set_layer_visibility` accepts `reception-horizon` ("reception
+  horizon", "my coverage", "antenna coverage", "receiver coverage", "receiver
+  range").
+
+**Antenna position route.** `GET /api/local-receivers/receiver` (same plugin
+as the aircraft route, refused cross-site through `sameSiteGated`) reads the
+`receiver.json` beside each configured `aircraft.json` (same validated origin
+and directory, same transport rules, 64 KB cap) and returns
+`{ configured, generatedAt, receivers: [{ band, label, status, position }] }`
+with `status` `located` (`position: { lat, lon }`), `unlocated` (the decoder
+was given no location), `unreachable` or `invalid`. Answers are cached for a
+minute; the browser reads the route only while the layer is on, once a
+minute (`createReceiverPositionSource`).
+
+`scripts/qa-reception-horizon.mjs` drives the running app against a
+synthetic decoder (`scripts/synthetic-adsb.mjs`) served through the real
+route handlers; `scripts/fake-adsb-feed.mjs` serves the same sky over HTTP
+for trying both layers without a radio.
+
 ## Bundled geography and submarine cable components
 
 Submarine cables use separate source, geometry, rendering, interaction and

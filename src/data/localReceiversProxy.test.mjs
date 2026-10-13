@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   LOCAL_RECEIVERS_ROUTE,
+  LOCAL_RECEIVER_POSITION_ROUTE,
   createLocalReceiversHandler,
   localReceiversProxy,
   parseLocalReceiverFeeds,
+  receiverDocumentUrl,
+  receiverJsonPosition,
 } from '../../server/providers/local-receivers.js';
 import { localProviderPlugins } from '../../server/providers/local.js';
 
@@ -114,7 +117,7 @@ test('an unconfigured route answers 200 without fetching anything', async (t) =>
   assert.deepEqual(res.json, { configured: false, feeds: [], records: [] });
 });
 
-test('construction mounts the route once and neither parses nor fetches', (t) => {
+test('construction mounts each route once and neither parses nor fetches', (t) => {
   t.mock.method(globalThis, 'fetch', () => {
     throw Error('construction must not fetch');
   });
@@ -128,7 +131,220 @@ test('construction mounts the route once and neither parses nor fetches', (t) =>
     feedsValue: '',
     logger: quietLogger(),
   }).configureServer({ middlewares: { use: (route) => routes.push(route) } });
-  assert.deepEqual(routes, [LOCAL_RECEIVERS_ROUTE]);
+  assert.deepEqual(routes, [
+    LOCAL_RECEIVERS_ROUTE,
+    LOCAL_RECEIVER_POSITION_ROUTE,
+  ]);
+});
+
+async function callPosition(handler, method = 'GET') {
+  const res = {
+    writeHead(status, headers) {
+      Object.assign(this, { status, headers });
+    },
+    end(body) {
+      this.body = body;
+    },
+  };
+  await handler.handlePosition({ url: '/', method }, res);
+  return { ...res, json: JSON.parse(res.body) };
+}
+
+test('receiver.json is read beside aircraft.json, never anywhere else', () => {
+  assert.equal(
+    receiverDocumentUrl('http://localhost:8080/data/aircraft.json'),
+    'http://localhost:8080/data/receiver.json',
+  );
+  assert.equal(
+    receiverDocumentUrl('https://192.168.1.20:8443/tar1090/data/aircraft.json'),
+    'https://192.168.1.20:8443/tar1090/data/receiver.json',
+  );
+  assert.equal(
+    receiverDocumentUrl('http://127.0.0.1:8978/aircraft.json'),
+    'http://127.0.0.1:8978/receiver.json',
+  );
+});
+
+test('a receiver.json position is used only when the decoder was given one', () => {
+  // dump1090-fa rounds to two decimals by default; readsb writes more.
+  assert.deepEqual(
+    receiverJsonPosition({
+      version: '9.0',
+      refresh: 1000,
+      lat: 30.27,
+      lon: -97.74,
+    }),
+    { lat: 30.27, lon: -97.74 },
+  );
+  assert.equal(receiverJsonPosition({ version: '9.0', refresh: 1000 }), null);
+  assert.equal(receiverJsonPosition({ lat: 0, lon: 0 }), null);
+  assert.equal(receiverJsonPosition({ lat: '30.2', lon: '-97.7' }), null);
+  assert.equal(receiverJsonPosition({ lat: 95, lon: 10 }), null);
+  assert.equal(receiverJsonPosition(null), null);
+});
+
+test('the receiver route returns each feed antenna position and nothing else', async () => {
+  const calls = [];
+  const handler = createLocalReceiversHandler({
+    feedsValue: `1090=${FEED_1090},978=${FEED_978},1090=http://8.8.8.8/aircraft.json`,
+    now: () => 5_000,
+    logger: quietLogger(),
+    fetchImpl: async (url, options) => {
+      calls.push({ url, redirect: options.redirect });
+      if (url.startsWith('http://localhost:8080'))
+        return respond(
+          200,
+          JSON.stringify({ version: 'readsb', lat: 30.26721, lon: -97.74311 }),
+        );
+      // dump978-fa started without --lat/--lon.
+      return respond(200, JSON.stringify({ version: '10.0', refresh: 1000 }));
+    },
+  });
+  const { status, headers, json } = await callPosition(handler);
+  assert.equal(status, 200);
+  assert.equal(headers['Cache-Control'], 'no-store');
+  assert.deepEqual(
+    calls.map(({ url }) => url).sort(),
+    [
+      'http://127.0.0.1:8978/data/receiver.json',
+      'http://localhost:8080/data/receiver.json',
+    ],
+    'only validated feeds, only their receiver.json, never the public host',
+  );
+  assert.ok(calls.every(({ redirect }) => redirect === 'manual'));
+  assert.deepEqual(json, {
+    configured: true,
+    generatedAt: 5_000,
+    receivers: [
+      {
+        band: '1090',
+        label: '1090 MHz #1',
+        status: 'located',
+        position: { lat: 30.26721, lon: -97.74311 },
+      },
+      {
+        band: '978',
+        label: '978 MHz UAT',
+        status: 'unlocated',
+        position: null,
+      },
+      { band: '1090', label: '1090 MHz #2', status: 'invalid', position: null },
+    ],
+  });
+  assert.ok(!JSON.stringify(json).includes('localhost'), 'no addresses');
+});
+
+test('an unreadable receiver.json is unreachable, and positions are cached for a minute', async () => {
+  let clock = 0;
+  let fetches = 0;
+  let fail = true;
+  const handler = createLocalReceiversHandler({
+    feedsValue: `1090=${FEED_1090}`,
+    now: () => clock,
+    logger: quietLogger(),
+    fetchImpl: async () => {
+      fetches += 1;
+      return fail
+        ? respond(200, '<html>not json</html>')
+        : respond(200, JSON.stringify({ lat: 51.5, lon: -0.12 }));
+    },
+  });
+  const [first] = await Promise.all([
+    callPosition(handler),
+    callPosition(handler),
+    callPosition(handler),
+  ]);
+  assert.equal(fetches, 1, 'concurrent requests are single-flight');
+  assert.equal(first.json.receivers[0].status, 'unreachable');
+  assert.equal(first.json.receivers[0].position, null);
+  fail = false;
+  clock += 59_000;
+  await callPosition(handler);
+  assert.equal(fetches, 1, 'still cached inside the minute');
+  clock += 1_000;
+  const second = await callPosition(handler);
+  assert.equal(fetches, 2);
+  assert.deepEqual(second.json.receivers[0].position, {
+    lat: 51.5,
+    lon: -0.12,
+  });
+  assert.equal((await callPosition(handler, 'POST')).status, 405);
+});
+
+test('an unconfigured receiver route answers without fetching anything', async (t) => {
+  t.mock.method(globalThis, 'fetch', () => {
+    throw Error('must not fetch');
+  });
+  const handler = createLocalReceiversHandler({
+    feedsValue: '',
+    logger: quietLogger(),
+  });
+  const res = await callPosition(handler);
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.json, { configured: false, receivers: [] });
+});
+
+test('the receiver route refuses cross-site requests before reading anything', async () => {
+  let fetches = 0;
+  const mounted = new Map();
+  localReceiversProxy({
+    feedsValue: `1090=${FEED_1090}`,
+    logger: quietLogger(),
+    fetchImpl: async () => {
+      fetches += 1;
+      return respond(200, JSON.stringify({ lat: 1.5, lon: 2.5 }));
+    },
+  }).configureServer({
+    middlewares: { use: (route, handler) => mounted.set(route, handler) },
+  });
+  const middleware = mounted.get(LOCAL_RECEIVER_POSITION_ROUTE);
+  const res = {
+    headers: {},
+    setHeader(name, value) {
+      this.headers[name] = value;
+    },
+    writeHead(status) {
+      this.statusCode = status;
+    },
+    end(body) {
+      this.body = body;
+    },
+  };
+  await middleware(
+    {
+      url: '/',
+      method: 'GET',
+      headers: {
+        host: 'localhost:4173',
+        origin: 'https://example.com',
+        'sec-fetch-site': 'cross-site',
+      },
+      socket: {},
+    },
+    res,
+  );
+  assert.equal(res.statusCode, 403);
+  assert.equal(fetches, 0);
+
+  const sameOrigin = { ...res, body: null, statusCode: null };
+  await middleware(
+    {
+      url: '/',
+      method: 'GET',
+      headers: {
+        host: 'localhost:4173',
+        origin: 'http://localhost:4173',
+        'sec-fetch-site': 'same-origin',
+      },
+      socket: {},
+    },
+    sameOrigin,
+  );
+  assert.equal(sameOrigin.statusCode, 200);
+  assert.deepEqual(JSON.parse(sameOrigin.body).receivers[0].position, {
+    lat: 1.5,
+    lon: 2.5,
+  });
 });
 
 test('live feeds are read in parallel and labelled with their band', async () => {
