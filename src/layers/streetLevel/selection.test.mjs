@@ -34,6 +34,7 @@ function harness({ selected = false } = {}) {
     removeListener(type, listener, options);
   };
   const sequences = { selected, cleared: 0 };
+  const groundClicks = [];
   const picks = [];
   /** What the pointer is over: a line this layer owns, or nothing. */
   const scene = { under: null };
@@ -66,6 +67,8 @@ function harness({ selected = false } = {}) {
     parts: {
       router: { ownsPick: (id) => id === 'mly:seq:1', resolve: () => null },
       hasSelectedSequence: () => sequences.selected,
+      openAtGround: (position, picked) =>
+        groundClicks.push({ position, picked }),
       clearSequences() {
         sequences.cleared++;
         sequences.selected = false;
@@ -75,6 +78,9 @@ function harness({ selected = false } = {}) {
   selection.install(viewer);
   const onMove = state.clickHandler.getInputAction(
     Cesium.ScreenSpaceEventType.MOUSE_MOVE,
+  );
+  const onClick = state.clickHandler.getInputAction(
+    Cesium.ScreenSpaceEventType.LEFT_CLICK,
   );
   return {
     state,
@@ -97,6 +103,8 @@ function harness({ selected = false } = {}) {
     camera,
     picks,
     move: (x) => onMove({ endPosition: { x, y: 10 } }),
+    click: (x) => onClick({ position: { x, y: 10 } }),
+    groundClicks,
     frame() {
       for (const task of frames.splice(0)) task();
     },
@@ -252,6 +260,24 @@ test('Esc in a text field or rich-text editor keeps the selection (M61)', () => 
     // A <div contenteditable> (or anything inside one) is a text field too.
     h.key('Escape', element('div', { isContentEditable: true }));
     assert.equal(h.sequences.cleared, 0, 'typing in a contenteditable');
+  } finally {
+    h.restore();
+  }
+});
+
+test('a click on nothing of ours goes to the ground handler with the pick, which decides', () => {
+  const h = harness();
+  try {
+    h.click(5);
+    h.scene.under = 'flight:abc';
+    h.click(6);
+    assert.deepEqual(
+      h.groundClicks.map(({ position, picked }) => [position.x, picked?.id]),
+      [
+        [5, undefined],
+        [6, 'flight:abc'],
+      ],
+    );
   } finally {
     h.restore();
   }

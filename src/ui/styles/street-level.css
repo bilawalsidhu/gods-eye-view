@@ -183,6 +183,28 @@ button.sl-status:focus-visible {
   border-color: rgba(255, 179, 0, 0.55);
 }
 
+/* The coverage hint and OPEN STREET VIEW share a line; the hint wraps. */
+.sl-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sl-meta-row .sl-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Scoped to outrank .scene-btn's flex: 1, which squeezed the button to its
+   min-width beside a long coverage line and clipped its one-line label. */
+.sl-meta-row .sl-nearest-btn {
+  flex: 0 0 auto;
+}
+
+.sl-nearest-btn[hidden] {
+  display: none;
+}
+
 /* ── Errors ──────────────────────────────────────────────────────────────── */
 .sl-error {
   font-family: var(--font-sans);
@@ -205,6 +227,14 @@ button.sl-status:focus-visible {
   display: inline-flex;
   border: 1px solid var(--glass-border-hover);
   border-radius: 999px;
+}
+
+.sl-seg[hidden],
+.sl-controls[hidden],
+.sl-filters[hidden],
+.sl-since[hidden],
+.sl-legend[hidden] {
+  display: none;
 }
 
 .sl-seg-btn {
@@ -480,7 +510,9 @@ button.sl-status:focus-visible {
 /* A dragged window keeps its natural height, so bound it to the viewport:
    the rail's max-height: 100% does not bind an auto-height parent.
    Id-qualified to outrank that rule. */
-#right-context-rail > #street-level-panel.panel-floating > .street-level-panel-inner {
+#right-context-rail
+  > #street-level-panel.panel-floating
+  > .street-level-panel-inner {
   max-height: calc(100vh - 12px);
   overflow-y: auto;
 }

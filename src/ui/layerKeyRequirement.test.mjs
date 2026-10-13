@@ -141,3 +141,19 @@ test('the manager publishes the declared key id on the row', async () => {
   );
   assert.equal(layerKeyRequirementTooltip(ungated), '');
 });
+
+test('a key-gated layer with another source ready says how to use it', () => {
+  const text = layerKeyRequirementTooltip({
+    requiresKeyId: 'mapillary',
+    stats: {
+      keyRequired: true,
+      keyAlternatives: [
+        { id: 'google', label: 'STREET VIEW', requiresKeyId: 'google-maps' },
+      ],
+    },
+  });
+  assert.equal(
+    text,
+    'Needs MAPILLARY_CLIENT_TOKEN — add it in Provider Settings, or light STREET VIEW to use your Google Maps key',
+  );
+});
