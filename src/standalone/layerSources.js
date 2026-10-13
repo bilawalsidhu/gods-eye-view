@@ -22,8 +22,13 @@ import { createFirmsSource } from '../layers/firms/source.js';
 import { createMapillarySource } from '../layers/streetLevel/providers/mapillary/source.js';
 import { createReferenceSources } from '../sources/reference.js';
 import { shouldUseDirect } from '../mobile/sourcePolicy.js';
-import { createWeatherDirectSource } from '../mobile/adapters/weatherDirect.js';
 import { createRouteDirectSource } from '../mobile/adapters/geocodeDirect.js';
+import {
+  createCctvDirectLayerSource,
+  createTransitDirectLayerSource,
+  createWeatherDirectLayerSource,
+  createWindDirectLayerSource,
+} from '../mobile/adapters/heavyLayerSources.js';
 import {
   createCycloneDirectSource,
   createFirmsDirectSource,
@@ -60,12 +65,16 @@ export function createStandaloneLayerSources(overrides = {}, options = {}) {
       // serve from its own scheme.
       origin: () => globalThis.document?.baseURI ?? 'http://localhost',
     }),
-    cctv: createCctvSource(),
+    cctv: useDirect
+      ? createCctvDirectLayerSource(transport)
+      : createCctvSource(),
     radio: useDirect
       ? createRadioDirectSource(transport)
       : createRadioSource(transport),
     traffic: createTrafficSource({ mapTiles }),
-    transit: createTransitSource(),
+    transit: useDirect
+      ? createTransitDirectLayerSource(transport)
+      : createTransitSource(),
     bikeshare: useDirect
       ? createGbfsDirectSource(transport)
       : createBikeshareSource(transport),
@@ -76,9 +85,11 @@ export function createStandaloneLayerSources(overrides = {}, options = {}) {
     firms: useDirect
       ? createFirmsDirectSource({ ...transport, getKey: firmsKey })
       : createFirmsSource(transport),
-    wind: createWindSource(),
+    wind: useDirect
+      ? createWindDirectLayerSource(transport)
+      : createWindSource(),
     weather: useDirect
-      ? createWeatherDirectSource(transport)
+      ? createWeatherDirectLayerSource(transport)
       : createWeatherSource(transport),
     cyclones: useDirect
       ? createCycloneDirectSource(transport)

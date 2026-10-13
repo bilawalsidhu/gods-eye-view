@@ -64,6 +64,21 @@ aspect locks and the launcher activity resizes in place on unfold; the
 Pixel Fold device matrix is still unrun. The WebGL2 fallback is probed and
 tested but not yet wired into boot. Full details in `docs/MOBILE.md`.
 
+On-device heavy adapters (`src/mobile/adapters/`): `transitDirect.js`
+(GTFS-RT protobuf via `pbf`), `windDirect.js` (GFS GRIB2 via `eccodes-wasm`),
+`cctvDirect.js` (TxDOT decode, same-host image guard, in-memory HLS leases
+with 15 s abandoned expiry, synthetic SVG fallback; StreetView omitted),
+`overpassDirect.js` (client-side QL sanitize with `around` bound parity to
+the server, limiter, simplification; mirrors required, none baked in), and
+`noaaTilesDirect.js` (capabilities parsing with XML hardening, tile bounds,
+PNG validation). All ports are Web-API-only (`src/` never imports `server/`)
+with canonical pointers to the server implementations. `heavyLayerSources.js`
+adapts them to the legacy layer shapes and `createStandaloneLayerSources`
+selects direct only when `shouldUseDirect()` holds; web defaults are
+unchanged. Fixture coverage lives in `src/mobile/adapters/heavy.test.mjs`.
+Real-device proof (live feeds, HLS playback, Fold survival) remains open;
+see the Plan 2 checklist in `docs/MOBILE.md`.
+
 ## God's Eye View in conversations — October 2, 2026
 
 Tool answers that can be shown in God's Eye View include a view: camera, layers,

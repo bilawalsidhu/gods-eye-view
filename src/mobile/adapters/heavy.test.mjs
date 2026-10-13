@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { PbfWriter } from 'pbf';
 import { createEccodes } from '@meri-imperiumi/eccodes-wasm';
 import {
   decodeFeedMessage,
@@ -46,6 +47,18 @@ import {
   weatherImageBbox as adapterWeatherImageBbox,
   weatherTileBounds as adapterWeatherTileBounds,
 } from './noaaTilesDirect.js';
+import { createTransitDirectSource } from './transitDirect.js';
+import { createWindDirectSource } from './windDirect.js';
+import {
+  createCctvDirectSource,
+  setCctvCatalog,
+} from './cctvDirect.js';
+import {
+  createOverpassDirectSource,
+  setOverpassMirrors,
+} from './overpassDirect.js';
+import { buildTransitSnapshot } from '../../data/transitProxy.js';
+import { createStandaloneLayerSources } from '../../standalone/layerSources.js';
 import { parseGfsIdx, windMessageRanges } from '../../../server/providers/wind/gfs.js';
 import { gfsObjectKey, selectLatestGfsCycle, nearestGfsStep } from '../../../server/providers/wind/catalog.js';
 
@@ -374,7 +387,7 @@ test('shared pacer gate: geocode and route share single pacer instance', async (
   assert.ok(typeof pacer.wait === 'function');
 });
 
-console.log('All fixture tests written - they will FAIL until adapters are implemented');
+console.log('Heavy direct adapter fixtures: server canonicals + ported factories');
 
 // ---------------------------------------------------------------------------
 // Ported-adapter coverage: the same behaviors through the Web-API-only ports
@@ -628,4 +641,323 @@ test('noaaTilesDirect port: tile + whole-image fetch with PNG validation', async
     source.getTile('radar', time, 0, 0, 0, { size: '999' }),
     /Invalid weather tile size/,
   );
+});
+
+// ---------------------------------------------------------------------------
+// Finding 2: factory-level fixture tests (through the direct factories, not
+// just the server canonicals).
+// ---------------------------------------------------------------------------
+
+test('transitDirect factory: canned protobuf yields the server snapshot shape', async () => {
+  // A minimal FULL_DATASET VehiclePositions feed, encoded with the same
+  // schema the server decoder reads (the module-level CANNED_TRANSIT_PBF is
+  // differential, so it cannot round-trip through buildTransitSnapshot).
+  const FEED_TS = 1760000000;
+  const writer = new PbfWriter();
+  writer.writeMessage(1, (_, header) => {
+    header.writeStringField(1, '2.0');
+    header.writeVarintField(2, GTFS_INCREMENTALITY_FULL_DATASET);
+    header.writeVarintField(3, FEED_TS);
+  });
+  writer.writeMessage(2, (_, entity) => {
+    entity.writeStringField(1, 'veh-1');
+    entity.writeMessage(4, (_, vehicle) => {
+      vehicle.writeMessage(2, (_, position) => {
+        position.writeFloatField(1, 30.2672);
+        position.writeFloatField(2, -97.7431);
+      });
+      vehicle.writeVarintField(5, FEED_TS);
+      vehicle.writeMessage(8, (_, descriptor) => {
+        descriptor.writeStringField(1, 'veh-1');
+      });
+    });
+  });
+  const feedBytes = writer.finish();
+  const feed = {
+    id: 'test-feed',
+    name: 'Test Feed',
+    url: 'https://gtfs.example/vp',
+    headers: {},
+  };
+  const { fetchImpl } = stubFetch((url) => {
+    assert.equal(url, feed.url);
+    return bytesResponse(feedBytes);
+  });
+  const source = createTransitDirectSource({
+    fetchImpl,
+    pacer: { wait: async () => {} },
+    registry: new Map([[feed.id, feed]]),
+  });
+  const snapshot = await source.getSnapshot(feed.id);
+
+  // Same snapshot shape as the server path: identical modulo fetch time.
+  const { fetchedAt: _a, ...actual } = snapshot;
+  const { fetchedAt: _b, ...expected } = buildTransitSnapshot(feed, feedBytes);
+  assert.deepEqual(actual, expected);
+  assert.equal(snapshot.vehicles.length, 1);
+  assert.equal(snapshot.vehicles[0].id, 'veh-1');
+
+  await assert.rejects(
+    source.getSnapshot('no-such-feed'),
+    /Unknown transit feed/,
+  );
+});
+
+test('windDirect factory: canned idx + GRIB bytes yield a server-shaped snapshot', async () => {
+  // Minimal GFS .idx inventory: U/V at 10 m plus a terminator for ranges.
+  const idx = [
+    '1:0:d=2026101200:UGRD:10 m above ground:0-6 hour fcst:',
+    '2:1000:d=2026101200:VGRD:10 m above ground:0-6 hour fcst:',
+    '3:2000:d=2026101200:TMP:2 m above ground:0-6 hour fcst:',
+    '4:3000:d=2026101200:HGT:500 mb:0-6 hour fcst:',
+  ].join('\n');
+  const grid2x2 = (overrides = {}) => ({
+    ni: 4,
+    nj: 3,
+    lo1: 0,
+    la1: 90,
+    di: 90,
+    dj: 60,
+    values: Array.from({ length: 12 }, (_, i) => i + 1),
+    shortName: 'UGRD',
+    level: 10,
+    units: 'm/s',
+    ...overrides,
+  });
+  const seen = [];
+  const fetchImpl = async (url, init = {}) => {
+    seen.push({ url: String(url), range: init.headers?.Range });
+    if (String(url).endsWith('.idx')) {
+      return new Response(idx, {
+        status: 200,
+        headers: { 'content-type': 'text/plain' },
+      });
+    }
+    const match = /^bytes=(\d+)-(\d+)$/.exec(init.headers?.Range || '');
+    assert.ok(match, 'wind ranges use Range requests');
+    const length = Number(match[2]) - Number(match[1]) + 1;
+    return new Response(new Uint8Array(length), { status: 206 });
+  };
+  const source = createWindDirectSource({
+    fetchImpl,
+    pacer: { wait: async () => {} },
+    // WASM decode itself is covered by the eccodes test above; the stub
+    // stands in for decoded GRIB messages so the factory plumbing (cycle
+    // selection, idx parsing, range fetching, resampling) is exercised.
+    decodeImpl: async (bytes) => grid2x2({ rawBytes: bytes.byteLength }),
+  });
+  const snapshot = await source.getSnapshot({ overlay: 'none' });
+  assert.ok(snapshot.cycle.date);
+  assert.ok(Number.isInteger(snapshot.cycle.hour));
+  assert.ok(Number.isInteger(snapshot.cycle.forecastHour));
+  assert.ok(Date.parse(snapshot.cycle.runIso));
+  assert.ok(Date.parse(snapshot.cycle.validIso));
+  assert.equal(snapshot.level, '10 m above ground');
+  assert.equal(snapshot.units, 'm/s');
+  assert.ok(snapshot.grid.u instanceof Float32Array);
+  assert.equal(snapshot.grid.u.length, snapshot.grid.nx * snapshot.grid.ny);
+  assert.ok(seen.some((call) => call.url.endsWith('.idx')));
+  assert.ok(seen.some((call) => typeof call.range === 'string'));
+});
+
+test('overpassDirect factory: mirrors are required, never baked in', () => {
+  // No baked defaults: missing/empty mirrors throw at construction.
+  assert.throws(() => createOverpassDirectSource(), /mirrors are required/);
+  assert.throws(
+    () => createOverpassDirectSource({ mirrors: [] }),
+    /mirrors are required/,
+  );
+  assert.throws(() => setOverpassMirrors([]), /mirrors are required/);
+
+  // Explicit operator mirrors configure the factory (and the module setter).
+  setOverpassMirrors(['https://o.example/api/interpreter']);
+  const fromSetter = createOverpassDirectSource({
+    fetchImpl: async () => {
+      throw new Error('must not fetch');
+    },
+  });
+  assert.ok(typeof fromSetter.query === 'function');
+});
+
+test('overpassDirect factory: planet-scan QL refused without any fetch', async () => {
+  let fetched = 0;
+  const source = createOverpassDirectSource({
+    fetchImpl: async () => {
+      fetched++;
+      return jsonResponse({ elements: [] });
+    },
+    pacer: { wait: async () => {} },
+    mirrors: ['https://o.example/api/interpreter'],
+  });
+  await assert.rejects(
+    source.query('node["amenity"="restaurant"];out;'),
+    /Overpass query rejected/,
+  );
+  assert.equal(fetched, 0);
+
+  // A bounded query passes sanitize and reaches the configured mirror.
+  const bounded = await source.query(
+    '[out:json];node["amenity"="restaurant"](around:1000,51.5,-0.1);out;',
+  );
+  assert.deepEqual(bounded, { elements: [] });
+  assert.equal(fetched, 1);
+});
+
+test('cctvDirect factory: stream info carries direct upstream URLs, never /api', async () => {
+  setCctvCatalog([
+    {
+      id: 'img-1',
+      name: 'Image Cam',
+      feedType: 'image',
+      url: 'https://cam.example/frame.jpg',
+    },
+    {
+      id: 'hls-1',
+      name: 'Video Cam',
+      feedType: 'hls',
+      url: 'https://cam.example/stream.m3u8',
+    },
+    { id: 'bare-1', name: 'Bare Cam', feedType: 'image' },
+  ]);
+  try {
+    const source = createCctvDirectSource({ pacer: { wait: async () => {} } });
+    const image = source.getStreamInfo('img-1');
+    assert.equal(image.frameUrl, 'https://cam.example/frame.jpg');
+    assert.equal(image.mediaUrl, null);
+    const video = source.getStreamInfo('hls-1');
+    assert.equal(video.mediaUrl, 'https://cam.example/stream.m3u8');
+    assert.equal(video.frameUrl, null);
+    const bare = source.getStreamInfo('bare-1');
+    assert.equal(bare.frameUrl, null);
+    assert.equal(bare.mediaUrl, null);
+    for (const info of [image, video, bare]) {
+      for (const value of Object.values(info)) {
+        assert.ok(
+          typeof value !== 'string' || !value.includes('/api/'),
+          'no /api proxy paths on-device',
+        );
+      }
+    }
+  } finally {
+    setCctvCatalog([]);
+  }
+});
+
+test('noaaTilesDirect factory: manifest carries direct URLs, never /api', async () => {
+  const time = new Date(Date.now() - 3600_000).toISOString();
+  const capabilities = `<?xml version="1.0"?>
+  <WMS_Capabilities>
+    <Capability>
+      <Layer>
+        <Layer>
+          <Name>conus_base_reflectivity_mosaic</Name>
+          <EX_GeographicBoundingBox>
+            <westBoundLongitude>-130</westBoundLongitude>
+            <eastBoundLongitude>-60</eastBoundLongitude>
+            <southBoundLatitude>20</southBoundLatitude>
+            <northBoundLatitude>55</northBoundLatitude>
+          </EX_GeographicBoundingBox>
+          <Dimension name="time" units="ISO8601" default="${time}">${time}</Dimension>
+        </Layer>
+      </Layer>
+    </Capability>
+  </WMS_Capabilities>`;
+  const { fetchImpl } = stubFetch((url) =>
+    url.includes('GetCapabilities')
+      ? new Response(capabilities, {
+          status: 200,
+          headers: { 'content-type': 'application/xml' },
+        })
+      : jsonResponse({}, 404),
+  );
+  const source = createAdapterNoaaTilesSource({
+    fetchImpl,
+    pacer: { wait: async () => {} },
+  });
+  const manifest = await source.getManifest('radar');
+  assert.equal(manifest.tileTemplate, null);
+  assert.ok(manifest.imageUrl.startsWith('https://nowcoast.noaa.gov/'));
+  assert.ok(manifest.imageUrl.includes('GetMap'));
+  assert.ok(!manifest.imageUrl.includes('/api/'));
+});
+
+// ---------------------------------------------------------------------------
+// Finding 3: standalone selection — web resolves legacy, direct resolves the
+// layer-shaped adapters, with identical keys on both paths.
+// ---------------------------------------------------------------------------
+
+test('standalone selection: web keeps legacy sources, direct selects adapters', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init = {}) => {
+    calls.push(String(url));
+    if (String(url).includes('/api/weather/manifest')) {
+      return jsonResponse({
+        schemaVersion: 1,
+        product: 'radar',
+        bounds: { west: -130, south: 20, east: -60, north: 55 },
+        times: ['2026-10-11T12:00:00.000Z'],
+        latest: '2026-10-11T12:00:00.000Z',
+        tileSize: 256,
+        maxLevel: 6,
+        tilingScheme: 'geographic',
+      });
+    }
+    return jsonResponse({}, 404);
+  };
+
+  // Web default: legacy proxy sources (fetch /api paths).
+  // Note: legacy transit is constructed argless (global fetch), so its /api
+  // behavior is proven by src/layers/transit/source.test.mjs; here we prove
+  // selection by keys plus the cctv/weather URL paths.
+  const web = createStandaloneLayerSources({}, { fetchImpl, direct: false });
+  assert.deepEqual(Object.keys(web.transit).sort(), [
+    'getFeeds',
+    'getHistory',
+    'requestSnapshot',
+  ]);
+  const probeCamera = {
+    id: 'c',
+    name: 'C',
+    city: '',
+    lat: 30.2672,
+    lon: -97.7431,
+    headingDeg: 0,
+    fovDeg: 60,
+    pitchDeg: -10,
+  };
+  assert.equal(
+    web.cctv.getFrameUrl(probeCamera).split('?')[0],
+    '/api/cctv/frame/c',
+  );
+  await web.weather.getSnapshot({ product: 'radar' });
+  assert.ok(calls.some((url) => url.includes('/api/weather/manifest')));
+
+  // On-device: same keys, adapter-backed (no /api fetches).
+  calls.length = 0;
+  const direct = createStandaloneLayerSources(
+    {},
+    { fetchImpl, direct: true },
+  );
+  assert.deepEqual(
+    Object.keys(direct.transit).sort(),
+    Object.keys(web.transit).sort(),
+  );
+  assert.deepEqual(
+    Object.keys(direct.cctv).sort(),
+    Object.keys(web.cctv).sort(),
+  );
+  assert.deepEqual(
+    Object.keys(direct.weather).sort(),
+    Object.keys(web.weather).sort(),
+  );
+  assert.deepEqual(
+    Object.keys(direct.wind).sort(),
+    Object.keys(web.wind).sort(),
+  );
+  await assert.rejects(
+    direct.transit.requestSnapshot('unknown-feed'),
+    /Unknown transit feed/,
+  );
+  assert.ok(!calls.some((url) => url.includes('/api/')));
+  assert.equal(direct.cctv.getFrameUrl(probeCamera), null);
 });

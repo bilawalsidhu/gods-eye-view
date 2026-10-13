@@ -168,8 +168,12 @@ export function createCctvDirectSource({
 
   /**
    * Get HLS stream info for a camera.
+   *
+   * On-device URLs are direct upstream URLs (never `/api` proxy paths, which
+   * do not exist without a backend): the registered HLS manifest for video
+   * cameras, the registered snapshot/image URL for image cameras, else null.
    * @param {string} cameraId
-   * @returns {{ feedType: string, mediaUrl: string|null, frameUrl: string, provider: string, sourceKind: string }}
+   * @returns {{ feedType: string, mediaUrl: string|null, frameUrl: string|null, provider: string, sourceKind: string }}
    */
   function getStreamInfo(cameraId) {
     const camera = getCamera(cameraId);
@@ -177,14 +181,16 @@ export function createCctvDirectSource({
 
     const feedType = camera.feedType || 'image';
     const isVideo = feedType === 'hls' || feedType === 'mjpeg';
+    const imageUrl =
+      camera.snapshotUrl ||
+      (!camera.feedType || camera.feedType === 'image' ? camera.url : null) ||
+      null;
 
     return {
       id: cameraId,
       feedType,
-      mediaUrl: isVideo
-        ? `/api/cctv/media/${encodeURIComponent(cameraId)}`
-        : null,
-      frameUrl: `/api/cctv/frame/${encodeURIComponent(cameraId)}`,
+      mediaUrl: isVideo ? camera.url || null : null,
+      frameUrl: isVideo ? null : imageUrl,
       provider: camera.provider || '',
       sourceKind: camera.sourceKind || (camera.url ? 'configured' : 'fallback'),
     };

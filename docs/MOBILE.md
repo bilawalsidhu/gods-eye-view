@@ -196,7 +196,8 @@ each line has been observed on-device.
   15 s; TxDOT base64-JSON payloads decode to JPEG; SSRF guard rejects non-catalog URLs.
 
 - **Overpass direct** — `createOverpassDirectSource` queries operator mirrors
-  with client-side QL sanitize (no planet scans, `around` ≤ 50 km, `bbox` ≤ 12°),
+  (REQUIRED explicit configuration, none baked in) with client-side QL
+  sanitize (no planet scans, `around` ≤ 50 km, `bbox` ≤ 12°),
   90/min limiter, 6 concurrent; simplification ported client-side.
 
 - **NOAA tiles direct** — `createNoaaTilesDirectSource` validates
@@ -221,9 +222,12 @@ All five heavy direct sources construct standalone and select through
 backend-pointed shell resolve the legacy `/api` proxy sources; only
 Capacitor-with-no-backend resolves the direct factories. The direct
 adapters are Web-API-only (`src/` never imports `server/`;
-`check:boundaries` reports zero `browser-imports-server`). They are not
-yet plumbed into `createStandaloneLayerSources` defaults because their
-return shapes differ from the proxy sources (decoded snapshots vs
-`Response`-shaped reads) — swapping them in would change web behavior,
-so layer-level plumbing stays device-matrix remainder work alongside the
-checklist above.
+`check:boundaries` reports zero `browser-imports-server`).
+`src/mobile/adapters/heavyLayerSources.js` adapts transit/wind/cctv/noaaTiles
+to the legacy layer shapes and `createStandaloneLayerSources` selects them
+under `useDirect`; Overpass exposes `createOverpassDirectBoundarySource` for
+the `boundarySource` seam (it takes REQUIRED explicit mirrors — there is no
+baked default). On-device outputs never emit `/api` proxy paths: CCTV stream
+info and the NOAA manifest carry direct upstream URLs (or null). Web defaults
+are unchanged. Remaining device-matrix work is the live proof checklist above
+(real feeds, HLS playback, Fold survival).

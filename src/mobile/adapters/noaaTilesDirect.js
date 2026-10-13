@@ -428,11 +428,49 @@ async function fetchWithTimeout(
 }
 
 /**
+ * Build the direct upstream WMS GetMap URL for a whole-extent image.
+ * Used for the manifest `imageUrl` so on-device clients never see an `/api`
+ * proxy path (no backend exists to serve it).
+ * @param {string} product
+ * @param {string} time Canonical observation time.
+ * @param {{ west: number, south: number, east: number, north: number }} bounds
+ * @param {string} size `WIDTHxHEIGHT`.
+ * @returns {string} Direct nowCOAST GetMap URL.
+ */
+function weatherDirectImageUrl(product, time, bounds, size) {
+  const spec = PRODUCTS[product];
+  const [width, height] = size.split('x').map(Number);
+  const upstreamUrl = new URL(`${BASE}${spec.service}/ows`);
+  upstreamUrl.search = new URLSearchParams({
+    service: 'WMS',
+    version: '1.1.1',
+    request: 'GetMap',
+    layers: spec.layer,
+    styles: spec.style,
+    srs: 'EPSG:4326',
+    bbox: [bounds.west, bounds.south, bounds.east, bounds.north].join(','),
+    width: String(width),
+    height: String(height),
+    format: 'image/png',
+    transparent: 'true',
+    time,
+  }).toString();
+  return upstreamUrl.href;
+}
+
+/**
  * Describe product for manifest response.
+ *
+ * `tileTemplate` is null on-device: per-tile bboxes cannot be expressed as a
+ * static URL template against the WMS endpoint, so tiles resolve through
+ * `getTile` instead of a URL. `imageUrl` is a concrete direct upstream GetMap
+ * URL for the whole extent — never an `/api` proxy path.
  */
 function describe(product, value, stale) {
   const spec = PRODUCTS[product];
   const time = value?.times?.at(-1) ?? null;
+  const bounds = value?.bounds ?? null;
+  const defaultSize = `${spec.image.width}x${spec.image.height}`;
   return {
     schemaVersion: 1,
     product,
@@ -441,7 +479,7 @@ function describe(product, value, stale) {
     description: spec.description,
     source: 'NOAA nowCOAST',
     attribution: spec.attribution ?? 'NOAA/NWS/NESDIS nowCOAST',
-    bounds: value?.bounds ?? null,
+    bounds,
     times: value?.times ?? [],
     allowedTimes: value?.allowedTimes ?? [],
     latest: time,
@@ -458,12 +496,11 @@ function describe(product, value, stale) {
     tileSize: 256,
     maxLevel: 6,
     tilingScheme: 'geographic',
-    tileTemplate: time
-      ? `/api/weather/tile?product=${product}&time=${encodeURIComponent(time)}&z={z}&x={x}&y={y}`
-      : null,
-    imageUrl: time
-      ? `/api/weather/image?product=${product}&time=${encodeURIComponent(time)}`
-      : null,
+    tileTemplate: null,
+    imageUrl:
+      time && bounds
+        ? weatherDirectImageUrl(product, time, bounds, defaultSize)
+        : null,
     imageSize: { ...spec.image },
   };
 }

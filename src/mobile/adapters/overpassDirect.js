@@ -3,6 +3,7 @@ import {
   createPacer,
   isUpstreamRefusal,
 } from '../sourcePolicy.js';
+import { stripOverpassNoise } from '../../sources/overpass.js';
 
 /**
  * On-device Overpass: direct Overpass API queries with client-side sanitize,
@@ -10,7 +11,9 @@ import {
  *
  * Mirrors the server's `server/providers/overpass/query.js` `sanitizeOverpassBody`
  * and `server/providers/overpass/geometry.js` `simplifyOverpassPayloadBody`.
- * Overpass mirrors are passed as explicit overrides (registry is empty in Task 2).
+ * Overpass mirrors are REQUIRED explicit configuration (plan binding: no baked
+ * defaults — the operator mirror set is deployment config, not code); the
+ * factory throws when mirrors are missing or empty.
  *
  * @module mobile/adapters/overpassDirect
  */
@@ -20,28 +23,48 @@ const MAX_CONCURRENT = 6;
 const DEFAULT_TIMEOUT_MS = 25_000;
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
-/** Overpass mirrors (passed explicitly by caller, e.g., from app config). */
-let OVERPASS_MIRRORS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-  'https://overpass.openstreetmap.ru/api/interpreter',
-];
+/**
+ * Overpass mirrors (explicit operator configuration, no baked default).
+ * Populate via `setOverpassMirrors` at app init or pass `mirrors` per factory.
+ */
+let OVERPASS_MIRRORS = [];
 
 /** Per-mirror rate limiter state. */
 const mirrorState = new Map();
 
 /**
- * Set Overpass mirrors (called at app init).
- * @param {Array<string>} mirrors
+ * Set Overpass mirrors (called at app init with operator configuration).
+ * @param {Array<string>} mirrors Interpreter endpoint URLs (non-empty).
  */
 export function setOverpassMirrors(mirrors) {
-  OVERPASS_MIRRORS =
-    Array.isArray(mirrors) && mirrors.length ? mirrors : OVERPASS_MIRRORS;
+  if (!Array.isArray(mirrors) || !mirrors.length) {
+    throw new TypeError('Overpass mirrors are required (non-empty array)');
+  }
+  OVERPASS_MIRRORS = mirrors;
+}
+
+/**
+ * Resolve the effective mirror list, refusing to run unconfigured.
+ * @param {Array<string>|undefined} mirrors Per-factory override.
+ * @returns {Array<string>} Non-empty mirror list.
+ */
+function resolveMirrors(mirrors) {
+  const resolved = mirrors === undefined ? OVERPASS_MIRRORS : mirrors;
+  if (
+    !Array.isArray(resolved) ||
+    !resolved.length ||
+    !resolved.every((mirror) => typeof mirror === 'string' && !!mirror.trim())
+  ) {
+    throw new TypeError(
+      'Overpass mirrors are required: pass explicit interpreter URLs',
+    );
+  }
+  return resolved;
 }
 
 /**
  * Create the on-device Overpass direct source.
- * @param {{ fetchImpl?: Function, pacer?: { wait: Function }, mirrors?: Array<string> }} options
+ * @param {{ fetchImpl?: Function, pacer?: { wait: Function }, mirrors?: Array<string> }} options Mirrors REQUIRED (or pre-set via `setOverpassMirrors`).
  * @returns {{ query: Function }}
  */
 export function createOverpassDirectSource({
@@ -49,6 +72,7 @@ export function createOverpassDirectSource({
   pacer = createPacer(DEFAULT_MIN_INTERVAL_MS),
   mirrors = OVERPASS_MIRRORS,
 } = {}) {
+  const effectiveMirrors = resolveMirrors(mirrors);
   let concurrent = 0;
   const waiting = [];
 
@@ -72,7 +96,7 @@ export function createOverpassDirectSource({
     try {
       // 3. Try mirrors in order
       let lastError;
-      for (const mirror of mirrors) {
+      for (const mirror of effectiveMirrors) {
         try {
           const response = await fetchImpl(mirror, {
             method: 'POST',
@@ -227,7 +251,10 @@ async function readResponseBytesCapped(response, maxBytes, signal) {
 }
 
 // ---------------------------------------------------------------------------
-// Client-side Overpass QL sanitize — mirrors server/providers/overpass/query.js
+// Client-side Overpass QL sanitize — faithful port of
+// server/providers/overpass/query.js `sanitizeOverpassBody` (same checks, same
+// error strings, same timeout clamp). The quoted-literal lexer is shared:
+// `src/sources/overpass.js` `stripOverpassNoise` (boundary-clean, no dup).
 // ---------------------------------------------------------------------------
 
 const OVERPASS_MAX_AROUND_M = 50_000;
@@ -237,58 +264,26 @@ const OVERPASS_SIMPLIFY_MIN_BYTES = 512 * 1024;
 const OVERPASS_SIMPLIFY_MIN_POINTS = 500;
 const OVERPASS_SIMPLIFY_TOLERANCE_DEG = 0.0004;
 
-const OVERPASS_AREA_ELEMENT_RE = /^area\s*\(/i;
-const OVERPASS_SELECTOR_RE = /^\s*(node|way|relation|area)\s*\[/i;
-const OVERPASS_BBOX_RE =
-  /\(\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\)/g;
-
 /**
- * Strip Overpass comments and quoted literals so validation sees only structure.
- * Mirrors `server/providers/overpass/query.js` `stripOverpassNoise`.
- * @param {string} text
- * @returns {string}
+ * Every Overpass element-type specifier, including the combined shortcuts.
+ * Shared by the selector + area-element-deny regexes so they can't drift.
  */
-function stripOverpassNoise(text) {
-  let out = '';
-  let inSingle = false;
-  let inDouble = false;
-  let inBlockComment = false;
-  let inLineComment = false;
-  let prev = '';
-  for (const ch of text) {
-    if (inLineComment) {
-      if (ch === '\n') inLineComment = false;
-      continue;
-    }
-    if (inBlockComment) {
-      if (prev === '*' && ch === '/') {
-        inBlockComment = false;
-      }
-      prev = ch;
-      continue;
-    }
-    if (!inSingle && !inDouble) {
-      if (prev === '/' && ch === '/') {
-        inLineComment = true;
-        out = out.slice(0, -1);
-        continue;
-      }
-      if (prev === '/' && ch === '*') {
-        inBlockComment = true;
-        out = out.slice(0, -1);
-        continue;
-      }
-    }
-    if (ch === "'" && !inDouble && !inBlockComment && !inLineComment) {
-      inSingle = !inSingle;
-    } else if (ch === '"' && !inSingle && !inBlockComment && !inLineComment) {
-      inDouble = !inDouble;
-    }
-    out += ch;
-    prev = ch;
-  }
-  return out;
-}
+const OVERPASS_ELEMENT_TYPES = 'node|way|relation|nwr|nw|nr|wr|rel';
+
+/** Element-selector (incl. `area`) whose statements must be individually bounded. */
+const OVERPASS_SELECTOR_RE = new RegExp(
+  `\\b(?:${OVERPASS_ELEMENT_TYPES}|area)\\b`,
+);
+
+/** An element selector bounded BY an area — the country-scan abuse shape. */
+const OVERPASS_AREA_ELEMENT_RE = new RegExp(
+  `\\b(?:${OVERPASS_ELEMENT_TYPES})\\s*\\(\\s*area\\b`,
+  'i',
+);
+
+/** A single bbox 4-tuple `(s,w,n,e)` (non-global so it does not advance lastIndex). */
+const OVERPASS_BBOX_RE =
+  /\(\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\)/;
 
 /**
  * Validate + clamp an Overpass form body. Mirrors
@@ -363,45 +358,54 @@ export function sanitizeOverpassBody(rawBody) {
     if (!stmt || stmt.startsWith('[') || /^out\b/.test(stmt)) continue;
 
     // Strip output-set assignments (NOT input bounds), then strip bracket tag
-    // filters so they don't confuse the bound check.
-    const withoutOutput = stmt.replace(/->\.\w+/g, '');
-    const withoutBrackets = withoutOutput.replace(/\[[^\]]*\]/g, '');
+    // filters so a tag KEY/value (e.g. `way[is_in]`, `node[around]`) can never be
+    // misread as a spatial bound. Bounds live in (...) / function calls / set
+    // refs, never inside [...], so the probe loses nothing real.
+    const outSets = [];
+    const body = stmt.replace(/->\s*\.(\w+)/g, (_, name) => {
+      outSets.push(name);
+      return ' ';
+    });
+    const probe = body.replace(/\[[^\]]*\]/g, ' ');
 
-    let isBounded = false;
-    if (/is_in\s*\(/.test(withoutBrackets)) isBounded = true;
-    if (OVERPASS_AREA_ELEMENT_RE.test(withoutBrackets)) isBounded = true;
-    if (OVERPASS_BBOX_RE.test(withoutBrackets)) isBounded = true;
-    if (/\barea\s*\(/.test(withoutBrackets)) isBounded = true;
-    if (/\bpivot\s*\./.test(withoutBrackets)) isBounded = true;
-
-    const setMatch = withoutBrackets.match(/->\.(\w+)/);
-    if (setMatch) {
-      if (isBounded) boundedSets.add(setMatch[1]);
-    } else if (
-      /\b(area|rel)\s*\(/.test(withoutBrackets) &&
-      !/\barea\s*\(/.test(withoutBrackets)
-    ) {
-      // Recursion without a bound is rejected unless it references a bounded set.
-      const refMatch = withoutBrackets.match(/\(([^)]+)\)/);
-      if (refMatch && !boundedSets.has(refMatch[1].trim())) {
-        return { ok: false, error: 'Unbounded Overpass recursion' };
-      }
-      isBounded = true;
-    } else if (!isBounded) {
-      return { ok: false, error: 'Unbounded Overpass selector' };
+    // Reject element-in-area scans on the TAG-STRIPPED probe, so a tag filter
+    // between the selector and the area filter (way["highway"](area.a)) can't hide
+    // it. An area has unbounded extent (could be a whole country); the app only
+    // SELECTS admin areas (area.set) and pivots (rel(pivot.x)), never node/way/
+    // relation(area...). The probe collapses tags so `way (area.a)` is caught.
+    if (OVERPASS_AREA_ELEMENT_RE.test(probe)) {
+      return {
+        ok: false,
+        error: 'Overpass area-bounded element selector not allowed',
+      };
     }
+
+    const hasSelector = OVERPASS_SELECTOR_RE.test(probe);
+    const inputSets = [...probe.matchAll(/(?<!\d)\.([a-z_]\w*)/gi)].map(
+      (m) => m[1],
+    );
+    const directBound =
+      /around:\s*\d/.test(probe) ||
+      OVERPASS_BBOX_RE.test(probe) ||
+      /is_in\s*\(/.test(probe) || // is_in(lat,lon) — the function form only
+      /\barea\s*\(/.test(probe); // area(id) — bounded as a set definition
+
+    const setBound = inputSets.some((s) => boundedSets.has(s));
+    const bounded = directBound || setBound;
+
+    if (hasSelector && !bounded) {
+      return { ok: false, error: 'Overpass query has an unbounded selector' };
+    }
+    // Only a bounded statement can mark its output sets as bounded.
+    if (bounded) for (const name of outSets) boundedSets.add(name);
   }
 
-  // Clamp timeout directive to server max.
-  const timeoutMatch = stripped.match(/\[timeout\s*:\s*(\d+)\]/i);
-  if (timeoutMatch) {
-    const t = Number(timeoutMatch[1]);
-    if (!Number.isFinite(t) || t > OVERPASS_MAX_QL_TIMEOUT) {
-      return { ok: false, error: 'Overpass timeout exceeds maximum' };
-    }
-  }
-
-  return { ok: true, body: `data=${encodeURIComponent(data)}` };
+  const clamped = data.replace(
+    /\[timeout:\s*(\d+)\s*\]/gi,
+    (_, n) =>
+      `[timeout:${Math.min(Number(n) || OVERPASS_MAX_QL_TIMEOUT, OVERPASS_MAX_QL_TIMEOUT)}]`,
+  );
+  return { ok: true, body: `data=${encodeURIComponent(clamped)}` };
 }
 
 // ---------------------------------------------------------------------------

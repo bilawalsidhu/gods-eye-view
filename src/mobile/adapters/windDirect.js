@@ -63,7 +63,9 @@ export function createWindDirectSource({
             fetchImpl,
             signal,
           });
-          const inventory = parseGfsIdx(indexBytes.toString());
+          // Bytes are NOT text: Uint8Array.toString() would comma-join the
+          // values, so decode explicitly before parsing the inventory.
+          const inventory = parseGfsIdx(new TextDecoder().decode(indexBytes));
           const ranges = windMessageRanges(inventory, { overlay });
 
           let scalarRange;

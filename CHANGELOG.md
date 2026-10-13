@@ -1,5 +1,13 @@
 # Changelog
 
+- On-device heavy feed adapters: transit decodes GTFS-RT VehiclePositions via
+  `pbf`, wind decodes GFS GRIB2 via `eccodes-wasm`, CCTV decodes TxDOT
+  base64-JSON snapshots and serves HLS through in-memory 15 s leases,
+  Overpass queries operator mirrors with client-side QL sanitize (mirrors are
+  required configuration, no baked defaults), and NOAA tiles validate
+  time/bbox/size allowlists against nowCOAST WMS. Thin layer-boundary shapes
+  select the direct sources only inside the Capacitor shell with no backend
+  configured; the web build keeps the same-origin proxies untouched.
 - GBFS v3 station names use English translations when available, then the first
   usable translation or short name. Empty or malformed names no longer appear as
   `[object Object]` or interrupt station loading; legacy string names remain
