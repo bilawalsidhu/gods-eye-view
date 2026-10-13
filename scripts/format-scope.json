@@ -343,6 +343,7 @@
   "src/layers/military/ownership.test.mjs",
   "src/layers/aircraft/classification.test.mjs",
   "src/data/aisLiveVessels.js",
+  "src/data/vesselIcons.test.mjs",
   "src/layers/vessels/cards.js",
   "src/layers/vessels/evidence.js",
   "src/layers/vessels/index.js",
