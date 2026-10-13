@@ -7,9 +7,10 @@ export class ProviderHealthPanel {
     now = () => Date.now(),
     timers = globalThis,
   } = {}) {
-    this._toggle = documentRef?.getElementById('provider-health-toggle');
-    this._panel = documentRef?.getElementById('provider-health-panel');
-    this._list = documentRef?.getElementById('provider-health-list');
+    this._document = documentRef || null;
+    this._toggle = this._document?.getElementById('provider-health-toggle');
+    this._panel = this._document?.getElementById('provider-health-panel');
+    this._list = this._document?.getElementById('provider-health-list');
     this._now = now;
     this._timers = timers;
     this._dataManager = null;
@@ -35,14 +36,21 @@ export class ProviderHealthPanel {
     this._unsubscribe?.();
     this._unsubscribe = null;
     this._dataManager = dataManager || null;
-    if (typeof this._dataManager?.subscribe === 'function') {
-      this._unsubscribe = this._dataManager.subscribe(() => this.render());
+    // Activity is the channel a layer's status and record counts travel on, so
+    // the rows and the summary follow the feeds without a manual refresh. A
+    // manager that only publishes lifecycle transitions still refreshes us.
+    const subscribe =
+      this._dataManager?.subscribeActivity || this._dataManager?.subscribe;
+    if (typeof subscribe === 'function') {
+      this._unsubscribe = subscribe.call(this._dataManager, () =>
+        this.render(),
+      );
     }
     this.render();
   }
 
   render() {
-    if (!this._list) return;
+    if (!this._list || !this._document) return;
     const rows = buildProviderHealthRows(
       this._dataManager?.getAll?.() || [],
       this._now(),
@@ -54,7 +62,7 @@ export class ProviderHealthPanel {
     this._toggle
       ?.querySelector('[data-health-summary]')
       ?.replaceChildren(
-        document.createTextNode(
+        this._document.createTextNode(
           `${liveCount} live · ${attentionCount} attention`,
         ),
       );
@@ -62,18 +70,18 @@ export class ProviderHealthPanel {
 
     this._list.replaceChildren();
     for (const row of rows) {
-      const item = document.createElement('div');
+      const item = this._document.createElement('div');
       item.className = `provider-health-row health-${row.state}`;
-      const heading = document.createElement('div');
+      const heading = this._document.createElement('div');
       heading.className = 'provider-health-heading';
-      const name = document.createElement('strong');
+      const name = this._document.createElement('strong');
       name.textContent = row.name;
-      const state = document.createElement('span');
+      const state = this._document.createElement('span');
       state.className = 'provider-health-state';
       state.textContent = row.label;
       heading.append(name, state);
 
-      const detail = document.createElement('div');
+      const detail = this._document.createElement('div');
       detail.className = 'provider-health-detail';
       const count =
         row.count === null ? '—' : new Intl.NumberFormat().format(row.count);
