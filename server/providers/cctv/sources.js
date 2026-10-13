@@ -203,6 +203,73 @@ export async function loadAustinSourcesFromOpenData() {
  *
  * @returns {Promise<Array<object>>} Normalized camera source objects.
  */
+/**
+ * Checks whether a Caltrans camera object has video stream data available.
+ *
+ * @param {object} cctv - The cctv property from a Caltrans row.
+ * @returns {boolean} True if video stream data appears present.
+ */
+function hasCaltransVideoData(cctv) {
+  if (!cctv) return false;
+  const img = cctv.imageData || {};
+  const hasStreamingVideo = String(img.streamingVideoURL || '').trim().length > 0;
+  const hasStaticVideo = Object.keys(img.static || {}).some(
+    (k) => k.toLowerCase().includes('video'),
+  );
+  return hasStreamingVideo || hasStaticVideo;
+}
+
+/**
+ * Extracts the video stream URL from a Caltrans camera object, if available.
+ *
+ * @param {object} cctv - The cctv property from a Caltrans row.
+ * @returns {string} Video stream URL, or empty string if none found.
+ */
+function extractCaltransVideoUrl(cctv) {
+  if (!cctv) return '';
+  const img = cctv.imageData || {};
+  const streamingVideoUrl = img.streamingVideoURL || '';
+  if (String(streamingVideoUrl).trim().length > 0) return String(streamingVideoUrl);
+  const static_ = img.static || {};
+  for (const key of Object.keys(static_)) {
+    if (key.toLowerCase().includes('video')) {
+      return String(static_[key]);
+    }
+  }
+  return '';
+}
+
+/**
+ * Determines the snapshot (still image) URL from a Caltrans camera object.
+ *
+ * @param {object} cctv - The cctv property from a Caltrans row.
+ * @returns {string} Still image URL, or empty string if none found.
+ */
+function extractCaltransSnapshotUrl(cctv) {
+  if (!cctv) return '';
+  const img = cctv.imageData || {};
+  if (img.static?.currentImageURL) return String(img.static.currentImageURL);
+  if (img.imageURL) return String(img.imageURL);
+  return '';
+}
+
+/**
+ * Fetch Caltrans CCTV cameras for the configured districts (CCTV_CALTRANS_DISTRICTS,
+ * comma-separated 1..12; empty string disables the pack). One official JSON feed per
+ * district, identical schema statewide; keyless. Only inService cameras with finite
+ * coords and a cwwp2.dot.ca.gov https image URL are kept (the image-URL origin check
+ * is defense-in-depth: the proxy only ever fetches catalog URLs, and this pins the
+ * catalog to the official host). Districts fetch in parallel and fail independently
+ * (Promise.allSettled) — one district outage never darkens the others.
+ *
+ * When CCTV_CALTRANS_VIDEO=1 is set in the environment and the camera data includes
+ * video stream information, cameras are registered with feedType 'hls' and the
+ * video stream URL, enabling live playback via hls.js. When video is unavailable
+ * or the env var is disabled, cameras fall back to still-image mode (the default
+ * behavior preserved for backward compatibility).
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
 export async function loadCaltransSourcesFromOpenData() {
   const districtsRaw =
     process.env.CCTV_CALTRANS_DISTRICTS ?? DEFAULT_CALTRANS_DISTRICTS;
@@ -261,6 +328,17 @@ export async function loadCaltransSourcesFromOpenData() {
       const label =
         locationName.replace(/^([A-Za-z0-9_-]+)\s*--\s*/, '') ||
         `Caltrans D${district} ${code}`;
+
+      const videoUrl =
+        String(process.env.CCTV_CALTRANS_VIDEO || '0').trim() !== '0' &&
+        hasCaltransVideoData(cctv)
+          ? extractCaltransVideoUrl(cctv)
+          : '';
+
+      const snapshotUrl = String(
+        videoUrl ? extractCaltransSnapshotUrl(cctv) : imageUrl,
+      );
+
       cameras.push({
         id: cameraId,
         name: loc.nearbyPlace ? `${label} (${loc.nearbyPlace})` : label,
@@ -291,9 +369,9 @@ export async function loadCaltransSourcesFromOpenData() {
             ? Math.max(-100, Math.min(4000, ft * 0.3048))
             : 150;
         })(),
-        feedType: 'image',
-        url: imageUrl,
-        snapshotUrl: imageUrl,
+        feedType: videoUrl ? 'hls' : 'image',
+        url: videoUrl || imageUrl,
+        snapshotUrl,
         sourceKind: 'caltrans-open-data',
         license: 'Public Caltrans highway camera frame',
       });

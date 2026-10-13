@@ -1642,6 +1642,8 @@ represent previously published GitHub Releases.
 - Added live NASA FIRMS fires, optional live TomTom traffic, Caltrans and TfL
   CCTV packs, CCTV viewsheds and direct-manipulation calibration, citywide CCTV
   cards, Natural Earth regions, analyst queries, and voice routing QA.
+- Enabled live HLS video streams from Caltrans cameras when
+  `CCTV_CALTRANS_VIDEO=1` is set (opt-in; still images by default).
 - Added the end-to-end vertical-datum system for aircraft, vessels, CCTV,
   annotations, trails, and terrain-aware rendering.
 - Added aircraft class silhouettes, path-derived display heading, ADSBDB
