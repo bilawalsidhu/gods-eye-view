@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  boxCloud,
   boxFromPin,
   boxFromRectangle,
   boxSideKm,
@@ -11,13 +12,13 @@ import {
   fitViewHeightM,
   formatCandidateReadout,
   gibsTemplate,
+  granulesOverBox,
   groupGranulesByDay,
   mergeCandidates,
   parseCandidateKey,
   quantizeBox,
   rankLatest,
-  boxCloud,
-  granulesOverBox,
+  scopeToBox,
   shortDay,
   thumbnailOrder,
   utcDay,
@@ -392,6 +393,24 @@ test('only granules over the box judge its cloud', () => {
   // No footprints: nothing can be ruled out.
   const blind = day([{ cloud: 5 }, { cloud: 60 }]);
   assert.equal(boxCloud(blind, BOX), 60);
+  // A band across the box between the samples, no vertex inside it.
+  const band = day([
+    { cloud: 5, footprint: square(-98.5, 29.5) },
+    {
+      cloud: 80,
+      footprint: [
+        [-99, 30.27],
+        [-96, 30.27],
+        [-96, 30.29],
+        [-99, 30.29],
+      ],
+    },
+  ]);
+  assert.equal(boxCloud(band, BOX), 80);
+  // The card shows the cloud of the granules that ranked the day.
+  assert.deepEqual(scopeToBox(edge, BOX).cloud, { min: 5, max: 5 });
+  assert.equal(scopeToBox(edge, BOX).granules.length, 2);
+  assert.equal(scopeToBox(edge, BOX).coverage, coverageFor(edge, BOX));
 });
 
 test('START HERE prefers a day that covers the whole box over a newer sliver', () => {

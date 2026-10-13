@@ -290,8 +290,15 @@ export function parseCandidateKey(key) {
 
 const cloudOf = (granule) => (finite(granule?.cloud) ? granule.cloud : null);
 
-function buildCandidate(product, day, granules) {
+/** Min and max known scene cloud of some granules, or null when none is known. */
+function cloudRange(granules) {
   const clouds = granules.map(cloudOf).filter((value) => value !== null);
+  return clouds.length
+    ? { min: Math.min(...clouds), max: Math.max(...clouds) }
+    : null;
+}
+
+function buildCandidate(product, day, granules) {
   const starts = granules
     .map((granule) => Date.parse(granule.timeStart))
     .filter(Number.isFinite);
@@ -303,9 +310,7 @@ function buildCandidate(product, day, granules) {
     product,
     day,
     granules,
-    cloud: clouds.length
-      ? { min: Math.min(...clouds), max: Math.max(...clouds) }
-      : null,
+    cloud: cloudRange(granules),
     timeRange:
       starts.length && ends.length
         ? {
@@ -417,6 +422,15 @@ function boxSamples({ west, south, east, north }) {
   ];
 }
 
+/** Signed area of the turn a → b → c. */
+const turn = ([ax, ay], [bx, by], [cx, cy]) =>
+  (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+
+/** Whether segments ab and cd cross at a point inside both; touching is not. */
+function segmentsCross(a, b, c, d) {
+  return turn(a, b, c) * turn(a, b, d) < 0 && turn(c, d, a) * turn(c, d, b) < 0;
+}
+
 const footprintOf = (granule) =>
   Array.isArray(granule?.footprint) && granule.footprint.length >= 3
     ? granule.footprint
@@ -447,9 +461,10 @@ export function coverageFor(candidate, box) {
  * The granules whose imagery lands in the box. CMR matches any granule that
  * touches the search box, so a 110 km HLS tile clipping one edge would
  * otherwise let its own clouds condemn a clear box. A footprint overlaps when
- * it holds a box sample or the box holds one of its vertices (a tile wholly
- * inside a large box). Granules without footprints are kept; when nothing is
- * known to overlap, every granule is.
+ * it holds a box sample, the box holds one of its vertices (a tile wholly
+ * inside a large box), or one of its edges crosses a box edge (a band across
+ * the box between the samples). Granules without footprints are kept; when
+ * nothing is known to overlap, every granule is.
  * @param {object} candidate
  * @param {object} [box] Degrees box.
  * @returns {Array<object>}
@@ -460,6 +475,10 @@ export function granulesOverBox(candidate, box) {
   if (!normalized) return granules;
   const { west, south, east, north } = normalized;
   const samples = boxSamples(normalized);
+  const corners = samples.slice(0, 4);
+  const edges = (points) =>
+    points.map((point, i) => [point, points[(i + 1) % points.length]]);
+  const boxEdges = edges(corners);
   const overlapping = granules.filter((granule) => {
     const ring = footprintOf(granule);
     if (!ring) return true;
@@ -468,6 +487,9 @@ export function granulesOverBox(candidate, box) {
       ring.some(
         ([lon, lat]) =>
           lon >= west && lon <= east && lat >= south && lat <= north,
+      ) ||
+      edges(ring).some(([a, b]) =>
+        boxEdges.some(([c, d]) => segmentsCross(a, b, c, d)),
       )
     );
   });
@@ -488,6 +510,22 @@ export function boxCloud(candidate, box) {
     worst = Math.max(worst, cloud);
   }
   return Number.isFinite(worst) ? worst : null;
+}
+
+/**
+ * A candidate as seen from the box: its coverage, and the scene cloud range
+ * of only the granules over the box, so the card shows the cloud that ranked
+ * it. The granules themselves are kept for drawing.
+ * @param {object} candidate
+ * @param {object} box Degrees box.
+ * @returns {object}
+ */
+export function scopeToBox(candidate, box) {
+  return {
+    ...candidate,
+    coverage: coverageFor(candidate, box),
+    cloud: cloudRange(granulesOverBox(candidate, box)),
+  };
 }
 
 /**

@@ -5,9 +5,9 @@
 import {
   CATALOG_DAYS,
   PRODUCTS,
-  coverageFor,
   groupGranulesByDay,
   mergeCandidates,
+  scopeToBox,
   utcDay,
   validateBox,
   viirsCandidates,
@@ -207,10 +207,9 @@ export async function searchHls({
       });
     }
   });
-  const hls = groupGranulesByDay(granules).map((candidate) => ({
-    ...candidate,
-    coverage: coverageFor(candidate, validated.box),
-  }));
+  const hls = groupGranulesByDay(granules).map((candidate) =>
+    scopeToBox(candidate, validated.box),
+  );
   return {
     candidates: mergeCandidates([hls, viirsCandidates(endIso, days)]),
     truncated,
