@@ -1,5 +1,24 @@
 # Changelog
 
+- Stream gateway chat text into the Intelligence panel as it arrives. Preserve
+  validated tool-call continuation, cancellation and bounded responses; label
+  interrupted partial answers as incomplete. HUD summaries remain buffered.
+
+- Support an explicitly configured OpenRouter free route through the loopback
+  Bifrost gateway while retaining local-model configuration. Preserve actual
+  returned model identity and surface rate limits, quota and availability errors
+  safely without retries or alternate-model fallback.
+- Label gateway chat without implying local inference, show each answer's served
+  model, and preserve useful provider errors. Add configurable HUD request spacing
+  that applies after failures and forced refreshes while keeping telemetry visible.
+
+- Add an opt-in local hybrid Intelligence panel, World Monitor country/news
+  tools for MCP and text chat, and a launcher for isolated local services.
+- Add local Bifrost/OpenAI-compatible text inference and HUD summaries.
+  The local profile keeps credentials server-side, returns real tool results,
+  and disables cloud Realtime fallback. Local speech remains unconfigured.
+- Preserve the map action runner when a session adapter has no Realtime controller.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 

@@ -306,11 +306,20 @@ test('common button and annotation bindings work with an alternate adapter and c
     ]);
     button.dispatchEvent(new Event('click'));
     assert.equal(controls.state, 'idle');
+    assert.deepEqual(
+      await controls.runner('fly_to_location', { query: 'Paris' }),
+      { ok: true },
+    );
+    assert.equal(
+      calls,
+      2,
+      'map links keep the runner with a controller-free adapter',
+    );
     lifetime.abort();
     assert.equal(subscribed, null);
     assert.equal(removed, 1);
     button.dispatchEvent(new Event('click'));
-    assert.equal(calls, 1);
+    assert.equal(calls, 2);
   } finally {
     globalThis.window = previous;
   }

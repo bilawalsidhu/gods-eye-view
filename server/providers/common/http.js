@@ -1,4 +1,5 @@
 export {
+  cancelResponseBodyBounded,
   readResponseTextCapped,
   readResponseJsonCapped,
   readResponseBytesCapped,

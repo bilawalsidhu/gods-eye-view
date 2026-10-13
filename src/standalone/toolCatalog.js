@@ -6,18 +6,27 @@ export function loadToolCatalog() {
   pending ??= Promise.all([
     import('../tools/index.js'),
     import('../tools/services.js'),
+    import('../tools/queries/worldmonitor.js'),
+    import('../tools/worldmonitorService.js'),
   ]).then(
     ([
       { composeCatalog, coreTools, catalogForSurface },
       { createToolServices },
+      { worldMonitorTools },
+      { createWorldMonitorService },
     ]) =>
       catalogForSurface(
         composeCatalog({
-          tools: coreTools,
-          services: createToolServices({
-            fetchImpl: (...args) => globalThis.fetch(...args),
-            appUrl: new URL(globalThis.document.baseURI).origin,
-          }),
+          tools: [...coreTools, ...worldMonitorTools],
+          services: {
+            ...createToolServices({
+              fetchImpl: (...args) => globalThis.fetch(...args),
+              appUrl: new URL(globalThis.document.baseURI).origin,
+            }),
+            worldmonitor: createWorldMonitorService({
+              fetchImpl: (...args) => globalThis.fetch(...args),
+            }),
+          },
         }),
         'voice',
       ),

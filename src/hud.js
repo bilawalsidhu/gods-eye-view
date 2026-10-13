@@ -106,6 +106,17 @@ export class IntelHUD {
   ) {
     this.summaryService = summaryService;
     this.summaryPolicy = summaryPolicy;
+    this._summaryMinIntervalMs =
+      Number.isFinite(summaryPolicy.minIntervalMs) &&
+      summaryPolicy.minIntervalMs > 0
+        ? Math.min(summaryPolicy.minIntervalMs, 86_400_000)
+        : 0;
+    this._lastSummaryAttemptAt = -Infinity;
+    this._summaryTimeoutMs =
+      Number.isFinite(summaryPolicy.requestTimeoutMs) &&
+      summaryPolicy.requestTimeoutMs > 0
+        ? Math.min(summaryPolicy.requestTimeoutMs, 90_000)
+        : 5000;
     this.basemapContext = basemapContext;
     this.placeSearch = placeSearch;
     this.viewer = viewer;
@@ -727,13 +738,22 @@ export class IntelHUD {
       return;
     }
     if (this._summaryRequest) return;
+    if (Date.now() - this._lastSummaryAttemptAt < this._summaryMinIntervalMs) {
+      this._setSummaryText(fallbackText, animate);
+      return;
+    }
 
     if (force) this._setSummaryText(fallbackText, false);
     this._summaryDirty = false;
     this._lastSummarySignature = signature;
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 5000);
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      this._summaryTimeoutMs,
+    );
     this._summaryRequest = controller;
+    // Failures, timeouts and forced refreshes share the same attempt spacing.
+    this._lastSummaryAttemptAt = Date.now();
     try {
       this.summaryPolicy.onRequest?.();
       const response = await this.summaryService.summarize(context, {
@@ -755,13 +775,16 @@ export class IntelHUD {
         animate,
       );
     } catch (error) {
+      // A request from a previous view (or destroyed HUD) must not repaint its
+      // captured fallback over the current view's immediate telemetry line.
+      if (revision !== this._summaryRevision) return;
       if (error?.name !== 'AbortError') {
         console.warn('[HUD] AI summary unavailable:', error);
-        // Invalidate the committed signature so the next periodic tick
-        // retries instead of sticking on the fallback line forever.
-        this._lastSummarySignature = null;
-        this._summaryDirty = true;
       }
+      // Timeouts also retry on a later tick. Only one request may be active;
+      // increasing the local model's budget must not overlap periodic work.
+      this._lastSummarySignature = null;
+      this._summaryDirty = true;
       this._setSummaryText(fallbackText, animate);
     } finally {
       window.clearTimeout(timeout);
@@ -938,6 +961,7 @@ export class IntelHUD {
 
   /** Tear down all running intervals. Call when discarding the HUD instance. */
   destroy() {
+    this._summaryRevision++;
     clearInterval(this._updateInterval);
     clearInterval(this._recBlinkInterval);
     clearInterval(this._timestampInterval);

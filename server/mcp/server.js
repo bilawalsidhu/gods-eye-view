@@ -13,6 +13,7 @@ import {
 } from '../../src/tools/panel.js';
 import { createMcpServer } from '../../src/tools/mcp/index.js';
 import { DEFAULT_API_BASE, createLocalToolServices } from './services.js';
+import { worldMonitorTools } from '../../src/tools/queries/worldmonitor.js';
 
 const INSTRUCTIONS =
   "Tools answer questions from God's Eye View's live public data. Location " +
@@ -40,7 +41,7 @@ export function createLocalMcpServer({
   return createMcpServer({
     catalog: catalogForSurface(
       composeCatalog({
-        tools: coreTools,
+        tools: [...coreTools, ...worldMonitorTools],
         services: createLocalToolServices({ apiBase, fetchImpl, panelKey }),
       }),
       'mcp',

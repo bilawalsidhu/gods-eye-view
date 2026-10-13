@@ -338,3 +338,11 @@ NOAA density imagery with the raw GLM product.
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+## Optional local World Monitor service
+
+The hybrid extension reads an operator-configured local World Monitor API.
+Country headlines retain publisher links and publication times; risk context
+retains source computation times and missing-data states. The news digest uses
+World Monitor's feed acquisition and coverage metadata. No provider content is
+copied into this repository. Preserve underlying publisher/data-source terms
+and World Monitor's source notices. See `docs/HYBRID_LOCAL_SETUP.md`.

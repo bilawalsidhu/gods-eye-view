@@ -10,9 +10,12 @@ import {
   toolsForSurface,
 } from '../../src/tools/index.js';
 import { realtimeSessionTools } from '../providers/openai/tools.js';
+import { worldMonitorTools } from '../../src/tools/queries/worldmonitor.js';
 
 export function standaloneVoiceTools() {
   return realtimeSessionTools(
-    toFunctionTools(toolsForSurface(coreTools, 'voice')),
+    toFunctionTools(
+      toolsForSurface([...coreTools, ...worldMonitorTools], 'voice'),
+    ),
   );
 }
