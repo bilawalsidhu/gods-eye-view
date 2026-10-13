@@ -136,6 +136,7 @@ function createGlobeRendering({
       mode,
       createCanvas,
       fetchImpl,
+      imageSource: directTiles(),
       decodeImage,
       now,
       onFetched,

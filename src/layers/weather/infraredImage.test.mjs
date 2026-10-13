@@ -174,3 +174,50 @@ test('bitmap decoding and Image fallback release resources on success, error and
   }
   assert.deepEqual(revoked, ['blob:test', 'blob:test', 'blob:test']);
 });
+
+test('imageSource fetches whole-image and detail bytes through the adapter', async () => {
+  const { acquireWeatherImage } = await import('./infraredImage.js');
+  const seen = [];
+  const imageSource = {
+    async getImage(product, time, options = {}) {
+      seen.push({ product, time, ...options });
+      return new Uint8Array([9, 9, 9]);
+    },
+  };
+  const sizes = [
+    { width: 4096, height: 2048 },
+    { width: 2048, height: 1024 },
+  ];
+  let decoded = 0;
+  const texture = async (options) =>
+    acquireWeatherImage('radar', '2026-10-12T12:00:00.000Z', {
+      signal: new AbortController().signal,
+      mode: 'filtered',
+      maxBytes: 1024,
+      createCanvas: canvas,
+      fetchImpl: () => assert.fail('direct must not build /api URLs'),
+      imageSource,
+      decodeImage: async (blob) => {
+        assert.equal(blob.type, 'image/png');
+        return { ...sizes[decoded++], close() {} };
+      },
+      now: () => 0,
+      ...options,
+    });
+  // Whole extent: size maps to WxH, no bbox key.
+  await texture({ size: { width: 4096, height: 2048 }, bbox: null });
+  assert.deepEqual(seen.at(-1), {
+    product: 'radar',
+    time: '2026-10-12T12:00:00.000Z',
+    size: '4096x2048',
+    signal: seen.at(-1).signal,
+  });
+  assert.ok(!('bbox' in seen.at(-1)));
+  // Detail window: bbox object maps to the comma string the adapter validates.
+  await texture({
+    size: { width: 2048, height: 1024 },
+    bbox: { west: -102, south: 34, east: -96, north: 37 },
+  });
+  assert.equal(seen.at(-1).size, '2048x1024');
+  assert.equal(seen.at(-1).bbox, '-102,34,-96,37');
+});

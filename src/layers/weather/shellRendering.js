@@ -1,6 +1,8 @@
 import { acquireWeatherImage } from './infraredImage.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
+import { shouldUseDirect } from '../../mobile/sourcePolicy.js';
+import { createNoaaTilesDirectSource } from '../../mobile/adapters/noaaTilesDirect.js';
 
 /** Metres above the ellipsoid. Lower shells draw first, so lightning draws last. */
 export const WEATHER_SHELL_HEIGHTS = Object.freeze({
@@ -404,6 +406,7 @@ export function createWeatherShell({
   decodeImage,
   createCanvas = () => document.createElement('canvas'),
   cacheBytes = WEATHER_SHELL_CACHE_BYTES,
+  imageSource = null,
 }) {
   if (!Object.hasOwn(WEATHER_IMAGE_SIZES, product))
     throw new TypeError('Unknown weather product');
@@ -430,6 +433,19 @@ export function createWeatherShell({
   let detail = null;
   let detailJob = null;
   let offCamera = null;
+  let directCache = null;
+  /**
+   * Resolve the direct image source: explicit override wins, otherwise the
+   * on-device NOAA adapter when the source policy selects direct. Null keeps
+   * the legacy `/api` image-URL path byte-identical.
+   * @returns {{ getImage: Function }|null}
+   */
+  function directImages() {
+    if (imageSource) return imageSource;
+    if (!shouldUseDirect()) return null;
+    if (!directCache) directCache = createNoaaTilesDirectSource({ fetchImpl });
+    return directCache;
+  }
 
   const suspended = () => imageryHostStatus(getHost()) !== null;
   const visible = () => !hidden && !suspended();
@@ -471,6 +487,7 @@ export function createWeatherShell({
       maxBytes: MAX_IMAGE_BYTES,
       createCanvas,
       fetchImpl,
+      imageSource: directImages(),
       decodeImage,
       now,
       onFetched,
