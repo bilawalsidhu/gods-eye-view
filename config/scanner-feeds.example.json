@@ -1,0 +1,36 @@
+{
+  "_comment": "Copy entries into scanner-feeds.json. Replace every placeholder; none of these URLs are real.",
+  "feeds": [
+    {
+      "id": "example-city-police",
+      "name": "Example City Police Dispatch",
+      "agency": "Example City PD",
+      "lat": 30.2672,
+      "lon": -97.7431,
+      "type": "stream",
+      "url": "https://example.invalid/your-licensed-stream.mp3",
+      "attribution": "Stream provider name"
+    },
+    {
+      "id": "example-openmhz-system",
+      "name": "Example OpenMHz System (latest calls)",
+      "agency": "Example County",
+      "lat": 30.2672,
+      "lon": -97.7431,
+      "type": "openmhz",
+      "system": "your-system-short-name",
+      "talkgroup": 1234,
+      "attribution": "OpenMHz"
+    },
+    {
+      "id": "example-local-trunk-recorder",
+      "name": "My home scanner (LAN stream)",
+      "agency": "Local",
+      "lat": 30.2672,
+      "lon": -97.7431,
+      "type": "stream",
+      "url": "http://192.168.1.50:8000/scanner.mp3",
+      "allowPrivate": true
+    }
+  ]
+}
