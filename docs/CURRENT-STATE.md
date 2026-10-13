@@ -979,6 +979,30 @@ future driver fix restores the effect with no code change; iOS/iPadOS platform
 detection is the backstop for when no probe context can be created. Applied
 during viewer construction, before any tile builds a draw command.
 
+## WebGL context loss
+
+Cesium has no context-loss handling of its own (CesiumGS/cesium#5991), so the
+viewer guard in `src/app/contextLoss.js` installed by
+`createApplicationViewer` is the app-side minimum: `webglcontextlost` is
+`preventDefault()`ed, the render loop stops before any frame can render into
+the 0×0 drawing buffer (the upstream failure surfaces as
+`DeveloperError: Expected width to be greater than 0` behind the dead
+"Rendering has stopped" panel), and a render error while the context reports
+lost is the fallback detector for drivers that deliver the event late. A
+layout zero-size cycle cannot reach this: Cesium skips rendering a 0×0 canvas
+and rebuilds the drawing buffer when real dimensions return.
+
+Recovery lives with the application lifecycle in `createApplicationScene`:
+the standalone page and iframe embeds reload once — the share-link hash
+already persists camera, layers and style — while a second loss inside the
+30 s cooldown, or refused web storage, degrades to a plain notice with a
+manual reload (never an automatic reload loop). An inline panel never
+reloads its host page; the panel runtime keeps its own notice. Cesium's
+error panel is dismissed when recovery takes over.
+`scripts/qa-context-loss.mjs` drives the whole contract in a real browser:
+preventDefault, loop stop, exactly one reload, the cooldown notice, and a
+healthy zero-size layout cycle.
+
 ## Map Source control ownership
 
 Map Source controls own chip listeners, source-state subscriptions and selection

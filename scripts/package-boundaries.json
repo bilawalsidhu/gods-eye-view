@@ -22,7 +22,11 @@
   },
   "viewer": {
     "exports": ["./application/viewer"],
-    "modules": ["src/app/viewer.js", "src/app/atmosphereCompat.js"],
+    "modules": [
+      "src/app/viewer.js",
+      "src/app/atmosphereCompat.js",
+      "src/app/contextLoss.js"
+    ],
     "external": ["cesium"]
   },
   "vite-build": {
@@ -1444,6 +1448,7 @@
       "src/app/sourceComposition.js",
       "src/app/controls.js",
       "src/app/data.js",
+      "src/app/contextLoss.js",
       "src/app/errors.js",
       "src/app/layerPresentation.js",
       "src/app/layers/aisLiveVessels.js",

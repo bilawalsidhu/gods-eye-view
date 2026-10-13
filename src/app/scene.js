@@ -4,6 +4,13 @@ import {
   createApplicationViewer,
   installTrackpadPinchZoom,
 } from '../app/viewer.js';
+import {
+  canReloadAfterContextLoss,
+  dismissCesiumErrorPanel,
+  markContextLossReload,
+  showContextLossNotice,
+} from './contextLoss.js';
+import { isEmbeddedInline } from './embed.js';
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
@@ -51,6 +58,31 @@ export async function createApplicationScene({
   const viewer = createApplicationViewer({
     container: 'cesiumContainer',
     creditContainer,
+    // Recovery for a dropped/evicted WebGL context (CesiumGS/cesium#5991).
+    // The share-link hash already persists camera, layers and style, so a
+    // fresh boot restores the view; see app/contextLoss.js for the routes.
+    onContextLoss: ({ error } = {}) => {
+      console.error(
+        "[God's Eye View] WebGL context lost; recovering.",
+        error ?? '',
+      );
+      // The error-first route (the loss event arriving after a frame
+      // already rendered into the dead context) leaves Cesium's panel up;
+      // recovery replaces it.
+      dismissCesiumErrorPanel();
+      // A panel embeds the app into a host page this document must never
+      // reload; the panel runtime owns that UX (globePanelRuntime.js).
+      if (isEmbeddedInline()) return;
+      if (!canReloadAfterContextLoss()) {
+        // Losing another context within the cooldown means this machine
+        // (or this boot) cannot hold one — offer the manual way out.
+        showContextLossNotice({ allowManualReload: true });
+        return;
+      }
+      markContextLossReload();
+      showContextLossNotice({ message: 'Restoring the 3D globe…' });
+      window.location.reload();
+    },
   });
   defer(() => {
     uninstallRenderGovernor(viewer);

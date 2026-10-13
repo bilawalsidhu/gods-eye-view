@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { applyModelAtmosphereWorkaround } from './atmosphereCompat.js';
+import { installContextLossGuard } from './contextLoss.js';
 
 const PINCH_ZOOM_MULTIPLIER = 8;
 const MAX_PINCH_PIXEL_DELTA = 120;
@@ -103,7 +104,12 @@ export function installTrackpadPinchZoom(
 }
 
 /** Create the standard globe viewer in caller-owned, visible containers. */
-export function createApplicationViewer({ container, creditContainer }) {
+export function createApplicationViewer({
+  container,
+  creditContainer,
+  onContextLoss,
+  onContextRestored,
+}) {
   if (!container || !creditContainer)
     throw new TypeError('Viewer and credit containers are required');
   const viewer = new Cesium.Viewer(container, {
@@ -123,6 +129,14 @@ export function createApplicationViewer({ container, creditContainer }) {
     msaaSamples: 4,
     contextOptions: { webgl: { preserveDrawingBuffer: true } },
   });
+  // Before anything can render: Cesium has no context-loss handling of its
+  // own (CesiumGS/cesium#5991), so a dropped or evicted WebGL context kills
+  // the render loop on the next frame with DeveloperError(width > 0) behind
+  // the dead "Rendering has stopped" panel. See app/contextLoss.js.
+  const removeContextLossGuard = installContextLossGuard(viewer, {
+    onLost: onContextLoss,
+    onRestored: onContextRestored,
+  });
   try {
     viewer.targetFrameRate = 60;
     // Before any tile builds a draw command: Cesium's per-vertex model
@@ -136,6 +150,7 @@ export function createApplicationViewer({ container, creditContainer }) {
     viewer.scene.skyAtmosphere.brightnessShift = -0.08;
     return viewer;
   } catch (error) {
+    removeContextLossGuard();
     viewer.destroy();
     throw error;
   }
