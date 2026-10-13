@@ -43,6 +43,7 @@ const PANEL_GROUPS = [
       'telegeography-submarine-cables',
       'local-dams',
       'local-power-plants',
+      'local-telemetry',
     ],
   },
   {
@@ -85,6 +86,7 @@ const PANEL_LABELS = {
   'local-datacenters': 'Data Centers',
   'local-firms': 'Active Fires',
   'air-quality': 'Air Quality',
+  'local-telemetry': 'Industrial Telemetry',
 };
 
 function panelLabel(layer) {

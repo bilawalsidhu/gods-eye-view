@@ -4618,6 +4618,7 @@ function layerTitle(layerId) {
   if (layerId === 'local-dams') return 'Dam';
   if (layerId === 'local-power-plants') return 'Power Plant';
   if (layerId === 'air-quality') return 'Air Quality Station';
+  if (layerId === 'local-telemetry') return 'Industrial Asset';
   if (layerId === 'telegeography-submarine-cables') return 'Submarine Cable';
   if (layerId === 'local-firms') return 'Active Fire';
   return layerId || 'Entity';

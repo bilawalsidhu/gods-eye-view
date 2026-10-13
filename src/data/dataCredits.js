@@ -186,6 +186,12 @@ export const DATA_CREDITS = [
       '<a href="https://openaq.org" target="_blank" rel="noopener">OpenAQ</a>',
   },
   {
+    key: 'local-telemetry',
+    html:
+      'Industrial Telemetry &amp; Field SCADA: Local IIoT Receiver / MQTT bridge ' +
+      '(operator-configured local hardware or simulation)',
+  },
+  {
     key: 'google-news-rss',
     html:
       'Cockpit regional headlines: ' +

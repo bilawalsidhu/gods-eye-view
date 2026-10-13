@@ -697,6 +697,11 @@
   content: '◎';
 }
 :root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='local-telemetry']
+  .data-icon::before {
+  content: '⟐';
+}
+:root[data-ui-theme='cyber']
   .data-toggle-row[data-layer-id='directions']
   .data-icon::before {
   content: '⌁';

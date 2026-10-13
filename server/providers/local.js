@@ -27,6 +27,7 @@ import { firePerimetersProxy } from './firePerimeters.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
 import { airQualityProxy } from './airQuality.js';
+import { industrialTelemetryProxy } from './industrialTelemetry.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -60,6 +61,7 @@ function localProviderPlugins({ realtime } = {}) {
     weatherProxy(),
     cycloneProxy(),
     airQualityProxy(),
+    industrialTelemetryProxy(),
     mapillaryProxy(),
     firePerimetersProxy(),
     keySetupEndpoint(),
