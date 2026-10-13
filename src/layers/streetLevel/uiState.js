@@ -1,5 +1,3 @@
-import { COLORS } from './policy.js';
-
 /**
  * @typedef {object} ProviderSnapshot
  * @property {string} id
@@ -42,8 +40,7 @@ export function summarizeCoverage(providers) {
 }
 
 /**
- * The panel snapshot from core state and provider snapshots. The legend has
- * one swatch per active source, then the shared selection colour.
+ * The panel snapshot from core state and provider snapshots.
  * @param {{enabled: boolean, filter: object, providers: Array<ProviderSnapshot>, street: object, sequence: object}} input
  */
 export function composeUIState({
@@ -52,18 +49,9 @@ export function composeUIState({
   providers,
   street,
   sequence,
-  surface = 'draped',
 }) {
-  const active = providers.filter((p) => p.on);
   const { keyRequired, keyRejected, ...coverage } =
     summarizeCoverage(providers);
-  const legend = active.map((provider) => ({
-    key: provider.id,
-    label: provider.name,
-    color: provider.color,
-  }));
-  if (active.length)
-    legend.push({ key: 'selected', label: 'Selected', color: COLORS.selected });
   return {
     enabled,
     keyRequired,
@@ -71,9 +59,7 @@ export function composeUIState({
     filter: { ...filter },
     providers: providers.map((p) => ({ ...p })),
     coverage,
-    legend,
     sequence: { ...sequence },
     street: { ...street },
-    surface,
   };
 }

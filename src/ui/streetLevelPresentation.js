@@ -1,4 +1,5 @@
 import { keySetupRequirement } from '../keySetupCore.mjs';
+import { keyStatusLabel } from '../layers/streetLevel/policy.js';
 
 // Street Level UI state to panel strings and flags. Pure, so it is testable.
 
@@ -56,10 +57,8 @@ function formatDate(ms) {
 function presentStatus(state) {
   const pressed = state.enabled === true;
   const title = pressed ? 'Turn Street Level off' : 'Turn Street Level on';
-  if (state.keyRejected)
-    return { text: 'KEY REJECTED', tone: 'warn', pressed, title };
-  if (state.keyRequired)
-    return { text: 'KEY REQUIRED', tone: 'warn', pressed, title };
+  const key = keyStatusLabel(state);
+  if (key) return { text: key, tone: 'warn', pressed, title };
   if (state.coverage.loading)
     return { text: 'LOADING', tone: 'busy', pressed, title };
   return pressed
@@ -98,6 +97,15 @@ function presentProviders(state) {
   });
 }
 
+/** How to add the key the first switched-on provider is missing. */
+function keyHint(state) {
+  const provider = (state.providers || []).find(
+    (p) => p.on && p.keyRequired && p.requiresKeyId,
+  );
+  const requirement = provider && keySetupRequirement(provider.requiresKeyId);
+  return requirement ? `${provider.name}: ${requirement}` : null;
+}
+
 function presentViewer(state) {
   const { street } = state;
   const right = [];
@@ -113,51 +121,52 @@ function presentViewer(state) {
     captionRight: right.join(' · '),
     link: street.externalUrl || null,
     linkLabel: street.providerLabel ? `${street.providerLabel} ↗` : '',
-    follow: {
-      pressed: street.follow === true,
-      disabled: street.open !== true || street.followAvailable !== true,
-      title:
-        street.followAvailable === true
-          ? 'Camera follows view: move the globe camera wherever the street-level view looks'
-          : 'Camera follow needs the Google 3D map: choose Google 3D under MAP SOURCE',
-    },
   };
 }
 
 function presentMeta(state) {
-  if (state.providers.length === 0) return state.coverage.hint || '';
-  if (!state.enabled) return 'Switch a provider on to draw its coverage.';
+  const providers = state.providers || [];
+  if (providers.length === 0) return state.coverage.hint || '';
+  if (!state.enabled) return 'Switch Street Level on to draw its coverage.';
+  if (!providers.some((p) => p.on))
+    return 'Every provider is switched off: light a chip to draw its coverage.';
   if (state.sequence.selectedId)
     return state.sequence.loading
       ? 'Loading this sequence…'
       : `${state.sequence.images.toLocaleString()} images in this sequence · Esc clears`;
   if (state.coverage.count > 0)
     return `${state.coverage.count.toLocaleString()} sequences in view · click a line for its photos`;
-  return state.coverage.hint || '';
+  if (state.coverage.hint) return state.coverage.hint;
+  // Still loading, or the error line already says why.
+  if (state.coverage.loading || state.keyRequired || state.coverage.error)
+    return '';
+  const filter = state.filter || {};
+  return (filter.pano || 'all') !== 'all' || Number(filter.sinceDays) > 0
+    ? 'No sequences in view match the filter'
+    : 'No coverage in view';
 }
 
 /** @param {{now?: number}} [options] Clock for the SINCE readout. */
 export function presentStreetLevelPanel(state, { now = Date.now() } = {}) {
-  const enabled = state.enabled === true;
   const keyRequired = state.keyRequired === true;
   const filter = state.filter || { pano: 'all', sinceDays: 0 };
-  // A missing key is already shown by the status and chip tooltip; only a
-  // rejected key keeps its error line, since that message names the fix.
+  // A missing key says how to add it; a rejected key's own error names the fix.
   const keyMissing = keyRequired && state.keyRejected !== true;
   return {
-    enabled,
+    enabled: state.enabled === true,
     keyRequired,
     status: presentStatus(state),
-    controlsDisabled: keyRequired || state.providers.length === 0,
+    controlsDisabled: keyRequired || (state.providers || []).length === 0,
     providers: presentProviders(state),
     error: keyMissing
-      ? null
-      : state.street.error || state.coverage.error || null,
+      ? keyHint(state)
+      : state.street.error ||
+        state.sequence.error ||
+        state.coverage.error ||
+        null,
     filter: { pano: filter.pano, sinceDays: Number(filter.sinceDays) || 0 },
     since: presentSince(filter.sinceDays, now),
-    legend: state.legend || [],
     viewer: presentViewer(state),
     meta: presentMeta(state),
-    wantsOpen: state.street.open === true,
   };
 }

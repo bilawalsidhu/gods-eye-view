@@ -5,46 +5,34 @@ import { encodeIdSwitches } from '../../data/idSwitches.js';
  *
  * @typedef {object} StreetLevelProvider
  * @property {string} id            Stable id, e.g. 'mapillary'; also the share-link option key.
- * @property {string} name          Human name for captions and legends, e.g. 'Mapillary'.
+ * @property {string} name          Human name for captions, e.g. 'Mapillary'.
  * @property {string} label         Chip text and link label, e.g. 'MAPILLARY'.
  * @property {string|null} requiresKeyId  Key-setup id the provider needs, or null when keyless.
  * @property {string} pickPrefix    Every primitive id the provider creates starts with it.
- * @property {{coverage: string}} colors   The source's one colour, from policy.js PROVIDER_COLORS.
+ * @property {{coverage: string}} colors   The source's one colour.
  * @property {{html: string}} credit   On-globe attribution while the provider is active.
  * @property {(context: ProviderContext) => ProviderInstance} create
  *
  * @typedef {object} ProviderContext   Handed to `create()` once by the core.
- * @property {object} services         Scene services: picking, input, render, sprites, ground, terrain.
+ * @property {object} services         Scene services: picking, input, render, sprites.
  * @property {() => {pano: string, sinceMs: number|null}} getFilter   Filter resolved against now; read it on every use so "since N days" keeps up.
  * @property {() => boolean} isActive  Layer enabled and this provider switched on.
- * @property {() => 'draped'|'terrain'} getSurface   'terrain' on Google 3D at street zoom: draw on bare earth.
- * @property {GroundCaster|null} groundCaster   Bare-earth heights for terrain mode (groundCast.js); null without a terrain service.
- * @property {{meshAt: (lon: number, lat: number) => number|undefined, request: (points: Array<[number, number]>) => void, onSampled: (listener: (cells: Array<[number, number]>) => void) => () => void}|null} meshSampler   Sampled Google 3D surface heights (meshSampler.js); pass `meshAt` to `castLine`.
  * @property {() => void} notify       Ask the core to publish a new UI snapshot.
- * @property {{openImage: (imageId: string) => Promise<void>, reportError: (message: string|null) => void}} actions
+ * @property {{openImage: (imageId: string) => Promise<boolean>}} actions
  *
  * @typedef {object} ProviderInstance
- * @property {() => Promise<{configured: boolean}>} status
+ * @property {(options?: {signal?: AbortSignal}) => Promise<{configured: boolean}>} status   Whether a usable key is set; the core gives up on a hung answer through `signal`.
  * @property {(viewer: object) => void} init         Create collections, hidden.
  * @property {(viewer: object) => void} activate     Start drawing coverage for the camera.
  * @property {() => void} deactivate                 Detach, clear coverage and selection, hide.
  * @property {(viewer: object) => void} destroy
- * @property {() => void} refreshCoverage
  * @property {(filter: {pano: string, sinceMs: number|null}) => void} setFilter   The filter changed: redraw (reading `getFilter()`).
- * @property {(mode: 'draped'|'terrain') => void} [setSurface]   Redraw coverage and cones for the new surface mode.
- * @property {() => {count: number, zoom: number|null, kind: string|null, loading: boolean, hint: string, error: string|null, keyRequired: boolean}} coverageStats
+ * @property {() => {count: number, loading: boolean, hint: string, error: string|null, keyRequired: boolean, keyRejected?: boolean}} coverageStats
  * @property {(pickId: string) => boolean} handlePick   The id carries the provider's own prefix.
  * @property {(sequenceId: string) => Promise<void>} [selectSequence]
  * @property {() => void} [clearSequence]
- * @property {() => {selectedId: string|null, images: number, loading: boolean}} [sequenceStats]
- * @property {(point: {lat: number, lon: number}, options?: {signal?: AbortSignal}) => Promise<string|null>} nearestImage   An aborted lookup gives up (it may reject with an AbortError).
+ * @property {() => {selectedId: string|null, images: number, loading: boolean, error?: string|null}} [sequenceStats]
  * @property {ViewerAdapter} viewer
- *
- * @typedef {object} GroundCaster
- * @property {(points: Array<[number, number]>, options?: {signal?: AbortSignal}) => Promise<boolean>} prepare   Fetch the heights around [lon, lat] points; true when all are known.
- * @property {(lines: Array<Array<[number, number]>>, options?: {signal?: AbortSignal}) => Promise<boolean>} prepareLines
- * @property {(lon: number, lat: number) => number|null} groundAt    Cached bare-earth ellipsoidal height.
- * @property {(coords: Array<[number, number]>) => Array<number>|null} castLine   Densified [lon, lat, height, ...] or null.
  *
  * @typedef {object} ViewerAdapter
  * @property {(host: HTMLElement) => Promise<void>} mount     Idempotent; may lazy-load a library.
@@ -52,16 +40,13 @@ import { encodeIdSwitches } from '../../data/idSwitches.js';
  * @property {() => void} close                               Drop the image, keep the instance warm.
  * @property {() => void} unmount                             Destroy the instance (host handed to another provider).
  * @property {() => void} resize
- * @property {(host: HTMLElement) => Promise<void>} [prewarm]
  * @property {(mode: 'letterbox'|'fill') => void} [setRenderMode]
  * @property {(listener: (pose: StreetPose) => void) => () => void} onPose
  *
  * @typedef {object} StreetPose
- * @property {string} providerId
  * @property {string} imageId
  * @property {{lon: number, lat: number}} position
  * @property {number|null} bearing
- * @property {number|null} tilt
  * @property {number|null} altitude
  * @property {boolean} isPano
  * @property {number|null} capturedAt   Epoch milliseconds.

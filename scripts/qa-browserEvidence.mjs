@@ -7,10 +7,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 /** Console messages and failed requests kept per page. */
-export const EVIDENCE_LIMIT = 200;
+const EVIDENCE_LIMIT = 200;
 
 /** Cesium's console line when the render loop throws (CesiumWidget). */
-export const RENDER_ERROR_PATTERN = /An error occurred while rendering/i;
+const RENDER_ERROR_PATTERN = /An error occurred while rendering/i;
 
 /** Mask tokens in a URL or message before it is printed or saved. */
 export function redact(text) {

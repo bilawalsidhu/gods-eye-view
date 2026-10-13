@@ -67,8 +67,6 @@ jobs:
     timeout-minutes: 30
     env:
       GEV_REQUIRE_ALLOCATION_GATE: '0'
-      # Fail on a missed header press unless the panel itself moved.
-      QA_FAIL_ON_RETRY: '1'
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -103,10 +101,6 @@ jobs:
 
       - name: Street Level gate with Mapillary fixtures
         run: npm run qa:street-level:fixtures -- --strict --url http://localhost:4173
-
-      - name: Portable panel gate
-        if: success() || failure()
-        run: npm run qa:panel-resize -- --url http://localhost:4173
 
       - name: Preview server log
         if: failure()

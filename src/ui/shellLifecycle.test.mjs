@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { UiLifetime } from './uiLifetime.js';
 import { PanelChrome } from './panelChrome.js';
 import { PanelLayoutController } from './panelLayoutController.js';
-import { PanelPositionControls } from './panelPositionControls.js';
 import { ShellFeedback } from './shellFeedback.js';
 import { RecordingControls } from './recordingControls.js';
 
@@ -174,46 +173,6 @@ test('panel layout coalesces each rail and cannot rearm after destruction', () =
   }
 });
 
-test('panel disposal cancels a live drag without saving or accepting later pointer movement', () => {
-  const f = fixture();
-  try {
-    const owner = new PanelPositionControls({
-      syncPanelCollapseButton() {},
-      layoutRightPanels() {},
-      syncCctvPanelViewport() {},
-      showToast() {},
-    });
-    const panel = f.element(),
-      handle = f.element();
-    owner._makePanelDraggable('sample', panel, handle);
-    handle.dispatchEvent(
-      Object.assign(new Event('pointerdown', { cancelable: true }), {
-        button: 0,
-        clientX: 30,
-        clientY: 40,
-      }),
-    );
-    assert.equal(panel.classList.contains('panel-dragging'), true);
-    owner.destroy();
-    const before = { ...panel.style };
-    window.dispatchEvent(
-      Object.assign(new Event('pointermove'), { clientX: 500, clientY: 300 }),
-    );
-    window.dispatchEvent(new Event('pointerup'));
-    assert.deepEqual(panel.style, before);
-    assert.equal(panel.classList.contains('panel-dragging'), false);
-    owner._makePanelDraggable('sample', panel, handle);
-    owner._initPanelDrag();
-    owner._ppToggles.style.top = '10000px';
-    owner._reclampDraggablePanels();
-    assert.equal(owner._ppToggles.style.top, '10000px');
-    assert.equal(owner.removers.length, 0);
-    assert.deepEqual(f.writes, []);
-  } finally {
-    f.restore();
-  }
-});
-
 test('feedback disposal clears toast and polling work and rejects retained notices', () => {
   const f = fixture();
   try {
@@ -314,7 +273,7 @@ test('weather rail orders between CCTV and Context, resets positions, observes a
         removeProperty: (key) => positions.delete(key),
         positions,
       };
-      panel.classList.add('panel-draggable', 'panel-dragging', 'collapsed');
+      panel.classList.add('collapsed');
       const button = f.element();
       button.closest = () => panel;
       const attributes = new Map();
@@ -349,8 +308,6 @@ test('weather rail orders between CCTV and Context, resets positions, observes a
     assert.ok(synced.includes('weather-panel'));
     assert.ok(observed.has(weather));
     assert.equal(weather.style.positions.size, 0);
-    assert.equal(weather.classList.contains('panel-draggable'), false);
-    assert.equal(weather.classList.contains('panel-dragging'), false);
     assert.equal(weather.button.textContent, '◀');
     assert.equal(weather.button.getAttribute('aria-expanded'), 'false');
     assert.equal(weather.button.title, 'Expand WEATHER');

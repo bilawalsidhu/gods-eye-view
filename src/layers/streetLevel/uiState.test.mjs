@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { composeUIState, summarizeCoverage } from './uiState.js';
-import { COLORS } from './policy.js';
 import { providerSnapshot } from '../../testSupport/streetLevelFakes.mjs';
 
 const provider = (overrides = {}) =>
@@ -45,44 +44,6 @@ test('the layer is key-gated only when every switched-on provider lacks its key'
     providers: [provider({ keyRequired: true, on: false })],
   });
   assert.equal(offOnly.keyRequired, false, 'nothing switched on to gate');
-});
-
-test('the legend is one swatch per active source, in its colour, then Selected', () => {
-  const single = composeUIState({ ...base, providers: [provider()] });
-  assert.deepEqual(single.legend, [
-    { key: 'mapillary', label: 'Mapillary', color: '#05cb63' },
-    { key: 'selected', label: 'Selected', color: COLORS.selected },
-  ]);
-  const two = composeUIState({
-    ...base,
-    providers: [
-      provider(),
-      provider({ id: 'panoramax', name: 'Panoramax', color: '#a66bff' }),
-    ],
-  });
-  assert.deepEqual(
-    two.legend.map((entry) => [entry.label, entry.color]),
-    [
-      ['Mapillary', '#05cb63'],
-      ['Panoramax', '#a66bff'],
-      ['Selected', COLORS.selected],
-    ],
-  );
-  const oneOff = composeUIState({
-    ...base,
-    providers: [
-      provider(),
-      provider({ id: 'panoramax', name: 'Panoramax', on: false }),
-    ],
-  });
-  assert.deepEqual(
-    oneOff.legend.map((entry) => entry.key),
-    ['mapillary', 'selected'],
-  );
-  assert.deepEqual(
-    composeUIState({ ...base, providers: [provider({ on: false })] }).legend,
-    [],
-  );
 });
 
 test('hint and error come from the first active provider that has one', () => {
@@ -135,17 +96,5 @@ test('a rejected key gates like a missing one and is named as rejected', () => {
   assert.equal(
     summarizeCoverage([provider({ keyRequired: true })]).keyRejected,
     false,
-  );
-});
-
-test('the surface mode defaults to draped and passes through', () => {
-  assert.equal(
-    composeUIState({ ...base, providers: [provider()] }).surface,
-    'draped',
-  );
-  assert.equal(
-    composeUIState({ ...base, providers: [provider()], surface: 'terrain' })
-      .surface,
-    'terrain',
   );
 });

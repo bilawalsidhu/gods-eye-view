@@ -7,7 +7,7 @@ import {
 } from './globePanel.js';
 import { panelRuntime } from '../app/globePanelRuntime.js';
 import { composeCatalog, coreTools } from './index.js';
-import { MAPILLARY_GRAPH_HOST } from '../layers/streetLevel/providers/mapillary/policy.js';
+import { MAPILLARY_GRAPH_HOST } from '../layers/streetLevel/policy.js';
 
 /** Whether a CSP source list allows a URL (exact origin or `https://*.host`). */
 function allows(sources, url) {

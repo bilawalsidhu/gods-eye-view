@@ -62,21 +62,6 @@ test('graph lookups call graph.mapillary.com with the client token and requested
   assert.equal(url.searchParams.get('access_token'), 'MLY|1|abc');
   assert.equal(url.searchParams.get('sequence_ids'), 'seq-1');
   assert.match(url.searchParams.get('fields'), /geometry/);
-
-  const nearest = await source.nearestImages({
-    lat: 38.5,
-    lon: -121.5,
-    radius: 500,
-    limit: 500,
-  });
-  assert.equal(nearest.length, 1);
-  const nearestUrl = new URL(calls[1].url);
-  assert.equal(
-    nearestUrl.searchParams.get('radius'),
-    '50',
-    'radius is clamped to the API maximum',
-  );
-  assert.equal(nearestUrl.searchParams.get('limit'), '100');
 });
 
 test('graph calls without a token fail fast as keyRequired without a request', async () => {
@@ -102,12 +87,6 @@ test('graph API errors carry the upstream message and status', async () => {
       error.status === 400 &&
       /Invalid OAuth/.test(error.message),
   );
-});
-
-test('the source exposes only imagery lookups', () => {
-  const source = createMapillarySource({ token: 'MLY|1|abc' });
-  for (const gone of ['queryFeatures', 'plan', 'geocode', 'spriteUrl'])
-    assert.equal(source[gone], undefined, gone);
 });
 
 test('a rejected key and a rate limit are told apart from other tile errors', async () => {

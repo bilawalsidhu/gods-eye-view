@@ -577,16 +577,6 @@ export class ShellFacade {
   }
 
   /**
-   * On window resize, keep the draggable panel on-screen — a panel positioned near an edge can fall
-   * outside a now-smaller viewport (audit U2). pp-toggles is right-pinned, so re-pin (horizontal) and
-   * clamp its top. No-op until the panel has been positioned (explicit inline top).
-   * @returns {void}
-   */
-  _reclampDraggablePanels() {
-    return this._panelPosition._reclampDraggablePanels();
-  }
-
-  /**
    * Creates one CesiumJS PostProcessStage per visual style and registers
    * it with the scene. Each stage starts with intensity 0 (invisible)
    * so crossfade transitions can animate it in later.
@@ -911,15 +901,6 @@ export class ShellFacade {
     return this._panelChrome._maybeNotifyLayoutReset(...arguments);
   }
 
-  /**
-   * Sets up drag-to-reposition for legacy floating controls. The right rail
-   * and left accordion remain fixed so their HUD alignment is deterministic.
-   * @returns {void}
-   */
-  _initPanelDrag() {
-    return this._panelPosition._initPanelDrag();
-  }
-
   _persistAwarenessSelection(...args) {
     return this._layerBindings._persistAwarenessSelection(...args);
   }
@@ -978,15 +959,6 @@ export class ShellFacade {
 
   _renderRadioState(...args) {
     return this._radioControls?._renderRadioState?.(...args);
-  }
-
-  /**
-   * Returns the versioned localStorage key for a panel's saved position.
-   * @param {string} panelId - DOM id of the panel.
-   * @returns {string} localStorage key.
-   */
-  _panelStorageKey(panelId) {
-    return this._panelPosition._panelStorageKey(panelId);
   }
 
   /**
@@ -1081,64 +1053,6 @@ export class ShellFacade {
    */
   _syncPanelCollapseButton(panelEl) {
     return this._panelChrome._syncPanelCollapseButton(...arguments);
-  }
-
-  /**
-   * Converts a panel from left-positioned to right-anchored so it expands
-   * leftward on resize. Used for the right-rail parameter panel.
-   * @param {HTMLElement} panelEl - The panel to re-anchor.
-   * @returns {void}
-   */
-  _pinPanelToRight(panelEl) {
-    return this._panelPosition._pinPanelToRight(panelEl);
-  }
-
-  /**
-   * Restores a panel's top/left position from localStorage.
-   * Right-rail panels are additionally pinned to the right edge.
-   * @param {string} panelId - DOM id of the panel.
-   * @param {HTMLElement} panelEl - The panel DOM element.
-   * @returns {void}
-   */
-  _restorePanelPosition(panelId, panelEl) {
-    return this._panelPosition._restorePanelPosition(panelId, panelEl);
-  }
-
-  /**
-   * Clamp a desired left/top so the panel stays fully on-screen (6px inset), matching the drag
-   * clamp (ui.js ~1822). Width/height are position-independent, so reading the rect first is safe.
-   * @param {number} left - desired left (px)
-   * @param {number} top - desired top (px)
-   * @param {HTMLElement} panelEl - the panel element
-   * @returns {{left:number, top:number}}
-   */
-  _clampToViewport(left, top, panelEl) {
-    return this._panelPosition._clampToViewport(left, top, panelEl);
-  }
-
-  /**
-   * Persists a panel's current bounding-rect position to localStorage.
-   * @param {string} panelId - DOM id of the panel.
-   * @param {HTMLElement} panelEl - The panel DOM element.
-   * @returns {void}
-   */
-  _savePanelPosition(panelId, panelEl) {
-    return this._panelPosition._savePanelPosition(panelId, panelEl);
-  }
-
-  /**
-   * Promotes a panel to the top of the panel z band [PANEL_Z_BASE, PANEL_Z_MAX].
-   * Renormalizes all promoted panels when the band is exhausted so panels can
-   * never climb above the voice pill (150), toasts (200), or clean-view exit (300).
-   * @param {HTMLElement} panelEl - Panel to bring to front.
-   * @returns {void}
-   */
-  _promotePanelZ(panelEl) {
-    return this._panelPosition._promotePanelZ(panelEl);
-  }
-
-  _makePanelDraggable(panelId, panelEl, handleEl) {
-    return this._panelPosition._makePanelDraggable(panelId, panelEl, handleEl);
   }
 
   _buildSharePanelState() {

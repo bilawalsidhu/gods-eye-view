@@ -216,10 +216,10 @@
   }
 
   #right-context-rail #pp-toggles.collapsed .pp-header-row,
-  #right-context-rail #cctv-panel:not(.panel-floating),
-  #right-context-rail #cctv-panel.collapsed:not(.panel-floating),
-  #right-context-rail #street-level-panel:not(.panel-floating),
-  #right-context-rail #street-level-panel.collapsed:not(.panel-floating),
+  #right-context-rail #cctv-panel,
+  #right-context-rail #cctv-panel.collapsed,
+  #right-context-rail #street-level-panel,
+  #right-context-rail #street-level-panel.collapsed,
   #right-context-rail #recent-imagery-panel,
   #right-context-rail #recent-imagery-panel.collapsed,
   #right-context-rail #radio-panel,

@@ -105,7 +105,6 @@ export class StyleManager extends ShellFacade {
         _setRadioDisclosure: (...args) => this._setRadioDisclosure(...args),
         _syncCctvPanelViewport: (...args) =>
           this._syncCctvPanelViewport(...args),
-        _onPanelResized: (...args) => this._onPanelResized(...args),
         _syncContextRadioLauncherState: (...args) =>
           this._syncContextRadioLauncherState(...args),
         _showToast: (...args) => this._showToast(...args),
@@ -265,6 +264,7 @@ export class StyleManager extends ShellFacade {
         _contextControls: this._contextControls,
         _cctvControls: this._cctvControls,
         _radioControls: this._radioControls,
+        _streetLevelControls: this._streetLevelControls,
       }),
       operations: {
         _updateTrafficSyncChip: (...args) =>
@@ -939,13 +939,11 @@ export class StyleManager extends ShellFacade {
     this._streetLevelControls?.destroy();
     this._streetLevelControls = null;
     if (!this._streetLevelPanel || !streetLevelLayer) return;
-    // Photo framing and FOLLOW release tracking like any explicit flight.
+    // Photo framing yields to newer navigation and releases tracking like
+    // any deferred flight.
     streetLevelLayer.attachNavigation?.({
-      run: (noun, move) => this._runExplicitNavigation(noun, move),
       begin: (noun) => this._beginDeferredNavigation(noun),
       reassert: (generation) => this._reassertNavigationHandoff(generation),
-      subscribeHandoff: (listener) =>
-        this._navigation.subscribeCameraHandoff(listener),
     });
     this._streetLevelControls = new StreetLevelControls({
       root: this._streetLevelPanel,
@@ -960,7 +958,6 @@ export class StyleManager extends ShellFacade {
           this._dataManager?.setLayerParams('street-level', params, options),
         setPanelCollapsed: (collapsed, options) =>
           this.setPanelCollapsed('street-level-panel', collapsed, options),
-        dockPanel: () => this._panelChrome.dockPanel('street-level-panel'),
         showToast: (message) => this._showToast(message),
         // Lets the panel open for a user, voice or tool switch-on, not a restore.
         subscribeEnableRequests: (listener) =>
@@ -1514,13 +1511,6 @@ export class StyleManager extends ShellFacade {
       this._setCockpitDisclosure?.('display', !open);
     });
     this._initCockpitDisplayPortal();
-  }
-
-  /** A portable panel was resized or docked: refit any viewport inside it. */
-  _onPanelResized(panelId) {
-    if (panelId === 'cctv-panel') this._syncCctvPanelViewport();
-    if (panelId === 'street-level-panel')
-      this._streetLevelControls?.onPanelResized();
   }
 
   /**

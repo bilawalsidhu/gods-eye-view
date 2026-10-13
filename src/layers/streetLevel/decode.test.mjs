@@ -17,7 +17,10 @@ function linePart(points) {
   return out;
 }
 
-/** A minimal mly1_public-shaped tile: one sequence line and one overview point. */
+/**
+ * A minimal mly1_public-shaped tile: one sequence line, plus one point in the
+ * z14 `image` layer the decoder skips.
+ */
 function sampleTile({ geometry = null } = {}) {
   const writer = new PbfWriter();
   writer.writeMessage(
@@ -70,7 +73,7 @@ function sampleTile({ geometry = null } = {}) {
     3,
     (_, layer) => {
       layer.writeVarintField(15, 2);
-      layer.writeStringField(1, 'overview');
+      layer.writeStringField(1, 'image');
       layer.writeVarintField(5, 4096);
       layer.writeStringField(3, 'is_pano');
       layer.writeMessage(
@@ -94,7 +97,7 @@ function sampleTile({ geometry = null } = {}) {
   return new Uint8Array(writer.finish());
 }
 
-test('sequences and overview points decode into lon/lat records', () => {
+test('sequences decode into lon/lat records; image points are skipped', () => {
   const decoded = decodeCoverageTile(sampleTile(), { x: 0, y: 0, z: 1 });
   assert.equal(decoded.sequences.length, 1);
   const [sequence] = decoded.sequences;
@@ -109,19 +112,13 @@ test('sequences and overview points decode into lon/lat records', () => {
     'west half of tile 0/0 at z1',
   );
   assert.ok(lat0 > 0 && lat1 < lat0, 'northern hemisphere, moving south');
-  assert.equal(decoded.overview.length, 1);
-  assert.equal(decoded.overview[0].id, '3');
-  assert.equal(decoded.overview[0].isPano, false);
-  assert.ok(Math.abs(decoded.overview[0].lon - -90) < 1e-6, 'tile centre');
+  assert.deepEqual(Object.keys(decoded), ['sequences']);
 });
 
 test('an empty tile decodes to empty lists', () => {
   assert.deepEqual(
     decodeCoverageTile(new Uint8Array(0), { x: 0, y: 0, z: 0 }),
-    {
-      sequences: [],
-      overview: [],
-    },
+    { sequences: [] },
   );
 });
 
