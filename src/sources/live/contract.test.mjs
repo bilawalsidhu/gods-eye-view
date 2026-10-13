@@ -485,3 +485,35 @@ test('composeSource prefers primary history and falls back with attribution tagg
   // No fallback → pass-through.
   assert.equal(composeSource(primary, null), primary);
 });
+
+
+test('composeSource propagates aborts from a pending fallback', async () => {
+  const controller = new AbortController();
+  let started;
+  const composed = composeSource(
+    {
+      async getTrack() {
+        return { records: [] };
+      },
+    },
+    {
+      async getTrackByQuery(_reference, { signal }) {
+        started();
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          );
+        });
+      },
+    },
+  );
+  const pending = composed.getTrack(
+    { id: 'abc123', callsign: 'TEST' },
+    { signal: controller.signal },
+  );
+  await new Promise((resolve) => {
+    started = resolve;
+  });
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+});
