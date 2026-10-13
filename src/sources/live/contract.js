@@ -101,6 +101,8 @@ export function composeSource(primary, fallback) {
         if (track?.records?.length)
           return { ...track, historySource: undefined };
       } catch (error) {
+        options.signal?.throwIfAborted();
+        if (error?.name === 'AbortError') throw error;
         primaryError = error;
       }
       try {
@@ -119,7 +121,9 @@ export function composeSource(primary, fallback) {
             historySource: fallback.label,
             credit: fallback.credit,
           };
-      } catch {
+      } catch (error) {
+        options.signal?.throwIfAborted();
+        if (error?.name === 'AbortError') throw error;
         /* fallback is best-effort */
       }
       if (primaryError) throw primaryError;
