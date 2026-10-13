@@ -20,7 +20,8 @@ export const getRecentImagery = defineTool({
   title: 'Recent satellite image',
   description:
     'The most recent clear satellite image of an area from NASA Harmonized ' +
-    'Landsat and Sentinel-2 (30 m), falling back to the VIIRS daily ' +
+    'Landsat and Sentinel-2 (30 m), or the least cloudy recent day when none ' +
+    'is clear, falling back to the VIIRS daily ' +
     `overview. Areas up to ${MAX_SIDE_KM} km across. Returns the image itself.`,
   inputSchema: {
     type: 'object',
@@ -104,7 +105,7 @@ export const getRecentImagery = defineTool({
       overview: 'coarse overview',
     }[reason];
     return {
-      summary: `Most recent image of ${area.label}: ${sensor}, ${candidate.day}, ${quality}${reason === 'overview' ? '' : `, ${cloud}`}.`,
+      summary: `${reason === 'cloudy' ? 'Least cloudy recent image' : 'Most recent image'} of ${area.label}: ${sensor}, ${candidate.day}, ${quality}${reason === 'overview' ? '' : `, ${cloud}`}.`,
       data: {
         view: suggestView(services, { area, layers: ['recent-imagery'] }),
         area: area.label,

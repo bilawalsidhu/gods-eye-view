@@ -407,6 +407,22 @@ test('only granules over the box judge its cloud', () => {
     },
   ]);
   assert.equal(boxCloud(band, BOX), 80);
+  // A long thin box and a cloudy tile crossing it north to south.
+  const thin = { west: -100, south: 30, east: -95, north: 30.4 };
+  const crossing = day([
+    { cloud: 5, footprint: square(-101, 29, 10) },
+    {
+      cloud: 90,
+      footprint: [
+        [-99, 29],
+        [-98, 29],
+        [-98, 31],
+        [-99, 31],
+      ],
+    },
+  ]);
+  assert.equal(boxCloud(crossing, thin), 90);
+  assert.equal(rankLatest([crossing], { box: thin }).reason, 'cloudy');
   // The card shows the cloud of the granules that ranked the day.
   assert.deepEqual(scopeToBox(edge, BOX).cloud, { min: 5, max: 5 });
   assert.equal(scopeToBox(edge, BOX).granules.length, 2);

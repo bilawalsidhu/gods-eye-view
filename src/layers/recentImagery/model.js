@@ -562,7 +562,11 @@ export function rankLatest(
     present(c) &&
     c.granules.length > 0;
   const coversBox = (c) => c.coverage !== 'partial';
-  const cloudOver = (c) => boxCloud(c, box);
+  const clouds = new Map();
+  const cloudOver = (c) => {
+    if (!clouds.has(c)) clouds.set(c, boxCloud(c, box));
+    return clouds.get(c);
+  };
   const clearSky = (c) => {
     const cloud = cloudOver(c);
     return cloud !== null && cloud <= maxCloud;
