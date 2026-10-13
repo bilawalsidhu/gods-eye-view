@@ -71,3 +71,45 @@ test('weather effects attenuate above the ground-weather layer', () => {
   assert.equal(weatherAltitudeFactors(24000).cloud, 0);
   assert.equal(weatherAltitudeFactors(20000).haze, 0);
 });
+
+test('normalized missing weather codes leave the actual cockpit cloud target clear', async () => {
+  const { normalizeRegionalWeather } = await import('./data/regionalModel.js');
+  const { CockpitCloudEffectsController } =
+    await import('./cockpitCloudEffects.js');
+  for (const code of [null, '']) {
+    const weather = normalizeRegionalWeather({
+      current: {
+        time: '2026-10-13T12:00',
+        temperature_2m: 20,
+        weather_code: code,
+        cloud_cover: 80,
+        wind_speed_10m: 12,
+      },
+    });
+    assert.equal(weather.weatherCode, null);
+    const profile = deriveWeatherEffectProfile(weather);
+    assert.equal(profile.available, false);
+    const controller = { canvas: { dataset: {} }, reducedMotion: false };
+    CockpitCloudEffectsController.prototype.applyWeather.call(
+      controller,
+      weather,
+      0,
+    );
+    assert.equal(
+      controller.targetStrength,
+      0,
+      'a missing condition code cannot enable the cloud pass',
+    );
+    assert.equal(controller.canvas.dataset.cloudStrength, '0.000');
+  }
+  const clear = deriveWeatherEffectProfile({
+    weatherCode: 0,
+    cloudCoverPct: 80,
+  });
+  assert.equal(
+    clear.available,
+    true,
+    'real clear-sky code zero remains available',
+  );
+  assert.ok(clear.cloud > 0);
+});
