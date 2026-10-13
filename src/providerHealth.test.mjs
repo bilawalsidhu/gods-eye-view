@@ -30,11 +30,11 @@ test('builds honest provider health rows from layer stats', () => {
     },
   ], 100_000);
 
-  assert.deepEqual(rows.map(({ id, label, detail, count, keyRequired }) => ({
-    id, label, detail, count, keyRequired,
+  assert.deepEqual(rows.map(({ id, state, label, detail, count, keyRequired }) => ({
+    id, state, label, detail, count, keyRequired,
   })), [
-    { id: 'flights', label: 'LIVE', detail: 'just now', count: 42, keyRequired: false },
-    { id: 'firms', label: 'UNAVAILABLE', detail: 'KEY REQUIRED', count: null, keyRequired: true },
+    { id: 'flights', state: 'nominal', label: 'LIVE', detail: 'just now', count: 42, keyRequired: false },
+    { id: 'firms', state: 'key-required', label: 'KEY REQUIRED', detail: 'KEY REQUIRED', count: null, keyRequired: true },
   ]);
 });
 
