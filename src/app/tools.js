@@ -1,3 +1,4 @@
+import { installPowerSaving } from './powerSaving.js';
 import { SceneDirector } from '../scenes/director.js';
 import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
@@ -99,6 +100,8 @@ export function createApplicationTools({
   // nothing animates per frame. Installed AFTER every module above has had
   // its chance to register pre-install holds. (perf wave 2)
   installRenderGovernor(viewer);
+  const powerSavings = installPowerSaving(viewer);
+  defer(() => powerSavings.destroy());
 
   // Install the explicit scope mask used by the DISPLAY controls.
   installScopeMask(viewer);
@@ -123,6 +126,7 @@ export function createApplicationTools({
     // keeps drawing itself (see keepPanelRendering in embed.js).
     const hidden = document.hidden && !isEmbeddedInline();
     viewer.useDefaultRenderLoop = !hidden;
+    dataManager.setPollingSuspended?.(hidden);
     cockpitCloudEffects?.setSuspended?.(hidden);
     if (!hidden) {
       data.presentation.flushVisible();
@@ -153,6 +157,7 @@ export function createApplicationTools({
     weatherEffects,
     cockpitCloudEffects,
     getRenderGovernorDiagnostics,
+    powerSavings,
     surfaceServices: operations.surface,
     requestRender: governorRequestRender,
   };

@@ -48,7 +48,11 @@ export function createLifecycle({
       clearFocusTarget('flights');
       flightState._focusEvidenceIds.clear();
       flightState._viewer = viewer;
-      flightState._billboardCollection = new Cesium.BillboardCollection();
+      // Icons have transparent edges/fades and draw depth-free. One blended
+      // pass keeps those pixels while avoiding the default second opaque pass.
+      flightState._billboardCollection = new Cesium.BillboardCollection({
+        blendOption: Cesium.BlendOption.TRANSLUCENT,
+      });
       viewer.scene.primitives.add(flightState._billboardCollection);
       registerSpriteCollection('flights', flightState._billboardCollection);
       flightState._modelCollection = new Cesium.PrimitiveCollection();
@@ -198,6 +202,7 @@ export function createLifecycle({
      * @param {Cesium.Viewer} viewer
      */
     disable(viewer) {
+      parts.filters?.cancel();
       parts.controller._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
       if (flightState._billboardCollection)
@@ -240,6 +245,7 @@ export function createLifecycle({
      * @param {Cesium.Viewer} viewer
      */
     destroy(viewer) {
+      parts.filters?.cancel();
       flightState.lifetime.abort();
       flightState._enrichActive = 0;
       flightState._enrichLastDispatchMs = 0;

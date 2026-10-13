@@ -1,4 +1,5 @@
 import { initFirstRunExperience } from '../firstRunExperience.js';
+import { AreaAssessmentControls } from '../ui/areaAssessment.js';
 
 /** Reveal welcome controls only after restoration and the loading transition. */
 export function startApplicationChrome({
@@ -10,6 +11,9 @@ export function startApplicationChrome({
   initializeSettings,
 }) {
   let disposed = false;
+  const areaAssessment = styleManager.viewer?.camera
+    ? new AreaAssessmentControls(styleManager.viewer)
+    : null;
   let firstRun;
   let revealTimer;
   let resolveDelay;
@@ -44,6 +48,7 @@ export function startApplicationChrome({
   );
   return async () => {
     disposed = true;
+    areaAssessment?.destroy();
     clearTimeout(delayTimer);
     clearTimeout(revealTimer);
     resolveDelay();

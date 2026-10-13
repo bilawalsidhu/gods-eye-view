@@ -1,5 +1,145 @@
 # God's Eye View Current State
 
+Live Flights now has **Filter airline / flight** inside Data Layers: choose a
+company by IATA or ICAO code, enter an observed callsign or supported IATA flight
+number, or select and follow a loaded flight. Filters are session-local and keep
+source acquisition and update cadence intact. Operator and number aliases use
+the existing adsbdb enrichment boundary; unknown mappings remain explicit.
+See [flight filter validation](FLIGHT-FILTERS-VALIDATION.md).
+
+Browser motion/detection work now reuses fix transforms and vessel label
+candidates, samples one fleet timestamp per tick and draws flight billboards in
+one translucent pass. Live polling and the Battery saver frame target remain
+unchanged. See [browser CPU validation](BROWSER-CPU-VALIDATION.md) for the current
+measurements and the limits of comparing changing live workloads.
+
+Display → Performance now offers persistent Battery saver (default), Balanced,
+and High quality profiles. Battery saver caps continuous rendering at 20 fps,
+uses 0.75 render resolution, 1 MSAA sample and overlay DPR up to 1. Hidden
+standalone tabs suspend rendering, automatic layer polling and HUD work;
+polling resumes with an enabled-layer refresh on return. Idle scenes retain the
+existing render governor. See [power-saving validation](POWER-SAVING-VALIDATION.md)
+for reproducible rendering and macOS process CPU measurements and their limits.
+
+The Node AIS server now batches expiry sweeps every 30 seconds and uses receipt
+recency for constant-time overflow eviction, keeping the 50,000-vessel hard cap
+and exact public retention cutoff. AIS timestamps and websocket byte decoding
+also avoid repeated parsing/copies. The worldwide subscription and update
+cadence remain the same. See [Node CPU validation](NODE-CPU-VALIDATION.md).
+
+With the current browser changes, live aircraft and vessels over Italy and
+Battery saver selected, three 30-second samples measured 48.34% browser CPU and
+1.66% Node CPU on an M4 (100% is one occupied core), at 20.02 fps. Actual source
+position updates were verified for both feeds. Changing live traffic and provider
+fallback prevent a matched percentage-saving claim. See [browser CPU validation](BROWSER-CPU-VALIDATION.md)
+for the current run and [historical live-use CPU validation](LIVE-CPU-VALIDATION.md)
+for the earlier 84.91% observation.
+
+Area insights is an expandable section within **Data Layers**, with all analysis controls inline.
+It samples the map center or a clicked ground point; it is not a continuous
+neighborhood heatmap. Four independently selected parameters (air quality,
+housing prices, service access, seismic hazard) have weights from 0 to 5.
+Preferences and budgets persist locally; sampled coordinates do not.
+The conservative index divides by all selected positive weights: missing
+observations contribute zero and visibly lower the judgment. Housing preference uses 100 × budget/(budget + price), with 50 at budget and
+no artificial cutoff at twice the budget. The tool reports the fraction of selected weight actually covered. Each parameter and the
+composite explicitly display "Higher is better"; raw units retain their original
+meaning. Scores are app
+preference rules, not official environmental, wealth, affordability or safety
+classifications. Source values, reference periods, geographic units and licence
+are retained beside the scores. Housing compares price with an editable budget
+in the source's original currency/unit; it does not infer resident income.
+
+Air is current modeled US AQI and pollutant concentrations from Open-Meteo/CAMS
+(global ~45 km, European ~11 km). Housing adapters use Italian Agenzia delle Entrate OMI zone ranges and French DGFiP DVF monthly
+municipal statistics (department fallback), UK HPI administrative districts and
+US Census ACS B25077 census tracts (county fallback), via Census Reporter.
+ACS top-coded $2,000,001 values are not treated as exact prices. Other countries currently report housing unavailable rather than a fabricated
+estimate. The provider adapters can be extended independently.
+
+Italian housing queries the public OMI map: latest published semester, official
+municipality list, exact polygon containment (including holes), residential
+quotation page. Nominatim identifies the municipality through the shared queue;
+`AREA_HOUSING_NOMINATIM_URL` optionally overrides its reverse endpoint. Standard
+apartments in normal condition are preferred, with explicitly labeled residential
+type fallback. The UI shows the official minimum/maximum in EUR/m², surface basis
+and semester; only the declared midpoint enters the preference index. These are
+quotations, not recorded transactions or appraisals. Changes to the public HTML,
+CAPTCHA, ambiguous boundaries and missing quotations fail closed. No national
+database is scraped or redistributed.
+
+Click an area marker or a service marker to analyze its exact location. Compared area labels also support keyboard activation through the shared overlay host.
+
+Map colors run from red (low) through amber to green (high), with gray when no index is selected. Missing selected data lowers the index instead. Analyzed points and cards use their own composite indices. Up to 12 manually
+analyzed locations are retained in memory for comparison, recalculating from
+their real observations when selection, weights or budgets change. Unacquired
+parameters remain missing in earlier points. Service locations use category colors (health pink, schools blue, groceries purple, transit cyan; not a score or missing-data status),
+never a distance-colored area assessment. No unqueried area receives a score.
+
+Services query an operator-configured Overpass endpoint within 3 km. If it fails,
+an explicitly configured `AREA_SERVICES_NOMINATIM_URL` can provide a bounded,
+non-exhaustive search sample (up to 40 results each for hospitals, schools,
+supermarkets and bus stops). It shares the existing Nominatim one-request-per-
+second queue. Distances are straight-line distances to mapped/sample results,
+not travel times; the UI labels sample provenance. Missing categories or an
+incomplete Overpass response leave the service observation unscored; its selected weight still contributes zero to the conservative index. The map shows the sampled
+point, search radius and at most 250 service POIs, with text on the shared world
+overlay host. Closing/disposal clears only resources owned by this tool.
+
+Seismic hazard uses the original GEM 2023.1 raster (PGA on reference rock, 10%
+exceedance probability in 50 years; 0.05 degree grid). It reads one Float64 pixel
+server-side instead of loading 173 MB into memory. `python3
+scripts/install-gem-hazard.py` downloads and checksum-verifies the 34 MB archive,
+retaining the raster and its CC BY-NC-SA 4.0 licence under ignored
+`output/area-data/`. `GEM_HAZARD_FILE` can select an operator-owned raster file.
+No-data cells remain unavailable, not zero hazard. This is not an administrative
+seismic zone, building risk estimate or prediction of the next earthquake.
+Dataset files are never redistributed in the MIT code repository.
+
+The nearby search compares nine sampled locations within a selectable 500 m,
+1.5 km or 3 km radius. It acquires the selected positive-weight parameters,
+re-measuring actual POI sample distances from each candidate. Housing, air and
+hazard are acquired at each candidate. Only full selected coverage is eligible;
+the closest candidate within two score points of the highest sampled score wins.
+This is a limited sampled comparison, not a housing listing search or a guarantee
+of the best location in the radius. Source resolution and sample limitations
+remain visible. Searches are interactive, one at a time, bounded by nine locations
+and a time budget, with no background crawling.
+
+The new UI is entirely English, following the upstream application. The same-
+origin `/api/area-assessment` GET endpoint validates coordinates/metric, caps
+responses, coalesces requests and bounds concurrency/cache/rate. It accepts no
+client-supplied upstream URL or local path. Each parameter fails independently.
+
+
+Vessel billboards use AIS macro-type silhouettes from `src/data/vesselIcons.js`.
+Reported numeric and descriptive types select cargo, tanker, passenger, fishing,
+sailing, pleasure, service or military shapes. Missing and unrecognized types use
+a generic hull, without inferring a category from the name. Shapes point north
+and use perspective-aware screen projection. Moving vessels (at least 0.5 kt)
+point along valid AIS course over ground (COG), with heading as fallback;
+stationary contacts prefer heading. Missing direction retains the last rotation.
+Cards use the same direction policy. Changes of COG refresh rotation even when
+the camera stays still. Each macro type has its own color:
+cargo cyan, tanker orange, passenger pink, fishing green, sailing blue, pleasure
+violet, service yellow, military red and unknown gray. Selection keeps the type
+color and adds a white outline, with matching card accents.
+The icon cache includes family, color and selection; later static-type updates
+change existing billboards through snapshot reconciliation. Focused coverage:
+`src/data/vesselIcons.test.mjs` and the vessel labels and reconciliation tests.
+Icon size follows camera height with continuous logarithmic interpolation:
+14 px at 20,000 km, 18 px at 5,000 km, 24 px at 1,000 km, 32 px at 100 km,
+40 px at 10 km and a maximum of 44 px at 2 km. Tankers are 22% larger; selection
+adds 20%. The visibility pass updates existing sprites as the camera zooms,
+without regenerating artwork. Size stays independent of speed, and focus overlap
+uses the 64 px source artwork and its current billboard scale.
+Card spacing clears the rotated icon's bounding square. Hull contours distinguish
+the tanker with a full rounded bow and compact aft house from the tapered cargo
+bow, broad cargo holds and continuous passenger superstructure. Pictograms use
+large negative spaces instead of detailed deck drawings. The SVGs are original;
+visual references are the [VectorStock zenith-view vessel collection](https://www.vectorstock.com/royalty-free-vector/top-view-on-isolated-boats-or-ships-vector-18374749)
+and the [GrabCAD oil tanker plan](https://grabcad.com/library/oil-tanker-7).
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing
@@ -5179,3 +5319,9 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+Area index missing-data policy: every selected positive weight remains in the
+denominator. Unavailable/unscored observations contribute zero, lowering the
+judgment; coverage and reasons remain visible. Parameter observations remain
+unknown, not fabricated measurements. Nearby recommendations still require
+complete selected coverage.

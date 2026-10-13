@@ -743,6 +743,19 @@ test('a frame whose decode throws is treated as malformed, not fatal', async () 
   assert.equal(context.adapter.snapshot().status, 'live', 'the socket still works afterwards');
 });
 
+test('reused AIS decoder respects view bounds and resets incomplete UTF-8 between frames', () => {
+  const payload = Buffer.from('fóó 船');
+  const padded = Buffer.concat([Buffer.from('prefix'), payload, Buffer.from('suffix')]);
+  const view = padded.subarray(6, 6 + payload.length);
+  assert.equal(decodeAisFrameSync(view), 'fóó 船');
+  assert.equal(decodeAisFrameSync(new DataView(view.buffer, view.byteOffset, view.byteLength)), 'fóó 船');
+  assert.equal(decodeAisFrameSync(Buffer.from([0xe2, 0x82])), '\ufffd');
+  assert.equal(decodeAisFrameSync(Buffer.from('fresh frame')), 'fresh frame');
+  const detached = new Uint8Array(new ArrayBuffer(8));
+  structuredClone(detached.buffer, { transfer: [detached.buffer] });
+  assert.throws(() => decodeAisFrameSync(detached), TypeError);
+});
+
 test('an ingester that throws does not take the process down', async () => {
   const context = setup({ ingestResult: () => { throw new Error('boom'); } });
   context.adapter.ensure(ENV);

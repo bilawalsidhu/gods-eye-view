@@ -1,5 +1,6 @@
 import { syncChipGroup } from './chipGroup.js';
 import { syncRowList } from './rowList.js';
+import { syncRowForm } from './rowForm.js';
 import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
@@ -331,7 +332,19 @@ export class LayerPanel {
               this.setLayerParams(layer.id, item.params, { origin: 'user' });
           });
           row.appendChild(list);
+          const form = document.createElement('div');
+          form.className = 'data-row-form';
+          form.hidden = true;
+          const disclosure = document.createElement('details');
+          disclosure.className = 'data-row-form-disclosure';
+          const summary = document.createElement('summary');
+          summary.textContent = 'Filters';
+          disclosure.append(summary, form);
+          form._disclosure = disclosure;
+          form._summary = summary;
+          row.appendChild(disclosure);
           this._syncRowControls(controls, layer, list);
+          this._syncRowForm(form, layer);
         }
       }
 
@@ -487,6 +500,22 @@ export class LayerPanel {
     syncRowList(container, list);
   }
 
+  _syncRowForm(container, layer) {
+    const descriptor = layer.enabled
+      ? this._rowControlsFor(layer.id)?.form
+      : null;
+    if (container?._disclosure) container._disclosure.hidden = !descriptor;
+    if (
+      container?._summary &&
+      descriptor?.label &&
+      container._summary.textContent !== descriptor.label
+    )
+      container._summary.textContent = descriptor.label;
+    syncRowForm(container, descriptor, (element, type, listener) =>
+      this._bind(element, type, listener),
+    );
+  }
+
   _refreshTogglePanel() {
     if (this._destroyed || !this._toggleContainer) return;
     // Skip DOM churn while hidden; visibilitychange (main.js) triggers one
@@ -521,6 +550,7 @@ export class LayerPanel {
         layer,
         row.querySelector('.data-row-list'),
       );
+      this._syncRowForm(row.querySelector('.data-row-form'), layer);
     }
     this._refreshWeatherPanel();
   }

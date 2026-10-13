@@ -92,6 +92,19 @@ export function hideOsmCredit(viewer, owner) {
 }
 
 export const DATA_CREDITS = [
+  {
+    key: 'area-air-quality',
+    html: 'Air quality: <a href="https://open-meteo.com/en/docs/air-quality-api" target="_blank" rel="noopener">Open-Meteo and CAMS</a> (CC BY 4.0)',
+  },
+  {
+    key: 'area-housing',
+    html: 'Housing: <a href="https://www1.agenziaentrate.gov.it/servizi/geopoi_omi/" target="_blank" rel="noopener">Agenzia delle Entrate OMI</a>; <a href="https://www.data.gouv.fr/datasets/statistiques-dvf" target="_blank" rel="noopener">DGFiP DVF</a> (Licence Ouverte 2.0); <a href="https://landregistry.data.gov.uk/app/ukhpi/doc" target="_blank" rel="noopener">HM Land Registry UK HPI</a> (OGL); <a href="https://censusreporter.org/tables/B25077/" target="_blank" rel="noopener">US Census ACS via Census Reporter</a> (public domain)',
+  },
+  {
+    key: 'area-seismic-hazard',
+    html: 'Seismic hazard: <a href="https://doi.org/10.5281/zenodo.8409647" target="_blank" rel="noopener">GEM Foundation, Global Seismic Hazard Map 2023.1</a> (CC BY-NC-SA 4.0; noncommercial)',
+  },
+
   // ── Live sources ────────────────────────────────────────────────
   {
     key: 'opensky',

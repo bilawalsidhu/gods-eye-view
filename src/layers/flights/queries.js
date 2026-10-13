@@ -305,7 +305,13 @@ export function createQueries({
           // here would double-image the tracked plane when 3D is turned off mid-track.
           if (flightState._billboardCollection)
             for (const [icao, bb] of flightState._billboards) {
-              if (icao !== flightState._trackedIcao) bb.show = true;
+              if (icao !== flightState._trackedIcao)
+                bb.show =
+                  !parts.filters ||
+                  parts.filters.matches(
+                    icao,
+                    flightState.records.data.get(icao),
+                  );
             }
         }
       }
@@ -414,6 +420,11 @@ export function createQueries({
         idx++;
         if (!shouldTake) continue;
         if (
+          parts.filters &&
+          !parts.filters.matches(icao24, flightState.records.data.get(icao24))
+        )
+          continue;
+        if (
           flightState._cockpitContactMode &&
           icao24.toLowerCase() === flightState._cockpitSubjectId
         )
@@ -509,6 +520,7 @@ export function createQueries({
       // feed order alone.
       let best = null;
       for (const [icao24, info] of flightState.records.data) {
+        if (parts.filters && !parts.filters.matches(icao24, info)) continue;
         const candidate = {
           tier: rankContactMatch({
             query: q,
@@ -553,6 +565,11 @@ export function createQueries({
       const nearby = [];
 
       for (const [icao24, bb] of flightState._billboards) {
+        if (
+          parts.filters &&
+          !parts.filters.matches(icao24, flightState.records.data.get(icao24))
+        )
+          continue;
         const isTracked = icao24 === flightState._trackedIcao;
         // Keep planes rendered as a 3D model (billboard hidden) so proximity counts
         // don't drop to zero on the 2D→3D handoff; bb.position stays current while hidden.
@@ -651,6 +668,11 @@ export function createQueries({
 
       const result = [];
       for (const [icao24, bb] of flightState._billboards) {
+        if (
+          parts.filters &&
+          !parts.filters.matches(icao24, flightState.records.data.get(icao24))
+        )
+          continue;
         const pos = bb.position;
         if (!pos) continue;
         const carto = Cesium.Cartographic.fromCartesian(
@@ -706,6 +728,7 @@ export function createQueries({
         : 2000;
       const result = [];
       for (const [icao24, info] of flightState.records.data) {
+        if (parts.filters && !parts.filters.matches(icao24, info)) continue;
         const routeOk =
           !!info?.route && parts.tracking._routeIsPlausible(icao24, info.route);
         result.push(
@@ -729,6 +752,11 @@ export function createQueries({
       let id = String(icao24).trim();
       if (!flightState._billboards.has(id)) id = id.toLowerCase();
       if (!flightState._billboards.has(id)) return false;
+      if (
+        parts.filters &&
+        !parts.filters.matches(id, flightState.records.data.get(id))
+      )
+        return false;
       if (parts.tracking._isExplicitTrackingOrigin(origin))
         parts.tracking._cancelPendingTrackingRestore();
       if (flightState._trackedIcao === id)
@@ -928,6 +956,14 @@ export function createQueries({
         : 0;
       return {
         count: flightState.feed._count,
+        ...(parts.filters?.active()
+          ? {
+              count: parts.filters.count(),
+              loadedCount: flightState.feed._count,
+              countLabel: parts.filters.countLabel(),
+              displayFilter: parts.filters.methods.getFlightFilters(),
+            }
+          : {}),
         lastUpdate: flightState.feed._lastUpdate,
         stale: flightState.feed._backoff,
         error: flightState.feed._lastError,

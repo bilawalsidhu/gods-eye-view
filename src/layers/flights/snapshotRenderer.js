@@ -20,6 +20,7 @@ export function createFlightSnapshotRenderer({
   motion,
   enrichment,
   queries,
+  filters,
 }) {
   const { refreshMilitaryRegistryIfStale, isMilitaryIcao } = militaryRegistry;
   const { warmGroundFloor } = groundFloor;
@@ -218,6 +219,13 @@ export function createFlightSnapshotRenderer({
         });
         flightState._billboards.set(icao24, bb);
         rendering._applyFleetBillboardPresentation(icao24, bb);
+      }
+
+      if (filters && !filters.matches(icao24, meta)) {
+        if (isTracked)
+          tracking._clearTracking(false, { origin: 'programmatic' });
+        flightState._billboards.get(icao24).show = false;
+        rendering._releaseModel(icao24);
       }
 
       // Takeoff while TRACKED: ground traffic drew no trail, so start one

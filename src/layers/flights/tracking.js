@@ -637,7 +637,12 @@ export function createTracking({
     // ROTATION_REFRESH_MS of a wrong (possibly reversed) nose on release.
     if (flightState._billboards.has(flightState._trackedIcao)) {
       const bb = flightState._billboards.get(flightState._trackedIcao);
-      bb.show = true;
+      bb.show =
+        !parts.filters ||
+        parts.filters.matches(
+          flightState._trackedIcao,
+          flightState.records.data.get(flightState._trackedIcao),
+        );
       bb.width = 20;
       bb.height = 20;
       // Ground/military-aware restore (a plane untracked while taxiing must come
@@ -814,6 +819,15 @@ export function createTracking({
       .trim()
       .toLowerCase();
     if (!id) return false;
+    if (
+      parts.filters &&
+      !parts.filters.matches(id, flightState.records.data.get(id))
+    ) {
+      const bb = flightState._billboards.get(id);
+      if (bb) bb.show = false;
+      parts.rendering._releaseModel(id);
+      return flightState.records.data.has(id);
+    }
     if (isTr3b(id)) {
       // Drop the 3D handoff for this contact — the fleet tick now skips it, so
       // an already-loaded model would otherwise linger with the billboard hidden.

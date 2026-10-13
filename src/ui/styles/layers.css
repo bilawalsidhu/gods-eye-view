@@ -1,4 +1,66 @@
 /* ── Data Layer Toggle Panel ─────────────────── */
+.data-row-form-disclosure {
+  margin: 7px 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.data-row-form-disclosure[hidden] {
+  display: none;
+}
+.data-row-form-disclosure summary {
+  cursor: pointer;
+}
+.data-row-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+.data-row-form[hidden] {
+  display: none;
+}
+.data-row-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 100%;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.data-row-field input,
+.data-row-field select {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  padding: 7px 8px;
+  background: #101a23;
+  color: var(--text-primary);
+  font: inherit;
+}
+.data-row-form-action {
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  padding: 6px 8px;
+  background: var(--accent-dim);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+.data-row-form-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.data-row-field input:focus-visible,
+.data-row-field select:focus-visible,
+.data-row-form-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 #left-panel-stack {
   position: fixed;
   top: var(--left-stack-safe-top, var(--left-stack-top));

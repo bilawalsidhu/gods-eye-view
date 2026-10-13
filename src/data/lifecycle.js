@@ -528,6 +528,20 @@ export class LayerLifecycle {
     }
   }
 
+  /** Suspend only automatic polling; explicit refreshes and lifecycle actions remain available. */
+  setPollingSuspended(suspended) {
+    const wasSuspended = this._pollingSuspended === true;
+    this._pollingSuspended = Boolean(suspended);
+    if (!wasSuspended || this._pollingSuspended) return;
+    for (const [id, entry] of this.layers) {
+      if (
+        Number(entry.module.refreshInterval) > 0 ||
+        Number(entry.module.updateInterval) > 0
+      )
+        void this._runPeriodicUpdate(id, entry);
+    }
+  }
+
   _armUpdateLoop(layerId, entry) {
     const configuredRefreshInterval = Number(entry.module.refreshInterval);
     const updateInterval = Number(entry.module.updateInterval);
@@ -539,11 +553,12 @@ export class LayerLifecycle {
           : 0;
     if (refreshInterval > 0) {
       entry.intervalId = setInterval(() => {
-        void this._runPeriodicUpdate(layerId, entry);
+        if (!this._pollingSuspended)
+          void this._runPeriodicUpdate(layerId, entry);
       }, refreshInterval);
     } else if (updateInterval === 0) {
       entry.intervalId = setInterval(() => {
-        if (!entry.enabled) return;
+        if (!entry.enabled || this._pollingSuspended) return;
         this._publishActivity({ type: 'status' });
       }, entry.module.statsRefreshInterval || 1000);
     }

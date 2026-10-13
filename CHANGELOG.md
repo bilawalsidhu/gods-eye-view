@@ -1,5 +1,25 @@
 # Changelog
 
+- Add Live Flights airline filters by IATA/ICAO code, exact callsign and supported
+  commercial flight number, plus a bounded loaded-flight selector and follow
+  action. Keep live acquisition unchanged and report unknown operator mappings.
+- Reduce browser work by caching flight-fix transforms, sampling one clock per
+  fleet tick, using one flight billboard pass and reusing vessel label candidates.
+  Preserve motion and live polling cadence; include real Battery saver CPU checks.
+
+- Reduce Node AIS ingestion CPU by batching expiry sweeps, evicting overflow by receipt recency without full-cache sorts, parsing each fix timestamp once and reusing a zero-copy frame decoder. Preserve live worldwide coverage and enforce expiry on public reads.
+- Add persistent Battery saver, Balanced and High quality rendering profiles in Display; default to 20 fps, reduced render resolution and antialiasing, and lower overlay pixel density. Suspend automatic layer polling and HUD work in hidden tabs, with refresh on return. Include a reproducible macOS process CPU comparison.
+- Add Area insights: independently selected real air, housing, service-access and global GEM seismic-hazard parameters, editable weights/budgets and honest partial coverage. English UI; housing coverage currently France, UK and USA.
+- Live vessels use distinct north-pointing silhouettes for AIS macro types
+  (cargo, tanker, passenger, fishing, sailing, pleasure, service and military).
+  Unknown types retain a generic vessel; selection preserves the family shape.
+  Zoom-dependent 14–44 px icons (22% larger tankers) use distinct outer contours, with labels
+  spaced beyond the rotated silhouette so the bow stays visible.
+  Each macro type has a distinct hue, shared with its card accent; selected
+  vessels retain their type color and gain a white outline.
+  Moving vessel icons follow AIS course over ground rather than a conflicting
+  hull heading, using perspective-aware projection in oblique views.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 

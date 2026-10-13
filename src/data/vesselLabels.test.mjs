@@ -43,16 +43,35 @@ test('vessel type CSS and card accents stay paired', () => {
   assert.equal(accentForVesselType('Passenger'), '255, 122, 223');
   assert.equal(accentForVesselType('Fishing'), '124, 255, 155');
   assert.equal(accentForVesselType('Pilot Vessel'), '247, 240, 163');
-  assert.equal(accentForVesselType('Dredger'), '57, 213, 255');
+  assert.equal(accentForVesselType('Dredger'), '247, 240, 163');
   assert.equal(accentForVesselType('84'), '255, 179, 71');
   assert.equal(vesselTypeCss('62'), '#ff7adf');
+});
+
+test('all nine vessel families have distinct colors and matching card accents', () => {
+  const types = ['71', '84', '62', '30', '36', '37', '52', '35', '0'];
+  assert.equal(new Set(types.map(vesselTypeCss)).size, types.length);
+  for (const type of types) {
+    const rgb = vesselTypeCss(type)
+      .slice(1)
+      .match(/../g)
+      .map((channel) => Number.parseInt(channel, 16))
+      .join(', ');
+    assert.equal(accentForVesselType(type), rgb);
+  }
+  assert.equal(vesselTypeCss('51'), vesselTypeCss('52'));
+  assert.equal(vesselTypeCss('55'), vesselTypeCss('35'));
 });
 
 test('vessel viewport cohort preserves the shipped 118px grid density', () => {
   assert.equal(vesselOverlayCohortLimit(1600, 900), 112);
   assert.equal(vesselOverlayCohortLimit(1920, 1080), 170);
   assert.equal(vesselOverlayCohortLimit(1920, 1080, 80), 80);
-  assert.equal(vesselOverlayCohortLimit(10000, 10000), 900, 'the shipped row ceiling remains absolute');
+  assert.equal(
+    vesselOverlayCohortLimit(10000, 10000),
+    900,
+    'the shipped row ceiling remains absolute',
+  );
   assert.equal(vesselOverlayCohortLimit(0, 1080), 0);
   assert.equal(vesselOverlayCohortLimit(1920, 1080, 0), 0);
 });
@@ -60,7 +79,11 @@ test('vessel viewport cohort preserves the shipped 118px grid density', () => {
 test('vessel host policy uses always-on shared fade and protected selected lane', () => {
   const position = { x: 1, y: 2, z: 3 };
   const ambient = applyVesselOverlayPolicy({
-    id: 'vessel:1', position, title: 'AMBIENT', gapPx: 10, selected: false,
+    id: 'vessel:1',
+    position,
+    title: 'AMBIENT',
+    gapPx: 10,
+    selected: false,
   });
   assert.equal(ambient.variant, 'card');
   assert.equal(ambient.protected, false);
@@ -72,17 +95,28 @@ test('vessel host policy uses always-on shared fade and protected selected lane'
   assert.equal(ambient.verticalOnly, true);
 
   const selected = applyVesselOverlayPolicy({
-    id: 'vessel:2', position, title: 'SELECTED', gapPx: 12, selected: true,
+    id: 'vessel:2',
+    position,
+    title: 'SELECTED',
+    gapPx: 12,
+    selected: true,
   });
   assert.equal(selected.variant, 'selected');
-  assert.equal(selected.verticalOnly, false, 'selected detail can clear panels on either side');
+  assert.equal(
+    selected.verticalOnly,
+    false,
+    'selected detail can clear panels on either side',
+  );
   assert.equal(selected.protected, true);
   assert.equal(selected.collisionGroup, 'ambient-card');
   assert.equal(selected.maxDistance, Number.POSITIVE_INFINITY);
 });
 
 test('vesselLabels cannot resurrect a dedicated renderer', async () => {
-  const source = await readFile(new URL('./vesselLabels.js', import.meta.url), 'utf8');
+  const source = await readFile(
+    new URL('./vesselLabels.js', import.meta.url),
+    'utf8',
+  );
   for (const forbidden of [
     'document.createElement',
     "createElement('canvas')",
@@ -91,6 +125,10 @@ test('vesselLabels cannot resurrect a dedicated renderer', async () => {
     'requestAnimationFrame',
     "id = 'vessel-labels'",
   ]) {
-    assert.equal(source.includes(forbidden), false, `dedicated renderer token returned: ${forbidden}`);
+    assert.equal(
+      source.includes(forbidden),
+      false,
+      `dedicated renderer token returned: ${forbidden}`,
+    );
   }
 });

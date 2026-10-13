@@ -8,6 +8,12 @@ export const AISSTREAM_STALE_MS = 30 * 60 * 1000;
 const AIS_TRACK_SAMPLES = 64;
 const AIS_TRACK_MIN_GAP_SEC = 30;
 const AIS_TRACK_MIN_MOVE_M = 25;
+// Sweep retained data in batches, not once for every incoming worldwide fix.
+// Public reads still enforce the exact 30-minute cutoff; the hard size cap is
+// enforced on every insertion. No timer or work is needed while the feed is idle.
+const AIS_CACHE_SWEEP_MS = 30_000;
+let _nextAisSweepAt = 0;
+let _lastAisSweepAt = 0;
 /** @type {Map<string,object>} */
 const _aisStreamVessels = new Map();
 /** @type {Map<string,object>} */
@@ -64,6 +70,11 @@ export function ingestAisStreamEnvelope(envelope) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return true;
 
   const staticData = _aisStreamStatic.get(mmsi) || {};
+  const receivedAt = Date.now();
+  const fix = aisTimestamp(metadata.time_utc ?? metadata.TimeUtc, receivedAt);
+  // Map insertion order is receipt recency, so overflow eviction is O(1)
+  // instead of sorting the entire cache each time a new MMSI arrives.
+  _aisStreamVessels.delete(mmsi);
   _aisStreamVessels.set(mmsi, {
     lat,
     lon,
@@ -75,34 +86,32 @@ export function ingestAisStreamEnvelope(envelope) {
     speed: normalizedSpeedOverGround(message.Sog ?? message.SOG),
     course: normalizedCourseOverGround(message.Cog ?? message.COG),
     heading: normalizedHeading(message.TrueHeading ?? message.Heading),
-    last_position_UTC: normalizeAisTimestamp(
-      metadata.time_utc ?? metadata.TimeUtc,
-    ),
+    last_position_UTC: fix.utc,
     // Use the AIS message's own report time, not server ingest wall-clock —
     // trail spacing and dead reckoning depend on true fix epochs.
-    last_position_epoch: aisEpochSeconds(metadata.time_utc ?? metadata.TimeUtc),
-    _updatedAt: Date.now(),
+    last_position_epoch: fix.epochSec,
+    _updatedAt: receivedAt,
   });
 
-  appendAisTrackSample(
-    mmsi,
-    lat,
-    lon,
-    aisEpochSeconds(metadata.time_utc ?? metadata.TimeUtc),
-  );
+  appendAisTrackSample(mmsi, lat, lon, fix.epochSec);
 
-  pruneAisStreamCache();
+  pruneAisStreamCache(receivedAt);
   return true;
 }
 
 /**
- * Parses an AISStream UTC timestamp into epoch seconds (fallback: now).
+ * Parse the report time once for both the public fix and the recent track.
  */
-function aisEpochSeconds(value) {
-  const ms = Date.parse(normalizeAisTimestamp(value));
-  return Number.isFinite(ms)
-    ? Math.floor(ms / 1000)
-    : Math.floor(Date.now() / 1000);
+function aisTimestamp(value, receivedAt) {
+  const text = stringValue(value);
+  let date = text
+    ? new Date(text.replace(' +0000 UTC', 'Z').replace(' UTC', 'Z'))
+    : new Date(receivedAt);
+  if (Number.isNaN(date.getTime())) date = new Date(receivedAt);
+  return {
+    utc: date.toISOString(),
+    epochSec: Math.floor(date.getTime() / 1000),
+  };
 }
 
 /**
@@ -164,6 +173,8 @@ function writeAisTrackSample(track, lat, lon, epochSec) {
  * @returns {Array<{lat:number,lon:number,t:number}>}
  */
 export function readAisTrack(mmsi) {
+  const vessel = _aisStreamVessels.get(mmsi);
+  if (!vessel || vessel._updatedAt < Date.now() - AISSTREAM_STALE_MS) return [];
   const track = _aisStreamTracks.get(mmsi);
   if (!track || !track.len) return [];
   const samples = [];
@@ -228,32 +239,29 @@ export function aisStreamRows(maxRows) {
   return rows.slice(0, maxRows).map(({ _updatedAt, ...row }) => row);
 }
 
-function pruneAisStreamCache() {
-  const cutoff = Date.now() - AISSTREAM_STALE_MS;
-  for (const [mmsi, row] of _aisStreamVessels) {
-    if (row._updatedAt < cutoff) {
-      _aisStreamVessels.delete(mmsi);
-      _aisStreamTracks.delete(mmsi);
-      _aisStreamTrackPending.delete(mmsi);
+function evictAisVessel(mmsi) {
+  _aisStreamVessels.delete(mmsi);
+  _aisStreamTracks.delete(mmsi);
+  _aisStreamTrackPending.delete(mmsi);
+}
+
+function pruneAisStreamCache(now) {
+  if (now >= _nextAisSweepAt || now < _lastAisSweepAt) {
+    const cutoff = now - AISSTREAM_STALE_MS;
+    for (const [mmsi, row] of _aisStreamVessels) {
+      if (row._updatedAt < cutoff) evictAisVessel(mmsi);
     }
+    // Pending single-fix entries with old report times must not leak.
+    const pendingCutoffSec = Math.floor(cutoff / 1000);
+    for (const [mmsi, pending] of _aisStreamTrackPending) {
+      if (pending.epochSec < pendingCutoffSec)
+        _aisStreamTrackPending.delete(mmsi);
+    }
+    _lastAisSweepAt = now;
+    _nextAisSweepAt = now + AIS_CACHE_SWEEP_MS;
   }
-  // Pending single-fix entries for vessels never seen again must not leak
-  const pendingCutoffSec = Math.floor(cutoff / 1000);
-  for (const [mmsi, pending] of _aisStreamTrackPending) {
-    if (pending.epochSec < pendingCutoffSec)
-      _aisStreamTrackPending.delete(mmsi);
-  }
-  if (_aisStreamVessels.size <= AISSTREAM_CACHE_MAX) return;
-  const ordered = [..._aisStreamVessels.entries()].sort(
-    (a, b) => a[1]._updatedAt - b[1]._updatedAt,
-  );
-  for (const [mmsi] of ordered.slice(
-    0,
-    _aisStreamVessels.size - AISSTREAM_CACHE_MAX,
-  )) {
-    _aisStreamVessels.delete(mmsi);
-    _aisStreamTracks.delete(mmsi);
-    _aisStreamTrackPending.delete(mmsi);
+  while (_aisStreamVessels.size > AISSTREAM_CACHE_MAX) {
+    evictAisVessel(_aisStreamVessels.keys().next().value);
   }
 }
 
@@ -297,14 +305,4 @@ function normalizedSpeedOverGround(value) {
 function normalizedCourseOverGround(value) {
   const course = numberValue(value);
   return course !== null && course >= 0 && course < 360 ? course : null;
-}
-
-function normalizeAisTimestamp(value) {
-  const text = stringValue(value);
-  if (!text) return new Date().toISOString();
-  const normalized = text.replace(' +0000 UTC', 'Z').replace(' UTC', 'Z');
-  const date = new Date(normalized);
-  return Number.isNaN(date.getTime())
-    ? new Date().toISOString()
-    : date.toISOString();
 }

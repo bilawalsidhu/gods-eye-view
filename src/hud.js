@@ -258,12 +258,14 @@ export class IntelHUD {
   _startTimers() {
     // Timestamp — every second
     this._timestampInterval = setInterval(() => {
+      if (document.hidden || !this._visible) return;
       const el = document.getElementById('hud-timestamp');
       if (el) el.textContent = this._formatUTC();
     }, 1000);
 
     // REC blink — every 800ms
     this._recBlinkInterval = setInterval(() => {
+      if (document.hidden || !this._visible) return;
       this._recBlinkState = !this._recBlinkState;
       const dot = document.getElementById('hud-rec-dot');
       if (dot)
@@ -272,13 +274,13 @@ export class IntelHUD {
 
     // Camera-derived data — 4 updates/second (250ms)
     this._updateInterval = setInterval(() => {
-      if (!this._visible) return;
+      if (document.hidden || !this._visible) return;
       this._updateCameraData();
     }, 250);
 
     // Semantic summary refresh cadence
     this._summaryInterval = setInterval(() => {
-      if (!this._visible) return;
+      if (document.hidden || !this._visible) return;
       void this._updateSummary(true);
     }, HUD_SUMMARY_INTERVAL_MS);
   }
