@@ -273,6 +273,18 @@ const layers = [
     noQuery: 'use control_cctv',
   },
   {
+    id: 'message-signs',
+    aliases: [
+      'message signs',
+      'highway signs',
+      'road signs',
+      'electronic signs',
+      'variable message signs',
+    ],
+    context: true,
+    noQuery: 'sign text is read through get_entity_context',
+  },
+  {
     id: 'alpr-cameras',
     aliases: [
       'flock cameras',
