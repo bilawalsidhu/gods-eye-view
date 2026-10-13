@@ -8,6 +8,7 @@ const HEALTH_LABELS = Object.freeze({
   fallback: 'FALLBACK',
   unavailable: 'UNAVAILABLE',
   off: 'OFF',
+  'key-required': 'KEY REQUIRED',
 });
 
 function formatAge(timestamp, now) {
@@ -25,8 +26,9 @@ export function buildProviderHealthRows(layers, now = Date.now()) {
   return (Array.isArray(layers) ? layers : [])
     .filter((layer) => layer && layer.showInTogglePanel !== false)
     .map((layer) => {
-      const state = layer.enabled ? layerFeedState(layer.stats) : 'off';
       const stats = layer.stats || {};
+      const keyRequired = stats.keyRequired === true || stats.missingKey === true;
+      const state = !layer.enabled ? 'off' : keyRequired ? 'key-required' : layerFeedState(stats);
       return {
         id: String(layer.id),
         name: String(layer.name || layer.id),
@@ -37,7 +39,7 @@ export function buildProviderHealthRows(layers, now = Date.now()) {
         updated: formatAge(stats.lastUpdate, now),
         count: Number.isFinite(Number(stats.count)) ? Number(stats.count) : null,
         retryInSec: Number.isFinite(Number(stats.retryInSec)) ? Number(stats.retryInSec) : null,
-        keyRequired: stats.keyRequired === true || stats.missingKey === true,
+        keyRequired,
       };
     });
 }
