@@ -42,18 +42,18 @@ export function createDefaultPlaceSearch({
       ...(selected
         ? [selected]
         : [
+            // Google Geocoding refuses referrer-restricted keys, so the browser
+            // key only signals that Google is configured; the server proxy
+            // answers with the server key.
             createGoogleGeocoder({
               request(query, { bias, signal }) {
-                const key = resolveApiKey?.();
-                if (!key) return null;
-                const url = new URL(
-                  endpoints.geocode ||
-                    'https://maps.googleapis.com/maps/api/geocode/json',
+                if (!resolveApiKey?.()) return null;
+                const params = new URLSearchParams({ address: query });
+                if (bias) params.set('bounds', bias);
+                return fetchImpl(
+                  `${endpoints.geocode || '/api/google/geocode'}?${params}`,
+                  { signal },
                 );
-                url.searchParams.set('address', query);
-                url.searchParams.set('key', key);
-                if (bias) url.searchParams.set('bounds', bias);
-                return fetchImpl(url.toString(), { signal });
               },
             }),
             createPhotonGeocoder({ fetchImpl, endpoint: endpoints.photon }),

@@ -293,6 +293,104 @@ export function googlePlacesContextProxy({
         );
       }
     });
+
+    // Geocoding (forward `address`, reverse `latlng`). The browser cannot call
+    // it directly: Google's Geocoding web service rejects any key carrying an
+    // HTTP-referrer restriction, which is exactly the restriction the
+    // browser-exposed key must have. So the search bar comes through here and
+    // the server key answers, with Google's JSON passed through unchanged.
+    middlewares.use('/api/google/geocode', async (req, res) => {
+      if (admitSameSite(req, res)) return;
+      if (req.method !== 'GET') {
+        res.statusCode = 405;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ status: 'INVALID_REQUEST', results: [] }));
+        return;
+      }
+
+      // Unconfigured is not a failure: REQUEST_DENIED with no results lets the
+      // client fall through to its keyless providers without an error.
+      const apiKey = resolveApiKey();
+      if (!String(apiKey ?? '').trim()) {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(
+          JSON.stringify({
+            status: 'REQUEST_DENIED',
+            results: [],
+            configured: false,
+          }),
+        );
+        return;
+      }
+
+      const requestUrl = new URL(req.url || '', 'http://localhost');
+      const address = String(
+        requestUrl.searchParams.get('address') || '',
+      ).trim();
+      const latlng = String(requestUrl.searchParams.get('latlng') || '').trim();
+      const bounds = String(requestUrl.searchParams.get('bounds') || '').trim();
+      if (!address === !latlng || address.length > 512) {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(
+          JSON.stringify({
+            status: 'INVALID_REQUEST',
+            results: [],
+            error_message: 'Exactly one of address or latlng is required',
+          }),
+        );
+        return;
+      }
+
+      const _grl = googleRateLimiter();
+      if (_grl && !_grl(clientKey(req))) {
+        res.statusCode = 429;
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Retry-After', '5');
+        res.end(JSON.stringify({ status: 'OVER_QUERY_LIMIT', results: [] }));
+        return;
+      }
+
+      const upstream = new URL(
+        endpoints.geocode ||
+          'https://maps.googleapis.com/maps/api/geocode/json',
+      );
+      if (address) upstream.searchParams.set('address', address);
+      else upstream.searchParams.set('latlng', latlng);
+      if (bounds) upstream.searchParams.set('bounds', bounds);
+      upstream.searchParams.set('key', apiKey);
+
+      try {
+        const response = await fetchImpl(upstream.toString(), {
+          redirect: 'error',
+        });
+        const data = await response.json().catch(() => ({}));
+        res.statusCode = response.ok ? 200 : response.status;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Cache-Control', 'private, max-age=300');
+        res.end(
+          JSON.stringify({
+            status: String(data.status || 'UNKNOWN_ERROR'),
+            results: Array.isArray(data.results) ? data.results : [],
+            ...(data.error_message
+              ? { error_message: String(data.error_message) }
+              : {}),
+          }),
+        );
+      } catch {
+        res.statusCode = 502;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(
+          JSON.stringify({
+            status: 'UNKNOWN_ERROR',
+            results: [],
+            error_message: 'Google Geocoding request failed',
+          }),
+        );
+      }
+    });
   }
 
   return {

@@ -53,7 +53,7 @@ export function createHttpGeospatialProvider({
   endpoints = {},
 } = {}) {
   const urls = {
-    reverse: 'https://maps.googleapis.com/maps/api/geocode/json',
+    reverse: '/api/google/geocode',
     textSearch: '/api/google/text-search',
     nearby: '/api/google/nearby-places',
     route: '/api/route',
@@ -93,7 +93,7 @@ export function createHttpGeospatialProvider({
       return normalizeGoogleReverse(
         await json(
           urls.reverse,
-          { latlng: `${latitude},${longitude}`, ...(key ? { key } : {}) },
+          { latlng: `${latitude},${longitude}` },
           options,
         ),
       );

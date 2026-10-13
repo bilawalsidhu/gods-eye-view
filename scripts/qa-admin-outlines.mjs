@@ -105,7 +105,7 @@ try {
     const lookup =
       !reverse &&
       ((local &&
-        /^\/api\/(overpass|geocode|google\/text-search|nominatim|photon)/.test(
+        /^\/api\/(overpass|geocode|google\/(?:text-search|geocode)|nominatim|photon)/.test(
           target.pathname,
         )) ||
         (target.hostname === 'maps.googleapis.com' &&
