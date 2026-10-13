@@ -1,5 +1,5 @@
 import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
-import { fetchRegionalWeather } from './weather.js';
+import { fetchOpenMeteoWeather } from './weather.js';
 import { validRegionalPoint } from './query.js';
 import { coalesceProxyRequest } from '../common/http.js';
 
@@ -29,7 +29,10 @@ function trimWeatherEffectsCache() {
 
 function weatherEffectsProxy() {
   async function refresh(point, key) {
-    const weather = await fetchRegionalWeather(point);
+    // Atmospheric effects need Open-Meteo wind/cloud/visibility fields that
+    // the HKO rhrread current report does not publish; Local Info prefers HKO
+    // over Hong Kong via fetchRegionalWeather instead.
+    const weather = await fetchOpenMeteoWeather(point);
     if (!weather) throw new Error('Weather observation unavailable');
     const payload = {
       status: 'ready',

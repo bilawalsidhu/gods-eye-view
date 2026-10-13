@@ -23,6 +23,7 @@ import { googlePlacesContextProxy } from './places.js';
 import { mapillaryProxy } from './mapillary.js';
 import { keySetupEndpoint } from '../standalone/key-setup.js';
 import { weatherProxy } from './weather.js';
+import { hkoRadarProxy } from './hkoRadar.js';
 import { firePerimetersProxy } from './firePerimeters.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
@@ -57,6 +58,7 @@ function localProviderPlugins({ realtime } = {}) {
     googlePlacesContextProxy(),
     windProxy(),
     weatherProxy(),
+    hkoRadarProxy(),
     cycloneProxy(),
     mapillaryProxy(),
     firePerimetersProxy(),

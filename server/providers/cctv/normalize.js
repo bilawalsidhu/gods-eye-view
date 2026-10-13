@@ -367,6 +367,17 @@ export function isLikelyCalgaryCoordinate(lat, lon) {
   );
 }
 
+/** Hong Kong SAR extent, with slack for the outlying islands. */
+export function isLikelyHongKongCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 22.15 &&
+    lat <= 22.6 &&
+    lon >= 113.8 &&
+    lon <= 114.45
+  );
+}
+
 /** Mainland Norway, with slack for the coast and the Finnmark border. */
 export function isLikelyNorwayCoordinate(lat, lon) {
   return (

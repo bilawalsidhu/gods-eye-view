@@ -8,10 +8,15 @@ const ORDER = [
   'weather-cyclones',
   'wind',
   'weather-radar',
+  'weather-hko-radar',
   'weather-satellite',
   'weather-lightning',
 ];
-const OBSERVED = new Set(ORDER.slice(2));
+const OBSERVED = new Set([
+  'weather-radar',
+  'weather-satellite',
+  'weather-lightning',
+]);
 const utc = (time) =>
   Number.isFinite(Date.parse(time))
     ? `${new Date(time).toISOString().slice(5, 16).replace('T', ' ')} UTC`

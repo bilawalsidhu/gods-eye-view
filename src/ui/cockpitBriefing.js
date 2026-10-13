@@ -256,5 +256,10 @@ export function renderRegionalBrief(payload, info) {
   if (this.briefPageIndex === 1 && this.briefSource) {
     this.briefSource.textContent = `${String(payload?.newsSource || 'REGIONAL NEWS').toUpperCase()} · LOCATION QUERY`;
   }
+  if (this.briefPageIndex === 2 && this.briefSource) {
+    const weatherSource =
+      weather?.source === 'hko' ? 'HONG KONG OBSERVATORY' : 'OPEN-METEO';
+    this.briefSource.textContent = `NATURAL EARTH · ${weatherSource} · UTC`;
+  }
   this.scheduleContextLayout();
 }

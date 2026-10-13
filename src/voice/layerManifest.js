@@ -213,6 +213,17 @@ const layers = [
     noQuery: 'map overlay; no countable records',
   },
   {
+    id: 'weather-hko-radar',
+    aliases: [
+      'hong kong radar',
+      'hk radar',
+      'hko radar',
+      'hong kong rain radar',
+    ],
+    context: false,
+    noQuery: 'map overlay; no countable records',
+  },
+  {
     id: 'weather-satellite',
     aliases: ['weather satellite', 'clouds', 'cloud imagery'],
     context: false,
