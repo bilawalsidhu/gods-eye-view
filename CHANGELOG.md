@@ -1,5 +1,9 @@
 # Changelog
 
+- Maryland cameras: a keyless MDOT SHA CHART pack (`CCTV_MDOT_*`) adds live
+  HLS traffic video with CHART stills as fallback, ranked toward Baltimore,
+  the D.C. suburbs and the regional centers (default cap 300 of ~520).
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 

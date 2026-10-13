@@ -267,6 +267,48 @@ export const NORWAY_ANCHORS = [
   { lat: 69.6492, lon: 18.9553 }, // Tromsø
 ];
 
+/** MDOT SHA CHART (Maryland): one keyless statewide JSON catalog published on
+ * the CHART Data Feeds page; ~550 cameras, ~490 reporting OK. */
+export const DEFAULT_MDOT_CCTV_URL =
+  'https://chart.maryland.gov/DataFeeds/GetCamerasJson';
+/** Live HLS: Wowza `rtplive` on the agency's own streamer hosts
+ * (strmr3/5/10 today). The playlist, its variant and its MPEG-TS segments
+ * are all relative paths on the same host. */
+export const MDOT_STREAM_HOST_PATTERN = /^strmr\d{1,2}\.sha\.maryland\.gov$/;
+export const MDOT_VIDEO_URL = (host, cameraId) =>
+  `https://${host}/rtplive/${cameraId}/playlist.m3u8`;
+/** The CHART site's own background-refreshed still for each camera. */
+export const MDOT_IMAGE_URL = (cameraId) =>
+  `https://chart.maryland.gov/wwwroot/thumbnails/${cameraId}.jpg`;
+export const DEFAULT_MDOT_MAX_SOURCES = 300;
+/** Hard ceiling on the catalog body. The whole state is ~250 KB. */
+export const MDOT_MAX_CATALOG_BYTES = 2 * 1024 * 1024;
+/** Prioritization anchors: cameras rank by distance to the nearest one, so
+ * a cap keeps the Baltimore and Washington-suburb cores and the regional
+ * centers, and trims the rural interstates between them first. */
+export const MARYLAND_ANCHORS = [
+  { lat: 39.2904, lon: -76.6122 }, // Baltimore
+  { lat: 39.4015, lon: -76.6019 }, // Towson
+  { lat: 39.1626, lon: -76.6247 }, // Glen Burnie
+  { lat: 39.2037, lon: -76.861 }, // Columbia
+  { lat: 38.9784, lon: -76.4922 }, // Annapolis
+  { lat: 39.084, lon: -77.1528 }, // Rockville
+  { lat: 38.9897, lon: -76.9378 }, // College Park
+  { lat: 39.4143, lon: -77.4105 }, // Frederick
+  { lat: 39.6418, lon: -77.72 }, // Hagerstown
+  { lat: 38.3607, lon: -75.5994 }, // Salisbury
+];
+/** Flat ground-height priors by CHART camera category; the client's ground
+ * snap refines them. Western Maryland climbs past 800 m in Garrett County. */
+export const MDOT_CATEGORY_ELEVATION_M = Object.freeze({
+  Baltimore: 50,
+  'Wash. DC': 90,
+  Annapolis: 15,
+  'Southern MD': 40,
+  'Eastern Shore': 10,
+  'Western MD': 250,
+});
+
 /** DelDOT CCTV: one keyless statewide JSON catalog; live video via RTMP-over-HTTP (rtmpt:80). */
 export const DELDOT_CCTV_URL = 'https://tmc.deldot.gov/json/videocamera.json';
 export const DEFAULT_DELDOT_MAX_SOURCES = 300;
