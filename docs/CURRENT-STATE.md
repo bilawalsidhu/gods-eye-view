@@ -1,5 +1,19 @@
 # God's Eye View Current State
 
+## Historic Fires backend — October 5, 2026
+
+The continuation of @lleon-at-navteca's Historic Fires work (#609) now has a
+current-main archive foundation. `/api/fire-history` exposes a reviewed event
+registry from `src/data/local_data/fire_events/` and fetches only those
+registered NASA FIRMS standard-processing windows. Disk cache names include a
+hash of the normalized event definition, so editing dates, bounds, sources, or
+metadata cannot silently reuse an old archive. Failed windows use a bounded
+cooldown/backoff before another keyed request can spend FIRMS quota.
+
+This slice intentionally does not own perimeter acquisition. Event definitions
+carry structured matching metadata only; rendering will consume the shared fire
+perimeters ownership seam when a historical perimeter source has one owner.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing
