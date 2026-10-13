@@ -1,5 +1,9 @@
 # Changelog
 
+- Add a Border Wait Times layer: live U.S. CBP waits at every land crossing
+  from Canada and Mexico, coloured by delay, with lane-by-lane cards, served
+  through a cached `/api/border-waits` proxy.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 

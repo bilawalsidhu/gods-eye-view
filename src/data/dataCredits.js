@@ -160,6 +160,15 @@ export const DATA_CREDITS = [
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
+  {
+    key: 'cbp-border-wait-times',
+    html:
+      'Border wait times: ' +
+      '<a href="https://bwt.cbp.gov/" target="_blank" rel="noopener">U.S. Customs and Border Protection</a>' +
+      ' · Crossing locations: ' +
+      '<a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0) and ' +
+      '<a href="https://data.bts.gov/d/keg4-3bc2" target="_blank" rel="noopener">U.S. DOT Bureau of Transportation Statistics</a>',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
