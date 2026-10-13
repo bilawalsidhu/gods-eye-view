@@ -178,6 +178,14 @@ export const DATA_CREDITS = [
       '(CC BY 4.0)',
   },
   {
+    key: 'air-quality',
+    html:
+      'Air Quality &amp; Emissions: ' +
+      '<a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener">Open-Meteo Air Quality</a> ' +
+      '(CC BY 4.0, CAMS / Copernicus Atmosphere) · ' +
+      '<a href="https://openaq.org" target="_blank" rel="noopener">OpenAQ</a>',
+  },
+  {
     key: 'google-news-rss',
     html:
       'Cockpit regional headlines: ' +

@@ -16,12 +16,15 @@ test('reference factories retain compatibility without starting acquisition or s
     'earthquakes',
     'fire-perimeters',
     'cables',
+    'air-quality',
   ]);
   assert.notEqual(first.earthquakes, second.earthquakes);
   assert.notEqual(first['fire-perimeters'], second['fire-perimeters']);
   assert.notEqual(first.cables, second.cables);
+  assert.notEqual(first['air-quality'], second['air-quality']);
   assert.equal(typeof first.earthquakes.getSnapshot, 'function');
   assert.equal(typeof first['fire-perimeters'].getSnapshot, 'function');
   assert.equal(typeof first.cables.fetch, 'function');
+  assert.equal(typeof first['air-quality'].getSnapshot, 'function');
   assert.equal(requests, 0);
 });

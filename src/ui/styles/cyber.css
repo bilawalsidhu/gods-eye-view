@@ -692,6 +692,11 @@
   content: '▲';
 }
 :root[data-ui-theme='cyber']
+  .data-toggle-row[data-layer-id='air-quality']
+  .data-icon::before {
+  content: '◎';
+}
+:root[data-ui-theme='cyber']
   .data-toggle-row[data-layer-id='directions']
   .data-icon::before {
   content: '⌁';
