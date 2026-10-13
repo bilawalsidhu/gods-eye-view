@@ -371,6 +371,8 @@ export class StyleManager {
     this._providerHealthPanel = document.getElementById('provider-health-panel');
     this._providerHealthList = document.getElementById('provider-health-list');
     this._providerHealthToggleHandler = null;
+    this._providerHealthTicker = null;
+    this._providerHealthRetryStarts = new Map();
     this._scenePanel = document.getElementById('scene-panel');
     this._cctvPanel = document.getElementById('cctv-panel');
     this._radioPanel = document.getElementById('radio-panel');
@@ -2187,10 +2189,23 @@ export class StyleManager {
       const expanded = this._providerHealthPanel.hidden;
       this._providerHealthPanel.hidden = !expanded;
       this._providerHealthToggle.setAttribute('aria-expanded', String(expanded));
+      if (expanded) this._startProviderHealthTicker();
+      else this._stopProviderHealthTicker();
       this._renderProviderHealth();
     };
     this._providerHealthToggle.addEventListener('click', this._providerHealthToggleHandler);
     this._renderProviderHealth();
+  }
+
+  _startProviderHealthTicker() {
+    if (this._providerHealthTicker) return;
+    this._providerHealthTicker = window.setInterval(() => this._renderProviderHealth(), 1000);
+  }
+
+  _stopProviderHealthTicker() {
+    if (this._providerHealthTicker) clearInterval(this._providerHealthTicker);
+    this._providerHealthTicker = null;
+    this._providerHealthRetryStarts.clear();
   }
 
   _renderProviderHealth() {
@@ -2218,9 +2233,22 @@ export class StyleManager {
       heading.append(name, state);
       const detail = document.createElement('div');
       detail.className = 'provider-health-detail';
-      const count = row.count === null ? '—' : this._formatCount(row.count);
-      detail.textContent = `${row.source} · ${row.detail} · ${count} records`;
-      if (row.retryInSec > 0) detail.textContent += ` · retry ${row.retryInSec}s`;
+      const count = row.count === null ? '—' : new Intl.NumberFormat().format(row.count);
+      const detailParts = [row.source, row.detail];
+      if (row.updated && row.updated !== row.detail) detailParts.push(`updated ${row.updated}`);
+      detailParts.push(`${count} records`);
+      if (row.retryInSec > 0) {
+        const retry = this._providerHealthRetryStarts.get(row.id);
+        const startedAt = retry?.value === row.retryInSec ? retry.startedAt : Date.now();
+        if (!retry || retry.value !== row.retryInSec) {
+          this._providerHealthRetryStarts.set(row.id, { value: row.retryInSec, startedAt });
+        }
+        const remaining = Math.max(0, row.retryInSec - Math.floor((Date.now() - startedAt) / 1000));
+        detailParts.push(`retry ${remaining}s`);
+      } else {
+        this._providerHealthRetryStarts.delete(row.id);
+      }
+      detail.textContent = detailParts.join(' · ');
       item.append(heading, detail);
       this._providerHealthList.appendChild(item);
     }
@@ -5186,6 +5214,7 @@ export class StyleManager {
       this._providerHealthToggle.removeEventListener('click', this._providerHealthToggleHandler);
       this._providerHealthToggleHandler = null;
     }
+    this._stopProviderHealthTicker();
     this._applicationShortcuts?.destroy();
     this._displayControls?.destroy();
     this._mapSourceControls?.destroy();
