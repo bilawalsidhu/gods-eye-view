@@ -153,7 +153,7 @@ export function createLocalTelemetryLayer({ source, overlayHost } = {}) {
             }),
           );
 
-          const overlayItem = createTelemetryOverlayEntry(device);
+          const overlayItem = createTelemetryOverlayEntry(device, position);
           if (overlayItem) overlayEntries.push(overlayItem);
         }
 

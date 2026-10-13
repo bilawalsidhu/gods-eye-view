@@ -85,7 +85,7 @@ export function mapAnalystRecord(device) {
 /**
  * Create a lightweight HUD overlay badge for screen projection.
  */
-export function createTelemetryOverlayEntry(device) {
+export function createTelemetryOverlayEntry(device, position = null) {
   if (!device || !Number.isFinite(device.lat) || !Number.isFinite(device.lon)) {
     return null;
   }
@@ -94,19 +94,42 @@ export function createTelemetryOverlayEntry(device) {
   const color = statusColor(device.status);
   const statusStr = String(device.status || 'nominal').toUpperCase();
   const batteryStr = device.battery != null ? ` [${device.battery}%]` : '';
+  const isFault = device.status === 'fault';
+  const isWarning = device.status === 'warning';
+
+  const cartesianPosition =
+    position &&
+    Number.isFinite(position.x) &&
+    Number.isFinite(position.y) &&
+    Number.isFinite(position.z)
+      ? position
+      : { x: device.lon, y: device.lat, z: device.alt || 0 };
 
   return {
     sourceId: TELEMETRY_OVERLAY_SOURCE_ID,
     id: `overlay:telemetry:${device.id}`,
     entityId: `local-telemetry:${device.id}`,
+    position: cartesianPosition,
+    variant: 'label',
+    title: `${icon} ${device.name || device.id}${batteryStr}`,
+    subtitle: `${statusStr}${device.facility ? ` · ${device.facility}` : ''}`,
+    accent: color,
     lat: device.lat,
     lon: device.lon,
     altitude: device.alt || 0,
     primaryText: `${icon} ${device.name || device.id}${batteryStr}`,
     secondaryText: `${statusStr}${device.facility ? ` · ${device.facility}` : ''}`,
     badgeColor: color,
-    priority:
-      device.status === 'fault' ? 100 : device.status === 'warning' ? 80 : 50,
+    priority: isFault ? 100 : isWarning ? 80 : 50,
+    collisionGroup: 'ambient-label',
+    paintLane: 'ambient-label',
+    interactive: false,
+    edgeFade: 'keyhole',
+    horizonCull: true,
+    terrainOcclusion: false,
+    gapPx: 12,
+    verticalOnly: true,
+    placement: 'above',
   };
 }
 
