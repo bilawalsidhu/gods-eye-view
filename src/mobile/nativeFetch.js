@@ -201,6 +201,10 @@ export function createNativeFetch({
       headers: normalizeRequestHeaders(init.headers),
       data: init.body ?? undefined,
       responseType: 'arraybuffer',
+      // Follow/fetch semantics are the transport's to honor; adapters that
+      // pin origins (HLS, TxDOT, same-host images) require the refusal to
+      // reach the transport instead of being silently followed.
+      redirect: init.redirect ?? 'follow',
     });
     const bytes = transportDataToBytes(result?.data);
     const status = Number(result?.status);

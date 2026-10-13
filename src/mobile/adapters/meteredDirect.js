@@ -116,6 +116,20 @@ export function createTomtomDirectSource({
           },
         );
       }
+      // Pre-admission: refuse without touching the upstream when the budget
+      // is already spent (a spent budget must not burn quota proving it).
+      // `remaining` is advisory (a lost race still hits `trySpend` below),
+      // and budgets without a peek keep the fetch-then-spend fallback.
+      if (
+        budget &&
+        typeof budget.remaining === 'function' &&
+        (await budget.remaining()) <= 0
+      ) {
+        throw Object.assign(new Error("Today's TomTom tile budget is spent"), {
+          code: TOMTOM_BUDGET_EXHAUSTED,
+          unavailable: TOMTOM_BUDGET_EXHAUSTED,
+        });
+      }
       // TomTom flow tiles accept the API key only as a query parameter (no header
       // auth on this endpoint). The key is validated to HTTPS by assertKeyedHttps
       // before use. This is an accepted risk: the query string may appear in

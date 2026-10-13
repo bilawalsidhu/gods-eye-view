@@ -500,7 +500,6 @@ test('tomtom tile spends the budget only after an OK response', async () => {
       return true;
     },
   });
-  // A failed upstream burns no allowance.
   const failing = createTomtomDirectSource({
     fetchImpl: async () => new Response(new Uint8Array(), { status: 500 }),
     getKey: async () => 'vault-secret',
@@ -516,6 +515,23 @@ test('tomtom tile spends the budget only after an OK response', async () => {
   });
   assert.ok((await succeeding.getFlowTile(12, 1, 2)) instanceof Uint8Array);
   assert.equal(spends, 1);
+});
+
+test('tomtom tile pre-admission refuses without fetching when spent', async () => {
+  let calls = 0;
+  const exhausted = createTomtomDirectSource({
+    fetchImpl: async () => {
+      calls++;
+      return new Response(new Uint8Array(), { status: 200 });
+    },
+    getKey: async () => 'vault-secret',
+    budget: memoryBudget(0),
+  });
+  await assert.rejects(exhausted.getFlowTile(12, 1, 2), (error) => {
+    assert.equal(error.code, 'BUDGET_EXHAUSTED');
+    return true;
+  });
+  assert.equal(calls, 0);
 });
 
 test('voice negotiate maps transport failures to VOICE UNAVAILABLE', async () => {
@@ -559,6 +575,7 @@ function memoryBudget(limit = 6000) {
       count += 1;
       return true;
     },
+    remaining: async () => Math.max(0, limit - count),
   };
 }
 
@@ -592,13 +609,13 @@ test('tomtom tile validates coords, requires a key, and honors the budget', asyn
   await assert.rejects(source.getFlowTile(12, 4096, 0), /tile/);
   assert.equal(calls.length, 0);
   await source.getFlowTile(12, 0, 0);
-  // Spend happens after an OK response, so the exhausted call still fetches
-  // (proving the failure path burns no allowance) and then rejects.
+  // Pre-admission refuses before fetching: the exhausted call burns no
+  // request and no allowance.
   await assert.rejects(source.getFlowTile(12, 0, 1), (error) => {
     assert.equal(error.code, 'BUDGET_EXHAUSTED');
     return true;
   });
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 1);
   const keyless = createTomtomDirectSource({
     fetchImpl,
     getKey: async () => null,

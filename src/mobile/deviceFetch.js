@@ -49,10 +49,13 @@ export function createDeviceFetch({
   });
   /**
    * Fetch through the native registry-enforced transport, normalized to a
-   * real Response for adapter body readers.
+   * real Response for adapter body readers. Redirect identity is preserved:
+   * the `redirect` init option is forwarded to the transport, and the final
+   * URL surfaces on the rebuilt Response (`url`/`redirected`) so origin
+   * pins (HLS, TxDOT, same-host images) keep refusing followed redirects.
    * @param {string|URL} url Request URL.
-   * @param {object} [init] Fetch init (method, headers, body, signal).
-   * @returns {Promise<Response>} Real Response (status, headers, bytes).
+   * @param {object} [init] Fetch init (method, headers, body, signal, redirect).
+   * @returns {Promise<Response>} Real Response (status, headers, bytes, url).
    */
   return async function deviceFetch(url, init = {}) {
     init.signal?.throwIfAborted();
@@ -60,6 +63,30 @@ export function createDeviceFetch({
     const bytes = new Uint8Array(await res.arrayBuffer());
     init.signal?.throwIfAborted();
     const status = Number.isFinite(res.status) ? res.status : 500;
-    return new Response(bytes, { status, headers: res.headers });
+    const response = new Response(bytes, { status, headers: res.headers });
+    const finalUrl = hrefOrNull(res.url) ?? hrefOrNull(url) ?? '';
+    const requestedUrl = hrefOrNull(url) ?? '';
+    // `Response.url`/`redirected` are prototype getters; shadow them per
+    // instance so the transport-reported identity survives the rebuild.
+    Object.defineProperties(response, {
+      url: { value: finalUrl, enumerable: true },
+      redirected: { value: finalUrl !== requestedUrl, enumerable: true },
+    });
+    return response;
   };
+}
+
+/**
+ * Normalize a URL value to its href, or null when unparseable.
+ * @param {string|URL} value Candidate URL.
+ * @returns {string|null} Href, or null.
+ */
+function hrefOrNull(value) {
+  try {
+    if (typeof value === 'string' && value) return new URL(value).href;
+    if (value instanceof URL) return value.href;
+  } catch {
+    /* unparseable: caller decides */
+  }
+  return null;
 }

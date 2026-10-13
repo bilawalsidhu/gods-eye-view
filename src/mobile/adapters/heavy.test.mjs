@@ -37,8 +37,10 @@ import {
   cctvUpstreamUserAgent as adapterCctvUserAgent,
   createHlsPuller as createAdapterHlsPuller,
   fetchCctvImageFromUpstream as fetchAdapterCctvImage,
+  fetchHlsBytes as fetchAdapterHlsBytes,
   fetchTxdotSnapshot as fetchAdapterTxdotSnapshot,
 } from './cctvDirect.js';
+import { createDeviceFetch } from '../deviceFetch.js';
 import {
   PRODUCTS as ADAPTER_PRODUCTS,
   createNoaaTilesDirectSource as createAdapterNoaaTilesSource,
@@ -524,6 +526,32 @@ test('cctvDirect port: HLS lease lifecycle with 15s abandoned expiry', async () 
   await puller.shutdown();
 });
 
+test('cctvDirect port: HLS redirect refusal survives the device fetch', async () => {
+  const requests = [];
+  const transport = {
+    request: async (options) => {
+      requests.push(options);
+      return {
+        status: 200,
+        headers: { 'content-type': 'application/vnd.apple.mpegurl' },
+        data: new TextEncoder().encode('#EXTM3U\n'),
+        // Transport followed the redirect: the refusal must trigger on the
+        // surfaced final URL, not the requested one.
+        url: 'https://elsewhere.example/stream.m3u8',
+      };
+    },
+  };
+  const fetchImpl = createDeviceFetch({ transport });
+  await assert.rejects(
+    fetchAdapterHlsBytes('https://kamera.vegvesen.no/public/cam/manifest.m3u8', {
+      fetchImpl,
+      maxBytes: 1024,
+    }),
+    /HLS upstream refused/,
+  );
+  assert.equal(requests[0].redirect, 'error');
+});
+
 test('noaaTilesDirect port: capabilities parse + time/bbox/size validation', () => {
   // Ported pure helpers agree with the server canonicals on the same inputs.
   assert.deepEqual(adapterWeatherTileBounds(0, 0, 0), [-180, -90, 0, 90]);
@@ -864,8 +892,7 @@ test('overpassDirect factory: transport failures fail over, 4xx does not', async
   assert.deepEqual(seen400, ['https://o1.example/api/interpreter']);
 });
 
-test('cctvDirect factory: stream info carries direct upstream URLs, never /api', async () => {
-  setCctvCatalog([
+test('cctvDirect factory: stream info carries direct upstream URLs, never /api', async () => {  setCctvCatalog([
     {
       id: 'img-1',
       name: 'Image Cam',

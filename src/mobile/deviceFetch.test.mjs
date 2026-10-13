@@ -51,8 +51,7 @@ test('device fetch enforces the registry before touching the transport', async (
   assert.equal(calls.length, 0);
 });
 
-test('device fetch applies mirror and catalog init', async () => {
-  const { transport } = stubTransport(() => ({
+test('device fetch applies mirror and catalog init', async () => {  const { transport } = stubTransport(() => ({
     status: 200,
     headers: {},
     data: new Uint8Array(0),
@@ -79,4 +78,25 @@ test('device fetch applies mirror and catalog init', async () => {
   } finally {
     setCctvCatalog([]);
   }
+});
+
+test('device fetch forwards redirect and surfaces the final URL', async () => {
+  const { calls, transport } = stubTransport((options) => ({
+    status: 200,
+    headers: { 'content-type': 'text/plain' },
+    data: new TextEncoder().encode('moved'),
+    url: 'https://nowcoast.noaa.gov/final',
+  }));
+  const fetchImpl = createDeviceFetch({ transport });
+  const redirected = await fetchImpl('https://nowcoast.noaa.gov/start', {
+    redirect: 'error',
+  });
+  assert.equal(calls[0].redirect, 'error');
+  assert.equal(redirected.url, 'https://nowcoast.noaa.gov/final');
+  assert.equal(redirected.redirected, true);
+
+  const direct = await fetchImpl('https://nowcoast.noaa.gov/final', {});
+  assert.equal(calls[1].redirect, 'follow');
+  assert.equal(direct.url, 'https://nowcoast.noaa.gov/final');
+  assert.equal(direct.redirected, false);
 });
