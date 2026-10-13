@@ -1195,7 +1195,8 @@
     "exports": [
       "./layers/street-level",
       "./layers/street-level/mapillary",
-      "./layers/street-level/mapillary/source"
+      "./layers/street-level/mapillary/source",
+      "./layers/street-level/google"
     ],
     "modules": [
       "src/layers/streetLevel/index.js",
@@ -1224,6 +1225,11 @@
       "src/layers/streetLevel/tileMath.js",
       "src/layers/streetLevel/selection.js",
       "src/layers/streetLevel/providers/mapillary/viewer.js",
+      "src/layers/streetLevel/groundClick.js",
+      "src/layers/streetLevel/providers/google/index.js",
+      "src/layers/streetLevel/providers/google/policy.js",
+      "src/layers/streetLevel/providers/google/viewer.js",
+      "src/layers/streetLevel/providers/google/mapsLoader.js",
       "src/layers/streetLevel/providers/mapillary/source.js",
       "scripts/qa-street-level.mjs"
     ],
@@ -2179,6 +2185,11 @@
       "src/layers/streetLevel/tileMath.js",
       "src/layers/streetLevel/selection.js",
       "src/layers/streetLevel/providers/mapillary/viewer.js",
+      "src/layers/streetLevel/groundClick.js",
+      "src/layers/streetLevel/providers/google/index.js",
+      "src/layers/streetLevel/providers/google/policy.js",
+      "src/layers/streetLevel/providers/google/viewer.js",
+      "src/layers/streetLevel/providers/google/mapsLoader.js",
       "src/layers/streetLevel/providers/mapillary/source.js",
       "src/app/layers/streetLevel.js",
       "src/layers/alpr/tileRecords.js",
@@ -2706,6 +2717,11 @@
       "src/layers/streetLevel/tileMath.js",
       "src/layers/streetLevel/selection.js",
       "src/layers/streetLevel/providers/mapillary/viewer.js",
+      "src/layers/streetLevel/groundClick.js",
+      "src/layers/streetLevel/providers/google/index.js",
+      "src/layers/streetLevel/providers/google/policy.js",
+      "src/layers/streetLevel/providers/google/viewer.js",
+      "src/layers/streetLevel/providers/google/mapsLoader.js",
       "src/layers/streetLevel/providers/mapillary/source.js",
       "src/app/layers/streetLevel.js",
       "src/layers/alpr/tileRecords.js",
