@@ -403,6 +403,35 @@ export function createCyclonesLayer({
     setRowControlsListener(value) {
       listener = typeof value === 'function' ? value : null;
     },
+    /**
+     * Snapshot loaded active storms as plain JSON-safe records for the analyst
+     * query engine. On demand only (once per spoken query); [] while the
+     * layer is off.
+     * @param {number} [maxCount=Infinity] Most records to return.
+     * @returns {Array<Object>} {id, name, classification, basin, lat, lon, windKt, pressureHpa}.
+     */
+    getAnalystRecords(maxCount = Infinity) {
+      if (!enabled || destroyed) return [];
+      const num = (v) => (Number.isFinite(v) ? v : null);
+      const result = [];
+      for (const storm of snapshot?.storms || []) {
+        if (result.length >= maxCount) break;
+        const lat = storm.position?.latitude;
+        const lon = storm.position?.longitude;
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+        result.push({
+          id: storm.name || storm.id,
+          name: storm.name || null,
+          classification: storm.classification || null,
+          basin: storm.basin || null,
+          lat,
+          lon,
+          windKt: num(storm.windKt),
+          pressureHpa: num(storm.pressureHpa),
+        });
+      }
+      return result;
+    },
     getStats() {
       const storm = selected();
       return {
