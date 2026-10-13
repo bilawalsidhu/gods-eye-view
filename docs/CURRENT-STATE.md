@@ -1184,6 +1184,10 @@ The Node-only `gods-eye-view/server/providers/space` export supplies factories;
 `sources/space` supplies fixed upstream URL builders with no I/O or environment
 access. Callers retain validation, transport and response policy.
 
+The shared TLE text parser skips incomplete named sets and resumes at the next
+complete set. A missing orbital line does not discard the later satellites in
+the catalog; satellite layers and next-pass tools use the same parser.
+
 ## Build configuration and local provider boundaries
 
 `vite.config.js` delegates to `server/standalone/vite.config.js`, which loads
@@ -3078,8 +3082,9 @@ shared 360°/flat and captured-since filters (relative days, so a link keeps its
 meaning), one viewer host and one on-globe credit per active provider. Each
 provider draws in one colour (`PROVIDER_COLORS` in
 `src/layers/streetLevel/policy.js`); 360° cones are rings and the selected
-sequence is GEV cyan. Share options: `m` (Mapillary), `p` (`a`/`p`/`f`
-panoramas), `s` (since, days). Only Mapillary is registered. Without
+sequence is GEV cyan. Share options: `m` (Mapillary), `r` (the other providers' switches by id,
+e.g. `google-1` for Street View), `p` (`a`/`p`/`f` panoramas), `s` (since, days). Mapillary and Google
+Street View are registered. Without
 `MAPILLARY_CLIENT_TOKEN` the panel reads KEY REQUIRED and the controls are
 disabled. With it, coverage draws as z0–5 overview points from orbit and z11–14
 sequence lines below 60 km; the proxy strips the unused `image` layer from z14
@@ -3103,8 +3108,15 @@ miss cooldown. Roads on elevated decks are still drawn at
 ground level. Framing a photo ignores mesh samples far below the bare earth
 (unloaded tiles).
 
-The header pill is the layer switch. With one provider its chip is a layer
-switch too; with several, darkening the last lit chip turns the layer off. The
+The header pill is the layer switch. Lighting a chip swaps the source;
+clicking the lit chip turns the layer off. A chip without a usable key
+explains the key instead of switching, and the other chips keep switching.
+Lit off its map stack, a provider leaves the panel saying which map it
+needs. When the switched-on providers lack
+their keys but a switched-off one would draw with a key already set (no
+Mapillary token, Street View on Google 3D with a Google key), the layer
+reports it (`keyAlternatives`), and the panel's KEY REQUIRED, its coverage
+line and the layer row's tooltip say to light it. The
 viewer sits under the header with EXPAND, FIT/FILL, FOLLOW and close above the
 image. FOLLOW needs the Google 3D map stack (`attachMapStackController`) and
 stops when the stack changes. Camera moves go through the application's
@@ -3125,8 +3137,52 @@ manages each provider's credit and fans the filter out to every provider. To
 add a provider: implement the definition, register it in
 `src/app/layers/streetLevel.js`, add its boolean option to the `street-level`
 group in `src/data/layerState.js` and its modules to
-`scripts/package-boundaries.json`. Once a keyless provider registers, the
-layer's `requiresKeyId` becomes null and the key gate moves to the chips.
+`scripts/package-boundaries.json`. With providers on different keys the
+layer's `requiresKeyId` is null and each chip reports its own key.
+
+Google Street View (`providers/google/`) runs on the Maps JavaScript API with
+the browser `GOOGLE_MAPS_API_KEY`, which needs that API enabled; it is loaded
+on first use (`mapsLoader.js`, CSP `script-src https://maps.googleapis.com`).
+Its chip starts off (`defaultOn: false`; a link without its switch keeps it off) because every
+panorama load is billed to the key. Google's terms forbid Street View beside
+non-Google maps, so the provider declares `requiresMapStack: 'photoreal'`:
+off Google 3D it does not appear at all (no chip, legend swatch, globe
+credit, layer source or button, and Google's script is not loaded), lookups
+and opens skip it, and leaving Google 3D closes its panorama; the share
+option keeps the user's choice for when Google 3D returns. Google offers no coverage layer
+for other maps, so it draws none: with it on, a click on the map itself
+(`scenePick.isSurfacePick`: nothing picked or Google 3D tile content, so a
+Mapillary line under the pointer wins; no tool holding the pointer; camera
+below 3 km) opens its nearest Google-collected outdoor panorama within 50 m
+and leaves the camera where it is (`groundClick.js`). Higher up the hint
+says to zoom in. **OPEN STREET VIEW** beside that hint (`#sl-nearest-btn`)
+does the same at the view centre, so Street View needs no pointer; it is
+disabled until the camera is at street zoom (and aimed at the sky, it opens
+nothing and says to aim at a street). One provider is lit at a time:
+`setProviderEnabled(id, true)` darkens the others, a chip click sends every
+switch in one update so the share link records the swap, and params that
+light several keep the one already on, else the first in chip order
+(`litByParams`; reapplying them never flips). Mapillary, free, is lit by
+default. The chip reads GOOGLE STREET VIEW, and an open panorama's globe
+marker is a Google-blue view cone (`marker: {kind: 'view-cone'}`) in place
+of GEV's amber pin. Its
+panoramas are all 360° and it draws no coverage, so it declares `filters: []`
+(a provider's `filters` default to both `pano` and `since`): lookups ignore
+the IMAGERY and SINCE filters, the panel hides each filter row no lit provider
+honours (`filterControls`), and the legend lists only providers that draw
+lines, with "Selected" only beside one of them. The viewer is Google's `StreetViewPanorama` in its own
+element in the viewer host, without Google's fullscreen, close and address
+controls (the address goes in the caption); a pose goes out at once and
+again when the panorama's month, photographer and address arrive (one
+successful lookup per panorama per session, seeded by the nearest lookup;
+a details lookup that fails or takes over ten seconds waits five seconds
+before a view event can retry, and an unmount drops lookups in flight). A key
+Google refuses (`gm_authFailure`: the API not enabled, a referrer it does
+not allow, billing off) reads KEY REJECTED and fails a pending open at
+once; a lookup or open Google never answers fails after 10 or 20 s. In CI
+(no Google key, no Google 3D) the gate checks that nothing of Street View
+shows off Google 3D, even switched on by a share link; the click and button
+step skips as `no Google key`.
 
 Street Level has two browser gates. `npm run qa:street-level -- --url <server>`
 runs against real Mapillary and needs `MAPILLARY_CLIENT_TOKEN`. `npm run

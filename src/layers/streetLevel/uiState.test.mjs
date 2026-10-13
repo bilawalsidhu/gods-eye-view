@@ -85,6 +85,49 @@ test('the legend is one swatch per active source, in its colour, then Selected',
   );
 });
 
+test('Street View draws no lines: no legend swatch, and no Selected on its own', () => {
+  const streetView = provider({
+    id: 'google',
+    name: 'Google Street View',
+    color: '#4285f4',
+    count: 0,
+    groundClick: true,
+    filters: [],
+  });
+  assert.deepEqual(
+    composeUIState({ ...base, providers: [streetView] }).legend,
+    [],
+  );
+  assert.deepEqual(
+    composeUIState({
+      ...base,
+      providers: [provider(), streetView],
+    }).legend.map((entry) => entry.key),
+    ['mapillary', 'selected'],
+  );
+});
+
+test('the filter controls show only for a lit provider that honours them', () => {
+  const streetView = provider({ id: 'google', groundClick: true, filters: [] });
+  const controls = (providers) =>
+    composeUIState({ ...base, providers }).filterControls;
+  assert.deepEqual(controls([streetView]), { pano: false, since: false });
+  assert.deepEqual(controls([provider(), streetView]), {
+    pano: true,
+    since: true,
+  });
+  assert.deepEqual(
+    controls([provider({ on: false }), streetView]),
+    { pano: false, since: false },
+    'Mapillary switched off',
+  );
+  assert.deepEqual(
+    controls([provider({ on: false }), { ...streetView, on: false }]),
+    { pano: true, since: true },
+    'nothing lit: both, ready for the first chip',
+  );
+});
+
 test('hint and error come from the first active provider that has one', () => {
   const ui = composeUIState({
     ...base,
@@ -147,5 +190,48 @@ test('the surface mode defaults to draped and passes through', () => {
     composeUIState({ ...base, providers: [provider()], surface: 'terrain' })
       .surface,
     'terrain',
+  );
+});
+
+test('every switched-on provider’s hint is kept, once each', async () => {
+  const { summarizeCoverage } = await import('./uiState.js');
+  const { providerSnapshot } =
+    await import('../../testSupport/streetLevelFakes.mjs');
+  const summary = summarizeCoverage([
+    providerSnapshot({ hint: 'zoom in for sequences' }),
+    providerSnapshot({
+      id: 'google',
+      hint: 'click a street to open Street View',
+    }),
+    providerSnapshot({ id: 'off', on: false, hint: 'not shown' }),
+    providerSnapshot({ id: 'dup', hint: 'zoom in for sequences' }),
+  ]);
+  assert.equal(
+    summary.hint,
+    'zoom in for sequences · click a street to open Street View',
+  );
+});
+
+test('a key-gated layer offers the switched-off sources that would draw with a key already set', async () => {
+  const { keyAlternatives } = await import('./uiState.js');
+  const mapillary = providerSnapshot({ keyRequired: true, configured: false });
+  const streetView = providerSnapshot({
+    id: 'google',
+    label: 'STREET VIEW',
+    on: false,
+    configured: true,
+    requiresKeyId: 'google-maps',
+  });
+  assert.deepEqual(keyAlternatives([mapillary, streetView]), [
+    { id: 'google', label: 'STREET VIEW', requiresKeyId: 'google-maps' },
+  ]);
+  // Nothing to offer: Mapillary has its key, or Street View has none either.
+  assert.deepEqual(keyAlternatives([providerSnapshot(), streetView]), []);
+  assert.deepEqual(
+    keyAlternatives([
+      mapillary,
+      { ...streetView, configured: false, keyRequired: true },
+    ]),
+    [],
   );
 });
