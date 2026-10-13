@@ -1,3 +1,5 @@
+import { displayPanelScroller } from './displayPanelScroll.js';
+
 /** Move the existing Display groups between their two presentation surfaces. */
 export class CockpitDisplayPortal {
   constructor({ standardPanel, cockpitPanel, groups, layout }) {
@@ -20,15 +22,18 @@ export class CockpitDisplayPortal {
       group.before(anchor);
       return [{ name, group, slot, anchor }];
     });
-    this.standardScrollTop = standardPanel?.scrollTop || 0;
+    this.standardScrollTop =
+      displayPanelScroller(standardPanel)?.scrollTop || 0;
     this.cockpitScrollTop = cockpitPanel?.scrollTop || 0;
     const options = { passive: true, signal: this.listeners.signal };
     standardPanel?.addEventListener(
       'scroll',
       () => {
-        if (!this.active) this.standardScrollTop = standardPanel.scrollTop;
+        if (!this.active)
+          this.standardScrollTop =
+            displayPanelScroller(standardPanel).scrollTop;
       },
-      options,
+      { ...options, capture: true },
     );
     cockpitPanel?.addEventListener(
       'scroll',
@@ -85,7 +90,8 @@ export class CockpitDisplayPortal {
       if (nextActive && this.cockpitPanel)
         this.cockpitPanel.scrollTop = this.cockpitScrollTop;
       if (!nextActive && this.standardPanel)
-        this.standardPanel.scrollTop = this.standardScrollTop;
+        displayPanelScroller(this.standardPanel).scrollTop =
+          this.standardScrollTop;
     };
     if (!settle) {
       restoreScroll();
@@ -121,7 +127,8 @@ export class CockpitDisplayPortal {
     }
     this.cockpitPanel?.classList.remove('uses-shared-display-controls');
     if (this.standardPanel)
-      this.standardPanel.scrollTop = this.standardScrollTop;
+      displayPanelScroller(this.standardPanel).scrollTop =
+        this.standardScrollTop;
     this.records = [];
     this.restoreOwner = null;
   }

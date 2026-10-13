@@ -29,6 +29,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Use Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -48,11 +49,77 @@ jobs:
       - name: Check package boundaries
         run: npm run check:boundaries
 
+      - name: Check published layer-token allocations
+        if: github.event_name == 'pull_request'
+        run: npm run layer-token:check -- --base-ref origin/main
+
       - name: Run unit tests
         run: npm test
 
       - name: Build production bundle
         run: npm run build
+
+  street-level-browser:
+    # Hermetic: every Mapillary request is answered from fixtures, so the
+    # dummy token below never leaves the page.
+    name: Street Level browser gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GEV_REQUIRE_ALLOCATION_GATE: '0'
+      # Fail on a missed header press unless the panel itself moved.
+      QA_FAIL_ON_RETRY: '1'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Use Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.14.0
+          cache: npm
+
+      - name: Install locked dependencies and headless Chrome
+        run: npm ci
+
+      - name: Build production bundle with a dummy Mapillary token
+        env:
+          MAPILLARY_CLIENT_TOKEN: 'MLY|0|qa-fixture'
+        run: npm run build
+
+      - name: Start the preview server
+        env:
+          MAPILLARY_CLIENT_TOKEN: 'MLY|0|qa-fixture'
+        run: |
+          npx vite preview --port 4173 --strictPort > preview.log 2>&1 &
+          for attempt in $(seq 1 90); do
+            curl -sf http://localhost:4173/ > /dev/null && exit 0
+            sleep 2
+          done
+          cat preview.log
+          exit 1
+
+      - name: Street Level gate with Mapillary fixtures
+        run: npm run qa:street-level:fixtures -- --strict --url http://localhost:4173
+
+      - name: Portable panel gate
+        if: success() || failure()
+        run: npm run qa:panel-resize -- --url http://localhost:4173
+
+      - name: Preview server log
+        if: failure()
+        run: cat preview.log
+
+      - name: Upload gate evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-gate-evidence
+          path: qa-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
 
   windows-onboarding:
     name: Windows onboarding

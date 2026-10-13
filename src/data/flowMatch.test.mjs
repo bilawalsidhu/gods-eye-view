@@ -44,10 +44,10 @@ test('coincident parallel road matches with the flow level', () => {
   assert.equal(matches[0].closure, false);
 });
 
-test('opposite-direction flow still matches (two-way bearing fold)', () => {
+test('opposite-direction flow matches only the reverse travel direction)', () => {
   // Same line drawn south->north vs road north->south equivalence.
   const reversed = line({ lengthM: 500, bearingDeg: 0, eastM: 4 }).reverse();
-  const { matches } = matchFlowToRoads([ROAD_NS], [flow(reversed, 0.3)]);
+  const { matches } = matchFlowToRoads([{...ROAD_NS, oneway:-1}], [flow(reversed, 0.3)]);
   assert.ok(matches[0], 'reversed flow should still match');
   assert.ok(Math.abs(matches[0].level - 0.3) < 1e-9);
 });
@@ -158,4 +158,29 @@ test('median: even count averages the two middles', () => {
 test('median: single value and empty', () => {
   assert.equal(median([0.7]), 0.7);
   assert.equal(median([]), null);
+});
+
+test('one-way rejects opposite closure and two travel directions retain separate congestion', () => {
+  const coords = [[0,0],[0.002,0]];
+  const forward = {coords, oneway:1};
+  const reverse = {coords, oneway:-1};
+  const east = {coords, trafficLevel:1, closure:false};
+  const west = {coords:[...coords].reverse(), trafficLevel:0, closure:true};
+  assert.equal(matchFlowToRoads([forward],[west]).matches[0], null);
+  for (const flows of [[east,west],[west,east]]) {
+    assert.deepEqual(matchFlowToRoads([forward,reverse],flows).matches,
+      [{level:1,closure:false},{level:0,closure:true}]);
+  }
+  assert.equal(matchFlowToRoads([forward],[east,{...east,trafficLevel:0,closure:true}]).matches[0], null);
+});
+
+test('a full-coverage flow line matches both travel directions; one-side does not', () => {
+  const coords = [[0,0],[0.002,0]];
+  const directions = [{coords, oneway:1}, {coords, oneway:-1}];
+  const full = {coords, trafficLevel:0.4, closure:false, coverage:'full'};
+  assert.deepEqual(matchFlowToRoads(directions, [full]).matches,
+    [{level:0.4,closure:false},{level:0.4,closure:false}]);
+  const oneSide = {...full, coverage:'one_side'};
+  assert.deepEqual(matchFlowToRoads(directions, [oneSide]).matches,
+    [{level:0.4,closure:false}, null]);
 });

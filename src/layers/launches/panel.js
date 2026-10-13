@@ -268,7 +268,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
       index < 0 || index >= layerState._launches.length - 1;
     parts.replay.syncReplayButton();
     const panelScroller = layerState._missionPanel.closest(
-      '.global-context-panel-inner',
+      ":root[data-ui-theme='cyber'] .cyber-panel-body, .global-context-panel-inner",
     );
     if (panelScroller) panelScroller.scrollTop = 0;
   }

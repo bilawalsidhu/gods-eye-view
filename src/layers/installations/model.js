@@ -116,24 +116,28 @@ export function createModel({ state: layerState, services, parts, source }) {
       longitude >= box.west &&
       longitude <= box.east;
     if (centreInside) return true;
-    if (Array.isArray(footprint) && footprint.length) {
-      let minLat = Infinity;
-      let maxLat = -Infinity;
-      let minLon = Infinity;
-      let maxLon = -Infinity;
-      for (const [lon, lat] of footprint) {
-        if (lat < minLat) minLat = lat;
-        if (lat > maxLat) maxLat = lat;
-        if (lon < minLon) minLon = lon;
-        if (lon > maxLon) maxLon = lon;
-      }
-      return (
-        maxLat >= box.south &&
-        minLat <= box.north &&
-        maxLon >= box.west &&
-        minLon <= box.east
-      );
-    }
+    const footprints =
+      record.footprints?.map((rings) => rings[0]) ||
+      (footprint?.length ? [footprint] : []);
+    if (footprints.length)
+      return footprints.some((footprint) => {
+        let minLat = Infinity;
+        let maxLat = -Infinity;
+        let minLon = Infinity;
+        let maxLon = -Infinity;
+        for (const [lon, lat] of footprint) {
+          if (lat < minLat) minLat = lat;
+          if (lat > maxLat) maxLat = lat;
+          if (lon < minLon) minLon = lon;
+          if (lon > maxLon) maxLon = lon;
+        }
+        return (
+          maxLat >= box.south &&
+          minLat <= box.north &&
+          maxLon >= box.west &&
+          minLon <= box.east
+        );
+      });
     // Unknown extent: inclusive. Only a point feature may be excluded on centre.
     return record.osmType !== 'node';
   }

@@ -197,13 +197,31 @@
     overflow-y: auto;
   }
 
+  /* Both stacks are scroll containers at this width (overflow-y above), which
+     also makes their overflow-x compute to auto. Each panel's decorative
+     .panel-glow is absolutely positioned with a negative inset (-18px/-20px),
+     so inside a scroll container it stops being harmless paint and becomes
+     18–20px of scrollable overflow on BOTH axes: a horizontal scrollbar band
+     under the expanded panel plus a vertical scrollbar that scrolls nothing
+     but glow. Pin the glow to the panel box here — its blur is ink overflow,
+     which never scrolls — instead of clipping the rail, which would also clip
+     legitimate content such as the Context radio popover. */
+  #left-panel-stack .panel-glow,
+  #right-context-rail .panel-glow {
+    inset: 0;
+  }
+
   #right-context-rail > #pp-toggles {
     width: 100%;
   }
 
   #right-context-rail #pp-toggles.collapsed .pp-header-row,
-  #right-context-rail #cctv-panel,
-  #right-context-rail #cctv-panel.collapsed,
+  #right-context-rail #cctv-panel:not(.panel-floating),
+  #right-context-rail #cctv-panel.collapsed:not(.panel-floating),
+  #right-context-rail #street-level-panel:not(.panel-floating),
+  #right-context-rail #street-level-panel.collapsed:not(.panel-floating),
+  #right-context-rail #recent-imagery-panel,
+  #right-context-rail #recent-imagery-panel.collapsed,
   #right-context-rail #radio-panel,
   #right-context-rail #radio-panel.collapsed,
   #right-context-rail #global-context-panel,
@@ -217,10 +235,12 @@
 
   #left-panel-stack > #data-panel,
   #left-panel-stack > #cctv-panel,
+  #left-panel-stack > #street-level-panel,
   #left-panel-stack > #global-context-panel,
   #left-panel-stack > #scene-panel,
   #left-panel-stack > #data-panel.collapsed,
   #left-panel-stack > #cctv-panel.collapsed,
+  #left-panel-stack > #street-level-panel.collapsed,
   #left-panel-stack > #global-context-panel.collapsed,
   #left-panel-stack > #scene-panel.collapsed {
     position: relative;
@@ -239,8 +259,9 @@
 }
 
 @media (max-width: 520px) {
+  /* 16px keeps the Radio broadcast waves (15px above the logo) on-screen. */
   #title-bar {
-    top: 14px;
+    top: 16px;
     left: 16px;
   }
 

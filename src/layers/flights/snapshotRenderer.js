@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import {
   turnRateFromFixHistory,
   liftRepeatedGroundFix,
@@ -165,7 +166,7 @@ export function createFlightSnapshotRenderer({
           // freshness × focus × horizon alpha composition.
           bb.color = rendering
             ._fleetBillboardColor(icao24)
-            .withAlpha(bb.color?.alpha ?? 1);
+            .withAlpha(cyberSonarBaseAlpha(bb));
         }
         if (
           prevMeta?.klass !== meta.klass ||
@@ -178,8 +179,24 @@ export function createFlightSnapshotRenderer({
         // as the enrichment path — the class's GLB/scale may have changed.
         if (prevMeta?.klass !== meta.klass) rendering._syncModelToClass(icao24);
       } else {
+        // Start where the fleet pass will draw it: the fleet renders behind
+        // real time, so a fresh contact's displayed position is its fix
+        // projected back to that delayed time, and a grounded contact is then
+        // lifted onto the floor under that delayed position. Creating it at
+        // the raw fix drew it ahead until the next fleet tick snapped it back;
+        // skipping the floor started a taxiing contact low and then raised it.
+        const delayed = motion._deadReckon(icao24, new Cesium.Cartesian3());
+        const displayed =
+          (delayed &&
+            motion._floorGroundedDisplayPosition(
+              icao24,
+              flightState.records.data.get(icao24) || meta,
+              delayed,
+              rendering._modelOwnsVisual(icao24),
+            )) ||
+          position;
         const bb = flightState._billboardCollection.add({
-          position,
+          position: displayed,
           image: aircraftIcon(rendering._iconKind(icao24, meta.klass)),
           width: isTracked ? 24 : 20,
           height: isTracked ? 24 : 20,

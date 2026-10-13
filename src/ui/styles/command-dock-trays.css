@@ -442,17 +442,17 @@
   letter-spacing: 0.035rem;
 }
 
-/* The compact dock leaves both lower corners free for required attribution and telemetry. */
+/* Keep the complete inline attribution row above the command dock. */
 body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
 body:not(.ui-clean-view):not(.recording-mode):has(
     #intel-hud[data-variant='minimal'].active
   )
   #cesium-credits {
   right: auto;
-  bottom: 0.75rem;
+  bottom: calc(2vh + 5rem);
   left: 1.5rem;
   width: auto !important;
-  max-width: calc(50vw - 15rem);
+  max-width: calc(100vw - 3rem);
   text-align: left;
 }
 

@@ -103,6 +103,115 @@
   opacity: 0.96;
 }
 
+/* ── Portable rail panels ────────────────────
+   Rail placement in layers.css is guarded with :not(.panel-floating), so
+   these rules only have to beat a panel's base placement (one id). */
+.panel-portable .panel-header {
+  cursor: grab;
+}
+.panel-portable.panel-dragging .panel-header {
+  cursor: grabbing;
+}
+#right-context-rail > .panel-floating {
+  position: fixed;
+  inset: auto;
+  /* Above every docked rail panel; keep in step with PANEL_Z_FLOATING_FLOOR. */
+  z-index: 111;
+  max-height: calc(100vh - 12px);
+  margin: 0;
+  flex: none;
+  pointer-events: auto;
+}
+/* A collapsed window shows only its header strip; its inline height stays. */
+#right-context-rail > .panel-floating.collapsed {
+  max-height: max-content;
+}
+.panel-floating[style*='height'] > .cctv-panel-inner {
+  box-sizing: border-box;
+  height: 100%;
+  max-height: none;
+}
+.panel-resize-edge,
+.panel-resize-grip {
+  position: absolute;
+  z-index: 3;
+  touch-action: none;
+}
+.panel-resize-edge[data-dir='n'],
+.panel-resize-edge[data-dir='s'] {
+  left: 10px;
+  right: 10px;
+  height: 7px;
+  cursor: ns-resize;
+}
+.panel-resize-edge[data-dir='n'] {
+  top: -3px;
+}
+.panel-resize-edge[data-dir='s'] {
+  bottom: -3px;
+}
+.panel-resize-edge[data-dir='e'],
+.panel-resize-edge[data-dir='w'] {
+  top: 10px;
+  bottom: 10px;
+  width: 7px;
+  cursor: ew-resize;
+}
+.panel-resize-edge[data-dir='e'] {
+  right: -3px;
+}
+.panel-resize-edge[data-dir='w'] {
+  left: -3px;
+}
+.panel-resize-edge[data-dir='ne'],
+.panel-resize-edge[data-dir='nw'],
+.panel-resize-edge[data-dir='sw'] {
+  width: 14px;
+  height: 14px;
+}
+.panel-resize-edge[data-dir='ne'] {
+  top: -3px;
+  right: -3px;
+  cursor: nesw-resize;
+}
+.panel-resize-edge[data-dir='nw'] {
+  top: -3px;
+  left: -3px;
+  cursor: nwse-resize;
+}
+.panel-resize-edge[data-dir='sw'] {
+  bottom: -3px;
+  left: -3px;
+  cursor: nesw-resize;
+}
+.panel-resize-grip {
+  right: 3px;
+  bottom: 3px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  opacity: 0.55;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 3px,
+    rgba(0, 212, 255, 0.6) 3px 4px
+  );
+  transition: opacity var(--transition-fast);
+}
+.panel-portable:hover .panel-resize-grip,
+.panel-resizing .panel-resize-grip {
+  opacity: 1;
+}
+.panel-collapsible.collapsed > .panel-resize-edge,
+.panel-collapsible.collapsed > .panel-resize-grip {
+  display: none;
+}
+.panel-resizing,
+.panel-resizing * {
+  user-select: none;
+}
+
 .panel-title {
   font-family: var(--font-mono);
   font-size: 9px;
@@ -362,9 +471,18 @@
 }
 
 #pp-toggles:not(.collapsed) > .pp-header-row,
-#pp-toggles:not(.collapsed) > .pp-toggle-group,
-#pp-toggles:not(.collapsed) > #clean-view-toggle {
+#pp-toggles:not(.collapsed) > .pp-panel-body > .pp-toggle-group,
+#pp-toggles:not(.collapsed) > .pp-panel-body > #clean-view-toggle {
   width: 100%;
+}
+
+.pp-panel-body,
+.cyber-panel-body {
+  display: contents;
+}
+
+.panel-collapsible.collapsed > .global-context-panel-inner > .cyber-panel-body {
+  display: none;
 }
 
 .pp-toggle-btn {
@@ -683,6 +801,28 @@
   min-width: 200px;
 }
 
+.cyber-sonar-control {
+  display: none;
+}
+
+:root[data-ui-theme='cyber'] .cyber-sonar-control {
+  display: flex;
+}
+
+.cyber-sonar-toggle-row,
+.cyber-sonar-setting {
+  min-width: 200px;
+}
+
+.cyber-sonar-toggle-row .pp-mode-btn {
+  margin-left: auto;
+  min-width: 48px;
+}
+
+:root[data-cyber-sonar='off'] .cyber-sonar-setting {
+  display: none;
+}
+
 /* Map Source tiles live with Visual Presets in the bottom command tray. */
 .map-source-section {
   display: grid;
@@ -965,7 +1105,9 @@ body.ui-clean-view #data-panel,
 body.ui-clean-view #cctv-panel,
 body.ui-clean-view #radio-panel,
 body.ui-clean-view #global-context-panel,
-body.ui-clean-view #scene-panel {
+body.ui-clean-view #scene-panel,
+/* The expanded viewer lives on <body>, outside every panel. */
+body.ui-clean-view .sl-viewer-wrap-expanded {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
@@ -1055,7 +1197,7 @@ body.ui-clean-view #scene-runtime.active {
 /* Display owns the constrained desktop scroll surface. Keeping Parameters as
  * a second scroll container traps wheel/touch input at its boundary and lets
  * the flex column compress newly added preset rows below the visible panel. */
-#pp-toggles:not(.collapsed) > #param-slider-panel.active {
+#pp-toggles:not(.collapsed) > .pp-panel-body > #param-slider-panel.active {
   flex: 0 0 auto;
   max-height: none;
   overflow-y: visible;

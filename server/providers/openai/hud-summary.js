@@ -1,5 +1,8 @@
-import { keylessHudSummaryResponse } from '../../../src/hudSummaryResponse.js';
-import { enforceOptInRateLimit, openAiRateLimiter } from './rate-limit.js';
+import {
+  HUD_SUMMARY_INSTRUCTIONS,
+  keylessHudSummaryResponse,
+} from '../../../src/hudSummaryResponse.js';
+import { enforceRateLimit, openAiRateLimiter } from './rate-limit.js';
 import { readRequestBody } from '../common/request.js';
 import { OPENAI_HUD_SUMMARY_MODEL_DEFAULT } from './constants.js';
 
@@ -43,10 +46,10 @@ async function handleHudSummary(req, res) {
     return;
   }
 
-  // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). Keyless HUD
-  // fallback has no provider cost and resolves above without consuming a
-  // paid-endpoint quota slot.
-  if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
+  // Per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). On by default; 0 disables.
+  // Keyless HUD fallback has no provider cost and resolves above without
+  // consuming a paid-endpoint quota slot.
+  if (!enforceRateLimit(openAiRateLimiter(), req, res)) return;
 
   try {
     const body = await readRequestBody(req, 64 * 1024);
@@ -61,13 +64,7 @@ async function handleHudSummary(req, res) {
         model:
           process.env.OPENAI_HUD_SUMMARY_MODEL ||
           OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
-        instructions: [
-          "Write one concise intelligence-HUD summary for God's Eye View.",
-          'Use only the supplied place, street, nearby-place, and enabled-layer text labels.',
-          'Prefer the clearest named place and include a relevant enabled layer only when useful.',
-          'Do not infer from coordinates or invent a place.',
-          'Output exactly five words with no title, punctuation, markdown, or introductory phrase.',
-        ].join(' '),
+        instructions: HUD_SUMMARY_INSTRUCTIONS,
         input: JSON.stringify(context),
         reasoning: { effort: 'minimal' },
         max_output_tokens: 100,
@@ -78,20 +75,23 @@ async function handleHudSummary(req, res) {
     res.statusCode = response.ok && summary ? 200 : response.status || 502;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
+    if (!response.ok)
+      console.warn(`[hud-summary] upstream HTTP ${response.status}`);
     res.end(
       JSON.stringify({
         summary: summary || null,
-        error: response.ok
-          ? null
-          : data.error?.message || 'OpenAI HUD summary request failed',
+        // Never relay `data.error.message`: that is OpenAI's own wording, and
+        // it carries request ids, organization hints and quota phrasing.
+        error: response.ok ? null : 'OpenAI HUD summary request failed',
       }),
     );
-  } catch (error) {
+  } catch {
+    console.warn('[hud-summary] request failed');
     res.statusCode = 502;
     res.setHeader('Content-Type', 'application/json');
     res.end(
       JSON.stringify({
-        error: error?.message || 'OpenAI HUD summary request failed',
+        error: 'OpenAI HUD summary request failed',
       }),
     );
   }

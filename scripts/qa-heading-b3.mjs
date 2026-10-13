@@ -525,11 +525,11 @@ async function main() {
         const nowSec = Date.now() / 1000 + (T.timeOffsetSec || 0);
         const tRel = nowSec - T.epochMs / 1000;
 
-        if (url.includes('/api/opensky-track')) return Promise.resolve(jsonResponse({ path: [] }));
-        if (url.includes('/api/adsblol/trace')) {
+        if (url.includes('/api/flights/track')) return Promise.resolve(jsonResponse({ path: [] }));
+        if (url.includes('/api/military/track')) {
           return Promise.resolve(jsonResponse({ timestamp: Math.floor(nowSec), trace: [] }));
         }
-        if (url.includes('/api/opensky')) {
+        if (url.includes('/api/flights')) {
           T.__hitsGuard = ++window.__TURN_HITS.opensky;
           const row = (id, callsign, s, altM, category) => [
             id, callsign, 'Synthetica',
@@ -548,7 +548,7 @@ async function main() {
           if (T.heli65.active) states.push(row(T.heli65.icao, T.heli65.callsign, T.stateAt(T.heli65, tRel), T.heli65.altM, T.heli65.category));
           return Promise.resolve(jsonResponse({ time: Math.floor(nowSec), states }));
         }
-        if (url.includes('/api/adsblol/mil')) {
+        if (url.includes('/api/military')) {
           window.__TURN_HITS.mil++;
           const ac = T.military.map((m) => {
             const s = T.stateAt(m, tRel);

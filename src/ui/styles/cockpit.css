@@ -1942,7 +1942,8 @@ body.cockpit-mode
     #command-dock,
     #military-awareness-panel,
     #military-awareness-direction-overlay,
-    #cockpit-entry
+    #cockpit-entry,
+    .sl-viewer-wrap-expanded
   ) {
   display: none !important;
 }

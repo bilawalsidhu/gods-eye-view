@@ -33,6 +33,7 @@ export class LayerBindings {
     this._disposed = false;
     this._dataManager = null;
     this._directionsShellModule = null;
+    this._weatherShellModules = [];
     this._cctvRequestFocusHandler = null;
     this._removeCctvRequestFocusListener = null;
     this._worldRequestFocusHandler = null;
@@ -114,6 +115,28 @@ export class LayerBindings {
       warmFn: (cells) => this.services.warmGroundFloor(cells),
       showToast: (message) => this._showToast(message),
     });
+  }
+
+  _connectWeatherCamera() {
+    for (const layer of this._weatherShellModules)
+      layer.attachShellServices?.(null);
+    this._weatherShellModules = [];
+    for (const id of [
+      'wind',
+      'weather-radar',
+      'weather-satellite',
+      'weather-lightning',
+      'weather-cyclones',
+    ]) {
+      const layer = this._dataManager?.layers?.get(id)?.module;
+      if (typeof layer?.attachShellServices !== 'function') continue;
+      layer.attachShellServices({
+        runNavigation: (navigate) =>
+          this.runImmediateNavigation('weather', navigate),
+        imageryHost: this.services.imageryHost,
+      });
+      this._weatherShellModules.push(layer);
+    }
   }
 
   _persistAwarenessSelection(event, cleared = false) {
@@ -212,6 +235,7 @@ export class LayerBindings {
     this._cctvControls.connect();
     this._radioControls.connect();
     this._connectDirectionsCamera();
+    this._connectWeatherCamera();
     if (!this._awarenessSelectedHandler) {
       this._awarenessSelectedHandler = (event) =>
         this._persistAwarenessSelection(event, false);
@@ -263,5 +287,6 @@ export class LayerBindings {
     this._directionsShellModule?.attachShellServices?.(null);
     this._directionsShellModule = null;
     this._dataManager = null;
+    this._connectWeatherCamera();
   }
 }

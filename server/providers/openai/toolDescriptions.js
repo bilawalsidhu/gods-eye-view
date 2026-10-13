@@ -1,3 +1,8 @@
+import {
+  voiceLayerAliasHint,
+  voiceQueryFieldHint,
+} from '../../../src/voice/layerManifest.js';
+
 export const ACTION_DESCRIPTIONS = {
   fly_to_location: {
     description:
@@ -12,7 +17,11 @@ export const ACTION_DESCRIPTIONS = {
         },
         query: {
           description:
-            'Plain place search query, e.g. "London", "Eiffel Tower", or "Dubai Marina".',
+            'Plain place search query, e.g. "London", "Eiffel Tower", or "Dubai Marina". "pointer" = the spot under the cursor.',
+          $position: 1,
+        },
+        referent: {
+          description: 'Numbered item n from the last result list.',
           $position: 1,
         },
         viewMode: {
@@ -76,13 +85,13 @@ export const ACTION_DESCRIPTIONS = {
     $position: 1,
   },
   set_layer_visibility: {
-    description: "Enable or disable one registered God's Eye View data layer.",
+    description:
+      "Enable or disable one God's Eye View data layer. Every shipped layer is in the enum; never tell the user a listed layer does not exist.",
     $position: 1,
     parameters: {
       properties: {
         layerId: {
-          description:
-            'Common-name mapping for the non-obvious ids: space mission(s) → rocket-launches; fires/wildfires/active fires → local-firms (NASA FIRMS); ships/vessels/boats → ais-live-vessels; undersea/submarine cables → telegeography-submarine-cables; datacenters → local-datacenters; dams → local-dams; bikes/bike share → bikeshare; street traffic/congestion → traffic; traffic cameras → cctv; internet radio/stations → radio; ALPR/license plate readers/Flock cameras → alpr-cameras.',
+          description: `Spoken names: ${voiceLayerAliasHint()}.`,
           $position: 1,
         },
       },
@@ -154,8 +163,12 @@ export const ACTION_DESCRIPTIONS = {
       properties: {
         scope: {
           description:
-            'Use auto by default. selected returns the clicked/selected entity; in_view returns visible entities near the screen center.',
+            'Use auto by default. selected returns the clicked/selected entity; in_view returns visible entities near the screen center; pointer returns what the cursor is on.',
           $position: 2,
+        },
+        referent: {
+          description: 'Numbered item n from the last result list.',
+          $position: 1,
         },
         layerId: {
           description: 'Optional layer filter for visible entity context.',
@@ -179,6 +192,29 @@ export const ACTION_DESCRIPTIONS = {
           description: 'auto restores style-driven show/hide.',
           $position: 2,
         },
+      },
+    },
+  },
+  set_cyber_sonar: {
+    description:
+      'Adjust Cyber-only sonar controls. Requires the Cyber HUD layout; never switches layout or HUD visibility. Omitted fields stay unchanged. Returns actual settings and separate map/contact sweep activity. A saved setting does not mean the effect is active.',
+    $position: 1,
+    parameters: {
+      properties: {
+        enabled: { description: 'Explicitly turn sonar on or off.' },
+        rings: { description: 'Number of decorative sonar rings, 3–12.' },
+        rangePct: {
+          description:
+            'Visual ring range, 60–120 percent; not geographic distance.',
+        },
+        intensityPct: {
+          description: 'Sonar Power slider, 0–100 percent. Zero is valid.',
+        },
+        opacityPct: {
+          description:
+            'Contact opacity floor between passes, 35–100 percent; labels have a derived floor. Not whole-scene dimming.',
+        },
+        sectorDeg: { description: 'Sonar sweep sector width, 8–60 degrees.' },
       },
     },
   },
@@ -326,12 +362,17 @@ export const ACTION_DESCRIPTIONS = {
       properties: {
         query: {
           description:
-            'Callsign, ship name, satellite name, ICAO hex, MMSI, or NORAD id.',
+            'Callsign, ship name, satellite name, ICAO hex, MMSI, or NORAD id. "pointer" = the contact under the cursor.',
+          $position: 1,
+        },
+        referent: {
+          description:
+            'Numbered item n from the last result list (-1 = last); query may then be its label.',
           $position: 1,
         },
         layerId: {
           description:
-            'Optional layer hint: flights | military | ais-live-vessels | satellites.',
+            'Optional: flights, military, ais-live-vessels or satellites. Other layers are not trackable; for fires use query "biggest fire".',
           $position: 1,
         },
       },
@@ -358,7 +399,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   annotate_map: {
     description:
-      'Draw annotations on the 3D map to visually point out what you are talking about — like sketching on a whiteboard over the world. Use this whenever you mention a specific place, building, campus, boundary, district, or a relationship between two places, so the user can SEE what you mean. Give place NAMES (preferred) or explicit lat/lng; the app resolves them to real-world positions and real building/area outlines — never guess pixel positions. Call this as you begin describing something, and you may mark several places in one call.',
+      'Mark places on the 3D map as you talk about them (see WHITEBOARD): pins, highlights, footprints and boundaries, arrows, routes and labels. Give place names (or explicit lat/lng); the app resolves real positions and outlines. Several places may go in one call.',
     $position: 1,
     parameters: {
       properties: {
@@ -375,7 +416,7 @@ export const ACTION_DESCRIPTIONS = {
               },
               target: {
                 description:
-                  'Place name to resolve, e.g. "Palace of Fine Arts, San Francisco", "the Pentagon", "Presidio of San Francisco". Preferred over coordinates. For a specific monument/statue/feature that sits within a larger landmark, use its OWN name + city ("Tejano Monument, Austin", "Texas African American History Memorial, Austin") — do NOT phrase it as "X at the Texas State Capitol", which makes the geocoder collapse several of them onto the same centroid so they stack on one spot.',
+                  'Place name to resolve ("Palace of Fine Arts, San Francisco"), or "pointer" for the spot under the cursor. A monument inside a larger landmark gets its own name + city ("Tejano Monument, Austin"), never "X at the Texas State Capitol" (that stacks them on one centroid).',
                 $position: 2,
               },
               points: {
@@ -427,27 +468,24 @@ export const ACTION_DESCRIPTIONS = {
               },
               entityKind: {
                 description:
-                  'What KIND of thing the target IS — a fact, not a style choice: building = one structure; compound = campus/grounds/mall/park; district = neighborhood or area of a city; street = a named road/corridor; point_feature = monument/statue/memorial/plaque/fountain or other small point landmark. Set it whenever you know it — it routes the resolver to the right footprint source (point_feature anchors monuments as precise points instead of adopting a nearby building outline).',
+                  'What the target IS (a fact, not a style): building = one structure; compound = campus/grounds/mall/park; district = neighborhood; street = a named road; point_feature = monument/statue/memorial/fountain, anchored as a precise point. Set it whenever you know it.',
                 $position: 2,
               },
               screenX: {
                 description:
-                  'Fallback only: when you cannot name/geocode the place but can SEE it in the latest viewport screenshot, the normalized horizontal position (0=left, 1=right) of the spot. The app converts it back to a real world point under that pixel.',
+                  'Fallback only, for a spot visible in the latest screenshot that you cannot name: normalized x (0=left, 1=right).',
                 $position: 3,
               },
               screenY: {
-                description:
-                  'Fallback only: normalized vertical position (0=top, 1=bottom) of the spot in the latest viewport screenshot.',
+                description: 'Fallback only: normalized y (0=top, 1=bottom).',
                 $position: 3,
               },
               toScreenX: {
-                description:
-                  'For type=arrow: normalized x of the arrow destination from the screenshot (pixel fallback).',
+                description: 'For type=arrow: destination x (pixel fallback).',
                 $position: 3,
               },
               toScreenY: {
-                description:
-                  'For type=arrow: normalized y of the arrow destination from the screenshot (pixel fallback).',
+                description: 'For type=arrow: destination y (pixel fallback).',
                 $position: 3,
               },
             },
@@ -505,18 +543,18 @@ export const ACTION_DESCRIPTIONS = {
   },
   analyst_query: {
     description:
-      'Answer questions ABOUT the data currently loaded on the map — counts, lists, superlatives, and attribute filters over live layers (flights, military, ships, fires, earthquakes). Examples: "how many flights over Texas", "biggest fire near LA", "which ships are headed to Oakland", "anything above 40,000 feet", "fastest thing in view". Queries ONLY client-side data from ENABLED layers — if the needed layer is off, say so and offer to enable it. For a follow-up about the previous answer\'s set ("which of those is closest?"), set followUp=true and send only the new filters/sort.',
+      'Counts, lists, superlatives and attribute filters over records loaded by ENABLED layers — "how many flights over Texas", "biggest fire near LA", "ships headed to Oakland", "next rocket launch". A requested list or ranking requires this tool even after set_context_mode returned a Contacts count; that count alone has no requested items. complete:false means the count is a floor ("at least") and rankings cover the records examined; partial names unanswered layers. Items carry lat/lon for a follow-up fly_to_location. ok:false codes: LAYER_OFF (offer to enable), NOT_READY (loading), FOLLOW_UP_MISMATCH (ask again without followUp), UNKNOWN_FIELD/UNKNOWN_SCOPE/BAD_VALUE (retry with the allowed values).',
     $position: 1,
     parameters: {
       properties: {
         layers: {
           description:
-            'Layers to query. fires/wildfires → local-firms; ships/vessels → ais-live-vessels.',
+            'Layers to query. fires → local-firms; ships → ais-live-vessels; buses/trains → transit; hurricanes → weather-cyclones; bases → military-installations; my receiver → local-adsb. Units differ per layer, so rank speed within one layer.',
           $position: 2,
         },
         scope: {
           description:
-            'Spatial scope. Default: view (near the camera). Use kind=region for "over Texas"-style asks; kind=anywhere for global questions.',
+            'Always set it (see WHERE). Explicit "in view" uses view; "nearby" uses view when Contacts is off. Around the active Contacts subject uses radius with the requested km and center omitted, never view: the five closest within 250 km use scope:{kind:"radius",km:250}, sortBy:"distance", limit:5. For another requested radius use its actual km, not 250. pointer = "around here/this" while pointing (radius at the cursor); region = "over Texas"; radius with center {lat, lon} = "near <place>" or explicit coordinates; anywhere = no place ("biggest anywhere", "today"). Preserve explicit view, named place, pointer and explicit center even while Contacts is active; never invent coordinates. There is no drawn-area scope yet: say so rather than answering for the view.',
           $position: 2,
           properties: {
             name: {
@@ -525,23 +563,29 @@ export const ACTION_DESCRIPTIONS = {
               $position: 1,
             },
             km: {
-              description: 'For kind=radius.',
+              description:
+                'For kind=radius or pointer: the actual requested kilometers. An active-subject 250 km request uses 250; another requested radius keeps that number.',
+              $position: 1,
+            },
+            center: {
+              description:
+                'Omit for a radius around the active Contacts subject. Supply only an explicitly requested coordinate or a resolved named-place coordinate; never invent 0,0 or replace an explicit center with the subject.',
               $position: 1,
             },
           },
         },
         filters: {
-          description:
-            'Attribute predicates, ANDed. ALTITUDE IS METERS (40,000 ft = 12192). Fields: altitudeM, speedMps, military, onGround, aircraftClass, callsign, operator, routeOrigin, routeDestination, originCountry (flights); speedKts, shipType, destination (ships); frp, confidence (fires); magnitude, depthKm, place (earthquakes).',
+          description: `ANDed; values keep their type (numbers, true/false). Altitude is meters (40,000 ft = 12192). Time fields take ISO; ageHours = hours ago. Every layer has id, lat, lon. Fields — ${voiceQueryFieldHint()}.`,
           $position: 1,
         },
         sortBy: {
-          description: 'Field to rank by, or "distance" for nearest-first.',
+          description:
+            'Field to rank by, or "distance" (nearest first unless sortDir=desc).',
           $position: 1,
         },
         followUp: {
           description:
-            'true = re-query the PREVIOUS result set instead of fresh data.',
+            'true = re-filter the last answer (its layers) instead of fresh data.',
           $position: 1,
         },
       },
@@ -549,7 +593,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   next_iss_pass: {
     description:
-      "When the user asks when the ISS / the space station will next fly over: returns the next visible ISS pass for the current camera location (or an explicit lat/lon) — rise time (ISO + minutes from now), rise compass direction, peak elevation, and duration. Requires the satellites layer to have loaded its catalog at least once this session; if it hasn't, tell the user to enable the satellites layer and try again.",
+      'Next ISS pass over the camera location (or lat/lon): rise time, direction, peak elevation, duration and estimated visibility. Needs the satellites layer to have loaded once; if not, ask the user to enable it.',
     $position: 1,
     parameters: {
       properties: {
@@ -570,5 +614,10 @@ export const ACTION_DESCRIPTIONS = {
         },
       },
     },
+  },
+  next_satellite_pass: {
+    description:
+      'Predict the next pass in 24 hours for one satellite in the loaded catalog, identified by exact NORAD ID or name. Ambiguous names return candidates: ask for a choice rather than selecting one. Defaults to geometric passes; visibleOnly requires estimated illumination and a dark observer sky, which does not guarantee naked-eye visibility. Uses camera location unless coordinates are supplied.',
+    $position: 1,
   },
 };

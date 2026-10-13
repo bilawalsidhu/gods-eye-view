@@ -2,37 +2,51 @@ import { readRealtimeSource } from '../testSupport/readRealtimeSource.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { responseInstructionForToolResult } from './realtimeProtocol.js';
+import { attachVoiceResult } from './speech.js';
 
-const voiceConfig = readFileSync(new URL('../../server/providers/openai/instructions.js', import.meta.url), 'utf8');
+const voiceConfig = readFileSync(
+  new URL('../../server/providers/openai/instructions.js', import.meta.url),
+  'utf8',
+);
 const realtime = readRealtimeSource();
 
 test('aircraft identity narration acknowledges missing enrichment', () => {
-  const start = voiceConfig.indexOf("'For \"what is this aircraft?\" answers");
+  const start = voiceConfig.indexOf('\'For "what is this aircraft?"');
   assert.ok(start >= 0, 'aircraft identity honesty instruction is missing');
   const text = voiceConfig.slice(start, voiceConfig.indexOf('\n', start));
-  assert.match(text, /get_entity_context selected\.properties/);
-  assert.match(text, /callsign, operator, registration, type, and route/);
-  assert.match(text, /route, routeOrigin, and routeDestination as the only authoritative route fields/);
-  assert.match(text, /Every aircraft identity answer MUST explicitly cover operator, type, and route/);
-  assert.match(text, /repeat its endpoint codes exactly/);
-  assert.match(text, /do not expand airport codes into city names/);
-  assert.match(text, /"Operator details are unavailable"/);
-  assert.match(text, /"Aircraft type is unavailable"/);
-  assert.match(text, /"Route details are unavailable"/);
-  assert.match(text, /never silently omit missing enrichment/i);
-  assert.match(text, /never .* infer it from the callsign/i);
+  assert.match(text, /get_entity_context/);
+  assert.match(
+    text,
+    /callsign, operator, type and route from returned fields only/,
+  );
+  assert.match(text, /airport codes verbatim/);
+  assert.match(text, /Never infer them from the callsign/);
+  assert.match(
+    text,
+    /Other questions about the selection answer from its properties/,
+  );
 
-  const followupStart = realtime.indexOf("if (result?.action === 'get_entity_context')");
-  const followupEnd = realtime.indexOf("if (result?.action === 'get_current_view_state')", followupStart);
-  assert.ok(followupStart >= 0 && followupEnd > followupStart, 'entity-context follow-up instruction is missing');
-  const followup = realtime.slice(followupStart, followupEnd);
-  assert.match(followup, /selectedLayerId === 'flights' \|\| selectedLayerId === 'military'/);
-  assert.match(followup, /Begin with the returned callsign and include the returned registration when available/);
-  assert.match(followup, /explicitly cover operator, aircraft type, and route before finishing/);
-  assert.match(followup, /selectedProperties\.operator/);
-  assert.match(followup, /selectedProperties\.type/);
-  assert.match(followup, /selectedProperties\.route \|\|\s*selectedProperties\.routeOrigin \|\|\s*selectedProperties\.routeDestination/);
-  assert.match(followup, /Operator details are unavailable/);
-  assert.match(followup, /Aircraft type is unavailable/);
-  assert.match(followup, /Route details are unavailable/);
+  // The follow-up now speaks the code-built say line, which always covers
+  // operator, type and route (see speech.test.mjs for the field rules).
+  const followup = responseInstructionForToolResult(
+    attachVoiceResult('get_entity_context', {
+      ok: true,
+      action: 'get_entity_context',
+      selected: {
+        id: 'a',
+        layerId: 'flights',
+        properties: { callsign: 'UAL1' },
+      },
+    }),
+  );
+  assert.match(
+    followup,
+    /asked what the aircraft is, speak its identityLine and add nothing/,
+  );
+  assert.match(
+    followup,
+    /any other question \(altitude, speed, registration\), answer from selected\.properties/,
+  );
+  assert.doesNotMatch(realtime, /Operator details are unavailable/);
 });

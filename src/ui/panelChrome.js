@@ -1,4 +1,5 @@
 import { UiLifetime } from './uiLifetime.js';
+import { displayPanelScroller } from './displayPanelScroll.js';
 import { PanelPositionControls } from './panelPositionControls.js';
 import { PanelLayoutController } from './panelLayoutController.js';
 import {
@@ -11,6 +12,9 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'location-bar', pinnable: true },
   { id: 'data-panel' },
   { id: 'cctv-panel' },
+  { id: 'weather-panel' },
+  { id: 'recent-imagery-panel' },
+  { id: 'street-level-panel' },
   { id: 'radio-panel' },
   { id: 'scene-panel' },
   { id: 'global-context-panel' },
@@ -21,6 +25,9 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
 const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'data-panel',
   'cctv-panel',
+  'weather-panel',
+  'recent-imagery-panel',
+  'street-level-panel',
   'scene-panel',
   'pp-toggles',
   'global-context-panel',
@@ -56,6 +63,7 @@ export class PanelChrome {
       layoutRightPanels: () => this._layoutRightPanels(),
       syncCctvPanelViewport: () => this._syncCctvPanelViewport(),
       showToast: (message) => this._showToast(message),
+      onPanelResized: (panelId) => this._onPanelResized(panelId),
     });
     this._panelLayout = new PanelLayoutController({
       readHud: () => ({
@@ -67,7 +75,7 @@ export class PanelChrome {
       readDisplayScrollTop: () =>
         this._displayPortalScrollRestoreOwner === 'standard'
           ? this._standardDisplayScrollTop
-          : this._ppToggles?.scrollTop || 0,
+          : displayPanelScroller(this._ppToggles)?.scrollTop || 0,
     });
   }
   get hud() {
@@ -139,6 +147,7 @@ export class PanelChrome {
     this._initCommandDockPins();
     this._initCommandDockTrayMetrics();
     this._maybeNotifyLayoutReset();
+    this._panelPosition._initPanelDrag();
   }
 
   _collapsePanelOnEscape(event, panelId) {
@@ -281,6 +290,9 @@ export class PanelChrome {
     const isRightRail = [
       'pp-toggles',
       'cctv-panel',
+      'weather-panel',
+      'recent-imagery-panel',
+      'street-level-panel',
       'global-context-panel',
     ].includes(panelEl?.id);
     const collapsed = panelEl.classList.contains('collapsed');
@@ -339,9 +351,11 @@ export class PanelChrome {
       if (!panelEl) continue;
       // Responsive auto-collapse is presentation only; the recipient should
       // restore the user's explicit expanded preference at its own viewport.
-      const collapsed = panelEl.classList.contains('layout-auto-collapsed')
-        ? false
-        : panelEl.classList.contains('collapsed');
+      const collapsed =
+        panelEl.classList.contains('layout-auto-collapsed') ||
+        panelEl.classList.contains('cyber-accordion-collapsed')
+          ? false
+          : panelEl.classList.contains('collapsed');
       const entry = { id: spec.id, collapsed };
       if (spec.pinnable)
         entry.pinned = panelEl.classList.contains('dock-pinned');
@@ -374,6 +388,11 @@ export class PanelChrome {
     this.shareLinkManager?.onPanelStateChange?.();
   }
 
+  /** @returns {boolean} Whether the panel was floating and is now docked. */
+  dockPanel(panelId) {
+    return this._panelPosition?.dockPanel?.(panelId) === true;
+  }
+
   setPanelCollapsed(
     panelId,
     collapsed,
@@ -391,9 +410,35 @@ export class PanelChrome {
     if (explicit && !restore)
       this.shareLinkManager?.claimRestoreLane?.('panel', panelId);
     const nextCollapsed = Boolean(collapsed);
-    const wasAutoCollapsed = panelEl.classList.contains(
-      'layout-auto-collapsed',
-    );
+    const wasAutoCollapsed =
+      panelEl.classList.contains('layout-auto-collapsed') ||
+      panelEl.classList.contains('cyber-accordion-collapsed');
+    // A user opening a Cyber rail panel owns the whole accordion, including
+    // peers that were only presentation-collapsed during a saved-state restore.
+    // A floating window is outside the accordion both ways.
+    if (
+      explicit &&
+      !restore &&
+      !nextCollapsed &&
+      document.documentElement?.dataset.uiTheme === 'cyber' &&
+      panelEl.parentElement === this._rightPanelStack &&
+      !panelEl.classList.contains('panel-floating')
+    ) {
+      for (const peer of this._rightPanelStack.children) {
+        if (
+          peer !== panelEl &&
+          peer.matches('[data-panel-id]') &&
+          !peer.classList.contains('panel-floating') &&
+          !peer.hidden
+        ) {
+          this.setPanelCollapsed(peer.id, true, {
+            explicit,
+            persist,
+            syncShare: false,
+          });
+        }
+      }
+    }
     const leftOwnerPanel = this._leftPanelStack?.contains(panelEl)
       ? panelEl
       : null;
@@ -425,6 +470,23 @@ export class PanelChrome {
     ) {
       this._panelLayout._rightStackPreferredPanelId = null;
     }
+    // Reveal Radio's owner before the no-op check: the nested section may
+    // already be expanded while its Context parent is closed.
+    if (
+      document.documentElement?.dataset.uiTheme === 'cyber' &&
+      !nextCollapsed &&
+      panelId === 'radio-panel' &&
+      document
+        .getElementById('global-context-panel')
+        ?.classList.contains('collapsed')
+    ) {
+      this.setPanelCollapsed('global-context-panel', false, {
+        explicit,
+        restore,
+        persist,
+        syncShare,
+      });
+    }
     if (
       panelEl.classList.contains('collapsed') === nextCollapsed &&
       !wasAutoCollapsed
@@ -438,7 +500,10 @@ export class PanelChrome {
       }
       return;
     }
-    panelEl.classList.remove('layout-auto-collapsed');
+    panelEl.classList.remove(
+      'layout-auto-collapsed',
+      'cyber-accordion-collapsed',
+    );
     if (
       !nextCollapsed &&
       this.cockpitView?.active &&
@@ -460,6 +525,7 @@ export class PanelChrome {
     if (
       !nextCollapsed &&
       panelId === 'radio-panel' &&
+      document.documentElement?.dataset.uiTheme !== 'cyber' &&
       document
         .getElementById('global-context-panel')
         ?.classList.contains('collapsed')
@@ -490,6 +556,10 @@ export class PanelChrome {
       }
     }
     panelEl.classList.toggle('collapsed', nextCollapsed);
+    // Only a user's own collapse docks a floating window; restores, cockpit
+    // entry and accordion peers keep its place.
+    if (explicit && !restore)
+      this._panelPosition?.onPanelCollapsed?.(panelId, nextCollapsed);
     if (
       nextCollapsed &&
       this.cockpitView?.active &&

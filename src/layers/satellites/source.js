@@ -19,7 +19,10 @@ export function createSatelliteSource({
       const response = await fetchImpl(`/api/celestrak/${group}`, { signal });
       const text = response.ok ? await response.text() : '';
       signal?.throwIfAborted();
-      return { ok: response.ok, status: response.status, text };
+      // The proxy serves its last copy, marked STALE-ERROR, when CelesTrak
+      // is down.
+      const stale = response.headers?.get?.('x-tle-cache') === 'STALE-ERROR';
+      return { ok: response.ok, status: response.status, text, stale };
     },
   };
 }

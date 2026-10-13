@@ -1,12 +1,12 @@
 import { defaultSurface } from './surfaceServices.js';
 import { createApplicationMilitary } from '../app/layers/militaryFlights.js';
 
-import { createAdsbLolSource } from '../sources/live/standalone.js';
+import { createMilitarySource } from '../sources/live/standalone.js';
 import * as militaryRegistry from './militaryRegistry.js';
 
 const militaryFlightsLayer = createApplicationMilitary({
   surface: defaultSurface,
-  source: createAdsbLolSource(),
+  source: createMilitarySource(),
   militaryRegistry,
 });
 export { TRACKED_MODEL_MAX_PX } from '../layers/military/policy.js';

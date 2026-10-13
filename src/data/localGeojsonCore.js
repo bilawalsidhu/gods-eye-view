@@ -1,4 +1,10 @@
 import * as Cesium from 'cesium';
+import {
+  layerTitle,
+  mapAnalystRecord,
+  parseGeojsonLines,
+} from '../sources/infrastructureData.js';
+import { createInfrastructureOverlayEntry } from './infrastructureOverlayEntry.js';
 import { isPointerFree } from './inputOwnership.js';
 import {
   selectInfraLod,
@@ -14,10 +20,6 @@ const VISIBILITY_UPDATE_MS = 450;
 export const LOCAL_OVERLAY_COHORT_LIMIT = 160;
 const LOCAL_OVERLAY_COLLISION_CAPACITY = 96;
 const LOCAL_OVERLAY_CELL_SURPLUS = 2;
-const LOCAL_OVERLAY_MAX_DISTANCE_M = 14000000;
-const LOCAL_OVERLAY_FADE_START_M = 250000;
-const LOCAL_OVERLAY_FADE_START_RATIO =
-  LOCAL_OVERLAY_FADE_START_M / LOCAL_OVERLAY_MAX_DISTANCE_M;
 // Stems are anchored at ellipsoid height 0, but high-elevation features
 // (e.g. dams in river canyons) sit hundreds of meters above the ellipsoid,
 // burying the short close-in stem inside the photoreal mesh. Once the
@@ -110,33 +112,15 @@ export function createLocalInfrastructureOverlayEntry({
   accent,
 }) {
   const copy = localInfrastructureOverlayCopy(properties, layerId);
-  return {
-    id: String(id),
+  return createInfrastructureOverlayEntry({
+    id,
     source: layerId,
     position,
-    variant: 'card',
     title: copy.title,
     details: copy.details,
     accent,
     priority,
-    collisionGroup: 'ambient-card',
-    zIndex: 30,
-    interactive: false,
-    minDistance: 0,
-    maxDistance: LOCAL_OVERLAY_MAX_DISTANCE_M,
-    distanceFadeStartRatio: LOCAL_OVERLAY_FADE_START_RATIO,
-    distanceScale: {
-      near: 250000,
-      nearValue: 1,
-      far: 9000000,
-      farValue: 0.62,
-    },
-    edgeFade: 'keyhole',
-    horizonCull: true,
-    terrainOcclusion: false,
-    gapPx: 15,
-    placement: 'above',
-  };
+  });
 }
 
 /**
@@ -310,7 +294,7 @@ export function localDatasetError(error) {
  * standard scene.pick natively clicks them.
  * @param {object} options Dataset URL, identity, appearance and optional Cesium adapters.
  * @param {object} services Caller-owned operations; see docs/INFRASTRUCTURE-LAYERS.md.
- * @returns {object} A fresh layer implementing init/enable/disable/update/destroy/getStats.
+ * @returns {object} A fresh layer implementing init/enable/disable/update/destroy/getStats/getAnalystRecords.
  * One live instance per layer id is allowed in a given viewer/context/overlay host.
  * Destroy the previous instance before replacing it. Importing creates no layers.
  */
@@ -322,6 +306,7 @@ export function createLocalGeoJsonLayer(
     color,
     icon = '📍',
     source = 'Local JSONL',
+    osmDerived = false,
     labels = true,
     labelMax = DEFAULT_LABEL_MAX,
     labelGridPx = DEFAULT_LABEL_GRID_PX,
@@ -337,6 +322,8 @@ export function createLocalGeoJsonLayer(
     clearSelectedEntityContextForLayer,
     removeEntityContextsForLayer,
     governorRequestRender,
+    showOsmCredit,
+    hideOsmCredit,
   },
 ) {
   let _dataSource = null;
@@ -466,6 +453,7 @@ export function createLocalGeoJsonLayer(
   };
 
   const disableLayer = (viewer) => {
+    hideOsmCredit?.(viewer, id);
     _enabled = false;
     clearGroundRetryRender();
     _activeLodIds = new Set();
@@ -530,6 +518,40 @@ export function createLocalGeoJsonLayer(
       computed: _lodComputed,
     }),
 
+    /**
+     * Snapshot in-memory infrastructure features as plain JSON-safe objects
+     * for the analyst query engine. On-demand only (called at most once per
+     * spoken query) — zero per-frame cost, no listeners, no caching. Returns
+     * [] while the layer is disabled or empty. Disable keeps the loaded
+     * stems for reuse; this method still returns [] until the next enable.
+     * @param {number} [maxCount=2000] Maximum records to return (truncation).
+     * @returns {Array<Object>} See mapAnalystRecord for the record shape.
+     */
+    getAnalystRecords(maxCount = 2000) {
+      if (!_enabled || !_stemRecords.length) return [];
+      const limit = Number.isFinite(maxCount)
+        ? Math.max(1, Math.floor(maxCount))
+        : 2000;
+      const result = [];
+      for (let i = 0; i < _stemRecords.length; i++) {
+        if (result.length >= limit) break;
+        const record = _stemRecords[i];
+        const carto = record.carto;
+        result.push(
+          mapAnalystRecord(
+            {
+              id: record.id,
+              lat: carto ? Cesium.Math.toDegrees(carto.latitude) : null,
+              lon: carto ? Cesium.Math.toDegrees(carto.longitude) : null,
+              properties: propertyObject(record.entity),
+            },
+            id,
+          ),
+        );
+      }
+      return result;
+    },
+
     enable: async (viewer) => {
       if (_destroyed) return;
       _enabled = true;
@@ -575,11 +597,7 @@ export function createLocalGeoJsonLayer(
                 }
                 const text = await response.text();
                 if (_destroyed) return;
-                const lines = text
-                  .split('\n')
-                  .filter((l) => l.trim().length > 0);
-
-                features = lines.map((line) => JSON.parse(line));
+                features = parseGeojsonLines(text);
                 _cachedFeatures = features;
               }
 
@@ -836,6 +854,7 @@ export function createLocalGeoJsonLayer(
       }
 
       if (_destroyed) return;
+      if (_enabled && _count > 0 && osmDerived) showOsmCredit?.(viewer, id);
       // 3. Add an incredibly fast pre-render occluder to hide points behind the globe
       if (_enabled && !_preRenderRemover) {
         _preRenderRemover = viewer.scene.preRender.addEventListener(() => {
@@ -1270,8 +1289,4 @@ function clampCardLine(value) {
   return text.length > 48 ? `${text.slice(0, 45)}...` : text;
 }
 
-function layerTitle(layerId) {
-  if (layerId === 'local-datacenters') return 'Datacenter';
-  if (layerId === 'local-dams') return 'Dam';
-  return 'Feature';
-}
+export { mapAnalystRecord };

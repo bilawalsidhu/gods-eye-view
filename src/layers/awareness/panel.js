@@ -5,6 +5,15 @@ import {
 } from '../../data/militaryAwarenessEngine.js';
 import { AWARENESS_PAGE_SIZE, AWARENESS_PAGE_ROTATE_MS } from './policy.js';
 
+/** Format a cohort total without presenting a retained cap as exact. */
+export function formatAwarenessCount(summary = {}) {
+  if (!Number.isFinite(summary.count)) return '?';
+  const count = summary.count.toLocaleString('en-US');
+  return summary.complete === false || summary.truncated === true
+    ? `At least ${count}`
+    : count;
+}
+
 export function createPanel({ state: layerState, services, parts, source }) {
   function ensurePanel() {
     if (layerState.panel) return layerState.panel;
@@ -61,7 +70,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
 
   function rowHtml(cohort) {
     const summary = cohort.summary;
-    const count = summary.count === null ? '?' : String(summary.count);
+    const count = formatAwarenessCount(summary);
     const page = layerState.cohortPages.get(cohort.id) || 0;
     const nearest = summary.nearest
       .slice(page, page + AWARENESS_PAGE_SIZE)
@@ -72,7 +81,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
           return `<li><span class="military-awareness-target unavailable" aria-label="Unavailable">${escapeHtml(label)} <span>${formatAwarenessDistance(item.distanceM)}</span></span></li>`;
         }
         const accessibleLabel = label === '—' ? 'Unavailable' : label;
-        return `<li><button type="button" class="military-awareness-target" data-awareness-layer="${escapeHtml(cohort.id)}" data-awareness-id="${escapeHtml(targetId)}" aria-label="Focus ${escapeHtml(accessibleLabel)}">${escapeHtml(label)} <span>${formatAwarenessDistance(item.distanceM)}</span></button></li>`;
+        return `<li><button type="button" class="military-awareness-target" data-awareness-layer="${escapeHtml(cohort.id)}" data-awareness-id="${escapeHtml(targetId)}" aria-label="Focus ${escapeHtml(accessibleLabel)}">${escapeHtml(label)} <span>${formatAwarenessDistance(item.distanceM)}</span></button>${namedAreasHtml(item.memberNames)}</li>`;
       })
       .join('');
     const pageCount = Math.max(
@@ -164,11 +173,18 @@ export function createPanel({ state: layerState, services, parts, source }) {
     );
   }
 
+  function namedAreasHtml(names) {
+    return names?.length
+      ? `<details class="military-awareness-names"><summary>Named areas (${names.length})</summary><div>${names.map((name) => escapeHtml(name)).join('<br>')}</div></details>`
+      : '';
+  }
+
   function renderResults() {
     if (!layerState.enabled || !layerState.results) return hidePanel();
     const panel = ensurePanel();
     const { subject, cohorts } = layerState.results;
     const markup = `<div class="military-awareness-subject">${escapeHtml(subject.label)} · ${formatAwarenessDistance(AWARENESS_RADIUS_M)} FLIGHT / VESSEL WINDOW</div>
+    ${namedAreasHtml(subject.memberNames)}
     ${navigationControlsHtml()}
     ${cohorts.map(rowHtml).join('')}
     <p class="military-awareness-note" tabindex="-1" data-awareness-focus-continuation>Open-source mapped/observed context. Missing broadcasts, unloaded map areas, or unmapped sites are not evidence of absence.</p>`;

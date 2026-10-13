@@ -1,3 +1,4 @@
+import { DOT_FADE_MS } from './retention.js';
 import { flowBucket, flowSpeedScale } from '../../data/trafficFlowStyle.js';
 import { presetDotOutline } from '../../data/trafficPresetStyle.js';
 import * as Cesium from 'cesium';
@@ -6,7 +7,6 @@ import {
   SPEED_MPS,
   MAX_DOTS,
   JAM_DOT_FAR_SCALE,
-  JAM_DOT_DEPTH_PUNCH,
   CREEP_MOVE_MS,
   CREEP_STOP_MS,
   CREEP_BURST,
@@ -129,11 +129,10 @@ export function createAnimation({
         layerState._scratchLerp,
       );
 
-      // Jam-viz density prototype: jam dots stay visible at city scale — a
-      // longer depth-test punch-through (single-sample road heights sit under
-      // the mesh at oblique views) and a higher far-scale floor. Sim dots and
-      // other buckets keep the shipped values.
+      // Grounded traffic respects building/terrain occlusion. The former
+      // depth override made distant roads look like vehicles crossing roofs.
       const jamProminent = bucket === 'jam' && parts.style.jamDensityOn();
+      const id = layerState._nextDotId++;
       const point = layerState._pointCollection.add({
         position: Cesium.Cartesian3.clone(layerState._scratchLerp),
         pixelSize,
@@ -151,8 +150,8 @@ export function createAnimation({
           layerState._fadeTransFar,
           0.0,
         ),
-        // visible through tiles only when very close (jam: city-scale punch)
-        disableDepthTestDistance: jamProminent ? JAM_DOT_DEPTH_PUNCH : 2000,
+        // Respect the sampled mesh at every viewing distance.
+        disableDepthTestDistance: 0,
         // Preset dark halo (spread only when present — the keyless/normal
         // path passes the exact shipped option set).
         ...(outlineSpec
@@ -161,7 +160,14 @@ export function createAnimation({
       });
       layerState._bucketCounts[bucket || 'sim'] += 1;
 
+      layerState._motion.added++;
       layerState._dots.push({
+        id,
+        index: layerState._dots.length,
+        born: now,
+        retiring: 0,
+        nominalSize: pixelSize,
+        recycle: false,
         point,
         road,
         bucket, // flow bucket at spawn (null = sim) — drives preset restyle/pulse
@@ -188,11 +194,11 @@ export function createAnimation({
    * Per-frame animation callback registered on `scene.preRender`.
    *
    * For every active dot:
-   *  1. Skip if currently paused by a simulated stop-light.
+   *  1. Ease heights and fade arrivals/departures, including paused dots.
    *  2. Convert speed (m/s) to a parametric t-delta relative to the current
    *     segment's Cartesian distance.
    *  3. Advance t in the dot's travel direction, handling segment boundary
-   *     crossings and end-of-road reversals.
+   *     crossings and faded end-of-road departures.
    *  4. Linearly interpolate between the two bounding waypoints and update the
    *     point primitive's position.
    *
@@ -207,55 +213,76 @@ export function createAnimation({
       : 0.016;
     layerState._lastAnimTime = now;
 
+    parts.retention.easeHeights(dt);
     for (let i = 0; i < layerState._dots.length; i++) {
       const dot = layerState._dots[i];
-
-      // Simulated stop-light pause — skip movement while timer is active
-      if (now < dot.stoppedUntil) continue;
+      if (dot.recycle) {
+        // A road-end departure is a new simulated vehicle at the entry, never
+        // a teleport attributed to the departed vehicle's stable identity.
+        dot.id = layerState._nextDotId++;
+        dot.segIdx = dot.direction > 0 ? 0 : dot.numSegments - 1;
+        dot.t = dot.direction > 0 ? 0 : 1;
+        dot.born = now;
+        dot.recycle = false;
+        layerState._motion.recycled++;
+      }
+      const remaining =
+        dot.direction > 0
+          ? dot.segIdx === dot.numSegments - 1
+            ? (1 - dot.t) * dot.segmentDist[dot.segIdx]
+            : Infinity
+          : dot.segIdx === 0
+            ? dot.t * dot.segmentDist[0]
+            : Infinity;
+      const endpointFade = Math.min(1, remaining / Math.max(1, dot.mps * 0.25));
+      dot.point.pixelSize =
+        dot.nominalSize *
+        Math.max(
+          0,
+          Math.min(
+            1,
+            (now - dot.born) / DOT_FADE_MS,
+            dot.retiring ? 1 - (now - dot.retiring) / DOT_FADE_MS : 1,
+            endpointFade,
+          ),
+        );
 
       // Stop-and-go creep (jam-viz density prototype, live jam dots only):
       // alternate short forward bursts with stops. The burst multiplier keeps
       // the long-run average near the honest TomTom crawl speed.
-      let burst = 1;
+      let burst = now < dot.stoppedUntil ? 0 : 1;
       if (dot.creep) {
         if (now >= dot.creep.until) {
           dot.creep.moving = !dot.creep.moving;
           const [lo, hi] = dot.creep.moving ? CREEP_MOVE_MS : CREEP_STOP_MS;
           dot.creep.until = now + lo + Math.random() * (hi - lo);
         }
-        if (!dot.creep.moving) continue;
-        burst = CREEP_BURST;
+        if (!dot.creep.moving) burst = 0;
+        else burst *= CREEP_BURST;
       }
 
-      // Convert m/s speed to parametric t-delta for the current segment length
-      const segLen = dot.segmentDist[dot.segIdx] || 1;
-      const tDelta = (dot.mps * burst * dt) / segLen;
-
-      // Advance parametric position along the road in the current direction
-      dot.t += tDelta * dot.direction;
-
-      // Handle forward segment boundary crossing (t >= 1.0)
-      if (dot.t >= 1.0) {
-        dot.t -= 1.0;
-        dot.segIdx++;
-        if (dot.segIdx >= dot.numSegments) {
-          // End of road: recycle to the road's entry with a small stagger —
-          // cars don't reverse at the end of a street (field-test round 1).
-          // Direction is preserved, so one-way flow stays legal.
-          dot.segIdx = 0;
-          dot.t = Math.random() * 0.3;
+      // Carry metres across bends, not a t fraction from a differently sized
+      // segment. Short segments cannot turn a slow car into a large jump.
+      let travel = dot.mps * burst * dt;
+      while (travel > 0) {
+        const length = Math.max(0.001, dot.segmentDist[dot.segIdx]);
+        const available = (dot.direction > 0 ? 1 - dot.t : dot.t) * length;
+        if (travel < available) {
+          dot.t += (travel / length) * dot.direction;
+          break;
         }
-        maybeStopLight(dot, now);
-      } else if (dot.t <= 0.0) {
-        // Handle backward segment boundary crossing (t <= 0.0)
-        dot.t += 1.0;
-        dot.segIdx--;
-        if (dot.segIdx < 0) {
-          // Start of road (traveling backward): recycle to the far end.
-          dot.segIdx = dot.numSegments - 1;
-          dot.t = 1.0 - Math.random() * 0.3;
+        travel -= available;
+        const next = dot.segIdx + dot.direction;
+        if (next < 0 || next >= dot.numSegments) {
+          dot.t = dot.direction > 0 ? 1 : 0;
+          dot.point.pixelSize = 0;
+          dot.recycle = true;
+          break;
         }
+        dot.segIdx = next;
+        dot.t = dot.direction > 0 ? 0 : 1;
         maybeStopLight(dot, now);
+        if (now < dot.stoppedUntil) break;
       }
 
       // Lerp between pre-computed Cartesian3 waypoints (no trig needed).
@@ -302,6 +329,9 @@ export function createAnimation({
   /** Remove all point primitives and reset dot/road arrays and counters. */
 
   function clearDots() {
+    services.credits?.hideOsmCredit?.(layerState._viewer, 'traffic');
+    parts.retention.clear();
+    if (layerState._dots.length) layerState._motion.rebuilds++;
     if (layerState._pointCollection) layerState._pointCollection.removeAll();
     parts.rendering.removeHeatLines();
     layerState._dots = [];
