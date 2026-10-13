@@ -3,9 +3,28 @@ import assert from 'node:assert/strict';
 import { borderWaitsProxy } from '../../server/providers/borderWaits.js';
 import { cbpPort } from '../layers/borderWaits/fixture.mjs';
 
+const CBSA_URL = 'https://www.cbsa-asfc.gc.ca/bwt-taf/bwt-eng.csv';
+const CBSA_HEADER =
+  '\uFEFFCustoms Office;; Location;; Last updated;; Commercial Flow - Canada bound;; Commercial Flow - U.S. bound;; Travellers Flow - Canada bound;; Travellers Flow - U.S. bound;;';
+const cbsaCsv = (...rows) => [CBSA_HEADER, ...rows].join('\r\n');
+const AMBASSADOR_CBSA =
+  'Ambassador Bridge;; Windsor, ON/Detroit, MI;; 2026-10-13 11:18 EDT;; 5 minutes;; --;; No Delay;; --;; ';
+
+// CBP requests go to `fetchImpl`, CBSA requests to `cbsaImpl` (unavailable
+// unless a test supplies one), so each source can fail on its own.
 function install(options = {}, hook = 'configureServer') {
   let handler;
-  const plugin = borderWaitsProxy({ warn() {}, ...options });
+  const { fetchImpl, cbsaImpl, ...rest } = options;
+  const plugin = borderWaitsProxy({
+    warn() {},
+    ...rest,
+    fetchImpl: async (url, init) =>
+      url === CBSA_URL
+        ? cbsaImpl
+          ? cbsaImpl(url, init)
+          : new Response('', { status: 404 })
+        : fetchImpl(url, init),
+  });
   assert.equal(plugin.name, 'border-waits');
   assert.equal(typeof plugin.configureServer, 'function');
   assert.equal(typeof plugin.configurePreviewServer, 'function');
@@ -154,5 +173,89 @@ test('a crossing without a location is logged once, not on every refresh', async
   await request();
   assert.deepEqual(warnings, [
     '[BorderWaits] No location for CBP crossings: 999901',
+  ]);
+});
+
+test('waits into Canada join the CBP crossing each CBSA office faces', async () => {
+  const cbsaCalls = [];
+  const request = install({
+    fetchImpl: async () =>
+      Response.json([cbpPort(), cbpPort({ port_number: '380002' })]),
+    cbsaImpl: async (url, init) => {
+      cbsaCalls.push(url);
+      assert.equal(init.redirect, 'error');
+      return new Response(cbsaCsv(AMBASSADOR_CBSA));
+    },
+  });
+  const res = await request();
+  assert.equal(res.status, 200);
+  assert.deepEqual(cbsaCalls, [CBSA_URL]);
+  assert.equal(res.body.canada.available, true);
+  const [ambassador, tunnel] = res.body.rows;
+  assert.deepEqual(ambassador.canada, {
+    office: 'Ambassador Bridge',
+    travellers: { status: 'no delay', delayMinutes: 0 },
+    commercial: { status: 'delay', delayMinutes: 5 },
+    updated: '2026-10-13 11:18 EDT',
+  });
+  assert.equal(tunnel.canada, null, 'CBSA did not report the tunnel');
+});
+
+test('CBP waits are served when CBSA fails, and CBSA serves stale on its own', async () => {
+  let clock = 0;
+  let cbsaUp = true;
+  const request = install({
+    now: () => clock,
+    fetchImpl: async () => Response.json([cbpPort()]),
+    cbsaImpl: async () =>
+      cbsaUp
+        ? new Response(cbsaCsv(AMBASSADOR_CBSA))
+        : new Response('<html>maintenance</html>'),
+  });
+  assert.equal((await request()).body.canada.available, true);
+  cbsaUp = false;
+  clock += 300_000;
+  const stale = await request();
+  assert.equal(stale.status, 200);
+  assert.equal(stale.headers['X-Data-Stale'], undefined, 'CBP is current');
+  assert.deepEqual(stale.body.canada, {
+    available: true,
+    fetchedAt: 0,
+    stale: true,
+  });
+  assert.equal(stale.body.rows[0].canada.office, 'Ambassador Bridge');
+
+  const fresh = install({
+    fetchImpl: async () => Response.json([cbpPort()]),
+    cbsaImpl: async () => {
+      throw new Error('connect ETIMEDOUT');
+    },
+  });
+  const res = await fresh();
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body.canada, { available: false });
+  assert.equal(res.body.rows[0].canada, null);
+});
+
+test('a CBSA office with no CBP crossing is logged once', async () => {
+  let clock = 0;
+  const warnings = [];
+  const request = install({
+    now: () => clock,
+    warn: (message) => warnings.push(message),
+    fetchImpl: async () => Response.json([cbpPort()]),
+    cbsaImpl: async () =>
+      new Response(
+        cbsaCsv(
+          AMBASSADOR_CBSA,
+          'North Portal;; North Portal, SK/Portal, ND;; 2026-10-13 09:00 CDT;; No Delay;; --;; No Delay;; --;; ',
+        ),
+      ),
+  });
+  await request();
+  clock += 300_000;
+  await request();
+  assert.deepEqual(warnings, [
+    '[BorderWaits] No CBP crossing for CBSA offices: North Portal',
   ]);
 });

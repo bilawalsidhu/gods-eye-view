@@ -5,6 +5,7 @@ import {
   DELAY_BANDS,
   UNREPORTED_COLOR,
   buildCrossingCard,
+  canadaLine,
   crossingTitle,
   delayBandKey,
   delayColor,
@@ -107,4 +108,35 @@ test('minute labels favour the longest waits and skip crossings with nothing to 
   assert.equal(labels[0].id, 'border-waits-label:b');
   assert.equal(labels[0].interactive, false);
   assert.equal(selectLabelCohort(rows, 2).length, 2);
+});
+
+test('a crossing CBSA reports also shows its wait into Canada', () => {
+  const card = buildCrossingCard(
+    row({
+      canada: {
+        office: 'Ambassador Bridge',
+        travellers: { status: 'no delay', delayMinutes: 0 },
+        commercial: { status: 'delay', delayMinutes: 5 },
+        updated: '2026-10-13 11:18 EDT',
+      },
+    }),
+  );
+  assert.ok(
+    card.details.includes(
+      'Into Canada · Cars no delay · Trucks 5 min · updated 11:18 EDT',
+    ),
+  );
+  assert.equal(canadaLine(null), null);
+  assert.equal(
+    canadaLine({ travellers: null, commercial: null, updated: 'x' }),
+    null,
+  );
+  assert.equal(
+    canadaLine({
+      travellers: { status: 'closed', delayMinutes: null },
+      commercial: null,
+      updated: null,
+    }),
+    'Into Canada · Cars closed',
+  );
 });

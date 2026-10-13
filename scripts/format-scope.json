@@ -376,6 +376,8 @@
   "src/layers/borderWaits/source.js",
   "src/layers/borderWaits/cards.js",
   "src/layers/borderWaits/crossings.js",
+  "src/layers/borderWaits/canada.js",
+  "src/layers/borderWaits/canada.test.mjs",
   "src/layers/borderWaits/fixture.mjs",
   "src/layers/borderWaits/records.test.mjs",
   "src/layers/borderWaits/cards.test.mjs",

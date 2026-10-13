@@ -126,6 +126,21 @@ try {
       .join('; '),
   );
 
+  const canada = await page.evaluate(async () => {
+    const payload = await (await fetch('/api/border-waits')).json();
+    return {
+      available: payload.canada?.available === true,
+      michigan: payload.rows.filter(
+        ({ id, canada: into }) => id.startsWith('38') && into,
+      ).length,
+    };
+  });
+  check(
+    'waits into Canada (CBSA) reach the Michigan crossings',
+    canada.available && canada.michigan === 5,
+    `${canada.michigan} of 5`,
+  );
+
   await wait(3_000);
   const overlay = await page.evaluate(async (source) => {
     const { getWorldOverlayDiagnostics } = await import(

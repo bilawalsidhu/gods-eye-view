@@ -14,6 +14,12 @@ import {
 export { normalizeBorderWaitSnapshot, headlineLane } from './records.js';
 export { createCbpBorderWaitSource } from './source.js';
 export { BORDER_CROSSING_LOCATIONS } from './crossings.js';
+export {
+  CBSA_OFFICE_CROSSINGS,
+  attachCanadaBound,
+  parseCbsaCsv,
+  parseCbsaFlow,
+} from './canada.js';
 export * from './cards.js';
 
 const LAYER_ID = 'border-waits';

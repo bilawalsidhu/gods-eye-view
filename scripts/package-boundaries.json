@@ -2028,6 +2028,7 @@
       "src/layers/borderWaits/cards.js",
       "src/layers/borderWaits/records.js",
       "src/layers/borderWaits/crossings.js",
+      "src/layers/borderWaits/canada.js",
       "src/layers/borderWaits/source.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
@@ -2613,6 +2614,7 @@
       "src/layers/borderWaits/cards.js",
       "src/layers/borderWaits/records.js",
       "src/layers/borderWaits/crossings.js",
+      "src/layers/borderWaits/canada.js",
       "src/layers/borderWaits/source.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
@@ -3337,6 +3339,7 @@
       "src/layers/borderWaits/cards.js",
       "src/layers/borderWaits/records.js",
       "src/layers/borderWaits/crossings.js",
+      "src/layers/borderWaits/canada.js",
       "src/layers/borderWaits/source.js",
       "src/sources/httpBody.js"
     ],

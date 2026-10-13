@@ -87,6 +87,32 @@ export function laneLine(lane) {
   return parts.join(' · ');
 }
 
+/** CBSA flow text: "no delay", "5 min", "closed". */
+function canadaFlow(flow) {
+  if (flow.status === 'closed') return 'closed';
+  if (flow.status === 'no delay') return 'no delay';
+  return `${flow.delayMinutes} min`;
+}
+
+/**
+ * The Canada-bound line for a crossing CBSA reports, e.g.
+ * "Into Canada · Cars no delay · Trucks 5 min · updated 10:15 EDT", or null.
+ */
+export function canadaLine(canada) {
+  if (!canada) return null;
+  const parts = [];
+  if (canada.travellers) parts.push(`Cars ${canadaFlow(canada.travellers)}`);
+  if (canada.commercial) parts.push(`Trucks ${canadaFlow(canada.commercial)}`);
+  if (!parts.length) return null;
+  // "2026-10-13 10:15 EDT" → "10:15 EDT"; CBSA reports the current day.
+  const updated = canada.updated?.replace(/^\d{4}-\d{2}-\d{2}\s+/, '');
+  return [
+    'Into Canada',
+    ...parts,
+    ...(updated ? [`updated ${updated}`] : []),
+  ].join(' · ');
+}
+
 /**
  * Build the overlay-host entry for one selected crossing. The caller supplies
  * `position` (Cartesian) separately — this model stays JSON-safe for tests.
@@ -108,6 +134,8 @@ export function buildCrossingCard(row, { stale = false } = {}) {
   if (updated) timing.push(`updated ${updated}`);
   if (row.hours) timing.push(row.hours);
   if (timing.length) details.push(timing.join(' · '));
+  const intoCanada = canadaLine(row.canada);
+  if (intoCanada) details.push(intoCanada);
   if (row.notice)
     details.push(
       row.notice.length > 140 ? `${row.notice.slice(0, 139)}…` : row.notice,
