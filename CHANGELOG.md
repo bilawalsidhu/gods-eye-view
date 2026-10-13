@@ -1,5 +1,9 @@
 # Changelog
 
+- Keep every submarine-cable segment associated with its source feature after
+  Cesium expands multipart geometry, correcting segment colors, click destinations
+  and horizon culling while retaining one reference stem per feature.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 
