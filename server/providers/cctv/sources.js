@@ -1910,7 +1910,11 @@ export function mdotCameraToSource(row) {
   const cameraId = `mdot-${rawId.toLowerCase()}`;
   const description = String(row.description ?? '').trim();
   const name = description || `CHART ${String(row.name ?? rawId).trim()}`;
-  const heading = directionToHeading(description, true);
+  // Non-strict on purpose: CHART descriptions name places ("I-70 East at
+  // South Mountain", "MD 5 South of Waldorf"), and strict mode would read a
+  // bare compass word inside a place name as the camera's bearing. Only an
+  // unambiguous NB/SB/EB/WB-style token sets a confident heading.
+  const heading = directionToHeading(description);
   const category = (
     Array.isArray(row.cameraCategories) ? row.cameraCategories : []
   ).find((entry) => Object.hasOwn(MDOT_CATEGORY_CITY, entry));

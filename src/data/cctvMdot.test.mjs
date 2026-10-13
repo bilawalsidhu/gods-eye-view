@@ -1,5 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { loadEnv } from 'vite';
 
 import {
   loadMdotSourcesFromOpenData,
@@ -60,6 +64,23 @@ test('a direction token in the description sets a confident heading', () => {
   );
   assert.equal(source.headingDeg, 0);
   assert.equal(source.headingConfidence, 'high');
+});
+
+test('a compass word inside a place name is not read as the camera bearing', () => {
+  // Strict parsing took "South" in "South Mountain" for 180° with high
+  // confidence; these must keep the estimated fallback instead.
+  for (const description of [
+    'I-70 East at South Mountain',
+    'MD 5 South of Waldorf',
+  ]) {
+    const source = mdotCameraToSource(row({ description }));
+    assert.equal(source.headingConfidence, 'low', description);
+    assert.equal(
+      source.headingDeg,
+      mdotCameraToSource(row({ description: '' })).headingDeg,
+      description,
+    );
+  }
 });
 
 test('CHART categories become picker cities, and an unknown one falls back to Maryland', () => {
@@ -211,4 +232,64 @@ test('CCTV_MDOT_ENABLED=0 keeps the lane from being loaded', async (t) => {
       [],
     );
   });
+});
+
+test('dev-fresh leaves the .env Maryland switch and cap in charge', async (t) => {
+  // The launcher must not default or export any CCTV_MDOT_* value: the dev
+  // server fills process.env from .env only where a key is still undefined,
+  // so anything the launcher set would silently shadow the file.
+  const launcher = await fs.readFile(
+    new URL('../../scripts/dev-fresh.sh', import.meta.url),
+    'utf8',
+  );
+  const code = launcher
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('#'));
+  assert.deepEqual(
+    code.filter((line) => line.includes('CCTV_MDOT_')),
+    [],
+  );
+
+  // With nothing inherited, a .env disable switch and cap reach the pack
+  // through the same loadEnv + fill-if-undefined rule the dev server uses.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'gev-mdot-env-'));
+  const fillFromDotenv = async (body) => {
+    await fs.writeFile(path.join(root, '.env'), body);
+    const patch = {};
+    for (const [key, value] of Object.entries(
+      loadEnv('development', root, ''),
+    )) {
+      if (key.startsWith('CCTV_MDOT_') && process.env[key] === undefined)
+        patch[key] = value;
+    }
+    return patch;
+  };
+  try {
+    await withEnv({}, async () => {
+      delete process.env.CCTV_MDOT_MAX_SOURCES;
+      const disabled = await fillFromDotenv('CCTV_MDOT_ENABLED=0\n');
+      assert.deepEqual(disabled, { CCTV_MDOT_ENABLED: '0' });
+      Object.assign(process.env, disabled);
+      const { requested } = await runCatalog(t);
+      assert.equal(requested.includes(DEFAULT_MDOT_CCTV_URL), false);
+    });
+
+    await withEnv({}, async () => {
+      delete process.env.CCTV_MDOT_MAX_SOURCES;
+      const capped = await fillFromDotenv('CCTV_MDOT_MAX_SOURCES=8\n');
+      assert.deepEqual(capped, { CCTV_MDOT_MAX_SOURCES: '8' });
+      Object.assign(process.env, capped);
+      t.mock.method(console, 'log', () => {});
+      const rows = Array.from({ length: 20 }, (_, i) =>
+        row({
+          id: i.toString(16).padStart(32, '0'),
+          lat: 39.2 + i * 0.01,
+        }),
+      );
+      t.mock.method(globalThis, 'fetch', async () => Response.json(rows));
+      assert.equal((await loadMdotSourcesFromOpenData()).length, 8);
+    });
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });
