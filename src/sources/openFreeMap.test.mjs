@@ -320,3 +320,41 @@ test('Capitol, greenbelt and commercial property fixtures exclude non-public dri
     assert.ok(records.some((r) => r.area === area && !r.drivable));
   }
 });
+
+test('repointing tileJsonUrl at a mirror never falls back to the default tile host', async () => {
+  const urls = [];
+  const mirror = 'http://127.0.0.1:12348';
+  const source = createOpenFreeMapSource({
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return url.endsWith('/planet')
+        ? Response.json({ tiles: [`${mirror}/planet/v/{z}/{x}/{y}.pbf`] })
+        : new Response(fixture('ofm-austin-14-3743-6745.pbf'));
+    },
+    tileJsonUrl: `${mirror}/planet`,
+  });
+  await source.fetchBounds(
+    { south: 30.264, north: 30.271, west: -97.75, east: -97.74 },
+    { zoom: 14 },
+  );
+  assert.ok(urls.length > 1, 'tiles were fetched');
+  assert.deepEqual(
+    urls.filter((url) => !url.startsWith(mirror)),
+    [],
+    'a repointed source must not fetch from tiles.openfreemap.org',
+  );
+});
+
+test('a mirror that serves the default host TileJSON verbatim fails loudly', async () => {
+  // A transparent caching proxy returns upstream's TileJSON unchanged, whose
+  // tiles[0] is an absolute upstream URL. That must be an error, not 100% of
+  // tile traffic quietly leaving the configured mirror.
+  const source = createOpenFreeMapSource({
+    fetchImpl: async () =>
+      Response.json({
+        tiles: ['https://tiles.openfreemap.org/planet/v/{z}/{x}/{y}.pbf'],
+      }),
+    tileJsonUrl: 'http://127.0.0.1:12348/planet',
+  });
+  await assert.rejects(source.getMetadata(), { retryable: false });
+});

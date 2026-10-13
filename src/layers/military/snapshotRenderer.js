@@ -23,6 +23,7 @@ export function createMilitarySnapshotRenderer({
   militaryRegistry,
   rendering,
   tracking,
+  motion,
   queries,
 }) {
   const { warmGroundFloor, cachedGroundFloor, GROUND_FLOOR_LIFT_M } =
@@ -142,8 +143,14 @@ export function createMilitarySnapshotRenderer({
         // Round 5: depth policy is uniform (always depth-test-free, see
         // _groundDepthDistance) — nothing to flip on landing/takeoff.
       } else {
+        // Start where the fleet pass will draw it: the fleet renders behind
+        // real time, so a fresh contact's displayed position is its fix
+        // projected back to that delayed time. Creating it at the raw fix drew
+        // it ahead until the next fleet tick snapped it back.
+        const displayed =
+          motion._deadReckon(icao24, new Cesium.Cartesian3()) || position;
         const bb = flightState._billboardCollection.add({
-          position,
+          position: displayed,
           image: aircraftIcon(rendering._iconKind(icao24, meta.klass)),
           width: isTracked ? 24 : 20,
           height: isTracked ? 24 : 20,

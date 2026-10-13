@@ -9,7 +9,7 @@ one before going on.
 ```sh
 npm install
 npm run build:panel   # the in-conversation globe; rerun after app changes
-npm run dev           # http://localhost:5173, keep it running
+npm run dev           # http://localhost:4173, keep it running
 ```
 
 The MCP server reads from this app.
@@ -21,15 +21,15 @@ The server is `server/mcp/stdio.js` in this checkout. Use absolute paths
 
 | Client | How |
 | --- | --- |
-| Claude Code | `claude mcp add gods-eye-view -- node /abs/path/gods-eye-view/server/mcp/stdio.js --api-base http://localhost:5173` |
-| Codex CLI | `codex mcp add gods-eye-view -- node /abs/path/gods-eye-view/server/mcp/stdio.js --api-base http://localhost:5173` |
+| Claude Code | `claude mcp add gods-eye-view -- node /abs/path/gods-eye-view/server/mcp/stdio.js --api-base http://localhost:4173` |
+| Codex CLI | `codex mcp add gods-eye-view -- node /abs/path/gods-eye-view/server/mcp/stdio.js --api-base http://localhost:4173` |
 | Codex and ChatGPT desktop | Same `~/.codex/config.toml` as the CLI (block below), or Settings → MCP servers → Add server (STDIO). |
 | Claude Desktop | Settings → Developer → Edit Config, then add the JSON below. |
 
 ```toml
 [mcp_servers.gods-eye-view]
 command = "node"
-args = ["/abs/path/gods-eye-view/server/mcp/stdio.js", "--api-base", "http://localhost:5173"]
+args = ["/abs/path/gods-eye-view/server/mcp/stdio.js", "--api-base", "http://localhost:4173"]
 ```
 
 ```json
@@ -37,7 +37,7 @@ args = ["/abs/path/gods-eye-view/server/mcp/stdio.js", "--api-base", "http://loc
   "mcpServers": {
     "gods-eye-view": {
       "command": "node",
-      "args": ["/abs/path/gods-eye-view/server/mcp/stdio.js", "--api-base", "http://localhost:5173"]
+      "args": ["/abs/path/gods-eye-view/server/mcp/stdio.js", "--api-base", "http://localhost:4173"]
     }
   }
 }
@@ -45,7 +45,7 @@ args = ["/abs/path/gods-eye-view/server/mcp/stdio.js", "--api-base", "http://loc
 
 **Windows with the checkout in WSL:** use `"command": "wsl.exe"` and put
 `"-e"` and the absolute Linux path to `node` first in `args`, for example
-`["-e", "/home/you/.local/share/mise/installs/node/24/bin/node", "/home/you/gods-eye-view/server/mcp/stdio.js", "--api-base", "http://localhost:5173"]`.
+`["-e", "/home/you/.local/share/mise/installs/node/24/bin/node", "/home/you/gods-eye-view/server/mcp/stdio.js", "--api-base", "http://localhost:4173"]`.
 
 ## 3. Restart and try it
 
@@ -60,7 +60,7 @@ Diego in God's Eye View with military flights on."*
 ## Troubleshooting
 
 - **The server does not appear:** run the command from step 2 in a terminal;
-  it should print `God's Eye View MCP server reading http://localhost:5173`
+  it should print `God's Eye View MCP server reading http://localhost:4173`
   and wait. A path or `args` mistake fails here.
 - **The panel says it could not load:** `npm run build:panel` was not run, or
   the dev server is down.
