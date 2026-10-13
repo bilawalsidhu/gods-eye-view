@@ -403,3 +403,69 @@ test('a remount looks up again a panorama whose lookup hung', async () => {
   await settle();
   assert.equal(poses.length, count);
 });
+
+test('superseded panorama waits cannot steal the current close cleanup', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { OPEN_TIMEOUT_MS } = await import('./policy.js');
+  const flush = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+  const { fake, loader, viewer, host } = setup();
+  await viewer.mount(host);
+  const [panorama] = fake.built;
+  panorama.setPano = (id) => {
+    panorama.pano = id;
+  };
+  const first = viewer.open('pano-a');
+  await flush();
+  const second = viewer.open('pano-b');
+  await flush();
+  panorama.fire('position_changed'); // new panorama has not reached OK
+  await flush();
+  viewer.close();
+  const remaining = loader.listenerCount();
+  t.mock.timers.tick(OPEN_TIMEOUT_MS);
+  await Promise.allSettled([first, second]);
+  assert.equal(
+    remaining,
+    0,
+    'close disposes every pending open without waiting 20 seconds',
+  );
+  assert.equal(panorama.visible, false);
+});
+
+test('unmount during details-service acquisition makes no later billed lookup', async () => {
+  const fake = fakeStreetViewLibrary({ panoramas: PANORAMAS });
+  const loader = fakeMapsLoader(fake.library);
+  const { createGoogleProvider } = await import('./index.js');
+  let release;
+  const acquiring = new Promise((resolve) => {
+    release = resolve;
+  });
+  const importLibrary = loader.importLibrary.bind(loader);
+  let imports = 0;
+  loader.importLibrary = async (name) => {
+    if (++imports > 1) await acquiring;
+    return importLibrary(name);
+  };
+  const provider = createGoogleProvider({
+    getApiKey: () => 'fixture-key',
+    loader,
+  });
+  const instance = provider.create({
+    notify() {},
+    actions: { reportError() {} },
+  });
+  const viewer = instance.viewer;
+  await viewer.mount(fakeHost());
+  await viewer.open('pano-a');
+  viewer.unmount();
+  release();
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(
+    fake.lookups.length,
+    0,
+    'teardown invalidates the request before calling getPanorama',
+  );
+  instance.destroy();
+});

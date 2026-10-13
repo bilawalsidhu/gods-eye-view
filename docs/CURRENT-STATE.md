@@ -3342,7 +3342,10 @@ controls (the address goes in the caption); a pose goes out at once and
 again when the panorama's month, photographer and address arrive (one
 successful lookup per panorama per session, seeded by the nearest lookup;
 a details lookup that fails or takes over ten seconds waits five seconds
-before a view event can retry, and an unmount drops lookups in flight). A key
+before a view event can retry, and an unmount drops lookups in flight). Opening
+another panorama settles the previous open before registering its wait; closing
+then releases the current wait immediately. A details lookup released while its
+service loads makes no panorama request after that service becomes available. A key
 Google refuses (`gm_authFailure`: the API not enabled, a referrer it does
 not allow, billing off) reads KEY REJECTED and fails a pending open at
 once; a lookup or open Google never answers fails after 10 or 20 s. In CI

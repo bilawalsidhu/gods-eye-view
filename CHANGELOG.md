@@ -74,6 +74,8 @@
 - Tool string length validation counts Unicode characters correctly, including characters outside the basic multilingual plane.
 
 - Director timeline seeks cross the dateline along the short longitude arc.
+- Release superseded Google Street View open waits and suppress metadata
+  requests whose viewer was unmounted while the service loaded.
 
 - Recent Imagery continues past malformed records in full catalog pages, respects the requested record limit, and reports results as truncated when that limit drops valid records.
 
