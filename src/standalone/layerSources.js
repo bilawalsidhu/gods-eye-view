@@ -2,10 +2,7 @@ import { createDirectionsSource } from '../layers/directions/source.js';
 import { createRecentImagerySource } from '../layers/recentImagery/source.js';
 import { createOpenFreeMapSource } from '../sources/openFreeMap.js';
 import {
-  createOpenSkySource,
-  createAdsbLolSource,
   createAeroApiSource,
-  createAisStreamSource,
   createFlightSource,
   createMilitarySource,
   createVesselSource,
@@ -35,14 +32,10 @@ export function createStandaloneLayerSources(overrides = {}) {
   const mapTiles = createOpenFreeMapSource();
   const defaults = {
     ...createReferenceSources(),
-    flights: composeSource(createOpenSkySource(), createAeroApiSource()),
-    military: createAdsbLolSource(),
-    vessels: createAisStreamSource({
-      apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/ais-live',
+    flights: composeSource(createFlightSource(), createAeroApiSource()),
+    military: createMilitarySource(),
     directions: createDirectionsSource(),
     'recent-imagery': createRecentImagerySource(),
-    flights: createFlightSource(),
-    military: createMilitarySource(),
     vessels: createVesselSource({
       apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/vessels',
       // Resolved against the document's address, which a panel host may
