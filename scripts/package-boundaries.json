@@ -297,6 +297,7 @@
       "server/providers/openai.js",
       "server/providers/openai/codex-auth.js",
       "server/providers/openai/constants.js",
+      "server/providers/openai/endpoints.js",
       "server/providers/openai/debug-log.js",
       "server/providers/openai/hud-summary.js",
       "server/providers/openai/instructions.js",

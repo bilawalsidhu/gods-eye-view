@@ -1,5 +1,13 @@
 import { DEFAULT_VOICE_TIER, resolveVoiceModel } from './voiceCost.js';
 
+/** A same-origin `/api/` path, or null for anything else (absolute, protocol-relative, traversal). */
+function sameOriginApiPath(value) {
+  const path = String(value || '').trim();
+  return /^\/api\/[A-Za-z0-9/_-]+$/.test(path) && !path.includes('//')
+    ? path
+    : null;
+}
+
 /** Realtime-compatible token and SDP requests, independent of microphone/UI ownership. */
 export function createRealtimeBackend({
   tokenEndpoint = '/api/realtime/token',
@@ -66,6 +74,12 @@ export function createRealtimeBackend({
         tier: response.headers?.get?.('X-GEV-Voice-Tier') || null,
         transcribeModel:
           response.headers?.get?.('X-GEV-Voice-Transcribe-Model') || null,
+        // Set when the server mints through a gateway (OPENAI_BASE_URL): the
+        // SDP offer must go back through the server's relay. Only a
+        // same-origin /api/ path is honoured.
+        callsEndpoint: sameOriginApiPath(
+          response.headers?.get?.('X-GEV-Realtime-Calls'),
+        ),
         expiresAt,
       };
     },
@@ -79,17 +93,20 @@ export function createRealtimeBackend({
         throw new Error(
           'Realtime client secret has expired; reconnect to request a new one',
         );
-      const response = await connectionTransport(callsEndpoint, {
-        method: 'POST',
-        body: offerSdp,
-        signal,
-        redirect: 'error',
-        cache: 'no-store',
-        headers: {
-          Authorization: `Bearer ${credential.token}`,
-          'Content-Type': 'application/sdp',
+      const response = await connectionTransport(
+        credential.callsEndpoint || callsEndpoint,
+        {
+          method: 'POST',
+          body: offerSdp,
+          signal,
+          redirect: 'error',
+          cache: 'no-store',
+          headers: {
+            Authorization: `Bearer ${credential.token}`,
+            'Content-Type': 'application/sdp',
+          },
         },
-      });
+      );
       signal.throwIfAborted();
       if (!response.ok) {
         await response.body?.cancel?.().catch(() => {});

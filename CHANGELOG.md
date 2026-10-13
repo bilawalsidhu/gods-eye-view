@@ -1,5 +1,11 @@
 # Changelog
 
+- `OPENAI_BASE_URL` points API-key voice minting and the HUD summary at an
+  OpenAI-compatible gateway such as LiteLLM. When it is set, the browser's
+  Realtime SDP offer is relayed through `/api/realtime/calls`, because a
+  gateway-minted secret is valid only at that gateway. ChatGPT OAuth voice
+  always stays on api.openai.com; unset, behavior is unchanged.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 
