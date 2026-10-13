@@ -125,6 +125,11 @@ export function createTomtomDirectSource({
           unavailable: TOMTOM_BUDGET_EXHAUSTED,
         });
       }
+      // TomTom flow tiles accept the API key only as a query parameter (no header
+      // auth on this endpoint). The key is validated to HTTPS by assertKeyedHttps
+      // before use. This is an accepted risk: the query string may appear in
+      // server/proxy logs, browser history, or Referer headers. Prefer HTTPS and
+      // rotate keys if the device is shared or lost.
       const url = `${tileRoot}/${z}/${x}/${y}.pbf?key=${encodeURIComponent(key)}`;
       assertKeyedHttps(url);
       const response = await fetchImpl(url, { signal });

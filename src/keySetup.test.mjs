@@ -1001,7 +1001,12 @@ test('vault REMOVE deletes through the vault and hides its button', async () => 
   });
   wireVaultKeySection({ section, vault, say: (text) => said.push(text) });
   const row = section.querySelector('section[data-key-id="vault:TOMTOM_API_KEY"]');
-  row.querySelector('[data-vault-remove="TOMTOM_API_KEY"]').fire('click');
+  const removeBtn = row.querySelector('[data-vault-remove="TOMTOM_API_KEY"]');
+  // First click: shows "Confirm?"
+  removeBtn.fire('click');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // Second click within 3s: actually removes
+  removeBtn.fire('click');
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(removed, ['TOMTOM_API_KEY']);

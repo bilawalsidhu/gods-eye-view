@@ -8,7 +8,7 @@ import {
   NOMINATIM_MIN_INTERVAL_MS,
   OSRM_MIN_INTERVAL_MS,
   UPSTREAM_NOT_ALLOWED,
-  createPacer,
+  getSharedPacer,
   isUpstreamRefusal,
 } from '../sourcePolicy.js';
 
@@ -73,14 +73,16 @@ function cleanRoutePoint(point) {
 }
 
 /**
- * Create the keyless on-device geocoder (Nominatim, paced at 1.1 s).
- * @param {{ fetchImpl?: Function, pacer?: { wait: Function } }} options Transport and courtesy gate.
+ * Create the keyless on-device geocoder (Nominatim, paced at 1.1 s via
+ * the shared pacer gate). The shared pacer enforces a single courtesy
+ * budget across all direct geocode/route sources.
+ * @param {{ fetchImpl?: Function }} options Transport only; pacer is shared.
  * @returns {{ search: Function, reverse: Function }} Forward + reverse lookup.
  */
 export function createGeocodeDirectSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
-  pacer = createPacer(NOMINATIM_MIN_INTERVAL_MS),
 } = {}) {
+  const pacer = getSharedPacer();
   const pacedFetch = async (url, init = {}) => {
     await pacer.wait(init);
     return fetchImpl(url, init);
@@ -103,14 +105,16 @@ export function createGeocodeDirectSource({
 }
 
 /**
- * Create the keyless on-device router (OSRM, paced at 1/s).
- * @param {{ fetchImpl?: Function, pacer?: { wait: Function } }} options Transport and courtesy gate.
+ * Create the keyless on-device router (OSRM, paced at 1/s via the
+ * shared pacer gate). The shared pacer enforces a single courtesy
+ * budget across all direct geocode/route sources.
+ * @param {{ fetchImpl?: Function }} options Transport only; pacer is shared.
  * @returns {{ getRoute: Function }} Directions-shaped route lookup.
  */
 export function createRouteDirectSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
-  pacer = createPacer(OSRM_MIN_INTERVAL_MS),
 } = {}) {
+  const pacer = getSharedPacer();
   return {
     /**
      * Route between two points, returning the proxy's payload shape

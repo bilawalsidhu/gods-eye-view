@@ -136,6 +136,24 @@ function untilAborted(promise, signal) {
   });
 }
 
+/** Singleton shared pacer gate for geocode/route (Nominatim 1.1 s + OSRM 1/s). */
+let sharedPacer = null;
+
+/**
+ * Get or create the single shared pacer used by all direct geocode/route sources.
+ * @param {{ now?: Function, sleep?: Function }} clock Injectable clock.
+ * @returns {{ wait: Function }} Shared pacer `wait({ signal })`.
+ */
+export function getSharedPacer({
+  now = () => Date.now(),
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+} = {}) {
+  if (!sharedPacer) {
+    sharedPacer = createPacer(1100, { now, sleep }); // max(NOMINATIM, OSRM)
+  }
+  return sharedPacer;
+}
+
 /**
  * Enforce a minimum gap between upstream requests (Nominatim 1.1 s, OSRM
  * 1/s), abort-aware so a cancelled caller never sleeps out its deadline.
@@ -186,4 +204,15 @@ export function withUpstreamPacer(fetchImpl, minIntervalMs) {
     await pacer.wait(init);
     return fetchImpl(url, init);
   };
+}
+
+/** Reset the shared pacer (test seam only). */
+export function resetSharedPacer() {
+  sharedPacer = null;
+}
+
+/** Install a test clock for the shared pacer (test seam only). */
+export function setSharedPacerClock({ now, sleep }) {
+  resetSharedPacer();
+  getSharedPacer({ now, sleep });
 }

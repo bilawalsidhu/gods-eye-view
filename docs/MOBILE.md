@@ -149,3 +149,81 @@ exercises a real permission grant or denial on-device.
 - Plan 3 — mobile/foldable UI: responsive rails, touch-first cockpit,
   cover-vs-inner layouts, battery/data savers, and wiring the WebGL2
   fallback into the boot path.
+
+## Plan 2 — on-device release checklist (device verification remainder)
+
+These items require a real Fold device (or Pixel Fold emulator API 37) with
+the Capacitor shell installed, the secure-storage plugin functional, and a
+network connection (Wi-Fi preferred). Do not claim they are verified until
+each line has been observed on-device.
+
+- **AISStream browser-origin WebSocket** — `vesselsLive.connect()` opens a
+  `wss://stream.aisstream.io` socket from the WebView; confirm the feed
+  authenticates with the vault `AISSTREAM_API_KEY`, track rings populate,
+  silence watchdog recycles on 120 s, and no CORS error blocks it.
+
+- **OpenAI WebRTC from WebView** — `voiceDirect.requestToken()` mints an
+  ephemeral client secret via the vault `OPENAI_API_KEY`; `negotiate()` completes
+  the SDP exchange; `getUserMedia` acquires the mic; the globe HUD shows
+  `VOICE ACTIVE`; mic denial surfaces honest `VOICE UNAVAILABLE` with the mic
+  never acquired.
+
+- **TomTom flow tile fetch** — `createTomtomDirectSource.getFlowTile()` retrieves
+  `pbf` tiles over HTTPS with the vault `TOMTOM_API_KEY` in the query string;
+  daily budget governor persists across midnight/reinstall; key rotation works.
+
+- **Secure storage on Android** — `@aparajita/capacitor-secure-storage` loads,
+  `loadVaultStorage` returns `backend: 'secure'`, writes/reads persist across
+  app restarts, Preferences fallback never silently promotes to secure.
+
+- **OpenSky credit governor with real credentials** — `flightsDirect` uses the
+  vault `OPENSKY_CLIENT_ID/SECRET` (or anon); adaptive polling 30/90/300 s
+  stretches on credit exhaustion; day rollover resets; adsb.lol fallback works.
+
+- **CelesTrak TLE CORS bypass** — `createNativeFetch` fetches
+  `celestrak.org/NORAD/elements/gp.php` via `CapacitorHttp`; satellite layer
+  populates without the server proxy.
+
+- **Transit direct (protobuf decode)** — `createTransitDirectSource` decodes
+  GTFS-RT `VehiclePositions` via `pbf`; live feed cards populate; no proxy.
+
+- **Wind direct (GRIB decode)** — `createWindDirectSource` fetches GFS/ECMWF
+  GRIB2 via `eccodes-wasm`; grid `.bin` bytes land in the renderer; animation
+  runs.
+
+- **CCTV direct (HLS leases + TxDOT decode)** — `createCctvDirectSource`
+  streams registered camera frames/media; HLS leases create/access/expire in
+  15 s; TxDOT base64-JSON payloads decode to JPEG; SSRF guard rejects non-catalog URLs.
+
+- **Overpass direct** — `createOverpassDirectSource` queries operator mirrors
+  with client-side QL sanitize (no planet scans, `around` ≤ 50 km, `bbox` ≤ 12°),
+  90/min limiter, 6 concurrent; simplification ported client-side.
+
+- **NOAA tiles direct** — `createNoaaTilesDirectSource` validates
+  time/bbox/size allowlists, fetches WMS `GetMap` PNG, dimension checks pass;
+  radar/satellite/lightning shells render on 3D Tiles.
+
+- **Fold unfold/resize survival** — cover portrait → inner landscape → mid-session
+  unfold with layers on; camera (3D tiles + globe) survives without black
+  canvas, crash, or context loss; Cesium `View` resets correctly.
+
+- **Voice mic denial & location deny** — deny mic permission → honest `VOICE
+  UNAVAILABLE` + UI message; deny location → search falls back gracefully,
+  no crash.
+
+- **Data-use transparency** — metered tiles (TomTom/Google) OFF by default,
+  cell-data warning visible, per-tile budget visible in UI.
+
+### Heavy direct sources — standalone composition status (verified, no device needed)
+
+All five heavy direct sources construct standalone and select through
+`selectSource`/`shouldUseDirect`: web (`capacitor: false`) and any
+backend-pointed shell resolve the legacy `/api` proxy sources; only
+Capacitor-with-no-backend resolves the direct factories. The direct
+adapters are Web-API-only (`src/` never imports `server/`;
+`check:boundaries` reports zero `browser-imports-server`). They are not
+yet plumbed into `createStandaloneLayerSources` defaults because their
+return shapes differ from the proxy sources (decoded snapshots vs
+`Response`-shaped reads) — swapping them in would change web behavior,
+so layer-level plumbing stays device-matrix remainder work alongside the
+checklist above.

@@ -323,16 +323,26 @@ const OSRM_FIXTURE = {
   ],
 };
 
-test('geocode direct searches Nominatim and consults the courtesy pacer', async () => {
+test('geocode direct searches Nominatim and consults the shared courtesy pacer', async () => {
   const { calls, fetchImpl } = stubFetch(() =>
     jsonResponse(NOMINATIM_SEARCH_FIXTURE),
   );
-  const pacer = recordingPacer();
-  const source = createGeocodeDirectSource({ fetchImpl, pacer });
-  const rows = await source.search('Paris');
-  assert.equal(rows.length, 1);
-  assert.match(rows[0].display_name, /Paris/);
-  assert.equal(pacer.waits.length, 1);
+  const waits = [];
+  const { resetSharedPacer, setSharedPacerClock } = await import('../../mobile/sourcePolicy.js');
+  resetSharedPacer();
+  setSharedPacerClock({
+    now: () => Date.now(),
+    sleep: async (ms) => { waits.push(ms); },
+  });
+  const source = createGeocodeDirectSource({ fetchImpl });
+  const rows1 = await source.search('Paris');
+  assert.equal(rows1.length, 1);
+  assert.match(rows1[0].display_name, /Paris/);
+  const rows2 = await source.search('London');
+  assert.equal(rows2.length, 1);
+  assert.equal(waits.length, 1);
+  // Allow small timing variance (pacer interval is 1100ms, actual may be ~1099)
+  assert.ok(waits[0] >= 1090 && waits[0] <= 1110, `wait was ${waits[0]}ms, expected ~1100`);
   assert.match(calls[0].url, new RegExp(`^${NOMINATIM_SEARCH_ENDPOINT}\\?`));
   assert.match(calls[0].url, /q=Paris/);
 });
@@ -341,6 +351,9 @@ test('geocode direct reverse-geocodes through the Nominatim endpoint', async () 
   const { calls, fetchImpl } = stubFetch(() =>
     jsonResponse(NOMINATIM_REVERSE_FIXTURE),
   );
+  const { resetSharedPacer, setSharedPacerClock } = await import('../../mobile/sourcePolicy.js');
+  resetSharedPacer();
+  setSharedPacerClock({ now: () => Date.now(), sleep: async () => {} });
   const source = createGeocodeDirectSource({ fetchImpl });
   const row = await source.reverse(48.85, 2.35);
   assert.match(row.display_name, /Paris/);
@@ -348,6 +361,9 @@ test('geocode direct reverse-geocodes through the Nominatim endpoint', async () 
 });
 
 test('geocode direct discards a late response after abort', async () => {
+  const { resetSharedPacer, setSharedPacerClock } = await import('../../mobile/sourcePolicy.js');
+  resetSharedPacer();
+  setSharedPacerClock({ now: () => Date.now(), sleep: async () => {} });
   await assertDiscardsLateResponse((fetchImpl, signal) =>
     createGeocodeDirectSource({ fetchImpl }).search('Paris', { signal }),
   );
@@ -355,23 +371,40 @@ test('geocode direct discards a late response after abort', async () => {
 
 test('route direct projects the OSRM response like the proxy payload', async () => {
   const { calls, fetchImpl } = stubFetch(() => jsonResponse(OSRM_FIXTURE));
-  const pacer = recordingPacer();
-  const source = createRouteDirectSource({ fetchImpl, pacer });
-  const payload = await source.getRoute({
+  const waits = [];
+  const { resetSharedPacer, setSharedPacerClock } = await import('../../mobile/sourcePolicy.js');
+  resetSharedPacer();
+  setSharedPacerClock({
+    now: () => Date.now(),
+    sleep: async (ms) => { waits.push(ms); },
+  });
+  const source = createRouteDirectSource({ fetchImpl });
+  // First request (no wait, first call)
+  const payload1 = await source.getRoute({
     mode: 'foot',
     a: { lat: 48.85, lon: 2.35 },
     b: { lat: 48.86, lon: 2.36 },
   });
-  assert.equal(payload.ok, true);
-  assert.equal(payload.profile, 'foot');
-  assert.equal(payload.distanceM, 1500);
-  assert.equal(payload.durationS, 901);
-  assert.deepEqual(payload.geometry, [
+  assert.equal(payload1.ok, true);
+  // Second request (should wait due to shared pacer)
+  const payload2 = await source.getRoute({
+    mode: 'foot',
+    a: { lat: 48.86, lon: 2.36 },
+    b: { lat: 48.87, lon: 2.37 },
+  });
+  assert.equal(payload2.ok, true);
+  assert.equal(waits.length, 1);
+  // Allow small timing variance (pacer interval is 1100ms, actual may be ~1099)
+  assert.ok(waits[0] >= 1090 && waits[0] <= 1110, `wait was ${waits[0]}ms, expected ~1100`);
+  assert.equal(payload1.ok, true);
+  assert.equal(payload1.profile, 'foot');
+  assert.equal(payload1.distanceM, 1500);
+  assert.equal(payload1.durationS, 901);
+  assert.deepEqual(payload1.geometry, [
     [2.35, 48.85],
     [2.36, 48.86],
   ]);
-  assert.equal(payload.steps.length, 2);
-  assert.equal(pacer.waits.length, 1);
+  assert.equal(payload1.steps.length, 2);
   assert.match(
     calls[0].url,
     /^https:\/\/routing\.openstreetmap\.de\/routed-foot\/route\/v1\/foot\//,

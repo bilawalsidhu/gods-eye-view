@@ -147,9 +147,17 @@ export async function loadSecureStore({
     const module = await importPlugin();
     const plugin = module?.SecureStorage ?? module?.default ?? null;
     if (!plugin) return null;
-    // Probe that the native implementation answers (an unsynced plugin
-    // rejects here). Values are never read — presence is enough.
-    await plugin.getKeyPrefix?.();
+    // Probe that the native implementation answers with a real round-trip
+    // (an unsynced plugin rejects here). Use a benign key that is never
+    // user-visible; values are never read — presence + latency is enough.
+    // Support both the modern `get` API and the legacy `getKeyPrefix` API.
+    if (typeof plugin.get === 'function') {
+      await plugin.get({ key: '__secure_storage_probe__' });
+    } else if (typeof plugin.getKeyPrefix === 'function') {
+      await plugin.getKeyPrefix();
+    } else {
+      throw new Error('Secure storage plugin missing get/getKeyPrefix');
+    }
     return secureStoreFromPlugin(plugin);
   } catch {
     return null;

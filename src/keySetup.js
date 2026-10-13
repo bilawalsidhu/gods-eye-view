@@ -694,26 +694,38 @@ export function wireVaultKeySection({
       })();
     });
   }
+  /** Show inline "Confirm?" text; second click within 3 s removes. */
+  const pendingRemove = new Map();
   for (const remove of section.querySelectorAll('[data-vault-remove]')) {
     const id = remove.dataset?.vaultRemove;
     if (!id) continue;
     remove.addEventListener?.('click', () => {
-      void (async () => {
-        const ok =
-          typeof globalThis.confirm !== 'function' ||
-          globalThis.confirm(`Remove ${id} from this device?`);
-        if (!ok) return;
-        sayIt('Removing…');
-        try {
-          await vault.removeKey(id);
-        } catch (error) {
-          sayIt(`Remove failed: ${error?.message || error}`);
-          return;
-        }
-        syncRow(id, false);
-        sayIt(`${id} removed from this device.`);
-        await changed();
-      })();
+      const wasPending = pendingRemove.get(id);
+      if (wasPending) {
+        clearTimeout(wasPending.timeout);
+        pendingRemove.delete(id);
+        void (async () => {
+          sayIt('Removing…');
+          try {
+            await vault.removeKey(id);
+          } catch (error) {
+            sayIt(`Remove failed: ${error?.message || error}`);
+            return;
+          }
+          syncRow(id, false);
+          sayIt(`${id} removed from this device.`);
+          await changed();
+        })();
+      } else {
+        pendingRemove.set(id, {
+          timeout: setTimeout(() => {
+            pendingRemove.delete(id);
+            remove.textContent = remove.dataset.originalText ?? 'Remove';
+          }, 3000),
+        });
+        remove.dataset.originalText = remove.textContent;
+        remove.textContent = 'Confirm?';
+      }
     });
   }
 }
@@ -1266,12 +1278,23 @@ export async function initKeySetup({
     }
     if (!Array.isArray(envVars) || !envVars.length) return;
     // Removal is destructive and — behind a framing defense that should already
-    // stop it — a clickjack target. A confirm turns a single aligned click into
-    // a deliberate two-step the lure cannot pre-satisfy.
-    const ok =
-      typeof globalThis.confirm !== 'function' ||
-      globalThis.confirm('Remove this key from your saved configuration?');
-    if (!ok) return;
+    // stop it — a clickjack target. An inline "Confirm?" second click turns a
+    // single aligned click into a deliberate two-step the lure cannot pre-satisfy.
+    if (!button.dataset.confirmPending) {
+      button.dataset.confirmPending = 'true';
+      button.dataset.originalText = button.textContent;
+      button.textContent = 'Confirm?';
+      button.dataset.confirmTimeout = setTimeout(() => {
+        delete button.dataset.confirmPending;
+        button.textContent = button.dataset.originalText;
+      }, 3000);
+      return;
+    }
+    // Second click within 3 s — proceed with removal.
+    clearTimeout(Number(button.dataset.confirmTimeout));
+    delete button.dataset.confirmPending;
+    delete button.dataset.confirmTimeout;
+    button.textContent = button.dataset.originalText;
     void submitUpdates(
       Object.fromEntries(envVars.map((name) => [name, null])),
       'Removed from',

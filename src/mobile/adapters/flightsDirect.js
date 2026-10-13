@@ -192,6 +192,10 @@ export function createFlightsDirectSource({
         Accept: 'application/json',
         'User-Agent': 'gods-eye-view-adsblol-regional-fallback/1.0',
       },
+      // Non-standard option: byte cap for this response. Honored by nativeFetch
+      // (via shared capped readers) and test stubs; standard fetch ignores unknown
+      // options. If a transport ignores it, the body is still capped by the
+      // downstream reader, but the cap here avoids a full download.
       capBytes: ADSB_LOL_POINT_CAP_BYTES,
     });
     signal?.throwIfAborted();
