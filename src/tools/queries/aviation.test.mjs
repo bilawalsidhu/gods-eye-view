@@ -388,3 +388,62 @@ test('the real OpenSky source marks an hour-old snapshot stale for searches', as
   assert.deepEqual(result.data.stale_feeds, ['civil']);
   assert.match(result.summary, /may be stale\.$/);
 });
+
+test('altitude bands require a reported altitude from normalized OpenSky records', async () => {
+  const { normalizeOpenSkyAircraft } =
+    await import('../../sources/live/aircraft.js');
+  const state = (id, baro, geometric) =>
+    normalizeOpenSkyAircraft([
+      id,
+      'TEST',
+      'Test',
+      1767225600,
+      1767225600,
+      0,
+      0,
+      baro,
+      false,
+      10,
+      90,
+      0,
+      [],
+      geometric,
+    ]);
+  const records = [
+    state('abc001', null, null),
+    state('abc002', 0, null),
+    state('abc003', null, 50),
+    state('abc004', 500, null),
+  ];
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      aircraft: { getSnapshot: async () => ({ records }) },
+    },
+  });
+  const area = { bbox: [-1, -1, 1, 1] };
+  assert.equal(
+    (await catalog.call('aircraft_in_area', { area })).data.total,
+    4,
+    'unfiltered answers retain unknown altitude',
+  );
+  for (const band of [
+    { max_altitude_m: 100 },
+    { min_altitude_m: -500, max_altitude_m: 100 },
+  ]) {
+    const result = await catalog.call('aircraft_in_area', { area, ...band });
+    assert.deepEqual(
+      result.data.rows.map((row) => row.id),
+      ['abc002', 'abc003'],
+    );
+    assert.deepEqual(
+      result.data.rows.map((row) => row.altitude_m),
+      [0, 50],
+    );
+  }
+  const minimum = await catalog.call('aircraft_in_area', {
+    area,
+    min_altitude_m: -500,
+  });
+  assert.equal(minimum.data.total, 3);
+});

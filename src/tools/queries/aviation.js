@@ -111,6 +111,8 @@ export const aircraftInArea = defineTool({
         (record) =>
           areaContains(area, { lat: record.latitude, lon: record.longitude }) &&
           !(args.airborne_only && record.onGround) &&
+          ((args.min_altitude_m == null && args.max_altitude_m == null) ||
+            Number.isFinite(altitude(record))) &&
           (args.min_altitude_m == null ||
             altitude(record) >= args.min_altitude_m) &&
           (args.max_altitude_m == null ||
