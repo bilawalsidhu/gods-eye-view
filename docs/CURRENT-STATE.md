@@ -1,5 +1,37 @@
 # God's Eye View Current State
 
+## Phone Nearby and Jersey public sources
+
+Standalone phones (up to 720px wide) use Map, Nearby, Location and More navigation
+with one dismissible sheet. Location permission is requested on touch phones;
+manual search and twelve parish village presets remain available. Presets are
+navigation centres with a radius, not parish boundary filters. All Jersey selects
+a 50km radius. A stationary 650ms single-pointer hold toggles dashboards; moving,
+pinching and controls cancel the gesture. Desktop layout and embedded panels retain
+their existing layout.
+
+Nearby provides opt-in Jersey bus positions/stops and tapped-stop departures;
+parking facilities and tracked live occupancy; current and next-30-day roadworks;
+Jersey Met weather; Ports of Jersey tides, published coastal access and shipping
+forecast; timestamp-validated offshore buoy observations; toilets, Eat Safe ratings,
+recycling, defibrillators and car parks with EV charging bays. Charging data is
+facility inventory, not live charger availability. Parish headlines are fetched
+from all twelve official RSS feeds, with missing feeds explicitly reported.
+Offers, events and local services link to provider listings; they do not claim
+live inventory. Jersey overlays are session-local and not serialized into share
+links or controlled by voice. Other registered layers remain available in an
+expandable Global layers section.
+
+The local provider exposes GET `/api/transit/jersey-local?type=…` with fixed
+upstream URLs, bounded bodies, request coalescing and short in-memory caches.
+It rejects caller URLs, duplicate/unknown parameters and writes. Stop departures
+accept only a numeric stop ID. Filtering by the user's location happens in the
+browser. RoadWorkx geometry is converted from the provider's NewJTM coordinates;
+incomplete geometry snapshots fail rather than claiming comprehensive coverage.
+Stale buoy observations are omitted. Public data is fetched at runtime and is
+not bundled. Static hosting needs this same-origin provider route to use the feeds.
+
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing
