@@ -115,6 +115,7 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | --------------------------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------- |
 | **Datacenters** (4,351) | `datacenters/` | **ODbL 1.0** (OpenStreetMap extract) | ✅ (attribution + share-alike on data) | © OpenStreetMap contributors (shared credit) |
 | **Dams** (704) | `dams/` | **ODbL 1.0** (OpenInfraMap / OSM extract) | ✅ (attribution + share-alike on data) | © OpenStreetMap contributors (shared credit) + Open Infrastructure Map |
+| **Power Plants** (147) | `power_plants/` | **ODbL 1.0 / CC BY 4.0** (WRI Global Power Plant Database / OSM) | ✅ (attribution + share-alike on data) | © OpenStreetMap contributors + World Resources Institute |
 | **Military area names** (36,466) | `osm_military_names/` | **ODbL 1.0** (OpenStreetMap, via Overture Maps) | ✅ (attribution + share-alike on data) | © OpenStreetMap contributors (shared credit) + Overture Maps Foundation |
 | **TeleGeography Submarine Cable Map** (712 cables + 1,917 landing points)   | `telegeography_submarine_cables/` | **CC BY-NC-SA 3.0**                                                                                       | ❌ **NonCommercial — remove for commercial use** | "© TeleGeography — submarinecablemap.com"                                   |
 | **Natural Earth physical regions** (1,046 land + 292 marine named polygons) | `natural_earth/`                  | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Made with Natural Earth" (courtesy credit — not legally required)          |
@@ -149,7 +150,7 @@ fixtures retain their provenance in `src/data/fixtures/README.md`.
 
 ### Bundled OpenStreetMap data
 
-Bundled OSM-derived data is distributed under [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/), separately from the MIT code: [datacenters](src/data/local_data/datacenters/), [dams](src/data/local_data/dams/) (via Open Infrastructure Map), [military names](src/data/local_data/osm_military_names/), and [OSM test fixtures](src/data/fixtures/). Keep © OpenStreetMap contributors and offer modified databases under ODbL.
+Bundled OSM-derived data is distributed under [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/), separately from the MIT code: [datacenters](src/data/local_data/datacenters/), [dams](src/data/local_data/dams/) (via Open Infrastructure Map), [power plants](src/data/local_data/power_plants/) (via WRI / OpenStreetMap), [military names](src/data/local_data/osm_military_names/), and [OSM test fixtures](src/data/fixtures/). Keep © OpenStreetMap contributors and offer modified databases under ODbL.
 
 ### NASA FIRMS acknowledgement
 

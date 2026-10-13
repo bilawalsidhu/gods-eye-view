@@ -83,6 +83,19 @@ test('datacenters and dams are listed nearest first with their own fields', asyn
         output: '2080 MW',
       },
     ],
+    'local-power-plants': [
+      {
+        id: 'p',
+        name: 'Grand Coulee Power Station',
+        lat: 47.957,
+        lon: -118.981,
+        operator: 'USBR',
+        capacity: '6809 MW',
+        river: null,
+        output: null,
+        fuel: 'Hydro',
+      },
+    ],
   };
   const infrastructure = { getRecords: async (layerId) => records[layerId] };
   const catalog = composeCatalog({
@@ -119,6 +132,20 @@ test('datacenters and dams are listed nearest first with their own fields', asyn
     lon: -114.737,
     distance_km: 3.8,
   });
+  const plants = await catalog.call('find_infrastructure', {
+    kind: 'power_plants',
+    area: { lat: 47.95, lon: -118.98, radius_km: 20 },
+  });
+  assert.deepEqual(plants.data.rows[0], {
+    name: 'Grand Coulee Power Station',
+    operator: 'USBR',
+    fuel: 'Hydro',
+    capacity: '6809 MW',
+    output: null,
+    lat: 47.957,
+    lon: -118.981,
+    distance_km: 0.8,
+  });
 });
 
 test('the bundled datasets load through the local fetch', async () => {
@@ -129,13 +156,22 @@ test('the bundled datasets load through the local fetch', async () => {
   const source = createInfrastructureSource({ fetchImpl });
   const dams = await source.getRecords('local-dams');
   const datacenters = await source.getRecords('local-datacenters');
-  assert.ok(dams.length > 500 && datacenters.length > 3000);
+  const powerPlants = await source.getRecords('local-power-plants');
+  assert.ok(
+    dams.length > 500 && datacenters.length > 3000 && powerPlants.length >= 100,
+  );
   assert.ok(
     dams.every(
       (record) => Number.isFinite(record.lat) && Number.isFinite(record.lon),
     ),
   );
+  assert.ok(
+    powerPlants.every(
+      (record) => Number.isFinite(record.lat) && Number.isFinite(record.lon),
+    ),
+  );
   assert.equal(await source.getRecords('local-dams'), dams);
+  assert.equal(await source.getRecords('local-power-plants'), powerPlants);
   await assert.rejects(
     source.getRecords('local-other'),
     /Unknown infrastructure layer/,

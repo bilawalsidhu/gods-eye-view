@@ -349,6 +349,27 @@ const layers = [
     },
   },
   {
+    id: 'local-power-plants',
+    aliases: [
+      'power plants',
+      'power stations',
+      'energy plants',
+      'solar farms',
+      'wind farms',
+      'nuclear plants',
+    ],
+    context: true,
+    query: {
+      fields: {
+        name: ['t'],
+        operator: ['t'],
+        fuel: ['t'],
+        capacity: ['t'],
+        output: ['t'],
+      },
+    },
+  },
+  {
     id: 'telegeography-submarine-cables',
     aliases: ['submarine cables', 'undersea cables', 'cables', 'telegeography'],
     context: false,

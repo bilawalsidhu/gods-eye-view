@@ -14,10 +14,13 @@ import { LIMIT_SCHEMA, capRows, countNoun } from '../results.js';
 const KINDS = {
   datacenters: { layerId: 'local-datacenters', noun: 'datacenter' },
   dams: { layerId: 'local-dams', noun: 'dam' },
+  power_plants: { layerId: 'local-power-plants', noun: 'power plant' },
 };
 const ATTRIBUTION = {
   datacenters: '© OpenStreetMap contributors (ODbL 1.0)',
   dams: '© OpenStreetMap contributors (ODbL 1.0), via Open Infrastructure Map',
+  power_plants:
+    '© OpenStreetMap contributors (ODbL 1.0) & World Resources Institute',
 };
 
 const round = (value, digits) =>
@@ -25,10 +28,11 @@ const round = (value, digits) =>
 
 export const findInfrastructure = defineTool({
   name: 'find_infrastructure',
-  title: 'Datacenters and dams',
+  title: 'Datacenters, dams, and power plants',
   description:
-    'Datacenters (with operator and capacity) or dams (with river and power ' +
-    'output) mapped in OpenStreetMap within an area, nearest the center first.',
+    'Datacenters (with operator and capacity), dams (with river and output), ' +
+    'or power plants (with fuel source and output) mapped in OpenStreetMap ' +
+    'and global registries within an area, nearest the center first.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -54,7 +58,13 @@ export const findInfrastructure = defineTool({
         operator: record.operator,
         ...(args.kind === 'datacenters'
           ? { capacity: record.capacity }
-          : { river: record.river, output: record.output }),
+          : args.kind === 'power_plants'
+            ? {
+                fuel: record.fuel,
+                capacity: record.capacity,
+                output: record.output,
+              }
+            : { river: record.river, output: record.output }),
         lat: round(record.lat, 5),
         lon: round(record.lon, 5),
         distance_km: round(distanceKm(center, record), 1),

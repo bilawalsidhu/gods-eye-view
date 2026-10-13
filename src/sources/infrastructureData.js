@@ -16,6 +16,12 @@ export const INFRASTRUCTURE_DATA_URLS = Object.freeze({
     return new URL('../data/local_data/dams/dams.geojsonl', import.meta.url)
       .href;
   },
+  get 'local-power-plants'() {
+    return new URL(
+      '../data/local_data/power_plants/power_plants.geojsonl',
+      import.meta.url,
+    ).href;
+  },
 });
 
 /** Parse GeoJSON Lines: one Feature per non-empty line. */
@@ -30,6 +36,7 @@ export function parseGeojsonLines(text) {
 export function layerTitle(layerId) {
   if (layerId === 'local-datacenters') return 'Datacenter';
   if (layerId === 'local-dams') return 'Dam';
+  if (layerId === 'local-power-plants') return 'Power Plant';
   return 'Feature';
 }
 
@@ -42,10 +49,10 @@ export function layerTitle(layerId) {
  * Names are unclamped — overlay cards shorten for paint; queries need the
  * full source string ("Usina Hidrelétrica de Itaipu").
  * @param {Object|null|undefined} raw - {id, lat, lon, properties}.
- * @param {string} [layerId] Local layer id (`local-datacenters` / `local-dams`).
+ * @param {string} [layerId] Local layer id (`local-datacenters` / `local-dams` / `local-power-plants`).
  * @returns {{id: string, name: string|null, lat: number|null, lon: number|null,
  *   operator: string|null, capacity: string|null, river: string|null,
- *   output: string|null}}
+ *   output: string|null, fuel: string|null}}
  */
 export function mapAnalystRecord(raw, layerId = '') {
   const num = (v) => (Number.isFinite(v) ? v : null);
@@ -80,7 +87,12 @@ export function mapAnalystRecord(raw, layerId = '') {
         text(tags.it_load) ||
         text(tags.capacity) ||
         text(props.capacity)
-      : null;
+      : layerId === 'local-power-plants'
+        ? text(props.output) ||
+          text(tags['plant:output:electricity']) ||
+          text(props.capacity) ||
+          text(tags.capacity)
+        : null;
   const river =
     layerId === 'local-dams'
       ? text(tags.associated_river) ||
@@ -90,8 +102,15 @@ export function mapAnalystRecord(raw, layerId = '') {
         text(tags['river:name'])
       : null;
   const output =
-    layerId === 'local-dams'
+    layerId === 'local-dams' || layerId === 'local-power-plants'
       ? text(props.output) || text(tags['plant:output:electricity'])
+      : null;
+  const fuel =
+    layerId === 'local-power-plants'
+      ? text(props.source) ||
+        text(props.fuel) ||
+        text(tags['plant:source']) ||
+        text(tags.source)
       : null;
   return {
     id: name || text(raw?.id) || layerTitle(layerId),
@@ -102,6 +121,7 @@ export function mapAnalystRecord(raw, layerId = '') {
     capacity,
     river,
     output,
+    fuel,
   };
 }
 

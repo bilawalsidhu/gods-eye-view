@@ -86,6 +86,33 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
     if (river && river.toLocaleLowerCase() !== title.toLocaleLowerCase()) {
       details.push(clampCardLine(river));
     }
+  } else if (layerId === 'local-power-plants') {
+    const fuel = firstClean([
+      props.fuel,
+      tags['plant:source'],
+      props.source,
+      tags.source,
+    ]);
+    const capacity = firstClean([
+      props.output,
+      tags['plant:output:electricity'],
+      props.capacity,
+      tags.capacity,
+    ]);
+    const operator = firstClean([
+      tags.operator,
+      props.operator,
+      tags['operator:short'],
+    ]);
+    const line = [fuel, capacity, operator]
+      .filter(
+        (value, index, values) => value && values.indexOf(value) === index,
+      )
+      .filter(
+        (value) => value.toLocaleLowerCase() !== title.toLocaleLowerCase(),
+      )
+      .join(' · ');
+    if (line) details.push(clampCardLine(line));
   }
 
   return { title, details };
@@ -1243,6 +1270,7 @@ function labelPriorityFromProperties(props, layerId) {
   if (cleanLabel(tags.operator) || cleanLabel(props.operator)) score += 180;
   if (props.output || tags['plant:output:electricity']) score += 120;
   if (layerId === 'local-dams') score += 80;
+  if (layerId === 'local-power-plants') score += 70;
   if (layerId === 'local-datacenters') score += 60;
   return score;
 }
