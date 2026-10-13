@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { createIonImagery } from './imagery.js';
+import { createIonImagery, upgradeBingTileProtocol } from './imagery.js';
 import { createWorldTerrain, createKeylessTerrain } from './terrain.js';
 import { createDefaultMapSources } from './defaultSources.js';
 
@@ -123,6 +123,42 @@ test('cancellation after ion metadata prevents terrain construction', async () =
     Cesium.IonResource.fromAssetId = originalResource;
     Cesium.CesiumTerrainProvider.fromUrl = originalTerrain;
   }
+});
+
+test('ion Bing imagery loads tiles over https even on an http page', async () => {
+  const originalImagery = Cesium.IonImageryProvider.fromAssetId;
+  const bing = {
+    _imageUrlTemplate:
+      'http://ecn.{subdomain}.tiles.virtualearth.net/tiles/a{quadkey}.jpeg',
+  };
+  try {
+    Cesium.IonImageryProvider.fromAssetId = async () => ({
+      _imageryProvider: bing,
+    });
+    const provider = await createIonImagery(
+      Cesium.IonWorldImageryStyle.AERIAL,
+      'imagery-token',
+    );
+    assert.equal(provider._imageryProvider, bing);
+    assert.equal(
+      bing._imageUrlTemplate,
+      'https://ecn.{subdomain}.tiles.virtualearth.net/tiles/a{quadkey}.jpeg',
+    );
+  } finally {
+    Cesium.IonImageryProvider.fromAssetId = originalImagery;
+  }
+});
+
+test('ion Bing labelled imagery moves to the host whose certificate covers https', () => {
+  const bing = {
+    _imageUrlTemplate:
+      'http://ak.dynamic.{subdomain}.tiles.virtualearth.net/comp/ch/{quadkey}?mkt={culture}&it=A,G,L',
+  };
+  upgradeBingTileProtocol({ _imageryProvider: bing });
+  assert.equal(
+    bing._imageUrlTemplate,
+    'https://{subdomain}.ssl.ak.dynamic.tiles.virtualearth.net/comp/ch/{quadkey}?mkt={culture}&it=A,G,L',
+  );
 });
 
 test('credentialed source factories reject an omitted token instead of consuming an SDK default', async () => {
