@@ -61,7 +61,7 @@ async function flushDeferredNotice() {
   await Promise.resolve();
 }
 
-test('invalid shared layer state surfaces only after initial restore settles', async (t) => {
+test('defers invalid-layer notice until startup settles', async (t) => {
   installBrowserGlobals(t);
   const notices = [];
   const owner = createOwner(
@@ -87,7 +87,7 @@ test('invalid shared layer state surfaces only after initial restore settles', a
   owner.destroy();
 });
 
-test('valid layer state stays quiet and disposal suppresses a pending invalid notice', async (t) => {
+test('valid layers stay quiet and disposal suppresses notice', async (t) => {
   installBrowserGlobals(t);
 
   const validNotices = [];
@@ -116,7 +116,7 @@ test('valid layer state stays quiet and disposal suppresses a pending invalid no
   assert.deepEqual(disposedNotices, []);
 });
 
-test('share-follow startup notices ignore superseded tracking results', async (t) => {
+test('share-follow notices ignore superseded tracking results', async (t) => {
   installBrowserGlobals(t);
   const cover = new EventTarget();
   globalThis.document = {
