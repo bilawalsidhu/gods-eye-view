@@ -37,4 +37,20 @@ export const MAP_STACKS = [
     kind: 'osm',
     requiresIon: false,
   },
+  {
+    id: 'kartverket-topo',
+    label: 'Kartverket Topo',
+    shortLabel: 'Topo',
+    kind: 'kartverket',
+    layer: 'topo',
+    requiresIon: false,
+  },
+  {
+    id: 'kartverket-nautical',
+    label: 'Kartverket Nautical',
+    shortLabel: 'Nautical',
+    kind: 'kartverket',
+    layer: 'sjokartraster',
+    requiresIon: false,
+  },
 ];

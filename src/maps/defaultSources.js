@@ -5,7 +5,9 @@ import {
   createOsmImagery,
   createEsriImagery,
   createIonImagery,
+  createKartverketImagery,
   ESRI_ATTRIBUTION_HTML,
+  KARTVERKET_ATTRIBUTION_HTML,
 } from './imagery.js';
 import { createWorldTerrain, createKeylessTerrain } from './terrain.js';
 
@@ -47,9 +49,11 @@ export function createDefaultMapSources({
       const imagery =
         descriptor.kind === 'ion'
           ? () => createIonImagery(descriptor.style, ionToken)
-          : descriptor.id === 'osm'
-            ? createOsmImagery
-            : createEsriImagery;
+          : descriptor.kind === 'kartverket'
+            ? () => createKartverketImagery(descriptor.layer)
+            : descriptor.id === 'osm'
+              ? createOsmImagery
+              : createEsriImagery;
       return {
         ...common,
         imagery,
@@ -65,6 +69,16 @@ export function createDefaultMapSources({
                 id: 'osm',
                 threshold: 2,
                 message: 'Esri Satellite tile requests failed; using OSM',
+              },
+            }
+          : {}),
+        ...(descriptor.kind === 'kartverket'
+          ? {
+              credit: KARTVERKET_ATTRIBUTION_HTML,
+              tileFailureFallback: {
+                id: 'osm',
+                threshold: 2,
+                message: `${descriptor.label} tile requests failed; using OSM`,
               },
             }
           : {}),

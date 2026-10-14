@@ -37,7 +37,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
     // Street Level adds its toggle enum values and generated alias hint.
-    '9eb113454c5af5e32e27ffcdc7919d0e4600ba1d204f8f175e071152be41ad0f',
+    // Kartverket adds two map stacks and names them in the stack description.
+    '63a7ed10e51aaa07f0f5f63ab53ad946e36cd27a714862699e53274fd9a7f3c0',
   );
 });
 
@@ -105,6 +106,9 @@ test('all legacy action arguments are byte-identical after removing the delibera
   delete property('show_data_layers_menu').layerId.enum;
   delete property('get_entity_context').layerId.enum;
   delete property('analyst_query').layers.items.enum;
+  // Kartverket's two Norwegian basemaps are additive map stacks.
+  const stacks = property('set_map_stack').stack;
+  stacks.enum = stacks.enum.filter((id) => !id.startsWith('kartverket-'));
   const panels = property('set_panel_open').panelId;
   panels.enum = panels.enum.filter(
     (id) => !['weather-panel', 'recent-imagery-panel'].includes(id),

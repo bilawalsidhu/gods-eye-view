@@ -11,6 +11,46 @@ export function createOsmImagery() {
   });
 }
 
+export const KARTVERKET_ATTRIBUTION_HTML =
+  '© <a href="https://www.kartverket.no" target="_blank" rel="noopener">Kartverket</a>, CC BY 4.0';
+
+/**
+ * Kartverket's open WMTS cache (no key, CORS open): Norway's topographic
+ * map, or its nautical charts. Tiles outside each layer's extent come back
+ * empty, so requests stop at it: elsewhere the bare globe shows.
+ */
+export const KARTVERKET_LAYERS = Object.freeze({
+  topo: Object.freeze({
+    west: 3.7765,
+    south: 57.6411,
+    east: 31.9867,
+    north: 71.5664,
+  }),
+  sjokartraster: Object.freeze({
+    west: -14.6549,
+    south: 53.7516,
+    east: 44.2455,
+    north: 81.7781,
+  }),
+});
+
+export function createKartverketImagery(layer) {
+  const extent = KARTVERKET_LAYERS[layer];
+  if (!extent) throw new Error(`Unknown Kartverket layer: ${layer}`);
+  return new Cesium.UrlTemplateImageryProvider({
+    url: `https://cache.kartverket.no/v1/wmts/1.0.0/${layer}/default/webmercator/{z}/{y}/{x}.png`,
+    tilingScheme: new Cesium.WebMercatorTilingScheme(),
+    maximumLevel: 18,
+    rectangle: Cesium.Rectangle.fromDegrees(
+      extent.west,
+      extent.south,
+      extent.east,
+      extent.north,
+    ),
+    credit: new Cesium.Credit(KARTVERKET_ATTRIBUTION_HTML),
+  });
+}
+
 export function createEsriImagery() {
   return Cesium.ArcGisMapServerImageryProvider.fromUrl(
     'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',

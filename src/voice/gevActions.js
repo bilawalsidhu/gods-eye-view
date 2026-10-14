@@ -242,6 +242,16 @@ const STACK_ALIASES = new Map([
   ['road', 'osm'],
   ['roads', 'osm'],
   ['road map', 'osm'],
+  ['kartverket-topo', 'kartverket-topo'],
+  ['kartverket', 'kartverket-topo'],
+  ['kartverket topo', 'kartverket-topo'],
+  ['norwegian topo', 'kartverket-topo'],
+  ['topographic map', 'kartverket-topo'],
+  ['kartverket-nautical', 'kartverket-nautical'],
+  ['kartverket nautical', 'kartverket-nautical'],
+  ['nautical chart', 'kartverket-nautical'],
+  ['sea chart', 'kartverket-nautical'],
+  ['sjøkart', 'kartverket-nautical'],
 ]);
 
 /** Search order for track_entity across entity layer families. */

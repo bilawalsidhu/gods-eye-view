@@ -351,6 +351,8 @@ const schemas = [
             'bing-labels',
             'esri-imagery',
             'osm',
+            'kartverket-topo',
+            'kartverket-nautical',
           ],
         },
       },
