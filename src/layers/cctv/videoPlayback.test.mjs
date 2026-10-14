@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attachCctvVideo } from './videoPlayback.js';
+import { webcrypto } from 'node:crypto';
+import { attachCctvVideo, createLeaseId } from './videoPlayback.js';
+
+const LEASE_V4 =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+/** What an insecure context exposes: getRandomValues but no randomUUID. */
+const insecureCrypto = {
+  getRandomValues: (array) => webcrypto.getRandomValues(array),
+};
 function video() {
   const v = new EventTarget();
   Object.assign(v, {
@@ -67,6 +76,34 @@ test('native HLS releases its client lease without response-header access', asyn
   assert.equal(releases.length, 1);
   assert.equal(releases[0].url, requested);
   assert.equal(releases[0].init.method, 'DELETE');
+});
+
+test('lease ids are v4 UUIDs with or without crypto.randomUUID', () => {
+  assert.match(createLeaseId(), LEASE_V4);
+  const ids = new Set();
+  for (let i = 0; i < 64; i++) ids.add(createLeaseId(insecureCrypto));
+  assert.equal(ids.size, 64);
+  for (const id of ids) assert.match(id, LEASE_V4);
+});
+
+test('HLS starts on a plain-HTTP LAN page without crypto.randomUUID', async () => {
+  const source = video();
+  source.canPlayType = () => 'probably';
+  const playback = attachCctvVideo(source, '/api/cctv/media/a', 'hls', {
+    loadHls: async () => ({ default: { isSupported: () => false } }),
+    fetchImpl: async () => {},
+    cryptoImpl: insecureCrypto,
+  });
+  try {
+    await playback.ready;
+    const lease = new URL(
+      source.src,
+      'http://192.168.1.10:4173/',
+    ).searchParams.get('lease');
+    assert.match(lease, LEASE_V4);
+  } finally {
+    playback.dispose();
+  }
 });
 
 test('finite video feeds retain looping while live HLS does not loop', async () => {

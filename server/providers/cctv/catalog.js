@@ -19,17 +19,21 @@ import {
   loadCalgarySourcesFromOpenData,
   loadDelDOTSourcesFromOpenData,
   loadVegvesenSourcesFromOpenData,
+  loadNycSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
 const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
+/** Env opt-in: only "1" enables. For packs whose feed access needs an
+ * operator agreement, so an unset flag never reaches the upstream. */
+const envOptIn = (name) => String(process.env[name] || '').trim() === '1';
 
 /**
  * Live open-data packs, in merge order. Adding a region is one entry here
  * plus its loader in sources.js; the catalog cap is shared across entries
  * round-robin (cap.js), so a new pack never silently evicts an older one.
  * Each pack fails independently (allSettled) and is gated by its own env
- * kill switch.
+ * kill switch, or by an opt-in flag where access needs an agreement.
  */
 const LIVE_PACKS = [
   { name: 'austin', enabled: () => true, load: loadAustinSourcesFromOpenData },
@@ -97,6 +101,13 @@ const LIVE_PACKS = [
     name: 'vegvesen',
     enabled: () => envEnabled('CCTV_VEGVESEN_ENABLED'),
     load: loadVegvesenSourcesFromOpenData,
+  },
+  {
+    // NYC DOT requires a data-sharing agreement for this feed, so the pack is
+    // off unless the operator opts in (see DATA_SOURCES.md).
+    name: 'nyc',
+    enabled: () => envOptIn('CCTV_NYC_ENABLED'),
+    load: loadNycSourcesFromOpenData,
   },
 ];
 /**

@@ -49,8 +49,8 @@ function splitComponents(query) {
   const parts = /[,;]/.test(text)
     ? text.split(/[,;]/)
     : text.split(/\s+(?=[+-]?[.\d]|[NSEW]\s*[+-]?[.\d])/i);
-  const trimmed = parts.map((part) => part.trim()).filter(Boolean);
-  return trimmed.length === 2 ? trimmed : null;
+  const trimmed = parts.map((part) => part.trim());
+  return trimmed.length === 2 && trimmed.every(Boolean) ? trimmed : null;
 }
 
 /** Present a parsed pair the way a coordinate is normally written. */
