@@ -14,7 +14,7 @@ import { applicationServices } from './services/application.js';
  * Color theming is driven by the active shader mode via CSS custom properties.
  */
 
-import * as Cesium from 'cesium';
+import * as geo from './geo/index.js';
 import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
@@ -341,8 +341,8 @@ export class IntelHUD {
     const cartographic = camera.positionCartographic;
     if (!cartographic) return;
 
-    const lonDeg = Cesium.Math.toDegrees(cartographic.longitude);
-    const latDeg = Cesium.Math.toDegrees(cartographic.latitude);
+    const lonDeg = geo.math.toDegrees(cartographic.longitude);
+    const latDeg = geo.math.toDegrees(cartographic.latitude);
     const altM = cartographic.height;
     const latDMS = this._toDMS(latDeg, 'lat');
     const lonDMS = this._toDMS(lonDeg, 'lon');
@@ -407,7 +407,7 @@ export class IntelHUD {
 
     // Off-nadir angle (ONA): camera pitch of -90 deg is nadir (straight down),
     // so ONA = 90 + pitch gives 0 at nadir and increases toward the horizon.
-    const pitchDeg = Cesium.Math.toDegrees(camera.pitch);
+    const pitchDeg = geo.math.toDegrees(camera.pitch);
     const ona = Math.max(0, 90 + pitchDeg);
     const onaEl = document.getElementById('hud-ona');
     if (onaEl) onaEl.textContent = `ONA: ${ona.toFixed(1)}°`;
@@ -512,19 +512,19 @@ export class IntelHUD {
     const declination =
       23.45 *
       Math.sin(
-        Cesium.Math.toRadians(
+        geo.math.toRadians(
           (360 / 365) * (now.getUTCDate() + 30 * now.getUTCMonth() - 81),
         ),
       );
-    const latRad = Cesium.Math.toRadians(lat);
-    const decRad = Cesium.Math.toRadians(declination);
-    const haRad = Cesium.Math.toRadians(hourAngle);
+    const latRad = geo.math.toRadians(lat);
+    const decRad = geo.math.toRadians(declination);
+    const haRad = geo.math.toRadians(hourAngle);
     // Standard formula: sin(el) = sin(lat)*sin(dec) + cos(lat)*cos(dec)*cos(ha)
     const sinEl =
       Math.sin(latRad) * Math.sin(decRad) +
       Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
     // Clamp to [-1,1] to guard against floating-point drift before asin
-    return Cesium.Math.toDegrees(Math.asin(Math.max(-1, Math.min(1, sinEl))));
+    return geo.math.toDegrees(Math.asin(Math.max(-1, Math.min(1, sinEl))));
   }
 
   /**
@@ -571,10 +571,10 @@ export class IntelHUD {
   _viewWindowKm(latDeg) {
     const rect = this.viewer.camera.computeViewRectangle();
     if (!rect) return null;
-    const north = Cesium.Math.toDegrees(rect.north);
-    const south = Cesium.Math.toDegrees(rect.south);
-    let east = Cesium.Math.toDegrees(rect.east);
-    let west = Cesium.Math.toDegrees(rect.west);
+    const north = geo.math.toDegrees(rect.north);
+    const south = geo.math.toDegrees(rect.south);
+    let east = geo.math.toDegrees(rect.east);
+    let west = geo.math.toDegrees(rect.west);
     let lonSpan = Math.abs(east - west);
     // Handle antimeridian wrap: if span exceeds 180 deg, take the shorter arc
     if (lonSpan > 180) lonSpan = 360 - lonSpan;
@@ -583,7 +583,7 @@ export class IntelHUD {
     // longitude distance is scaled by cos(lat) to account for meridian convergence.
     const widthKm = Math.max(
       0,
-      lonSpan * 111 * Math.cos(Cesium.Math.toRadians(latDeg)),
+      lonSpan * 111 * Math.cos(geo.math.toRadians(latDeg)),
     );
     const heightKm = Math.max(0, latSpan * 111);
     return { widthKm, heightKm };
@@ -599,7 +599,7 @@ export class IntelHUD {
    * @returns {number} Distance in kilometers.
    */
   _haversineKm(lat1, lon1, lat2, lon2) {
-    const toRad = (deg) => Cesium.Math.toRadians(deg);
+    const toRad = (deg) => geo.math.toRadians(deg);
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
     const a =

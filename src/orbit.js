@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from './geo/index.js';
 import {
   holdContinuousRender,
   releaseContinuousRender,
@@ -16,7 +17,7 @@ export class OrbitController {
     this.target = null;
     this.radius = 500;
     this.pitch = -30;
-    this.speed = Cesium.Math.toRadians(6); // ~6°/sec → full rotation in ~60s
+    this.speed = geo.math.toRadians(6); // ~6°/sec → full rotation in ~60s
     this.angle = 0;
     this._removeListener = null;
   }
@@ -35,7 +36,7 @@ export class OrbitController {
     this.target = targetCartesian;
     this.radius = options.radius || this.radius;
     this.pitch = options.pitch || this.pitch;
-    this.speed = Cesium.Math.toRadians(options.speed || 6);
+    this.speed = geo.math.toRadians(options.speed || 6);
     this.active = true;
     // Orbit mutates the camera from preRender — without a hold the loop
     // starves after its first idle frame. (perf wave 2)
@@ -56,7 +57,7 @@ export class OrbitController {
 
       const hpr = new Cesium.HeadingPitchRange(
         this.angle,
-        Cesium.Math.toRadians(this.pitch),
+        geo.math.toRadians(this.pitch),
         this.radius,
       );
       this.viewer.camera.lookAt(this.target, hpr);

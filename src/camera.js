@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from './geo/index.js';
 
 /**
  * Camera presets for notable locations.
@@ -6,26 +7,26 @@ import * as Cesium from 'cesium';
  */
 export const CAMERA_PRESETS = {
   austin: {
-    destination: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 800),
+    destination: geo.cartesian3.fromDegrees(-97.7431, 30.2672, 800),
     orientation: {
-      heading: Cesium.Math.toRadians(0),
-      pitch: Cesium.Math.toRadians(-35),
+      heading: geo.math.toRadians(0),
+      pitch: geo.math.toRadians(-35),
       roll: 0.0,
     },
   },
   sf: {
-    destination: Cesium.Cartesian3.fromDegrees(-122.4194, 37.7749, 1000),
+    destination: geo.cartesian3.fromDegrees(-122.4194, 37.7749, 1000),
     orientation: {
-      heading: Cesium.Math.toRadians(30),
-      pitch: Cesium.Math.toRadians(-30),
+      heading: geo.math.toRadians(30),
+      pitch: geo.math.toRadians(-30),
       roll: 0.0,
     },
   },
   nyc: {
-    destination: Cesium.Cartesian3.fromDegrees(-73.9857, 40.7484, 1200),
+    destination: geo.cartesian3.fromDegrees(-73.9857, 40.7484, 1200),
     orientation: {
-      heading: Cesium.Math.toRadians(-20),
-      pitch: Cesium.Math.toRadians(-30),
+      heading: geo.math.toRadians(-20),
+      pitch: geo.math.toRadians(-30),
       roll: 0.0,
     },
   },
@@ -53,10 +54,10 @@ export function flyToPreset(viewer, presetName, duration = 3.0) {
 export function flyToAustin(viewer) {
   // Start from a high altitude, then fly down
   viewer.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 25000),
+    destination: geo.cartesian3.fromDegrees(-97.7431, 30.2672, 25000),
     orientation: {
-      heading: Cesium.Math.toRadians(0),
-      pitch: Cesium.Math.toRadians(-90),
+      heading: geo.math.toRadians(0),
+      pitch: geo.math.toRadians(-90),
       roll: 0.0,
     },
   });
@@ -65,10 +66,10 @@ export function flyToAustin(viewer) {
   const timer = setTimeout(() => {
     if (viewer.isDestroyed()) return;
     viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 600),
+      destination: geo.cartesian3.fromDegrees(-97.7431, 30.2672, 600),
       orientation: {
-        heading: Cesium.Math.toRadians(15),
-        pitch: Cesium.Math.toRadians(-30),
+        heading: geo.math.toRadians(15),
+        pitch: geo.math.toRadians(-30),
         roll: 0.0,
       },
       duration: 4.0,

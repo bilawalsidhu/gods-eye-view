@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 
 const MAX_FRAME_ATTEMPTS = 120;
 const MIN_TRACKED_RANGE_M = 150;
@@ -59,7 +59,7 @@ export function trackedModelScaleForPixelCap({
 export function trackedDisplayPositionForCamera(entity, time, result) {
   const displayedPosition = entity?.gevDisplayPosition?.();
   return displayedPosition
-    ? Cesium.Cartesian3.clone(displayedPosition, result)
+    ? geo.cartesian3.clone(displayedPosition, result)
     : entity?.position?.getValue(time, result);
 }
 
@@ -106,15 +106,15 @@ export function clampTrackedCameraPosition(
   minimumRangeM = MIN_TRACKED_RANGE_M,
 ) {
   const crossedOrigin =
-    Cesium.Cartesian3.dot(camera.position, previousPosition) <= 0;
-  const forwardDistance = -Cesium.Cartesian3.dot(
+    geo.cartesian3.dot(camera.position, previousPosition) <= 0;
+  const forwardDistance = -geo.cartesian3.dot(
     camera.position,
     camera.direction,
   );
-  const rangeSquared = Cesium.Cartesian3.magnitudeSquared(camera.position);
+  const rangeSquared = geo.cartesian3.magnitudeSquared(camera.position);
   if (crossedOrigin) {
-    Cesium.Cartesian3.normalize(previousPosition, camera.position);
-    Cesium.Cartesian3.multiplyByScalar(
+    geo.cartesian3.normalize(previousPosition, camera.position);
+    geo.cartesian3.multiplyByScalar(
       camera.position,
       minimumRangeM,
       camera.position,
@@ -125,7 +125,7 @@ export function clampTrackedCameraPosition(
     forwardDistance < minimumRangeM ||
     rangeSquared < minimumRangeM * minimumRangeM
   ) {
-    Cesium.Cartesian3.multiplyByScalar(
+    geo.cartesian3.multiplyByScalar(
       camera.direction,
       -minimumRangeM,
       camera.position,
@@ -155,11 +155,11 @@ export function clampTrackedCameraPosition(
 export function applyTrackedCameraFrame(viewer, entity, viewFrom) {
   if (!viewer || !entity || !viewFrom) return;
   let attempts = 0;
-  const trackedTransform = new Cesium.Matrix4();
-  const trackedPosition = new Cesium.Cartesian3();
-  const resolvedViewFrom = new Cesium.Cartesian3();
-  const cameraOffset = new Cesium.Cartesian3();
-  const previousCameraPosition = new Cesium.Cartesian3();
+  const trackedTransform = geo.matrix4.create();
+  const trackedPosition = geo.cartesian3.create();
+  const resolvedViewFrom = geo.cartesian3.create();
+  const cameraOffset = geo.cartesian3.create();
+  const previousCameraPosition = geo.cartesian3.create();
   let framed = false;
   const restoreZoomInertia = acquireStableTrackedZoom(
     viewer.scene.screenSpaceCameraController,
@@ -201,24 +201,24 @@ export function applyTrackedCameraFrame(viewer, entity, viewFrom) {
         if (attempts >= MAX_FRAME_ATTEMPTS) stop();
         return;
       }
-      const transform = Cesium.Transforms.eastNorthUpToFixedFrame(
+      const transform = geo.transforms.eastNorthUpToFixedFrame(
         position,
-        Cesium.Ellipsoid.WGS84,
+        geo.ellipsoid.WGS84,
         trackedTransform,
       );
       const offset =
         typeof viewFrom.getValue === 'function'
           ? viewFrom.getValue(viewer.clock.currentTime, resolvedViewFrom)
-          : Cesium.Cartesian3.clone(viewFrom, resolvedViewFrom);
+          : geo.cartesian3.clone(viewFrom, resolvedViewFrom);
       if (
         !offset ||
-        Cesium.Cartesian3.magnitudeSquared(offset) < Cesium.Math.EPSILON12
+        geo.cartesian3.magnitudeSquared(offset) < geo.math.EPSILON12
       ) {
         stop();
         return;
       }
       viewer.camera.lookAtTransform(transform, offset);
-      Cesium.Cartesian3.clone(viewer.camera.position, previousCameraPosition);
+      geo.cartesian3.clone(viewer.camera.position, previousCameraPosition);
       framed = true;
       return;
     }
@@ -227,10 +227,10 @@ export function applyTrackedCameraFrame(viewer, entity, viewFrom) {
     // continuous camera writer. Only a programmatic zoom that bypasses the
     // controller's minimumZoomDistance needs correction.
     if (clampTrackedCameraPosition(viewer.camera, previousCameraPosition)) {
-      Cesium.Cartesian3.clone(viewer.camera.position, cameraOffset);
+      geo.cartesian3.clone(viewer.camera.position, cameraOffset);
       viewer.camera.lookAtTransform(viewer.camera.transform, cameraOffset);
     }
-    Cesium.Cartesian3.clone(viewer.camera.position, previousCameraPosition);
+    geo.cartesian3.clone(viewer.camera.position, previousCameraPosition);
   });
   return stop;
 }

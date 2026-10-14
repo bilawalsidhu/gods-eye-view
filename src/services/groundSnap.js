@@ -46,7 +46,7 @@
  * are per-layer, keyed by that layer's icao space).
  */
 
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 
 /** Taxi threshold: a cached snap answers directly for moves up to this far from
  *  the sampled spot (m). Past it the value is demoted to a held last-known and a
@@ -178,13 +178,13 @@ export function createGroundSnap({ groundFloor }) {
   const entries = new Map();
   let windowStartMs = 0;
   let windowCount = 0;
-  const scratchCarto = new Cesium.Cartographic();
-  const scratchSurfacePos = new Cesium.Cartesian3();
+  const scratchCarto = geo.cartographic.create();
+  const scratchSurfacePos = geo.cartesian3.create();
   /** Separate from `scratchCarto`: the held-evidence check runs on paths that
    *  return BEFORE the sample writes `scratchCarto`, and on the sampling path it
    *  must not disturb the cartographic that `reportValidatedMeshFloorCell` reads
    *  back after the sample lands. */
-  const scratchHeldCarto = new Cesium.Cartographic();
+  const scratchHeldCarto = geo.cartographic.create();
 
   /**
    * The last measurement for a contact whose fresh snap has been demoted — it
@@ -205,7 +205,7 @@ export function createGroundSnap({ groundFloor }) {
     if (!entry || !entry.held || entry.h == null || !entry.samplePos)
       return null;
     if (
-      Cesium.Cartesian3.distanceSquared(surfacePos, entry.samplePos) >
+      geo.cartesian3.distanceSquared(surfacePos, entry.samplePos) >
       HELD_SNAP_MAX_DRIFT_M * HELD_SNAP_MAX_DRIFT_M
     ) {
       return dropHold(entry);
@@ -253,15 +253,15 @@ export function createGroundSnap({ groundFloor }) {
    * @returns {number|null}
    */
   function freshMeasuredFloorAt(surfacePos) {
-    const carto = Cesium.Cartographic.fromCartesian(
+    const carto = geo.cartographic.fromCartesian(
       surfacePos,
-      Cesium.Ellipsoid.WGS84,
+      geo.ellipsoid.WGS84,
       scratchHeldCarto,
     );
     if (!carto) return null;
     return cachedMeshFloor(
-      Cesium.Math.toDegrees(carto.latitude),
-      Cesium.Math.toDegrees(carto.longitude),
+      geo.math.toDegrees(carto.latitude),
+      geo.math.toDegrees(carto.longitude),
     );
   }
 
@@ -284,7 +284,7 @@ export function createGroundSnap({ groundFloor }) {
    * @returns {number|null}
    */
   function heightFor(viewer, icao, pos, getExclusions) {
-    const surfacePos = Cesium.Ellipsoid.WGS84.scaleToGeodeticSurface(
+    const surfacePos = geo.ellipsoid.WGS84.scaleToGeodeticSurface(
       pos,
       scratchSurfacePos,
     );
@@ -292,7 +292,7 @@ export function createGroundSnap({ groundFloor }) {
     const cached = entries.get(icao);
     if (cached && cached.h != null && cached.samplePos && !cached.held) {
       if (
-        Cesium.Cartesian3.distanceSquared(surfacePos, cached.samplePos) <=
+        geo.cartesian3.distanceSquared(surfacePos, cached.samplePos) <=
         MOVE_INVALIDATE_M * MOVE_INVALIDATE_M
       ) {
         return cached.h;
@@ -339,9 +339,9 @@ export function createGroundSnap({ groundFloor }) {
     windowCount += 1;
     let sampled;
     try {
-      const carto = Cesium.Cartographic.fromCartesian(
+      const carto = geo.cartographic.fromCartesian(
         pos,
-        Cesium.Ellipsoid.WGS84,
+        geo.ellipsoid.WGS84,
         scratchCarto,
       );
       // sampleHeight throws when unsupported (no depth textures) — that's a miss.
@@ -357,8 +357,8 @@ export function createGroundSnap({ groundFloor }) {
     if (!Number.isFinite(sampled) || sampled < -150) return miss();
     if (meshFloorPreferred()) {
       reportValidatedMeshFloorCell(
-        Cesium.Math.toDegrees(scratchCarto.latitude),
-        Cesium.Math.toDegrees(scratchCarto.longitude),
+        geo.math.toDegrees(scratchCarto.latitude),
+        geo.math.toDegrees(scratchCarto.longitude),
         sampled,
       );
     }
@@ -366,7 +366,7 @@ export function createGroundSnap({ groundFloor }) {
     // contact is now, and it outranks a memory of where it was.
     entries.set(icao, {
       h: sampled,
-      samplePos: Cesium.Cartesian3.clone(surfacePos),
+      samplePos: geo.cartesian3.clone(surfacePos),
       held: false,
       nextRetryMs: 0,
       misses: 0,

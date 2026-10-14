@@ -16,6 +16,7 @@
  */
 
 import * as Cesium from 'cesium';
+import * as geo from './geo/index.js';
 import {
   holdContinuousRender,
   releaseContinuousRender,
@@ -36,8 +37,8 @@ const ONCE = {
   panViewFraction: 0.25,
   durationS: 0.9,
 };
-const PITCH_MIN = Cesium.Math.toRadians(-89);
-const PITCH_MAX = Cesium.Math.toRadians(-5);
+const PITCH_MIN = geo.math.toRadians(-89);
+const PITCH_MAX = geo.math.toRadians(-5);
 
 /* ── Route dolly: cinematic tuning ──────────────────────────────────────────
  * Every knob an owner may want to retune lives in this block. The shaping is
@@ -296,30 +297,30 @@ export const ROUTE_CINEMA = Object.freeze({
 
 /* ── Route dolly geometry ────────────────────────────────────────────────── */
 
-const _arcA = new Cesium.Cartesian3();
-const _arcB = new Cesium.Cartesian3();
-const _chordVertical = new Cesium.Cartesian3();
-const _turnCross = new Cesium.Cartesian3();
-const _framePos = new Cesium.Cartesian3();
-const _frameAheadPos = new Cesium.Cartesian3();
-const _frameUp = new Cesium.Cartesian3();
-const _frameIn = new Cesium.Cartesian3();
-const _frameOut = new Cesium.Cartesian3();
-const _frameGaze = new Cesium.Cartesian3();
-const _frameRight = new Cesium.Cartesian3();
-const _frameLevelUp = new Cesium.Cartesian3();
-const _frameDir = new Cesium.Cartesian3();
-const _frameEye = new Cesium.Cartesian3();
-const _frameBankedUp = new Cesium.Cartesian3();
-const _frameCarto = new Cesium.Cartographic();
-const _frameAheadCarto = new Cesium.Cartographic();
-const _bankQuat = new Cesium.Quaternion();
-const _bankMatrix = new Cesium.Matrix3();
-const _headingQuat = new Cesium.Quaternion();
-const _headingMatrix = new Cesium.Matrix3();
-const _warmPos = new Cesium.Cartesian3();
-const _warmCarto = new Cesium.Cartographic();
-const _probeCarto = new Cesium.Cartographic();
+const _arcA = geo.cartesian3.create();
+const _arcB = geo.cartesian3.create();
+const _chordVertical = geo.cartesian3.create();
+const _turnCross = geo.cartesian3.create();
+const _framePos = geo.cartesian3.create();
+const _frameAheadPos = geo.cartesian3.create();
+const _frameUp = geo.cartesian3.create();
+const _frameIn = geo.cartesian3.create();
+const _frameOut = geo.cartesian3.create();
+const _frameGaze = geo.cartesian3.create();
+const _frameRight = geo.cartesian3.create();
+const _frameLevelUp = geo.cartesian3.create();
+const _frameDir = geo.cartesian3.create();
+const _frameEye = geo.cartesian3.create();
+const _frameBankedUp = geo.cartesian3.create();
+const _frameCarto = geo.cartographic.create();
+const _frameAheadCarto = geo.cartographic.create();
+const _bankQuat = geo.quaternion.create();
+const _bankMatrix = geo.matrix3.create();
+const _headingQuat = geo.quaternion.create();
+const _headingMatrix = geo.matrix3.create();
+const _warmPos = geo.cartesian3.create();
+const _warmCarto = geo.cartographic.create();
+const _probeCarto = geo.cartographic.create();
 
 /** Point at arc length `s` along the polyline (binary search — queries jump
  *  backwards for the inbound chord, so a forward cursor would not do). */
@@ -336,23 +337,23 @@ function arcPoint(state, s, result) {
   const segLen = cumM[lo + 1] - cumM[lo];
   const t =
     segLen > 1e-6 ? Math.min(1, Math.max(0, (clamped - cumM[lo]) / segLen)) : 0;
-  return Cesium.Cartesian3.lerp(pts[lo], pts[lo + 1], t, result);
+  return geo.cartesian3.lerp(pts[lo], pts[lo + 1], t, result);
 }
 
 /** Unit horizontal direction from arc `sA` to arc `sB`, or null when degenerate. */
 function horizontalChord(state, sA, sB, up, result) {
   const a = arcPoint(state, sA, _arcA);
   const b = arcPoint(state, sB, _arcB);
-  Cesium.Cartesian3.subtract(b, a, result);
-  const vertical = Cesium.Cartesian3.multiplyByScalar(
+  geo.cartesian3.subtract(b, a, result);
+  const vertical = geo.cartesian3.multiplyByScalar(
     up,
-    Cesium.Cartesian3.dot(result, up),
+    geo.cartesian3.dot(result, up),
     _chordVertical,
   );
-  Cesium.Cartesian3.subtract(result, vertical, result);
-  const len = Cesium.Cartesian3.magnitude(result);
+  geo.cartesian3.subtract(result, vertical, result);
+  const len = geo.cartesian3.magnitude(result);
   if (!(len > 1e-3)) return null;
-  return Cesium.Cartesian3.divideByScalar(result, len, result);
+  return geo.cartesian3.divideByScalar(result, len, result);
 }
 
 /**
@@ -368,9 +369,9 @@ function horizontalChord(state, sA, sB, up, result) {
  * @returns {number} Radians, + = right.
  */
 export function signedTurnRad(a, b, up) {
-  const cross = Cesium.Cartesian3.cross(a, b, _turnCross);
-  const sinLeft = Cesium.Cartesian3.dot(cross, up);
-  const cosTurn = Cesium.Cartesian3.dot(a, b);
+  const cross = geo.cartesian3.cross(a, b, _turnCross);
+  const sinLeft = geo.cartesian3.dot(cross, up);
+  const cosTurn = geo.cartesian3.dot(a, b);
   if (cosTurn <= -1 + ANTIPODAL_EPS && Math.abs(sinLeft) < ANTIPODAL_EPS)
     return Math.PI;
   return -Math.atan2(sinLeft, cosTurn);
@@ -403,13 +404,13 @@ export function routeCorridorCells(
     s += ROUTE_WARM_STEP_M
   ) {
     const point = arcPoint(state, s, _warmPos);
-    const carto = Cesium.Cartographic.fromCartesian(
+    const carto = geo.cartographic.fromCartesian(
       point,
-      Cesium.Ellipsoid.WGS84,
+      geo.ellipsoid.WGS84,
       _warmCarto,
     );
-    const lat = Number(Cesium.Math.toDegrees(carto.latitude).toFixed(3));
-    const lon = Number(Cesium.Math.toDegrees(carto.longitude).toFixed(3));
+    const lat = Number(geo.math.toDegrees(carto.latitude).toFixed(3));
+    const lon = Number(geo.math.toDegrees(carto.longitude).toFixed(3));
     const key = `${lat},${lon}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -555,7 +556,7 @@ export function probeMeshFloorM(scene, cells) {
   let sampled = 0;
   for (const cell of cells) {
     try {
-      const carto = Cesium.Cartographic.fromDegrees(
+      const carto = geo.cartographic.fromDegrees(
         cell.lon,
         cell.lat,
         0,
@@ -604,9 +605,9 @@ export function createRouteFlight({
   // the mean: routes under 10 m (slow) / 20 m (normal) / 45 m (fast) fly slower
   // than asked. Those are shorter than the camera is tall — nothing to see.
   const durationS = Math.max(0.5, totalM / cruiseMps);
-  const pathHeightM = Cesium.Cartographic.fromCartesian(
+  const pathHeightM = geo.cartographic.fromCartesian(
     pts[0],
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _warmCarto,
   ).height;
   const state = {
@@ -702,12 +703,12 @@ export function advanceRouteFlight(state, dt) {
   state.groundSpeedMps = cruiseMps * profile.speed;
 
   const pos = arcPoint(state, traveled, _framePos);
-  const carto = Cesium.Cartographic.fromCartesian(
+  const carto = geo.cartographic.fromCartesian(
     pos,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _frameCarto,
   );
-  const up = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormalCartographic(
+  const up = geo.ellipsoid.WGS84.geodeticSurfaceNormalCartographic(
     carto,
     _frameUp,
   );
@@ -731,7 +732,7 @@ export function advanceRouteFlight(state, dt) {
   );
   const turnRateDegS =
     inbound && outbound
-      ? Cesium.Math.toDegrees(signedTurnRad(inbound, outbound, up)) /
+      ? geo.math.toDegrees(signedTurnRad(inbound, outbound, up)) /
         ROUTE_BANK_WINDOW_S
       : 0;
   const bankTarget = routeBankTargetDeg(turnRateDegS, state.reducedMotion);
@@ -763,8 +764,7 @@ export function advanceRouteFlight(state, dt) {
     horizontalChord(state, traveled, traveled + lookaheadM, up, _frameGaze) ||
     outbound ||
     inbound;
-  if (gaze && !state.headingDir)
-    state.headingDir = Cesium.Cartesian3.clone(gaze);
+  if (gaze && !state.headingDir) state.headingDir = geo.cartesian3.clone(gaze);
   else if (gaze) {
     // Rotate the heading TOWARD the gaze about the local up, rather than
     // lerping the two vectors. A Cartesian lerp cannot cross an antipodal pair
@@ -775,66 +775,62 @@ export function advanceRouteFlight(state, dt) {
     const turnToGaze = signedTurnRad(state.headingDir, gaze, up);
     // signedTurnRad is + for a RIGHT turn; a positive rotation about up is a
     // LEFT turn, so the step is negated.
-    const rotation = Cesium.Matrix3.fromQuaternion(
-      Cesium.Quaternion.fromAxisAngle(up, -turnToGaze * k, _headingQuat),
+    const rotation = geo.matrix3.fromQuaternion(
+      geo.quaternion.fromAxisAngle(up, -turnToGaze * k, _headingQuat),
       _headingMatrix,
     );
-    const turned = Cesium.Matrix3.multiplyByVector(
+    const turned = geo.matrix3.multiplyByVector(
       rotation,
       state.headingDir,
       _frameDir,
     );
-    const vertical = Cesium.Cartesian3.multiplyByScalar(
+    const vertical = geo.cartesian3.multiplyByScalar(
       up,
-      Cesium.Cartesian3.dot(turned, up),
+      geo.cartesian3.dot(turned, up),
       _chordVertical,
     );
-    Cesium.Cartesian3.subtract(turned, vertical, turned);
-    if (Cesium.Cartesian3.magnitude(turned) > 1e-6) {
-      Cesium.Cartesian3.normalize(turned, state.headingDir);
+    geo.cartesian3.subtract(turned, vertical, turned);
+    if (geo.cartesian3.magnitude(turned) > 1e-6) {
+      geo.cartesian3.normalize(turned, state.headingDir);
     }
   }
   // A path with no horizontal extent (identical lat/lon, differing heights)
   // has no azimuth to fly: point east so the frame stays orthonormal.
   if (!state.headingDir) {
-    const east = Cesium.Cartesian3.fromElements(-pos.y, pos.x, 0, _frameGaze);
+    const east = geo.cartesian3.fromElements(-pos.y, pos.x, 0, _frameGaze);
     state.headingDir =
-      Cesium.Cartesian3.magnitude(east) > 1e-6
-        ? Cesium.Cartesian3.normalize(east, new Cesium.Cartesian3())
-        : Cesium.Cartesian3.fromElements(1, 0, 0, new Cesium.Cartesian3());
+      geo.cartesian3.magnitude(east) > 1e-6
+        ? geo.cartesian3.normalize(east, geo.cartesian3.create())
+        : geo.cartesian3.fromElements(1, 0, 0, geo.cartesian3.create());
   }
   const heading = state.headingDir;
 
   // Locked pitch: heading gives the azimuth, the pitch never wanders.
-  const pitch = Cesium.Math.toRadians(ROUTE_PITCH_DEG);
-  const direction = Cesium.Cartesian3.normalize(
-    Cesium.Cartesian3.add(
-      Cesium.Cartesian3.multiplyByScalar(heading, Math.cos(pitch), _frameDir),
-      Cesium.Cartesian3.multiplyByScalar(up, Math.sin(pitch), _frameLevelUp),
+  const pitch = geo.math.toRadians(ROUTE_PITCH_DEG);
+  const direction = geo.cartesian3.normalize(
+    geo.cartesian3.add(
+      geo.cartesian3.multiplyByScalar(heading, Math.cos(pitch), _frameDir),
+      geo.cartesian3.multiplyByScalar(up, Math.sin(pitch), _frameLevelUp),
       _frameDir,
     ),
     _frameDir,
   );
   // Orthonormal camera frame, then roll it about its own forward axis: a
   // positive rotation drops the right wing, which is what a right turn wants.
-  const right = Cesium.Cartesian3.normalize(
-    Cesium.Cartesian3.cross(direction, up, _frameRight),
+  const right = geo.cartesian3.normalize(
+    geo.cartesian3.cross(direction, up, _frameRight),
     _frameRight,
   );
-  const levelUp = Cesium.Cartesian3.normalize(
-    Cesium.Cartesian3.cross(right, direction, _frameLevelUp),
+  const levelUp = geo.cartesian3.normalize(
+    geo.cartesian3.cross(right, direction, _frameLevelUp),
     _frameLevelUp,
   );
-  const bankRad = Cesium.Math.toRadians(appliedBankDeg);
+  const bankRad = geo.math.toRadians(appliedBankDeg);
   let bankedUp = levelUp;
   if (Math.abs(bankRad) > 1e-6) {
-    const quat = Cesium.Quaternion.fromAxisAngle(direction, bankRad, _bankQuat);
-    const rotation = Cesium.Matrix3.fromQuaternion(quat, _bankMatrix);
-    bankedUp = Cesium.Matrix3.multiplyByVector(
-      rotation,
-      levelUp,
-      _frameBankedUp,
-    );
+    const quat = geo.quaternion.fromAxisAngle(direction, bankRad, _bankQuat);
+    const rotation = geo.matrix3.fromQuaternion(quat, _bankMatrix);
+    bankedUp = geo.matrix3.multiplyByVector(rotation, levelUp, _frameBankedUp);
   }
 
   // Keep the corridor ahead of the camera warm. The batch dedupes to coarse
@@ -850,19 +846,19 @@ export function advanceRouteFlight(state, dt) {
   let sampledFloor = Number.NaN;
   if (typeof state.floorFn === 'function') {
     const aheadPos = arcPoint(state, traveled + lookaheadM / 2, _frameAheadPos);
-    const aheadCarto = Cesium.Cartographic.fromCartesian(
+    const aheadCarto = geo.cartographic.fromCartesian(
       aheadPos,
-      Cesium.Ellipsoid.WGS84,
+      geo.ellipsoid.WGS84,
       _frameAheadCarto,
     );
     try {
       const here = state.floorFn(
-        Cesium.Math.toDegrees(carto.latitude),
-        Cesium.Math.toDegrees(carto.longitude),
+        geo.math.toDegrees(carto.latitude),
+        geo.math.toDegrees(carto.longitude),
       );
       const ahead = state.floorFn(
-        Cesium.Math.toDegrees(aheadCarto.latitude),
-        Cesium.Math.toDegrees(aheadCarto.longitude),
+        geo.math.toDegrees(aheadCarto.latitude),
+        geo.math.toDegrees(aheadCarto.longitude),
       );
       const warm = [here, ahead].filter((value) => Number.isFinite(value));
       if (warm.length) sampledFloor = Math.max(...warm);
@@ -926,11 +922,11 @@ export function advanceRouteFlight(state, dt) {
     );
   }
   state.appliedHeightM = heightM;
-  const eye = Cesium.Cartesian3.fromRadians(
+  const eye = geo.cartesian3.fromRadians(
     carto.longitude,
     carto.latitude,
     heightM,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _frameEye,
   );
 
@@ -1019,7 +1015,7 @@ function levelCameraRoll() {
   try {
     const cam = _viewer?.camera;
     if (!cam || typeof cam.setView !== 'function') return false;
-    const roll = Cesium.Math.negativePiToPi(cam.roll || 0);
+    const roll = geo.math.negativePiToPi(cam.roll || 0);
     if (Math.abs(roll) < 1e-5) return false;
     cam.setView({
       orientation: { heading: cam.heading, pitch: cam.pitch, roll: 0 },
@@ -1123,9 +1119,9 @@ function onTick() {
       const target = _getTarget?.(_viewer);
       if (!target) return;
       const cam2 = _viewer.camera;
-      const range = Cesium.Cartesian3.distance(cam2.positionWC, target);
-      const carto2 = Cesium.Cartographic.fromCartesian(cam2.positionWC);
-      const tCarto2 = Cesium.Cartographic.fromCartesian(target);
+      const range = geo.cartesian3.distance(cam2.positionWC, target);
+      const carto2 = geo.cartographic.fromCartesian(cam2.positionWC);
+      const tCarto2 = geo.cartographic.fromCartesian(target);
       const dh2 = carto2.height - tCarto2.height;
       m.target = target;
       m.hpr = new Cesium.HeadingPitchRange(
@@ -1140,12 +1136,11 @@ function onTick() {
     }
     if (m.kind === 'orbit') {
       const rate =
-        Cesium.Math.toRadians(ORBIT_DEG_S[m.speed]) *
+        geo.math.toRadians(ORBIT_DEG_S[m.speed]) *
         (m.direction === 'left' ? -1 : 1);
       if (m.mode === 'once') {
         const total =
-          Cesium.Math.toRadians(ONCE.orbitDeg) *
-          (m.direction === 'left' ? -1 : 1);
+          geo.math.toRadians(ONCE.orbitDeg) * (m.direction === 'left' ? -1 : 1);
         m.hpr.heading = m.hprStartHeading + total * scale;
       } else {
         m.hpr.heading += rate * dt;
@@ -1166,11 +1161,11 @@ function onTick() {
       const degS = TILT_DEG_S[m.speed];
       const stepRad =
         m.mode === 'once'
-          ? Cesium.Math.toRadians(
+          ? geo.math.toRadians(
               m.kind === 'tilt' ? ONCE.tiltDeg : ONCE.rotateDeg,
             ) *
             (scale - (m.lastScale || 0))
-          : Cesium.Math.toRadians(degS) * dt;
+          : geo.math.toRadians(degS) * dt;
       m.lastScale = scale;
       if (m.kind === 'tilt') {
         const up = m.direction === 'up';
@@ -1298,7 +1293,7 @@ export function moveCamera(args = {}, runNavigation = null) {
     // Honest limits: at the clamp a tilt is a no-op — say so instead of
     // reporting success and letting the model gaslight itself (field test).
     const pitch = _viewer.camera.pitch;
-    if (direction === 'up' && pitch >= PITCH_MAX - Cesium.Math.toRadians(0.5)) {
+    if (direction === 'up' && pitch >= PITCH_MAX - geo.math.toRadians(0.5)) {
       return {
         ok: false,
         action: 'move_camera',
@@ -1306,10 +1301,7 @@ export function moveCamera(args = {}, runNavigation = null) {
           'Already at the upper tilt limit (near the horizon) — tilt down, or zoom/pan instead.',
       };
     }
-    if (
-      direction === 'down' &&
-      pitch <= PITCH_MIN + Cesium.Math.toRadians(0.5)
-    ) {
+    if (direction === 'down' && pitch <= PITCH_MIN + geo.math.toRadians(0.5)) {
       return {
         ok: false,
         action: 'move_camera',
@@ -1389,10 +1381,10 @@ export function moveCamera(args = {}, runNavigation = null) {
         };
       }
       const cam = _viewer.camera;
-      const range = Cesium.Cartesian3.distance(cam.positionWC, target);
+      const range = geo.cartesian3.distance(cam.positionWC, target);
       // Pitch from geometry so lookAt reproduces the CURRENT framing exactly.
-      const carto = Cesium.Cartographic.fromCartesian(cam.positionWC);
-      const tCarto = Cesium.Cartographic.fromCartesian(target);
+      const carto = geo.cartographic.fromCartesian(cam.positionWC);
+      const tCarto = geo.cartographic.fromCartesian(target);
       const dh = carto.height - tCarto.height;
       const pitch = -Math.asin(
         Math.min(1, Math.max(-1, dh / Math.max(1, range))),
@@ -1505,11 +1497,11 @@ export function flyRoute(
     };
   }
   const pts = route.path.map((p) =>
-    Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0),
+    geo.cartesian3.fromDegrees(p.lon, p.lat, p.height || 0),
   );
   const cumM = [0];
   for (let i = 1; i < pts.length; i += 1) {
-    cumM.push(cumM[i - 1] + Cesium.Cartesian3.distance(pts[i - 1], pts[i]));
+    cumM.push(cumM[i - 1] + geo.cartesian3.distance(pts[i - 1], pts[i]));
   }
   if (!Number.isFinite(cumM.at(-1)) || cumM.at(-1) <= 0) {
     return {

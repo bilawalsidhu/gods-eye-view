@@ -7,10 +7,11 @@
  * skylight (https://github.com/cpaczek/skylight, MIT) shared/src/aim.ts.
  */
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 
 const DEG = Math.PI / 180;
-const _mmCarto = new Cesium.Cartographic();
-const _mmCandidateCarto = new Cesium.Cartographic();
+const _mmCarto = geo.cartographic.create();
+const _mmCandidateCarto = geo.cartographic.create();
 
 export function norm360(deg) {
   return ((deg % 360) + 360) % 360;
@@ -28,22 +29,22 @@ export function norm360(deg) {
  */
 export function liftRepeatedGroundFix(newest, candidatePosition, onGround) {
   if (!onGround || !newest?.position || !candidatePosition) return false;
-  const stored = Cesium.Cartographic.fromCartesian(
+  const stored = geo.cartographic.fromCartesian(
     newest.position,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _mmCarto,
   );
-  const candidate = Cesium.Cartographic.fromCartesian(
+  const candidate = geo.cartographic.fromCartesian(
     candidatePosition,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _mmCandidateCarto,
   );
   if (!stored || !candidate || candidate.height <= stored.height) return false;
-  Cesium.Cartesian3.fromRadians(
+  geo.cartesian3.fromRadians(
     stored.longitude,
     stored.latitude,
     candidate.height,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     newest.position,
   );
   return true;
@@ -66,9 +67,9 @@ export function courseBetweenCartesians(from, to, minChordM = 25) {
   const dy = to.y - from.y;
   const dz = to.z - from.z;
   if (dx * dx + dy * dy + dz * dz < minChordM * minChordM) return null;
-  const carto = Cesium.Cartographic.fromCartesian(
+  const carto = geo.cartographic.fromCartesian(
     from,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _mmCarto,
   );
   if (!carto) return null;
@@ -436,8 +437,8 @@ export function arcOffsetEnu(speedMps, trackDeg, turnRateDps, dtSec, result) {
 }
 
 const _forwardFixArc = { east: 0, north: 0, endCourseDeg: 0 };
-const _forwardFixEnu = new Cesium.Matrix4();
-const _forwardFixOffset = new Cesium.Cartesian3();
+const _forwardFixEnu = geo.matrix4.create();
+const _forwardFixOffset = geo.cartesian3.create();
 
 /**
  * Create a forward-only synthetic fix when a repeated position epoch carries
@@ -474,21 +475,21 @@ export function synthesizeForwardKinematicsFix(newest, next = {}) {
     dtSec,
     _forwardFixArc,
   );
-  Cesium.Cartesian3.fromElements(
+  geo.cartesian3.fromElements(
     _forwardFixArc.east,
     _forwardFixArc.north,
     0,
     _forwardFixOffset,
   );
-  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(
+  const enu = geo.transforms.eastNorthUpToFixedFrame(
     newest.position,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _forwardFixEnu,
   );
-  const position = Cesium.Matrix4.multiplyByPoint(
+  const position = geo.matrix4.multiplyByPoint(
     enu,
     _forwardFixOffset,
-    new Cesium.Cartesian3(),
+    geo.cartesian3.create(),
   );
   return {
     time: Cesium.JulianDate.fromDate(new Date(next.epochMs)),

@@ -2,6 +2,7 @@
  * One-click camera transfer for layer-owned world targets.
  */
 import * as Cesium from 'cesium';
+import * as geo from './geo/index.js';
 
 export const WORLD_FOCUS_REQUEST_EVENT = 'gev:world-request-focus';
 export const WORLD_CLICK_FOCUS_DURATION_SEC = 1.9;
@@ -26,10 +27,10 @@ export function isValidWorldFocusTarget(detail) {
   // Vessel and fire targets are surface-anchored Earth positions. Merely
   // finite coordinates near the ECEF origin cannot be flown to, and must be
   // rejected before the camera policy releases a current follow owner.
-  const magnitude = Cesium.Cartesian3.magnitude(position);
+  const magnitude = geo.cartesian3.magnitude(position);
   return (
     Number.isFinite(magnitude) &&
-    magnitude >= Cesium.Ellipsoid.WGS84.minimumRadius * 0.95
+    magnitude >= geo.ellipsoid.WGS84.minimumRadius * 0.95
   );
 }
 
@@ -85,7 +86,7 @@ export function flyToWorldTarget(viewer, target = {}) {
     {
       offset: new Cesium.HeadingPitchRange(
         heading,
-        Cesium.Math.toRadians(framing.pitchDeg),
+        geo.math.toRadians(framing.pitchDeg),
         framing.rangeM,
       ),
       duration,

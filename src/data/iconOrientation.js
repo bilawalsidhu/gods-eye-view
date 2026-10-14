@@ -22,6 +22,7 @@
  * unverified math swap, decides whether exact projection becomes preferred.
  */
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 
 /** Meters used to give the course vector a stable projection magnitude. */
 const FORWARD_PROBE_M = 2000;
@@ -31,11 +32,11 @@ const FORWARD_PROBE_M = 2000;
  */
 const MIN_SCREEN_COMPONENT_M = 0.5;
 /** Ignore sub-degree projection noise while retaining deliberate camera-orbit rotation. */
-const ROTATION_DEADBAND_RAD = Cesium.Math.toRadians(0.5);
+const ROTATION_DEADBAND_RAD = geo.math.toRadians(0.5);
 
-const _scratchEnu = new Cesium.Matrix4();
-const _scratchForward = new Cesium.Cartesian3();
-const _scratchWorldForward = new Cesium.Cartesian3();
+const _scratchEnu = geo.matrix4.create();
+const _scratchForward = geo.cartesian3.create();
+const _scratchWorldForward = geo.cartesian3.create();
 
 /**
  * Computes the billboard rotation (radians, CCW-positive, for
@@ -58,19 +59,19 @@ export function screenProjectedRotation(
   const camera = scene?.camera;
   if (!camera?.rightWC || !camera?.upWC || !position) return previous;
 
-  const courseRad = Cesium.Math.toRadians(courseDeg || 0);
-  Cesium.Cartesian3.fromElements(
+  const courseRad = geo.math.toRadians(courseDeg || 0);
+  geo.cartesian3.fromElements(
     Math.sin(courseRad) * FORWARD_PROBE_M,
     Math.cos(courseRad) * FORWARD_PROBE_M,
     0,
     _scratchForward,
   );
-  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(
+  const enu = geo.transforms.eastNorthUpToFixedFrame(
     position,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _scratchEnu,
   );
-  Cesium.Matrix4.multiplyByPointAsVector(
+  geo.matrix4.multiplyByPointAsVector(
     enu,
     _scratchForward,
     _scratchWorldForward,
@@ -79,8 +80,8 @@ export function screenProjectedRotation(
   // Screen x follows camera-right. Window y grows downward, the opposite of
   // camera-up. Projecting the vector itself avoids clipping/behind-camera
   // failure modes from the old forward-point worldToWindowCoordinates probe.
-  const dx = Cesium.Cartesian3.dot(_scratchWorldForward, camera.rightWC);
-  const dy = -Cesium.Cartesian3.dot(_scratchWorldForward, camera.upWC);
+  const dx = geo.cartesian3.dot(_scratchWorldForward, camera.rightWC);
+  const dy = -geo.cartesian3.dot(_scratchWorldForward, camera.upWC);
   if (dx * dx + dy * dy < MIN_SCREEN_COMPONENT_M * MIN_SCREEN_COMPONENT_M)
     return previous;
 
@@ -129,7 +130,7 @@ const _occluder = new Cesium.EllipsoidalOccluder(
  */
 export const HORIZON_FEATHER_RAD = 0.019;
 
-const _wgs84OneOverRadii = Cesium.Ellipsoid.WGS84.oneOverRadii;
+const _wgs84OneOverRadii = geo.ellipsoid.WGS84.oneOverRadii;
 
 /**
  * How much SKY sits behind a world point from this camera: 0 (planet behind)
@@ -271,9 +272,9 @@ export function cameraPoseSignature(camera) {
  * frustum the vehicle is nowhere near.
  */
 const NEAR_PROBE_M = 30;
-const _scratchProbe = new Cesium.Cartesian3();
-const _scratchWindowAt = new Cesium.Cartesian2();
-const _scratchWindowAhead = new Cesium.Cartesian2();
+const _scratchProbe = geo.cartesian3.create();
+const _scratchWindowAt = geo.cartesian2.create();
+const _scratchWindowAhead = geo.cartesian2.create();
 
 /**
  * Billboard rotation for a SURFACE contact, projected exactly — perspective
@@ -311,24 +312,24 @@ export function perspectiveProjectedRotation(
   if (!scene?.camera || !position || !Number.isFinite(courseDeg)) {
     return previous;
   }
-  const courseRad = Cesium.Math.toRadians(courseDeg);
-  Cesium.Cartesian3.fromElements(
+  const courseRad = geo.math.toRadians(courseDeg);
+  geo.cartesian3.fromElements(
     Math.sin(courseRad) * NEAR_PROBE_M,
     Math.cos(courseRad) * NEAR_PROBE_M,
     0,
     _scratchForward,
   );
-  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(
+  const enu = geo.transforms.eastNorthUpToFixedFrame(
     position,
-    Cesium.Ellipsoid.WGS84,
+    geo.ellipsoid.WGS84,
     _scratchEnu,
   );
-  Cesium.Matrix4.multiplyByPointAsVector(
+  geo.matrix4.multiplyByPointAsVector(
     enu,
     _scratchForward,
     _scratchWorldForward,
   );
-  Cesium.Cartesian3.add(position, _scratchWorldForward, _scratchProbe);
+  geo.cartesian3.add(position, _scratchWorldForward, _scratchProbe);
 
   const at = Cesium.SceneTransforms.worldToWindowCoordinates(
     scene,

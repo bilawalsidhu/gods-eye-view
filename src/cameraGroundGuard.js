@@ -15,6 +15,7 @@
  * held, so the correction reads as the shot settling.
  */
 import * as Cesium from 'cesium';
+import * as geo from './geo/index.js';
 import { ownCameraArrival } from './data/cameraArrival.js';
 
 /** Minimum eye height above the rendered surface for a usable view. */
@@ -25,7 +26,7 @@ export const GUARD_INTERVAL_MS = 600;
 /** Ignore sub-metre noise rather than nudging the camera forever. */
 const GUARD_EPSILON_M = 2;
 
-const probeScratch = new Cesium.Cartographic();
+const probeScratch = geo.cartographic.create();
 
 /**
  * Highest rendered surface across a few cells, with how many cells answered.
@@ -41,7 +42,7 @@ function sampleSurfaceM(scene, cells) {
   for (const cell of cells) {
     try {
       const height = scene.sampleHeight(
-        Cesium.Cartographic.fromDegrees(cell.lon, cell.lat, 0, probeScratch),
+        geo.cartographic.fromDegrees(cell.lon, cell.lat, 0, probeScratch),
       );
       if (!Number.isFinite(height)) continue;
       sampled += 1;
@@ -152,8 +153,8 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
     const carto = camera.positionCartographic;
     // The eye must clear both the framed target and the ground beneath it.
     const below = {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
+      lat: geo.math.toDegrees(carto.latitude),
+      lon: geo.math.toDegrees(carto.longitude),
     };
     const { heightM, sampled } = sampleSurfaceM(viewer.scene, [
       { lat: at.lat, lon: at.lon },
@@ -168,7 +169,7 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
       if (deficit > 0) {
         stop();
         camera.flyTo({
-          destination: Cesium.Cartesian3.fromRadians(
+          destination: geo.cartesian3.fromRadians(
             carto.longitude,
             carto.latitude,
             carto.height + deficit,

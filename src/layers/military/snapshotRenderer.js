@@ -118,7 +118,10 @@ export function createMilitarySnapshotRenderer({
             history.push(synthetic);
             if (history.length > POSITION_HISTORY_LIMIT) history.shift();
             meta.turnRateDps = turnRateFromFixHistory(history);
-            if (isTracked) tracking._appendTrailFix(synthetic.position.clone());
+            if (isTracked)
+              tracking._appendTrailFix(
+                Cesium.Cartesian3.clone(synthetic.position),
+              );
           }
         }
       }
