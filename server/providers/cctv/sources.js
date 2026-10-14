@@ -96,6 +96,13 @@ import {
   NYC_MAX_CATALOG_BYTES,
   NYC_GROUND_ELEVATION_M,
   NYC_ANCHORS,
+  HOUSTON_CAMERAS_URL,
+  HOUSTON_IMAGE_URL,
+  HOUSTON_CAMERA_ID_RE,
+  DEFAULT_HOUSTON_MAX_SOURCES,
+  HOUSTON_MAX_CATALOG_BYTES,
+  HOUSTON_GROUND_ELEVATION_M,
+  HOUSTON_ANCHORS,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -116,6 +123,7 @@ import {
   isLikelyCataloniaCoordinate,
   decodeNumericEntities,
   isLikelyNycCoordinate,
+  isLikelyHoustonCoordinate,
   isLikelyNorwayCoordinate,
   isLikelyTorontoCoordinate,
   cameraDisplayCode,
@@ -2779,6 +2787,141 @@ export async function loadTorontoSourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] Toronto camera download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/**
+ * Label for one Houston TranStar camera: the interchange an operator
+ * recognises ("10 EAST @ SAN JACINTO").
+ *
+ * @param {object} record - Raw TranStar camera row.
+ * @param {string} cameraId - Derived stable id.
+ * @returns {string}
+ */
+export function houstonCameraName(record, cameraId) {
+  const name = String(record?.location ?? '').trim();
+  if (name) return name;
+  const short = String(cameraId || '').replace(/^houston-/, '');
+  return short ? `Houston Camera ${short}` : 'Houston Camera';
+}
+
+/**
+ * One Houston TranStar camera row -> one catalog source, or null.
+ *
+ * Frame URLs are synthesized from a validated numeric id on the pinned
+ * snapshot origin. The payload's `url` is a `showWin(...)` viewer helper
+ * and is ignored so a catalog edit cannot steer the frame proxy off-host.
+ * Dedicated `dir` values (North/South/East/West) become high-confidence
+ * headings; `None`/blank fall back to the shared id-hash heading.
+ *
+ * @param {object} record - Raw TranStar camera row.
+ * @returns {?object}
+ */
+export function houstonCameraToSource(record) {
+  if (!record || typeof record !== 'object') return null;
+
+  const lat = toFiniteNumber(record.lat);
+  const lon = toFiniteNumber(record.lng);
+  if (!isLikelyHoustonCoordinate(lat, lon)) return null;
+
+  const rawId = String(record.id ?? '').trim();
+  if (!HOUSTON_CAMERA_ID_RE.test(rawId)) return null;
+  const cameraId = `houston-${rawId}`;
+  const imageUrl = HOUSTON_IMAGE_URL(rawId);
+  const name = houstonCameraName(record, cameraId);
+  const extractedHeading = directionToHeading(record.dir, true);
+  const hasHeading = Number.isFinite(extractedHeading);
+
+  return {
+    id: cameraId,
+    name,
+    city: 'Houston',
+    cityId: 'houston',
+    provider: 'Houston TranStar',
+    lat,
+    lon,
+    headingDeg: hasHeading ? extractedHeading : fallbackHeadingFromId(cameraId),
+    headingConfidence: hasHeading ? 'high' : 'low',
+    pitchDeg: hasHeading ? -24 : -18,
+    fovDeg: hasHeading ? 56 : 44,
+    rangeM: hasHeading ? 210 : 145,
+    mountHeightM: hasHeading ? 10 : 8,
+    groundElevationM: HOUSTON_GROUND_ELEVATION_M,
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'houston-transtar',
+    license: 'Public Houston TranStar traffic camera',
+    code: cameraDisplayCode(name.toUpperCase()),
+  };
+}
+
+/**
+ * Fetch Houston TranStar cameras from the keyless `cctvSnapshots_json.js`
+ * catalog. Frames are stills on `www.houstontranstar.org`, registered from
+ * a validated numeric id rather than from the payload URL. The catalog host
+ * answers `Accept: application/json` with HTTP 406, so this request accepts
+ * any media type.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadHoustonSourcesFromOpenData() {
+  try {
+    const endpoint =
+      process.env.CCTV_HOUSTON_CAMERAS_URL || HOUSTON_CAMERAS_URL;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: '*/*' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn(
+        '[CCTV] Houston catalog redirected; redirects are not followed',
+      );
+      return discard();
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] Houston camera download failed:', resp.status);
+      return discard();
+    }
+    const payload = await readResponseJsonCapped(
+      resp,
+      HOUSTON_MAX_CATALOG_BYTES,
+    );
+    const rows = Array.isArray(payload?.cameras) ? payload.cameras : [];
+    const cameras = [];
+    const seen = new Set();
+    for (const record of rows) {
+      const camera = houstonCameraToSource(record);
+      if (!camera || seen.has(camera.id)) continue;
+      seen.add(camera.id);
+      cameras.push(camera);
+    }
+    const maxRaw = Number(
+      process.env.CCTV_HOUSTON_MAX_SOURCES || DEFAULT_HOUSTON_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(400, Math.floor(maxRaw)))
+      : DEFAULT_HOUSTON_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, HOUSTON_ANCHORS);
+    console.log(
+      `[CCTV] Loaded Houston camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Houston camera download error:',
       error?.message || error,
     );
     return [];
