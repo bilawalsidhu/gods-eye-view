@@ -19,9 +19,9 @@ test('gates fall back to Puppeteer’s browser without macOS Chrome', () => {
 test('an explicit executable path wins', () => {
   assert.equal(
     chromeExecutablePath({
-      env: { PUPPETEER_EXECUTABLE_PATH: 'C:\Chrome\chrome.exe' },
+      env: { PUPPETEER_EXECUTABLE_PATH: 'C:\\Chrome\\chrome.exe' },
       exists: () => true,
     }),
-    'C:\Chrome\chrome.exe',
+    'C:\\Chrome\\chrome.exe',
   );
 });
