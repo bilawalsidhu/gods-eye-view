@@ -145,6 +145,8 @@ async function main() {
 
   try {
     const res = await fetch(APP_URL);
+    // Only the status matters; an unread body can hold the socket open.
+    await res.body?.cancel();
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   } catch (e) {
     console.error(`Dev server not reachable at ${APP_URL} (${e.message}).`);
