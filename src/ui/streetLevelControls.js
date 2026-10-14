@@ -73,6 +73,7 @@ export class StreetLevelControls {
       sinceRow: byId('sl-since-row'),
       sinceRange: byId('sl-since'),
       sinceLabel: byId('sl-since-label'),
+      sinceNote: byId('sl-since-note'),
       legend: byId('sl-legend'),
       followBtn: byId('sl-follow-btn'),
       viewerWrap: byId('sl-viewer-wrap'),
@@ -527,6 +528,9 @@ export class StreetLevelControls {
     const shows = view.filterControls || { pano: true, since: true };
     setProp(el.panoRow, 'hidden', !shows.pano);
     setProp(el.sinceRow, 'hidden', !shows.since);
+    // A lit source that dates by upload says so under the slider.
+    setProp(el.sinceNote, 'textContent', view.sinceNote || '');
+    setProp(el.sinceNote, 'hidden', !view.sinceNote);
     setProp(el.controls, 'hidden', !shows.pano && !shows.since);
     setProp(el.legend, 'hidden', view.legend.length === 0);
     this._renderRadios(

@@ -108,7 +108,15 @@ export function createStreetLevelLayer({
       getSurface: () => state.surface,
       notify,
       actions: {
-        openImage: (imageId) => openImage(entry.def.id, imageId),
+        /** `{frame: false}` opens it without moving the camera. */
+        openImage: (imageId, options) =>
+          openImage(entry.def.id, imageId, options),
+        /** This provider's image nearest a point the user picked on the map. */
+        openNearest: (point) =>
+          layer.openNearest(point, {
+            providerIds: [entry.def.id],
+            frame: false,
+          }),
         /**
          * Show a provider error, or withdraw it (null). A withdrawal clears
          * only this provider's own error, never a newer one from elsewhere.
@@ -334,13 +342,34 @@ export function createStreetLevelLayer({
   function setProviderEnabled(providerId, on) {
     const entry = state.providers.get(providerId);
     if (!entry) return false;
+    const before = litIds();
     const next = on !== false;
     if (next)
       for (const other of state.providers.values())
         if (other !== entry && other.on) switchProvider(other, false);
     switchProvider(entry, next);
+    sourceChanged(before);
     notify();
     return true;
+  }
+
+  const litIds = () =>
+    [...state.providers]
+      .filter(([, entry]) => entry.on)
+      .map(([id]) => id)
+      .join();
+
+  /**
+   * After a chip, voice or a link changed the lit source: a lookup still
+   * running and its spinner or error were about the source switched away
+   * (an open photo keeps its own state).
+   */
+  function sourceChanged(before) {
+    if (litIds() === before) return;
+    abortNearest();
+    if (state.street.open) return;
+    state.street.error = null;
+    state.street.loading = false;
   }
 
   function switchProvider(entry, on) {
@@ -407,6 +436,9 @@ export function createStreetLevelLayer({
         hint: hintFor(entry, stats),
         error: stats.error || null,
         color: entry.def.colors.coverage,
+        coverageLabel: entry.def.coverageLabel || null,
+        highlightsSequence: entry.def.highlightsSequence !== false,
+        sinceBasis: entry.def.sinceBasis === 'upload' ? 'upload' : 'capture',
         groundClick: entry.def.groundClick === true,
         filters: [...filtersOf(entry.def)],
       };
@@ -606,9 +638,11 @@ export function createStreetLevelLayer({
         filter: state.filter,
       });
       const lit = litByParams(decoded.providers);
+      const before = litIds();
       for (const [id, entry] of state.providers)
         if (id !== lit) switchProvider(entry, false);
       if (lit) switchProvider(state.providers.get(lit), true);
+      sourceChanged(before);
       notify();
       setCoverageFilter(decoded.filter);
       return true;
