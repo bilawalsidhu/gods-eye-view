@@ -2,6 +2,21 @@
 
 - Malformed v2 share links now display `Shared layer selection could not be restored` after startup instead of silently falling back to defaults. Thanks to [daikaginza](https://github.com/daikaginza) for reporting #776 and [KnottyDyes](https://github.com/KnottyDyes) for independently identifying the silent layer-state drop.
 
+- Bing Aerial and Bing Labels request HTTPS tiles on HTTP localhost through
+  their ion-backed providers, retaining ion and per-tile attribution without
+  widening the Content Security Policy.
+
+- Add New York City traffic cameras from the NYC DOT Traffic Management Center
+  as an opt-in CCTV pack. NYC DOT requires a data-sharing agreement for the
+  camera feed, so the pack is off unless `CCTV_NYC_ENABLED=1` is set by an
+  operator who holds one; otherwise no request reaches NYC DOT. NYC DOT's
+  requested disclaimer is in the Data attribution popover. The camera list is one keyless JSON request to
+  `webcams.nyctmc.org/api/cameras`; frames are stills synthesized from each
+  camera UUID on that same host, so a catalog field cannot steer the proxy
+  off-host. Offline cameras are dropped. Once enabled, the 250 cameras nearest
+  the five borough cores load and `CCTV_NYC_MAX_SOURCES` changes the cap. The catalog-wide ceiling is
+  unchanged; extra cameras share it round-robin with the other packs.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 
@@ -97,9 +112,41 @@
 
 ## [Unreleased]
 
-- Keep later satellites when a TLE catalog entry is missing an orbital line.
-  The parser skips the incomplete set and resumes at the next complete named
-  set, instead of losing the rest of the group (#906).
+- Street Level: KartaView is the third provider, keyless. Light its chip
+  (purple; off by default, one provider at a time) and zoom in below about
+  6 km: the lines are the streets KartaView has photos of (z13–14 tiles from
+  `api.kartaview.org`). A click on a line opens the photo nearest the click
+  without moving the camera, flat or 360° (a small WebGL panorama: drag to
+  look, wheel to zoom), with cones along its drive and ‹ › / ← → to step
+  through it. The caption links to the full-size photo (KartaView's photo
+  pages fail for signed-out visitors), and the globe credits "© KartaView
+  contributors, CC BY-SA 4.0". Share links carry it in the provider
+  switches (`0.m.0_0.r.google-0*kartaview-1`). Archived photos (KartaView
+  answers 409) are skipped by the click and by ‹ ›. Shift+← →, ↑ ↓, + − and
+  pinch look around a 360° photo. The open photo's marker is a purple view
+  cone pointing along the drive (KartaView's own compass headings are often
+  0 or far off). The IMAGERY (ALL / 360° / FLAT) and SINCE filters apply to
+  KartaView as to Mapillary: its lines are filtered by KartaView's own
+  server (its filtered PNG tiles, as a mask over the JSON lines), and the
+  photo a click opens, and the cones, by each photo's projection and upload
+  date. KartaView's SINCE is the upload date (all its server can filter by);
+  a note under the slider says so while KartaView is lit (`sinceBasis:
+  'upload'` in the provider contract).
+  Mapillary's line coverage and sequence cones are now shared by both
+  (`lineCoverage.js`, `sequenceCones.js`).
+
+- Street Level: Google Street View is the second provider. On the Google 3D
+  map (Google's terms keep it off other maps), light its chip (off by
+  default: every panorama is billed to the Google Maps key, which needs the
+  Maps JavaScript API) and click a street, or press OPEN STREET VIEW, to
+  open Google's own panorama in
+  the panel, with its arrows, the address and month in the caption, a link
+  to Google Maps and FOLLOW. Share links carry it in the provider switches
+  (`r.google-1`). One provider is lit at a time (lighting one switches the
+  other off), Mapillary by default since it is free. Street View's panoramas
+  are all 360°, so the IMAGERY and SINCE filters and the legend apply to
+  Mapillary only and hide while GOOGLE STREET VIEW is lit; its globe marker
+  is a Google-blue view cone.
 
 - Add an experimental ChatGPT/Codex OAuth option for cloud voice in Provider
   Settings. API-key voice remains the default. Local sign-in can start from
