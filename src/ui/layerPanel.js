@@ -59,6 +59,7 @@ const PANEL_GROUPS = [
       'weather-satellite',
       'weather-lightning',
       'weather-cyclones',
+      'ocean-stations',
     ],
   },
   {
@@ -80,6 +81,7 @@ const PANEL_LABELS = {
   'alpr-cameras': 'Mapped ALPR Cameras',
   'local-datacenters': 'Data Centers',
   'local-firms': 'Active Fires',
+  'ocean-stations': 'Ocean Stations',
 };
 
 function panelLabel(layer) {
