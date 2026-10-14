@@ -356,6 +356,18 @@ export function isLikelyNswCoordinate(lat, lon) {
   );
 }
 
+/** Greater Auckland (Puhoi to Bombay, Waitākere to the gulf). Other NZTA
+ * regions (Wellington, Canterbury) are out of this city pack. */
+export function isLikelyAucklandCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= -37.3 &&
+    lat <= -36.35 &&
+    lon >= 174.55 &&
+    lon <= 175.1
+  );
+}
+
 /** Calgary's municipal extent, with slack for the ring road. */
 export function isLikelyCalgaryCoordinate(lat, lon) {
   return (

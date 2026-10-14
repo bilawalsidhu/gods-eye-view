@@ -1,5 +1,16 @@
 # Changelog
 
+- Add Auckland traffic cameras from Waka Kotahi NZTA as a CCTV pack. The camera
+  list is one keyless GeoJSON request to
+  `journeys.nzta.govt.nz/assets/map-data-cache/cameras.json`; only Auckland
+  (RegionID 7) cameras that are online stay. Frames are stills synthesized
+  from each camera's `ExternalId` on `www.trafficnz.info`, so a catalog field
+  cannot steer the proxy off-host. By default the 120 cameras nearest
+  downtown, Albany, Manukau, the airport and Henderson load — enough for the
+  whole Auckland region. `CCTV_AUCKLAND_ENABLED=0` turns the pack off and
+  `CCTV_AUCKLAND_MAX_SOURCES` changes the cap. The catalog-wide ceiling is
+  unchanged; extra cameras share it round-robin with the other packs.
+
 - GBFS v3 station names use English translations when available, then the first
   usable translation or short name. Empty or malformed names no longer appear as
   `[object Object]` or interrupt station loading; legacy string names remain

@@ -65,6 +65,14 @@ import {
   DEFAULT_VEGVESEN_MAX_SOURCES,
   VEGVESEN_MAX_CATALOG_BYTES,
   NORWAY_ANCHORS,
+  AUCKLAND_CAMERAS_URL,
+  AUCKLAND_IMAGE_URL,
+  AUCKLAND_CAMERA_ID_RE,
+  AUCKLAND_REGION_ID,
+  DEFAULT_AUCKLAND_MAX_SOURCES,
+  AUCKLAND_MAX_CATALOG_BYTES,
+  AUCKLAND_GROUND_ELEVATION_M,
+  AUCKLAND_ANCHORS,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -82,6 +90,7 @@ import {
   isLikelyTexasCoordinate,
   isLikelyNswCoordinate,
   isLikelyCalgaryCoordinate,
+  isLikelyAucklandCoordinate,
   isLikelyNorwayCoordinate,
   cameraDisplayCode,
   rowArrayToObject,
@@ -1858,6 +1867,177 @@ export async function loadVegvesenSourcesFromOpenData() {
   } catch (error) {
     console.warn(
       '[CCTV] Vegvesen camera download error:',
+      error?.message || error,
+    );
+    return [];
+  }
+}
+
+/** NZTA catalogs flag Offline / UnderMaintenance as 1 or true. */
+function nztaFlagOn(value) {
+  return value === true || value === 1 || value === '1';
+}
+
+/**
+ * Label for one Auckland NZTA camera: the published site name
+ * ("SH16 Carrington Rd Overbridge").
+ *
+ * @param {object} record - Raw NZTA camera properties.
+ * @param {string} cameraId - Derived stable id.
+ * @returns {string}
+ */
+export function aucklandCameraName(record, cameraId) {
+  const name = String(record?.Name ?? '').trim();
+  if (name) return name;
+  const description = String(record?.Description ?? '').trim();
+  if (description) return description;
+  const short = String(cameraId || '').replace(/^auckland-/, '');
+  return short ? `Auckland Camera ${short}` : 'Auckland Camera';
+}
+
+/**
+ * Coordinates for one NZTA camera feature: GeoJSON `[lon, lat]` first, then
+ * the properties Latitude/Longitude strings.
+ *
+ * @param {object} feature - GeoJSON feature.
+ * @param {object} record - feature.properties.
+ * @returns {?{lat:number, lon:number}}
+ */
+function aucklandCoords(feature, record) {
+  const coords = feature?.geometry?.coordinates;
+  if (Array.isArray(coords) && coords.length >= 2) {
+    const lon = toFiniteNumber(coords[0]);
+    const lat = toFiniteNumber(coords[1]);
+    if (Number.isFinite(lat) && Number.isFinite(lon)) return { lat, lon };
+  }
+  const lat = toFiniteNumber(record?.Latitude);
+  const lon = toFiniteNumber(record?.Longitude);
+  if (Number.isFinite(lat) && Number.isFinite(lon)) return { lat, lon };
+  return null;
+}
+
+/**
+ * One NZTA GeoJSON camera feature -> one catalog source, or null.
+ *
+ * Frame URLs are synthesized from a validated `ExternalId` on the pinned
+ * trafficnz.info origin. The payload `ImageUrl` and the internal `id` are
+ * ignored so a catalog edit cannot steer the frame proxy off-host (and so
+ * the internal id, which 404s on that host, is never registered). Offline
+ * and under-maintenance cameras are dropped. `Direction` is a dedicated
+ * travel-direction field (Southbound, Northbound, and the other two), so
+ * headings use that parser without matching bare street-name cardinals.
+ *
+ * @param {object} feature - Raw NZTA GeoJSON feature.
+ * @returns {?object}
+ */
+export function aucklandCameraToSource(feature) {
+  if (!feature || typeof feature !== 'object') return null;
+  const record =
+    feature.properties && typeof feature.properties === 'object'
+      ? feature.properties
+      : feature;
+  if (nztaFlagOn(record.Offline) || nztaFlagOn(record.UnderMaintenance)) {
+    return null;
+  }
+  if (Number(record.RegionID) !== AUCKLAND_REGION_ID) return null;
+
+  const point = aucklandCoords(feature, record);
+  if (!point || !isLikelyAucklandCoordinate(point.lat, point.lon)) return null;
+
+  const rawId = String(record.ExternalId ?? '').trim();
+  if (!AUCKLAND_CAMERA_ID_RE.test(rawId)) return null;
+  const cameraId = `auckland-${rawId}`;
+  const imageUrl = AUCKLAND_IMAGE_URL(rawId);
+  const name = aucklandCameraName(record, cameraId);
+  const extractedHeading = directionToHeading(record.Direction);
+  const hasHeading = Number.isFinite(extractedHeading);
+
+  return {
+    id: cameraId,
+    name,
+    city: 'Auckland',
+    cityId: 'auckland',
+    provider: 'Waka Kotahi NZ Transport Agency',
+    lat: point.lat,
+    lon: point.lon,
+    headingDeg: hasHeading ? extractedHeading : fallbackHeadingFromId(cameraId),
+    headingConfidence: hasHeading ? 'high' : 'low',
+    pitchDeg: hasHeading ? -24 : -18,
+    fovDeg: hasHeading ? 56 : 44,
+    rangeM: hasHeading ? 210 : 145,
+    mountHeightM: hasHeading ? 10 : 8,
+    groundElevationM: AUCKLAND_GROUND_ELEVATION_M,
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'auckland-nzta',
+    license: 'Public Waka Kotahi NZTA traffic camera',
+    code: cameraDisplayCode(name.toUpperCase()),
+  };
+}
+
+/**
+ * Fetch Auckland cameras from the keyless NZTA journeys GeoJSON catalog.
+ * Frames are stills on `www.trafficnz.info`, registered from a validated
+ * ExternalId rather than from the payload URL. Only RegionID 7 (Auckland)
+ * cameras inside the metro bounding box are kept.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadAucklandSourcesFromOpenData() {
+  try {
+    const endpoint =
+      process.env.CCTV_AUCKLAND_CAMERAS_URL || AUCKLAND_CAMERAS_URL;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: 'application/json' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn(
+        '[CCTV] Auckland catalog redirected; redirects are not followed',
+      );
+      return discard();
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] Auckland camera download failed:', resp.status);
+      return discard();
+    }
+    const payload = await readResponseJsonCapped(
+      resp,
+      AUCKLAND_MAX_CATALOG_BYTES,
+    );
+    const rows = Array.isArray(payload?.features) ? payload.features : [];
+    const cameras = [];
+    const seen = new Set();
+    for (const feature of rows) {
+      const camera = aucklandCameraToSource(feature);
+      if (!camera || seen.has(camera.id)) continue;
+      seen.add(camera.id);
+      cameras.push(camera);
+    }
+    const maxRaw = Number(
+      process.env.CCTV_AUCKLAND_MAX_SOURCES || DEFAULT_AUCKLAND_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(200, Math.floor(maxRaw)))
+      : DEFAULT_AUCKLAND_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, AUCKLAND_ANCHORS);
+    console.log(
+      `[CCTV] Loaded Auckland camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn(
+      '[CCTV] Auckland camera download error:',
       error?.message || error,
     );
     return [];
