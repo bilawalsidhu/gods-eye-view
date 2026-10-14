@@ -29,6 +29,10 @@
   the five borough cores load and `CCTV_NYC_MAX_SOURCES` changes the cap. The catalog-wide ceiling is
   unchanged; extra cameras share it round-robin with the other packs.
 
+- Weather records keep missing conditions unknown and refuse summaries without a measured temperature.
+
+- Tool string length validation counts Unicode characters correctly, including characters outside the basic multilingual plane.
+
 - Director timeline seeks cross the dateline along the short longitude arc.
 
 - Treat explicitly current, complete empty vessel coverage as a successful update,
