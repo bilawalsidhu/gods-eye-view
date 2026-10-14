@@ -9,6 +9,23 @@ import { providerSnapshot } from '../testSupport/streetLevelFakes.mjs';
 
 const provider = providerSnapshot;
 
+test('an empty composition explains unavailable imagery even while disabled', () => {
+  for (const enabled of [false, true]) {
+    const view = presentStreetLevelPanel(
+      snapshot({
+        enabled,
+        providers: [],
+        coverage: { hint: 'No street-level imagery providers configured' },
+        legend: [],
+      }),
+    );
+    assert.equal(view.controlsDisabled, true);
+    assert.equal(view.keyRequired, false);
+    assert.deepEqual(view.providers, []);
+    assert.equal(view.meta, 'No street-level imagery providers configured');
+  }
+});
+
 function snapshot(overrides = {}) {
   const base = {
     enabled: false,
@@ -387,4 +404,138 @@ test('FOLLOW is disabled off Google 3D and says where to switch', () => {
     snapshot({ street: { open: false, followAvailable: true } }),
   );
   assert.equal(closed.viewer.follow.disabled, true, 'nothing to follow');
+});
+
+test('a Street View caption names the place, dates it by month, and offers no FIT/FILL', () => {
+  const view = presentStreetLevelPanel(
+    snapshot({
+      enabled: true,
+      street: {
+        open: true,
+        providerId: 'google',
+        providerName: 'Google Street View',
+        providerLabel: 'STREET VIEW',
+        imageId: 'pano-1',
+        title: '1014 10th St',
+        creator: 'Google',
+        capturedAt: Date.UTC(2023, 0, 1),
+        capturedAtPrecision: 'month',
+        bearing: 0,
+        isPano: true,
+        renderModes: false,
+        externalUrl:
+          'https://www.google.com/maps/@?api=1&map_action=pano&pano=pano-1',
+      },
+    }),
+  );
+  assert.equal(view.viewer.captionLeft, '1014 10th St · Image by Google');
+  assert.equal(view.viewer.captionRight, '360° · 0° · 2023-01');
+  assert.equal(view.viewer.linkLabel, 'STREET VIEW ↗');
+  assert.equal(view.viewer.renderModes, false);
+});
+
+test('the meta line keeps the sequence count and adds the other providers’ hints', () => {
+  const view = presentStreetLevelPanel(
+    snapshot({
+      enabled: true,
+      coverage: {
+        loading: false,
+        count: 2514,
+        hint: 'click a street to open Street View',
+        error: null,
+      },
+    }),
+  );
+  assert.equal(
+    view.meta,
+    `${(2514).toLocaleString()} sequences in view · click a line for its photos · click a street to open Street View`,
+  );
+});
+
+test('OPEN STREET VIEW shows while Street View is on, and waits for street zoom', () => {
+  const streetView = provider({
+    id: 'google',
+    name: 'Google Street View',
+    label: 'STREET VIEW',
+    groundClick: true,
+    requiresKeyId: 'google-maps',
+  });
+  const view = (overrides) =>
+    presentStreetLevelPanel(
+      snapshot({
+        enabled: true,
+        providers: [provider(), streetView],
+        ...overrides,
+      }),
+    ).nearest;
+  const ready = view({ groundClickReady: true });
+  assert.deepEqual(ready, {
+    visible: true,
+    label: 'OPEN STREET VIEW',
+    title: 'Open Google Street View at the centre of the view',
+    disabled: false,
+    providerIds: ['google'],
+  });
+  const high = view({ groundClickReady: false });
+  assert.equal(high.disabled, true);
+  assert.equal(
+    high.title,
+    'Zoom in to a street to open Google Street View here',
+  );
+  // Hidden with Street View off, without its key, or with the layer off
+  // (off Google 3D the provider is not listed at all).
+  assert.equal(
+    view({ providers: [provider(), { ...streetView, on: false }] }).visible,
+    false,
+  );
+  assert.equal(
+    view({ providers: [provider(), { ...streetView, keyRequired: true }] })
+      .visible,
+    false,
+  );
+  assert.equal(view({ providers: [provider()] }).visible, false);
+  assert.equal(
+    presentStreetLevelPanel(snapshot({ providers: [provider(), streetView] }))
+      .nearest.visible,
+    false,
+  );
+});
+
+test('KEY REQUIRED points at Street View when it would draw with the Google key', () => {
+  const view = presentStreetLevelPanel(
+    snapshot({
+      enabled: true,
+      keyRequired: true,
+      providers: [
+        provider({ keyRequired: true, configured: false }),
+        provider({
+          id: 'google',
+          name: 'Google Street View',
+          label: 'STREET VIEW',
+          on: false,
+          configured: true,
+          requiresKeyId: 'google-maps',
+        }),
+      ],
+      keyAlternatives: [
+        { id: 'google', label: 'STREET VIEW', requiresKeyId: 'google-maps' },
+      ],
+    }),
+  );
+  const guidance =
+    'Needs MAPILLARY_CLIENT_TOKEN — add it in Provider Settings, or light STREET VIEW to use your Google Maps key';
+  assert.equal(view.status.text, 'KEY REQUIRED');
+  assert.equal(view.status.title, guidance);
+  assert.equal(view.meta, guidance);
+  // Off Google 3D Street View is not listed: plain KEY REQUIRED.
+  const plain = presentStreetLevelPanel(
+    snapshot({
+      enabled: true,
+      keyRequired: true,
+      providers: [provider({ keyRequired: true, configured: false })],
+      keyAlternatives: [],
+    }),
+  );
+  assert.equal(plain.status.text, 'KEY REQUIRED');
+  assert.notEqual(plain.meta, guidance);
 });

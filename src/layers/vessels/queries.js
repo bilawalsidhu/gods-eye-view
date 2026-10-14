@@ -119,7 +119,16 @@ export function createQueries({
       typeof payload?.status === 'string' ? payload.status : null;
     const lastMessageAt = payload?.lastMessageAt ?? null;
     const acceptedRowCount = acceptedRows.length;
+    const emptyCoverage =
+      rawRows.length === 0 &&
+      payload?.rawRowCount === 0 &&
+      payload?.complete === true &&
+      payload?.freshness === 'current' &&
+      AIS_HEALTHY_STATUSES.has(transportStatus) &&
+      Number.isFinite(Number(lastMessageAt)) &&
+      Number(lastMessageAt) > 0;
     return {
+      emptyCoverage,
       transportStatus,
       lastMessageAt,
       rawRows,
@@ -130,9 +139,10 @@ export function createQueries({
           ? payload.rawRowCount
           : rawRows.length,
       acceptedRowCount,
-      error:
-        deriveAisFeedError(payload, acceptedRowCount) ||
-        (acceptedRowCount === 0 ? 'awaiting usable AIS positions…' : null),
+      error: emptyCoverage
+        ? null
+        : deriveAisFeedError(payload, acceptedRowCount) ||
+          (acceptedRowCount === 0 ? 'awaiting usable AIS positions…' : null),
     };
   }
 

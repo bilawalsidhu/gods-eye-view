@@ -15,11 +15,19 @@ export function createRealtimeBackend({
     );
   return Object.freeze({
     protocol: 'openai-realtime',
-    async requestToken({ tier = DEFAULT_VOICE_TIER, signal } = {}) {
+    async requestToken({
+      tier = DEFAULT_VOICE_TIER,
+      authMode = 'api-key',
+      signal,
+    } = {}) {
       signal = scoped(signal);
       signal.throwIfAborted();
       const separator = tokenEndpoint.includes('?') ? '&' : '?';
-      const url = `${tokenEndpoint}${separator}tier=${encodeURIComponent(resolveVoiceModel(tier).tier)}`;
+      const query = new URLSearchParams({
+        tier: resolveVoiceModel(tier).tier,
+      });
+      if (authMode === 'oauth') query.set('auth', 'oauth');
+      const url = `${tokenEndpoint}${separator}${query}`;
       const response = await tokenTransport(url, {
         signal,
         cache: 'no-store',

@@ -3,7 +3,10 @@ import { syncRowList } from './rowList.js';
 import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
-import { keySetupRequirement } from '../keySetupCore.mjs';
+import {
+  keySetupRequirement,
+  keySetupWithAlternatives,
+} from '../keySetupCore.mjs';
 import { createWeatherPanel } from './weatherPanel.js';
 const FEED_STATE_LABELS = Object.freeze({
   nominal: 'ON',
@@ -100,7 +103,11 @@ function panelLabel(layer) {
 export function layerKeyRequirementTooltip(layer = {}) {
   if (layer?.stats?.keyRequired !== true) return '';
   const requiresKeyId = String(layer.requiresKeyId || '').trim();
-  return requiresKeyId ? keySetupRequirement(requiresKeyId) : '';
+  // A layer with several sources also names the ones it could use instead.
+  return keySetupWithAlternatives(
+    requiresKeyId ? keySetupRequirement(requiresKeyId) : '',
+    layer.stats.keyAlternatives || [],
+  );
 }
 
 /** Layer row presentation over supplied state and actions; no layer imports. */
@@ -588,7 +595,12 @@ export class LayerPanel {
   }
 
   _syncToggleButton(button, layer) {
-    const feedState = layer.enabled ? layerFeedState(layer.stats) : 'off';
+    const unavailable = layer.stats?.sourceUnavailable === true;
+    const feedState = unavailable
+      ? 'unavailable'
+      : layer.enabled
+        ? layerFeedState(layer.stats)
+        : 'off';
     const transitioning =
       layer.lifecycleState === 'enabling' ||
       layer.lifecycleState === 'disabling';
@@ -601,7 +613,7 @@ export class LayerPanel {
     for (const state of Object.keys(FEED_STATE_LABELS)) {
       button.classList.toggle(
         `feed-${state}`,
-        layer.enabled && !uncertain && feedState === state,
+        (layer.enabled || unavailable) && !uncertain && feedState === state,
       );
     }
     button.dataset.feedState = transitioning
@@ -613,16 +625,21 @@ export class LayerPanel {
     // click guard above prevents repeat activation without the focus loss caused
     // by native `disabled`.
     button.disabled = false;
-    button.setAttribute('aria-disabled', String(transitioning));
+    button.setAttribute(
+      'aria-disabled',
+      String(transitioning || (unavailable && !layer.enabled)),
+    );
     button.setAttribute('aria-busy', String(transitioning));
     button.textContent = transitioning
       ? layer.lifecycleState.toUpperCase()
       : uncertain
         ? 'UNCERTAIN'
-        : layer.enabled
+        : layer.enabled || unavailable
           ? FEED_STATE_LABELS[feedState]
           : 'OFF';
-    const keyGuidance = layerKeyRequirementTooltip(layer);
+    const keyGuidance = unavailable
+      ? String(layer.stats.error || 'Data source unavailable')
+      : layerKeyRequirementTooltip(layer);
     // Name the missing key on the control itself: a row reading KEY REQUIRED
     // without saying WHICH key leaves a dead control and no next step. Empty
     // when the layer needs no key, or already has one.
