@@ -179,6 +179,7 @@ const CREDIT_EXPECTATIONS = {
   'telegeography-submarine-cables': /TeleGeography/i,
   'local-neighborhoods': /DataSF|San Francisco/i,
   'weather-effects': /Open-Meteo/i,
+  'ocean-stations': /NDBC|National Data Buoy Center|NOAA/i,
 };
 
 /**

@@ -207,6 +207,31 @@ const layers = [
     },
   },
   {
+    id: 'ocean-stations',
+    aliases: [
+      'ocean stations',
+      'weather buoys',
+      'marine buoys',
+      'ocean buoys',
+      'buoys',
+      'marine observations',
+      'ndbc',
+    ],
+    context: false,
+    query: {
+      fields: {
+        waveHeightM: ['n', 'm'],
+        wavePeriodSec: ['n', 's'],
+        waterTempC: ['n', '°C'],
+        airTempC: ['n', '°C'],
+        windSpeedMps: ['n', 'm/s'],
+        windDirDeg: ['n', 'deg'],
+        pressureHpa: ['n', 'hPa'],
+        timeMs: ['ms'],
+      },
+    },
+  },
+  {
     id: 'weather-radar',
     aliases: ['weather radar', 'radar', 'rain', 'weather'],
     context: false,

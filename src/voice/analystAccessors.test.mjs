@@ -5,6 +5,7 @@ import { createControls as launchControls } from '../layers/launches/controls.js
 import { createControls as installationControls } from '../layers/installations/controls.js';
 import { createQueries as transitQueries } from '../layers/transit/queries.js';
 import { createCyclonesLayer } from '../layers/cyclones/index.js';
+import { mapAnalystRecord } from '../layers/oceanStations/model.js';
 import { ANALYST_LAYERS } from '../data/analystEngine.js';
 
 /** Every declared analyst field must be a key the accessor actually emits. */
@@ -222,4 +223,21 @@ test('cyclones flatten the storm position and stay empty while off', async () =>
   });
   assertDeclaredFields('weather-cyclones', row);
   layer.destroy?.();
+});
+
+test('ocean stations emit declared analyst fields', () => {
+  const record = mapAnalystRecord({
+    id: '41001',
+    lat: 34.7,
+    lon: -72.6,
+    waveHeightM: 2.1,
+    wavePeriodSec: 7.0,
+    waterTempC: 22.4,
+    airTempC: 20.1,
+    windSpeedMps: 6.5,
+    windDirDeg: 180,
+    pressureHpa: 1013.2,
+    timeMs: 1700000000000,
+  });
+  assertDeclaredFields('ocean-stations', record);
 });
