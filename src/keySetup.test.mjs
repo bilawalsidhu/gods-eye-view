@@ -1046,3 +1046,48 @@ test('capacitor backend surface renders editable vault rows with a banner', asyn
   assert.ok(section.querySelector('[data-vault-banner="true"]'));
   controls.dispose();
 });
+
+test('loadDefaultCapacitorStorage never returns the raw plugin proxy', async () => {
+  const { loadDefaultCapacitorStorage } = await import('./keySetup.js');
+  const values = new Map();
+  // Proxy whose `.then` read throws exactly like the native bridge for
+  // unimplemented methods: awaiting the raw proxy would reject.
+  const throwingPlugin = new Proxy(
+    {
+      get: async ({ key }) => ({ value: values.has(key) ? values.get(key) : null }),
+      set: async ({ key, value }) => {
+        values.set(key, String(value));
+      },
+      remove: async ({ key }) => {
+        values.delete(key);
+      },
+    },
+    {
+      get(target, prop) {
+        if (prop === 'then') {
+          throw new Error('"Preferences.then()" is not implemented on android');
+        }
+        return target[prop];
+      },
+    },
+  );
+  const store = await loadDefaultCapacitorStorage({
+    importPlugin: async () => ({ Preferences: throwingPlugin }),
+  });
+  // Awaiting the store itself must not touch `.then` on the proxy.
+  await store;
+  await store.set({ key: 'k', value: 'v' });
+  assert.deepEqual(await store.get({ key: 'k' }), { value: 'v' });
+  await store.remove({ key: 'k' });
+  assert.deepEqual(await store.get({ key: 'k' }), { value: null });
+});
+
+test('loadDefaultCapacitorStorage falls back when the plugin is missing', async () => {
+  const { loadDefaultCapacitorStorage } = await import('./keySetup.js');
+  const store = await loadDefaultCapacitorStorage({
+    importPlugin: async () => ({}),
+  });
+  assert.equal(typeof store.get, 'function');
+  assert.equal(typeof store.set, 'function');
+  assert.equal(typeof store.remove, 'function');
+});

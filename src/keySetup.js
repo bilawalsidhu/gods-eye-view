@@ -312,22 +312,38 @@ export function localApiBaseStorage() {
   };
 }
 
+/** Default import function for the Preferences plugin (test seam). */
+async function importPreferencesPlugin() {
+  return import('@capacitor/preferences');
+}
+
 /**
  * Load the production store for the Capacitor branch: the real Preferences
  * plugin (dynamically imported so the web bundle never fetches it), falling
  * back to the `localStorage` adapter.
+ *
+ * Returns bound plain methods, never the raw plugin proxy: awaiting (or
+ * spreading) the proxy reads `.then`, which the native bridge reports as
+ * UNIMPLEMENTED and turns into an unhandled rejection on-device.
+ * @param {{ importPlugin?: Function }} options Import seam for tests.
  * @returns {Promise<{ get: Function, set: Function, remove: Function }>} Preferences-shaped store.
  */
-async function loadDefaultCapacitorStorage() {
+export async function loadDefaultCapacitorStorage({
+  importPlugin = importPreferencesPlugin,
+} = {}) {
   try {
-    const { Preferences } = await import('@capacitor/preferences');
+    const { Preferences } = await importPlugin();
     if (
       Preferences &&
       typeof Preferences.get === 'function' &&
       typeof Preferences.set === 'function' &&
       typeof Preferences.remove === 'function'
-    )
-      return Preferences;
+    ) {
+      const get = Preferences.get.bind(Preferences);
+      const set = Preferences.set.bind(Preferences);
+      const remove = Preferences.remove.bind(Preferences);
+      return { get, set, remove };
+    }
   } catch {
     // Gated import failure (tests, SSR): fall through to the local adapter.
   }
