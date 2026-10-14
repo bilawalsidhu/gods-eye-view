@@ -117,6 +117,7 @@
   "server/providers/radio/transport.js",
   "src/tooling/mediaProviders.test.mjs",
   "server/standalone/api-not-found.js",
+  "server/standalone/google-tiles-token.js",
   "src/tooling/previewServing.test.mjs",
   "server/providers/common/request.js",
   "server/providers/common/source-root.js",
