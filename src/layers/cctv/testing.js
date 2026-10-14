@@ -103,6 +103,8 @@ export function createTesting({ state: layerState, services, parts, source }) {
     layerState._activeCameraId = activeCameraId;
     layerState._autoHopSuspended = false;
     layerState._enabled = !!enabled;
+    layerState._viewHistory.length = 0;
+    layerState._viewForward.length = 0;
     layerState._coverageMode = parts.model.normalizeCoverageMode(
       coverageMode,
       'on',

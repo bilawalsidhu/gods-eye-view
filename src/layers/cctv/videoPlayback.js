@@ -1,3 +1,22 @@
+/** How often the live-rate governor resamples the buffer. */
+export const LIVE_RATE_POLL_MS = 500;
+
+/** Seconds of buffered media ahead of playback that trigger each rate band. */
+export const LIVE_RATE_BANDS = Object.freeze([
+  { maxAhead: 2, playbackRate: 0.9 },
+  { maxAhead: 6, playbackRate: 0.95 },
+  { maxAhead: 10, playbackRate: 1 },
+  { maxAhead: 20, playbackRate: 1.15 },
+  { maxAhead: Infinity, playbackRate: 1.25 },
+]);
+
+/** Selects the live playback rate for the given buffer runway. */
+export function livePlaybackRateFor(ahead) {
+  return (
+    LIVE_RATE_BANDS.find((band) => ahead < band.maxAhead)?.playbackRate ?? 1
+  );
+}
+
 /** One decoder per active camera; both surfaces consume this video element. */
 export function attachCctvVideo(
   video,
@@ -54,6 +73,19 @@ export function attachCctvVideo(
     clearTimeout(startup);
     video.play().catch(() => {});
   };
+  const applyLiveRate = () => {
+    if (disposed || !video.buffered?.length) return;
+    const ahead =
+      video.buffered.end(video.buffered.length - 1) - video.currentTime;
+    // Some agency encoders publish less media time than wall time, so a thin
+    // buffer backs off toward the encoder's own rate rather than stalling. A
+    // fat buffer means we are behind live, so close the gap instead of idling.
+    video.playbackRate = livePlaybackRateFor(ahead);
+  };
+  const startGovernor = () => {
+    if (disposed || governor) return;
+    governor = setInterval(applyLiveRate, LIVE_RATE_POLL_MS);
+  };
   video.addEventListener('canplay', play);
   video.addEventListener('error', fail);
   startup = setTimeout(fail, 30000);
@@ -69,12 +101,13 @@ export function attachCctvVideo(
         if (video.canPlayType('application/vnd.apple.mpegurl'))
           video.src = mediaUrl;
         else fail();
+        startGovernor();
         return;
       }
       hls = new Hls({
         enableWorker: true,
-        maxBufferLength: 24,
-        maxMaxBufferLength: 30,
+        maxBufferLength: 12,
+        maxMaxBufferLength: 18,
         backBufferLength: 0,
         maxBufferSize: 16 * 1024 * 1024,
         liveSyncDurationCount: 3,
@@ -92,15 +125,7 @@ export function attachCctvVideo(
           else hls.loadSource(mediaUrl);
         }, 2000);
       });
-      governor = setInterval(() => {
-        if (disposed || !video.buffered?.length) return;
-        const ahead =
-          video.buffered.end(video.buffered.length - 1) - video.currentTime;
-        // Some agency encoders publish less media time than wall time. Bound
-        // correction rather than repeatedly draining the live buffer at 1x.
-        video.playbackRate =
-          ahead < 6 ? 0.8 : ahead < 12 ? 0.9 : ahead > 24 ? 1.05 : 1;
-      }, 1000);
+      startGovernor();
       hls.attachMedia(video);
       hls.loadSource(mediaUrl);
     } catch {

@@ -9,7 +9,12 @@ export function _initCctvPanel() {
   this.listen(this._cctvNearestBtn, 'click', async () => {
     const generation = ++this._actionGeneration;
     const activeId = this._cctvState?.activeCameraId;
-    if (!(await this.actions.toggleEnabled(true))) return;
+    // Enable without the transition's own nearest auto-focus / flight: this
+    // handler is the single source of truth, so it always measures against
+    // the map location the operator is looking at right now (never a stale
+    // region or a double flight).
+    if (!(await this.actions.toggleEnabled(true, { suppressAutoFocus: true })))
+      return;
     if (
       this.destroyed ||
       generation !== this._actionGeneration ||
@@ -20,6 +25,39 @@ export function _initCctvPanel() {
     this.actions.runExplicitFocus(
       () => this.cctv.focusNearest({ focus: false }),
       (cameraId) => this.cctv.focusCamera(cameraId, 1.8),
+    );
+  });
+
+  this.listen(this._cctvBackBtn, 'click', async () => {
+    const generation = ++this._actionGeneration;
+    // Suppress the enable-transition's own flight so BACK is the single
+    // movement: the transition must not pre-activate a camera or flash a
+    // nearest-camera flight the restore immediately cancels.
+    if (!(await this.actions.toggleEnabled(true, { suppressAutoFocus: true })))
+      return;
+    if (
+      this.destroyed ||
+      generation !== this._actionGeneration ||
+      !this.actions.isEnabled()
+    )
+      return;
+    this.actions.runExplicitNavigation?.('camera', () =>
+      this.cctv.historyBack(),
+    );
+  });
+
+  this.listen(this._cctvForwardBtn, 'click', async () => {
+    const generation = ++this._actionGeneration;
+    if (!(await this.actions.toggleEnabled(true, { suppressAutoFocus: true })))
+      return;
+    if (
+      this.destroyed ||
+      generation !== this._actionGeneration ||
+      !this.actions.isEnabled()
+    )
+      return;
+    this.actions.runExplicitNavigation?.('camera', () =>
+      this.cctv.historyForward(),
     );
   });
 

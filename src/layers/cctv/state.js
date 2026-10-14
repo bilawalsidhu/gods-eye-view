@@ -48,6 +48,16 @@ export function createState({ services }) {
 
   layerState._lastViewContext = '';
 
+  // Browser-like BACK/FORWARD stacks over camera fly poses. Pushed before every
+  // explicit CCTV flight (NEAREST/NEXT/PREV/FOCUS/select/voice), so the operator
+  // can return to a map location they left behind. Bounded and reset on re-init.
+
+  layerState._viewHistory = [];
+
+  layerState._viewForward = [];
+
+  layerState._viewHistoryLimit = 50;
+
   layerState._clickHandler = null;
 
   layerState._count = 0;

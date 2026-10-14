@@ -64,6 +64,7 @@ import cctvLayer, {
   materializeCctvActiveCoverageEntities,
   materializeCctvVisibleCoverageEntities,
   maybeAutoHop,
+  nearestCameraIdToViewer,
   prioritizeActiveCctvGeometryRecord,
   processCctvGeometryDrainBatch,
   processCctvGeometryQueueBatch,
@@ -1799,4 +1800,176 @@ test('the footprint lift is capped so a tower under the far edge cannot launch t
   );
   assert.equal(hill.liftCapped, false);
   assert.ok(Math.abs(hill.liftM - (flat.liftM + 30)) < 1e-6);
+});
+
+function makeHistoryViewer() {
+  const camera = {
+    positionWC: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 4_000),
+    positionCartographic: Cesium.Cartographic.fromDegrees(
+      -97.7431,
+      30.2672,
+      4_000,
+    ),
+    heading: 0.4,
+    pitch: -0.7,
+    roll: 0.1,
+    transform: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
+    flyCalls: 0,
+    flyTo(options) {
+      this.flyCalls++;
+      if (options?.destination) {
+        this.positionWC = options.destination;
+        this.positionCartographic = Cesium.Cartographic.fromCartesian(
+          options.destination,
+        );
+      }
+      if (options?.orientation) {
+        this.heading = options.orientation.heading;
+        this.pitch = options.orientation.pitch;
+        this.roll = options.orientation.roll;
+      }
+    },
+    flyToBoundingSphere() {
+      this.flyCalls++;
+    },
+    getPickRay() {
+      return {};
+    },
+  };
+  return {
+    entities: new Cesium.EntityCollection(),
+    isDestroyed: () => false,
+    trackedEntity: undefined,
+    camera,
+    scene: {
+      canvas: { clientWidth: 1200, clientHeight: 800 },
+      globe: {
+        pick: () =>
+          Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 0),
+      },
+      primitives: { add: (primitive) => primitive, remove: () => true },
+      requestRender() {},
+    },
+  };
+}
+
+test('CCTV NEAREST measures against the ground point being viewed, not the camera eye', () => {
+  const farAway = { lat: 30.2672, lon: -97.7431 };
+  const underView = { lat: 30.2722, lon: -97.7381 };
+  const records = [
+    { ...makeDeselectRecord('far-cam'), camera: { ...UNCLAMPED_CAMERA, ...farAway, id: 'far-cam', name: 'Far cam' } },
+    { ...makeDeselectRecord('view-cam'), camera: { ...UNCLAMPED_CAMERA, ...underView, id: 'view-cam', name: 'View cam' } },
+  ];
+  // The camera EYE sits over the far camera's block, but the screen center
+  // picks the ground point under the VIEW camera's block.
+  const viewer = makeHistoryViewer();
+  viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(farAway.lon, farAway.lat, 4_000);
+  viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(farAway.lon, farAway.lat, 4_000);
+  viewer.scene.globe.pick = () => Cesium.Cartesian3.fromDegrees(underView.lon, underView.lat, 0);
+  _setCctvOverlayHostForTest({
+    setEntries() {},
+    setVisible() {},
+    clearSource() {},
+  });
+  try {
+    _setCctvCoverageStateForTest({
+      viewer,
+      records,
+      enabled: true,
+      coverageMode: 'off',
+      showProjection: false,
+    });
+    assert.equal(nearestCameraIdToViewer(), 'view-cam');
+  } finally {
+    _setCctvOverlayHostForTest();
+    _setCctvCoverageStateForTest({ enabled: false });
+  }
+});
+
+test('CCTV history ignores a pose that only changes the heading across the 2π wrap', () => {
+  const viewer = makeHistoryViewer();
+  const records = [makeDeselectRecord('cam-1', 0)];
+  _setCctvOverlayHostForTest({
+    setEntries() {},
+    setVisible() {},
+    clearSource() {},
+  });
+  try {
+    _setCctvCoverageStateForTest({
+      viewer,
+      records,
+      activeCameraId: 'cam-1',
+      enabled: true,
+      coverageMode: 'off',
+      showProjection: false,
+    });
+    viewer.camera.heading = 0;
+    cctvLayer.focusCamera('cam-1', 0.2);
+    // Rotating the heading VALUE past 2π means the same physical view: the
+    // re-focus must not capture a second entry, so one BACK exhausts history.
+    viewer.camera.heading = 2 * Math.PI;
+    cctvLayer.focusCamera('cam-1', 0.2);
+    assert.equal(cctvLayer.historyBack(), true);
+    assert.equal(cctvLayer.canGoBack(), false);
+  } finally {
+    _setCctvOverlayHostForTest();
+    _setCctvCoverageStateForTest({ enabled: false });
+  }
+});
+
+test('CCTV focus pushes a BACK entry and BACK/FORWARD restore the abandoned views', () => {
+  const viewer = makeHistoryViewer();
+  const records = [makeDeselectRecord('cam-1', 0)];
+  _setCctvOverlayHostForTest({
+    setEntries() {},
+    setVisible() {},
+    clearSource() {},
+  });
+  try {
+    _setCctvCoverageStateForTest({
+      viewer,
+      records,
+      activeCameraId: 'cam-1',
+      enabled: true,
+      coverageMode: 'off',
+      showProjection: false,
+    });
+    assert.equal(cctvLayer.canGoBack(), false);
+    assert.equal(cctvLayer.canGoForward(), false);
+    assert.equal(cctvLayer.getUIState().canGoBack, false);
+
+    cctvLayer.focusCamera('cam-1', 0.2);
+    assert.equal(cctvLayer.canGoBack(), true, 'focus must remember the previous view');
+    assert.equal(cctvLayer.getUIState().canGoBack, true);
+
+    // Re-focusing the same camera does not duplicate the remembered view.
+    const before = cctvLayer.getUIState().canGoBack;
+    cctvLayer.focusCamera('cam-1', 0.2);
+    assert.equal(cctvLayer.getUIState().canGoBack, before);
+
+    // The operator leaves: look elsewhere, then BACK returns to the prior pose
+    // and FORWARD re-applies the abandoned one.
+    viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(-97.74, 30.27, 2_000);
+    viewer.camera.positionCartographic = Cesium.Cartographic.fromDegrees(-97.74, 30.27, 2_000);
+    viewer.camera.heading = 1.3;
+    const flyCallsAfterFocus = viewer.camera.flyCalls;
+    assert.equal(cctvLayer.historyBack(), true);
+    assert.equal(viewer.camera.flyCalls, flyCallsAfterFocus + 1);
+    assert.equal(cctvLayer.canGoBack(), false);
+    assert.equal(cctvLayer.canGoForward(), true);
+    assert.equal(cctvLayer.getUIState().canGoForward, true);
+
+    assert.equal(cctvLayer.historyForward(), true);
+    assert.equal(cctvLayer.canGoBack(), true);
+    assert.equal(cctvLayer.canGoForward(), false);
+
+    // Once BACK has restored the oldest remembered view, history is exhausted
+    // and BACK refuses instead of wrapping.
+    assert.equal(cctvLayer.historyBack(), true);
+    assert.equal(cctvLayer.canGoBack(), false);
+    assert.equal(cctvLayer.historyBack(), false);
+  } finally {
+    _setCctvOverlayHostForTest();
+    _setCctvCoverageStateForTest({ enabled: false });
+  }
 });
