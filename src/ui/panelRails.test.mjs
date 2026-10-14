@@ -704,6 +704,51 @@ test('narrow-screen rails pin every hosted panel glow inside its panel box', () 
   }
 });
 
+test('right layout ignores a CSS-hidden expanded panel when deciding exclusivity', () => {
+  const f = fixture('right');
+  const weather = element('weather-panel', { height: 300 });
+  weather.computed.display = 'none';
+  f.stack.children.push(weather);
+  weather.parentElement = f.stack;
+
+  f.run();
+
+  assert.equal(f.stack.classList.contains('layout-exclusive'), false);
+  assert.equal(f.stack.dataset.expandedCount, '0');
+  assert.equal(f.first.getAttribute('aria-hidden'), undefined);
+  assert.equal(f.second.getAttribute('aria-hidden'), undefined);
+  assert.equal(
+    weather.style.getPropertyValue('--right-panel-allocated-height'),
+    '',
+  );
+});
+
+test('right layout still restores panels that exclusive presentation hides', () => {
+  const f = fixture('right');
+  // Model layers.css: an exclusive rail hides its collapsed panels.
+  f.options.windowRef.getComputedStyle = (node) => ({
+    ...node.computed,
+    display:
+      f.stack.classList.contains('layout-exclusive') &&
+      node.classList.contains('collapsed')
+        ? 'none'
+        : node.computed.display,
+  });
+  f.expand(f.first, 250);
+  f.second.classList.add('layout-auto-collapsed');
+  f.stack.classList.add('layout-exclusive');
+
+  f.run();
+  assert.equal(f.stack.classList.contains('layout-exclusive'), true);
+  assert.equal(f.second.getAttribute('aria-hidden'), 'true');
+
+  f.options.hud.visible = false;
+  f.run();
+  assert.equal(f.second.classList.contains('collapsed'), false);
+  assert.equal(f.second.classList.contains('layout-auto-collapsed'), false);
+  assert.deepEqual(f.collapsed, ['second']);
+});
+
 test('right layout ignores a hidden panel: no lane, no gap, no auto-collapse', () => {
   const f = fixture('right');
   const imagery = element('recent-imagery-panel', { height: 0 });
