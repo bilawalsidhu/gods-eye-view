@@ -14,19 +14,27 @@
  * objects (`{statusCode, response, responseHeaders}`) that stop Cesium's
  * render loop.
  *
- * Fix: rewrite absolute same-origin XHR URLs to relative paths on
- * `CapacitorWebXMLHttpRequest.prototype` (the prototype the bridge's
- * instances actually use — NOT `window.XMLHttpRequest.prototype`, which the
- * bridge leaves as an unused default object) before the bridge patch sees
- * them. Relative URLs take the real (local-server) path. Install once, at
- * boot, on native shells only; web is untouched.
+ * Fix: rewrite absolute same-origin XHR URLs to relative paths before the
+ * bridge patch sees them. Relative URLs take the real (local-server) path.
+ *
+ * Lifecycle hazard (observed on-device): the bridge (re)applies its XHR
+ * patch after app modules evaluate, silently discarding a one-shot wrapper
+ * — the wrapper is gone but no error surfaces. So instead of assigning a
+ * wrapper once, this installs an ACCESSOR for `open` on the live prototype:
+ * every future reassignment of `open` (including the bridge's own
+ * re-patches) flows through the setter and gets wrapped on the spot, with
+ * zero timing dependence. A bounded poll
+ * (`installSameOriginXhrBypassWhenReady`) covers the remaining cases: the
+ * bridge object appearing late, or the holder object itself being replaced.
+ *
+ * Install once, at boot, on native shells only; web is untouched.
  *
  * @module mobile/capacitorXhrBypass
  */
 
 const INSTALLED = Symbol.for('gev.sameOriginXhrBypassInstalled');
 
-/** Live prototype each globalRef was last wrapped on (identity tracking). */
+/** Live prototype each globalRef was last installed on (identity tracking). */
 const wrappedProtos = new WeakMap();
 
 /**
@@ -65,65 +73,100 @@ function findPatchedXhrPrototype(globalRef) {
 }
 
 /**
+ * Wrap a bridge `open` so absolute same-origin URLs become relative.
+ * Idempotent: an already-wrapped function is returned as-is.
+ * @param {Function} rawOpen Bridge (or previously wrapped) open.
+ * @param {string} serverOrigin Origin prefix, no trailing slash.
+ * @returns {Function} Wrapped open, marked with INSTALLED.
+ */
+function wrapOpen(rawOpen, serverOrigin) {
+  if (typeof rawOpen === 'function' && rawOpen[INSTALLED] === true) {
+    return rawOpen;
+  }
+  const prefix = `${serverOrigin}/`;
+  const wrapped = function (method, url, ...rest) {
+    if (typeof url === 'string' && url.startsWith(prefix)) {
+      url = url.slice(serverOrigin.length) || '/';
+    }
+    return rawOpen.call(this, method, url, ...rest);
+  };
+  wrapped[INSTALLED] = true;
+  return wrapped;
+}
+
+/**
  * Install the same-origin XHR bypass.
  * @param {{ globalRef?: object }} options Global to patch (test seam).
- * @returns {boolean} True when installed, false when already installed or impossible.
+ * @returns {boolean} True when protection is active now.
  */
 export function installSameOriginXhrBypass({ globalRef = globalThis } = {}) {
   const proto = findPatchedXhrPrototype(globalRef);
   if (!proto) return false;
-  // Guard on the wrapper marker on `open` itself, not just the proto: if the
-  // bridge re-applied its patch, `open` is fresh again and must be rewrapped
-  // even though a previous install already tagged the prototype object.
+  const serverOrigin = resolveServerOrigin(globalRef);
+  if (!serverOrigin) return false;
+  let currentRaw;
   try {
-    if (proto.open?.[INSTALLED] === true) return false;
+    currentRaw = proto.open;
   } catch {
     return false;
   }
-  const serverOrigin = resolveServerOrigin(globalRef);
-  if (!serverOrigin) return false;
-  const prefix = `${serverOrigin}/`;
-  const patchedOpen = proto.open;
-  proto.open = function (method, url, ...rest) {
-    if (typeof url === 'string' && url.startsWith(prefix)) {
-      url = url.slice(serverOrigin.length) || '/';
+  if (typeof currentRaw !== 'function') return false;
+  // Already ours (accessor in place from a previous install): no-op. A
+  // bridge re-patch flows through the setter below, so no reinstall is
+  // ever needed for the same prototype object.
+  try {
+    const existing = Object.getOwnPropertyDescriptor(proto, 'open');
+    if (proto[INSTALLED] && existing && typeof existing.get === 'function') {
+      wrappedProtos.set(globalRef, proto);
+      return false;
     }
-    return patchedOpen.call(this, method, url, ...rest);
+  } catch {
+    return false;
+  }
+  let cached = null;
+  let cachedRaw = null;
+  const getWrapped = () => {
+    if (!cached || cachedRaw !== currentRaw) {
+      cached = wrapOpen(currentRaw, serverOrigin);
+      cachedRaw = currentRaw;
+    }
+    return cached;
   };
-  proto.open[INSTALLED] = true;
-  proto[INSTALLED] = true;
+  try {
+    Object.defineProperty(proto, 'open', {
+      configurable: true,
+      enumerable: true,
+      get: getWrapped,
+      set(newRaw) {
+        currentRaw = newRaw;
+      },
+    });
+  } catch {
+    return false;
+  }
   wrappedProtos.set(globalRef, proto);
-  return true;
+  proto[INSTALLED] = true;
+  return getWrapped() !== null;
 }
 
 /**
- * Install the bypass as soon as the bridge's XHR patch is ready — and keep
- * it installed. The native bridge may (re)apply its XHR patch after app
- * modules evaluate, which silently discards a one-shot install, so this
- * polls for a bounded window, reinstalling whenever the live prototype
- * loses the bypass, and settles once the bypass survives consecutive
- * checks. Nativeness is evaluated late (at attempt time), never at
- * module-eval time.
- * @param {{ globalRef?: object, intervalMs?: number, timeoutMs?: number, settleChecks?: number }} options Global, poll cadence, give-up time, consecutive verifications to settle early.
- * @returns {Promise<boolean>} True when protection is active at settle time.
+ * Install the bypass as soon as the bridge's XHR patch exists — the
+ * accessor installed by `installSameOriginXhrBypass` then self-heals
+ * across later re-patches, so this poll only needs to cover the bridge
+ * object appearing late (or being replaced). Nativeness is evaluated late
+ * (at attempt time), never at module-eval time.
+ * @param {{ globalRef?: object, intervalMs?: number, timeoutMs?: number }} options Global, poll cadence, give-up time.
+ * @returns {Promise<boolean>} True when protection is active.
  */
 export function installSameOriginXhrBypassWhenReady({
   globalRef = globalThis,
   intervalMs = 25,
   timeoutMs = 8000,
-  settleChecks = 3,
 } = {}) {
-  const liveProto = () =>
-    globalRef?.CapacitorWebXMLHttpRequest?.prototype ?? null;
-  const isActive = () => {
-    const proto = liveProto();
-    if (!proto || wrappedProtos.get(globalRef) !== proto) return false;
-    try {
-      return proto.open?.[INSTALLED] === true;
-    } catch {
-      return false;
-    }
-  };
+  const installedHere = () =>
+    wrappedProtos.get(globalRef) ===
+      globalRef?.CapacitorWebXMLHttpRequest?.prototype &&
+    !!globalRef?.CapacitorWebXMLHttpRequest?.prototype?.[INSTALLED];
   const attempt = () => {
     const cap = globalRef?.Capacitor;
     if (!cap) return false;
@@ -135,22 +178,16 @@ export function installSameOriginXhrBypassWhenReady({
       native = false;
     }
     if (!native) return false;
-    return installSameOriginXhrBypass({ globalRef }) || isActive();
+    return installSameOriginXhrBypass({ globalRef });
   };
-  if (attempt() && isActive()) return Promise.resolve(true);
+  if (attempt() && installedHere()) return Promise.resolve(true);
   const startedAt = Date.now();
-  let consecutive = 0;
   return new Promise((resolve) => {
     const timer = setInterval(() => {
-      if (isActive()) {
-        consecutive += 1;
-      } else {
-        consecutive = 0;
-        attempt();
-      }
-      if (consecutive >= settleChecks || Date.now() - startedAt >= timeoutMs) {
+      const done = attempt() || installedHere();
+      if (done || Date.now() - startedAt >= timeoutMs) {
         clearInterval(timer);
-        resolve(isActive());
+        resolve(installedHere());
       }
     }, intervalMs);
   });

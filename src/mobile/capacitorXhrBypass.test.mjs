@@ -306,7 +306,6 @@ test('whenReady reinstalls after the bridge re-patches open', async () => {
       globalRef: win,
       intervalMs: 5,
       timeoutMs: 500,
-      settleChecks: 1,
     }),
     true,
   );
@@ -316,4 +315,37 @@ test('whenReady reinstalls after the bridge re-patches open', async () => {
     'https://localhost/after.json',
   );
   assert.equal(calls[calls.length - 1].url, '/after.json');
+});
+
+test('bridge re-patch after install stays bypassed via the setter', () => {
+  const calls = [];
+  const bridgeOpen = function (method, url) {
+    this._url = url;
+    calls.push({ bridged: true, url });
+  };
+  const win = {
+    CapacitorWebXMLHttpRequest: { prototype: { open: bridgeOpen } },
+    Capacitor: {
+      getServerUrl: () => 'https://localhost',
+      isNativePlatform: () => true,
+    },
+  };
+  assert.equal(installSameOriginXhrBypass({ globalRef: win }), true);
+  win.CapacitorWebXMLHttpRequest.prototype.open.call(
+    {},
+    'GET',
+    'https://localhost/first.json',
+  );
+  assert.equal(calls[0].url, '/first.json');
+  // Bridge re-applies its patch with plain assignment: the accessor setter
+  // rewraps on the spot, no reinstall needed.
+  win.CapacitorWebXMLHttpRequest.prototype.open = bridgeOpen;
+  win.CapacitorWebXMLHttpRequest.prototype.open.call(
+    {},
+    'GET',
+    'https://localhost/second.json',
+  );
+  assert.equal(calls[1].url, '/second.json');
+  // A redundant install is a no-op while the accessor stands.
+  assert.equal(installSameOriginXhrBypass({ globalRef: win }), false);
 });
