@@ -30,12 +30,16 @@ const TESTS = ['src/firstRunExperience.test.mjs', 'src/standalone/startupChrome.
 const FILES = {
   keyboard: path.join(ROOT, 'src', 'ui', 'surfaceKeyboard.js'),
   module: path.join(ROOT, 'src', 'firstRunExperience.js'),
-  html: path.join(ROOT, 'index.html'),
-  css: path.join(ROOT, 'style.css'),
+  html: path.join(ROOT, 'src', 'ui', 'templates', 'welcome.html'),
+  css: path.join(ROOT, 'src', 'ui', 'styles', 'first-run.css'),
   voiceInstructions: path.join(ROOT, 'server/providers/openai/instructions.js'),
-  voiceTools: path.join(ROOT, 'server/providers/openai/tools.js'),
-  main: path.join(ROOT, 'src', 'standalone', 'startupChrome.js'),
-  ui: path.join(ROOT, 'src', 'ui.js'),
+  voiceDescriptions: path.join(
+    ROOT,
+    'server/providers/openai/toolDescriptions.js',
+  ),
+  main: path.join(ROOT, 'src', 'app', 'startupChrome.js'),
+  ui: path.join(ROOT, 'src', 'ui', 'panelPositionControls.js'),
+  radio: path.join(ROOT, 'src', 'ui', 'radioBindings.js'),
   docs: path.join(ROOT, 'docs', 'CURRENT-STATE.md'),
 };
 
@@ -63,14 +67,14 @@ const MUTATIONS = [
   {
     defect: 'the session flag is never read, so it re-nags on every reload',
     file: 'module',
-    from: "if (readStored('session', sessionStorageRef, FIRST_RUN_SESSION_KEY) === 'dismissed') return false;",
-    to: '// session check removed',
+    from: "  if (\n    readStored('session', sessionStorageRef, FIRST_RUN_SESSION_KEY) ===\n    'dismissed'\n  )\n    return false;",
+    to: '  // session check removed',
   },
   {
     defect: 'the durable flag is never read, so the checkbox does nothing',
     file: 'module',
-    from: "if (readStored('local', storage, FIRST_RUN_STORAGE_KEY) === 'suppressed') return false;",
-    to: '// durable check removed',
+    from: "  if (readStored('local', storage, FIRST_RUN_STORAGE_KEY) === 'suppressed')\n    return false;",
+    to: '  // durable check removed',
   },
   {
     defect: '?welcome=1 no longer outranks suppression, so demos cannot replay it',
@@ -105,7 +109,7 @@ const MUTATIONS = [
   {
     defect: 'the guarded resolver stops catching, so a hostile getter escapes',
     file: 'module',
-    from: "  try {\n    return kind === 'session' ? globalThis.sessionStorage : globalThis.localStorage;\n  } catch {\n    // Privacy-restricted storage should not make first launch silent.\n    return null;\n  }",
+    from: "  try {\n    return kind === 'session'\n      ? globalThis.sessionStorage\n      : globalThis.localStorage;\n  } catch {\n    // Privacy-restricted storage should not make first launch silent.\n    return null;\n  }",
     to: "  return kind === 'session' ? globalThis.sessionStorage : globalThis.localStorage;",
   },
   {
@@ -131,8 +135,8 @@ const MUTATIONS = [
   {
     defect: 'nothing watches for another surface taking the screen',
     file: 'module',
-    from: "surfaceObserver?.observe(documentRef.body, { attributes: true, attributeFilter: ['class'] });",
-    to: '/* observer never attached */',
+    from: "    surfaceObserver?.observe(documentRef.body, {\n      attributes: true,\n      attributeFilter: ['class'],\n    });",
+    to: '    /* observer never attached */',
   },
   {
     defect: 'cockpit drops off the exclusive list and can stack with the launcher',
@@ -155,8 +159,8 @@ const MUTATIONS = [
   {
     defect: 'isTopmost stops hit-testing, so an unclassed overlay buries the card again',
     file: 'module',
-    from: '    && root.getClientRects().length > 0\n    && !coveredByOverlay();',
-    to: '    && root.getClientRects().length > 0;',
+    from: '    root.getClientRects().length > 0 &&\n    !coveredByOverlay();',
+    to: '    root.getClientRects().length > 0;',
   },
   {
     defect: 'an inconclusive hit test reads as COVERED, so ESC quietly stops working',
@@ -174,9 +178,9 @@ const MUTATIONS = [
     // Anchored past the call so it cannot land on the cockpit disclosure's own
     // stopImmediatePropagation() a few lines below and prove nothing about this.
     defect: 'the radio disclosure returns to stopPropagation, so one ESC does two things',
-    file: 'ui',
-    from: '      event.stopImmediatePropagation();\n      const escapedFromDisclosure = event.target === this._contextRadioToggleBtn',
-    to: '      event.stopPropagation();\n      const escapedFromDisclosure = event.target === this._contextRadioToggleBtn',
+    file: 'radio',
+    from: '      event.stopImmediatePropagation();\n      const escapedFromDisclosure =\n        event.target === this._contextRadioToggleBtn ||',
+    to: '      event.stopPropagation();\n      const escapedFromDisclosure =\n        event.target === this._contextRadioToggleBtn ||',
   },
   {
     defect: 'the "no timer" decision is deleted, so the next editor re-litigates it blind',
@@ -234,7 +238,7 @@ const MUTATIONS = [
   {
     defect: 'the removed INFRASTRUCTURE tile comes back as a one-click globe dump',
     file: 'module',
-    from: "  environmental: Object.freeze({",
+    from: '  environmental: Object.freeze({',
     to: "  infrastructure: Object.freeze({\n    kind: 'globe',\n    layerIds: Object.freeze(['local-datacenters', 'local-dams', 'telegeography-submarine-cables']),\n    busyText: 'Mapping global infrastructure…',\n  }),\n  environmental: Object.freeze({",
   },
   {
@@ -326,8 +330,8 @@ const MUTATIONS = [
   {
     defect: 'the Context panel is left collapsed, hiding the mode that just started',
     file: 'module',
-    from: "styleManager.setPanelCollapsed?.('global-context-panel', false, { explicit: true });",
-    to: '// panel reveal removed',
+    from: "            styleManager.setPanelCollapsed?.('global-context-panel', false, {\n              explicit: true,\n            });",
+    to: '            // panel reveal removed',
   },
   {
     defect: 'the decision table is deleted, so the next editor re-litigates it blind',
@@ -340,8 +344,8 @@ const MUTATIONS = [
   {
     defect: 'disabling the focused tile drops the keyboard to <body> mid-flight',
     file: 'module',
-    from: "for (const button of buttons) button.setAttribute('aria-disabled', String(next));",
-    to: 'for (const button of buttons) button.disabled = next;',
+    from: "    for (const button of buttons)\n      button.setAttribute('aria-disabled', String(next));",
+    to: '    for (const button of buttons) button.disabled = next;',
   },
   {
     defect: 'Tab escapes into an app the visitor has not seen yet',
@@ -370,8 +374,8 @@ const MUTATIONS = [
   {
     defect: 'the card stays clickable through its fade-out (double-launch)',
     file: 'css',
-    from: '  transition: opacity 220ms ease, transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);\n  /* Inert until revealed AND again while fading out, so a click during the\n     dismiss animation cannot launch a second mission behind the fade. */\n  pointer-events: none;',
-    to: '  transition: opacity 220ms ease, transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);',
+    from: '  transition:\n    opacity 220ms ease,\n    transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);\n  /* Inert until revealed AND again while fading out, so a click during the\n     dismiss animation cannot launch a second mission behind the fade. */\n  pointer-events: none;',
+    to: '  transition:\n    opacity 220ms ease,\n    transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);',
   },
   {
     defect: 'the launcher survives Clean-UI and recording mode',
@@ -403,8 +407,8 @@ const MUTATIONS = [
     // those instead and prove nothing about this feature.
     defect: "the launcher's reduced-motion opt-out is dropped",
     file: 'css',
-    from: '  #first-run-launcher,\n  .first-run-choices button,\n  .first-run-arrow { transition: none; }\n  /* Scrolling a tile into view must not animate either. */\n  .first-run-choices { scroll-behavior: auto; }',
-    to: '  .first-run-nothing { transition: none; }',
+    from: '  #first-run-launcher,\n  .first-run-choices button,\n  .first-run-arrow {\n    transition: none;\n  }\n  /* Scrolling a tile into view must not animate either. */\n  .first-run-choices {\n    scroll-behavior: auto;\n  }',
+    to: '  .first-run-nothing {\n    transition: none;\n  }',
   },
 
   // ── Markup and startup ordering ───────────────────────────────────────────
@@ -442,21 +446,21 @@ const MUTATIONS = [
     defect: 'the launcher is revealed before the loading cover yields',
     file: 'main',
     from: "      loadingScreen.classList.add('hidden');",
-    to: '      initFirstRunExperience({ styleManager, dataManager });\n      loadingScreen.classList.add(\'hidden\');',
+    to: "      revealFirstRun();\n      loadingScreen.classList.add('hidden');",
   },
   {
     defect: 'the globe missions lose their DataManager and cannot enable layers',
     file: 'main',
-    from: 'initFirstRunExperience({ styleManager, dataManager });',
-    to: 'initFirstRunExperience({ styleManager });',
+    from: 'firstRun = initializeWelcome?.({ styleManager, dataManager });',
+    to: 'firstRun = initializeWelcome?.({ styleManager });',
   },
 
   // ── Voice: schema must not drift ──────────────────────────────────────────
   {
     defect: 'the voice TOOL SCHEMA is edited (a Realtime prompt-cache bust)',
-    file: 'voiceTools',
-    from: "            'earthquakes',\n            'satellites',",
-    to: "            'earthquakes',\n            'infrastructure-mode',\n            'satellites',",
+    file: 'voiceDescriptions',
+    from: "'Counts, lists, superlatives and attribute filters over records loaded by ENABLED layers",
+    to: "'Counts, lists, superlatives, and attribute filters over records loaded by ENABLED layers",
   },
   {
     defect: 'the instruction mapping is dropped, so voice cannot reach the modes',
