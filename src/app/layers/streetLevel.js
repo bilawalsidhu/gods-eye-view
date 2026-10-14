@@ -1,6 +1,7 @@
 import { createStreetLevelLayer } from '../../layers/streetLevel/index.js';
 import { createMapillaryProvider } from '../../layers/streetLevel/providers/mapillary/index.js';
 import { createGoogleProvider } from '../../layers/streetLevel/providers/google/index.js';
+import { createKartaViewProvider } from '../../layers/streetLevel/providers/kartaview/index.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as input from '../../data/inputOwnership.js';
@@ -10,12 +11,16 @@ import * as render from '../../renderGovernor.js';
 /** The browser Maps key the scene was started with (src/app/scene.js). */
 const googleApiKey = () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ || null;
 
-/** Mapillary and Google Street View, once the Mapillary source is supplied; else none. */
+/**
+ * Mapillary, Google Street View and KartaView, once the Mapillary source is
+ * supplied; else none.
+ */
 function defaultProviders(sources) {
   if (sources.mapillary == null) return [];
   return [
     createMapillaryProvider({ source: sources.mapillary }),
     createGoogleProvider({ getApiKey: googleApiKey }),
+    createKartaViewProvider(),
   ];
 }
 

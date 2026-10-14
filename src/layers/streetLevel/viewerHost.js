@@ -39,6 +39,10 @@ export function createViewerHost({ state, parts }) {
       sequenceId: pose.sequenceId ?? null,
       creator: pose.creator || null,
       externalUrl: pose.externalUrl || null,
+      // FIT / FILL, unless this image has no frame to fit (a panorama).
+      renderModes:
+        typeof active.adapter.setRenderMode === 'function' &&
+        active.adapter.supportsRenderModes?.() !== false,
     });
     parts.marker.set(
       state.street.position,

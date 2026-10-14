@@ -8,6 +8,7 @@ export const POSITION_PICK_ID = 'sl:pos';
 export const PROVIDER_COLORS = Object.freeze({
   mapillary: '#05cb63',
   google: '#4285f4',
+  kartaview: '#635bff',
 });
 
 /** Colours every provider shares: the selection highlight and the marker. */

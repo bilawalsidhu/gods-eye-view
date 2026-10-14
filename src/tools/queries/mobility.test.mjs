@@ -106,6 +106,34 @@ test('bike share joins station information with live status inside the area', as
   assert.equal(result.data.rows[1].capacity, 10);
 });
 
+test('bike share returns localized names without losing stations with malformed names', async () => {
+  const informationUrl = 'https://gbfs.example/austin/station_information.json';
+  const information = structuredClone(documents[informationUrl]);
+  information.version = '3.0';
+  information.data.stations[0].name = [
+    { language: 'hu', text: 'Magyar név' },
+    { language: 'en', text: 'Congress & 2nd' },
+  ];
+  information.data.stations[2].name = [null, { language: 42, text: [] }];
+  const source = bikeshare([system('austin', 'Austin, TX', 30.27, -97.74)]);
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: {
+      bikeshare: {
+        ...source,
+        getStations: (url) =>
+          url === informationUrl ? information : source.getStations(url),
+      },
+    },
+  });
+  const result = await catalog.call('get_bike_share', { area: downtown });
+  assert.equal(result.data.total, 2);
+  assert.equal(result.data.rows[0].name, 'Congress & 2nd');
+  assert.equal(result.data.rows[0].bikes_available, 4);
+  assert.equal(result.data.rows[1].name, null);
+  assert.doesNotMatch(result.summary, /unavailable/);
+});
+
 test('bike share reports uncovered areas and failed systems honestly', async () => {
   const none = composeCatalog({
     tools: coreTools,
