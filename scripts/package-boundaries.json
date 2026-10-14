@@ -1633,6 +1633,7 @@
       "src/mobile/adapters/transitDirect.js",
       "src/mobile/adapters/weatherDirect.js",
       "src/mobile/adapters/windDirect.js",
+      "src/mobile/capacitorXhrBypass.js",
       "src/mobile/deviceFetch.js",
       "src/mobile/governors.js",
       "src/mobile/keyStore.js",
