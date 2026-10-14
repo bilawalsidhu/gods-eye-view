@@ -2225,7 +2225,10 @@
       "src/tools/functions.js",
       "src/voice/actionSchemas.js",
       "src/view/index.js",
-      "src/app/embed.js"
+      "src/app/embed.js",
+      "src/remote/protocol.js",
+      "src/remote/client.js",
+      "src/remote/control.js"
     ],
     "external": [
       "hls.js",

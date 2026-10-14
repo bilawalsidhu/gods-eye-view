@@ -5,6 +5,7 @@ import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installViews, isEmbeddedInline } from './embed.js';
+import { installRemoteControl } from '../remote/control.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import {
   installRenderGovernor,
@@ -179,12 +180,21 @@ export function createApplicationTools({
       delete window.__gevVoiceCommands;
   });
   debug.voiceCommands = voiceCommands;
+  const runViewAction = (name, args) =>
+    voiceCommands.runner(name, args, { signal });
   defer(
     installViews({
       shell: styleManager,
       viewer,
       dataManager,
-      run: (name, args) => voiceCommands.runner(name, args, { signal }),
+      run: runViewAction,
+      signal,
+    }),
+  );
+  defer(
+    installRemoteControl({
+      viewer,
+      run: runViewAction,
       signal,
     }),
   );

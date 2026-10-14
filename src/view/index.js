@@ -197,7 +197,7 @@ const text = (value, max) =>
  * One annotation with only the fields the app draws, or null when it has
  * nothing to place. Unknown fields and out-of-range values are dropped.
  */
-function annotationOf(input) {
+export function annotationOf(input) {
   if (!input || !VIEW_ANNOTATION_TYPES.includes(input.type)) return null;
   const points = Array.isArray(input.points)
     ? input.points
