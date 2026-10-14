@@ -28,11 +28,15 @@ import {
   createCctvDirectLayerSource,
   createFlightsDirectLayerSource,
   createTransitDirectLayerSource,
+  createVesselDirectLayerSource,
   createWeatherDirectLayerSource,
   createWindDirectLayerSource,
 } from '../mobile/adapters/heavyLayerSources.js';
+import { createTomtomFetchShim } from '../mobile/adapters/meteredDirect.js';
+import { createDailyBudget } from '../mobile/governors.js';
 import {
   createCycloneDirectSource,
+  createFirePerimeterDirectSource,
   createFirmsDirectSource,
   createGbfsDirectSource,
   createRadioDirectSource,
@@ -60,9 +64,27 @@ export function createStandaloneLayerSources(overrides = {}, options = {}) {
     typeof getKey === 'function' ? () => getKey('OPENSKY_CLIENT_ID') : null;
   const openskySecret =
     typeof getKey === 'function' ? () => getKey('OPENSKY_CLIENT_SECRET') : null;
+  const aisKey =
+    typeof getKey === 'function' ? () => getKey('AISSTREAM_API_KEY') : null;
+  const tomtomKey =
+    typeof getKey === 'function' ? () => getKey('TOMTOM_API_KEY') : null;
+  // TomTom daily tile budget persists in memory per page; the vault key is
+  // the operator's own, so a reload resetting the count is acceptable.
+  const tomtomBudget = useDirect ? createDailyBudget({ limit: 6000 }) : null;
+  const tomtomFetch =
+    useDirect && deviceFetch
+      ? createTomtomFetchShim({
+          fetchImpl: deviceFetch,
+          getKey: tomtomKey,
+          budget: tomtomBudget,
+        })
+      : undefined;
   const mapTiles = createOpenFreeMapSource();
   const defaults = {
     ...createReferenceSources(),
+    ...(useDirect
+      ? { 'fire-perimeters': createFirePerimeterDirectSource(transport) }
+      : {}),
     directions: useDirect
       ? createRouteDirectSource(transport)
       : createDirectionsSource(transport),
@@ -75,22 +97,24 @@ export function createStandaloneLayerSources(overrides = {}, options = {}) {
         })
       : createFlightSource(),
     military: createMilitarySource(),
-    vessels: createVesselSource({
-      // Parked on direct: vesselsLive is a push socket (connect/tick plus a
-      // health-only snapshot), not pollable vessel rows — no lossless mapping
-      // to getSnapshot exists. See docs/MOBILE.md parked wirings.
-      apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/vessels',
-      // Resolved against the document's address, which a panel host may
-      // serve from its own scheme.
-      origin: () => globalThis.document?.baseURI ?? 'http://localhost',
-    }),
+    vessels: useDirect
+      ? createVesselDirectLayerSource({ getKey: aisKey })
+      : createVesselSource({
+          apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/vessels',
+          // Resolved against the document's address, which a panel host may
+          // serve from its own scheme.
+          origin: () => globalThis.document?.baseURI ?? 'http://localhost',
+        }),
     cctv: useDirect
       ? createCctvDirectLayerSource(transport)
       : createCctvSource(),
     radio: useDirect
       ? createRadioDirectSource(transport)
       : createRadioSource(transport),
-    traffic: createTrafficSource({ mapTiles }),
+    traffic:
+      useDirect && tomtomFetch
+        ? createTrafficSource({ fetchImpl: tomtomFetch, mapTiles })
+        : createTrafficSource({ mapTiles }),
     transit: useDirect
       ? createTransitDirectLayerSource(transport)
       : createTransitSource(),

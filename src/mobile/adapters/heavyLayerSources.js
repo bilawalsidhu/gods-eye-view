@@ -6,6 +6,11 @@ import { createOverpassDirectSource } from './overpassDirect.js';
 import { createNoaaTilesDirectSource } from './noaaTilesDirect.js';
 import { createFlightsDirectSource } from './flightsDirect.js';
 import { createAdsbdbDirectSource } from './adsbdbDirect.js';
+import { createVesselsLiveSource } from './vesselsLive.js';
+import {
+  normalizeVesselTrack,
+  vesselSnapshot,
+} from '../../sources/live/vessels.js';
 import { createCreditGovernor } from '../governors.js';
 import { openSkySnapshot } from '../../sources/live/aircraft.js';
 import { LiveSourceError } from '../../sources/live/contract.js';
@@ -370,6 +375,216 @@ export function createFlightsDirectLayerSource({
       signal?.throwIfAborted();
       if (!result || result.unavailable) return result ?? null;
       return { ...result, found: true };
+    },
+  };
+}
+
+/** Vessel staleness bound mirrors `AISSTREAM_STALE_MS` (30 min). */
+const VESSEL_DIRECT_STALE_MS = 30 * 60 * 1000;
+
+/** Default poll cap mirrors the legacy `getSnapshot` default. */
+const VESSEL_DIRECT_DEFAULT_MAX_ROWS = 12000;
+
+/**
+ * Great-circle distance in km (local copy; the codebase keeps small
+ * per-module copies rather than a shared helper).
+ */
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const d2r = Math.PI / 180;
+  const dLat = (lat2 - lat1) * d2r;
+  const dLon = (lon2 - lon1) * d2r;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * d2r) * Math.cos(lat2 * d2r) * Math.sin(dLon / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+const finiteNumber = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
+const textValue = (value) => {
+  if (value === null || value === undefined) return '';
+  const s = String(value).trim();
+  return s;
+};
+
+/**
+ * Map one AISStream envelope to a proxy-shaped vessel row. Mirrors the field
+ * mapping in `server/providers/vessels/ais-store.js` `ingestAisStreamEnvelope`
+ * (metadata/message fallbacks, static-data merge); final normalization stays
+ * with `normalizeVesselObservation`, which drops positionless rows.
+ * @param {string} mmsi Vessel MMSI.
+ * @param {object} envelope Parsed AISStream envelope.
+ * @returns {object|null} Proxy row, or null when unusable.
+ */
+function vesselRowFromEnvelope(mmsi, envelope) {
+  if (!envelope || typeof envelope !== 'object') return null;
+  const messageType = envelope?.MessageType;
+  const message =
+    envelope?.Message?.[messageType] &&
+    typeof envelope.Message[messageType] === 'object'
+      ? envelope.Message[messageType]
+      : {};
+  const metadata = envelope?.MetaData ?? envelope?.Metadata ?? {};
+  const lat = finiteNumber(
+    metadata.latitude ?? metadata.Latitude ?? message.Latitude,
+  );
+  const lon = finiteNumber(
+    metadata.longitude ?? metadata.Longitude ?? message.Longitude,
+  );
+  const id = String(mmsi || '').trim();
+  if (!id) return null;
+  const name =
+    textValue(metadata.ShipName ?? message.ShipName ?? message.shipname) ||
+    `MMSI ${id}`;
+  const epoch = Number.isFinite(
+    Date.parse(metadata.time_utc ?? metadata.TimeUtc),
+  )
+    ? Math.floor(Date.parse(metadata.time_utc ?? metadata.TimeUtc) / 1000)
+    : Math.floor(Date.now() / 1000);
+  return {
+    mmsi: id,
+    lat,
+    lon,
+    name,
+    imo: textValue(message.ImoNumber ?? message.IMO),
+    type: textValue(message.ShipType ?? message.Shiptype ?? message.Type),
+    destination: textValue(message.Destination),
+    speed: finiteNumber(message.Sog ?? message.SOG),
+    course: finiteNumber(message.Cog ?? message.COG),
+    heading: finiteNumber(message.TrueHeading ?? message.Heading),
+    last_position_epoch: epoch,
+    last_position_UTC: metadata.time_utc ?? metadata.TimeUtc ?? null,
+  };
+}
+
+/**
+ * Vessel layer source backed by the on-device AISStream socket.
+ * Legacy shape: `{ label, getSnapshot, getTrack }` (same contract as
+ * `createVesselSource`: poll rows plus mmsi tracks). Positions accumulate
+ * from the push socket into a latest-fix map; snapshots read that map, so a
+ * quiet feed honestly reports few rows rather than an error.
+ * @param {{ fetchImpl?: Function, getKey?: Function|null, createLive?: Function|null, clock?: Function }} options Transport, vault reader, live-handle seam (tests), clock.
+ * @returns {{ label: string, getSnapshot: Function, getTrack: Function }} Legacy vessel source.
+ */
+export function createVesselDirectLayerSource({
+  getKey = null,
+  createLive = null,
+  clock,
+} = {}) {
+  const now =
+    typeof clock === 'function' ? clock : (clock?.now ?? (() => Date.now()));
+  /** MMSI -> latest proxy row plus receipt time. */
+  const latest = new Map();
+  let live = null;
+  function ensureLive() {
+    if (!live) {
+      const factory = createLive ?? createVesselsLiveSource;
+      live = factory({
+        ...(getKey ? { getKey } : {}),
+        onVessel: ({ mmsi, envelope }) => {
+          const row = vesselRowFromEnvelope(mmsi, envelope);
+          if (row) latest.set(String(mmsi), { row, at: now() });
+        },
+        ...(clock ? { clock } : {}),
+      });
+    }
+    return live;
+  }
+  function freshRows() {
+    const cutoff = now() - VESSEL_DIRECT_STALE_MS;
+    const rows = [];
+    for (const [mmsi, entry] of latest) {
+      if (entry.at < cutoff) {
+        latest.delete(mmsi);
+        continue;
+      }
+      rows.push(entry.row);
+    }
+    return rows;
+  }
+  return {
+    label: 'Vessels',
+    /**
+     * Poll the accumulated live map (same shape as the proxy snapshot).
+     * @param {{ maxRows?: number, area?: { lat: number, lon: number, radiusKm: number } }} query Row cap + optional area.
+     * @param {{ signal?: AbortSignal }} options Caller signal.
+     * @returns {Promise<object>} `{ records, source, coverage, ... }` via `vesselSnapshot`.
+     */
+    async getSnapshot(
+      { maxRows = VESSEL_DIRECT_DEFAULT_MAX_ROWS, area } = {},
+      { signal } = {},
+    ) {
+      signal?.throwIfAborted();
+      const handle = ensureLive();
+      const connected = await handle.connect({ signal });
+      signal?.throwIfAborted();
+      if (connected?.unavailable === 'KEY_REQUIRED') {
+        throw new LiveSourceError('missing-key', 'AISSTREAM_API_KEY not set');
+      }
+      handle.tick();
+      signal?.throwIfAborted();
+      let rows = freshRows();
+      if (
+        Number.isFinite(area?.lat) &&
+        Number.isFinite(area?.lon) &&
+        Number.isFinite(area?.radiusKm)
+      ) {
+        rows = rows.filter(
+          (row) =>
+            Number.isFinite(row.lat) &&
+            Number.isFinite(row.lon) &&
+            haversineKm(area.lat, area.lon, row.lat, row.lon) <= area.radiusKm,
+        );
+      }
+      rows.sort((a, b) => String(a.mmsi).localeCompare(String(b.mmsi)));
+      const capped =
+        Number.isFinite(maxRows) && maxRows >= 0
+          ? rows.slice(0, maxRows)
+          : rows;
+      const snapshot = vesselSnapshot({ rows: capped });
+      signal?.throwIfAborted();
+      const liveState =
+        typeof handle.snapshot === 'function' ? handle.snapshot() : {};
+      return {
+        ...snapshot,
+        transportStatus: 'live',
+        lastMessageAt: null,
+        silentForMs: liveState.silentForMs ?? null,
+        reconnectAttempt: liveState.attempts ?? 0,
+      };
+    },
+    /**
+     * Read one vessel's retained ring through the legacy track shape.
+     * @param {string} reference Vessel MMSI.
+     * @param {{ signal?: AbortSignal }} options Caller signal.
+     * @returns {Promise<{ records: Array, complete: boolean }>} Track records.
+     */
+    async getTrack(reference, { signal } = {}) {
+      signal?.throwIfAborted();
+      const handle = ensureLive();
+      const connected = await handle.connect({ signal });
+      signal?.throwIfAborted();
+      if (connected?.unavailable === 'KEY_REQUIRED') {
+        throw new LiveSourceError('missing-key', 'AISSTREAM_API_KEY not set');
+      }
+      const ring =
+        typeof handle.getTrack === 'function'
+          ? handle.getTrack(String(reference ?? ''))
+          : [];
+      signal?.throwIfAborted();
+      return {
+        records: normalizeVesselTrack(
+          (Array.isArray(ring) ? ring : []).map((sample) => ({
+            lat: sample.latitude,
+            lon: sample.longitude,
+            t: Math.floor(Number(sample.at) / 1000),
+          })),
+        ),
+        complete: false,
+      };
     },
   };
 }

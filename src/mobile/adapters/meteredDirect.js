@@ -432,3 +432,77 @@ export function createHudSummaryDirect({
     },
   };
 }
+
+/** TomTom status path served by the shim (mirrors the proxy route). */
+const TOMTOM_STATUS_PATH = '/api/tomtom/status';
+
+/** TomTom flow-tile path prefix served by the shim. */
+const TOMTOM_FLOW_PREFIX = '/api/tomtom/flow/';
+
+/**
+ * Fetch-level shim serving the legacy TomTom proxy routes from the direct
+ * source, so `createTrafficSource` works on-device with zero layer changes:
+ * `/api/tomtom/status` answers key presence and `/api/tomtom/flow/{z}/{x}/{y}.pbf`
+ * serves direct tile bytes. Every other URL passes through untouched.
+ * @param {{ fetchImpl?: Function, getKey?: Function|null, budget?: { trySpend: Function, remaining?: Function }|null }} options Transport, vault reader, daily budget.
+ * @returns {Function} fetchImpl-compatible shim.
+ */
+export function createTomtomFetchShim({
+  fetchImpl = (...args) => globalThis.fetch(...args),
+  getKey = null,
+  budget = null,
+} = {}) {
+  const tomtom = createTomtomDirectSource({ fetchImpl, getKey, budget });
+  const jsonResponse = (payload, status = 200) =>
+    new Response(JSON.stringify(payload), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  return async function tomtomShimFetch(url, init = {}) {
+    let path = null;
+    try {
+      path = new URL(String(url), 'http://localhost').pathname;
+    } catch {
+      return fetchImpl(url, init);
+    }
+    if (path === TOMTOM_STATUS_PATH) {
+      init?.signal?.throwIfAborted();
+      let key = null;
+      try {
+        key = typeof getKey === 'function' ? await getKey() : null;
+      } catch {
+        key = null;
+      }
+      init?.signal?.throwIfAborted();
+      return jsonResponse({ hasKey: typeof key === 'string' && !!key });
+    }
+    if (path.startsWith(TOMTOM_FLOW_PREFIX) && path.endsWith('.pbf')) {
+      const parts = path
+        .slice(TOMTOM_FLOW_PREFIX.length, -'.pbf'.length)
+        .split('/');
+      const [z, x, y] = parts.map(Number);
+      if (parts.length !== 3 || !parts.every((part) => /^\d+$/.test(part))) {
+        return jsonResponse({ error: 'Invalid TomTom tile coordinate' }, 400);
+      }
+      try {
+        const bytes = await tomtom.getFlowTile(z, x, y, {
+          signal: init?.signal,
+        });
+        init?.signal?.throwIfAborted();
+        return new Response(bytes, {
+          status: 200,
+          headers: { 'Content-Type': 'application/x-protobuf' },
+        });
+      } catch (error) {
+        if (error?.code === TOMTOM_BUDGET_EXHAUSTED) {
+          return jsonResponse({ error: 'TomTom tile budget exhausted' }, 429);
+        }
+        if (error?.keyRequired) {
+          return jsonResponse({ error: 'TOMTOM_API_KEY not set' }, 503);
+        }
+        throw error;
+      }
+    }
+    return fetchImpl(url, init);
+  };
+}

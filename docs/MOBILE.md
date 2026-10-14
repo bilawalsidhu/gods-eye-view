@@ -237,18 +237,21 @@ are unchanged. Remaining device-matrix work is the live proof checklist above
 
 ### Parked on-device wirings (final review — evidence, not roadmap wishes)
 
-- **Vessels** — `createVesselsLiveSource` is a push socket (`connect`/`tick`;
-  `snapshot()` reports feed health, not vessel rows) while the layer polls
-  `getSnapshot` for rows. No lossless mapping exists; the slot stays proxy.
+- **Vessels** — wired: `createVesselDirectLayerSource` accumulates push
+  frames into a latest-fix map and serves legacy poll snapshots plus
+  ring-backed tracks; keyless throws the legacy missing-key error.
 - **Military** — no direct equivalent exists at all; stays proxy.
 - **Voice token backend** — `createVoiceBackend` has no boot composition
   point (sessions construct it on demand with vault key + `fetchImpl`
   parameter); nothing to select at boot. Transport failures now map to
   `VOICE UNAVAILABLE` like token failures.
-- **Google Places / TomTom / HUD summary** — no layer/composition slot
-  consumes these factories (`grep` for callers outside `adapters/` is empty);
+- **Google Places / HUD summary** — no layer/composition slot consumes
+  these factories (`grep` for callers outside `adapters/` is empty);
   HUD summary additionally needs vault-key threading at the service layer,
   beyond what a fetch seam can provide.
+- **TomTom flow** — wired: `createTomtomFetchShim` serves the legacy
+  `/api/tomtom/status` + flow-tile routes from the direct source (vault
+  key + persisted daily budget); all other routes pass through untouched.
 - **Local receivers** — the legacy `createLocalReceiverFeeds` polls one
   server route while the direct source reads explicit user LAN feed URLs;
   no feed plumbing passes user feeds, and LAN hosts cannot be statically
@@ -258,5 +261,8 @@ are unchanged. Remaining device-matrix work is the live proof checklist above
   `services.boundaries` contract is proxy-shaped (probe/status/remark
   handling) with no operator-mirrors config channel. Stays proxy pending
   mirrors plumbing.
+- **Fire perimeters** — wired: `createFirePerimeterDirectSource` reads NIFC
+  WFIGS directly (paged, capped) and is selected for `fire-perimeters` when
+  direct; the reference catalog keeps the proxy otherwise.
 - **Flight tracks** — the direct module exposes states + enrichment only;
   `getTrack` rejects honestly unavailable (never fake data).
