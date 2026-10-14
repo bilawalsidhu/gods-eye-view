@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   cameraPoseSignature,
   perspectiveProjectedRotation,
@@ -56,13 +57,7 @@ export function createRendering({ state, services, parts }) {
   function cartesianFor(lat, lon, heightM, out) {
     // `heightM` already carries the shared floor's own lift, so nothing is
     // added here: two lifts stacked is a vehicle hovering.
-    return Cesium.Cartesian3.fromDegrees(
-      lon,
-      lat,
-      heightM || 0,
-      undefined,
-      out,
-    );
+    return geo.cartesian3.fromDegrees(lon, lat, heightM || 0, undefined, out);
   }
 
   /** Heights are aligned to work with Google 3D tiles. Rebuild both ends. */
@@ -74,13 +69,13 @@ export function createRendering({ state, services, parts }) {
       entry.from.lat,
       entry.from.lon,
       entry.from.h,
-      entry.fromCart || new Cesium.Cartesian3(),
+      entry.fromCart || geo.cartesian3.create(),
     );
     entry.toCart = cartesianFor(
       entry.to.lat,
       entry.to.lon,
       entry.to.h,
-      entry.toCart || new Cesium.Cartesian3(),
+      entry.toCart || geo.cartesian3.create(),
     );
     entry.endpointRevision = entry.sample.revision;
     entry.endpointFromSeq = entry.sample.fromSeq;
@@ -262,7 +257,7 @@ export function createRendering({ state, services, parts }) {
       height: MARKER_PIXEL_SIZE,
       color: MODE_CESIUM_COLORS[entry.mode],
       rotation: 0,
-      alignedAxis: Cesium.Cartesian3.ZERO,
+      alignedAxis: geo.cartesian3.ZERO,
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
     });
     entry.marker = marker;
@@ -443,8 +438,8 @@ export function createRendering({ state, services, parts }) {
 
   const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84);
   const sphere = new Cesium.BoundingSphere(undefined, 5);
-  const cameraPosition = new Cesium.Cartesian3();
-  const candidatePosition = new Cesium.Cartesian3();
+  const cameraPosition = geo.cartesian3.create();
+  const candidatePosition = geo.cartesian3.create();
   /** Visibility work runs off the frame path, coalesced at four sweeps/second. */
   function requestVisibility() {
     state._visibilityDirty = true;
@@ -471,7 +466,7 @@ export function createRendering({ state, services, parts }) {
     if (!camera) return 0;
     const position =
       camera.positionWC ||
-      Cesium.Ellipsoid.WGS84.cartographicToCartesian(
+      geo.ellipsoid.WGS84.cartographicToCartesian(
         camera.positionCartographic,
         cameraPosition,
       );

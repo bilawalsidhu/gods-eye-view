@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   LOD_LEVELS,
   LOD_HYSTERESIS,
@@ -122,7 +123,7 @@ export function createViewport({
     const center = Cesium.Rectangle.center(viewRect, layerState.scratchCenterB);
     const latShift = Math.abs(center.latitude - lastCenter.latitude);
     let lonShift = Math.abs(center.longitude - lastCenter.longitude);
-    if (lonShift > Math.PI) lonShift = Cesium.Math.TWO_PI - lonShift;
+    if (lonShift > Math.PI) lonShift = geo.math.TWO_PI - lonShift;
     return (
       latShift > lastHeight * VIEW_PADDING * 0.6 ||
       lonShift > lastWidth * VIEW_PADDING * 0.6
@@ -159,13 +160,13 @@ export function createViewport({
         const camera = layerState._viewer.camera;
         if (
           layerState._camSnapValid &&
-          Cesium.Cartesian3.equalsEpsilon(
+          geo.cartesian3.equalsEpsilon(
             camera.positionWC,
             layerState._camPos,
             0,
             0.5,
           ) &&
-          Cesium.Cartesian3.equalsEpsilon(
+          geo.cartesian3.equalsEpsilon(
             camera.directionWC,
             layerState._camDir,
             0,
@@ -174,8 +175,8 @@ export function createViewport({
         ) {
           return;
         }
-        Cesium.Cartesian3.clone(camera.positionWC, layerState._camPos);
-        Cesium.Cartesian3.clone(camera.directionWC, layerState._camDir);
+        geo.cartesian3.clone(camera.positionWC, layerState._camPos);
+        geo.cartesian3.clone(camera.directionWC, layerState._camDir);
         layerState._camSnapValid = true;
         // The camera moved, so the horizon moved. A rebuild culls its own fresh
         // sprites (renderDetections); an early-out — same LOD band and view

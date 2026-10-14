@@ -1,5 +1,6 @@
 import { createReticleFootprint } from './footprint.js';
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   deriveFetchCenter,
   clampBoundsAroundCenter,
@@ -37,10 +38,10 @@ export function createViewport({ state: layerState, services, parts, source }) {
     const rect = layerState._viewer.camera.computeViewRectangle();
     if (!rect) return null;
     return {
-      south: Cesium.Math.toDegrees(rect.south),
-      west: Cesium.Math.toDegrees(rect.west),
-      north: Cesium.Math.toDegrees(rect.north),
-      east: Cesium.Math.toDegrees(rect.east),
+      south: geo.math.toDegrees(rect.south),
+      west: geo.math.toDegrees(rect.west),
+      north: geo.math.toDegrees(rect.north),
+      east: geo.math.toDegrees(rect.east),
     };
   }
 
@@ -61,8 +62,8 @@ export function createViewport({ state: layerState, services, parts, source }) {
   function getFetchCenter() {
     const carto = layerState._viewer.camera.positionCartographic;
     if (!carto) return null;
-    const nadirLat = Cesium.Math.toDegrees(carto.latitude);
-    const nadirLon = Cesium.Math.toDegrees(carto.longitude);
+    const nadirLat = geo.math.toDegrees(carto.latitude);
+    const nadirLon = geo.math.toDegrees(carto.longitude);
 
     let hitLat;
     let hitLon;
@@ -71,13 +72,13 @@ export function createViewport({ state: layerState, services, parts, source }) {
     const height = canvas.clientHeight || canvas.height;
     if (width > 0 && height > 0) {
       const hit = layerState._viewer.camera.pickEllipsoid(
-        new Cesium.Cartesian2(width / 2, height / 2),
+        geo.cartesian2.create(width / 2, height / 2),
         Cesium.Ellipsoid.WGS84,
       );
       if (hit) {
-        const hitCarto = Cesium.Cartographic.fromCartesian(hit);
-        hitLat = Cesium.Math.toDegrees(hitCarto.latitude);
-        hitLon = Cesium.Math.toDegrees(hitCarto.longitude);
+        const hitCarto = geo.cartographic.fromCartesian(hit);
+        hitLat = geo.math.toDegrees(hitCarto.latitude);
+        hitLon = geo.math.toDegrees(hitCarto.longitude);
       }
     }
 

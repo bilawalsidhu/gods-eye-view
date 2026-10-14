@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { REQUEST_DEBOUNCE_MS } from './policy.js';
 import { installationAnchorBox } from './source.js';
 
@@ -27,10 +27,10 @@ export function createViewport({ state: layerState, services, parts, source }) {
       viewer.scene.globe.ellipsoid,
     );
     if (!rectangle) return null;
-    const south = Cesium.Math.toDegrees(rectangle.south);
-    const north = Cesium.Math.toDegrees(rectangle.north);
-    const west = Cesium.Math.toDegrees(rectangle.west);
-    const east = Cesium.Math.toDegrees(rectangle.east);
+    const south = geo.math.toDegrees(rectangle.south);
+    const north = geo.math.toDegrees(rectangle.north);
+    const west = geo.math.toDegrees(rectangle.west);
+    const east = geo.math.toDegrees(rectangle.east);
     // Wide and dateline views use the bundled point index.
     if (
       !Number.isFinite(south + north + west + east) ||

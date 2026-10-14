@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { FOLLOW_EYE_HEIGHT_M } from './policy.js';
 
 /** Plausible ellipsoidal land heights: Dead Sea to Everest, with geoid slack. */
@@ -79,7 +80,7 @@ export function createCameraFollow({ state, parts }) {
    */
   function groundHeightAt(lon, lat, fallback) {
     const scene = state.viewer?.scene;
-    const carto = Cesium.Cartographic.fromDegrees(lon, lat);
+    const carto = geo.cartographic.fromDegrees(lon, lat);
     const caster = parts?.groundCaster;
     const dem = caster?.groundAt(lon, lat) ?? null;
     if (dem === null) caster?.prepare([[lon, lat]]);
@@ -108,14 +109,14 @@ export function createCameraFollow({ state, parts }) {
     if (!follow || !position || !state.viewer) return;
     const ground = groundHeightAt(position.lon, position.lat, altitude);
     state.viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(
+      destination: geo.cartesian3.fromDegrees(
         position.lon,
         position.lat,
         ground + FOLLOW_EYE_HEIGHT_M,
       ),
       orientation: {
-        heading: Cesium.Math.toRadians(bearing || 0),
-        pitch: Cesium.Math.toRadians(Number.isFinite(tilt) ? tilt : 0),
+        heading: geo.math.toRadians(bearing || 0),
+        pitch: geo.math.toRadians(Number.isFinite(tilt) ? tilt : 0),
         roll: 0,
       },
     });
@@ -148,13 +149,13 @@ export function createCameraFollow({ state, parts }) {
       };
       state.viewer.camera.flyToBoundingSphere(
         new Cesium.BoundingSphere(
-          Cesium.Cartesian3.fromDegrees(position.lon, position.lat, ground + 2),
+          geo.cartesian3.fromDegrees(position.lon, position.lat, ground + 2),
           4,
         ),
         {
           offset: new Cesium.HeadingPitchRange(
-            Cesium.Math.toRadians(bearing || 0),
-            Cesium.Math.toRadians(-32),
+            geo.math.toRadians(bearing || 0),
+            geo.math.toRadians(-32),
             140,
           ),
           duration: 1.6,

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 
 export function createFirmsState({ services, config }) {
   const layerState = {};
@@ -9,11 +10,11 @@ export function createFirmsState({ services, config }) {
 
   layerState.scratchViewRect = new Cesium.Rectangle();
 
-  layerState.scratchCenterA = new Cesium.Cartographic();
+  layerState.scratchCenterA = geo.cartographic.create();
 
-  layerState.scratchCenterB = new Cesium.Cartographic();
+  layerState.scratchCenterB = geo.cartographic.create();
 
-  layerState.scratchWindowCoord = new Cesium.Cartesian2();
+  layerState.scratchWindowCoord = geo.cartesian2.create();
 
   layerState._viewer = null;
 
@@ -107,9 +108,9 @@ export function createFirmsState({ services, config }) {
 
   layerState._camSnapValid = false;
 
-  layerState._camPos = new Cesium.Cartesian3();
+  layerState._camPos = geo.cartesian3.create();
 
-  layerState._camDir = new Cesium.Cartesian3();
+  layerState._camDir = geo.cartesian3.create();
   layerState.request = null;
   return layerState;
 }

@@ -1,5 +1,5 @@
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   readFix,
   correctHeight,
@@ -154,12 +154,10 @@ export function createTrails({ state, services, parts, source }) {
           // Ground polylines consume longitude/latitude and drape themselves.
           // Unknown floors still disqualify the marker corridor.
           positions.push(
-            draped ? Cesium.Cartesian3.fromDegrees(point.lon, point.lat) : null,
+            draped ? geo.cartesian3.fromDegrees(point.lon, point.lat) : null,
           );
         } else
-          positions.push(
-            Cesium.Cartesian3.fromDegrees(point.lon, point.lat, h),
-          );
+          positions.push(geo.cartesian3.fromDegrees(point.lon, point.lat, h));
       }
       signature += `${a.seq}/${b.seq}:${heights.join(',')};`;
       if (retainBody) vertices += n + 1;
@@ -216,7 +214,7 @@ export function createTrails({ state, services, parts, source }) {
     }
     if (sample.fromSeq === sample.toSeq) {
       if (!Number.isFinite(entry.segment.from.h)) return null;
-      Cesium.Cartesian3.clone(entry.fromCart, out);
+      geo.cartesian3.clone(entry.fromCart, out);
       return out;
     }
     const path = entry.displayPaths?.get(sample.fromSeq);

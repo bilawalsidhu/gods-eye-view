@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   HORIZON_CAMERA_MOVE_EPSILON_M,
   GLOBAL_RADIO_ALTITUDE_M,
@@ -178,15 +179,13 @@ export function createNavigation({
       );
     } else {
       const earthRadius = earthDiscScreenRadius(
-        Cesium.Cartesian3.magnitude(camera.positionWC),
+        geo.cartesian3.magnitude(camera.positionWC),
         height,
         camera.frustum?.fovy,
       );
       const facingEarthCenter =
-        Cesium.Cartesian3.dot(
-          camera.directionWC,
-          layerState._radioEarthToCenter,
-        ) > 0;
+        geo.cartesian3.dot(camera.directionWC, layerState._radioEarthToCenter) >
+        0;
       if (!earthRadius || facingEarthCenter) return null;
       const keyhole = getKeyholeGeometry(width, height);
       fullGlobeCapable =
@@ -198,7 +197,7 @@ export function createNavigation({
     );
     if (recenterHeight == null) return null;
     return {
-      destination: Cesium.Cartesian3.fromRadians(
+      destination: geo.cartesian3.fromRadians(
         cartographic.longitude,
         cartographic.latitude,
         recenterHeight,
@@ -207,7 +206,7 @@ export function createNavigation({
         ...radioCameraState(camera),
         height: recenterHeight,
         heading: 0,
-        pitch: -Cesium.Math.PI_OVER_TWO,
+        pitch: -geo.math.PI_OVER_TWO,
         roll: 0,
       },
     };
@@ -280,7 +279,7 @@ export function createNavigation({
     return startRadioCameraFlight(
       navigation,
       {
-        destination: Cesium.Cartesian3.fromDegrees(
+        destination: geo.cartesian3.fromDegrees(
           plan.lon,
           plan.lat,
           plan.height,
@@ -364,11 +363,7 @@ export function createNavigation({
       return false;
     cancelActiveRadioCameraFlight();
     layerState._viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        station.lon,
-        station.lat,
-        85_000,
-      ),
+      destination: geo.cartesian3.fromDegrees(station.lon, station.lat, 85_000),
       duration: 1.1,
     });
     return true;

@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { GROUND_CLICK_MAX_HEIGHT_M } from './policy.js';
 import { cameraHeightAboveGround } from './view.js';
 
@@ -43,12 +43,12 @@ export function createGroundClick({
       .map((entry) => entry.def.id);
     if (!providerIds.length) return false;
     const position = scenePick.pickGroundPosition(state.viewer, screenPosition);
-    const carto = position && Cesium.Cartographic.fromCartesian(position);
+    const carto = position && geo.cartographic.fromCartesian(position);
     if (!carto) return false;
     return openNearest(
       {
-        lon: Cesium.Math.toDegrees(carto.longitude),
-        lat: Cesium.Math.toDegrees(carto.latitude),
+        lon: geo.math.toDegrees(carto.longitude),
+        lat: geo.math.toDegrees(carto.latitude),
       },
       { providerIds, frame: false },
     );

@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   EMPTY_ACCEPTED_CATALOG_SNAPSHOT,
   DEFAULT_RADIO_FILTER,
@@ -8,9 +8,9 @@ import {
 export function createState({ services }) {
   const layerState = {};
 
-  layerState._radioEarthScreenCenter = new Cesium.Cartesian2();
+  layerState._radioEarthScreenCenter = geo.cartesian2.create();
 
-  layerState._radioEarthToCenter = new Cesium.Cartesian3();
+  layerState._radioEarthToCenter = geo.cartesian3.create();
 
   layerState._viewer = null;
 

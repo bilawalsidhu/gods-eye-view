@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { createState } from './state.js';
 import { createMarker } from './marker.js';
 import { createCameraFollow } from './cameraFollow.js';
@@ -304,11 +304,11 @@ export function createStreetLevelLayer({
       x: canvas.clientWidth / 2,
       y: canvas.clientHeight / 2,
     });
-    const carto = position && Cesium.Cartographic.fromCartesian(position);
+    const carto = position && geo.cartographic.fromCartesian(position);
     return carto
       ? {
-          lon: Cesium.Math.toDegrees(carto.longitude),
-          lat: Cesium.Math.toDegrees(carto.latitude),
+          lon: geo.math.toDegrees(carto.longitude),
+          lat: geo.math.toDegrees(carto.latitude),
         }
       : null;
   }

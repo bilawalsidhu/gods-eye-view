@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { installationFeedback } from '../../data/installationFeedback.js';
 import {
   LAYER_ID,
@@ -51,17 +52,17 @@ export function createControls({ state: layerState, services, parts, source }) {
         )
           next = { latitude: position.latitude, longitude: position.longitude };
         else {
-          const carto = Cesium.Cartographic.fromCartesian(position);
+          const carto = geo.cartographic.fromCartesian(position);
           if (carto)
             next = {
-              latitude: Cesium.Math.toDegrees(carto.latitude),
-              longitude: Cesium.Math.toDegrees(carto.longitude),
+              latitude: geo.math.toDegrees(carto.latitude),
+              longitude: geo.math.toDegrees(carto.longitude),
             };
         }
       }
       // Keep the live centre even when the coarse fetch anchor has not moved.
       layerState.contextPosition = next
-        ? Cesium.Cartesian3.fromDegrees(next.longitude, next.latitude)
+        ? geo.cartesian3.fromDegrees(next.longitude, next.latitude)
         : null;
       const previous = layerState.contextAnchor;
       if (!next) {
@@ -73,8 +74,8 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (
         previous &&
         parts.model.approximateSurfaceDistanceM(
-          Cesium.Math.toRadians(previous.latitude),
-          Cesium.Math.toRadians(previous.longitude),
+          geo.math.toRadians(previous.latitude),
+          geo.math.toRadians(previous.longitude),
           next.latitude,
           next.longitude,
         ) < ANCHOR_REFRESH_M
@@ -88,7 +89,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     getNearby(center, rangeM, maxCount = 50) {
       if (!center) return [];
       const range = Number.isFinite(rangeM) ? rangeM : Infinity;
-      const centerCartographic = Cesium.Cartographic.fromCartesian(center);
+      const centerCartographic = geo.cartographic.fromCartesian(center);
       if (!centerCartographic) return [];
       const nearby = [];
       const approximateLimit = Number.isFinite(range)
@@ -107,10 +108,10 @@ export function createControls({ state: layerState, services, parts, source }) {
           continue;
         // The awareness disk is projected onto the ground. Confirm candidates
         // with an exact ellipsoidal surface distance and reusable scratch state.
-        layerState.distanceEndpointScratch.longitude = Cesium.Math.toRadians(
+        layerState.distanceEndpointScratch.longitude = geo.math.toRadians(
           record.longitude,
         );
-        layerState.distanceEndpointScratch.latitude = Cesium.Math.toRadians(
+        layerState.distanceEndpointScratch.latitude = geo.math.toRadians(
           record.latitude,
         );
         layerState.distanceEndpointScratch.height = 0;
@@ -122,7 +123,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         if (!Number.isFinite(distanceM) || distanceM > range) continue;
         nearby.push({
           ...record,
-          position: Cesium.Cartesian3.fromDegrees(
+          position: geo.cartesian3.fromDegrees(
             record.longitude,
             record.latitude,
             parts.rendering.installationSurfaceHeightM(record),
@@ -150,7 +151,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (!parts.selection.selectRecord(record.id)) return false;
       layerState.viewer.camera.flyToBoundingSphere(
         new Cesium.BoundingSphere(
-          Cesium.Cartesian3.fromDegrees(
+          geo.cartesian3.fromDegrees(
             record.longitude,
             record.latitude,
             parts.rendering.installationSurfaceHeightM(record),

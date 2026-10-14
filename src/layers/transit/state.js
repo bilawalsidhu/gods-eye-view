@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { createHistoryBudget } from '../../data/contactPlayback.js';
 
 /**
@@ -120,7 +120,7 @@ export function createState({ services }) {
   state._error = null;
   state._limitWarned = false;
 
-  state._scratchCartesian = new Cesium.Cartesian3();
+  state._scratchCartesian = geo.cartesian3.create();
 
   return state;
 }

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { wrapLon } from './tileMath.js';
 
 /** Equirectangular metres between {lon, lat} points, the short way round ±180°; street scale. */
@@ -33,8 +34,8 @@ export function groundUnderCamera(viewer, { groundAt } = {}) {
   let ground = globe?.show === false ? null : globe?.getHeight?.(carto);
   if (!Number.isFinite(ground))
     ground = groundAt?.(
-      Cesium.Math.toDegrees(carto.longitude),
-      Cesium.Math.toDegrees(carto.latitude),
+      geo.math.toDegrees(carto.longitude),
+      geo.math.toDegrees(carto.latitude),
     );
   return Number.isFinite(ground) ? ground : null;
 }
@@ -68,10 +69,10 @@ function groundHit(camera, point, ellipsoid, maxRange) {
   if (
     Number.isFinite(maxRange) &&
     camera.positionWC &&
-    Cesium.Cartesian3.distance(cartesian, camera.positionWC) > maxRange
+    geo.cartesian3.distance(cartesian, camera.positionWC) > maxRange
   )
     return null;
-  return Cesium.Cartographic.fromCartesian(cartesian, ellipsoid) || null;
+  return geo.cartographic.fromCartesian(cartesian, ellipsoid) || null;
 }
 
 /**
@@ -96,7 +97,7 @@ export function visibleBbox(
       scene.globe?.ellipsoid || Cesium.Ellipsoid.WGS84,
       groundHeight,
     );
-    const point = new Cesium.Cartesian2();
+    const point = geo.cartesian2.create();
     for (let i = 0; i <= grid; i++) {
       for (let j = 0; j <= grid; j++) {
         point.x = (width * i) / grid;
@@ -112,8 +113,8 @@ export function visibleBbox(
   if (Number.isFinite(nearRange) && nearRange > 0 && nadir) {
     const dLat = nearRange / 111_320;
     const dLon = dLat / Math.max(0.05, Math.cos(nadir.latitude));
-    const lat = Cesium.Math.toDegrees(nadir.latitude);
-    const lon = Cesium.Math.toDegrees(nadir.longitude);
+    const lat = geo.math.toDegrees(nadir.latitude);
+    const lon = geo.math.toDegrees(nadir.longitude);
     for (const [dx, dy] of [
       [-1, -1],
       [-1, 1],
@@ -121,7 +122,7 @@ export function visibleBbox(
       [1, 1],
     ])
       hits.push(
-        Cesium.Cartographic.fromDegrees(
+        geo.cartographic.fromDegrees(
           lon + dx * dLon,
           Math.max(-85, Math.min(85, lat + dy * dLat)),
         ),
@@ -133,8 +134,8 @@ export function visibleBbox(
     let east = -Infinity;
     let north = -Infinity;
     for (const carto of hits) {
-      const lon = Cesium.Math.toDegrees(carto.longitude);
-      const lat = Cesium.Math.toDegrees(carto.latitude);
+      const lon = geo.math.toDegrees(carto.longitude);
+      const lat = geo.math.toDegrees(carto.latitude);
       west = Math.min(west, lon);
       east = Math.max(east, lon);
       south = Math.min(south, lat);
@@ -147,7 +148,7 @@ export function visibleBbox(
       let west360 = Infinity;
       let east360 = -Infinity;
       for (const carto of hits) {
-        const lon = Cesium.Math.toDegrees(carto.longitude);
+        const lon = geo.math.toDegrees(carto.longitude);
         const shifted = lon < 0 ? lon + 360 : lon;
         west360 = Math.min(west360, shifted);
         east360 = Math.max(east360, shifted);
@@ -162,10 +163,10 @@ export function visibleBbox(
   const rectangle = camera.computeViewRectangle?.(scene.globe?.ellipsoid);
   if (!rectangle) return null;
   return [
-    Cesium.Math.toDegrees(rectangle.west),
-    Cesium.Math.toDegrees(rectangle.south),
-    Cesium.Math.toDegrees(rectangle.east),
-    Cesium.Math.toDegrees(rectangle.north),
+    geo.math.toDegrees(rectangle.west),
+    geo.math.toDegrees(rectangle.south),
+    geo.math.toDegrees(rectangle.east),
+    geo.math.toDegrees(rectangle.north),
   ];
 }
 
@@ -183,8 +184,8 @@ export function viewCentre(viewer) {
   const carto = viewer.camera?.positionCartographic;
   if (!carto) return null;
   return {
-    lat: Cesium.Math.toDegrees(carto.latitude),
-    lon: Cesium.Math.toDegrees(carto.longitude),
+    lat: geo.math.toDegrees(carto.latitude),
+    lon: geo.math.toDegrees(carto.longitude),
   };
 }
 
@@ -200,8 +201,8 @@ export function viewFocus(
   const carto = camera?.positionCartographic;
   if (!carto) return null;
   const nadir = {
-    lon: Cesium.Math.toDegrees(carto.longitude),
-    lat: Cesium.Math.toDegrees(carto.latitude),
+    lon: geo.math.toDegrees(carto.longitude),
+    lat: geo.math.toDegrees(carto.latitude),
   };
   const canvas = viewer.scene?.canvas;
   const width = canvas?.clientWidth || canvas?.width || 0;
@@ -210,7 +211,7 @@ export function viewFocus(
   if (width > 0 && height > 0) {
     const hit = groundHit(
       camera,
-      new Cesium.Cartesian2(width / 2, height / 2),
+      geo.cartesian2.create(width / 2, height / 2),
       raisedEllipsoid(
         viewer.scene?.globe?.ellipsoid || Cesium.Ellipsoid.WGS84,
         groundHeight,
@@ -219,8 +220,8 @@ export function viewFocus(
     );
     if (hit)
       ahead = {
-        lon: Cesium.Math.toDegrees(hit.longitude),
-        lat: Cesium.Math.toDegrees(hit.latitude),
+        lon: geo.math.toDegrees(hit.longitude),
+        lat: geo.math.toDegrees(hit.latitude),
       };
   }
   return { nadir, ahead };
@@ -232,9 +233,9 @@ export function viewFocus(
  */
 export const HORIZON_CULL_DEPTH_M = 1000;
 const HORIZON_CULL_ELLIPSOID = new Cesium.Ellipsoid(
-  Cesium.Ellipsoid.WGS84.radii.x - HORIZON_CULL_DEPTH_M,
-  Cesium.Ellipsoid.WGS84.radii.y - HORIZON_CULL_DEPTH_M,
-  Cesium.Ellipsoid.WGS84.radii.z - HORIZON_CULL_DEPTH_M,
+  geo.ellipsoid.WGS84.radii.x - HORIZON_CULL_DEPTH_M,
+  geo.ellipsoid.WGS84.radii.y - HORIZON_CULL_DEPTH_M,
+  geo.ellipsoid.WGS84.radii.z - HORIZON_CULL_DEPTH_M,
 );
 
 /**
@@ -267,13 +268,13 @@ export function createHorizonCull({ getViewer, items, onChange }) {
 
   /** Cull everything from the camera at `position`; the count seen. */
   function cullAll(position) {
-    from = Cesium.Cartesian3.clone(position, from);
+    from = geo.cartesian3.clone(position, from);
     return cull(items(), position);
   }
 
   function onPreRender() {
     const position = getViewer()?.camera?.positionWC;
-    if (!position || (from && Cesium.Cartesian3.equals(from, position))) return;
+    if (!position || (from && geo.cartesian3.equals(from, position))) return;
     if (!cullAll(position)) stop();
   }
 

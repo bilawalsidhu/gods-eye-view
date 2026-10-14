@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { tilesForBounds, tileToBBox } from '../../data/tomtomTiles.js';
 
 export const RETICLE_RANGE_KM = 10;
@@ -64,17 +65,17 @@ export function footprintTiles(polygon, zoom, near) {
 
 /** Reusable camera scratch; sampled only on camera events, never in the animation loop. */
 export function createReticleFootprint() {
-  const pixels = Array.from({ length: 25 }, () => new Cesium.Cartesian2());
-  const hits = Array.from({ length: 25 }, () => new Cesium.Cartesian3());
-  const carto = new Cesium.Cartographic();
+  const pixels = Array.from({ length: 25 }, () => geo.cartesian2.create());
+  const hits = Array.from({ length: 25 }, () => geo.cartesian3.create());
+  const carto = geo.cartographic.create();
   const ray = new Cesium.Ray();
   return (viewer, altitude) => {
     const { camera, scene } = viewer;
     if (!camera.getPickRay) return null;
     const nadir = camera.positionCartographic;
     const near = {
-      lat: Cesium.Math.toDegrees(nadir.latitude),
-      lon: Cesium.Math.toDegrees(nadir.longitude),
+      lat: geo.math.toDegrees(nadir.latitude),
+      lon: geo.math.toDegrees(nadir.longitude),
     };
     const width = scene.canvas.clientWidth || scene.canvas.width,
       height = scene.canvas.clientHeight || scene.canvas.height;
@@ -91,9 +92,9 @@ export function createReticleFootprint() {
         const hit = camera.pickEllipsoid(p, Cesium.Ellipsoid.WGS84, hits[i]);
         let dx, dy;
         if (hit) {
-          Cesium.Cartographic.fromCartesian(hit, Cesium.Ellipsoid.WGS84, carto);
-          dy = (Cesium.Math.toDegrees(carto.latitude) - near.lat) * 111.195;
-          let dlon = Cesium.Math.toDegrees(carto.longitude) - near.lon;
+          geo.cartographic.fromCartesian(hit, geo.ellipsoid.WGS84, carto);
+          dy = (geo.math.toDegrees(carto.latitude) - near.lat) * 111.195;
+          let dlon = geo.math.toDegrees(carto.longitude) - near.lon;
           dlon -= 360 * Math.round(dlon / 360);
           dx = dlon * 111.195 * Math.cos(nadir.latitude);
         } else {

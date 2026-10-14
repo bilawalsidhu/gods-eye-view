@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { GBFS_CITY_REGISTRY } from './registry.js';
 import {
   ACTIVATION_EXIT_ALTITUDE_M,
@@ -37,8 +38,8 @@ export function createViewport({ state: layerState, services, parts, source }) {
     if (rect) {
       const center = Cesium.Rectangle.center(rect);
       return {
-        lat: Cesium.Math.toDegrees(center.latitude),
-        lon: Cesium.Math.toDegrees(center.longitude),
+        lat: geo.math.toDegrees(center.latitude),
+        lon: geo.math.toDegrees(center.longitude),
       };
     }
 
@@ -46,8 +47,8 @@ export function createViewport({ state: layerState, services, parts, source }) {
     const carto = viewer?.camera?.positionCartographic;
     if (carto) {
       return {
-        lat: Cesium.Math.toDegrees(carto.latitude),
-        lon: Cesium.Math.toDegrees(carto.longitude),
+        lat: geo.math.toDegrees(carto.latitude),
+        lon: geo.math.toDegrees(carto.longitude),
       };
     }
 

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   ACTIVATION_ENTER_ALTITUDE_M,
   ACTIVATION_EXIT_ALTITUDE_M,
@@ -29,15 +30,15 @@ export function createViewport({ state, services, parts }) {
     if (rect) {
       const center = Cesium.Rectangle.center(rect);
       return {
-        lat: Cesium.Math.toDegrees(center.latitude),
-        lon: Cesium.Math.toDegrees(center.longitude),
+        lat: geo.math.toDegrees(center.latitude),
+        lon: geo.math.toDegrees(center.longitude),
       };
     }
     const carto = viewer?.camera?.positionCartographic;
     if (carto) {
       return {
-        lat: Cesium.Math.toDegrees(carto.latitude),
-        lon: Cesium.Math.toDegrees(carto.longitude),
+        lat: geo.math.toDegrees(carto.latitude),
+        lon: geo.math.toDegrees(carto.longitude),
       };
     }
     return null;
@@ -59,10 +60,10 @@ export function createViewport({ state, services, parts }) {
     );
     state._viewBounds = rect
       ? inflateViewBounds({
-          south: Cesium.Math.toDegrees(rect.south),
-          north: Cesium.Math.toDegrees(rect.north),
-          west: Cesium.Math.toDegrees(rect.west),
-          east: Cesium.Math.toDegrees(rect.east),
+          south: geo.math.toDegrees(rect.south),
+          north: geo.math.toDegrees(rect.north),
+          west: geo.math.toDegrees(rect.west),
+          east: geo.math.toDegrees(rect.east),
         })
       : null;
     // The sweep itself is deferred: `marker.show` is a dirty flag, and a drag

@@ -1,5 +1,5 @@
 import { paintTransitBracket } from './detectionDraw.js';
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { governorRequestRender } from '../renderGovernor.js';
 import {
   DETECTION_ENABLE_FADE_MS,
@@ -1391,7 +1391,7 @@ function _drawOverlay(frame) {
     let halfH;
     if (obj.type === 'AIR') {
       const bscale = nearFarScale(
-        Cesium.Cartesian3.distance(camPos, obj.position),
+        geo.cartesian3.distance(camPos, obj.position),
         BILL_NEAR,
         BILL_NEAR_SCALE,
         BILL_FAR,
