@@ -91,6 +91,13 @@ export function hideOsmCredit(viewer, owner) {
   return true;
 }
 
+/** NYC DOT asks every application that uses its data to carry this
+ * disclaimer verbatim (nyc.gov/html/dot/html/about/datafeeds.shtml). */
+export const NYC_DOT_DISCLAIMER =
+  'This application may contain and/or utilize information which was originally compiled by the New York City Department of Transportation (NYC DOT) for governmental purposes; the information may subsequently been modified by entity/entities other than NYC DOT. ' +
+  'NYC DOT and the City of New York make no representation as to the accuracy or usefulness of the information provided by this application or the information&#39;s suitability for any purpose and disclaim any liability for omissions or errors that may be contained therein. ' +
+  'The public is advised to observe posted signage for compliance with applicable laws and regulations.';
+
 export const DATA_CREDITS = [
   // ── Live sources ────────────────────────────────────────────────
   {
@@ -246,6 +253,13 @@ export const DATA_CREDITS = [
       'Road cameras (Norway): contains data under the ' +
       '<a href="https://data.norge.no/nlod/en/2.0" target="_blank" rel="noopener">Norwegian licence for Open Government data (NLOD)</a> ' +
       'distributed by Statens vegvesen',
+  },
+  {
+    key: 'nyc-cctv',
+    html:
+      'CCTV cameras &amp; frames (New York City, when enabled): ' +
+      '<a href="https://webcams.nyctmc.org/" target="_blank" rel="noopener">NYC DOT Traffic Management Center</a>. ' +
+      NYC_DOT_DISCLAIMER,
   },
   {
     key: 'gbfs',

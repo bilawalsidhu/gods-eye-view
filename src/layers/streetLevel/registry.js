@@ -22,6 +22,9 @@ export function filtersOf(provider) {
  * @property {boolean} [defaultOn]     Default true.
  * @property {{kind: 'view-cone', color: string}} [marker]   Default: GEV's pin.
  * @property {Array<'pano'|'since'>} [filters]   Filters it honours (default both).
+ * @property {{noun: string, action: string}} [coverageLabel]   How the panel counts its lines and says what a click does (default: sequences, "click a line for its photos").
+ * @property {boolean} [highlightsSequence]   Its lines show the selected sequence (default true; the legend's "Selected" needs one).
+ * @property {'capture'|'upload'} [sinceBasis]   What SINCE compares (default 'capture'); 'upload' puts a note under the slider while the provider is lit.
  * @property {(context: ProviderContext) => ProviderInstance} create
  *
  * @typedef {object} ProviderContext   Handed to `create()` once by the core.
@@ -32,7 +35,7 @@ export function filtersOf(provider) {
  * @property {GroundCaster|null} groundCaster   Bare-earth heights for terrain mode (groundCast.js); null without a terrain service.
  * @property {{meshAt: (lon: number, lat: number) => number|undefined, request: (points: Array<[number, number]>) => void, onSampled: (listener: (cells: Array<[number, number]>) => void) => () => void}|null} meshSampler   Sampled Google 3D surface heights (meshSampler.js); pass `meshAt` to `castLine`.
  * @property {() => void} notify       Ask the core to publish a new UI snapshot.
- * @property {{openImage: (imageId: string) => Promise<void>, reportError: (message: string|null) => void}} actions
+ * @property {{openImage: (imageId: string, options?: {frame?: boolean}) => Promise<boolean>, openNearest: (point: {lon: number, lat: number}) => Promise<boolean>, reportError: (message: string|null) => void}} actions
  *
  * @typedef {object} ProviderInstance
  * @property {() => Promise<{configured: boolean}>} status
@@ -44,7 +47,7 @@ export function filtersOf(provider) {
  * @property {(filter: {pano: string, sinceMs: number|null}) => void} setFilter   The filter changed: redraw (reading `getFilter()`).
  * @property {(mode: 'draped'|'terrain') => void} [setSurface]   Redraw coverage and cones for the new surface mode.
  * @property {() => {count: number, zoom: number|null, kind: string|null, loading: boolean, hint: string, error: string|null, keyRequired: boolean}} coverageStats
- * @property {(pickId: string) => boolean} handlePick   The id carries the provider's own prefix.
+ * @property {(pickId: string, click?: {groundPoint: () => {lon: number, lat: number}|null}) => boolean} handlePick   The id carries the provider's own prefix; `groundPoint` is where the click met the ground.
  * @property {(sequenceId: string) => Promise<void>} [selectSequence]
  * @property {() => void} [clearSequence]
  * @property {() => {selectedId: string|null, images: number, loading: boolean}} [sequenceStats]
@@ -65,6 +68,7 @@ export function filtersOf(provider) {
  * @property {() => void} resize
  * @property {(host: HTMLElement) => Promise<void>} [prewarm]
  * @property {(mode: 'letterbox'|'fill') => void} [setRenderMode]
+ * @property {() => boolean} [supportsRenderModes]   False while the image has no frame to fit (a panorama): FIT / FILL hide.
  * @property {(listener: (pose: StreetPose) => void) => () => void} onPose
  *
  * @typedef {object} StreetPose
@@ -156,6 +160,14 @@ export function validateProviders(providers) {
     )
       throw new TypeError(
         `Street Level provider ${label}: filters must list ${IMAGERY_FILTERS.join(' or ')}`,
+      );
+    if (
+      provider.sinceBasis !== undefined &&
+      provider.sinceBasis !== 'capture' &&
+      provider.sinceBasis !== 'upload'
+    )
+      throw new TypeError(
+        `Street Level provider ${label}: sinceBasis must be 'capture' or 'upload'`,
       );
     ids.add(provider.id);
     prefixes.push(provider.pickPrefix);
