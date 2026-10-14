@@ -534,6 +534,7 @@
   "src/data/cctvVegvesen.test.mjs",
   "src/data/cctvNswSource.test.mjs",
   "src/data/cctvTxdotSource.test.mjs",
+  "src/data/cctvMdot.test.mjs",
   "src/layers/cctv/source.test.mjs",
   "src/data/alprCameras.js",
   "src/data/alprCameras.test.mjs",
