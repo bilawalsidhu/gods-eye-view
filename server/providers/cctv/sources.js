@@ -65,6 +65,14 @@ import {
   DEFAULT_VEGVESEN_MAX_SOURCES,
   VEGVESEN_MAX_CATALOG_BYTES,
   NORWAY_ANCHORS,
+  DEFAULT_MDOT_CCTV_URL,
+  MDOT_STREAM_HOST_PATTERN,
+  MDOT_VIDEO_URL,
+  MDOT_IMAGE_URL,
+  DEFAULT_MDOT_MAX_SOURCES,
+  MDOT_MAX_CATALOG_BYTES,
+  MARYLAND_ANCHORS,
+  MDOT_CATEGORY_ELEVATION_M,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -83,6 +91,7 @@ import {
   isLikelyNswCoordinate,
   isLikelyCalgaryCoordinate,
   isLikelyNorwayCoordinate,
+  isLikelyMarylandCoordinate,
   cameraDisplayCode,
   rowArrayToObject,
   prioritizeSources,
@@ -1860,6 +1869,151 @@ export async function loadVegvesenSourcesFromOpenData() {
       '[CCTV] Vegvesen camera download error:',
       error?.message || error,
     );
+    return [];
+  }
+}
+
+/** CHART's region labels as camera-picker categories. */
+const MDOT_CATEGORY_CITY = Object.freeze({
+  Baltimore: 'Baltimore',
+  'Wash. DC': 'Washington DC suburbs (MD)',
+  Annapolis: 'Annapolis',
+  'Southern MD': 'Southern Maryland',
+  'Eastern Shore': 'Eastern Shore (MD)',
+  'Western MD': 'Western Maryland',
+});
+
+/**
+ * Map one MDOT SHA CHART camera record to a source, or null when it is not a
+ * working, plausibly-placed camera on the agency's own hosts.
+ *
+ * @param {object} row - One element of the CHART GetCamerasJson array.
+ * @returns {?object}
+ */
+export function mdotCameraToSource(row) {
+  if (!row || typeof row !== 'object') return null;
+  // COMM_FAILURE cameras publish a dead stream; MARGINAL ones usually play.
+  if (String(row.commMode ?? '').toUpperCase() !== 'ONLINE') return null;
+  if (String(row.opStatus ?? '').toUpperCase() === 'COMM_FAILURE') return null;
+
+  const lat = toFiniteNumber(row.lat);
+  const lon = toFiniteNumber(row.lon);
+  if (!isLikelyMarylandCoordinate(lat, lon)) return null;
+
+  const rawId = String(row.id ?? '').trim();
+  if (!/^[0-9a-f]{32}$/i.test(rawId)) return null;
+  const host = String(row.cctvIp ?? '')
+    .trim()
+    .toLowerCase();
+  if (!MDOT_STREAM_HOST_PATTERN.test(host)) return null;
+
+  const cameraId = `mdot-${rawId.toLowerCase()}`;
+  const description = String(row.description ?? '').trim();
+  const name = description || `CHART ${String(row.name ?? rawId).trim()}`;
+  // Non-strict on purpose: CHART descriptions name places ("I-70 East at
+  // South Mountain", "MD 5 South of Waldorf"), and strict mode would read a
+  // bare compass word inside a place name as the camera's bearing. Only an
+  // unambiguous NB/SB/EB/WB-style token sets a confident heading.
+  const heading = directionToHeading(description);
+  const category = (
+    Array.isArray(row.cameraCategories) ? row.cameraCategories : []
+  ).find((entry) => Object.hasOwn(MDOT_CATEGORY_CITY, entry));
+  const imageUrl = MDOT_IMAGE_URL(rawId);
+  // Live video from the CHART streamers; the site's still is the snapshot
+  // fallback. CCTV_MDOT_VIDEO=0 keeps stills only.
+  const videoUrl =
+    String(process.env.CCTV_MDOT_VIDEO || '1').trim() !== '0'
+      ? MDOT_VIDEO_URL(host, rawId)
+      : '';
+
+  return {
+    id: cameraId,
+    name,
+    city: category ? MDOT_CATEGORY_CITY[category] : 'Maryland',
+    cityId: category
+      ? `mdot-${category
+          .toLowerCase()
+          .replace(/[^a-z]+/g, '-')
+          .replace(/-$/, '')}`
+      : 'mdot-md',
+    provider: 'MDOT SHA CHART',
+    lat,
+    lon,
+    headingDeg: Number.isFinite(heading)
+      ? heading
+      : fallbackHeadingFromId(cameraId),
+    headingConfidence: Number.isFinite(heading) ? 'high' : 'low',
+    pitchDeg: Number.isFinite(heading) ? -24 : -18,
+    fovDeg: Number.isFinite(heading) ? 56 : 44,
+    rangeM: Number.isFinite(heading) ? 210 : 145,
+    mountHeightM: Number.isFinite(heading) ? 10 : 8,
+    groundElevationM: category ? MDOT_CATEGORY_ELEVATION_M[category] : 60,
+    feedType: videoUrl ? 'hls' : 'image',
+    url: videoUrl || imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'mdot-chart',
+    license:
+      'Public MDOT SHA CHART traffic camera, State of Maryland (live view only; not recorded)',
+    code: cameraDisplayCode(name.toUpperCase()),
+  };
+}
+
+/**
+ * Fetch Maryland (MDOT SHA CHART) traffic cameras from the keyless CHART
+ * Data Feeds JSON. Video is live HLS on the CHART streamer hosts; stills are
+ * the CHART site's own thumbnails.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadMdotSourcesFromOpenData() {
+  try {
+    const endpoint = process.env.CCTV_MDOT_URL || DEFAULT_MDOT_CCTV_URL;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: 'application/json' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn(
+        '[CCTV] MDOT catalog redirected; redirects are not followed',
+      );
+      return discard();
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] MDOT camera download failed:', resp.status);
+      return discard();
+    }
+    const payload = await readResponseJsonCapped(resp, MDOT_MAX_CATALOG_BYTES);
+    const rows = Array.isArray(payload) ? payload : [];
+    const cameras = [];
+    const seen = new Set();
+    for (const row of rows) {
+      const camera = mdotCameraToSource(row);
+      if (!camera || seen.has(camera.id)) continue;
+      seen.add(camera.id);
+      cameras.push(camera);
+    }
+    const maxRaw = Number(
+      process.env.CCTV_MDOT_MAX_SOURCES || DEFAULT_MDOT_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(600, Math.floor(maxRaw)))
+      : DEFAULT_MDOT_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, MARYLAND_ANCHORS);
+    console.log(
+      `[CCTV] Loaded MDOT CHART camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] MDOT camera download error:', error?.message || error);
     return [];
   }
 }

@@ -17,7 +17,10 @@ HOST="${HOST:-localhost}"
 # (~2,260 live presets). Caps keep the densest cores per pack; override
 # per-run for lighter/heavier loads. Kill switches: CCTV_CALTRANS_DISTRICTS='',
 # CCTV_TFL_ENABLED=0, CCTV_ONTARIO_ENABLED=0, CCTV_FINTRAFFIC_ENABLED=0 and
-# CCTV_CALGARY_ENABLED=0 (Open Calgary, ~215 live upstream).
+# CCTV_CALGARY_ENABLED=0 (Open Calgary, ~215 live upstream). MDOT SHA CHART
+# (Maryland, ~520 live upstream) is deliberately not defaulted here, so its
+# CCTV_MDOT_* settings resolve from the shell, then .env, then the provider's
+# own defaults.
 CCTV_AUSTIN_MAX_SOURCES="${CCTV_AUSTIN_MAX_SOURCES:-250}"
 # Use `-` not `:-` so an explicit empty string (the documented kill switch)
 # is preserved rather than replaced by the default. Still set-u-safe when unset.

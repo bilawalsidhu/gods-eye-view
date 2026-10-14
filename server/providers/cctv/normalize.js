@@ -367,6 +367,17 @@ export function isLikelyCalgaryCoordinate(lat, lon) {
   );
 }
 
+/** Maryland, from Garrett County to Ocean City, with slack at the borders. */
+export function isLikelyMarylandCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 37.85 &&
+    lat <= 39.75 &&
+    lon >= -79.5 &&
+    lon <= -75.0
+  );
+}
+
 /** Mainland Norway, with slack for the coast and the Finnmark border. */
 export function isLikelyNorwayCoordinate(lat, lon) {
   return (
