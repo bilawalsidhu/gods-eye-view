@@ -3120,7 +3120,7 @@ provider draws in one colour (`PROVIDER_COLORS` in
 `src/layers/streetLevel/policy.js`); 360° cones are rings and the selected
 sequence is GEV cyan. Share options: `m` (Mapillary), `r` (the other providers' switches by id,
 e.g. `google-1` for Street View), `p` (`a`/`p`/`f` panoramas), `s` (since, days). Mapillary, Google
-Street View and KartaView are registered. Without
+Street View, KartaView and Vegbilder are registered. Without
 `MAPILLARY_CLIENT_TOKEN` the panel reads KEY REQUIRED and the controls are
 disabled. With it, coverage draws as z0–5 overview points from orbit and z11–14
 sequence lines below 60 km; the proxy strips the unused `image` layer from z14
@@ -3313,6 +3313,37 @@ for panoramas (`supportsRenderModes`). The
 caption has no place name (KartaView's is where the drive began) and links to
 the full-size photo through the image proxy, since kartaview.org's photo
 pages fail for signed-out visitors.
+
+Vegbilder (`providers/vegbilder/`) is Statens vegvesen's road photos of
+Norway, keyless and browser-side through the public GeoServer WFS
+(`ogckart-sn1.atlas.vegvesen.no/vegbilder_1_0`, CORS open). Each year and
+kind is its own feature type (`Vegbilder_<year>` flat from 2014 without 2015,
+`Vegbilder_360_<year>` from 2021); a year not published yet answers "Feature
+type … unknown", which reads as empty. There are no line features: coverage
+draws below 1.5 km from z15 boxes of photo points (`propertyName` leaves out
+the long signed addresses), the latest three years of each kind the filter
+lets through (`coverageLayers`), none before SINCE. Points are grouped into
+drives (road reference, lane, day: `driveIdOf`), ordered by metre and turned
+round when the later photos sit lower (lanes against the metering), and cut
+into lines at gaps over 40 m or 10 minutes (`linesFromImages`). Tiles outside
+mainland Norway ask nothing. A line click opens the nearest photo within
+50 m, searching newest year first, flat before 360° within a year
+(`searchLayers`), four feature types at a time. Some listed photos have no
+file (many of Oslo's 360° ones answer 404, and the store takes no HEAD or
+range request), so the nearest candidate is loaded as an <img> first and a
+missing one skipped for the next feature type's (`loadsInBrowser`, at most
+four tries). The drive around an open photo comes from a CQL query on its
+road reference, lane and day within 300 m (`driveFilter`), cached per 200 m
+of road; its pass gives the cones and ‹ ›. Photo addresses are signed for ten
+hours, so a photo is asked for by `resourceId` again after an hour. Images
+come from two hosts (`s3vegbilder.atlas.vegvesen.no`, and
+`s3-oslo.osys.vegvesen.no` for newer drives); any other address is dropped. A
+flat photo shows in an <img>; a 360° photo (8,192 × 4,096) is decoded into a
+4,096-wide bitmap for KartaView's WebGL panorama renderer, and its 2,520 px
+front view (`URLPREVIEW`) stands in if it fails. The viewer reuses
+KartaView's viewer styles in Vegvesen orange (`.sl-vb-viewer`). The caption
+reads the road ("Rv. 162") and links to the photo itself, since Vegvesen's
+map takes no photo id.
 
 Street Level has two browser gates. `npm run qa:street-level -- --url <server>`
 runs against real Mapillary and needs `MAPILLARY_CLIENT_TOKEN`. `npm run

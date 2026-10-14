@@ -16,7 +16,7 @@ export const PANEL_WORKER_PRELUDE_PATH = 'cesium/worker-prelude.js';
  * Sites the app's browser code loads from directly: map imagery, 3D tiles,
  * terrain, fonts, and Street Level's Mapillary Graph API and image CDN (its
  * coverage tiles come through the app's server), Google Street View and
- * KartaView. Everything from the app's
+ * KartaView and Vegbilder. Everything from the app's
  * own server comes through the MCP server.
  */
 const PROVIDER_ORIGINS = Object.freeze([
@@ -49,6 +49,10 @@ const PROVIDER_ORIGINS = Object.freeze([
   'https://api.kartaview.org',
   'https://cdn.kartaview.org',
   'https://*.openstreetcam.org',
+  // Statens vegvesen's Vegbilder WFS and its photo storage.
+  'https://ogckart-sn1.atlas.vegvesen.no',
+  'https://s3vegbilder.atlas.vegvesen.no',
+  'https://s3-oslo.osys.vegvesen.no',
 ]);
 
 export const MCP_APP_MIME_TYPE = 'text/html;profile=mcp-app';

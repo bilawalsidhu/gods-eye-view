@@ -62,6 +62,7 @@ export const EXPECTED_PROVIDERS = Object.freeze([
   'mapillary',
   'google',
   'kartaview',
+  'vegbilder',
 ]);
 
 /**

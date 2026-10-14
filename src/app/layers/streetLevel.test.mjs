@@ -28,7 +28,7 @@ test('explicit providers replace the default source and an empty list removes it
   );
 });
 
-test('the defaults are Mapillary (given its source), Street View and KartaView, which start off and travel as provider switches', async () => {
+test('the defaults are Mapillary (given its source), Street View, KartaView and Vegbilder, which start off and travel as provider switches', async () => {
   const { createDefaultLayerState } = await import('../../data/layerState.js');
   const mapillary = {
     getStatus() {},
@@ -37,7 +37,12 @@ test('the defaults are Mapillary (given its source), Street View and KartaView, 
     nearestImages() {},
   };
   const layer = createApplicationStreetLevel({ sources: { mapillary } });
-  assert.deepEqual(layer.providerIds, ['mapillary', 'google', 'kartaview']);
+  assert.deepEqual(layer.providerIds, [
+    'mapillary',
+    'google',
+    'kartaview',
+    'vegbilder',
+  ]);
   // A fresh page and a restored default agree: Street View is billed, so off.
   layer.setParams(createDefaultLayerState().options['street-level']);
   assert.equal(layer.getParams().google, false);
@@ -45,7 +50,10 @@ test('the defaults are Mapillary (given its source), Street View and KartaView, 
   // A link that lit Street View carries it in the shared switch field.
   layer.setParams({ providerSwitches: 'google-1' });
   assert.equal(layer.getParams().google, true);
-  assert.equal(layer.getParams().providerSwitches, 'google-1*kartaview-0');
+  assert.equal(
+    layer.getParams().providerSwitches,
+    'google-1*kartaview-0*vegbilder-0',
+  );
   // KartaView is keyless and free, but one source shows at a time.
   layer.setParams({ providerSwitches: 'kartaview-1' });
   assert.equal(layer.getParams().kartaview, true);

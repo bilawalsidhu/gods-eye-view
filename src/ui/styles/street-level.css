@@ -7,6 +7,8 @@
   /* KartaView's purple for lines; a lighter one where it is text (WCAG AA). */
   --sl-kartaview: #635bff;
   --sl-kartaview-text: #8f8aff;
+  --sl-vegbilder: #f28c00;
+  --sl-vegbilder-text: #ffa733;
   --sl-text: 0.62rem;
   --sl-text-small: 0.6rem;
 }
@@ -180,6 +182,9 @@ button.sl-status:focus-visible {
 /* #635bff text on its own tint is 3.7:1 at this size; the lighter one is ~6:1. */
 .sl-chips .data-toggle-chip.active[data-chip-id='kartaview'] {
   color: var(--sl-kartaview-text);
+}
+.sl-chips .data-toggle-chip.active[data-chip-id='vegbilder'] {
+  color: var(--sl-vegbilder-text);
 }
 
 .sl-chips .data-toggle-chip.active::before {
@@ -721,6 +726,16 @@ button.sl-status:focus-visible {
 /* Nothing to step through until a photo shows. */
 .sl-kv-viewer:not([data-kind='flat']):not([data-kind='pano']) .sl-kv-step {
   display: none;
+}
+
+/* Vegbilder's viewer is KartaView's, in Statens vegvesen orange. */
+.sl-vb-viewer:focus-visible::after {
+  border-color: var(--sl-vegbilder-text);
+}
+
+.sl-vb-viewer .sl-kv-step:hover:not(:disabled),
+.sl-vb-viewer .sl-kv-step:focus-visible {
+  background: color-mix(in srgb, var(--sl-vegbilder) 85%, transparent);
 }
 
 /* ── Short viewports ─────────────────────────────────────────────────────── */
