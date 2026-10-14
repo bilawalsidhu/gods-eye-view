@@ -1,5 +1,11 @@
 # Changelog
 
+- GBFS v3 station names use English translations when available, then the first
+  usable translation or short name. Empty or malformed names no longer appear as
+  `[object Object]` or interrupt station loading; legacy string names remain
+  supported in the globe and bike-share tools. Thanks to
+  [Kristóf Kékesi](https://github.com/KristofKekesi) (#61).
+
 - Add a Border Wait Times layer: live U.S. CBP waits at every land crossing
   from Canada and Mexico, coloured by delay, with lane-by-lane cards, served
   through a cached `/api/border-waits` proxy.
@@ -102,9 +108,18 @@
 
 ## [Unreleased]
 
-- Keep later satellites when a TLE catalog entry is missing an orbital line.
-  The parser skips the incomplete set and resumes at the next complete named
-  set, instead of losing the rest of the group (#906).
+- Street Level: Google Street View is the second provider. On the Google 3D
+  map (Google's terms keep it off other maps), light its chip (off by
+  default: every panorama is billed to the Google Maps key, which needs the
+  Maps JavaScript API) and click a street, or press OPEN STREET VIEW, to
+  open Google's own panorama in
+  the panel, with its arrows, the address and month in the caption, a link
+  to Google Maps and FOLLOW. Share links carry it in the provider switches
+  (`r.google-1`). One provider is lit at a time (lighting one switches the
+  other off), Mapillary by default since it is free. Street View's panoramas
+  are all 360°, so the IMAGERY and SINCE filters and the legend apply to
+  Mapillary only and hide while GOOGLE STREET VIEW is lit; its globe marker
+  is a Google-blue view cone.
 
 - Add an experimental ChatGPT/Codex OAuth option for cloud voice in Provider
   Settings. API-key voice remains the default. Local sign-in can start from
