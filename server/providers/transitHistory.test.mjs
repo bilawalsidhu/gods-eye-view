@@ -142,9 +142,10 @@ test('three identical-order 15000-vehicle snapshots retain paths within a bounde
     const rows = Array.from({ length: 15000 }, (_, i) =>
       row(now, `vehicle-${i}`),
     );
-    const start = process.cpuUsage();
+    // Main-thread CPU: excludes scheduler waits and parallel GC helper threads.
+    const start = process.threadCpuUsage();
     h.ingest(feed, rows, now);
-    const usage = process.cpuUsage(start);
+    const usage = process.threadCpuUsage(start);
     times.push((usage.user + usage.system) / 1000);
   }
   assert.equal(h.diagnostics().keys, 15000);

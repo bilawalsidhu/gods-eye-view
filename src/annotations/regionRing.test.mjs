@@ -51,9 +51,11 @@ test('region ring: Natural Earth names resolve without a geocoder', async () => 
 test('region ring: a slow admin-boundary lookup returns region-timeout within the budget', async () => {
   let adminSignal;
   let release;
+  let lookupStarted;
   const { resolveRegionRingForQuery } = createAnnotationResolver({
     featureSource: featureSource({
       getAdministrativeAreas(_point, { signal }) {
+        lookupStarted = Date.now();
         adminSignal = signal;
         return new Promise((resolve) => {
           release = resolve;
@@ -61,7 +63,6 @@ test('region ring: a slow admin-boundary lookup returns region-timeout within th
       },
     }),
   });
-  const started = Date.now();
   const region = await resolveRegionRingForQuery(
     'Atlantis',
     undefined,
@@ -73,8 +74,10 @@ test('region ring: a slow admin-boundary lookup returns region-timeout within th
     ring: null,
     error: 'region-timeout',
   });
+  // Timed from the boundary lookup, so the bundled pack scans before it do not
+  // count. Under the 3 s default budget, so an ignored budgetMs still fails.
   assert.ok(
-    Date.now() - started < 10_000,
+    Date.now() - lookupStarted < 2_000,
     'returns at the budget, not the lookup',
   );
   // The lookup is left running so it can fill the boundary cache.
