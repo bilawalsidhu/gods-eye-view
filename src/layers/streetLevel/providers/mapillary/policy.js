@@ -55,8 +55,6 @@ export const COVERAGE_LINE_WIDTH_PX = 2.5;
 
 /** Per-sequence image cones after a sequence is selected. */
 export const SEQUENCE_IMAGES_LIMIT = 2000;
-export const IMAGE_CONE_SIZE_PX = 26;
-export const IMAGE_CONE_MIN_SPACING_M = 3;
 
 /** Images asked for in a nearest-image search (radius: NEAREST_RADIUS_M). */
 export const NEAREST_LIMIT = 8;

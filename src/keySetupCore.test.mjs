@@ -9,6 +9,7 @@ import {
   isKeySetupExternallyManaged,
   keySetupStatus,
   keySetupRequirement,
+  keySetupWithAlternatives,
   knownKeySetupEnvVars,
   parseWindowsUserSid,
   upsertDotenvValues,
@@ -361,4 +362,17 @@ test('server Google key remains supported without appearing in setup or its miss
   assert.deepEqual(complete, keySetupStatus({ ...allVisibleConfigured, GOOGLE_MAPS_SERVER_API_KEY: secret }));
   assert.ok(!JSON.stringify(status).includes('GOOGLE_MAPS_SERVER_API_KEY'));
   assert.ok(!JSON.stringify(status).includes(secret));
+});
+
+test('key guidance can offer another source that works with a key already set', () => {
+  const streetView = { label: 'STREET VIEW', requiresKeyId: 'google-maps' };
+  assert.equal(
+    keySetupWithAlternatives(keySetupRequirement('mapillary'), [streetView]),
+    'Needs MAPILLARY_CLIENT_TOKEN — add it in Provider Settings, or light STREET VIEW to use your Google Maps key',
+  );
+  assert.equal(
+    keySetupWithAlternatives('', [streetView]),
+    'Light STREET VIEW to use your Google Maps key',
+  );
+  assert.equal(keySetupWithAlternatives('Needs X', []), 'Needs X');
 });

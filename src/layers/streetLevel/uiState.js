@@ -15,6 +15,11 @@ import { COLORS } from './policy.js';
  * @property {string} hint
  * @property {string|null} error
  * @property {string} color   The source's one colour.
+ * @property {boolean} [groundClick]
+ * @property {Array<'pano'|'since'>} [filters]
+ * @property {{noun: string, action: string}|null} [coverageLabel]
+ * @property {boolean} [highlightsSequence]   Its lines turn cyan when their sequence is selected.
+ * @property {'capture'|'upload'} [sinceBasis]   What its SINCE compares.
  */
 
 /**
@@ -30,8 +35,10 @@ export function summarizeCoverage(providers) {
     hint:
       providers.length === 0
         ? 'No street-level imagery providers configured'
-        : active.find((p) => p.hint)?.hint || '',
+        : [...new Set(active.map((p) => p.hint).filter(Boolean))].join(' · '),
     error: active.find((p) => p.error)?.error || null,
+    // One source is lit at a time; its wording counts the lines.
+    label: active.find((p) => p.coverageLabel)?.coverageLabel || null,
     keyRequired:
       active.length > 0 && active.every((p) => p.keyRequired === true),
     keyRejected:
@@ -42,12 +49,50 @@ export function summarizeCoverage(providers) {
 }
 
 /**
+ * Switched-off providers that would draw with a key already set, offered
+ * while the switched-on ones lack theirs.
+ * @param {Array<ProviderSnapshot>} providers
+ * @returns {Array<{id: string, label: string, requiresKeyId: string|null}>}
+ */
+export function keyAlternatives(providers) {
+  if (!summarizeCoverage(providers).keyRequired) return [];
+  return providers
+    .filter((p) => !p.on && p.configured === true && p.keyRequired !== true)
+    .map(({ id, label, requiresKeyId }) => ({ id, label, requiresKeyId }));
+}
+
+/**
+ * The filter controls a switched-on provider honours (both when none is on).
+ * @param {Array<ProviderSnapshot>} providers
+ */
+export function filterControls(providers) {
+  const active = providers.filter((p) => p.on);
+  const honoured = (key) =>
+    active.length === 0 ||
+    active.some((p) => (p.filters ?? ['pano', 'since']).includes(key));
+  return { pano: honoured('pano'), since: honoured('since') };
+}
+
+/**
+ * The note under SINCE when a lit provider dates its imagery by upload,
+ * e.g. "KartaView: by upload date", or null.
+ * @param {Array<ProviderSnapshot>} providers
+ */
+export function sinceNote(providers) {
+  const names = providers
+    .filter((p) => p.on && p.sinceBasis === 'upload')
+    .map((p) => p.name);
+  return names.length ? `${names.join(', ')}: by upload date` : null;
+}
+
+/**
  * The panel snapshot from core state and provider snapshots. The legend has
- * one swatch per active source, then the shared selection colour.
+ * one swatch per active source that draws coverage lines, then Selected.
  * @param {{enabled: boolean, filter: object, providers: Array<ProviderSnapshot>, street: object, sequence: object}} input
  */
 export function composeUIState({
   enabled,
+  groundClickReady = false,
   filter,
   providers,
   street,
@@ -57,18 +102,30 @@ export function composeUIState({
   const active = providers.filter((p) => p.on);
   const { keyRequired, keyRejected, ...coverage } =
     summarizeCoverage(providers);
-  const legend = active.map((provider) => ({
-    key: provider.id,
-    label: provider.name,
-    color: provider.color,
-  }));
-  if (active.length)
+  const legend = active
+    .filter((provider) => provider.groundClick !== true)
+    .map((provider) => ({
+      key: provider.id,
+      label: provider.name,
+      color: provider.color,
+    }));
+  // "Selected" only beside a source whose lines turn cyan when selected.
+  if (
+    active.some(
+      (provider) =>
+        provider.groundClick !== true && provider.highlightsSequence !== false,
+    )
+  )
     legend.push({ key: 'selected', label: 'Selected', color: COLORS.selected });
   return {
     enabled,
+    groundClickReady: groundClickReady === true,
     keyRequired,
+    keyAlternatives: keyAlternatives(providers),
     keyRejected,
     filter: { ...filter },
+    filterControls: filterControls(providers),
+    sinceNote: sinceNote(providers),
     providers: providers.map((p) => ({ ...p })),
     coverage,
     legend,

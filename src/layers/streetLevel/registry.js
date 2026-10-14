@@ -1,5 +1,11 @@
 import { encodeIdSwitches } from '../../data/idSwitches.js';
 
+export const IMAGERY_FILTERS = Object.freeze(['pano', 'since']);
+
+export function filtersOf(provider) {
+  return provider?.filters ?? IMAGERY_FILTERS;
+}
+
 /**
  * The contract an imagery provider registers with the Street Level layer.
  *
@@ -11,17 +17,25 @@ import { encodeIdSwitches } from '../../data/idSwitches.js';
  * @property {string} pickPrefix    Every primitive id the provider creates starts with it.
  * @property {{coverage: string}} colors   The source's one colour, from policy.js PROVIDER_COLORS.
  * @property {{html: string}} credit   On-globe attribution while the provider is active.
+ * @property {boolean} [groundClick]   No coverage: a ground click at street zoom opens its nearest image.
+ * @property {string} [requiresMapStack]   Usable only on this map stack.
+ * @property {boolean} [defaultOn]     Default true.
+ * @property {{kind: 'view-cone', color: string}} [marker]   Default: GEV's pin.
+ * @property {Array<'pano'|'since'>} [filters]   Filters it honours (default both).
+ * @property {{noun: string, action: string}} [coverageLabel]   How the panel counts its lines and says what a click does (default: sequences, "click a line for its photos").
+ * @property {boolean} [highlightsSequence]   Its lines show the selected sequence (default true; the legend's "Selected" needs one).
+ * @property {'capture'|'upload'} [sinceBasis]   What SINCE compares (default 'capture'); 'upload' puts a note under the slider while the provider is lit.
  * @property {(context: ProviderContext) => ProviderInstance} create
  *
  * @typedef {object} ProviderContext   Handed to `create()` once by the core.
- * @property {object} services         Scene services: picking, input, render, sprites, ground, terrain.
+ * @property {object} services         Scene services: picking, input, render, sprites, ground, terrain, scenePick (ground clicks need it).
  * @property {() => {pano: string, sinceMs: number|null}} getFilter   Filter resolved against now; read it on every use so "since N days" keeps up.
  * @property {() => boolean} isActive  Layer enabled and this provider switched on.
  * @property {() => 'draped'|'terrain'} getSurface   'terrain' on Google 3D at street zoom: draw on bare earth.
  * @property {GroundCaster|null} groundCaster   Bare-earth heights for terrain mode (groundCast.js); null without a terrain service.
  * @property {{meshAt: (lon: number, lat: number) => number|undefined, request: (points: Array<[number, number]>) => void, onSampled: (listener: (cells: Array<[number, number]>) => void) => () => void}|null} meshSampler   Sampled Google 3D surface heights (meshSampler.js); pass `meshAt` to `castLine`.
  * @property {() => void} notify       Ask the core to publish a new UI snapshot.
- * @property {{openImage: (imageId: string) => Promise<void>, reportError: (message: string|null) => void}} actions
+ * @property {{openImage: (imageId: string, options?: {frame?: boolean}) => Promise<boolean>, openNearest: (point: {lon: number, lat: number}) => Promise<boolean>, reportError: (message: string|null) => void}} actions
  *
  * @typedef {object} ProviderInstance
  * @property {() => Promise<{configured: boolean}>} status
@@ -33,7 +47,7 @@ import { encodeIdSwitches } from '../../data/idSwitches.js';
  * @property {(filter: {pano: string, sinceMs: number|null}) => void} setFilter   The filter changed: redraw (reading `getFilter()`).
  * @property {(mode: 'draped'|'terrain') => void} [setSurface]   Redraw coverage and cones for the new surface mode.
  * @property {() => {count: number, zoom: number|null, kind: string|null, loading: boolean, hint: string, error: string|null, keyRequired: boolean}} coverageStats
- * @property {(pickId: string) => boolean} handlePick   The id carries the provider's own prefix.
+ * @property {(pickId: string, click?: {groundPoint: () => {lon: number, lat: number}|null}) => boolean} handlePick   The id carries the provider's own prefix; `groundPoint` is where the click met the ground.
  * @property {(sequenceId: string) => Promise<void>} [selectSequence]
  * @property {() => void} [clearSequence]
  * @property {() => {selectedId: string|null, images: number, loading: boolean}} [sequenceStats]
@@ -54,6 +68,7 @@ import { encodeIdSwitches } from '../../data/idSwitches.js';
  * @property {() => void} resize
  * @property {(host: HTMLElement) => Promise<void>} [prewarm]
  * @property {(mode: 'letterbox'|'fill') => void} [setRenderMode]
+ * @property {() => boolean} [supportsRenderModes]   False while the image has no frame to fit (a panorama): FIT / FILL hide.
  * @property {(listener: (pose: StreetPose) => void) => () => void} onPose
  *
  * @typedef {object} StreetPose
@@ -65,6 +80,8 @@ import { encodeIdSwitches } from '../../data/idSwitches.js';
  * @property {number|null} altitude
  * @property {boolean} isPano
  * @property {number|null} capturedAt   Epoch milliseconds.
+ * @property {'day'|'month'} [capturedAtPrecision]   How exactly the provider dates images (default 'day').
+ * @property {string|null} [title]     A place name for the caption, e.g. the address.
  * @property {string|null} creator
  * @property {string|null} sequenceId
  * @property {string} externalUrl      Deep link to the image on the provider's site.
@@ -123,6 +140,34 @@ export function validateProviders(providers) {
     )
       throw new TypeError(
         `Street Level provider ${label} needs a coverage colour`,
+      );
+    if (
+      provider.marker !== undefined &&
+      !(
+        provider.marker?.kind === 'view-cone' &&
+        typeof provider.marker.color === 'string'
+      )
+    )
+      throw new TypeError(
+        `Street Level provider ${label}: marker must be {kind: 'view-cone', color}`,
+      );
+    if (
+      provider.filters !== undefined &&
+      !(
+        Array.isArray(provider.filters) &&
+        provider.filters.every((key) => IMAGERY_FILTERS.includes(key))
+      )
+    )
+      throw new TypeError(
+        `Street Level provider ${label}: filters must list ${IMAGERY_FILTERS.join(' or ')}`,
+      );
+    if (
+      provider.sinceBasis !== undefined &&
+      provider.sinceBasis !== 'capture' &&
+      provider.sinceBasis !== 'upload'
+    )
+      throw new TypeError(
+        `Street Level provider ${label}: sinceBasis must be 'capture' or 'upload'`,
       );
     ids.add(provider.id);
     prefixes.push(provider.pickPrefix);

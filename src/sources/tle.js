@@ -1,6 +1,6 @@
 /**
  * Parse three-line TLE catalog text into `{ name, line1, line2 }` entries.
- * Blocks whose second and third lines are not TLE lines 1 and 2 are skipped.
+ * Malformed sets are skipped without dropping the valid sets that follow.
  */
 export function parseTleText(text) {
   const lines = String(text)
@@ -9,12 +9,13 @@ export function parseTleText(text) {
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
   const result = [];
-  for (let i = 0; i < lines.length - 2; i += 3) {
+  for (let i = 0; i < lines.length - 2; i++) {
     const name = lines[i];
     const line1 = lines[i + 1];
     const line2 = lines[i + 2];
     if (line1.startsWith('1 ') && line2.startsWith('2 ')) {
       result.push({ name, line1, line2 });
+      i += 2;
     }
   }
   return result;
