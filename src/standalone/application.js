@@ -7,6 +7,7 @@ import { createStandaloneControls } from './controls.js';
 import { createStandaloneData } from './data.js';
 import { createStandaloneTools } from './tools.js';
 import { createGoogleTokenSource } from '../maps/googleTokens.js';
+import { createApplicationKeyReader } from '../mobile/vaultKeys.js';
 
 // The existing controls and layer catalog contain page-scoped state.
 let constructed = false;
@@ -51,6 +52,7 @@ export function createStandaloneApplication({
       catalog = createStandaloneCatalog({
         sources,
         streetLevelProviders,
+        getKey: createApplicationKeyReader(),
         nepalBoundaryResolver: (signal) =>
           scene.operations.annotationResolver.resolveRegionRingForQuery(
             'Nepal',
