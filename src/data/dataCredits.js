@@ -99,6 +99,13 @@ export const NYC_DOT_DISCLAIMER =
   'The public is advised to observe posted signage for compliance with applicable laws and regulations.';
 
 export const DATA_CREDITS = [
+  {
+    key: 'caba-traffic-enforcement',
+    html:
+      'Traffic enforcement locations: ' +
+      '<a href="https://data.buenosaires.gob.ar/dataset/camaras-fijas-control-vehicular" target="_blank" rel="noopener">Gobierno de la Ciudad de Buenos Aires / Buenos Aires Data</a> ' +
+      '(<a href="https://creativecommons.org/licenses/by/2.5/ar/" target="_blank" rel="noopener">CC BY 2.5 AR</a>); converted from CSV to map points. Location inventory only.',
+  },
   // ── Live sources ────────────────────────────────────────────────
   {
     key: 'opensky',

@@ -6,6 +6,10 @@ const contract = (layers, methods) =>
 
 /** Acquisition contracts and their consumers; records remain family-specific. */
 export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
+  'caba-traffic-enforcement': contract(
+    ['caba-traffic-enforcement'],
+    ['getFeatures'],
+  ),
   directions: contract(['directions'], ['getRoute']),
   'recent-imagery': contract(
     ['recent-imagery'],

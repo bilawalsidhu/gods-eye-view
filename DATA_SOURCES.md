@@ -342,3 +342,15 @@ NOAA density imagery with the raw GLM product.
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+
+## Buenos Aires Data — CABA fixed traffic enforcement locations
+
+- **Publisher:** Gobierno de la Ciudad de Buenos Aires / Buenos Aires Data.
+- **Dataset:** [Cámaras fijas de control vehicular](https://data.buenosaires.gob.ar/dataset/camaras-fijas-control-vehicular).
+- **Resource:** [Official CSV download](https://data.buenosaires.gob.ar/dataset/camaras-fijas-control-vehicular/resource/juqdkmgo-311-resource/download).
+- **License:** [CC BY 2.5 Argentina](https://creativecommons.org/licenses/by/2.5/ar/), as declared by the portal (checked 2026-10-14).
+- **Use:** runtime download, cached for 24 hours by the local provider; CSV converted to GeoJSON points. No bundled snapshot or imagery.
+- **Required attribution:** “Gobierno de la Ciudad de Buenos Aires / Buenos Aires Data”, linked to the dataset and license. The Data attribution popover notes the CSV-to-points conversion.
+- **Coverage:** published fixed traffic enforcement locations in CABA. The source excludes exclusive-lane enforcement cameras. It does not establish complete CCTV coverage or identify all devices as ALPR.
+- **Freshness:** the portal resource metadata reports 2025-07-23; this is not a per-device observation. The app separately records catalog retrieval time and reports operating status and imagery as not provided.
+- **Implementation and verification:** [CABA traffic enforcement](docs/CABA-TRAFFIC-ENFORCEMENT.md). Coordinates are checked for decimal-comma parsing and plausible CABA bounds. Invalid/empty downloads produce an unavailable state.

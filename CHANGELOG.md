@@ -1,5 +1,9 @@
 # Changelog
 
+- Add a CABA Traffic Enforcement infrastructure layer sourced from the official
+  Buenos Aires Data CSV, with location/type metadata, CC BY 2.5 AR attribution,
+  bounded on-demand acquisition and explicit inventory-only semantics.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 

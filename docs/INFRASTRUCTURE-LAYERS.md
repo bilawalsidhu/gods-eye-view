@@ -61,3 +61,11 @@ Dataset files and source/license notices remain under `src/data/local_data/`.
 Their input counts are 4,351 datacenter features and 704 dam features. Cesium may
 expand multipart geometries into multiple entities; entity and stem counts are
 different measurements. This change does not refresh or relicense the datasets.
+
+The lower-level GeoJSON factory also accepts `loadFeatures({signal})` instead of
+a dataset `url`. The callback returns an array of GeoJSON features, receives the
+layer's abort signal and owns acquisition. Concurrent enables share its pending
+load; successful features remain cached until destruction. The same failure,
+late-result and scene-resource cleanup rules apply. This seam lets the CABA
+inventory use a supplied source without changing the two bundled layers returned
+by `createInfrastructureLayers`.

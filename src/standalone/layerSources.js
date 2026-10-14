@@ -1,4 +1,5 @@
 import { createDirectionsSource } from '../layers/directions/source.js';
+import { createCabaTrafficSource } from '../layers/trafficEnforcement/source.js';
 import { createRecentImagerySource } from '../layers/recentImagery/source.js';
 import { createOpenFreeMapSource } from '../sources/openFreeMap.js';
 import {
@@ -30,6 +31,7 @@ export function createStandaloneLayerSources(overrides = {}) {
   const mapTiles = createOpenFreeMapSource();
   const defaults = {
     ...createReferenceSources(),
+    'caba-traffic-enforcement': createCabaTrafficSource(),
     directions: createDirectionsSource(),
     'recent-imagery': createRecentImagerySource(),
     flights: createFlightSource(),

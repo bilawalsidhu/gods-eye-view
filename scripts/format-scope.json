@@ -1001,5 +1001,9 @@
   "src/tools/globePanel.test.mjs",
   "src/costEndpointThrottle.test.mjs",
   "src/sources/gbfsStations.test.mjs",
-  "scripts/qa-gbfs-names.mjs"
+  "scripts/qa-gbfs-names.mjs",
+  "src/layers/trafficEnforcement/records.test.mjs",
+  "src/layers/trafficEnforcement/source.test.mjs",
+  "server/providers/cabaTraffic.test.mjs",
+  "scripts/qa-caba-traffic.mjs"
 ]

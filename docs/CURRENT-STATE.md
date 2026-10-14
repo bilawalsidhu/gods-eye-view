@@ -1,5 +1,14 @@
 # God's Eye View Current State
 
+CABA Traffic Enforcement adds a default-off Infrastructure inventory layer for
+Buenos Aires Data's published fixed traffic enforcement locations. The local
+provider downloads the official CSV on demand with a 24-hour cache; the browser
+retains its loaded snapshot for the layer lifetime. Points expose address, device
+type, license and catalog retrieval time. Operating status and imagery are not
+provided by the source, and exclusive-lane cameras are outside its declared
+coverage. See [CABA traffic enforcement](CABA-TRAFFIC-ENFORCEMENT.md) for acquisition,
+limits and validation; `scripts/qa-caba-traffic.mjs` covers the browser contract.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing

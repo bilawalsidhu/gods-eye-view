@@ -328,6 +328,13 @@ const layers = [
     query: { fields: { name: ['t'], class: ['t'], kind: ['t'] } },
   },
   {
+    id: 'caba-traffic-enforcement',
+    aliases: ['caba traffic enforcement', 'buenos aires traffic cameras'],
+    context: true,
+    noQuery:
+      'Published locations only; use entity context for inventory metadata.',
+  },
+  {
     id: 'local-datacenters',
     aliases: ['datacenters', 'data centers', 'data centres'],
     context: true,
