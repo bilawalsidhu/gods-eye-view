@@ -777,6 +777,9 @@ export const FIRMS_SOURCES = Object.freeze([
   'MODIS_NRT',
 ]);
 
+/** Per-source CSV cap mirrors the server proxy (16 MiB per response). */
+export const FIRMS_CSV_CAP_BYTES = 16 * 1024 * 1024;
+
 /** Snapshot freshness window, matching the proxy cache TTL. */
 export const FIRMS_DIRECT_TTL_MS = 30 * 60_000;
 
@@ -827,6 +830,7 @@ export function createFirmsDirectSource({
         try {
           const response = await fetchImpl(firmsAreaUrl(key, source), {
             signal,
+            capBytes: FIRMS_CSV_CAP_BYTES,
           });
           if (!response.ok) {
             sources.push({ source, count: 0, ok: false });

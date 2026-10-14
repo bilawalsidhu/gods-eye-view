@@ -902,6 +902,10 @@ test('firms direct merges the area feeds into the proxy snapshot shape', async (
     calls.every((call) => call.url.includes('test-map-key')),
     'MAP_KEY travels in the FIRMS path segment over HTTPS',
   );
+  assert.ok(
+    calls.every((call) => call.init.capBytes === 16 * 1024 * 1024),
+    'world CSVs carry the 16 MiB server-parity cap so phones stop failing',
+  );
 });
 
 test('firms direct skips error payloads and fails only when all fail', async () => {

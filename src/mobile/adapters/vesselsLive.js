@@ -78,6 +78,27 @@ function frameOf(event) {
 }
 
 /**
+ * Decode one WebSocket frame to text. Browsers deliver binary frames as
+ * Blob (default `binaryType`) — `String(blob)` is `"[object Blob]"`, which
+ * silently drops every frame on-device. Accept text, bytes, and Blobs.
+ * @param {*} data Frame payload.
+ * @returns {Promise<string>} Decoded text (possibly unparseable).
+ */
+async function decodeFrameData(data) {
+  if (typeof data === 'string') return data;
+  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    return data.text();
+  }
+  if (data instanceof ArrayBuffer) {
+    return new TextDecoder().decode(data);
+  }
+  if (ArrayBuffer.isView(data)) {
+    return new TextDecoder().decode(data);
+  }
+  return String(data);
+}
+
+/**
  * Best-effort position out of a recognized envelope. Position-report
  * bodies carry `Latitude`/`Longitude`; anything else keeps the vessel known
  * without a track sample.
@@ -211,6 +232,12 @@ export function createVesselsLiveSource({
     assertKeyedHttps(url);
     const next = createSocket(url);
     if (!next) throw new Error('Socket factory returned nothing');
+    try {
+      next.binaryType = 'arraybuffer';
+    } catch {
+      // Stub sockets and exotic transports may not accept the hint; the
+      // decoder below still handles Blob, bytes, and text.
+    }
     socket = next;
     lastMessageAt = now();
     setStatus('connecting');
@@ -229,11 +256,31 @@ export function createVesselsLiveSource({
     });
     listen(next, 'message', (event) => {
       if (socket !== next || disposed) return;
-      try {
-        handleFrame(frameOf(event));
-      } catch {
-        // A hostile frame is dropped, never fatal.
+      const data = frameOf(event);
+      if (typeof data === 'string') {
+        // Fast path: text frames stay synchronous (stub transports, tests,
+        // and text-mode sockets observe no behavior change).
+        try {
+          handleFrame(data);
+        } catch {
+          // A hostile frame is dropped, never fatal.
+        }
+        return;
       }
+      void (async () => {
+        let text;
+        try {
+          text = await decodeFrameData(data);
+        } catch {
+          return;
+        }
+        if (socket !== next || disposed) return;
+        try {
+          handleFrame(text);
+        } catch {
+          // A hostile frame is dropped, never fatal.
+        }
+      })();
     });
     const onDown = () => {
       if (socket !== next) return;

@@ -745,3 +745,54 @@ test('hud summary failure stays honest and discards late responses', async () =>
     }).summarize({}, { signal }),
   );
 });
+
+test('vessels live decodes Blob frames', async () => {
+  const { createVesselsLiveSource } = await import('./vesselsLive.js');
+  const seen = [];
+  let socket;
+  const source = createVesselsLiveSource({
+    getKey: async () => 'k',
+    createSocket: () => {
+      socket = { handlers: {}, send() {}, close() {} };
+      return socket;
+    },
+    onVessel: (v) => seen.push(v),
+  });
+  await source.connect({});
+  const payload = JSON.stringify({
+    MessageType: 'PositionReport',
+    Message: { PositionReport: { UserID: 1, Latitude: 48.8, Longitude: 2.3 } },
+    MetaData: { MMSI: 1, ShipName: 'BLOB', time_utc: '2026-10-14T04:00:00.000Z' },
+  });
+  const blob = new Blob([payload], { type: 'application/octet-stream' });
+  socket.onmessage({ data: blob });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].mmsi, '1');
+  source.dispose();
+});
+
+test('vessels live decodes ArrayBuffer frames', async () => {
+  const { createVesselsLiveSource } = await import('./vesselsLive.js');
+  const seen = [];
+  let socket;
+  const source = createVesselsLiveSource({
+    getKey: async () => 'k',
+    createSocket: () => {
+      socket = { handlers: {}, send() {}, close() {} };
+      return socket;
+    },
+    onVessel: (v) => seen.push(v),
+  });
+  await source.connect({});
+  const payload = JSON.stringify({
+    MessageType: 'PositionReport',
+    Message: { PositionReport: { UserID: 2, Latitude: 48.8, Longitude: 2.3 } },
+    MetaData: { MMSI: 2, ShipName: 'BUF', time_utc: '2026-10-14T04:00:00.000Z' },
+  });
+  socket.onmessage({ data: new TextEncoder().encode(payload).buffer });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].mmsi, '2');
+  source.dispose();
+});
