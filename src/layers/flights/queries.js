@@ -1,6 +1,7 @@
 import { approxDistanceKm as _approxDistanceKm } from './recordPolicy.js';
 import { displayedKinematics } from '../../data/motionModel.js';
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { isExplicitLayerStateOrigin } from '../../data/layerState.js';
 import { modelVisualAnchor } from '../../data/modelVisualAnchor.js';
 import {
@@ -141,18 +142,18 @@ export function createQueries({
       reportedSpeedMps: info?.velocity,
       reportedTrackDeg: info?.true_track,
     });
-    const carto = Cesium.Cartographic.fromCartesian(
+    const carto = geo.cartographic.fromCartesian(
       basePos,
-      Cesium.Ellipsoid.WGS84,
+      geo.ellipsoid.WGS84,
       flightState._scratchCarto,
     );
     if (!carto) return null;
     return {
       icao24,
       callsign: String(info?.callsign || '').trim() || null,
-      position: Cesium.Cartesian3.clone(basePos),
-      latitude: Cesium.Math.toDegrees(carto.latitude),
-      longitude: Cesium.Math.toDegrees(carto.longitude),
+      position: geo.cartesian3.clone(basePos),
+      latitude: geo.math.toDegrees(carto.latitude),
+      longitude: geo.math.toDegrees(carto.longitude),
       // The cockpit instrument reports aviation altitude, not the Cesium
       // ellipsoid height of the camera/ground-clamped render position. The
       // latter can be slightly negative over terrain near the surface.
@@ -430,7 +431,7 @@ export function createQueries({
           object = {
             sourceId: icao24,
             type: 'AIR',
-            _weldPos: new Cesium.Cartesian3(),
+            _weldPos: geo.cartesian3.create(),
           };
           flightState._detectionObjects.set(icao24, object);
         }
@@ -453,7 +454,7 @@ export function createQueries({
                 Number.isFinite(model.computedScale)
                   ? model.computedScale
                   : spec.scale,
-                object._weldPos || (object._weldPos = new Cesium.Cartesian3()),
+                object._weldPos || (object._weldPos = geo.cartesian3.create()),
               )
             : bb.position;
         if (!pos) continue;
@@ -572,7 +573,7 @@ export function createQueries({
         const pos = trackedPos || bb.position;
         if (!pos) continue;
 
-        const distance = Cesium.Cartesian3.distance(center, pos);
+        const distance = geo.cartesian3.distance(center, pos);
         if (distance > maxRange) continue;
 
         const info = flightState.records.data.get(icao24);
@@ -653,9 +654,9 @@ export function createQueries({
       for (const [icao24, bb] of flightState._billboards) {
         const pos = bb.position;
         if (!pos) continue;
-        const carto = Cesium.Cartographic.fromCartesian(
+        const carto = geo.cartographic.fromCartesian(
           pos,
-          Cesium.Ellipsoid.WGS84,
+          geo.ellipsoid.WGS84,
           flightState._scratchCarto,
         );
         if (!carto) continue;
@@ -664,8 +665,8 @@ export function createQueries({
           id: icao24, // identity (trackById resolves this)
           label: _contactLabel(icao24, info),
           position: pos,
-          latitude: Cesium.Math.toDegrees(carto.latitude),
-          longitude: Cesium.Math.toDegrees(carto.longitude),
+          latitude: geo.math.toDegrees(carto.latitude),
+          longitude: geo.math.toDegrees(carto.longitude),
           altitudeM: carto.height,
           airline: info?.airline ?? null,
           typeName: info?.typeName ?? null,
@@ -864,7 +865,7 @@ export function createQueries({
           described.callsign ||
           _toCleanText(described.registration) ||
           described.icao24,
-        position: Cesium.Cartesian3.clone(described.position),
+        position: geo.cartesian3.clone(described.position),
       };
     },
 

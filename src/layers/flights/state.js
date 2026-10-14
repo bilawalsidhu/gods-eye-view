@@ -1,6 +1,7 @@
 import { FlightRecords } from './records.js';
 import { createFlightFeed } from './ingestion.js';
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { ENRICH_AMBIENT_BUDGET_CEIL } from './policy.js';
 
 export function createFlightState({ source, services }) {
@@ -31,9 +32,9 @@ export function createFlightState({ source, services }) {
 
   flightState._groundSnap = createGroundSnap();
 
-  flightState._scratchGroundCarto = new Cesium.Cartographic();
+  flightState._scratchGroundCarto = geo.cartographic.create();
 
-  flightState._scratchGroundPos = new Cesium.Cartesian3();
+  flightState._scratchGroundPos = geo.cartesian3.create();
 
   /** @type {Cesium.PrimitiveCollection|null} */
 
@@ -84,10 +85,10 @@ export function createFlightState({ source, services }) {
 
   flightState._scratchModelHpr = new Cesium.HeadingPitchRoll(0, 0, 0);
 
-  flightState._scratchModelMtx = new Cesium.Matrix4();
+  flightState._scratchModelMtx = geo.matrix4.create();
 
   flightState._scratchModelBS = new Cesium.BoundingSphere(
-    new Cesium.Cartesian3(),
+    geo.cartesian3.create(),
     1.0,
   );
   // frustum-visibility test
@@ -238,25 +239,25 @@ export function createFlightState({ source, services }) {
   // Scratch (reusable) variables — avoid per-frame heap allocation
   // ---------------------------------------------------------------------------
 
-  flightState._scratchOffset = new Cesium.Cartesian3();
+  flightState._scratchOffset = geo.cartesian3.create();
 
-  flightState._scratchCarto = new Cesium.Cartographic();
+  flightState._scratchCarto = geo.cartographic.create();
 
-  flightState._scratchEnu = new Cesium.Matrix4();
+  flightState._scratchEnu = geo.matrix4.create();
 
   flightState._scratchArc = { east: 0, north: 0, endCourseDeg: 0 };
 
   flightState._scratchRenderTime = new Cesium.JulianDate();
 
-  flightState._scratchFleetPos = new Cesium.Cartesian3();
+  flightState._scratchFleetPos = geo.cartesian3.create();
 
-  flightState._scratchSonarScreen = new Cesium.Cartesian2();
+  flightState._scratchSonarScreen = geo.cartesian2.create();
 
-  flightState._scratchDrRaw = new Cesium.Cartesian3();
+  flightState._scratchDrRaw = geo.cartesian3.create();
 
   flightState._scratchWarmupTime = new Cesium.JulianDate();
 
-  flightState._trackedPosHolder = new Cesium.Cartesian3();
+  flightState._trackedPosHolder = geo.cartesian3.create();
 
   // ---------------------------------------------------------------------------
   // Per-frame cache for the tracked entity's dead-reckoned position.
@@ -341,13 +342,13 @@ export function createFlightState({ source, services }) {
 
   flightState._enrichAmbientRefillAnchorMs = 0;
 
-  flightState._drCorrection = new Cesium.Cartesian3(0, 0, 0);
+  flightState._drCorrection = geo.cartesian3.create(0, 0, 0);
 
   flightState._drCorrectionStartMs = 0;
 
-  flightState._drPrevRaw = new Cesium.Cartesian3();
+  flightState._drPrevRaw = geo.cartesian3.create();
 
-  flightState._drPrevDisplay = new Cesium.Cartesian3();
+  flightState._drPrevDisplay = geo.cartesian3.create();
 
   flightState._drPrevMs = 0;
 
@@ -359,18 +360,18 @@ export function createFlightState({ source, services }) {
 
   /** @type {Cesium.Cartesian3} Scratch for the tracked model's rendered translation. */
 
-  flightState._trackedVisualPos = new Cesium.Cartesian3();
+  flightState._trackedVisualPos = geo.cartesian3.create();
 
-  flightState._trackedTrailPos = new Cesium.Cartesian3();
+  flightState._trackedTrailPos = geo.cartesian3.create();
 
   /** Scratch for the tracked model's world-space origin (the envelope centre). */
 
-  flightState._scratchTrailClip = new Cesium.Cartesian3();
+  flightState._scratchTrailClip = geo.cartesian3.create();
 
   /** Scratch for the shortened trail-head start. Owned by the head-segment
    *  callback alone, so nothing else can overwrite it mid-frame. */
 
-  flightState._scratchTrailHead = new Cesium.Cartesian3();
+  flightState._scratchTrailHead = geo.cartesian3.create();
 
   /** Hysteresis latch for the tracked contact's zoom regime, plus the selection it
    *  belongs to. Scoped per selection so a NEW target re-evaluates against the ENTER
@@ -388,7 +389,7 @@ export function createFlightState({ source, services }) {
 
   /** @type {Cesium.Cartographic} Scratch for the grounded display-floor read. */
 
-  flightState._scratchDisplayCarto = new Cesium.Cartographic();
+  flightState._scratchDisplayCarto = geo.cartographic.create();
 
   /** @type {Map<string, {cell: {lat: number, lon: number}, effectiveM: number|null,
    *  in: Cesium.Cartesian3, out: Cesium.Cartesian3|null, heldM: number|null,
@@ -415,11 +416,11 @@ export function createFlightState({ source, services }) {
 
   /** @type {Cesium.Cartographic} Scratch for the corridor's display-end read. */
 
-  flightState._scratchCorridorCarto = new Cesium.Cartographic();
+  flightState._scratchCorridorCarto = geo.cartographic.create();
 
   /** @type {Cesium.Cartesian3} Scratch for the corridor's dead-reckon probe. */
 
-  flightState._scratchCorridorPos = new Cesium.Cartesian3();
+  flightState._scratchCorridorPos = geo.cartesian3.create();
 
   /** IR hot-target mode (owner playtest 2026-08-16): the NVG/FLIR post-styles
    *  map LUMINANCE, so mid-gray textured models read cold and vanish into

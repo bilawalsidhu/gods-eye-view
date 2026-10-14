@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import {
   turnRateFromFixHistory,
@@ -52,7 +53,7 @@ export function createMilitarySnapshotRenderer({
             : false,
         },
       );
-      const position = Cesium.Cartesian3.fromDegrees(
+      const position = geo.cartesian3.fromDegrees(
         meta.rawLon,
         meta.rawLat,
         meta.renderAltitudeM,
@@ -61,7 +62,7 @@ export function createMilitarySnapshotRenderer({
       flightState._cullPositions.set(
         icao24,
         meta.renderAltitudeM < 10
-          ? Cesium.Cartesian3.fromDegrees(meta.rawLon, meta.rawLat, 12)
+          ? geo.cartesian3.fromDegrees(meta.rawLon, meta.rawLat, 12)
           : null,
       );
       const isTracked = icao24 === flightState._trackedIcao;
@@ -84,7 +85,7 @@ export function createMilitarySnapshotRenderer({
         history.push({
           time: fixTime,
           epochMs: fixEpochMs,
-          position: position.clone(),
+          position: geo.cartesian3.clone(position),
           velocity: meta.speedMps,
           track: meta.track,
         });
@@ -99,7 +100,7 @@ export function createMilitarySnapshotRenderer({
         // (owner): ground traffic appends too — taxi history stays live
         // after touchdown; _appendTrailFix floors grounded positions at
         // the surface so the ground leg drapes instead of diving.
-        if (isTracked) tracking._appendTrailFix(position.clone());
+        if (isTracked) tracking._appendTrailFix(geo.cartesian3.clone(position));
       } else {
         const modelOwnsGroundVisual = rendering._modelOwnsVisual(icao24);
         if (!modelOwnsGroundVisual) {
@@ -120,7 +121,7 @@ export function createMilitarySnapshotRenderer({
             meta.turnRateDps = turnRateFromFixHistory(history);
             if (isTracked)
               tracking._appendTrailFix(
-                Cesium.Cartesian3.clone(synthetic.position),
+                geo.cartesian3.clone(synthetic.position),
               );
           }
         }
@@ -151,7 +152,7 @@ export function createMilitarySnapshotRenderer({
         // projected back to that delayed time. Creating it at the raw fix drew
         // it ahead until the next fleet tick snapped it back.
         const displayed =
-          motion._deadReckon(icao24, new Cesium.Cartesian3()) || position;
+          motion._deadReckon(icao24, geo.cartesian3.create()) || position;
         const bb = flightState._billboardCollection.add({
           position: displayed,
           image: aircraftIcon(rendering._iconKind(icao24, meta.klass)),
@@ -163,7 +164,7 @@ export function createMilitarySnapshotRenderer({
             (meta.onGround ? GROUND_SCALE : 1),
           // Screen-projected rotation lands on the next fleet tick.
           rotation: 0,
-          alignedAxis: Cesium.Cartesian3.ZERO,
+          alignedAxis: geo.cartesian3.ZERO,
           color: isTracked ? TRACKED_ICON_COLOR : MIL_ICON_COLOR,
           sizeInMeters: false,
           scaleByDistance: rendering._normalBillboardScaleByDistance(),
@@ -217,7 +218,7 @@ export function createMilitarySnapshotRenderer({
         continue;
       info.renderAltitudeM = lifted;
       flightState._cullPositions.delete(icao24);
-      const liftedPos = Cesium.Cartesian3.fromDegrees(
+      const liftedPos = geo.cartesian3.fromDegrees(
         info.rawLon,
         info.rawLat,
         lifted,
@@ -225,7 +226,7 @@ export function createMilitarySnapshotRenderer({
       const hist = flightState._positionHistory.get(icao24);
       const newest = hist?.[hist.length - 1];
       if (newest)
-        newest.position = Cesium.Cartesian3.clone(liftedPos, newest.position);
+        newest.position = geo.cartesian3.clone(liftedPos, newest.position);
       const bbStale = flightState._billboards.get(icao24);
       if (bbStale) bbStale.position = liftedPos;
     }
@@ -242,10 +243,10 @@ export function createMilitarySnapshotRenderer({
           flightState._trackedModel,
         ].filter(Boolean),
         viewerLat: viewerCarto
-          ? Cesium.Math.toDegrees(viewerCarto.latitude)
+          ? geo.math.toDegrees(viewerCarto.latitude)
           : undefined,
         viewerLon: viewerCarto
-          ? Cesium.Math.toDegrees(viewerCarto.longitude)
+          ? geo.math.toDegrees(viewerCarto.longitude)
           : undefined,
       });
     }

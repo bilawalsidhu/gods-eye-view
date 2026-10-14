@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   COURSE_HOLD_SPEED_MPS,
   lerpAngleDeg,
@@ -95,7 +96,7 @@ export function createMotion({
         continue;
       info.renderAltitudeM = lifted;
       flightState._cullPositions.delete(icao24); // above the ellipsoid now (or floors say otherwise next poll)
-      const position = Cesium.Cartesian3.fromDegrees(
+      const position = geo.cartesian3.fromDegrees(
         info.rawLon,
         info.rawLat,
         lifted,
@@ -103,7 +104,7 @@ export function createMotion({
       const history = flightState._positionHistory.get(icao24);
       const newest = history?.[history.length - 1];
       if (newest)
-        newest.position = Cesium.Cartesian3.clone(position, newest.position);
+        newest.position = geo.cartesian3.clone(position, newest.position);
       const bb = flightState._billboards.get(icao24);
       if (bb) bb.position = position;
     }
@@ -134,7 +135,7 @@ export function createMotion({
         flightState._drSpeedMps < COURSE_HOLD_SPEED_MPS;
       flightState._drExtrapolating = false;
       return position
-        ? Cesium.Cartesian3.clone(position, result || new Cesium.Cartesian3())
+        ? geo.cartesian3.clone(position, result || geo.cartesian3.create())
         : null;
     }
     const history = flightState._positionHistory.get(icao24);
@@ -146,7 +147,7 @@ export function createMotion({
       return null;
     }
 
-    const out = result || new Cesium.Cartesian3();
+    const out = result || geo.cartesian3.create();
     // Render one poll interval behind real time so we interpolate between
     // two KNOWN fixes whenever possible (see RENDER_DELAY_SEC rationale).
     const renderTime = Cesium.JulianDate.addSeconds(
@@ -176,7 +177,7 @@ export function createMotion({
         // a slow turner's nose advances continuously through the segment instead
         // of snapping once per poll. Helicopters always use the reported track
         // (rotorcraft chords are noise-dominated at their typical speeds).
-        const chordLenM = Cesium.Cartesian3.distance(a.position, b.position);
+        const chordLenM = geo.cartesian3.distance(a.position, b.position);
         const segSpeed =
           span > 0 ? chordLenM / span : (info && info.velocity) || 0;
         const fallbackTrack = (info && info.true_track) || 0;
@@ -193,7 +194,7 @@ export function createMotion({
         flightState._drSpeedMps = segSpeed;
         flightState._drCourseHold = segSpeed < COURSE_HOLD_SPEED_MPS;
         flightState._drExtrapolating = false;
-        return Cesium.Cartesian3.lerp(a.position, b.position, t, out);
+        return geo.cartesian3.lerp(a.position, b.position, t, out);
       }
     }
 
@@ -274,24 +275,24 @@ export function createMotion({
     flightState._drExtrapolating = true;
     if (speed === 0 || dt === 0) {
       flightState._drCourseDeg = heading;
-      return Cesium.Cartesian3.clone(fix.position, out);
+      return geo.cartesian3.clone(fix.position, out);
     }
     // Constant-rate-turn arc (straight line when turnRateDps ≈ 0) — a plane in a
     // standard-rate turn is ~90° of arc wrong per 30 s if extrapolated straight.
     arcOffsetEnu(speed, heading, turnRateDps, dt, flightState._scratchArc);
     flightState._drCourseDeg = flightState._scratchArc.endCourseDeg;
-    Cesium.Cartesian3.fromElements(
+    geo.cartesian3.fromElements(
       flightState._scratchArc.east,
       flightState._scratchArc.north,
       0,
       flightState._scratchOffset,
     );
-    const enu = Cesium.Transforms.eastNorthUpToFixedFrame(
+    const enu = geo.transforms.eastNorthUpToFixedFrame(
       fix.position,
-      Cesium.Ellipsoid.WGS84,
+      geo.ellipsoid.WGS84,
       flightState._scratchEnu,
     );
-    return Cesium.Matrix4.multiplyByPoint(enu, flightState._scratchOffset, out);
+    return geo.matrix4.multiplyByPoint(enu, flightState._scratchOffset, out);
   }
 
   /**
@@ -320,7 +321,7 @@ export function createMotion({
     const camera = flightState._viewer?.camera;
     const scene = flightState._viewer?.scene;
     if (!camera?.positionWC || !position || !scene) return 28;
-    const rangeM = Cesium.Cartesian3.distance(camera.positionWC, position);
+    const rangeM = geo.cartesian3.distance(camera.positionWC, position);
     if (parts.rendering._modelOwnsVisual(icao24)) {
       const spec = parts.rendering._modelSpec(
         flightState.records.data.get(icao24)?.klass,
@@ -398,9 +399,9 @@ export function createMotion({
       const speed = (info && info.velocity) || 0;
       // Plausible single-frame motion (m): real velocity × frame Δt, ×4 slack + 25 m base.
       const plausible = speed * dtSec * 4 + 25;
-      if (Cesium.Cartesian3.distance(raw, flightState._drPrevRaw) > plausible) {
+      if (geo.cartesian3.distance(raw, flightState._drPrevRaw) > plausible) {
         // Discontinuity — re-anchor so the DISPLAYED position stays continuous, then decay.
-        Cesium.Cartesian3.subtract(
+        geo.cartesian3.subtract(
           flightState._drPrevDisplay,
           raw,
           flightState._drCorrection,
@@ -408,19 +409,19 @@ export function createMotion({
         flightState._drCorrectionStartMs = nowMs;
       }
     } else {
-      Cesium.Cartesian3.fromElements(0, 0, 0, flightState._drCorrection);
+      geo.cartesian3.fromElements(0, 0, 0, flightState._drCorrection);
       flightState._drCorrectionStartMs = nowMs - DR_CORRECTION_MS; // fully decayed
     }
 
     const elapsed = nowMs - flightState._drCorrectionStartMs;
     const factor =
       elapsed >= DR_CORRECTION_MS ? 0 : 1 - elapsed / DR_CORRECTION_MS;
-    let display = Cesium.Cartesian3.multiplyByScalar(
+    let display = geo.cartesian3.multiplyByScalar(
       flightState._drCorrection,
       factor,
       flightState._trackedPosHolder,
     );
-    Cesium.Cartesian3.add(raw, display, display);
+    geo.cartesian3.add(raw, display, display);
     // Same display floor the fleet pass applies — otherwise selecting a correctly
     // floored grounded billboard swapped it for an unfloored tracked entity and
     // dropped the cyan target back under the mesh. Applied HERE, at the single
@@ -439,8 +440,8 @@ export function createMotion({
       nowMs,
     );
 
-    Cesium.Cartesian3.clone(raw, flightState._drPrevRaw);
-    Cesium.Cartesian3.clone(display, flightState._drPrevDisplay);
+    geo.cartesian3.clone(raw, flightState._drPrevRaw);
+    geo.cartesian3.clone(display, flightState._drPrevDisplay);
     flightState._drPrevMs = nowMs;
     flightState._drReconcileValid = true;
     flightState._cachedDRPosition = display;
@@ -530,7 +531,7 @@ export function createMotion({
       !parts.rendering._modelOwnsVisual(flightState._trackedIcao)
     )
       return null;
-    return Cesium.Matrix4.getTranslation(
+    return geo.matrix4.getTranslation(
       flightState._trackedModel.modelMatrix,
       flightState._scratchTrailClip,
     );
@@ -767,7 +768,7 @@ export function createMotion({
       state.probeMs = null; // re-ground may probe immediately
       state.out = null;
       state.effectiveM = null;
-      Cesium.Cartesian3.clone(Cesium.Cartesian3.ZERO, state.in); // invalidate the memo
+      geo.cartesian3.clone(geo.cartesian3.ZERO, state.in); // invalidate the memo
     } else if (_seedExpired(state, nowMs)) {
       flightState._displayFloorState.delete(icao24); // airborne long enough to be anywhere
     }
@@ -832,22 +833,22 @@ export function createMotion({
       return pos;
     }
     const state = flightState._displayFloorState.get(icao24);
-    const carto = Cesium.Cartographic.fromCartesian(
+    const carto = geo.cartographic.fromCartesian(
       pos,
-      Cesium.Ellipsoid.WGS84,
+      geo.ellipsoid.WGS84,
       flightState._scratchDisplayCarto,
     );
     // Boundary hysteresis: a position jittering across a cell edge would flip
     // floors at fleet-tick rate (see stickyFloorCell).
     const cell = stickyFloorCell(
-      Cesium.Math.toDegrees(carto.latitude),
-      Cesium.Math.toDegrees(carto.longitude),
+      geo.math.toDegrees(carto.latitude),
+      geo.math.toDegrees(carto.longitude),
       state?.cell,
     );
     const floor = cachedGroundFloor(cell.lat, cell.lon);
     const next = state || {
       cell,
-      in: new Cesium.Cartesian3(),
+      in: geo.cartesian3.create(),
       out: null,
       effectiveM: null,
       heldM: null,
@@ -943,25 +944,25 @@ export function createMotion({
     if (
       state &&
       state.effectiveM === effective &&
-      Cesium.Cartesian3.equals(pos, state.in)
+      geo.cartesian3.equals(pos, state.in)
     ) {
       return state.out || pos;
     }
     const lifted = displayFloorHeightM(carto.height, effective);
     next.cell = cell;
     next.effectiveM = effective;
-    Cesium.Cartesian3.clone(pos, next.in);
+    geo.cartesian3.clone(pos, next.in);
     if (lifted == null) {
       next.out = null;
     } else {
       // The cache OWNS its output: returning a shared scratch would let the next
       // contact in the fleet loop overwrite a position already handed out.
-      next.out = Cesium.Cartesian3.fromRadians(
+      next.out = geo.cartesian3.fromRadians(
         carto.longitude,
         carto.latitude,
         lifted,
-        Cesium.Ellipsoid.WGS84,
-        next.out || new Cesium.Cartesian3(),
+        geo.ellipsoid.WGS84,
+        next.out || geo.cartesian3.create(),
       );
     }
     if (!state) flightState._displayFloorState.set(icao24, next);
@@ -1044,13 +1045,13 @@ export function createMotion({
         flightState._drCourseDeg != null
           ? flightState._drCourseDeg
           : info.true_track || 0;
-      const c = Cesium.Cartographic.fromCartesian(
+      const c = geo.cartographic.fromCartesian(
         dr,
-        Cesium.Ellipsoid.WGS84,
+        geo.ellipsoid.WGS84,
         flightState._scratchCorridorCarto,
       );
-      const lat = Cesium.Math.toDegrees(c.latitude);
-      const lon = Cesium.Math.toDegrees(c.longitude);
+      const lat = geo.math.toDegrees(c.latitude);
+      const lon = geo.math.toDegrees(c.longitude);
       const cells = corridorFloorCells(
         corridorPathLatLon({
           extrapolating,

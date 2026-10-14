@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { cyberSonarBaseAlpha } from '../../cyberSonar.js';
 import {
   turnRateFromFixHistory,
@@ -33,10 +34,10 @@ export function createFlightSnapshotRenderer({
     const viewerCarto =
       (viewer || flightState._viewer)?.camera?.positionCartographic || null;
     const viewerLatDeg = viewerCarto
-      ? Cesium.Math.toDegrees(viewerCarto.latitude)
+      ? geo.math.toDegrees(viewerCarto.latitude)
       : null;
     const viewerLonDeg = viewerCarto
-      ? Cesium.Math.toDegrees(viewerCarto.longitude)
+      ? geo.math.toDegrees(viewerCarto.longitude)
       : null;
     const floorWarmPoints = [];
 
@@ -76,7 +77,7 @@ export function createFlightSnapshotRenderer({
           floorWarmPoints,
         },
       );
-      const position = Cesium.Cartesian3.fromDegrees(
+      const position = geo.cartesian3.fromDegrees(
         meta.rawLon,
         meta.rawLat,
         meta.renderAltitudeM,
@@ -86,7 +87,7 @@ export function createFlightSnapshotRenderer({
       flightState._cullPositions.set(
         icao24,
         meta.renderAltitudeM < 10
-          ? Cesium.Cartesian3.fromDegrees(meta.rawLon, meta.rawLat, 12)
+          ? geo.cartesian3.fromDegrees(meta.rawLon, meta.rawLat, 12)
           : null,
       );
       const isTracked = icao24 === flightState._trackedIcao;
@@ -109,7 +110,7 @@ export function createFlightSnapshotRenderer({
         history.push({
           time: fixTime,
           epochMs: fixEpochMs,
-          position: position.clone(),
+          position: geo.cartesian3.clone(position),
           velocity: meta.velocity,
           track: meta.true_track,
         });
@@ -125,7 +126,7 @@ export function createFlightSnapshotRenderer({
         // Round 2 (owner): ground traffic appends too — taxi history stays
         // live after touchdown (grounded flights positions are already
         // surface-clamped via the surfaceM chain, so the ground leg drapes).
-        if (isTracked) tracking._appendTrailFix(position.clone());
+        if (isTracked) tracking._appendTrailFix(geo.cartesian3.clone(position));
       } else {
         const modelOwnsGroundVisual = rendering._modelOwnsVisual(icao24);
         if (!modelOwnsGroundVisual) {
@@ -149,7 +150,7 @@ export function createFlightSnapshotRenderer({
             meta.turnRateDps = turnRateFromFixHistory(history);
             if (isTracked)
               tracking._appendTrailFix(
-                Cesium.Cartesian3.clone(synthetic.position),
+                geo.cartesian3.clone(synthetic.position),
               );
           }
         }
@@ -188,7 +189,7 @@ export function createFlightSnapshotRenderer({
         // lifted onto the floor under that delayed position. Creating it at
         // the raw fix drew it ahead until the next fleet tick snapped it back;
         // skipping the floor started a taxiing contact low and then raised it.
-        const delayed = motion._deadReckon(icao24, new Cesium.Cartesian3());
+        const delayed = motion._deadReckon(icao24, geo.cartesian3.create());
         const displayed =
           (delayed &&
             motion._floorGroundedDisplayPosition(
@@ -206,7 +207,7 @@ export function createFlightSnapshotRenderer({
           scale: rendering._fleetBillboardScale(icao24, meta.klass),
           // Screen-projected rotation lands on the next fleet tick.
           rotation: 0,
-          alignedAxis: Cesium.Cartesian3.ZERO,
+          alignedAxis: geo.cartesian3.ZERO,
           color: isTracked
             ? Cesium.Color.CYAN
             : rendering._fleetBillboardColor(icao24),

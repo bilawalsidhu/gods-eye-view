@@ -1,5 +1,6 @@
 import { displayedKinematics } from '../../data/motionModel.js';
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { isExplicitLayerStateOrigin } from '../../data/layerState.js';
 import { aircraftIncludedInNearby } from '../../data/aircraftNearbyPolicy.js';
 import { modelVisualAnchor } from '../../data/modelVisualAnchor.js';
@@ -102,9 +103,9 @@ export function createQueries({
       reportedSpeedMps: info?.speedMps,
       reportedTrackDeg: info?.track,
     });
-    const carto = Cesium.Cartographic.fromCartesian(
+    const carto = geo.cartographic.fromCartesian(
       basePos,
-      Cesium.Ellipsoid.WGS84,
+      geo.ellipsoid.WGS84,
       flightState._scratchCarto,
     );
     if (!carto) return null;
@@ -115,9 +116,9 @@ export function createQueries({
       // getTrackedSubject and the voice narration can read it straight off the
       // descriptor instead of reaching back into `_flightData`.
       registration: _toCleanText(info?.registration) || null,
-      position: Cesium.Cartesian3.clone(basePos),
-      latitude: Cesium.Math.toDegrees(carto.latitude),
-      longitude: Cesium.Math.toDegrees(carto.longitude),
+      position: geo.cartesian3.clone(basePos),
+      latitude: geo.math.toDegrees(carto.latitude),
+      longitude: geo.math.toDegrees(carto.longitude),
       // Keep the cockpit readout on the reported aviation altitude. Render
       // terrain height is a separate visual datum and may be below zero.
       altitudeM: Number.isFinite(info?.altitudeM)
@@ -360,7 +361,7 @@ export function createQueries({
         const pos = trackedPos || bb.position;
         if (!pos) continue;
 
-        const distance = Cesium.Cartesian3.distance(center, pos);
+        const distance = geo.cartesian3.distance(center, pos);
         if (distance > maxRange) continue;
 
         const info = flightState.records.data.get(icao24);
@@ -444,7 +445,7 @@ export function createQueries({
             sourceId: icao24,
             type: 'AIR',
             tier: 'military',
-            _weldPos: new Cesium.Cartesian3(),
+            _weldPos: geo.cartesian3.create(),
           };
           flightState._detectionObjects.set(icao24, object);
         }
@@ -464,7 +465,7 @@ export function createQueries({
                 Number.isFinite(model.computedScale)
                   ? model.computedScale
                   : spec.scale,
-                object._weldPos || (object._weldPos = new Cesium.Cartesian3()),
+                object._weldPos || (object._weldPos = geo.cartesian3.create()),
               )
             : bb.position;
         if (!pos) continue;
@@ -590,9 +591,9 @@ export function createQueries({
       for (const [icao24, bb] of flightState._billboards) {
         const pos = bb.position;
         if (!pos) continue;
-        const carto = Cesium.Cartographic.fromCartesian(
+        const carto = geo.cartographic.fromCartesian(
           pos,
-          Cesium.Ellipsoid.WGS84,
+          geo.ellipsoid.WGS84,
           flightState._scratchCarto,
         );
         if (!carto) continue;
@@ -606,8 +607,8 @@ export function createQueries({
             _toCleanText(info?.registration) ||
             icao24,
           position: pos,
-          latitude: Cesium.Math.toDegrees(carto.latitude),
-          longitude: Cesium.Math.toDegrees(carto.longitude),
+          latitude: geo.math.toDegrees(carto.latitude),
+          longitude: geo.math.toDegrees(carto.longitude),
           altitudeM: carto.height,
         });
         if (result.length >= limit) break;
@@ -782,7 +783,7 @@ export function createQueries({
         // Same label chain as getNearby/getDetectableObjects: a callsign-less
         // contact reads as its registration, never as the raw ICAO hex.
         label: described.callsign || described.registration || described.icao24,
-        position: Cesium.Cartesian3.clone(described.position),
+        position: geo.cartesian3.clone(described.position),
       };
     },
 
