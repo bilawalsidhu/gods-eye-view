@@ -19,6 +19,8 @@ const tests = (file) =>
 const source = (file) =>
   file.startsWith('src/sources/') ||
   /^src\/layers\/[^/]+\/(?:source|bundledSource|flowSource)\.js$/.test(file);
+// Engine-neutral geometry ported from Cesium; every runtime file is a portable root.
+const geo = (file) => file.startsWith('src/geo/');
 const renderer = (file) =>
   /^src\/(?:ui|app|standalone|overlays)\//.test(file) ||
   /^src\/layers\/[^/]+\/(?:index|rendering|snapshotRenderer|overlay|presentation|cards|controls)\.js$/.test(
@@ -186,6 +188,7 @@ export function checkImportDirections(root) {
   for (const file of files.filter((file) => file.startsWith('src/')))
     browser(file);
   const roots = new Map(files.filter(source).map((file) => [file, 'source']));
+  for (const file of files.filter(geo)) roots.set(file, 'geo');
   for (const [key, value] of Object.entries(pkg.exports || {})) {
     if (portableExport(key) && typeof value === 'string')
       roots.set(value.replace(/^\.\//, ''), key);
@@ -211,7 +214,9 @@ export function checkImportDirections(root) {
         if (
           builtins.has(specifier) ||
           specifier.startsWith('node:') ||
-          /^(?:cesium|vite)(?:\/|$)/.test(specifier)
+          /^(?:cesium|vite)(?:\/|$)/.test(specifier) ||
+          // Geo must not reach Cesium through its workspace packages either.
+          (label === 'geo' && /^@cesium\//.test(specifier))
         )
           report(
             file,

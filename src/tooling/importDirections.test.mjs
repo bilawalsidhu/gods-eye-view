@@ -83,6 +83,24 @@ for (const [name, files, pattern] of [
     /reaches browser globals/,
   ],
   [
+    'geo module imports cesium',
+    { 'src/geo/demo.js': "import 'cesium';" },
+    /src\/geo\/demo\.js: geo reaches platform\/rendering dependency: cesium/,
+  ],
+  [
+    'geo module imports a Cesium workspace package',
+    { 'src/geo/demo.js': "import { Cartesian3 } from '@cesium/engine';" },
+    /src\/geo\/demo\.js: geo reaches platform\/rendering dependency: @cesium\/engine/,
+  ],
+  [
+    'geo module reaches cesium through a helper',
+    {
+      'src/geo/demo.js': "import '../data/helper.js';",
+      'src/data/helper.js': "export * from 'cesium';",
+    },
+    /src\/data\/helper\.js: geo reaches platform\/rendering dependency: cesium/,
+  ],
+  [
     'browser imports Node without prefix',
     { 'src/unused.mjs': "import 'fs/promises';" },
     /Node builtin/,
@@ -148,6 +166,14 @@ for (const [name, files, pattern] of [
     assert.throws(() => checkImportDirections(root), pattern);
   });
 }
+
+test('geo modules may import each other, and its tests may import cesium', (t) => {
+  const { root, write } = fixture(t);
+  write('src/geo/math.js', 'export const half = (value) => value / 2;');
+  write('src/geo/demo.js', "export { half } from './math.js';");
+  write('src/geo/demo.test.mjs', "import 'cesium'; import './demo.js';");
+  assert.doesNotThrow(() => checkImportDirections(root));
+});
 
 test('self package imports cannot evade portable ownership', (t) => {
   const { root, write } = fixture(t, { './view': './src/ui/view.js' });
