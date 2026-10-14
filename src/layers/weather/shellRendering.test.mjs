@@ -1502,3 +1502,135 @@ test('global infrared keeps one full-extent image; detail images halve for small
   });
   small.shell.clear();
 });
+
+/** Minimal PNG header bytes (signature + IHDR) with the given dimensions. */
+function directShellPng(width, height) {
+  const bytes = new Uint8Array(33);
+  bytes.set([137, 80, 78, 71, 13, 10, 26, 10], 0);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(8, 13);
+  bytes.set([73, 72, 68, 82], 12); // IHDR
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  bytes.set([8, 2, 0, 0, 0], 24);
+  return bytes;
+}
+
+function directShellCapabilities(time) {
+  return `<?xml version="1.0"?>
+  <WMS_Capabilities>
+    <Capability>
+      <Layer>
+        <Layer>
+          <Name>conus_base_reflectivity_mosaic</Name>
+          <EX_GeographicBoundingBox>
+            <westBoundLongitude>-130</westBoundLongitude>
+            <eastBoundLongitude>-60</eastBoundLongitude>
+            <southBoundLatitude>20</southBoundLatitude>
+            <northBoundLatitude>55</northBoundLatitude>
+          </EX_GeographicBoundingBox>
+          <Dimension name="time" units="ISO8601" default="${time}">${time}</Dimension>
+        </Layer>
+      </Layer>
+    </Capability>
+  </WMS_Capabilities>`;
+}
+
+test('direct mode stages shell frames through the NOAA adapter, never /api URLs', async (t) => {
+  const time = new Date(Date.now() - 3600_000).toISOString();
+  const transported = [];
+  const h = harness({
+    fetchImpl: async () => assert.fail('legacy fetch must not run on-device'),
+    decodeImage: async (blob) => {
+      assert.equal(blob.type, 'image/png');
+      return {
+        width: 4096,
+        height: 2048,
+        close() {},
+      };
+    },
+  });
+  globalThis.Capacitor = {
+    isNativePlatform: () => true,
+    Http: {
+      request: async ({ url }) => {
+        transported.push(String(url));
+        if (String(url).includes('GetCapabilities')) {
+          return {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+            data: new TextEncoder().encode(directShellCapabilities(time)),
+            url: String(url),
+          };
+        }
+        if (String(url).includes('GetMap')) {
+          const params = new URL(String(url)).searchParams;
+          return {
+            status: 200,
+            headers: { 'content-type': 'image/png' },
+            data: directShellPng(
+              Number(params.get('width')),
+              Number(params.get('height')),
+            ),
+            url: String(url),
+          };
+        }
+        return {
+          status: 404,
+          headers: {},
+          data: new Uint8Array(0),
+          url: String(url),
+        };
+      },
+    },
+  };
+  t.after(() => {
+    delete globalThis.Capacitor;
+  });
+  try {
+    const frame = snapshot('radar', { times: [time], latest: time });
+    const pending = h.shell.setFrame(frame, time);
+    let settled = false;
+    pending.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    // The direct adapter paces upstream requests in wall-clock time; keep
+    // rendering until the staged surface commits (web mock fetches settle
+    // inside one flush, so a single render suffices there).
+    for (let i = 0; i < 200 && !settled; i++) {
+      await flush();
+      h.render();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    assert.equal(await pending, true);
+    assert.ok(transported.some((url) => url.includes('GetCapabilities')));
+    assert.ok(transported.some((url) => url.includes('GetMap')));
+    assert.ok(
+      transported.every((url) => !url.includes('/api/')),
+      'no /api proxy URLs on-device',
+    );
+  } finally {
+    h.shell.clear();
+  }
+});
+
+test('web mode stages shell frames from legacy /api image URLs unchanged', async () => {
+  const h = harness();
+  try {
+    delete globalThis.Capacitor;
+    assert.equal(await show(h, times[0]), true);
+    assert.ok(h.fetches.length > 0);
+    assert.ok(
+      h.fetches.every(({ url }) =>
+        String(url).startsWith('/api/weather/image?product=radar&time='),
+      ),
+    );
+  } finally {
+    h.shell.clear();
+  }
+});

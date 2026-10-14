@@ -2253,3 +2253,192 @@ for (const product of ['radar', 'clouds-regional', 'lightning']) {
     assert.equal(h.viewer.camera.moveEnd.size, 0);
   });
 }
+
+/** Minimal PNG header bytes (signature + IHDR) with the given dimensions. */
+function directTilePng(width, height) {
+  const bytes = new Uint8Array(33);
+  bytes.set([137, 80, 78, 71, 13, 10, 26, 10], 0);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(8, 13);
+  bytes.set([73, 72, 68, 82], 12); // IHDR
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  bytes.set([8, 2, 0, 0, 0], 24);
+  return bytes;
+}
+
+function directCapabilities(time) {
+  return `<?xml version="1.0"?>
+  <WMS_Capabilities>
+    <Capability>
+      <Layer>
+        <Layer>
+          <Name>conus_base_reflectivity_mosaic</Name>
+          <EX_GeographicBoundingBox>
+            <westBoundLongitude>-130</westBoundLongitude>
+            <eastBoundLongitude>-60</eastBoundLongitude>
+            <southBoundLatitude>20</southBoundLatitude>
+            <northBoundLatitude>55</northBoundLatitude>
+          </EX_GeographicBoundingBox>
+          <Dimension name="time" units="ISO8601" default="${time}">${time}</Dimension>
+        </Layer>
+      </Layer>
+    </Capability>
+  </WMS_Capabilities>`;
+}
+
+/** Shared observation time for the direct tests: the adapter caches manifests
+ * per product, so both tests must present the same allowed time. */
+const directTime = new Date(Date.now() - 3600_000).toISOString();
+
+test('direct mode prefetches tiles through the NOAA adapter, never /api URLs', async (t) => {
+  const time = directTime;
+  const transported = [];
+  const decoded = [];
+  let host;
+  const h = renderingHarness({
+    getHost: () => host,
+    fetchImpl: async () => assert.fail('legacy fetch must not run on-device'),
+    decodeImage: async (bytes) => {
+      decoded.push(bytes);
+      return mockCanvas();
+    },
+  });
+  globalThis.Capacitor = {
+    isNativePlatform: () => true,
+    Http: {
+      request: async ({ url }) => {
+        transported.push(String(url));
+        if (String(url).includes('GetCapabilities')) {
+          return {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+            data: new TextEncoder().encode(directCapabilities(time)),
+            url: String(url),
+          };
+        }
+        if (String(url).includes('GetMap')) {
+          const params = new URL(String(url)).searchParams;
+          return {
+            status: 200,
+            headers: { 'content-type': 'image/png' },
+            data: directTilePng(
+              Number(params.get('width')),
+              Number(params.get('height')),
+            ),
+            url: String(url),
+          };
+        }
+        return {
+          status: 404,
+          headers: {},
+          data: new Uint8Array(0),
+          url: String(url),
+        };
+      },
+    },
+  };
+  t.after(() => {
+    delete globalThis.Capacitor;
+  });
+  try {
+    host = { collection: h.viewer.imageryLayers, kind: 'globe' };
+    assert.equal(
+      await h.rendering.prefetch({ ...snapshot, times: [time] }, time),
+      true,
+    );
+    assert.ok(transported.some((url) => url.includes('GetCapabilities')));
+    assert.ok(transported.some((url) => url.includes('GetMap')));
+    assert.ok(
+      transported.every((url) => !url.includes('/api/')),
+      'no /api proxy URLs on-device',
+    );
+  } finally {
+    h.rendering.clear();
+  }
+});
+
+test('direct mode stages frames through an adapter-backed provider', async (t) => {
+  const time = directTime;
+  const transported = [];
+  const h = renderingHarness({
+    fetchImpl: async () => assert.fail('legacy fetch must not run on-device'),
+    decodeImage: async () => mockCanvas(),
+  });
+  globalThis.Capacitor = {
+    isNativePlatform: () => true,
+    Http: {
+      request: async ({ url }) => {
+        transported.push(String(url));
+        if (String(url).includes('GetCapabilities')) {
+          return {
+            status: 200,
+            headers: { 'content-type': 'application/xml' },
+            data: new TextEncoder().encode(directCapabilities(time)),
+            url: String(url),
+          };
+        }
+        if (String(url).includes('GetMap')) {
+          const params = new URL(String(url)).searchParams;
+          return {
+            status: 200,
+            headers: { 'content-type': 'image/png' },
+            data: directTilePng(
+              Number(params.get('width')),
+              Number(params.get('height')),
+            ),
+            url: String(url),
+          };
+        }
+        return {
+          status: 404,
+          headers: {},
+          data: new Uint8Array(0),
+          url: String(url),
+        };
+      },
+    },
+  };
+  t.after(() => {
+    delete globalThis.Capacitor;
+  });
+  try {
+    const pending = h.rendering.setFrame({ ...snapshot, times: [time] }, time);
+    h.settle();
+    assert.equal(await pending, true);
+    const provider = h.providers[0];
+    assert.equal(
+      provider.options,
+      undefined,
+      'adapter-backed provider replaces UrlTemplate on-device',
+    );
+    const image = await provider.requestImage(0, 0, 2);
+    assert.ok(image);
+    assert.ok(transported.some((url) => url.includes('GetMap')));
+    assert.ok(transported.every((url) => !url.includes('/api/')));
+  } finally {
+    h.rendering.clear();
+  }
+});
+
+test('web mode prefetches legacy /api tile URLs unchanged', async () => {
+  const fetched = [];
+  const h = renderingHarness({
+    fetchImpl: async (url) => {
+      fetched.push(String(url));
+      return mockResponse();
+    },
+  });
+  try {
+    delete globalThis.Capacitor;
+    assert.equal(await h.rendering.prefetch(snapshot, times[1]), true);
+    assert.ok(fetched.length > 0);
+    assert.ok(
+      fetched.every((url) =>
+        url.startsWith('/api/weather/tile?product=radar&time='),
+      ),
+    );
+  } finally {
+    h.rendering.clear();
+  }
+});

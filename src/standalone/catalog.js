@@ -1,5 +1,9 @@
 import { createSurfaceServices } from '../app/surfaceServices.js';
 import { createApplicationRequestServices } from '../services/requests.js';
+import { endpointSet, storedApiBase } from '../mobile/runtimeConfig.js';
+import { shouldUseDirect } from '../mobile/sourcePolicy.js';
+import { createDeviceFetch } from '../mobile/deviceFetch.js';
+import { createTerrainDirectSource } from '../mobile/adapters/tileFeedsDirect.js';
 import { createApplicationCatalog } from '../app/constructCatalog.js';
 import { createStandaloneLayerSources } from './layerSources.js';
 export { createStandaloneReferenceSources } from './layerSources.js';
@@ -10,15 +14,37 @@ export function createStandaloneCatalog({
   sources = {},
   streetLevelProviders,
   signal = new AbortController().signal,
-  surface = createSurfaceServices({
-    terrainSource: createApplicationRequestServices().terrain,
-    signal,
-  }),
+  surface,
+  fetchImpl,
+  getKey,
+  direct,
 } = {}) {
+  const useDirect = direct ?? shouldUseDirect();
+  // On-device without a backend and no explicit transport, every source
+  // speaks through the native registry-enforced device fetch; everywhere
+  // else the caller's transport (or legacy defaults) apply untouched.
+  const deviceFetch =
+    fetchImpl ?? (useDirect ? createDeviceFetch() : undefined);
+  if (surface === undefined) {
+    surface = createSurfaceServices({
+      terrainSource: useDirect
+        ? createTerrainDirectSource(
+            deviceFetch ? { fetchImpl: deviceFetch } : {},
+          )
+        : createApplicationRequestServices({
+            endpoints: endpointSet(storedApiBase()),
+          }).terrain,
+      signal,
+    });
+  }
   return createApplicationCatalog({
     nepalBoundaryResolver,
     surface,
-    sources: createStandaloneLayerSources(sources),
+    sources: createStandaloneLayerSources(sources, {
+      fetchImpl: deviceFetch,
+      getKey,
+      direct: useDirect,
+    }),
     streetLevelProviders,
     signal,
     vesselOptions: {

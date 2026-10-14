@@ -60,6 +60,12 @@ export function decodeInfraredImage(blob, signal) {
  * it into a canvas. Infrared frames get the display transfer; a canvas also keeps
  * Cesium's texture row order, which an ImageBitmap upload would not. The decoded
  * image is always released. */
+/**
+ * Fetch one whole-image or detail-window frame and decode it into a canvas.
+ * With `imageSource` (the on-device NOAA adapter) bytes come through
+ * `getImage` instead of a `/api` proxy URL; without it the legacy same-origin
+ * fetch runs byte-identically.
+ */
 export async function acquireWeatherImage(
   product,
   time,
@@ -71,16 +77,31 @@ export async function acquireWeatherImage(
     maxBytes,
     createCanvas,
     fetchImpl,
+    imageSource = null,
     decodeImage = decodeInfraredImage,
     now = () => performance.now(),
     onFetched = () => {},
   },
 ) {
-  const response = await fetchImpl(weatherImageUrl(product, time, size, bbox), {
-    signal,
-  });
-  if (!response.ok) throw new Error(`Weather HTTP ${response.status}`);
-  const bytes = await readResponseBytesCapped(response, maxBytes);
+  let bytes;
+  if (imageSource) {
+    bytes = await imageSource.getImage(product, time, {
+      ...(size === undefined ? {} : { size: `${size.width}x${size.height}` }),
+      ...(bbox === null || bbox === undefined
+        ? {}
+        : { bbox: [bbox.west, bbox.south, bbox.east, bbox.north].join(',') }),
+      signal,
+    });
+  } else {
+    const response = await fetchImpl(
+      weatherImageUrl(product, time, size, bbox),
+      {
+        signal,
+      },
+    );
+    if (!response.ok) throw new Error(`Weather HTTP ${response.status}`);
+    bytes = await readResponseBytesCapped(response, maxBytes);
+  }
   signal.throwIfAborted();
   onFetched();
   const started = now();
