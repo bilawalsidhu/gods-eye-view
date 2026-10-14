@@ -8,7 +8,7 @@ import {
   CCTV_FRAME_CANVAS_H,
   applyFrameResult,
 } from '../../data/cctvCards.js';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { horizonOccluder } from '../../data/iconOrientation.js';
 import { selectCctvLod, applyEvictionGrace } from '../../data/cctvLod.js';
 import {
@@ -85,8 +85,8 @@ export function createCards({ state: layerState, services, parts, source }) {
     }
     const scene = layerState._viewer.scene;
     const carto = layerState._viewer.camera.positionCartographic;
-    const viewerLat = carto ? Cesium.Math.toDegrees(carto.latitude) : 0;
-    const viewerLon = carto ? Cesium.Math.toDegrees(carto.longitude) : 0;
+    const viewerLat = carto ? geo.math.toDegrees(carto.latitude) : 0;
+    const viewerLon = carto ? geo.math.toDegrees(carto.longitude) : 0;
     // The active camera is excluded from ambient selection ALWAYS (not just
     // after its async activation settles). It is published separately in the
     // protected lane below, and grace never applies to it.

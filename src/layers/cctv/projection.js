@@ -1,5 +1,6 @@
 import { attachCctvVideo } from './videoPlayback.js';
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   CCTV_PROJECTION_OVERLAY_SOURCE_ID,
   CCTV_PROJECTION_OVERLAY_SOURCE_OPTIONS,
@@ -77,7 +78,7 @@ export function createProjection({
       );
     }
     if (runtime.labelPosition) {
-      Cesium.Cartesian3.clone(positions.label, runtime.labelPosition);
+      geo.cartesian3.clone(positions.label, runtime.labelPosition);
     }
   }
 
@@ -124,8 +125,8 @@ export function createProjection({
   /** Create the native monitor plane plus its cached host-label presentation. */
 
   function createProjectionPlane(record, runtime, geometry, positions) {
-    runtime.labelPosition ||= new Cesium.Cartesian3();
-    Cesium.Cartesian3.clone(positions.label, runtime.labelPosition);
+    runtime.labelPosition ||= geo.cartesian3.create();
+    geo.cartesian3.clone(positions.label, runtime.labelPosition);
     runtime.cameraId = String(record.camera.id);
     runtime.overlayEntry = createCctvProjectionOverlayEntry({
       cameraId: runtime.cameraId,
@@ -142,7 +143,7 @@ export function createProjection({
         positions.capCenter,
       ),
       plane: {
-        plane: new Cesium.Plane(Cesium.Cartesian3.UNIT_Z, 0.0),
+        plane: new Cesium.Plane(geo.cartesian3.UNIT_Z, 0.0),
         dimensions: new Cesium.Cartesian2(
           geometry.halfW * 2,
           geometry.halfH * 2,
@@ -186,7 +187,7 @@ export function createProjection({
       video: null,
       planeEntity: null,
       cameraId: String(record.camera.id),
-      labelPosition: new Cesium.Cartesian3(),
+      labelPosition: geo.cartesian3.create(),
       overlayEntry: null,
       planeMaterial: null,
       buffers: null,

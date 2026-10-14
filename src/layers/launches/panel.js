@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   MISSION_CLOSE_VIEW_RANGE_M,
   MISSION_GLOBE_VIEW_RANGE_M,
@@ -360,7 +361,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
       Cesium.JulianDate.now(layerState._declutterTime),
     );
     const altitudeM = position
-      ? Cesium.Cartographic.fromCartesian(position)?.height
+      ? geo.cartographic.fromCartesian(position)?.height
       : null;
     setMissionPanelField(
       '[data-mission-distance]',

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { CCTV_FOCUS_RESULT } from './policy.js';
 
 export function createNavigation({
@@ -15,8 +16,8 @@ export function createNavigation({
   function nearestCameraIdToViewer() {
     const carto = layerState._viewer?.camera?.positionCartographic;
     if (!carto || !layerState._records.length) return null;
-    const lat = Cesium.Math.toDegrees(carto.latitude);
-    const lon = Cesium.Math.toDegrees(carto.longitude);
+    const lat = geo.math.toDegrees(carto.latitude);
+    const lon = geo.math.toDegrees(carto.longitude);
 
     let best = null;
     for (const record of layerState._records) {

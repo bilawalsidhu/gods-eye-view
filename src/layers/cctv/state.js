@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 
 export function createState({ services }) {
   const {
@@ -74,7 +74,7 @@ export function createState({ services }) {
 
   layerState._activeFocusStyleCount = 0;
 
-  layerState._scratchFocusScreen = new Cesium.Cartesian2();
+  layerState._scratchFocusScreen = geo.cartesian2.create();
 
   // Staggered geometry-load queue state (see startGeometryLoadQueue).
 

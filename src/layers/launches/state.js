@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
@@ -125,7 +126,7 @@ export function createState({ services }) {
 
   state._declutterOccluder = new Cesium.EllipsoidalOccluder(
     Cesium.Ellipsoid.WGS84,
-    new Cesium.Cartesian3(),
+    geo.cartesian3.create(),
   );
 
   state._missionRingDate = new Date(0);

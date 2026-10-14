@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   REPLAY_ASCENT_FALLBACK_SEC,
   REPLAY_ASCENT_MIN_SEC,
@@ -52,10 +53,10 @@ export function createReplay({ state: layerState, services, parts, source }) {
     if (!previous || !next) return next;
     const distance = Math.hypot(next.x - previous.x, next.y - previous.y);
     if (!Number.isFinite(distance) || distance > snapDistance) return next;
-    const amount = Cesium.Math.clamp(Number(alpha) || 0, 0, 1);
+    const amount = geo.math.clamp(Number(alpha) || 0, 0, 1);
     return {
-      x: Cesium.Math.lerp(previous.x, next.x, amount),
-      y: Cesium.Math.lerp(previous.y, next.y, amount),
+      x: geo.math.lerp(previous.x, next.x, amount),
+      y: geo.math.lerp(previous.y, next.y, amount),
     };
   }
 
@@ -77,13 +78,13 @@ export function createReplay({ state: layerState, services, parts, source }) {
         .slice(1)
         .reduce(
           (total, point, index) =>
-            total + Cesium.Cartesian3.distance(ascentPath[index], point),
+            total + geo.cartesian3.distance(ascentPath[index], point),
           0,
         );
       realAscentSeconds = Math.max(180, pathLength / 9000);
     }
     if (!realAscentSeconds) realAscentSeconds = REPLAY_ASCENT_FALLBACK_SEC * 50;
-    return Cesium.Math.clamp(
+    return geo.math.clamp(
       REPLAY_ASCENT_FALLBACK_SEC * (realAscentSeconds / 600),
       REPLAY_ASCENT_MIN_SEC,
       REPLAY_ASCENT_MAX_SEC,
@@ -99,11 +100,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
   function normalizeReplaySpeed(value) {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) return 1;
-    const clamped = Cesium.Math.clamp(
-      numeric,
-      REPLAY_SPEED_MIN,
-      REPLAY_SPEED_MAX,
-    );
+    const clamped = geo.math.clamp(numeric, REPLAY_SPEED_MIN, REPLAY_SPEED_MAX);
     return Math.round(clamped / REPLAY_SPEED_STEP) * REPLAY_SPEED_STEP;
   }
 
@@ -414,7 +411,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
           track.lastCameraHeading,
         );
         const orbitBlend = !state.ascending
-          ? Cesium.Math.clamp(
+          ? geo.math.clamp(
               (Number(state.phaseProgress) || 0) /
                 REPLAY_ORBIT_PULLBACK_FRACTION,
               0,
@@ -428,16 +425,16 @@ export function createReplay({ state: layerState, services, parts, source }) {
         if (state.ascending) track.orbitCameraWorldFrame = false;
         const nowMs = performance.now();
         const frameDurationMs = Number.isFinite(lastCameraUpdateMs)
-          ? Cesium.Math.clamp(nowMs - lastCameraUpdateMs, 4, 50)
+          ? geo.math.clamp(nowMs - lastCameraUpdateMs, 4, 50)
           : 1000 / 60;
         lastCameraUpdateMs = nowMs;
         track.lastCameraHeading = parts.camera.smoothReplayCameraHeading(
           track.lastCameraHeading,
           desiredHeading,
-          (Cesium.Math.toRadians(2) * frameDurationMs) / (1000 / 60),
+          (geo.math.toRadians(2) * frameDurationMs) / (1000 / 60),
         );
         const cartographic =
-          Cesium.Ellipsoid.WGS84.cartesianToCartographic(position);
+          geo.ellipsoid.WGS84.cartesianToCartographic(position);
         const altitude = Math.max(0, cartographic?.height || 0);
         const cameraView = parts.camera.replayCameraView(state, altitude);
         const defaultOrbitTarget = !state.ascending
@@ -518,7 +515,7 @@ export function createReplay({ state: layerState, services, parts, source }) {
       {
         offset: new Cesium.HeadingPitchRange(
           initialHeading,
-          Cesium.Math.toRadians(-20),
+          geo.math.toRadians(-20),
           REPLAY_INITIAL_RANGE_M,
         ),
         duration: 1.4,

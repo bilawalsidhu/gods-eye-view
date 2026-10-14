@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 
 export const WINDOW_DAYS = 30;
 
@@ -48,9 +48,9 @@ export const REPLAY_ORBIT_GLOBE_RANGE_M = 18000000;
 
 export const REPLAY_ORBIT_PULLBACK_FRACTION = 0.2;
 
-export const REPLAY_ASCENT_CAMERA_OFFSET_RAD = Cesium.Math.toRadians(30);
+export const REPLAY_ASCENT_CAMERA_OFFSET_RAD = geo.math.toRadians(30);
 
-export const REPLAY_ORBIT_CAMERA_OFFSET_RAD = Cesium.Math.toRadians(45);
+export const REPLAY_ORBIT_CAMERA_OFFSET_RAD = geo.math.toRadians(45);
 
 export const REPLAY_ORBIT_FRAME_CENTER_BLEND = 0.45;
 
@@ -64,7 +64,7 @@ export const MAX_POST_TLE_RETRIES = 1;
 
 export const POST_TLE_RETRY_DELAY_MS = 1500;
 
-export const EARTH_ROTATION_RAD_PER_SEC = Cesium.Math.TWO_PI / 86164.0905;
+export const EARTH_ROTATION_RAD_PER_SEC = geo.math.TWO_PI / 86164.0905;
 
 export const PROJECTED_ASCENT_ROTATION_SEC = 600;
 

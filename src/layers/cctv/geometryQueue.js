@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   GEO_PROGRESS_NOTIFY_INTERVAL_MS,
   GEO_PROGRESS_NOTIFY_BATCH_LIMIT,
@@ -298,10 +298,10 @@ export function createGeometryQueue({
     const active = parts.selection.getActiveRecord();
     const carto = layerState._viewer?.camera?.positionCartographic;
     const refLat = carto
-      ? Cesium.Math.toDegrees(carto.latitude)
+      ? geo.math.toDegrees(carto.latitude)
       : (active?.camera.lat ?? 0);
     const refLon = carto
-      ? Cesium.Math.toDegrees(carto.longitude)
+      ? geo.math.toDegrees(carto.longitude)
       : (active?.camera.lon ?? 0);
     const pending = layerState._records
       .filter((record) => record !== active)

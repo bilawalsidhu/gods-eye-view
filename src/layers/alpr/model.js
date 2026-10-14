@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { EARTH_MEAN_RADIUS_M } from './policy.js';
 export * from './records.js';
 
@@ -12,9 +12,9 @@ export * from './records.js';
  */
 export function destinationPointDeg(latDeg, lonDeg, bearingDeg, distanceM) {
   const angularDistance = distanceM / EARTH_MEAN_RADIUS_M;
-  const bearing = Cesium.Math.toRadians(bearingDeg);
-  const lat1 = Cesium.Math.toRadians(latDeg);
-  const lon1 = Cesium.Math.toRadians(lonDeg);
+  const bearing = geo.math.toRadians(bearingDeg);
+  const lat1 = geo.math.toRadians(latDeg);
+  const lon1 = geo.math.toRadians(lonDeg);
   const lat2 = Math.asin(
     Math.sin(lat1) * Math.cos(angularDistance) +
       Math.cos(lat1) * Math.sin(angularDistance) * Math.cos(bearing),
@@ -26,8 +26,8 @@ export function destinationPointDeg(latDeg, lonDeg, bearingDeg, distanceM) {
       Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat2),
     );
   return {
-    latitude: Cesium.Math.toDegrees(lat2),
-    longitude: Cesium.Math.toDegrees(lon2),
+    latitude: geo.math.toDegrees(lat2),
+    longitude: geo.math.toDegrees(lon2),
   };
 }
 

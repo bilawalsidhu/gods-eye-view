@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { staticFrameRefreshMs } from '../../data/cctvLod.js';
 import { frameFetchDue, cardFetchPolicy } from '../../data/cctvCards.js';
 import { DEFAULT_CAMERA_CALIBRATION } from './policy.js';
@@ -13,7 +14,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    */
 
   function toRad(deg) {
-    return Cesium.Math.toRadians(deg);
+    return geo.math.toRadians(deg);
   }
 
   /**
@@ -283,8 +284,8 @@ export function createModel({ state: layerState, services, parts, source }) {
     const lon2 = lon1 + Math.atan2(y, x);
 
     return {
-      lat: Cesium.Math.toDegrees(lat2),
-      lon: Cesium.Math.toDegrees(lon2),
+      lat: geo.math.toDegrees(lat2),
+      lon: geo.math.toDegrees(lon2),
     };
   }
 
@@ -328,8 +329,8 @@ export function createModel({ state: layerState, services, parts, source }) {
   function currentViewContext() {
     const carto = layerState._viewer?.camera?.positionCartographic;
     if (!carto) return 'none';
-    const lat = Cesium.Math.toDegrees(carto.latitude);
-    const lon = Cesium.Math.toDegrees(carto.longitude);
+    const lat = geo.math.toDegrees(carto.latitude);
+    const lon = geo.math.toDegrees(carto.longitude);
     const alt = carto.height || 0;
     const zoomBucket =
       alt < 1500
@@ -404,24 +405,26 @@ export function createModel({ state: layerState, services, parts, source }) {
 
   function planeOrientationFor(camera, capCenterPos) {
     const frame = parts.geometry.frustumFrameEcef(camera, capCenterPos);
-    const right = Cesium.Cartesian3.cross(
+    const right = geo.cartesian3.cross(
       frame.dir,
       frame.up,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    const normal = Cesium.Cartesian3.negate(frame.dir, new Cesium.Cartesian3());
-    const m = new Cesium.Matrix3(
-      right.x,
-      frame.up.x,
-      normal.x,
-      right.y,
-      frame.up.y,
-      normal.y,
-      right.z,
-      frame.up.z,
-      normal.z,
-    );
-    return Cesium.Quaternion.fromRotationMatrix(m);
+    const normal = geo.cartesian3.negate(frame.dir, geo.cartesian3.create());
+    // Column-major rotation whose columns are right, up and normal.
+    const m = geo.matrix3.create();
+    m[0] = right.x;
+    m[1] = right.y;
+    m[2] = right.z;
+    m[3] = frame.up.x;
+    m[4] = frame.up.y;
+    m[5] = frame.up.z;
+    m[6] = normal.x;
+    m[7] = normal.y;
+    m[8] = normal.z;
+    // The quaternion becomes an entity's ConstantProperty value, so it stays a
+    // Cesium Quaternion there (that property clones and compares its value).
+    return geo.quaternion.fromRotationMatrix(m, new Cesium.Quaternion());
   }
 
   /**

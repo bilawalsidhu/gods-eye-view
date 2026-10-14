@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { createFrustumVolumePrimitive } from '../../data/cctvViewshed.js';
 import {
   PROJECTION_VERT_ASPECT,
@@ -272,7 +273,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
    */
 
   function frustumCartesians(geometry) {
-    const at = (p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt);
+    const at = (p) => geo.cartesian3.fromDegrees(p.lon, p.lat, p.alt);
     return {
       mount: at(geometry.mount),
       capCenter: at(geometry.capCenter),
@@ -280,7 +281,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       tr: at(geometry.corners.tr),
       br: at(geometry.corners.br),
       bl: at(geometry.corners.bl),
-      label: Cesium.Cartesian3.fromDegrees(
+      label: geo.cartesian3.fromDegrees(
         geometry.topCenter.lon,
         geometry.topCenter.lat,
         geometry.topCenter.alt + 1.2,
@@ -301,26 +302,22 @@ export function createGeometry({ state: layerState, services, parts, source }) {
   function frustumFrameEcef(camera, atPos) {
     const h = parts.model.toRad(camera.headingDeg);
     const p = parts.model.toRad(camera.pitchDeg);
-    const enu = Cesium.Transforms.eastNorthUpToFixedFrame(atPos);
-    const rot = Cesium.Matrix4.getMatrix3(enu, new Cesium.Matrix3());
+    const enu = geo.transforms.eastNorthUpToFixedFrame(atPos);
+    const rot = geo.matrix4.getMatrix3(enu, geo.matrix3.create());
     // ENU components: view axis + the perpendicular "up" of the pitched cap.
-    const dirEnu = new Cesium.Cartesian3(
+    const dirEnu = geo.cartesian3.create(
       Math.sin(h) * Math.cos(p),
       Math.cos(h) * Math.cos(p),
       Math.sin(p),
     );
-    const upEnu = new Cesium.Cartesian3(
+    const upEnu = geo.cartesian3.create(
       -Math.sin(p) * Math.sin(h),
       -Math.sin(p) * Math.cos(h),
       Math.cos(p),
     );
     return {
-      dir: Cesium.Matrix3.multiplyByVector(
-        rot,
-        dirEnu,
-        new Cesium.Cartesian3(),
-      ),
-      up: Cesium.Matrix3.multiplyByVector(rot, upEnu, new Cesium.Cartesian3()),
+      dir: geo.matrix3.multiplyByVector(rot, dirEnu, geo.cartesian3.create()),
+      up: geo.matrix3.multiplyByVector(rot, upEnu, geo.cartesian3.create()),
     };
   }
 
@@ -462,10 +459,10 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       sampleMeshFloorCells(layerState._viewer?.scene, [point], {
         excludeObjects: excludeObjects.filter(Boolean),
         viewerLat: viewerCarto
-          ? Cesium.Math.toDegrees(viewerCarto.latitude)
+          ? geo.math.toDegrees(viewerCarto.latitude)
           : undefined,
         viewerLon: viewerCarto
-          ? Cesium.Math.toDegrees(viewerCarto.longitude)
+          ? geo.math.toDegrees(viewerCarto.longitude)
           : undefined,
       });
     }
@@ -623,7 +620,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
     if (Math.abs(rangeScale - 1) > 0.0001) return; // slider overrides the clamp
     try {
       const mountAlt = parts.ground.groundAltFor(record) + camera.mountHeightM;
-      const mountPos = Cesium.Cartesian3.fromDegrees(
+      const mountPos = geo.cartesian3.fromDegrees(
         camera.lon,
         camera.lat,
         mountAlt,
@@ -637,7 +634,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       }
       const hit = scene.pickFromRay(new Cesium.Ray(mountPos, dir), exclude);
       if (!hit?.position) return;
-      const dist = Cesium.Cartesian3.distance(mountPos, hit.position);
+      const dist = geo.cartesian3.distance(mountPos, hit.position);
       record.probeClampRangeM = activationProbeClampRange(camera.rangeM, dist);
     } catch {
       // probe failure → keep the unclamped range

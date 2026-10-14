@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { MISSION_GLOBE_VIEW_RANGE_M, MISSION_FOCUS_RANGE_M } from './policy.js';
 
 export function createSelection({
@@ -24,7 +25,7 @@ export function createSelection({
       fovy >= Math.PI
     )
       return;
-    const earthRadius = Cesium.Ellipsoid.WGS84.maximumRadius;
+    const earthRadius = geo.ellipsoid.WGS84.maximumRadius;
     const keyholeRadius = getKeyholeGeometry(width, height).radius;
     const targetScreenRadius = keyholeRadius * 0.61;
     const angularRadius = Math.atan(
@@ -33,14 +34,14 @@ export function createSelection({
     const distance = earthRadius / Math.max(Math.sin(angularRadius), 1e-4);
     const altitude = Math.max(earthRadius * 1.55, distance - earthRadius);
     viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromRadians(
+      destination: geo.cartesian3.fromRadians(
         cartographic.longitude,
         cartographic.latitude,
         altitude,
       ),
       orientation: {
         heading: viewer.camera.heading,
-        pitch: -Cesium.Math.PI_OVER_TWO,
+        pitch: -geo.math.PI_OVER_TWO,
         roll: 0,
       },
       duration,
@@ -99,7 +100,7 @@ export function createSelection({
     if (!layerState._viewer || !launch || layerState._replayCameraLaunchId)
       return;
     stopMissionZoomAnchor();
-    const target = Cesium.Cartesian3.fromDegrees(launch.lon, launch.lat);
+    const target = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
     const range = Math.max(
       2000,
       Number(initialRange) || MISSION_GLOBE_VIEW_RANGE_M,
@@ -127,15 +128,12 @@ export function createSelection({
     const orbitPositions = orbitEntity?.polyline?.positions?.getValue(
       Cesium.JulianDate.now(),
     );
-    const launchPosition = Cesium.Cartesian3.fromDegrees(
-      launch.lon,
-      launch.lat,
-    );
+    const launchPosition = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
     let range = 18000000;
     if (orbitPositions?.length > 1) {
       const canvas = layerState._viewer.scene.canvas;
       const fovy =
-        layerState._viewer.camera.frustum?.fovy || Cesium.Math.toRadians(60);
+        layerState._viewer.camera.frustum?.fovy || geo.math.toRadians(60);
       const aspect = Math.max(
         0.1,
         (canvas.clientWidth || canvas.width) /
@@ -145,7 +143,7 @@ export function createSelection({
       const paddedHalfAngle = Math.min(fovy, fovx) * 0.5 * 0.62;
       const orbitExtent = orbitPositions.reduce(
         (largest, point) =>
-          Math.max(largest, Cesium.Cartesian3.distance(launchPosition, point)),
+          Math.max(largest, geo.cartesian3.distance(launchPosition, point)),
         0,
       );
       range = Math.max(
@@ -153,39 +151,35 @@ export function createSelection({
         18000000,
       );
     }
-    const targetNormal = Cesium.Cartesian3.normalize(
+    const targetNormal = geo.cartesian3.normalize(
       launchPosition,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    const destination = Cesium.Cartesian3.add(
+    const destination = geo.cartesian3.add(
       launchPosition,
-      Cesium.Cartesian3.multiplyByScalar(
+      geo.cartesian3.multiplyByScalar(
         targetNormal,
         range,
-        new Cesium.Cartesian3(),
+        geo.cartesian3.create(),
       ),
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    const direction = Cesium.Cartesian3.negate(
+    const direction = geo.cartesian3.negate(
       targetNormal,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.create(),
     );
-    let right = Cesium.Cartesian3.cross(
+    let right = geo.cartesian3.cross(
       direction,
-      Cesium.Cartesian3.UNIT_Z,
-      new Cesium.Cartesian3(),
+      geo.cartesian3.UNIT_Z,
+      geo.cartesian3.create(),
     );
-    if (Cesium.Cartesian3.magnitudeSquared(right) < 1e-8) {
-      right = Cesium.Cartesian3.cross(
-        direction,
-        Cesium.Cartesian3.UNIT_Y,
-        right,
-      );
+    if (geo.cartesian3.magnitudeSquared(right) < 1e-8) {
+      right = geo.cartesian3.cross(direction, geo.cartesian3.UNIT_Y, right);
     }
-    Cesium.Cartesian3.normalize(right, right);
-    const up = Cesium.Cartesian3.normalize(
-      Cesium.Cartesian3.cross(right, direction, new Cesium.Cartesian3()),
-      new Cesium.Cartesian3(),
+    geo.cartesian3.normalize(right, right);
+    const up = geo.cartesian3.normalize(
+      geo.cartesian3.cross(right, direction, geo.cartesian3.create()),
+      geo.cartesian3.create(),
     );
     layerState._viewer.camera.flyTo({
       destination,
@@ -202,10 +196,7 @@ export function createSelection({
     if (!layerState._viewer || !launch) return;
     parts.replay.stopMissionReplay();
     stopMissionZoomAnchor();
-    const launchPosition = Cesium.Cartesian3.fromDegrees(
-      launch.lon,
-      launch.lat,
-    );
+    const launchPosition = geo.cartesian3.fromDegrees(launch.lon, launch.lat);
     layerState._viewer.selectedEntity = layerState._dataSource.entities.getById(
       `rocket-launch:${launch.id}`,
     );
@@ -214,7 +205,7 @@ export function createSelection({
       {
         offset: new Cesium.HeadingPitchRange(
           0,
-          Cesium.Math.toRadians(-42),
+          geo.math.toRadians(-42),
           MISSION_FOCUS_RANGE_M,
         ),
         duration: 1.4,
