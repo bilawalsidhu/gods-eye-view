@@ -530,6 +530,51 @@ export function findPickPoint({
   return null;
 }
 
+/**
+ * In the page: an integer CSS pixel near `probe` (a findPickPoint result)
+ * where `scene.pick` returns `prefix + id` on several consecutive picks, or
+ * null. Pixels off the screen-centre column come first, then the nearest.
+ */
+export function verifiedPickPixel({ probe, prefix, id }) {
+  const scene = window.__godsEyeView.viewer.scene;
+  const canvas = scene.canvas;
+  const rect = canvas.getBoundingClientRect();
+  const hits = (x, y) => {
+    const picked = scene.pick({ x, y });
+    const pid =
+      typeof picked?.id === 'string' ? picked.id : (picked?.id?.id ?? null);
+    return (
+      typeof pid === 'string' &&
+      pid.startsWith(prefix) &&
+      pid.slice(prefix.length).split('~')[0] === id
+    );
+  };
+  const x0 = Math.round(probe.x - rect.left);
+  const y0 = Math.round(probe.y - rect.top);
+  const centreColumn = Math.round(rect.width / 2);
+  const candidates = [];
+  for (let dx = -3; dx <= 3; dx++)
+    for (let dy = -3; dy <= 3; dy++) candidates.push([x0 + dx, y0 + dy]);
+  candidates.sort(
+    ([ax, ay], [bx, by]) =>
+      (ax === centreColumn) - (bx === centreColumn) ||
+      Math.abs(ax - x0) +
+        Math.abs(ay - y0) -
+        Math.abs(bx - x0) -
+        Math.abs(by - y0),
+  );
+  for (const [x, y] of candidates) {
+    if (x < 2 || y < 2 || x > rect.width - 2 || y > rect.height - 2) continue;
+    // rect.left/top are whole pixels in the QA viewports; the click lands here.
+    const pageX = rect.left + x;
+    const pageY = rect.top + y;
+    if (document.elementFromPoint(pageX, pageY) !== canvas) continue;
+    if (hits(x, y) && hits(x, y) && hits(x, y))
+      return { x: pageX, y: pageY, id };
+  }
+  return null;
+}
+
 async function main() {
   const { default: puppeteer } = await import('puppeteer');
   const args = process.argv.slice(2);
@@ -1115,27 +1160,60 @@ async function main() {
             PHOTO_LINE.south +
               ((i + 2) / 13) * (PHOTO_LINE.north - PHOTO_LINE.south),
           ]);
-          // Ground primitives are built over a few frames: poll for a pick.
-          const handle = await page.waitForFunction(
-            findPickPoint,
-            { timeout: 30_000, polling: 250 },
-            {
+          // The draped line is about one pixel wide and can sit on a pixel
+          // boundary, so a probe at a fractional point may hit while a click
+          // at the integer pixel misses. Click only at an integer pixel that
+          // picks the line right before the click, and retry a few times.
+          const ATTEMPTS = 4;
+          let at = null;
+          let selected = false;
+          for (let attempt = 1; attempt <= ATTEMPTS && !selected; attempt++) {
+            await page.waitForFunction(
+              () => window.__godsEyeView.viewer.scene.globe.tilesLoaded,
+              { timeout: 30_000, polling: 250 },
+            );
+            // Ground primitives are built over a few frames: poll for a pick.
+            const handle = await page.waitForFunction(
+              findPickPoint,
+              { timeout: 30_000, polling: 250 },
+              {
+                prefix: 'mly:seq:',
+                id: target,
+                points: fixtures ? along : null,
+                billboardIds: null,
+              },
+            );
+            const probe = await handle.jsonValue();
+            at = await page.evaluate(verifiedPickPixel, {
+              probe,
               prefix: 'mly:seq:',
-              id: target,
-              points: fixtures ? along : null,
-              billboardIds: null,
-            },
-          );
-          const at = await handle.jsonValue();
-          await page.mouse.click(at.x, at.y);
-          const selected = await uiUntil(
-            (u, id) =>
-              u.sequence.selectedId === id &&
-              !u.sequence.loading &&
-              u.sequence.images > 0,
-            at.id,
-            { timeout: 30_000 },
-          );
+              id: probe.id,
+            });
+            if (!at) {
+              console.log(`  (attempt ${attempt}: no integer pixel picks it)`);
+              continue;
+            }
+            await page.mouse.click(at.x, at.y);
+            selected = await uiUntil(
+              (u, id) =>
+                u.sequence.selectedId === id &&
+                !u.sequence.loading &&
+                u.sequence.images > 0,
+              at.id,
+              { timeout: attempt < ATTEMPTS ? 10_000 : 30_000 },
+            );
+            if (!selected) {
+              console.log(
+                `  (attempt ${attempt}: the click at ${at.x},${at.y} missed)`,
+              );
+              await page.evaluate(() =>
+                window.__godsEyeView.dataManager.layers
+                  .get('street-level')
+                  .module.closeViewer(),
+              );
+            }
+          }
+          assert.ok(at, 'an integer pixel picks the coverage line');
           const sequence = (await ui()).sequence;
           assert.ok(
             selected,
