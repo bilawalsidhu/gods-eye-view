@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
 
 function trackedTarget(viewer) {
@@ -11,17 +12,13 @@ function trackedTarget(viewer) {
   );
 }
 
-export const OBLIQUE_PITCH = Cesium.Math.toRadians(-35);
-export const STRAIGHT_DOWN_PITCH = Cesium.Math.toRadians(-89);
-const OBLIQUE_THRESHOLD = Cesium.Math.toRadians(-60);
+export const OBLIQUE_PITCH = geo.math.toRadians(-35);
+export const STRAIGHT_DOWN_PITCH = geo.math.toRadians(-89);
+const OBLIQUE_THRESHOLD = geo.math.toRadians(-60);
 
 function normalizedHeading(heading) {
-  const wrapped = Cesium.Math.zeroToTwoPi(
-    Number.isFinite(heading) ? heading : 0,
-  );
-  return Math.abs(wrapped - Cesium.Math.TWO_PI) < Cesium.Math.EPSILON10
-    ? 0
-    : wrapped;
+  const wrapped = geo.math.zeroToTwoPi(Number.isFinite(heading) ? heading : 0);
+  return Math.abs(wrapped - geo.math.TWO_PI) < geo.math.EPSILON10 ? 0 : wrapped;
 }
 
 /** Return the world position under the center of the canvas, when available. */
@@ -79,20 +76,20 @@ export function readCameraTargetFrame(viewer) {
   if (!camera || !target || !isPickedWorldPosition(camera.positionWC))
     return null;
 
-  const transform = Cesium.Transforms.eastNorthUpToFixedFrame(target);
-  const inverse = Cesium.Matrix4.inverseTransformation(
+  const transform = geo.transforms.eastNorthUpToFixedFrame(target);
+  const inverse = geo.matrix4.inverseTransformation(
     transform,
-    new Cesium.Matrix4(),
+    geo.matrix4.create(),
   );
-  const localOffset = Cesium.Matrix4.multiplyByPoint(
+  const localOffset = geo.matrix4.multiplyByPoint(
     inverse,
     camera.positionWC,
-    new Cesium.Cartesian3(),
+    geo.cartesian3.create(),
   );
-  const range = Cesium.Cartesian3.magnitude(localOffset);
+  const range = geo.cartesian3.magnitude(localOffset);
   if (!Number.isFinite(range) || range < 1) return null;
 
-  const pitch = -Math.asin(Cesium.Math.clamp(localOffset.z / range, -1, 1));
+  const pitch = -Math.asin(geo.math.clamp(localOffset.z / range, -1, 1));
   // Cesium places a lookAt camera at range * (-sin h cos p, -cos h cos p,
   // -sin p) in the target's east-north-up frame, so recovering h means
   // negating BOTH horizontal components. Negating only the north one reads
@@ -100,7 +97,7 @@ export function readCameraTargetFrame(viewer) {
   // make north-up rotate the wrong way from three quarters of the compass.
   const targetHeading = Math.atan2(-localOffset.x, -localOffset.y);
   const heading = normalizedHeading(
-    pitch < Cesium.Math.toRadians(-88.5) ? camera.heading : targetHeading,
+    pitch < geo.math.toRadians(-88.5) ? camera.heading : targetHeading,
   );
   return { target, range, heading, pitch };
 }
@@ -111,7 +108,7 @@ export function setCameraTargetFrame(viewer, frame) {
   if (!camera || !frame?.target || !Number.isFinite(frame.range)) return false;
   try {
     const trackedTransform = viewer.trackedEntity
-      ? Cesium.Matrix4.clone(camera.transform)
+      ? geo.matrix4.clone(camera.transform)
       : null;
     camera.lookAt(
       frame.target,
@@ -128,9 +125,9 @@ export function setCameraTargetFrame(viewer, frame) {
       viewer.scene?.requestRender?.();
       return true;
     }
-    const destination = Cesium.Cartesian3.clone(camera.positionWC);
-    const direction = Cesium.Cartesian3.clone(camera.directionWC);
-    const up = Cesium.Cartesian3.clone(camera.upWC);
+    const destination = geo.cartesian3.clone(camera.positionWC);
+    const direction = geo.cartesian3.clone(camera.directionWC);
+    const up = geo.cartesian3.clone(camera.upWC);
     camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
     if (destination && direction && up) {
       camera.setView({ destination, orientation: { direction, up } });
@@ -179,7 +176,7 @@ export function resetCameraNorth(viewer) {
 }
 
 function headingDegrees(camera) {
-  return Cesium.Math.toDegrees(normalizedHeading(camera?.heading));
+  return geo.math.toDegrees(normalizedHeading(camera?.heading));
 }
 
 /** Ease an orbit without handing off the entity that owns the follow camera. */
@@ -201,7 +198,7 @@ export function createCameraOrientationAnimator(
     const entity = viewer.trackedEntity;
     pending = destination;
     const start = now();
-    const headingDelta = Cesium.Math.negativePiToPi(
+    const headingDelta = geo.math.negativePiToPi(
       destination.heading - frame.heading,
     );
     remove = viewer.scene.preUpdate.addEventListener(() => {
@@ -209,7 +206,7 @@ export function createCameraOrientationAnimator(
         cancel();
         return;
       }
-      const progress = Cesium.Math.clamp((now() - start) / duration, 0, 1);
+      const progress = geo.math.clamp((now() - start) / duration, 0, 1);
       const eased = Cesium.EasingFunction.CUBIC_IN_OUT(progress);
       const target = entity ? trackedTarget(viewer) : frame.target;
       if (
@@ -218,7 +215,7 @@ export function createCameraOrientationAnimator(
           ...frame,
           target,
           heading: frame.heading + headingDelta * eased,
-          pitch: Cesium.Math.lerp(frame.pitch, destination.pitch, eased),
+          pitch: geo.math.lerp(frame.pitch, destination.pitch, eased),
         })
       ) {
         cancel();

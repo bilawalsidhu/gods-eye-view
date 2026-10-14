@@ -30,6 +30,7 @@ import {
 } from './cyberSonarControls.js';
 
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 
@@ -1317,12 +1318,12 @@ export class StyleManager extends ShellFacade {
     const carto = this.viewer.camera.positionCartographic;
     if (!carto) return null;
     return {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
+      lat: geo.math.toDegrees(carto.latitude),
+      lon: geo.math.toDegrees(carto.longitude),
       alt: carto.height,
-      heading: Cesium.Math.toDegrees(this.viewer.camera.heading),
-      pitch: Cesium.Math.toDegrees(this.viewer.camera.pitch),
-      roll: Cesium.Math.toDegrees(this.viewer.camera.roll),
+      heading: geo.math.toDegrees(this.viewer.camera.heading),
+      pitch: geo.math.toDegrees(this.viewer.camera.pitch),
+      roll: geo.math.toDegrees(this.viewer.camera.roll),
     };
   }
 
@@ -1335,15 +1336,15 @@ export class StyleManager extends ShellFacade {
   applyCameraState(cameraState, duration = 2.8) {
     if (!cameraState) return;
     this.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
+      destination: geo.cartesian3.fromDegrees(
         cameraState.lon,
         cameraState.lat,
         cameraState.alt,
       ),
       orientation: {
-        heading: Cesium.Math.toRadians(cameraState.heading || 0),
-        pitch: Cesium.Math.toRadians(cameraState.pitch || -35),
-        roll: Cesium.Math.toRadians(cameraState.roll || 0),
+        heading: geo.math.toRadians(cameraState.heading || 0),
+        pitch: geo.math.toRadians(cameraState.pitch || -35),
+        roll: geo.math.toRadians(cameraState.roll || 0),
       },
       duration: Math.max(0.2, duration || 0),
       easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,

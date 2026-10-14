@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { resolvePickedContext } from '../data/pickedContext.js';
 import { cameraPoseKey } from './pointerContext.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
@@ -34,7 +34,7 @@ export function createPointerPicker({
     if (!width || !height) return null;
     let picked = null;
     try {
-      picked = scene.pick(new Cesium.Cartesian2(x, y));
+      picked = scene.pick(geo.cartesian2.create(x, y));
     } catch {
       picked = null;
     }

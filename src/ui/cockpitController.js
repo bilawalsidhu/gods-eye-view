@@ -44,7 +44,7 @@ import {
   syncSignalLayout,
 } from './cockpitLayout.js';
 import { onKeyDown } from './cockpitInput.js';
-import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 
 export class CockpitViewController {
   constructor(
@@ -209,20 +209,20 @@ export class CockpitViewController {
     this.regionalBriefSubjectId = null;
     this.contextLayoutFrame = null;
     this.contextLayoutStamp = null;
-    this.scratchTarget = new Cesium.Cartesian3();
-    this.cockpitAnchor = new Cesium.Cartesian3();
+    this.scratchTarget = geo.cartesian3.create();
+    this.cockpitAnchor = geo.cartesian3.create();
     this.cockpitAnchorValid = false;
-    this.scratchCamera = new Cesium.Cartesian3();
-    this.scratchAdvance = new Cesium.Cartesian3();
-    this.scratchCorrection = new Cesium.Cartesian3();
-    this.scratchForward = new Cesium.Cartesian3();
-    this.scratchHorizontal = new Cesium.Cartesian3();
-    this.scratchUp = new Cesium.Cartesian3();
-    this.scratchLocal = new Cesium.Cartesian3();
-    this.scratchEnu = new Cesium.Matrix4();
-    this.scratchAnchorCartographic = new Cesium.Cartographic();
-    this.scratchCameraCartographic = new Cesium.Cartographic();
-    this.scratchTargetCartographic = new Cesium.Cartographic();
+    this.scratchCamera = geo.cartesian3.create();
+    this.scratchAdvance = geo.cartesian3.create();
+    this.scratchCorrection = geo.cartesian3.create();
+    this.scratchForward = geo.cartesian3.create();
+    this.scratchHorizontal = geo.cartesian3.create();
+    this.scratchUp = geo.cartesian3.create();
+    this.scratchLocal = geo.cartesian3.create();
+    this.scratchEnu = geo.matrix4.create();
+    this.scratchAnchorCartographic = geo.cartographic.create();
+    this.scratchCameraCartographic = geo.cartographic.create();
+    this.scratchTargetCartographic = geo.cartographic.create();
     this._listenerRemovers = [];
 
     // Camera mutations belong before scene update/culling. Changing the camera

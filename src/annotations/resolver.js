@@ -14,6 +14,7 @@ import {
 } from '../sources/featureGeometry.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { lookupNeighborhoodRing } from '../data/neighborhoodPolygons.js';
 import {
   lookupNaturalRegionOutline,
@@ -1835,8 +1836,8 @@ export function createAnnotationResolver({
     try {
       const carto = viewer?.camera?.positionCartographic;
       if (!carto) return null;
-      const lat = Cesium.Math.toDegrees(carto.latitude);
-      const lon = Cesium.Math.toDegrees(carto.longitude);
+      const lat = geo.math.toDegrees(carto.latitude);
+      const lon = geo.math.toDegrees(carto.longitude);
       const radiusKm = Math.max((carto.height / 1000) * 3, 5);
       if (![lat, lon, radiusKm].every(Number.isFinite)) return null;
       return { lat, lon, radiusKm };
@@ -1850,10 +1851,10 @@ export function createAnnotationResolver({
     try {
       const rect = viewer?.camera?.computeViewRectangle?.();
       if (!rect) return null;
-      const swLat = Cesium.Math.toDegrees(rect.south).toFixed(4);
-      const swLng = Cesium.Math.toDegrees(rect.west).toFixed(4);
-      const neLat = Cesium.Math.toDegrees(rect.north).toFixed(4);
-      const neLng = Cesium.Math.toDegrees(rect.east).toFixed(4);
+      const swLat = geo.math.toDegrees(rect.south).toFixed(4);
+      const swLng = geo.math.toDegrees(rect.west).toFixed(4);
+      const neLat = geo.math.toDegrees(rect.north).toFixed(4);
+      const neLng = geo.math.toDegrees(rect.east).toFixed(4);
       if ([swLat, swLng, neLat, neLng].some((v) => v === 'NaN')) return null;
       return `${swLat},${swLng}|${neLat},${neLng}`;
     } catch {
@@ -1953,11 +1954,11 @@ export function createAnnotationResolver({
       }
     }
     if (!isPickedWorldPosition(cart)) return null;
-    const carto = Cesium.Cartographic.fromCartesian(cart);
+    const carto = geo.cartographic.fromCartesian(cart);
     if (!carto) return null;
     return {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
+      lat: geo.math.toDegrees(carto.latitude),
+      lon: geo.math.toDegrees(carto.longitude),
       // The height the pick actually landed on — a roof, a hillside, or 0 on
       // the ellipsoid. Callers that only want a coordinate ignore it; the draw
       // tool's live preview needs it, or the rubber band sinks to sea level
@@ -1979,11 +1980,11 @@ export function createAnnotationResolver({
         scene.clampToHeightSupported &&
         typeof scene.clampToHeight === 'function'
       ) {
-        const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-        const surface = Cesium.Cartographic.toCartesian(carto);
+        const carto = geo.cartographic.fromDegrees(lon, lat);
+        const surface = geo.cartographic.toCartesian(carto);
         const clamped = scene.clampToHeight(surface);
         if (clamped) {
-          const h = Cesium.Cartographic.fromCartesian(clamped).height;
+          const h = geo.cartographic.fromCartesian(clamped).height;
           if (Number.isFinite(h)) return h;
         }
       }
@@ -1991,7 +1992,7 @@ export function createAnnotationResolver({
       /* tiles not ready — fall through */
     }
     const globeHeight = scene.globe?.getHeight?.(
-      Cesium.Cartographic.fromDegrees(lon, lat),
+      geo.cartographic.fromDegrees(lon, lat),
     );
     return Number.isFinite(globeHeight) && globeHeight > 0 ? globeHeight : 0;
   }

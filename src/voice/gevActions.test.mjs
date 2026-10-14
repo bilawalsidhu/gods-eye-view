@@ -3,6 +3,7 @@ import { createStandalonePlaceSearch } from '../standalone/placeSearch.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { CCTV_FOCUS_RESULT } from '../data/cctv.js';
 import { getContextStore, registerEntityContext } from '../data/contextStore.js';
 import { DataLayerManager } from '../data/manager.js';
@@ -2820,7 +2821,8 @@ test('a nested Cockpit rollback result is translated too', async () => {
  * analyst's 2 000-record last-fix slice). These pin the unified engine.
  */
 function awarenessSubjectHarness({ subject, flights = [], military = [] }) {
-  const position = subject ? { __subject: true } : null;
+  // The Contacts subject sits at 29.9 N, 97.9 W, 9 000 m.
+  const position = subject ? geo.cartesian3.fromDegrees(-97.9, 29.9, 9000) : null;
   const snapshotFlights = flights.slice(0, 20_000);
   const snapshotMilitary = military.slice(0, 20_000);
   return {
@@ -2887,7 +2889,6 @@ async function withAwareness(harness, run) {
     aircraftSnapshot: awareness.getAircraftQuerySnapshot,
     flightsNearby: flightsLayer.getNearby,
     militaryNearby: militaryLayer.getNearby,
-    cartoFrom: Cesium.Cartographic.fromCartesian,
   };
   awareness.getContextSnapshot = () => harness.snapshot;
   awareness.getAircraftQuerySnapshot = () => {
@@ -2920,11 +2921,6 @@ async function withAwareness(harness, run) {
   };
   flightsLayer.getNearby = () => harness.flights.slice();
   militaryLayer.getNearby = () => harness.military.slice();
-  Cesium.Cartographic.fromCartesian = (value) => (
-    value?.__subject
-      ? { latitude: Cesium.Math.toRadians(29.9), longitude: Cesium.Math.toRadians(-97.9), height: 9000 }
-      : originals.cartoFrom(value)
-  );
   try {
     return await run(awareness);
   } finally {
@@ -2932,7 +2928,6 @@ async function withAwareness(harness, run) {
     awareness.getAircraftQuerySnapshot = originals.aircraftSnapshot;
     flightsLayer.getNearby = originals.flightsNearby;
     militaryLayer.getNearby = originals.militaryNearby;
-    Cesium.Cartographic.fromCartesian = originals.cartoFrom;
   }
 }
 

@@ -1,6 +1,7 @@
 import { isUnavailableCapability } from '../sources/capability.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import {
   holdContinuousRender,
   releaseContinuousRender,
@@ -1013,13 +1014,13 @@ export function createAnnotationEngine({
         return;
       }
       const cart = points.map((p) =>
-        Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0),
+        geo.cartesian3.fromDegrees(p.lon, p.lat, p.height || 0),
       );
       const sphere = Cesium.BoundingSphere.fromPoints(cart);
       viewer.camera.flyToBoundingSphere(sphere, {
         offset: new Cesium.HeadingPitchRange(
           viewer.camera.heading,
-          Cesium.Math.toRadians(-35),
+          geo.math.toRadians(-35),
           Math.max(900, sphere.radius * 2.6),
         ),
         duration: 1.6,
@@ -1034,7 +1035,7 @@ export function createAnnotationEngine({
   function isPointOnScreen(p) {
     try {
       const camera = viewer.camera;
-      const pos = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0);
+      const pos = geo.cartesian3.fromDegrees(p.lon, p.lat, p.height || 0);
       const cv = camera.frustum.computeCullingVolume(
         camera.position,
         camera.direction,
@@ -1075,7 +1076,7 @@ export function createAnnotationEngine({
         : viewportRange(anno.viewport) || 600;
       viewer.camera.flyToBoundingSphere(
         new Cesium.BoundingSphere(
-          Cesium.Cartesian3.fromDegrees(
+          geo.cartesian3.fromDegrees(
             target.lon,
             target.lat,
             anno.anchor.height || 0,
@@ -1085,7 +1086,7 @@ export function createAnnotationEngine({
         {
           offset: new Cesium.HeadingPitchRange(
             viewer.camera.heading,
-            Cesium.Math.toRadians(-35),
+            geo.math.toRadians(-35),
             range * 2.4,
           ),
           duration: 1.8,
@@ -1275,10 +1276,10 @@ export function createAnnotationEngine({
     if (destroyed) return;
     try {
       viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
+        destination: geo.cartesian3.fromDegrees(lon, lat, height),
         orientation: {
-          heading: Cesium.Math.toRadians(heading),
-          pitch: Cesium.Math.toRadians(pitch),
+          heading: geo.math.toRadians(heading),
+          pitch: geo.math.toRadians(pitch),
           roll: 0,
         },
         duration,
@@ -1395,9 +1396,9 @@ const VIEWPORT_ASSIST_RANGE_CAP_M = 120000;
 function viewportRange(vp) {
   if (!vp?.low || !vp?.high) return null;
   try {
-    const span = Cesium.Cartesian3.distance(
-      Cesium.Cartesian3.fromDegrees(vp.low.longitude, vp.low.latitude),
-      Cesium.Cartesian3.fromDegrees(vp.high.longitude, vp.high.latitude),
+    const span = geo.cartesian3.distance(
+      geo.cartesian3.fromDegrees(vp.low.longitude, vp.low.latitude),
+      geo.cartesian3.fromDegrees(vp.high.longitude, vp.high.latitude),
     );
     return Number.isFinite(span) && span > 0
       ? Math.max(300, Math.min(span * 0.7, VIEWPORT_ASSIST_RANGE_CAP_M))
@@ -1422,9 +1423,9 @@ function ringRange(ring) {
     if (lon < minLon) minLon = lon;
     if (lon > maxLon) maxLon = lon;
   }
-  const span = Cesium.Cartesian3.distance(
-    Cesium.Cartesian3.fromDegrees(minLon, minLat),
-    Cesium.Cartesian3.fromDegrees(maxLon, maxLat),
+  const span = geo.cartesian3.distance(
+    geo.cartesian3.fromDegrees(minLon, minLat),
+    geo.cartesian3.fromDegrees(maxLon, maxLat),
   );
   return Math.max(300, span * 0.7);
 }

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { LocationControls } from './location.js';
 
@@ -373,8 +374,8 @@ export class LocationNavigation {
         cancelled,
         heightKm: Math.round(GLOBE_VIEW.heightM / 1000),
         centeredOn: {
-          latitude: Number(Cesium.Math.toDegrees(carto.latitude).toFixed(2)),
-          longitude: Number(Cesium.Math.toDegrees(carto.longitude).toFixed(2)),
+          latitude: Number(geo.math.toDegrees(carto.latitude).toFixed(2)),
+          longitude: Number(geo.math.toDegrees(carto.longitude).toFixed(2)),
         },
       };
       this._resetGlobeBtn?.setAttribute(

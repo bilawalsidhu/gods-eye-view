@@ -20,6 +20,7 @@ import { SceneControls } from '../ui/scenes.js';
 import { buildPlaybackQueue, playSceneQueue } from '../director/playback.js';
 import { createScenePlaybackAdapter } from './playbackAdapter.js';
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
 import {
   SCENE_APPEND_RECIPES,
   SCENE_RECIPES,
@@ -1577,15 +1578,15 @@ export class SceneDirector {
     this.styleManager?.clearSearchedLocation?.();
     this.viewer.camera.cancelFlight?.();
     this.viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(
+      destination: geo.cartesian3.fromDegrees(
         cameraState.lon,
         cameraState.lat,
         cameraState.alt,
       ),
       orientation: {
-        heading: Cesium.Math.toRadians(cameraState.heading || 0),
-        pitch: Cesium.Math.toRadians(cameraState.pitch ?? -35),
-        roll: Cesium.Math.toRadians(cameraState.roll || 0),
+        heading: geo.math.toRadians(cameraState.heading || 0),
+        pitch: geo.math.toRadians(cameraState.pitch ?? -35),
+        roll: geo.math.toRadians(cameraState.roll || 0),
       },
     });
     return true;
@@ -2268,7 +2269,7 @@ export class SceneDirector {
       0.2,
       Number(durationSec) || DEFAULT_SHOT_DURATION_SEC,
     );
-    const destination = Cesium.Cartesian3.fromDegrees(
+    const destination = geo.cartesian3.fromDegrees(
       cameraState.lon,
       cameraState.lat,
       cameraState.alt,
@@ -2288,9 +2289,9 @@ export class SceneDirector {
       this.viewer.camera.flyTo({
         destination,
         orientation: {
-          heading: Cesium.Math.toRadians(cameraState.heading || 0),
-          pitch: Cesium.Math.toRadians(cameraState.pitch ?? -35),
-          roll: Cesium.Math.toRadians(cameraState.roll || 0),
+          heading: geo.math.toRadians(cameraState.heading || 0),
+          pitch: geo.math.toRadians(cameraState.pitch ?? -35),
+          roll: geo.math.toRadians(cameraState.roll || 0),
         },
         duration,
         easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
