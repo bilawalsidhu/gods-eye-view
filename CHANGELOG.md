@@ -1,5 +1,11 @@
 # Changelog
 
+- Remote control. A page subscribed to `/api/remote/stream` applies views pushed
+  to `/api/remote/push`. Push and the session list require
+  `REMOTE_CONTROL_TOKEN`; with no token set, they are refused. A view may be a
+  share link from `show_in_gods_eye_view`, with camera, layers, annotations,
+  and follow applied on top. The browser stream carries no bearer token.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 
