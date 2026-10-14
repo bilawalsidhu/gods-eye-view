@@ -515,15 +515,20 @@ test('evidence never carries a Mapillary token', () => {
 test('--strict accepts only the documented skips', () => {
   assert.deepEqual(
     [...STRICT_ALLOWED_SKIPS],
-    ['no Google 3D', 'fixtures only'],
+    ['no Google 3D', 'no Google key', 'fixtures only'],
   );
   assert.deepEqual(
     strictViolations([
       { reason: 'no Google 3D', label: 'terrain' },
+      { reason: 'no Google key', label: 'street view' },
       { reason: 'fixtures only', label: 'keyless page' },
       { reason: 'no Mapillary key', label: 'the keyed steps' },
+      { reason: 'Google key refused', label: 'street view' },
     ]),
-    [{ reason: 'no Mapillary key', label: 'the keyed steps' }],
+    [
+      { reason: 'no Mapillary key', label: 'the keyed steps' },
+      { reason: 'Google key refused', label: 'street view' },
+    ],
   );
 });
 
