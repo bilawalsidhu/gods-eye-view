@@ -267,6 +267,36 @@ export const NORWAY_ANCHORS = [
   { lat: 69.6492, lon: 18.9553 }, // Tromsø
 ];
 
+/** Auckland cameras from Waka Kotahi NZTA: one keyless GeoJSON list for the
+ * whole country; this pack keeps RegionID 7 (Auckland). Frames are stills
+ * synthesized from `ExternalId` on trafficnz.info — never from the payload
+ * `ImageUrl`, and never from the internal `id` (that path 404s). */
+export const AUCKLAND_CAMERAS_URL =
+  'https://www.journeys.nzta.govt.nz/assets/map-data-cache/cameras.json';
+/** The only origin Auckland camera frames may come from. */
+export const AUCKLAND_IMAGE_ORIGIN = 'https://www.trafficnz.info/';
+export const AUCKLAND_IMAGE_URL = (id) =>
+  `${AUCKLAND_IMAGE_ORIGIN}camera/${id}.jpg`;
+/** NZTA ExternalId values are 1–4 digit integers with no leading zero. */
+export const AUCKLAND_CAMERA_ID_RE = /^[1-9]\d{0,3}$/;
+/** Journeys map-data `RegionID` for Auckland (confirmed against the live
+ * catalog: 98 cameras, all inside the metro bounding box). */
+export const AUCKLAND_REGION_ID = 7;
+export const DEFAULT_AUCKLAND_MAX_SOURCES = 120;
+export const AUCKLAND_MAX_CATALOG_BYTES = 2 * 1024 * 1024;
+/** Ground-elevation prior in metres. The NZTA payload carries none; Auckland
+ * sits a few tens of metres above sea level. */
+export const AUCKLAND_GROUND_ELEVATION_M = 40;
+/** Queen Street / Britomart: the primary prioritization anchor. */
+export const AUCKLAND_DOWNTOWN = { lat: -36.8485, lon: 174.7633 };
+export const AUCKLAND_ANCHORS = [
+  { lat: -36.8485, lon: 174.7633 }, // Downtown / Britomart
+  { lat: -36.727, lon: 174.7 }, // Albany / North Shore
+  { lat: -36.993, lon: 174.88 }, // Manukau
+  { lat: -37.008, lon: 174.785 }, // Auckland Airport
+  { lat: -36.881, lon: 174.631 }, // Henderson / west
+];
+
 /** DelDOT CCTV: one keyless statewide JSON catalog; live video via RTMP-over-HTTP (rtmpt:80). */
 export const DELDOT_CCTV_URL = 'https://tmc.deldot.gov/json/videocamera.json';
 export const DEFAULT_DELDOT_MAX_SOURCES = 300;

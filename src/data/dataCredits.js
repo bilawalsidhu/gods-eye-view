@@ -248,6 +248,12 @@ export const DATA_CREDITS = [
       'distributed by Statens vegvesen',
   },
   {
+    key: 'auckland-cctv',
+    html:
+      'CCTV cameras &amp; frames (Auckland): ' +
+      '<a href="https://www.nzta.govt.nz/traffic-and-travel-information/use-our-data/" target="_blank" rel="noopener">Waka Kotahi NZ Transport Agency</a>',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },
