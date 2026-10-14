@@ -1,18 +1,16 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 
 export function createState({ services }) {
   const state = {};
 
-  state.DIRECTION_SCRATCH = Array.from(
-    { length: 3 },
-    () => new Cesium.Cartesian3(),
+  state.DIRECTION_SCRATCH = Array.from({ length: 3 }, () =>
+    geo.cartesian3.create(),
   );
 
-  state.SUBJECT_CARTOGRAPHIC_SCRATCH = new Cesium.Cartographic();
+  state.SUBJECT_CARTOGRAPHIC_SCRATCH = geo.cartographic.create();
 
-  state.TARGET_CARTOGRAPHIC_SCRATCH = Array.from(
-    { length: 3 },
-    () => new Cesium.Cartographic(),
+  state.TARGET_CARTOGRAPHIC_SCRATCH = Array.from({ length: 3 }, () =>
+    geo.cartographic.create(),
   );
 
   Object.assign(state, {

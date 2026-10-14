@@ -1,6 +1,6 @@
 import { createVesselFeed } from './ingestion.js';
 import { VesselRecords } from './records.js';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { DEFAULT_AIS_RUNTIME } from './policy.js';
 
 export function createVesselState({ source, services }) {
@@ -18,7 +18,7 @@ export function createVesselState({ source, services }) {
 
   vesselState._lastCamPoseSig = '';
 
-  vesselState._scratchFocusScreen = new Cesium.Cartesian2();
+  vesselState._scratchFocusScreen = geo.cartesian2.create();
 
   vesselState.DEFAULT_VESSEL_OVERLAY_HOST = Object.freeze({
     setEntries: setOverlayEntries,

@@ -3,7 +3,7 @@ import {
   satelliteClassLabel,
   satelliteClassLegend,
 } from '../../data/satelliteClass.js';
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { ISS_NORAD, POINT_STYLES } from './policy.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
@@ -195,7 +195,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       return {
         noradId,
         name: sat.name.trim(),
-        position: Cesium.Cartesian3.fromDegrees(
+        position: geo.cartesian3.fromDegrees(
           pos.longitude,
           pos.latitude,
           pos.altitude,
@@ -227,15 +227,15 @@ export function createControls({ state: layerState, services, parts, source }) {
           layerState._catalog.get(noradId)?.group === 'dense'
         )
           continue;
-        const carto = Cesium.Cartographic.fromCartesian(point.position);
+        const carto = geo.cartographic.fromCartesian(point.position);
         if (!carto) continue;
         const sat = layerState._catalog.get(noradId);
         result.push({
           id: noradId,
           label: sat ? sat.name.trim() : String(noradId),
           position: point.position,
-          latitude: Cesium.Math.toDegrees(carto.latitude),
-          longitude: Cesium.Math.toDegrees(carto.longitude),
+          latitude: geo.math.toDegrees(carto.latitude),
+          longitude: geo.math.toDegrees(carto.longitude),
           altitudeM: carto.height,
         });
       }

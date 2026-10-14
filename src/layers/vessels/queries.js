@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   AIS_DEGRADED_STATUSES,
   AIS_HEALTHY_STATUSES,
@@ -316,7 +316,7 @@ export function createQueries({
           continue;
         const position = visual.billboard?.position || visual.position;
         if (!position) continue;
-        const distanceM = Cesium.Cartesian3.distance(centerCartesian, position);
+        const distanceM = geo.cartesian3.distance(centerCartesian, position);
         if (!Number.isFinite(distanceM) || distanceM > range) continue;
         entries.push({
           mmsi: record.mmsi,

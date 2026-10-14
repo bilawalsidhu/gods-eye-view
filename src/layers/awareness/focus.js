@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import { VESSEL_FOCUS_RADIUS_M } from './policy.js';
 
 export function createFocus({ state: layerState, services, parts, source }) {
@@ -74,7 +75,7 @@ export function createFocus({ state: layerState, services, parts, source }) {
       layerId,
       id: String(known.id || known.mmsi),
       label: known.label || known.name || known.callsign || String(id),
-      position: Cesium.Cartesian3.clone(known.position),
+      position: geo.cartesian3.clone(known.position),
     });
     return true;
   }
@@ -120,7 +121,7 @@ export function createFocus({ state: layerState, services, parts, source }) {
     let closestDistance = Infinity;
     for (const candidate of candidates) {
       if (!candidate?.position) continue;
-      const distance = Cesium.Cartesian3.distance(
+      const distance = geo.cartesian3.distance(
         cameraPosition,
         candidate.position,
       );

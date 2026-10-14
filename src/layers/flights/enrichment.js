@@ -1,6 +1,7 @@
 import { classifyAircraft } from '../../data/aircraftClass.js';
 import { horizonOccluder } from '../../data/iconOrientation.js';
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   ENRICH_MAX_INFLIGHT,
   ENRICH_DISPATCH_GAP_MS,
@@ -200,10 +201,7 @@ export function createEnrichment({
         if (!/^[0-9a-f]{6}$/i.test(icao24)) continue; // adsbdb keys are 6-char hex only
         if (flightState.records.data.get(icao24)?.onGround) continue; // ground traffic never spends ambient budget (click-to-enrich still works)
         if (!bb.position || !occluder.isPointVisible(bb.position)) continue; // beyond the limb
-        Cesium.Cartesian3.clone(
-          bb.position,
-          flightState._scratchModelBS.center,
-        );
+        geo.cartesian3.clone(bb.position, flightState._scratchModelBS.center);
         if (
           cull.computeVisibility(flightState._scratchModelBS) ===
           Cesium.Intersect.OUTSIDE
@@ -211,7 +209,7 @@ export function createEnrichment({
           continue; // off-screen
         cand.push([
           icao24,
-          Cesium.Cartesian3.distanceSquared(camPos, bb.position),
+          geo.cartesian3.distanceSquared(camPos, bb.position),
         ]);
       }
       cand.sort((a, b) => a[1] - b[1]); // nearest first — what the user is looking at resolves first

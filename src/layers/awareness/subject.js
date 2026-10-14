@@ -3,6 +3,7 @@ import {
   AWARENESS_RELATIONSHIP,
 } from '../../data/militaryAwarenessEngine.js';
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   AWARENESS_QUERY_LIMIT,
   SOURCE_LABEL,
@@ -218,7 +219,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
             subject,
             parts.history.historySourceItem(subject),
           ),
-          position: Cesium.Cartesian3.clone(subject.position),
+          position: geo.cartesian3.clone(subject.position),
         });
         layerState.navigationIndex = layerState.navigationHistory.length - 1;
       }
@@ -389,7 +390,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     const labelChanged = nextLabel !== layerState.subject.label;
     layerState.subject = { ...layerState.subject, position, label: nextLabel };
     const movementM = layerState.lastEvaluatedPosition
-      ? Cesium.Cartesian3.distance(layerState.lastEvaluatedPosition, position)
+      ? geo.cartesian3.distance(layerState.lastEvaluatedPosition, position)
       : Infinity;
     if (
       !parts.model.awarenessRefreshRequired({
@@ -413,7 +414,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
     }
     layerState.results = evaluateSubject(layerState.subject, sources);
     layerState.sourceRevision = nextSourceRevision;
-    layerState.lastEvaluatedPosition = Cesium.Cartesian3.clone(
+    layerState.lastEvaluatedPosition = geo.cartesian3.clone(
       position,
       layerState.lastEvaluatedPosition,
     );
@@ -448,7 +449,7 @@ export function createSubject({ state: layerState, services, parts, source }) {
       id: record.properties?.mmsi || record.id,
       label: record.label || record.id,
       memberNames: record.properties?.memberNames || [],
-      position: Cesium.Cartesian3.fromDegrees(longitude, latitude, 0),
+      position: geo.cartesian3.fromDegrees(longitude, latitude, 0),
     };
   }
 

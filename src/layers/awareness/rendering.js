@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   createCyberSonarSampler,
   isCyberContactSonarActive as isCyberSonarActive,
@@ -132,7 +133,7 @@ export function createRendering({
 
     const cameraHeading = layerState.viewer.camera.heading || 0;
     const headingDeg =
-      (Math.round(Cesium.Math.toDegrees(cameraHeading)) + 360) % 360;
+      (Math.round(geo.math.toDegrees(cameraHeading)) + 360) % 360;
     layerState.compassRing.style.setProperty(
       '--compass-rotation',
       `${-headingDeg}deg`,
@@ -141,8 +142,8 @@ export function createRendering({
     layerState.compassHeading.style.left = `${geometry.centerX}px`;
     layerState.compassHeading.style.top = `${geometry.centerY - compassRadius + 39}px`;
     for (const label of layerState.compassLabels) {
-      const bearing = Cesium.Math.toRadians(Number(label.dataset.bearing));
-      const angle = bearing - cameraHeading - Cesium.Math.PI_OVER_TWO;
+      const bearing = geo.math.toRadians(Number(label.dataset.bearing));
+      const angle = bearing - cameraHeading - geo.math.PI_OVER_TWO;
       const labelRadius = compassRadius - 17;
       label.style.left = `${geometry.centerX + Math.cos(angle) * labelRadius}px`;
       label.style.top = `${geometry.centerY + Math.sin(angle) * labelRadius}px`;
@@ -166,19 +167,19 @@ export function createRendering({
         marker.hidden = true;
         continue;
       }
-      const direction = Cesium.Cartesian3.subtract(
+      const direction = geo.cartesian3.subtract(
         item.position,
         layerState.subject.position,
         layerState.DIRECTION_SCRATCH[index],
       );
-      if (Cesium.Cartesian3.magnitudeSquared(direction) < 1) {
+      if (geo.cartesian3.magnitudeSquared(direction) < 1) {
         marker.hidden = true;
         continue;
       }
-      Cesium.Cartesian3.normalize(direction, direction);
+      geo.cartesian3.normalize(direction, direction);
       const projection = celestialScreenAngle(
-        Cesium.Cartesian3.dot(direction, layerState.viewer.camera.rightWC),
-        Cesium.Cartesian3.dot(direction, layerState.viewer.camera.upWC),
+        geo.cartesian3.dot(direction, layerState.viewer.camera.rightWC),
+        geo.cartesian3.dot(direction, layerState.viewer.camera.upWC),
         marker._lastAngle,
       );
       if (projection.stable) marker._lastAngle = projection.angle;
@@ -201,12 +202,12 @@ export function createRendering({
       marker._arrow.style.transform = `translate(-50%, -50%) rotate(${projection.angle}rad)`;
       marker._label.style.transform = `translate(-50%, -50%) translate(${-Math.cos(projection.angle) * 56}px, ${-Math.sin(projection.angle) * 56}px)`;
       const label = formatAwarenessLabel(item);
-      const subjectCartographic = Cesium.Cartographic.fromCartesian(
+      const subjectCartographic = geo.cartographic.fromCartesian(
         layerState.subject.position,
         undefined,
         layerState.SUBJECT_CARTOGRAPHIC_SCRATCH,
       );
-      const targetCartographic = Cesium.Cartographic.fromCartesian(
+      const targetCartographic = geo.cartographic.fromCartesian(
         item.position,
         undefined,
         layerState.TARGET_CARTOGRAPHIC_SCRATCH[index],
@@ -214,10 +215,10 @@ export function createRendering({
       const bearing =
         subjectCartographic && targetCartographic
           ? bearingBetweenCoordinates(
-              Cesium.Math.toDegrees(subjectCartographic.latitude),
-              Cesium.Math.toDegrees(subjectCartographic.longitude),
-              Cesium.Math.toDegrees(targetCartographic.latitude),
-              Cesium.Math.toDegrees(targetCartographic.longitude),
+              geo.math.toDegrees(subjectCartographic.latitude),
+              geo.math.toDegrees(subjectCartographic.longitude),
+              geo.math.toDegrees(targetCartographic.latitude),
+              geo.math.toDegrees(targetCartographic.longitude),
             )
           : null;
       const bearingText = Number.isFinite(bearing)
@@ -243,9 +244,9 @@ export function createRendering({
 
   function renderVisual(subject) {
     if (!layerState.viewer || !subject?.position) return;
-    const cartographic = Cesium.Cartographic.fromCartesian(subject.position);
+    const cartographic = geo.cartographic.fromCartesian(subject.position);
     if (!cartographic) return;
-    const groundCenter = Cesium.Cartesian3.fromRadians(
+    const groundCenter = geo.cartesian3.fromRadians(
       cartographic.longitude,
       cartographic.latitude,
       0,
@@ -256,12 +257,11 @@ export function createRendering({
       // Move it only after a meaningful displacement so live tracking does not
       // churn ten large geometries for sub-pixel motion every 750 ms.
       if (
-        Cesium.Cartesian3.distance(layerState.visual.center, groundCenter) >=
-        250
+        geo.cartesian3.distance(layerState.visual.center, groundCenter) >= 250
       ) {
         for (const entity of layerState.visual.entities)
           entity.position.setValue(groundCenter);
-        Cesium.Cartesian3.clone(groundCenter, layerState.visual.center);
+        geo.cartesian3.clone(groundCenter, layerState.visual.center);
         // Content actually changed — buy exactly one frame instead of holding.
         governorRequestRender('awareness-visual');
       }
@@ -289,7 +289,7 @@ export function createRendering({
     layerState.visual = {
       key,
       entities,
-      center: Cesium.Cartesian3.clone(groundCenter),
+      center: geo.cartesian3.clone(groundCenter),
     };
     governorRequestRender('awareness-visual');
   }

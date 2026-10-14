@@ -1104,7 +1104,21 @@
       "src/layers/satellites/state.js",
       "src/layers/satellites/testing.js",
       "src/layers/satellites/tracking.js",
-      "src/data/inputOwnership.js"
+      "src/data/inputOwnership.js",
+      "src/geo/index.js",
+      "src/geo/math.js",
+      "src/geo/ellipsoid.js",
+      "src/geo/cartographic.js",
+      "src/geo/cartesian2.js",
+      "src/geo/cartesian3.js",
+      "src/geo/matrix3.js",
+      "src/geo/matrix4.js",
+      "src/geo/quaternion.js",
+      "src/geo/transforms.js",
+      "src/geo/scaleToGeodeticSurface.js",
+      "src/geo/check.js",
+      "src/geo/debug.js",
+      "src/geo/developerError.js"
     ],
     "external": ["cesium", "satellite.js"]
   },

@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 import {
   TRAIL_HEIGHT_M,
   VESSEL_LIFT_M,
@@ -44,7 +44,7 @@ export function createTracking({
       currentGeoidN(record.lat, record.lon),
       TRAIL_HEIGHT_M,
     );
-    return Cesium.Cartesian3.fromDegrees(record.lon, record.lat, heightM);
+    return geo.cartesian3.fromDegrees(record.lon, record.lat, heightM);
   }
 
   /**
@@ -66,7 +66,7 @@ export function createTracking({
         currentGeoidN(record.lat, record.lon),
         VESSEL_LIFT_M,
       );
-      visual.position = Cesium.Cartesian3.fromDegrees(
+      visual.position = geo.cartesian3.fromDegrees(
         record.lon,
         record.lat,
         heightM,
@@ -146,7 +146,7 @@ export function createTracking({
         currentGeoidN(lat, lon),
         TRAIL_HEIGHT_M,
       );
-      older.push(Cesium.Cartesian3.fromDegrees(lon, lat, heightM));
+      older.push(geo.cartesian3.fromDegrees(lon, lat, heightM));
     }
     if (!older.length) return;
 
@@ -170,8 +170,7 @@ export function createTracking({
     const next = vesselTrailPosition(record);
     if (!next) return;
     const last = state.trailPositions[state.trailPositions.length - 1];
-    if (last && Cesium.Cartesian3.distance(last, next) <= TRAIL_MIN_MOVE_M)
-      return;
+    if (last && geo.cartesian3.distance(last, next) <= TRAIL_MIN_MOVE_M) return;
     state.trailPositions.push(next);
     if (state.trailPositions.length > TRAIL_MAX_POINTS)
       state.trailPositions.shift();

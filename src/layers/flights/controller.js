@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import * as geo from '../../geo/index.js';
 
 export function createController({
   flightState,
@@ -17,8 +17,8 @@ export function createController({
     const cartographic = viewer?.camera?.positionCartographic;
     return cartographic
       ? {
-          latitude: Cesium.Math.toDegrees(cartographic.latitude),
-          longitude: Cesium.Math.toDegrees(cartographic.longitude),
+          latitude: geo.math.toDegrees(cartographic.latitude),
+          longitude: geo.math.toDegrees(cartographic.longitude),
         }
       : {};
   }
