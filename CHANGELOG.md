@@ -15,8 +15,6 @@
   the five borough cores load and `CCTV_NYC_MAX_SOURCES` changes the cap. The catalog-wide ceiling is
   unchanged; extra cameras share it round-robin with the other packs.
 
-- Infrastructure features crossing the dateline retain a representative position near their geometry.
-
 - Harden infrastructure outline anchors for future data refreshes that cross the dateline; current bundled datacenter and dam features do not cross it.
 
 - Treat explicitly current, complete empty vessel coverage as a successful update,
