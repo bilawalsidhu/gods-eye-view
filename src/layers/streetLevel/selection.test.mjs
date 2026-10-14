@@ -8,7 +8,12 @@ import { createSelection } from './selection.js';
  * `frame()` runs them; timers and Date.now() are mocked so a burst of moves
  * has a known timeline.
  */
-function harness({ selected = false } = {}) {
+function harness({
+  selected = false,
+  router = null,
+  providers = new Map(),
+  services = {},
+} = {}) {
   const saved = {
     document: globalThis.document,
     requestAnimationFrame: globalThis.requestAnimationFrame,
@@ -60,12 +65,16 @@ function harness({ selected = false } = {}) {
     viewer,
     enabled: true,
     clickHandler: null,
-    services: { picking: null, input: null },
+    providers,
+    services: { picking: null, input: null, ...services },
   };
   const selection = createSelection({
     state,
     parts: {
-      router: { ownsPick: (id) => id === 'mly:seq:1', resolve: () => null },
+      router: router || {
+        ownsPick: (id) => id === 'mly:seq:1',
+        resolve: () => null,
+      },
       hasSelectedSequence: () => sequences.selected,
       openAtGround: (position, picked) =>
         groundClicks.push({ position, picked }),
@@ -278,6 +287,46 @@ test('a click on nothing of ours goes to the ground handler with the pick, which
         [6, 'flight:abc'],
       ],
     );
+  } finally {
+    h.restore();
+  }
+});
+
+test('a click on a provider line hands it the ground under the click, measured only if asked', () => {
+  const handled = [];
+  const instance = {
+    handlePick: (id, click) => handled.push({ id, click }),
+  };
+  const groundPicks = [];
+  const h = harness({
+    router: {
+      ownsPick: () => true,
+      resolve: (id) => ({ providerId: 'kartaview', instance, id }),
+    },
+    providers: new Map([['kartaview', { on: true }]]),
+    services: {
+      scenePick: {
+        pickGroundPosition: (viewer, position) => {
+          groundPicks.push(position);
+          return Cesium.Cartesian3.fromDegrees(-83.0458, 42.3314, 190);
+        },
+      },
+    },
+  });
+  try {
+    h.scene.under = 'kv:line:14/1/2/3';
+    h.click(40);
+    assert.equal(handled.length, 1);
+    assert.equal(handled[0].id, 'kv:line:14/1/2/3');
+    assert.equal(
+      groundPicks.length,
+      0,
+      'no depth read until the provider asks',
+    );
+    const point = handled[0].click.groundPoint();
+    assert.ok(Math.abs(point.lon + 83.0458) < 1e-9);
+    assert.ok(Math.abs(point.lat - 42.3314) < 1e-9);
+    assert.deepEqual(groundPicks, [{ x: 40, y: 10 }]);
   } finally {
     h.restore();
   }
