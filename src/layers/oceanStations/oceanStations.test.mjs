@@ -3,11 +3,22 @@ import test from 'node:test';
 import { createOceanStationsLayer } from './index.js';
 import { buildOceanStationCard } from './cards.js';
 
-function harness(source, { overlayEntries = [], clicks = [] } = {}) {
+function harness(
+  source,
+  {
+    overlayEntries = [],
+    clicks = [],
+    screenSpaceEventHandlerFactory = null,
+    pickOwnerMap = new Map(),
+  } = {},
+) {
   const sources = [];
+  let pickedResult = null;
   const scene = {
-    canvas: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }) },
-    pick: () => null,
+    canvas: {
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
+    },
+    pick: () => pickedResult,
   };
   const viewer = {
     scene,
@@ -21,12 +32,14 @@ function harness(source, { overlayEntries = [], clicks = [] } = {}) {
       },
     },
   };
-  const screenSpaceEventHandlerFactory = () => ({
-    setInputAction(callback) {
-      clicks.push(callback);
-    },
-    destroy() {},
-  });
+  const handlerFactory =
+    screenSpaceEventHandlerFactory ??
+    (() => ({
+      setInputAction(callback) {
+        clicks.push(callback);
+      },
+      destroy() {},
+    }));
   const overlayHost = {
     setEntries(sourceId, entries) {
       overlayEntries.push({ sourceId, entries });
@@ -34,15 +47,44 @@ function harness(source, { overlayEntries = [], clicks = [] } = {}) {
     setVisible() {},
     clearSource() {},
   };
+  const picking = {
+    registerPickOwner(id, pred) {
+      pickOwnerMap.set(id, pred);
+    },
+    unregisterPickOwner(id) {
+      pickOwnerMap.delete(id);
+    },
+    resolvePickId(picked) {
+      return typeof picked?.id === 'string' ? picked.id : picked?.id?.id || null;
+    },
+    isOwnedByOtherLayer(layerId, id) {
+      for (const [owner, pred] of pickOwnerMap) {
+        if (owner !== layerId && pred(id)) return true;
+      }
+      return false;
+    },
+  };
   const layer = createOceanStationsLayer({
     source,
     overlayHost,
-    screenSpaceEventHandlerFactory,
+    screenSpaceEventHandlerFactory: handlerFactory,
+    picking,
   });
   layer.init(viewer);
   layer.enable(viewer);
-  return { layer, viewer, sources, overlayEntries, clicks };
+  return {
+    layer,
+    viewer,
+    sources,
+    overlayEntries,
+    clicks,
+    setPicked: (p) => {
+      pickedResult = p;
+    },
+    pickOwnerMap,
+  };
 }
+
 
 const mockStation = {
   id: '41002',
@@ -129,3 +171,54 @@ test('buildOceanStationCard formats temperatures, waves, wind, and link', () => 
   assert.match(text, /Pressure: 1018\.5 hPa \(\+1\.2\)/);
   assert.match(text, /Observed: 2026-10-14 01:50 UTC/);
 });
+
+test('layer init succeeds defensively even if screenSpaceEventHandlerFactory throws', () => {
+  assert.doesNotThrow(() => {
+    const h = harness(
+      { getSnapshot: async () => [mockStation] },
+      {
+        screenSpaceEventHandlerFactory: () => {
+          throw new Error('Canvas element not available');
+        },
+      },
+    );
+    assert.equal(h.layer.id, 'ocean-stations');
+    h.layer.destroy();
+  });
+});
+
+test('clicking an ocean station selects it and publishes card; unowned clears; sibling owned preserves', async () => {
+  const h = harness({ getSnapshot: async () => [mockStation] });
+  await h.layer.update(h.viewer);
+
+  assert.equal(h.clicks.length, 1, 'registered click input action');
+  const clickHandler = h.clicks[0];
+
+  // Pick ocean station
+  h.setPicked({ id: 'ocean-station:41002' });
+  clickHandler({ position: { x: 100, y: 100 } });
+
+  const published = h.overlayEntries[h.overlayEntries.length - 1];
+  assert.equal(published.sourceId, 'ocean-stations');
+  assert.equal(published.entries.length, 1);
+  assert.equal(published.entries[0].id, 'ocean-station-card:41002');
+  assert.ok(published.entries[0].position, 'includes Cesium Cartesian3 position');
+
+  // Register another layer's entity ownership
+  h.pickOwnerMap.set('flights', (id) => id === 'aircraft:123');
+
+  // Click on a sibling layer's entity — selection should NOT be cleared
+  h.setPicked({ id: 'aircraft:123' });
+  clickHandler({ position: { x: 200, y: 200 } });
+  const stillPublished = h.overlayEntries[h.overlayEntries.length - 1];
+  assert.equal(stillPublished.entries.length, 1, 'card remained visible');
+
+  // Click on empty space — clears selection
+  h.setPicked(null);
+  clickHandler({ position: { x: 300, y: 300 } });
+  const cleared = h.overlayEntries[h.overlayEntries.length - 1];
+  assert.deepEqual(cleared.entries, [], 'card cleared');
+
+  h.layer.destroy(h.viewer);
+});
+

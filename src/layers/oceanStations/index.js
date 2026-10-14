@@ -100,45 +100,82 @@ export function createOceanStationsLayer({
 
   function installClickHandler() {
     if (_clickHandler || !_viewer) return;
-    const canvas = _viewer.scene?.canvas;
-    if (!canvas) return;
+    const canvas = _viewer.scene?.canvas || _viewer.canvas;
+    if (!canvas && typeof screenSpaceEventHandlerFactory !== 'function') return;
 
-    const handler =
-      typeof screenSpaceEventHandlerFactory === 'function'
-        ? screenSpaceEventHandlerFactory(_viewer)
-        : new Cesium.ScreenSpaceEventHandler(canvas);
+    let handler = null;
+    if (typeof screenSpaceEventHandlerFactory === 'function') {
+      try {
+        handler = screenSpaceEventHandlerFactory(_viewer);
+      } catch {
+        handler = null;
+      }
+      if (!handler && canvas) {
+        try {
+          handler = screenSpaceEventHandlerFactory(canvas);
+        } catch {
+          handler = null;
+        }
+      }
+    }
+    if (
+      !handler &&
+      canvas &&
+      typeof Cesium.ScreenSpaceEventHandler === 'function'
+    ) {
+      try {
+        handler = new Cesium.ScreenSpaceEventHandler(canvas);
+      } catch {
+        handler = null;
+      }
+    }
+    if (!handler) return;
 
     _clickHandler = handler;
-    handler.setInputAction((click) => {
-      if (pointer && !pointer.isPointerFree()) return;
+    const clickType = Cesium.ScreenSpaceEventType?.LEFT_CLICK ?? 'LEFT_CLICK';
+    try {
+      handler.setInputAction((click) => {
+        if (pointer && !pointer.isPointerFree()) return;
 
-      const cardHit = overlayHost?.hitTest?.(
-        click.position?.x,
-        click.position?.y,
-        { sourceId: OCEAN_STATION_OVERLAY_SOURCE_ID },
-      );
-      if (cardHit) {
-        if (_selectedId && openExternal) {
-          const stn = _stationsById.get(_selectedId);
-          if (stn) {
-            const card = buildOceanStationCard(stn, Date.now());
-            if (card.link) openExternal(card.link);
+        const cardHit = overlayHost?.hitTest?.(
+          click?.position?.x,
+          click?.position?.y,
+          { sourceId: OCEAN_STATION_OVERLAY_SOURCE_ID },
+        );
+        if (cardHit) {
+          if (_selectedId && openExternal) {
+            const stn = _stationsById.get(_selectedId);
+            if (stn) {
+              const card = buildOceanStationCard(stn, Date.now());
+              if (card.link) openExternal(card.link);
+            }
           }
+          return;
         }
-        return;
-      }
 
-      const picked = _viewer.scene?.pick?.(click.position);
-      const stnId = resolvePickedStationId(picked);
+        const picked = _viewer?.scene?.pick?.(click?.position);
+        const stnId = resolvePickedStationId(picked);
 
-      if (stnId) {
-        _selectedId = stnId;
-        publishSelectedCard();
-      } else if (_selectedId) {
-        _selectedId = null;
-        publishSelectedCard();
-      }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+        if (stnId) {
+          _selectedId = stnId;
+          publishSelectedCard();
+          return;
+        }
+
+        if (picked && typeof picking?.resolvePickId === 'function') {
+          const pickId = picking.resolvePickId(picked);
+          if (pickId && picking?.isOwnedByOtherLayer?.(layer.id, pickId))
+            return;
+        }
+
+        if (_selectedId) {
+          _selectedId = null;
+          publishSelectedCard();
+        }
+      }, clickType);
+    } catch {
+      // Ignore click handler registration failures
+    }
   }
 
   const layer = {
@@ -161,14 +198,24 @@ export function createOceanStationsLayer({
       _enabled = false;
       _selectedId = null;
       _stationsById.clear();
-      overlayHost?.setVisible(OCEAN_STATION_OVERLAY_SOURCE_ID, false);
-      installClickHandler();
+      overlayHost?.setVisible?.(OCEAN_STATION_OVERLAY_SOURCE_ID, false);
+      try {
+        installClickHandler();
+      } catch {
+        // Defensive: click handler failure must not abort layer initialization
+      }
     },
 
     enable(viewer) {
       _enabled = true;
       if (_dataSource) _dataSource.show = true;
-      overlayHost?.setVisible(OCEAN_STATION_OVERLAY_SOURCE_ID, true);
+      overlayHost?.setVisible?.(OCEAN_STATION_OVERLAY_SOURCE_ID, true);
+      if (typeof picking?.registerPickOwner === 'function') {
+        picking.registerPickOwner(
+          layer.id,
+          (id) => typeof id === 'string' && id.startsWith(PICK_PREFIX),
+        );
+      }
     },
 
     disable(viewer) {
@@ -177,8 +224,11 @@ export function createOceanStationsLayer({
       _enabled = false;
       if (_dataSource) _dataSource.show = false;
       _selectedId = null;
-      overlayHost?.clearSource(OCEAN_STATION_OVERLAY_SOURCE_ID);
-      overlayHost?.setVisible(OCEAN_STATION_OVERLAY_SOURCE_ID, false);
+      overlayHost?.clearSource?.(OCEAN_STATION_OVERLAY_SOURCE_ID);
+      overlayHost?.setVisible?.(OCEAN_STATION_OVERLAY_SOURCE_ID, false);
+      if (typeof picking?.unregisterPickOwner === 'function') {
+        picking.unregisterPickOwner(layer.id);
+      }
     },
 
     async update(viewer) {
@@ -264,14 +314,25 @@ export function createOceanStationsLayer({
       _enabled = false;
       _selectedId = null;
       _stationsById.clear();
-      overlayHost?.clearSource(OCEAN_STATION_OVERLAY_SOURCE_ID);
-      overlayHost?.setVisible(OCEAN_STATION_OVERLAY_SOURCE_ID, false);
+      overlayHost?.clearSource?.(OCEAN_STATION_OVERLAY_SOURCE_ID);
+      overlayHost?.setVisible?.(OCEAN_STATION_OVERLAY_SOURCE_ID, false);
+      if (typeof picking?.unregisterPickOwner === 'function') {
+        picking.unregisterPickOwner(layer.id);
+      }
       if (_clickHandler) {
-        _clickHandler.destroy();
+        try {
+          _clickHandler.destroy();
+        } catch {
+          // ignore handler destruction error
+        }
         _clickHandler = null;
       }
-      if (_dataSource && viewer) {
-        viewer.dataSources.remove(_dataSource, true);
+      if (_dataSource && viewer?.dataSources) {
+        try {
+          viewer.dataSources.remove(_dataSource, true);
+        } catch {
+          // ignore data source removal error
+        }
         _dataSource = null;
       }
       _viewer = null;
