@@ -13,13 +13,13 @@
  */
 
 import { cancelCameraArrival } from '../data/cameraArrival.js';
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { resolveCameraPose, resolveCameraMove } from '../director/camera.js';
 import { createCameraMotion } from './cameraMotion.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { SceneControls } from '../ui/scenes.js';
 import { buildPlaybackQueue, playSceneQueue } from '../director/playback.js';
 import { createScenePlaybackAdapter } from './playbackAdapter.js';
-import * as Cesium from 'cesium';
 import * as geo from '../geo/index.js';
 import {
   SCENE_APPEND_RECIPES,
@@ -78,12 +78,16 @@ export class SceneDirector {
    * @param {Cesium.Viewer} viewer - The Cesium viewer instance
    * @param {Object} styleManager - Controls visual state (bloom, sharpen, HUD, detection, style presets)
    * @param {Object} dataManager - Manages data layer enable/disable and per-layer params
+   * @param {Object} [options] `engine`: the globe engine whose camera the
+   *   scene flights drive (defaults to the one registered for the viewer); the
+   *   viewer still serves tracking, interactions and data packs (phase 1c).
    */
   constructor(
     viewer,
     styleManager,
     dataManager,
     {
+      engine = engineFromViewer(viewer),
       isMapStackAvailable = () => false,
       scenePacks = createDefaultScenePacks(),
       dataPacks = {},
@@ -92,6 +96,7 @@ export class SceneDirector {
     this._destroyed = false;
     this._pendingWork = new Set();
     this.viewer = viewer;
+    this.engine = engine;
     this.styleManager = styleManager;
     this.dataManager = dataManager;
     this._isMapStackAvailable = isMapStackAvailable;
@@ -242,7 +247,7 @@ export class SceneDirector {
       this.stopScene('Stopped');
       this._loadAbort?.abort();
       this._loadGeneration++;
-      this.viewer.camera.cancelFlight();
+      this.engine?.camera.cancelFlight();
       clearTimeout(this._storageToastTimer);
       await Promise.allSettled(this._pendingWork || []);
       this._clock.destroy();
@@ -1553,7 +1558,7 @@ export class SceneDirector {
    * @returns {boolean} False when the camera is unavailable (Cockpit/disposed).
    */
   _claimCameraOwnership() {
-    cancelCameraArrival(this.viewer);
+    cancelCameraArrival(this.engine);
     // Older/headless style managers may predate the facade — proceed then.
     if (typeof this.styleManager?.runImmediateNavigation !== 'function')
       return true;
@@ -1573,11 +1578,11 @@ export class SceneDirector {
 
   /** Place the camera at an authored replay start pose without an intermediate flight. */
   _setCameraView(cameraState) {
-    if (!cameraState || typeof this.viewer?.camera?.setView !== 'function')
-      return false;
+    const camera = this.engine?.camera;
+    if (!cameraState || !camera) return false;
     this.styleManager?.clearSearchedLocation?.();
-    this.viewer.camera.cancelFlight?.();
-    this.viewer.camera.setView({
+    camera.cancelFlight();
+    camera.setView({
       destination: geo.cartesian3.fromDegrees(
         cameraState.lon,
         cameraState.lat,
@@ -1839,7 +1844,7 @@ export class SceneDirector {
     this._loadGeneration++;
     this._clock.stopShot();
     this._cancelActiveSceneTravel();
-    this.viewer.camera.cancelFlight();
+    this.engine?.camera.cancelFlight();
     this._clock.stop();
     if (!this._running || !this._runToken) return;
     this._runToken.cancelled = true;
@@ -2286,7 +2291,7 @@ export class SceneDirector {
         resolve();
       };
 
-      this.viewer.camera.flyTo({
+      this.engine.camera.flyTo({
         destination,
         orientation: {
           heading: geo.math.toRadians(cameraState.heading || 0),
@@ -2294,7 +2299,7 @@ export class SceneDirector {
           roll: geo.math.toRadians(cameraState.roll || 0),
         },
         duration,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+        easing: 'cubicInOut',
         complete: finish,
         cancel: finish,
       });

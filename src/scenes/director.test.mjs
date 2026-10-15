@@ -18,6 +18,7 @@ import test from 'node:test';
 import { SceneDirector } from './director.js';
 import { SCENE_TRACKING_PARAM_KEYS } from './scenePolicy.js';
 import { SCENE_RECIPES, getSceneAppendRecipeById } from './recipes.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 
 const NEPAL_ORIGINAL_SHOT_TITLES = [
   'Global Incident Context',
@@ -694,6 +695,17 @@ function fakeStyleManager({ contextMode = null, exitFails = false } = {}) {
   return manager;
 }
 
+/**
+ * A globe engine whose camera commands go to the viewer double's camera (read
+ * on each call, so a test may replace one), as the scene engine's do.
+ */
+function engineFor(viewer) {
+  const engine = createFakeEngine();
+  for (const name of ['flyTo', 'cancelFlight', 'setView'])
+    engine.camera[name] = (...args) => viewer.camera[name]?.(...args);
+  return engine;
+}
+
 /** Cesium viewer double whose flights complete on the next microtask turn. */
 function fakeViewer() {
   const flights = [];
@@ -723,6 +735,7 @@ function makeDirector(options = {}) {
   const styleManager = fakeStyleManager(options.style);
   const dataManager = fakeDataManager(options.data);
   const director = new SceneDirector(viewer, styleManager, dataManager, {
+    engine: engineFor(viewer),
     isMapStackAvailable: options.isMapStackAvailable,
   });
   // Telemetry is only accumulated during a run; observable-failure assertions
