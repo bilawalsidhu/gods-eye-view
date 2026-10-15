@@ -193,6 +193,22 @@ const layers = [
     },
   },
   {
+    id: 'border-waits',
+    aliases: ['border waits', 'border wait times', 'border crossings'],
+    context: false,
+    query: {
+      fields: {
+        delayMinutes: ['n', 'min'],
+        port: ['t'],
+        crossing: ['t'],
+        border: ['t'],
+        status: ['t'],
+        delayStatus: ['t'],
+      },
+      caveat: 'CBP-reported passenger-vehicle wait to enter the U.S.',
+    },
+  },
+  {
     id: 'weather-cyclones',
     aliases: ['cyclones', 'hurricanes', 'typhoons', 'tropical storms'],
     context: false,

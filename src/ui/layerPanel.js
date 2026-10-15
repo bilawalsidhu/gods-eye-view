@@ -31,6 +31,7 @@ const PANEL_GROUPS = [
       'traffic',
       'transit',
       'bikeshare',
+      'border-waits',
     ],
   },
   {

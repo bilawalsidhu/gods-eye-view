@@ -2037,6 +2037,13 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/borderWaits.js",
+      "src/layers/borderWaits/index.js",
+      "src/layers/borderWaits/cards.js",
+      "src/layers/borderWaits/records.js",
+      "src/layers/borderWaits/crossings.js",
+      "src/layers/borderWaits/canada.js",
+      "src/layers/borderWaits/source.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -2629,6 +2636,13 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/borderWaits.js",
+      "src/layers/borderWaits/index.js",
+      "src/layers/borderWaits/cards.js",
+      "src/layers/borderWaits/records.js",
+      "src/layers/borderWaits/crossings.js",
+      "src/layers/borderWaits/canada.js",
+      "src/layers/borderWaits/source.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -3137,6 +3151,7 @@
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
+      "src/layers/borderWaits/source.js",
       "src/layers/submarineCables/bundledSource.js"
     ],
     "external": []
@@ -3355,6 +3370,24 @@
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js"
     ],
+    "external": []
+  },
+  "border-waits": {
+    "exports": ["./layers/border-waits"],
+    "modules": [
+      "src/layers/borderWaits/index.js",
+      "src/layers/borderWaits/cards.js",
+      "src/layers/borderWaits/records.js",
+      "src/layers/borderWaits/crossings.js",
+      "src/layers/borderWaits/canada.js",
+      "src/layers/borderWaits/source.js",
+      "src/sources/httpBody.js"
+    ],
+    "external": ["cesium"]
+  },
+  "border-waits-source": {
+    "exports": ["./layers/border-waits/source"],
+    "modules": ["src/layers/borderWaits/source.js", "src/sources/httpBody.js"],
     "external": []
   },
   "tools": {

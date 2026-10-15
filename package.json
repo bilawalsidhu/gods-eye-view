@@ -51,6 +51,7 @@
     "qa:street-level:fixtures": "node scripts/qa-street-level.mjs --fixtures",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
     "qa:transit": "node scripts/qa-transit.mjs",
+    "qa:border-waits": "node scripts/qa-border-waits.mjs",
     "mcp": "node server/mcp/stdio.js"
   },
   "dependencies": {
@@ -165,6 +166,7 @@
     "./layers/recent-imagery": "./src/layers/recentImagery/index.js",
     "./layers/recent-imagery/source": "./src/layers/recentImagery/source.js",
     "./layers/perimeters": "./src/layers/perimeters/index.js",
+    "./layers/border-waits": "./src/layers/borderWaits/index.js",
     "./sources/firms-csv": "./src/data/firmsCsv.js",
     "./layers/firms": "./src/layers/firms/index.js",
     "./layers/satellites": "./src/layers/satellites/index.js",
@@ -238,6 +240,7 @@
     "./layers/cctv/source": "./src/layers/cctv/source.js",
     "./layers/earthquakes/source": "./src/layers/earthquakes/source.js",
     "./layers/perimeters/source": "./src/layers/perimeters/source.js",
+    "./layers/border-waits/source": "./src/layers/borderWaits/source.js",
     "./layers/firms/source": "./src/layers/firms/source.js",
     "./layers/installations/source": "./src/layers/installations/source.js",
     "./layers/launches/source": "./src/layers/launches/source.js",
