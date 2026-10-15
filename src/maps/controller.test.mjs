@@ -993,3 +993,75 @@ test('controller and Cesium engine: photoreal to a globe stack restores imagery 
   engine.destroy();
   assert.deepEqual(credits(), []);
 });
+
+// --- On a non-Cesium engine: descriptions only, nothing Cesium is built ------
+
+function navaraFixture() {
+  return import('../globe/testing/fakeEngine.js').then(
+    ({ createFakeEngine }) => {
+      const engine = createFakeEngine({ kind: 'navara' });
+      const registry = createDefaultMapSources({
+        googleTileset: { show: true },
+        cesiumToken: 'ion-test',
+        googleApiKey: 'google-test',
+      });
+      const built = [];
+      for (const source of registry.sources) {
+        if (source.imagery)
+          source.imagery = () => built.push(`imagery:${source.descriptor.id}`);
+        if (source.terrain)
+          source.terrain = {
+            ...source.terrain,
+            create: () => built.push(`terrain:${source.terrain.id}`),
+          };
+      }
+      const controller = new MapSourceController(null, { registry, engine });
+      return { engine, controller, built };
+    },
+  );
+}
+
+test('on a non-Cesium engine the controller sends descriptions and builds nothing', async () => {
+  const { engine, controller, built } = await navaraFixture();
+  await controller.setStack('esri-imagery');
+  const [imagery] = engine.fake.callsOf('maps.setBaseImagery')[0].args;
+  assert.equal(imagery.kind, 'esri-imagery');
+  assert.equal(imagery.descriptor.id, 'esri-imagery');
+  assert.match(imagery.credit, /Esri/);
+  assert.equal('provider' in imagery, false);
+  assert.equal(typeof imagery.imagery, 'undefined');
+  const [terrain] = engine.fake.callsOf('maps.setTerrain')[0].args;
+  assert.deepEqual(terrain, {
+    id: 'world',
+    kind: 'world',
+    accessToken: 'ion-test',
+  });
+  await controller.setStack('bing-aerial');
+  const [ion] = engine.fake.callsOf('maps.setBaseImagery')[1].args;
+  assert.equal(ion.kind, 'ion');
+  assert.equal(ion.accessToken, 'ion-test');
+  assert.ok(ion.style !== undefined);
+  await controller.setStack('photoreal');
+  const [photoreal] = engine.fake.callsOf('maps.setPhotorealTiles').at(-1).args;
+  assert.equal(photoreal.kind, 'photoreal');
+  assert.equal(photoreal.googleApiKey, 'google-test');
+  assert.equal(photoreal.cesiumToken, 'ion-test');
+  assert.equal('tileset' in photoreal, false);
+  assert.deepEqual(built, [], 'no Cesium provider, terrain or tileset built');
+  assert.equal(controller.getActiveId(), 'photoreal');
+  controller.destroy();
+});
+
+test('on a non-Cesium engine a source the engine cannot build falls back by description', async () => {
+  const { engine, controller } = await navaraFixture();
+  const setBaseImagery = engine.maps.setBaseImagery;
+  engine.maps.setBaseImagery = async (source) => {
+    if (source.kind === 'esri-imagery') throw new Error('no Esri here');
+    return setBaseImagery(source);
+  };
+  const state = await controller.setStack('esri-imagery');
+  assert.equal(state.activeId, 'osm');
+  assert.equal(state.lastError, 'Esri Satellite is unavailable; using OSM');
+  assert.equal(engine.fake.maps.imagery.kind, 'osm');
+  controller.destroy();
+});

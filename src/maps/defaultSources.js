@@ -12,8 +12,16 @@ export function createDefaultMapSources({
 } = {}) {
   const ionToken = String(cesiumToken || '').trim();
   const hasIon = Boolean(ionToken);
-  const hasGoogle = Boolean(String(googleApiKey || '').trim());
-  const terrain = terrainSourceFor(ionToken);
+  // Engine-neutral descriptions ride beside the Cesium factories: a terrain
+  // `kind` (+ token), ion imagery's token and the photoreal credentials, so
+  // an engine that builds its own sources needs none of the factories.
+  const terrain = {
+    ...terrainSourceFor(ionToken),
+    kind: hasIon ? 'world' : 'keyless',
+    ...(hasIon && { accessToken: ionToken }),
+  };
+  const googleKey = String(googleApiKey || '').trim();
+  const hasGoogle = Boolean(googleKey);
   return {
     defaultId: googleTileset ? 'photoreal' : 'esri-imagery',
     unknownId: 'photoreal',
@@ -33,11 +41,14 @@ export function createDefaultMapSources({
           available: Boolean(googleTileset),
           unavailableReason: photorealUnavailableReason(hasIon || hasGoogle),
           tileset: googleTileset,
+          ...(googleKey && { googleApiKey: googleKey }),
+          ...(hasIon && { cesiumToken: ionToken }),
         };
       const imagery = imageryFactoryFor(descriptor, ionToken);
       return {
         ...common,
         imagery,
+        ...(descriptor.kind === 'ion' && { accessToken: ionToken }),
         terrain,
         ...(descriptor.id === 'esri-imagery'
           ? {

@@ -216,3 +216,26 @@ test('applyTerrain installs a terrain object or a provider', () => {
   assert.deepEqual(calls, ['terrain']);
   assert.equal(viewer.terrainProvider, 'provider');
 });
+
+test('default sources carry engine-neutral descriptions beside their Cesium factories', () => {
+  const sources = createDefaultMapSources({
+    cesiumToken: 'ion-test',
+    googleApiKey: 'google-test',
+    googleTileset: { show: true },
+  }).sources;
+  const byId = (id) => sources.find(({ descriptor }) => descriptor.id === id);
+  assert.equal(byId('bing-aerial').accessToken, 'ion-test');
+  assert.equal(
+    byId('osm').accessToken,
+    undefined,
+    'only ion imagery needs the token',
+  );
+  assert.equal(byId('osm').terrain.kind, 'world');
+  assert.equal(byId('osm').terrain.accessToken, 'ion-test');
+  assert.equal(byId('photoreal').googleApiKey, 'google-test');
+  assert.equal(byId('photoreal').cesiumToken, 'ion-test');
+  const keyless = createDefaultMapSources().sources;
+  const osm = keyless.find(({ descriptor }) => descriptor.id === 'osm');
+  assert.equal(osm.terrain.kind, 'keyless');
+  assert.equal(osm.terrain.accessToken, undefined);
+});
