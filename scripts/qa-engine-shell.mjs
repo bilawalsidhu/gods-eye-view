@@ -6,14 +6,25 @@
  *
  * - the engine kind, and a viewer for Cesium only (window.__godsEyeView);
  * - no console errors (KNOWN_NOISE lists the only ones tolerated);
- * - the map is drawn (the engine canvas is not blank);
- * - search: a city typed into the location search flies near it;
- * - navigation: north up, tilt, wheel zoom and reset to the globe;
+ * - the map is drawn (the engine canvas is not blank) once the tiles load;
+ * - idle: no frames for 2 s once the tiles have loaded;
+ * - attributions: the Google line is on screen (Cesium's credit strip,
+ *   Navara's attribution card);
+ * - search: a city typed into the location search flies near it, and after
+ *   searching Tokyo the HUD's own lat/lon text reads Tokyo;
+ * - navigation: north up, tilt, wheel zoom and reset to the globe; the wheel
+ *   stops above the ground (the smallest clearance over the sampled surface
+ *   on any frame: Cesium >= -1 m, Navara >= 25 m);
  * - orbit: frames keep coming while it runs and stop when it stops;
  * - the HUD readouts follow the camera;
  * - share links: the hash written for a pose restores that pose on reload
  *   (Cesium within 1e-6; Navara's deltas are recorded);
  * - map stacks: base imagery and back to Google 3D.
+ *
+ * With both engines, then across them: the share hash written on each engine
+ * opened on the other gives the same pose (<= 1 m, <= 0.1°), and both engines
+ * at one fixed pose are photographed side by side (--out keeps
+ * qa-engine-side-by-side.png and .jpg).
  *
  *   node scripts/qa-engine-shell.mjs [--engine=cesium|navara|both]
  *     [--base-url=URL] [--out=DIR]
@@ -55,6 +66,18 @@ const BOOT_TIMEOUT_MS = Number(process.env.QA_BOOT_TIMEOUT_MS || 180000);
 const RESERVED_PORTS = new Set([4185]);
 const SEARCH = { query: 'Paris', lat: 48.8566, lon: 2.3522, withinKm: 60 };
 const SHARE_TOLERANCE = 1e-6;
+const TOKYO = { query: 'Tokyo', lat: 35.6762, lon: 139.6503, withinKm: 60 };
+// Smallest clearance above the sampled surface during and after the wheel:
+// Cesium's own collision keeps the camera at about the surface; the Navara
+// engine keeps 30 m (src/globe/navara/groundFloor.js).
+const MIN_CLEARANCE = { cesium: -1, navara: 25 };
+// Cross-engine share links: the same hash on the other engine.
+const CROSS_TOLERANCE = { metres: 1, degrees: 0.1 };
+// Idle: no frames over this long once the tiles have loaded.
+const IDLE_MS = 2000;
+// The pose both engines are photographed at for the side-by-side picture.
+const SIDE_BY_SIDE_HASH =
+  'v=2&lat=40.7060&lon=-74.0130&alt=900&heading=30&pitch=-25&roll=0';
 
 /**
  * Console errors tolerated in either mode, each for a stated reason. Anything
@@ -246,6 +269,125 @@ async function countFrames(ms) {
   };
 }
 
+/**
+ * Records the camera's clearance above the sampled surface on every rendered
+ * frame until stopClearanceWatch.
+ */
+function startClearanceWatch() {
+  const { engine } = window.__godsEyeView;
+  const watch = { min: null, sampled: 0, unsampled: 0 };
+  watch.remove = engine.frames.postRender.addEventListener(() => {
+    const pose = engine.camera.pose();
+    const ground = engine.surface.sampleHeight(pose.cartographic);
+    if (!Number.isFinite(ground)) {
+      watch.unsampled += 1;
+      return;
+    }
+    const clearance = pose.cartographic.height - ground;
+    watch.sampled += 1;
+    if (watch.min == null || clearance < watch.min) watch.min = clearance;
+  });
+  window.__qaClearanceWatch = watch;
+}
+
+/** Ends the watch; the final pose's clearance and the smallest one seen. */
+function stopClearanceWatch() {
+  const { engine } = window.__godsEyeView;
+  const watch = window.__qaClearanceWatch;
+  watch.remove();
+  delete window.__qaClearanceWatch;
+  const pose = engine.camera.pose();
+  const sampled = engine.surface.sampleHeight(pose.cartographic);
+  const ground = Number.isFinite(sampled) ? sampled : null;
+  const clearance = ground == null ? null : pose.cartographic.height - ground;
+  const minClearance =
+    clearance == null
+      ? watch.min
+      : watch.min == null
+        ? clearance
+        : Math.min(watch.min, clearance);
+  return {
+    height: pose.cartographic.height,
+    ground,
+    clearance,
+    minClearance,
+    sampled: watch.sampled,
+    unsampled: watch.unsampled,
+  };
+}
+
+/**
+ * The on-screen attribution that names Google: Cesium's credit strip
+ * (#cesium-credits) or Navara's attribution card. Visible means displayed,
+ * inside the viewport and, for Navara, the Google line inside the card's
+ * scrolled list.
+ */
+function readAttribution() {
+  const inViewport = (rect) =>
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.right > 0 &&
+    rect.bottom > 0 &&
+    rect.left < window.innerWidth &&
+    rect.top < window.innerHeight;
+  const shown = (element) => {
+    for (let node = element; node; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (
+        node.hidden ||
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        Number(style.opacity) === 0
+      )
+        return false;
+    }
+    return true;
+  };
+  const googleIn = (element) =>
+    /google/i.test(element.textContent ?? '') ||
+    [...element.querySelectorAll('img')].some((image) =>
+      /google/i.test(`${image.alt} ${image.title} ${image.src}`),
+    );
+  const strip = document.getElementById('cesium-credits');
+  const card = document.querySelector('.navara-attr-card');
+  const container = card ?? strip;
+  if (!container) return { found: false };
+  const containerRect = container.getBoundingClientRect();
+  // The smallest element that names Google.
+  const candidates = [...container.querySelectorAll('*')].filter(
+    (element) =>
+      googleIn(element) && ![...element.children].some((c) => googleIn(c)),
+  );
+  const line = candidates.find((element) => {
+    const rect = element.getBoundingClientRect();
+    if (!shown(element) || !inViewport(rect)) return false;
+    // Inside the scrolled part of its list, when there is one.
+    const list = element.closest('.navara-attr-list');
+    if (!list) return true;
+    const listRect = list.getBoundingClientRect();
+    return rect.bottom > listRect.top && rect.top < listRect.bottom;
+  });
+  return {
+    found: true,
+    which: card ? 'navara-attr-card' : 'cesium-credits',
+    // The strip can be a zero-size box around fixed children; its own
+    // display, visibility and opacity count, the Google line's box below.
+    containerShown: shown(container),
+    containerSize: [
+      Math.round(containerRect.width),
+      Math.round(containerRect.height),
+    ],
+    googleLines: candidates.length,
+    googleLineVisible: Boolean(line),
+    text: line
+      ? (line.textContent || line.querySelector('img')?.alt || 'logo')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 80)
+      : '',
+  };
+}
+
 function readHud() {
   const text = (id) => document.getElementById(id)?.textContent?.trim() ?? '';
   return {
@@ -267,24 +409,49 @@ function distanceKm(a, b) {
   return 2 * 6371 * Math.asin(Math.sqrt(h));
 }
 
+/** Parses the HUD's `DD°MM'SS.SS"N DDD°MM'SS.SS"E` into degrees. */
+function parseHudLatLon(text) {
+  const match =
+    /(\d+)°(\d+)'([\d.]+)"([NS])\s+(\d+)°(\d+)'([\d.]+)"([EW])/.exec(
+      text ?? '',
+    );
+  if (!match) return null;
+  const dms = (d, m, s, hemisphere, negative) =>
+    (Number(d) + Number(m) / 60 + Number(s) / 3600) *
+    (hemisphere === negative ? -1 : 1);
+  return {
+    lat: dms(match[1], match[2], match[3], match[4], 'S'),
+    lon: dms(match[5], match[6], match[7], match[8], 'W'),
+  };
+}
+
 /** Smallest difference of two angles in degrees. */
 const angleDelta = (a, b) => {
   const d = ((((a - b) % 360) + 540) % 360) - 180;
   return Math.abs(d);
 };
 
-async function runEngine(browser, baseUrl, engine) {
+/** A results list and its recorder, which prints each check as it lands. */
+function createRecorder(label) {
   const results = [];
   // A failing check with a known gap is reported as GAP and does not fail
   // the run; a passing one is reported as ok.
   const record = (name, ok, detail = {}, knownGap = undefined) => {
     const gap = !ok && knownGap ? knownGap : null;
     results.push({ name, ok: Boolean(ok) || Boolean(gap), gap, detail });
-    const label = ok ? 'ok  ' : gap ? 'GAP ' : 'FAIL';
+    const mark = ok ? 'ok  ' : gap ? 'GAP ' : 'FAIL';
     console.log(
-      `${label} [${engine}] ${name} ${redact(JSON.stringify(detail))}${gap ? ` (known gap: ${gap})` : ''}`,
+      `${mark} [${label}] ${name} ${redact(JSON.stringify(detail))}${gap ? ` (known gap: ${gap})` : ''}`,
     );
   };
+  return { results, record };
+}
+
+/**
+ * A fresh browser context and page that collects console errors (less
+ * KNOWN_NOISE) and the Navara requests, with the first-run welcome off.
+ */
+async function openPage(browser) {
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
   await page.setViewport({ width: 1280, height: 800 });
@@ -324,8 +491,39 @@ async function runEngine(browser, baseUrl, engine) {
       /* storage blocked */
     }
   });
+  return { context, page, errors, ignored, navaraRequests };
+}
 
-  const query = engine === 'cesium' ? '' : `?engine=${engine}`;
+const engineQuery = (engine) =>
+  engine === 'cesium' ? '' : `?engine=${engine}`;
+
+/**
+ * Waits until the engine reports its tiles loaded for 1.5 s in a row (an
+ * engine can be idle for a moment between tile requests while it still
+ * refines), polling for up to 90 s.
+ */
+async function waitForTiles(page) {
+  const tilesStarted = Date.now();
+  let loadedSince = null;
+  while (Date.now() - tilesStarted < 90000) {
+    const loaded = await page.evaluate(() =>
+      window.__godsEyeView.engine.surface.tilesLoaded(),
+    );
+    if (!loaded) loadedSince = null;
+    else if (loadedSince == null) loadedSince = Date.now();
+    else if (Date.now() - loadedSince >= 1500)
+      return { loaded: true, ms: loadedSince - tilesStarted };
+    await sleep(250);
+  }
+  return { loaded: false, ms: Date.now() - tilesStarted };
+}
+
+async function runEngine(browser, baseUrl, engine) {
+  const { results, record } = createRecorder(engine);
+  const { context, page, errors, ignored, navaraRequests } =
+    await openPage(browser);
+
+  const query = engineQuery(engine);
   const started = Date.now();
   await page.goto(`${baseUrl}${query}`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => Boolean(window.__godsEyeView?.engine), {
@@ -357,24 +555,9 @@ async function runEngine(browser, baseUrl, engine) {
   record('boot flight comes to rest', bootRest);
   // Judge the picture once the engine reports its tiles loaded (a cold dev
   // server and cache can take a while).
-  // Loaded means reported loaded for 1.5 s in a row: an engine can be idle
-  // for a moment between tile requests while it still refines.
-  const tilesStarted = Date.now();
-  let tilesLoaded = false;
-  let loadedSince = null;
-  while (Date.now() - tilesStarted < 90000) {
-    const loaded = await page.evaluate(() =>
-      window.__godsEyeView.engine.surface.tilesLoaded(),
-    );
-    if (!loaded) loadedSince = null;
-    else if (loadedSince == null) loadedSince = Date.now();
-    else if (Date.now() - loadedSince >= 1500) {
-      tilesLoaded = true;
-      break;
-    }
-    await sleep(250);
-  }
-  const tilesLoadedMs = (loadedSince ?? Date.now()) - tilesStarted;
+  const tiles = await waitForTiles(page);
+  const tilesLoaded = tiles.loaded;
+  const tilesLoadedMs = tiles.ms;
   record('tiles load', tilesLoaded, { tilesLoadedMs });
   console.log(
     `[${engine}] tiles loaded in ${tilesLoadedMs} ms after boot rest`,
@@ -390,6 +573,26 @@ async function runEngine(browser, baseUrl, engine) {
     await page.screenshot({
       path: path.join(outDir, `qa-engine-shell-${engine}.png`),
     });
+
+  // Idle: once the tiles have loaded and the camera rests, nothing renders.
+  const bootIdle = await page.evaluate(countFrames, IDLE_MS);
+  record(`idle renders no frames for ${IDLE_MS} ms`, bootIdle.frames === 0, {
+    frames: bootIdle.frames,
+    framesPerSecond: Math.round((bootIdle.frames / IDLE_MS) * 1000 * 10) / 10,
+    continuous: bootIdle.continuous,
+  });
+
+  // Attributions: the Google line is on screen.
+  const attribution = await page.evaluate(readAttribution);
+  record(
+    'attribution shows the Google line',
+    attribution.found &&
+      attribution.containerShown &&
+      attribution.googleLineVisible &&
+      attribution.which ===
+        (engine === 'navara' ? 'navara-attr-card' : 'cesium-credits'),
+    attribution,
+  );
 
   // HUD at boot.
   const hudBoot = await page.evaluate(readHud);
@@ -457,6 +660,8 @@ async function runEngine(browser, baseUrl, engine) {
   });
   await page.evaluate(waitForRest, 1500, 60000);
   const restored = await page.evaluate(readPose);
+  // The hash and the pose it restored, for the cross-engine check.
+  const share = { hash, restored };
   const shareDelta = {
     lat: Math.abs(restored.lat - shared.lat),
     lon: Math.abs(restored.lon - shared.lon),
@@ -529,31 +734,54 @@ async function runEngine(browser, baseUrl, engine) {
     after: Math.round(zoomed.height),
   });
   // Keep zooming: the camera must stop above the ground. Paris lies about
-  // 80 m above the ellipsoid; the clearance is to the sampled surface.
+  // 80 m above the ellipsoid; the clearance is to the sampled surface, and
+  // the smallest clearance of any frame rendered during the wheel counts.
+  await page.evaluate(startClearanceWatch);
   const floor = await wheel(10, -400);
   await sleep(500);
-  const floorState = await page.evaluate(() => {
-    const { engine } = window.__godsEyeView;
-    const pose = engine.camera.pose();
-    const ground = engine.surface.sampleHeight(pose.cartographic);
-    return {
-      height: pose.cartographic.height,
-      ground: Number.isFinite(ground) ? ground : null,
-    };
-  });
-  const clearance =
-    floorState.ground == null ? null : floorState.height - floorState.ground;
+  const floorState = await page.evaluate(stopClearanceWatch);
   record(
-    'wheel zoom stops above the ground',
-    floorState.height >= 20 &&
-      // The Navara engine keeps 30 m above the sampled surface
-      // (src/globe/navara/groundFloor.js); Cesium's own collision is closer.
-      (engine !== 'navara' || (clearance != null && clearance >= 20)),
+    `wheel zoom stops above the ground (clearance >= ${MIN_CLEARANCE[engine]} m)`,
+    floorState.clearance != null &&
+      floorState.minClearance != null &&
+      floorState.clearance >= MIN_CLEARANCE[engine] &&
+      floorState.minClearance >= MIN_CLEARANCE[engine],
     {
       height: Math.round(floorState.height),
       ground: floorState.ground == null ? null : Math.round(floorState.ground),
-      clearance: clearance == null ? null : Math.round(clearance),
+      clearance:
+        floorState.clearance == null ? null : Math.round(floorState.clearance),
+      minClearance:
+        floorState.minClearance == null
+          ? null
+          : Math.round(floorState.minClearance * 10) / 10,
+      framesSampled: floorState.sampled,
+      framesWithoutGround: floorState.unsampled,
       afterWheel: Math.round(floor.height),
+    },
+  );
+
+  // Search Tokyo: the HUD (its text, not the engine) reads Tokyo.
+  await openLocationTray();
+  if (!(await page.$('#location-search.expanded')))
+    await page.click('#search-toggle');
+  await page.waitForSelector('#location-search.expanded', { timeout: 5000 });
+  await page.click('#location-search', { clickCount: 3 });
+  await page.type('#location-search', TOKYO.query);
+  await page.keyboard.press('Enter');
+  await sleep(1500);
+  await page.evaluate(waitForRest, 2000, 60000);
+  await sleep(1000);
+  const hudTokyo = await page.evaluate(readHud);
+  const hudTokyoPoint = parseHudLatLon(hudTokyo.latlon);
+  const hudTokyoKm = hudTokyoPoint ? distanceKm(hudTokyoPoint, TOKYO) : null;
+  record(
+    `search "${TOKYO.query}": the HUD reads Tokyo (< ${TOKYO.withinKm} km)`,
+    hudTokyoKm != null && hudTokyoKm < TOKYO.withinKm,
+    {
+      hud: hudTokyo.latlon,
+      alt: hudTokyo.alt,
+      km: hudTokyoKm == null ? null : Math.round(hudTokyoKm * 10) / 10,
     },
   );
 
@@ -578,6 +806,7 @@ async function runEngine(browser, baseUrl, engine) {
   // After orbit the camera holds still and rendering leaves continuous mode;
   // frames may still come while tiles stream in (recorded).
   const idle = await page.evaluate(countFrames, 1500);
+  idle.framesPerSecond = Math.round((idle.frames / 1500) * 1000 * 10) / 10;
   record(
     'orbit animates and stops',
     orbitActive &&
@@ -636,7 +865,158 @@ async function runEngine(browser, baseUrl, engine) {
     ignored: [...new Set(ignored)],
   });
   await context.close();
+  return { results, share };
+}
+
+/** Position distance in metres and the worst angle difference in degrees. */
+function poseDelta(a, b) {
+  return {
+    metres: Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z),
+    degrees: Math.max(
+      angleDelta(a.heading, b.heading),
+      Math.abs(a.pitch - b.pitch),
+      angleDelta(a.roll, b.roll),
+    ),
+  };
+}
+
+const roundDelta = ({ metres, degrees }) => ({
+  metres: Math.round(metres * 1000) / 1000,
+  degrees: Math.round(degrees * 1e5) / 1e5,
+});
+
+/** Opens `hash` on `engine`, lets the camera settle and returns the pose. */
+async function openHash(
+  browser,
+  baseUrl,
+  engine,
+  hash,
+  { tiles = false } = {},
+) {
+  const opened = await openPage(browser);
+  const { page } = opened;
+  await page.goto(`${baseUrl}${engineQuery(engine)}${hash}`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await page.waitForFunction(() => Boolean(window.__godsEyeView?.engine), {
+    timeout: BOOT_TIMEOUT_MS,
+  });
+  await page.evaluate(waitForRest, 1500, 60000);
+  const tileWait = tiles ? await waitForTiles(page) : null;
+  if (tiles) await sleep(1000);
+  const pose = await page.evaluate(readPose);
+  return { ...opened, pose, tileWait };
+}
+
+/**
+ * Share links across engines: the hash written on one engine, opened on the
+ * other, gives the pose it gave on its own engine (within 1 m and 0.1°).
+ * Then both engines at one fixed pose, photographed side by side.
+ */
+async function runCrossEngine(browser, baseUrl, shares) {
+  const { results, record } = createRecorder('cross');
+  for (const [from, to] of [
+    ['cesium', 'navara'],
+    ['navara', 'cesium'],
+  ]) {
+    const source = shares[from];
+    if (!source) continue;
+    const opened = await openHash(browser, baseUrl, to, source.hash);
+    const delta = poseDelta(opened.pose, source.restored);
+    record(
+      `share link written on ${from} opens on ${to} at the same pose (<= ${CROSS_TOLERANCE.metres} m, ${CROSS_TOLERANCE.degrees}°)`,
+      delta.metres <= CROSS_TOLERANCE.metres &&
+        delta.degrees <= CROSS_TOLERANCE.degrees &&
+        opened.errors.length === 0,
+      {
+        ...roundDelta(delta),
+        height: Math.round(opened.pose.height),
+        errors: opened.errors.slice(0, 5),
+      },
+    );
+    await opened.context.close();
+  }
+
+  // Side by side at one pose.
+  const shots = {};
+  for (const engine of ['cesium', 'navara']) {
+    const opened = await openHash(
+      browser,
+      baseUrl,
+      engine,
+      `#${SIDE_BY_SIDE_HASH}`,
+      { tiles: true },
+    );
+    shots[engine] = {
+      pose: opened.pose,
+      tileWait: opened.tileWait,
+      png: await opened.page.screenshot({ type: 'png' }),
+      errors: opened.errors,
+    };
+    await opened.context.close();
+  }
+  const sameDelta = poseDelta(shots.cesium.pose, shots.navara.pose);
+  record(
+    'the side-by-side pose is the same on both engines',
+    sameDelta.metres <= CROSS_TOLERANCE.metres &&
+      sameDelta.degrees <= CROSS_TOLERANCE.degrees &&
+      shots.cesium.tileWait.loaded &&
+      shots.navara.tileWait.loaded &&
+      shots.cesium.errors.length === 0 &&
+      shots.navara.errors.length === 0,
+    {
+      ...roundDelta(sameDelta),
+      tilesLoadedMs: {
+        cesium: shots.cesium.tileWait.ms,
+        navara: shots.navara.tileWait.ms,
+      },
+      errors: [...shots.cesium.errors, ...shots.navara.errors].slice(0, 5),
+    },
+  );
+  if (outDir) await composeSideBySide(browser, shots);
   return results;
+}
+
+/**
+ * Both screenshots in one picture, labelled, rendered by the browser. Writes
+ * qa-engine-side-by-side.png and .jpg to --out.
+ */
+async function composeSideBySide(browser, shots) {
+  const context = await browser.createBrowserContext();
+  const page = await context.newPage();
+  const width = 800;
+  const height = 500;
+  await page.setViewport({ width: width * 2, height: height + 28 });
+  const image = (engine) =>
+    `data:image/png;base64,${Buffer.from(shots[engine].png).toString('base64')}`;
+  const pose = shots.cesium.pose;
+  const caption = `lat ${pose.lat.toFixed(4)} lon ${pose.lon.toFixed(4)} alt ${Math.round(pose.height)} m heading ${Math.round(pose.heading)} pitch ${Math.round(pose.pitch)}`;
+  await page.setContent(`<!doctype html><html><body style="margin:0;background:#111;color:#eee;font:13px system-ui">
+    <div style="display:flex">${['cesium', 'navara']
+      .map(
+        (
+          engine,
+        ) => `<figure style="margin:0;position:relative;width:${width}px">
+        <img src="${image(engine)}" style="display:block;width:${width}px;height:${height}px">
+        <figcaption style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,.65);padding:3px 8px;border-radius:4px">${engine === 'cesium' ? 'Cesium (default)' : 'Navara (?engine=navara)'}</figcaption>
+      </figure>`,
+      )
+      .join('')}</div>
+    <div style="height:28px;line-height:28px;padding:0 8px">${caption}</div>
+  </body></html>`);
+  await page.evaluate(() =>
+    Promise.all([...document.images].map((img) => img.decode())),
+  );
+  await page.screenshot({
+    path: path.join(outDir, 'qa-engine-side-by-side.png'),
+    type: 'png',
+  });
+  await page.screenshot({
+    path: path.join(outDir, 'qa-engine-side-by-side.jpg'),
+    type: 'jpeg',
+    quality: 82,
+  });
+  await context.close();
 }
 
 const executablePath =
@@ -656,10 +1036,12 @@ const browser = await puppeteer.launch({
   args: ['--use-angle=metal', '--window-size=1280,800'],
 });
 let failed = 0;
+const shares = {};
 try {
   for (const engine of ENGINES) {
     try {
-      const results = await runEngine(browser, baseUrl, engine);
+      const { results, share } = await runEngine(browser, baseUrl, engine);
+      shares[engine] = share;
       const bad = results.filter(({ ok }) => !ok);
       const gaps = results.filter(({ gap }) => gap);
       failed += bad.length;
@@ -670,6 +1052,19 @@ try {
     } catch (error) {
       failed += 1;
       console.log(`FAIL [${engine}] ${redact(error.stack || error.message)}`);
+    }
+  }
+  if (shares.cesium && shares.navara) {
+    try {
+      const results = await runCrossEngine(browser, baseUrl, shares);
+      const bad = results.filter(({ ok }) => !ok);
+      failed += bad.length;
+      console.log(
+        `[cross] ${results.length - bad.length}/${results.length} passed`,
+      );
+    } catch (error) {
+      failed += 1;
+      console.log(`FAIL [cross] ${redact(error.stack || error.message)}`);
     }
   }
 } finally {
