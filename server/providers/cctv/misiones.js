@@ -142,8 +142,7 @@ export async function loadMisionesSources({
   sourceRoot = process.cwd(),
   fetchImpl = fetch,
 } = {}) {
-  if (String(process.env.CCTV_MISIONES_ENABLED || '').trim() !== '1')
-    return [];
+  if (String(process.env.CCTV_MISIONES_ENABLED || '').trim() !== '1') return [];
   const file =
     process.env.CCTV_MISIONES_LOCATIONS_FILE || DEFAULT_MISIONES_LOCATIONS_FILE;
   try {
@@ -153,8 +152,7 @@ export async function loadMisionesSources({
     if (fs.statSync(resolved).size > MISIONES_MAX_LOCATION_BYTES)
       throw new Error('Misiones location configuration exceeds size cap');
     const locations = JSON.parse(fs.readFileSync(resolved, 'utf8'));
-    if (!Object.keys(normalizeMisionesLocations(locations)).length)
-      return [];
+    if (!Object.keys(normalizeMisionesLocations(locations)).length) return [];
     const signal = AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS);
     const response = await fetchImpl(MISIONES_CATALOG_URL, {
       redirect: 'error',

@@ -52,6 +52,7 @@ test('requests refused for the same token renew it once', async () => {
 
 test('a server that does not offer tokens yields none', async () => {
   for (const answer of [
+    Response.json(null),
     new Response('Not found', { status: 404 }),
     new Response('<!doctype html>', { status: 200 }),
     Response.json({ accessToken: '', expiresAt: Date.now() + 60_000 }),

@@ -9,7 +9,7 @@ HTTPS stream origin.
 The pack ships eight installation coordinates finalized by the contributor on
 2026-10-15 at 02:26:04.444Z. Enable it with `CCTV_MISIONES_ENABLED=1`; no location
 file override is needed. It stays off by default because provider reuse
-authorization and application playback have not been established.
+authorization has not been established and HEVC playback depends on the browser/device.
 
 ## Location data and provenance
 
@@ -139,7 +139,7 @@ reproduced in the PR development environment:
   Cross-origin HLS.js is therefore expected to be blocked; no real browser test
   was performed. The main page sent `X-Frame-Options: SAMEORIGIN`.
 - curl, FFprobe and FFmpeg worked; Python urllib received Cloudflare HTTP 403,
-  error 1010. The actual Node fetch client still needs validation. This pack
+  error 1010. The actual Node fetch client was subsequently validated on 2026-10-15 (see below). This pack
   keeps the relay's honest user agent and does not spoof cookies or Referer.
 
 Public reachability is not redistribution authorization. Reuse permission,
@@ -150,9 +150,12 @@ provider permission nor codec support.
 
 ## Validation status and commands
 
-This contribution is a draft. The cloud environment remained pending/offline;
-Node tests, formatting, the build, browser gates and live playback have not run.
-The PR description records the limited isolated-JavaScript checks separately.
+Local validation on 2026-10-15 uses Node 24.22.0 on Linux. The full suite passed
+6,723 tests, including both allocation gates, with one Windows-only native DACL
+test skipped. The focused HLS/fMP4/source/middleware suite passed 31 tests.
+Build, formatting, package boundaries and published-token checks passed.
+The HLS eviction fixtures now admit all three candidate segments before asserting
+eviction by the byte budget, instead of truncating one during playlist parsing.
 Synthetic test media verifies transport bookkeeping only, not video decoding.
 
 ```bash
@@ -167,7 +170,30 @@ npm run test:track
 node scripts/qa-cctv-v2.mjs --url http://localhost:4173
 ```
 
-Before marking ready, run the repository gates and verify actual upstream
-responses with the application's Node client, HEVC playback on intended browsers,
-lease cleanup and stream stability. The eight positions already have the supplied
-project review; future location changes should retain their own provenance.
+The application's real Node client loaded all eight reviewed locations and
+read master playlists, media playlists, initialization files and media segments
+for seven cameras. cam05 timed out; reachability is a point-in-time observation,
+not a guarantee that every feed remains online.
+
+The eight positions already have the supplied project review; future location
+changes should retain their own provenance.
+
+### Local playback evidence, 2026-10-15
+
+Firefox 157 on this Linux desktop played cam02 through the application relay
+for 122 seconds of wall time: media time advanced by 127.5 seconds and 3,823
+additional frames decoded at 704×480. Both the map projection and panel video
+were visually inspected. Disabling CCTV released the consumer lease; a formerly
+valid cached initialization URL then returned 404. There were no uncaught page
+errors. This is a short live smoke test, not long-term availability evidence.
+
+Chrome's native AMD/ANGLE path on this PC lost rendering when starting HEVC.
+Disabling accelerated video decoding preserved the map but did not produce
+playable HEVC. Firefox worked with its default decoder settings. Browser and
+driver compatibility therefore remains a deployment constraint; the pack stays
+opt-in. No browser preferences or system codec configuration were changed.
+
+The general `qa-cctv-v2` gate was run headful with `CCTV_MAX_SOURCES=64`: 52
+checks passed and one failed because the keyless scene supplied no 3D mesh
+ground samples. The gate is not reported as green; its real-mesh assertion
+requires a configured 3D tile source. No CCTV ground/rendering code changed.

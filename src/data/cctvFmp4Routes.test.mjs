@@ -7,11 +7,7 @@ import path from 'node:path';
 import { cctvProxy } from '../../server/providers/cctv.js';
 
 test('MP4 routes enforce session and lease checks', async (t) => {
-  const keys = [
-    'CCTV_SOURCES_FILE',
-    'CCTV_SOURCES_JSON',
-    'CCTV_FORCE_AUSTIN',
-  ];
+  const keys = ['CCTV_SOURCES_FILE', 'CCTV_SOURCES_JSON', 'CCTV_FORCE_AUSTIN'];
   const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gev-hls-routes-'));
   const server = new EventEmitter();
@@ -74,10 +70,7 @@ test('MP4 routes enforce session and lease checks', async (t) => {
   const lease = '11111111-1111-4111-8111-111111111111';
   const result = await request('/media/mp4?lease=' + lease);
   assert.equal(result.status, 200);
-  assert.equal(
-    result.headers['Content-Type'],
-    'application/vnd.apple.mpegurl',
-  );
+  assert.equal(result.headers['Content-Type'], 'application/vnd.apple.mpegurl');
   const playlist = String(result.body);
   const initUrl = /#EXT-X-MAP:URI="([^"]+)"/.exec(playlist)[1];
   const segmentUrl = playlist.split('\n').find((line) => line.includes('seg_'));
@@ -94,8 +87,7 @@ test('MP4 routes enforce session and lease checks', async (t) => {
     local(initUrl).replace(/session=[^&]+/, 'session=wrong'),
     '/media/mp4/../init.mp4?lease=' + lease,
   ];
-  for (const url of invalid)
-    assert.equal((await request(url)).status, 404);
+  for (const url of invalid) assert.equal((await request(url)).status, 404);
   assert.equal(requests.length, reads);
   assert.equal(
     (await request('/media/mp4?lease=' + lease, 'DELETE')).status,

@@ -143,10 +143,16 @@ test('only pinned camera URLs and non-offline records register', () => {
 
 test('all eight reviewed coordinates retain their IDs and values', () => {
   const positions = normalizeMisionesLocations(reviewed);
-  assert.deepEqual(
-    Object.keys(positions),
-    ['cam01', 'cam02', 'cam03', 'cam04', 'cam05', 'cam06', 'cam07', 'cam08'],
-  );
+  assert.deepEqual(Object.keys(positions), [
+    'cam01',
+    'cam02',
+    'cam03',
+    'cam04',
+    'cam05',
+    'cam06',
+    'cam07',
+    'cam08',
+  ]);
   assert.equal(reviewed.verification.source, 'user_review');
   for (const item of reviewed.cameras) {
     const camera = misionesCameraToSource(
@@ -178,10 +184,7 @@ test('incomplete reviews do not activate flat coordinate records', () => {
     { verification: { ...reviewed.verification, source: 'inference' } },
     { verification: { ...reviewed.verification, method: '' } },
   ])
-    assert.deepEqual(
-      normalizeMisionesLocations({ ...reviewed, ...patch }),
-      {},
-    );
+    assert.deepEqual(normalizeMisionesLocations({ ...reviewed, ...patch }), {});
   for (const patch of [
     { certainty: 'candidate' },
     { confirmed_at: 'invalid' },
@@ -368,5 +371,8 @@ test('the catalog registry respects the Misiones opt-in', async (t) => {
   delete process.env.CCTV_MISIONES_ENABLED;
   const disabled = await createCctvCatalog({ sourceRoot: directory })();
   assert.equal(requested.includes(MISIONES_CATALOG_URL), false);
-  assert.equal(disabled.some((source) => source.pack === 'misiones'), false);
+  assert.equal(
+    disabled.some((source) => source.pack === 'misiones'),
+    false,
+  );
 });

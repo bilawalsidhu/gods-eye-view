@@ -34,9 +34,29 @@ const AIRCRAFT_FIELDS = {
   aircraftClass: ['t'],
   military: ['f'],
   onGround: ['f'],
+  squawk: ['t'],
+  emergency: ['f'],
+  emergencyKind: ['t'],
+  emergencySource: ['t'],
+  emergencyBroadcast: ['t'],
+  lastContactAtMs: ['ms'],
 };
 
 const layers = [
+  {
+    id: 'gnss-integrity',
+    aliases: [
+      'gnss integrity',
+      'navigation integrity',
+      'low navigation accuracy',
+      'gnss interference',
+      'gps interference',
+      'gps jamming',
+      'gnss',
+    ],
+    context: false,
+    noQuery: 'navigation-integrity cells; no countable analyst records',
+  },
   {
     id: 'flights',
     track: true,

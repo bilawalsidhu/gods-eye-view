@@ -92,9 +92,7 @@
         "crs": "WGS84"
       },
       "assessment": "OpenStreetMap registra un domo en este punto. El cruce y la curva costera son compatibles con el encuadre. La asociación del nodo con cam04 es una inferencia, no está confirmada por el operador.",
-      "sources": [
-        "https://www.openstreetmap.org/node/3913260213"
-      ],
+      "sources": ["https://www.openstreetmap.org/node/3913260213"],
       "evidence": {
         "live_frame": "evidencia/cam04-live.png",
         "site_cover": "evidencia/cam04-cover.jpg"
@@ -114,9 +112,7 @@
       },
       "candidate_camera_position": null,
       "assessment": "El fotograma y la portada son compatibles con El Brete. La coordenada corresponde a la playa, no al poste de la cámara.",
-      "sources": [
-        "https://www.openstreetmap.org/way/202014677"
-      ],
+      "sources": ["https://www.openstreetmap.org/way/202014677"],
       "evidence": {
         "live_frame": "evidencia/cam05-live.png",
         "site_cover": "evidencia/cam05-cover.jpg"
@@ -136,9 +132,7 @@
         "crs": "WGS84"
       },
       "assessment": "OpenStreetMap registra un domo junto a la rotonda que aparece en el fotograma. La asociación del nodo con cam06 es una inferencia, no está confirmada por el operador.",
-      "sources": [
-        "https://www.openstreetmap.org/node/6885586760"
-      ],
+      "sources": ["https://www.openstreetmap.org/node/6885586760"],
       "evidence": {
         "live_frame": "evidencia/cam06-live.png",
         "site_cover": "evidencia/cam06-cover.jpg"
@@ -153,9 +147,7 @@
       "reference_point": null,
       "candidate_camera_position": null,
       "assessment": "Pendiente de geolocalización fiable: el fotograma actual está desenfocado. Hay varios cruces sobre el Zaimán. La portada muestra una vía costera, pero no se pudo establecer con suficiente certeza qué puente ni el punto de instalación.",
-      "sources": [
-        "https://feeder.camarasdemisiones.com/streams"
-      ],
+      "sources": ["https://feeder.camarasdemisiones.com/streams"],
       "evidence": {
         "live_frame": "evidencia/cam07-live.png",
         "site_cover": "evidencia/cam07-cover.jpg"

@@ -299,9 +299,7 @@ export function createHlsPuller({
           body,
           initId,
           discontinuity:
-            segment.discontinuity ||
-            entry.pendingDiscontinuity ||
-            initChanged,
+            segment.discontinuity || entry.pendingDiscontinuity || initChanged,
         });
         entry.lastInitId = initId;
         entry.pendingDiscontinuity = false;

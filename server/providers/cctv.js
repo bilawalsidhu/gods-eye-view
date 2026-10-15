@@ -254,7 +254,8 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 leaseId,
               );
               res.writeHead(asset ? 200 : 404, {
-                'Content-Type': asset?.contentType || 'application/octet-stream',
+                'Content-Type':
+                  asset?.contentType || 'application/octet-stream',
                 'Cache-Control': 'no-store',
               });
               res.end(asset?.body);
