@@ -5384,6 +5384,14 @@ ids use `crypto.randomUUID` where the page is a secure context and an equivalent
 v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Encrypted/fMP4/byte-range playlists fail
 closed. Performance and live agency reliability require recorded validation.
 
+The relay accepts at most 12 MiB per incoming segment and retains at most
+24 MiB per session. A playlist may advertise already-expired segments: 404s
+older than its newest two entries are skipped and the next retained segment
+marks a discontinuity. A 404 in that newest pair, access failures, redirects,
+TLS errors and oversized responses retain the existing retry/failure behavior.
+This accommodates Mendoza's expired live-window entries and Tandil's roughly
+8 MB 1080p segments without changing origin registration or storing recordings.
+
 ## Wind forecast models
 
 Wind supports selectable GFS/IFS models with persisted model choice. Each fetch chooses the available cycle and forecast step nearest the current time; rows show both issue and valid UTC timestamps. Grid identities include model, cycle, forecast step and any requested scalar field. The six model/field cache slots each retain the last two issued grids for manifest/grid rollover, coalesce concurrent requests, retain last-good data on failures and retry no faster than once per minute. Model changes clear the old field immediately, cancel old acquisition and ignore superseded results.

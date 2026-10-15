@@ -10,6 +10,71 @@ const playlist =
   '#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:12\n#EXTINF:2,\na.ts\n#EXTINF:2,\nb.ts\n#EXTINF:2,\nc.ts\n';
 const base = 'https://camera.example/live/list.m3u8';
 
+test('an expired old segment does not block the current live pair', async (t) => {
+  const manager = createHlsPuller({
+    limits: { ...HLS_LIMITS, pollMs: 100000 },
+    fetchImpl: async (url) =>
+      url.endsWith('.m3u8')
+        ? new Response(playlist)
+        : url.endsWith('a.ts')
+          ? new Response('', { status: 404 })
+          : new Response('current'),
+  });
+  t.after(() => manager.shutdown());
+  const entry = await manager.ensure('expired', base);
+  assert.equal(await manager.waitReady(entry), true);
+  assert.equal(entry.segments.size, 2);
+  assert.equal(manager.stats().bytes, 14);
+  const output = await manager.buildPlaylist(entry, 'expired');
+  assert.match(output, /#EXT-X-DISCONTINUITY\n#EXTINF/);
+  assert.deepEqual([...entry.upstream.keys()], [13, 14]);
+});
+
+test('recent missing segments and access failures still exhaust the retry budget', async (t) => {
+  for (const [file, status] of [
+    ['c.ts', 404],
+    ['a.ts', 403],
+  ]) {
+    const manager = createHlsPuller({
+      limits: { ...HLS_LIMITS, pollMs: 1, readyMs: 1000 },
+      fetchImpl: async (url) =>
+        url.endsWith('.m3u8')
+          ? new Response(
+              status === 404
+                ? playlist.replace('#EXTINF:2,\na.ts\n', '')
+                : playlist,
+            )
+          : url.endsWith(file)
+            ? new Response('', { status })
+            : new Response('current'),
+    });
+    t.after(() => manager.shutdown());
+    const entry = await manager.ensure(`${file}-${status}`, base);
+    assert.equal(await manager.waitReady(entry), false);
+    assert.equal(entry.stopping, true);
+    assert.deepEqual(manager.stats(), { sessions: 0, bytes: 0 });
+  }
+});
+
+test('1080p segments fit the bounded downloader while oversized responses still fail', async () => {
+  const bytes = new Uint8Array(8 * 1024 * 1024 + 1024);
+  const body = await fetchHlsBytes(base, {
+    maxBytes: HLS_LIMITS.segmentBytes,
+    fetchImpl: async () => new Response(bytes),
+  });
+  assert.equal(body.length, bytes.length);
+  await assert.rejects(
+    fetchHlsBytes(base, {
+      maxBytes: HLS_LIMITS.segmentBytes,
+      fetchImpl: async () =>
+        new Response('x', {
+          headers: { 'content-length': String(HLS_LIMITS.segmentBytes + 1) },
+        }),
+    }),
+    /too large/,
+  );
+});
+
 test('playlist parser uses sequence, refuses escaping and unsupported references', () => {
   assert.deepEqual(
     parseHlsMedia(playlist, base).map((s) => s.seq),

@@ -5,7 +5,7 @@ export const HLS_LIMITS = Object.freeze({
   sessions: 2,
   leasesPerSession: 8,
   playlistBytes: 256 * 1024,
-  segmentBytes: 4 * 1024 * 1024,
+  segmentBytes: 12 * 1024 * 1024,
   sessionBytes: 24 * 1024 * 1024,
   segments: 12,
   pollMs: 2000,
@@ -43,7 +43,9 @@ export async function fetchHlsBytes(
       response.redirected ||
       (response.url && new URL(response.url).href !== new URL(url).href)
     )
-      throw new Error('HLS upstream refused');
+      throw Object.assign(new Error('HLS upstream refused'), {
+        status: response.status,
+      });
     if (Number(response.headers.get('content-length')) > maxBytes)
       throw new Error('HLS response too large');
     reader = response.body?.getReader?.();
@@ -201,7 +203,15 @@ export function createHlsPuller({
       for (const segment of segments) {
         if (entry.stopping) return;
         if (entry.upstream.has(segment.seq)) continue;
-        const body = await read(entry, segment.uri, limits.segmentBytes);
+        let body;
+        try {
+          body = await read(entry, segment.uri, limits.segmentBytes);
+        } catch (error) {
+          // Some live windows advertise expired segments; keep the newest pair strict.
+          if (error.status !== 404 || segment.seq >= newest - 1) throw error;
+          entry.pendingDiscontinuity = true;
+          continue;
+        }
         if (entry.stopping) return;
         // Evict BEFORE retaining the incoming segment. One bounded download may
         // exist in addition to the cache; no unbounded disk output is possible.
