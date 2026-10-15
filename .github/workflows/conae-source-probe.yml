@@ -1,0 +1,17 @@
+name: CONAE source probe
+on:
+  push:
+    branches: [contrib/argentina-conae-goes]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check out this branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Inspect the public CONAE source
+        run: node scripts/check-conae-goes.mjs
