@@ -1,5 +1,10 @@
 # Changelog
 
+- CCTV supports public YouTube watch, live, share and embed links as external
+  players. The panel keeps YouTube's controls and a source link, unloads the
+  player when hidden or deselected, and offers two opt-in Buenos Aires examples.
+  These approximate camera locations do not claim coverage or calibrated poses.
+
 - Overpass and military-installation disk caches no longer serve answers from a
   previously configured `OVERPASS_UPSTREAMS` instance after it is repointed.
 

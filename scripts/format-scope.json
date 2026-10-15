@@ -1022,5 +1022,9 @@
   "src/sources/gbfsStations.test.mjs",
   "scripts/qa-gbfs-names.mjs",
   "src/ui/flyToDataSource.js",
-  "src/ui/flyToDataSource.test.mjs"
+  "src/ui/flyToDataSource.test.mjs",
+  "src/sources/youtube.test.mjs",
+  "src/data/cctvYouTube.test.mjs",
+  "src/ui/cctvEmbed.test.mjs",
+  "config/cctv_sources.youtube.json"
 ]

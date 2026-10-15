@@ -953,6 +953,54 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+## YouTube CCTV players
+
+CCTV's `embed` feed type accepts public HTTPS YouTube video URLs in
+`embedUrl`: `youtube.com/watch?v=VIDEO_ID`, `youtube.com/live/VIDEO_ID`,
+`youtu.be/VIDEO_ID`, `youtube.com/shorts/VIDEO_ID`, and the YouTube or
+YouTube-nocookie `/embed/VIDEO_ID` form. Canonicalization requires an exact
+allowlisted host and an eleven-character video ID, rejects credentials and
+nonstandard ports, and discards caller parameters. Every accepted link becomes
+`https://www.youtube-nocookie.com/embed/VIDEO_ID?playsinline=1`. The existing
+Bhote Koshi media callouts share the video-ID parser. No new dependency, API key,
+player SDK or server-side YouTube request is required.
+
+The original player retains its controls, branding and access restrictions.
+Press Play to start; consent, login, regional restrictions or disabled embedding
+remain provider-controlled. `sourcePageUrl` supplies the official-page link;
+when omitted for YouTube, the panel links to the canonical watch page. The iframe
+preserves an origin referrer and a minimum 200-by-200-pixel viewport. It loads
+only while selected and visible and is released on hide, collapse, switch,
+disable or destruction. The existing `EXTERNAL` status does not claim that a
+stream is currently live. Frame/media proxying, projection, calibration and
+ambient thumbnails stay disabled for these players.
+
+Try the two attributed Argentine examples with:
+
+```bash
+CCTV_SOURCES_FILE=config/cctv_sources.youtube.json npm run dev
+```
+
+The custom catalog replaces the default camera packs; add `CCTV_FORCE_AUSTIN=1`
+to merge it with the defaults. The file contains Argentina News' Obelisco view
+and UADE's Campus Buenos Aires view, discovered through SkylineWebcams and
+verified against YouTube's public oEmbed metadata; UADE also embeds its stream
+on its own homepage. Their rounded landmark/campus anchors are approximate,
+not surveyed mounts. No video or thumbnails are bundled. Details and coordinate
+provenance are in `DATA_SOURCES.md`.
+
+Channel `/@handle/live` URLs and playlist-only URLs are not video IDs. When a
+broadcaster restarts under a new video ID, update `embedUrl`; this feature does
+not scrape channels or discover replacement streams. Skyline-owned streams and
+private/paywalled aggregator catalogs are not imported. A camera listed by an
+aggregator needs an independently public, authorized original player.
+
+Unit coverage: `src/sources/youtube.test.mjs`, `cctvEmbed.test.mjs`,
+`cctvYouTube.test.mjs` (catalog, API routes, geometry and public state), and existing
+Bhote Koshi tests. Browser gate: `node scripts/qa-cctv-v2.mjs --url
+http://localhost:4173`; real YouTube playback and provider restrictions require
+an additional browser check.
+
 ## NYC DOT TMC CCTV source pack
 
 The CCTV catalog can add New York City traffic cameras from the NYC DOT

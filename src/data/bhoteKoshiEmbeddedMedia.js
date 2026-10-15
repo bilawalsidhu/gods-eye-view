@@ -1,13 +1,6 @@
 import * as Cesium from 'cesium';
+import { youtubeVideoId } from '../sources/youtube.js';
 
-const YOUTUBE_HOSTS = new Set([
-  'youtube.com',
-  'www.youtube.com',
-  'm.youtube.com',
-  'youtube-nocookie.com',
-  'www.youtube-nocookie.com',
-  'youtu.be',
-]);
 const FACEBOOK_HOSTS = new Set([
   'facebook.com',
   'www.facebook.com',
@@ -295,15 +288,6 @@ export function publicEmbeddedMediaUrl(value) {
   return url;
 }
 
-function youtubeVideoId(url) {
-  const host = url.hostname.toLowerCase();
-  if (!YOUTUBE_HOSTS.has(host)) return null;
-  if (host === 'youtu.be')
-    return /^\/([\w-]{11})\/?$/.exec(url.pathname)?.[1] || null;
-  if (url.pathname === '/watch') return url.searchParams.get('v');
-  return /^\/(?:embed|shorts)\/([\w-]{11})\/?$/.exec(url.pathname)?.[1] || null;
-}
-
 function isFacebookVideoUrl(url) {
   const host = url.hostname.toLowerCase();
   if (!FACEBOOK_HOSTS.has(host)) return false;
@@ -329,7 +313,7 @@ export function resolveEmbeddedMediaSource(value) {
   const url = publicEmbeddedMediaUrl(value);
   if (!url) return null;
   const youtubeId = youtubeVideoId(url);
-  if (youtubeId && /^[\w-]{11}$/.test(youtubeId)) {
+  if (youtubeId) {
     return {
       provider: 'youtube',
       id: youtubeId,

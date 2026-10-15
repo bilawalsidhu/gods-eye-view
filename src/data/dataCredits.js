@@ -199,6 +199,14 @@ export const DATA_CREDITS = [
       '(location-matched article links; publisher terms apply)',
   },
   {
+    key: 'youtube-cctv',
+    html:
+      'YouTube CCTV examples (when configured): ' +
+      '<a href="https://www.youtube.com/@ArgentinaNewsTV" target="_blank" rel="noopener">Argentina News</a>, ' +
+      '<a href="https://www.uade.edu.ar/" target="_blank" rel="noopener">UADE</a>. ' +
+      'Original YouTube players; no open video license asserted.',
+  },
+  {
     key: 'austin-cctv',
     html:
       'CCTV cameras &amp; frames: City of Austin, TX — ' +

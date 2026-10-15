@@ -23,6 +23,10 @@ export function createPresentation({
         : 'No cameras available in catalog.';
     }
 
+    if (active.camera.feedType === 'embed') {
+      return `${active.camera.city.toUpperCase()} CCTV · ${active.camera.name} · PUBLIC PLAYER · APPROXIMATE LOCATION · COVERAGE NOT CALIBRATED`;
+    }
+
     const area = parts.model.sectorAreaKm2(
       active.camera.rangeM,
       active.camera.fovDeg,
@@ -66,6 +70,7 @@ export function createPresentation({
     const resolvedActiveId =
       activeId || parts.selection.getActiveRecord()?.camera.id || null;
     const camera = record.camera;
+    const embedded = camera.feedType === 'embed';
     const health = layerState._healthById.get(camera.id) || null;
     const isActive = camera.id === resolvedActiveId;
     const refreshMs = isActive
@@ -78,19 +83,22 @@ export function createPresentation({
       provider: camera.provider,
       lat: camera.lat,
       lon: camera.lon,
-      headingDeg: camera.headingDeg,
+      headingDeg: embedded ? null : camera.headingDeg,
       // Bearing provenance (#639): the pack's confidence flag plus the derived
       // "is this a synthetic guess" bit (calibration-aware), so UI consumers
       // never have to re-derive it.
       headingConfidence: camera.headingConfidence || null,
       headingEstimated: isHeadingEstimated(camera),
-      pitchDeg: camera.pitchDeg,
-      fovDeg: camera.fovDeg,
-      rangeM: camera.rangeM,
-      elevationM: camera.absoluteHeightM,
-      mountHeightM: camera.mountHeightM,
+      pitchDeg: embedded ? null : camera.pitchDeg,
+      fovDeg: embedded ? null : camera.fovDeg,
+      rangeM: embedded ? null : camera.rangeM,
+      elevationM: embedded ? null : camera.absoluteHeightM,
+      mountHeightM: embedded ? null : camera.mountHeightM,
       active: isActive,
       feedType: camera.feedType,
+      embedUrl: embedded ? camera.embedUrl || '' : '',
+      sourcePageUrl: camera.sourcePageUrl || '',
+      locationNote: camera.locationNote || '',
       isVideo:
         parts.model.isVideoFeedType(camera.feedType) &&
         record.projection?.mode !== 'image',
@@ -98,7 +106,7 @@ export function createPresentation({
         health?.sourceKind ||
         camera.sourceKind ||
         (camera.feedConfigured ? 'configured' : 'seed'),
-      sourceStatus: health?.status || 'unknown',
+      sourceStatus: embedded ? 'external' : health?.status || 'unknown',
       sourceMessage: health?.message || '',
       sourceLabel: health?.label || camera.provider || '',
       credit: camera.credit || '',
@@ -129,8 +137,8 @@ export function createPresentation({
       calBadge: parts.calibration.deriveCalBadge(camera),
       poseSource: camera.poseSource || null,
       basePose: camera.basePose ? { ...camera.basePose } : null,
-      frameUrl: parts.frames.frameUrlFor(camera, refreshMs),
-      mediaUrl: parts.frames.mediaUrlFor(camera),
+      frameUrl: embedded ? null : parts.frames.frameUrlFor(camera, refreshMs),
+      mediaUrl: embedded ? null : parts.frames.mediaUrlFor(camera),
     };
   }
 

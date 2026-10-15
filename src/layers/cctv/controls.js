@@ -88,7 +88,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         const targetRecord = targetCameraId
           ? layerState._recordById.get(targetCameraId)
           : null;
-        if (targetRecord) {
+        if (targetRecord && targetRecord.camera.feedType !== 'embed') {
           if (calibrationCfg.reset) {
             // RESET: back to the base prior, delete the persisted entry, clear
             // the dirty flag (semantics unchanged from v2).
@@ -147,7 +147,9 @@ export function createControls({ state: layerState, services, parts, source }) {
         }
       }
       if (typeof params.calibrationMode === 'boolean') {
-        layerState._calibrationMode = params.calibrationMode;
+        layerState._calibrationMode =
+          params.calibrationMode &&
+          parts.selection.getActiveRecord()?.camera?.feedType !== 'embed';
         if (layerState._calibrationMode) {
           parts.calibration.ensureGizmo();
           layerState._gizmo?.setEnabled(true);

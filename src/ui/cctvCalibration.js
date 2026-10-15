@@ -158,7 +158,8 @@ export function _beginCctvCalValueEdit(chip) {
 }
 
 export function _syncCctvCalReadout(enabled, activeCamera) {
-  const canCalibrate = !!enabled && !!activeCamera;
+  const canCalibrate =
+    !!enabled && !!activeCamera && activeCamera.feedType !== 'embed';
   if (this._cctvAdjustBtn) {
     const adjustOn = !!this._cctvState?.calibrationMode;
     this._cctvAdjustBtn.classList.toggle('active', adjustOn && canCalibrate);

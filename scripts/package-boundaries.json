@@ -179,7 +179,8 @@
       "scripts/google-server-key.mjs",
       "src/data/cctvFootprint.js",
       "src/sources/cctvTypes.js",
-      "src/sources/httpBody.js"
+      "src/sources/httpBody.js",
+      "src/sources/youtube.js"
     ],
     "external": []
   },
@@ -474,7 +475,10 @@
       "src/ui/cctvControls.js",
       "src/ui/cctvFrames.js",
       "src/ui/cctvVideo.js",
-      "src/ui/cctvPresentation.js"
+      "src/ui/cctvPresentation.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
+      "src/ui/cctvEmbed.js"
     ],
     "external": []
   },
@@ -668,7 +672,10 @@
       "src/ui/localSdrControls.js",
       "src/layers/localAdsb/feedNames.js",
       "src/ui/localSdrPresentation.js",
-      "src/data/cameraArrival.js"
+      "src/data/cameraArrival.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
+      "src/ui/cctvEmbed.js"
     ],
     "external": ["cesium"]
   },
@@ -1189,7 +1196,9 @@
       "src/overlays/worldOverlayTokens.js",
       "src/data/cctvFootprint.js",
       "src/data/inputOwnership.js",
-      "src/layers/cctv/sourcePolicy.js"
+      "src/layers/cctv/sourcePolicy.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js"
     ],
     "external": ["hls.js", "cesium"]
   },
@@ -2239,7 +2248,10 @@
       "src/app/embed.js",
       "src/data/cameraFraming.js",
       "src/data/geoImportPins.js",
-      "src/data/geoImportImages.js"
+      "src/data/geoImportImages.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js",
+      "src/ui/cctvEmbed.js"
     ],
     "external": [
       "hls.js",
@@ -2780,7 +2792,9 @@
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
       "src/sources/infrastructureData.js",
-      "src/data/cameraFraming.js"
+      "src/data/cameraFraming.js",
+      "src/sources/cctvTypes.js",
+      "src/sources/youtube.js"
     ],
     "external": [
       "hls.js",
@@ -3022,7 +3036,7 @@
   },
   "cctv-types-source": {
     "exports": ["./sources/cctv-types"],
-    "modules": ["src/sources/cctvTypes.js"],
+    "modules": ["src/sources/cctvTypes.js", "src/sources/youtube.js"],
     "external": []
   },
   "regional-source": {

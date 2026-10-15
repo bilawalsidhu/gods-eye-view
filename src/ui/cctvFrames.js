@@ -90,6 +90,11 @@ export function _syncCctvSourceBadge(activeCamera, enabled) {
     this._cctvSourceBadge.dataset.frameState = 'idle';
     return;
   }
+  if (activeCamera.feedType === 'embed') {
+    this._cctvSourceBadge.textContent = 'PUBLIC PLAYER · EXTERNAL';
+    this._cctvSourceBadge.dataset.frameState = 'external';
+    return;
+  }
   const hasDisplayedFrame =
     this._cctvFrameWrap?.classList.contains('has-frame');
   if (this._cctvFrame?.dataset.loading === 'true' && !hasDisplayedFrame) {
