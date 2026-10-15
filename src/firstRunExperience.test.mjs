@@ -656,16 +656,29 @@ test('the DISPLAY rail starts collapsed on a first run, and a stored choice wins
 
 // ── Voice: instruction-only, tool schema unchanged ─────────────────────
 
-test('the voice TOOL SCHEMA matches the pinned release — the mission mapping is instructions only', () => {
-  // ALPR deliberately adds its ID to the two layer menus and visibility aliases.
+test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping is instructions only', () => {
+  // Analyst layers and the separate satellite-pass tool deliberately extend the schema.
   // Canonical serialization pins every tool name, description, property and
   // ordering while allowing source formatting. Derived from the unchanged
   // release schema before formatting (the previous source-byte pin passed).
-  const block = JSON.stringify(GEV_REALTIME_TOOLS);
-  assert.equal(block.length, 26208, 'serialized tool schema length drifted');
+  const legacyTools = structuredClone(GEV_REALTIME_TOOLS).filter((tool) => tool.name !== 'set_cyber_sonar');
+  const hudLayout = legacyTools.find((tool) => tool.name === 'set_hud').parameters.properties.layout;
+  assert.deepEqual(hudLayout.enum, ['tactical', 'operator', 'minimal', 'cyber']);
+  // Cyber deliberately adds one layout; first-run missions still change no tools.
+  hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
+  const block = JSON.stringify(legacyTools);
+  // Re-derived for the voice layer manifest (generated layer enums, alias and
+  // field hints), point-and-ask's pointer/referent arguments and the prompt
+  // consolidation (shorter analyst, annotate_map and ISS wording), plus the
+  // referent-only track_entity alternative (kept out of the model-facing
+  // schema, which may not carry top-level anyOf), and Contacts requested-radius
+  // list descriptions; the missions still ride existing tools.
+  // Street Level and GNSS extend the manifest; broadcast caveats describe tracked and analyst aircraft.
+  // Air quality (ECCC AQHI) extends the manifest.
+  assert.equal(block.length, 30655, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '135d4ec66239777da34a8476cdf8348574421d7afd2e981cc3490909a5bc8686',
+    '3b1d5e77c10a92f6543a4f9d1ff1870101a0306b65e5b8a6113111c81eda371e',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');

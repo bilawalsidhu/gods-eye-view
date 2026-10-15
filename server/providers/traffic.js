@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
 
+import { readResponseBytesCapped } from './common/http.js';
 import {
   isValidTileCoord as isValidTomTomTile,
   utcDayKey as tomtomUtcDayKey,
@@ -23,9 +24,16 @@ import {
  * Budget governor (mirrors the OpenSky credit-governor philosophy — last-good
  * data beats a dead layer): a persistent counter (.gev-cache/tomtom/budget.json,
  * keyed by UTC date, reset on day change) counts upstream fetch attempts
- * against a soft cap (TOMTOM_DAILY_TILE_BUDGET, default 40,000 of the free
- * tier's ~50k/day). Over the cap the proxy serves stale tiles when available,
- * else 429 {error:'budget'}.
+ * against a soft cap (TOMTOM_DAILY_TILE_BUDGET). Over the cap the proxy
+ * serves stale tiles when available, else 429 {error:'budget'}.
+ *
+ * The default is derived from TomTom's published free allowance, which is
+ * granted MONTHLY, not daily: 200,000 Traffic Flow & Incidents tile requests
+ * per month (https://docs.tomtom.com/pricing/). The previous 40,000/day
+ * default — and the "~50k/day" figure this comment used to cite — exhausted
+ * a month's entire allowance in five days, leaving the traffic layer dead
+ * for the rest of the billing period. 6,000/day keeps a full 31-day month
+ * inside the allowance (186,000) with headroom to spare.
  *
  * GET /api/tomtom/status → {hasKey, dailyCount, budget, date}. Keyless mode:
  * status reports hasKey:false and the tile endpoint 503s {error:'no_key'}
@@ -37,9 +45,12 @@ export function tomtomProxy() {
   const TILE_TTL_MS = 120_000;
   const CACHE_DIR = path.join(process.cwd(), '.gev-cache', 'tomtom');
   const BUDGET_PATH = path.join(CACHE_DIR, 'budget.json');
-  const DEFAULT_DAILY_BUDGET = 40000;
+  // 200,000/month free tier / 31 days = 6,451. Rounded down for headroom.
+  const DEFAULT_DAILY_BUDGET = 6000;
   const MEM_MAX_ENTRIES = 256;
   const UPSTREAM_TIMEOUT_MS = 15000;
+  /** Flow tiles are well under 1 MB; this bounds a runaway body, not a budget. */
+  const TOMTOM_TILE_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
   /** @type {Map<string, {at:number, buf:Buffer}>} tile key `z/x/y` -> cached tile (kept past TTL for serve-stale). */
   const mem = new Map();
@@ -135,11 +146,15 @@ export function tomtomProxy() {
       'https://api.tomtom.com/traffic/map/4/tile/flow/relative/' +
       `${z}/${x}/${y}.pbf?key=${encodeURIComponent(process.env.TOMTOM_API_KEY)}`;
     recordUpstreamFetch(); // attempts count — upstream bills the request either way
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-    });
+    const signal = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
+    const res = await fetch(url, { signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const buf = Buffer.from(await res.arrayBuffer());
+    const bytes = await readResponseBytesCapped(
+      res,
+      TOMTOM_TILE_MAX_RESPONSE_BYTES,
+      signal,
+    );
+    const buf = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     if (buf.length === 0) throw new Error('empty tile body');
     return buf;
   }

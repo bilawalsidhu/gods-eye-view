@@ -7,11 +7,13 @@ export class LayerPresentation {
   constructor(
     manager,
     {
+      weatherClock,
       requestRender = governorRequestRender,
       invalidateDetection = markDetectionSourcesChanged,
     } = {},
   ) {
     this.manager = manager;
+    this.weatherClock = weatherClock;
     this._panel = null;
     this.pendingVisible = false;
     this._unsubscribe = manager.subscribeActivity((change) => {
@@ -35,6 +37,7 @@ export class LayerPresentation {
   get panel() {
     if (!this._panel)
       this._panel = new LayerPanel({
+        weatherClock: this.weatherClock,
         getLayers: () => this.manager.getAll(),
         isEnabled: (id) => this.manager.isEnabled(id),
         setEnabled: (id, enabled, options) =>
@@ -66,6 +69,12 @@ export class LayerPresentation {
   }
   mount(container) {
     this.panel.mount(container);
+  }
+  /** Hand the Recent Imagery readout factory to the panel (see LayerPanel). */
+  attachRecentImagery(factory) {
+    // Detaching never builds a panel that teardown already released.
+    if (factory) this.panel.attachRecentImagery(factory);
+    else this._panel?.attachRecentImagery(null);
   }
   refresh() {
     this._panel?._refreshTogglePanel();

@@ -3,19 +3,38 @@ export const COCKPIT_VISION_MODES = Object.freeze([
   'crt',
   'nvg',
   'thermal',
+  'anime',
   'noir',
+  'snow',
 ]);
 
 const TARGET_STYLE_BY_MODE = Object.freeze({
   crt: 'retro',
   nvg: 'surveillance',
   thermal: 'thermal',
+  anime: 'anime',
   noir: 'noir',
+  snow: 'snow',
 });
 
-/** Normalize a requested Cockpit vision mode to the inherited preset entry. */
+const COCKPIT_MODE_BY_STYLE = Object.freeze({
+  normal: 'optical',
+  retro: 'crt',
+  surveillance: 'nvg',
+  thermal: 'thermal',
+  anime: 'anime',
+  noir: 'noir',
+  snow: 'snow',
+});
+
+/** Normalize a requested Cockpit vision mode to the unfiltered Normal entry. */
 export function normalizeCockpitVisionMode(mode) {
   return COCKPIT_VISION_MODES.includes(mode) ? mode : 'optical';
+}
+
+/** Start Cockpit on the equivalent supported map preset. */
+export function cockpitVisionModeForStyle(style) {
+  return COCKPIT_MODE_BY_STYLE[String(style || '').toLowerCase()] || 'optical';
 }
 
 /** Settle pending map-style crossfades and return their intended final intensities. */
@@ -34,12 +53,10 @@ export function captureCockpitVisionBaseline(stages, transitions) {
  * Apply Cockpit-only stage intensities without changing any shader parameters.
  * Returns the temporary style whose parameters should be shown, or null.
  */
-export function applyCockpitVisionStageIntensities(stages, mode, restore = {}) {
+export function applyCockpitVisionStageIntensities(stages, mode) {
   const next = normalizeCockpitVisionMode(mode);
   if (next === 'optical') {
-    for (const [name, intensity] of Object.entries(restore)) {
-      if (stages[name]) stages[name].uniforms.intensity = intensity;
-    }
+    for (const stage of Object.values(stages)) stage.uniforms.intensity = 0;
     return null;
   }
 

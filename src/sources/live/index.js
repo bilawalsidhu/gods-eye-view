@@ -13,7 +13,7 @@ export {
   vesselSnapshot,
 } from './vessels.js';
 export {
-  createOpenSkySource,
-  createAdsbLolSource,
-  createAisStreamSource,
+  createFlightSource,
+  createMilitarySource,
+  createVesselSource,
 } from './standalone.js';

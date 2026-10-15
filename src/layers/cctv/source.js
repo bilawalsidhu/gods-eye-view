@@ -51,5 +51,18 @@ export function createCctvSource({
     },
     getFrameUrl: frameUrlFor,
     getMediaUrl: mediaUrlFor,
+    /** Read one current frame through the registered frame endpoint. */
+    async getFrame(camera, { signal } = {}) {
+      signal?.throwIfAborted();
+      const response = await fetchImpl(frameUrlFor(camera), {
+        cache: 'no-store',
+        signal,
+      });
+      if (!response.ok) throw new Error('Camera frame HTTP ' + response.status);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      signal?.throwIfAborted();
+      const type = response.headers.get('content-type') || '';
+      return { contentType: type.split(';')[0].trim().toLowerCase(), bytes };
+    },
   };
 }

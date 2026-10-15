@@ -3,7 +3,8 @@ import path from 'node:path';
 import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
 import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
-import { normalizeSourceItem } from './normalize.js';
+import { cameraRegion, normalizeSourceItem } from './normalize.js';
+import { loadLithuaniaSources } from './lithuania.js';
 import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
@@ -17,17 +18,30 @@ import {
   loadWarendorfSourcesFromCatalog,
   loadNswSourcesFromOpenData,
   loadCalgarySourcesFromOpenData,
+  loadCataloniaSourcesFromOpenData,
+  loadDelDOTSourcesFromOpenData,
+  loadKingCountySourcesFromOpenData,
+  loadWsdotSourcesFromOpenData,
+  loadVegvesenSourcesFromOpenData,
+  loadNycSourcesFromOpenData,
+  loadTorontoSourcesFromOpenData,
 } from './sources.js';
 
 /** Env kill switch: unset or anything but "0" means enabled. */
 const envEnabled = (name) => String(process.env[name] || '1').trim() !== '0';
+/** Env opt-in: only "1" enables. For packs whose feed access needs an
+ * operator agreement or whose terms are unconfirmed, so an unset flag never
+ * reaches the upstream. */
+const envOptIn = (name) => String(process.env[name] || '').trim() === '1';
 
 /**
  * Live open-data packs, in merge order. Adding a region is one entry here
- * plus its loader in sources.js; the catalog cap is shared across entries
- * round-robin (cap.js), so a new pack never silently evicts an older one.
+ * plus its loader (in sources.js or its own module); the catalog cap is
+ * shared across entries round-robin (cap.js), so a new pack never silently
+ * evicts an older one.
  * Each pack fails independently (allSettled) and is gated by its own env
- * kill switch.
+ * kill switch, or by an opt-in flag where access needs an agreement or the
+ * terms are unconfirmed.
  */
 const LIVE_PACKS = [
   { name: 'austin', enabled: () => true, load: loadAustinSourcesFromOpenData },
@@ -86,6 +100,50 @@ const LIVE_PACKS = [
     enabled: () => envEnabled('CCTV_CALGARY_ENABLED'),
     load: loadCalgarySourcesFromOpenData,
   },
+  {
+    name: 'catalonia',
+    enabled: () => envEnabled('CCTV_CATALONIA_ENABLED'),
+    load: loadCataloniaSourcesFromOpenData,
+  },
+  {
+    name: 'deldot',
+    enabled: () => envEnabled('CCTV_DELDOT_ENABLED'),
+    load: loadDelDOTSourcesFromOpenData,
+  },
+  {
+    name: 'kingcounty',
+    enabled: () => envEnabled('CCTV_KINGCOUNTY_ENABLED'),
+    load: loadKingCountySourcesFromOpenData,
+  },
+  {
+    name: 'wsdot',
+    enabled: () => envEnabled('CCTV_WSDOT_ENABLED'),
+    load: loadWsdotSourcesFromOpenData,
+  },
+  {
+    name: 'vegvesen',
+    enabled: () => envEnabled('CCTV_VEGVESEN_ENABLED'),
+    load: loadVegvesenSourcesFromOpenData,
+  },
+  {
+    // NYC DOT requires a data-sharing agreement for this feed, so the pack is
+    // off unless the operator opts in (see DATA_SOURCES.md).
+    name: 'nyc',
+    enabled: () => envOptIn('CCTV_NYC_ENABLED'),
+    load: loadNycSourcesFromOpenData,
+  },
+  {
+    name: 'toronto',
+    enabled: () => envEnabled('CCTV_TORONTO_ENABLED'),
+    load: loadTorontoSourcesFromOpenData,
+  },
+  {
+    // Opt-in until the Via Lietuva open-data terms are confirmed to cover the
+    // camera photos (see DATA_SOURCES.md).
+    name: 'lithuania',
+    enabled: () => envOptIn('CCTV_LITHUANIA_ENABLED'),
+    load: loadLithuaniaSources,
+  },
 ];
 /**
  * Load CCTV sources from a local JSON file (CCTV_SOURCES_FILE env or default).
@@ -137,6 +195,9 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
   /** @type {Promise<Array<object>>|null} In-flight refresh, shared by concurrent
    * callers so a post-TTL burst launches ONE refetch, not one per request. */
   let _cctvSourceInflight = null;
+  /** @type {Array<{pack: string, available: number, served: number}>} Packs
+   * that serve fewer cameras than they offer. */
+  let _cctvTrimmedPacks = [];
 
   /**
    * Assemble and cache the merged CCTV source list.
@@ -203,8 +264,12 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
       name,
       sources: items
         .filter((item) => item && typeof item === 'object')
-        .map((item) => normalizeSourceItem(item))
+        .map((item) => ({ ...normalizeSourceItem(item), pack: name }))
         .filter((item) => item.id),
+      available: Number.isFinite(items.available)
+        ? items.available
+        : items.length,
+      region: items.region ?? null,
     });
     const packs = [
       ...LIVE_PACKS.map((pack, index) =>
@@ -228,6 +293,16 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
       loadGroundHeights(sourceRoot),
     );
     const trimmed = allocation.packs.filter((pack) => pack.kept < pack.offered);
+    // Each pack's own nearest-first cap and the shared catalog cap both trim.
+    const trimmedPacks = packs
+      .map((pack, index) => ({
+        pack: pack.name,
+        available: Math.max(pack.available, allocation.packs[index].offered),
+        served: allocation.packs[index].kept,
+        // Where the pack's cameras are, including those not served.
+        region: pack.region ?? cameraRegion(pack.sources),
+      }))
+      .filter((pack) => pack.served < pack.available);
     if (trimmed.length) {
       const detail = trimmed
         .map((pack) => `${pack.name} ${pack.kept}/${pack.offered}`)
@@ -238,6 +313,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     }
     if (capped.length > 0 || _cctvSourceCache.length === 0) {
       _cctvSourceCache = capped;
+      _cctvTrimmedPacks = trimmedPacks;
     } else {
       // Every source came back empty (all live packs timed out / upstream outage)
       // but a good catalog is already cached — serve it stale rather than blanking
@@ -251,5 +327,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     return _cctvSourceCache;
   }
 
+  /** Packs serving fewer cameras than they offer, as of the last refresh. */
+  getCctvSources.trimmedPacks = () => _cctvTrimmedPacks;
   return getCctvSources;
 }

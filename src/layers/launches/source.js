@@ -2,16 +2,24 @@
 export function createLaunchSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
 } = {}) {
+  /** The launch payload, and whether the proxy served it from a stale cache. */
+  async function getLaunchSnapshot({ signal } = {}) {
+    signal?.throwIfAborted();
+    const response = await fetchImpl('/api/launches', { signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    signal?.throwIfAborted();
+    if (!Array.isArray(payload) && !Array.isArray(payload?.results))
+      throw new Error('Malformed launch snapshot');
+    return {
+      payload,
+      stale: response.headers?.get?.('x-gev-cache') === 'STALE-ERROR',
+    };
+  }
   return {
-    async getLaunches({ signal } = {}) {
-      signal?.throwIfAborted();
-      const response = await fetchImpl('/api/launches', { signal });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const payload = await response.json();
-      signal?.throwIfAborted();
-      if (!Array.isArray(payload) && !Array.isArray(payload?.results))
-        throw new Error('Malformed launch snapshot');
-      return payload;
+    getLaunchSnapshot,
+    async getLaunches(options) {
+      return (await getLaunchSnapshot(options)).payload;
     },
     async getActiveTle({ signal } = {}) {
       signal?.throwIfAborted();

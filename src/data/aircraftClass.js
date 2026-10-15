@@ -438,6 +438,20 @@ export function classifyAircraft({ typeCode, category } = {}) {
   return 'airliner';
 }
 
+/** Readable name of each class, for cards and readouts. */
+export const AIRCRAFT_CLASS_LABELS = Object.freeze({
+  light: 'Light aircraft',
+  glider: 'Glider',
+  turboprop: 'Turboprop',
+  airliner: 'Airliner',
+  widebody: 'Widebody',
+  quadjet: 'Four-engine jet',
+  helicopter: 'Helicopter',
+  fastjet: 'Fast jet',
+  bizjet: 'Business jet',
+  uav: 'Drone',
+});
+
 /** Billboard scale multipliers (skylight GLYPH_SCALE, + fastjet). */
 export const CLASS_SCALE_2D = {
   light: 0.62,

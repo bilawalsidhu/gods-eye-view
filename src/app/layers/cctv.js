@@ -1,4 +1,5 @@
 import { createCctvLayer } from '../../layers/cctv/index.js';
+import * as credits from '../../data/dataCredits.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as activation from '../../cctvFocusRequest.js';
 import * as overlays from '../../overlays/worldOverlay.js';
@@ -13,6 +14,7 @@ export function createApplicationCctv({ surface, source }) {
   return createCctvLayer({
     source,
     services: {
+      credits,
       sprites,
       activation,
       overlays,

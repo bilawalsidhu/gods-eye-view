@@ -339,6 +339,12 @@ export function createLifecycle({
      */
     enable() {
       layerState._enabled = true;
+      if (
+        layerState._records.some(
+          (record) => record.camera.cityId === 'warendorf',
+        )
+      )
+        services.credits?.showOsmCredit?.(layerState._viewer, 'cctv');
       layerState._lastUpdate = Date.now();
       // Pick-ownership (H2): camera billboards use the camera id directly;
       // coverage polyline entities use `cctv-<cameraId>-<role>` entity ids.
@@ -385,6 +391,7 @@ export function createLifecycle({
 
     /** Disables the layer: hides entities, stops the projection loop and load queue. */
     disable() {
+      services.credits?.hideOsmCredit?.(layerState._viewer, 'cctv');
       layerState._enabled = false;
       unregisterPickOwner('cctv');
       // ADJUST mode does not survive a layer toggle — predictable re-entry.
@@ -408,6 +415,7 @@ export function createLifecycle({
      * @param {Cesium.Viewer} [viewer] - Viewer instance (falls back to stored ref).
      */
     destroy(viewer) {
+      services.credits?.hideOsmCredit?.(layerState._viewer, 'cctv');
       layerState._sourceAbort?.abort();
       if (typeof document !== 'undefined')
         document.removeEventListener(

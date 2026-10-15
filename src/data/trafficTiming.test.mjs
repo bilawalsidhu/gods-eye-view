@@ -366,7 +366,7 @@ test('the timed parser stays source-equivalent to the production parser', () => 
 
   assert.doesNotMatch(SOURCE, /function fetchRoadsTimed\s*\(/);
   assert.doesNotMatch(SOURCE, /function renderRoadsForAltitudeTimed\s*\(/);
-  const fetchBody = canonicalSemanticBody(functionBody('fetchRoads'));
+  const fetchBody = canonicalSemanticBody(functionBody('readRoads'));
   assert.equal(fetchBody.includes('response.text()'), false);
   assert.equal(fetchBody.includes('JSON.parse('), false);
   const okCheck = fetchBody.indexOf('if(!response.ok)');

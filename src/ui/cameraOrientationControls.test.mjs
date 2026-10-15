@@ -337,6 +337,33 @@ test('the needle follows a rotation too small for the camera-changed threshold',
   controls.destroy();
 });
 
+test('north-up indicator follows real heading including the 360-degree seam', () => {
+  const { viewer } = createRealViewer(AUSTIN_GROUND);
+  const northButton = new FakeButton();
+  const controls = bindCameraOrientationControls({
+    viewer,
+    elements: { northButton },
+    runNavigation: (_noun, navigate) => navigate(),
+  });
+  for (const [heading, active] of [
+    [0, true],
+    [15, false],
+    [359.8, true],
+    [359, false],
+    [360, true],
+    [90, false],
+  ]) {
+    orbit(viewer, AUSTIN_GROUND, heading, Cesium.Math.toRadians(-80), 5_000);
+    viewer.scene.preRender.raiseEvent();
+    assert.equal(
+      northButton.getAttribute('data-north-up'),
+      String(active),
+      `heading ${heading}`,
+    );
+  }
+  controls.destroy();
+});
+
 test('a settled camera writes nothing, and teardown releases every signal', () => {
   const { viewer } = createRealViewer(AUSTIN_GROUND);
   orbit(viewer, AUSTIN_GROUND, 0, Cesium.Math.toRadians(-80), 5_000);

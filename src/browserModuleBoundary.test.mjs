@@ -22,7 +22,7 @@ test('no browser-built module imports a Node core module', () => {
   // import survives the build and turns into a runtime failure the moment the
   // guard around it is wrong. src/data/naturalEarthRegions.js and
   // src/data/neighborhoodPolygons.js both carried one to read their bundled
-  // JSON packs under node:test; an import attribute serves both runtimes.
+  // JSON packs under node:test; src/data/bundledJson.js now serves both runtimes.
   const offenders = [];
   for (const file of browserModules()) {
     const source = readFileSync(file, 'utf8');

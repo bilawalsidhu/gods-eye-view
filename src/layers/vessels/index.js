@@ -1,6 +1,7 @@
 import { createVesselState } from './state.js';
 import { createLifecycle } from './lifecycle.js';
 import { createIngestion } from './ingestion.js';
+import { vesselViewArea } from './cameraArea.js';
 import { createVesselSnapshotRenderer } from './snapshotRenderer.js';
 import { createRendering } from './rendering.js';
 import { createSelection } from './selection.js';
@@ -36,6 +37,7 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
     feed: vesselState.state.feed,
     readSource: () => vesselState._source,
     readViewer: () => vesselState.state.viewer,
+    readArea: vesselViewArea,
     getRowLimit: parts.rendering.renderRowLimit,
     readCount: () => vesselState.state.records.all.length,
     applyRows: parts.snapshots.reconcileVessels,

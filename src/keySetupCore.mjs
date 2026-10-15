@@ -1,7 +1,8 @@
 /**
  * Key setup ("POWER UP") — the pure core.
  *
- * One registry, three pure functions, zero dependencies. The dev server's
+ * One registry and pure functions; its only import is the proxy-header check
+ * shared with the other local gates (localRequestGate.mjs). The dev server's
  * /api/setup endpoints (vite.config.js) and the in-app panel (keySetup.js)
  * are both thin shells over this module, so what a key is called, what it
  * unlocks, and how a .env line is written each live in exactly one place.
@@ -10,6 +11,8 @@
  * pass environments in and write text out, which is also what makes every
  * behavior below unit-testable.
  */
+
+import { hasProxySignals } from './localRequestGate.mjs';
 
 /** Longest accepted key/token value. Real provider keys are all far shorter. */
 export const KEY_SETUP_VALUE_LIMIT = 512;
@@ -25,7 +28,7 @@ export const KEY_SETUP_APPEND_HEADER =
  * Provider credentials, in display order — most magic per
  * minute first. `tier` mirrors the README's color legend: 'metered' (🔴) is a
  * billing-enabled account, 'free' (🟡) is a register-and-paste key.
- * `clientExposed` marks the two keys that are injected into the browser
+ * `clientExposed` marks the keys that are injected into the browser
  * bundle by design (restrict them at the provider, per SECURITY.md).
  * `hidden` keeps advanced configuration out of the panel and missing-key count.
  */
@@ -33,7 +36,7 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'google-maps',
     title: 'GOOGLE MAPS',
-    unlocks: 'The photorealistic 3D planet + place search',
+    unlocks: 'The photorealistic 3D planet, place search + Street View',
     getUrl: 'https://developers.google.com/maps/documentation/tile/get-api-key',
     envVars: Object.freeze(['GOOGLE_MAPS_API_KEY']),
     tier: 'metered',
@@ -52,7 +55,7 @@ export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
     id: 'openai',
     title: 'OPENAI',
-    unlocks: 'Voice control — talk to the planet',
+    unlocks: 'Voice control — API key or ChatGPT OAuth',
     getUrl: 'https://platform.openai.com/api-keys',
     envVars: Object.freeze(['OPENAI_API_KEY']),
     tier: 'metered',
@@ -77,7 +80,7 @@ export const KEY_SETUP_KEYS = Object.freeze([
     id: 'tomtom',
     title: 'TOMTOM',
     unlocks: 'Real live traffic (keyless runs a simulation)',
-    getUrl: 'https://developer.tomtom.com',
+    getUrl: 'https://my.tomtom.com/keys',
     envVars: Object.freeze(['TOMTOM_API_KEY']),
     tier: 'free',
   }),
@@ -99,6 +102,16 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'free',
   }),
   Object.freeze({
+    id: 'mapillary',
+    title: 'MAPILLARY',
+    unlocks:
+      'Street-level imagery and coverage in the Street Level layer. Free: register an app in the Mapillary developer dashboard and paste its Client Token',
+    getUrl: 'https://www.mapillary.com/dashboard/developers',
+    envVars: Object.freeze(['MAPILLARY_CLIENT_TOKEN']),
+    tier: 'free',
+    clientExposed: true,
+  }),
+  Object.freeze({
     id: 'launch-library',
     title: 'LAUNCH LIBRARY',
     unlocks: 'Higher space-missions request allowance',
@@ -112,6 +125,32 @@ export const KEY_SETUP_KEYS = Object.freeze([
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 /** Socket addresses that count as this machine. */
 const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
+/**
+ * Whether a socket address is one the operator has explicitly declared to be
+ * this machine through GEV_KEY_SETUP_TRUSTED_PEERS: a comma-separated list of
+ * EXACT addresses, never wildcards, prefixes or hostnames. Unset trusts
+ * nothing, which is every launcher but one.
+ *
+ * The shipped use is the Docker launcher (scripts/docker-start.mjs). A port
+ * published on the host's loopback still reaches the container FROM the
+ * container network's gateway, never from 127.0.0.1, so the loopback check
+ * alone refuses the very machine running the server. Admitting that one
+ * address relaxes nothing else: the sharing, Host, Origin, Content-Type and
+ * proxy-header checks all still apply to it.
+ */
+function isTrustedPeerAddress(remoteAddress, env) {
+  const normalize = (value) =>
+    String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/^::ffff:/, '');
+  const address = normalize(remoteAddress);
+  if (!address) return false;
+  return String(env?.GEV_KEY_SETUP_TRUSTED_PEERS || '')
+    .split(',')
+    .some((entry) => entry.trim() !== '' && normalize(entry) === address);
+}
 
 /** Parse an exact local request authority from a Host header. */
 function localAuthority(hostHeader, protocol) {
@@ -185,6 +224,24 @@ export function parseWindowsUserSid(stdout) {
 }
 
 /**
+ * Whether the launcher has sharing on. Every sharing signal the launcher
+ * recognizes (scripts/pinokio-preflight.mjs) counts, so the two sets cannot
+ * drift apart. One DELIBERATE divergence: preflight is a boot check that
+ * treats an empty PINOKIO_SHARE_VAR as sharing-on (fail closed before Start),
+ * but here an empty/unset value is the NORMAL git-clone and Pinokio state, so
+ * a bare/sentinel value is not sharing; only a real tunnel var is.
+ */
+export function isSharingEnabled(env = {}) {
+  const shareVar = String(env.PINOKIO_SHARE_VAR ?? '').trim();
+  return (
+    ['PINOKIO_SHARE_CLOUDFLARE', 'PINOKIO_SHARE_LOCAL'].some((name) =>
+      /^(1|true)$/i.test(String(env[name] || '').trim()),
+    ) ||
+    (shareVar !== '' && shareVar !== '__gev_sharing_disabled__')
+  );
+}
+
+/**
  * The admission gate for the Provider Settings endpoints — pure, exported so
  * every refusal below is pinned by a unit assertion rather than a review note.
  *
@@ -193,7 +250,9 @@ export function parseWindowsUserSid(stdout) {
  *    outright — a credential-writing endpoint has no business existing on a
  *    shared instance, and tunnel traffic reaches the server FROM loopback, so
  *    the socket check below cannot carry that boundary alone;
- *  - loopback socket: refuses LAN peers when the server is bound wide;
+ *  - loopback socket: refuses LAN peers when the server is bound wide. The
+ *    only exception is an exact address listed in
+ *    GEV_KEY_SETUP_TRUSTED_PEERS, and every check below still applies to it;
  *  - local Host header: tunnel and DNS-rebinding traffic carries a foreign
  *    Host even when the socket says loopback;
  *  - exact same Origin on POST: a hostile web page can make a browser POST to
@@ -219,20 +278,7 @@ export function admitKeySetupRequest({
   // on this machine, whatever its socket says. Refuse them outright as defense
   // in depth — the shipped tunnel (Pinokio) is force-closed at boot, so these
   // only appear when someone has deliberately fronted the dev server.
-  const PROXY_SIGNALS = [
-    'forwarded',
-    'via',
-    'x-forwarded-for',
-    'x-forwarded-host',
-    'x-forwarded-port',
-    'x-forwarded-proto',
-    'x-real-ip',
-    'cf-connecting-ip',
-    'cf-ray',
-  ];
-  if (
-    PROXY_SIGNALS.some((name) => String(proxyHeaders[name] || '').trim() !== '')
-  ) {
+  if (hasProxySignals(proxyHeaders)) {
     return {
       ok: false,
       status: 403,
@@ -249,20 +295,17 @@ export function admitKeySetupRequest({
   // tunnel var is. This is defense in depth regardless: the loopback+Host checks
   // below independently refuse LAN/tunnel traffic, and under Pinokio the launcher
   // refuses to boot at all when sharing is genuinely on.
-  const shareVar = String(env.PINOKIO_SHARE_VAR ?? '').trim();
-  const sharingEnabled =
-    ['PINOKIO_SHARE_CLOUDFLARE', 'PINOKIO_SHARE_LOCAL'].some((name) =>
-      /^(1|true)$/i.test(String(env[name] || '').trim()),
-    ) ||
-    (shareVar !== '' && shareVar !== '__gev_sharing_disabled__');
-  if (sharingEnabled) {
+  if (isSharingEnabled(env)) {
     return {
       ok: false,
       status: 403,
       error: 'Provider Settings is disabled while sharing is enabled',
     };
   }
-  if (!LOOPBACK_ADDRESSES.has(String(remoteAddress || ''))) {
+  if (
+    !LOOPBACK_ADDRESSES.has(String(remoteAddress || '')) &&
+    !isTrustedPeerAddress(remoteAddress, env)
+  ) {
     return {
       ok: false,
       status: 403,
@@ -338,6 +381,28 @@ export function keySetupRequirement(id) {
   const entry = KEY_SETUP_KEYS.find((candidate) => candidate.id === id);
   if (!entry || entry.hidden) return '';
   return `Needs ${entry.envVars.join(' + ')} — add it in Provider Settings`;
+}
+
+/**
+ * Key guidance that also names switched-off sources whose key is already set.
+ * @param {string} requirement What `keySetupRequirement` said ('' allowed).
+ * @param {Array<{label: string, requiresKeyId?: string|null}>} [alternatives]
+ */
+export function keySetupWithAlternatives(requirement, alternatives = []) {
+  const options = alternatives.map(({ label, requiresKeyId }) => {
+    const entry = KEY_SETUP_KEYS.find(
+      (candidate) => candidate.id === requiresKeyId,
+    );
+    const name = entry
+      ? entry.title
+          .toLowerCase()
+          .replace(/\b\w/g, (letter) => letter.toUpperCase())
+      : null;
+    return name ? `light ${label} to use your ${name} key` : `light ${label}`;
+  });
+  if (!options.length) return requirement;
+  const offer = `or ${options.join(', or ')}`;
+  return requirement ? `${requirement}, ${offer}` : offer.replace(/^or l/, 'L');
 }
 
 /**
