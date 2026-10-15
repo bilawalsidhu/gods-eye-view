@@ -21,3 +21,5 @@ qa-artifacts/
 3d-models/
 pinokio/ENVIRONMENT
 pinokio/.installed
+
+config/scanner-feeds.json

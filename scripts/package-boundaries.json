@@ -1299,6 +1299,20 @@
     ],
     "external": ["cesium"]
   },
+  "scanner-layer": {
+    "exports": ["./layers/scanner"],
+    "modules": [
+      "src/layers/scanner/index.js",
+      "src/layers/scanner/model.js",
+      "src/layers/scanner/source.js"
+    ],
+    "external": ["cesium"]
+  },
+  "scanner-source": {
+    "exports": ["./layers/scanner/source"],
+    "modules": ["src/layers/scanner/model.js", "src/layers/scanner/source.js"],
+    "external": []
+  },
   "submarine-cables": {
     "exports": ["./layers/submarine-cables"],
     "modules": [
@@ -1472,6 +1486,7 @@
       "src/app/layers/militaryInstallations.js",
       "src/app/layers/overlayHost.js",
       "src/app/layers/radio.js",
+      "src/app/layers/scanner.js",
       "src/app/layers/rocketLaunches.js",
       "src/app/layers/satellites.js",
       "src/app/layers/submarineCables.js",
@@ -1780,6 +1795,9 @@
       "src/layers/radio/tuning.js",
       "src/layers/radio/tuningNoise.js",
       "src/layers/radio/volume.js",
+      "src/layers/scanner/index.js",
+      "src/layers/scanner/model.js",
+      "src/layers/scanner/source.js",
       "src/layers/satellites/catalog.js",
       "src/layers/satellites/controls.js",
       "src/layers/satellites/index.js",
@@ -2283,6 +2301,7 @@
       "src/app/layers/militaryInstallations.js",
       "src/app/layers/overlayHost.js",
       "src/app/layers/radio.js",
+      "src/app/layers/scanner.js",
       "src/app/layers/rocketLaunches.js",
       "src/app/layers/satellites.js",
       "src/app/layers/submarineCables.js",
@@ -2517,6 +2536,9 @@
       "src/layers/radio/tuning.js",
       "src/layers/radio/tuningNoise.js",
       "src/layers/radio/volume.js",
+      "src/layers/scanner/index.js",
+      "src/layers/scanner/model.js",
+      "src/layers/scanner/source.js",
       "src/layers/satellites/catalog.js",
       "src/layers/satellites/controls.js",
       "src/layers/satellites/index.js",

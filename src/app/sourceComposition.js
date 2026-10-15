@@ -19,6 +19,10 @@ export const CATALOG_SOURCE_CONTRACTS = Object.freeze({
     ['getCatalog', 'getHealth', 'getFrameUrl', 'getMediaUrl'],
   ),
   radio: contract(['radio'], ['getDirectory', 'recordClick']),
+  scanner: contract(
+    ['police-scanner'],
+    ['getFeeds', 'getCalls', 'getStreamUrl'],
+  ),
   traffic: contract(
     ['traffic'],
     [

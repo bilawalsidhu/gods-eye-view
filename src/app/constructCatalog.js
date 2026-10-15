@@ -24,6 +24,7 @@ import { createApplicationLocalAdsb } from './layers/localAdsb.js';
 import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
+import { createApplicationScanner } from './layers/scanner.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
@@ -131,6 +132,7 @@ export function createApplicationCatalog({
         createApplicationTraffic({ source: sources.traffic, surface }),
         createApplicationCctv({ surface, source: sources.cctv }),
         createApplicationRadio({ surface, source: sources.radio }),
+        createApplicationScanner({ source: sources.scanner }),
         createApplicationTransit({ surface, source: sources.transit }),
         createApplicationBikeshare({ source: sources.bikeshare }),
         createApplicationDirections({ source: sources.directions }),

@@ -299,6 +299,12 @@ const layers = [
     noQuery: 'use control_radio',
   },
   {
+    id: 'police-scanner',
+    aliases: ['police radio', 'police scanner', 'scanner', 'police'],
+    context: false,
+    noQuery: 'live audio feeds; no countable records',
+  },
+  {
     id: 'street-level',
     aliases: ['street level', 'street-level imagery', 'mapillary'],
     context: false,
