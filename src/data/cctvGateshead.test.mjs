@@ -7,6 +7,7 @@ import {
   isGatesheadImageUrl,
   loadGatesheadSourcesFromCatalog,
   loadA19SourcesFromCatalog,
+  loadAdditionalUtmcSourcesFromCatalog,
   createGatesheadSnapshotReader,
 } from '../../server/providers/cctv/gateshead.js';
 
@@ -25,6 +26,22 @@ test('only exact registered public image-host paths are admitted', () => {
   ]) {
     assert.equal(isGatesheadImageUrl(value), false, String(value));
   }
+});
+
+test('additional UTMC pack uses unique published locations without duplicating the original packs', () => {
+  const added = loadAdditionalUtmcSourcesFromCatalog();
+  const original = [
+    ...loadGatesheadSourcesFromCatalog(),
+    ...loadA19SourcesFromCatalog(),
+  ];
+  const pages = new Set(original.map((c) => c.sourcePage));
+  assert.ok(added.length >= 250 && added.length <= 500);
+  assert.equal(new Set(added.map((c) => c.id)).size, added.length);
+  assert.ok(
+    added.every((c) => !pages.has(c.sourcePage) && isGatesheadImageUrl(c.url)),
+  );
+  assert.ok(added.some((c) => c.city === 'Newcastle'));
+  assert.ok(added.some((c) => c.city === 'Durham'));
 });
 
 test('A19 pack contains 18 unique published corridor cameras with regional attribution', () => {

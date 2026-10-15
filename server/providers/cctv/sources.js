@@ -395,7 +395,7 @@ export async function loadTflSourcesFromOpenData() {
       process.env.CCTV_TFL_MAX_SOURCES || DEFAULT_TFL_MAX_SOURCES,
     );
     const maxCount = Number.isFinite(maxRaw)
-      ? Math.max(8, Math.min(600, Math.floor(maxRaw)))
+      ? Math.max(8, Math.min(1000, Math.floor(maxRaw)))
       : DEFAULT_TFL_MAX_SOURCES;
     const prioritized = prioritizeSources(cameras, maxCount, [LONDON_CENTER]);
     console.log(

@@ -925,6 +925,49 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+## UK public-data panel and local Scope preference
+
+The standalone composition installs `src/standalone/ukDataPanel.js` as an
+application-owned tool. UK DATA opens a responsive nonmodal panel with region
+shortcuts, source selection, search, camera handoff and bounded owned points.
+It is separate from the shareable layer registry and allocates no layer token.
+Camera selection uses the existing lifecycle manager. Closing, changing source,
+hiding the page or destroying the app cancels requests/timers; owned markers
+are removed. Late responses cannot repaint a replaced/closed panel. The panel
+appears after normal startup restoration and the loading transition.
+
+`server/providers/uk-data.js` admits only registered HTTPS provider URLs;
+client URLs are never fetched. Responses are capped at 12 MiB and 25 seconds.
+Requests coalesce and caches follow each feed's cadence. Air-series IDs must
+belong to the admitted station catalogue; the combined cache has 80 entries.
+Failures may return a previous retrieval for six hours, explicitly stale with
+its original time; otherwise the source is unavailable, never an empty/all-clear
+assertion. RSS has a 5,000-record limit and reports truncation. The browser
+shows at most 120 matching rows and 300 points with those limits visible.
+
+EA gauges join readings by exact measure ID. UK-AIR's actual latitude-first
+geometry is corrected, historical station entries are labelled, and each last
+observation is requested separately. METARs are filtered to UK EG identifiers.
+RSS item dates are never replaced by fresh channel/retrieval timestamps.
+Source links/credits stay visible. DATA_SOURCES.md lists coverage and terms.
+
+The additional UTMC catalog adds 291 published locations to the 61 Gateshead
+and 18 A19 records. Refresh the additional catalog with the existing script's
+`--all` flag. The optional TfL source cap accepts 1,000; the default 250,
+global ceiling and round-robin allocation policy are unchanged.
+
+Scope OFF is an explicit local preference (`gev:scope-enabled:v1`). The user's
+OFF choice wins over a later authored ON state, including shared views/scenes;
+turning Scope on clears the override. Denied storage retains the session choice.
+The optional `VITE_GEV_SCOPE_DEFAULT_OFF=1` sets the initial preference before
+the mask can paint. Other installations retain the existing ON default.
+Controls/generated state read the actual renderer setting.
+
+Focused checks cover UK normalizers/cache/admission, the expanded camera packs,
+and Scope persistence: `src/regional/ukData.test.mjs`,
+`src/data/cctvGateshead.test.mjs`, `src/data/cctvUkExpansion.test.mjs`,
+`src/scopeMaskPreference.test.mjs` and `src/scopeMask.test.mjs`.
+
 ## Gateshead UTMC CCTV source pack
 
 The default public camera packs include Gateshead (UK), with 61 published

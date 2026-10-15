@@ -1,5 +1,17 @@
 # Changelog
 
+- Add a UK public-data panel with provider-specific coverage, source attribution,
+  observation times, stale/unavailable states, bounded map markers and search.
+  It connects Environment Agency floods/river levels, SEPA river levels, Defra
+  UK-AIR, UK reporting-airfield METARs, TfL road/rail status, and Traffic Wales
+  and TrafficwatchNI updates. Nearby OSM places load on request. Account-based
+  feeds remain disconnected and link to their official access routes.
+- Expand the UTMC catalogue with 291 additional published cameras and allow an
+  optional TfL cap of 1,000 while retaining its 250-camera default. A saved
+  local Scope OFF choice survives reloads and authored ON states; the Scope
+  button can opt back in. `VITE_GEV_SCOPE_DEFAULT_OFF=1` sets an installation's
+  initial preference without changing the default for other installations.
+
 - Add Gateshead (UK) and northern A19 map presets and keyless CCTV packs with 79 public
   Tyne and Wear UTMC snapshot cameras. Registered frame URLs stay on the
   publisher's image host, the map and preview share one fetch per minute,

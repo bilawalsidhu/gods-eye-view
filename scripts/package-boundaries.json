@@ -1874,6 +1874,7 @@
       "src/scenes/recipes.js",
       "src/scenes/scenePolicy.js",
       "src/scopeMask.js",
+      "src/scopeMaskPreference.js",
       "src/search/alpsGeocoder.js",
       "src/search/defaults.js",
       "src/search/geospatial.js",

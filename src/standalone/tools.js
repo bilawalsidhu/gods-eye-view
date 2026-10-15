@@ -2,8 +2,9 @@ import { createAssetDirectorySource } from '../director/packs/source.js';
 import { createApplicationTools } from '../app/tools.js';
 import { startStandaloneChrome } from './startupChrome.js';
 import { loadToolCatalog } from './toolCatalog.js';
+import { installUkDataPanel } from './ukDataPanel.js';
 export function createStandaloneTools(options) {
-  return createApplicationTools({
+  const tools = createApplicationTools({
     startChrome: startStandaloneChrome,
     sceneDataPacks: {
       sources: {
@@ -19,4 +20,11 @@ export function createStandaloneTools(options) {
     ...options,
     voice: { toolCatalog: loadToolCatalog, ...options?.voice },
   });
+  const ukData = installUkDataPanel({
+    viewer: options.scene.viewer,
+    dataManager: options.data.dataManager,
+    signal: options.signal,
+  });
+  options.defer(() => ukData.destroy());
+  return tools;
 }

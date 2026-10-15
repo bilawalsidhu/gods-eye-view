@@ -135,13 +135,50 @@ The submarine-cable GeoJSON is **CC BY-NC-SA 3.0** (Attribution-**NonCommercial*
 
 The richer structured dataset is licensed separately/commercially by TeleGeography.
 
-### Gateshead and northern A19 camera packs
+### UK public-data panel
+
+The standalone app's **UK DATA** panel loads the selected public source only
+while open and visible. Retrieval time is separate from each record's own
+observation/publication time. Old or absent readings and unavailable providers
+are not represented as current values or an all-clear. Map/list limits are
+displayed; coverage varies by provider.
+
+| Source | Coverage and use | Attribution / terms |
+| --- | --- | --- |
+| [Environment Agency](https://environment.data.gov.uk/flood-monitoring/doc/reference) | Flood warnings and reporting level gauges in England; exact measure IDs join readings to gauges; readings may be absent or old | Environment Agency, OGL 3.0 |
+| [SEPA time series](https://timeseriesdoc.sepa.org.uk/api-documentation/before-you-start/what-controls-there-are-on-access/) | Scottish river/tidal gauges; anonymous quotas apply | SEPA, OGL; no false identity or referrer supplied |
+| [Defra UK-AIR SOS](https://uk-air.defra.gov.uk/data/about_sos) | UK station catalogue including historical sites; on-demand last observation; actual latitude-first coordinates corrected before mapping | © Crown copyright Defra via uk-air.defra.gov.uk, [OGL terms](https://uk-air.defra.gov.uk/data/so/about/) |
+| [NOAA Aviation Weather Center](https://aviationweather.gov/data/api/) | Reporting UK airfield observations, filtered to EG station IDs; not a street-level forecast | NOAA / NWS, [public-domain terms](https://www.weather.gov/disclaimer) |
+| [TfL Open Data](https://tfl.gov.uk/info-for/open-data-users/) | London roads and Tube, DLR, Overground, Elizabeth line and tram status | Powered by TfL Open Data |
+| [Traffic Wales RSS](https://traffic.wales/developers) | Welsh motorway/trunk-road incidents and planned works; original links/item dates retained | Traffic Wales / Welsh Government; 5-minute cache |
+| [TrafficwatchNI RSS](https://www.trafficwatchni.com/twni/rss-faqs) | Published Northern Ireland incidents, works and events; old/cleared items retain their original dates | DfI Traffic Information and Control Centre; [RSS terms](https://trafficwatchni.com/twni/terms-and-conditions); links retained |
+| [OpenStreetMap](https://www.openstreetmap.org/copyright) | Requested places within 10 km of the current UK map region: hospitals, EV charging, emergency services, bus/rail stations, airfields and harbours; operation/capacity unverified | © OpenStreetMap contributors, ODbL; existing bounded/cached Overpass service |
+
+The access directory identifies National Highways/Traffic Scotland/Traffic Wales
+camera licensing, BODS, NRW, National Rail and UTMC account requirements. These
+are not connected feeds; no credentials are bundled. The panel is not a complete
+UK camera or incident inventory. Images requiring provider approval are excluded.
+
+### Gateshead and regional UTMC camera packs
 
 The Gateshead pack adds 61 publicly listed cameras from North East Traffic Cameras / Tyne and Wear UTMC. Catalog coordinates and names were read from the publisher's camera pages; run `node scripts/refresh-gateshead-cameras.mjs` to refresh the catalog. Frames are requested from the publisher's registered JPEG URLs, shared in memory for 60 seconds, and are never archived by this addition. These are periodically refreshed public snapshots, not continuous video. Check the timestamp embedded in each image: a successful download does not establish that the image is current. The source normally updates every 60–300 seconds, with exceptions and outages. Published camera locations are used; headings and projection geometry remain uncalibrated estimates.
 
 Source: https://netrafficcams.co.uk/ and https://www.netraveldata.co.uk/?page_id=42 . UTMC Open Data Service attribution: © Newcastle City Council, Open Government Licence 3.0 (https://www.netraveldata.co.uk/?page_id=13). No plate recognition, plate records, vehicle search or private camera access is included.
 
 The separate northern A19 pack adds 18 published cameras at Sunderland, South Tyneside, the Tyne Tunnel, Silverlink, Holystone and Moor Farm. Run `node scripts/refresh-gateshead-cameras.mjs --a19` to refresh `config/cctv_sources.a19.json`. It uses the same UTMC public-snapshot source, attribution, cache and availability behavior. Set `CCTV_A19_ENABLED=0` to disable it. This is partial junction coverage: it does not provide continuous coverage down the A19, or cameras in Peterlee, Northallerton or Nuneaton. National Highways camera images require a separate reuse licence; those images are not included.
+
+The additional UTMC pack in `config/cctv_sources.utmc.json` adds 291 more
+publisher-listed locations, giving 370 across the three UTMC catalogs at this
+retrieval. It includes Newcastle, Durham, North/South Tyneside, Sunderland,
+Northumberland, Darlington, Stockton-on-Tees and one Westmorland & Furness
+location. `node scripts/refresh-gateshead-cameras.mjs --all` refreshes this
+additional pack without duplicating the Gateshead/A19 catalogs. Disable it with
+`CCTV_UTMC_ENABLED=0`. Counts and frame availability can change.
+
+For a UK-focused installation, `CCTV_TFL_MAX_SOURCES=1000` admits up to 1,000
+available TfL cameras and `CCTV_MAX_SOURCES=5000` raises the existing global
+catalog cap to its existing ceiling. These are optional; default global
+allocation and TfL's 250-camera default remain unchanged.
 
 ### ALPR camera mapping
 

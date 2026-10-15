@@ -26,24 +26,29 @@ export function loadGatesheadSourcesFromCatalog({
   pack = 'gateshead',
 } = {}) {
   const a19 = pack === 'a19';
+  const additional = pack === 'utmc';
   try {
     const catalog = JSON.parse(
       fs.readFileSync(
         path.join(
           sourceRoot,
-          `config/cctv_sources.${a19 ? 'a19' : 'gateshead'}.json`,
+          `config/cctv_sources.${additional ? 'utmc' : a19 ? 'a19' : 'gateshead'}.json`,
         ),
         'utf8',
       ),
     );
     const seen = new Set();
     return (Array.isArray(catalog.cameras) ? catalog.cameras : [])
-      .slice(0, 150)
+      .slice(0, additional ? 500 : 150)
       .flatMap((row) => {
         if (
           !row ||
           typeof row.name !== 'string' ||
-          !(a19 ? /^a19-\d+$/ : /^gateshead-\d+$/).test(row.id) ||
+          !(
+            additional ? /^utmc-\d+$/ : a19 ? /^a19-\d+$/ : /^gateshead-\d+$/
+          ).test(row.id) ||
+          (additional &&
+            (typeof row.city !== 'string' || row.city.length > 80)) ||
           (a19 &&
             ![
               'North Tyneside',
@@ -55,18 +60,18 @@ export function loadGatesheadSourcesFromCatalog({
           !isGatesheadImageUrl(row.url) ||
           !Number.isFinite(row.lat) ||
           !Number.isFinite(row.lon) ||
-          row.lat < (a19 ? 54.7 : 54.8) ||
-          row.lat > (a19 ? 55.2 : 55.1) ||
-          row.lon < -2 ||
-          row.lon > -1.3
+          row.lat < (additional ? 49 : a19 ? 54.7 : 54.8) ||
+          row.lat > (additional ? 61 : a19 ? 55.2 : 55.1) ||
+          row.lon < (additional ? -9 : -2) ||
+          row.lon > (additional ? 2 : -1.3)
         )
           return [];
         seen.add(row.id);
         return [
           {
             ...row,
-            city: a19 ? row.city : 'Gateshead',
-            cityId: a19 ? 'a19' : 'gateshead',
+            city: a19 || additional ? row.city : 'Gateshead',
+            cityId: additional ? 'utmc-northeast' : a19 ? 'a19' : 'gateshead',
             provider: 'Tyne and Wear UTMC · public snapshots',
             credit:
               '© Newcastle City Council / UTMC · normally 1–5 min · check image timestamp',
@@ -92,6 +97,10 @@ export function loadGatesheadSourcesFromCatalog({
 
 export function loadA19SourcesFromCatalog(options = {}) {
   return loadGatesheadSourcesFromCatalog({ ...options, pack: 'a19' });
+}
+
+export function loadAdditionalUtmcSourcesFromCatalog(options = {}) {
+  return loadGatesheadSourcesFromCatalog({ ...options, pack: 'utmc' });
 }
 
 /** Share requests across the map and preview; one provider fetch per camera/minute. */

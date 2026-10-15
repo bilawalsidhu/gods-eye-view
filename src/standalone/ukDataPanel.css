@@ -1,0 +1,146 @@
+.uk-data-root {
+  position: relative;
+  z-index: 1100;
+  font:
+    13px/1.5 system-ui,
+    sans-serif;
+  color: #eefbff;
+}
+.uk-data-launch {
+  position: fixed;
+  left: 22px;
+  top: 88px;
+  min-height: 36px;
+  padding: 7px 15px;
+  background: #0c2029ed;
+  border: 1px solid #4bc5db;
+  border-radius: 7px;
+  color: #e9fcff;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+.uk-data-panel {
+  position: fixed;
+  top: 80px;
+  right: 18px;
+  width: min(600px, calc(100vw - 36px));
+  max-height: calc(100dvh - 120px);
+  overflow: auto;
+  background: #0a1923f5;
+  border: 1px solid #4bc5db;
+  border-radius: 12px;
+  padding: 18px;
+  box-sizing: border-box;
+  box-shadow: 0 10px 40px #0008;
+  pointer-events: auto;
+}
+.uk-data-panel[hidden] {
+  display: none;
+}
+.uk-data-panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+}
+.uk-data-panel h2 {
+  font-size: 17px;
+  letter-spacing: 0.12em;
+  margin: 0;
+}
+.uk-data-panel h3 {
+  font-size: 14px;
+  margin: 0 0 6px;
+}
+.uk-data-panel p {
+  margin: 8px 0;
+}
+.uk-data-panel button,
+.uk-data-panel select,
+.uk-data-panel input {
+  font: inherit;
+  background: #12303d;
+  color: #f5fcff;
+  border: 1px solid #4b727f;
+  border-radius: 5px;
+  padding: 7px;
+  min-height: 34px;
+  box-sizing: border-box;
+}
+.uk-data-panel button {
+  cursor: pointer;
+}
+.uk-data-panel button:disabled {
+  opacity: 0.5;
+}
+.uk-data-panel button:focus-visible,
+.uk-data-launch:focus-visible,
+.uk-data-panel input:focus-visible,
+.uk-data-panel select:focus-visible,
+.uk-data-panel a:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+.uk-data-panel a {
+  color: #8ee5f3;
+  overflow-wrap: anywhere;
+}
+.uk-data-regions,
+.uk-data-toolbar,
+.uk-data-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.uk-data-regions {
+  margin: 12px 0;
+}
+.uk-data-regions button {
+  font-size: 12px;
+  padding: 5px 8px;
+}
+.uk-data-toolbar {
+  align-items: end;
+}
+.uk-data-toolbar label {
+  flex: 1 1 100%;
+}
+.uk-data-toolbar select {
+  display: block;
+  width: 100%;
+}
+.uk-data-toolbar input {
+  flex: 1 1 200px;
+}
+.uk-data-credit,
+.uk-data-time {
+  font-size: 12px;
+  color: #bfd7e0;
+}
+.uk-data-results article {
+  padding: 13px 0;
+  border-bottom: 1px solid #31505c;
+}
+.uk-data-results article p {
+  overflow-wrap: anywhere;
+}
+.uk-data-actions {
+  align-items: center;
+  margin-top: 9px;
+}
+.uk-data-actions a {
+  margin-left: 6px;
+}
+@media (max-width: 700px) {
+  .uk-data-panel {
+    top: 65px;
+    max-height: calc(100dvh - 90px);
+    padding: 13px;
+  }
+  .uk-data-launch {
+    top: 82px;
+    left: 12px;
+    font-size: 11px;
+  }
+}
