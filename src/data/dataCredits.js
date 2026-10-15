@@ -211,6 +211,14 @@ export const DATA_CREDITS = [
       '<a href="https://its.txdot.gov/" target="_blank" rel="noopener">Texas Department of Transportation</a> (courtesy)',
   },
   {
+    key: 'monte-hermoso-cctv',
+    html:
+      'Webcam (Monte Hermoso, Argentina): Montevisión, published by ' +
+      '<a href="https://www.noticiasmontehermoso.com.ar/camara-de-monte-hermoso-en-vivo/" target="_blank" rel="noopener">Noticias Monte Hermoso</a>. ' +
+      'Approximate map reference: ' +
+      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors (ODbL)</a>.',
+  },
+  {
     key: 'deldot-cctv',
     html: 'CCTV live video (Delaware): <a href="https://deldot.gov/map/" target="_blank" rel="noopener">DelDOT — Delaware Department of Transportation</a>',
   },

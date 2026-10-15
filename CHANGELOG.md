@@ -1,5 +1,8 @@
 # Changelog
 
+- CCTV adds the public Peatonal Dufaur webcam in Monte Hermoso, Argentina,
+  using the existing HLS relay with attribution and an approximate map location.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 
