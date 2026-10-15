@@ -443,7 +443,10 @@ async function main() {
         // for nearby names. Answer both with empty results: the entity-context
         // assertions are about the SELECTED contact, and a live lookup would
         // make the run non-hermetic (and bill the owner's Google quota).
-        if (url.hostname === 'maps.googleapis.com' && url.pathname.startsWith('/maps/api/geocode')) {
+        if (
+          isAppRequest &&
+          (url.pathname === '/api/google/reverse-geocode' || url.pathname === '/api/google/geocode')
+        ) {
           return Promise.resolve(jsonResponse({ status: 'ZERO_RESULTS', results: [] }));
         }
         if (isAppRequest && url.pathname === '/api/google/nearby-places') {

@@ -1,6 +1,9 @@
 import https from 'node:https';
 import { Readable } from 'node:stream';
 import { isNonGlobalIpv4 } from './stations.js';
+
+const NULL_BODY_STATUSES = new Set([204, 205, 304]);
+
 export function radioMirrorOrigin(value) {
   const hostname = String(value ?? '')
     .toLowerCase()
@@ -124,19 +127,33 @@ export function fetchPinnedRadioResponse(url, options, addresses) {
         },
       },
       (response) => {
-        const headers = new Headers();
-        for (const [name, value] of Object.entries(response.headers)) {
-          if (Array.isArray(value))
-            value.forEach((item) => headers.append(name, item));
-          else if (value !== undefined) headers.set(name, String(value));
+        // Nothing thrown here may escape: this callback runs outside the
+        // promise, so an exception would be uncaught and crash the server.
+        try {
+          const status = response.statusCode || 500;
+          // A `Response` only represents statuses up to 599; Node never hands
+          // this callback a 1xx.
+          if (status > 599)
+            throw new Error(
+              `Radio Browser returned unsupported status ${status}`,
+            );
+          const headers = new Headers();
+          for (const [name, value] of Object.entries(response.headers)) {
+            if (Array.isArray(value))
+              value.forEach((item) => headers.append(name, item));
+            else if (value !== undefined) headers.set(name, String(value));
+          }
+          const nullBody = NULL_BODY_STATUSES.has(status);
+          const upstream = new Response(
+            nullBody ? null : Readable.toWeb(response),
+            { status, statusText: response.statusMessage || '', headers },
+          );
+          if (nullBody) response.resume();
+          resolve(upstream);
+        } catch (error) {
+          response.destroy();
+          reject(error);
         }
-        resolve(
-          new Response(Readable.toWeb(response), {
-            status: response.statusCode || 500,
-            statusText: response.statusMessage || '',
-            headers,
-          }),
-        );
       },
     );
     request.on('error', reject);
