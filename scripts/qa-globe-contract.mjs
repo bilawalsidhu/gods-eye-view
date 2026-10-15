@@ -254,9 +254,24 @@ try {
           scene.requestRender();
         });
 
-      const results = (await runContractSuite(engine, { waitFrames })).map(
-        ({ name, ok, error }) => ({ name, ok, error: error?.message }),
-      );
+      // The maps checks need a photoreal source the engine can show: the
+      // app's startup tileset (a prebuilt Cesium source). The map stack the
+      // app had is reapplied afterwards.
+      const mapSources = debug.tileset
+        ? {
+            imagery: [{ kind: 'osm' }, { kind: 'esri-imagery' }],
+            photoreal: { kind: 'photoreal', tileset: debug.tileset },
+          }
+        : null;
+      const results = (
+        await runContractSuite(engine, { waitFrames, mapSources })
+      ).map(({ name, ok, error }) => ({ name, ok, error: error?.message }));
+      // Reapplying the active stack sends its sources to the engine again.
+      if (debug.mapStackController)
+        await debug.mapStackController.setStack(
+          debug.mapStackController.getActiveId(),
+          { silent: true },
+        );
 
       const extra = [];
       const check = async (name, run) => {
