@@ -1474,7 +1474,7 @@ accessible name remains "Don't show this again". Control behavior is unchanged.
 
 ## FIRMS source status
 
-FIRMS ingestion and adaptation require explicit finite coordinates within WGS84 ranges; genuine zero coordinates remain valid and admitted detection indices stay sequential.
+The FIRMS CSV parser rejects impossible acquisition calendar dates before the proxy filters records to the trailing 24 hours, while retaining valid UTC acquisition times.
 
 The FIRMS proxy records source success after appending its rows. If aggregation
 throws, that source reports failure without a contradictory success entry.
