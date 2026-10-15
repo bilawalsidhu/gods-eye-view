@@ -1,50 +1,33 @@
-name: CONAE branch verification
+name: CONAE browser comparison
 on:
   push:
     branches: [contrib/argentina-conae-goes]
 permissions:
   contents: read
 jobs:
-  verify:
+  fires:
+    name: Fires (${{ matrix.label }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: contribution
+            ref: 0b716e03691f45e253dcac49bd2c3513a386e2ec
+          - label: upstream
+            ref: f0a1b22dc82c6c5cd9690d07c1cdb297818da86f
     steps:
-      - name: Check out this branch
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          ref: ${{ matrix.ref }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24.14.0'
           cache: npm
-      - name: Install
-        run: npm ci
-      - name: Format adopted files
-        run: npm run format
-      - name: Report formatting changes
-        run: |
-          node --input-type=module <<'JS'
-          import {execFileSync} from 'node:child_process';
-          import {readFileSync} from 'node:fs';
-          const paths = execFileSync('git', ['diff', '--name-only'], {encoding:'utf8'}).trim().split('\n').filter(Boolean);
-          for (const path of paths) console.log('FORMATTED ' + JSON.stringify({path,content:readFileSync(path,'utf8')}));
-          JS
-      - name: Check formatting and boundaries
-        run: |
-          npm run format:check
-          npm run check:boundaries
-      - name: Unit tests
-        run: |
-          if npm test > /tmp/gev-unit.log 2>&1; then
-            tail -n 25 /tmp/gev-unit.log
-          else
-            grep -n -A 25 -B 5 -E 'not ok|error:|Error:|fail' /tmp/gev-unit.log | tail -n 240
-            exit 1
-          fi
-      - name: Build
-        run: npm run build
-      - name: Start the app
-        id: dev
+      - run: npm ci
+      - name: Start app
         run: |
           npm run dev -- --host 127.0.0.1 --port 4173 > /tmp/gev-dev.log 2>&1 &
           for attempt in $(seq 1 30); do
@@ -53,15 +36,12 @@ jobs:
           done
           cat /tmp/gev-dev.log
           exit 1
-      - name: Fires browser fixtures
+      - name: Fires fixtures
         run: node scripts/qa-firms.mjs --url http://127.0.0.1:4173 --fixtures
-      - name: Track regression
-        if: always() && steps.dev.outcome == 'success'
-        run: npm run test:track -- --url http://127.0.0.1:4173 --offline-imagery
-      - name: Upload browser evidence
-        if: always() && steps.dev.outcome == 'success'
+      - name: Browser evidence
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: conae-browser-evidence
+          name: fires-${{ matrix.label }}
           path: qa-shots/
           if-no-files-found: ignore
