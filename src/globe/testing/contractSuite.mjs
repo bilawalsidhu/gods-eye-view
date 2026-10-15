@@ -1418,6 +1418,78 @@ export function createContractSuite(
       },
     ],
     [
+      'picker.pickPosition and projector.worldToWindow round-trip within 1.5 px',
+      async () => {
+        if (!engine.picker.pickPositionSupported) return;
+        // Straight down and tilted; screen points with no surface are skipped.
+        // Over New York, low enough for map detail.
+        const views = [
+          { height: 20000, heading: 0, pitch: -math.PI_OVER_TWO },
+          { height: 5000, heading: 0.7, pitch: -1.0 },
+        ];
+        let hits = 0;
+        const misses = [];
+        for (const { height: viewHeight, heading, pitch } of views) {
+          camera.setView({
+            destination: cartesian3.fromDegrees(-73.78, 40.64, viewHeight),
+            orientation: { heading, pitch, roll: 0 },
+          });
+          // Picks read the depth of the last drawn frame: draw this view.
+          await settle(3);
+          const { width, height } = engine.host.size();
+          const screens = [
+            [0.5, 0.5],
+            [0.3, 0.4],
+            [0.7, 0.6],
+            [0.5, 0.75],
+          ].map(([x, y]) =>
+            cartesian2.create(Math.round(width * x), Math.round(height * y)),
+          );
+          // The depth a pick reads needs drawn frames.
+          await until(
+            () => engine.picker.pickPosition(screens[0]) !== undefined,
+            'a surface under the centre for pickPosition',
+          );
+          for (const screen of screens) {
+            const position = engine.picker.pickPosition(screen);
+            if (position === undefined) continue;
+            const back = engine.projector.worldToWindow(position);
+            const error = back
+              ? Math.hypot(back.x - screen.x, back.y - screen.y)
+              : Infinity;
+            hits += 1;
+            if (!(error <= 1.5))
+              misses.push(
+                `(${screen.x}, ${screen.y}) → ${back ? `(${back.x.toFixed(2)}, ${back.y.toFixed(2)})` : 'undefined'}`,
+              );
+          }
+        }
+        ensure(hits > 0, 'pickPosition hit no surface');
+        ensure(
+          misses.length === 0,
+          `round-trip off by more than 1.5 px: ${misses.join('; ')}`,
+        );
+      },
+    ],
+    [
+      'maps.setTerrain: keyless terrain resolves; an unknown kind rejects',
+      async () => {
+        await engine.maps.setTerrain({ id: 'keyless', kind: 'keyless' });
+        let rejected = null;
+        try {
+          await engine.maps.setTerrain({
+            id: 'no-such-terrain',
+            kind: 'no-such-terrain',
+          });
+        } catch (error) {
+          rejected = error;
+        }
+        ensure(rejected !== null, 'an unknown terrain kind resolved');
+        // The keyless terrain still applies after the rejection.
+        await engine.maps.setTerrain({ id: 'keyless', kind: 'keyless' });
+      },
+    ],
+    [
       'camera.commanded: fires for each camera command, never for reads',
       async () => {
         await nadirView();

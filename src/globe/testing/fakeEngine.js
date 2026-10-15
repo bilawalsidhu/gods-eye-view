@@ -24,6 +24,8 @@ const { cartesian2, cartesian3, cartographic, ellipsoid, math, matrix4 } = geo;
 const WGS84 = ellipsoid.WGS84;
 const RADII = WGS84.radii;
 const MAXIMUM_RADIUS = Math.max(RADII.x, RADII.y, RADII.z);
+// The terrain kinds the engines build themselves (src/maps/registry.js).
+const TERRAIN_KINDS = Object.freeze(['ellipsoid', 'keyless', 'world']);
 const DEFAULT_FLIGHT_SECONDS = 3;
 const DEFAULT_ZOOM_AMOUNT = 100000; // Cesium's camera.defaultZoomAmount
 const ZERO_RADIUS_SPHERE_RANGE = 100; // Cesium's MINIMUM_ZOOM
@@ -845,6 +847,13 @@ export function createFakeEngine(options = {}) {
       },
       async setTerrain(source) {
         record('maps.setTerrain', [source]);
+        // As the real engines: a prebuilt source or a known kind.
+        const kind = source?.kind ?? source?.id;
+        if (
+          typeof source?.create !== 'function' &&
+          !TERRAIN_KINDS.includes(kind)
+        )
+          throw new TypeError(`Unknown terrain source: ${kind}`);
         fake.maps.terrain = source;
       },
       async setPhotorealTiles(source) {
