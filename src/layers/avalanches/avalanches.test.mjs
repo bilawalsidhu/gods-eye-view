@@ -570,6 +570,26 @@ test('the panel draws the window, marks forecasts, and offers replay off-season'
   assert.equal(weeks[0].classList.contains('is-current'), true);
   assert.equal(weeks[1].disabled, true, 'an empty week cannot be opened');
   assert.equal(notice.hidden, true);
+  const root = container.children[0];
+  const minimize = findAll(container, 'avalanche-panel-collapse')[0];
+  assert.equal(root.classList.contains('is-collapsed'), false);
+  assert.equal(minimize.title, 'Minimize timeline');
+  minimize.dispatchEvent(new Event('click'));
+  assert.equal(root.classList.contains('is-collapsed'), true);
+  assert.equal(minimize.title, 'Expand timeline');
+  assert.equal(panel.isCollapsed(), true);
+  panel.render(view);
+  assert.equal(
+    root.classList.contains('is-collapsed'),
+    true,
+    'a redraw keeps it minimized',
+  );
+  assert.ok(
+    !calls.some(([name]) => name === 'toggle'),
+    'minimizing does not pause',
+  );
+  panel.setCollapsed(false);
+  assert.equal(root.classList.contains('is-collapsed'), false);
   panel.destroy();
   assert.equal(container.children.length, 0);
 });

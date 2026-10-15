@@ -11,9 +11,14 @@ import { DANGER_LEVELS, PATH_COLOR } from './policy.js';
  * explains why the map is empty and offers last season instead; in replay it
  * shows that season as a bar per week, tallest where avalanches were most
  * often reported, and any week can be opened.
+ *
+ * The panel can be minimized to a pill — play/pause, the day and its
+ * observed/forecast badge — so it stops covering the map while playback runs.
+ * The choice holds for the session, across replays and layer toggles.
  * @param {{container:HTMLElement, onDay:Function, onToggle:Function,
  *   onReplay:Function, onWeek:Function, onLive:Function}} options
- * @returns {{render:Function, hide:Function, destroy:Function}}
+ * @returns {{render:Function, hide:Function, destroy:Function,
+ *   setCollapsed:Function, isCollapsed:Function}}
  */
 export function createAvalanchePanel({
   container,
@@ -56,7 +61,8 @@ export function createAvalanchePanel({
   const count = element('span', 'avalanche-panel-count');
   sub.append(badge, count);
   titles.append(day, sub);
-  head.append(toggle, titles);
+  const collapse = button('avalanche-panel-collapse');
+  head.append(toggle, titles, collapse);
 
   const dayTrack = element('div', 'avalanche-panel-track is-days');
   dayTrack.setAttribute('aria-label', 'Day');
@@ -96,7 +102,22 @@ export function createAvalanchePanel({
   root.append(kicker, head, dayTrack, legend, notice, seasonBlock);
   container.appendChild(root);
 
+  let collapsed = false;
+  function applyCollapsed() {
+    root.classList.toggle('is-collapsed', collapsed);
+    const label = collapsed ? 'Expand timeline' : 'Minimize timeline';
+    collapse.title = label;
+    collapse.setAttribute('aria-label', label);
+    collapse.setAttribute('aria-expanded', String(!collapsed));
+    collapse.textContent = collapsed ? '▴' : '▾';
+  }
+  applyCollapsed();
+
   toggle.addEventListener('click', () => onToggle());
+  collapse.addEventListener('click', () => {
+    collapsed = !collapsed;
+    applyCollapsed();
+  });
   replay.addEventListener('click', () => onReplay());
   live.addEventListener('click', () => onLive());
   dayTrack.addEventListener('click', (event) => {
@@ -235,6 +256,14 @@ export function createAvalanchePanel({
     hide() {
       root.hidden = true;
     },
+
+    /** @param {boolean} next Whether the panel shows as a minimized pill. */
+    setCollapsed(next) {
+      collapsed = Boolean(next);
+      applyCollapsed();
+    },
+
+    isCollapsed: () => collapsed,
 
     destroy() {
       root.remove();

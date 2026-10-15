@@ -324,6 +324,69 @@
   box-shadow: 0 0 6px var(--accent-glow);
 }
 
+.avalanche-panel-collapse {
+  flex: none;
+  align-self: flex-start;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.avalanche-panel-collapse:hover,
+.avalanche-panel-collapse:focus-visible {
+  border-color: var(--glass-border-hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+/* Minimized: a pill holding only play/pause, the day and its badge. */
+.avalanche-panel.is-collapsed {
+  width: auto;
+  padding: 5px 6px;
+  border-radius: 22px;
+}
+
+.avalanche-panel.is-collapsed > :not(.avalanche-panel-head) {
+  display: none;
+}
+
+.avalanche-panel.is-collapsed .avalanche-panel-head {
+  margin: 0;
+  gap: 8px;
+}
+
+.avalanche-panel.is-collapsed .avalanche-panel-titles {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.avalanche-panel.is-collapsed .avalanche-panel-day {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.avalanche-panel.is-collapsed .avalanche-panel-sub {
+  margin-top: 0;
+}
+
+.avalanche-panel.is-collapsed .avalanche-panel-count {
+  display: none;
+}
+
+.avalanche-panel.is-collapsed .avalanche-panel-collapse {
+  align-self: center;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .avalanche-panel-day.is-changing {
     animation: none;
