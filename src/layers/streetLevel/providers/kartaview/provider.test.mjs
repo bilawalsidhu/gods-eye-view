@@ -896,6 +896,27 @@ test('a photo no page lists steps to the photos either side of its index', async
   assert.equal(env.poses.at(-1), 's-4');
 });
 
+test('Esc in the docked viewer clears the selected drive and is consumed; with none, it goes on to the panel', async (t) => {
+  const env = await mounted({ sequences: { s: [0, 1, 2, 3] } });
+  await withCones(t, env);
+  await env.instance.viewer.open('s-1');
+  await env.instance.selectSequence('s');
+  assert.ok(await until(() => env.instance.sequenceStats().images === 4));
+  const root = env.next.parentNode;
+  const press = () => {
+    const flags = { stopped: false, prevented: false };
+    root.fire('keydown', {
+      key: 'Escape',
+      stopPropagation: () => (flags.stopped = true),
+      preventDefault: () => (flags.prevented = true),
+    });
+    return flags;
+  };
+  assert.deepEqual(press(), { stopped: true, prevented: true });
+  assert.equal(env.instance.sequenceStats().selectedId, null, 'drive cleared');
+  assert.deepEqual(press(), { stopped: false, prevented: false });
+});
+
 test('the panel counts the drive’s photos, not the thinned page of them the cones show', async (t) => {
   const env = await mounted({
     sequences: { s: Array.from({ length: 40 }, (_, i) => i) },

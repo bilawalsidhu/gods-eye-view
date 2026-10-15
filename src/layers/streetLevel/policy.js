@@ -9,7 +9,8 @@ export const PROVIDER_COLORS = Object.freeze({
   mapillary: '#05cb63',
   google: '#4285f4',
   kartaview: '#635bff',
-  vegbilder: '#f28c00',
+  panoramax: '#ff6f00',
+  vegbilder: '#ec4899',
 });
 
 /** Colours every provider shares: the selection highlight and the marker. */

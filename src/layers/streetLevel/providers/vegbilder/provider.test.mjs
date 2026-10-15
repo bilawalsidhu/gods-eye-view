@@ -118,7 +118,7 @@ test('Vegbilder registers keyless, off by default, with both filters and Statens
   assert.deepEqual(definition.filters, ['pano', 'since']);
   assert.equal(definition.sinceBasis, undefined, 'SINCE is the capture date');
   assert.match(definition.credit.html, /Statens vegvesen<\/a>, NLOD 2\.0/);
-  assert.equal(definition.colors.coverage, '#f28c00');
+  assert.equal(definition.colors.coverage, '#ec4899');
   validateProviders([
     { ...definition, id: 'mapillary', pickPrefix: 'mly:' },
     { ...definition, id: 'google', pickPrefix: 'gsv:' },

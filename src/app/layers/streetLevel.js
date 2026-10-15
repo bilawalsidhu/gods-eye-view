@@ -2,6 +2,7 @@ import { createStreetLevelLayer } from '../../layers/streetLevel/index.js';
 import { createMapillaryProvider } from '../../layers/streetLevel/providers/mapillary/index.js';
 import { createGoogleProvider } from '../../layers/streetLevel/providers/google/index.js';
 import { createKartaViewProvider } from '../../layers/streetLevel/providers/kartaview/index.js';
+import { createPanoramaxProvider } from '../../layers/streetLevel/providers/panoramax/index.js';
 import { createVegbilderProvider } from '../../layers/streetLevel/providers/vegbilder/index.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as picking from '../../data/pickRegistry.js';
@@ -13,7 +14,7 @@ import * as render from '../../renderGovernor.js';
 const googleApiKey = () => globalThis.window?.__GOOGLE_MAPS_API_KEY__ || null;
 
 /**
- * Mapillary, Google Street View, KartaView and Vegbilder, once the Mapillary
+ * Mapillary, Google Street View, KartaView, Panoramax and Vegbilder, once the Mapillary
  * source is supplied; else none.
  */
 function defaultProviders(sources) {
@@ -22,6 +23,7 @@ function defaultProviders(sources) {
     createMapillaryProvider({ source: sources.mapillary }),
     createGoogleProvider({ getApiKey: googleApiKey }),
     createKartaViewProvider(),
+    createPanoramaxProvider(),
     createVegbilderProvider(),
   ];
 }

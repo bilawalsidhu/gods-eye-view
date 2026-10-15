@@ -2,7 +2,7 @@ import {
   createPanoramaRenderer,
   PANO_FOV_DEFAULT_DEG,
   wrapDegrees,
-} from '../kartaview/panorama.js';
+} from '../../panorama.js';
 import {
   IMAGE_TIMEOUT_MS,
   MISSING_FILE_MESSAGE,
@@ -225,7 +225,7 @@ export function createVegbilderViewer({
 
   function makeCanvas(doc) {
     const element = doc.createElement('canvas');
-    element.className = 'sl-kv-pano';
+    element.className = 'sl-photo-pano';
     element.hidden = true;
     listen(element, 'pointerdown', onPointerDown);
     listen(element, 'pointermove', onPointerMove);
@@ -282,7 +282,7 @@ export function createVegbilderViewer({
       y: event.clientY,
       view: renderer.getView(),
     };
-    canvas.classList.add('sl-kv-dragging');
+    canvas.classList.add('sl-photo-dragging');
   }
 
   function onPointerMove(event) {
@@ -310,7 +310,7 @@ export function createVegbilderViewer({
     if (pointers.size < 2) pinch = null;
     if (!drag || event.pointerId !== drag.id) return;
     drag = null;
-    canvas.classList.remove('sl-kv-dragging');
+    canvas.classList.remove('sl-photo-dragging');
   }
 
   function onWheel(event) {
@@ -365,7 +365,8 @@ export function createVegbilderViewer({
     const doc = host.ownerDocument;
     root = doc.createElement('div');
     // KartaView's viewer styles, with Vegbilder's colour.
-    root.className = 'sl-kv-viewer sl-vb-viewer';
+    root.className = 'sl-photo-viewer';
+    root.dataset.provider = VEGBILDER_PROVIDER_ID;
     root.tabIndex = 0;
     root.setAttribute('role', 'group');
     root.setAttribute(
@@ -373,7 +374,7 @@ export function createVegbilderViewer({
       'Vegbilder road photo. ← and → step along the drive. On a 360° photo, drag or use Shift+← →, ↑ ↓ to look around, and + − to zoom',
     );
     picture = doc.createElement('img');
-    picture.className = 'sl-kv-photo';
+    picture.className = 'sl-photo-flat';
     picture.alt = 'Statens vegvesen road photo';
     picture.draggable = false;
     picture.hidden = true;
@@ -381,7 +382,7 @@ export function createVegbilderViewer({
     const nav = (label, glyph, delta) => {
       const button = doc.createElement('button');
       button.type = 'button';
-      button.className = `sl-kv-step sl-kv-step-${delta < 0 ? 'prev' : 'next'}`;
+      button.className = `sl-photo-step sl-photo-step-${delta < 0 ? 'prev' : 'next'}`;
       button.textContent = glyph;
       button.title = label;
       button.setAttribute('aria-label', label);

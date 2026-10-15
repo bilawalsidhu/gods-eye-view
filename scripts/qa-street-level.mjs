@@ -3,8 +3,9 @@
  * Browser QA for the Street Level layer against a running server. Run with
  * `npm run qa:street-level -- --url http://localhost:4173`.
  *
- * `--fixtures` (the CI mode) answers every *.mapillary.com and KartaView
- * request from fixtures, so nothing reaches Mapillary or KartaView. The server still needs a token
+ * `--fixtures` (the CI mode) answers every *.mapillary.com, KartaView and
+ * Panoramax request from fixtures, so nothing reaches those providers. The
+ * server still needs a token
  * because the bundle carries it; CI uses a dummy one. Fixture runs also stage
  * a rejected key and a keyless second server.
  *
@@ -46,6 +47,17 @@ import {
   kartaViewPhotos,
   resetKartaViewFixture,
 } from './fixtures/street-level/kartaView.mjs';
+import {
+  answerPanoramaxRequest,
+  describePanoramaxCall,
+  PNX_CREATOR,
+  PNX_LINE,
+  PNX_PARK,
+  PNX_SEQUENCES,
+  panoramaxHdDownloads,
+  panoramaxPictures,
+  resetPanoramaxFixture,
+} from './fixtures/street-level/panoramax.mjs';
 
 const PANEL_ID = 'street-level-panel';
 
@@ -62,6 +74,7 @@ export const EXPECTED_PROVIDERS = Object.freeze([
   'mapillary',
   'google',
   'kartaview',
+  'panoramax',
   'vegbilder',
 ]);
 
@@ -246,6 +259,8 @@ export async function serveFixtures(page, fixture) {
       { urlPattern: '*://api.kartaview.org/*' },
       { urlPattern: '*://cdn.kartaview.org/*' },
       { urlPattern: '*://*.openstreetcam.org/*' },
+      { urlPattern: '*://api.panoramax.xyz/*' },
+      { urlPattern: '*://panoramax.openstreetmap.fr/*' },
     ],
   });
   const fulfil = (requestId, { status, headers = {}, contentType, body }) =>
@@ -279,6 +294,14 @@ export async function serveFixtures(page, fixture) {
     } else if (/(^|\.)(kartaview|openstreetcam)\.org$/.test(address.hostname)) {
       const call = describeKartaViewCall(method, address);
       answer = answerKartaViewRequest({ method, url: request.url });
+      fixture.calls.add(call);
+      if (!answer.known) fixture.unknown.push(call);
+    } else if (
+      address.hostname === 'api.panoramax.xyz' ||
+      address.hostname === 'panoramax.openstreetmap.fr'
+    ) {
+      const call = describePanoramaxCall(method, address);
+      answer = answerPanoramaxRequest({ method, url: request.url });
       fixture.calls.add(call);
       if (!answer.known) fixture.unknown.push(call);
     } else if (
@@ -1055,7 +1078,7 @@ async function main() {
           assert.equal(street.renderModes, true, 'FIT / FILL for a flat photo');
           assert.ok(
             await settle(page, () => {
-              const img = document.querySelector('.sl-kv-photo');
+              const img = document.querySelector('.sl-photo-flat');
               return img && !img.hidden && img.naturalWidth > 0;
             }),
             'the photo is on screen',
@@ -1099,7 +1122,7 @@ async function main() {
             );
           }
           const before = street.imageId;
-          await clickPanelControl(page, '.sl-kv-step-next');
+          await clickPanelControl(page, '.sl-photo-step-next');
           assert.ok(
             await uiUntil(
               (u, was) =>
@@ -1151,10 +1174,10 @@ async function main() {
             assert.equal(u.street.error, null);
             assert.equal(u.street.renderModes, false, 'no frame to fit');
             assert.equal(
-              await page.$eval('.sl-kv-pano', (canvas) => canvas.hidden),
+              await page.$eval('.sl-photo-pano', (canvas) => canvas.hidden),
               false,
             );
-            const box = await page.$eval('.sl-kv-pano', (canvas) => {
+            const box = await page.$eval('.sl-photo-pano', (canvas) => {
               const r = canvas.getBoundingClientRect();
               return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
             });
@@ -1171,7 +1194,7 @@ async function main() {
             // A GPU reset: the panorama comes back on a new canvas, and drags.
             assert.ok(
               await page.evaluate(() => {
-                const canvas = document.querySelector('.sl-kv-pano');
+                const canvas = document.querySelector('.sl-photo-pano');
                 window.__kvLostCanvas = canvas;
                 const lose = canvas
                   .getContext('webgl')
@@ -1185,7 +1208,7 @@ async function main() {
               await settle(
                 page,
                 () => {
-                  const canvas = document.querySelector('.sl-kv-pano');
+                  const canvas = document.querySelector('.sl-photo-pano');
                   return (
                     canvas &&
                     canvas !== window.__kvLostCanvas &&
@@ -1230,6 +1253,349 @@ async function main() {
       );
       assert.ok(await lit('mapillary'), 'Mapillary is lit again');
       await setStack(original);
+    }
+
+    /**
+     * Panoramax: keyless orange coverage with both filters, a line click
+     * opening that sequence's picture nearest the click (author, licence,
+     * cones, ›), a 360° picture whose original is fetched once on EXPAND.
+     * Live runs park over Paris, where Panoramax has pictures. Runs on a
+     * draped map; leaves Mapillary lit.
+     */
+    async function panoramaxSteps() {
+      resetPanoramaxFixture();
+      const ui = () =>
+        page.evaluate(() =>
+          window.__godsEyeView.dataManager.layers
+            .get('street-level')
+            .module.getUIState(),
+        );
+      const uiUntil = (test, arg = null, options) =>
+        settle(
+          page,
+          `(${test})(window.__godsEyeView.dataManager.layers.get('street-level').module.getUIState(), ${JSON.stringify(arg)})`,
+          undefined,
+          options,
+        );
+      const lit = (id) =>
+        uiUntil(
+          (u, want) =>
+            u.providers.find((p) => p.id === want)?.on === true &&
+            u.providers.filter((p) => p.on).length === 1,
+          id,
+        );
+      const module = (call, ...args) =>
+        page.evaluate(
+          (name, list) =>
+            window.__godsEyeView.dataManager.layers
+              .get('street-level')
+              .module[name](...list),
+          call,
+          args,
+        );
+      const stack = () =>
+        page.evaluate(() =>
+          window.__godsEyeView.mapStackController.getActiveId(),
+        );
+      const setStack = async (id) => {
+        await page.evaluate(
+          (stackId) =>
+            window.__godsEyeView.mapStackController.setStack(stackId),
+          id,
+        );
+        await settle(
+          page,
+          (stackId) =>
+            window.__godsEyeView.mapStackController.getActiveId() === stackId,
+          id,
+        );
+      };
+      const camera = () =>
+        page.evaluate(() => {
+          const c = window.__godsEyeView.viewer.camera.positionCartographic;
+          return {
+            lon: (c.longitude * 180) / Math.PI,
+            lat: (c.latitude * 180) / Math.PI,
+            height: c.height,
+          };
+        });
+      const pnxChip = '#sl-provider-chips [data-chip-id="panoramax"]';
+      const original = await stack();
+      await module('closeViewer');
+      await setStack('esri-imagery');
+      for (let attempt = 0; attempt < 4; attempt++) {
+        await page.evaluate((at) => {
+          const v = window.__godsEyeView.viewer;
+          v.camera.cancelFlight?.();
+          const C = v.camera.positionCartographic.constructor;
+          v.camera.setView({
+            destination: v.scene.globe.ellipsoid.cartographicToCartesian(
+              C.fromDegrees(at.lon, at.lat, at.height),
+            ),
+            orientation: { heading: 0, pitch: at.pitch, roll: 0 },
+          });
+        }, PNX_PARK);
+        await sleep(1000);
+      }
+      try {
+        await step(
+          'Panoramax: its chip draws keyless orange coverage, keeps both filters, credits Panoramax and lights in the share link',
+          async () => {
+            await clickPanelControl(page, pnxChip);
+            assert.ok(await lit('panoramax'), 'Panoramax alone is lit');
+            await waitForCoverage(page);
+            const u = await ui();
+            assert.equal(u.keyRequired, false);
+            assert.deepEqual(u.filterControls, { pano: true, since: true });
+            assert.equal(
+              await page.$eval(pnxChip, (chip) =>
+                chip.style.getPropertyValue('--chip-color'),
+              ),
+              '#ff6f00',
+            );
+            assert.match(
+              await page.$eval('#sl-coverage-meta', (node) => node.textContent),
+              /sequences in view · click a line for its nearest photo/,
+            );
+            await page.waitForFunction(
+              () =>
+                document.body.innerHTML.includes('Panoramax</a> contributors'),
+              { timeout: 15_000 },
+            );
+            assert.ok(
+              await settle(page, () =>
+                (new URLSearchParams(location.hash.slice(1)).get('lo') || '')
+                  .split('_')
+                  .some(
+                    (entry) =>
+                      entry.startsWith('0.') && entry.includes('panoramax-1'),
+                  ),
+              ),
+              `the share link lights Panoramax: ${await page.evaluate(() => location.hash)}`,
+            );
+          },
+        );
+        await step(
+          'Panoramax: a click on a line opens that sequence’s picture nearest the click, camera still, with author and licence, cones and ›',
+          async ({ skip }) => {
+            // Points on the street: the fixture's, or live pictures there.
+            let points = null;
+            if (fixtures)
+              points = Array.from({ length: 9 }, (_, i) => [
+                PNX_LINE.west +
+                  ((i + 2) / 13) * (PNX_LINE.east - PNX_LINE.west),
+                PNX_LINE.lat,
+              ]);
+            else {
+              const near = await fetch(
+                `https://api.panoramax.xyz/api/search?place_position=${PNX_PARK.lon},${PNX_PARK.lat}&place_distance=0-150&place_fov_tolerance=180&limit=12`,
+              )
+                .then((r) => r.json())
+                .catch(() => null);
+              points = near?.features?.map((f) => f.geometry.coordinates);
+              if (!points?.length)
+                return skip('no Panoramax picture near the park');
+            }
+            const handle = await page
+              .waitForFunction(
+                findPickPoint,
+                { timeout: 60_000, polling: 500 },
+                {
+                  prefix: 'pnx:seq:',
+                  id: null,
+                  points,
+                  billboardIds: null,
+                },
+              )
+              .catch(() => null);
+            if (!handle && !fixtures) return skip('no Panoramax line in view');
+            assert.ok(handle, 'a Panoramax line is pickable');
+            let at = await handle.jsonValue();
+            if (fixtures) {
+              // Click the top line where the other sequence's pictures are:
+              // the nearest picture is then the other's, and only the line
+              // click's own-sequence lookup opens the clicked line's.
+              const others = panoramaxPictures()
+                .filter((p) => p.sequenceId !== at.id)
+                .slice(40, 100)
+                .map((p) => [p.lon, p.lat]);
+              const aimed = await page
+                .waitForFunction(
+                  findPickPoint,
+                  { timeout: 60_000, polling: 500 },
+                  {
+                    prefix: 'pnx:seq:',
+                    id: at.id,
+                    points: others,
+                    billboardIds: null,
+                  },
+                )
+                .catch(() => null);
+              assert.ok(
+                aimed,
+                'the line is pickable over the other’s pictures',
+              );
+              at = await aimed.jsonValue();
+            }
+            const parked = await camera();
+            await page.mouse.click(at.x, at.y);
+            await page.waitForFunction(
+              () => {
+                const s = window.__godsEyeView.dataManager.layers
+                  .get('street-level')
+                  .module.getUIState().street;
+                return (s.imageId && !s.loading) || s.error;
+              },
+              { timeout: 60_000 },
+            );
+            const street = (await ui()).street;
+            assert.equal(street.error, null, `viewer error: ${street.error}`);
+            assert.equal(street.providerId, 'panoramax');
+            assert.equal(
+              street.sequenceId,
+              at.id,
+              'the picture is from the line clicked',
+            );
+            assert.ok(street.license, 'the caption names the licence');
+            assert.match(
+              street.externalUrl,
+              /^https:\/\/api\.panoramax\.xyz\/#pic=/,
+            );
+            await sleep(1500);
+            const now = await camera();
+            assert.ok(
+              Math.abs(now.lon - parked.lon) < 1e-6 &&
+                Math.abs(now.lat - parked.lat) < 1e-6 &&
+                Math.abs(now.height - parked.height) < 0.5,
+              `the camera did not move: ${JSON.stringify({ parked, now })}`,
+            );
+            if (fixtures) {
+              const caption = await page.$eval(
+                '#sl-image-by',
+                (node) => node.textContent,
+              );
+              if (street.sequenceId === PNX_SEQUENCES[0])
+                assert.equal(caption, `Image by ${PNX_CREATOR} · CC BY-SA 4.0`);
+              else
+                assert.equal(
+                  caption,
+                  'via panoramax.openstreetmap.fr · Licence Ouverte 2.0',
+                  'an account named by an email address is not shown; the instance is',
+                );
+              const pictures = panoramaxPictures().filter(
+                (p) => p.sequenceId === street.sequenceId,
+              );
+              assert.ok(
+                await uiUntil(
+                  (u, want) =>
+                    u.sequence.selectedId === want &&
+                    !u.sequence.loading &&
+                    u.sequence.images > 0,
+                  street.sequenceId,
+                  { timeout: 30_000 },
+                ),
+                `cones along the sequence: ${JSON.stringify((await ui()).sequence)}`,
+              );
+              assert.ok((await ui()).sequence.images <= pictures.length);
+            }
+            const before = street.imageId;
+            await clickPanelControl(page, '.sl-photo-step-next');
+            assert.ok(
+              await uiUntil(
+                (u, was) =>
+                  u.street.imageId &&
+                  u.street.imageId !== was &&
+                  !u.street.loading &&
+                  !u.street.error,
+                before,
+                { timeout: 30_000 },
+              ),
+              '› opened the next picture',
+            );
+            const after = (await ui()).street;
+            assert.equal(after.sequenceId, street.sequenceId);
+            if (fixtures) {
+              const all = panoramaxPictures();
+              const from = all.find((p) => p.id === before);
+              assert.equal(
+                after.imageId,
+                all.find(
+                  (p) =>
+                    p.sequenceId === from.sequenceId &&
+                    p.index === from.index + 1,
+                ).id,
+                '› followed the picture’s next link',
+              );
+            }
+          },
+        );
+        if (fixtures)
+          await step(
+            'Panoramax: a 360° picture opens on the panorama without FIT / FILL, drags, and EXPAND fetches its original once',
+            async () => {
+              const pano = panoramaxPictures().find((p) => p.isPano);
+              await module('openImage', 'panoramax', pano.id);
+              assert.ok(
+                await uiUntil(
+                  (u, want) =>
+                    u.street.imageId === want &&
+                    !u.street.loading &&
+                    u.street.isPano,
+                  pano.id,
+                  { timeout: 60_000 },
+                ),
+                `the panorama opened: ${JSON.stringify((await ui()).street)}`,
+              );
+              const u = await ui();
+              assert.equal(u.street.renderModes, false, 'no frame to fit');
+              const box = await page.$eval('.sl-photo-pano', (canvas) => {
+                const r = canvas.getBoundingClientRect();
+                return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+              });
+              const bearing = u.street.bearing;
+              await page.mouse.move(box.x, box.y);
+              await page.mouse.down();
+              for (let i = 1; i <= 8; i++)
+                await page.mouse.move(box.x - i * 15, box.y);
+              await page.mouse.up();
+              assert.ok(
+                await uiUntil((v, was) => v.street.bearing !== was, bearing),
+                'dragging the panorama turned its bearing',
+              );
+              assert.equal(panoramaxHdDownloads(), 0, 'docked: SD only');
+              await clickPanelControl(page, '#sl-viewer-expand');
+              assert.ok(
+                await settle(page, () =>
+                  Boolean(document.querySelector('.sl-viewer-wrap-expanded')),
+                ),
+                'the viewer expanded',
+              );
+              const deadline = Date.now() + 30_000;
+              while (panoramaxHdDownloads() === 0 && Date.now() < deadline)
+                await sleep(250);
+              await sleep(2000);
+              assert.equal(
+                panoramaxHdDownloads(),
+                1,
+                'the original, once, for the expanded viewer',
+              );
+              await page.keyboard.press('Escape');
+            },
+          );
+        else
+          await skipStep(
+            'fixtures only',
+            'Panoramax: a 360° picture opens on the panorama without FIT / FILL, drags, and EXPAND fetches its original once',
+          );
+      } finally {
+        await module('closeViewer');
+        await clickPanelControl(
+          page,
+          '#sl-provider-chips [data-chip-id="mapillary"]',
+        );
+        assert.ok(await lit('mapillary'), 'Mapillary is lit again');
+        await setStack(original);
+      }
     }
 
     async function keyedSteps() {
@@ -2550,6 +2916,7 @@ async function main() {
         },
       );
       await kartaViewSteps();
+      await panoramaxSteps();
       await step(
         'a reload with the layer on keeps a collapsed panel collapsed, and the share link carries its ui token',
         async () => {
@@ -2633,7 +3000,7 @@ async function main() {
         );
       if (fixtures)
         await step(
-          'every Mapillary and KartaView request was answered from a fixture',
+          'every Mapillary, KartaView and Panoramax request was answered from a fixture',
           () => {
             console.log(
               `  (answered: ${[...fixture.calls].sort().join(' | ')})`,

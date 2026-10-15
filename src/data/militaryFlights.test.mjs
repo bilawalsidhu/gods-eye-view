@@ -71,6 +71,12 @@ test('military analyst record: full record maps every contract field', () => {
     aircraftClass: 'widebody',
     originCountry: null,
     operator: 'United States Air Force',
+    squawk: null,
+    emergency: false,
+    emergencyKind: null,
+    emergencySource: null,
+    emergencyBroadcast: null,
+    lastContactAtMs: null,
     routeOrigin: null,
     routeDestination: null,
   });

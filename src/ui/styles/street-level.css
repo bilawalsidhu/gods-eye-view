@@ -7,8 +7,11 @@
   /* KartaView's purple for lines; a lighter one where it is text (WCAG AA). */
   --sl-kartaview: #635bff;
   --sl-kartaview-text: #8f8aff;
-  --sl-vegbilder: #f28c00;
-  --sl-vegbilder-text: #ffa733;
+  --sl-vegbilder: #ec4899;
+  --sl-vegbilder-text: #f472b6;
+  /* Panoramax's orange; the darker one sits behind white text. */
+  --sl-panoramax: #ff6f00;
+  --sl-panoramax-fill: #b84e00;
   --sl-text: 0.62rem;
   --sl-text-small: 0.6rem;
 }
@@ -637,8 +640,11 @@ button.sl-status:focus-visible {
   font-size: 1.3rem;
 }
 
-/* ── KartaView photo viewer ──────────────────────────────────────────────── */
-.sl-kv-viewer {
+/* ── Photo viewer (KartaView, Panoramax, Vegbilder) ─────────────────────────────────── */
+.sl-photo-viewer {
+  /* The lit source's colour: a focus ring, and behind the white ‹ › glyphs. */
+  --sl-photo-ring: var(--sl-kartaview-text);
+  --sl-photo-fill: color-mix(in srgb, var(--sl-kartaview) 85%, transparent);
   position: absolute;
   inset: 0;
   background: #000;
@@ -646,23 +652,34 @@ button.sl-status:focus-visible {
   overflow: hidden;
 }
 
-.sl-kv-viewer:focus-visible {
+.sl-photo-viewer:focus-visible {
   outline: none;
 }
 
 /* The photo and canvas fill the viewer and would cover a ring drawn on it:
    draw the ring on a layer above them (clicks pass through). */
-.sl-kv-viewer:focus-visible::after {
+.sl-photo-viewer:focus-visible::after {
   content: '';
   position: absolute;
   inset: 0;
   z-index: 3;
-  border: 2px solid var(--sl-kartaview-text);
+  border: 2px solid var(--sl-photo-ring);
   pointer-events: none;
 }
 
-.sl-kv-photo,
-.sl-kv-pano {
+/* White on #ff6f00 is 2.8:1; on the darker orange behind ‹ › it is 5.1:1. */
+.sl-photo-viewer[data-provider='panoramax'] {
+  --sl-photo-ring: var(--sl-panoramax);
+  --sl-photo-fill: var(--sl-panoramax-fill);
+}
+
+.sl-photo-viewer[data-provider='vegbilder'] {
+  --sl-photo-ring: var(--sl-vegbilder-text);
+  --sl-photo-fill: color-mix(in srgb, var(--sl-vegbilder) 85%, transparent);
+}
+
+.sl-photo-flat,
+.sl-photo-pano {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -670,25 +687,25 @@ button.sl-status:focus-visible {
   user-select: none;
 }
 
-.sl-kv-photo {
+.sl-photo-flat {
   object-fit: contain;
 }
 
-.sl-kv-pano {
+.sl-photo-pano {
   cursor: grab;
   touch-action: none;
 }
 
-.sl-kv-pano.sl-kv-dragging {
+.sl-photo-pano.sl-photo-dragging {
   cursor: grabbing;
 }
 
-.sl-kv-photo[hidden],
-.sl-kv-pano[hidden] {
+.sl-photo-flat[hidden],
+.sl-photo-pano[hidden] {
   display: none;
 }
 
-.sl-kv-step {
+.sl-photo-step {
   position: absolute;
   top: 50%;
   z-index: 2;
@@ -704,38 +721,29 @@ button.sl-status:focus-visible {
   cursor: pointer;
 }
 
-.sl-kv-step-prev {
+.sl-photo-step-prev {
   left: 6px;
 }
 
-.sl-kv-step-next {
+.sl-photo-step-next {
   right: 6px;
 }
 
-.sl-kv-step:hover:not(:disabled),
-.sl-kv-step:focus-visible {
-  background: color-mix(in srgb, var(--sl-kartaview) 85%, transparent);
+.sl-photo-step:hover:not(:disabled),
+.sl-photo-step:focus-visible {
+  background: var(--sl-photo-fill);
   outline: none;
 }
 
-.sl-kv-step:disabled {
+.sl-photo-step:disabled {
   opacity: 0.3;
   cursor: default;
 }
 
 /* Nothing to step through until a photo shows. */
-.sl-kv-viewer:not([data-kind='flat']):not([data-kind='pano']) .sl-kv-step {
+.sl-photo-viewer:not([data-kind='flat']):not([data-kind='pano'])
+  .sl-photo-step {
   display: none;
-}
-
-/* Vegbilder's viewer is KartaView's, in Statens vegvesen orange. */
-.sl-vb-viewer:focus-visible::after {
-  border-color: var(--sl-vegbilder-text);
-}
-
-.sl-vb-viewer .sl-kv-step:hover:not(:disabled),
-.sl-vb-viewer .sl-kv-step:focus-visible {
-  background: color-mix(in srgb, var(--sl-vegbilder) 85%, transparent);
 }
 
 /* ── Short viewports ─────────────────────────────────────────────────────── */
