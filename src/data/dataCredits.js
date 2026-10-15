@@ -249,10 +249,36 @@ export const DATA_CREDITS = [
       'license CC BY 4.0',
   },
   {
+    key: 'lithuania-cctv',
+    html:
+      // Opt-in: the camera endpoints are the eismoinfo.lt website backend, not
+      // among the services Via Lietuva's open-data statement lists (its
+      // conditions: attribution, reuse on the same terms).
+      'Road-camera stills (Lithuania, when enabled): ' +
+      '<a href="https://eismoinfo.lt/" target="_blank" rel="noopener">Via Lietuva / Eismoinfo</a>; periodically updated images',
+  },
+  {
     key: 'calgary-cctv',
     html:
       'Traffic cameras (Calgary): contains information licensed under the ' +
       '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
+  },
+  {
+    key: 'catalonia-cctv',
+    html:
+      'CCTV cameras &amp; frames (Catalonia): ' +
+      '<a href="https://transit.gencat.cat/" target="_blank" rel="noopener">Servei Català de Trànsit</a> ' +
+      '(Llicència oberta d’ús d’informació - Catalunya); some cameras are supplied by partners ' +
+      '(Ajuntament de Barcelona, Ajuntament de Terrassa), each named in the CCTV panel',
+  },
+  {
+    key: 'kingcounty-cctv',
+    html:
+      'CCTV cameras &amp; frames (King County, WA): King County Road Services — ' +
+      '<a href="https://kingcounty.gov/en/dept/local-services/roads" target="_blank" rel="noopener">kingcounty.gov</a>, ' +
+      'per the ' +
+      '<a href="https://kingcounty.gov/en/dept/kcit/data-information-services/gis-center/about/terms-conditions-copyrights" target="_blank" rel="noopener">KCGIS Center terms</a>. ' +
+      'Partner-city cameras hosted on the county image handler (e.g. Newcastle) name their owner in the CCTV panel.',
   },
   {
     key: 'vegvesen-cctv',
@@ -283,6 +309,12 @@ export const DATA_CREDITS = [
       '<a href="https://atacadoconnect.com/camera-da-ponte-da-amizade-ao-vivo" target="_blank" rel="noopener">Atacado Connect</a> · ' +
       '<a href="https://www.gibarra.com.py/" target="_blank" rel="noopener">Grupo Ibarra</a>. ' +
       'Approximate area locations; operator credits and watermarks retained, no open video license asserted.',
+  },
+  {
+    key: 'toronto-cctv',
+    html:
+      'Traffic cameras (Toronto): contains information licensed under the ' +
+      '<a href="https://www.toronto.ca/city-government/data-research-maps/open-data/open-data-licence/" target="_blank" rel="noopener">Open Government Licence – Toronto</a>',
   },
   {
     key: 'gbfs',
