@@ -74,6 +74,7 @@
 - Tool string length validation counts Unicode characters correctly, including characters outside the basic multilingual plane.
 
 - Director timeline seeks cross the dateline along the short longitude arc.
+
 - Exclude aircraft without a reported altitude from requested altitude bands;
   unfiltered aircraft queries still retain them.
 
