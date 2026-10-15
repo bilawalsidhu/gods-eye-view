@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createLayerCatalog, catalogControlServices } from './catalog.js';
+import {
+  absentLayerControlServices,
+  createLayerCatalog,
+  catalogControlServices,
+} from './catalog.js';
 import { createApplicationData } from './data.js';
 
 const metadata = (layers) =>
@@ -123,4 +127,66 @@ test('controls bind catalog instances rather than similarly named defaults', () 
     () => catalogControlServices(createLayerCatalog([], [])),
     /Control layer missing/,
   );
+});
+
+test('without data layers the controls get one empty stand-in per layer role', () => {
+  const ids = [
+    'traffic',
+    'flights',
+    'military',
+    'satellites',
+    'cctv',
+    'street-level',
+    'radio',
+    'bikeshare',
+    'transit',
+    'ais-live-vessels',
+    'military-awareness',
+    'military-installations',
+    'rocket-launches',
+    'local-adsb',
+  ];
+  const layers = ids.map((id) => ({ id }));
+  const roles = Object.keys(
+    catalogControlServices(createLayerCatalog(layers, metadata(layers))),
+  );
+  const absent = absentLayerControlServices();
+  assert.deepEqual(Object.keys(absent), roles);
+  for (const role of roles) {
+    assert.deepEqual(Object.keys(absent[role]), [], role);
+    assert.equal(absent[role].subscribe, undefined);
+  }
+  assert.notEqual(absent.flightsLayer, absent.trafficLayer);
+  assert.notEqual(
+    absentLayerControlServices().flightsLayer,
+    absent.flightsLayer,
+  );
+});
+
+test('data setup without a viewer registers an empty catalog and no sonar scene', async (t) => {
+  const previous = globalThis.document;
+  globalThis.document = { getElementById: () => null };
+  t.after(() => {
+    if (previous === undefined) delete globalThis.document;
+    else globalThis.document = previous;
+  });
+  const releases = [];
+  let attached = null;
+  const { dataManager } = createApplicationData({
+    scene: { viewer: null, mapStackController: null },
+    controls: {
+      styleManager: {
+        attachDataManager(manager) {
+          attached = manager;
+        },
+      },
+    },
+    catalog: createLayerCatalog([], []),
+    defer: (release) => releases.push(release),
+  });
+  assert.equal(attached, dataManager);
+  assert.equal(dataManager.viewer, null);
+  assert.equal(dataManager.layers.size, 0);
+  assert.equal(dataManager.registrationsFinalized, true);
+  for (const release of releases.reverse()) await release();
 });

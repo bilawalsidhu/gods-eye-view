@@ -1,4 +1,7 @@
-import { catalogControlServices } from './catalog.js';
+import {
+  absentLayerControlServices,
+  catalogControlServices,
+} from './catalog.js';
 import { StyleManager } from '../ui/composition.js';
 import { flyToAustin } from '../camera.js';
 import { initCockpitCloudEffects } from '../cockpitCloudEffects.js';
@@ -21,7 +24,10 @@ export function createApplicationControls({
       searchAndFlyTo: operations.searchAndFlyTo,
       fetchRegionalBrief: (...args) =>
         operations.requests.regional.getBrief(...args),
-      ...catalogControlServices(catalog),
+      // No viewer (the Navara engine): no data layers, empty stand-ins.
+      ...(viewer
+        ? catalogControlServices(catalog)
+        : absentLayerControlServices()),
     },
     requestServices: operations.requests,
     // The page's globe engine: the shell's overlay host runs on it.
@@ -36,9 +42,11 @@ export function createApplicationControls({
   // clouds use a separate, capped low-resolution GPU pass that never attaches
   // Cesium fog or post-process stages and is fully stopped in map mode.
   const weatherEffects = null;
-  const cockpitCloudEffects = initCockpitCloudEffects(viewer, {
-    weatherService: operations.requests.weather,
-  });
+  const cockpitCloudEffects = viewer
+    ? initCockpitCloudEffects(viewer, {
+        weatherService: operations.requests.weather,
+      })
+    : null;
   defer(() => cockpitCloudEffects?.destroy());
 
   // If no share link state, do default fly-to Austin

@@ -59,3 +59,14 @@ export function catalogControlServices(catalog) {
     }),
   );
 }
+
+/**
+ * Layer roles for controls on a page without data layers (the experimental
+ * Navara engine): one empty object per role, so the shell's optional calls
+ * (`layer.method?.()`) do nothing.
+ */
+export function absentLayerControlServices() {
+  return Object.fromEntries(
+    Object.keys(CONTROL_LAYER_IDS).map((role) => [role, {}]),
+  );
+}

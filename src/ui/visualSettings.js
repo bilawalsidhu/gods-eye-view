@@ -544,7 +544,7 @@ export class VisualSettings {
       fadeRatio: fadePct / 100,
       outsideOpacity: outsideOpacityPct / 100,
     });
-    this.viewer.scene.requestRender?.();
+    this.viewer?.scene.requestRender?.();
   }
 
   _setDetectionAllocation(strategy, { syncShare = true, persist = true } = {}) {
@@ -1486,7 +1486,13 @@ export class VisualSettings {
     this._styleParameters.clear();
     const shader = STYLES[styleName];
 
-    if (!shader || !shader.uniforms || styleName === 'normal') {
+    // No stage without a viewer (the Navara engine): nothing to adjust.
+    if (
+      !shader ||
+      !shader.uniforms ||
+      styleName === 'normal' ||
+      !this.stages[styleName]
+    ) {
       this._sliderPanel.classList.remove('active');
       this._scheduleRightPanelLayout();
       return;

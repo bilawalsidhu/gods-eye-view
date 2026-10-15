@@ -14,7 +14,12 @@ import {
   releaseContinuousRender,
 } from '../renderGovernor.js';
 
-/** Attach scene tools, rendering listeners and the application debug handle. */
+/**
+ * Attach scene tools, rendering listeners and the application debug handle.
+ * Without a viewer (the experimental Navara engine) the viewer-bound tools
+ * (director, annotations, drawing, imagery box, scope mask, tracking, voice,
+ * embedded views) are not created; their handles are null.
+ */
 export function createApplicationTools({
   scene,
   controls,
@@ -31,6 +36,20 @@ export function createApplicationTools({
   const { viewer, engine, tileset, mapStackController, operations } = scene;
   const { styleManager, weatherEffects, cockpitCloudEffects } = controls;
   const { dataManager } = data;
+  // Without a viewer (the Navara mode) the tools load with that mode's code.
+  if (!viewer) {
+    return import('./navaraMode.js').then(({ createViewerlessTools }) =>
+      createViewerlessTools({
+        scene,
+        controls,
+        data,
+        loadingScreen,
+        startChrome,
+        signal,
+        defer,
+      }),
+    );
+  }
   const sceneDirector = new SceneDirector(viewer, styleManager, dataManager, {
     engine,
     dataPacks: sceneDataPacks,

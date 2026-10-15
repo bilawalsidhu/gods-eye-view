@@ -57,7 +57,8 @@ export function createApplicationData({
   }
   presentation.mount(document.getElementById('data-toggles'));
   styleManager.attachDataManager(dataManager);
-  defer(createCyberSonarScene(viewer, dataManager));
+  // The sonar scene draws on the viewer; the Navara engine has none.
+  if (viewer) defer(createCyberSonarScene(viewer, dataManager));
 
   return { dataManager, catalog, presentation };
 }
