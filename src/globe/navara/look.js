@@ -1,0 +1,108 @@
+// Builds a Navara look (viewOptions.js navaraScenePlan) on an initialised
+// view and keeps it current while the view renders: the sun follows the wall
+// clock as the HUD's SUN elevation does; the cinematic look lights the globe
+// from the atmosphere when seen from space and shows its clouds only for low
+// views over low ground. All of it runs only on frames the view draws
+// anyway, so an idle view stays idle.
+
+import {
+  cloudsVisibleAt,
+  globeLightingAt,
+  sunDateStale,
+} from './viewOptions.js';
+
+/**
+ * @param {object} view an initialised ThreeView with the default plugin
+ * @param {object} plugin its DefaultPlugin
+ * @param {ReturnType<import('./viewOptions.js').navaraScenePlan>} plan
+ * @returns {{ handles: object[], frame: (height: number, moving?: boolean, ground?: number) => boolean }}
+ *   `frame` is called before each frame with the camera height, whether the
+ *   camera is moving and the height of the ground in view (metres above the
+ *   ellipsoid, NaN when unknown); it returns true when it changed the scene,
+ *   so the caller draws one more frame.
+ */
+export function buildNavaraLook(view, plugin, plan, now = () => Date.now()) {
+  const handles = [];
+  if (plan.pluginDefault) {
+    const scene = plugin.addDefaultPhotorealScene();
+    handles.push(...Object.values(scene).filter(Boolean));
+  } else {
+    for (const desc of plan.meshes) handles.push(view.addMesh(desc));
+    for (const desc of plan.lights) handles.push(view.addLight(desc));
+    for (const desc of plan.effects) handles.push(view.addEffect(desc));
+  }
+  const effect = (name) => {
+    const at = plan.effects.findIndex((desc) => Object.hasOwn(desc, name));
+    return at < 0
+      ? null
+      : handles[plan.meshes.length + plan.lights.length + at];
+  };
+  const aerial = plan.globeLighting ? effect('aerialPerspective') : null;
+  const clouds = effect('clouds');
+  let globeLit = false;
+  let cloudsShown = true;
+
+  const frame = (height, moving = false, ground = Number.NaN) => {
+    let changed = false;
+    const atmosphere = view.atmosphere;
+    if (atmosphere && sunDateStale(atmosphere.date.getTime(), now())) {
+      atmosphere.date = new Date(now());
+      changed = true;
+    }
+    if (aerial) {
+      const next = globeLightingAt(height, globeLit);
+      // Switching recompiles the aerial perspective, a frame of about 0.8 s
+      // headless: it switches on only at rest (a flight from city to city
+      // through space never switches) and off as soon as the camera comes
+      // down, before the tiles would show relit.
+      if (next !== globeLit && !(next && moving)) {
+        globeLit = next;
+        // Only the aerial perspective changes: the tiles already draw plain
+        // albedo, so view.lit stays (toggling it recompiles every tile
+        // material, a frame of about 0.8 s mid-flight).
+        aerial.update({ aerialPerspective: { irradiance: next } });
+        changed = true;
+      }
+    }
+    // Clouds only for a camera below them over low ground; switching them
+    // costs no recompile, so it follows the camera in motion too.
+    if (clouds) {
+      const next = cloudsVisibleAt(height, ground, cloudsShown);
+      if (next !== cloudsShown) {
+        cloudsShown = next;
+        clouds.update({ visible: next });
+        parkCloudLayers(view.atmosphere, next);
+        changed = true;
+      }
+    }
+    return changed;
+  };
+  return { handles, frame };
+}
+
+// The clouds hand the aerial perspective their last output through the
+// atmosphere (overlay, shadow, shadow length) once, when they first draw.
+// A hidden clouds pass leaves those in place, and the aerial perspective
+// keeps compositing the last clouds as grey ghosts. Hiding parks them;
+// showing puts them back.
+const CLOUD_OUTPUTS = ['overlay', 'shadow', 'shadowLength'];
+const parked = new WeakMap();
+
+function parkCloudLayers(atmosphere, shown) {
+  if (!atmosphere) return;
+  if (!shown) {
+    const outputs = {};
+    for (const name of CLOUD_OUTPUTS) {
+      if (!atmosphere[name]) continue;
+      outputs[name] = atmosphere[name].value;
+      atmosphere[name].value = null;
+    }
+    parked.set(atmosphere, outputs);
+    return;
+  }
+  const outputs = parked.get(atmosphere);
+  if (!outputs) return;
+  parked.delete(atmosphere);
+  for (const [name, value] of Object.entries(outputs))
+    atmosphere[name].value = value;
+}

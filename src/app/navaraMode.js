@@ -55,6 +55,8 @@ export async function createNavaraScene({
   signal.throwIfAborted();
   const globe = await createNavaraGlobe({
     container: document.getElementById('cesiumContainer'),
+    // The cinematic look unless `?look=photoreal|minimal` asks otherwise.
+    search: globalThis.location?.search ?? '',
   });
   defer(() => globe.destroy());
   const { engine } = globe;

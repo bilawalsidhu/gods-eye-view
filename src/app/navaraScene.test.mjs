@@ -15,6 +15,7 @@ function installDom() {
     window: globalThis.window,
     document: globalThis.document,
     CustomEvent: globalThis.CustomEvent,
+    location: globalThis.location,
   };
   const container = { id: 'cesiumContainer' };
   const appended = [];
@@ -27,6 +28,7 @@ function installDom() {
     },
     body: { appendChild: (node) => appended.push(node) },
   };
+  globalThis.location = { search: '?engine=navara&look=photoreal' };
   const events = [];
   globalThis.window = {
     dispatchEvent: (event) => events.push(event),
@@ -125,6 +127,8 @@ test('the Navara scene builds the engine on the app container and no viewer', as
   assert.equal(run.scene.engine.kind, 'navara');
   assert.equal(run.loads.length, 1);
   assert.equal(run.loads[0].container, run.dom.container);
+  // The globe picks its look from the page's ?look= (cinematic by default).
+  assert.equal(run.loads[0].search, '?engine=navara&look=photoreal');
   assert.ok(run.scene.operations.searchAndFlyTo);
   assert.equal(globalThis.window.__GOOGLE_MAPS_API_KEY__, 'google-test');
   // Data layers are off: only the credits of what the shell itself uses
