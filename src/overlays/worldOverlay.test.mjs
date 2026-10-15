@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as Cesium from 'cesium';
+import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
 import {
   getKeyholeGeometry,
   keyholeLabelAlphaFromGeometry,
@@ -379,8 +380,11 @@ function installMockEnvironment({
     },
   };
 
+  // Shell modules take the globe engine; the Cesium engine runs on the mock.
+  const engine = createCesiumEngine(viewer);
   return {
     viewer,
+    engine,
     ctx,
     detectionCtx,
     paintTrace,
@@ -395,6 +399,7 @@ function installMockEnvironment({
     advanceTime(ms) { currentTime += ms; },
     cleanup() {
       destroyWorldOverlay();
+      engine.destroy();
       delete globalThis.document;
       delete globalThis.window;
       delete globalThis.ResizeObserver;
@@ -435,7 +440,7 @@ test('destroying before the first init leaves pre-init buffering intact', () => 
   setOverlayEntries('pre-init', [selectedEntry('buffered')]);
   assert.equal(getWorldOverlayDiagnostics().entryCount, 1);
 
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   env.postRender.raise();
   assert.equal(getWorldOverlayDiagnostics().paintedCount, 1);
 
@@ -450,8 +455,8 @@ test('destroying before the first init leaves pre-init buffering intact', () => 
 test('lifecycle is idempotent and teardown removes listeners, observers, and DOM', () => {
   const env = installMockEnvironment();
   assert.equal(env.document.getElementById('world-overlay-detection-surface'), null);
-  initWorldOverlay(env.viewer);
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
+  initWorldOverlay(env.engine);
   assert.equal(env.postRender.listeners.size, 1);
   assert.equal(env.moveEnd.listeners.size, 1);
   assert.equal(env.window.listenerCount('gev:cockpit-mode-changed'), 1);
@@ -553,7 +558,7 @@ test('no ancestor isolates the detection surface, so `screen` reaches the scene'
   // changed was containment. This walks the ancestor chain the host actually
   // builds and evaluates each node against the shipped stylesheet.
   const env = installMockEnvironment();
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const css = readStylesheet(new URL('../../style.css', import.meta.url));
   const surface = env.document.getElementById('world-overlay-detection-surface');
   assert.ok(surface, 'the host owns a detection surface');
@@ -585,7 +590,7 @@ test('no ancestor isolates the detection surface, so `screen` reaches the scene'
 
 test('canvas backing store tracks CSS size and live DPR', () => {
   const env = installMockEnvironment({ width: 400, height: 300, dpr: 2 });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   let canvas = env.document.getElementById('world-overlay-canvas');
   let detectionSurface = env.document.getElementById('world-overlay-detection-surface');
   assert.equal(canvas.width, 0);
@@ -619,7 +624,7 @@ test('shared fade tuning reaches a host-painted card on the next rendered frame'
   });
   try {
     setKeyholeFadeTuning({ fadeRatio: 0.16, outsideOpacity: 0.05 });
-    initWorldOverlay(env.viewer);
+    initWorldOverlay(env.engine);
     setOverlayEntries('fade-host', [selectedEntry('CARD', {
       position: new Cesium.Cartesian3(0.85, 0, 0),
       variant: 'card',
@@ -649,7 +654,7 @@ test('inlined host alpha binding matches combinedOverlayAlpha across channel ran
     get() { return paintedAlphas.at(-1) ?? 1; },
     set(value) { paintedAlphas.push(value); },
   });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const cases = [
     { source: 1, entry: 0.9, temporal: 0.8, distance: 0.25, altitude: 0.25 },
     { source: 0.8, entry: 0.75, temporal: 0.7, distance: 0.5, altitude: 0.5 },
@@ -695,7 +700,7 @@ test('inlined host alpha binding matches combinedOverlayAlpha across channel ran
 
 test('a host dormant since init holds no canvas backing store', () => {
   const env = installMockEnvironment({ width: 1600, height: 900, dpr: 2 });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const canvas = env.document.getElementById('world-overlay-canvas');
   const detectionSurface = env.document.getElementById('world-overlay-detection-surface');
   assert.equal(canvas.width, 0);
@@ -733,7 +738,7 @@ test('a host dormant since init holds no canvas backing store', () => {
 
 test('empty postRender stays inert through production mutation, resize, and clock noise', () => {
   const env = installMockEnvironment();
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   env.postRender.raise();
   const settledCallCount = env.ctx.calls.length;
   const settledLayoutReads = { ...env.layoutReads };
@@ -752,7 +757,7 @@ test('empty postRender stays inert through production mutation, resize, and cloc
 
 test('HUD mutations defer occluder selector scans until overlay paint work exists', () => {
   const env = installMockEnvironment();
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const settledQueries = { ...env.selectorQueries };
   const hudMutation = {
     type: 'childList',
@@ -777,7 +782,7 @@ test('ticking chrome churn (text swaps, non-chrome nodes) never invalidates a li
       { id: 'traffic-sync-chip', rect: { left: 200, top: 0, width: 90, height: 24 } },
     ],
   });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   setOverlayEntries('ticker-noise', [selectedEntry('live-entry')]);
   env.postRender.raise();
 
@@ -819,7 +824,7 @@ test('genuine chrome changes still invalidate: add, remove, and own-attribute fl
       { id: 'pp-toggles', rect: { left: 300, top: 40, width: 60, height: 200 } },
     ],
   });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   setOverlayEntries('chrome-changes', [selectedEntry('live-entry')]);
   env.postRender.raise();
   const observer = env.mutationObservers[0];
@@ -859,7 +864,7 @@ test('chrome observers scope: body is childList discovery; occluder attributes a
       { selector: '.hud-top-left', rect: { left: 0, top: 0, width: 140, height: 44 } },
     ],
   });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   setOverlayEntries('observer-scope', [selectedEntry('live-entry')]);
   env.postRender.raise();
 
@@ -909,7 +914,7 @@ test('projection records never retain keys for entries that are no longer live',
 
   const env = installMockEnvironment();
   try {
-    initWorldOverlay(env.viewer);
+    initWorldOverlay(env.engine);
     for (let batch = 0; batch < 4; batch++) {
       const entries = Array.from({ length: 320 }, (_, index) => (
         selectedEntry(`batch-${batch}-${index}`, {
@@ -944,7 +949,7 @@ test('projection records never retain keys for entries that are no longer live',
 
 test('the per-domain candidate index stays bounded while identities churn', () => {
   const env = installMockEnvironment();
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const COHORT = 40;
   const BATCHES = 60;
   const batchEntries = (batch) => Array.from({ length: COHORT }, (_, index) => (
@@ -1003,7 +1008,7 @@ test('entry normalization validates required fields and source lifecycle is stab
   assert.throws(() => normalizeOverlayEntry('fires', { id: 'a', position: position(), variant: 'table' }), /variant/);
 
   const env = installMockEnvironment();
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   setOverlayEntries('fires', [normalized]);
   upsertOverlayEntry('fires', { id: 'b', position: position(), variant: 'card' });
   assert.deepEqual(getWorldOverlayDiagnostics().entriesBySource, { fires: 2 });
@@ -1019,7 +1024,7 @@ test('accessible actions announce only accepted focus and expose selected state'
   const env = installMockEnvironment();
   let acceptedActivations = 0;
   let staleActivations = 0;
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   setOverlayEntries('accessible-actions', [selectedEntry('vessel:123', {
     interactive: true,
     accessibilityLabel: 'Focus vessel TEST, MMSI 123',
@@ -1092,7 +1097,7 @@ test('viewport and horizon culling obey explicit policy inputs', () => {
 
 test('paint lanes are deterministic across all seven binding lanes', () => {
   const env = installMockEnvironment();
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   assert.deepEqual(WORLD_OVERLAY_PAINT_LANES, [
     'detection',
     'ambient-label',
@@ -1136,7 +1141,7 @@ test('custom detection lane receives the shared host frame and paints below ordi
     dpr: 2,
     occluderRect: { left: 10, top: 20, width: 80, height: 40 },
   });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   let capturedFrame = null;
   let paintCount = 0;
   const lane = registerWorldOverlayPaintLane('detection', (frame) => {
@@ -1200,7 +1205,7 @@ test('custom-lane painter state is bracketed by host save/restore', () => {
   // host wraps every custom-lane painter in save/try/finally-restore. Pin the
   // bracketing structurally (the mock ctx records call order, not state).
   const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const lane = registerWorldOverlayPaintLane('detection', (frame) => {
     frame.ctx.beginPath();
     frame.ctx.rect(0, 0, 1, 1);
@@ -1227,7 +1232,7 @@ test('custom-lane painter state is bracketed by host save/restore', () => {
 
 test('custom lanes without the detection target paint on the shared canvas', () => {
   const env = installMockEnvironment();
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   let target = null;
   registerWorldOverlayPaintLane('ambient-label', (frame) => {
     target = { surface: frame.surface, ctx: frame.ctx };
@@ -1279,7 +1284,7 @@ test('UI exclusions stay per-rect: overlapping chrome never merges into a boundi
       { id: 'command-dock', rect: chrome.bottom },
     ],
   });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   let uiRects = null;
   registerWorldOverlayPaintLane('detection', (frame) => {
     uiRects = frame.uiRects.slice(0, frame.uiRectCount)
@@ -1336,7 +1341,7 @@ test('UI exclusions ignore chrome the user cannot see', () => {
       { id: 'pp-toggles', rect: { left: 0, top: 0, width: 0, height: 0 } },
     ],
   });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   let uiRectCount = -1;
   registerWorldOverlayPaintLane('detection', (frame) => { uiRectCount = frame.uiRectCount; }, {
     id: 'detection',
@@ -1363,7 +1368,7 @@ test('chrome that fills the viewport suppresses neither cards nor the detection 
     dpr: 1,
     occluderRect: { left: 0, top: 0, width: 400, height: 300 },
   });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   let detectionPaints = 0;
   registerWorldOverlayPaintLane('detection', (frame) => {
     detectionPaints++;
@@ -1402,7 +1407,7 @@ test('a placement is only ever kept under chrome that composites ABOVE the host'
 
   const paintedUnder = (occluders) => {
     const env = installMockEnvironment({ width: 400, height: 300, dpr: 1, occluders });
-    initWorldOverlay(env.viewer);
+    initWorldOverlay(env.engine);
     setOverlayEntries('ambient', [selectedEntry('CONTACT')]);
     env.postRender.raise();
     const { paintedCount } = getWorldOverlayDiagnostics();
@@ -1446,7 +1451,7 @@ test('cockpit keeps its cards and its detection lane, and hides only the tracked
       { selector: '.cockpit-roll-arc', inInventory: false, rect: { left: 88, top: 2, width: 224, height: 32 } },
     ],
   });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   let uiRectCount = -1;
   let detectionPaints = 0;
   registerWorldOverlayPaintLane('detection', (frame) => {
@@ -1492,7 +1497,7 @@ test('opt-in anchor separation thins a co-located cohort before the arbiter sees
   const anchors = [500, 540, 580, 620, 660, 700];
   const project = (separation) => {
     const env = installMockEnvironment({ width: 400, height: 800, dpr: 1 });
-    initWorldOverlay(env.viewer);
+    initWorldOverlay(env.engine);
     setOverlayEntries('cctv', anchors.map((y, index) => selectedEntry(`cam-${index}`, {
       position: positionAtScreen(200, y, 400, 800),
       protected: false,
@@ -1532,7 +1537,7 @@ test('the occluder inventory carries no cockpit line-art chrome', () => {
 test('position getters snapshot once per frame and cockpit-gated sources disappear', () => {
   const env = installMockEnvironment();
   let getterCalls = 0;
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   setOverlayEntries('tracked', [selectedEntry('flight', {
     position: () => { getterCalls++; return position(); },
     interactive: true,
@@ -1568,7 +1573,7 @@ test('bounded per-source cohorts feed the domain arbiter without universal selec
   assert.equal(selectBoundedOverlayCohort([...normalized, protectedEntry], 3).length, 4);
 
   const env = installMockEnvironment();
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   setOverlayEntries('bulk', normalized, { cohortLimit: 3, collisionCapacity: 2 });
   env.postRender.raise();
   const diagnostics = getWorldOverlayDiagnostics();
@@ -1580,7 +1585,7 @@ test('bounded per-source cohorts feed the domain arbiter without universal selec
 
 test('FIRMS and vessels enlarge the ambient-card lane under an explicit aggregate budget', () => {
   const env = installMockEnvironment({ width: 1600, height: 900, dpr: 1 });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const makeEntries = (sourceOffset, count = 200) => Array.from({ length: count }, (_, index) => {
     const slot = index % 160;
     const column = slot % 16;
@@ -1637,7 +1642,7 @@ test('FIRMS and vessels enlarge the ambient-card lane under an explicit aggregat
 
 test('paint rectangles publish from a pool and topmost interactive lookup wins', () => {
   const env = installMockEnvironment();
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   setOverlayEntries('hits', [
     selectedEntry('under', { interactive: true, zIndex: 1, collisionGroup: 'under' }),
     selectedEntry('over', { interactive: true, zIndex: 2, collisionGroup: 'over' }),
@@ -1662,7 +1667,7 @@ test('paint rectangles publish from a pool and topmost interactive lookup wins',
 
 test('CCTV stable frame slots gate ambient chrome and wire the exact host hit rectangle', () => {
   const env = installMockEnvironment({ width: 500, height: 400, dpr: 1 });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const slot = createFrameSlot();
   const entry = createCctvThumbnailOverlayEntry({
     id: 'cam-a',
@@ -1711,7 +1716,7 @@ test('CCTV stable frame slots gate ambient chrome and wire the exact host hit re
 
 test('pinned CCTV chrome may paint before frame one while ordinary safe-top policy still yields', () => {
   const env = installMockEnvironment({ width: 500, height: 400, dpr: 1 });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const ambient = createCctvThumbnailOverlayEntry({
     id: 'ambient-top',
     position: new Cesium.Cartesian3(0, 0.9, 0),
@@ -1741,7 +1746,7 @@ test('safe-top yield culls an uncontested ambient entry at projection, with a be
   // pinned neighbor to arbiter-collide with, so only the projection gate can
   // null it; the below-band twin proves the paint path itself is live.
   const env = installMockEnvironment({ width: 500, height: 400, dpr: 1 });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const above = createCctvThumbnailOverlayEntry({
     id: 'yield-above',
     position: new Cesium.Cartesian3(-0.5, 0.9, 0),
@@ -1779,7 +1784,7 @@ test('CCTV host binding preserves the smoothstep scale and 0.45/0.35 fade curve'
     get() { return paintedAlphas.at(-1) ?? 1; },
     set(value) { paintedAlphas.push(value); },
   });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const entry = createCctvThumbnailOverlayEntry({
     id: 'altitude-curve',
     position: position(),
@@ -1830,7 +1835,7 @@ test('scene presentation samples once per frame and recovers after a callback fa
     get() { return alphas.at(-1) ?? 1; },
     set(value) { alphas.push(value); },
   });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const entry = createCctvThumbnailOverlayEntry({
     id: 'scene-presentation', position: position(), title: 'SCENE',
     frameSlot: { frame: { ready: true }, stamp: 1 }, active: true,
@@ -1904,7 +1909,7 @@ test('scene presentation samples once per frame and recovers after a callback fa
 test('CCTV leader remains one CSS pixel at the 0.35 altitude scale point', () => {
   const env = installMockEnvironment({ width: 500, height: 400, dpr: 1 });
   env.viewer.camera.positionCartographic.height = 9500;
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const entry = createCctvThumbnailOverlayEntry({
     id: 'scaled-leader',
     position: position(),
@@ -1930,7 +1935,7 @@ test('CCTV leader remains one CSS pixel at the 0.35 altitude scale point', () =>
 
 test('active CCTV thumbnail is protected outside the ambient quota and excludes ambient footprint', () => {
   const env = installMockEnvironment({ width: 800, height: 600, dpr: 1 });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const readySlot = () => ({ frame: { ready: true }, stamp: 1 });
   const active = createCctvThumbnailOverlayEntry({
     id: 'active',
@@ -1967,7 +1972,7 @@ test('active CCTV thumbnail is protected outside the ambient quota and excludes 
 
 test('protected tracked entry bypasses ambient quota and excludes its paint footprint', () => {
   const env = installMockEnvironment({ width: 800, height: 600, dpr: 1 });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const position = new Cesium.Cartesian3(0, 0, 0);
   setOverlayEntries('ambient-source', [{
     id: 'ambient',
@@ -2010,7 +2015,7 @@ test('protected tracked entry bypasses ambient quota and excludes its paint foot
 
 test('three clustered protected cards fall back to the least-overlapping placement', () => {
   const env = installMockEnvironment({ width: 800, height: 600, dpr: 1 });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const anchor = new Cesium.Cartesian3(0, 0, 0);
   setOverlayEntries('protected-cluster', [
     selectedEntry('wide-first', {
@@ -2051,7 +2056,7 @@ test('three clustered protected cards fall back to the least-overlapping placeme
 
 test('steady frames reuse paint-item and paint-rectangle pool identities', () => {
   const env = installMockEnvironment();
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   setOverlayEntries('pool-reuse', [selectedEntry('ambient', {
     selected: false,
     protected: false,
@@ -2078,7 +2083,7 @@ test('steady frames reuse paint-item and paint-rectangle pool identities', () =>
 
 test('destroy empties paint pools and releases pooled record and entry payloads', () => {
   const env = installMockEnvironment();
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   setOverlayEntries('pool-release', [selectedEntry('payload', {
     metadata: { retainedProbe: new Uint8Array(1024) },
   })]);
@@ -2095,7 +2100,7 @@ test('destroy empties paint pools and releases pooled record and entry payloads'
   assert.equal(released.paintItemPoolSize, 0);
   assert.equal(released.paintRectPoolSize, 0);
 
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   setOverlayEntries('pool-release', [selectedEntry('next-payload')]);
   env.postRender.raise();
   assert.notEqual(getOverlayPaintRect('pool-release', 'next-payload'), firstRect);
@@ -2109,7 +2114,7 @@ function togglablePosition(box) {
 
 test('a candidate that is not projected this frame stops painting immediately', () => {
   const env = installMockEnvironment();
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const box = { hidden: false };
   setOverlayEntries('stamp', [selectedEntry('ambient', {
     selected: false,
@@ -2136,7 +2141,7 @@ test('a candidate that is not projected this frame stops painting immediately', 
 
 test('published paint rectangles are scoped to the publishing key and frame', () => {
   const env = installMockEnvironment();
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const first = { hidden: false };
   const second = { hidden: false };
   setOverlayEntries('rects', [
@@ -2171,7 +2176,7 @@ test('published paint rectangles are scoped to the publishing key and frame', ()
 
 test('every exported entry point is inert after destroy', () => {
   const env = installMockEnvironment();
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   setOverlayEntries('post-destroy', [selectedEntry('live', { interactive: true })]);
   env.postRender.raise();
   assert.equal(getWorldOverlayDiagnostics().paintedCount, 1);
@@ -2206,7 +2211,7 @@ test('every exported entry point is inert after destroy', () => {
   assert.equal(env.window.listenerCount('resize'), 0);
 
   // A later init still produces a fully working host.
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   setOverlayEntries('post-destroy', [selectedEntry('revived', { interactive: true })]);
   env.postRender.raise();
   assert.equal(getWorldOverlayDiagnostics().paintedCount, 1);
@@ -2246,7 +2251,7 @@ test('installation titles share persistent card arbitration and retain a bounded
     overlayHost: { setEntries: setOverlayEntries, clearSource: clearOverlaySource,
       setVisible: setOverlaySourceVisible, getDiagnostics: getWorldOverlayDiagnostics },
   });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   markers.enable();
   const records = Array.from({ length: 40 }, (_, i) => ({ id: `site:${i}`, name: `Base ${i}`,
     namedArea: true, pointOnly: i % 2 === 0, areaM2: 1000 - i,
@@ -2285,7 +2290,7 @@ test('installation titles share persistent card arbitration and retain a bounded
 test('promoting an ambient entry to selected paints it once with no fading duplicate', () => {
   const env = installMockEnvironment();
   try {
-    initWorldOverlay(env.viewer);
+    initWorldOverlay(env.engine);
     const entry = { id: 'site', position: position(), title: 'One site', variant: 'card', collisionGroup: 'ambient-card', horizonCull: false, edgeFade: false };
     const paint = () => { env.ctx.calls.length = 0; env.postRender.raise(); return env.ctx.calls.filter(([op, text]) => op === 'fillText' && text === 'One site').length; };
     setOverlayEntries('military-installations', [entry]); paint(); env.advanceTime(200);
@@ -2362,5 +2367,14 @@ test('on a globe engine the host hands painters the live camera position and req
   assert.equal(frame.cameraPosition, engine.camera.livePosition);
   assert.equal(frame.occluder.isPointVisible(Cesium.Cartesian3.fromDegrees(180, 0, 0)), false);
   assert.equal(frame.occluder.isPointVisible(Cesium.Cartesian3.fromDegrees(0, 0, 0)), true);
+  env.cleanup();
+});
+
+test('the host takes a globe engine and refuses a bare viewer', async () => {
+  const { env, engine } = await fakeEngineHost();
+  assert.throws(() => initWorldOverlay(env.viewer), /requires a globe engine/);
+  assert.throws(() => initWorldOverlay(null), /requires a globe engine/);
+  initWorldOverlay(engine);
+  assert.equal(engine.frames.postRender.numberOfListeners, 1);
   env.cleanup();
 });

@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
 import * as geo from '../geo/index.js';
-import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
+import { isGlobeEngine } from '../globe/contract.js';
 import {
   createCyberSonarSampler,
   isCyberContactSonarActive as isCyberSonarActive,
@@ -2664,15 +2664,11 @@ function createDevFacade() {
 
 /**
  * Initialize the singleton host. Repeated calls for the same engine are no-op.
- * @param {import('../globe/contract.js').GlobeEngine | object} target The
- *   globe engine, or a Cesium viewer (its engine: engineFromViewer).
+ * @param {import('../globe/contract.js').GlobeEngine} engine
  */
-export function initWorldOverlay(target) {
-  const engine = engineFromViewer(target);
-  if (!engine)
-    throw new TypeError(
-      'initWorldOverlay requires a globe engine or a Cesium viewer',
-    );
+export function initWorldOverlay(engine) {
+  if (!isGlobeEngine(engine))
+    throw new TypeError('initWorldOverlay requires a globe engine');
   if (_engine === engine && _canvas && _removePostRender) return;
   if (_engine) destroyWorldOverlay();
   _destroyed = false;
