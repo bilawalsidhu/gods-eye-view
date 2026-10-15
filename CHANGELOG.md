@@ -32,6 +32,7 @@
 - Tool string length validation counts Unicode characters correctly, including characters outside the basic multilingual plane.
 
 - Director timeline seeks cross the dateline along the short longitude arc.
+
 - Keep cockpit cloud effects clear when a weather observation has no WMO code.
 
 - Treat explicitly current, complete empty vessel coverage as a successful update,
