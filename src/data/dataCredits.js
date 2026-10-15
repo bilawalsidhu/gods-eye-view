@@ -359,8 +359,7 @@ export const DATA_CREDITS = [
     html:
       'Webcam snapshots (Argentina): ' +
       '<a href="https://varitech.ar/" target="_blank" rel="noopener">Varitech - varitech.ar</a> ' +
-      '— Cerro Catedral, Chapelco and La Hoya. Approximate map references: ' +
-      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors (ODbL)</a>.',
+      '— Cerro Catedral, Chapelco and La Hoya.',
   },
   {
     key: 'warendorf-cctv',
