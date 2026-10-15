@@ -109,7 +109,6 @@ export function createAvalanchePanel({
     collapse.title = label;
     collapse.setAttribute('aria-label', label);
     collapse.setAttribute('aria-expanded', String(!collapsed));
-    collapse.textContent = collapsed ? '▴' : '▾';
   }
   applyCollapsed();
 

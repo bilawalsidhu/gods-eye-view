@@ -324,27 +324,46 @@
   box-shadow: 0 0 6px var(--accent-glow);
 }
 
+/* Minimize / expand: a full button beside play/pause, its chevron drawn in
+   CSS so it reads at any font size. Down tucks the panel away; up restores it. */
 .avalanche-panel-collapse {
+  display: flex;
   flex: none;
+  align-items: center;
+  justify-content: center;
   align-self: flex-start;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   margin-left: auto;
-  border: 1px solid transparent;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.32);
   border-radius: 50%;
-  background: none;
-  color: var(--text-secondary);
-  font-size: 11px;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
   cursor: pointer;
   transition:
-    color var(--transition-fast),
+    background var(--transition-fast),
     border-color var(--transition-fast);
+}
+
+.avalanche-panel-collapse::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.avalanche-panel.is-collapsed .avalanche-panel-collapse::before {
+  transform: translateY(2px) rotate(-135deg);
 }
 
 .avalanche-panel-collapse:hover,
 .avalanche-panel-collapse:focus-visible {
-  border-color: var(--glass-border-hover);
-  color: var(--text-primary);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
   outline: none;
 }
 
