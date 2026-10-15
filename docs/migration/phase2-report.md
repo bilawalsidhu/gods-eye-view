@@ -8,6 +8,13 @@ and the layers off. Cesium stays the default, and Cesium mode behaves as
 before. Branch `migration/phase2-engine`, base `6193d50c` (the end of phase
 1a).
 
+**Choosing the engine:** `?engine=navara` (or `?engine=cesium`) in the URL;
+otherwise the localStorage key `gev.engine` (`navara` or `cesium`), read by
+`src/app/engineChoice.js`; otherwise Cesium. The storage key is a hidden
+opt-in: nothing in the app writes it, so it is set only by hand (for example
+`localStorage.setItem('gev.engine', 'navara')` in the console). An unknown
+value or unreadable storage never selects Navara.
+
 This is the exit criterion of the roadmap's phase 2. Layers keep running on
 the Cesium viewer until phase 1c moves them onto the engine.
 
@@ -62,6 +69,10 @@ Checked headless by `scripts/qa-engine-shell.mjs` on the dev server and on
 - **Pick:** `picker.pick` and `drillPick` return nothing. Navara picks its
   meshes only on click gestures (`featureClick`); that maps to picks carried
   on input payloads, deferred to 1c together with the layers.
+- **Google 3D tiles without a browser key:** on Navara they need a browser
+  `googleApiKey`. A deployment that serves Google through the server token
+  (`/api/google/tiles-token`, Cesium's route) has none in the browser, so
+  Navara falls back to Esri imagery there until the S3 proxy (next steps).
 - **Visual styles, bloom and sharpen:** no post-process stages, so the
   style buttons change nothing. The notice does not mention them.
 - **Not constructed:** the cockpit, the director (so no data packs and no
@@ -101,7 +112,14 @@ Against the plan's contract, the tasks added `livePosition`, `height`,
 `terrainHeight`, `clampToHeight`, `releasePhotorealTiles`, `current`,
 `isDestroyed`, `pose().aspectRatio`, input modifiers, `render.request(reason)`
 and `flyTo` options `endTransform` and rectangle destinations. Each came with
-suite checks.
+suite checks. The suite also checks that `pickPosition` and `worldToWindow`
+round-trip within 1.5 px (over New York, straight down and tilted) and that
+`maps.setTerrain` resolves for keyless terrain and rejects an unknown kind,
+on the fake and on both engines.
+
+Three members have no shell caller in Navara mode yet and are kept for 1c:
+`camera.flightActive` and `input.setCameraInputs` (the cockpit's camera
+input lock) and `maps.current` (diagnostics).
 
 `maps.*` take engine-neutral source descriptions from `maps/registry.js`
 (`kind`, URL, keys); only the Cesium engine also gets prebuilt Cesium
@@ -114,8 +132,8 @@ providers.
 - **Visual styles off on Navara** (above).
 - **Attribution card is closable.** Navara's card has a close button. Once
   it is closed, the data-provider lines are gone and only the ⓘ toggle and
-  the Google Maps logo remain. Before Navara can be the default, gev needs an always-visible
-  Google copyright line (mirrored into the HUD credit strip).
+  the Google Maps logo remain. Before Navara can be the default, gev needs an
+  always-visible Google copyright line (mirrored into the HUD credit strip).
 - **Worker-pool leak on a fast destroy.** Disposing a Navara view within about
   1.5 s of `init()` leaks about 11 workers: the pool's warm-up ignores
   `terminated`. Upstream ask; a possible mitigation is to defer dispose by
@@ -176,7 +194,8 @@ atmosphere assets, all loaded only on `?engine=navara`.
 `scripts/qa-engine-bench.mjs`, headless Chrome with `--use-angle=metal
 --disable-gpu-vsync --disable-frame-rate-limit`, 1280×800, on this Mac.
 Each engine got one discarded warm-up run, then 3 runs, each in a fresh
-browser context. The table gives the medians of the 3 runs.
+browser context. Each cell is the median of that metric over the 3 runs
+(per-metric medians, not the values of one median run).
 
 - **Initial view:** navigation start to the startup pose (Austin, 600 m)
   with the camera still and the tiles loaded, both for 1.5 s; the time is
@@ -223,9 +242,14 @@ Reading the numbers:
 ![Cesium and Navara at the same pose](phase2-side-by-side.jpg)
 
 Both engines at `#lat=40.7060&lon=-74.0130&alt=900&heading=30&pitch=-25&roll=0`
-(lower Manhattan), headless, once each engine reported its tiles loaded.
-Cesium (left) draws the default "normal" style with its lens vignette; Navara
-(right) has no post-process stages and shows its attribution card.
+(lower Manhattan), headless, once each engine reported its tiles loaded. The
+framing is the same pixel for pixel: both cameras have a vertical field of
+view of 39.683° at 1280×800 (60° across the wider side), and a
+`pickPosition` → `worldToWindow` round trip lands within about 1 px on both
+(the contract suite checks 1.5 px). The visible difference is Cesium mode's
+default "normal" style, whose radial vignette darkens the corners on the
+left; Navara (right) has no post-process stages. Navara also shows its
+attribution card.
 
 ## QA
 
@@ -233,10 +257,10 @@ Final runs at the last commit, headless on free ports (never 4185):
 
 | Check | Result |
 |---|---|
-| `npm test` | 6799 tests: 6798 pass, 0 fail, 1 skip (the Node 24 allocation budgets) |
-| `npm run check:boundaries`, `npm run format:check`, `npm run build` | clean |
-| `qa-globe-contract --engine=cesium` | 61/61 (54 contract, 7 engine) |
-| `qa-globe-contract --engine=navara` | 64/64 (54 contract, 10 engine) |
+| `npm test` | 6801 tests: 6800 pass, 0 fail, 1 skip (the Node 24 allocation budgets) |
+| `npm run check:boundaries`, `npm run format:check` (1,412 files, every new phase 2 file included), `npm run build` | clean |
+| `qa-globe-contract --engine=cesium` | 63/63 (56 contract, 7 engine) |
+| `qa-globe-contract --engine=navara` | 66/66 (56 contract, 10 engine) |
 | `qa-engine-shell`, dev server | Cesium 22/22, Navara 24/24, cross-engine 3/3 |
 | `qa-engine-shell`, `vite preview` | Cesium 22/22, Navara 24/24, cross-engine 3/3 |
 
@@ -270,9 +294,37 @@ streamed.
 1. **Phase 1c: layers on the engine.** Move each layer family off the viewer
    onto the contract (picks on input payloads for Navara, render primitives
    through an engine-side layer host), then turn layers on in Navara mode.
-2. **Google proxy (spike S3).** Route Google tiles through gev's server, as
-   spike S3 explored, before Navara mode leaves the experimental flag.
-3. **Drape S1 in the product.** Bring the drape from spike S1 into the app.
+2. **Google proxy (spike S3).** A same-origin `/api/google/tiles/*` proxy
+   next to `/api/google/tiles-token`:
+   - it rewrites `uri`/`url` in the tileset JSON, keeping `session`;
+   - it authenticates upstream with `X-Goog-Api-Key` or a Bearer token from
+     the existing token source (the spike tested only the header key);
+   - it strips `key=` and fails closed with 502 if a key would still reach a
+     response;
+   - the CSP is unchanged (same origin), and it closes the browser-key gap
+     above.
+
+   Production also needs rate limits and per-user quotas, traffic
+   accounting (about 1.8k upstream requests per 80 s city tour; 1,839 in the
+   spike), a glb cache that honours Google's `Cache-Control`, streamed bodies
+   and an origin check. Google's licence terms (attribution, caching only as
+   the headers allow) stay with the app.
+3. **Drape S1 in the product.** A drape post-effect with tiles, terrain and
+   both modes, like Cesium's `ClassificationType`:
+   - a height window of terrain −50 m to +600 m;
+   - aircraft masked through G-buffer depth, which depends on the
+     undocumented `raw.gbufferRenderTarget.depthTexture`, and gev's meshes
+     must be `MeshDesc`;
+   - about 0.8–0.9 ms p50 as its own `EffectPass` (an empty `EffectPass`
+     alone costs about 0.8 ms) against 0.10 ms merged into tone mapping for
+     a route and a block; the 256-segment stress case costs about 1 ms more
+     even when merged;
+   - real data needs a larger data texture and a grid for polygon edges
+     (limits today: 256 segments, 8 polygons × 64 edges).
+
+   Upstream asks (a drafted, unfiled issue): a native `clampToGround`
+   drape for polylines and polygons (terrain, tiles or both), mergeable
+   effects, and `effectIds` on tilesets without a batch table.
 4. **Tile heights in `surface`.** Replace the retained-geometry patch with a
    public Navara height query over 3D tiles (the upstream ask above).
 5. **An always-visible Google line** before Navara can be the default.
