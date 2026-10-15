@@ -1,5 +1,36 @@
 # Changelog
 
+- Stop one retired bikeshare feed from reporting the whole layer as failed.
+  City feeds are fetched independently, but failure was recorded in a single
+  flag that only a successful *activation* cleared — and an already-loaded city
+  never activates again. A dead feed re-entering camera range therefore latched
+  LOAD FAILED permanently over a map still drawing every other city's stations.
+  Failure is now tracked per city: a city that fails beside others still
+  drawing marks the layer DEGRADED, polls that all fail over previously drawn
+  points read STALE without advancing freshness, and LOAD FAILED is reported
+  only when nothing is left to draw. A city that recovers clears its own
+  failure, a failure is dropped once its city leaves range or the camera rises
+  above the activation altitude, and late results from superseded requests are
+  ignored.
+
+  Repointed the three feeds whose operators had moved: Reddy Bikeshare (Buffalo)
+  to Social Bicycles, Tugo (Tucson) and Trinity Metro (Fort Worth) to PBSC.
+  Dropped CoGo (Columbus) and Broward B-cycle (Fort Lauderdale), whose systems
+  have wound down — CoGo's feed reports no stations and last moved a bike in
+  March 2025. The three repointed feeds were verified live.
+
+- Add Bike Share Toronto (1,069 stations) to the bikeshare registry. The system
+  publishes the same PBSC GBFS v2 feeds as the Austin, Honolulu and Chattanooga
+  entries, so it needs no new plumbing; a registry test now holds every city's
+  feed URLs against the proxy host and path allowlists, so a city the proxy
+  would refuse fails the suite instead of rendering an empty layer.
+
+- GBFS v3 station names use English translations when available, then the first
+  usable translation or short name. Empty or malformed names no longer appear as
+  `[object Object]` or interrupt station loading; legacy string names remain
+  supported in the globe and bike-share tools. Thanks to
+  [Kristóf Kékesi](https://github.com/KristofKekesi) (#61).
+
 - Overpass and military-installation disk caches no longer serve answers from a
   previously configured `OVERPASS_UPSTREAMS` instance after it is repointed.
 
@@ -153,6 +184,19 @@
   `scripts/build-datacenters-norway.py` reproduces or `--verify`s the merge,
   touching only features inside Geofabrik's Norway boundary, and the dataset
   README records the extract, checksum and filter.
+- Add a keyless Air quality layer to the Weather group, with Environment and
+  Climate Change Canada's AQHI as the first registered provider. Readings carry
+  `{ provider, scale, value, band }` so another network can be added without
+  inventing a shared numeric meaning across indices that do not share one; the
+  row and readout both state that coverage is Canada only. The WEATHER card
+  shows the band legend and the highest readings currently in view. AQHI is
+  reported as an integer from 1 with an open-ended "10+", so readings round to
+  that published form rather than the decimal precision the API returns.
+  Readings older than six hours are dropped, and the layer reports `stale`
+  through `getStats()` (also when every observation was dropped) so feed
+  provenance cannot describe an aged feed as live. Voice can switch it on and
+  query readings by value, band, station and observation time.
+
 - Bound six upstream body reads (FIRMS CSV, CelesTrak TLE groups, adsb.lol
   `/v2/mil`, TomTom flow tiles, OpenSky `states/all` and adsbdb lookups) with
   streaming size caps that cancel the body at the cap or the route's deadline;

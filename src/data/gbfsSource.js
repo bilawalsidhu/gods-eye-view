@@ -4,7 +4,7 @@ const GBFS_ALLOWED_HOSTS = new Set([
   'gbfs.bluebikes.com',
   'gbfs.bcycle.com',
   'gbfs.biketownpdx.com',
-  'gbfs.cogobikeshare.com',
+  'reddybikeshare.socialbicycles.com',
   'austin.publicbikesystem.net',
   'hon.publicbikesystem.net',
   'chat.publicbikesystem.net',
