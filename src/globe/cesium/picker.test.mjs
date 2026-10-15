@@ -36,7 +36,7 @@ test('drillPick passes the limit and normalises every result', () => {
     viewer.calls.push({ name: 'scene.drillPick', args });
     return [{ id: 'a', primitive: 1 }, { primitive: 2 }];
   };
-  const drilled = picker.drillPick(geo.cartesian2.create(1, 1), 3);
+  const drilled = picker.drillPick(geo.cartesian2.create(1, 1), 3, 5, 7);
   assert.deepEqual(
     drilled.map(({ id, primitive }) => [id, primitive]),
     [
@@ -45,9 +45,10 @@ test('drillPick passes the limit and normalises every result', () => {
     ],
   );
   assert.ok('id' in drilled[1]);
-  const [screen, limit] = viewer.callsOf('scene.drillPick')[0].args;
+  const [screen, limit, width, height] =
+    viewer.callsOf('scene.drillPick')[0].args;
   assert.ok(screen instanceof Cesium.Cartesian2);
-  assert.equal(limit, 3);
+  assert.deepEqual([limit, width, height], [3, 5, 7]);
 });
 
 test('pickPosition passes a new Cesium.Cartesian2 per call and returns geo', () => {
@@ -77,4 +78,17 @@ test('pickPositionSupported follows the scene', () => {
   scene.pickPositionSupported = false;
   assert.equal(picker.pickPositionSupported, false);
   assert.equal(picker.pickPosition(geo.cartesian2.create(1, 1)), undefined);
+});
+
+test('pick results carry 3D tile content for surface checks', () => {
+  const { picker, scene } = setup();
+  const content = { name: 'tile content' };
+  const tileset = { isCesium3DTileset: true };
+  scene.pick = () => ({ content, primitive: tileset });
+  const picked = picker.pick(geo.cartesian2.create(1, 1));
+  assert.equal(picked.content, content);
+  assert.equal(picked.id, undefined);
+  assert.equal(picked.primitive, tileset);
+  scene.pick = () => ({ id: 'entity', primitive: {} });
+  assert.equal(picker.pick(geo.cartesian2.create(1, 1)).content, undefined);
 });

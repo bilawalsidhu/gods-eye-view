@@ -149,7 +149,7 @@ test('a newer flight cancels the previous one and stays active', () => {
 });
 
 test('flyToSphere builds a BoundingSphere and an offset with Cesium defaults', () => {
-  const { viewer, camera, cesium } = setup();
+  const { viewer, camera } = setup();
   const center = geo.cartesian3.fromDegrees(2.35, 48.85, 100);
   let done = false;
   camera.flyToSphere(
@@ -166,24 +166,26 @@ test('flyToSphere builds a BoundingSphere and an offset with Cesium defaults', (
   assert.ok(options.offset instanceof Cesium.HeadingPitchRange);
   assert.equal(options.offset.heading, 0);
   assert.equal(options.offset.pitch, -Math.PI / 4);
-  const tanPhi = Math.tan(cesium.frustum.fovy / 2);
-  const tanTheta = cesium.frustum.aspectRatio * tanPhi;
   assert.equal(
     options.offset.range,
-    Math.max(100, 1000 / tanTheta, 1000 / tanPhi),
+    0,
+    "a missing range is left to Cesium's own fit and zoom-distance clamp",
   );
   assert.equal(options.duration, 0);
+  assert.equal(options.easingFunction, undefined);
 
-  camera.flyToSphere({ center, radius: 0 }, { duration: 0 });
-  assert.equal(
-    viewer.callsOf('camera.flyToBoundingSphere')[1].args[1].offset.range,
-    100,
-  );
   camera.flyToSphere(
     { center, radius: 10 },
-    { heading: 0.3, pitch: -0.5, range: 5000, duration: 2 },
+    {
+      heading: 0.3,
+      pitch: -0.5,
+      range: 5000,
+      duration: 2,
+      easing: 'linear',
+    },
   );
-  const explicit = viewer.callsOf('camera.flyToBoundingSphere')[2].args[1];
+  const explicit = viewer.callsOf('camera.flyToBoundingSphere')[1].args[1];
+  assert.equal(explicit.easingFunction, Cesium.EasingFunction.LINEAR_NONE);
   assert.deepEqual(
     [explicit.offset.heading, explicit.offset.pitch, explicit.offset.range],
     [0.3, -0.5, 5000],
@@ -304,4 +306,43 @@ test('destroy cancels the engine flight and drops Cesium subscriptions', () => {
   destroy();
   assert.deepEqual(outcome, ['cancel']);
   assert.equal(cesium.changed.numberOfListeners, 0);
+});
+
+test('flyTo passes endTransform as a Cesium Matrix4', () => {
+  const { viewer, camera } = setup();
+  camera.flyTo({
+    destination: geo.cartesian3.fromDegrees(0, 0, 1e6),
+    duration: 0,
+    endTransform: geo.matrix4.IDENTITY,
+  });
+  const [options] = viewer.callsOf('camera.flyTo')[0].args;
+  assert.ok(options.endTransform instanceof Cesium.Matrix4);
+  assert.deepEqual(Cesium.Matrix4.toArray(options.endTransform), [
+    ...geo.matrix4.IDENTITY,
+  ]);
+  camera.flyTo({ destination: geo.cartesian3.fromDegrees(0, 0, 1e6) });
+  assert.equal(
+    viewer.callsOf('camera.flyTo')[1].args[0].endTransform,
+    undefined,
+  );
+});
+
+test('rectangle destinations become a Cesium.Rectangle in flyTo and setView', () => {
+  const { viewer, camera } = setup();
+  const rectangle = { west: -0.2, south: 0.6, east: -0.1, north: 0.7 };
+  camera.flyTo({ destination: rectangle, duration: 0 });
+  camera.setView({ destination: rectangle });
+  for (const name of ['camera.flyTo', 'camera.setView']) {
+    const { destination } = viewer.callsOf(name)[0].args[0];
+    assert.ok(destination instanceof Cesium.Rectangle, name);
+    assert.deepEqual(
+      [
+        destination.west,
+        destination.south,
+        destination.east,
+        destination.north,
+      ],
+      [-0.2, 0.6, -0.1, 0.7],
+    );
+  }
 });

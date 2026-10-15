@@ -39,6 +39,7 @@ export function createCesiumInput(
 ) {
   const { scene } = viewer;
   let handler = null;
+  let destroyed = false;
   const groups = new Map();
 
   const input = {
@@ -47,6 +48,7 @@ export function createCesiumInput(
         throw new TypeError(`Unknown input type: ${type}`);
       if (modifier !== undefined && !MODIFIERS.includes(modifier))
         throw new TypeError(`Unknown input modifier: ${modifier}`);
+      if (destroyed) return () => {};
       handler ??= createEventHandler(scene.canvas);
       const key = `${type}:${modifier}`;
       let listeners = groups.get(key);
@@ -56,7 +58,8 @@ export function createCesiumInput(
         handler.setInputAction(
           (event) => {
             const converted = toEvent(event);
-            for (const entry of [...listeners]) entry.listener(converted);
+            for (const entry of [...listeners])
+              if (listeners.has(entry)) entry.listener(converted);
           },
           TYPES[type],
           KEYS[modifier],
@@ -78,6 +81,7 @@ export function createCesiumInput(
   return {
     input,
     destroy() {
+      destroyed = true;
       groups.clear();
       handler?.destroy();
       handler = null;

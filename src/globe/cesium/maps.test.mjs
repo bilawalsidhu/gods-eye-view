@@ -103,7 +103,7 @@ test('every catalog globe stack works as a registry source', async () => {
 });
 
 test('a superseded imagery switch is dropped', async () => {
-  const { viewer, maps } = setup();
+  const { viewer, maps, destroy } = setup();
   let release;
   const slow = new Promise((resolve) => (release = resolve));
   const first = maps.setBaseImagery({
@@ -127,7 +127,60 @@ test('a superseded imagery switch is dropped', async () => {
     viewer.imageryList.map((layer) => layer.provider.name),
     ['fast'],
   );
-  assert.equal(stale.destroyed, true, 'the stale provider is disposed');
+  assert.equal(stale.destroyed, false, 'the stale provider stays cached');
+  destroy();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stale.destroyed, true, 'destroy disposes cached providers');
+});
+
+test('re-applying the same source keeps the live layer and its provider', async () => {
+  const { viewer, maps } = setup();
+  let built = 0;
+  const esri = {
+    descriptor: { id: 'esri-imagery', kind: 'esri-imagery' },
+    imagery: async () => ({ name: `esri ${++built}` }),
+    credit: ESRI_ATTRIBUTION_HTML,
+  };
+  await maps.setBaseImagery(esri);
+  const live = viewer.imageryList[0];
+  await maps.setBaseImagery(esri);
+  assert.equal(built, 1, 'the provider is cached per source');
+  assert.equal(viewer.imageryList[0], live, 'no bare-globe rebuild');
+  assert.equal(viewer.callsOf('imageryLayers.add').length, 1);
+  assert.equal(viewer.callsOf('imageryLayers.remove').length, 0);
+  await maps.setBaseImagery({
+    descriptor: { id: 'osm', kind: 'osm' },
+    imagery: () => ({ name: 'osm' }),
+  });
+  await maps.setBaseImagery(esri);
+  assert.equal(built, 1);
+  assert.equal(viewer.imageryList[0].provider.name, 'esri 1');
+});
+
+test('a failed provider keeps the current layer and can be retried', async () => {
+  const { viewer, maps } = setup();
+  await maps.setBaseImagery({
+    descriptor: { id: 'osm', kind: 'osm' },
+    imagery: () => ({ name: 'osm' }),
+  });
+  let attempts = 0;
+  const flaky = {
+    descriptor: { id: 'esri-imagery', kind: 'esri-imagery' },
+    imagery: async () => {
+      if (++attempts === 1) throw new Error('Esri metadata refused');
+      return { name: 'esri' };
+    },
+    credit: ESRI_ATTRIBUTION_HTML,
+  };
+  await assert.rejects(maps.setBaseImagery(flaky), /metadata refused/);
+  assert.deepEqual(
+    viewer.imageryList.map((layer) => layer.provider.name),
+    ['osm'],
+  );
+  assert.deepEqual(viewer.staticCredits, []);
+  await maps.setBaseImagery(flaky);
+  assert.equal(attempts, 2, 'the failure was not cached');
+  assert.equal(viewer.imageryList[0].provider.name, 'esri');
 });
 
 test('setTerrain applies provider and terrain results', async () => {

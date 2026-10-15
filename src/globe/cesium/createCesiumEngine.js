@@ -23,6 +23,10 @@ import { createCesiumSurface } from './surface.js';
  *   loadPhotorealTileset?: Function,
  * }} [options] `requestRender` defaults to the render governor; the
  *   `create*`/`load*` options are test seams.
+ *
+ * `render.setContinuous` takes a hold on the app's singleton renderGovernor
+ * (src/renderGovernor.js), which governs the one viewer it was installed on;
+ * so one Cesium engine per page, on that viewer.
  * @returns {import('../contract.js').GlobeEngine}
  */
 export function createCesiumEngine(viewer, options = {}) {

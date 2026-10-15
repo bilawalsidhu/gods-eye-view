@@ -13,6 +13,9 @@
 //   (scene.cameraEventWaitTime) of wall time.
 // - nothing occludes picks or projection except where the contract says so
 //   (horizonVisible); there is no terrain or scene geometry unless scripted.
+// - a rectangle destination looks at the rectangle's centre from where its
+//   wider side fills the view; Cesium fits the corners.
+// - zoom distances are Cesium's defaults (1 m to unbounded).
 
 import * as geo from '../../geo/index.js';
 import { INPUT_TYPES, MODIFIERS, createEngineEvent } from '../contract.js';
@@ -23,7 +26,9 @@ const RADII = WGS84.radii;
 const MAXIMUM_RADIUS = Math.max(RADII.x, RADII.y, RADII.z);
 const DEFAULT_FLIGHT_SECONDS = 3;
 const DEFAULT_ZOOM_AMOUNT = 100000; // Cesium's camera.defaultZoomAmount
-const MINIMUM_SPHERE_RANGE = 100;
+const ZERO_RADIUS_SPHERE_RANGE = 100; // Cesium's MINIMUM_ZOOM
+const MINIMUM_ZOOM_DISTANCE = 1; // Cesium's screenSpaceCameraController default
+const MAXIMUM_ZOOM_DISTANCE = Infinity;
 const NEAR = 1;
 const FAR = 1e9;
 const SCRIPTABLE = new Set([
@@ -259,8 +264,31 @@ export function createFakeEngine(options = {}) {
   const poseAngles = () =>
     headingPitchRoll(state.position, state.direction, state.up);
 
+  // Where a {west, south, east, north} destination is seen from.
+  function rectanglePosition({ west, south, east, north }) {
+    const lonSpan = east >= west ? east - west : east + math.TWO_PI - west;
+    const longitude = math.negativePiToPi(west + lonSpan / 2);
+    const latitude = (south + north) / 2;
+    const tanY = Math.tan(fovy / 2);
+    const radius = WGS84.maximumRadius;
+    // The widest parallel of the rectangle, and a small margin for curvature.
+    const widest =
+      south * north <= 0
+        ? 1
+        : Math.cos(Math.min(Math.abs(south), Math.abs(north)));
+    const across =
+      1.05 *
+      Math.max(
+        (radius * widest * lonSpan) / 2 / (tanY * aspect()),
+        (radius * (north - south)) / 2 / tanY,
+      );
+    return cartesian3.fromRadians(longitude, latitude, across, WGS84);
+  }
+
   // The pose for a destination and orientation; missing angles use `fallback`.
-  function viewFor(position, orientation, fallback) {
+  function viewFor(destination, orientation, fallback) {
+    const position =
+      'west' in destination ? rectanglePosition(destination) : destination;
     if (orientation && 'direction' in orientation)
       return {
         position: copy3(position),
@@ -319,11 +347,17 @@ export function createFakeEngine(options = {}) {
     current?.cancel?.();
   }
 
+  // Ends a flight: the end transform first, then the target pose.
+  function land(flightOptions, target) {
+    if (flightOptions.endTransform) setTransform(flightOptions.endTransform);
+    apply(target);
+  }
+
   function startFlight(flightOptions, target) {
     cancelCurrentFlight();
     const duration = flightOptions.duration ?? DEFAULT_FLIGHT_SECONDS;
     if (duration <= 0) {
-      apply(target);
+      land(flightOptions, target);
       flightOptions.complete?.();
       return;
     }
@@ -333,6 +367,7 @@ export function createFakeEngine(options = {}) {
       duration: duration * 1000,
       elapsed: 0,
       ease: EASINGS[flightOptions.easing] ?? EASINGS.cubicInOut,
+      endTransform: flightOptions.endTransform,
       complete: flightOptions.complete,
       cancel: flightOptions.cancel,
     };
@@ -353,7 +388,7 @@ export function createFakeEngine(options = {}) {
     }
     const current = flight;
     flight = null;
-    apply(current.target);
+    land(current, current.target);
     current.complete?.();
   }
 
@@ -593,10 +628,14 @@ export function createFakeEngine(options = {}) {
       if (!range) {
         const tanPhi = Math.tan(fovy / 2);
         const tanTheta = aspect() * tanPhi;
-        range = Math.max(
-          MINIMUM_SPHERE_RANGE,
-          Math.max(sphere.radius / tanTheta, sphere.radius / tanPhi),
-        );
+        range =
+          sphere.radius === 0
+            ? ZERO_RADIUS_SPHERE_RANGE
+            : math.clamp(
+                Math.max(sphere.radius / tanTheta, sphere.radius / tanPhi),
+                MINIMUM_ZOOM_DISTANCE,
+                MAXIMUM_ZOOM_DISTANCE,
+              );
       }
       const frame = geo.transforms.eastNorthUpToFixedFrame(
         sphere.center,
@@ -687,9 +726,9 @@ export function createFakeEngine(options = {}) {
         record('picker.pick', [screen, w, h]);
         return scripted('pick', [screen, w, h], () => undefined);
       },
-      drillPick(screen, limit) {
-        record('picker.drillPick', [screen, limit]);
-        return scripted('drillPick', [screen, limit], () => []);
+      drillPick(screen, limit, w, h) {
+        record('picker.drillPick', [screen, limit, w, h]);
+        return scripted('drillPick', [screen, limit, w, h], () => []);
       },
       pickPosition(screen) {
         record('picker.pickPosition', [screen]);
@@ -774,15 +813,15 @@ export function createFakeEngine(options = {}) {
       },
     },
     maps: {
-      setBaseImagery(source) {
+      async setBaseImagery(source) {
         record('maps.setBaseImagery', [source]);
         fake.maps.imagery = source;
       },
-      setTerrain(source) {
+      async setTerrain(source) {
         record('maps.setTerrain', [source]);
         fake.maps.terrain = source;
       },
-      setPhotorealTiles(source) {
+      async setPhotorealTiles(source) {
         record('maps.setPhotorealTiles', [source]);
         fake.maps.photoreal = source ?? null;
       },

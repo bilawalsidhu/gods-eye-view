@@ -5,7 +5,7 @@
 
 import * as Cesium from 'cesium';
 import { loadPhotorealisticTileset } from '../../maps/google3d.js';
-import { createMapCredits } from '../../maps/credits.js';
+import { createMapScene } from '../../maps/sceneApply.js';
 import {
   ESRI_ATTRIBUTION_HTML,
   imageryFactoryFor,
@@ -21,6 +21,10 @@ function imageryCreator(source) {
     throw new TypeError(`Unknown imagery source: ${descriptor?.kind}`);
   return imageryFactoryFor(descriptor, source.accessToken);
 }
+
+// Registry sources are stable by id; plain descriptions by kind and style.
+const imageryKey = (source) =>
+  source?.descriptor?.id ?? `${source?.kind}:${source?.style ?? ''}`;
 
 function imageryCredit(source) {
   if (source?.credit !== undefined) return source.credit;
@@ -74,8 +78,8 @@ export function createCesiumMaps(
   } = {},
 ) {
   const abort = new AbortController();
-  let credits = null;
-  let layer = null;
+  const mapScene = createMapScene(viewer, { createImageryLayer });
+  const providers = new Map();
   let ownedTileset = null;
   let shownTileset = null;
   const generations = { imagery: 0, terrain: 0, photoreal: 0 };
@@ -88,25 +92,29 @@ export function createCesiumMaps(
     [startupTileset(), shownTileset, ownedTileset].filter(
       (tileset, index, all) => tileset && all.indexOf(tileset) === index,
     );
-  const showCredit = (html) => {
-    credits ??= createMapCredits(viewer);
-    credits.show(html);
-  };
+
+  // One provider per source, as MapSourceController caches them, so applying
+  // the same source again keeps the live layer. Failures are not cached.
+  function providerFor(source) {
+    const key = imageryKey(source);
+    if (providers.has(key)) return providers.get(key);
+    const promise = Promise.resolve()
+      .then(() => imageryCreator(source)({ signal: abort.signal }))
+      .catch((error) => {
+        if (providers.get(key) === promise) providers.delete(key);
+        throw error;
+      });
+    providers.set(key, promise);
+    return promise;
+  }
 
   const maps = {
     async setBaseImagery(source) {
       const generation = ++generations.imagery;
-      const create = imageryCreator(source);
-      const provider = await create({ signal: abort.signal });
-      if (destroyed || generation !== generations.imagery) {
-        dispose(provider);
-        return;
-      }
-      const next = createImageryLayer(provider);
-      viewer.imageryLayers.add(next, 0);
-      if (layer) viewer.imageryLayers.remove(layer, true);
-      layer = next;
-      showCredit(imageryCredit(source));
+      const provider = await providerFor(source);
+      if (destroyed || generation !== generations.imagery) return;
+      mapScene.showBaseImagery(provider);
+      mapScene.showCredit(imageryCredit(source));
       requestRender('map-imagery');
     },
     async setTerrain(source) {
@@ -120,9 +128,9 @@ export function createCesiumMaps(
       const generation = ++generations.photoreal;
       const { scene } = viewer;
       if (source == null) {
-        for (const tileset of tilesets()) tileset.show = false;
+        mapScene.showTileset(null, tilesets());
         shownTileset = null;
-        scene.globe.show = true;
+        mapScene.showGlobe(true);
         requestRender('map-photoreal');
         return;
       }
@@ -148,10 +156,13 @@ export function createCesiumMaps(
         ownedTileset = tileset;
       }
       if (!scene.primitives.contains(tileset)) scene.primitives.add(tileset);
-      for (const other of tilesets()) other.show = other === tileset;
-      tileset.show = true;
+      // As MapSourceController activates a 3D stack: no base layer, the
+      // source's credit, one tileset shown and the globe hidden.
+      mapScene.removeBaseImagery();
+      mapScene.showCredit(source.credit);
       shownTileset = tileset;
-      scene.globe.show = false;
+      mapScene.showTileset(tileset, tilesets());
+      mapScene.showGlobe(false);
       requestRender('map-photoreal');
     },
     photorealActive: () => tilesets().some((tileset) => tileset.show === true),
@@ -163,9 +174,10 @@ export function createCesiumMaps(
       if (destroyed) return;
       destroyed = true;
       abort.abort();
-      if (layer) viewer.imageryLayers.remove(layer, true);
-      layer = null;
-      credits?.destroy();
+      mapScene.destroy();
+      for (const promise of providers.values())
+        void promise.then(dispose, () => {});
+      providers.clear();
       if (ownedTileset) {
         viewer.scene.primitives.remove(ownedTileset);
         dispose(ownedTileset);

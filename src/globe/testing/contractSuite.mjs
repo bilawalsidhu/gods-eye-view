@@ -238,8 +238,9 @@ export function createContractSuite(
         let rested = 0;
         const removeRest = camera.moveEnd.addEventListener(() => rested++);
         try {
-          await nadirView();
-          await until(() => rested > 0, 'moveEnd after the nadir view');
+          // A pose no other check uses, so this always is a move.
+          await nadirView(1.5e6);
+          await until(() => rested > 0, 'moveEnd after the resting move');
         } finally {
           removeRest();
         }
@@ -900,7 +901,7 @@ export function createContractSuite(
         const { width, height } = engine.host.size();
         const tanPhi = Math.tan(pose.fovy / 2);
         const tanTheta = (width / height) * tanPhi;
-        const range = Math.max(100, radius / tanTheta, radius / tanPhi);
+        const range = Math.max(radius / tanTheta, radius / tanPhi);
         near(
           cartesian3.distance(pose.position, center),
           range,
@@ -1220,6 +1221,103 @@ export function createContractSuite(
           compared++;
         }
         ensure(compared >= 2, 'too few screen points hit the globe');
+      },
+    ],
+    [
+      'camera.flyTo: endTransform IDENTITY releases a lookAt lock when it lands',
+      async () => {
+        const target = cartesian3.fromDegrees(-0.12, 51.5, 0);
+        const destination = cartesian3.fromDegrees(-0.12, 51.4, 20000);
+        const locked = () => {
+          camera.lookAt(target, { heading: 0, pitch: -0.7, range: 2000 });
+          ensure(
+            camera
+              .transform()
+              .some((value, index) => value !== matrix4.IDENTITY[index]),
+            'lookAt did not lock the camera',
+          );
+        };
+        const released = (label) => {
+          const transform = camera.transform();
+          for (let index = 0; index < 16; index++)
+            near(
+              transform[index],
+              matrix4.IDENTITY[index],
+              0,
+              `${label} transform[${index}]`,
+            );
+          near(
+            cartesian3.distance(camera.pose().position, destination),
+            0,
+            0.01,
+            `${label} position error (m)`,
+          );
+        };
+        locked();
+        camera.flyTo({
+          destination,
+          duration: 0,
+          endTransform: matrix4.IDENTITY,
+        });
+        released('duration 0');
+        locked();
+        let done = false;
+        camera.flyTo({
+          destination,
+          duration: 0.25,
+          endTransform: matrix4.IDENTITY,
+          complete: () => (done = true),
+        });
+        await until(() => done, 'the timed flight');
+        released('timed');
+      },
+    ],
+    [
+      'camera.flyTo and setView: a rectangle destination fills the view',
+      async () => {
+        const rectangle = {
+          west: math.toRadians(2.2),
+          south: math.toRadians(48.8),
+          east: math.toRadians(2.5),
+          north: math.toRadians(48.9),
+        };
+        const { width, height } = engine.host.size();
+        const expectFit = (label) => {
+          const pose = camera.pose();
+          near(pose.pitch, -math.PI_OVER_TWO, 1e-6, `${label} pitch`);
+          const middle = engine.projector.worldToWindow(
+            cartesian3.fromRadians(math.toRadians(2.35), math.toRadians(48.85)),
+          );
+          ensure(middle, `${label}: the rectangle centre did not project`);
+          near(middle.x, width / 2, width * 0.05, `${label} centre x (px)`);
+          near(middle.y, height / 2, height * 0.05, `${label} centre y (px)`);
+          for (const [lon, lat] of [
+            [rectangle.west, rectangle.south],
+            [rectangle.west, rectangle.north],
+            [rectangle.east, rectangle.south],
+            [rectangle.east, rectangle.north],
+          ]) {
+            const corner = engine.projector.worldToWindow(
+              cartesian3.fromRadians(lon, lat),
+            );
+            ensure(
+              corner &&
+                corner.x >= -1 &&
+                corner.x <= width + 1 &&
+                corner.y >= -1 &&
+                corner.y <= height + 1,
+              `${label}: a corner is off screen (${corner?.x}, ${corner?.y})`,
+            );
+          }
+        };
+        await nadirView();
+        camera.flyTo({ destination: rectangle, duration: 0 });
+        await settle();
+        expectFit('flyTo');
+        await nadirView();
+        camera.setView({ destination: rectangle });
+        await settle();
+        expectFit('setView');
       },
     ],
     [

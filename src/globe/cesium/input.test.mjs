@@ -111,3 +111,28 @@ test('destroy destroys the handler', () => {
   destroy();
   assert.equal(handlers[0].destroyed, true);
 });
+
+test('a listener removed during dispatch is not called', () => {
+  const { handlers, input } = setup();
+  const seen = [];
+  let offB;
+  input.on('click', () => {
+    seen.push('a');
+    offB();
+  });
+  offB = input.on('click', () => seen.push('b'));
+  handlers[0].fire(Type.LEFT_CLICK, { position: new Cesium.Cartesian2() });
+  assert.deepEqual(seen, ['a']);
+});
+
+test('on() after destroy() creates no handler', () => {
+  const { handlers, input, destroy } = setup();
+  destroy();
+  const off = input.on('click', () => {});
+  assert.equal(handlers.length, 0);
+  off();
+  off();
+  input.on('click', () => {});
+  destroy();
+  assert.equal(handlers.length, 0);
+});
