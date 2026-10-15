@@ -237,6 +237,17 @@ const layers = [
     noQuery: 'road-speed overlay; no countable records',
   },
   {
+    id: 'drivebc-road-conditions',
+    aliases: [
+      'drivebc road conditions',
+      'bc road conditions',
+      'british columbia road events',
+      'bc road closures',
+    ],
+    context: false,
+    noQuery: 'DriveBC road-event overlay; query tool supplies event records',
+  },
+  {
     id: 'transit',
     aliases: ['buses', 'trains', 'public transit', 'trams', 'subway'],
     context: false,

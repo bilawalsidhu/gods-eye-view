@@ -11,6 +11,7 @@
 import { createAlprTileSource } from '../layers/alpr/source.js';
 import { GBFS_CITY_REGISTRY } from '../layers/bikeshare/registry.js';
 import { createBikeshareSource } from '../layers/bikeshare/source.js';
+import { createDriveBcSource } from '../layers/drivebc/source.js';
 import { createCctvSource } from '../layers/cctv/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createUsgsEarthquakeSource } from '../layers/earthquakes/source.js';
@@ -66,6 +67,7 @@ export function createToolServices({ fetchImpl, appUrl, panelKey }) {
       systems: GBFS_CITY_REGISTRY,
       getStations: createBikeshareSource({ fetchImpl }).getStations,
     },
+    drivebc: createDriveBcSource({ fetchImpl }),
     transit: createTransitSource({ fetchImpl }),
     traffic: createTrafficSource({ fetchImpl, tileFetchImpl: fetchImpl }),
     weather: requests.weather,

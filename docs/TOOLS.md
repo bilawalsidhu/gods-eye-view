@@ -282,6 +282,7 @@ and the development server's internal routes. See SECURITY.md.
 | `get_bike_share` | `bikeshare` | Live GBFS stations in an area, with bikes and docks available |
 | `get_transit_vehicles` | `transit` | Live GTFS-Realtime vehicle positions in an area, optionally one route |
 | `get_traffic_flow` | `traffic` | TomTom flow in a city-sized area: speed vs free flow, congested and closed road |
+| `get_bc_road_conditions` | `drivebc` | Active BC-only road events from DriveBC Open511, filtered to an area |
 | `get_weather` | `weather` | Current conditions at a place or point |
 | `get_weather_map` | `weatherMaps` | The latest NOAA radar, satellite or lightning map image over an area |
 | `get_wind` | `wind` | GFS or IFS model wind 10 m above ground at a location |

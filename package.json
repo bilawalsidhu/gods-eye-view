@@ -172,6 +172,8 @@
     "./layers/installations": "./src/layers/installations/index.js",
     "./layers/awareness": "./src/layers/awareness/index.js",
     "./layers/traffic": "./src/layers/traffic/index.js",
+    "./layers/drivebc": "./src/layers/drivebc/index.js",
+    "./layers/drivebc/source": "./src/layers/drivebc/source.js",
     "./layers/bikeshare": "./src/layers/bikeshare/index.js",
     "./layers/directions": "./src/layers/directions/index.js",
     "./layers/directions/source": "./src/layers/directions/source.js",

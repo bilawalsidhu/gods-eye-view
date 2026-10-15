@@ -1,5 +1,9 @@
 # God's Eye View Current State
 
+## DriveBC Road Conditions
+
+The Movement layer panel includes a separate **DriveBC Road Conditions** toggle. It draws active British Columbia Open511 events: point markers for point reports and ground-clamped colored linework for road segments. Severity controls the color; selecting an item opens its event details. The source is keyless, caches for 60 seconds, times out after 12 seconds, caps responses at 12 MiB and one page at 500 events, and marks the layer partial when that page limit is reached. Recent cached data is marked stale rather than presented as freshly fetched. The API query tool `get_bc_road_conditions` returns area-filtered event records; the overlay itself is BC-only and does not imply coverage elsewhere in Canada.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing

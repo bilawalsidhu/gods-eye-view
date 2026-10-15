@@ -1126,6 +1126,19 @@
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile"]
   },
+  "drivebc-layer": {
+    "exports": ["./layers/drivebc", "./layers/drivebc/source"],
+    "modules": [
+      "src/layers/drivebc/index.js",
+      "src/layers/drivebc/source.js",
+      "src/layers/drivebc/severity.js",
+      "src/layers/drivebc/popup.js",
+      "src/sources/httpBody.js",
+      "src/data/inputOwnership.js",
+      "src/data/pickRegistry.js"
+    ],
+    "external": ["cesium"]
+  },
   "bikeshare-layer": {
     "exports": ["./layers/bikeshare"],
     "modules": [
@@ -1476,6 +1489,7 @@
       "src/app/layers/satellites.js",
       "src/app/layers/submarineCables.js",
       "src/app/layers/traffic.js",
+      "src/app/layers/drivebc.js",
       "src/app/operations.js",
       "src/app/scene.js",
       "src/sources/sourceSlot.js",
@@ -1827,6 +1841,10 @@
       "src/layers/traffic/surface.js",
       "src/layers/traffic/timing.js",
       "src/layers/traffic/viewport.js",
+      "src/layers/drivebc/index.js",
+      "src/layers/drivebc/source.js",
+      "src/layers/drivebc/severity.js",
+      "src/layers/drivebc/popup.js",
       "src/layers/vessels/cards.js",
       "src/layers/vessels/evidence.js",
       "src/layers/vessels/index.js",
@@ -2271,10 +2289,16 @@
       "src/layers/wind/presentation.js",
       "src/layers/wind/rendering.js",
       "src/layers/weather/rasterTiles.js",
+      "src/layers/drivebc/index.js",
+      "src/layers/drivebc/source.js",
+      "src/layers/drivebc/index.test.mjs",
+      "src/layers/drivebc/severity.js",
+      "src/layers/drivebc/popup.js",
       "src/app/layers/aisLiveVessels.js",
       "src/app/layers/alprCameras.js",
       "src/app/layers/bikeshare.js",
       "src/app/layers/cctv.js",
+      "src/app/layers/drivebc.js",
       "src/app/layers/earthquakes.js",
       "src/app/layers/firms.js",
       "src/app/layers/flights.js",
@@ -2563,6 +2587,10 @@
       "src/layers/traffic/surface.js",
       "src/layers/traffic/timing.js",
       "src/layers/traffic/viewport.js",
+      "src/layers/drivebc/index.js",
+      "src/layers/drivebc/source.js",
+      "src/layers/drivebc/severity.js",
+      "src/layers/drivebc/popup.js",
       "src/layers/vessels/cards.js",
       "src/layers/vessels/evidence.js",
       "src/layers/vessels/index.js",
@@ -3137,6 +3165,7 @@
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
+      "src/layers/drivebc/source.js",
       "src/layers/submarineCables/bundledSource.js"
     ],
     "external": []
@@ -3438,6 +3467,7 @@
       "src/layers/cctv/source.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/layers/cyclones/source.js",
+      "src/layers/drivebc/source.js",
       "src/sources/httpBody.js",
       "src/layers/earthquakes/source.js",
       "src/layers/earthquakes/records.js",

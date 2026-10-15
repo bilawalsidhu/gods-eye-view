@@ -37,7 +37,7 @@ test('every acquisition source can be omitted without losing catalog membership'
 
 test('all acquisition sources may be absent, and enable fails before initializing or fetching', async (t) => {
   const actual = catalog({}, t);
-  assert.equal(actual.layers.length, 30);
+  assert.equal(actual.layers.length, 31);
   const manager = new LayerLifecycle(
     {},
     { getSourceAvailability: actual.getSourceAvailability },
@@ -71,14 +71,20 @@ test('configured sources retain identity; invalid implementations never become u
   assert.throws(() => missing.getSnapshot(), { code: 'unavailable' });
 });
 
-test('standalone defaults allow exact replacements and explicit removal, and reject typos', () => {
+test('standalone defaults allow exact replacements and explicit removal, and reject typos', (t) => {
   const source = { getSnapshot: async () => [] };
+  const defaultCatalog = catalog(createStandaloneLayerSources(), t);
+  assert.equal(
+    defaultCatalog.getSourceAvailability('drivebc-road-conditions').available,
+    true,
+  );
   const sources = createStandaloneLayerSources({
     flights: source,
     military: null,
   });
   assert.equal(sources.flights, source);
   assert.equal(sources.military, null);
+  assert.equal(typeof sources.drivebc.getSnapshot, 'function');
   assert.equal(typeof sources.cctv.getCatalog, 'function');
   assert.throws(
     () => createStandaloneLayerSources({ fligts: source }),

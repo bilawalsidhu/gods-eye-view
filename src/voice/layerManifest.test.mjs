@@ -57,6 +57,7 @@ test('tool enums are generated from the manifest', () => {
     'rocket-launches',
     'bikeshare',
     'local-adsb',
+    'drivebc-road-conditions',
   ])
     assert.ok(toggle.includes(id), `${id} is voice-toggleable`);
   assert.ok(!toggle.includes('military-awareness'), 'Global Context is reached through set_context_mode');
@@ -101,6 +102,10 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
     'weather radar': 'weather-radar', lightning: 'weather-lightning', 'military bases': 'military-installations',
     'recent imagery': 'recent-imagery', 'bike share': 'bikeshare', 'rocket launches': 'rocket-launches',
     'street level': 'street-level', mapillary: 'street-level',
+    'drivebc road conditions': 'drivebc-road-conditions',
+    'bc road conditions': 'drivebc-road-conditions',
+    'british columbia road events': 'drivebc-road-conditions',
+    'bc road closures': 'drivebc-road-conditions',
     wind: 'wind', directions: 'directions', 'fire perimeters': 'fire-perimeters',
     'wildfire perimeters': 'fire-perimeters', 'burn areas': 'fire-perimeters',
   };

@@ -167,6 +167,13 @@ export const DATA_CREDITS = [
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
+  {
+    key: 'drivebc-open511',
+    html:
+      'British Columbia road events: ' +
+      '<a href="https://api.open511.gov.bc.ca/help" target="_blank" rel="noopener">DriveBC Open511</a>' +
+      ' · <a href="https://www2.gov.bc.ca/gov/content/data/open-data/open-government-licence-bc" target="_blank" rel="noopener">Open Government Licence – British Columbia</a>',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {

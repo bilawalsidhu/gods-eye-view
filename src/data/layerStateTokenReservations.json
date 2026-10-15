@@ -6,6 +6,7 @@
   ["bikeshare", "b"],
   ["cctv", "c"],
   ["directions", "n"],
+  ["drivebc-road-conditions", "3"],
   ["earthquakes", "e"],
   ["fire-perimeters", "2"],
   ["flights", "f"],
