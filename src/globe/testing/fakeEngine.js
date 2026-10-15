@@ -210,8 +210,10 @@ function rectangleFromCartographics(points) {
 
 /**
  * @param {{ kind?: 'cesium'|'navara', width?: number, height?: number, fovy?: number,
- *   longitude?: number, latitude?: number, altitude?: number }} [options]
- *   Canvas size in CSS px, angles in radians. The initial pose looks straight
+ *   longitude?: number, latitude?: number, altitude?: number,
+ *   container?: object, canvas?: object }} [options]
+ *   Canvas size in CSS px, angles in radians; `container`/`canvas` stand in
+ *   for the host elements (DOM mocks for shell tests). The initial pose looks straight
  *   down from `altitude` metres (10 000 km).
  * @returns {import('../contract.js').GlobeEngine & { fake: object }}
  */
@@ -238,6 +240,7 @@ export function createFakeEngine(options = {}) {
     'frames.postRender': createEngineEvent(),
   };
   const inputs = new Map(INPUT_TYPES.map((type) => [type, new Set()]));
+  const livePosition = cartesian3.create();
   const scripts = new Map();
   let transform = [...matrix4.IDENTITY];
   let percentageChanged = 0.5;
@@ -602,10 +605,8 @@ export function createFakeEngine(options = {}) {
         fovy,
       };
     },
-    position(result) {
-      return result
-        ? cartesian3.clone(state.position, result)
-        : copy3(state.position);
+    get livePosition() {
+      return cartesian3.clone(state.position, livePosition);
     },
     height: () => cartographic.fromCartesian(state.position, WGS84).height,
     setView(view) {
@@ -718,8 +719,8 @@ export function createFakeEngine(options = {}) {
   };
 
   const host = {
-    container: { kind: 'fake-container' },
-    canvas: { kind: 'fake-canvas' },
+    container: options.container ?? { kind: 'fake-container' },
+    canvas: options.canvas ?? { kind: 'fake-canvas' },
     size: () => ({ width, height }),
   };
 

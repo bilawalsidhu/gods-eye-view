@@ -177,38 +177,40 @@ export function createContractSuite(
       },
     ],
     [
-      'camera.position and camera.height: the pose position and height, without a pose',
+      'camera.livePosition and camera.height: the pose position and height, without a pose',
       async () => {
         camera.setView({
           destination: cartesian3.fromDegrees(-3.7, 40.4, 12000),
           orientation: { heading: 0.4, pitch: -0.5, roll: 0 },
         });
         await settle();
-        const pose = camera.pose();
-        const result = cartesian3.create();
-        const filled = camera.position(result);
-        ensure(
-          filled === result,
-          'position(result) returns the result it filled',
-        );
+        const live = camera.livePosition;
+        ensure(isCartesian3(live), 'livePosition is a Cartesian3');
         near(
-          cartesian3.distance(filled, pose.position),
+          cartesian3.distance(live, camera.pose().position),
           0,
           1e-6,
-          'position(result) vs pose().position',
-        );
-        const fresh = camera.position();
-        ensure(
-          isCartesian3(fresh) && fresh !== filled,
-          'position() returns a fresh Cartesian3',
+          'livePosition vs pose().position',
         );
         near(
-          cartesian3.distance(fresh, pose.position),
-          0,
-          1e-6,
-          'position() vs pose().position',
+          camera.height(),
+          camera.pose().cartographic.height,
+          0.01,
+          'height()',
         );
-        near(camera.height(), pose.cartographic.height, 0.01, 'height()');
+        const destination = cartesian3.fromDegrees(2.35, 48.85, 30000);
+        camera.setView({ destination });
+        await settle();
+        ensure(
+          camera.livePosition === live,
+          'livePosition is the same engine-owned object on every read',
+        );
+        near(
+          cartesian3.distance(camera.livePosition, destination),
+          0,
+          1e-3,
+          'livePosition follows the camera',
+        );
       },
     ],
     [

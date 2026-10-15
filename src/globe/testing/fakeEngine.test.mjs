@@ -354,12 +354,27 @@ test('fake drillPick records width and height; maps return promises', async () =
   }
 });
 
-test('fake camera position fills a result and height is the pose height', () => {
+test('fake livePosition is one object that follows the camera; height is the pose height', () => {
   const engine = createFakeEngine({ altitude: 2_000_000 });
-  const result = geo.cartesian3.create();
-  assert.equal(engine.camera.position(result), result);
+  const live = engine.camera.livePosition;
   assert.ok(
-    geo.cartesian3.distance(result, engine.camera.pose().position) < 1e-6,
+    geo.cartesian3.distance(live, engine.camera.pose().position) < 1e-6,
   );
   assert.ok(Math.abs(engine.camera.height() - 2_000_000) < 0.01);
+  engine.fake.setPose({ longitude: 0.3, latitude: 0.2, height: 500 });
+  assert.equal(engine.camera.livePosition, live);
+  assert.ok(
+    geo.cartesian3.distance(live, engine.camera.pose().position) < 1e-6,
+  );
+});
+
+test('fake host elements can be supplied', () => {
+  const container = { id: 'globe' };
+  const canvas = { id: 'canvas' };
+  const engine = createFakeEngine({ container, canvas });
+  assert.equal(engine.host.container, container);
+  assert.equal(engine.host.canvas, canvas);
+  assert.deepEqual(createFakeEngine().host.container, {
+    kind: 'fake-container',
+  });
 });

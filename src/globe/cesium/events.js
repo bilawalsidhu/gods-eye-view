@@ -18,7 +18,7 @@ import { createEngineEvent } from '../contract.js';
 export function bridgeEvent(source, mapArgs, { unary } = {}) {
   const event = createEngineEvent();
   const forward = unary
-    ? (a, b, c) => event.raiseEvent(unary(a, b, c))
+    ? (a, b, c) => event.raiseValue(unary(a, b, c))
     : mapArgs
       ? (...args) => event.raiseEvent(...mapArgs(...args))
       : (...args) => event.raiseEvent(...args);

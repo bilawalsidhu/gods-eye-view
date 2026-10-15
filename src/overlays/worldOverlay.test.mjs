@@ -2297,3 +2297,70 @@ test('promoting an ambient entry to selected paints it once with no fading dupli
     assert.equal(paint(), 1, 'deselect restores the ambient card without re-entry cooldown');
   } finally { env.cleanup(); }
 });
+
+// --- The host on a globe engine (src/globe contract) -------------------------
+
+async function fakeEngineHost() {
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 1 });
+  const engine = createFakeEngine({
+    width: 400,
+    height: 300,
+    container: env.viewer.container,
+  });
+  return { env, engine };
+}
+
+test('the host runs on a globe engine: frames, camera events and canvas size', async () => {
+  const { env, engine } = await fakeEngineHost();
+  initWorldOverlay(engine);
+  initWorldOverlay(engine);
+  assert.equal(engine.frames.postRender.numberOfListeners, 1);
+  assert.equal(engine.camera.moveEnd.numberOfListeners, 1);
+  const surface = env.document.getElementById('world-overlay-detection-surface');
+  assert.equal(surface.parentElement, env.viewer.container,
+    'the detection surface hangs off the engine host container');
+  setOverlayEntries('engine', [selectedEntry('CENTRE', { position: Cesium.Cartesian3.fromDegrees(0, 0, 0) })]);
+  engine.fake.frame();
+  const canvas = env.document.getElementById('world-overlay-canvas');
+  assert.equal(canvas.width, 400, 'sized from engine.host.size()');
+  assert.equal(canvas.height, 300);
+  assert.equal(getWorldOverlayDiagnostics().paintedCount, 1);
+  destroyWorldOverlay();
+  assert.equal(engine.frames.postRender.numberOfListeners, 0);
+  assert.equal(engine.camera.moveEnd.numberOfListeners, 0);
+  env.cleanup();
+});
+
+test('on a globe engine the host projects with viewProjection and culls with horizonVisible', async () => {
+  const { env, engine } = await fakeEngineHost();
+  initWorldOverlay(engine);
+  setOverlayEntries('engine', [
+    selectedEntry('NEAR', { position: Cesium.Cartesian3.fromDegrees(0, 0, 0), horizonCull: true }),
+    selectedEntry('FAR', { position: Cesium.Cartesian3.fromDegrees(0, 0, 0), horizonCull: true,
+      cullPosition: Cesium.Cartesian3.fromDegrees(180, 0, 0) }),
+  ]);
+  engine.fake.frame();
+  assert.equal(getOverlayPaintRect('engine', 'NEAR') !== null, true);
+  assert.equal(getOverlayPaintRect('engine', 'FAR'), null, 'hidden behind the globe');
+  const rect = getOverlayPaintRect('engine', 'NEAR');
+  const centre = engine.projector.worldToWindow(Cesium.Cartesian3.fromDegrees(0, 0, 0));
+  assert.ok(Math.abs(rect.anchorX - centre.x) < 1e-6 && Math.abs(rect.anchorY - centre.y) < 1e-6,
+    'anchored at the projected point');
+  env.cleanup();
+});
+
+test('on a globe engine the host hands painters the live camera position and requests renders by reason', async () => {
+  const { env, engine } = await fakeEngineHost();
+  initWorldOverlay(engine);
+  let frame = null;
+  registerWorldOverlayPaintLane('detection', (value) => { frame = value; },
+    { id: 'detection', active: true, target: 'detection' });
+  setOverlayEntries('engine', [selectedEntry('CENTRE', { position: Cesium.Cartesian3.fromDegrees(0, 0, 0) })]);
+  assert.ok(engine.fake.callsOf('render.request').some(({ args }) => args[0] === 'world-overlay'));
+  engine.fake.frame();
+  assert.equal(frame.cameraPosition, engine.camera.livePosition);
+  assert.equal(frame.occluder.isPointVisible(Cesium.Cartesian3.fromDegrees(180, 0, 0)), false);
+  assert.equal(frame.occluder.isPointVisible(Cesium.Cartesian3.fromDegrees(0, 0, 0)), true);
+  env.cleanup();
+});
