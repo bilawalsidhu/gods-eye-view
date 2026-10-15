@@ -7,6 +7,10 @@ test('out-of-range finite timestamps are unknown rather than throwing', async ()
     assert.equal(isoTime(value), null);
   assert.equal(isoTime(0), '1970-01-01T00:00:00.000Z');
   assert.equal(isoTime(8640000000000000), '+275760-09-13T00:00:00.000Z');
+  assert.equal(isoTime(-8640000000000000), '-271821-04-20T00:00:00.000Z');
+  for (const value of [8640000000000001, -8640000000000001, -Infinity])
+    assert.equal(isoTime(value), null);
+  assert.equal(isoTime(-1), '1969-12-31T23:59:59.999Z');
   const station = {
     station_id: 's1',
     name: 'Fixture',
