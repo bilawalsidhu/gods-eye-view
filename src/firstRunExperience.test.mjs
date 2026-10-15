@@ -673,11 +673,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // referent-only track_entity alternative (kept out of the model-facing
   // schema, which may not carry top-level anyOf), and Contacts requested-radius
   // list descriptions; the missions still ride existing tools.
-  // Street Level adds toggle enum values and the generated alias hint.
-  assert.equal(block.length, 29802, 'serialized tool schema length drifted');
+  // Street Level and GNSS extend the manifest; broadcast caveats describe tracked and analyst aircraft.
+  assert.equal(block.length, 30511, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'b316ca2e67848eb565b6847ac044a19d1465d8ef8252a5dfbd7d947a2a36d5ed',
+    '62d5df9cedf413403e4fd0a7cbe94bb2cd13736c3d8fedc84bcccd63ad253eb6',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');
