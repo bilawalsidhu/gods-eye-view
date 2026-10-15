@@ -120,3 +120,42 @@ test('tile attribution follows source changes and viewers have independent owner
   assert.equal(a.credits.size, 0);
   assert.equal(b.credits.size, 1);
 });
+
+test('data credits go through the globe engine credits', async () => {
+  const {
+    registerDataCredits,
+    registerDynamicCredit,
+    showOsmCredit,
+    hideOsmCredit,
+  } = await import('./dataCredits.js');
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const engine = createFakeEngine();
+  registerDataCredits(engine, [{ html: 'A' }, { html: 'B' }]);
+  assert.deepEqual(engine.fake.credits, [
+    { html: 'A', onScreen: false },
+    { html: 'B', onScreen: false },
+  ]);
+  assert.equal(
+    registerDynamicCredit(engine, { key: 'engine-dyn', html: 'D' }),
+    true,
+  );
+  assert.equal(
+    registerDynamicCredit(engine, { key: 'engine-dyn', html: 'D' }),
+    true,
+  );
+  assert.equal(
+    engine.fake.credits.filter(({ html }) => html === 'D').length,
+    1,
+  );
+  engine.fake.resetCalls();
+  assert.equal(showOsmCredit(engine, 'alpr', { openMapTiles: true }), true);
+  const inline = engine.fake.credits.filter(({ onScreen }) => onScreen);
+  assert.equal(inline.length, 2);
+  assert.match(inline[0].html, /© OpenStreetMap/);
+  assert.ok(engine.fake.callsOf('render.request').length > 0);
+  assert.equal(hideOsmCredit(engine, 'alpr'), true);
+  assert.equal(
+    engine.fake.credits.filter(({ onScreen }) => onScreen).length,
+    0,
+  );
+});

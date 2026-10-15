@@ -63,6 +63,7 @@ const dispose = (value) => {
  *   tilesetRef?: { current: object | null } | (() => object | null),
  *   requestRender?: (reason: string) => void,
  *   createImageryLayer?: (provider: object) => object,
+ *   credits?: object,
  *   loadPhotorealTileset?: (credentials: object) => Promise<{ tileset: object | null, errors: Error[] }>,
  * }} [options] `tilesetRef` names the startup Google tileset the app added.
  * @returns {{ maps: object, destroy: () => void }}
@@ -73,12 +74,16 @@ export function createCesiumMaps(
     tilesetRef = null,
     requestRender = () => viewer.scene.requestRender?.(),
     createImageryLayer = (provider) => new Cesium.ImageryLayer(provider),
+    credits,
     loadPhotorealTileset = (credentials) =>
       loadPhotorealisticTileset(Cesium, credentials),
   } = {},
 ) {
   const abort = new AbortController();
-  const mapScene = createMapScene(viewer, { createImageryLayer });
+  const mapScene = createMapScene(viewer, {
+    createImageryLayer,
+    ...(credits && { credits }),
+  });
   const providers = new Map();
   let ownedTileset = null;
   let shownTileset = null;

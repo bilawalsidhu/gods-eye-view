@@ -34,6 +34,7 @@ export function createCesiumEngine(viewer, options = {}) {
   // Viewer.canvas is scene.canvas; the engine reads the public alias.
   const canvas = viewer.canvas ?? viewer.scene.canvas;
   const render = createCesiumRender(viewer, options);
+  const credits = createCesiumCredits(viewer);
   const parts = {
     camera: createCesiumCamera(viewer),
     picker: createCesiumPicker(viewer),
@@ -42,9 +43,10 @@ export function createCesiumEngine(viewer, options = {}) {
     render,
     surface: createCesiumSurface(viewer),
     input: createCesiumInput(viewer, options),
-    credits: createCesiumCredits(viewer),
+    credits,
     maps: createCesiumMaps(viewer, {
       ...options,
+      credits: credits.credits,
       requestRender: (reason) => render.render.request(reason),
     }),
   };

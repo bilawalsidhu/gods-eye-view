@@ -89,3 +89,21 @@ test('removeBaseImagery, tilesets, globe and credits', () => {
   assert.deepEqual(layers, []);
   assert.deepEqual(credits, []);
 });
+
+test('the map scene shows its credit through a given credits capability', async () => {
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const engine = createFakeEngine();
+  const { viewer, credits } = fixture();
+  const scene = createMapScene(viewer, {
+    createImageryLayer: (provider) => ({ provider }),
+    credits: engine.credits,
+  });
+  scene.showCredit('Esri');
+  scene.showCredit('Esri');
+  assert.deepEqual(engine.fake.credits, [{ html: 'Esri', onScreen: true }]);
+  scene.showCredit('OSM');
+  assert.deepEqual(engine.fake.credits, [{ html: 'OSM', onScreen: true }]);
+  scene.destroy();
+  assert.deepEqual(engine.fake.credits, []);
+  assert.deepEqual(credits, [], 'nothing on the viewer display');
+});

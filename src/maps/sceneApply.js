@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { createCesiumCredits } from '../globe/cesium/credits.js';
 import { createMapCredits } from './credits.js';
 
 /**
@@ -7,13 +8,20 @@ import { createMapCredits } from './credits.js';
  * Shared by MapSourceController and the Cesium globe engine's `maps`, so
  * both apply sources the same way. Creating it touches nothing.
  * @param {Cesium.Viewer} viewer
- * @param {{ createImageryLayer?: (provider: object) => object }} [options]
+ * @param {{
+ *   createImageryLayer?: (provider: object) => object,
+ *   credits?: import('../globe/contract.js').GlobeEngine['credits'],
+ * }} [options] `credits`: the globe engine's credits (default: the viewer's
+ *   credit display through the Cesium engine's credits).
  */
 export function createMapScene(
   viewer,
-  { createImageryLayer = (provider) => new Cesium.ImageryLayer(provider) } = {},
+  {
+    createImageryLayer = (provider) => new Cesium.ImageryLayer(provider),
+    credits: engineCredits = createCesiumCredits(viewer).credits,
+  } = {},
 ) {
-  const credits = createMapCredits(viewer);
+  const credits = createMapCredits(engineCredits);
   let layer = null;
   let provider = null;
   const scene = {

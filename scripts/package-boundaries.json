@@ -1607,6 +1607,7 @@
       "./maps/defaults"
     ],
     "modules": [
+      "src/globe/cesium/credits.js",
       "src/maps/availability.js",
       "src/maps/catalog.js",
       "src/maps/controller.js",
@@ -3086,6 +3087,7 @@
   "application-operations": {
     "exports": ["./application/operations"],
     "modules": [
+      "src/globe/cesium/credits.js",
       "src/services/groundSnap.js",
       "src/globe/contract.js",
       "src/annotations/annotationResolver.js",
