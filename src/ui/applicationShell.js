@@ -29,8 +29,9 @@ import {
   setCyberSonarControls,
 } from './cyberSonarControls.js';
 
-import * as Cesium from 'cesium';
 import * as geo from '../geo/index.js';
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
+import { cesiumHeading, cesiumRoll } from '../cameraAngles.js';
 
 import { aircraftTrackingTarget } from '../cockpitTracking.js';
 
@@ -62,12 +63,13 @@ export class StyleManager extends ShellFacade {
   /**
    * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
    * @param {object} [options] `engine`: the page's globe engine (the world
-   *   overlay host runs on it).
+   *   overlay host, camera navigation, HUD and share links run on it; defaults
+   *   to the one registered for the viewer).
    */
   constructor(
     viewer,
     {
-      engine = null,
+      engine = engineFromViewer(viewer),
       mapStackController = null,
       placeSearch,
       services,
@@ -129,11 +131,13 @@ export class StyleManager extends ShellFacade {
       readLayers: () => this._dataManager?.getAll?.() || [],
     });
     this.viewer = viewer;
+    this.engine = engine;
     this.mapStackController = mapStackController;
     this.placeSearch = placeSearch;
 
     this._navigation = new NavigationController({
       viewer,
+      engine,
       tracking: {
         flightsLayer,
         militaryFlightsLayer,
@@ -154,6 +158,7 @@ export class StyleManager extends ShellFacade {
     });
     this._shareRestoration = new ShareRestoration({
       viewer,
+      canvas: engine?.host.canvas ?? viewer?.canvas,
       navigation: this._navigation,
       syncShareState: () => this._syncShareState(),
       syncModels3d: (state) => this._syncModels3dFromLayerState(state),
@@ -302,6 +307,7 @@ export class StyleManager extends ShellFacade {
 
     this._locationNavigation = new LocationNavigation({
       viewer,
+      engine,
       placeSearch,
       navigation: this._navigation,
       readCockpit: () => this.cockpitView,
@@ -354,7 +360,8 @@ export class StyleManager extends ShellFacade {
     this._lastTrafficChipUpdateAt = 0;
 
     // Intel HUD
-    this.hud = new IntelHUD(viewer, {
+    this.hud = new IntelHUD(engine, {
+      viewer,
       placeSearch,
       summaryService: requestServices?.summary,
     });
@@ -417,13 +424,13 @@ export class StyleManager extends ShellFacade {
     });
 
     // Share Link Manager
-    this.shareLinkManager = new ShareLinkManager(viewer, {
+    this.shareLinkManager = new ShareLinkManager(engine, {
       onRestore: async (state) => {
         return this._visualSettings.restoreShareState(state);
       },
       isNavigationCurrent: (generation) =>
         generation === this._navigationGeneration,
-      cancelOwnedNavigation: () => this.viewer.camera.cancelFlight(),
+      cancelOwnedNavigation: () => this.engine.camera.cancelFlight(),
     });
     this.shareLinkManager.setPanelStateProvider(() =>
       this._buildSharePanelState(),
@@ -1322,15 +1329,17 @@ export class StyleManager extends ShellFacade {
    * @returns {{lat: number, lon: number, alt: number, heading: number, pitch: number, roll: number}|null}
    */
   getCameraState() {
-    const carto = this.viewer.camera.positionCartographic;
+    const pose = this.engine?.camera.pose();
+    const carto = pose?.cartographic;
     if (!carto) return null;
+    // Heading and roll as Cesium reports them, as captured shots always held.
     return {
       lat: geo.math.toDegrees(carto.latitude),
       lon: geo.math.toDegrees(carto.longitude),
       alt: carto.height,
-      heading: geo.math.toDegrees(this.viewer.camera.heading),
-      pitch: geo.math.toDegrees(this.viewer.camera.pitch),
-      roll: geo.math.toDegrees(this.viewer.camera.roll),
+      heading: geo.math.toDegrees(cesiumHeading(pose)),
+      pitch: geo.math.toDegrees(pose.pitch),
+      roll: geo.math.toDegrees(cesiumRoll(pose)),
     };
   }
 
@@ -1342,7 +1351,7 @@ export class StyleManager extends ShellFacade {
    */
   applyCameraState(cameraState, duration = 2.8) {
     if (!cameraState) return;
-    this.viewer.camera.flyTo({
+    this.engine.camera.flyTo({
       destination: geo.cartesian3.fromDegrees(
         cameraState.lon,
         cameraState.lat,
@@ -1354,7 +1363,7 @@ export class StyleManager extends ShellFacade {
         roll: geo.math.toRadians(cameraState.roll || 0),
       },
       duration: Math.max(0.2, duration || 0),
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+      easing: 'cubicInOut',
     });
   }
 
@@ -1466,6 +1475,7 @@ export class StyleManager extends ShellFacade {
     this._cameraOrientationControls?.destroy();
     this._cameraOrientationControls = bindCameraOrientationControls({
       viewer: this.viewer,
+      engine: this.engine,
       elements: {
         tiltButton: this._tiltMapBtn,
         northButton: this._northUpBtn,

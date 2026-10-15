@@ -1,5 +1,6 @@
-import * as Cesium from 'cesium';
 import * as geo from './geo/index.js';
+import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
+import { cesiumHeading, cesiumRoll } from './cameraAngles.js';
 import { BLOOM_INTENSITY_DEFAULT, BLOOM_SCALE_VERSION } from './bloom.js';
 import {
   migrateDetectionState,
@@ -86,11 +87,15 @@ const SHARE_STYLE_PARAM_REGISTRY = Object.freeze({
 });
 
 export class ShareLinkManager {
+  /**
+   * @param {import('./globe/contract.js').GlobeEngine | object} engine The
+   *   globe engine, or a viewer registered for one.
+   */
   constructor(
-    viewer,
+    engine,
     { onRestore, isNavigationCurrent, cancelOwnedNavigation } = {},
   ) {
-    this.viewer = viewer;
+    this.engine = engineFromViewer(engine);
     this._onRestore = onRestore; // callback: ({ style, bloom, sharpen }) => void
     this._debounceTimer = null;
     this._currentStyle = 'normal';
@@ -143,7 +148,7 @@ export class ShareLinkManager {
         : null;
 
     // Listen for camera changes
-    this._removeCameraChanged = this.viewer.camera.changed.addEventListener(
+    this._removeCameraChanged = this.engine.camera.changed.addEventListener(
       () => {
         this._scheduleUpdate();
       },
@@ -258,7 +263,7 @@ export class ShareLinkManager {
   }
 
   /**
-   * Apply a parsed state to the viewer + style manager.
+   * Apply a parsed state to the camera + style manager.
    */
   async applyState(state, { applyCamera = true, navigationToken = null } = {}) {
     if (this._destroyed || !state)
@@ -293,10 +298,10 @@ export class ShareLinkManager {
       };
       // Re-apply the final pose only while this share restoration still owns
       // navigation. A later user or voice command wins over delayed restore.
-      this.viewer.camera.flyTo({
+      this.engine.camera.flyTo({
         ...view,
         duration: 3.0,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+        easing: 'cubicInOut',
         complete: () => {
           if (
             this._destroyed ||
@@ -306,8 +311,8 @@ export class ShareLinkManager {
             releaseOwnedFlight('superseded');
             return;
           }
-          this.viewer.camera.setView(view);
-          this.viewer.scene?.requestRender?.();
+          this.engine.camera.setView(view);
+          this.engine.render.request('share-restore');
           releaseOwnedFlight('applied');
         },
         cancel: () => releaseOwnedFlight('cancelled'),
@@ -539,8 +544,8 @@ export class ShareLinkManager {
   /** Build a deterministic snapshot without mutating history. */
   _buildHashParams() {
     if (this._destroyed) return null;
-    const camera = this.viewer.camera;
-    const carto = camera.positionCartographic;
+    const pose = this.engine.camera.pose();
+    const carto = pose.cartographic;
     if (!carto) return null;
 
     const params = new URLSearchParams();
@@ -548,15 +553,12 @@ export class ShareLinkManager {
     params.set('lat', geo.math.toDegrees(carto.latitude).toFixed(4));
     params.set('lon', geo.math.toDegrees(carto.longitude).toFixed(4));
     params.set('alt', Math.round(carto.height).toString());
-    params.set(
-      'heading',
-      Math.round(geo.math.toDegrees(camera.heading)).toString(),
-    );
-    params.set(
-      'pitch',
-      Math.round(geo.math.toDegrees(camera.pitch)).toString(),
-    );
-    params.set('roll', Math.round(geo.math.toDegrees(camera.roll)).toString());
+    // Heading and roll as Cesium reports them, so `heading=360` and
+    // `roll=360` read the same on every engine (src/cameraAngles.js).
+    const degrees = (angle) => Math.round(geo.math.toDegrees(angle)).toString();
+    params.set('heading', degrees(cesiumHeading(pose)));
+    params.set('pitch', degrees(pose.pitch));
+    params.set('roll', degrees(cesiumRoll(pose)));
     params.set('style', STYLE_TO_URL[this._currentStyle] || 'normal');
     params.set('bloom', this._bloomEnabled ? '1' : '0');
     params.set('sharpen', this._sharpenEnabled ? '1' : '0');

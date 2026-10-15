@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { LocationNavigation } from './locationNavigation.js';
+import { createFakeEngine } from '../globe/testing/fakeEngine.js';
 import { LayerBindings } from './layerBindings.js';
 
 function replaceWindow(t, value) {
@@ -17,11 +18,9 @@ function location(t) {
   replaceWindow(t, { setTimeout });
   const calls = [];
   let hooks;
+  const engine = createFakeEngine({ altitude: 20000000 });
   const owner = new LocationNavigation({
-    viewer: { camera: {
-      cancelFlight() {}, lookAtTransform() {},
-      positionCartographic: { latitude: 0, longitude: 0, height: 20000000 },
-    } },
+    engine,
     services: {
       OrbitController: class { stop() { calls.push('orbit-stop'); } },
       GLOBE_VIEW: { heightM: 20000000 },

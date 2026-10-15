@@ -3,10 +3,15 @@ import { stampInitialShareGesture } from '../navigationPolicy.js';
 import { canPresentDeferredStatusNotice } from '../loadingFeedback.js';
 import { UiLifetime } from './uiLifetime.js';
 
-/** Own initial share restoration, durable layer state and restoration notices. */
+/**
+ * Own initial share restoration, durable layer state and restoration notices.
+ * `canvas` (the globe engine's) receives the first-gesture listeners; it
+ * defaults to the viewer's.
+ */
 export class ShareRestoration {
   constructor({
     viewer,
+    canvas = viewer?.canvas,
     navigation,
     syncShareState,
     syncModels3d,
@@ -16,6 +21,7 @@ export class ShareRestoration {
   }) {
     Object.assign(this, {
       viewer,
+      canvas,
       navigation,
       syncShareState,
       syncModels3d,
@@ -114,20 +120,16 @@ export class ShareRestoration {
         this.navigation._stampNavigation(options),
       );
     };
-    this.viewer?.canvas?.addEventListener(
+    this.canvas?.addEventListener(
       'pointerdown',
       this._initialShareGestureHandler,
       {
         passive: true,
       },
     );
-    this.viewer?.canvas?.addEventListener(
-      'wheel',
-      this._initialShareGestureHandler,
-      {
-        passive: true,
-      },
-    );
+    this.canvas?.addEventListener('wheel', this._initialShareGestureHandler, {
+      passive: true,
+    });
   }
   connect(dataManager) {
     this._dataManager = dataManager;
@@ -292,14 +294,11 @@ export class ShareRestoration {
       share: null,
       layers: [],
     });
-    this.viewer?.canvas?.removeEventListener(
+    this.canvas?.removeEventListener(
       'pointerdown',
       this._initialShareGestureHandler,
     );
-    this.viewer?.canvas?.removeEventListener(
-      'wheel',
-      this._initialShareGestureHandler,
-    );
+    this.canvas?.removeEventListener('wheel', this._initialShareGestureHandler);
     this._initialShareGestureHandler = null;
     this._lifetime.destroy();
   }

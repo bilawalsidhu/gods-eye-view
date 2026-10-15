@@ -21,6 +21,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { ensureGeoidReady } from './data/geoid.js';
+import { createFakeEngine } from './globe/testing/fakeEngine.js';
 
 const MGRS_STUB_URL = 'gev-test-stub:mgrs';
 registerHooks({
@@ -57,6 +58,18 @@ const SFO_ELLIPSOIDAL_M = -15;
  * is deliberately absent so `_buildDOM` bails and the readouts stay the plain
  * text sinks this test reads.
  */
+/**
+ * The HUD reads its camera through a globe engine: one standing where the
+ * viewer double's camera stands (cartographic, pitch, no view rectangle).
+ */
+function engineFor(viewer) {
+  const engine = createFakeEngine();
+  const { longitude, latitude, height } = viewer.camera.positionCartographic;
+  engine.fake.setPose({ longitude, latitude, height, heading: 0, pitch: viewer.camera.pitch, roll: 0 });
+  engine.fake.script('viewRectangle', undefined);
+  return engine;
+}
+
 function installHudEnvironment() {
   const elements = new Map(
     ['hud-alt', 'hud-summary', 'hud-mgrs', 'hud-latlon', 'hud-bottom-line', 'hud-gsd', 'hud-coll', 'hud-ona', 'hud-mode']
@@ -181,7 +194,7 @@ test('a cold tick paints both readouts uncorrected, and resolving flips both in 
   const env = installHudEnvironment();
   let hud;
   try {
-    hud = new IntelHUD(env.viewer);
+    hud = new IntelHUD(engineFor(env.viewer));
     const alt = () => env.elements.get('hud-alt').textContent;
     const summary = () => env.elements.get('hud-summary').textContent;
 
@@ -231,7 +244,7 @@ test('the corrected readouts are the MSL datum, not a coincidence of the SFO sig
   env.viewer.camera.positionCartographic.height = 100;
   let hud;
   try {
-    hud = new IntelHUD(env.viewer);
+    hud = new IntelHUD(engineFor(env.viewer));
     hud._updateCameraData(); // cold: requests the grid, paints uncorrected
     assert.match(env.elements.get('hud-alt').textContent, /^ALT: 100m/);
     await ensureGeoidReady();
@@ -243,6 +256,34 @@ test('the corrected readouts are the MSL datum, not a coincidence of the SFO sig
       `100 m ellipsoidal over London is 54 m MSL, got ${env.elements.get('hud-alt').textContent}`,
     );
     assert.match(env.elements.get('hud-summary').textContent, /\| ALT 54M \|/);
+  } finally {
+    hud?.destroy();
+    env.restore();
+  }
+});
+
+test('the HUD follows the engine camera: moveEnd repaints, the view window reads the engine, destroy unsubscribes', () => {
+  const env = installHudEnvironment();
+  const engine = engineFor(env.viewer);
+  let hud;
+  try {
+    hud = new IntelHUD(engine);
+    assert.equal(engine.camera.moveEnd.numberOfListeners, 1);
+    engine.fake.script('viewRectangle', {
+      west: (-122.5 * Math.PI) / 180,
+      south: (37.5 * Math.PI) / 180,
+      east: (-122.4 * Math.PI) / 180,
+      north: (37.6 * Math.PI) / 180,
+    });
+    const window = hud._viewWindowKm(37.55);
+    assert.ok(Math.abs(window.heightKm - 11.1) < 1e-9);
+    hud._visible = true;
+    hud._firstSummaryKicked = true; // no AI summary request from this test
+    engine.fake.emit('camera.moveEnd');
+    assert.match(env.elements.get('hud-mgrs').textContent, /^MGRS: 10S/);
+    hud.destroy();
+    hud = null;
+    assert.equal(engine.camera.moveEnd.numberOfListeners, 0);
   } finally {
     hud?.destroy();
     env.restore();

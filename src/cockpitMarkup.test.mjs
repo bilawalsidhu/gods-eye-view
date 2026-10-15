@@ -533,7 +533,7 @@ test('Reset releases Contact camera ownership through its selection-preserving r
 test('Location navigation releases immediate routes before flight and deferred routes after resolution', () => {
   const releaseStart = ui.indexOf('  _releaseFollowCamera(');
   const locationFlight = ui.indexOf('_flyWithTransition(cityChanged, flyAction)');
-  const search = ui.indexOf('searchAndFlyTo(this.viewer, query, {');
+  const search = ui.indexOf('searchAndFlyTo(this.engine, query, {');
   const voiceStart = voiceActions.indexOf('beginDeferredLocationNavigation');
 
   assert.ok(releaseStart >= 0, 'shared Location camera handoff is missing');
