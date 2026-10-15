@@ -1,0 +1,193 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createNavaraMaps } from './maps.js';
+
+function fakeView() {
+  const view = {
+    sources: [],
+    layers: [],
+    shown: [],
+    frames: 0,
+    addSource(desc) {
+      const source = {
+        id: `source-${view.sources.length}`,
+        desc,
+        delete() {
+          view.sources = view.sources.filter((entry) => entry !== source);
+          return true;
+        },
+      };
+      view.sources.push(source);
+      return source;
+    },
+    addLayer(desc) {
+      const layer = {
+        id: `layer-${view.layers.length}`,
+        desc,
+        delete() {
+          view.layers = view.layers.filter((entry) => entry !== layer);
+        },
+      };
+      view.layers.push(layer);
+      return layer;
+    },
+    attribution: {
+      add(items) {
+        view.shown.push(...items);
+      },
+      remove(items) {
+        for (const item of items)
+          view.shown = view.shown.filter(
+            (entry) => JSON.stringify(entry) !== JSON.stringify(item),
+          );
+      },
+    },
+    forceUpdate() {
+      view.frames++;
+    },
+  };
+  return view;
+}
+
+const layersOf = (view, type) =>
+  view.layers.filter((layer) => layer.desc.type === type);
+
+test('setBaseImagery builds Navara raster layers for OSM and Esri, one at a time', async () => {
+  const view = fakeView();
+  const { maps } = createNavaraMaps(view);
+  await maps.setBaseImagery({ kind: 'osm' });
+  let [layer] = layersOf(view, 'raster');
+  assert.equal(
+    view.sources[0].desc.url,
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  );
+  assert.equal(layer.desc.source, view.sources[0]);
+  assert.ok(view.shown.some((item) => /OpenStreetMap/.test(JSON.stringify(item))));
+  await maps.setBaseImagery({
+    descriptor: { id: 'esri-imagery', kind: 'esri-imagery' },
+    credit: '<a href="https://www.esri.com">Powered by Esri</a>',
+  });
+  assert.equal(layersOf(view, 'raster').length, 1);
+  assert.equal(view.sources.length, 1);
+  assert.match(view.sources[0].desc.url, /World_Imagery\/MapServer\/tile\/\{z\}\/\{y\}\/\{x\}$/);
+  assert.deepEqual(view.shown, [
+    { attributionHtml: '<a href="https://www.esri.com">Powered by Esri</a>' },
+  ]);
+  assert.ok(view.frames > 0);
+});
+
+test('the same imagery source again keeps the live layer', async () => {
+  const view = fakeView();
+  const { maps } = createNavaraMaps(view);
+  await maps.setBaseImagery({ kind: 'osm' });
+  const [layer] = view.layers;
+  await maps.setBaseImagery({ kind: 'osm' });
+  assert.deepEqual(view.layers, [layer]);
+});
+
+test('an imagery source Navara cannot build rejects and the current one stays', async () => {
+  const view = fakeView();
+  const { maps } = createNavaraMaps(view);
+  await maps.setBaseImagery({ kind: 'osm' });
+  await assert.rejects(maps.setBaseImagery({ kind: 'ion', style: 2 }), /ion/);
+  await assert.rejects(maps.setBaseImagery({ kind: 'nope' }), TypeError);
+  assert.equal(view.sources[0].desc.url, 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
+});
+
+test('setTerrain: keyless Re:Earth mesh, flat ellipsoid, and ion world terrain with a token', async () => {
+  const view = fakeView();
+  const requests = [];
+  const { maps } = createNavaraMaps(view, {
+    fetch: async (url) => {
+      requests.push(url);
+      return {
+        ok: true,
+        json: async () => ({
+          url: 'https://assets.ion.cesium.com/asset_depot/1/CesiumWorldTerrain/v1.2/',
+          accessToken: 'endpoint-token',
+        }),
+      };
+    },
+  });
+  await maps.setTerrain({ id: 'keyless', create: () => {} });
+  const [terrain] = layersOf(view, 'terrain');
+  assert.equal(
+    terrain.desc.source.desc.url,
+    'https://terrain.reearth.land/cesium-mesh/ellipsoid/{z}/{x}/{y}.terrain',
+  );
+  assert.equal(terrain.desc.source.desc.type, 'quantized-mesh');
+  await maps.setTerrain({ kind: 'ellipsoid' });
+  assert.equal(layersOf(view, 'terrain').length, 0);
+  assert.equal(view.sources.length, 0);
+  await assert.rejects(maps.setTerrain({ kind: 'world' }), /token/);
+  await maps.setTerrain({ kind: 'world', accessToken: 'ion-token' });
+  assert.equal(
+    requests[0],
+    'https://api.cesium.com/v1/assets/1/endpoint?access_token=ion-token',
+  );
+  const [world] = layersOf(view, 'terrain');
+  assert.equal(
+    world.desc.source.desc.url,
+    'https://assets.ion.cesium.com/asset_depot/1/CesiumWorldTerrain/v1.2/{z}/{x}/{y}.terrain?v=1.2.0',
+  );
+  assert.equal(world.desc.source.desc.token, 'endpoint-token');
+});
+
+test('a newer terrain request wins over an older one still resolving', async () => {
+  const view = fakeView();
+  let answer;
+  const { maps } = createNavaraMaps(view, {
+    fetch: () => new Promise((resolve) => (answer = resolve)),
+  });
+  const world = maps.setTerrain({ kind: 'world', accessToken: 't' });
+  await maps.setTerrain({ kind: 'keyless' });
+  answer({ ok: true, json: async () => ({ url: 'https://x/', accessToken: 'y' }) });
+  await world;
+  const [terrain] = layersOf(view, 'terrain');
+  assert.match(terrain.desc.source.desc.url, /reearth/);
+  assert.equal(layersOf(view, 'terrain').length, 1);
+});
+
+test('setPhotorealTiles shows Google 3D tiles with a browser key and the Google credit', async () => {
+  const view = fakeView();
+  const { maps } = createNavaraMaps(view);
+  await maps.setBaseImagery({ kind: 'osm' });
+  await maps.setPhotorealTiles({ googleApiKey: ' browser key ' });
+  const [tiles] = layersOf(view, '3d-tiles');
+  assert.equal(
+    tiles.desc.source.desc.url,
+    'https://tile.googleapis.com/v1/3dtiles/root.json?key=browser%20key',
+  );
+  assert.deepEqual(tiles.desc.model, { maxSse: 16 });
+  assert.equal(layersOf(view, 'raster').length, 0, 'base imagery removed');
+  const google = view.shown.find((item) => item.creditLayerId === tiles.id);
+  assert.ok(google?.logo, 'no Google logo');
+  assert.equal(maps.photorealActive(), true);
+  await maps.setPhotorealTiles(null);
+  assert.equal(maps.photorealActive(), false);
+  assert.equal(layersOf(view, '3d-tiles').length, 0);
+  assert.ok(!view.shown.some((item) => item.creditLayerId));
+});
+
+test('photoreal without a browser key rejects and changes nothing', async () => {
+  const view = fakeView();
+  const { maps } = createNavaraMaps(view);
+  await assert.rejects(
+    maps.setPhotorealTiles({ descriptor: { kind: 'photoreal' }, tileset: {} }),
+    /browser key/,
+  );
+  assert.equal(maps.photorealActive(), false);
+  assert.equal(view.layers.length, 0);
+});
+
+test('destroy removes every layer, source and credit it added', async () => {
+  const view = fakeView();
+  const { maps, destroy } = createNavaraMaps(view);
+  await maps.setBaseImagery({ kind: 'osm' });
+  await maps.setTerrain({ kind: 'keyless' });
+  await maps.setPhotorealTiles({ googleApiKey: 'k' });
+  destroy();
+  assert.deepEqual(view.layers, []);
+  assert.deepEqual(view.sources, []);
+  assert.deepEqual(view.shown, []);
+});
