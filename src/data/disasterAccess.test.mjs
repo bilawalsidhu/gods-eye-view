@@ -130,3 +130,75 @@ test('packet results use evidence-support language, never a safety verdict', () 
   assert.equal(packet.routes[0].support, 'supported');
   assert.equal(JSON.stringify(packet).toLowerCase().includes('safe'), false);
 });
+
+test('malformed route references cannot become fully supported', () => {
+  for (const ref of [null, undefined, ' ', false, 0, {}, []]) {
+    const result = evaluateDisasterRouteSupport(
+      { id: 'relief-bridge', segmentIds: ['bridge', ref] },
+      [segment('bridge')],
+    );
+    assert.equal(result.support, 'unknown');
+    assert.deepEqual(result.reasons, ['invalid-route-segment-refs']);
+    assert.deepEqual(result.segmentIds, ['bridge']);
+  }
+});
+
+test('a blocked segment overrides malformed route references', () => {
+  const result = evaluateDisasterRouteSupport(
+    { id: 'relief-bridge', segmentIds: [null, 'bridge'] },
+    [segment('bridge', 'blocked')],
+  );
+  assert.equal(result.support, 'unsupported');
+  assert.deepEqual(result.reasons, [
+    'invalid-route-segment-refs',
+    'blocked:bridge',
+  ]);
+});
+
+test('fully invalid reference set is unknown', () => {
+  const result = evaluateDisasterRouteSupport({
+    id: 'relief-bridge',
+    segmentIds: [null, ' '],
+  });
+  assert.equal(result.support, 'unknown');
+  assert.deepEqual(result.reasons, [
+    'route-segments-not-mapped',
+    'invalid-route-segment-refs',
+  ]);
+});
+
+test('unmapped route receipt keeps its segment identifiers immutable', () => {
+  const result = evaluateDisasterRouteSupport(
+    { id: 'relief-a', segmentIds: [] },
+    [],
+  );
+  assert.equal(Object.isFrozen(result.segmentIds), true);
+  assert.throws(() => result.segmentIds.push('invented-segment'), TypeError);
+  assert.deepEqual(result.segmentIds, []);
+});
+
+test('sparse route references cannot disappear from the support decision', () => {
+  const refs = Array(2);
+  refs[0] = 'bridge';
+  const result = evaluateDisasterRouteSupport(
+    { id: 'relief-bridge', segmentIds: refs },
+    [segment('bridge')],
+  );
+  assert.equal(result.support, 'unknown');
+  assert.deepEqual(result.reasons, ['invalid-route-segment-refs']);
+});
+
+test('valid trimmed duplicate references preserve support and input ownership', () => {
+  const refs = [' bridge ', 'bridge'];
+  const result = evaluateDisasterRouteSupport(
+    { id: 'relief-bridge', segmentIds: refs },
+    [segment('bridge')],
+  );
+  assert.equal(result.support, 'supported');
+  assert.deepEqual(result.segmentIds, ['bridge']);
+  assert.deepEqual(result.reasons, []);
+  assert.deepEqual(refs, [' bridge ', 'bridge']);
+  refs.push('later');
+  assert.deepEqual(result.segmentIds, ['bridge']);
+  assert.equal(Object.isFrozen(result.segmentIds), true);
+});

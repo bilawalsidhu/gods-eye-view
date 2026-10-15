@@ -217,3 +217,13 @@ test('a close view keeps the parent name inside its polygon when the usual label
     hole,
   );
 });
+
+test('queries can take every named site in a box instead of one per display cell', async () => {
+  const names = await loadMilitaryNames();
+  const box = { west: -2, south: 50, east: 2, north: 54 };
+  const thinned = militaryNamesInView(names, box);
+  const all = militaryNamesInView(names, box, Infinity, false);
+  assert.equal(all.count, thinned.count);
+  assert.equal(all.records.length, all.count);
+  assert.ok(all.records.length > thinned.records.length);
+});

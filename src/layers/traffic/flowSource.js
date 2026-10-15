@@ -25,21 +25,31 @@ export function createFlowTileSource({
     maxTiles: 16,
   });
   let partial = false;
+  /**
+   * Flow segments for bounds, with whether any covering tile failed to load
+   * for this request.
+   */
+  async function fetchFlowDetail(bounds, { signal, zoom = 12 } = {}) {
+    const result = await tiles.fetchBounds(bounds, {
+      zoom,
+      signal,
+      tiles: bounds.coverage?.coarse,
+    });
+    partial = result.partial;
+    const segments = bounds.coverage
+      ? result.tiles.flat()
+      : result.tiles.flat().flatMap((segment) =>
+          clipTileLine(segment.coords, bounds).map((coords) => ({
+            ...segment,
+            coords,
+          })),
+        );
+    return { segments, partial: result.partial === true };
+  }
   return {
-    async fetchFlowForBounds(bounds, { signal, zoom = 12 } = {}) {
-      const result = await tiles.fetchBounds(bounds, {
-        zoom,
-        signal,
-        tiles: bounds.coverage?.coarse,
-      });
-      partial = result.partial;
-      if (bounds.coverage) return result.tiles.flat();
-      return result.tiles.flat().flatMap((segment) =>
-        clipTileLine(segment.coords, bounds).map((coords) => ({
-          ...segment,
-          coords,
-        })),
-      );
+    fetchFlowDetail,
+    async fetchFlowForBounds(bounds, options) {
+      return (await fetchFlowDetail(bounds, options)).segments;
     },
     getFlowSessionStats: () => ({ ...tiles.getStats(), partial }),
     resetFlowTileCache: () => tiles.clear(),

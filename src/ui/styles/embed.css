@@ -1,0 +1,14 @@
+/* Embed mode (?embed=1): the globe alone, on top of clean view. Provider
+   attribution stays visible. */
+body.ui-embed #clean-view-exit,
+body.ui-embed #intel-hud,
+body.ui-embed #key-setup-chip,
+body.ui-embed #key-setup,
+body.ui-embed #first-run-launcher,
+body.ui-embed #command-dock,
+body.ui-embed #left-panel-stack,
+body.ui-embed #right-context-rail,
+body.ui-embed #world-overlay-actions,
+body.ui-embed #view-switcher {
+  display: none !important;
+}

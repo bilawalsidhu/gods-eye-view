@@ -5,6 +5,15 @@ import {
 } from '../../data/militaryAwarenessEngine.js';
 import { AWARENESS_PAGE_SIZE, AWARENESS_PAGE_ROTATE_MS } from './policy.js';
 
+/** Format a cohort total without presenting a retained cap as exact. */
+export function formatAwarenessCount(summary = {}) {
+  if (!Number.isFinite(summary.count)) return '?';
+  const count = summary.count.toLocaleString('en-US');
+  return summary.complete === false || summary.truncated === true
+    ? `At least ${count}`
+    : count;
+}
+
 export function createPanel({ state: layerState, services, parts, source }) {
   function ensurePanel() {
     if (layerState.panel) return layerState.panel;
@@ -61,7 +70,7 @@ export function createPanel({ state: layerState, services, parts, source }) {
 
   function rowHtml(cohort) {
     const summary = cohort.summary;
-    const count = summary.count === null ? '?' : String(summary.count);
+    const count = formatAwarenessCount(summary);
     const page = layerState.cohortPages.get(cohort.id) || 0;
     const nearest = summary.nearest
       .slice(page, page + AWARENESS_PAGE_SIZE)

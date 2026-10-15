@@ -1,3 +1,4 @@
+import { resolveCatalogSources } from './sourceComposition.js';
 import { createWeatherClock } from '../layers/weather/clock.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
 import { createCyclonesLayer } from '../layers/cyclones/index.js';
@@ -23,39 +24,15 @@ import { createApplicationLocalAdsb } from './layers/localAdsb.js';
 import { createApplicationAwareness } from './layers/militaryAwareness.js';
 import { createApplicationFirms } from './layers/firms.js';
 import { createApplicationEarthquakes } from './layers/earthquakes.js';
+import { createApplicationAirQuality } from './layers/airQuality.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
+import { createApplicationGnssIntegrity } from './layers/gnss.js';
 import { createApplicationCables } from './layers/submarineCables.js';
+import { createApplicationStreetLevel } from './layers/streetLevel.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
 import { createBhoteKoshiLocatorLayer } from '../data/bhoteKoshiLocator.js';
-
-const SOURCE_METHODS = Object.freeze({
-  flights: ['getSnapshot'],
-  military: ['getSnapshot'],
-  vessels: ['getSnapshot'],
-  cctv: ['getCatalog', 'getHealth', 'getFrameUrl', 'getMediaUrl'],
-  radio: ['getDirectory', 'recordClick'],
-  traffic: [
-    'requestRoads',
-    'getStatus',
-    'fetchFlowForBounds',
-    'getFlowSessionStats',
-    'resetFlowTileCache',
-  ],
-  bikeshare: ['getStations'],
-  installations: ['getMappedSites', 'searchNearby'],
-  satellites: ['readGroup'],
-  launches: ['getLaunches', 'getActiveTle'],
-  alpr: ['fetch'],
-  firms: ['getSnapshot'],
-  wind: ['getSnapshot'],
-  weather: ['getSnapshot'],
-  cyclones: ['getSnapshot'],
-  earthquakes: ['getSnapshot'],
-  'fire-perimeters': ['getSnapshot'],
-  cables: ['fetch'],
-});
 
 /**
  * Hardware-local layers are registered like any other but never enter share
@@ -83,6 +60,7 @@ export function createApplicationCatalog({
   vesselOptions,
   resolveAsset,
   nepalBoundaryResolver,
+  streetLevelProviders,
 }) {
   if (!signal?.addEventListener)
     throw new TypeError('An application lifetime signal is required');
@@ -90,12 +68,8 @@ export function createApplicationCatalog({
   if (!surface?.groundFloor || !surface?.terrain)
     throw new TypeError('Application surface services are required');
 
-  for (const [name, methods] of Object.entries(SOURCE_METHODS)) {
-    if (
-      methods.some((method) => typeof sources?.[name]?.[method] !== 'function')
-    )
-      throw new TypeError(`Invalid catalog source: ${name}`);
-  }
+  const sourceComposition = resolveCatalogSources(sources);
+  sources = sourceComposition.sources;
   const militaryRegistry = createMilitaryRegistry();
   const weatherClock = createWeatherClock();
   const dispose = () => {
@@ -105,7 +79,8 @@ export function createApplicationCatalog({
   };
   signal.addEventListener('abort', dispose, { once: true });
   try {
-    militaryRegistry.configureSource(sources.military, { signal });
+    if (sourceComposition.isConfigured('military'))
+      militaryRegistry.configureSource(sources.military, { signal });
     const flights = createApplicationFlights({
       surface,
       source: sources.flights,
@@ -144,10 +119,19 @@ export function createApplicationCatalog({
           ...(resolveAsset ? { resolveAsset } : {}),
         }),
         createApplicationEarthquakes({ source: sources.earthquakes }),
+        createApplicationAirQuality({ source: sources['air-quality'] }),
         createApplicationFirePerimeters({
           source: sources['fire-perimeters'],
         }),
+        createApplicationGnssIntegrity({
+          source: sources['gnss-integrity'],
+        }),
         createApplicationAlpr({ surface, source: sources.alpr }),
+        createApplicationStreetLevel({
+          surface,
+          sources: { mapillary: sources.mapillary },
+          providers: streetLevelProviders,
+        }),
         satellites,
         createApplicationLaunches({ source: sources.launches, satellites }),
         createApplicationTraffic({ source: sources.traffic, surface }),
@@ -155,8 +139,8 @@ export function createApplicationCatalog({
         createApplicationRadio({ surface, source: sources.radio }),
         createApplicationTransit({ surface, source: sources.transit }),
         createApplicationBikeshare({ source: sources.bikeshare }),
-        createApplicationDirections(),
-        createApplicationRecentImagery(),
+        createApplicationDirections({ source: sources.directions }),
+        createApplicationRecentImagery({ source: sources['recent-imagery'] }),
         vessels,
         installations,
         createApplicationAwareness({
@@ -197,6 +181,9 @@ export function createApplicationCatalog({
     );
     return Object.freeze({
       ...catalog,
+      getSourceAvailability: sourceComposition.createAvailabilityLookup(
+        catalog.layers,
+      ),
       militaryRegistry,
       surface,
       weatherClock,

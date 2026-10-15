@@ -82,7 +82,17 @@ export function normalizeDisasterAccessSegment(input) {
  */
 export function evaluateDisasterRouteSupport(route, accessSegments = []) {
   const routeId = nonEmptyText(route?.id) || 'candidate-route';
-  const segmentIds = uniqueIds(route?.segmentIds);
+  const routeRefs = Array.isArray(route?.segmentIds) ? route.segmentIds : [];
+  const segmentIds = uniqueIds(routeRefs);
+  // Dropping malformed references must not create a fully supported route.
+  // Iteration includes sparse entries; a known blockage still takes precedence.
+  let invalidRouteRefs = false;
+  for (const id of routeRefs) {
+    if (!nonEmptyText(id)) {
+      invalidRouteRefs = true;
+      break;
+    }
+  }
   const normalizedSegments = accessSegments
     .map(normalizeDisasterAccessSegment)
     .filter(Boolean);
@@ -94,14 +104,18 @@ export function evaluateDisasterRouteSupport(route, accessSegments = []) {
     return Object.freeze({
       routeId,
       support: 'unknown',
-      segmentIds,
-      reasons: Object.freeze(['route-segments-not-mapped']),
+      segmentIds: Object.freeze(segmentIds),
+      reasons: Object.freeze(
+        invalidRouteRefs
+          ? ['route-segments-not-mapped', 'invalid-route-segment-refs']
+          : ['route-segments-not-mapped'],
+      ),
     });
   }
 
-  const reasons = [];
+  const reasons = invalidRouteRefs ? ['invalid-route-segment-refs'] : [];
   let blocked = false;
-  let unknown = false;
+  let unknown = invalidRouteRefs;
   let degraded = false;
 
   for (const segmentId of segmentIds) {

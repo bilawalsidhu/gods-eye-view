@@ -3,11 +3,11 @@ import { readCappedResponseText } from '../common/http.js';
 /**
  * Vite plugin: aircraft track-history backfill proxies (PRD WS-F F1/F2).
  *
- * /api/opensky-track?icao24=<hex6> — OpenSky GET /tracks/all (experimental;
+ * /api/flights/track?icao24=<hex6> — OpenSky GET /tracks/all (experimental;
  *   own credit bucket, 4 credits per call on the free tier). OAuth via the
  *   shared coalesced token. 60s per-icao cache; 404/429 forwarded so the
  *   client can fall back to its accumulated trail silently.
- * /api/adsblol/trace?hex=<hex> — adsb.lol tar1090 readsb trace
+ * /api/military/track?hex=<hex> — adsb.lol tar1090 readsb trace
  *   (undocumented but live; no browser CORS, hence this proxy). Up to ~24h
  *   of real history per aircraft. Treat as best-effort; data is ODbL —
  *   credit "adsb.lol (ODbL)" in the UI.
@@ -65,7 +65,7 @@ export function trackBackfillProxies() {
   }
 
   function install(middlewares) {
-    middlewares.use('/api/opensky-track', async (req, res) => {
+    middlewares.use('/api/flights/track', async (req, res) => {
       try {
         const incoming = new URL(req.url || '', 'http://localhost');
         const icao24 = String(incoming.searchParams.get('icao24') || '')
@@ -93,7 +93,7 @@ export function trackBackfillProxies() {
       }
     });
 
-    middlewares.use('/api/adsblol/trace', async (req, res) => {
+    middlewares.use('/api/military/track', async (req, res) => {
       try {
         const incoming = new URL(req.url || '', 'http://localhost');
         const hex = String(incoming.searchParams.get('hex') || '')

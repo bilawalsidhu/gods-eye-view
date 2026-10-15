@@ -34,8 +34,8 @@ function assertClaimsBefore(block, mutation, label) {
 function makeManager(hash = '') {
   globalThis.window = { location: { hash, href: `http://localhost/${hash}` } };
   globalThis.history = {
-    replaceState(_state, _title, nextHash) {
-      window.location.hash = nextHash;
+    replaceState(_state, _title, next) {
+      window.location.hash = new URL(next, window.location.href).hash;
     },
   };
   const viewer = {
@@ -181,6 +181,24 @@ test('a collapsed Recent Imagery panel survives the share-link round trip beside
   assert.deepEqual(older.panelState, { specs: [
     { id: 'cctv-panel', collapsed: true, pinned: null },
     { id: 'global-context-panel', collapsed: false, pinned: null },
+  ] });
+});
+
+test('a collapsed Street Level panel survives the share-link round trip', () => {
+  const manager = makeManager();
+  manager.setPanelStateProvider(() => ({ specs: [
+    { id: 'cctv-panel', collapsed: false },
+    { id: 'street-level-panel', collapsed: true },
+  ] }));
+  clearTimeout(manager._debounceTimer);
+  manager._updateHash();
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  assert.equal(params.get('ui'), 'v.c.0_t.c.1');
+  const restored = makeManager(`#v=2&lat=10&lon=20&ui=${params.get('ui')}`)
+    .parseInitialHash();
+  assert.deepEqual(restored.panelState, { specs: [
+    { id: 'cctv-panel', collapsed: false, pinned: null },
+    { id: 'street-level-panel', collapsed: true, pinned: null },
   ] });
 });
 

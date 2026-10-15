@@ -162,3 +162,40 @@ test('detail-window image URLs carry the bbox and omit the default detail size',
     /size/,
   );
 });
+
+test('image frames are read through the bounded image route', async () => {
+  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47]);
+  const requested = [];
+  const source = createWeatherSource({
+    fetchImpl: async (url, init) => {
+      requested.push({ url, redirect: init.redirect });
+      return new Response(png, { headers: { 'Content-Type': 'image/PNG' } });
+    },
+  });
+  const frame = await source.getImage({
+    product: 'radar',
+    time,
+    size: { width: 1024, height: 512 },
+    bbox: { west: -100, south: 30, east: -96, north: 32 },
+  });
+  assert.equal(frame.contentType, 'image/png');
+  assert.deepEqual([...frame.bytes], [...png]);
+  assert.deepEqual(requested, [
+    {
+      url: weatherImageUrl(
+        'radar',
+        time,
+        { width: 1024, height: 512 },
+        { west: -100, south: 30, east: -96, north: 32 },
+      ),
+      redirect: 'error',
+    },
+  ]);
+  const failing = createWeatherSource({
+    fetchImpl: async () => new Response(null, { status: 409 }),
+  });
+  await assert.rejects(
+    failing.getImage({ product: 'radar', time }),
+    /Weather image HTTP 409/,
+  );
+});

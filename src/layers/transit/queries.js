@@ -176,6 +176,38 @@ export function createQueries({ state, parts }) {
       return collectDetectableVehicles(options);
     },
 
+    /**
+     * Snapshot loaded transit vehicles (last reported fix) as plain JSON-safe records for the analyst
+     * query engine. On demand only (once per spoken query); [] while the
+     * layer is off.
+     * @param {number} [maxCount=Infinity] Most records to return.
+     * @returns {Array<Object>} {id, label, routeId, mode, lat, lon, speedMps, courseDeg, status, occupancy}.
+     */
+    getAnalystRecords(maxCount = Infinity) {
+      if (!state._enabled) return [];
+      const num = (v) => (Number.isFinite(v) ? v : null);
+      const result = [];
+      for (const entry of state._vehicles.values()) {
+        if (result.length >= maxCount) break;
+        const record = entry.record || {};
+        if (!Number.isFinite(record.lat) || !Number.isFinite(record.lon))
+          continue;
+        result.push({
+          id: record.label || record.id || entry.key,
+          label: record.label || null,
+          routeId: record.routeId || null,
+          mode: entry.mode || null,
+          lat: record.lat,
+          lon: record.lon,
+          speedMps: num(record.speedMps),
+          courseDeg: num(entry.courseDeg ?? record.bearing),
+          status: record.status || null,
+          occupancy: record.occupancy || null,
+        });
+      }
+      return result;
+    },
+
     getStats() {
       const active = [...state._activeFeeds.values()];
       const statuses = active.map((feed) =>
