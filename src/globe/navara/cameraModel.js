@@ -389,6 +389,11 @@ export function createCameraModel({
     camera,
     sync,
     afterFrame,
+    /**
+     * Ends a running flight (its `cancel` runs) without camera.commanded:
+     * for the user's own gestures, which are not a new camera owner.
+     */
+    stopFlight: () => cancelCurrentFlight(),
     /** The current camera for projections: pose, vertical fov and CSS size. */
     view,
     worldToWindow: (position, result) =>

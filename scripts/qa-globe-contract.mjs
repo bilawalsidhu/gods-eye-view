@@ -741,6 +741,69 @@ async function runNavara(page, url, consoleErrors) {
     );
 
     await check(
+      'navara: render governor holds keep frames coming; releasing the last returns to idle',
+      async () => {
+        const governor = await import('/src/renderGovernor.js');
+        governor.installRenderGovernor(engine);
+        let frames = 0;
+        const remove = engine.frames.postRender.addEventListener(
+          () => frames++,
+        );
+        try {
+          governor.holdContinuousRender('qa-a');
+          governor.holdContinuousRender('qa-b');
+          governor.releaseContinuousRender('qa-a');
+          frames = 0;
+          await sleep(1000);
+          ensure(frames > 10, `only ${frames} frames in 1 s held, no input`);
+          governor.releaseContinuousRender('qa-b');
+          for (let waited = 0; waited < 15000; waited += 500) {
+            frames = 0;
+            await sleep(1500);
+            if (frames === 0) break;
+          }
+          ensure(frames === 0, `${frames} frames in 1.5 s after release`);
+          ensure(!engine.render.isContinuous(), 'still continuous');
+        } finally {
+          remove();
+          governor.releaseContinuousRender('qa-a');
+          governor.releaseContinuousRender('qa-b');
+          governor.uninstallRenderGovernor(engine);
+        }
+      },
+    );
+
+    await check(
+      'navara: a pointer gesture on the canvas raises no camera.commanded',
+      async () => {
+        let commanded = 0;
+        const remove = engine.camera.commanded.addEventListener(
+          () => commanded++,
+        );
+        try {
+          const canvas = engine.host.canvas;
+          const rect = canvas.getBoundingClientRect();
+          const options = {
+            bubbles: true,
+            cancelable: true,
+            clientX: rect.left + 100,
+            clientY: rect.top + 100,
+            button: 0,
+            buttons: 1,
+          };
+          canvas.dispatchEvent(new PointerEvent('pointerdown', options));
+          canvas.dispatchEvent(
+            new PointerEvent('pointerup', { ...options, buttons: 0 }),
+          );
+          await settle();
+          ensure(commanded === 0, `a gesture raised commanded ${commanded}x`);
+        } finally {
+          remove();
+        }
+      },
+    );
+
+    await check(
       'navara: maps — OSM, keyless terrain under Google 3D tiles, credits on screen; surface height at JFK (S2)',
       async () => {
         ensure(qa.googleApiKey, 'the dev server has no Google browser key');

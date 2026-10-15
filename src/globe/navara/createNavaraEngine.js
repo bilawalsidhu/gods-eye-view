@@ -120,7 +120,8 @@ export function createNavaraEngine(
     view.on(name, handler);
 
   const input = createNavaraInput(view, {
-    onCameraInput: () => model.camera.cancelFlight(),
+    // A gesture is the user, not a new camera owner: no camera.commanded.
+    onCameraInput: () => model.stopFlight(),
   });
   const credits = createNavaraCredits(view);
   const maps = createNavaraMaps(view, fetch ? { fetch } : {});
