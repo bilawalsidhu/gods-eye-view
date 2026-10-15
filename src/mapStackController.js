@@ -9,7 +9,13 @@ export class MapStackController extends MapSourceController {
   constructor(viewer, options = {}) {
     const googleApiKey =
       typeof window !== 'undefined' ? window.__GOOGLE_MAPS_API_KEY__ : '';
-    const registry = createDefaultMapSources({ ...options, googleApiKey });
+    // Sources for the page's engine: Navara builds its own from the
+    // descriptions (src/maps/defaultSources.js).
+    const registry = createDefaultMapSources({
+      ...options,
+      googleApiKey,
+      engineKind: options.engine?.kind === 'navara' ? 'navara' : 'cesium',
+    });
     super(viewer, {
       registry,
       initialStack: options.googleTileset
