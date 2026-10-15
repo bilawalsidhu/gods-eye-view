@@ -144,18 +144,27 @@ const SAMPLE_WINDOW_MS = 250;
 function _tilesReady(viewer) {
   const prims = viewer?.scene?.primitives;
   if (!prims) return false;
-  for (let i = 0; i < prims.length; i++) {
+  const tileset = firstVisibleTileset(prims);
+  return tileset ? tileset.tilesLoaded === true : true;
+}
+
+/**
+ * The first shown primitive that reports a boolean `tilesLoaded` (a 3D
+ * tileset, duck-typed), or null.
+ * @param {{ length: number, get: (index: number) => any }} primitives
+ * @returns {object | null}
+ */
+export function firstVisibleTileset(primitives) {
+  for (let i = 0; i < primitives.length; i++) {
     let p = null;
     try {
-      p = prims.get(i);
+      p = primitives.get(i);
     } catch {
       continue;
     }
-    if (p && p.show !== false && typeof p.tilesLoaded === 'boolean') {
-      return p.tilesLoaded === true;
-    }
+    if (p && p.show !== false && typeof p.tilesLoaded === 'boolean') return p;
   }
-  return true;
+  return null;
 }
 
 /**

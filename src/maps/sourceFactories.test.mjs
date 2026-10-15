@@ -1,8 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { createIonImagery } from './imagery.js';
-import { createWorldTerrain, createKeylessTerrain } from './terrain.js';
+import {
+  createEsriImagery,
+  createIonImagery,
+  createOsmImagery,
+  imageryFactoryFor,
+} from './imagery.js';
+import {
+  applyTerrain,
+  createWorldTerrain,
+  createKeylessTerrain,
+  terrainSourceFor,
+} from './terrain.js';
 import { createDefaultMapSources } from './defaultSources.js';
 
 test('Esri uses Re:Earth without keys and preserves ion terrain when configured', async () => {
@@ -160,4 +170,49 @@ test('both Google 3D routes keep tiles drawing while draped imagery loads', asyn
   assert.equal(calls[1][0].accessToken, 'token');
   assert.equal(calls[1][1].asynchronouslyLoadImagery, true);
   assert.equal(calls[1][1].enableCollision, true);
+});
+
+test('imageryFactoryFor picks the factory a stack descriptor names', async () => {
+  assert.equal(imageryFactoryFor({ id: 'osm', kind: 'osm' }), createOsmImagery);
+  assert.equal(
+    imageryFactoryFor({ id: 'esri-imagery', kind: 'esri-imagery' }),
+    createEsriImagery,
+  );
+  const original = Cesium.IonImageryProvider.fromAssetId;
+  try {
+    Cesium.IonImageryProvider.fromAssetId = async (style, options) => ({
+      style,
+      token: options.accessToken,
+    });
+    const ion = imageryFactoryFor(
+      { id: 'bing-aerial', kind: 'ion', style: 2 },
+      'ion-token',
+    );
+    assert.deepEqual(await ion(), { style: 2, token: 'ion-token' });
+  } finally {
+    Cesium.IonImageryProvider.fromAssetId = original;
+  }
+});
+
+test('terrainSourceFor chooses world terrain only with an ion token', () => {
+  assert.deepEqual(terrainSourceFor(''), {
+    id: 'keyless',
+    create: createKeylessTerrain,
+  });
+  const world = terrainSourceFor(' token ');
+  assert.equal(world.id, 'world');
+  assert.equal(typeof world.create, 'function');
+});
+
+test('applyTerrain installs a terrain object or a provider', () => {
+  const calls = [];
+  const viewer = {
+    terrainProvider: null,
+    scene: { setTerrain: (terrain) => calls.push(terrain) },
+  };
+  applyTerrain(viewer, { provider: 'provider' });
+  assert.equal(viewer.terrainProvider, 'provider');
+  applyTerrain(viewer, { terrain: 'terrain' });
+  assert.deepEqual(calls, ['terrain']);
+  assert.equal(viewer.terrainProvider, 'provider');
 });

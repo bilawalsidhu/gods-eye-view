@@ -1,6 +1,7 @@
 import { indexMapSources } from './registry.js';
 import * as Cesium from 'cesium';
 import { createMapCredits } from './credits.js';
+import { applyTerrain } from './terrain.js';
 import { acquireImageryComparison } from './imageryComparison.js';
 
 /**
@@ -290,8 +291,7 @@ export class MapSourceController {
         () => terrain.create({ signal: this._abort.signal }),
       );
       if (gen !== this._switchGen) return;
-      if (result.terrain) this.viewer.scene.setTerrain(result.terrain);
-      else this.viewer.terrainProvider = result.provider;
+      applyTerrain(this.viewer, result);
       this._terrainMode = terrain.id;
     }
     return resolution;

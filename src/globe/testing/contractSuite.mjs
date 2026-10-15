@@ -233,7 +233,16 @@ export function createContractSuite(
     [
       'camera events: changed, moveStart and moveEnd follow a move',
       async () => {
-        await nadirView();
+        // moveStart marks a move from rest: let the nadir move end first
+        // (Cesium raises moveEnd only after cameraEventWaitTime, 500 ms).
+        let rested = 0;
+        const removeRest = camera.moveEnd.addEventListener(() => rested++);
+        try {
+          await nadirView();
+          await until(() => rested > 0, 'moveEnd after the nadir view');
+        } finally {
+          removeRest();
+        }
         const previous = camera.percentageChanged;
         const seen = { changed: 0, moveStart: 0, moveEnd: 0 };
         const removers = Object.keys(seen).map((name) =>
