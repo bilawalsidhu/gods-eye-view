@@ -251,6 +251,164 @@ default "normal" style, whose radial vignette darkens the corners on the
 left; Navara (right) has no post-process stages. Navara also shows its
 attribution card.
 
+## Navara look
+
+Navara mode now opens with a `cinematic` look. `?look=photoreal` gives
+Navara's own photoreal scene (the previous default) and `?look=minimal`
+gives the bench scene. The plan is the pure `navaraScenePlan` in
+[`viewOptions.js`](../../src/globe/navara/viewOptions.js), and
+[`look.js`](../../src/globe/navara/look.js) builds it and keeps it
+current. Cesium mode is unchanged: its main chunk is byte-identical to the
+one built from `6ebd3a63` once chunk hashes are masked, at 2,849,217 B.
+
+**What the cinematic look adds to photoreal:**
+
+- **Volumetric clouds** (`clouds`, quality `low`, coverage 0.2), lit by
+  the real sun. They are the biggest visible gain: at golden hour they turn
+  orange against the sky. Both cumulus layers start at 1,500 m instead of
+  750 and 1,000 m, so at the city views (Austin's 600 m, Manhattan's
+  900 m) they fill the sky without hiding streets. They are a procedural
+  backdrop, not weather data, so they show only where they cannot get in
+  the way:
+  - they hide above 4 km (and show again below 3.5 km), where they would
+    lie between the camera and the map;
+  - they hide over ground above 1,000 m in view (and show again below
+    800 m), where they would cut into the terrain as dark puffs (the Grand
+    Canyon). The ground is the depth a quarter of the way up from the
+    bottom of the last frame, read when the camera comes to rest and once
+    more when the tiles have loaded. Each read stalls for 1.5 to 4 ms, so
+    none run while the camera moves.
+
+  Switching the clouds costs no shader compile. While they are hidden,
+  `look.js` parks the last cloud image they handed the aerial perspective
+  (otherwise it keeps compositing it as grey ghosts). They cast no shadows
+  on the ground, because dark patches over the map read as features. They
+  do not animate: an idle view still draws 0 frames.
+- **ACES filmic tone mapping** in place of AgX. On Google tiles, AgX
+  washes the baked colours out. ACES restores contrast and saturation (see
+  Manhattan and Austin) without relighting the tiles.
+- **A night side from space.** Above 1,500 km, with the camera at rest,
+  the aerial perspective lights the globe from the atmosphere (`irradiance`
+  with depth-reconstructed normals and `albedoScale` 2). The terminator,
+  the dusk glow and the dark hemisphere become visible, while Cesium and
+  photoreal show a fully sunlit Earth. The lighting switches back off below
+  1,000 km, before the tiles would show relit.
+- **Brighter stars** (intensity 40, 2 px), so a starfield shows next to a
+  sunlit Earth.
+- **No sun shadow maps** (`castShadow: false`). The tiles carry baked
+  light, so the maps would darken nothing.
+- **Lens flare and SMAA**, as in photoreal. A mobile-optimized view drops
+  the clouds and the lens flare and uses FXAA.
+
+**The sun follows the wall clock.** The HUD's SUN elevation uses
+`new Date()`. Navara's atmosphere took its date once, when the module
+loaded, and never moved, so it drifted from the HUD over a long session.
+On every frame Navara draws anyway, `look.js` now resets the atmosphere's
+date once it is more than a minute off. An idle view stays idle.
+
+**What was tried and rejected, judged on Google photoreal tiles:**
+
+- **Deferred lighting up close** (`deferredLighting`, `shadow`,
+  `specular`). The tiles' light is baked, so relighting them double-shades
+  them: Manhattan turns grey and dark, and the sun's shadows and specular
+  add nothing visible on top of the baked shadows. It is used only from
+  space, where the imagery is flat.
+- **SSAO.** It greys facades and darkens the baked ambient occlusion a
+  second time.
+- **SSR.** It reads the G-buffer normals, which are zero for Google tiles
+  (see the limits below), and the tiles mark no water, so it has nothing
+  to reflect from. Not measured further.
+- **Depth of field and rain drops.** They hurt legibility and are
+  gimmicks for a map.
+- **Colour grading LUT.** Its default LUT is fetched from
+  raw.githubusercontent.com (an outside host, blocked by gev's sources
+  policy), and ACES already does the grading.
+- **Fog light.** It only matters with point lights, and gev has none.
+- **Exposure.** `view.toneMappingExposure` has no visible effect through
+  the postprocessing tone-mapping pass, so the night side cannot be dimmed
+  that way.
+
+**Gallery** (`node scripts/qa-navara-look.mjs`, headless Chrome with
+`--use-angle=metal`, 1280×800, each engine's own canvas). Each row shows
+Cesium, Navara photoreal and Navara cinematic at the same pose and the same
+sun (the page clock is shifted to the scene's time):
+
+![Lower Manhattan](navara-look/manhattan.jpg)
+![Austin, the startup view](navara-look/austin.jpg)
+![Rio de Janeiro, Sugarloaf](navara-look/coast.jpg)
+![Grand Canyon](navara-look/mountains.jpg)
+![The globe from 8,000 km](navara-look/globe.jpg)
+![San Francisco at golden hour](navara-look/golden-hour.jpg)
+![Manhattan at dusk](navara-look/dusk.jpg)
+
+**Cost.** Measured with `qa-engine-bench.mjs --server=preview` (flags as
+under Measurements: Austin to Paris at 20 km, 10 s): 3 runs per look, after
+a 90 s cool-down each, per-metric medians:
+
+| Navara look | Flight p50 (ms) | Flight p95 (ms) | p95 per run (ms) | Longest frame (ms) | Frames per second |
+|---|---|---|---|---|---|
+| photoreal | 6.9 | 12.1 | 11.9–12.6 | 400.5 | 143.3 |
+| cinematic | 6.8 | 12.3 | 12.0–12.4 | 304.7 | 147.2 |
+
+- **The flight:** it runs at 20 km and above, where the clouds are hidden,
+  so cinematic costs what photoreal costs. Both meet the 16.7 ms p95.
+- **An earlier series** on a busier machine measured both looks about
+  2 ms higher at p95 (photoreal 14.0, cinematic 14.2).
+- **Clouds shown:** before the clouds hid above 4 km, the same flight
+  measured cinematic at p50 11.1 ms and p95 17.8 ms (16.1–18.2 ms over two
+  series), over the budget. Hiding them from above is a legibility rule
+  that also keeps flights within the budget.
+- **Clouds where they show:** at a still view over Austin, 3 km up and
+  looking at the horizon, they add about 3.3 ms per frame (p50 11.2 against
+  7.9 ms without them, dev server). At the startup view (600 m) they add
+  about 1.2 ms. Quality `low` saves about 1 ms against `medium`. Neither
+  the cloud resolution scale nor cloud haze, light shafts or shadows
+  changed the cost measurably.
+- **The rest of the look costs nothing measurable:** without clouds,
+  cinematic and photoreal both show p50 7.9–8.2 ms at that view.
+- **Noise:** these are headless numbers on a shared machine. Back-to-back
+  runs without a cool-down drifted by up to 6 ms, so compare only runs
+  taken under the same conditions.
+
+**Idle and QA:** with the tiles loaded, Navara draws 0 frames after 2 s
+(`qa-engine-shell`), at the startup view and at rest at 8,000 km with the
+globe lit. The shell's pixel checks ("map is drawn") pass unchanged under
+the new look.
+
+**Known limits of the look:**
+
+- **The tiles keep their daylight at dusk and at night.** The sky darkens
+  but the city stays lit (Manhattan at dusk). Relighting them is the
+  rejected deferred lighting.
+- **Switching the night side on or off costs one frame of about 0.6–0.8 s**
+  (headless): the aerial-perspective shader recompiles. To keep this out
+  of flights, the lighting switches on only when the camera is at rest. A
+  flight from city to city through space (the bench flight peaks at
+  2,300 km) never switches. Coming down from space switches once, at
+  1,000 km.
+- **The clouds are procedural,** not weather data. They are a backdrop,
+  not a forecast. At low quality they show a fine grain in still frames.
+  Between two rests they keep the last ground decision, so a low flight
+  from the coast into the mountains hides them only once it stops.
+- **`surface.sampleHeight` returned `undefined` in the app's Navara mode**
+  at the Austin startup view, with photoreal as well as cinematic, while
+  the contract page's JFK check passes. So the cloud rule reads depth
+  instead. The cause was not investigated. One lead is the "multiple
+  instances of Three.js" warning: the geometry-retaining patch may miss the
+  app's `ModelMesh`. If so, the ground floor is affected too. Worth a
+  follow-up.
+- **Navara's G-buffer normals are zero for Google tiles and the globe,**
+  which turns atmosphere lighting black. The look reconstructs normals
+  from depth (`useNormalBuffer: false`).
+
+**Upstream asks for Navara:**
+
+- G-buffer normals for 3D tiles;
+- an exposure that the tone-mapping pass honours;
+- a way to switch `irradiance` without recompiling, or a precompile
+  option;
+- a sun date that can follow the clock.
+
 ## QA
 
 Final runs at the last commit, headless on free ports (never 4185):
@@ -263,6 +421,17 @@ Final runs at the last commit, headless on free ports (never 4185):
 | `qa-globe-contract --engine=navara` | 66/66 (56 contract, 10 engine) |
 | `qa-engine-shell`, dev server | Cesium 22/22, Navara 24/24, cross-engine 3/3 |
 | `qa-engine-shell`, `vite preview` | Cesium 22/22, Navara 24/24, cross-engine 3/3 |
+
+After the Navara look (see that section):
+
+- `npm test`: 6814 tests, 6813 pass, 1 skip;
+- `check:boundaries`, `format:check` (1,413 files) and `build`: clean;
+- `qa-globe-contract --engine=navara`: 66/66;
+- `qa-engine-shell --engine=both` on the dev server: Cesium 22/22, Navara
+  24/24, cross-engine 3/3.
+
+The Cesium contract run and the shell run on `vite preview` were not
+repeated.
 
 What `qa-engine-shell` measured, on dev (preview gave the same verdicts):
 
