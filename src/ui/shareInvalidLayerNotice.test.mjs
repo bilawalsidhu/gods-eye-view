@@ -65,11 +65,7 @@ test('defers invalid-layer notice until startup settles', async (t) => {
   installBrowserGlobals(t);
   const notices = [];
   const owner = createOwner(
-    {
-      latitude: 30,
-      longitude: -97,
-      layerStateInvalid: true,
-    },
+    { latitude: 30, longitude: -97, layerStateInvalid: true },
     notices,
   );
 
