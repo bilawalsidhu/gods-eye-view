@@ -1,5 +1,6 @@
 /** Camera-jump regression against an existing server; never starts a server. */
 import puppeteer from 'puppeteer';
+import { chromeExecutablePath } from './qa-chrome.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { reduceTrailPixels } from '../src/layers/transit/qaMetrics.js';
 
@@ -8,8 +9,7 @@ const shots = process.env.QA_SHOTS || 'qa-shots/transit-recovery';
 await mkdir(shots, { recursive: true });
 const browser = await puppeteer.launch({
   headless: false,
-  executablePath:
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: chromeExecutablePath(),
   args: [
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
