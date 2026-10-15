@@ -188,7 +188,7 @@ test('assertGlobeEngine accepts a complete engine and names every missing capabi
 
 test('the contract carries what the shell infrastructure needs', () => {
   for (const member of [
-    'camera.position',
+    'camera.livePosition',
     'camera.height',
     'maps.releasePhotorealTiles',
   ])
@@ -196,12 +196,12 @@ test('the contract carries what the shell infrastructure needs', () => {
   const engine = createFakeEngine();
   const broken = {
     ...engine,
-    camera: { ...engine.camera, position: undefined, height: 1 },
+    camera: { ...engine.camera, livePosition: undefined, height: 1 },
     maps: { ...engine.maps, releasePhotorealTiles: undefined },
   };
   assert.throws(
     () => assertGlobeEngine(broken),
-    /camera\.position.*camera\.height.*maps\.releasePhotorealTiles/,
+    /camera\.livePosition.*camera\.height.*maps\.releasePhotorealTiles/,
   );
 });
 
@@ -255,4 +255,18 @@ test('the contract suite rejects a raw Cesium-style event that double-registers'
     failed.some((name) => /twice/.test(name)),
     failed.join('\n'),
   );
+});
+
+test('raiseValue raises exactly one argument with the event semantics', () => {
+  const event = createEngineEvent();
+  const seen = [];
+  const second = (...values) => seen.push(['second', values]);
+  event.addEventListener((...values) => {
+    seen.push(['first', values]);
+    event.removeEventListener(second);
+  });
+  event.addEventListener(second);
+  event.raiseValue(42);
+  assert.deepEqual(seen, [['first', [42]]]);
+  assert.equal(event.numberOfListeners, 1);
 });

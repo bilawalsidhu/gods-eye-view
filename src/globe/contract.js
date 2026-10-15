@@ -83,9 +83,10 @@
  *
  * @typedef {object} GlobeCamera
  * @property {() => CameraPose} pose Fresh values on every call.
- * @property {(result?: Cartesian3) => Cartesian3} position The pose's world
- *   position; fills and returns `result` when given (no allocation, for
- *   per-frame readers), else a fresh value.
+ * @property {Cartesian3} livePosition The pose's world position as one
+ *   engine-owned object: the same object on every read, holding the current
+ *   position (at the latest when read). For per-frame readers, which must not
+ *   allocate; read-only, copy it to keep a value.
  * @property {() => number} height The camera's height above the WGS84
  *   ellipsoid (the pose's cartographic height), without building a pose.
  * @property {(view: { destination: Cartesian3 | Rectangle, orientation?: Orientation }) => void} setView
@@ -209,9 +210,10 @@ export const isEngineEvent = (value) =>
   value != null && value[ENGINE_EVENT] === true;
 
 /**
- * An event with the contract's semantics (see EngineEvent). `raiseEvent` is
- * for engine implementations; a listener that throws propagates, and the
- * event stays usable.
+ * An event with the contract's semantics (see EngineEvent). `raiseEvent` and
+ * `raiseValue` (one argument, no argument list: for per-frame events) are for
+ * engine implementations; a listener that throws propagates, and the event
+ * stays usable.
  */
 export function createEngineEvent() {
   let entries = [];
@@ -225,6 +227,13 @@ export function createEngineEvent() {
     if (depth) removedDuringRaise = true;
     else entries.splice(entries.indexOf(entry), 1);
     return true;
+  };
+  const settle = () => {
+    depth--;
+    if (!depth && removedDuringRaise) {
+      entries = entries.filter((entry) => entry.listener);
+      removedDuringRaise = false;
+    }
   };
   const event = {
     get numberOfListeners() {
@@ -259,11 +268,21 @@ export function createEngineEvent() {
           if (listener) listener(...args);
         }
       } finally {
-        depth--;
-        if (!depth && removedDuringRaise) {
-          entries = entries.filter((entry) => entry.listener);
-          removedDuringRaise = false;
+        settle();
+      }
+    },
+    // raiseEvent(value) without an argument list, for per-frame events.
+    raiseValue(value) {
+      const snapshot = entries;
+      const length = snapshot.length;
+      depth++;
+      try {
+        for (let index = 0; index < length; index++) {
+          const listener = snapshot[index].listener;
+          if (listener) listener(value);
         }
+      } finally {
+        settle();
       }
     },
   };
@@ -282,7 +301,11 @@ const SHAPE = {
   host: { container: isObject, canvas: isObject, size: isFunction },
   camera: {
     pose: isFunction,
-    position: isFunction,
+    livePosition: (value) =>
+      value != null &&
+      isNumber(value.x) &&
+      isNumber(value.y) &&
+      isNumber(value.z),
     height: isFunction,
     setView: isFunction,
     flyTo: isFunction,

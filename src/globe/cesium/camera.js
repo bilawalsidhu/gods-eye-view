@@ -111,13 +111,9 @@ export function createCesiumCamera(viewer) {
         fovy: cesium.frustum.fovy,
       };
     },
-    position(result) {
-      const { x, y, z } = cesium.positionWC;
-      if (!result) return geo.cartesian3.create(x, y, z);
-      result.x = x;
-      result.y = y;
-      result.z = z;
-      return result;
+    // Cesium updates positionWC in place; it is the live object.
+    get livePosition() {
+      return cesium.positionWC;
     },
     height: () => cesium.positionCartographic.height,
     setView(view) {

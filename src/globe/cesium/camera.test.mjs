@@ -347,16 +347,10 @@ test('rectangle destinations become a Cesium.Rectangle in flyTo and setView', ()
   }
 });
 
-test('position fills a result from positionWC and height reads the camera cartographic', () => {
+test('livePosition is the Cesium camera positionWC and height reads its cartographic', () => {
   const { camera, cesium } = setup();
   cesium.positionCartographic = new Cesium.Cartographic(0.1, 0.2, 1234.5);
-  const result = geo.cartesian3.create();
-  assert.equal(camera.position(result), result);
-  assert.deepEqual({ ...result }, { x: 7e6, y: 1e5, z: 2e5 });
-  const fresh = camera.position();
-  notCesium(fresh, 'position()');
-  assert.notEqual(fresh, cesium.positionWC);
-  assert.deepEqual({ ...fresh }, { x: 7e6, y: 1e5, z: 2e5 });
+  assert.equal(camera.livePosition, cesium.positionWC);
   assert.equal(camera.height(), 1234.5);
 });
 
@@ -364,5 +358,5 @@ test('the camera is the viewer camera (Viewer.camera is scene.camera)', () => {
   const viewer = createFakeViewer();
   const own = { ...viewer.camera, positionWC: new Cesium.Cartesian3(1, 2, 3) };
   const { camera } = createCesiumCamera({ ...viewer, camera: own });
-  assert.deepEqual({ ...camera.position() }, { x: 1, y: 2, z: 3 });
+  assert.equal(camera.livePosition, own.positionWC);
 });
