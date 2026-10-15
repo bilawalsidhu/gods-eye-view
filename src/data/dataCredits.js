@@ -170,6 +170,13 @@ export const DATA_CREDITS = [
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
+    key: 'eccc-aqhi',
+    html:
+      'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet ' +
+      '(<a href="https://eccc-msc.github.io/open-data/" target="_blank" rel="noopener">eccc-msc.github.io/open-data</a>) ' +
+      '· <a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">ECCC Data Servers End-use Licence</a>',
+  },
+  {
     key: 'overture-military-names',
     html: 'Military area names: <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps Foundation</a> (ODbL)',
   },
@@ -263,7 +270,9 @@ export const DATA_CREDITS = [
   },
   {
     key: 'gbfs',
-    html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
+    html:
+      'Bikeshare availability: GBFS operator feeds ' +
+      '(e.g. Austin BCycle; Bike Share Toronto, operated by the Toronto Parking Authority)',
   },
   {
     key: 'urbansharing-gbfs',
