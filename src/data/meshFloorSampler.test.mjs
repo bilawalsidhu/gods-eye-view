@@ -128,3 +128,43 @@ test('sampler: outside the google-3d regime nothing is sampled at all', () => {
   setMeshFloorPreferred(true);
   assert.equal(cachedMeshFloor(cell.lat, cell.lon), null);
 });
+
+// --- On a globe engine (engine.surface / camera.height / maps.photorealActive)
+
+async function fakeEngineAt(cell, { heightM = 900, tilesLoaded = true, photoreal = true, sample } = {}) {
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const engine = createFakeEngine({
+    longitude: Cesium.Math.toRadians(cell.lon),
+    latitude: Cesium.Math.toRadians(cell.lat),
+    altitude: heightM,
+  });
+  if (photoreal) await engine.maps.setPhotorealTiles({ tileset: {} });
+  engine.fake.script('tilesLoaded', tilesLoaded);
+  engine.fake.script('sampleHeight', sample);
+  return engine;
+}
+
+test('sampler on a globe engine: samples engine.surface and latches against the prior', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  const engine = await fakeEngineAt(cell, { sample: () => 137.0 });
+  sampleMeshFloorCells(engine, [cell], { viewerLat: cell.lat, viewerLon: cell.lon, excludeObjects: ['own'] });
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), 137.0);
+  const [call] = engine.fake.callsOf('surface.sampleHeight');
+  assert.ok(Math.abs(Cesium.Math.toDegrees(call.args[0].latitude) - cell.lat) < 1e-9);
+  assert.deepEqual(call.args[1], ['own']);
+});
+
+test('sampler on a globe engine: a high camera, loading tiles or no photoreal tiles sample nothing', async () => {
+  reset();
+  const cell = nextSite();
+  await seedDem(cell, 120.0);
+  const opts = { viewerLat: cell.lat, viewerLon: cell.lon };
+  for (const options of [{ heightM: 90_000 }, { tilesLoaded: false }, { photoreal: false }]) {
+    const engine = await fakeEngineAt(cell, { ...options, sample: () => 138.0 });
+    sampleMeshFloorCells(engine, [cell], opts);
+    assert.equal(engine.fake.callsOf('surface.sampleHeight').length, 0, JSON.stringify(options));
+  }
+  assert.equal(cachedMeshFloor(cell.lat, cell.lon), null);
+});

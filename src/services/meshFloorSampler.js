@@ -1,4 +1,6 @@
 import * as Cesium from 'cesium';
+import * as geo from '../geo/index.js';
+import { isGlobeEngine } from '../globe/contract.js';
 
 /** Construct an instance-owned meshFloorSampler service with explicit dependencies. */
 export function createMeshFloorSampler({
@@ -50,6 +52,7 @@ export function createMeshFloorSampler({
   const MAX_CAMERA_HEIGHT_M = 25_000;
   /** @type {Cesium.Cartographic} Scratch for probe coordinates. */
   const _scratchProbe = new Cesium.Cartographic();
+  const _scratchEngineProbe = geo.cartographic.create();
 
   // Regime tracking: mesh cells only apply while the photoreal (google-3d)
   // stack renders. main.js re-dispatches MapStackController.onChange as this
@@ -95,7 +98,9 @@ export function createMeshFloorSampler({
    * layer poll (never per contact, never per frame). Synchronous — Cesium's
    * sampleHeight is a CPU-side query against loaded tiles.
    *
-   * @param {Cesium.Scene|undefined} scene - The scene (skipped when absent/torn down).
+   * @param {object|undefined} target - The globe engine (engine.surface,
+   *   camera.height, maps.photorealActive), or the Cesium scene from callers
+   *   that still hold one (skipped when absent/torn down).
    * @param {Array<{lat: number, lon: number}>} points - Contact/waypoint coords.
    * @param {object} [options]
    * @param {Array<object>} [options.excludeObjects] - Own billboards/models to
@@ -105,21 +110,31 @@ export function createMeshFloorSampler({
    *   Viewer subpoint (computed once by the caller's poll).
    */
   function sampleMeshFloorCells(
-    scene,
+    target,
     points,
     { excludeObjects = [], viewerLat, viewerLon } = {},
   ) {
     if (!meshFloorPreferred()) return;
-    if (!scene || typeof scene.sampleHeight !== 'function') return;
+    const engine = isGlobeEngine(target) ? target : null;
+    const scene = engine ? null : target;
+    if (engine ? !engine.surface.supported : !scene) return;
+    if (!engine && typeof scene.sampleHeight !== 'function') return;
     if (!Array.isArray(points) || !points.length) return;
     // Round-5 hardening (the CCTV projectionTilesReady lesson, ported late):
     // while tiles are MID-STREAM a probe returns coarse-LOD heights — real
     // numbers, wildly wrong — and the one-shot latch made them permanent.
     // Only sample when the visible Google tileset reports tilesLoaded AND the
     // camera is low enough that the streamed LOD near it is fine-grained.
-    const camH = scene.camera?.positionCartographic?.height;
+    const camH = engine
+      ? engine.camera.height()
+      : scene.camera?.positionCartographic?.height;
     if (!Number.isFinite(camH) || camH > MAX_CAMERA_HEIGHT_M) return;
-    if (!_visibleTilesetLoaded(scene)) return;
+    if (
+      !(engine
+        ? engine.maps.photorealActive() && engine.surface.tilesLoaded()
+        : _visibleTilesetLoaded(scene))
+    )
+      return;
     let sampled = 0;
     const attempted = new Set();
     for (const p of points) {
@@ -139,13 +154,23 @@ export function createMeshFloorSampler({
       }
       let height;
       try {
-        const carto = Cesium.Cartographic.fromDegrees(
-          cell.lon,
-          cell.lat,
-          0,
-          _scratchProbe,
-        );
-        height = scene.sampleHeight(carto, excludeObjects);
+        if (engine) {
+          const carto = geo.cartographic.fromDegrees(
+            cell.lon,
+            cell.lat,
+            0,
+            _scratchEngineProbe,
+          );
+          height = engine.surface.sampleHeight(carto, excludeObjects);
+        } else {
+          const carto = Cesium.Cartographic.fromDegrees(
+            cell.lon,
+            cell.lat,
+            0,
+            _scratchProbe,
+          );
+          height = scene.sampleHeight(carto, excludeObjects);
+        }
         sampled += 1;
       } catch {
         continue; // scene mid-teardown — try again next poll

@@ -47,6 +47,7 @@
  */
 
 import * as geo from '../geo/index.js';
+import { isGlobeEngine } from '../globe/contract.js';
 
 /** Taxi threshold: a cached snap answers directly for moves up to this far from
  *  the sampled spot (m). Past it the value is demoted to a held last-known and a
@@ -170,7 +171,7 @@ export function firstVisibleTileset(primitives) {
 /**
  * Create a per-layer ground-snap cache.
  * @returns {{
- *   heightFor: (viewer: Cesium.Viewer, icao: string, pos: Cesium.Cartesian3,
+ *   heightFor: (target: object, icao: string, pos: Cesium.Cartesian3,
  *               getExclusions?: () => Array<unknown>) => number|null,
  *   forget: (icao: string) => void,
  *   clear: () => void,
@@ -281,7 +282,9 @@ export function createGroundSnap({ groundFloor }) {
    * A contact that HAS resolved once keeps that answer through a resample outage;
    * see `heldSnapM`.
    *
-   * @param {Cesium.Viewer} viewer - Live viewer (sampling + tiles-ready check).
+   * @param {object} target - The globe engine (`engine.surface`: sampleHeight
+   *   and tilesLoaded), or a live Cesium viewer from callers that still hold
+   *   one (scene.sampleHeight and the first visible tileset's tilesLoaded).
    * @param {string} icao - Cache key (per-layer icao space).
    * @param {Cesium.Cartesian3} pos - Current display position. Cache movement
    *   is measured after projecting this input to the WGS84 ellipsoid, so a
@@ -292,7 +295,8 @@ export function createGroundSnap({ groundFloor }) {
    *   otherwise). Only invoked when a sample actually fires.
    * @returns {number|null}
    */
-  function heightFor(viewer, icao, pos, getExclusions) {
+  function heightFor(target, icao, pos, getExclusions) {
+    const engine = isGlobeEngine(target) ? target : null;
     const surfacePos = geo.ellipsoid.WGS84.scaleToGeodeticSurface(
       pos,
       scratchSurfacePos,
@@ -344,7 +348,8 @@ export function createGroundSnap({ groundFloor }) {
       entries.set(icao, next);
       return heldSnapM(next, surfacePos);
     };
-    if (!_tilesReady(viewer)) return miss();
+    if (!(engine ? engine.surface.tilesLoaded() : _tilesReady(target)))
+      return miss();
     windowCount += 1;
     let sampled;
     try {
@@ -354,10 +359,10 @@ export function createGroundSnap({ groundFloor }) {
         scratchCarto,
       );
       // sampleHeight throws when unsupported (no depth textures) — that's a miss.
-      sampled = viewer.scene.sampleHeight(
-        carto,
-        getExclusions ? getExclusions() : undefined,
-      );
+      const exclusions = getExclusions ? getExclusions() : undefined;
+      sampled = engine
+        ? engine.surface.sampleHeight(carto, exclusions)
+        : target.scene.sampleHeight(carto, exclusions);
     } catch {
       sampled = undefined;
     }
