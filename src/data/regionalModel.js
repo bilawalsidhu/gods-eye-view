@@ -67,11 +67,20 @@ export function normalizeRegionalArticles(payload, limit = MAX_ARTICLES) {
     seen.add(signature);
     const rawDate = cleanText(row?.seendate, 32);
     const compactDate = /^(\d{8})T(\d{6})Z$/.exec(rawDate);
-    const publishedAt = compactDate
+    const candidateDate = compactDate
       ? `${compactDate[1].slice(0, 4)}-${compactDate[1].slice(4, 6)}-${compactDate[1].slice(6, 8)}T${compactDate[2].slice(0, 2)}:${compactDate[2].slice(2, 4)}:${compactDate[2].slice(4, 6)}Z`
-      : Number.isNaN(Date.parse(rawDate))
-        ? null
-        : new Date(rawDate).toISOString();
+      : rawDate;
+    const parsedMs = Date.parse(candidateDate);
+    const validDate =
+      Number.isFinite(parsedMs) &&
+      (!compactDate ||
+        new Date(parsedMs).toISOString().slice(0, 19) ===
+          candidateDate.slice(0, 19));
+    const publishedAt = validDate
+      ? compactDate
+        ? candidateDate
+        : new Date(parsedMs).toISOString()
+      : null;
     articles.push({
       title,
       url,

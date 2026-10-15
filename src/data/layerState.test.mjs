@@ -2422,23 +2422,74 @@ test('wind appearance shares round trip while old links retain weather defaults'
   assert.deepEqual(invalid.options.wind, defaults);
 });
 
-test('observed weather round trips product and opacity without persisting historical playback', () => {
+test('observed weather round trips product and presets without persisting historical playback', () => {
   const state = normalizeLayerState({
     enabledLayerIds: ['weather-radar', 'weather-satellite'],
     options: {
       'weather-radar': { opacity: 'light', play: true },
-      'weather-satellite': { product: 'clouds', opacity: 'light', step: -1 },
+      'weather-satellite': {
+        product: 'clouds',
+        opacity: 'light',
+        infrared: 'filtered',
+        step: -1,
+      },
     },
   });
   const params = new URLSearchParams(encode(state));
   const decoded = decodeLayerStateParams(params);
   assert.deepEqual(decoded, state);
   assert.equal(state.options['weather-satellite'].product, 'clouds');
+  assert.equal(state.options['weather-satellite'].opacity, 'light');
+  assert.equal(state.options['weather-satellite'].infrared, 100);
   assert.equal(Object.hasOwn(state.options['weather-radar'], 'play'), false);
 });
 
-test('satellite infrared display mode round trips and invalid or absent values use filtered', () => {
-  for (const infrared of ['full', 'filtered', undefined, 'invalid']) {
+test('satellite filter strength percentages round-trip and legacy mode codes remain readable', () => {
+  const state = normalizeLayerState({
+    enabledLayerIds: ['weather-satellite'],
+    options: { 'weather-satellite': { infrared: 53, opacity: 'light' } },
+  });
+  const params = encodeLayerStateParams(
+    new URLSearchParams([['v', '2']]),
+    state,
+  );
+  assert.deepEqual(decodeLayerStateParams(params), state);
+  assert.equal(state.options['weather-satellite'].infrared, 53);
+  assert.equal(state.options['weather-satellite'].opacity, 'light');
+  for (const [legacy, expected] of [
+    ['f', 100],
+    ['a', 0],
+  ]) {
+    const decoded = decodeLayerStateParams(
+      new URLSearchParams(`v=2&l=o&lo=o.i.${legacy}`),
+    );
+    assert.equal(decoded.options['weather-satellite'].infrared, expected);
+  }
+  for (const [legacy, expected] of [
+    ['filtered', 100],
+    ['full', 0],
+  ]) {
+    const normalized = normalizeLayerState({
+      enabledLayerIds: ['weather-satellite'],
+      options: { 'weather-satellite': { infrared: legacy } },
+    });
+    assert.equal(normalized.options['weather-satellite'].infrared, expected);
+  }
+  const invalid = normalizeLayerState({
+    enabledLayerIds: ['weather-satellite'],
+    options: { 'weather-satellite': { infrared: 101 } },
+  });
+  assert.equal(invalid.options['weather-satellite'].infrared, 100);
+});
+
+test('satellite cloud filter round trips and invalid or absent values default to Clouds only', () => {
+  for (const [infrared, expected] of [
+    ['full', 0],
+    ['filtered', 100],
+    [53, 53],
+    [undefined, 100],
+    ['invalid', 100],
+  ]) {
     const state = normalizeLayerState({
       enabledLayerIds: ['weather-satellite'],
       options: {
@@ -2454,10 +2505,7 @@ test('satellite infrared display mode round trips and invalid or absent values u
       decodeLayerStateParams(new URLSearchParams(encode(state))),
       state,
     );
-    assert.equal(
-      state.options['weather-satellite'].infrared,
-      infrared === 'full' ? 'full' : 'filtered',
-    );
+    assert.equal(state.options['weather-satellite'].infrared, expected);
     assert.equal(
       Object.hasOwn(state.options['weather-satellite'], 'step'),
       false,

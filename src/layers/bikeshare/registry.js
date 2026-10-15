@@ -49,6 +49,56 @@ const RAW_GBFS_CITY_REGISTRY = [
     provider: 'Divvy',
   },
   {
+    id: 'detroit-mogo',
+    city: 'Detroit, MI',
+    centerLat: 42.3314,
+    centerLon: -83.0458,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://detroit.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://detroit.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'MoGo',
+  },
+  {
+    id: 'pittsburgh-pogoh',
+    city: 'Pittsburgh, PA',
+    centerLat: 40.4406,
+    centerLon: -79.9959,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://pittsburgh.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://pittsburgh.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'POGOH',
+  },
+  {
+    id: 'aspen-we-cycle',
+    city: 'Aspen, CO',
+    centerLat: 39.1911,
+    centerLon: -106.8175,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://aspen.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://aspen.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'WE-cycle',
+  },
+  // HIBike serves both Kailua-Kona and Hilo, about 95 km apart; the centre sits
+  // between them so a camera over either town loads the whole system.
+  {
+    id: 'hawaii-island-hibike',
+    city: 'Kona & Hilo, HI',
+    centerLat: 19.68,
+    centerLon: -155.54,
+    loadRadiusKm: 90,
+    stationInformationUrl:
+      'https://kona.publicbikesystem.net/customer/gbfs/v2/en/station_information.json',
+    stationStatusUrl:
+      'https://kona.publicbikesystem.net/customer/gbfs/v2/en/station_status.json',
+    provider: 'HIBike',
+  },
+  {
     id: 'dc-capital-bikeshare',
     city: 'Washington, DC',
     centerLat: 38.9072,

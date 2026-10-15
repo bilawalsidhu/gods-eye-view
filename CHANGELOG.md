@@ -1,5 +1,13 @@
 # Changelog
 
+- Overpass and military-installation disk caches no longer serve answers from a
+  previously configured `OVERPASS_UPSTREAMS` instance after it is repointed.
+
+- A Radio Browser mirror answering 204, 205 or 304, or a status outside
+  200–599, no longer crashes the local dev/preview server. Null-body statuses
+  get an empty body; anything else that cannot become a response fails that
+  mirror so the next one is tried.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 
@@ -36,18 +44,13 @@
 
 - Director timeline seeks cross the dateline along the short longitude arc.
 
-- Map state updates stop delivering to subscribers removed during the same notification.
+- Recent Imagery continues past malformed records in full catalog pages, respects the requested record limit, and reports results as truncated when that limit drops valid records.
 
-- Director assets cancelled during the final stream read are discarded with reader cleanup.
+- Regional articles retain unknown publication times when compact source dates do not identify a real calendar instant.
 
-- Analyst queries preserve useful rows when an upstream timestamp is outside the supported date range.
-
-- Fire detections with missing or impossible positions are skipped while genuine zero coordinates remain valid.
-
-- Frequently reused terrain batches retain their cached heights ahead of unused cells.
-
-- Recent Imagery’s exported `setBox` and `searchHls` reject missing, blank or
-  boolean programmatic box edges instead of interpreting them as zero coordinates.
+- Add Detroit (MoGo), Pittsburgh (POGOH), Aspen (WE-cycle) and Kona & Hilo
+  (HIBike) to the GBFS bikeshare registry, the layer's first stations in
+  Michigan.
 
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
@@ -150,6 +153,14 @@
   `scripts/build-datacenters-norway.py` reproduces or `--verify`s the merge,
   touching only features inside Geofabrik's Norway boundary, and the dataset
   README records the extract, checksum and filter.
+- Satellite clouds keep Clouds only / Full as quick endpoints and add a continuous
+  cloud-filter slider: 0% is Full, 100% is the existing brightness key, and
+  intermediate values blend the keyed alpha. The slider commits on release to
+  avoid restaging imagery for every drag event. Filter percentages round-trip in
+  share links; legacy mode codes retain their old endpoint meanings. Background
+  panel refreshes preserve the pending drag value until release. Contributed by
+  [NotProniss](https://github.com/NotProniss) (#1084).
+
 - Flights and Military Flights highlight emergency transponder broadcasts in
   fleet billboards, 3D models and Cockpit contacts. Colors update when a status
   starts or clears. Emergency squawks outrank ADS-B priority statuses; GEV
@@ -268,6 +279,15 @@
   browsers only expose in secure contexts, so starting a live feed threw
   before playback. The id now falls back to a v4 UUID built from
   `crypto.getRandomValues`, which the server's lease check accepts.
+
+- Move Google geocoding behind the local server. Forward and reverse lookups now
+  go through `/api/google/geocode` and `/api/google/reverse-geocode` with the
+  server key, joining Places and Street View. Google's Geocoding web service
+  refuses referrer-restricted keys, so the previous browser call left
+  `SECURITY.md`'s advice and working search mutually exclusive: the bundled
+  browser key had to be unrestricted for search to work at all. That key now
+  needs only the Map Tiles API and the Maps JavaScript API (Street View). Keyless sessions and the Photon/Nominatim
+  fallback order are unchanged.
 
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
