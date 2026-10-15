@@ -11,8 +11,23 @@ test('Navara internals are pinned: package.json and internals.js name the same e
     /NAVARA_INTERNALS_VERSION = '([^']+)'/,
   )?.[1];
   assert.equal(declared, '0.2.1');
-  for (const name of ['@navaramap/three', '@navaramap/three-default-plugin'])
+  for (const name of ['@navaramap/three', '@navaramap/three-default-plugin']) {
     assert.equal(pkg.dependencies[name], declared, name);
+    const installed = JSON.parse(
+      read(`../../../node_modules/${name}/package.json`),
+    );
+    assert.equal(installed.version, declared, `installed ${name}`);
+  }
+});
+
+// `x._member`, `x?._member` and `x['_member']`.
+const PRIVATE_ACCESS = /\.\s*_[A-Za-z]|\[\s*['"`]_[A-Za-z]/;
+
+test('the private-member pattern catches dotted and bracketed access', () => {
+  for (const code of ['view._isIdle', 'view?._scenes', "view['_isIdle']", 'v[ "_x" ]'])
+    assert.ok(PRIVATE_ACCESS.test(code), code);
+  for (const code of ['view.isIdle', 'a_b.c', "map['key']"])
+    assert.ok(!PRIVATE_ACCESS.test(code), code);
 });
 
 test('only internals.js reaches private Navara members', () => {
@@ -20,7 +35,7 @@ test('only internals.js reaches private Navara members', () => {
     (name) =>
       name.endsWith('.js') &&
       name !== 'internals.js' &&
-      /\.\s*_[A-Za-z]/.test(read(name).replace(/\/\/.*$/gm, '')),
+      PRIVATE_ACCESS.test(read(name).replace(/\/\/.*$/gm, '')),
   );
   assert.deepEqual(offenders, []);
 });

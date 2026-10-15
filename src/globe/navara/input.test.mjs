@@ -141,3 +141,24 @@ test('destroy removes every DOM listener and later subscriptions are inert', () 
   assert.equal(typeof off, 'function');
   assert.equal(canvas.listenerCount, 0);
 });
+
+test('setCameraInputs merges into the camera options set through the engine', () => {
+  const { input, cameraOptions } = setup();
+  input.setCameraOptions({ minimumZoomDistance: 50, zoomSpeed: 2 });
+  input.setCameraInputs(false);
+  assert.deepEqual(cameraOptions.at(-1), {
+    minimumZoomDistance: 50,
+    zoomSpeed: 2,
+    enableSpin: false,
+    enableZoom: false,
+    enableTilt: false,
+  });
+  input.setCameraOptions({ zoomSpeed: 3 });
+  assert.deepEqual(cameraOptions.at(-1), {
+    minimumZoomDistance: 50,
+    zoomSpeed: 3,
+    enableSpin: false,
+    enableZoom: false,
+    enableTilt: false,
+  });
+});

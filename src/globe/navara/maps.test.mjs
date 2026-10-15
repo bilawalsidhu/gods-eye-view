@@ -8,6 +8,8 @@ function fakeView() {
     layers: [],
     shown: [],
     frames: 0,
+    opened: 0,
+    rasterCounts: [],
     addSource(desc) {
       const source = {
         id: `source-${view.sources.length}`,
@@ -24,14 +26,21 @@ function fakeView() {
       const layer = {
         id: `layer-${view.layers.length}`,
         desc,
+        update(next) {
+          layer.desc = next;
+        },
         delete() {
           view.layers = view.layers.filter((entry) => entry !== layer);
+          view.rasterCounts.push(layersOf(view, 'raster').length);
         },
       };
       view.layers.push(layer);
       return layer;
     },
     attribution: {
+      show() {
+        view.opened++;
+      },
       add(items) {
         view.shown.push(...items);
       },
@@ -159,14 +168,37 @@ test('setPhotorealTiles shows Google 3D tiles with a browser key and the Google 
     'https://tile.googleapis.com/v1/3dtiles/root.json?key=browser%20key',
   );
   assert.deepEqual(tiles.desc.model, { maxSse: 16 });
-  assert.equal(layersOf(view, 'raster').length, 0, 'base imagery removed');
+  // Hidden, not deleted: Navara 0.2.1 stops loading terrain at the current
+  // view when the last raster layer is deleted.
+  const [base] = layersOf(view, 'raster');
+  assert.equal(base.desc.raster?.show, false, 'base imagery not hidden');
+  assert.deepEqual(view.rasterCounts, []);
   const google = view.shown.find((item) => item.creditLayerId === tiles.id);
   assert.ok(google?.logo, 'no Google logo');
+  assert.ok(view.opened > 0, 'the copyright lines are not opened on screen');
   assert.equal(maps.photorealActive(), true);
   await maps.setPhotorealTiles(null);
   assert.equal(maps.photorealActive(), false);
   assert.equal(layersOf(view, '3d-tiles').length, 0);
   assert.ok(!view.shown.some((item) => item.creditLayerId));
+});
+
+test('base imagery hidden by photoreal comes back; a new one replaces it without a raster gap', async () => {
+  const view = fakeView();
+  const { maps } = createNavaraMaps(view);
+  await maps.setBaseImagery({ kind: 'osm' });
+  await maps.setPhotorealTiles({ googleApiKey: 'k' });
+  const [osm] = layersOf(view, 'raster');
+  await maps.setPhotorealTiles(null);
+  await maps.setBaseImagery({ kind: 'osm' });
+  assert.deepEqual(layersOf(view, 'raster'), [osm]);
+  assert.notEqual(osm.desc.raster?.show, false, 'OSM still hidden');
+  view.rasterCounts.length = 0;
+  await maps.setBaseImagery({ kind: 'esri-imagery' });
+  const rasters = layersOf(view, 'raster');
+  assert.equal(rasters.length, 1);
+  assert.match(rasters[0].desc.source.desc.url, /World_Imagery/);
+  assert.deepEqual(view.rasterCounts, [1], 'a raster gap while replacing');
 });
 
 test('photoreal without a browser key rejects and changes nothing', async () => {

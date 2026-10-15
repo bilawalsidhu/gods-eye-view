@@ -490,7 +490,7 @@ async function runCesium(page, url) {
  * that Navara draws the engine's camera, render on demand, the canvas capture,
  * and live map sources (Google 3D tiles with the dev server's browser key).
  */
-async function runNavara(page, url) {
+async function runNavara(page, url, consoleErrors) {
   await page.goto(new URL(engineSpec.page, url).href, {
     waitUntil: 'domcontentloaded',
   });
@@ -510,7 +510,7 @@ async function runNavara(page, url) {
   const failure = await page.evaluate(() => window.__globeQa.error);
   if (failure) throw new Error(`the Navara globe did not start: ${failure}`);
 
-  return page.evaluate(async () => {
+  const report = await page.evaluate(async () => {
     const qa = window.__globeQa;
     const { engine, view } = qa;
     const { runContractSuite } =
@@ -560,6 +560,52 @@ async function runNavara(page, url) {
       ensure(engine.kind === 'navara', `engine kind ${engine.kind}`);
     });
 
+    // Whether Navara draws what the engine projects: points along the
+    // engine's pick rays project through Navara's drawn three camera to the
+    // same window position (within 0.5 px).
+    const drawnMatches = (label, distance) => {
+      const raw = view.camera.raw;
+      raw.updateMatrixWorld();
+      const { width, height } = engine.host.size();
+      const Vector = raw.position.constructor;
+      for (const [x, y] of [
+        [width / 2, height / 2],
+        [width * 0.1, height * 0.2],
+        [width * 0.9, height * 0.85],
+      ]) {
+        const ray = engine.camera.pickRay(cartesian2.create(x, y));
+        const point = cartesian3.add(
+          ray.origin,
+          cartesian3.multiplyByScalar(
+            ray.direction,
+            distance,
+            cartesian3.create(),
+          ),
+          cartesian3.create(),
+        );
+        const ndc = new Vector(point.x, point.y, point.z).project(raw);
+        const drawn = [((ndc.x + 1) / 2) * width, ((1 - ndc.y) / 2) * height];
+        ensure(
+          Math.abs(drawn[0] - x) < 0.5 && Math.abs(drawn[1] - y) < 0.5,
+          `${label}: (${x}, ${y}) is drawn at (${drawn.map((v) => v.toFixed(2))})`,
+        );
+      }
+    };
+    const untilMoveEnd = async (label) => {
+      let ends = 0;
+      const remove = engine.camera.moveEnd.addEventListener(() => ends++);
+      try {
+        for (let frame = 0; frame < 200 && !ends; frame++) {
+          await waitFrames(1);
+          await sleep(20);
+        }
+      } finally {
+        remove();
+      }
+      ensure(ends > 0, `${label}: the camera never came to rest`);
+      await settle();
+    };
+
     await check(
       'navara: Navara draws the engine camera (pose and fov)',
       async () => {
@@ -568,35 +614,87 @@ async function runNavara(page, url) {
           orientation: { heading: 0.6, pitch: -0.5, roll: 0.1 },
         });
         await settle();
-        const raw = view.camera.raw;
-        raw.updateMatrixWorld();
-        const { width, height } = engine.host.size();
-        const Vector = raw.position.constructor;
-        let compared = 0;
-        for (const [x, y] of [
-          [width / 2, height / 2],
-          [width * 0.1, height * 0.2],
-          [width * 0.9, height * 0.85],
-        ]) {
-          const ray = engine.camera.pickRay(cartesian2.create(x, y));
-          const point = cartesian3.add(
-            ray.origin,
-            cartesian3.multiplyByScalar(
-              ray.direction,
-              20000,
-              cartesian3.create(),
-            ),
-            cartesian3.create(),
-          );
-          const ndc = new Vector(point.x, point.y, point.z).project(raw);
-          const drawn = [((ndc.x + 1) / 2) * width, ((1 - ndc.y) / 2) * height];
-          ensure(
-            Math.abs(drawn[0] - x) < 0.5 && Math.abs(drawn[1] - y) < 0.5,
-            `(${x}, ${y}) is drawn at (${drawn.map((v) => v.toFixed(2))})`,
-          );
-          compared++;
+        drawnMatches('tilted', 20000);
+      },
+    );
+
+    await check(
+      'navara: Navara draws the engine camera looking straight down (±89.99° clamp)',
+      async () => {
+        engine.camera.setView({
+          destination: cartesian3.fromDegrees(20, 10, 1e6),
+          orientation: { heading: 0.7, pitch: -Math.PI / 2, roll: 0 },
+        });
+        await settle();
+        drawnMatches('nadir', 1e6);
+        ensure(
+          Math.abs(engine.camera.pose().pitch + Math.PI / 2) < 1e-9,
+          'the clamped redraw replaced the exact pitch',
+        );
+      },
+    );
+
+    await check(
+      'navara: Navara draws the engine camera after its flight lands',
+      async () => {
+        const destination = cartesian3.fromDegrees(-3.7, 40.4, 50000);
+        let landed = false;
+        engine.camera.flyTo({
+          destination,
+          orientation: { heading: 0.5, pitch: -0.8, roll: 0.1 },
+          duration: 1,
+          complete: () => (landed = true),
+        });
+        for (let frame = 0; frame < 300 && !landed; frame++) {
+          await waitFrames(1);
+          await sleep(10);
         }
-        ensure(compared === 3, 'not every point compared');
+        ensure(landed, 'the flight did not land');
+        await settle();
+        const pose = engine.camera.pose();
+        ensure(
+          cartesian3.distance(pose.position, destination) < 0.01,
+          'the pose is not the destination',
+        );
+        drawnMatches('landed', 30000);
+      },
+    );
+
+    await check(
+      'navara: a mouse drag moves the camera and the pose follows what is drawn',
+      async () => {
+        engine.camera.setView({
+          destination: cartesian3.fromDegrees(20, 10, 30000),
+          orientation: { heading: 0.6, pitch: -0.5, roll: 0 },
+        });
+        await untilMoveEnd('before the drag');
+        const before = engine.camera.pose();
+        const canvas = engine.host.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const fire = (type, x, y, buttons) =>
+          canvas.dispatchEvent(
+            new MouseEvent(type, {
+              bubbles: true,
+              cancelable: true,
+              clientX: rect.left + x,
+              clientY: rect.top + y,
+              button: 0,
+              buttons,
+            }),
+          );
+        fire('mousedown', 640, 400, 1);
+        for (let step = 1; step <= 10; step++) {
+          fire('mousemove', 640 + step * 15, 400 + step * 5, 1);
+          await sleep(30);
+        }
+        fire('mouseup', 790, 450, 0);
+        await untilMoveEnd('after the drag');
+        const after = engine.camera.pose();
+        ensure(
+          cartesian3.distance(before.position, after.position) > 100,
+          'the drag did not move the camera',
+        );
+        drawnMatches('dragged', 20000);
       },
     );
 
@@ -634,7 +732,7 @@ async function runNavara(page, url) {
     );
 
     await check(
-      'navara: maps — OSM, keyless terrain, Google 3D tiles; surface height at JFK (S2)',
+      'navara: maps — OSM, keyless terrain under Google 3D tiles, credits on screen; surface height at JFK (S2)',
       async () => {
         ensure(qa.googleApiKey, 'the dev server has no Google browser key');
         // JFK runway 13R/31L, looked at straight down from 800 m (S2).
@@ -652,21 +750,22 @@ async function runNavara(page, url) {
             else if (performance.now() - loadedSince > 1500) return;
           }
         };
+        // Photoreal right after the base imagery: the hidden (not deleted)
+        // base layer keeps Navara loading terrain under the tiles.
         await engine.maps.setBaseImagery({ kind: 'osm' });
         await engine.maps.setTerrain({ kind: 'keyless' });
         engine.camera.setView({
           destination: cartesian3.fromDegrees(lon, lat, 800),
         });
+        await engine.maps.setPhotorealTiles({ googleApiKey: qa.googleApiKey });
+        ensure(engine.maps.photorealActive(), 'photoreal is not active');
         await untilLoaded();
         // Re:Earth terrain there: −29.66 m (S2).
         const terrain = engine.surface.terrainHeight(place);
         ensure(
           Number.isFinite(terrain) && Math.abs(terrain + 29.66) < 1,
-          `terrainHeight ${terrain} is not within 1 m of −29.66`,
+          `terrainHeight ${terrain} under the tiles is not within 1 m of −29.66`,
         );
-        await engine.maps.setPhotorealTiles({ googleApiKey: qa.googleApiKey });
-        ensure(engine.maps.photorealActive(), 'photoreal is not active');
-        await untilLoaded();
         const height = engine.surface.sampleHeight(place);
         // Cesium's sampleHeightMostDetailed there: −29.85 m (S2).
         ensure(
@@ -694,6 +793,25 @@ async function runNavara(page, url) {
           document.querySelector('img[src*="google-credit"]'),
           'the Google logo is not on screen',
         );
+        // Google's copyright lines are on screen, as Cesium shows them.
+        const shownText = [...document.querySelectorAll('body *')]
+          .filter((element) => {
+            const box = element.getBoundingClientRect();
+            const style = getComputedStyle(element);
+            return (
+              box.width > 0 &&
+              box.height > 0 &&
+              style.visibility !== 'hidden' &&
+              Number(style.opacity) > 0 &&
+              element.children.length === 0
+            );
+          })
+          .map((element) => element.textContent.trim())
+          .filter(Boolean);
+        ensure(
+          shownText.includes('Google') && shownText.length >= 3,
+          `the copyright lines are not on screen (${shownText.join(' | ')})`,
+        );
         // The canvas keeps its drawing buffer, so captures work any time (S4).
         const probe = document.createElement('canvas');
         probe.width = 64;
@@ -716,6 +834,97 @@ async function runNavara(page, url) {
     );
     return { results, extra };
   });
+  report.extra.push(await navaraLifecycleCheck(page, consoleErrors));
+  return report;
+}
+
+/**
+ * Destroying a Navara globe stops it: its canvas leaves the page, no frame,
+ * animation frame or worker outlives it, and a new globe starts and renders
+ * on the same page. Runs last: it destroys the harness globe first.
+ */
+async function navaraLifecycleCheck(page, consoleErrors) {
+  const name =
+    'navara: create → destroy → create leaves no canvas, frames, workers or errors';
+  const errorsBefore = consoleErrors.length;
+  const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const settledWorkers = async () => {
+    await pause(1500);
+    return page.workers().length;
+  };
+  try {
+    const ensure = (condition, message) => {
+      if (!condition) throw new Error(message);
+    };
+    await page.evaluate(() => {
+      window.__qaAnimationFrames = 0;
+      const request = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = (callback) => {
+        window.__qaAnimationFrames++;
+        return request(callback);
+      };
+      window.__globeQa.destroy();
+    });
+    ensure(
+      (await settledWorkers()) === 0,
+      'workers outlived the harness globe',
+    );
+    const cycle = () =>
+      page.evaluate(async () => {
+        const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        const container = document.createElement('div');
+        container.style.cssText = 'position:absolute;inset:0';
+        document.body.appendChild(container);
+        const globe = await window.__globeQa.createGlobe({ container });
+        let frames = 0;
+        const remove = globe.engine.frames.postRender.addEventListener(
+          () => frames++,
+        );
+        for (let tries = 0; tries < 50 && !frames; tries++) {
+          globe.engine.render.request();
+          await sleep(50);
+        }
+        remove();
+        // Navara 0.2.1 warms its worker pool in the background after init;
+        // a view disposed before that finishes leaks the late workers (see
+        // the Tasks 6–7 report). Live past the warm-up, as the app does.
+        await sleep(2000);
+        let after = 0;
+        globe.view.on('postRender', () => after++);
+        globe.destroy();
+        const animationFrames = window.__qaAnimationFrames;
+        await sleep(1000);
+        const result = {
+          rendered: frames,
+          framesAfter: after,
+          animationFramesAfter: window.__qaAnimationFrames - animationFrames,
+          canvases: container.querySelectorAll('canvas').length,
+        };
+        container.remove();
+        return result;
+      });
+    for (const round of [1, 2]) {
+      const result = await cycle();
+      ensure(result.rendered > 0, `round ${round}: the new globe drew nothing`);
+      ensure(result.canvases === 0, `round ${round}: the canvas stayed`);
+      ensure(
+        result.framesAfter === 0 && result.animationFramesAfter === 0,
+        `round ${round}: ${result.framesAfter} frames and ` +
+          `${result.animationFramesAfter} animation frames after destroy`,
+      );
+      ensure(
+        (await settledWorkers()) === 0,
+        `round ${round}: workers outlived the globe`,
+      );
+    }
+    ensure(
+      consoleErrors.length === errorsBefore,
+      `console errors: ${consoleErrors.slice(errorsBefore).join(' | ')}`,
+    );
+    return { name, ok: true };
+  } catch (error) {
+    return { name, ok: false, error: error.message };
+  }
 }
 
 const server = argument('base-url')
@@ -746,7 +955,7 @@ try {
   console.log(`[qa-globe-contract] engine=${engineName} app=${server.url}`);
   const report =
     engineName === 'navara'
-      ? await runNavara(page, server.url)
+      ? await runNavara(page, server.url, consoleErrors)
       : await runCesium(page, server.url);
 
   const all = [...report.results, ...report.extra];

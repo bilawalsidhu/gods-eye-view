@@ -11,9 +11,11 @@
 //   token), or none (the ellipsoid). Navara 0.2.1 panics on a quantized-mesh
 //   URL without the {z}/{x}/{y}.terrain template (S2), so URLs always carry it.
 // - photoreal: Google 3D tiles with a browser key only in this phase (the
-//   server proxy of S3 comes later), with Google's logo kept on screen and the
-//   tiles' own copyright lines (creditLayerId). Showing them removes the base
-//   imagery, as MapSourceController does; clearing them does not restore it.
+//   server proxy of S3 comes later), with Google's logo and the tiles' own
+//   copyright lines (creditLayerId) on screen. Showing them hides the base
+//   imagery, as MapSourceController removes it; clearing them does not bring
+//   it back until setBaseImagery. Hidden, not deleted: deleting the last
+//   raster layer stops Navara 0.2.1 loading terrain at the current view.
 
 const OSM_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const OSM_CREDIT = {
@@ -68,24 +70,47 @@ export function createNavaraMaps(
   const generations = { imagery: 0, terrain: 0, photoreal: 0 };
   let destroyed = false;
 
-  function clear(name) {
-    const slot = slots[name];
+  function retire(slot) {
     if (!slot) return;
-    slots[name] = null;
     slot.layer.delete();
     slot.source.delete();
-    if (slot.credits.length) view.attribution?.remove(slot.credits);
+    if (slot.credits.length && !slot.hidden)
+      view.attribution?.remove(slot.credits);
   }
 
+  function clear(name) {
+    const slot = slots[name];
+    slots[name] = null;
+    retire(slot);
+  }
+
+  // The new layer goes in before the old one goes: deleting the last raster
+  // layer stops Navara 0.2.1 loading terrain at the current view.
   function show(name, key, sourceDesc, layerDesc, credits = []) {
-    clear(name);
+    const previous = slots[name];
     const source = view.addSource(sourceDesc);
     const layer = view.addLayer({ ...layerDesc, source });
     const shown = credits.map((credit) =>
       typeof credit === 'function' ? credit(layer) : credit,
     );
+    retire(previous);
     if (shown.length) view.attribution?.add(shown);
-    slots[name] = { key, source, layer, credits: shown };
+    slots[name] = { key, source, layer, layerDesc, credits: shown };
+    view.forceUpdate();
+  }
+
+  // Base imagery under photoreal is hidden rather than deleted (see show).
+  function setImageryShown(shown) {
+    const slot = slots.imagery;
+    if (!slot || slot.hidden === !shown) return;
+    slot.hidden = !shown;
+    slot.layer.update({
+      ...slot.layerDesc,
+      source: slot.source,
+      raster: { show: shown },
+    });
+    if (slot.credits.length)
+      view.attribution?.[shown ? 'add' : 'remove'](slot.credits);
     view.forceUpdate();
   }
 
@@ -126,7 +151,7 @@ export function createNavaraMaps(
       const generation = ++generations.imagery;
       const { url, credit } = imageryFor(source);
       if (destroyed || generation !== generations.imagery) return;
-      if (slots.imagery?.key === url) return;
+      if (slots.imagery?.key === url) return setImageryShown(true);
       show('imagery', url, { type: 'raster-tile', url }, { type: 'raster' }, [
         credit,
       ]);
@@ -157,7 +182,7 @@ export function createNavaraMaps(
         );
       if (destroyed || generation !== generations.photoreal) return;
       const url = `${GOOGLE_TILES_ROOT}?key=${encodeURIComponent(key)}`;
-      clear('imagery');
+      setImageryShown(false);
       if (slots.photoreal?.key === url) return;
       show(
         'photoreal',
@@ -172,6 +197,9 @@ export function createNavaraMaps(
           }),
         ],
       );
+      // Google's terms want its copyright lines on screen, as Cesium shows
+      // them; Navara lists them in its attribution card, collapsed by default.
+      view.attribution?.show();
     },
     photorealActive: () => slots.photoreal != null,
   };

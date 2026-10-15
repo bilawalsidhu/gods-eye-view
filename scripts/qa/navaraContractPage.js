@@ -3,7 +3,12 @@
 // of the production build, which only takes the application's own HTML.
 import { createNavaraGlobe } from '../../src/globe/navara/index.js';
 
-const state = { engine: null, view: null, error: null };
+const state = {
+  engine: null,
+  view: null,
+  error: null,
+  createGlobe: createNavaraGlobe,
+};
 window.__globeQa = state;
 try {
   const globe = await createNavaraGlobe({
