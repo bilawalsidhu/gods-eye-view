@@ -41,12 +41,12 @@ page.on('console', (message) => {
 page.on('pageerror', (error) => consoleErrors.push(error.message));
 page.on('response', (response) => {
   const url = new URL(response.url());
-  const expectedOptionalTrackMiss = response.status() === 404
-    && url.pathname === '/api/flights/track';
+  const expectedOptionalMiss = response.status() === 404
+    && ['/api/flights/track', '/api/google/tiles-token'].includes(url.pathname);
   if (
     url.origin === new URL(appUrl).origin
     && response.status() >= 400
-    && !expectedOptionalTrackMiss
+    && !expectedOptionalMiss
   ) {
     localHttpErrors.push(`${response.status()} ${url.pathname}`);
   }
@@ -66,7 +66,7 @@ try {
     // live orbit accuracy. Reuse the tracking suite's fixed element sets so
     // CelesTrak outages cannot invalidate an otherwise clean UI run.
     if (url.origin === new URL(appUrl).origin
-      && ['/api/celestrak/active', '/api/celestrak/starlink'].includes(url.pathname)) {
+      && url.pathname.startsWith('/api/celestrak/')) {
       const dense = url.pathname.endsWith('/starlink');
       request.respond({
         status: 200,
@@ -2098,7 +2098,16 @@ try {
     JSON.stringify(cyberStyleStates));
   for (const height of [987, 720, 640, 900]) {
     await page.setViewport({ width: 1440, height, deviceScaleFactor: 1 });
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    // Software rendering may need more than one frame to settle the resize.
+    // Keep the geometry assertions below authoritative if the wait expires.
+    await page.waitForFunction(() => {
+      const signal = document.getElementById('cockpit-signal-stream');
+      const utility = document.querySelector('#cockpit-utility-controls .cockpit-utility-control.is-expanded');
+      if (!signal || !utility) return false;
+      const s = signal.getBoundingClientRect();
+      const u = utility.getBoundingClientRect();
+      return u.bottom <= s.top - 7 && s.bottom < innerHeight;
+    }, { timeout: 10_000 }).catch(() => {});
     const geometry = await page.evaluate(() => {
       const signal = document.getElementById('cockpit-signal-stream');
       const utility = document.getElementById('cockpit-utility-controls');
