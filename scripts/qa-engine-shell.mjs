@@ -297,6 +297,13 @@ async function runEngine(browser, baseUrl, engine) {
   page.on('response', (response) => {
     if (response.status() >= 400) failedUrls.push(response.url());
   });
+  // Navara's code, workers and wasm (dev: /src/globe/navara/, @navaramap;
+  // build: the navaraMode and navara_wasm assets).
+  const navaraRequests = new Set();
+  page.on('request', (request) => {
+    const { pathname } = new URL(request.url());
+    if (/navara/i.test(pathname)) navaraRequests.add(pathname);
+  });
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
     const entry = {
@@ -351,15 +358,20 @@ async function runEngine(browser, baseUrl, engine) {
     );
   const bootRest = await page.evaluate(waitForRest, 1500, 90000);
   record('boot flight comes to rest', bootRest);
-  // Let tiles stream in before judging the picture.
-  await sleep(4000);
-  const startPose = await page.evaluate(readPose);
-  const picture = await page.evaluate(canvasStats);
-  record(
-    `map is drawn (${boot.stack})`,
-    picture.stddev > 8 && picture.colours > 40,
-    picture,
-  );
+  // Let tiles stream in before judging the picture (a cold dev server and
+  // cache can take a while).
+  const drawn = (stats) => stats.stddev > 8 && stats.colours > 40;
+  const drawStarted = Date.now();
+  let picture = await page.evaluate(canvasStats);
+  while (!drawn(picture) && Date.now() - drawStarted < 45000) {
+    await sleep(1000);
+    picture = await page.evaluate(canvasStats);
+  }
+  await sleep(2000);
+  record(`map is drawn (${boot.stack})`, drawn(picture), {
+    ...picture,
+    waitedMs: Date.now() - drawStarted,
+  });
   if (outDir)
     await page.screenshot({
       path: path.join(outDir, `qa-engine-shell-${engine}.png`),
@@ -576,6 +588,11 @@ async function runEngine(browser, baseUrl, engine) {
     );
   }
 
+  record(
+    engine === 'cesium' ? 'loads no Navara code' : 'loads the Navara code',
+    engine === 'cesium' ? navaraRequests.size === 0 : navaraRequests.size > 0,
+    { navaraRequests: navaraRequests.size },
+  );
   const viewerAccess =
     engine === 'navara'
       ? await page.evaluate(() => window.__godsEyeView.viewer === null)
