@@ -83,6 +83,7 @@ export function filtersOf(provider) {
  * @property {'day'|'month'} [capturedAtPrecision]   How exactly the provider dates images (default 'day').
  * @property {string|null} [title]     A place name for the caption, e.g. the address.
  * @property {string|null} creator
+ * @property {string|null} [license]   The image's licence when it is per image, e.g. 'CC BY-SA 4.0'.
  * @property {string|null} sequenceId
  * @property {string} externalUrl      Deep link to the image on the provider's site.
  */

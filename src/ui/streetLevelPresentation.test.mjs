@@ -539,3 +539,25 @@ test('KEY REQUIRED points at Street View when it would draw with the Google key'
   assert.equal(plain.status.text, 'KEY REQUIRED');
   assert.notEqual(plain.meta, guidance);
 });
+
+test('the caption names an image’s own licence after its author, and leaves it out when there is none', () => {
+  const caption = (street) =>
+    presentStreetLevelPanel({
+      enabled: true,
+      providers: [],
+      coverage: {},
+      legend: [],
+      filter: {},
+      sequence: {},
+      street: { open: true, imageId: '1', ...street },
+    }).viewer.captionLeft;
+  assert.equal(
+    caption({ creator: 'Fixture Mapper', license: 'CC BY-SA 4.0' }),
+    'Image by Fixture Mapper · CC BY-SA 4.0',
+  );
+  assert.equal(
+    caption({ license: 'Licence Ouverte 2.0' }),
+    'Licence Ouverte 2.0',
+  );
+  assert.equal(caption({ creator: 'Someone' }), 'Image by Someone');
+});
