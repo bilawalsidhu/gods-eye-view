@@ -71,14 +71,19 @@ test('setBaseImagery builds Navara raster layers for OSM and Esri, one at a time
     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   );
   assert.equal(layer.desc.source, view.sources[0]);
-  assert.ok(view.shown.some((item) => /OpenStreetMap/.test(JSON.stringify(item))));
+  assert.ok(
+    view.shown.some((item) => /OpenStreetMap/.test(JSON.stringify(item))),
+  );
   await maps.setBaseImagery({
     descriptor: { id: 'esri-imagery', kind: 'esri-imagery' },
     credit: '<a href="https://www.esri.com">Powered by Esri</a>',
   });
   assert.equal(layersOf(view, 'raster').length, 1);
   assert.equal(view.sources.length, 1);
-  assert.match(view.sources[0].desc.url, /World_Imagery\/MapServer\/tile\/\{z\}\/\{y\}\/\{x\}$/);
+  assert.match(
+    view.sources[0].desc.url,
+    /World_Imagery\/MapServer\/tile\/\{z\}\/\{y\}\/\{x\}$/,
+  );
   assert.deepEqual(view.shown, [
     { attributionHtml: '<a href="https://www.esri.com">Powered by Esri</a>' },
   ]);
@@ -100,7 +105,10 @@ test('an imagery source Navara cannot build rejects and the current one stays', 
   await maps.setBaseImagery({ kind: 'osm' });
   await assert.rejects(maps.setBaseImagery({ kind: 'ion', style: 2 }), /ion/);
   await assert.rejects(maps.setBaseImagery({ kind: 'nope' }), TypeError);
-  assert.equal(view.sources[0].desc.url, 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
+  assert.equal(
+    view.sources[0].desc.url,
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  );
 });
 
 test('setTerrain: keyless Re:Earth mesh, flat ellipsoid, and ion world terrain with a token', async () => {
@@ -150,7 +158,10 @@ test('a newer terrain request wins over an older one still resolving', async () 
   });
   const world = maps.setTerrain({ kind: 'world', accessToken: 't' });
   await maps.setTerrain({ kind: 'keyless' });
-  answer({ ok: true, json: async () => ({ url: 'https://x/', accessToken: 'y' }) });
+  answer({
+    ok: true,
+    json: async () => ({ url: 'https://x/', accessToken: 'y' }),
+  });
   await world;
   const [terrain] = layersOf(view, 'terrain');
   assert.match(terrain.desc.source.desc.url, /reearth/);
@@ -240,7 +251,11 @@ test('current() returns the passed sources: base while the globe shows, tiles wh
   await maps.setBaseImagery(esri);
   const [raster] = layersOf(view, 'raster');
   assert.match(raster.desc.source.desc.url, /World_Imagery/);
-  assert.equal(raster.desc.raster?.show, false, 'the new layer shows over tiles');
+  assert.equal(
+    raster.desc.raster?.show,
+    false,
+    'the new layer shows over tiles',
+  );
   assert.ok(
     !view.shown.some((item) => /esri/i.test(JSON.stringify(item))),
     'its credit shows over tiles',
@@ -250,7 +265,10 @@ test('current() returns the passed sources: base while the globe shows, tiles wh
   await maps.setPhotorealTiles(null);
   assert.deepEqual(maps.current(), { baseImagery: esri, photoreal: null });
   assert.notEqual(raster.desc.raster?.show, false, 'base not back');
-  assert.ok(view.shown.some((item) => /esri/i.test(JSON.stringify(item))), 'credit not back');
+  assert.ok(
+    view.shown.some((item) => /esri/i.test(JSON.stringify(item))),
+    'credit not back',
+  );
 });
 
 test('the same tiles under a new source object count as that source', async () => {
@@ -277,4 +295,3 @@ test('releasePhotorealTiles forgets the source and takes its tiles away if shown
   assert.equal(maps.current().photoreal, null);
   assert.equal(layersOf(view, '3d-tiles').length, 0);
 });
-

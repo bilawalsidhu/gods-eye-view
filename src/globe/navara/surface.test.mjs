@@ -52,7 +52,12 @@ function tileAt(lon, lat, height, half = 100) {
   return { tile, mesh };
 }
 
-function setup({ tiles = [], terrain = () => undefined, idle = true, retain } = {}) {
+function setup({
+  tiles = [],
+  terrain = () => undefined,
+  idle = true,
+  retain,
+} = {}) {
   const view = {
     sampleTerrainHeight: (place) => terrain(place),
   };

@@ -11,7 +11,10 @@ const read = (relative) =>
 
 test('the controls pass the scene engine to the shell', () => {
   const controls = read('./controls.js');
-  assert.match(controls, /scene: \{ viewer, engine, mapStackController, operations \}/);
+  assert.match(
+    controls,
+    /scene: \{ viewer, engine, mapStackController, operations \}/,
+  );
   assert.match(controls, /new Controls\(viewer, \{[\s\S]*?\n\s+engine,\n/);
 });
 

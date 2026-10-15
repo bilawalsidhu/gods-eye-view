@@ -326,9 +326,11 @@ test('lookAt locks the transform, aims at the target and release keeps the pose'
     target,
     geo.ellipsoid.WGS84,
   );
-  camera.transform().forEach((value, index) =>
-    near(value, frame[index], 1e-9, `transform[${index}]`),
-  );
+  camera
+    .transform()
+    .forEach((value, index) =>
+      near(value, frame[index], 1e-9, `transform[${index}]`),
+    );
   camera.release();
   assert.deepEqual(camera.transform(), [...matrix4.IDENTITY]);
   near(
@@ -395,8 +397,15 @@ test('picks, projection and view rectangle come from the pose and canvas size', 
   const back = model.worldToWindow(hit);
   near(back.x, centre.x, 1e-6, 'x');
   const rectangle = camera.viewRectangle();
-  assert.ok(rectangle.west < math.toRadians(20) && math.toRadians(20) < rectangle.east);
-  near(camera.pose().fovy, 2 * Math.atan(Math.tan(Math.PI / 6) / 1.6), 1e-15, 'fovy');
+  assert.ok(
+    rectangle.west < math.toRadians(20) && math.toRadians(20) < rectangle.east,
+  );
+  near(
+    camera.pose().fovy,
+    2 * Math.atan(Math.tan(Math.PI / 6) / 1.6),
+    1e-15,
+    'fovy',
+  );
 });
 
 test('destroy cancels a running flight and stops the moveEnd timer', () => {
@@ -452,7 +461,12 @@ test('livePosition is one engine-owned object holding the current position; heig
   const moved = cartesian3.fromDegrees(21, 11, 9e5);
   port.drawn = { position: moved, ...orientationVectors(moved, 0.3, -1, 0) };
   frame();
-  near(cartesian3.distance(camera.livePosition, moved), 0, 1e-9, 'follows Navara');
+  near(
+    cartesian3.distance(camera.livePosition, moved),
+    0,
+    1e-9,
+    'follows Navara',
+  );
   near(camera.height(), 9e5, 1e-6, 'height after a user move');
   const pose = camera.pose();
   assert.notEqual(pose.position, live, 'pose shares the live object');
@@ -469,7 +483,10 @@ test('commanded fires before each camera command and never for reads', () => {
   assert.equal(raised, 0);
   const target = cartesian3.fromDegrees(10, 10, 0);
   camera.setView({ destination: cartesian3.fromDegrees(10, 10, 1e6) });
-  camera.flyTo({ destination: cartesian3.fromDegrees(11, 10, 1e6), duration: 0 });
+  camera.flyTo({
+    destination: cartesian3.fromDegrees(11, 10, 1e6),
+    duration: 0,
+  });
   camera.flyToSphere({ center: target, radius: 10 }, { duration: 0 });
   camera.lookAt(target, { heading: 0, pitch: -1, range: 500 });
   camera.cancelFlight();

@@ -56,7 +56,12 @@ function cameraAt(lon, lat, height, heading, pitch, roll, size = [1280, 800]) {
 
 test('heading π/2 at pitch 0 looks east with up along the local up', () => {
   const position = cartesian3.fromDegrees(-120, 35, 3000);
-  const { direction, up } = orientationVectors(position, math.PI_OVER_TWO, 0, 0);
+  const { direction, up } = orientationVectors(
+    position,
+    math.PI_OVER_TWO,
+    0,
+    0,
+  );
   const axes = axesAt(position);
   near(dot(direction, axes.east), 1, 1e-12, 'direction·east');
   near(dot(up, axes.up), 1, 1e-12, 'up·up');
@@ -183,11 +188,11 @@ test('viewProjection agrees with projectToWindow', () => {
 test('horizonVisible: the nadir is visible and the antipode hidden', () => {
   const eye = cartesian3.fromDegrees(20, 10, 1e6);
   assert.equal(horizonVisible(eye, cartesian3.fromDegrees(20, 10, 0)), true);
-  assert.equal(horizonVisible(eye, cartesian3.fromDegrees(-160, -10, 0)), false);
   assert.equal(
-    horizonVisible(eye, cartesian3.fromDegrees(-70, 10, 2e7)),
-    true,
+    horizonVisible(eye, cartesian3.fromDegrees(-160, -10, 0)),
+    false,
   );
+  assert.equal(horizonVisible(eye, cartesian3.fromDegrees(-70, 10, 2e7)), true);
 });
 
 test("viewRectangle matches Cesium's computeViewRectangle (S4 reference poses)", () => {
@@ -255,7 +260,9 @@ test('rectangleViewPosition frames a rectangle at the centre of a nadir view', (
     [rectangle.east, rectangle.north],
   ]) {
     const corner = projectToWindow(camera, cartesian3.fromRadians(lon, lat));
-    assert.ok(corner.x >= 0 && corner.x <= 1280 && corner.y >= 0 && corner.y <= 800);
+    assert.ok(
+      corner.x >= 0 && corner.x <= 1280 && corner.y >= 0 && corner.y <= 800,
+    );
   }
 });
 
