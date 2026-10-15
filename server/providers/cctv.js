@@ -74,7 +74,12 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
       mediaUrl: isVideoFeedType(feedType)
         ? `/api/cctv/media/${encodeURIComponent(cameraId)}`
         : null,
-      frameUrl: `/api/cctv/frame/${encodeURIComponent(cameraId)}`,
+      frameUrl:
+        feedType === 'embed'
+          ? null
+          : `/api/cctv/frame/${encodeURIComponent(cameraId)}`,
+      embedUrl: feedType === 'embed' ? source?.embedUrl || null : null,
+      sourcePageUrl: source?.sourcePageUrl || null,
       provider: source?.provider || '',
       sourceKind:
         source?.sourceKind || (source?.url ? 'configured' : 'fallback'),
@@ -161,6 +166,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               mountHeightM: source.mountHeightM,
               groundElevationM: source.groundElevationM,
               feedType: normalizeFeedType(source.feedType),
+              embedUrl: source.embedUrl || '',
+              sourcePageUrl: source.sourcePageUrl || '',
+              locationNote: source.locationNote || '',
               sourceKind:
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
               poseSource: source.poseSource,
@@ -184,6 +192,29 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             'Cache-Control': 'no-store',
           });
           res.end(JSON.stringify({ cameras: listHealth() }));
+          return;
+        }
+
+        // A provider-hosted player has no frame or media proxy. Refuse before
+        // any upstream request or Street View/synthetic fallback can run.
+        const playerRoute = /^\/(?:frame|media)\/([^/]+)(?:\/|$)/.exec(
+          url.pathname,
+        );
+        if (
+          playerRoute &&
+          sourceById.get(decodeURIComponent(playerRoute[1]))?.feedType ===
+            'embed'
+        ) {
+          res.writeHead(409, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+          });
+          res.end(
+            JSON.stringify({
+              error:
+                'This camera uses its public embedded player; frames are not available.',
+            }),
+          );
           return;
         }
 

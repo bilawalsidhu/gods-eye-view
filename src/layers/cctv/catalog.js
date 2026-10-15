@@ -1,4 +1,8 @@
 import { CAMERA_SEEDS, SOURCE_ENDPOINT } from './policy.js';
+import {
+  normalizeCctvEmbedUrl,
+  normalizeCctvSourcePageUrl,
+} from '../../sources/cctvTypes.js';
 
 export function createCatalog({ state: layerState, services, parts, source }) {
   const { CITY_POIS } = services.locations;
@@ -184,6 +188,9 @@ export function createCatalog({ state: layerState, services, parts, source }) {
             (source.url ? 'configured' : 'seed'),
         ).toLowerCase(),
         feedType,
+        embedUrl: normalizeCctvEmbedUrl(source.embedUrl),
+        sourcePageUrl: normalizeCctvSourcePageUrl(source.sourcePageUrl),
+        locationNote: String(source.locationNote || ''),
         feedConfigured: typeof source.url === 'string' && !!source.url.trim(),
         lat,
         lon,

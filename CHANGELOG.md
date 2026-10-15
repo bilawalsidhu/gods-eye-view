@@ -1,5 +1,12 @@
 # Changelog
 
+- Add Encarnación's public Sambódromo / Costanera camera to the existing CCTV
+  layer. Selecting its approximate venue marker opens the Municipality's original
+  RTSP.me player inside the camera panel, with an official-page link. The player
+  unloads when hidden or deselected. No frames, coverage frustum or calibrated
+  facing are claimed for this external player. `CCTV_ENCARNACION_ENABLED=0`
+  disables the pack.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 

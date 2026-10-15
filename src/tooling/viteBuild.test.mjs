@@ -228,4 +228,9 @@ test('the CSP admits the event media embeds and the Maps JavaScript API, and no 
   }
   // X posts load in X's own frames.
   assert.ok(frames.includes('https://platform.twitter.com'));
+  // CCTV can frame only RTSP.me's public player path; it needs no parent-page
+  // script or media-origin exception (the provider owns the child document).
+  assert.ok(frames.includes('https://rtsp.me/embed/'));
+  assert.ok(!frames.includes('https://rtsp.me'));
+  assert.ok(!scripts.some((source) => source.includes('rtsp.me')));
 });

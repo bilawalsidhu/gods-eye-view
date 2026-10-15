@@ -179,7 +179,8 @@
       "scripts/google-server-key.mjs",
       "src/data/cctvFootprint.js",
       "src/sources/cctvTypes.js",
-      "src/sources/httpBody.js"
+      "src/sources/httpBody.js",
+      "server/providers/cctv/encarnacion.js"
     ],
     "external": []
   },
@@ -474,7 +475,9 @@
       "src/ui/cctvControls.js",
       "src/ui/cctvFrames.js",
       "src/ui/cctvVideo.js",
-      "src/ui/cctvPresentation.js"
+      "src/ui/cctvPresentation.js",
+      "src/ui/cctvEmbed.js",
+      "src/sources/cctvTypes.js"
     ],
     "external": []
   },
@@ -668,7 +671,9 @@
       "src/ui/localSdrControls.js",
       "src/layers/localAdsb/feedNames.js",
       "src/ui/localSdrPresentation.js",
-      "src/data/cameraArrival.js"
+      "src/data/cameraArrival.js",
+      "src/ui/cctvEmbed.js",
+      "src/sources/cctvTypes.js"
     ],
     "external": ["cesium"]
   },
@@ -1186,7 +1191,8 @@
       "src/overlays/worldOverlayTokens.js",
       "src/data/cctvFootprint.js",
       "src/data/inputOwnership.js",
-      "src/layers/cctv/sourcePolicy.js"
+      "src/layers/cctv/sourcePolicy.js",
+      "src/sources/cctvTypes.js"
     ],
     "external": ["hls.js", "cesium"]
   },
@@ -2225,7 +2231,9 @@
       "src/tools/functions.js",
       "src/voice/actionSchemas.js",
       "src/view/index.js",
-      "src/app/embed.js"
+      "src/app/embed.js",
+      "src/ui/cctvEmbed.js",
+      "src/sources/cctvTypes.js"
     ],
     "external": [
       "hls.js",
@@ -2760,7 +2768,8 @@
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
-      "src/sources/infrastructureData.js"
+      "src/sources/infrastructureData.js",
+      "src/sources/cctvTypes.js"
     ],
     "external": [
       "hls.js",

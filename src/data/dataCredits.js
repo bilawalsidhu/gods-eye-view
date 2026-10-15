@@ -262,6 +262,14 @@ export const DATA_CREDITS = [
       NYC_DOT_DISCLAIMER,
   },
   {
+    key: 'encarnacion-cctv',
+    html:
+      'Public Sambódromo / Costanera camera (Paraguay): ' +
+      '<a href="https://encarnacion.gov.py/en-vivo/" target="_blank" rel="noopener">Municipalidad de Encarnación</a> · ' +
+      '<a href="https://rtsp.me/" target="_blank" rel="noopener">RTSP.me</a>. ' +
+      'Approximate venue location; original public player, no open video license asserted.',
+  },
+  {
     key: 'gbfs',
     html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
   },

@@ -925,6 +925,36 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+## Encarnación municipal CCTV player
+
+The existing CCTV layer includes one public Encarnación, Paraguay camera,
+`encarnacion-sambodromo`. The Municipality publishes
+`https://rtsp.me/embed/3NsfyZGe/` on `https://encarnacion.gov.py/en-vivo/`.
+Its announcement describes the Playa San José / Costanera tourism broadcast.
+The marker uses the approximate Centro Cívico / Sambódromo location from the
+Municipality's tourism page; the physical mount, facing and coverage are not
+surveyed. The panel labels this uncertainty and suppresses calibration, projection
+and coverage for this `embed` feed type. It remains selectable through the normal
+map, camera selector and navigation controls. No new layer token is introduced.
+
+The provider's original player loads only for the active camera while the panel
+and document are visible. Collapse, backgrounding, camera changes, CCTV disable
+and destruction remove the iframe. Regular state refreshes reuse the same player.
+The panel links to the official municipal page and labels playback `EXTERNAL`;
+an iframe load is not treated as proof of live camera health. The catalog carries
+only the stable public player URL, with no camera credentials or media tokens.
+The player is sandboxed, its URL is constrained to HTTPS RTSP.me public embed
+paths, and the parent CSP adds only that frame path. The server never fetches the
+player: frame/media routes return 409 for this camera instead of showing an
+unrelated Street View or synthetic fallback. No ambient thumbnails are fetched.
+
+The pack follows the existing default-pack/custom-catalog policy and fair catalog
+cap. Set `CCTV_ENCARNACION_ENABLED=0` to disable it. Video is neither bundled nor
+recorded; public availability is not represented as an open video license.
+Unit coverage: `cctvEncarnacion.test.mjs`, `cctvEmbed.test.mjs`, CCTV controls and
+CSP tests. Browser regression gate: `node scripts/qa-cctv-v2.mjs --url
+http://localhost:4173`; live provider playback is an additional manual check.
+
 ## NYC DOT TMC CCTV source pack
 
 The CCTV catalog can add New York City traffic cameras from the NYC DOT

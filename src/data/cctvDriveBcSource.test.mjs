@@ -193,6 +193,8 @@ test('CCTV catalog merges DriveBC cameras and CCTV_DRIVEBC_ENABLED=0 skips the r
     CCTV_TFL_ENABLED: undefined,
     CCTV_DRIVEBC_ENABLED: undefined,
     CCTV_DRIVEBC_MAX_SOURCES: undefined,
+    // This fixture exercises the remote catalog with only DriveBC available.
+    CCTV_ENCARNACION_ENABLED: '0',
   });
   const requested = [];
   t.mock.method(globalThis, 'fetch', async (url) => {
@@ -222,7 +224,7 @@ test('CCTV catalog merges DriveBC cameras and CCTV_DRIVEBC_ENABLED=0 skips the r
 });
 
 test('default per-pack camera caps fit inside the default catalog cap', () => {
-  // Every default pack at its own cap (Warendorf ships 1 curated camera).
+  // Every default pack at its own cap (Warendorf and Encarnación ship 1 each).
   const packs =
     DEFAULT_AUSTIN_MAX_SOURCES +
     DEFAULT_CALTRANS_MAX_SOURCES +
@@ -234,7 +236,7 @@ test('default per-pack camera caps fit inside the default catalog cap', () => {
     DEFAULT_TALLINN_MAX_SOURCES +
     DEFAULT_TARKTEE_MAX_SOURCES +
     DEFAULT_NSW_MAX_SOURCES +
-    1;
+    2;
   assert.ok(
     packs <= DEFAULT_CCTV_MAX_SOURCES,
     `default packs (${packs}) would be thinned by the catalog cap (${DEFAULT_CCTV_MAX_SOURCES})`,

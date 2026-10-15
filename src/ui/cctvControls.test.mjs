@@ -72,6 +72,87 @@ test('failed refresh preserves settled pixels, but changing cameras clears them'
   assert.equal(controls._cctvFrameWrap.classList.contains('has-frame'), false);
 });
 
+test('the camera panel owns the embedded player across visibility, selection and disable transitions', (t) => {
+  const { controls, requests } = fixture(t);
+  const prior = globalThis.document;
+  const children = new Set();
+  globalThis.document = {
+    hidden: false,
+    createElement(tag) {
+      return {
+        tag,
+        setAttribute() {},
+        remove() {
+          children.delete(this);
+        },
+      };
+    },
+  };
+  t.after(() => {
+    globalThis.document = prior;
+  });
+  controls._cctvFrameWrap.appendChild = (node) => children.add(node);
+  controls._cctvPanel = element();
+  controls._cctvSourceBadge = element();
+  controls.actions.setPanelCollapsed = () => {};
+  const camera = {
+    id: 'encarnacion-sambodromo',
+    name: 'Sambódromo',
+    feedType: 'embed',
+    embedUrl: 'https://rtsp.me/embed/3NsfyZGe/',
+    sourcePageUrl: 'https://encarnacion.gov.py/en-vivo/',
+  };
+  const state = {
+    enabled: true,
+    activeCameraId: camera.id,
+    activeCamera: camera,
+    cameras: [camera],
+  };
+  const render = () => controls._renderCctvState(state);
+  render();
+  assert.equal(children.size, 2);
+  assert.equal(
+    requests.length,
+    0,
+    'no synthetic/still preview for a public player',
+  );
+  assert.equal(controls._cctvFrame.hidden, true);
+  assert.equal(
+    controls._cctvSourceBadge.textContent,
+    'PUBLIC PLAYER · EXTERNAL',
+  );
+  const player = [...children][0];
+  render();
+  assert.equal(
+    [...children][0],
+    player,
+    'health refreshes do not reload the player',
+  );
+  controls._cctvPanel.classList.add('collapsed');
+  render();
+  assert.equal(children.size, 0);
+  controls._cctvPanel.classList.remove('collapsed');
+  render();
+  assert.equal(children.size, 2);
+  document.hidden = true;
+  render();
+  assert.equal(children.size, 0);
+  document.hidden = false;
+  render();
+  controls._renderCctvState({ ...state, enabled: false });
+  assert.equal(children.size, 0);
+  render();
+  controls._renderCctvState({
+    ...state,
+    activeCameraId: null,
+    activeCamera: null,
+  });
+  assert.equal(children.size, 0);
+  render();
+  controls.destroy();
+  assert.equal(children.size, 0);
+});
+
 test('destroy invalidates image callbacks and releases each subscription once', (t) => {
   const { controls, requests } = fixture(t);
   let unsubscribed = 0;
