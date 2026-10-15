@@ -40,6 +40,7 @@ function setup({ parts = {}, surface = 'draped' } = {}) {
       collection: {
         show: true,
         add: (options) => ({ ...options }),
+        remove() {},
         removeAll() {},
       },
       billboard: null,
@@ -186,4 +187,29 @@ test('draped mode clamps the marker to the globe whatever the ground says', () =
     Cesium.HeightReference.CLAMP_TO_GROUND,
   );
   assert.equal(ground.prepares.length, 0);
+});
+
+test('a Street View photo gets a blue view cone; a Mapillary photo GEV\u2019s pin', () => {
+  const { state, marker } = setup();
+  const removed = [];
+  state.marker.collection.remove = (billboard) => removed.push(billboard);
+  const streetView = { kind: 'view-cone', color: '#4285f4' };
+  marker.set({ lon: -121.49, lat: 38.58 }, 45, streetView);
+  const cone = state.marker.billboard;
+  assert.equal(cone.imageId, 'sl-position:view-cone:#4285f4');
+  assert.equal(
+    cone.rotation,
+    -Cesium.Math.toRadians(45),
+    'it turns with the view',
+  );
+  // Dragging the panorama keeps the look and the billboard.
+  marker.set({ lon: -121.49, lat: 38.58 }, 90, streetView);
+  assert.equal(state.marker.billboard, cone);
+  // Re-placed for a surface change: still the cone.
+  marker.setSurface();
+  assert.equal(state.marker.billboard, cone);
+  // A Mapillary photo next (its provider has no marker): the pin.
+  marker.set({ lon: -121.49, lat: 38.58 }, 90, undefined);
+  assert.equal(state.marker.billboard.imageId, 'sl-position:pin');
+  assert.deepEqual(removed, [cone]);
 });
