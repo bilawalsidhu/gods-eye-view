@@ -719,6 +719,8 @@
   "scripts/module-analysis.mjs",
   "scripts/check-import-directions.mjs",
   "src/tooling/importDirections.test.mjs",
+  "src/globe/contract.test.mjs",
+  "src/globe/testing/fakeEngine.test.mjs",
   "src/sources/reference.js",
   "src/sources/reference.test.mjs",
   "src/search/nominatim.js",

@@ -101,6 +101,47 @@ for (const [name, files, pattern] of [
     /src\/data\/helper\.js: geo reaches platform\/rendering dependency: cesium/,
   ],
   [
+    'globe contract imports cesium',
+    { 'src/globe/contract.js': "import 'cesium';" },
+    /src\/globe\/contract\.js: globe contract reaches engine dependency: cesium/,
+  ],
+  [
+    'globe contract imports three',
+    { 'src/globe/contract.js': "import * as THREE from 'three';" },
+    /globe contract reaches engine dependency: three/,
+  ],
+  [
+    'globe testing support imports a Navara package',
+    { 'src/globe/testing/fakeEngine.js': "import '@navaramap/three';" },
+    /src\/globe\/testing\/fakeEngine\.js: globe contract reaches engine dependency: @navaramap\/three/,
+  ],
+  [
+    'globe contract reaches cesium through a helper',
+    {
+      'src/globe/contract.js': "import '../data/helper.js';",
+      'src/data/helper.js': "export * from '@cesium/engine';",
+    },
+    /src\/data\/helper\.js: globe contract reaches engine dependency: @cesium\/engine/,
+  ],
+  [
+    'globe contract imports an engine implementation',
+    {
+      'src/globe/contract.js': "import('./navara/index.js');",
+      'src/globe/navara/index.js': '',
+    },
+    /globe contract imports engine implementation: src\/globe\/navara\/index\.js/,
+  ],
+  [
+    'Cesium globe engine imports Navara',
+    { 'src/globe/cesium/engine.js': "import '@navaramap/three';" },
+    /Cesium globe engine imports @navaramap\/three/,
+  ],
+  [
+    'Navara globe engine imports Cesium',
+    { 'src/globe/navara/engine.js': "import { Cartesian3 } from 'cesium';" },
+    /Navara globe engine imports cesium/,
+  ],
+  [
     'browser imports Node without prefix',
     { 'src/unused.mjs': "import 'fs/promises';" },
     /Node builtin/,
@@ -172,6 +213,23 @@ test('geo modules may import each other, and its tests may import cesium', (t) =
   write('src/geo/math.js', 'export const half = (value) => value / 2;');
   write('src/geo/demo.js', "export { half } from './math.js';");
   write('src/geo/demo.test.mjs', "import 'cesium'; import './demo.js';");
+  assert.doesNotThrow(() => checkImportDirections(root));
+});
+
+test('globe engines use their own dependencies, and globe tests may import any engine', (t) => {
+  const { root, write } = fixture(t);
+  write('src/geo/math.js', 'export const half = (value) => value / 2;');
+  write('src/globe/contract.js', "export { half } from '../geo/math.js';");
+  write('src/globe/testing/suite.mjs', "import '../contract.js';");
+  write('src/globe/testing/suite.test.mjs', "import 'cesium'; import 'three';");
+  write(
+    'src/globe/cesium/engine.js',
+    "import 'cesium'; import '../contract.js';",
+  );
+  write(
+    'src/globe/navara/engine.js',
+    "import 'three'; import '@navaramap/three'; import '../contract.js';",
+  );
   assert.doesNotThrow(() => checkImportDirections(root));
 });
 
