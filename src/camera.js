@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
 import * as geo from './geo/index.js';
+import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 
 /**
  * Camera presets for notable locations.
@@ -34,26 +34,33 @@ export const CAMERA_PRESETS = {
 
 /**
  * Fly the camera to a preset location with a smooth animation.
+ * @param {import('./globe/contract.js').GlobeEngine | object} engine The globe
+ *   engine, or a viewer registered for one.
  */
-export function flyToPreset(viewer, presetName, duration = 3.0) {
+export function flyToPreset(engine, presetName, duration = 3.0) {
   const preset = CAMERA_PRESETS[presetName];
-  if (!preset) return;
+  const camera = engineFromViewer(engine)?.camera;
+  if (!preset || !camera) return;
 
-  viewer.camera.flyTo({
+  camera.flyTo({
     destination: preset.destination,
     orientation: preset.orientation,
     duration,
-    easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+    easing: 'cubicInOut',
   });
 }
 
 /**
  * Set camera to Austin on load with a cinematic fly-in.
+ * @param {import('./globe/contract.js').GlobeEngine | object} target The globe
+ *   engine, or a viewer registered for one.
  * @returns {Function} Cancels the pending or active startup flight.
  */
-export function flyToAustin(viewer) {
+export function flyToAustin(target) {
+  const engine = engineFromViewer(target);
+  if (!engine) return () => {};
   // Start from a high altitude, then fly down
-  viewer.camera.setView({
+  engine.camera.setView({
     destination: geo.cartesian3.fromDegrees(-97.7431, 30.2672, 25000),
     orientation: {
       heading: geo.math.toRadians(0),
@@ -64,8 +71,8 @@ export function flyToAustin(viewer) {
 
   // Cinematic fly-in after a brief pause
   const timer = setTimeout(() => {
-    if (viewer.isDestroyed()) return;
-    viewer.camera.flyTo({
+    if (engine.isDestroyed()) return;
+    engine.camera.flyTo({
       destination: geo.cartesian3.fromDegrees(-97.7431, 30.2672, 600),
       orientation: {
         heading: geo.math.toRadians(15),
@@ -73,11 +80,11 @@ export function flyToAustin(viewer) {
         roll: 0.0,
       },
       duration: 4.0,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+      easing: 'cubicInOut',
     });
   }, 500);
   return () => {
     clearTimeout(timer);
-    if (!viewer.isDestroyed()) viewer.camera.cancelFlight();
+    if (!engine.isDestroyed()) engine.camera.cancelFlight();
   };
 }

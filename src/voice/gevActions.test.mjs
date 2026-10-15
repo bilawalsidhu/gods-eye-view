@@ -24,6 +24,8 @@ import { MAP_STACKS } from '../mapStackController.js';
 import { GEV_REALTIME_TOOLS } from '../../server/providers/openai/tools.js';
 import { presentResult } from './resultDisplay.js';
 import { attachVoiceResult } from './speech.js';
+import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
+import { registerViewerEngine } from '../globe/cesium/engineFromViewer.js';
 
 test('every live basemap is reachable by its own id — no enum value without a voice alias', () => {
   // B1 regression: a stack added to MAP_STACKS (and the set_map_stack enum)
@@ -130,6 +132,9 @@ function createVoiceNavigationHarness({ cockpitActive = false } = {}) {
       lookAtTransform() {},
     },
   };
+  // Location flights run on the globe engine registered for the viewer, as
+  // the app's scene engine is (src/app/globeEngine.js).
+  registerViewerEngine(viewer, createCesiumEngine(viewer));
   const styleManager = {
     runImmediateNavigation(noun, navigate, releaseOptions = undefined) {
       return runExplicitNavigation({

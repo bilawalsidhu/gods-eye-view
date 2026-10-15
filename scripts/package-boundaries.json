@@ -550,6 +550,7 @@
   "ui-shell": {
     "exports": ["./ui/shell"],
     "modules": [
+      "src/globe/cesium/engineFromViewer.js",
       "src/globe/contract.js",
       "src/hudLayouts.js",
       "src/hudLayoutPolicy.js",
@@ -758,6 +759,8 @@
   "scenes": {
     "exports": ["./scenes"],
     "modules": [
+      "src/globe/cesium/engineFromViewer.js",
+      "src/globe/contract.js",
       "src/scenes/nepalEvidencePack.js",
       "src/data/bhoteKoshiIncidentPlaces.js",
       "src/data/bhoteKoshiShotPaths.js",
@@ -3087,6 +3090,7 @@
   "application-operations": {
     "exports": ["./application/operations"],
     "modules": [
+      "src/globe/cesium/engineFromViewer.js",
       "src/globe/cesium/credits.js",
       "src/services/groundSnap.js",
       "src/globe/contract.js",
@@ -3164,12 +3168,19 @@
   },
   "layer-lifecycle": {
     "exports": ["./data/lifecycle"],
-    "modules": ["src/data/lifecycle.js", "src/data/cameraArrival.js"],
+    "modules": [
+      "src/globe/cesium/engineFromViewer.js",
+      "src/globe/contract.js",
+      "src/data/lifecycle.js",
+      "src/data/cameraArrival.js"
+    ],
     "external": []
   },
   "ui-navigation": {
     "exports": ["./ui/navigation"],
     "modules": [
+      "src/globe/cesium/engineFromViewer.js",
+      "src/globe/contract.js",
       "src/navigationPolicy.js",
       "src/ui/navigationController.js",
       "src/app/stateChannel.js",

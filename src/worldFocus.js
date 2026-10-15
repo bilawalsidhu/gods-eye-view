@@ -1,8 +1,8 @@
 /**
  * One-click camera transfer for layer-owned world targets.
  */
-import * as Cesium from 'cesium';
 import * as geo from './geo/index.js';
+import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 
 export const WORLD_FOCUS_REQUEST_EVENT = 'gev:world-request-focus';
 export const WORLD_CLICK_FOCUS_DURATION_SEC = 1.9;
@@ -70,27 +70,30 @@ export function routeWorldFocusRequest(event, runExplicitFocus, fly) {
   return runExplicitFocus(detail, () => fly(detail));
 }
 
-/** Fly to a world target after ownership has been released. */
-export function flyToWorldTarget(viewer, target = {}) {
-  const camera = viewer?.camera;
+/**
+ * Fly to a world target after ownership has been released.
+ * @param {import('./globe/contract.js').GlobeEngine | object | null} engine
+ *   The globe engine, or a viewer registered for one.
+ */
+export function flyToWorldTarget(engine, target = {}) {
+  const camera = engineFromViewer(engine)?.camera;
   const framing = WORLD_FOCUS_FRAMING[target.kind];
   if (!camera || !framing || !isValidWorldFocusTarget(target)) return false;
-  const heading = Number.isFinite(camera.heading) ? camera.heading : 0;
+  const { heading: current } = camera.pose();
+  const heading = Number.isFinite(current) ? current : 0;
   const duration =
     target.durationSec > 0
       ? target.durationSec
       : WORLD_CLICK_FOCUS_DURATION_SEC;
-  camera.cancelFlight?.();
-  camera.flyToBoundingSphere(
-    new Cesium.BoundingSphere(target.position, framing.radiusM),
+  camera.cancelFlight();
+  camera.flyToSphere(
+    { center: target.position, radius: framing.radiusM },
     {
-      offset: new Cesium.HeadingPitchRange(
-        heading,
-        geo.math.toRadians(framing.pitchDeg),
-        framing.rangeM,
-      ),
+      heading,
+      pitch: geo.math.toRadians(framing.pitchDeg),
+      range: framing.rangeM,
       duration,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+      easing: 'cubicInOut',
     },
   );
   return true;
