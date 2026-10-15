@@ -98,3 +98,19 @@ test('military records keep bounded partial retention and release metadata only 
     'remove',
   );
 });
+
+test('military emergency status follows the latest poll instead of sticking', () => {
+  const records = store();
+  const first = records.receive(
+    observation({ squawk: '1234', emergency: 'minfuel' }),
+    context(),
+  );
+  assert.equal(first.meta.squawk, '1234');
+  assert.equal(first.meta.emergency.kind, 'minfuel');
+  assert.equal(first.meta.emergency.severity, 'priority');
+  const next = records.receive(
+    observation({ squawk: '1234', emergency: 'none' }),
+    context(),
+  );
+  assert.equal(next.meta.emergency, null);
+});

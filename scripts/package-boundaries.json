@@ -781,6 +781,7 @@
   "live-observations": {
     "exports": ["./sources/live"],
     "modules": [
+      "src/data/aircraftEmergency.js",
       "src/sources/live/aircraft.js",
       "src/sources/live/contract.js",
       "src/sources/live/index.js",
@@ -794,6 +795,7 @@
     "modules": [
       "src/cyberSonar.js",
       "src/data/aircraftClass.js",
+      "src/data/aircraftEmergency.js",
       "src/data/aircraftIcons.js",
       "src/data/aircraftMeta.js",
       "src/data/aircraftNearbyPolicy.js",
@@ -837,6 +839,7 @@
     "modules": [
       "src/cyberSonar.js",
       "src/data/aircraftClass.js",
+      "src/data/aircraftEmergency.js",
       "src/data/aircraftIcons.js",
       "src/data/aircraftMeta.js",
       "src/data/aircraftNearbyPolicy.js",
@@ -1502,6 +1505,7 @@
       "src/contextModePolicy.js",
       "src/creditKeyboard.js",
       "src/data/aircraftClass.js",
+      "src/data/aircraftEmergency.js",
       "src/data/aircraftIcons.js",
       "src/data/aircraftMeta.js",
       "src/data/aircraftNearbyPolicy.js",
@@ -2038,6 +2042,10 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/gnss.js",
+      "src/layers/gnss/index.js",
+      "src/layers/gnss/source.js",
+      "src/layers/gnss/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -2293,6 +2301,7 @@
       "src/celestialRing.js",
       "src/cockpitMath.js",
       "src/data/aircraftClass.js",
+      "src/data/aircraftEmergency.js",
       "src/data/aircraftIcons.js",
       "src/data/aircraftMeta.js",
       "src/data/aircraftNearbyPolicy.js",
@@ -2631,6 +2640,10 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/gnss.js",
+      "src/layers/gnss/index.js",
+      "src/layers/gnss/source.js",
+      "src/layers/gnss/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -2923,7 +2936,8 @@
       "src/layers/flights/recordPolicy.js",
       "src/data/aircraftMeta.js",
       "src/data/renderAltitude.js",
-      "src/data/aircraftClass.js"
+      "src/data/aircraftClass.js",
+      "src/data/aircraftEmergency.js"
     ],
     "external": []
   },
@@ -2942,7 +2956,8 @@
       "src/layers/military/recordPolicy.js",
       "src/data/aircraftMeta.js",
       "src/data/renderAltitude.js",
-      "src/data/aircraftClass.js"
+      "src/data/aircraftClass.js",
+      "src/data/aircraftEmergency.js"
     ],
     "external": []
   },
@@ -3139,7 +3154,8 @@
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
-      "src/layers/submarineCables/bundledSource.js"
+      "src/layers/submarineCables/bundledSource.js",
+      "src/layers/gnss/source.js"
     ],
     "external": []
   },
@@ -3350,6 +3366,21 @@
     ],
     "external": ["cesium"]
   },
+  "gnss": {
+    "exports": ["./layers/gnss"],
+    "modules": [
+      "src/layers/gnss/index.js",
+      "src/sources/httpBody.js",
+      "src/layers/gnss/source.js",
+      "src/layers/gnss/records.js"
+    ],
+    "external": ["cesium"]
+  },
+  "gnss-source": {
+    "exports": ["./layers/gnss/source"],
+    "modules": ["src/sources/httpBody.js", "src/layers/gnss/source.js"],
+    "external": []
+  },
   "perimeters-source": {
     "exports": ["./layers/perimeters/source"],
     "modules": [
@@ -3477,6 +3508,7 @@
       "src/sources/featureGeometry.js",
       "src/sources/live/standalone.js",
       "src/sources/live/contract.js",
+      "src/data/aircraftEmergency.js",
       "src/sources/live/aircraft.js",
       "src/sources/live/vessels.js",
       "src/tools/places.js",

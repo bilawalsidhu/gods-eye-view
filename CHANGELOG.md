@@ -1,5 +1,18 @@
 # Changelog
 
+- Snow flakes sway within a fixed range instead of drifting sideways faster the
+  longer the app runs; the Wind setting still scales the sway.
+
+- The right rail ignores panels that other CSS hides, such as during an event
+  view, so they no longer force one-panel-at-a-time layout or collapse visible
+  panels. Panels the rail collapses itself are still restored.
+
+- Coordinate searches refuse empty latitude or longitude components instead of navigating to an unintended location.
+
+- Bing Aerial and Bing Labels request HTTPS tiles on HTTP localhost through
+  their ion-backed providers, retaining ion and per-tile attribution without
+  widening the Content Security Policy.
+
 - Add New York City traffic cameras from the NYC DOT Traffic Management Center
   as an opt-in CCTV pack. NYC DOT requires a data-sharing agreement for the
   camera feed, so the pack is off unless `CCTV_NYC_ENABLED=1` is set by an
@@ -10,6 +23,31 @@
   off-host. Offline cameras are dropped. Once enabled, the 250 cameras nearest
   the five borough cores load and `CCTV_NYC_MAX_SOURCES` changes the cap. The catalog-wide ceiling is
   unchanged; extra cameras share it round-robin with the other packs.
+
+- Street Level counts unique tiles before ranking so overlapping dateline halves
+  in polar views do not waste slots in the 16-tile overview budget.
+
+- Directions no longer shows a truncation notice for a route with exactly 200
+  turns, and a roundabout at the 200th turn keeps its exit distance.
+
+- Weather records keep missing conditions unknown and refuse summaries without a measured temperature.
+
+- Tool string length validation counts Unicode characters correctly, including characters outside the basic multilingual plane.
+
+- Director timeline seeks cross the dateline along the short longitude arc.
+
+- Map state updates stop delivering to subscribers removed during the same notification.
+
+- Director assets cancelled during the final stream read are discarded with reader cleanup.
+
+- Analyst queries preserve useful rows when an upstream timestamp is outside the supported date range.
+
+- Fire detections with missing or impossible positions are skipped while genuine zero coordinates remain valid.
+
+- Frequently reused terrain batches retain their cached heights ahead of unused cells.
+
+- Recent Imagery’s exported `setBox` and `searchHls` reject missing, blank or
+  boolean programmatic box edges instead of interpreting them as zero coordinates.
 
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
@@ -114,10 +152,20 @@
   construction, is drawn in amber: site, 2,750 m runway and terminal, with
   Avinor's planned 2029 opening. `scripts/build-airports-norway.py` rebuilds
   or `--verify`s the file from a pinned Geofabrik extract. Voice and the
-  analyst know the layer as `local-airports`; its share-link token is `3`.
+  analyst know the layer as `local-airports`; its share-link token is `4`.
 - Keep later satellites when a TLE catalog entry is missing an orbital line.
   The parser skips the incomplete set and resumes at the next complete named
   set, instead of losing the rest of the group (#906).
+- Flights and Military Flights highlight emergency transponder broadcasts in
+  fleet billboards, 3D models and Cockpit contacts. Colors update when a status
+  starts or clears. Emergency squawks outrank ADS-B priority statuses; GEV
+  reports minimum fuel and lifeguard without red tint. Cockpit names the code
+  or ADS-B status, and analyst/voice results retain broadcast provenance and
+  the latest known contact time. One omitted ADS-B status poll during a source
+  switch may retain the previous status if the squawk is unchanged; an explicit
+  clear takes effect immediately. Broadcasts are not confirmed incidents.
+  Contributed by [Leo Pechnicki](https://github.com/leopechnicki) (#856).
+
 - Street Level: KartaView is the third provider, keyless. Light its chip
   (purple; off by default, one provider at a time) and zoom in below about
   6 km: the lines are the streets KartaView has photos of (z13–14 tiles from
@@ -200,6 +248,23 @@
   the pack, `CCTV_VEGVESEN_MAX_SOURCES` caps it (keeping cameras nearest the
   largest cities) and `CCTV_VEGVESEN_VIDEO=0` keeps stills only. Attributed
   under NLOD 2.0.
+
+- GNSS Integrity (Events, voice-addressable, share token `3`) draws navigation
+  accuracy scores from a keyless regional adsb.lol sample; aircraft-level analyst
+  queries are unavailable for these aggregate cells. Cells do not intercept
+  map clicks. Pan/zoom refreshes automatically; feed failures retain the display
+  and explain the next retry. Aircraft-reported quality includes MLAT-positioned
+  contacts after GPS loss, excludes TIS-B/MLAT-derived quality, and locates GPS-loss
+  evidence at the last good GNSS position when available. Scores discount one
+  bad aircraft per cell and retain 30 minutes of visited-view evidence; they
+  do not confirm jamming. See [method and limits](DATA_SOURCES.md#gnss-integrity).
+  Contributed by [Leo Pechnicki](https://github.com/leopechnicki) (#855).
+
+- Live HLS cameras play on a page opened over plain HTTP from another machine
+  (`HOST=0.0.0.0`). The client lease id came from `crypto.randomUUID`, which
+  browsers only expose in secure contexts, so starting a live feed threw
+  before playback. The id now falls back to a v4 UUID built from
+  `crypto.getRandomValues`, which the server's lease check accepts.
 
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
