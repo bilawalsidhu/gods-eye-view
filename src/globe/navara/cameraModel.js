@@ -97,7 +97,10 @@ export function createCameraModel({
     changed: createEngineEvent(),
     moveStart: createEngineEvent(),
     moveEnd: createEngineEvent(),
+    commanded: createEngineEvent(),
   };
+  // A camera command takes the camera from whoever held it; say so first.
+  const announce = () => events.commanded.raiseEvent();
   const initial = port.read();
   let state = initial
     ? copyPose(initial)
@@ -295,19 +298,23 @@ export function createCameraModel({
           cartesian3.create(),
         ),
         fovy: current.fovy,
+        aspectRatio: current.width / current.height,
       };
     },
     setView(options) {
       if (!options?.destination)
         throw new TypeError('setView needs a destination');
+      announce();
       place(viewFor(options.destination, options.orientation));
     },
     flyTo(options) {
       if (!options?.destination)
         throw new TypeError('flyTo needs a destination');
+      announce();
       startFlight(options, viewFor(options.destination, options.orientation));
     },
     flyToSphere(sphere, options = {}) {
+      announce();
       transform = [...matrix4.IDENTITY];
       const { width, height } = port.size();
       const range =
@@ -328,6 +335,7 @@ export function createCameraModel({
     },
     flightActive: () => flight != null,
     lookAt(target, offset) {
+      announce();
       camera.lookAtTransform(
         geo.transforms.eastNorthUpToFixedFrame(target, WGS84),
         offset,
@@ -342,6 +350,7 @@ export function createCameraModel({
       transform = [...matrix4.IDENTITY];
     },
     cancelFlight() {
+      announce();
       cancelCurrentFlight();
     },
     zoomIn(amount = DEFAULT_ZOOM_AMOUNT) {
@@ -367,6 +376,7 @@ export function createCameraModel({
     changed: events.changed,
     moveStart: events.moveStart,
     moveEnd: events.moveEnd,
+    commanded: events.commanded,
     get percentageChanged() {
       return percentageChanged;
     },

@@ -40,6 +40,8 @@
  * @property {Cartesian3} up
  * @property {Cartesian3} right direction × up
  * @property {number} fovy Vertical field of view.
+ * @property {number} aspectRatio The view's width over its height (Cesium:
+ *   the frustum's, from the drawing buffer).
  *
  * @typedef {{ heading: number, pitch: number, roll: number }
  *   | { direction: Cartesian3, up: Cartesian3 }} Orientation
@@ -117,6 +119,11 @@
  * @property {EngineEvent} moveEnd Fires once the camera has been still for a
  *   while (Cesium: scene.cameraEventWaitTime, 500 ms), so a move that follows
  *   within that time continues the same movement and raises no new moveStart.
+ * @property {EngineEvent} commanded Fires (no arguments) when a command, not a
+ *   user gesture, is about to take the camera: setView, flyTo, flyToSphere,
+ *   lookAt and cancelFlight. Cesium also raises it for those calls made on the
+ *   viewer's own camera and when the viewer's tracked entity changes, so a
+ *   pending correction yields to every new camera owner.
  * @property {number} percentageChanged
  *
  * @typedef {'click'|'doubleClick'|'move'|'down'|'up'} InputType
@@ -196,7 +203,10 @@
  * @property {'cesium'|'navara'} kind
  * @property {{ container: object, canvas: object, size: () => { width: number, height: number } }} host
  * @property {GlobeCamera} camera
- * @property {{ pick: (screen: Cartesian2, width?: number, height?: number) => (PickResult | undefined), drillPick: (screen: Cartesian2, limit?: number, width?: number, height?: number) => PickResult[], pickPosition: (screen: Cartesian2) => (Cartesian3 | undefined), pickPositionSupported: boolean }} picker
+ * @property {{ pick: (screen: Cartesian2, width?: number, height?: number) => (PickResult | undefined), drillPick: (screen: Cartesian2, limit?: number, width?: number, height?: number) => PickResult[], pickPosition: (screen: Cartesian2) => (Cartesian3 | undefined), pickPositionSupported: boolean, pickGlobe: (screen: Cartesian2) => (Cartesian3 | undefined) }} picker
+ *   pickGlobe: where the ray through a window position meets the globe
+ *   surface (terrain, not tiles or models; Cesium's globe.pick of the camera's
+ *   pick ray); an engine without a terrain surface answers the ellipsoid.
  * @property {GlobeProjector} projector
  * @property {{ preUpdate: EngineEvent, preRender: EngineEvent, postRender: EngineEvent }} frames Listeners receive a timestamp in ms.
  * @property {GlobeRender} render
@@ -207,6 +217,7 @@
  * @property {{ addStatic: (html: string, options?: { onScreen?: boolean }) => () => void }} credits
  * @property {GlobeMaps} maps
  * @property {() => void} destroy
+ * @property {() => boolean} isDestroyed True once destroy() has run.
  */
 
 export const ENGINE_KINDS = Object.freeze(['cesium', 'navara']);
@@ -345,6 +356,7 @@ const SHAPE = {
     changed: isEngineEvent,
     moveStart: isEngineEvent,
     moveEnd: isEngineEvent,
+    commanded: isEngineEvent,
     percentageChanged: isNumber,
   },
   picker: {
@@ -352,6 +364,7 @@ const SHAPE = {
     drillPick: isFunction,
     pickPosition: isFunction,
     pickPositionSupported: isBoolean,
+    pickGlobe: isFunction,
   },
   projector: {
     worldToWindow: isFunction,
@@ -396,6 +409,7 @@ export const GLOBE_ENGINE_MEMBERS = Object.freeze([
     Object.keys(members).map((member) => `${capability}.${member}`),
   ),
   'destroy',
+  'isDestroyed',
 ]);
 
 /**
@@ -425,6 +439,7 @@ export function assertGlobeEngine(engine) {
       if (!valid(value[member])) problems.push(`${capability}.${member}`);
   }
   if (!isFunction(engine.destroy)) problems.push('destroy');
+  if (!isFunction(engine.isDestroyed)) problems.push('isDestroyed');
   if (problems.length)
     throw new TypeError(
       `GlobeEngine is missing or mistypes: ${problems.join(', ')}`,

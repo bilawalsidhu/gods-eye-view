@@ -31,6 +31,31 @@ function readCamera(raw) {
   };
 }
 
+// Nearest hit of a ray with the WGS84 ellipsoid raised by `height` metres
+// (each radius grown by it), or undefined.
+function rayRaisedEllipsoid({ origin, direction }, height) {
+  const radii = geo.ellipsoid.WGS84.radii;
+  const rx = radii.x + height;
+  const ry = radii.y + height;
+  const rz = radii.z + height;
+  const o = [origin.x / rx, origin.y / ry, origin.z / rz];
+  const d = [direction.x / rx, direction.y / ry, direction.z / rz];
+  const a = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+  const b = 2 * (o[0] * d[0] + o[1] * d[1] + o[2] * d[2]);
+  const c = o[0] * o[0] + o[1] * o[1] + o[2] * o[2] - 1;
+  const discriminant = b * b - 4 * a * c;
+  if (discriminant < 0) return undefined;
+  const root = Math.sqrt(discriminant);
+  const near = (-b - root) / (2 * a);
+  const t = near > 0 ? near : (-b + root) / (2 * a);
+  if (!(t > 0)) return undefined;
+  return cartesian3.add(
+    origin,
+    cartesian3.multiplyByScalar(direction, t, cartesian3.create()),
+    cartesian3.create(),
+  );
+}
+
 /**
  * @param {object} view An initialised Navara ThreeView.
  * @param {{
@@ -115,6 +140,26 @@ export function createNavaraEngine(
       return hit ? cartesian3.create(hit.x, hit.y, hit.z) : undefined;
     },
     pickPositionSupported: true,
+    // The globe under a window position: the pick ray's ellipsoid hit, moved
+    // onto Navara's terrain (a few fixed-point steps; terrain varies slowly
+    // over the distance the hit moves).
+    pickGlobe(screen) {
+      let hit = model.camera.pickEllipsoid(screen);
+      if (!hit) return undefined;
+      const ray = model.camera.pickRay(screen);
+      for (let step = 0; step < 4; step++) {
+        const height = surface.terrainHeight(
+          geo.cartographic.fromCartesian(hit, geo.ellipsoid.WGS84),
+        );
+        if (!Number.isFinite(height)) break;
+        const next = rayRaisedEllipsoid(ray, height);
+        if (!next) break;
+        const moved = cartesian3.distance(next, hit);
+        hit = next;
+        if (moved < 0.01) break;
+      }
+      return hit;
+    },
   };
 
   let destroyed = false;
@@ -151,5 +196,6 @@ export function createNavaraEngine(
       credits.destroy();
       maps.destroy();
     },
+    isDestroyed: () => destroyed,
   };
 }

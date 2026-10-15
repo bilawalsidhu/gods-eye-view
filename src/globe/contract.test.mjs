@@ -206,6 +206,22 @@ test('the contract carries what the shell infrastructure needs', () => {
   );
 });
 
+test('the contract carries what shell navigation needs', () => {
+  for (const member of ['camera.commanded', 'picker.pickGlobe', 'isDestroyed'])
+    assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
+  const engine = createFakeEngine();
+  const broken = {
+    ...engine,
+    camera: { ...engine.camera, commanded: {} },
+    picker: { ...engine.picker, pickGlobe: undefined },
+    isDestroyed: false,
+  };
+  assert.throws(
+    () => assertGlobeEngine(broken),
+    /camera\.commanded.*picker\.pickGlobe.*isDestroyed/,
+  );
+});
+
 test('the fake engine passes the engine contract suite', async (t) => {
   const engine = createFakeEngine();
   const checks = createContractSuite(engine, {

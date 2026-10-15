@@ -41,6 +41,16 @@ export function createCesiumPicker(viewer) {
     get pickPositionSupported() {
       return Boolean(scene.pickPositionSupported);
     },
+    pickGlobe(screen) {
+      if (!scene.globe) return undefined;
+      try {
+        const camera = viewer.camera ?? scene.camera;
+        const ray = camera.getPickRay(toCesium2(screen));
+        return ray ? toGeo3(scene.globe.pick(ray, scene)) : undefined;
+      } catch {
+        return undefined;
+      }
+    },
   };
   return { picker, destroy() {} };
 }

@@ -77,8 +77,10 @@ test('destroy releases holds, listeners, handlers and engine-owned map state', a
   engine.render.setContinuous(true);
   engine.credits.addStatic('credit');
   await engine.maps.setBaseImagery({ kind: 'osm' });
+  assert.equal(engine.isDestroyed(), false);
   engine.destroy();
   engine.destroy();
+  assert.equal(engine.isDestroyed(), true);
   assert.equal(viewer.scene.camera.changed.numberOfListeners, 0);
   assert.equal(viewer.scene.postRender.numberOfListeners, 0);
   assert.equal(handlers.handlers[0].destroyed, true);

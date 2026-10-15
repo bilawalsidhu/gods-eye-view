@@ -360,3 +360,69 @@ test('the camera is the viewer camera (Viewer.camera is scene.camera)', () => {
   const { camera } = createCesiumCamera({ ...viewer, camera: own });
   assert.equal(camera.livePosition, own.positionWC);
 });
+
+test('pose carries the frustum aspect ratio', () => {
+  const { camera, cesium } = setup();
+  assert.equal(camera.pose().aspectRatio, cesium.frustum.aspectRatio);
+});
+
+test('commanded hooks the Cesium camera and tracking only while it has listeners', () => {
+  const { viewer, camera, cesium, destroy } = setup();
+  const names = [
+    'flyTo',
+    'flyToBoundingSphere',
+    'setView',
+    'lookAt',
+    'cancelFlight',
+  ];
+  const originals = Object.fromEntries(
+    names.map((name) => [name, cesium[name]]),
+  );
+  const own = Object.fromEntries(
+    names.map((name) => [name, Object.getOwnPropertyDescriptor(cesium, name)]),
+  );
+  let raised = 0;
+  const listener = () => raised++;
+  const remove = camera.commanded.addEventListener(listener);
+  for (const name of names)
+    assert.notEqual(cesium[name], originals[name], name);
+  // Direct calls on the viewer camera (layers, cockpit) announce themselves.
+  cesium.setView({});
+  assert.equal(raised, 1);
+  cesium.cancelFlight();
+  assert.equal(raised, 2);
+  // So do engine commands, once per Cesium entry point they reach.
+  camera.lookAt(geo.cartesian3.fromDegrees(0, 0, 0), {
+    heading: 0,
+    pitch: -1,
+    range: 10,
+  });
+  assert.equal(raised, 3);
+  assert.equal(viewer.callsOf('camera.lookAt').length, 1);
+  // A new tracked entity takes the camera too.
+  viewer.trackedEntityChanged.raiseEvent({ id: 'contact' });
+  assert.equal(raised, 4);
+  camera.release();
+  assert.equal(raised, 4, 'release is not a new owner');
+  remove();
+  for (const name of names) {
+    assert.equal(cesium[name], originals[name], `${name} restored`);
+    assert.deepEqual(Object.getOwnPropertyDescriptor(cesium, name), own[name]);
+  }
+  assert.equal(viewer.trackedEntityChanged.numberOfListeners, 0);
+  cesium.setView({});
+  assert.equal(raised, 4);
+  camera.commanded.addEventListener(listener);
+  destroy();
+  assert.equal(cesium.setView, originals.setView, 'destroy unhooks');
+  assert.equal(viewer.trackedEntityChanged.numberOfListeners, 0);
+});
+
+test('commanded leaves a newer hook on the camera in place', () => {
+  const { camera, cesium } = setup();
+  const remove = camera.commanded.addEventListener(() => {});
+  const newer = () => {};
+  cesium.flyTo = newer;
+  remove();
+  assert.equal(cesium.flyTo, newer);
+});

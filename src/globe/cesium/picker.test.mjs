@@ -92,3 +92,24 @@ test('pick results carry 3D tile content for surface checks', () => {
   scene.pick = () => ({ id: 'entity', primitive: {} });
   assert.equal(picker.pick(geo.cartesian2.create(1, 1)).content, undefined);
 });
+
+test('pickGlobe asks the globe along the camera pick ray and returns geo', () => {
+  const { viewer, picker, scene } = setup();
+  const hit = picker.pickGlobe(geo.cartesian2.create(3, 4));
+  assert.ok(!(hit instanceof Cesium.Cartesian3));
+  assert.deepEqual([hit.x, hit.y, hit.z], [6378137, 3, 4]);
+  const [screen] = viewer.callsOf('camera.getPickRay')[0].args;
+  assert.ok(screen instanceof Cesium.Cartesian2);
+  assert.equal(screen.toString(), '(3, 4)');
+  const [ray, pickedScene] = viewer.callsOf('globe.pick')[0].args;
+  assert.ok(ray instanceof Cesium.Ray);
+  assert.equal(pickedScene, scene);
+  scene.globe.pick = () => undefined;
+  assert.equal(picker.pickGlobe(geo.cartesian2.create(1, 1)), undefined);
+  scene.globe.pick = () => {
+    throw new Error('no ray');
+  };
+  assert.equal(picker.pickGlobe(geo.cartesian2.create(1, 1)), undefined);
+  scene.globe = undefined;
+  assert.equal(picker.pickGlobe(geo.cartesian2.create(1, 1)), undefined);
+});

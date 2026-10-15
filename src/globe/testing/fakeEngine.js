@@ -35,6 +35,7 @@ const SCRIPTABLE = new Set([
   'pick',
   'drillPick',
   'pickPosition',
+  'pickGlobe',
   'pickEllipsoid',
   'viewRectangle',
   'sampleHeight',
@@ -235,6 +236,7 @@ export function createFakeEngine(options = {}) {
     'camera.changed': createEngineEvent(),
     'camera.moveStart': createEngineEvent(),
     'camera.moveEnd': createEngineEvent(),
+    'camera.commanded': createEngineEvent(),
     'frames.preUpdate': createEngineEvent(),
     'frames.preRender': createEngineEvent(),
     'frames.postRender': createEngineEvent(),
@@ -262,6 +264,11 @@ export function createFakeEngine(options = {}) {
     destroyed: false,
   };
   const record = (method, args) => fake.calls.push({ method, args });
+  // A camera command: recorded, then announced before it runs.
+  const command = (method, args) => {
+    record(method, args);
+    events['camera.commanded'].raiseEvent();
+  };
 
   const aspect = () => width / height;
   const right = () => unit(cross(state.direction, state.up));
@@ -604,6 +611,7 @@ export function createFakeEngine(options = {}) {
         up: copy3(state.up),
         right: right(),
         fovy,
+        aspectRatio: aspect(),
       };
     },
     get livePosition() {
@@ -611,13 +619,13 @@ export function createFakeEngine(options = {}) {
     },
     height: () => cartographic.fromCartesian(state.position, WGS84).height,
     setView(view) {
-      record('camera.setView', [view]);
+      command('camera.setView', [view]);
       if (!view?.destination)
         throw new TypeError('setView needs a destination');
       apply(viewFor(view.destination, view.orientation, CESIUM_DEFAULTS));
     },
     flyTo(flightOptions) {
-      record('camera.flyTo', [flightOptions]);
+      command('camera.flyTo', [flightOptions]);
       if (!flightOptions?.destination)
         throw new TypeError('flyTo needs a destination');
       startFlight(
@@ -630,7 +638,7 @@ export function createFakeEngine(options = {}) {
       );
     },
     flyToSphere(sphere, sphereOptions = {}) {
-      record('camera.flyToSphere', [sphere, sphereOptions]);
+      command('camera.flyToSphere', [sphere, sphereOptions]);
       setTransform(matrix4.IDENTITY);
       let range = sphereOptions.range;
       if (!range) {
@@ -669,7 +677,7 @@ export function createFakeEngine(options = {}) {
     },
     flightActive: () => flight != null,
     lookAt(target, offset) {
-      record('camera.lookAt', [target, offset]);
+      command('camera.lookAt', [target, offset]);
       const frame = geo.transforms.eastNorthUpToFixedFrame(target, WGS84);
       setTransform(frame, target);
       lookAtFrame(frame, offset);
@@ -685,7 +693,7 @@ export function createFakeEngine(options = {}) {
       setTransform(matrix4.IDENTITY);
     },
     cancelFlight() {
-      record('camera.cancelFlight', []);
+      command('camera.cancelFlight', []);
       cancelCurrentFlight();
     },
     zoomIn(amount = DEFAULT_ZOOM_AMOUNT) {
@@ -711,6 +719,7 @@ export function createFakeEngine(options = {}) {
     changed: events['camera.changed'],
     moveStart: events['camera.moveStart'],
     moveEnd: events['camera.moveEnd'],
+    commanded: events['camera.commanded'],
     get percentageChanged() {
       return percentageChanged;
     },
@@ -745,6 +754,12 @@ export function createFakeEngine(options = {}) {
         );
       },
       pickPositionSupported: true,
+      pickGlobe(screen) {
+        record('picker.pickGlobe', [screen]);
+        return scripted('pickGlobe', [screen], () =>
+          camera.pickEllipsoid(screen),
+        );
+      },
     },
     projector: {
       worldToWindow(position, result) {
@@ -857,6 +872,7 @@ export function createFakeEngine(options = {}) {
       cancelCurrentFlight();
       fake.destroyed = true;
     },
+    isDestroyed: () => fake.destroyed,
     fake,
   };
 

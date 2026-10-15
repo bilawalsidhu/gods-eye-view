@@ -378,3 +378,22 @@ test('fake host elements can be supplied', () => {
     kind: 'fake-container',
   });
 });
+
+test('fake isDestroyed, commanded and pickGlobe are inspectable', () => {
+  const engine = createFakeEngine();
+  let commanded = 0;
+  engine.camera.commanded.addEventListener(() => commanded++);
+  engine.fake.emit('camera.commanded');
+  engine.camera.cancelFlight();
+  assert.equal(commanded, 2);
+  engine.fake.script('pickGlobe', { x: 1, y: 2, z: 3 });
+  assert.deepEqual(engine.picker.pickGlobe({ x: 0, y: 0 }), {
+    x: 1,
+    y: 2,
+    z: 3,
+  });
+  assert.equal(engine.fake.callsOf('picker.pickGlobe').length, 1);
+  assert.equal(engine.isDestroyed(), false);
+  engine.destroy();
+  assert.equal(engine.isDestroyed(), true);
+});

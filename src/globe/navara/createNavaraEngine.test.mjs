@@ -205,3 +205,24 @@ function near(actual, expected, tolerance, label) {
     `${label}: ${actual} is not within ${tolerance} of ${expected}`,
   );
 }
+
+test('isDestroyed follows destroy', () => {
+  const { engine } = setup();
+  assert.equal(engine.isDestroyed(), false);
+  engine.destroy();
+  assert.equal(engine.isDestroyed(), true);
+});
+
+test('pickGlobe meets the terrain along the pick ray, or the ellipsoid', () => {
+  const { engine, view } = setup();
+  const centre = cartesian2.create(640, 400);
+  const bare = engine.picker.pickGlobe(centre);
+  const ellipsoid = engine.camera.pickEllipsoid(centre);
+  near(cartesian3.distance(bare, ellipsoid), 0, 1e-6, 'no terrain: ellipsoid');
+  view.sampleTerrainHeight = () => 2000;
+  const raised = engine.picker.pickGlobe(centre);
+  const place = geo.cartographic.fromCartesian(raised);
+  near(place.height, 2000, 0.5, 'terrain height (m)');
+  near(math.toDegrees(place.longitude), 0, 1e-6, 'longitude');
+  assert.equal(engine.picker.pickGlobe(cartesian2.create(640, -1e7)), undefined);
+});

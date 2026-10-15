@@ -457,3 +457,33 @@ test('livePosition is one engine-owned object holding the current position; heig
   const pose = camera.pose();
   assert.notEqual(pose.position, live, 'pose shares the live object');
 });
+
+test('commanded fires before each camera command and never for reads', () => {
+  const { camera } = setup();
+  let raised = 0;
+  const remove = camera.commanded.addEventListener(() => raised++);
+  assert.ok(isEngineEvent(camera.commanded));
+  camera.pose();
+  camera.height();
+  camera.viewRectangle();
+  assert.equal(raised, 0);
+  const target = cartesian3.fromDegrees(10, 10, 0);
+  camera.setView({ destination: cartesian3.fromDegrees(10, 10, 1e6) });
+  camera.flyTo({ destination: cartesian3.fromDegrees(11, 10, 1e6), duration: 0 });
+  camera.flyToSphere({ center: target, radius: 10 }, { duration: 0 });
+  camera.lookAt(target, { heading: 0, pitch: -1, range: 500 });
+  camera.cancelFlight();
+  assert.equal(raised, 5);
+  camera.release();
+  camera.zoomIn(10);
+  assert.equal(raised, 5, 'release and zoom are not new owners');
+  remove();
+  camera.setView({ destination: cartesian3.fromDegrees(10, 10, 1e6) });
+  assert.equal(raised, 5);
+});
+
+test('pose carries the view aspect ratio', () => {
+  const { camera, port } = setup();
+  const { width, height } = port.size();
+  assert.equal(camera.pose().aspectRatio, width / height);
+});

@@ -107,6 +107,7 @@ export function createFakeViewer({ width = 1024, height = 768 } = {}) {
     show: true,
     tilesLoaded: true,
     getHeight: record('globe.getHeight', () => 12.5),
+    pick: record('globe.pick', () => new Cesium.Cartesian3(6378137, 3, 4)),
   };
   const scene = {
     camera,
@@ -163,6 +164,7 @@ export function createFakeViewer({ width = 1024, height = 768 } = {}) {
     creditDisplay,
     staticCredits,
     primitiveList,
+    trackedEntityChanged: new Cesium.Event(),
     imageryList,
     terrainProvider: undefined,
     imageryLayers: {
