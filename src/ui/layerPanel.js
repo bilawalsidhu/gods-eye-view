@@ -61,6 +61,7 @@ const PANEL_GROUPS = [
   {
     label: 'Weather',
     ids: [
+      'air-quality',
       'wind',
       'weather-radar',
       'weather-satellite',
@@ -382,6 +383,7 @@ export class LayerPanel {
               'weather-satellite',
               'weather-lightning',
               'weather-cyclones',
+              'air-quality',
             ].includes(layer.id),
         )
         .map((layer) => ({
