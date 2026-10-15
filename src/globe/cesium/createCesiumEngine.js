@@ -69,5 +69,6 @@ export function createCesiumEngine(viewer, options = {}) {
       destroyed = true;
       for (const part of Object.values(parts)) part.destroy();
     },
+    isDestroyed: () => destroyed,
   };
 }

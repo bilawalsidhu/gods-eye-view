@@ -3,6 +3,7 @@
 
 import * as Cesium from 'cesium';
 import * as geo from '../../geo/index.js';
+import { createEngineEvent } from '../contract.js';
 import { bridgeEvent } from './events.js';
 import { toCesium2, toCesium3, toGeo3 } from './convert.js';
 
@@ -49,6 +50,86 @@ const cesiumOffset = (offset) =>
     ? new Cesium.HeadingPitchRange(offset.heading, offset.pitch, offset.range)
     : toCesium3(offset);
 
+// The Cesium camera entry points that hand the camera to a new owner. The
+// viewer's camera is shared with code that still calls Cesium directly
+// (layers, cockpit), so `commanded` hooks these methods themselves.
+const COMMANDS = Object.freeze([
+  'flyTo',
+  'flyToBoundingSphere',
+  'setView',
+  'lookAt',
+  'cancelFlight',
+]);
+
+/**
+ * camera.commanded: raised before any COMMANDS call on the Cesium camera and
+ * when the viewer's tracked entity changes. The hooks exist only while the
+ * event has listeners and then restore each method exactly (unless something
+ * newer replaced it), so an idle engine leaves the camera untouched.
+ */
+function commandedEvent(viewer, cesium) {
+  const event = createEngineEvent();
+  let unhook = null;
+  const hook = () => {
+    const removers = [];
+    for (const name of COMMANDS) {
+      const original = cesium[name];
+      if (typeof original !== 'function') continue;
+      const descriptor = Object.getOwnPropertyDescriptor(cesium, name);
+      const wrapped = function (...args) {
+        event.raiseEvent();
+        return original.apply(this, args);
+      };
+      cesium[name] = wrapped;
+      removers.push(() => {
+        if (cesium[name] !== wrapped) return;
+        if (descriptor) Object.defineProperty(cesium, name, descriptor);
+        else delete cesium[name];
+      });
+    }
+    const removeTracking = viewer.trackedEntityChanged?.addEventListener(() =>
+      event.raiseEvent(),
+    );
+    if (removeTracking) removers.push(removeTracking);
+    return () => {
+      for (const remove of removers) remove();
+    };
+  };
+  let detached = false;
+  const sync = () => {
+    const wanted = !detached && event.numberOfListeners > 0;
+    if (wanted === (unhook !== null)) return;
+    if (wanted) unhook = hook();
+    else {
+      const remove = unhook;
+      unhook = null;
+      remove();
+    }
+  };
+  const add = event.addEventListener;
+  const remove = event.removeEventListener;
+  event.addEventListener = (listener) => {
+    const removeListener = add(listener);
+    sync();
+    return () => {
+      removeListener();
+      sync();
+    };
+  };
+  event.removeEventListener = (listener) => {
+    const removed = remove(listener);
+    sync();
+    return removed;
+  };
+  return {
+    event,
+    detach() {
+      detached = true;
+      sync();
+    },
+  };
+}
+
 /**
  * @param {Cesium.Viewer} viewer
  * @returns {{ camera: import('../contract.js').GlobeCamera, destroy: () => void }}
@@ -60,6 +141,7 @@ export function createCesiumCamera(viewer) {
     changed: bridgeEvent(cesium.changed),
     moveStart: bridgeEvent(cesium.moveStart),
     moveEnd: bridgeEvent(cesium.moveEnd),
+    commanded: commandedEvent(viewer, cesium),
   };
 
   // The engine's own flight, so flightActive is exact even for flights that
@@ -109,6 +191,7 @@ export function createCesiumCamera(viewer) {
         up: toGeo3(cesium.upWC),
         right: toGeo3(cesium.rightWC),
         fovy: cesium.frustum.fovy,
+        aspectRatio: cesium.frustum.aspectRatio,
       };
     },
     // Cesium updates positionWC in place; it is the live object.
@@ -203,6 +286,7 @@ export function createCesiumCamera(viewer) {
     changed: bridges.changed.event,
     moveStart: bridges.moveStart.event,
     moveEnd: bridges.moveEnd.event,
+    commanded: bridges.commanded.event,
     get percentageChanged() {
       return cesium.percentageChanged;
     },

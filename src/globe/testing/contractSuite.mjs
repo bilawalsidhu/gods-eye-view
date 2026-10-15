@@ -1380,6 +1380,100 @@ export function createContractSuite(
         );
       },
     ],
+    [
+      'isDestroyed: false while the engine lives',
+      async () => {
+        ensure(engine.isDestroyed() === false, 'a live engine is destroyed');
+      },
+    ],
+    [
+      'camera.pose: aspectRatio is the view width over its height',
+      async () => {
+        await nadirView();
+        const { width, height } = engine.host.size();
+        // Cesium's frustum uses the drawing buffer, rounded to device pixels.
+        near(camera.pose().aspectRatio, width / height, 0.01, 'aspectRatio');
+      },
+    ],
+    [
+      'picker.pickGlobe: the nadir hits the globe and the sky misses',
+      async () => {
+        await nadirView();
+        const hit = engine.picker.pickGlobe(centre());
+        ensure(isCartesian3(hit), 'the nadir missed the globe');
+        const point = cartographic.fromCartesian(hit, WGS84);
+        // Terrain, when shown, stays within Earth's relief of the ellipsoid.
+        near(point.height, 0, 9000, 'globe height (m)');
+        near(math.toDegrees(point.longitude), 20, 0.05, 'longitude (deg)');
+        near(math.toDegrees(point.latitude), 10, 0.05, 'latitude (deg)');
+        camera.setView({
+          destination: cartesian3.fromDegrees(20, 10, 1e6),
+          orientation: { heading: 0, pitch: 0.6, roll: 0 },
+        });
+        await settle();
+        ensure(
+          engine.picker.pickGlobe(centre()) === undefined,
+          'the sky hit the globe',
+        );
+      },
+    ],
+    [
+      'camera.commanded: fires for each camera command, never for reads',
+      async () => {
+        await nadirView();
+        let raised = 0;
+        const remove = camera.commanded.addEventListener(() => raised++);
+        const target = cartesian3.fromDegrees(20, 10, 0);
+        const commands = [
+          [
+            'setView',
+            () =>
+              camera.setView({
+                destination: cartesian3.fromDegrees(20, 10, 2e6),
+              }),
+          ],
+          [
+            'flyTo',
+            () =>
+              camera.flyTo({
+                destination: cartesian3.fromDegrees(21, 10, 2e6),
+                duration: 0,
+              }),
+          ],
+          [
+            'flyToSphere',
+            () =>
+              camera.flyToSphere(
+                { center: target, radius: 100 },
+                { duration: 0 },
+              ),
+          ],
+          [
+            'lookAt',
+            () => camera.lookAt(target, { heading: 0, pitch: -1, range: 5e3 }),
+          ],
+          ['cancelFlight', () => camera.cancelFlight()],
+        ];
+        try {
+          camera.pose();
+          camera.height();
+          camera.viewRectangle();
+          camera.pickEllipsoid(centre());
+          ensure(raised === 0, `reads raised camera.commanded ${raised}x`);
+          for (const [name, command] of commands) {
+            const before = raised;
+            command();
+            ensure(raised > before, `${name} did not raise camera.commanded`);
+          }
+          camera.release();
+        } finally {
+          remove();
+        }
+        const count = raised;
+        camera.setView({ destination: cartesian3.fromDegrees(20, 10, 1e6) });
+        ensure(raised === count, 'a removed listener was called');
+      },
+    ],
   ];
   if (mapSources?.photoreal && mapSources.imagery?.length >= 2)
     checks.push(...mapChecks(engine.maps, mapSources));
