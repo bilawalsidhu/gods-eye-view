@@ -1,5 +1,17 @@
 const MAX_ARTICLES = 5;
 
+/** Station readings expire by their own observation clock, including on cached briefs. */
+export function isRecentDmhObservation(observation, nowMs = Date.now()) {
+  const stamp = Date.parse(observation?.observedAt);
+  const age = nowMs - stamp;
+  return (
+    Number.isFinite(stamp) &&
+    Number.isFinite(nowMs) &&
+    age >= -5 * 60_000 &&
+    age <= 90 * 60_000
+  );
+}
+
 function cleanText(value, maxLength = 180) {
   return String(value || '')
     .replace(/\s+/g, ' ')

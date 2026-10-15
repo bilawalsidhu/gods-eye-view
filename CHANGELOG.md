@@ -1,5 +1,7 @@
 # Changelog
 
+- Add nearby recent DMH/DINAC automatic-station observations for Paraguay to Cockpit Local Info and regional briefs, with source time, distance, freshness filtering and independent bounded caching.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 

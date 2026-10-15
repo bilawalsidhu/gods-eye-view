@@ -4,6 +4,11 @@ import { fetchRegionalWeather } from './weather.js';
 import { fetchRegionalNews } from './news.js';
 import { validRegionalPoint } from './query.js';
 import { coalesceProxyRequest } from '../common/http.js';
+import { createDmhObservationSource } from './dmh.js';
+import {
+  isRecentDmhObservation,
+  regionalDistanceM,
+} from '../../../src/data/regionalModel.js';
 
 // ---------------------------------------------------------------------------
 // Regional cockpit briefing proxy
@@ -14,12 +19,43 @@ const REGIONAL_BRIEF_STALE_MS = 60 * 60_000;
 
 const REGIONAL_BRIEF_MAX_CACHE = 120;
 
-/** True when at least one regional source produced usable data. */
-function regionalBriefHasAnySource({ place, weather, news } = {}) {
-  return Boolean(place || weather || (news && news.status !== 'unavailable'));
+// Brief cells span 0.1 degrees; recalculate station distance for the actual
+// request and do not carry an expired reading through the one-hour fallback.
+function withCurrentObservation(payload, point) {
+  const observation = payload.stationObservation;
+  if (!observation) return payload;
+  const distanceM = regionalDistanceM(point, observation);
+  if (!isRecentDmhObservation(observation) || distanceM > 50_000) {
+    return {
+      ...payload,
+      stationObservation: null,
+      stationObservationStatus: 'no-recent-station',
+    };
+  }
+  return { ...payload, stationObservation: { ...observation, distanceM } };
 }
 
-function regionalBriefProxy({ placeProvider = fetchRegionalPlace } = {}) {
+/** True when at least one regional source produced usable data. */
+function regionalBriefHasAnySource({
+  place,
+  weather,
+  news,
+  stationObservation,
+} = {}) {
+  return Boolean(
+    place ||
+    weather ||
+    stationObservation ||
+    (news && news.status !== 'unavailable'),
+  );
+}
+
+function regionalBriefProxy({
+  placeProvider = fetchRegionalPlace,
+  weatherProvider = fetchRegionalWeather,
+  newsProvider = fetchRegionalNews,
+  dmhProvider = createDmhObservationSource().getObservation,
+} = {}) {
   const _regionalBriefCache = new Map();
 
   const _regionalBriefInFlight = new Map();
@@ -39,15 +75,23 @@ function regionalBriefProxy({ placeProvider = fetchRegionalPlace } = {}) {
   }
 
   async function refresh(point, key) {
-    const [placeResult, weatherResult] = await Promise.allSettled([
+    const [placeResult, weatherResult, dmhResult] = await Promise.allSettled([
       placeProvider(point),
-      fetchRegionalWeather(point),
+      weatherProvider(point),
+      dmhProvider(point),
     ]);
     const place = placeResult.status === 'fulfilled' ? placeResult.value : null;
     const weather =
       weatherResult.status === 'fulfilled' ? weatherResult.value : null;
-    const news = await fetchRegionalNews(place);
-    if (!regionalBriefHasAnySource({ place, weather, news })) {
+    const dmh =
+      dmhResult.status === 'fulfilled'
+        ? dmhResult.value
+        : { status: 'unavailable', observation: null };
+    const stationObservation = dmh?.observation ?? null;
+    const news = await newsProvider(place);
+    if (
+      !regionalBriefHasAnySource({ place, weather, news, stationObservation })
+    ) {
       throw new Error('All regional briefing sources unavailable');
     }
     const payload = {
@@ -59,6 +103,8 @@ function regionalBriefProxy({ placeProvider = fetchRegionalPlace } = {}) {
       placeStatus: place ? 'ready' : 'unavailable',
       weather,
       weatherStatus: weather ? 'ready' : 'unavailable',
+      stationObservation,
+      stationObservationStatus: dmh?.status || 'unavailable',
       newsStatus: news.status,
       newsQuery: news.query,
       newsSource: news.source,
@@ -104,7 +150,14 @@ function regionalBriefProxy({ placeProvider = fetchRegionalPlace } = {}) {
           'Cache-Control': 'public, max-age=60',
           'X-Regional-Brief': 'HIT',
         });
-        res.end(JSON.stringify({ ...cached.payload, status: 'cached' }));
+        res.end(
+          JSON.stringify(
+            withCurrentObservation(
+              { ...cached.payload, status: 'cached' },
+              point,
+            ),
+          ),
+        );
         return;
       }
       const request = coalesceProxyRequest(_regionalBriefInFlight, key, () =>
@@ -117,7 +170,7 @@ function regionalBriefProxy({ placeProvider = fetchRegionalPlace } = {}) {
           'Cache-Control': 'public, max-age=60',
           'X-Regional-Brief': request.shared ? 'INFLIGHT' : 'MISS',
         });
-        res.end(JSON.stringify(payload));
+        res.end(JSON.stringify(withCurrentObservation(payload, point)));
       } catch {
         if (cached && now - cached.cachedAt <= REGIONAL_BRIEF_STALE_MS) {
           res.writeHead(200, {
@@ -125,7 +178,14 @@ function regionalBriefProxy({ placeProvider = fetchRegionalPlace } = {}) {
             'Cache-Control': 'no-store',
             'X-Regional-Brief': 'STALE',
           });
-          res.end(JSON.stringify({ ...cached.payload, status: 'stale' }));
+          res.end(
+            JSON.stringify(
+              withCurrentObservation(
+                { ...cached.payload, status: 'stale' },
+                point,
+              ),
+            ),
+          );
           return;
         }
         res.writeHead(503, {

@@ -268,6 +268,7 @@
       "server/providers/common/rate-limit.js",
       "server/providers/regional.js",
       "server/providers/regional/briefing.js",
+      "server/providers/regional/dmh.js",
       "server/providers/regional/http.js",
       "server/providers/regional/news.js",
       "server/providers/regional/place.js",
@@ -505,6 +506,7 @@
     ],
     "modules": [
       "src/ui/cockpit.js",
+      "src/data/regionalModel.js",
       "src/ui/cockpitBriefing.js",
       "src/ui/cockpitCamera.js",
       "src/ui/cockpitContext.js",
@@ -588,6 +590,7 @@
       "src/ui/cctvPresentation.js",
       "src/ui/clearLayersControl.js",
       "src/ui/cockpit.js",
+      "src/data/regionalModel.js",
       "src/ui/cockpitBriefing.js",
       "src/ui/cockpitCamera.js",
       "src/ui/cockpitContext.js",

@@ -1,4 +1,5 @@
 /** Regional briefing requests, pages and rotation for the Cockpit controller. */
+import { isRecentDmhObservation } from '../data/regionalModel.js';
 import {
   COCKPIT_BRIEF_ROTATE_MS,
   COCKPIT_BRIEF_CYCLE_OFF_HELP,
@@ -170,6 +171,10 @@ export function maybeRefreshRegionalBrief(info) {
 }
 
 export function renderRegionalBriefStatus(status, info) {
+  if (this.localObservation) {
+    this.localObservation.hidden = true;
+    this.localObservation.textContent = '';
+  }
   if (this.newsStatus) {
     this.newsStatus.hidden = false;
     this.newsStatus.dataset.state = status;
@@ -220,6 +225,26 @@ export function renderRegionalBrief(payload, info) {
   if (this.localPlace) this.localPlace.textContent = placeLabel.toUpperCase();
   this.updateLocalPosition(info);
   const weather = payload?.weather;
+  if (this.localObservation) {
+    const observation = payload?.stationObservation;
+    const usable =
+      isRecentDmhObservation(observation) &&
+      Number.isFinite(observation?.distanceM) &&
+      observation.distanceM <= 50_000;
+    this.localObservation.hidden = !usable;
+    const values = [];
+    if (Number.isFinite(observation?.temperatureC))
+      values.push(`${observation.temperatureC.toFixed(1)}°C`);
+    if (Number.isFinite(observation?.humidityPct))
+      values.push(`RH ${Math.round(observation.humidityPct)}%`);
+    if (Number.isFinite(observation?.windKph))
+      values.push(
+        `WIND ${Math.round(observation.windKph)} KM/H ${formatCockpitWindDirection(observation.windDirectionDeg)}`,
+      );
+    this.localObservation.textContent = usable
+      ? `DMH / DINAC · STATION OBSERVATION\n${observation.stationName} · ${(observation.distanceM / 1000).toFixed(1)} KM FROM LOCATION\n${values.join(' · ')}\n${new Date(observation.observedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC · ${formatCockpitBriefAge(observation.observedAt)}`
+      : '';
+  }
   if (this.localTemperature) {
     this.localTemperature.textContent = Number.isFinite(weather?.temperatureC)
       ? `${Math.round(weather.temperatureC)}°C`

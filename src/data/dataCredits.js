@@ -185,6 +185,10 @@ export const DATA_CREDITS = [
       '(CC BY 4.0)',
   },
   {
+    key: 'dmh-paraguay',
+    html: 'Paraguay station observations: <a href="https://www.meteorologia.gov.py/emas/" target="_blank" rel="noopener">Dirección de Meteorología e Hidrología / DINAC</a>',
+  },
+  {
     key: 'google-news-rss',
     html:
       'Cockpit regional headlines: ' +
