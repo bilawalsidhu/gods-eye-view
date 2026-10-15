@@ -1,5 +1,7 @@
 # Changelog
 
+- Add Acaray and Yacyretá dam geometries from OpenStreetMap to the existing Dams layer, with source provenance and a corrected OpenStreetMap source label.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 

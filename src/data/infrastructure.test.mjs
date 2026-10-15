@@ -65,7 +65,7 @@ test('infrastructure factory preserves identity and creates independent state wi
     first.map(({ id, name, source }) => ({ id, name, source })),
     [
       { id: 'local-datacenters', name: 'Datacenters', source: 'Local' },
-      { id: 'local-dams', name: 'Dams', source: 'USACE' },
+      { id: 'local-dams', name: 'Dams', source: 'OpenStreetMap' },
     ],
   );
   first.forEach((layer, index) => {
@@ -83,7 +83,7 @@ test('infrastructure factory preserves identity and creates independent state wi
 test('dataset URLs still name the complete bundled sources', () => {
   for (const [file, count] of [
     ['datacenters', 4351],
-    ['dams', 704],
+    ['dams', 706],
   ]) {
     const lines = readFileSync(
       new URL(`./local_data/${file}/${file}.geojsonl`, import.meta.url),
