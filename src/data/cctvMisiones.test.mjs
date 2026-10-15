@@ -9,12 +9,19 @@ import {
   normalizeMisionesLocations,
   MISIONES_CATALOG_URL,
   MISIONES_MAX_CATALOG_BYTES,
+  DEFAULT_MISIONES_LOCATIONS_FILE,
 } from '../../server/providers/cctv/misiones.js';
 import { createCctvCatalog } from '../../server/providers/cctv/catalog.js';
 
 const research = JSON.parse(
   fs.readFileSync(
     new URL('../../docs/data/cctv-misiones-2026-10-14.json', import.meta.url),
+    'utf8',
+  ),
+);
+const reviewed = JSON.parse(
+  fs.readFileSync(
+    new URL('../../config/cctv_misiones_locations.json', import.meta.url),
     'utf8',
   ),
 );
@@ -134,6 +141,61 @@ test('only pinned camera URLs and non-offline records register', () => {
   );
 });
 
+test('all eight reviewed coordinates retain their IDs and values', () => {
+  const positions = normalizeMisionesLocations(reviewed);
+  assert.deepEqual(
+    Object.keys(positions),
+    ['cam01', 'cam02', 'cam03', 'cam04', 'cam05', 'cam06', 'cam07', 'cam08'],
+  );
+  assert.equal(reviewed.verification.source, 'user_review');
+  for (const item of reviewed.cameras) {
+    const camera = misionesCameraToSource(
+      row({ url: item.stream_url, title: item.name }),
+      reviewed,
+    );
+    assert.equal(camera.id, 'misiones-' + item.camera_id);
+    assert.equal(camera.lat, item.latitude);
+    assert.equal(camera.lon, item.longitude);
+    assert.equal(camera.url, item.stream_url);
+    assert.equal(camera.name, item.name);
+    assert.equal(camera.headingConfidence, 'low');
+    assert.equal(camera.poseSource, undefined);
+    assert.match(camera.credit, /OpenStreetMap contributors/);
+    assert.match(
+      positions[item.camera_id].verification_source,
+      /user_review: Revisión de capturas y mapa OSM/,
+    );
+  }
+});
+
+test('incomplete reviews do not activate flat coordinate records', () => {
+  for (const patch of [
+    { coordinate_system: 'EPSG:3857' },
+    { status: 'candidate' },
+    { requires_further_review: true },
+    { finalized_at: 'invalid' },
+    { verification: { ...reviewed.verification, scope: 'landmark' } },
+    { verification: { ...reviewed.verification, source: 'inference' } },
+    { verification: { ...reviewed.verification, method: '' } },
+  ])
+    assert.deepEqual(
+      normalizeMisionesLocations({ ...reviewed, ...patch }),
+      {},
+    );
+  for (const patch of [
+    { certainty: 'candidate' },
+    { confirmed_at: 'invalid' },
+    { latitude: String(reviewed.cameras[0].latitude) },
+  ])
+    assert.deepEqual(
+      normalizeMisionesLocations({
+        ...reviewed,
+        cameras: [{ ...reviewed.cameras[0], ...patch }],
+      }),
+      {},
+    );
+});
+
 const setup = (t) => {
   const keys = [
     'CCTV_MISIONES_ENABLED',
@@ -190,9 +252,10 @@ test('Misiones filters and deduplicates the mixed catalog', async (t) => {
 });
 
 test('Misiones requires opt-in and a verified position', async (t) => {
-  const { file } = setup(t);
+  const { file, directory } = setup(t);
   let calls = 0;
   const options = {
+    sourceRoot: directory,
     fetchImpl: async () => {
       calls++;
       return Response.json([row()]);
@@ -218,6 +281,43 @@ test('Misiones requires opt-in and a verified position', async (t) => {
   process.env.CCTV_MISIONES_LOCATIONS_FILE = file + '.missing';
   assert.deepEqual(await loadMisionesSources(options), []);
   assert.equal(calls, 0);
+});
+
+test('opt-in loads bundled positions without an override', async (t) => {
+  const { directory } = setup(t);
+  delete process.env.CCTV_MISIONES_LOCATIONS_FILE;
+  const bundled = path.join(directory, DEFAULT_MISIONES_LOCATIONS_FILE);
+  fs.mkdirSync(path.dirname(bundled), { recursive: true });
+  fs.writeFileSync(bundled, JSON.stringify(reviewed));
+  const rows = reviewed.cameras.map((camera) =>
+    row({ url: camera.stream_url, title: camera.name }),
+  );
+  let calls = 0;
+  const options = {
+    sourceRoot: directory,
+    fetchImpl: async (url) => {
+      calls++;
+      assert.equal(url, MISIONES_CATALOG_URL);
+      return Response.json(rows);
+    },
+  };
+  const cameras = await loadMisionesSources(options);
+  assert.equal(calls, 1);
+  assert.deepEqual(
+    cameras.map((camera) => [camera.id, camera.lat, camera.lon]),
+    reviewed.cameras.map((camera) => [
+      'misiones-' + camera.camera_id,
+      camera.latitude,
+      camera.longitude,
+    ]),
+  );
+  delete process.env.CCTV_MISIONES_ENABLED;
+  assert.deepEqual(await loadMisionesSources(options), []);
+  assert.equal(calls, 1);
+  process.env.CCTV_MISIONES_ENABLED = '1';
+  fs.writeFileSync(bundled, JSON.stringify(research));
+  assert.deepEqual(await loadMisionesSources(options), []);
+  assert.equal(calls, 1);
 });
 
 test('failed and oversized catalogs yield no camera', async (t) => {

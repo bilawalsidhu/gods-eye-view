@@ -8,6 +8,8 @@ export const MISIONES_CATALOG_URL =
   'https://feeder.camarasdemisiones.com/streams';
 export const MISIONES_STREAM_ORIGIN = 'https://stream.camarasdemisiones.com';
 export const MISIONES_MAX_CATALOG_BYTES = 256 * 1024;
+export const DEFAULT_MISIONES_LOCATIONS_FILE =
+  'config/cctv_misiones_locations.json';
 const MISIONES_MAX_LOCATION_BYTES = 64 * 1024;
 export const MISIONES_CAMERAS = Object.freeze({
   cam01: 'Parque Cantera / Puente',
@@ -23,6 +25,17 @@ export const MISIONES_CAMERAS = Object.freeze({
 /** Accept installation positions only; never promote a landmark or candidate. */
 export function normalizeMisionesLocations(value) {
   if (!Array.isArray(value?.cameras)) return {};
+  // Project-reviewed coordinates retain the contributor's method and dates.
+  // The historical research report does not satisfy this explicit contract.
+  const reviewed =
+    value.coordinate_system === 'WGS84' &&
+    value.status === 'definitive' &&
+    value.requires_further_review === false &&
+    Number.isFinite(Date.parse(value.finalized_at)) &&
+    value.verification?.scope === 'physical_camera_location' &&
+    value.verification?.source === 'user_review' &&
+    typeof value.verification.method === 'string' &&
+    Boolean(value.verification.method.trim());
   const locations = {};
   const seen = new Set();
   for (const camera of value.cameras) {
@@ -31,7 +44,18 @@ export function normalizeMisionesLocations(value) {
     // Ambiguous duplicate identities invalidate the configuration.
     if (seen.has(id)) return {};
     seen.add(id);
-    const position = camera.verified_camera_position;
+    const position = reviewed
+      ? camera.certainty === 'definitive' &&
+        Number.isFinite(Date.parse(camera.confirmed_at))
+        ? {
+            latitude: camera.latitude,
+            longitude: camera.longitude,
+            crs: value.coordinate_system,
+            verification_source:
+              value.verification.source + ': ' + value.verification.method,
+          }
+        : null
+      : camera.verified_camera_position;
     if (
       !position ||
       position.crs !== 'WGS84' ||
@@ -79,6 +103,13 @@ export function misionesCameraToSource(row, locationDocument) {
           .slice(0, 120)
       : '';
   const name = title || MISIONES_CAMERAS[cameraId];
+  const mapCredit =
+    typeof locationDocument.map_data_attribution === 'string'
+      ? locationDocument.map_data_attribution
+          .replace(/[\u0000-\u001f\u007f]/g, ' ')
+          .trim()
+          .slice(0, 300)
+      : '';
   return {
     id: 'misiones-' + cameraId,
     name,
@@ -99,20 +130,22 @@ export function misionesCameraToSource(row, locationDocument) {
     snapshotUrl: '',
     sourceKind: 'misiones-public-cameras',
     license: 'Publicly accessible stream; reuse authorization unverified',
-    credit: 'Cámaras de Misiones — camarasdemisiones.com',
+    credit:
+      'Cámaras de Misiones — camarasdemisiones.com' +
+      (mapCredit ? '; ' + mapCredit : ''),
     code: cameraDisplayCode(cameraId.toUpperCase() + ' ' + name),
   };
 }
 
-/** Opt-in acquisition; no upstream request without a verified local position. */
+/** Opt-in acquisition using the bundled review or an explicit local override. */
 export async function loadMisionesSources({
   sourceRoot = process.cwd(),
   fetchImpl = fetch,
 } = {}) {
   if (String(process.env.CCTV_MISIONES_ENABLED || '').trim() !== '1')
     return [];
-  const file = process.env.CCTV_MISIONES_LOCATIONS_FILE;
-  if (!file) return [];
+  const file =
+    process.env.CCTV_MISIONES_LOCATIONS_FILE || DEFAULT_MISIONES_LOCATIONS_FILE;
   try {
     const resolved = path.isAbsolute(file)
       ? file

@@ -6,13 +6,28 @@ cameras, television, radio and external players, and contains no geographic
 fields. This integration accepts only `cam01` through `cam08` on the pinned
 HTTPS stream origin.
 
-**No installation position is confirmed in the contributed evidence.** The
-pack is off by default and registers no cameras until an operator supplies
-verified installation coordinates. The research JSON is not a runtime catalog;
-using it as the location configuration still registers zero cameras and makes
-no Misiones network request.
+The pack ships eight installation coordinates finalized by the contributor on
+2026-10-15 at 02:26:04.444Z. Enable it with `CCTV_MISIONES_ENABLED=1`; no location
+file override is needed. It stays off by default because provider reuse
+authorization and application playback have not been established.
 
-## Geographic evidence
+## Location data and provenance
+
+The [default location file](../config/cctv_misiones_locations.json) preserves the
+contributor's WGS84 values, camera identities, stream URLs, individual confirmation
+timestamps and finalization metadata. Its stated verification scope is
+`physical_camera_location`, its source is `user_review`, and its method is review
+of screenshots and OSM maps, accepted by the contributor as definitive for this
+project. These are project-reviewed positions; no operator GPS survey or separate
+independent verification is claimed. The supplied decimal values are preserved
+without implying measured positional accuracy. The OSM attribution also travels
+with each camera's displayed credit.
+
+The final review is the runtime position source. The earlier preliminary report
+below remains historical evidence, and is not automatically promoted into camera
+positions. Selecting that older file as an override still yields zero cameras.
+
+### Preliminary research, 2026-10-14
 
 The [contributor report](data/cctv-misiones-2026-10-14.json) is preserved in its
 original Spanish, including uncertainty, source links, timestamps and attribution.
@@ -20,7 +35,7 @@ It reports inspection of eight live frames and eight covers on 2026-10-14,
 21:36:23–21:36:49 in `America/Argentina/Cordoba`, with OSM maps, Esri satellite
 imagery and official ATM references. It does not include operator GPS data.
 
-| Camera | Published place | Coordinate meaning |
+| Camera | Published place | Meaning in the preliminary report |
 | --- | --- | --- |
 | cam01 | Parque La Cantera / Puente, Posadas | Park reference |
 | cam02 | El Arco, RN 12 km 1326 | Checkpoint reference |
@@ -38,35 +53,39 @@ image files were not supplied with this contribution, are not bundled, and were
 not independently inspected for this PR. The report's visual and cartographic
 assessments remain contributor evidence, not operator confirmation.
 
-OSM-derived research coordinates retain **© OpenStreetMap contributors,
+OSM-derived coordinates retain **© OpenStreetMap contributors,
 [ODbL 1.0](https://www.openstreetmap.org/copyright)**. That attribution and
 license apply to the OSM-derived data; the repository's code license does not
 replace them. No stream recordings, covers or satellite imagery are bundled.
 
 ## Configuration
 
-1. Establish the actual installation position for each camera you intend to
-   enable, documenting the source of that verification. A nearby landmark or a
-   plausible OSM camera node is insufficient.
-2. Copy `config/cctv_misiones_locations.example.json` to a local configuration.
-   Leave unresolved cameras at `verified_camera_position: null`.
-3. For a confirmed camera, replace that null with an object containing numeric
-   `latitude`, numeric `longitude`, `crs: "WGS84"`, and a nonempty
-   `verification_source` describing the installation evidence. The source
-   validates these assertions; it cannot independently verify an installation.
-4. After checking the provider's current reuse conditions for your intended
-   deployment, set the two environment variables below and restart the server.
+Enable the bundled eight-camera location catalog and restart the server:
 
 ```dotenv
 CCTV_MISIONES_ENABLED=1
-CCTV_MISIONES_LOCATIONS_FILE=/absolute/path/to/verified-misiones-locations.json
 ```
 
-The document has a `cameras` array; each item uses `camera_id: "cam01"` through
-`"cam08"`. No invented numeric example is supplied as a camera location. Numeric
-strings, missing provenance, non-WGS84 coordinates, positions outside a broad
-Misiones sanity envelope and duplicate identities are rejected. Relative paths
-resolve against the application's source root. Files are limited to 64 KiB.
+The default is `config/cctv_misiones_locations.json`, resolved from the
+application's source root. An optional `CCTV_MISIONES_LOCATIONS_FILE` replaces
+that document for installations maintaining their own positions. Invalid or
+missing overrides do not silently fall back to the bundled data.
+
+The bundled schema records `coordinate_system: "WGS84"`, `status: "definitive"`,
+`requires_further_review: false`, a finalization date, and the contributor's
+physical-location review source/method. Each camera has `camera_id`, numeric
+`latitude`/`longitude`, `certainty: "definitive"` and `confirmed_at`. Incomplete
+reviews are rejected. This validation checks the recorded assertions; it does
+not independently establish their real-world accuracy.
+
+The original per-camera override format also remains available: copy
+`config/cctv_misiones_locations.example.json`, then replace each confirmed
+`verified_camera_position: null` with numeric `latitude`, numeric `longitude`,
+`crs: "WGS84"` and a nonempty `verification_source`. Leave unresolved cameras
+null. Neither format falls back to `reference_point` or
+`candidate_camera_position`. Numeric strings, missing provenance, positions
+outside a broad Misiones sanity envelope and duplicate identities are rejected.
+Files are limited to 64 KiB.
 
 Acquisition uses the existing live-pack catalog gate and cache. A configured
 `CCTV_SOURCES_FILE` or `CCTV_SOURCES_JSON` normally replaces live packs; the
@@ -150,5 +169,5 @@ node scripts/qa-cctv-v2.mjs --url http://localhost:4173
 
 Before marking ready, run the repository gates and verify actual upstream
 responses with the application's Node client, HEVC playback on intended browsers,
-lease cleanup and stream stability. Confirm installation evidence before enabling
-any map point, and keep unresolved entries out of camera geometry.
+lease cleanup and stream stability. The eight positions already have the supplied
+project review; future location changes should retain their own provenance.

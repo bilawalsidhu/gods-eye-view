@@ -1006,5 +1006,6 @@
   "src/data/cctvFmp4Routes.test.mjs",
   "src/data/cctvMisiones.test.mjs",
   "config/cctv_misiones_locations.example.json",
-  "docs/data/cctv-misiones-2026-10-14.json"
+  "docs/data/cctv-misiones-2026-10-14.json",
+  "config/cctv_misiones_locations.json"
 ]

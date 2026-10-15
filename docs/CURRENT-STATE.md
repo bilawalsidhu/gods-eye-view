@@ -5243,11 +5243,14 @@ Encrypted, byte-range and mixed-container playlists fail closed. HEVC decoding
 remains browser/device-dependent. Performance and live agency reliability
 require recorded validation.
 
-The Misiones source pack is opt-in (`CCTV_MISIONES_ENABLED=1`) and additionally
-requires `CCTV_MISIONES_LOCATIONS_FILE` with verified installation positions and
-provenance. The eight-camera research report confirms no physical installations:
-place references and unconfirmed candidates are never promoted to camera points.
-Without a valid configured position, the pack makes no Misiones upstream request.
+The Misiones source pack is opt-in (`CCTV_MISIONES_ENABLED=1`) and uses the eight
+bundled installation coordinates in `config/cctv_misiones_locations.json`.
+They were finalized by the contributor on 2026-10-15 through screenshot/OSM
+review, with method and confirmation timestamps retained. An optional
+`CCTV_MISIONES_LOCATIONS_FILE` replaces the default. The earlier preliminary
+research remains separate: place references and unconfirmed candidates are
+never promoted to camera positions. Without a valid configured position, the
+pack makes no Misiones upstream request.
 Only the pinned cam01–cam08 HLS paths are accepted, with no covers or external
 players. Reuse authorization and live Node/browser playback remain unverified;
 see [CCTV-MISIONES.md](CCTV-MISIONES.md).
