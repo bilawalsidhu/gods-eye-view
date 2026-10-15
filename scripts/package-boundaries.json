@@ -781,6 +781,7 @@
   "live-observations": {
     "exports": ["./sources/live"],
     "modules": [
+      "src/data/aircraftEmergency.js",
       "src/sources/live/aircraft.js",
       "src/sources/live/contract.js",
       "src/sources/live/index.js",
@@ -794,6 +795,7 @@
     "modules": [
       "src/cyberSonar.js",
       "src/data/aircraftClass.js",
+      "src/data/aircraftEmergency.js",
       "src/data/aircraftIcons.js",
       "src/data/aircraftMeta.js",
       "src/data/aircraftNearbyPolicy.js",
@@ -837,6 +839,7 @@
     "modules": [
       "src/cyberSonar.js",
       "src/data/aircraftClass.js",
+      "src/data/aircraftEmergency.js",
       "src/data/aircraftIcons.js",
       "src/data/aircraftMeta.js",
       "src/data/aircraftNearbyPolicy.js",
@@ -1194,7 +1197,8 @@
     "exports": [
       "./layers/street-level",
       "./layers/street-level/mapillary",
-      "./layers/street-level/mapillary/source"
+      "./layers/street-level/mapillary/source",
+      "./layers/street-level/google"
     ],
     "modules": [
       "src/layers/streetLevel/index.js",
@@ -1223,6 +1227,19 @@
       "src/layers/streetLevel/tileMath.js",
       "src/layers/streetLevel/selection.js",
       "src/layers/streetLevel/providers/mapillary/viewer.js",
+      "src/layers/streetLevel/groundClick.js",
+      "src/layers/streetLevel/providers/google/index.js",
+      "src/layers/streetLevel/providers/google/policy.js",
+      "src/layers/streetLevel/providers/google/viewer.js",
+      "src/layers/streetLevel/providers/google/mapsLoader.js",
+      "src/layers/streetLevel/providers/kartaview/index.js",
+      "src/layers/streetLevel/providers/kartaview/policy.js",
+      "src/layers/streetLevel/providers/kartaview/source.js",
+      "src/layers/streetLevel/providers/kartaview/decode.js",
+      "src/layers/streetLevel/providers/kartaview/viewer.js",
+      "src/layers/streetLevel/providers/kartaview/panorama.js",
+      "src/layers/streetLevel/lineCoverage.js",
+      "src/layers/streetLevel/sequenceCones.js",
       "src/layers/streetLevel/providers/mapillary/source.js",
       "scripts/qa-street-level.mjs"
     ],
@@ -1488,6 +1505,7 @@
       "src/contextModePolicy.js",
       "src/creditKeyboard.js",
       "src/data/aircraftClass.js",
+      "src/data/aircraftEmergency.js",
       "src/data/aircraftIcons.js",
       "src/data/aircraftMeta.js",
       "src/data/aircraftNearbyPolicy.js",
@@ -2000,6 +2018,9 @@
       "src/data/inputOwnership.js",
       "src/annotations/drawMode.js",
       "src/annotations/drawTool.js",
+      "src/data/geoFileImport.js",
+      "src/ui/flyToDataSource.js",
+      "src/ui/geoFileImport.js",
       "src/data/routeSteps.js",
       "src/layers/directions/index.js",
       "src/layers/directions/source.js",
@@ -2023,6 +2044,10 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/gnss.js",
+      "src/layers/gnss/index.js",
+      "src/layers/gnss/source.js",
+      "src/layers/gnss/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/sources/reference.js",
       "src/search/nominatim.js",
@@ -2178,6 +2203,19 @@
       "src/layers/streetLevel/tileMath.js",
       "src/layers/streetLevel/selection.js",
       "src/layers/streetLevel/providers/mapillary/viewer.js",
+      "src/layers/streetLevel/groundClick.js",
+      "src/layers/streetLevel/providers/google/index.js",
+      "src/layers/streetLevel/providers/google/policy.js",
+      "src/layers/streetLevel/providers/google/viewer.js",
+      "src/layers/streetLevel/providers/google/mapsLoader.js",
+      "src/layers/streetLevel/providers/kartaview/index.js",
+      "src/layers/streetLevel/providers/kartaview/policy.js",
+      "src/layers/streetLevel/providers/kartaview/source.js",
+      "src/layers/streetLevel/providers/kartaview/decode.js",
+      "src/layers/streetLevel/providers/kartaview/viewer.js",
+      "src/layers/streetLevel/providers/kartaview/panorama.js",
+      "src/layers/streetLevel/lineCoverage.js",
+      "src/layers/streetLevel/sequenceCones.js",
       "src/layers/streetLevel/providers/mapillary/source.js",
       "src/app/layers/streetLevel.js",
       "src/layers/alpr/tileRecords.js",
@@ -2198,7 +2236,10 @@
       "src/tools/functions.js",
       "src/voice/actionSchemas.js",
       "src/view/index.js",
-      "src/app/embed.js"
+      "src/app/embed.js",
+      "src/data/cameraFraming.js",
+      "src/data/geoImportPins.js",
+      "src/data/geoImportImages.js"
     ],
     "external": [
       "hls.js",
@@ -2265,6 +2306,7 @@
       "src/celestialRing.js",
       "src/cockpitMath.js",
       "src/data/aircraftClass.js",
+      "src/data/aircraftEmergency.js",
       "src/data/aircraftIcons.js",
       "src/data/aircraftMeta.js",
       "src/data/aircraftNearbyPolicy.js",
@@ -2602,6 +2644,10 @@
       "src/layers/perimeters/records.js",
       "src/layers/perimeters/cards.js",
       "src/layers/perimeters/inciweb.js",
+      "src/app/layers/gnss.js",
+      "src/layers/gnss/index.js",
+      "src/layers/gnss/source.js",
+      "src/layers/gnss/records.js",
       "src/layers/cctv/sourcePolicy.js",
       "src/search/nominatim.js",
       "src/nominatimGeocode.js",
@@ -2704,6 +2750,19 @@
       "src/layers/streetLevel/tileMath.js",
       "src/layers/streetLevel/selection.js",
       "src/layers/streetLevel/providers/mapillary/viewer.js",
+      "src/layers/streetLevel/groundClick.js",
+      "src/layers/streetLevel/providers/google/index.js",
+      "src/layers/streetLevel/providers/google/policy.js",
+      "src/layers/streetLevel/providers/google/viewer.js",
+      "src/layers/streetLevel/providers/google/mapsLoader.js",
+      "src/layers/streetLevel/providers/kartaview/index.js",
+      "src/layers/streetLevel/providers/kartaview/policy.js",
+      "src/layers/streetLevel/providers/kartaview/source.js",
+      "src/layers/streetLevel/providers/kartaview/decode.js",
+      "src/layers/streetLevel/providers/kartaview/viewer.js",
+      "src/layers/streetLevel/providers/kartaview/panorama.js",
+      "src/layers/streetLevel/lineCoverage.js",
+      "src/layers/streetLevel/sequenceCones.js",
       "src/layers/streetLevel/providers/mapillary/source.js",
       "src/app/layers/streetLevel.js",
       "src/layers/alpr/tileRecords.js",
@@ -2720,7 +2779,8 @@
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
-      "src/sources/infrastructureData.js"
+      "src/sources/infrastructureData.js",
+      "src/data/cameraFraming.js"
     ],
     "external": [
       "hls.js",
@@ -2785,7 +2845,8 @@
       "src/sources/overpassFeatures.js",
       "src/sources/featureSource.js",
       "src/sources/capability.js",
-      "src/data/cameraArrival.js"
+      "src/data/cameraArrival.js",
+      "src/data/cameraFraming.js"
     ],
     "external": [
       "cesium",
@@ -2881,7 +2942,8 @@
       "src/layers/flights/recordPolicy.js",
       "src/data/aircraftMeta.js",
       "src/data/renderAltitude.js",
-      "src/data/aircraftClass.js"
+      "src/data/aircraftClass.js",
+      "src/data/aircraftEmergency.js"
     ],
     "external": []
   },
@@ -2900,7 +2962,8 @@
       "src/layers/military/recordPolicy.js",
       "src/data/aircraftMeta.js",
       "src/data/renderAltitude.js",
-      "src/data/aircraftClass.js"
+      "src/data/aircraftClass.js",
+      "src/data/aircraftEmergency.js"
     ],
     "external": []
   },
@@ -3097,7 +3160,8 @@
       "src/sources/httpBody.js",
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
-      "src/layers/submarineCables/bundledSource.js"
+      "src/layers/submarineCables/bundledSource.js",
+      "src/layers/gnss/source.js"
     ],
     "external": []
   },
@@ -3308,6 +3372,21 @@
     ],
     "external": ["cesium"]
   },
+  "gnss": {
+    "exports": ["./layers/gnss"],
+    "modules": [
+      "src/layers/gnss/index.js",
+      "src/sources/httpBody.js",
+      "src/layers/gnss/source.js",
+      "src/layers/gnss/records.js"
+    ],
+    "external": ["cesium"]
+  },
+  "gnss-source": {
+    "exports": ["./layers/gnss/source"],
+    "modules": ["src/sources/httpBody.js", "src/layers/gnss/source.js"],
+    "external": []
+  },
   "perimeters-source": {
     "exports": ["./layers/perimeters/source"],
     "modules": [
@@ -3435,6 +3514,7 @@
       "src/sources/featureGeometry.js",
       "src/sources/live/standalone.js",
       "src/sources/live/contract.js",
+      "src/data/aircraftEmergency.js",
       "src/sources/live/aircraft.js",
       "src/sources/live/vessels.js",
       "src/tools/places.js",

@@ -10,6 +10,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
+import { chromeExecutablePath } from './qa-chrome.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -35,8 +36,7 @@ const check = (name, passed, detail = '') => {
 
 const browser = await puppeteer.launch({
   headless: false,
-  executablePath:
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: chromeExecutablePath(),
   args: [
     '--no-sandbox',
     '--disable-background-timer-throttling',

@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { chromeExecutablePath } from './qa-chrome.mjs';
 import {
   planeSupportPoints,
   poseHash,
@@ -389,8 +390,7 @@ async function main() {
       const { default: puppeteer } = await import('puppeteer');
       browser = await puppeteer.launch({
         headless: false,
-        executablePath:
-          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        executablePath: chromeExecutablePath(),
         protocolTimeout: 600000,
         args: [
           '--no-sandbox',

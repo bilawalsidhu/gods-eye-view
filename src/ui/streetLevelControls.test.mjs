@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import test from 'node:test';
 import { StreetLevelControls } from './streetLevelControls.js';
 import { createStreetLevelLayer } from '../layers/streetLevel/index.js';
@@ -307,12 +308,17 @@ function panelDom() {
     add(settings, 'div', { id });
   // A missing key gates the filters only; the chips stay outside the gate.
   const controls = add(settings, 'fieldset', { id: 'sl-controls' });
+  const panoRow = add(controls, 'div', { id: 'sl-pano-row' });
   for (const pano of ['all', 'pano', 'flat'])
-    add(controls, 'button', { dataset: { slPano: pano } });
-  add(controls, 'input', { id: 'sl-since' });
-  add(controls, 'output', { id: 'sl-since-label' });
+    add(panoRow, 'button', { dataset: { slPano: pano } });
+  const sinceRow = add(controls, 'div', { id: 'sl-since-row' });
+  add(sinceRow, 'input', { id: 'sl-since' });
+  add(sinceRow, 'output', { id: 'sl-since-label' });
+  add(sinceRow, 'small', { id: 'sl-since-note' });
   add(settings, 'ul', { id: 'sl-legend' });
-  add(settings, 'div', { id: 'sl-coverage-meta' });
+  const metaRow = add(settings, 'div', { classes: ['sl-meta-row'] });
+  add(metaRow, 'div', { id: 'sl-coverage-meta' });
+  add(metaRow, 'button', { id: 'sl-nearest-btn' });
   // The globe's canvas is focusable too (tabindex=0).
   const globe = add(
     add(document.body, 'div', { id: 'cesiumContainer' }),
@@ -1136,3 +1142,142 @@ test('a <body> child added while the viewer is expanded goes inert with the rest
       assert.equal(observer.watching(), false);
     }),
   ));
+
+test('OPEN STREET VIEW opens the nearest panorama at the view centre without moving the camera', () =>
+  withDom(async (dom) => {
+    const state = uiState();
+    state.providers.push({
+      ...state.providers[0],
+      id: 'google',
+      name: 'Google Street View',
+      label: 'STREET VIEW',
+      groundClick: true,
+      count: 0,
+    });
+    state.groundClickReady = true;
+    const { layer } = stubPanel(dom, state);
+    const asked = [];
+    layer.openNearest = (point, options) => asked.push([point, options]);
+    const button = dom.root.querySelector('#sl-nearest-btn');
+    assert.equal(button.hidden, false);
+    assert.equal(button.textContent, 'OPEN STREET VIEW');
+    button.click();
+    assert.deepEqual(asked, [
+      [
+        undefined,
+        { providerIds: ['google'], frame: false, aim: 'screen-centre' },
+      ],
+    ]);
+    // Too high to mean a street: disabled, and a click does nothing.
+    layer.publish({ ...state, groundClickReady: false });
+    assert.equal(button.disabled, true);
+    button.click();
+    assert.equal(asked.length, 1);
+    // Off Google 3D the provider is not listed: no button.
+    layer.publish({ ...state, providers: [state.providers[0]] });
+    assert.equal(button.hidden, true);
+  }));
+
+test('a refused Street View key cannot lock Mapillary out; its chip only explains itself', () =>
+  withDom(async (dom) => {
+    const state = uiState({ on: false, keyRequired: true });
+    state.providers.push({
+      ...state.providers[0],
+      id: 'google',
+      name: 'Google Street View',
+      label: 'STREET VIEW',
+      on: true,
+      keyRequired: true,
+      keyRejected: true,
+      error: 'Google refused GOOGLE_MAPS_API_KEY for Street View',
+    });
+    state.providers[0].keyRequired = false;
+    const { calls, layer } = stubPanel(dom, state);
+    const chips = () => dom.root.querySelector('#sl-provider-chips').children;
+    chips()[0].click(); // Mapillary: configured, dark
+    await settle();
+    // One source at a time: lighting Mapillary darkens Street View too.
+    assert.deepEqual(calls.setParams, [
+      [{ mapillary: true, google: false }, { origin: 'user' }],
+    ]);
+    // Now dark, the refused chip says why instead of lighting.
+    state.providers[0].on = true;
+    state.providers[1].on = false;
+    state.keyRequired = false;
+    layer.publish({ ...state });
+    chips()[1].click();
+    await settle();
+    assert.equal(calls.setParams.length, 1);
+    assert.deepEqual(calls.toasts, [
+      dom.root.querySelector('#sl-provider-chips').children[1].title,
+    ]);
+  }));
+
+test('a swap names every registered provider, also those hidden on this map', () =>
+  withDom(async (dom) => {
+    const state = uiState({ on: false });
+    const { calls, layer, chip } = stubPanel(dom, state);
+    // Off Google 3D the Street View chip is not listed, but stays registered.
+    layer.providerIds = ['mapillary', 'google'];
+    chip().click();
+    await settle();
+    assert.deepEqual(calls.setParams, [
+      [{ mapillary: true, google: false }, { origin: 'user' }],
+    ]);
+  }));
+
+test('a note under SINCE says what date it compares, only while one is given', () =>
+  withDom(async (dom) => {
+    const state = uiState();
+    const { layer } = stubPanel(dom, state);
+    const note = () => dom.root.querySelector('#sl-since-note');
+    assert.equal(note().hidden, true, 'none for Mapillary');
+    layer.publish({ ...state, sinceNote: 'KartaView: by upload date' });
+    assert.equal(note().hidden, false);
+    assert.equal(note().textContent, 'KartaView: by upload date');
+    layer.publish(state);
+    assert.equal(note().hidden, true);
+    // The panel's own markup has it, read out with the slider.
+    const template = fs.readFileSync(
+      new URL('./templates/layer-panels.html', import.meta.url),
+      'utf8',
+    );
+    assert.match(template, /<small id="sl-since-note"[^>]* hidden>/);
+    assert.match(template, /aria-describedby="sl-since-label sl-since-note"/);
+  }));
+
+test('Street View lit hides the imagery filters and the legend; Mapillary lit shows them', () =>
+  withDom(async (dom) => {
+    const state = uiState();
+    const { layer } = stubPanel(dom, state);
+    const shown = () => ({
+      pano: !dom.root.querySelector('#sl-pano-row').hidden,
+      since: !dom.root.querySelector('#sl-since-row').hidden,
+      controls: !dom.root.querySelector('#sl-controls').hidden,
+      legend: !dom.root.querySelector('#sl-legend').hidden,
+    });
+    assert.deepEqual(shown(), {
+      pano: true,
+      since: true,
+      controls: true,
+      legend: true,
+    });
+    layer.publish({
+      ...state,
+      filterControls: { pano: false, since: false },
+      legend: [],
+    });
+    assert.deepEqual(shown(), {
+      pano: false,
+      since: false,
+      controls: false,
+      legend: false,
+    });
+    layer.publish(state);
+    assert.deepEqual(shown(), {
+      pano: true,
+      since: true,
+      controls: true,
+      legend: true,
+    });
+  }));

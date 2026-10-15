@@ -4,6 +4,32 @@
   with uncached 204 instead of a browser-visible 404. Existing providers take
   precedence, and unrelated API routes behave as before.
 
+- Snow flakes sway within a fixed range instead of drifting sideways faster the
+  longer the app runs; the Wind setting still scales the sway.
+
+- The right rail ignores panels that other CSS hides, such as during an event
+  view, so they no longer force one-panel-at-a-time layout or collapse visible
+  panels. Panels the rail collapses itself are still restored.
+
+- Coordinate searches refuse empty latitude or longitude components instead of navigating to an unintended location.
+
+- Bing Aerial and Bing Labels request HTTPS tiles on HTTP localhost through
+  their ion-backed providers, retaining ion and per-tile attribution without
+  widening the Content Security Policy.
+
+- Add New York City traffic cameras from the NYC DOT Traffic Management Center
+  as an opt-in CCTV pack. NYC DOT requires a data-sharing agreement for the
+  camera feed, so the pack is off unless `CCTV_NYC_ENABLED=1` is set by an
+  operator who holds one; otherwise no request reaches NYC DOT. NYC DOT's
+  requested disclaimer is in the Data attribution popover. The camera list is one keyless JSON request to
+  `webcams.nyctmc.org/api/cameras`; frames are stills synthesized from each
+  camera UUID on that same host, so a catalog field cannot steer the proxy
+  off-host. Offline cameras are dropped. Once enabled, the 250 cameras nearest
+  the five borough cores load and `CCTV_NYC_MAX_SOURCES` changes the cap. The catalog-wide ceiling is
+  unchanged; extra cameras share it round-robin with the other packs.
+
+- Cancelled catalog queries refuse execution when their signal is already aborted.
+
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
 
@@ -99,9 +125,51 @@
 
 ## [Unreleased]
 
-- Keep later satellites when a TLE catalog entry is missing an orbital line.
-  The parser skips the incomplete set and resumes at the next complete named
-  set, instead of losing the rest of the group (#906).
+- Flights and Military Flights highlight emergency transponder broadcasts in
+  fleet billboards, 3D models and Cockpit contacts. Colors update when a status
+  starts or clears. Emergency squawks outrank ADS-B priority statuses; GEV
+  reports minimum fuel and lifeguard without red tint. Cockpit names the code
+  or ADS-B status, and analyst/voice results retain broadcast provenance and
+  the latest known contact time. One omitted ADS-B status poll during a source
+  switch may retain the previous status if the squawk is unchanged; an explicit
+  clear takes effect immediately. Broadcasts are not confirmed incidents.
+  Contributed by [Leo Pechnicki](https://github.com/leopechnicki) (#856).
+
+- Street Level: KartaView is the third provider, keyless. Light its chip
+  (purple; off by default, one provider at a time) and zoom in below about
+  6 km: the lines are the streets KartaView has photos of (z13–14 tiles from
+  `api.kartaview.org`). A click on a line opens the photo nearest the click
+  without moving the camera, flat or 360° (a small WebGL panorama: drag to
+  look, wheel to zoom), with cones along its drive and ‹ › / ← → to step
+  through it. The caption links to the full-size photo (KartaView's photo
+  pages fail for signed-out visitors), and the globe credits "© KartaView
+  contributors, CC BY-SA 4.0". Share links carry it in the provider
+  switches (`0.m.0_0.r.google-0*kartaview-1`). Archived photos (KartaView
+  answers 409) are skipped by the click and by ‹ ›. Shift+← →, ↑ ↓, + − and
+  pinch look around a 360° photo. The open photo's marker is a purple view
+  cone pointing along the drive (KartaView's own compass headings are often
+  0 or far off). The IMAGERY (ALL / 360° / FLAT) and SINCE filters apply to
+  KartaView as to Mapillary: its lines are filtered by KartaView's own
+  server (its filtered PNG tiles, as a mask over the JSON lines), and the
+  photo a click opens, and the cones, by each photo's projection and upload
+  date. KartaView's SINCE is the upload date (all its server can filter by);
+  a note under the slider says so while KartaView is lit (`sinceBasis:
+  'upload'` in the provider contract).
+  Mapillary's line coverage and sequence cones are now shared by both
+  (`lineCoverage.js`, `sequenceCones.js`).
+
+- Street Level: Google Street View is the second provider. On the Google 3D
+  map (Google's terms keep it off other maps), light its chip (off by
+  default: every panorama is billed to the Google Maps key, which needs the
+  Maps JavaScript API) and click a street, or press OPEN STREET VIEW, to
+  open Google's own panorama in
+  the panel, with its arrows, the address and month in the caption, a link
+  to Google Maps and FOLLOW. Share links carry it in the provider switches
+  (`r.google-1`). One provider is lit at a time (lighting one switches the
+  other off), Mapillary by default since it is free. Street View's panoramas
+  are all 360°, so the IMAGERY and SINCE filters and the legend apply to
+  Mapillary only and hide while GOOGLE STREET VIEW is lit; its globe marker
+  is a Google-blue view cone.
 
 - Add an experimental ChatGPT/Codex OAuth option for cloud voice in Provider
   Settings. API-key voice remains the default. Local sign-in can start from
@@ -149,6 +217,32 @@
   the pack, `CCTV_VEGVESEN_MAX_SOURCES` caps it (keeping cameras nearest the
   largest cities) and `CCTV_VEGVESEN_VIDEO=0` keeps stills only. Attributed
   under NLOD 2.0.
+
+- Import your own GeoJSON, KML, KMZ and GPX files from DISPLAY or by dropping
+  them onto the app. Show, hide, fly to or remove each file for the session.
+  GeoJSON/GPX draw on the ground; KML retains its styles and explicit heights.
+  Large repeated-style exports use shared local pins, while recorded track
+  vertices and segment gaps stay intact. Imports respect newer camera gestures,
+  leave the shared clock alone, and report malformed or oversized files.
+  File bytes stay on the device; rendered overlays may appear in shared map
+  screenshots. Thanks to [Chase Mills](https://github.com/kapturner) (#925).
+
+- GNSS Integrity (Events, voice-addressable, share token `3`) draws navigation
+  accuracy scores from a keyless regional adsb.lol sample; aircraft-level analyst
+  queries are unavailable for these aggregate cells. Cells do not intercept
+  map clicks. Pan/zoom refreshes automatically; feed failures retain the display
+  and explain the next retry. Aircraft-reported quality includes MLAT-positioned
+  contacts after GPS loss, excludes TIS-B/MLAT-derived quality, and locates GPS-loss
+  evidence at the last good GNSS position when available. Scores discount one
+  bad aircraft per cell and retain 30 minutes of visited-view evidence; they
+  do not confirm jamming. See [method and limits](DATA_SOURCES.md#gnss-integrity).
+  Contributed by [Leo Pechnicki](https://github.com/leopechnicki) (#855).
+
+- Live HLS cameras play on a page opened over plain HTTP from another machine
+  (`HOST=0.0.0.0`). The client lease id came from `crypto.randomUUID`, which
+  browsers only expose in secure contexts, so starting a live feed threw
+  before playback. The id now falls back to a v4 UUID built from
+  `crypto.getRandomValues`, which the server's lease check accepts.
 
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
