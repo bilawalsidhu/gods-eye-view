@@ -1,12 +1,17 @@
-import * as Cesium from 'cesium';
 import * as geo from '../geo/index.js';
 import { createStateChannel } from '../app/stateChannel.js';
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import { LocationControls } from './location.js';
 
-/** Own destination selection, lookup, orbit and world-jump lifetime. */
+/**
+ * Own destination selection, lookup, orbit and world-jump lifetime. The camera
+ * is the globe `engine`'s; `viewer` is optional and only clears Cesium's
+ * tracked entity (entity tracking moves to the engine in phase 1c).
+ */
 export class LocationNavigation {
   constructor({
-    viewer,
+    viewer = null,
+    engine = engineFromViewer(viewer),
     placeSearch,
     services,
     elements,
@@ -16,7 +21,7 @@ export class LocationNavigation {
   }) {
     Object.assign(
       this,
-      { viewer, placeSearch, services, navigation, readCockpit },
+      { viewer, engine, placeSearch, services, navigation, readCockpit },
       elements,
       operations,
     );
@@ -31,7 +36,7 @@ export class LocationNavigation {
     this._globeResetPromise = null;
     this._cancelGlobeReset = null;
     this._worldJumpActive = false;
-    this.orbitController = new services.OrbitController(viewer);
+    this.orbitController = new services.OrbitController(engine);
     this._orbitIndicator = null;
     this._locationState = createStateChannel(
       () => this._locationLookup?.getState() || null,
@@ -112,7 +117,7 @@ export class LocationNavigation {
         !this._disposed && generation === this._navigationGeneration,
       beforeFly: (generation) => this._reassertNavigationHandoff(generation),
       search: (query, options) =>
-        searchAndFlyTo(this.viewer, query, {
+        searchAndFlyTo(this.engine, query, {
           placeSearch: this.placeSearch,
           ...options,
         }),
@@ -194,7 +199,7 @@ export class LocationNavigation {
     const isCityChanged =
       this._activeLocationId && this._activeLocationId !== cityId;
     const result = this._flyWithTransition(!!isCityChanged, (hooks) =>
-      flyToPresetLocation(this.viewer, cityId, hooks),
+      flyToPresetLocation(this.engine, cityId, hooks),
     );
     if (result === false) return;
     this._expandPOIRow(cityId);
@@ -215,7 +220,7 @@ export class LocationNavigation {
     const isCityChanged =
       this._activeLocationId && this._activeLocationId !== cityId;
     const result = this._flyWithTransition(!!isCityChanged, (hooks) =>
-      flyToPOI(this.viewer, cityId, poiIndex, hooks),
+      flyToPOI(this.engine, cityId, poiIndex, hooks),
     );
     if (result === false) return;
     this._setActiveLocation(cityId);
@@ -350,9 +355,9 @@ export class LocationNavigation {
     } catch {
       /* best-effort release */
     }
-    this.viewer.trackedEntity = undefined;
-    this.viewer.camera.cancelFlight();
-    this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    if (this.viewer) this.viewer.trackedEntity = undefined;
+    this.engine.camera.cancelFlight();
+    this.engine.camera.release();
     this._beginWorldJumpTransition();
 
     let resolveReset;
@@ -367,7 +372,7 @@ export class LocationNavigation {
       settled = true;
       clearTimeout(timer);
       this._endWorldJumpTransition();
-      const carto = this.viewer.camera.positionCartographic;
+      const carto = this.engine.camera.pose().cartographic;
       const result = {
         ok: !cancelled,
         action: 'zoom_to_globe',
@@ -392,7 +397,7 @@ export class LocationNavigation {
     };
     this._cancelGlobeReset = () => finish(true);
     timer = window.setTimeout(() => {
-      const height = this.viewer.camera.positionCartographic?.height;
+      const height = this.engine.camera.height();
       finish(
         !Number.isFinite(height) ||
           Math.abs(height - GLOBE_VIEW.heightM) > 1000,
@@ -406,7 +411,7 @@ export class LocationNavigation {
       'aria-label',
       'Resetting cockpit to full globe view',
     );
-    const target = flyToGlobeView(this.viewer, {
+    const target = flyToGlobeView(this.engine, {
       onComplete: () => finish(false),
       onCancel: () => finish(true),
     });
@@ -414,7 +419,7 @@ export class LocationNavigation {
     return resetPromise;
   }
 
-  /** Revoke callbacks and settle owned camera work before the viewer is released. */
+  /** Revoke callbacks and settle owned camera work before the engine is released. */
   destroy() {
     if (this._disposed) return;
     this._disposed = true;

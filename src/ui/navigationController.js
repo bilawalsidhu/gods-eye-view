@@ -1,16 +1,21 @@
 import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { createStateChannel } from '../app/stateChannel.js';
-import * as Cesium from 'cesium';
+import { engineFromViewer } from '../globe/cesium/engineFromViewer.js';
 import {
   beginDeferredNavigation,
   reassertNavigationHandoff,
   runExplicitNavigation,
 } from '../navigationPolicy.js';
 
-/** Own camera authority generations, pending search UI and tracking handoff. */
+/**
+ * Own camera authority generations, pending search UI and tracking handoff.
+ * The camera is the globe `engine`'s. `viewer` is optional and only clears
+ * Cesium's tracked entity (entity tracking moves to the engine in phase 1c).
+ */
 export class NavigationController {
   constructor({
-    viewer,
+    viewer = null,
+    engine = engineFromViewer(viewer),
     tracking,
     searchInput,
     interruptCameraMotion,
@@ -24,6 +29,7 @@ export class NavigationController {
   }) {
     Object.assign(this, {
       viewer,
+      engine,
       tracking,
       searchInput,
       interruptCameraMotion,
@@ -46,7 +52,7 @@ export class NavigationController {
     cancelPendingSelection = true,
     clearSearchedLocation = true,
   } = {}) {
-    cancelCameraArrival(this.viewer);
+    cancelCameraArrival(this.engine);
     this.cancelOrientation();
     const { flightsLayer, militaryFlightsLayer, satellitesLayer } =
       this.tracking;
@@ -174,12 +180,13 @@ export class NavigationController {
     } catch {
       /* best-effort release */
     }
-    this.viewer.trackedEntity = undefined;
+    if (this.viewer) this.viewer.trackedEntity = undefined;
     this.interruptCameraMotion('explicit-navigation');
     this.stopOrbit();
-    if (!preserveCameraFlight) this.viewer.camera.cancelFlight();
+    const camera = this.engine?.camera;
+    if (!preserveCameraFlight) camera?.cancelFlight();
     try {
-      this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      camera?.release();
     } catch {
       /* teardown race */
     }
@@ -213,7 +220,7 @@ export class NavigationController {
       release: () => {
         this.interruptCameraMotion('camera-orientation');
         this.stopOrbit();
-        this.viewer.camera.cancelFlight();
+        this.engine?.camera.cancelFlight();
       },
       navigate,
     });
@@ -259,7 +266,7 @@ export class NavigationController {
     return this._cameraHandoffs.subscribe(listener, { emitCurrent: false });
   }
   stop() {
-    cancelCameraArrival(this.viewer);
+    cancelCameraArrival(this.engine);
     this._disposed = true;
     this._cameraHandoffs?.publish();
     this._cameraHandoffs?.destroy();

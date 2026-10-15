@@ -15,6 +15,8 @@ import { applicationServices } from './services/application.js';
  */
 
 import * as geo from './geo/index.js';
+import { isGlobeEngine } from './globe/contract.js';
+import { engineFromViewer } from './globe/cesium/engineFromViewer.js';
 import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
@@ -92,12 +94,17 @@ const NEARBY_POINTS = Object.values(CITY_POIS).flatMap((city) =>
  */
 export class IntelHUD {
   /**
-   * @param {Cesium.Viewer} viewer - The Cesium Viewer instance used for
-   *   camera telemetry and coordinate derivation.
+   * @param {import('./globe/contract.js').GlobeEngine | object} engine The
+   *   globe engine whose camera drives the telemetry, or a viewer registered
+   *   for one.
+   * @param {object} [options] `viewer`: the Cesium viewer the basemap label
+   *   context (voice, until phase 1c) reads; without one the summary has no
+   *   place labels. Defaults to the first argument when that is a viewer.
    */
   constructor(
-    viewer,
+    engine,
     {
+      viewer = isGlobeEngine(engine) ? null : engine,
       placeSearch,
       summaryPolicy = {},
       basemapContext = {},
@@ -108,6 +115,7 @@ export class IntelHUD {
     this.summaryPolicy = summaryPolicy;
     this.basemapContext = basemapContext;
     this.placeSearch = placeSearch;
+    this.engine = engineFromViewer(engine);
     this.viewer = viewer;
     this._visible = false;
     this._autoMode = true; // auto show/hide based on style
@@ -172,7 +180,9 @@ export class IntelHUD {
     this._passNum = 100 + Math.floor(Math.random() * 200);
 
     this._buildDOM();
-    this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd);
+    this._removeCameraMoveEnd = this.engine.camera.moveEnd.addEventListener(
+      this._onCameraMoveEnd,
+    );
     this._startTimers();
   }
 
@@ -332,13 +342,13 @@ export class IntelHUD {
 
   /**
    * Derive all camera-based telemetry and push values to the DOM.
-   * Reads the viewer camera's cartographic position and computes MGRS,
+   * Reads the camera's cartographic position and computes MGRS,
    * lat/lon DMS, GSD, NIIRS, sun elevation, off-nadir angle, and
    * collection timestamp. Stores results in {@link _latestMetrics}.
    */
   _updateCameraData() {
-    const camera = this.viewer.camera;
-    const cartographic = camera.positionCartographic;
+    const pose = this.engine.camera.pose();
+    const cartographic = pose.cartographic;
     if (!cartographic) return;
 
     const lonDeg = geo.math.toDegrees(cartographic.longitude);
@@ -407,7 +417,7 @@ export class IntelHUD {
 
     // Off-nadir angle (ONA): camera pitch of -90 deg is nadir (straight down),
     // so ONA = 90 + pitch gives 0 at nadir and increases toward the horizon.
-    const pitchDeg = geo.math.toDegrees(camera.pitch);
+    const pitchDeg = geo.math.toDegrees(pose.pitch);
     const ona = Math.max(0, 90 + pitchDeg);
     const onaEl = document.getElementById('hud-ona');
     if (onaEl) onaEl.textContent = `ONA: ${ona.toFixed(1)}°`;
@@ -569,7 +579,7 @@ export class IntelHUD {
    *   dimensions, or null if the view rectangle cannot be computed.
    */
   _viewWindowKm(latDeg) {
-    const rect = this.viewer.camera.computeViewRectangle();
+    const rect = this.engine.camera.viewRectangle();
     if (!rect) return null;
     const north = geo.math.toDegrees(rect.north);
     const south = geo.math.toDegrees(rect.south);
@@ -779,11 +789,14 @@ export class IntelHUD {
   }
 
   async _summaryContext() {
-    const labels = await getBasemapLabelContext(
-      this.viewer,
-      this.placeSearch,
-      this.basemapContext,
-    );
+    // Basemap labels still read the Cesium viewer (voice, phase 1c).
+    const labels = this.viewer
+      ? await getBasemapLabelContext(
+          this.viewer,
+          this.placeSearch,
+          this.basemapContext,
+        )
+      : { placeLabels: [], streetLabels: [], nearbyPlaceLabels: [] };
     const enabledLayers =
       this._dataManager
         ?.getAll?.()
@@ -943,7 +956,8 @@ export class IntelHUD {
     clearInterval(this._timestampInterval);
     clearInterval(this._summaryInterval);
     clearInterval(this._summaryTypingInterval);
-    this.viewer.camera.moveEnd.removeEventListener(this._onCameraMoveEnd);
+    this._removeCameraMoveEnd?.();
+    this._removeCameraMoveEnd = null;
     this._dataManagerUnsubscribe?.();
     this._summaryRequest?.abort();
   }

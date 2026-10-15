@@ -17,7 +17,10 @@ test('the controls pass the scene engine to the shell', () => {
 
 test('the shell initializes the world overlay on its engine', () => {
   const shell = read('../ui/applicationShell.js');
-  assert.match(shell, /\{\n\s+engine = null,\n\s+mapStackController = null,/);
+  assert.match(
+    shell,
+    /\{\n\s+engine = engineFromViewer\(viewer\),\n\s+mapStackController = null,/,
+  );
   assert.match(shell, /initWorldOverlay\(engine\);/);
   assert.doesNotMatch(shell, /initWorldOverlay\(viewer\)/);
 });

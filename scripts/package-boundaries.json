@@ -551,6 +551,7 @@
     "exports": ["./ui/shell"],
     "modules": [
       "src/globe/cesium/engineFromViewer.js",
+      "src/cameraAngles.js",
       "src/globe/contract.js",
       "src/hudLayouts.js",
       "src/hudLayoutPolicy.js",
@@ -1696,6 +1697,7 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/cameraAngles.js",
       "src/cyberSonarScene.js",
       "src/cyberSonar.js",
       "src/hudLayouts.js",

@@ -191,10 +191,10 @@ test('accepted navigation releases through PR15-aware ownership before flight', 
     'origin: trackingOrigin',
     'satellitesLayer.stopTracking?.({ origin: trackingOrigin })',
     'rocketLaunchesLayer.releaseCameraOwnership?.()',
-    'this.viewer.trackedEntity = undefined;',
+    'if (this.viewer) this.viewer.trackedEntity = undefined;',
     "interruptCameraMotion('explicit-navigation')",
-    'this.viewer.camera.cancelFlight();',
-    'this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);',
+    'camera?.cancelFlight();',
+    'camera?.release();',
   ], 'follow release');
   assert.match(release, /flightsLayer\.stopTracking\?\.\(\{ origin: trackingOrigin \}\)/);
   assert.match(release, /militaryFlightsLayer\.stopTracking\?\.\(\{ origin: trackingOrigin \}\)/);
@@ -273,11 +273,11 @@ test('a direct globe gesture retires delayed camera and selection restore only',
   );
   assert.match(
     ui,
-    /viewer\?\.canvas\?\.addEventListener\(\s*'pointerdown',\s*this\._initialShareGestureHandler/,
+    /this\.canvas\?\.addEventListener\(\s*'pointerdown',\s*this\._initialShareGestureHandler/,
   );
   assert.match(
     ui,
-    /viewer\?\.canvas\?\.addEventListener\(\s*'wheel',\s*this\._initialShareGestureHandler/,
+    /this\.canvas\?\.addEventListener\(\s*'wheel',\s*this\._initialShareGestureHandler/,
   );
   assert.match(
     ui,
