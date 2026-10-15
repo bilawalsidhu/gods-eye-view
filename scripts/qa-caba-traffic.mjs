@@ -34,7 +34,7 @@ const snapshot = {
   ],
 };
 const browser = await puppeteer.launch({
-  headless: true,
+  headless: !process.argv.includes('--headful'),
   executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
   args: ['--no-sandbox', '--disable-setuid-sandbox'],
 });
@@ -44,18 +44,29 @@ try {
   let requests = 0;
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.setRequestInterception(true);
-  page.on('request', (request) => {
-    if (new URL(request.url()).pathname === '/api/caba-traffic-enforcement') {
-      requests++;
-      void request.respond({
-        status: unavailable ? 502 : 200,
-        contentType: 'application/json',
-        body: JSON.stringify(
-          unavailable ? { error: 'fixture_unavailable' } : snapshot,
-        ),
+  // Scope fixtures to application fetches so Cesium worker loading is untouched.
+  await page.exposeFunction('__cabaFixture', () => {
+    requests++;
+    return {
+      status: unavailable ? 502 : 200,
+      body: unavailable ? { error: 'fixture_unavailable' } : snapshot,
+    };
+  });
+  await page.evaluateOnNewDocument(() => {
+    const original = window.fetch.bind(window);
+    window.fetch = async (input, options) => {
+      const target = input instanceof Request ? input.url : input;
+      if (
+        new URL(target, location.href).pathname !==
+        '/api/caba-traffic-enforcement'
+      )
+        return original(input, options);
+      const fixture = await window.__cabaFixture();
+      return new Response(JSON.stringify(fixture.body), {
+        status: fixture.status,
+        headers: { 'Content-Type': 'application/json' },
       });
-    } else void request.continue();
+    };
   });
   async function boot() {
     await page.goto(url.href, { waitUntil: 'domcontentloaded' });

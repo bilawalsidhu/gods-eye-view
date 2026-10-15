@@ -27,6 +27,8 @@ test('tool string bounds hold at their edges and on huge arguments', () => {
   assert.deepEqual(validateValue(string({}), 'x'.repeat(1e6)), []);
   // Counting all of it takes roughly 0.7 s; stopping at the limit takes none.
   const huge = 'x'.repeat(1e8);
+  // Flatten V8's lazy repeat before timing the validator, not string allocation.
+  assert.equal(huge.charCodeAt(huge.length - 1), 120);
   const started = performance.now();
   assert.equal(validateValue(string({ maxLength: 60 }), huge).length, 1);
   assert.ok(performance.now() - started < 200, 'stops counting past the limit');

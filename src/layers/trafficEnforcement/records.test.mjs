@@ -81,7 +81,10 @@ test('duplicate rows collapse; colocated types remain distinct', () => {
 test('oversized inventories reject without truncation', () => {
   assert.throws(() =>
     parseCabaTrafficCsv(
-      header + Array(CABA_MAX_ROWS + 1).fill(line).join('\n'),
+      header +
+        Array(CABA_MAX_ROWS + 1)
+          .fill(line)
+          .join('\n'),
     ),
   );
   assert.throws(() => parseCabaTrafficCsv('x'.repeat(2 * 1024 * 1024 + 1)));

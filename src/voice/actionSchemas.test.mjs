@@ -36,8 +36,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // consolidated tool wording (each policy stated once); model-facing tools
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
-    // Street Level adds its toggle enum values and generated alias hint.
-    '9eb113454c5af5e32e27ffcdc7919d0e4600ba1d204f8f175e071152be41ad0f',
+    // Street Level, GNSS and CABA extend the manifest; tracked and analyst aircraft describe broadcasts.
+    '091da3f6f966454198543307b54141ab9c8139133c0ce14c6d63a9ae396bbe6a',
   );
 });
 

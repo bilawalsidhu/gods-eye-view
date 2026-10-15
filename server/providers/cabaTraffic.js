@@ -3,7 +3,7 @@ import {
   parseCabaTrafficCsv,
 } from '../../src/layers/trafficEnforcement/records.js';
 import {
-  readResponseTextCapped,
+  readResponseBytesCapped,
   coalesceProxyRequest,
 } from './common/http.js';
 import { makeRateLimiter, clientKey } from './common/rate-limit.js';
@@ -58,11 +58,18 @@ export function cabaTrafficProxy({
             await response.body?.cancel();
             throw new Error('Inventory upstream unavailable');
           }
-          const csv = await readResponseTextCapped(
+          const bytes = await readResponseBytesCapped(
             response,
             2 * 1024 * 1024,
             signal,
           );
+          let csv;
+          try {
+            csv = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+          } catch {
+            // The official CDN also publishes legacy Western-encoded CSV.
+            csv = new TextDecoder('windows-1252').decode(bytes);
+          }
           const rows = parseCabaTrafficCsv(csv);
           cached = { rows, fetchedAt: now() };
           return cached;

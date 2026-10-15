@@ -31,7 +31,7 @@ the conversion. The MIT code license does not replace this dataset license.
 The local provider exposes `GET /api/caba-traffic-enforcement` in both Vite dev
 and preview. It requests only the fixed official resource, permits at most three
 HTTPS redirects on the city's data/CDN hosts, caps downloads at 2 MiB and 5,000
-rows, and times out after 20 seconds. Successful responses share a 24-hour cache;
+rows, and times out after 20 seconds. CSV decoding accepts UTF-8 and the official CDN's legacy Windows-1252 encoding, preserving accented headers and addresses. Successful responses share a 24-hour cache;
 concurrent requests coalesce. Failed refreshes return an unavailable error.
 Caller-selected URLs and query parameters are rejected.
 
@@ -48,7 +48,7 @@ selection and context records on disable/destroy. Reload the app to request a
 new inventory; toggles do not poll the publisher. Destruction aborts acquisition
 and discards late results.
 
-Layer ID: `caba-traffic-enforcement`. Provisional share token: `3`; rerun the
+Layer ID: `caba-traffic-enforcement`. Provisional share token: `4`; rerun the
 allocator against merge-time main before merging. Voice supports visibility and
 entity context; aggregate analyst queries are not exposed for this inventory.
 
@@ -76,6 +76,20 @@ node scripts/qa-caba-traffic.mjs --url http://localhost:4173
 
 The CABA browser gate uses deterministic fixtures to check point/context
 provenance, cleanup across toggles, share-state round trips and visible failures.
-It does not validate live access to the city's CSV. Also enable the layer against
+`--headful` uses the native browser GPU; provider fixtures replace only application fetches and leave Cesium workers untouched. It does not validate live access to the city's CSV. Also enable the layer against
 the real provider and inspect its returned count and at least one location before
 marking the contribution ready for review.
+
+### Local validation, 2026-10-15
+
+Node 24.22.0 on Linux passed 6,717 tests, including both allocation gates; the
+Windows-only native DACL test was skipped. Build, formatting, package boundaries,
+setup doctor and published-token checks passed. The official CSV download through
+the real provider returned 224 records. Its legacy encoding was reproduced in a
+regression test that failed before the decoder correction and passed afterward.
+
+The catalogue includes both GNSS and CABA after synchronization with upstream
+`5d05a0a`; manifest-derived schema pins and share-token allocation fixtures reflect
+that combined state. The Unicode validator timing fixture is materialized before
+timing, so V8's lazy repeated-string allocation is excluded while the existing
+200 ms validation bound stays unchanged.

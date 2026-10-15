@@ -10,6 +10,7 @@ import { makeFixtureRoot } from './fixtureRoot.mjs';
 test('data providers have both hooks; credential editing stays development-only', () => {
   const plugins = localProviderPlugins();
   assert.ok(plugins.some(({ name }) => name === 'fire-perimeters'));
+  assert.ok(plugins.some(({ name }) => name === 'gnss-integrity'));
   for (const plugin of plugins) {
     if (plugin.name === 'gev-key-setup') {
       assert.equal(plugin.configurePreviewServer, undefined);
@@ -103,6 +104,7 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         ['/api/adsbdb/type/invalid', 400],
         ['/api/firms/status', 200],
         ['/api/fire-perimeters/inciweb/publication/invalid', 400],
+        ['/api/gnss-integrity?lat=invalid', 400],
         ['/api/terrain/heights?points=invalid', 400],
         ['/api/overpass', 405],
         ['/api/overpass/status', 200],
@@ -113,6 +115,9 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         // the check that the real servers register them.
         ['/api/mapillary/status', 200],
         ['/api/mapillary/tiles/coverage/14/1/2', 503],
+        ['/api/google/tiles-token', 200],
+        ['/api/google/tiles-token?probe=1', 200],
+        ['/api/google/tiles-token/unknown', 404],
         ['/api/radio/unknown', 404],
         ['/api/setup/status', isPreview ? 404 : 200],
         ['/api/setup/update', 404],
@@ -131,6 +136,10 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
           route,
         );
         const body = await response.json();
+        if (route.startsWith('/api/google/tiles-token') && status === 200) {
+          assert.equal(body, null, 'standalone offers no Google tiles token');
+          assert.equal(response.headers.get('cache-control'), 'no-store');
+        }
         if (route === '/api/cctv/sources')
           assert.equal(body.sources[0].id, 'fixture');
         if (route === '/api/mapillary/status')
@@ -148,6 +157,11 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
       const tle = await fetch(origin + '/api/celestrak/invalid!');
       assert.equal(tle.status, 400);
       assert.equal(await tle.text(), 'invalid group');
+      const tokenWrite = await fetch(origin + '/api/google/tiles-token', {
+        method: 'POST',
+      });
+      assert.equal(tokenWrite.status, 404);
+      assert.deepEqual(await tokenWrite.json(), { error: 'Unknown API route' });
       if (isPreview) {
         const write = await fetch(origin + '/api/setup/keys', {
           method: 'POST',

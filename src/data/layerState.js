@@ -590,7 +590,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'bikeshare', token: 'b', disposition: 'enabled-only' }),
   Object.freeze({
     id: 'caba-traffic-enforcement',
-    token: '3',
+    token: '4',
     disposition: 'enabled-only',
   }),
   Object.freeze({
@@ -611,6 +611,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     token: 'f',
     disposition: 'enabled+options',
     optionOwner: 'flights',
+  }),
+  Object.freeze({
+    id: 'gnss-integrity',
+    token: '3',
+    disposition: 'enabled-only',
   }),
   Object.freeze({ id: 'local-dams', token: 'q', disposition: 'enabled-only' }),
   Object.freeze({

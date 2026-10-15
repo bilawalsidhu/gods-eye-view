@@ -87,6 +87,16 @@ test('concurrent callers coalesce one upstream request', async () => {
   assert.equal(calls, 1);
 });
 
+test('the official legacy-encoded CSV preserves accented headers and values', async () => {
+  const request = harness({
+    fetchImpl: async () => new Response(Buffer.from(csv, 'latin1')),
+  });
+  const result = await request();
+  assert.equal(result.status, 200);
+  assert.equal(result.body.rows[0].type, 'Cinemómetro');
+  assert.equal(result.body.rows[0].latitude, -34.6);
+});
+
 test('only official HTTPS redirects are followed', async () => {
   for (const location of [
     'http://data.buenosaires.gob.ar/file.csv',

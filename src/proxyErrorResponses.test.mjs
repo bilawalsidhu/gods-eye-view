@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { parseTerrainPoints } from './data/terrainHeightsProxy.js';
 import { readResponseTextCapped, coalesceProxyRequest } from './sources/httpBody.js';
 
 const source = ['local.js', 'common/http.js', 'aircraft/enrichment.js', 'terrain.js', 'space/celestrak.js', 'space/launch-library.js', '../../src/data/spaceProviderRequests.js']
@@ -172,3 +173,18 @@ test('ADSBDB retains validation and missing-aircraft semantics', async () => {
   assert.equal(absent.status, 200);
   assert.deepEqual(JSON.parse(absent.body), { found: false });
 });
+
+for (const preview of [false, true]) {
+  test(`terrain server rejects out-of-range points before upstream resolution in ${preview ? 'preview' : 'development'}`, async () => {
+    let calls = 0;
+    const app = fixture('terrainHeightsProxy', { parseTerrainPoints,
+      resolveTerrainHeightRequest: async () => { calls++; return { status: 200, body: { results: [] } }; },
+    }, preview);
+    for (const points of ['181,0', '-181,0', '0,91', '0,-91', '1,2;0,91']) {
+      assert.equal((await app.request('/?points=' + encodeURIComponent(points))).status, 400);
+    }
+    assert.equal(calls, 0);
+    assert.equal((await app.request('/?points=-180,-90;180,90')).status, 200);
+    assert.equal(calls, 1);
+  });
+}
