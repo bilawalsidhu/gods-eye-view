@@ -95,6 +95,9 @@ export function createCesiumMaps(
   // decides what the globe shows. Terrain has its own.
   const generations = { display: 0, terrain: 0 };
   let baseSource = null;
+  // The source objects on screen, as passed (maps.current()).
+  let currentBase = null;
+  let currentTiles = null;
   let creditOwner = null;
   let destroyed = false;
 
@@ -130,6 +133,7 @@ export function createCesiumMaps(
   }
 
   function showBase(source, provider) {
+    currentBase = source;
     mapScene.showBaseImagery(provider);
     showCredit('imagery', imageryCredit(source));
   }
@@ -156,6 +160,7 @@ export function createCesiumMaps(
       if (source == null) {
         mapScene.showTileset(null, tilesets());
         shownTileset = null;
+        currentTiles = null;
         // The globe comes back with the last base imagery and its credit;
         // the photoreal credit goes.
         if (baseSource) {
@@ -195,6 +200,8 @@ export function createCesiumMaps(
       // As MapSourceController activates a 3D stack: no base layer, the
       // source's credit, one tileset shown and the globe hidden.
       mapScene.removeBaseImagery();
+      currentBase = null;
+      currentTiles = source;
       showCredit('photoreal', source.credit);
       shownTileset = tileset;
       mapScene.showTileset(tileset, tilesets());
@@ -205,9 +212,11 @@ export function createCesiumMaps(
       const tileset = source?.tileset;
       if (!tileset || !known.delete(tileset)) return;
       if (shownTileset === tileset) shownTileset = null;
+      if (currentTiles?.tileset === tileset) currentTiles = null;
       if (added.delete(tileset)) viewer.scene.primitives.remove(tileset);
     },
     photorealActive: () => tilesets().some((tileset) => tileset.show === true),
+    current: () => ({ baseImagery: currentBase, photoreal: currentTiles }),
   };
 
   return {

@@ -191,6 +191,7 @@ test('the contract carries what the shell infrastructure needs', () => {
     'camera.livePosition',
     'camera.height',
     'maps.releasePhotorealTiles',
+    'maps.current',
   ])
     assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
   const engine = createFakeEngine();
@@ -209,8 +210,13 @@ test('the fake engine passes the engine contract suite', async (t) => {
   const engine = createFakeEngine();
   const checks = createContractSuite(engine, {
     waitFrames: async (count) => engine.fake.frames(count),
+    mapSources: {
+      imagery: [{ kind: 'osm' }, { kind: 'esri-imagery' }],
+      photoreal: { kind: 'photoreal' },
+    },
   });
   assert.ok(checks.length >= 15);
+  assert.ok(checks.some(({ name }) => name.startsWith('maps:')));
   assert.equal(new Set(checks.map((check) => check.name)).size, checks.length);
   for (const check of checks) await t.test(check.name, () => check.run());
 });

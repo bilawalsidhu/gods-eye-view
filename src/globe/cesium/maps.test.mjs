@@ -378,3 +378,21 @@ test('releasePhotorealTiles leaves a tileset the engine did not add in the scene
   maps.releasePhotorealTiles({ tileset: startup });
   assert.equal(viewer.primitiveList.includes(startup), true);
 });
+
+test('current names the sources on screen as passed', async () => {
+  const { maps } = setup();
+  assert.deepEqual(maps.current(), { baseImagery: null, photoreal: null });
+  const esri = esriSource();
+  const tiles = { tileset: tileset(), credit: 'Google' };
+  await maps.setBaseImagery(esri);
+  assert.deepEqual(maps.current(), { baseImagery: esri, photoreal: null });
+  await maps.setPhotorealTiles(tiles);
+  assert.equal(maps.current().photoreal, tiles);
+  assert.equal(maps.current().baseImagery, null);
+  await maps.setPhotorealTiles(null);
+  assert.equal(maps.current().baseImagery, esri);
+  assert.equal(maps.current().photoreal, null);
+  await maps.setPhotorealTiles(tiles);
+  maps.releasePhotorealTiles(tiles);
+  assert.equal(maps.current().photoreal, null, 'a released source is gone');
+});

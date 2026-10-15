@@ -69,12 +69,15 @@ const along = (origin, direction, distance) =>
 
 /**
  * @param {import('../contract.js').GlobeEngine} engine
- * @param {{ waitFrames: (count: number) => Promise<void>, maxWaitFrames?: number }} options
+ * @param {{ waitFrames: (count: number) => Promise<void>, maxWaitFrames?: number,
+ *   mapSources?: { imagery: object[], photoreal: object } }} options
+ *   `mapSources` (two imagery sources and a photoreal one the engine can
+ *   show) adds the maps checks; they leave photoreal tiles hidden.
  * @returns {{ name: string, run: () => Promise<void> }[]}
  */
 export function createContractSuite(
   engine,
-  { waitFrames, maxWaitFrames = 240 },
+  { waitFrames, maxWaitFrames = 240, mapSources = null },
 ) {
   if (typeof waitFrames !== 'function')
     throw new TypeError('createContractSuite needs a waitFrames(count) helper');
@@ -1378,7 +1381,80 @@ export function createContractSuite(
       },
     ],
   ];
+  if (mapSources?.photoreal && mapSources.imagery?.length >= 2)
+    checks.push(...mapChecks(engine.maps, mapSources));
   return checks.map(([name, run]) => ({ name, run }));
+}
+
+// The maps switch order, observed through maps.current().
+function mapChecks(maps, { imagery: [first, second], photoreal }) {
+  const shows = (baseImagery, tiles, label) => {
+    const current = maps.current();
+    ensure(
+      current.baseImagery === baseImagery,
+      `${label}: base imagery is not the expected source`,
+    );
+    ensure(
+      current.photoreal === tiles,
+      `${label}: photoreal tiles are not the expected source`,
+    );
+    ensure(
+      maps.photorealActive() === (tiles !== null),
+      `${label}: photorealActive is ${maps.photorealActive()}`,
+    );
+  };
+  return [
+    [
+      'maps: setPhotorealTiles(null) brings back the last base imagery',
+      async () => {
+        await maps.setBaseImagery(first);
+        shows(first, null, 'after setBaseImagery');
+        await maps.setPhotorealTiles(photoreal);
+        shows(null, photoreal, 'tiles replace the base imagery');
+        await maps.setPhotorealTiles(null);
+        shows(first, null, 'null');
+      },
+    ],
+    [
+      'maps: the last imagery or photoreal call decides what shows',
+      async () => {
+        await maps.setBaseImagery(first);
+        await Promise.all([
+          maps.setBaseImagery(second),
+          maps.setPhotorealTiles(photoreal),
+        ]);
+        shows(null, photoreal, 'tiles last');
+        await maps.setPhotorealTiles(null);
+        const restored = maps.current().baseImagery;
+        // The second source was superseded before or after it showed.
+        ensure(
+          restored === first || restored === second,
+          'null: the last base imagery shown is not back',
+        );
+        await Promise.all([
+          maps.setPhotorealTiles(photoreal),
+          maps.setBaseImagery(second),
+        ]);
+        ensure(
+          maps.current().baseImagery === second,
+          'imagery last: the second source is not on the globe',
+        );
+        await maps.setPhotorealTiles(null);
+        shows(second, null, 'null after imagery');
+      },
+    ],
+    [
+      'maps.releasePhotorealTiles: a released source no longer shows or counts',
+      async () => {
+        await maps.setPhotorealTiles(photoreal);
+        await maps.setPhotorealTiles(null);
+        maps.releasePhotorealTiles(photoreal);
+        maps.releasePhotorealTiles(photoreal);
+        ensure(!maps.photorealActive(), 'photorealActive after release');
+        ensure(maps.current().photoreal === null, 'current after release');
+      },
+    ],
+  ];
 }
 
 /** Runs every check in order; never throws for a failing check. */

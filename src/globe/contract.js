@@ -161,6 +161,37 @@
  *   a surface-pick check reads), else undefined.
  * @property {any} [object] The engine's own pick result, for engine-specific code.
  *
+ * @typedef {object} GlobeMaps
+ *   Map sources are engine-neutral descriptions, as maps/registry.js sources
+ *   carry them; each engine builds its own providers from them:
+ *   - imagery `{ kind: 'osm'|'esri-imagery'|'ion', style?, accessToken?,
+ *     credit?, descriptor? }`;
+ *   - photoreal tiles `{ kind: 'photoreal', googleApiKey?, cesiumToken?,
+ *     credit?, descriptor? }`;
+ *   - terrain `{ kind: 'ellipsoid'|'keyless'|'world', accessToken?, id? }`.
+ *   Optional prebuilt members (`provider`, `tileset`, terrain `create`, an
+ *   `imagery()` factory) are engine objects their caller built and owns: only
+ *   the engine kind that built them uses them (the Cesium engine for the
+ *   registry's Cesium factories), any other ignores them and builds from the
+ *   description. The engine neither caches nor disposes them.
+ *   Each setter settles once the source is on screen and rejects when it
+ *   cannot be built (the current source then stays). Base imagery and
+ *   photoreal tiles share one switch order: the call made last decides what
+ *   shows, and a superseded call settles without showing anything.
+ * @property {(source: object) => Promise<void>} setBaseImagery
+ * @property {(source: object) => Promise<void>} setTerrain
+ * @property {(source: object | null) => Promise<void>} setPhotorealTiles
+ *   Tiles replace the base imagery and hide the globe; null hides every
+ *   tileset and shows the globe again with the last base imagery and its
+ *   credit (no credit when none was set).
+ * @property {(source: object) => void} releasePhotorealTiles Forgets a
+ *   photoreal source shown before (it no longer counts for photorealActive)
+ *   and takes engine-added tiles out of the scene; its caller disposes them.
+ * @property {() => boolean} photorealActive
+ * @property {() => { baseImagery: object | null, photoreal: object | null }} current
+ *   The source objects on screen, as passed: the base imagery layer on the
+ *   globe and the photoreal tiles shown (null for none).
+ *
  * @typedef {object} GlobeEngine
  * @property {'cesium'|'navara'} kind
  * @property {{ container: object, canvas: object, size: () => { width: number, height: number } }} host
@@ -174,17 +205,7 @@
  *   As in Cesium, a listener with a modifier fires only while that key is
  *   held and one without fires only while no modifier is held.
  * @property {{ addStatic: (html: string, options?: { onScreen?: boolean }) => () => void }} credits
- * @property {{ setBaseImagery: (source: object) => Promise<void>, setTerrain: (source: object) => Promise<void>, setPhotorealTiles: (source: object | null) => Promise<void>, releasePhotorealTiles: (source: object) => void, photorealActive: () => boolean }} maps
- *   Sources are maps/registry.js descriptions; the engine builds its own
- *   providers. Each setter settles once the source is on screen and rejects
- *   when it cannot be built (the current source then stays). A source may
- *   carry a ready engine `provider` its caller built and owns (the engine
- *   neither caches nor disposes it). Base imagery and photoreal tiles share
- *   one switch order: the one asked for last wins, a superseded call settles
- *   without showing anything. setPhotorealTiles(null) shows the globe again
- *   with the last base imagery and its credit (no credit when none was set).
- *   releasePhotorealTiles forgets a tileset source shown before and takes it
- *   out of the scene when the engine put it there; its caller disposes it.
+ * @property {GlobeMaps} maps
  * @property {() => void} destroy
  */
 
@@ -364,6 +385,7 @@ const SHAPE = {
     setPhotorealTiles: isFunction,
     releasePhotorealTiles: isFunction,
     photorealActive: isFunction,
+    current: isFunction,
   },
 };
 

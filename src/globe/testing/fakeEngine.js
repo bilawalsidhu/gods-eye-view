@@ -241,6 +241,7 @@ export function createFakeEngine(options = {}) {
   };
   const inputs = new Map(INPUT_TYPES.map((type) => [type, new Set()]));
   const livePosition = cartesian3.create();
+  let lastBaseImagery = null;
   const scripts = new Map();
   let transform = [...matrix4.IDENTITY];
   let percentageChanged = 0.5;
@@ -819,10 +820,13 @@ export function createFakeEngine(options = {}) {
         };
       },
     },
+    // The contract's switch order: a call shows its source when made (the
+    // fake builds nothing), so the call made last decides what shows.
     maps: {
       async setBaseImagery(source) {
         record('maps.setBaseImagery', [source]);
         fake.maps.imagery = source;
+        lastBaseImagery = source;
       },
       async setTerrain(source) {
         record('maps.setTerrain', [source]);
@@ -830,12 +834,23 @@ export function createFakeEngine(options = {}) {
       },
       async setPhotorealTiles(source) {
         record('maps.setPhotorealTiles', [source]);
-        fake.maps.photoreal = source ?? null;
+        if (source == null) {
+          fake.maps.photoreal = null;
+          fake.maps.imagery = lastBaseImagery;
+          return;
+        }
+        fake.maps.photoreal = source;
+        fake.maps.imagery = null;
       },
       releasePhotorealTiles(source) {
         record('maps.releasePhotorealTiles', [source]);
+        if (fake.maps.photoreal === source) fake.maps.photoreal = null;
       },
       photorealActive: () => fake.maps.photoreal != null,
+      current: () => ({
+        baseImagery: fake.maps.imagery ?? null,
+        photoreal: fake.maps.photoreal,
+      }),
     },
     destroy() {
       record('destroy', []);
