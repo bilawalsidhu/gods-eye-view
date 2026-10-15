@@ -43,11 +43,18 @@ export function normalizeAdsbLolAircraftState(aircraft, nowSeconds) {
     .toLowerCase();
   const latitude = finiteNumber(aircraft?.lat);
   const longitude = finiteNumber(aircraft?.lon);
-  if (!hex || latitude === null || longitude === null) return null;
+  if (
+    !hex ||
+    latitude === null ||
+    longitude === null ||
+    Math.abs(latitude) > 90 ||
+    Math.abs(longitude) > 180
+  )
+    return null;
 
   const seenPosition = Math.max(
     0,
-    finiteNumber(aircraft?.seen_pos) ?? finiteNumber(aircraft?.seen) ?? 0,
+    finiteNumber(aircraft?.seen_pos) ?? finiteNumber(aircraft?.seen) ?? NaN,
   );
   const seen = Math.max(0, finiteNumber(aircraft?.seen) ?? seenPosition);
   const onGround = aircraft?.alt_baro === 'ground';
@@ -62,8 +69,10 @@ export function normalizeAdsbLolAircraftState(aircraft, nowSeconds) {
     hex,
     String(aircraft?.flight || aircraft?.r || '').trim() || null,
     null,
-    Math.max(0, nowSeconds - seenPosition),
-    Math.max(0, nowSeconds - seen),
+    Number.isFinite(seenPosition)
+      ? Math.max(0, nowSeconds - seenPosition)
+      : null,
+    Number.isFinite(seen) ? Math.max(0, nowSeconds - seen) : null,
     longitude,
     latitude,
     barometricFeet === null ? null : barometricFeet * FOOT_TO_M,
@@ -94,8 +103,28 @@ export function normalizeAdsbLolPointResponse(payload) {
       : Math.floor(
           responseNow > 10_000_000_000 ? responseNow / 1000 : responseNow,
         );
-  const states = (Array.isArray(payload?.ac) ? payload.ac : [])
-    .map((aircraft) => normalizeAdsbLolAircraftState(aircraft, nowSeconds))
-    .filter(Boolean);
-  return { time: nowSeconds, states };
+  const aircraft = Array.isArray(payload?.ac) ? payload.ac : [];
+  const states = [];
+  // Keep the OpenSky vectors unchanged. The regional fallback's extra readsb
+  // status travels alongside them, keyed only to admitted aircraft.
+  const admitted = new Set();
+  const statuses = [];
+  for (const row of aircraft) {
+    const state = normalizeAdsbLolAircraftState(row, nowSeconds);
+    if (!state) continue;
+    states.push(state);
+    // The live contract admits the first valid vector for each ICAO. Its
+    // status must come from that same row, never an invalid or later duplicate.
+    const id = state[0];
+    if (admitted.has(id)) continue;
+    admitted.add(id);
+    if (typeof row.emergency === 'string')
+      statuses.push([id, row.emergency.trim().toLowerCase()]);
+  }
+  const emergencyByIcao = Object.fromEntries(statuses);
+  return {
+    time: nowSeconds,
+    states,
+    ...(Object.keys(emergencyByIcao).length ? { emergencyByIcao } : {}),
+  };
 }

@@ -3263,6 +3263,30 @@ test('ALPR common names toggle only the registered camera layer through the norm
   }
 });
 
+test('GNSS integrity and interference common names toggle only the GNSS layer through the normal voice action', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } } };
+  const calls = [];
+  let enabled = false;
+  const dataManager = {
+    layers: new Map([['gnss-integrity', { module: {} }]]),
+    getAll: () => [{ id: 'gnss-integrity', name: 'GNSS Integrity' }],
+    isEnabled: () => enabled,
+    setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  for (const alias of ['gnss-integrity', 'gnss integrity', 'navigation integrity', 'low navigation accuracy', 'gnss interference', 'gps interference', 'gps jamming', 'gnss']) {
+    for (const value of [true, false]) {
+      const result = await runner('set_layer_visibility', { layerId: alias, enabled: value });
+      assert.equal(result.ok, true);
+      assert.equal(result.layerId, 'gnss-integrity');
+      assert.deepEqual(calls.at(-1), ['gnss-integrity', value]);
+    }
+  }
+});
+
 test('Local ADS-B common names toggle only the receiver layer through the normal voice action', async () => {
   globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
   const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
@@ -3457,6 +3481,26 @@ test('analyst_query refusals carry their code and the allowed values', async () 
   const ok = await runner('analyst_query', { layers: ['earthquakes'], scope: { kind: 'anywhere' } });
   assert.equal(ok.display.window, 'last 24 h');
   assert.match(ok.items[0].time, /^\d{4}-\d\d-\d\dT/);
+});
+
+test('analyst_query keeps its answer when one record has an out-of-range time', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const now = Date.now();
+  const earthquakes = {
+    getStats: () => ({ count: 2, lastUpdate: now }),
+    getAnalystRecords: () => [
+      { id: 'q', lat: 0, lon: 0, magnitude: 5, timeMs: now },
+      { id: 'r', lat: 1, lon: 1, magnitude: 4, timeMs: 8.64e15 + 1 },
+    ],
+  };
+  const { runner } = manifestRunner({ earthquakes }, { enabled: ['earthquakes'] });
+  const result = await runner('analyst_query', { layers: ['earthquakes'], scope: { kind: 'anywhere' } });
+  assert.equal(result.ok, true);
+  const q = result.items.find((item) => item.id === 'q');
+  assert.match(q.time, /^\d{4}-\d\d-\d\dT/);
+  const r = result.items.find((item) => item.id === 'r');
+  assert.ok(r, 'the record is still listed');
+  assert.equal(r.time, undefined, 'an unrepresentable time is omitted');
 });
 
 test('spoken layer names from the manifest reach the newer layers', async () => {
