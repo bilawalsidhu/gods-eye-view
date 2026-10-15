@@ -32,6 +32,7 @@ export function createNavaraInput(view, { onCameraInput = () => {} } = {}) {
   let attached = false;
   let destroyed = false;
   let cameraInputs = true;
+  let cameraOptions = {};
   let downAt = null;
   let last = null;
 
@@ -108,11 +109,20 @@ export function createNavaraInput(view, { onCameraInput = () => {} } = {}) {
     },
     setCameraInputs(enabled) {
       cameraInputs = Boolean(enabled);
-      view.camera.options = {
+      input.setCameraOptions({
         enableSpin: cameraInputs,
         enableZoom: cameraInputs,
         enableTilt: cameraInputs,
-      };
+      });
+    },
+    /**
+     * Navara-only extension: camera controller options (zoom distances,
+     * speeds, ...). Navara has no getter, so the engine keeps every option
+     * set through it and always sends the merged set.
+     */
+    setCameraOptions(options) {
+      cameraOptions = { ...cameraOptions, ...options };
+      view.camera.options = { ...cameraOptions };
     },
   };
   return {

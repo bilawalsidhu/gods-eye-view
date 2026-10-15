@@ -1,9 +1,10 @@
 // Static credits on Navara's attribution UI (view.attribution, the
 // AttributionPlugin). Navara matches entries by content and drops duplicates,
 // so one HTML string is shown once and counted here, staying until its last
-// holder removes it. Navara has no separate on-screen strip: `onScreen` credits
-// go into the same list; logos that must stay visible (Google) are sources
-// with a `logo`, added by maps.js.
+// holder removes it. Navara has no separate on-screen strip: an `onScreen`
+// credit opens the attribution card (collapsed by default) so the list is on
+// screen; logos that must stay visible (Google) are sources with a `logo`,
+// added by maps.js.
 
 /**
  * @param {{ attribution?: { add: Function, remove: Function } }} view
@@ -19,11 +20,12 @@ export function createNavaraCredits(view) {
     view.attribution?.remove([{ attributionHtml: html }]);
   };
   const credits = {
-    addStatic(html) {
+    addStatic(html, { onScreen = false } = {}) {
       const text = String(html);
       const count = counts.get(text) ?? 0;
       counts.set(text, count + 1);
       if (count === 0) view.attribution?.add([{ attributionHtml: text }]);
+      if (onScreen) view.attribution?.show();
       let removed = false;
       return () => {
         if (removed) return;

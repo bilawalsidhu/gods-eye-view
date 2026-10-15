@@ -4,8 +4,12 @@ import { createNavaraCredits } from './credits.js';
 
 function fakeAttribution() {
   const shown = [];
-  return {
+  const attribution = {
     shown,
+    opened: 0,
+    show() {
+      attribution.opened++;
+    },
     add(items) {
       for (const item of items)
         if (!shown.some((entry) => entry.attributionHtml === item.attributionHtml))
@@ -20,6 +24,7 @@ function fakeAttribution() {
       }
     },
   };
+  return attribution;
 }
 
 test('addStatic shows HTML in the attribution and the remover is idempotent', () => {
@@ -54,4 +59,13 @@ test('destroy removes every credit; a view without attribution UI is a no-op', (
   const bare = createNavaraCredits({ attribution: undefined });
   const remove = bare.credits.addStatic('A');
   remove();
+});
+
+test('onScreen credits open the attribution list on screen; others do not', () => {
+  const attribution = fakeAttribution();
+  const { credits } = createNavaraCredits({ attribution });
+  credits.addStatic('Quiet');
+  assert.equal(attribution.opened, 0);
+  credits.addStatic('Loud', { onScreen: true });
+  assert.equal(attribution.opened, 1);
 });

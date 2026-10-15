@@ -42,6 +42,7 @@ export async function createNavaraGlobe({ container, effects, pixelRatio }) {
   const plan = navaraScenePlan(effects);
   const canvas = preservedCanvas(container);
   let view;
+  let engine;
   try {
     view = new ThreeView(navaraViewOptions({ container, canvas, pixelRatio }));
     const plugin = new DefaultPlugin();
@@ -53,15 +54,15 @@ export async function createNavaraGlobe({ container, effects, pixelRatio }) {
       for (const name of plan.lights) view.addLight({ [name]: {} });
       for (const name of plan.effects) view.addEffect({ [name]: {} });
     }
+    engine = createNavaraEngine(view, {
+      hooks: navaraHooks(view),
+      container,
+    });
   } catch (error) {
     view?.dispose();
     canvas.remove();
     throw error;
   }
-  const engine = createNavaraEngine(view, {
-    hooks: navaraHooks(view),
-    container,
-  });
   let destroyed = false;
   return {
     view,
