@@ -963,16 +963,17 @@ tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
 ## Argentina CCTV catalog
 
-The separate opt-in [Argentina catalog](CCTV-ARGENTINA.md) contains 53 feeds
-verified on 2026-10-15 (20 YouTube, 18 HLS, 15 still images). Load it with
-`CCTV_SOURCES_FILE=config/cctv_sources.argentina.json` after the YouTube player
-support in #1162 is available. This is a configuration/data addition on `main`,
-with no player or Encarnación implementation changes. Its dated survey records
-verification and 115 other findings. Coordinates are approximate area anchors;
-none asserts a calibrated pose.
-Misiones HEVC feeds and a relay-incompatible Mendoza feed remain survey-only.
-The offline catalog integrity test runs with the unit suite; live feed checks
-are documented in the catalog guide.
+The separate opt-in [Argentina catalog](CCTV-ARGENTINA.md) contains 74 feeds
+verified on 2026-10-15 (25 external players, 24 HLS, 25 still images). Load it with
+`CCTV_SOURCES_FILE=config/cctv_sources.argentina.json` after public-player support
+in #1162 and the HLS recovery fix in #1165 are available. This is a data addition
+on `main`, with no player, relay or Encarnación implementation changes.
+The survey preserves 115 original leads: 18 resolved into 21 runtime additions,
+70 discarded, 16 unavailable, two stale, one multi-location and eight Misiones
+entries covered by #1145. None remains unresolved. Coordinates are approximate
+area anchors; none asserts a calibrated pose. Offline integrity tests cover
+provenance, receipt coverage and disposition references; live checks are
+recorded separately in the survey and catalog guide.
 
 ## NYC DOT TMC CCTV source pack
 

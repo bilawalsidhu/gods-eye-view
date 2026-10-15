@@ -72,9 +72,20 @@ test('Argentina types use supported URL contracts and normalize direct feeds unc
     assert.ok(['embed', 'hls', 'image'].includes(camera.feedType));
     const url = new URL(mediaUrl(camera));
     if (camera.feedType === 'embed') {
-      assert.equal(url.origin, 'https://www.youtube.com');
-      assert.equal(url.pathname, '/watch');
-      assert.match(url.searchParams.get('v'), /^[A-Za-z0-9_-]{11}$/);
+      if (url.hostname === 'www.youtube.com') {
+        assert.equal(url.pathname, '/watch');
+        assert.match(url.searchParams.get('v'), /^[A-Za-z0-9_-]{11}$/);
+      } else if (url.hostname === 'www.twitch.tv') {
+        assert.match(url.pathname, /^\/[a-z0-9_]{1,25}$/);
+        assert.equal(url.search, '');
+      } else if (url.hostname === 'v.angelcam.com') {
+        assert.equal(url.pathname, '/iframe');
+        assert.match(url.searchParams.get('v'), /^[a-z0-9]{10}$/);
+      } else {
+        assert.match(url.hostname, /^[a-z0-9-]+\.roundshot\.com$/);
+        assert.equal(url.pathname, '/');
+        assert.equal(url.search, '');
+      }
       assert.equal(camera.url, undefined);
       assert.equal(camera.snapshotUrl, undefined);
     } else {
@@ -112,13 +123,27 @@ test('every active feed has a dated receipt and unavailable media stays out', ()
     assert.equal(camera.checkedAt, survey.checkedAt);
     assert.equal(receipt.checkedAt.slice(0, 10), survey.checkedAt);
     if (camera.feedType === 'embed') {
-      assert.equal(
-        receipt.videoId,
-        new URL(camera.embedUrl).searchParams.get('v'),
-      );
-      assert.equal(receipt.isLiveNow, true);
-      assert.ok(receipt.playbackAdvancedSeconds > 0.5);
-      assert.ok(receipt.videoSize.every((n) => n > 0));
+      const url = new URL(camera.embedUrl);
+      if (url.hostname.endsWith('.roundshot.com')) {
+        assert.equal(receipt.provider, 'roundshot');
+        assert.equal(receipt.captureDate, survey.checkedAt);
+        assert.ok(receipt.canvasSize.every((n) => n > 0));
+      } else {
+        if (url.hostname === 'www.youtube.com') {
+          assert.equal(receipt.videoId, url.searchParams.get('v'));
+          assert.equal(receipt.isLiveNow, true);
+        } else if (url.hostname === 'www.twitch.tv') {
+          assert.equal(receipt.provider, 'twitch');
+          assert.equal(receipt.channel, url.pathname.slice(1));
+          assert.equal(receipt.isLiveNow, true);
+        } else {
+          assert.equal(receipt.provider, 'angelcam');
+          // Angelcam's 256x144 connecting animation is not camera video.
+          assert.ok(receipt.videoSize[0] > 256);
+        }
+        assert.ok(receipt.playbackAdvancedSeconds > 0.5);
+        assert.ok(receipt.videoSize.every((n) => n > 0));
+      }
     } else {
       assert.equal(receipt.httpStatus, 200);
       assert.equal(receipt.decoded, true);
@@ -142,4 +167,56 @@ test('every active feed has a dated receipt and unavailable media stays out', ()
     if (finding.publishedUrl)
       assert.ok(!active.has(finding.publishedUrl), finding.id);
   }
+});
+
+test('survey dispositions preserve the original leads and resolve only active feeds', () => {
+  const findings = [...survey.otherSources, ...survey.resolvedSources];
+  assert.equal(new Set(findings.map((r) => r.id)).size, findings.length);
+  assert.equal(findings.length, survey.resolutionSummary.originalFindings);
+  const activeIds = new Set(catalog.map((camera) => camera.id));
+  const recoveredIds = survey.resolvedSources.flatMap((finding) => {
+    assert.equal(finding.status, 'included');
+    assert.ok(finding.previousStatus && finding.reason);
+    assert.ok(finding.cameraIds.length > 0);
+    for (const id of finding.cameraIds) assert.ok(activeIds.has(id), id);
+    return finding.cameraIds;
+  });
+  assert.equal(new Set(recoveredIds).size, recoveredIds.length);
+  assert.equal(recoveredIds.length, survey.resolutionSummary.addedRuntimeFeeds);
+  assert.equal(
+    survey.resolvedSources.length,
+    survey.resolutionSummary.resolvedFindings,
+  );
+  assert.equal(
+    survey.otherSources.length,
+    survey.resolutionSummary.remainingFindings,
+  );
+  const dispositions = {};
+  for (const finding of survey.otherSources) {
+    assert.ok(
+      [
+        'discarded',
+        'unavailable',
+        'stale',
+        'multi-location',
+        'covered-by-pr',
+      ].includes(finding.status),
+    );
+    dispositions[finding.status] = (dispositions[finding.status] || 0) + 1;
+    if (finding.status === 'discarded') {
+      assert.ok(
+        ['republication-restricted', 'no-current-public-feed'].includes(
+          finding.discardReason,
+        ),
+      );
+      if (finding.discardReason === 'republication-restricted') {
+        assert.equal(new URL(finding.termsUrl).protocol, 'https:');
+      }
+    }
+    if (finding.provider === 'Cámaras de Misiones') {
+      assert.equal(finding.status, 'covered-by-pr');
+      assert.ok(!activeIds.has(finding.id));
+    }
+  }
+  assert.deepEqual(dispositions, survey.resolutionSummary.dispositions);
 });
