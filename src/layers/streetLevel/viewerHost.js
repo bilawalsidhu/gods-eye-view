@@ -38,6 +38,7 @@ export function createViewerHost({ state, parts }) {
       title: pose.title || null,
       sequenceId: pose.sequenceId ?? null,
       creator: pose.creator || null,
+      license: pose.license || null,
       externalUrl: pose.externalUrl || null,
       // FIT / FILL, unless this image has no frame to fit (a panorama).
       renderModes:
