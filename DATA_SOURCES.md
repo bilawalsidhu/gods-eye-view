@@ -71,6 +71,37 @@ How to read this:
 | **Re:Earth Terrain** (Mapterhorn)                                     | Terrain (keyless globe stacks — OSM etc. — + `/api/terrain/heights` ellipsoidal-height lookups)                                     | Terrain mesh: CC BY 4.0; geoid: EGM2008 (NGA, public domain)                                                                                                                                                                                                                                                                                          | "Terrain (keyless globe stacks): Re:Earth Terrain / Mapterhorn (CC BY 4.0) / EGM2008 (NGA)"                                                 |
 | **OSRM on the FOSSGIS routing servers** (`routing.openstreetmap.de`) | Street-following routes for the Directions layer and voice route annotations, via `/api/route` | [FOSSGIS routing usage policy](https://routing.openstreetmap.de/about.html): "Display the required attribution and display a link to 'fix the map'", "Use a valid user agent and, if applicable, a correct referrer", "One request per second max", "No scraping, no heavy usage". The full policy is the German [FOSSGIS Nutzungsbedingungen](https://www.fossgis.de/arbeitsgruppen/osm-server/nutzungsbedingungen/); FOSSGIS also states that the server may be embedded in your own pages but "eine gewerbliche Nutzung ist nur mit Einschränkungen erlaubt" (commercial use only with restrictions). Route data derives from OpenStreetMap (ODbL 1.0) | "Routing: OSRM on the FOSSGIS servers" + a "fix the map" link — shown in the Data attribution popover |
 
+### San Antonio-area USGS water
+
+The `san-antonio-usgs-water` layer acquires the USGS Water Data OGC v1
+[`latest-continuous`](https://api.waterdata.usgs.gov/ogcapi/v1/collections/latest-continuous/items),
+[`monitoring-locations`](https://api.waterdata.usgs.gov/ogcapi/v1/collections/monitoring-locations/items),
+and [`time-series-metadata`](https://api.waterdata.usgs.gov/ogcapi/v1/collections/time-series-metadata/items)
+collections. Only USGS station identities and source-agency metadata are
+accepted. The fixed San Antonio-area rectangle includes neighboring counties;
+the dynamic 24-hour query window uses measurement time, not database modification.
+It does not establish complete municipal/county coverage or a rainfall total.
+
+**Rights and credit.** [USGS copyrights and credits](https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits)
+states that USGS-authored data and information are in the U.S. public domain and
+asks for proper credit. Third-party materials can have separate rights. Credit
+**U.S. Geological Survey** with links to the source and
+[provisional-data statement](https://waterdata.usgs.gov/provisional-data-statement/).
+The Data attribution popover and station cards supply that provenance; the
+popover identifies selected fields, site grouping and styling by this app.
+No USGS logo, third-party images or real observation snapshot is bundled.
+Source data are separate from this repository's MIT code license.
+
+**Meaning and acquisition.** Readings retain original value text, source units,
+series/parameter/statistic/sublocation identity, approval status, qualifiers,
+observation time and separate retrieval time. Provisional values may be revised.
+Stage is not necessarily river depth; groundwater depth is not map altitude.
+No derived danger category is provided. Acquisitions have hard page/record/byte
+and deadline limits, complete metadata joins, a 15-minute observation cache,
+24-hour metadata caches and bounded rate-limit backoff. This implementation uses
+keyless access; no operator credential enters browser code or URLs.
+See [the source contract and review notes](docs/SAN_ANTONIO_USGS_WATER.md).
+
 ### Local receiver input (not fetched from a service)
 
 The optional Local ADS-B layer and the broadcast-FM receiver use radio you receive yourself: a USB RTL-SDR opened in the browser through WebUSB, or the `aircraft.json` of a decoder you run on your own machine or network (`LOCAL_RECEIVER_FEEDS`). Radio samples, audio and the optional receiver location stay in the browser. Decoder feeds are read by your local GEV server and relayed only to your browser, with about a second of in-memory caching. When you select a local aircraft, its ICAO address (and an airline-style callsign) is looked up, and aircraft that qualify for a 3D model are looked up by ICAO address, through the same adsbdb proxy the public flight layers use; your server caches those answers on disk and treats them as fresh for 24 hours. Received radio data is not stored or redistributed. ADS-B is an unauthenticated public broadcast and may be incomplete, delayed, spoofed or decoded in error; it is not suitable for navigation or operational use.

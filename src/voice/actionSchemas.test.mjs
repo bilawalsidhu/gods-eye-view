@@ -37,7 +37,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
     // Street Level adds its toggle enum values and generated alias hint.
-    '9eb113454c5af5e32e27ffcdc7919d0e4600ba1d204f8f175e071152be41ad0f',
+    // USGS water adds its toggle and site-level analyst fields to the manifest.
+    '7886df679370051b7c54e30c1f93712d1aa3f03c3751398d4ac0288cac6c6df8',
   );
 });
 

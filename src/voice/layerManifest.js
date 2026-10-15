@@ -349,6 +349,23 @@ const layers = [
     },
   },
   {
+    id: 'san-antonio-usgs-water',
+    aliases: ['san antonio water', 'san antonio usgs water'],
+    context: false,
+    query: {
+      fields: {
+        name: ['t'],
+        county: ['t'],
+        siteType: ['t'],
+        readingCount: ['n'],
+        numericReadingCount: ['n'],
+        provisional: ['f'],
+      },
+      caveat:
+        'sites with separate time-series readings, observation times and source units; provisional values can change; gage height is not depth or flood danger; the window is not a rainfall total',
+    },
+  },
+  {
     id: 'telegeography-submarine-cables',
     aliases: ['submarine cables', 'undersea cables', 'cables', 'telegeography'],
     context: false,

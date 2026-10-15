@@ -270,6 +270,8 @@
     "./tools/mcp": "./src/tools/mcp/index.js",
     "./tools/panel": "./src/tools/panel.js",
     "./tools/services": "./src/tools/services.js",
-    "./view": "./src/view/index.js"
+    "./view": "./src/view/index.js",
+    "./layers/usgs-water": "./src/layers/usgsWater/index.js",
+    "./layers/usgs-water/source": "./src/layers/usgsWater/source.js"
   }
 }

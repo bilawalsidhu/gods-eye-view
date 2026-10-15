@@ -2225,7 +2225,13 @@
       "src/tools/functions.js",
       "src/voice/actionSchemas.js",
       "src/view/index.js",
-      "src/app/embed.js"
+      "src/app/embed.js",
+      "src/layers/usgsWater/config.js",
+      "src/layers/usgsWater/records.js",
+      "src/layers/usgsWater/source.js",
+      "src/layers/usgsWater/renderer.js",
+      "src/layers/usgsWater/index.js",
+      "src/app/layers/usgsWater.js"
     ],
     "external": [
       "hls.js",
@@ -2760,7 +2766,12 @@
       "src/data/local_data/osm_military_names/names.json",
       "src/layers/installations/namedMarkers.js",
       "src/data/infrastructureOverlayEntry.js",
-      "src/sources/infrastructureData.js"
+      "src/sources/infrastructureData.js",
+      "src/layers/usgsWater/config.js",
+      "src/layers/usgsWater/records.js",
+      "src/layers/usgsWater/renderer.js",
+      "src/layers/usgsWater/index.js",
+      "src/app/layers/usgsWater.js"
     ],
     "external": [
       "hls.js",
@@ -3502,6 +3513,26 @@
       "src/data/idSwitches.js",
       "src/data/layerState.js",
       "src/data/layerStateTokenReservations.json"
+    ],
+    "external": []
+  },
+  "usgs-water-layer": {
+    "exports": ["./layers/usgs-water"],
+    "modules": [
+      "src/layers/usgsWater/config.js",
+      "src/layers/usgsWater/records.js",
+      "src/layers/usgsWater/renderer.js",
+      "src/layers/usgsWater/index.js"
+    ],
+    "external": ["cesium"]
+  },
+  "usgs-water-source": {
+    "exports": ["./layers/usgs-water/source"],
+    "modules": [
+      "src/layers/usgsWater/config.js",
+      "src/layers/usgsWater/records.js",
+      "src/layers/usgsWater/source.js",
+      "src/sources/httpBody.js"
     ],
     "external": []
   }

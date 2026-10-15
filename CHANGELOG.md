@@ -1,5 +1,10 @@
 # Changelog
 
+- Add a San Antonio-area USGS water layer grouped by monitoring location, with
+  separate series readings, measurement times, source units, provisional status,
+  county filtering and source cards. Bounded OGC acquisition caches observations
+  and metadata, honors rate limits, and retains stale display after failed refresh.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 

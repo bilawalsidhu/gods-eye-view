@@ -1,5 +1,25 @@
 # God's Eye View Current State
 
+## San Antonio-area USGS water — October 11, 2026
+
+The San Antonio group includes `san-antonio-usgs-water`, initially disabled.
+It acquires latest USGS Water Data OGC v1 observations within a fixed regional
+rectangle and a dynamic 24-hour measurement window, then joins station and
+time-series metadata. One ground-clamped marker represents each location;
+separate readings retain series identities, units, measurement times, status,
+qualifiers and sublocations. Blue/gray show numeric-reading availability only.
+Null-only sites remain visible. Gage height and groundwater depth do not become
+map altitudes, and the layer does not classify flood danger or rainfall totals.
+
+Selected source cards and local Area/Bexar/Reading controls expose the data.
+Bexar uses state `48`, county `029`, inside the rectangle; neighboring counties
+remain distinct. Share links preserve visibility; local filters start at Area.
+Bounded acquisition, 15-minute observation caching, longer metadata caching,
+429 Retry-After/backoff, cancellation and stale display are owned by the new
+source/layer family. No private API key is embedded. See
+[source, semantics and verification](SAN_ANTONIO_USGS_WATER.md) and the focused
+browser gate `node scripts/qa-usgs-water.mjs`.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing

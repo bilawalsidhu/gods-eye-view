@@ -48,6 +48,10 @@ const PANEL_GROUPS = [
     ],
   },
   {
+    label: 'San Antonio',
+    ids: ['san-antonio-usgs-water'],
+  },
+  {
     label: 'Events',
     ids: ['rocket-launches', 'earthquakes', 'local-firms', 'fire-perimeters'],
   },

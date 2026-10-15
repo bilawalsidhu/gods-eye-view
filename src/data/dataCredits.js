@@ -99,6 +99,10 @@ export const NYC_DOT_DISCLAIMER =
   'The public is advised to observe posted signage for compliance with applicable laws and regulations.';
 
 export const DATA_CREDITS = [
+  {
+    key: 'usgs-water-san-antonio',
+    html: 'Water observations: <a href="https://waterdata.usgs.gov/" target="_blank" rel="noopener">U.S. Geological Survey</a> · modern Water Data OGC API. USGS-authored data are in the U.S. public domain; third-party material retains its rights. Selected fields, site grouping and display styling by this app. <a href="https://waterdata.usgs.gov/provisional-data-statement/" target="_blank" rel="noopener">Provisional data</a> may be revised. Gage height is not necessarily river depth; this display does not classify flood danger.',
+  },
   // ── Live sources ────────────────────────────────────────────────
   {
     key: 'opensky',
