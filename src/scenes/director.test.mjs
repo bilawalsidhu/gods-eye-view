@@ -1597,3 +1597,27 @@ test('camera refusal starts no authored frame or playback clock', async () => {
     assert.deepEqual(viewer.flights, []);
   } finally { restore(); }
 });
+
+test('scene placement, flights and stop run on a globe engine without a viewer', async () => {
+  const restore = installSceneRuntime();
+  try {
+    const engine = createFakeEngine();
+    const director = new SceneDirector(null, fakeStyleManager(), fakeDataManager(), { engine });
+    const pose = { lat: 27.95, lon: 85.95, alt: 4200, heading: 40, pitch: -25, roll: 0 };
+    assert.equal(director._setCameraView(pose), true);
+    const placed = engine.camera.pose().cartographic;
+    assert.ok(Math.abs(placed.height - 4200) < 1e-6);
+    const flying = director._flyCamera({ ...pose, alt: 6000 }, 0.2, { cancelled: false });
+    const [flight] = engine.fake.callsOf('camera.flyTo').at(-1).args;
+    assert.equal(flight.easing, 'cubicInOut');
+    engine.fake.frames(20, 16);
+    await flying;
+    assert.ok(Math.abs(engine.camera.height() - 6000) < 1e-6);
+    director.stopScene('test');
+    assert.ok(engine.fake.callsOf('camera.cancelFlight').length >= 2);
+    director.destroy();
+    await director._destroyPromise;
+  } finally {
+    restore();
+  }
+});
