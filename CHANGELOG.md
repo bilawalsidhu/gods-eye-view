@@ -1,5 +1,8 @@
 # Changelog
 
+- CCTV adds eleven Varitech ski-resort snapshots in Argentina, with five-minute
+  demand-only caching, provider attribution and explicitly approximate map locations.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 

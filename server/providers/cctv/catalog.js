@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { loadVaritechSourcesFromCatalog } from './varitech.js';
 import path from 'node:path';
 import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
 import { allocateSourceCap, resolveCatalogCap } from './cap.js';
@@ -76,6 +77,11 @@ const LIVE_PACKS = [
     name: 'tarktee',
     enabled: () => envEnabled('CCTV_TARKTEE_ENABLED'),
     load: loadTarkteeSourcesFromDatex,
+  },
+  {
+    name: 'varitech',
+    enabled: () => envEnabled('CCTV_VARITECH_ENABLED'),
+    load: loadVaritechSourcesFromCatalog,
   },
   {
     name: 'warendorf',

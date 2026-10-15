@@ -355,6 +355,14 @@ export const DATA_CREDITS = [
       '<a href="https://tarktee.transpordiamet.ee/" target="_blank" rel="noopener">tarktee.transpordiamet.ee</a> (courtesy)',
   },
   {
+    key: 'varitech-cctv',
+    html:
+      'Webcam snapshots (Argentina): ' +
+      '<a href="https://varitech.ar/" target="_blank" rel="noopener">Varitech - varitech.ar</a> ' +
+      '— Cerro Catedral, Chapelco and La Hoya. Approximate map references: ' +
+      '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors (ODbL)</a>.',
+  },
+  {
     key: 'warendorf-cctv',
     html: 'Webcam (Warendorf): <a href="https://www.warendorf.de/" target="_blank" rel="noopener">Stadt Warendorf</a> (courtesy)',
   },

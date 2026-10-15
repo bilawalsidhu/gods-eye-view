@@ -1,5 +1,12 @@
 # God's Eye View Current State
 
+CCTV includes eleven Varitech JPEG webcams in Cerro Catedral, Chapelco and La Hoya.
+The pack uses the existing snapshot path, caches requested frames for five minutes,
+and can be disabled with `CCTV_VARITECH_ENABLED=0`. Names and per-camera credits
+identify approximate resort-area coordinates; low-confidence bearings keep the
+existing estimated-heading presentation. No camera images are bundled. Provider
+terms and geographic provenance are recorded in DATA_SOURCES.md and the catalog.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing
