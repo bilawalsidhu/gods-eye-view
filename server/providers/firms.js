@@ -1,7 +1,116 @@
 import path from 'node:path';
+import https from 'node:https';
 import { promises as fsp } from 'node:fs';
+import { Readable } from 'node:stream';
 
 import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
+
+/**
+ * The per-address connection errors behind a fetch failure, or null. Node 24
+ * puts the AggregateError directly on `err.cause`; Node 26's fetch wraps it in
+ * a ConnectTimeoutError one level deeper.
+ * @param {unknown} err
+ * @returns {?Array<unknown>}
+ */
+function connectAttemptErrors(err) {
+  let cause = err?.cause;
+  for (let depth = 0; cause && depth < 3; depth++) {
+    if (Array.isArray(cause.errors)) return cause.errors;
+    cause = cause.cause;
+  }
+  return null;
+}
+
+/**
+ * Describe a fetch failure with its socket-level cause. Node reports every
+ * connection failure as `fetch failed`; the cause carries the error code and
+ * the address that failed (never the URL, which embeds the MAP_KEY).
+ * @param {unknown} err
+ * @returns {string}
+ */
+export function describeFetchError(err) {
+  const message = err?.message || String(err);
+  const cause = err?.cause;
+  if (!cause) return message;
+  const attempts = connectAttemptErrors(err);
+  const parts = attempts?.length
+    ? attempts.map((inner) => inner?.message || inner?.code || String(inner))
+    : [cause.message || cause.code || String(cause)];
+  return `${message} (${parts.join('; ')})`;
+}
+
+/**
+ * Whether a fetch failed because every address it tried failed to connect.
+ * Node's network-family auto-selection gives each address a short attempt
+ * timeout, so a slow IPv4 handshake is abandoned in favour of an unreachable
+ * IPv6 address and the whole request fails (#68).
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+export function isAddressSelectionFailure(err) {
+  return err instanceof TypeError && connectAttemptErrors(err)?.length > 0;
+}
+
+/**
+ * GET over IPv4 only, with one connection attempt bounded by the caller's
+ * signal rather than by the auto-selection attempt timeout.
+ * @param {string} url
+ * @param {{signal?: AbortSignal}} [options]
+ * @returns {Promise<Response>}
+ */
+export function fetchIpv4(url, { signal } = {}) {
+  return new Promise((resolve, reject) => {
+    const request = https.request(
+      url,
+      {
+        method: 'GET',
+        signal,
+        family: 4,
+        autoSelectFamily: false,
+        agent: false,
+      },
+      (response) => {
+        const headers = new Headers();
+        for (const [name, value] of Object.entries(response.headers)) {
+          if (Array.isArray(value))
+            value.forEach((item) => headers.append(name, item));
+          else if (value !== undefined) headers.set(name, String(value));
+        }
+        resolve(
+          new Response(Readable.toWeb(response), {
+            status: response.statusCode || 500,
+            statusText: response.statusMessage || '',
+            headers,
+          }),
+        );
+      },
+    );
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+/**
+ * Fetch a FIRMS URL, retrying once over IPv4 when address selection fails.
+ * Other failures (HTTP status, timeout, DNS) are returned or thrown as is.
+ * @param {string} url
+ * @param {{signal?: AbortSignal}} options
+ * @param {{fetchImpl?: typeof fetch, fetchIpv4Impl?: typeof fetchIpv4, warn?: Function}} [deps]
+ * @returns {Promise<Response>}
+ */
+export async function fetchFirms(
+  url,
+  options,
+  { fetchImpl = fetch, fetchIpv4Impl = fetchIpv4, warn = console.warn } = {},
+) {
+  try {
+    return await fetchImpl(url, options);
+  } catch (err) {
+    if (!isAddressSelectionFailure(err) || options?.signal?.aborted) throw err;
+    warn(`[firms-proxy] ${describeFetchError(err)} — retrying over IPv4`);
+    return fetchIpv4Impl(url, options);
+  }
+}
 
 /**
  * NASA FIRMS live active-fire proxy with a memory + disk cache.
@@ -83,7 +192,7 @@ export function firmsProxy() {
    */
   async function fetchSource(key, source) {
     const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${encodeURIComponent(key)}/${source}/world/2`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+    const res = await fetchFirms(url, { signal: AbortSignal.timeout(60_000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const records = parseFirmsCsv(await res.text());
     if (records === null) throw new Error('non-CSV upstream response');
@@ -111,7 +220,7 @@ export function firmsProxy() {
       } catch (err) {
         console.warn(
           `[firms-proxy] ${source} fetch failed:`,
-          err?.message || err,
+          describeFetchError(err),
         );
         sources.push({ source, count: 0, ok: false });
       }
@@ -146,7 +255,9 @@ export function firmsProxy() {
       statusInflight = (async () => {
         try {
           const url = `https://firms.modaps.eosdis.nasa.gov/mapserver/mapkey_status/?MAP_KEY=${encodeURIComponent(key)}`;
-          const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+          const res = await fetchFirms(url, {
+            signal: AbortSignal.timeout(10_000),
+          });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const body = await res.json();
           const used = Number(body?.current_transactions);
@@ -157,7 +268,7 @@ export function firmsProxy() {
         } catch (err) {
           console.warn(
             '[firms-proxy] mapkey status failed:',
-            err?.message || err,
+            describeFetchError(err),
           );
           return null;
         }

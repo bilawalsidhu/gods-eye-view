@@ -1476,6 +1476,15 @@ throws, that source reports failure without a contradictory success entry.
 The existing per-record append continues to support large feeds; sequential
 fetching, trailing-24-hour filtering and partial-success caching are unchanged.
 
+FIRMS requests retry once over IPv4 when every resolved address fails to
+connect. Node's network-family auto-selection gives each address a short
+attempt timeout, so on hosts where IPv6 is unreachable a slow IPv4 handshake
+was abandoned and the request reported only `fetch failed` (#68). The retry
+makes a single IPv4 connection within the same deadline; HTTP errors,
+timeouts and DNS failures are not retried. FIRMS warnings include the
+per-address connection errors and never the request URL, which embeds the
+MAP_KEY.
+
 ## Installations and map-source guidance
 
 - Keyless mapped installations use OpenFreeMap `landuse` military polygons,
