@@ -21,6 +21,13 @@ const source = (file) =>
   /^src\/layers\/[^/]+\/(?:source|bundledSource|flowSource)\.js$/.test(file);
 // Engine-neutral geometry ported from Cesium; every runtime file is a portable root.
 const geo = (file) => file.startsWith('src/geo/');
+// The engine-neutral globe contract and its test support; engines live below it.
+const globeContract = (file) =>
+  /^src\/globe\/[^/]+$/.test(file) || file.startsWith('src/globe/testing/');
+const globeEngine = (file) => /^src\/globe\/(?:cesium|navara)\//.test(file);
+const cesiumPackage = /^(?:cesium(?:\/|$)|@cesium\/)/;
+// Navara renders through three.js and its postprocessing peer.
+const navaraPackage = /^(?:(?:three|postprocessing)(?:\/|$)|@navaramap\/)/;
 const renderer = (file) =>
   /^src\/(?:ui|app|standalone|overlays)\//.test(file) ||
   /^src\/layers\/[^/]+\/(?:index|rendering|snapshotRenderer|overlay|presentation|cards|controls)\.js$/.test(
@@ -230,6 +237,35 @@ export function checkImportDirections(root) {
       }
     }
     visit(start);
+  }
+  // The globe contract reaches no engine, directly or through helpers; each
+  // engine implementation imports only its own engine's packages.
+  const globeSeen = new Set();
+  function globe(file) {
+    if (globeSeen.has(file) || !code.test(file)) return;
+    globeSeen.add(file);
+    const info = load(file);
+    if (!info) return;
+    for (const specifier of info.external) {
+      if (cesiumPackage.test(specifier) || navaraPackage.test(specifier))
+        report(file, `globe contract reaches engine dependency: ${specifier}`);
+    }
+    for (const to of info.edges) {
+      if (globeEngine(to))
+        report(file, `globe contract imports engine implementation: ${to}`);
+      else globe(to);
+    }
+  }
+  for (const file of files.filter(globeContract)) globe(file);
+  for (const file of files.filter(globeEngine)) {
+    const navara = file.startsWith('src/globe/navara/');
+    for (const specifier of load(file)?.external || []) {
+      if ((navara ? cesiumPackage : navaraPackage).test(specifier))
+        report(
+          file,
+          `${navara ? 'Navara' : 'Cesium'} globe engine imports ${specifier}`,
+        );
+    }
   }
   // Common voice controls may use their DOM view, but never a protocol implementation.
   const voiceSeen = new Set();

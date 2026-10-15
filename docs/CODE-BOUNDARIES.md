@@ -33,6 +33,7 @@ export inventory. Use declared exports rather than reaching into internal files.
 | `src/layers/<family>/` | Source acquisition, records and Cesium resources with explicit controller/renderer owners               |
 | `src/sources/`         | Portable protocols and source contracts; request state belongs to each factory instance                 |
 | `src/geo/`             | Engine-neutral WGS84 maths, ported from Cesium, never imports Cesium                                    |
+| `src/globe/`           | Engine-neutral globe contract and its test support; engines only in `globe/cesium`, `globe/navara`      |
 | `src/services/`        | Supplied application operations; scene construction owns caches and cancellation                        |
 | `src/voice/`           | Portable action schemas/session, common controls, action execution and separate protocol adapters       |
 | `server/providers/`    | Node route factories, process-scoped provider caches and shutdown cleanup                               |
@@ -63,7 +64,11 @@ flight/military/vessel record and ingestion exports, action schemas, the session
 interface, lifecycle and feed state, and every runtime file in `src/geo/` (the
 engine-neutral geometry ported from Cesium). The browser-global rule reserves
 platform names such as `document` and `window` in these modules; it is an
-architectural check, not a JavaScript sandbox. Common voice controls cannot depend on a
+architectural check, not a JavaScript sandbox. The globe contract
+(`src/globe/*.js` and `src/globe/testing/**`) cannot reach `cesium`,
+`@cesium/*`, `three`, `postprocessing` or `@navaramap/*`, directly or through
+helpers, nor import an engine implementation; `src/globe/cesium/**` imports no
+Navara/three package and `src/globe/navara/**` no Cesium package. Common voice controls cannot depend on a
 Realtime protocol implementation. Negative fixtures cover indirect helpers,
 self-package imports, symlinks and unreachable files.
 
