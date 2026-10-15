@@ -1,6 +1,7 @@
 import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
 import { stickyText, stickyNumber } from '../../data/aircraftMeta.js';
 import { classifyAircraft } from '../../data/aircraftClass.js';
+import { aircraftEmergency } from '../../data/aircraftEmergency.js';
 import {
   GROUND_FLOOR_WARM_MAX_ALT_M,
   LANDED_MISSING_POLL_LIMIT,
@@ -161,6 +162,9 @@ export class MilitaryFlightRecords {
         null,
       ),
       turnRateDps: prevMeta?.turnRateDps || 0,
+      // Per poll, NOT sticky (mirror of flights): a cleared code clears here.
+      squawk: aircraft.squawk ?? null,
+      emergency: aircraftEmergency(aircraft),
       onGround,
       // Round 7: sticky airborne history (see _likelyLanded).
       wasAirborne: prevMeta?.wasAirborne === true || !onGround,
