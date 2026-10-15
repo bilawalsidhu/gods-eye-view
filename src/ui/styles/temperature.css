@@ -251,6 +251,72 @@
   pointer-events: none;
 }
 
+/* Minimize / expand: a full button beside play/pause, its chevron drawn in
+   CSS so it reads at any font size. Down tucks the panel away; up restores it. */
+.temperature-timeline-collapse {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.temperature-timeline-collapse::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.temperature-timeline.is-collapsed .temperature-timeline-collapse::before {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+.temperature-timeline-collapse:hover,
+.temperature-timeline-collapse:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+  outline: none;
+}
+
+/* Minimized: a pill holding only play/pause and the month. */
+.temperature-timeline.is-collapsed {
+  width: auto;
+  padding: 5px 6px;
+  border-radius: 22px;
+}
+
+.temperature-timeline.is-collapsed > :not(.temperature-timeline-head) {
+  display: none;
+}
+
+.temperature-timeline.is-collapsed .temperature-timeline-head {
+  margin: 0;
+  gap: 8px;
+}
+
+.temperature-timeline.is-collapsed .temperature-timeline-month {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.temperature-timeline.is-collapsed .temperature-timeline-status:empty {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .temperature-timeline-scale-marker {
     transition: none;
