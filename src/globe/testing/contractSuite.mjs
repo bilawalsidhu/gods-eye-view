@@ -1065,6 +1065,92 @@ export function createContractSuite(
       },
     ],
     [
+      'camera.setView and flyTo: missing angles default to heading 0, pitch −π/2, roll 0',
+      async () => {
+        const destination = cartesian3.fromDegrees(40, 30, 20000);
+        const expectDefaults = (label) => {
+          const pose = camera.pose();
+          near(pose.pitch, -math.PI_OVER_TWO, 1e-6, `${label} pitch`);
+          near(angleBetween(pose.heading, 0), 0, 1e-6, `${label} heading`);
+          near(pose.roll, 0, 1e-6, `${label} roll`);
+        };
+        const tilted = { heading: 1, pitch: -0.3, roll: 0.2 };
+        camera.setView({ destination, orientation: tilted });
+        camera.setView({ destination });
+        await settle();
+        expectDefaults('setView without orientation');
+        camera.setView({ destination, orientation: tilted });
+        camera.setView({ destination, orientation: {} });
+        expectDefaults('setView with empty orientation');
+        camera.setView({ destination, orientation: tilted });
+        camera.flyTo({ destination, duration: 0 });
+        expectDefaults('flyTo without orientation');
+        camera.setView({ destination, orientation: tilted });
+        camera.setView({ destination, orientation: { heading: 1 } });
+        const partial = camera.pose();
+        near(angleBetween(partial.heading, 1), 0, 1e-6, 'partial heading');
+        near(partial.pitch, -math.PI_OVER_TWO, 1e-6, 'partial pitch default');
+      },
+    ],
+    [
+      'camera.viewRectangle: a horizontal view is bounded by the horizon',
+      async () => {
+        camera.setView({
+          destination: cartesian3.fromDegrees(20, 10, 100000),
+          orientation: { heading: 0, pitch: 0, roll: 0 },
+        });
+        await settle();
+        const rectangle = camera.viewRectangle();
+        ensure(rectangle, 'no view rectangle looking at the horizon');
+        for (const side of ['west', 'south', 'east', 'north'])
+          ensure(Number.isFinite(rectangle[side]), `${side} is not finite`);
+        // Looking north, Cesium's rectangle is built from the canvas corners
+        // that hit the globe (the bottom ones) and horizon points for the
+        // rest; it need not contain the camera's own position.
+        const { width, height } = engine.host.size();
+        for (const x of [0, width]) {
+          const ground = camera.pickEllipsoid(cartesian2.create(x, height));
+          ensure(
+            isCartesian3(ground),
+            `the bottom corner at x=${x} missed the globe`,
+          );
+          const seen = cartographic.fromCartesian(ground, WGS84);
+          ensure(
+            rectangle.west <= seen.longitude + 1e-9 &&
+              seen.longitude - 1e-9 <= rectangle.east &&
+              rectangle.south <= seen.latitude + 1e-9 &&
+              seen.latitude - 1e-9 <= rectangle.north,
+            `the visible corner at x=${x} lies outside the rectangle`,
+          );
+        }
+        const lon = math.toRadians(20);
+        ensure(
+          rectangle.west < lon && lon < rectangle.east,
+          `camera longitude outside ${rectangle.west}..${rectangle.east}`,
+        );
+        ensure(
+          rectangle.east - rectangle.west < math.toRadians(30) &&
+            rectangle.north - rectangle.south < math.toRadians(30),
+          'the rectangle is not bounded by the horizon',
+        );
+      },
+    ],
+    [
+      'camera.viewRectangle: undefined when looking away from the Earth',
+      async () => {
+        camera.setView({
+          destination: cartesian3.fromDegrees(20, 10, 1e6),
+          orientation: { heading: 0, pitch: math.PI_OVER_TWO, roll: 0 },
+        });
+        await settle();
+        const rectangle = camera.viewRectangle();
+        ensure(
+          rectangle === undefined,
+          `looking away from the Earth gave ${JSON.stringify(rectangle)}`,
+        );
+      },
+    ],
+    [
       'camera.viewRectangle: spans all longitudes over a pole',
       async () => {
         camera.setView({
