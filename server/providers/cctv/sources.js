@@ -65,6 +65,13 @@ import {
   DEFAULT_VEGVESEN_MAX_SOURCES,
   VEGVESEN_MAX_CATALOG_BYTES,
   NORWAY_ANCHORS,
+  NYC_CAMERAS_URL,
+  NYC_IMAGE_URL,
+  NYC_CAMERA_ID_RE,
+  DEFAULT_NYC_MAX_SOURCES,
+  NYC_MAX_CATALOG_BYTES,
+  NYC_GROUND_ELEVATION_M,
+  NYC_ANCHORS,
 } from './constants.js';
 import {
   toFiniteNumber,
@@ -82,6 +89,7 @@ import {
   isLikelyTexasCoordinate,
   isLikelyNswCoordinate,
   isLikelyCalgaryCoordinate,
+  isLikelyNycCoordinate,
   isLikelyNorwayCoordinate,
   cameraDisplayCode,
   rowArrayToObject,
@@ -1860,6 +1868,151 @@ export async function loadVegvesenSourcesFromOpenData() {
       '[CCTV] Vegvesen camera download error:',
       error?.message || error,
     );
+    return [];
+  }
+}
+
+const NYC_BOROUGHS = new Set([
+  'Manhattan',
+  'Brooklyn',
+  'Queens',
+  'Bronx',
+  'Staten Island',
+]);
+
+/** NYC TMC publishes `isOnline` as the strings "true"/"false". */
+export function nycCameraIsOnline(value) {
+  return (
+    value === true ||
+    String(value ?? '')
+      .trim()
+      .toLowerCase() === 'true'
+  );
+}
+
+/**
+ * Label for one NYC camera: the intersection an operator recognises
+ * ("Central Park West @ 86 St"). The catalog's `area` is the borough, not
+ * a facing, and is not part of the name.
+ *
+ * @param {object} record - Raw TMC camera row.
+ * @param {string} cameraId - Derived stable id.
+ * @returns {string}
+ */
+export function nycCameraName(record, cameraId) {
+  const name = String(record?.name ?? '').trim();
+  if (name) return name;
+  const short = String(cameraId || '')
+    .replace(/^nyc-/, '')
+    .slice(0, 8);
+  return short ? `NYC Camera ${short}` : 'NYC Camera';
+}
+
+/**
+ * One NYC DOT TMC camera row -> one catalog source, or null.
+ *
+ * Frame URLs are synthesized from a validated UUID on the pinned TMC image
+ * origin. The payload's `imageUrl` is ignored so a catalog edit cannot steer
+ * the frame proxy off-host. There is no heading in the feed; headings use
+ * the shared id-hash fallback at low confidence, like Calgary and Fintraffic.
+ *
+ * @param {object} record - Raw TMC camera row.
+ * @returns {?object}
+ */
+export function nycCameraToSource(record) {
+  if (!record || typeof record !== 'object') return null;
+  if (!nycCameraIsOnline(record.isOnline)) return null;
+
+  const lat = toFiniteNumber(record.latitude);
+  const lon = toFiniteNumber(record.longitude);
+  if (!isLikelyNycCoordinate(lat, lon)) return null;
+
+  const uuid = String(record.id ?? '').trim();
+  if (!NYC_CAMERA_ID_RE.test(uuid)) return null;
+  const cameraId = `nyc-${uuid.toLowerCase()}`;
+  const imageUrl = NYC_IMAGE_URL(uuid);
+  const name = nycCameraName(record, cameraId);
+  const area = String(record.area ?? '').trim();
+  const city = NYC_BOROUGHS.has(area) ? area : 'New York';
+
+  return {
+    id: cameraId,
+    name,
+    city,
+    cityId: 'nyc',
+    provider: 'NYC DOT Traffic Management Center',
+    lat,
+    lon,
+    headingDeg: fallbackHeadingFromId(cameraId),
+    headingConfidence: 'low',
+    pitchDeg: -18,
+    fovDeg: 44,
+    rangeM: 145,
+    mountHeightM: 8,
+    groundElevationM: NYC_GROUND_ELEVATION_M,
+    feedType: 'image',
+    url: imageUrl,
+    snapshotUrl: imageUrl,
+    sourceKind: 'nyc-dot-tmc',
+    license: 'Public NYC DOT Traffic Management Center traffic camera',
+    code: cameraDisplayCode(name.toUpperCase()),
+  };
+}
+
+/**
+ * Fetch NYC DOT Traffic Management Center cameras from the keyless
+ * `webcams.nyctmc.org` catalog. Frames are stills on that same host,
+ * registered from a validated UUID rather than from the payload URL.
+ *
+ * @returns {Promise<Array<object>>} Normalized camera source objects.
+ */
+export async function loadNycSourcesFromOpenData() {
+  try {
+    const endpoint = process.env.CCTV_NYC_CAMERAS_URL || NYC_CAMERAS_URL;
+    const resp = await fetch(endpoint, {
+      headers: { Accept: 'application/json' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
+    });
+    const discard = async () => {
+      try {
+        await resp.body?.cancel();
+      } catch {
+        /* no-op */
+      }
+      return [];
+    };
+    if (resp.status >= 300 && resp.status < 400) {
+      console.warn('[CCTV] NYC catalog redirected; redirects are not followed');
+      return discard();
+    }
+    if (!resp.ok) {
+      console.warn('[CCTV] NYC camera download failed:', resp.status);
+      return discard();
+    }
+    const rows = await readResponseJsonCapped(resp, NYC_MAX_CATALOG_BYTES);
+    if (!Array.isArray(rows)) return [];
+    const cameras = [];
+    const seen = new Set();
+    for (const record of rows) {
+      const camera = nycCameraToSource(record);
+      if (!camera || seen.has(camera.id)) continue;
+      seen.add(camera.id);
+      cameras.push(camera);
+    }
+    const maxRaw = Number(
+      process.env.CCTV_NYC_MAX_SOURCES || DEFAULT_NYC_MAX_SOURCES,
+    );
+    const maxCount = Number.isFinite(maxRaw)
+      ? Math.max(8, Math.min(400, Math.floor(maxRaw)))
+      : DEFAULT_NYC_MAX_SOURCES;
+    const prioritized = prioritizeSources(cameras, maxCount, NYC_ANCHORS);
+    console.log(
+      `[CCTV] Loaded NYC camera sources: ${cameras.length} (using nearest ${prioritized.length})`,
+    );
+    return prioritized;
+  } catch (error) {
+    console.warn('[CCTV] NYC camera download error:', error?.message || error);
     return [];
   }
 }
