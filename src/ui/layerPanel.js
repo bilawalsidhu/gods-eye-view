@@ -48,6 +48,10 @@ const PANEL_GROUPS = [
     ],
   },
   {
+    label: 'San Antonio',
+    ids: ['san-antonio-parks', 'san-antonio-trails', 'san-antonio-trailheads'],
+  },
+  {
     label: 'Events',
     ids: ['rocket-launches', 'earthquakes', 'local-firms', 'fire-perimeters'],
   },

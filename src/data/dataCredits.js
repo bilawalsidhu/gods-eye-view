@@ -101,6 +101,18 @@ export const NYC_DOT_DISCLAIMER =
 export const DATA_CREDITS = [
   // ── Live sources ────────────────────────────────────────────────
   {
+    key: 'san-antonio-parks-trails',
+    html:
+      'City of San Antonio Parks &amp; Recreation: ' +
+      '<a href="https://data.sanantonio.gov/dataset/park-boundaries" target="_blank" rel="noopener">Park Boundaries</a> (published 2017-08-21), ' +
+      '<a href="https://data.sanantonio.gov/dataset/park-trails" target="_blank" rel="noopener">Park Trails</a> (published 2019-10-17), ' +
+      '<a href="https://data.sanantonio.gov/dataset/park-trailheads" target="_blank" rel="noopener">Park Trailheads</a> (published 2017-08-21). ' +
+      'Modified display: selected fields, WGS84 conversion and map styling; see feature cards for source data-edit dates. ' +
+      '<a href="https://www.sanantonio.gov/Portals/0/Files/ITSD/COSA-OpenDataPortalTermsofUs.pdf" target="_blank" rel="noopener">City Terms of Use</a>. ' +
+      'GIS reference data supplied as is, without warranty; not a survey or live access/closure information. ' +
+      'Observe posted trail rules and current conditions. This display is not endorsed by the City.',
+  },
+  {
     key: 'opensky',
     html:
       'Flights: OpenSky Network — Schäfer et al., ' +

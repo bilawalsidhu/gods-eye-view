@@ -72,6 +72,10 @@ test('layerFeedState matches the chip classifier for every honesty class', () =>
     'degraded',
   );
   assert.equal(layerFeedState({ loading: true }), 'loading');
+  assert.equal(
+    layerFeedState({ partial: true, count: 5, lastUpdate: 1 }),
+    'partial',
+  );
   assert.equal(layerFeedState({ count: 5, lastUpdate: 1 }), 'nominal');
   assert.equal(
     layerFeedState({
@@ -90,7 +94,15 @@ test('layerFeedState matches the chip classifier for every honesty class', () =>
 test('chip labels and severity cover every feed-state the envelope can emit', () => {
   assert.deepEqual(
     [...LAYER_FEED_STATES],
-    ['nominal', 'loading', 'degraded', 'stale', 'fallback', 'unavailable'],
+    [
+      'nominal',
+      'loading',
+      'degraded',
+      'stale',
+      'partial',
+      'fallback',
+      'unavailable',
+    ],
   );
   assert.deepEqual([...SNAPSHOT_FEED_STATES], [...LAYER_FEED_STATES, 'off']);
   for (const state of LAYER_FEED_STATES) {
@@ -102,6 +114,11 @@ test('chip labels and severity cover every feed-state the envelope can emit', ()
     true,
   );
   assert.equal(FEED_STATE_SEVERITY.stale < FEED_STATE_SEVERITY.fallback, true);
+  assert.equal(
+    FEED_STATE_SEVERITY.fallback < FEED_STATE_SEVERITY.partial,
+    true,
+  );
+  assert.equal(FEED_STATE_SEVERITY.partial < FEED_STATE_SEVERITY.nominal, true);
   assert.equal(worstFeedState(['nominal', 'stale', 'fallback']), 'stale');
   assert.equal(worstFeedState(['degraded', 'unavailable']), 'unavailable');
   assert.equal(worstFeedState([]), null);
@@ -155,6 +172,46 @@ test('an enabled stale layer carries age, source, and a mechanical note', () => 
   assert.match(envelope.note, /4m ago/);
   assert.match(envelope.note, /do not describe this as live/i);
 });
+
+for (const withNominal of [false, true]) {
+  test(`an enabled partial layer stays partial ${withNominal ? 'beside a nominal layer' : 'when queried alone'}`, () => {
+    const layers = [
+      {
+        id: 'san-antonio-parks',
+        name: 'San Antonio Parks',
+        enabled: true,
+        stats: {
+          partial: true,
+          count: 2,
+          sourceCount: 3,
+          skippedCount: 1,
+          lastUpdate: NOW - 10_000,
+          source: 'City of San Antonio Parks & Recreation',
+        },
+      },
+    ];
+    if (withNominal)
+      layers.push({
+        id: 'earthquakes',
+        name: 'Earthquakes',
+        enabled: true,
+        stats: { count: 3, lastUpdate: NOW - 10_000 },
+      });
+    const envelope = feedProvenanceEnvelope(layers, { now: NOW });
+    assert.equal(envelope.overall, 'partial');
+    assert.equal(envelope.layers[0].enabled, true);
+    assert.equal(envelope.layers[0].feedState, 'partial');
+    assert.equal(envelope.layers[0].count, 2);
+    assert.match(envelope.note, /San Antonio Parks is PARTIAL/);
+    assert.match(envelope.note, /City of San Antonio Parks & Recreation/);
+    assert.match(envelope.note, /do not describe this as live/i);
+    assert.doesNotMatch(envelope.note, /is off|are nominal/);
+    assert.equal(
+      viewStateLayerRow(layers[0], { now: NOW }).feedState,
+      'partial',
+    );
+  });
+}
 
 test('degraded and unavailable envelopes outrank leftover nominal neighbours', () => {
   const layers = layerSnapshots(

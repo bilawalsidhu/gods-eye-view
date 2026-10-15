@@ -17,6 +17,7 @@ export const LAYER_FEED_STATES = Object.freeze([
   'loading',
   'degraded',
   'stale',
+  'partial',
   'fallback',
   'unavailable',
 ]);
@@ -27,6 +28,7 @@ export const LAYER_FEED_STATE_LABELS = Object.freeze({
   loading: 'LOADING',
   degraded: 'DEGRADED',
   stale: 'STALE',
+  partial: 'PARTIAL',
   fallback: 'FALLBACK',
   unavailable: 'UNAVAILABLE',
 });
@@ -48,8 +50,9 @@ export const FEED_STATE_SEVERITY = Object.freeze({
   degraded: 2,
   stale: 3,
   fallback: 4,
-  nominal: 5,
-  off: 6,
+  partial: 5,
+  nominal: 6,
+  off: 7,
 });
 
 export { layerFeedState } from './feedState.js';
@@ -90,7 +93,7 @@ export function snapshotAgeLabel(lastUpdate, now = Date.now()) {
 /**
  * Pick the most severe feed-state from a list.
  * @param {Iterable<string|null|undefined>} states Feed-state strings.
- * @returns {'nominal'|'loading'|'degraded'|'stale'|'fallback'|'unavailable'|'off'|null}
+ * @returns {'nominal'|'loading'|'degraded'|'stale'|'partial'|'fallback'|'unavailable'|'off'|null}
  */
 export function worstFeedState(states) {
   let worst = null;

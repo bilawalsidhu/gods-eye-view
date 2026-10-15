@@ -1,5 +1,40 @@
 # God's Eye View Current State
 
+## San Antonio parks and trails — October 11, 2026
+
+The San Antonio group contains three independent reference layers:
+`san-antonio-parks` (park boundary polygons), `san-antonio-trails` (trail-network
+line segments, including sidewalks, connectors, park roads and bridges), and
+`san-antonio-trailheads` (mapped access points). They start disabled. A layer's
+first activation downloads only its own collection from the City ArcGIS service;
+no API key or bundled City dataset is required. Source data-edit dates remain
+separate from download times. These layers do not report current trail closures
+or establish that a mapped route or access point is open.
+
+`src/layers/sanAntonio/` separates source acquisition, record normalization,
+Cesium rendering and layer lifecycle. The portable source exposes
+`getSnapshot({ datasetId, signal })`; application composition injects it through
+`sources['san-antonio']`, and standalone chooses the City endpoints. Removing that
+source explicitly makes all three layers unavailable before acquisition.
+Complete downloads are cached in memory for six hours. Declared counts, stable
+OBJECTID ordering, bounded pages/bytes and final source consistency checks reject
+incomplete or moving snapshots. Invalid geometries are counted as omitted; a
+nonempty collection with no usable geometry fails rather than reporting success.
+
+Parks and trails use batched ground primitives; trailheads use clamped points.
+Multipart geometry and polygon holes are preserved. A click shows one selected
+feature card with source facts/date and a fixed link to its City catalog record.
+Disable and destroy abort pending work, clear selection and release all graphics;
+cached plain source data can be reused on the next activation. A failed refresh
+retains the previous display with an explicit stale/error state.
+
+Layer tokens are provisionally `3` (parks), `4` (trails) and `5` (trailheads),
+reserved in the permanent ledger and validated against the merge-time base.
+Voice supports the three named San Antonio toggles and bounded reference-record
+queries; it does not infer current access or risk. See [the San Antonio source and
+review notes](SAN_ANTONIO.md), [data terms](../DATA_SOURCES.md#san-antonio-parks-and-trails),
+and the deterministic browser gate `node scripts/qa-san-antonio.mjs`.
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing

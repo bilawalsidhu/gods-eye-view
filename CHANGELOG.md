@@ -1,5 +1,11 @@
 # Changelog
 
+- Add San Antonio park boundaries, trail network segments and trailhead locations
+  as three independently selectable, shareable reference layers. City ArcGIS data
+  is fetched only on activation, with bounded pagination, six-hour memory caching,
+  source dates and attribution. Ground geometry preserves multipart shapes and
+  park holes; disabling a layer releases its graphics and selection handlers.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 

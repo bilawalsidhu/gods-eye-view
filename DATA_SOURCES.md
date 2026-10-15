@@ -71,6 +71,50 @@ How to read this:
 | **Re:Earth Terrain** (Mapterhorn)                                     | Terrain (keyless globe stacks — OSM etc. — + `/api/terrain/heights` ellipsoidal-height lookups)                                     | Terrain mesh: CC BY 4.0; geoid: EGM2008 (NGA, public domain)                                                                                                                                                                                                                                                                                          | "Terrain (keyless globe stacks): Re:Earth Terrain / Mapterhorn (CC BY 4.0) / EGM2008 (NGA)"                                                 |
 | **OSRM on the FOSSGIS routing servers** (`routing.openstreetmap.de`) | Street-following routes for the Directions layer and voice route annotations, via `/api/route` | [FOSSGIS routing usage policy](https://routing.openstreetmap.de/about.html): "Display the required attribution and display a link to 'fix the map'", "Use a valid user agent and, if applicable, a correct referrer", "One request per second max", "No scraping, no heavy usage". The full policy is the German [FOSSGIS Nutzungsbedingungen](https://www.fossgis.de/arbeitsgruppen/osm-server/nutzungsbedingungen/); FOSSGIS also states that the server may be embedded in your own pages but "eine gewerbliche Nutzung ist nur mit Einschränkungen erlaubt" (commercial use only with restrictions). Route data derives from OpenStreetMap (ODbL 1.0) | "Routing: OSRM on the FOSSGIS servers" + a "fix the map" link — shown in the Data attribution popover |
 
+### San Antonio parks and trails
+
+Three City of San Antonio Parks & Recreation collections are fetched directly
+from the published ArcGIS services only when their respective layers activate:
+
+| Collection | City catalog and original publication | Feature service | Meaning |
+| --- | --- | --- | --- |
+| Park Boundaries | [City catalog](https://data.sanantonio.gov/dataset/park-boundaries), 2017-08-21 | [Park_Boundaries/0](https://services.arcgis.com/g1fRTDLeMgspWrYp/ArcGIS/rest/services/Park_Boundaries/FeatureServer/0) | Boundary features, including greenways and other park-system land; not a distinct City-park count |
+| Park Trails | [City catalog](https://data.sanantonio.gov/dataset/park-trails), 2019-10-17 | [Park_Trails/0](https://services.arcgis.com/g1fRTDLeMgspWrYp/ArcGIS/rest/services/Park_Trails/FeatureServer/0) | Network segments: trails, sidewalks, connectors, park roads and bridges |
+| Park Trailheads | [City catalog](https://data.sanantonio.gov/dataset/park-trailheads), 2017-08-21 | [Park_Trailheads/0](https://services.arcgis.com/g1fRTDLeMgspWrYp/ArcGIS/rest/services/Park_Trailheads/FeatureServer/0) | Mapped access points; no current access or closure status |
+
+**Terms and attribution.** The [Open Data SA About page](https://data.sanantonio.gov/about)
+includes the GIS catalog, describes reuse and redistribution, and links the
+[City Terms of Use (January 8, 2020)](https://www.sanantonio.gov/Portals/0/Files/ITSD/COSA-OpenDataPortalTermsofUs.pdf)
+and [Open Data Policy](https://www.sanantonio.gov/Portals/0/Files/ITSD/OpenData-Policy.pdf).
+The catalog's CKAN records identify these exact services. The City terms grant
+conditional, revocable use/distribution rights, require departmental attribution
+with the source webpage and publication date, and require modifications to be
+identified. Third-party material retains its owner's terms. The individual
+dataset license fields are blank: do not label these datasets MIT, CC0 or CC BY
+based on the portal's generic footer. A named permissive dataset license has not
+been established; the trail description also references MPO alongside the City.
+The 2026-10-11 live validation found 353 trail segments with `TrailSource: MPO`.
+That is a provenance label, not independent proof of ownership or permission.
+Any separately owned material requires its own permission under the City terms.
+
+Required credit is **City of San Antonio Parks & Recreation**, with the three
+catalog links and publication dates above. The app's Data attribution popover
+provides that credit, the terms link, and the modification notice: selected
+fields, WGS84 conversion and map styling. Feature cards and layer legends show
+the source data-edit date returned by ArcGIS; this is distinct from the original
+catalog publication date and from the time of download. The source GIS
+disclaimer and trail-use notices remain accessible through the catalog links.
+Data is supplied as is, without warranty; it is reference mapping, not a survey,
+current closure information or an endorsement by the City. Observe posted trail
+rules and current conditions.
+
+**Acquisition.** No City snapshot is stored in this repository. The adapter uses
+explicit field allowlists, WGS84 GeoJSON, deterministic OBJECTID pagination,
+response/feature/deadline bounds and complete-snapshot validation. Its three-entry
+memory cache lasts six hours. It acquires no private owner or staff fields.
+Tests and browser QA use synthetic geometry. See [implementation and review
+notes](docs/SAN_ANTONIO.md) for limits and the exact collection contract.
+
 ### Local receiver input (not fetched from a service)
 
 The optional Local ADS-B layer and the broadcast-FM receiver use radio you receive yourself: a USB RTL-SDR opened in the browser through WebUSB, or the `aircraft.json` of a decoder you run on your own machine or network (`LOCAL_RECEIVER_FEEDS`). Radio samples, audio and the optional receiver location stay in the browser. Decoder feeds are read by your local GEV server and relayed only to your browser, with about a second of in-memory caching. When you select a local aircraft, its ICAO address (and an airline-style callsign) is looked up, and aircraft that qualify for a 3D model are looked up by ICAO address, through the same adsbdb proxy the public flight layers use; your server caches those answers on disk and treats them as fresh for 24 hours. Received radio data is not stored or redistributed. ADS-B is an unauthenticated public broadcast and may be incomplete, delayed, spoofed or decoded in error; it is not suitable for navigation or operational use.

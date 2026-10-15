@@ -349,6 +349,34 @@ const layers = [
     },
   },
   {
+    id: 'san-antonio-parks',
+    aliases: ['san antonio parks', 'san antonio park boundaries'],
+    context: false,
+    query: {
+      fields: { name: ['t'], objectId: ['n'] },
+      caveat: 'park boundary features, not distinct City parks; reference data',
+    },
+  },
+  {
+    id: 'san-antonio-trails',
+    aliases: ['san antonio trails', 'san antonio greenway trails'],
+    context: false,
+    query: {
+      fields: { name: ['t'], objectId: ['n'] },
+      caveat:
+        'mapped network segments, including sidewalks and park roads; no live closure status',
+    },
+  },
+  {
+    id: 'san-antonio-trailheads',
+    aliases: ['san antonio trailheads', 'san antonio trail access'],
+    context: false,
+    query: {
+      fields: { name: ['t'], objectId: ['n'] },
+      caveat: 'mapped access locations; no live access or closure status',
+    },
+  },
+  {
     id: 'telegeography-submarine-cables',
     aliases: ['submarine cables', 'undersea cables', 'cables', 'telegeography'],
     context: false,

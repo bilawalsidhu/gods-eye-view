@@ -27,6 +27,8 @@ import { createApplicationEarthquakes } from './layers/earthquakes.js';
 import { createApplicationFirePerimeters } from './layers/perimeters.js';
 import { createApplicationCables } from './layers/submarineCables.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
+import { createApplicationSanAntonioLayer } from './layers/sanAntonio.js';
+import { SAN_ANTONIO_DATASETS } from '../layers/sanAntonio/config.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
 import { createBhoteKoshiEventLayer } from '../data/bhoteKoshiEvent.js';
@@ -161,6 +163,12 @@ export function createApplicationCatalog({
         }),
         createCyclonesLayer({ feed: sources.cyclones }),
         ...createInfrastructureLayers(localGeoJsonServices),
+        ...SAN_ANTONIO_DATASETS.map((dataset) =>
+          createApplicationSanAntonioLayer({
+            dataset,
+            source: sources['san-antonio'],
+          }),
+        ),
         createApplicationCables({ source: sources.cables }),
         createApplicationFirms({
           surface,
