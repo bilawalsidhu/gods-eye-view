@@ -31,3 +31,18 @@ test('destroy removes the credits the engine added', () => {
   assert.equal(viewer.staticCredits.length, 0);
   assert.equal(viewer.callsOf('creditDisplay.removeStaticCredit').length, 2);
 });
+
+test('the display is Viewer.creditDisplay, else the scene frame state one it aliases', () => {
+  const added = [];
+  const display = {
+    addStaticCredit: (credit) => added.push(credit),
+    removeStaticCredit: (credit) => added.splice(added.indexOf(credit), 1),
+  };
+  const { credits } = createCesiumCredits({
+    scene: { frameState: { creditDisplay: display } },
+  });
+  const remove = credits.addStatic('frame state');
+  assert.equal(added[0].html, 'frame state');
+  remove();
+  assert.deepEqual(added, []);
+});

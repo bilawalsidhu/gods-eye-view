@@ -8,7 +8,9 @@ import * as Cesium from 'cesium';
  */
 export function createCesiumCredits(viewer) {
   const added = new Set();
-  const display = () => viewer.creditDisplay;
+  // Viewer.creditDisplay is the scene frame state's display.
+  const display = () =>
+    viewer.creditDisplay ?? viewer.scene?.frameState?.creditDisplay;
   const remove = (credit) => {
     if (!added.delete(credit)) return;
     display()?.removeStaticCredit(credit);

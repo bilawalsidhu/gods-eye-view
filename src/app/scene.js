@@ -62,7 +62,7 @@ export async function createApplicationScene({
   const tilesetRef = { current: null };
   const engine = createSceneEngine(viewer, { tilesetRef, defer });
   defer(installTrackpadPinchZoom(viewer));
-  registerDataCredits(viewer, credits);
+  registerDataCredits(engine, credits);
   configureCreditKeyboardAccess(document);
   loaderStatus.textContent =
     googleApiKey || googleTokens || cesiumToken
