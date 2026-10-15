@@ -3,6 +3,7 @@ import cesium from 'vite-plugin-cesium';
 import { DEFAULT_ALLOWED_HOSTS, hostCheckPlugin } from './allowedHosts.js';
 import { embedFramingPlugin } from './embed-framing.js';
 import { panelBuildPlugin } from './panel.js';
+import { navaraWorkerAssets } from './navaraAssets.js';
 
 /**
  * Content-Security-Policy for every document the dev/preview server serves.
@@ -125,6 +126,11 @@ export function createBrowserViteConfig({
         mapillaryToken ?? '',
       ),
     },
-    build: { chunkSizeWarningLimit: 1500 },
+    build: {
+      chunkSizeWarningLimit: 1500,
+      // Build only: the wasm Navara's workers load by name (the Navara
+      // engine is a separate chunk loaded on ?engine=navara).
+      rollupOptions: { plugins: [navaraWorkerAssets()] },
+    },
   };
 }

@@ -70,7 +70,9 @@ architectural check, not a JavaScript sandbox. The globe contract
 helpers, nor import an engine implementation; the `src/globe/cesium/**` graph
 reaches no Navara/three package or `src/globe/navara/**` module, and the
 `src/globe/navara/**` graph no Cesium package or `src/globe/cesium/**` module,
-through helpers too. Common voice controls cannot depend on a
+through helpers too. Outside its own directory, `src/globe/navara/**` is
+reached only through a literal `import()` (the app's `?engine=navara` mode), so
+Navara stays out of the Cesium-mode bundle. Common voice controls cannot depend on a
 Realtime protocol implementation. Negative fixtures cover indirect helpers,
 self-package imports, symlinks and unreachable files.
 

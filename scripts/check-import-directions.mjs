@@ -97,7 +97,9 @@ export function checkImportDirections(root) {
     }
     let analysis;
     try {
-      analysis = analyzeModule(readFileSync(resolved, 'utf8'));
+      analysis = analyzeModule(readFileSync(resolved, 'utf8'), {
+        dynamic: true,
+      });
     } catch (error) {
       report(file, error.message);
       return null;
@@ -141,6 +143,18 @@ export function checkImportDirections(root) {
         continue;
       }
       record.edges.push(to);
+      // Navara stays out of the Cesium-mode bundle: outside its own directory
+      // it is reached only through import() (src/app/scene.js), which the
+      // bundler splits into a chunk loaded on ?engine=navara.
+      if (
+        to.startsWith('src/globe/navara/') &&
+        !file.startsWith('src/globe/navara/') &&
+        !analysis.dynamicImports.includes(specifier)
+      )
+        report(
+          file,
+          `The Navara engine loads only through a dynamic import(): ${to}`,
+        );
       if (file.startsWith('src/') && to.startsWith('server/'))
         report(file, `Browser imports server: ${to}`);
       if (

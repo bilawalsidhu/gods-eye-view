@@ -33,7 +33,8 @@
       "build/application-html.js",
       "build/allowedHosts.js",
       "build/embed-framing.js",
-      "build/panel.js"
+      "build/panel.js",
+      "build/navaraAssets.js"
     ],
     "external": ["vite-plugin-cesium"]
   },

@@ -241,6 +241,44 @@ for (const [name, files, pattern] of [
   });
 }
 
+test('module analysis can tell dynamic imports from static ones', () => {
+  assert.deepEqual(
+    analyzeModule(
+      "import a from 'one'; export * from 'two'; import('three'); const x = () => import('four');",
+      { dynamic: true },
+    ),
+    {
+      imports: ['one', 'two', 'three', 'four'],
+      browser: [],
+      dynamicImports: ['three', 'four'],
+    },
+  );
+});
+
+test('the app reaches the Navara engine only through a dynamic import', (t) => {
+  const { root, write } = fixture(t);
+  write('src/globe/navara/index.js', "import './engine.js';");
+  write('src/globe/navara/engine.js', '');
+  write(
+    'src/app/scene.js',
+    "export const load = () => import('../globe/navara/index.js');",
+  );
+  assert.doesNotThrow(() => checkImportDirections(root));
+  write('src/app/scene.js', "import '../globe/navara/index.js';");
+  assert.throws(
+    () => checkImportDirections(root),
+    /src\/app\/scene\.js: The Navara engine loads only through a dynamic import\(\): src\/globe\/navara\/index\.js/,
+  );
+  write(
+    'src/app/scene.js',
+    "export { createNavaraGlobe } from '../globe/navara/index.js';",
+  );
+  assert.throws(
+    () => checkImportDirections(root),
+    /only through a dynamic import/,
+  );
+});
+
 test('geo modules may import each other, and its tests may import cesium', (t) => {
   const { root, write } = fixture(t);
   write('src/geo/math.js', 'export const half = (value) => value / 2;');
