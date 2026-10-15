@@ -1,12 +1,10 @@
 // The bridge for shell callers that still hold only a Cesium viewer (layers
-// until phase 1c, standalone entries, tests): the engine of that viewer. The
-// app registers its scene engine (src/app/globeEngine.js); any other viewer
-// gets one built on first use and cached. Building one changes nothing in
-// the viewer, and it is never destroyed here: its subscriptions live only as
-// long as their callers keep them.
+// until phase 1c): the engine registered for that viewer. The app registers
+// its scene engine (src/app/globeEngine.js) and unregisters it before
+// destroying it. Nothing is ever built here, so no engine can outlive its
+// viewer without a destroy path: an unregistered or torn-down viewer has none.
 
 import { isGlobeEngine } from '../contract.js';
-import { createCesiumEngine } from './createCesiumEngine.js';
 
 const engines = new WeakMap();
 
@@ -24,17 +22,11 @@ export function registerViewerEngine(viewer, engine) {
 /**
  * @param {object | null | undefined} viewer A Cesium viewer, or an engine
  *   (returned as is).
- * @param {Parameters<typeof createCesiumEngine>[1]} [options] Used only when
- *   an engine has to be built.
- * @returns {import('../contract.js').GlobeEngine | null}
+ * @returns {import('../contract.js').GlobeEngine | null} The registered
+ *   engine, or null.
  */
-export function engineFromViewer(viewer, options) {
+export function engineFromViewer(viewer) {
   if (viewer == null) return null;
   if (isGlobeEngine(viewer)) return viewer;
-  let engine = engines.get(viewer);
-  if (!engine) {
-    engine = createCesiumEngine(viewer, options);
-    engines.set(viewer, engine);
-  }
-  return engine;
+  return engines.get(viewer) ?? null;
 }

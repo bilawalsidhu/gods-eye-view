@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { createCesiumEngine } from '../globe/cesium/createCesiumEngine.js';
 import {
   AMBIENT_CARD_COLLISION_CAPACITY,
   destroyWorldOverlay,
@@ -316,6 +317,8 @@ function installMockEnvironment({ width, height, dpr }) {
 
   return {
     viewer,
+    // Shell modules take the globe engine; the Cesium engine runs on the mock.
+    engine: createCesiumEngine(viewer),
     postRender,
     advanceTime(ms) {
       currentTime += ms;
@@ -1174,7 +1177,7 @@ function main() {
     height: VIEWPORT_HEIGHT,
     dpr: 2,
   });
-  initWorldOverlay(env.viewer);
+  initWorldOverlay(env.engine);
   const workload =
     PROFILE === 'phase6-detection'
       ? buildPhase6DetectionWorkload(ENTRY_COUNT)
@@ -1318,6 +1321,7 @@ function main() {
 
   if (detectionActive) destroyDetection();
   destroyWorldOverlay();
+  env.engine.destroy();
 }
 
 main();

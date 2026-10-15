@@ -80,9 +80,9 @@ test('the scene engine is the one engineFromViewer returns for its viewer until 
   assert.equal(engineFromViewer(viewer), engine);
   for (const cleanup of cleanups.reverse()) cleanup();
   assert.equal(engine.fake.destroyed, true);
-  assert.throws(
-    () => engineFromViewer(viewer),
-    /createCesiumEngine needs a viewer/,
-    'no longer registered: a fresh one would be built',
+  assert.equal(
+    engineFromViewer(viewer),
+    null,
+    'no longer registered, and none is built',
   );
 });

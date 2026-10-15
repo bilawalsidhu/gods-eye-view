@@ -61,11 +61,18 @@ import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
 export class StyleManager extends ShellFacade {
   /**
    * @param {Cesium.Viewer} viewer - The CesiumJS viewer instance.
-   * @param {object} [options]
+   * @param {object} [options] `engine`: the page's globe engine (the world
+   *   overlay host runs on it).
    */
   constructor(
     viewer,
-    { mapStackController = null, placeSearch, services, requestServices } = {},
+    {
+      engine = null,
+      mapStackController = null,
+      placeSearch,
+      services,
+      requestServices,
+    } = {},
   ) {
     super();
     const {
@@ -460,7 +467,7 @@ export class StyleManager extends ShellFacade {
     // The shared world-overlay host must own its one postRender lane before
     // detection and tracked-readout initialize. It stays transparent until a
     // production source explicitly registers entries.
-    initWorldOverlay(viewer);
+    initWorldOverlay(engine);
 
     // Initialize detection overlay BEFORE style stages so the composite
     // stage is first in the post-process pipeline

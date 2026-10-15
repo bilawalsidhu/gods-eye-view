@@ -5,7 +5,7 @@ import { initCockpitCloudEffects } from '../cockpitCloudEffects.js';
 
 /** Construct the existing controls and camera presentation. */
 export function createApplicationControls({
-  scene: { viewer, mapStackController, operations },
+  scene: { viewer, engine, mapStackController, operations },
   loaderStatus,
   Controls = StyleManager,
   services,
@@ -24,6 +24,8 @@ export function createApplicationControls({
       ...catalogControlServices(catalog),
     },
     requestServices: operations.requests,
+    // The page's globe engine: the shell's overlay host runs on it.
+    engine,
     mapStackController,
     placeSearch,
   });

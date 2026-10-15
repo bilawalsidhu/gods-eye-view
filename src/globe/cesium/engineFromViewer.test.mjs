@@ -5,28 +5,25 @@ import { createFakeEngine } from '../testing/fakeEngine.js';
 import { engineFromViewer, registerViewerEngine } from './engineFromViewer.js';
 import { createFakeViewer } from './testing/fakeViewer.mjs';
 
-test('a viewer without a registered engine gets one built once and cached', () => {
+test('a viewer without a registered engine has none: nothing is built', () => {
   const viewer = createFakeViewer();
-  const engine = engineFromViewer(viewer);
-  assert.equal(isGlobeEngine(engine), true);
-  assert.equal(engine.kind, 'cesium');
-  assert.equal(engineFromViewer(viewer), engine);
-  assert.deepEqual(viewer.calls, [], 'building it changes nothing');
-  assert.notEqual(engineFromViewer(createFakeViewer()), engine);
+  assert.equal(engineFromViewer(viewer), null);
+  assert.deepEqual(viewer.calls, []);
 });
 
-test('the engine registered for a viewer is the one returned', () => {
+test('the engine registered for a viewer is returned until it is unregistered', () => {
   const viewer = createFakeViewer();
   const engine = createFakeEngine();
   const unregister = registerViewerEngine(viewer, engine);
   assert.equal(engineFromViewer(viewer), engine);
   unregister();
-  const built = engineFromViewer(viewer);
-  assert.notEqual(built, engine);
+  assert.equal(engineFromViewer(viewer), null, 'a torn-down viewer has none');
+  const next = createFakeEngine();
+  registerViewerEngine(viewer, next);
   unregister();
   assert.equal(
     engineFromViewer(viewer),
-    built,
+    next,
     'a stale unregister keeps the new one',
   );
 });
