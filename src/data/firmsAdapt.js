@@ -7,8 +7,8 @@
  */
 
 /**
- * Map proxy fire records into internal fire records. Records with
- * non-finite coordinates are skipped; `index` is the post-skip position
+ * Map proxy fire records into internal fire records. Records with missing,
+ * non-numeric or out-of-range (WGS84) coordinates are skipped; `index` is the post-skip position
  * (it keys pick ids and context-store ids, so it must stay sequential).
  * `contextEntity`/`position` start null and are lazily filled by the layer.
  * @param {?Array<Object>} records - /api/firms `fires` array.
@@ -21,7 +21,15 @@ export function adaptFirmsRecords(records) {
   for (const record of records) {
     const lat = Number(record?.lat);
     const lon = Number(record?.lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    if (
+      !hasCoordinateValue(record?.lat) ||
+      !hasCoordinateValue(record?.lon) ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lon) > 180
+    )
+      continue;
     fires.push({
       index: fires.length,
       lat,
@@ -109,4 +117,12 @@ function clamp01(value) {
 function finiteNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+}
+
+// Same rule as parseFirmsCsv: a blank or non-numeric value is not a zero.
+function hasCoordinateValue(value) {
+  return (
+    typeof value === 'number' ||
+    (typeof value === 'string' && value.trim() !== '')
+  );
 }
