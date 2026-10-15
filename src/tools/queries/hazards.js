@@ -115,9 +115,10 @@ export const getActiveFires = defineTool({
           lon: fire.lon,
           frp_mw: fire.frp ?? null,
           confidence: fire.confidence ?? null,
-          acquired: fire.provider === 'conae-goes'
-            ? isoTime(fire.acqMs)
-            : [fire.acqDate, fire.acqTime].filter(Boolean).join(' ') || null,
+          acquired:
+            fire.provider === 'conae-goes'
+              ? isoTime(fire.acqMs)
+              : [fire.acqDate, fire.acqTime].filter(Boolean).join(' ') || null,
           source: fire.provider === 'conae-goes' ? 'CONAE GOES' : 'NASA FIRMS',
           satellite: fire.satellite ?? null,
           day_night: fire.daynight || null,

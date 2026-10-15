@@ -4,16 +4,28 @@ import { createConaeGoesSource } from './conae-goes.js';
 
 const START = Date.parse('2026-10-15T04:00:00Z');
 const payload = () => ({
-  type: 'FeatureCollection', totalFeatures: 1,
-  features: [{
-    type: 'Feature', geometry: { type: 'Point', coordinates: [-60, -30] },
-    properties: { 'Fecha_Local_UTC-3': '2026-10-15 00:50:00', Satelite: 'GOES19', Fire_Radiative_Power: 12 },
-  }],
+  type: 'FeatureCollection',
+  totalFeatures: 1,
+  features: [
+    {
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [-60, -30] },
+      properties: {
+        'Fecha_Local_UTC-3': '2026-10-15 00:50:00',
+        Satelite: 'GOES19',
+        Fire_Radiative_Power: 12,
+      },
+    },
+  ],
 });
 
 test('CONAE requests are fixed, bounded, coalesced and cached independently', async () => {
-  let now = START, calls = 0, release;
-  const blocked = new Promise((resolve) => { release = resolve; });
+  let now = START,
+    calls = 0,
+    release;
+  const blocked = new Promise((resolve) => {
+    release = resolve;
+  });
   const source = createConaeGoesSource({
     now: () => now,
     fetchImpl: async (raw, options) => {
@@ -21,7 +33,10 @@ test('CONAE requests are fixed, bounded, coalesced and cached independently', as
       const url = new URL(raw);
       assert.equal(url.origin, 'https://geoservicios.conae.gov.ar');
       assert.equal(url.pathname, '/geoserver/FocosDeCalor/wfs');
-      assert.equal(url.searchParams.get('typeName'), 'FocosDeCalor:FocosGOES_24hs');
+      assert.equal(
+        url.searchParams.get('typeName'),
+        'FocosDeCalor:FocosGOES_24hs',
+      );
       assert.equal(url.searchParams.get('srsName'), 'EPSG:4326');
       assert.equal(url.searchParams.get('maxFeatures'), '50001');
       assert.equal(options.redirect, 'error');
@@ -47,7 +62,9 @@ test('CONAE requests are fixed, bounded, coalesced and cached independently', as
 });
 
 test('failure backoff protects cold and stale caches, filtering expired observations', async () => {
-  let now = START, calls = 0, fail = true;
+  let now = START,
+    calls = 0,
+    fail = true;
   const source = createConaeGoesSource({
     now: () => now,
     fetchImpl: async () => {
@@ -79,20 +96,35 @@ test('HTTP, invalid JSON, partial collections and oversized bodies cannot masque
   for (const response of [
     new Response('offline', { status: 503 }),
     new Response('<ServiceException/>'),
-    Response.json({ type: 'FeatureCollection', features: [], totalFeatures: 12 }),
-    new Response('{}', { headers: { 'content-length': String(33 * 1024 * 1024) } }),
-    new Response(new ReadableStream({
-      start(controller) {
-        controller.enqueue(new Uint8Array(33 * 1024 * 1024));
-        controller.close();
-      },
-    })),
+    Response.json({
+      type: 'FeatureCollection',
+      features: [],
+      totalFeatures: 12,
+    }),
+    new Response('{}', {
+      headers: { 'content-length': String(33 * 1024 * 1024) },
+    }),
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(new Uint8Array(33 * 1024 * 1024));
+          controller.close();
+        },
+      }),
+    ),
   ]) {
-    const source = createConaeGoesSource({ now: () => START, fetchImpl: async () => response });
+    const source = createConaeGoesSource({
+      now: () => START,
+      fetchImpl: async () => response,
+    });
     await assert.rejects(source.getSnapshot(), /unavailable/);
     assert.equal(source.getStatus().fetchedAt, null);
   }
-  const source = createConaeGoesSource({ now: () => START, fetchImpl: async () => Response.json({ type: 'FeatureCollection', features: [] }) });
+  const source = createConaeGoesSource({
+    now: () => START,
+    fetchImpl: async () =>
+      Response.json({ type: 'FeatureCollection', features: [] }),
+  });
   assert.deepEqual((await source.getSnapshot()).fires, []);
   assert.equal(source.getStatus().unavailable, false);
 });

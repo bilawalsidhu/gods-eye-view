@@ -255,9 +255,19 @@ export function firmsProxy() {
         }
 
         const providers = [];
-        if (key) providers.push({ name: 'NASA FIRMS', load: () => getFirmsSnapshot(key) });
-        if (conaeEnabled()) providers.push({ name: 'CONAE GOES', load: () => conae.getSnapshot() });
-        const results = await Promise.allSettled(providers.map((p) => p.load()));
+        if (key)
+          providers.push({
+            name: 'NASA FIRMS',
+            load: () => getFirmsSnapshot(key),
+          });
+        if (conaeEnabled())
+          providers.push({
+            name: 'CONAE GOES',
+            load: () => conae.getSnapshot(),
+          });
+        const results = await Promise.allSettled(
+          providers.map((p) => p.load()),
+        );
         const snapshots = [];
         const sources = [];
         for (let i = 0; i < results.length; i++) {

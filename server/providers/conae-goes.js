@@ -1,5 +1,9 @@
 import { readResponseJsonCapped } from '../../src/sources/httpBody.js';
-import { MAX_CONAE_RECORDS, currentConaeRecords, parseConaeGoes } from './conae-goes/parse.js';
+import {
+  MAX_CONAE_RECORDS,
+  currentConaeRecords,
+  parseConaeGoes,
+} from './conae-goes/parse.js';
 
 const TTL_MS = 10 * 60_000;
 const RETRY_MS = 60_000;
@@ -11,7 +15,10 @@ const ENDPOINT = 'https://geoservicios.conae.gov.ar/geoserver/FocosDeCalor/wfs';
  * One optional CONAE cache per proxy instance, independent of FIRMS disk/quota.
  * No request is made at construction. The caller owns the server-side opt-in.
  */
-export function createConaeGoesSource({ fetchImpl = (...args) => fetch(...args), now = () => Date.now() } = {}) {
+export function createConaeGoesSource({
+  fetchImpl = (...args) => fetch(...args),
+  now = () => Date.now(),
+} = {}) {
   let entry = null;
   let inflight = null;
   let retryAt = 0;
@@ -19,13 +26,18 @@ export function createConaeGoesSource({ fetchImpl = (...args) => fetch(...args),
 
   async function refresh() {
     const params = new URLSearchParams({
-      service: 'WFS', version: '1.0.0', request: 'GetFeature',
-      typeName: 'FocosDeCalor:FocosGOES_24hs', outputFormat: 'application/json',
-      srsName: 'EPSG:4326', maxFeatures: String(MAX_CONAE_RECORDS + 1),
+      service: 'WFS',
+      version: '1.0.0',
+      request: 'GetFeature',
+      typeName: 'FocosDeCalor:FocosGOES_24hs',
+      outputFormat: 'application/json',
+      srsName: 'EPSG:4326',
+      maxFeatures: String(MAX_CONAE_RECORDS + 1),
     });
     const signal = AbortSignal.timeout(TIMEOUT_MS);
     const response = await fetchImpl(ENDPOINT + '?' + params, {
-      signal, redirect: 'error',
+      signal,
+      redirect: 'error',
       headers: { Accept: 'application/json' },
     });
     if (!response.ok) {
@@ -42,9 +54,15 @@ export function createConaeGoesSource({ fetchImpl = (...args) => fetch(...args),
     const fires = currentConaeRecords(entry.fires, now());
     const stale = failed || now() - entry.at >= TTL_MS;
     return {
-      fetchedAt: entry.at, sourceLabel: 'CONAE GOES', stale, ttlMs: TTL_MS,
-      sources: [{ source: 'CONAE GOES', count: fires.length, ok: !failed, stale }],
-      count: fires.length, fires,
+      fetchedAt: entry.at,
+      sourceLabel: 'CONAE GOES',
+      stale,
+      ttlMs: TTL_MS,
+      sources: [
+        { source: 'CONAE GOES', count: fires.length, ok: !failed, stale },
+      ],
+      count: fires.length,
+      fires,
     };
   }
 
@@ -64,7 +82,9 @@ export function createConaeGoesSource({ fetchImpl = (...args) => fetch(...args),
             failed = true;
             retryAt = now() + RETRY_MS;
           })
-          .finally(() => { inflight = null; });
+          .finally(() => {
+            inflight = null;
+          });
       }
       const pending = inflight;
       await pending;
@@ -76,7 +96,8 @@ export function createConaeGoesSource({ fetchImpl = (...args) => fetch(...args),
         fetchedAt: entry?.at ?? null,
         count: entry ? currentConaeRecords(entry.fires, now()).length : null,
         stale: entry ? failed || now() - entry.at >= TTL_MS : false,
-        unavailable: failed, ttlMs: TTL_MS,
+        unavailable: failed,
+        ttlMs: TTL_MS,
       };
     },
   };

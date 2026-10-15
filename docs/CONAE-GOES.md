@@ -71,13 +71,13 @@ The contributor supplied a GeoJSON response fetched from the published WFS on
 sample returned two of 103 matching observations. Only field names and
 synthetic records using this schema are stored in tests.
 
-| WFS field | Meaning / normalization |
-| --- | --- |
-| `geometry.coordinates` | Point in WGS84, longitude then latitude; agrees with the sample's duplicate `Longitud` / `Latitud` properties |
-| `Fecha_Local_UTC-3` | `YYYY-MM-DD HH:mm:ss` in the explicitly named UTC-3 offset; add three hours to obtain UTC, independent of the host timezone |
-| `Satelite` | Observed `GOES19`; normalize to `GOES-19` |
-| `Fire_Radiative_Power` | FRP in MW, consistent with the official FAQ; missing/negative/non-numeric values remain null |
-| Confidence, brightness, day/night | Not supplied by this product; do not infer a measured value |
+| WFS field                                          | Meaning / normalization                                                                                                                  |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `geometry.coordinates`                             | Point in WGS84, longitude then latitude; agrees with the sample's duplicate `Longitud` / `Latitud` properties                            |
+| `Fecha_Local_UTC-3`                                | `YYYY-MM-DD HH:mm:ss` in the explicitly named UTC-3 offset; add three hours to obtain UTC, independent of the host timezone              |
+| `Satelite`                                         | Observed `GOES19`; normalize to `GOES-19`                                                                                                |
+| `Fire_Radiative_Power`                             | FRP in MW, consistent with the official FAQ; missing/negative/non-numeric values remain null                                             |
+| Confidence, brightness, day/night                  | Not supplied by this product; do not infer a measured value                                                                              |
 | `totalFeatures`, `numberMatched`, `numberReturned` | Check completeness; the two-feature inspection sample is deliberately incomplete and must not be used as the application's full snapshot |
 
 For example, local `2026-10-14 21:20:00` represents
