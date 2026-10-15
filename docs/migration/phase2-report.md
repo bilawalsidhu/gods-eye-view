@@ -315,7 +315,7 @@ streamed.
    - aircraft masked through G-buffer depth, which depends on the
      undocumented `raw.gbufferRenderTarget.depthTexture`, and gev's meshes
      must be `MeshDesc`;
-   - about 0.8–0.9 ms p50 as its own `EffectPass` (an empty `EffectPass`
+   - about 0.8–0.95 ms p50 as its own `EffectPass` (an empty `EffectPass`
      alone costs about 0.8 ms) against 0.10 ms merged into tone mapping for
      a route and a block; the 256-segment stress case costs about 1 ms more
      even when merged;

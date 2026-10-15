@@ -207,6 +207,8 @@
  *   pickGlobe: where the ray through a window position meets the globe
  *   surface (terrain, not tiles or models; Cesium's globe.pick of the camera's
  *   pick ray); an engine without a terrain surface answers the ellipsoid.
+ *   pickPosition reads the depth of the last drawn frame: after a camera change,
+ *   request a render and wait a frame before reading it.
  * @property {GlobeProjector} projector
  * @property {{ preUpdate: EngineEvent, preRender: EngineEvent, postRender: EngineEvent }} frames Listeners receive a timestamp in ms.
  * @property {GlobeRender} render
