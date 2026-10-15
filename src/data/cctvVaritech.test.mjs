@@ -25,7 +25,10 @@ test('Varitech labels resort references and estimated headings honestly', () => 
     assert.equal(camera.poseSource, undefined);
     assert.equal(camera.feedType, 'image');
     assert.equal(camera.url, camera.snapshotUrl);
-    assert.match(camera.url, /^https:\/\/varitech\.ar\/cameras\/cam\d{3}\/latest\.jpg$/);
+    assert.match(
+      camera.url,
+      /^https:\/\/varitech\.ar\/cameras\/cam\d{3}\/latest\.jpg$/,
+    );
   }
 });
 
@@ -41,16 +44,23 @@ test('Varitech rejects malformed coordinates and IDs and ignores supplied URLs',
     lat: -41.167,
     lon: -71.443,
   };
-  fs.writeFileSync(file, JSON.stringify([
-    null,
-    { ...valid, id: 'cam999' },
-    { ...valid, lat: null },
-    { ...valid, lat: '-41.167' },
-    { ...valid, lon: 0 },
-    { ...valid, center: '__proto__' },
-    { ...valid, url: 'https://evil.example/frame.jpg', snapshotUrl: 'http://127.0.0.1/' },
-    valid,
-  ]));
+  fs.writeFileSync(
+    file,
+    JSON.stringify([
+      null,
+      { ...valid, id: 'cam999' },
+      { ...valid, lat: null },
+      { ...valid, lat: '-41.167' },
+      { ...valid, lon: 0 },
+      { ...valid, center: '__proto__' },
+      {
+        ...valid,
+        url: 'https://evil.example/frame.jpg',
+        snapshotUrl: 'http://127.0.0.1/',
+      },
+      valid,
+    ]),
+  );
   const cameras = loadVaritechSourcesFromCatalog({ sourceRoot: root });
   assert.equal(cameras.length, 1);
   assert.equal(cameras[0].url, URL);
@@ -59,14 +69,19 @@ test('Varitech rejects malformed coordinates and IDs and ignores supplied URLs',
   assert.deepEqual(loadVaritechSourcesFromCatalog({ sourceRoot: root }), []);
   fs.writeFileSync(file, '{}');
   assert.deepEqual(loadVaritechSourcesFromCatalog({ sourceRoot: root }), []);
-  assert.deepEqual(loadVaritechSourcesFromCatalog({ sourceRoot: path.join(root, 'missing') }), []);
+  assert.deepEqual(
+    loadVaritechSourcesFromCatalog({ sourceRoot: path.join(root, 'missing') }),
+    [],
+  );
 });
 
 test('Varitech fetches on demand, shares concurrent requests and expires at five minutes', async () => {
   let time = 0;
   let calls = 0;
   let release;
-  const gate = new Promise((resolve) => { release = resolve; });
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
   const read = createVaritechSnapshotFetcher({
     now: () => time,
     fetchImpl: async () => {
@@ -94,15 +109,19 @@ test('Varitech fetches on demand, shares concurrent requests and expires at five
 test('Varitech fails closed outside its exact public JPEG allowlist', async () => {
   let calls = 0;
   const read = createVaritechSnapshotFetcher({
-    fetchImpl: async () => { calls++; return jpeg(); },
+    fetchImpl: async () => {
+      calls++;
+      return jpeg();
+    },
   });
   for (const url of [
     'https://varitech.ar.evil.example/cameras/cam003/latest.jpg',
     'https://varitech.ar/cameras/cam999/latest.jpg',
     URL + '?redirect=http://127.0.0.1',
     URL.replace('https:', 'http:'),
-    'https://user:password@varitech.ar/cameras/cam003/latest.jpg',
-  ]) assert.equal(await read(url), null);
+    '***varitech.ar/cameras/cam003/latest.jpg',
+  ])
+    assert.equal(await read(url), null);
   assert.equal(calls, 0);
 });
 
@@ -130,19 +149,26 @@ test('Varitech expires failed refreshes without retaining a previous image', asy
 test('Varitech rejects non-JPEG and oversized snapshots', async () => {
   for (const response of [
     new Response('<svg/>', { headers: { 'Content-Type': 'image/svg+xml' } }),
-    new Response('oversized', { headers: {
-      'Content-Type': 'image/jpeg',
-      'Content-Length': String(2 * 1024 * 1024 + 1),
-    } }),
+    new Response('oversized', {
+      headers: {
+        'Content-Type': 'image/jpeg',
+        'Content-Length': String(2 * 1024 * 1024 + 1),
+      },
+    }),
   ]) {
-    const read = createVaritechSnapshotFetcher({ fetchImpl: async () => response });
+    const read = createVaritechSnapshotFetcher({
+      fetchImpl: async () => response,
+    });
     assert.equal(await read(URL), null);
   }
 });
 
 test('separate Varitech proxy instances do not share cached frames', async () => {
   let calls = 0;
-  const fetchImpl = async () => { calls++; return jpeg(); };
+  const fetchImpl = async () => {
+    calls++;
+    return jpeg();
+  };
   const a = createVaritechSnapshotFetcher({ fetchImpl });
   const b = createVaritechSnapshotFetcher({ fetchImpl });
   await a(URL);

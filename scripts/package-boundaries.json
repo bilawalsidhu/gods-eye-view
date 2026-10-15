@@ -172,6 +172,7 @@
       "server/providers/cctv/range.js",
       "server/providers/cctv/sources.js",
       "server/providers/cctv/stream.js",
+      "server/providers/cctv/varitech.js",
       "server/providers/common/http.js",
       "src/data/directionText.js",
       "server/providers/common/geo.js",

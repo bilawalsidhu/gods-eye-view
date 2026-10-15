@@ -128,9 +128,8 @@ export function createVaritechSnapshotFetcher({
       fetchImpl,
       maxBytes: 2 * 1024 * 1024,
     }).then((image) => {
-      const result = image?.contentType.split(';')[0].trim() === 'image/jpeg'
-        ? image
-        : null;
+      const result =
+        image?.contentType.split(';')[0].trim() === 'image/jpeg' ? image : null;
       entry.pending = false;
       entry.expiresAt = now() + (result ? 5 * 60 * 1000 : 30 * 1000);
       return result;
