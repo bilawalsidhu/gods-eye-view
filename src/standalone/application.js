@@ -7,9 +7,22 @@ import { createStandaloneControls } from './controls.js';
 import { createStandaloneData } from './data.js';
 import { createStandaloneTools } from './tools.js';
 import { createGoogleTokenSource } from '../maps/googleTokens.js';
+import { createLayerCatalog } from '../app/catalog.js';
+import { resolveEngineKind } from '../app/engineChoice.js';
 
 // The existing controls and layer catalog contain page-scoped state.
 let constructed = false;
+
+/** The page's engine choice: ?engine=, else the stored gev.engine, else Cesium. */
+function pageEngineKind() {
+  let storage = null;
+  try {
+    storage = globalThis.localStorage ?? null;
+  } catch {
+    // Blocked storage reads as no stored choice.
+  }
+  return resolveEngineKind({ search: globalThis.location?.search, storage });
+}
 
 /** Compose the standalone application once per page. Reload to start again. */
 export function createStandaloneApplication({
@@ -20,6 +33,7 @@ export function createStandaloneApplication({
   sources = {},
   streetLevelProviders,
   allowQaRegistration = false,
+  engineKind = pageEngineKind(),
 }) {
   if (constructed)
     throw new Error('The standalone application already owns this page');
@@ -47,7 +61,14 @@ export function createStandaloneApplication({
         googleTokens: googleApiKey ? null : createGoogleTokenSource(),
         cesiumToken,
         loaderStatus,
+        engineKind,
       });
+      // The experimental Navara engine runs without data layers: an empty
+      // catalog with the same interface.
+      if (engineKind === 'navara') {
+        catalog = createLayerCatalog([], []);
+        return scene;
+      }
       catalog = createStandaloneCatalog({
         sources,
         streetLevelProviders,

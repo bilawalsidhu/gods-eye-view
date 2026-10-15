@@ -159,3 +159,17 @@ test('data credits go through the globe engine credits', async () => {
     0,
   );
 });
+
+test('without a viewer or engine the OSM and dynamic credits skip cleanly', async () => {
+  const {
+    registerDataCredits,
+    registerDynamicCredit,
+    showOsmCredit,
+    hideOsmCredit,
+  } = await import('./dataCredits.js');
+  // The Navara mode has no viewer; a layer-side call with it must not throw.
+  assert.doesNotThrow(() => registerDataCredits(null, [{ html: 'A' }]));
+  assert.equal(showOsmCredit(null, 'owner'), false);
+  assert.equal(hideOsmCredit(null, 'owner'), false);
+  assert.equal(registerDynamicCredit(null, { key: 'k', html: 'K' }), false);
+});

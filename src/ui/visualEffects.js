@@ -52,8 +52,10 @@ export class VisualEffects {
     this.previousBloom = null;
   }
 
+  // Post-process stages are Cesium's: without a viewer (the Navara engine)
+  // there are none, and the style, bloom and sharpen controls change nothing.
   initStyles() {
-    if (this.stopped || this.stageEntries.length) return;
+    if (!this.viewer || this.stopped || this.stageEntries.length) return;
     for (const [name, shader] of Object.entries(STYLES)) {
       const uniforms = { intensity: 0.0 };
       if (shader.fragmentShader.includes('uniform float time'))
@@ -73,7 +75,7 @@ export class VisualEffects {
   }
 
   initPostProcess(sharpenIntensity = this.sharpenIntensity) {
-    if (this.stopped || this.sharpenStage) return;
+    if (!this.viewer || this.stopped || this.sharpenStage) return;
     this.bloomStage = this.viewer.scene.postProcessStages.bloom;
     const names = [
       'glowOnly',
@@ -224,6 +226,7 @@ export class VisualEffects {
     if (this.destroyed) return;
     this.stop();
     this.destroyed = true;
+    if (!this.viewer) return;
     const stages = this.viewer.scene.postProcessStages;
     for (const [, stage] of this.stageEntries) stages.remove(stage);
     if (this.sharpenStage) stages.remove(this.sharpenStage);

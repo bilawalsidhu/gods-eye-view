@@ -31,6 +31,15 @@ export class CockpitCoordinator {
       elements,
       operations,
     );
+    this._cockpitDisplayPortal = null;
+    // The cockpit flies the Cesium camera after tracked aircraft; without a
+    // viewer (the Navara engine) there is no cockpit and controlCockpit
+    // reports it unavailable.
+    this.cockpitView = viewer
+      ? this._createCockpitView(viewer, services)
+      : null;
+  }
+  _createCockpitView(viewer, services) {
     const {
       flightsLayer,
       militaryFlightsLayer,
@@ -49,8 +58,7 @@ export class CockpitCoordinator {
       regionalDistanceM,
       weatherCodeLabel,
     } = services;
-    this._cockpitDisplayPortal = null;
-    this.cockpitView = new CockpitViewController(viewer, {
+    return new CockpitViewController(viewer, {
       services: {
         flightsLayer,
         militaryFlightsLayer,
@@ -112,7 +120,7 @@ export class CockpitCoordinator {
   }
   getCockpitState() {
     const { militaryAwarenessLayer } = this.services;
-    const snapshot = militaryAwarenessLayer.getContextSnapshot?.();
+    const snapshot = militaryAwarenessLayer?.getContextSnapshot?.();
     const info = this.cockpitView?.readAircraftInfo?.();
     const active = Boolean(this.cockpitView?.active);
     const gateOpen = Boolean(this.cockpitView?.isEntryAllowed?.());

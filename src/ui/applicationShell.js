@@ -414,14 +414,18 @@ export class StyleManager extends ShellFacade {
 
     // Full-globe sun/moon ring. It is a crisp screen-space overlay above the
     // Cesium canvas but below the HUD/detection/readout z ladder.
-    this.celestialRing = new CelestialRing(viewer, {
-      enabled: false,
-      onAutoDisable: () =>
-        this.setCelestialRingEnabled(false, {
-          syncShare: !!this.shareLinkManager,
-          focus: false,
-        }),
-    });
+    // Viewer-bound modules (the ring, detection, tracked readout, cockpit)
+    // are not created without a viewer (the experimental Navara engine).
+    this.celestialRing = viewer
+      ? new CelestialRing(viewer, {
+          enabled: false,
+          onAutoDisable: () =>
+            this.setCelestialRingEnabled(false, {
+              syncShare: !!this.shareLinkManager,
+              focus: false,
+            }),
+        })
+      : null;
 
     // Share Link Manager
     this.shareLinkManager = new ShareLinkManager(engine, {
@@ -478,24 +482,26 @@ export class StyleManager extends ShellFacade {
 
     // Initialize detection overlay BEFORE style stages so the composite
     // stage is first in the post-process pipeline
-    initDetection(
-      viewer,
-      [
-        trafficLayer,
-        flightsLayer,
-        militaryFlightsLayer,
-        localAdsbLayer,
-        satellitesLayer,
-        cctvLayer,
-        bikeshareLayer,
-        transitLayer,
-        aisLiveVesselsLayer,
-      ].filter(Boolean),
-      (modeLabel) => {
-        this._updateDetectionButton(modeLabel);
-      },
-    );
-    initTrackedReadout(viewer);
+    if (viewer) {
+      initDetection(
+        viewer,
+        [
+          trafficLayer,
+          flightsLayer,
+          militaryFlightsLayer,
+          localAdsbLayer,
+          satellitesLayer,
+          cctvLayer,
+          bikeshareLayer,
+          transitLayer,
+          aisLiveVesselsLayer,
+        ].filter(Boolean),
+        (modeLabel) => {
+          this._updateDetectionButton(modeLabel);
+        },
+      );
+      initTrackedReadout(viewer);
+    }
     setDetectionStyle(this.activeStyle);
     this._applyDetectionDensityFromUi();
 

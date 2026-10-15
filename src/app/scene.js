@@ -16,7 +16,11 @@ import {
 import { describeError } from './errors.js';
 import { createSceneEngine } from './globeEngine.js';
 
-/** Construct the application globe using the caller's local configuration. */
+/**
+ * Construct the application globe using the caller's local configuration.
+ * `engineKind` 'navara' builds the experimental Navara engine instead of the
+ * Cesium viewer: the scene then has no viewer (`viewer: null`).
+ */
 export async function createApplicationScene({
   requestServices,
   googleApiKey,
@@ -26,6 +30,8 @@ export async function createApplicationScene({
   MapController = MapStackController,
   mapOptions = {},
   loaderStatus,
+  engineKind = 'cesium',
+  loadNavaraGlobe,
   signal,
   defer,
 }) {
@@ -43,6 +49,22 @@ export async function createApplicationScene({
       else window.__GOOGLE_MAPS_API_KEY__ = previousKey;
     });
   }
+  // The Navara mode's own code loads only in that mode, with Navara itself,
+  // so the Cesium-mode bundle carries none of it.
+  if (engineKind === 'navara')
+    return (await import('./navaraMode.js')).createNavaraScene({
+      operations,
+      cesiumToken,
+      credits,
+      MapController,
+      mapOptions,
+      loaderStatus,
+      loadNavaraGlobe,
+      signal,
+      defer,
+    });
+  if (engineKind !== 'cesium')
+    throw new TypeError(`Unknown globe engine: ${engineKind}`);
   loaderStatus.textContent = 'Configuring viewer...';
   // Provider attribution stays visible, including clean-view and recording.
   const creditContainer = document.createElement('div');

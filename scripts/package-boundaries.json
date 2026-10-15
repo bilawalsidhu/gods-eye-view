@@ -1760,6 +1760,18 @@
       "src/globe/cesium/render.js",
       "src/globe/cesium/surface.js",
       "src/globe/cesium/engineFromViewer.js",
+      "src/globe/navara/cameraMath.js",
+      "src/globe/navara/cameraModel.js",
+      "src/globe/navara/createNavaraEngine.js",
+      "src/globe/navara/credits.js",
+      "src/globe/navara/index.js",
+      "src/globe/navara/input.js",
+      "src/globe/navara/internals.js",
+      "src/globe/navara/maps.js",
+      "src/globe/navara/surface.js",
+      "src/globe/navara/viewOptions.js",
+      "src/app/engineChoice.js",
+      "src/app/navaraMode.js",
       "src/sources/sourceSlot.js",
       "src/app/sources.js",
       "src/app/startupChrome.js",
@@ -2525,7 +2537,11 @@
       "pbf",
       "satellite.js",
       "mapillary-js",
-      "@jtarrio/webrtlsdr"
+      "@jtarrio/webrtlsdr",
+      "@navaramap/three",
+      "@navaramap/three-default-plugin",
+      "three",
+      "postprocessing"
     ]
   },
   "application-catalog": {

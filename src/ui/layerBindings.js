@@ -77,11 +77,13 @@ export class LayerBindings {
       window,
       this._worldRequestFocusHandler,
     );
-    this._navigationOwnerChangedRemover =
-      this.viewer.trackedEntityChanged.addEventListener((entity) => {
-        if (entity && !this._disposed)
-          this._stampNavigation({ cancelPendingSelection: false });
-      });
+    // Entity tracking is the viewer's (no viewer on the Navara engine).
+    if (this.viewer)
+      this._navigationOwnerChangedRemover =
+        this.viewer.trackedEntityChanged.addEventListener((entity) => {
+          if (entity && !this._disposed)
+            this._stampNavigation({ cancelPendingSelection: false });
+        });
     // Vessel/installation focus flies without ever assigning a tracked entity,
     // so it cannot reach the listener above. It announces instead.
     this._removeNavigationAuthorityListener =

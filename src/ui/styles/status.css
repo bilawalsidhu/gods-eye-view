@@ -415,3 +415,17 @@
   visibility: visible;
   transform: translateX(-50%) translateY(0);
 }
+
+/* The experimental Navara engine (?engine=navara) shows its attributions in
+   its own card, fixed bottom-right over the location tray. Keep it on the
+   left, above the HUD's coordinate lines and below the left panel rail. */
+body .navara-attr-dock {
+  right: auto;
+  left: 16px;
+  bottom: 176px;
+  align-items: flex-start;
+}
+body .navara-attr-card {
+  max-height: 290px;
+  overflow: auto;
+}
