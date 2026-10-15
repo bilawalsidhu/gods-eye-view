@@ -659,3 +659,17 @@ test('FIT/FILL stays hidden for a second Street View panorama after a close', as
   await host.open('google', 'g-2');
   assert.equal(state.street.renderModes, false);
 });
+
+test('an adapter that can frame but says this image has no frame offers no FIT / FILL', async () => {
+  const adapter = fakeAdapter();
+  let frameable = false;
+  adapter.setRenderMode = () => {};
+  adapter.supportsRenderModes = () => frameable;
+  const { state, host } = harness(adapter);
+  await host.open('mapillary', 'pano-1');
+  assert.equal(state.street.imageId, 'pano-1', 'the pose arrived');
+  assert.equal(state.street.renderModes, false);
+  frameable = true;
+  await host.open('mapillary', 'flat-1');
+  assert.equal(state.street.renderModes, true, 'a flat image can be framed');
+});

@@ -147,6 +147,8 @@ test('Codex login resolves an installed executable before PATH and starts browse
   const checked = [];
   // The resolver joins the home directory with the platform's own separator, so
   // the fixture recognises the installed location the same way it builds it.
+  // Built with path.join so the stub matches the resolver on Windows too,
+  // where the separators are backslashes.
   const installed = path.join('/home/fixture', '.local', 'bin', 'codex');
   assert.equal(
     resolveCodexExecutable({
