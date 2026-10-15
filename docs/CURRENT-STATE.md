@@ -6,7 +6,6 @@ provider returns an uncached `204 No Content` for `GET /api/google/tiles-token`
 real token providers and before the unknown-API handler, so existing Google
 browser keys, provider-issued tokens, and unrelated API routes remain unchanged.
 
-
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing
@@ -1101,6 +1100,9 @@ collapse can still be undone.
 
 ## Surface keyboard lifecycle
 
+Surface Tab cycling excludes controls with a negative tabindex, native disabled
+state or inert ancestry; ordinary visible enabled controls retain their order.
+
 `ui/surfaces` owns the capture-phase keyboard listener, Tab cycling and return
 focus shared by the first-run launcher and Provider Settings. Each caller
 activates it while open and deactivates it on dismissal; destruction releases
@@ -1184,7 +1186,9 @@ stalled downloads are cancelled. Development and preview use the same handler.
 Overpass query validation, geometry simplification, disk caching and upstream
 transport now have separate modules; military-installation search reuses that
 transport. Regional briefing combines separate place, news and weather sources,
-while weather effects uses only the weather source. Existing process-scoped
+while weather effects uses only the weather source.
+GDELT compact dates that do not name a real calendar instant keep the article
+with an unknown publication time. Existing process-scoped
 caches, rate limits, stale fallbacks and route ordering are preserved.
 
 Local voice has separate HUD-summary, debug-log and Realtime-token handlers,
@@ -1213,13 +1217,21 @@ a browser key. Preview is for local build verification, not a production server.
 
 ## CCTV and radio provider modules
 
+CCTV direction text resolves travel tokens first, then intercardinals, then
+bare cardinals when enabled. Only conflicting headings within the highest
+matching tier remain unknown; street quadrants and lower-tier words do not
+cancel an explicit travel heading.
+
 CCTV catalog acquisition, source normalization and frame/media delivery now live
 in separate modules. Each CCTV factory owns its catalog and health state; its
 `sourceRoot` option resolves relative source files against the application root.
 Radio Browser station normalization, restricted outbound transport and directory
-caching are separate modules. Node-only package entries expose both provider
-factories. Routes, payloads, fallback behavior and existing dev/preview hook
-registration are preserved; browser rendering is unchanged.
+caching are separate modules. The pinned transport gives a mirror's 204, 205 or
+304 reply an empty body and fails any reply outside 200–599 without throwing
+outside its promise, so an unusual mirror status cannot crash the server.
+Node-only package entries expose both provider factories. Routes, payloads,
+fallback behavior and existing dev/preview hook registration are preserved;
+browser rendering is unchanged.
 
 ## Terrain, traffic, fire and bike-share provider modules
 
@@ -4442,7 +4454,24 @@ Providers normalize coordinates, canonical name, label, place types and optional
 bounds. Camera framing, nearby landmark recovery and footprint selection remain
 in their consumers, including the Capitol identity/containment safeguards.
 Radio keeps localized country names in labels rather than station filters.
-Reverse geocoding and nearby/text-search endpoints retain their existing behavior.
+Nearby/text-search endpoints retain their existing behavior.
+
+**Google geocoding is a server route, not a browser call** (#363). Forward and
+reverse lookups go to `/api/google/geocode` and `/api/google/reverse-geocode`,
+which carry `GOOGLE_MAPS_SERVER_API_KEY` (falling back to `GOOGLE_MAPS_API_KEY`)
+and share the Places routes' opt-in `GEV_RATELIMIT_GOOGLE_PER_MIN` throttle.
+Google's Geocoding **web service** refuses referrer-restricted keys, so the
+previous browser call forced the bundled browser key — visible in devtools by
+design — to be left unrestricted; it now needs only the Map Tiles API and the
+Maps JavaScript API (Street View). Both routes answer in Google's own
+`status`/`results` shape rather than the Places routes' `places: []` contract,
+because the browser adapters normalize that shape directly. The browser key still gates the provider client-side, so a keyless
+session spends no request to learn it has no Google: the route's own keyless
+answer reads as an unanswered provider, which would stop the chain caching the
+negative Photon or Nominatim then produces. Its query is capped at 200
+characters, its reverse coordinates are validated against WGS84 bounds before
+the request is paid for, and a malformed viewport bias is dropped rather than
+refused, since a bias only ranks results.
 
 Only valid answers and definitive misses enter bounded caches; malformed replies,
 HTTP refusals and outages remain retryable. Searches share a 12-second total
@@ -4538,6 +4567,8 @@ are omitted rather than framing the wrong part of the globe.
 - **Validation.** `node scripts/qa-geo-import.mjs` covers all four formats and real painted show/hide. Run `node scripts/qa-geo-import-regressions.mjs` against both dev and preview for XYZ/track heights, failure recovery, namespace/BOM support, portrait framing and panel drops. `node scripts/qa-geo-import-large.mjs [--file /absolute/path/sample.kml] [--expect-local-pins]` checks a 27.6 MB repeated-style file, native style/image equivalence, large-file painted output and frame times. It records the WebGL renderer; software-rendered runs do not establish GPU performance. Unit tests live beside the data/controller/framing modules.
 
 ### Recent Imagery (September 2026)
+
+CMR pagination counts raw rows when checking page completion and the record budget. A catalog is truncated when upstream hits exceed the rows examined or the record cap drops valid granules from the last page; discarded malformed rows do not imply unseen imagery.
 
 Programmatic boxes passed to the exported `setBox` and `searchHls` operations
 reject missing, blank or boolean edges instead of interpreting them as zero

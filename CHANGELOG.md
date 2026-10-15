@@ -1,8 +1,9 @@
 # Changelog
 
-- Keyless standalone startup answers an unavailable Google tile-token endpoint
-  with uncached 204 instead of a browser-visible 404. Existing providers take
-  precedence, and unrelated API routes behave as before.
+- A Radio Browser mirror answering 204, 205 or 304, or a status outside
+  200–599, no longer crashes the local dev/preview server. Null-body statuses
+  get an empty body; anything else that cannot become a response fails that
+  mirror so the next one is tried.
 
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
@@ -40,7 +41,9 @@
 
 - Director timeline seeks cross the dateline along the short longitude arc.
 
-- Reject impossible FIRMS acquisition calendar days in the CSV parser before trailing-24-hour filtering.
+- Recent Imagery continues past malformed records in full catalog pages, respects the requested record limit, and reports results as truncated when that limit drops valid records.
+
+- Regional articles retain unknown publication times when compact source dates do not identify a real calendar instant.
 
 - Treat explicitly current, complete empty vessel coverage as a successful update,
   clearing obsolete contacts while retaining stale or incomplete snapshots.
@@ -255,6 +258,20 @@
   browsers only expose in secure contexts, so starting a live feed threw
   before playback. The id now falls back to a v4 UUID built from
   `crypto.getRandomValues`, which the server's lease check accepts.
+
+- Move Google geocoding behind the local server. Forward and reverse lookups now
+  go through `/api/google/geocode` and `/api/google/reverse-geocode` with the
+  server key, joining Places and Street View. Google's Geocoding web service
+  refuses referrer-restricted keys, so the previous browser call left
+  `SECURITY.md`'s advice and working search mutually exclusive: the bundled
+  browser key had to be unrestricted for search to work at all. That key now
+  needs only the Map Tiles API and the Maps JavaScript API (Street View). Keyless sessions and the Photon/Nominatim
+  fallback order are unchanged.
+
+- Keyless standalone startup answers an unavailable Google tile-token endpoint
+  with uncached 204 instead of a browser-visible 404. Existing providers take
+  precedence, and unrelated API routes behave as before.
+
 
 ## [0.2.1] — 2026-10-02 — God's Eye View through Your Agent (with security fixes and other features)
 
