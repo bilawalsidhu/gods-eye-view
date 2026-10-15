@@ -132,6 +132,22 @@ try {
       });
       return;
     }
+    // Layout and lifecycle checks need persistent contacts, not live traffic
+    // that can leave coverage or land halfway through the browser journey.
+    if (url.origin === new URL(appUrl).origin && url.pathname === '/api/flights') {
+      const now = Math.floor(Date.now() / 1000);
+      request.respond({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ time: now, states: [0, 1, 2].map((index) => [
+          ['aaa051', 'aaa052', 'aaa053'][index], 'QA' + (51 + index), 'Synthetic',
+          now, now, -97.7431 + index * 0.15, 30.2672 + index * 0.1,
+          9000 + index * 500, false, 230, 90, 0, null,
+          9000 + index * 500, null, false, 0,
+        ]) }),
+      });
+      return;
+    }
     if (url.origin === new URL(appUrl).origin && url.pathname === '/api/flights/track') {
       request.respond({
         status: 200,
@@ -666,7 +682,7 @@ try {
       tracked: Boolean(airborne && layer.trackById?.(airborne.id)),
     };
   });
-  check('real airborne flight is tracked before Contacts activation', tracked.tracked, JSON.stringify(tracked));
+  check('fixture airborne flight is tracked before Contacts activation', tracked.tracked, JSON.stringify(tracked));
   await page.waitForFunction(
     () => Boolean(window.__godsEyeView.viewer.trackedEntity?.position),
     { timeout: 10_000 },
