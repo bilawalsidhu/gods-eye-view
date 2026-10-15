@@ -24,7 +24,12 @@ test('Navara internals are pinned: package.json and internals.js name the same e
 const PRIVATE_ACCESS = /\.\s*_[A-Za-z]|\[\s*['"`]_[A-Za-z]/;
 
 test('the private-member pattern catches dotted and bracketed access', () => {
-  for (const code of ['view._isIdle', 'view?._scenes', "view['_isIdle']", 'v[ "_x" ]'])
+  for (const code of [
+    'view._isIdle',
+    'view?._scenes',
+    "view['_isIdle']",
+    'v[ "_x" ]',
+  ])
     assert.ok(PRIVATE_ACCESS.test(code), code);
   for (const code of ['view.isIdle', 'a_b.c', "map['key']"])
     assert.ok(!PRIVATE_ACCESS.test(code), code);

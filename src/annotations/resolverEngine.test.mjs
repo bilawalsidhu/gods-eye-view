@@ -33,7 +33,10 @@ test('viewportBias reads the engine view rectangle', () => {
     east: geo.math.toRadians(-97.5),
     north: geo.math.toRadians(30.5),
   });
-  assert.equal(resolver.viewportBias(engine), '30.0000,-98.0000|30.5000,-97.5000');
+  assert.equal(
+    resolver.viewportBias(engine),
+    '30.0000,-98.0000|30.5000,-97.5000',
+  );
   engine.fake.script('viewRectangle', undefined);
   assert.equal(resolver.viewportBias(engine), null);
 });
@@ -43,7 +46,9 @@ test('pickWorldFromScreen tries the depth pick, then the ellipsoid, then the glo
   const depth = geo.cartesian3.fromDegrees(-97.7, 30.3, 210);
   engine.fake.script('pickPosition', depth);
   const picked = resolver.pickWorldFromScreen(engine, 0.5, 0.5);
-  assert.ok(Math.abs(picked.lat - 30.3) < 1e-9 && Math.abs(picked.height - 210) < 1e-6);
+  assert.ok(
+    Math.abs(picked.lat - 30.3) < 1e-9 && Math.abs(picked.height - 210) < 1e-6,
+  );
   const [screen] = engine.fake.callsOf('picker.pickPosition')[0].args;
   assert.deepEqual([screen.x, screen.y], [512, 384]);
 
@@ -53,7 +58,10 @@ test('pickWorldFromScreen tries the depth pick, then the ellipsoid, then the glo
   assert.ok(Math.abs(ellipsoid.height) < 1e-3);
 
   engine.fake.script('pickEllipsoid', undefined);
-  engine.fake.script('pickGlobe', geo.cartesian3.fromDegrees(-97.71, 30.25, 300));
+  engine.fake.script(
+    'pickGlobe',
+    geo.cartesian3.fromDegrees(-97.71, 30.25, 300),
+  );
   const globe = resolver.pickWorldFromScreen(engine, 0.5, 0.5);
   assert.ok(Math.abs(globe.height - 300) < 1e-6);
   engine.fake.script('pickGlobe', undefined);
@@ -71,7 +79,13 @@ test('near-view recovery centres on the engine camera when nothing is picked', a
       return [];
     },
   };
-  await resolver.placesNearViewRecovery(engine, 'cafe', null, undefined, placeSearch);
+  await resolver.placesNearViewRecovery(
+    engine,
+    'cafe',
+    null,
+    undefined,
+    placeSearch,
+  );
   assert.equal(centres.length, 1);
   assert.ok(Math.abs(centres[0].latitude - 48.85) < 1e-9);
   assert.ok(Math.abs(centres[0].longitude - 2.35) < 1e-9);

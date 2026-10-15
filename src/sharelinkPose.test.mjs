@@ -15,7 +15,10 @@ function linkFor(pose) {
   const params = new URLSearchParams(manager._buildHashParams().toString());
   manager.destroy();
   return Object.fromEntries(
-    ['lat', 'lon', 'alt', 'heading', 'pitch', 'roll'].map((k) => [k, params.get(k)]),
+    ['lat', 'lon', 'alt', 'heading', 'pitch', 'roll'].map((k) => [
+      k,
+      params.get(k),
+    ]),
   );
 }
 
@@ -43,7 +46,10 @@ test('a straight-down view writes roll 0; other angles round as before', () => {
   assert.equal(down.roll, '0');
   assert.equal(down.pitch, '-90');
   const oblique = linkFor(at(45.4, -29.6, 2));
-  assert.deepEqual([oblique.heading, oblique.pitch, oblique.roll], ['45', '-30', '2']);
+  assert.deepEqual(
+    [oblique.heading, oblique.pitch, oblique.roll],
+    ['45', '-30', '2'],
+  );
   assert.equal(linkFor(at(359.7, -30)).heading, '360');
 });
 

@@ -107,7 +107,10 @@ test('modifiers: a listener fires only for its own key, an unmodified one only w
 test('on validates its arguments and returns an idempotent remover', () => {
   const { canvas, input } = setup();
   assert.throws(() => input.on('wheel', () => {}), TypeError);
-  assert.throws(() => input.on('click', () => {}, { modifier: 'meta' }), TypeError);
+  assert.throws(
+    () => input.on('click', () => {}, { modifier: 'meta' }),
+    TypeError,
+  );
   let count = 0;
   const off = input.on('down', () => count++);
   off();

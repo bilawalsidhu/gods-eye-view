@@ -18,14 +18,31 @@ function fakeView() {
     parentElement: { id: 'container' },
   });
   const position = cartesian3.fromDegrees(0, 0, 1e7);
-  const { direction, up } = orientationVectors(position, 0, -math.PI_OVER_TWO, 0);
+  const { direction, up } = orientationVectors(
+    position,
+    0,
+    -math.PI_OVER_TWO,
+    0,
+  );
   // three's camera.matrixWorld: columns right, up, back (−direction), position.
   const right = cartesian3.cross(direction, up, cartesian3.create());
   const elements = [
-    right.x, right.y, right.z, 0,
-    up.x, up.y, up.z, 0,
-    -direction.x, -direction.y, -direction.z, 0,
-    position.x, position.y, position.z, 1,
+    right.x,
+    right.y,
+    right.z,
+    0,
+    up.x,
+    up.y,
+    up.z,
+    0,
+    -direction.x,
+    -direction.y,
+    -direction.z,
+    0,
+    position.x,
+    position.y,
+    position.z,
+    1,
   ];
   const view = {
     canvas,
@@ -58,7 +75,9 @@ function fakeView() {
       view.calls.push(['setCamera', pose]);
     },
     flyTo(pose, options) {
-      return new Promise((resolve) => view.flights.push({ pose, options, resolve }));
+      return new Promise((resolve) =>
+        view.flights.push({ pose, options, resolve }),
+      );
     },
     forceUpdate() {
       view.calls.push(['forceUpdate']);
@@ -135,7 +154,12 @@ test("the camera starts from Navara's drawn camera and pushes poses with setCame
 
 test("Navara's fov follows Cesium's vertical fov, also after a resize", () => {
   const { view, engine } = setup();
-  near(view.camera.fovs.at(-1), math.toDegrees(cesiumFovy(1280, 800)), 1e-12, 'fov');
+  near(
+    view.camera.fovs.at(-1),
+    math.toDegrees(cesiumFovy(1280, 800)),
+    1e-12,
+    'fov',
+  );
   view.canvas.clientWidth = 600;
   view.canvas.clientHeight = 900;
   view.emit('resize', 600, 900);
@@ -187,7 +211,10 @@ test('the projector agrees with the camera', () => {
   const window = engine.projector.worldToWindow(ahead);
   near(window.x, 640, 1e-6, 'x');
   near(window.y, 400, 1e-6, 'y');
-  assert.equal(engine.projector.horizonVisible(cartesian3.fromDegrees(0, 0)), true);
+  assert.equal(
+    engine.projector.horizonVisible(cartesian3.fromDegrees(0, 0)),
+    true,
+  );
 });
 
 test('destroy removes its Navara listeners, keeps the view and is idempotent', () => {
@@ -224,7 +251,10 @@ test('pickGlobe meets the terrain along the pick ray, or the ellipsoid', () => {
   const place = geo.cartographic.fromCartesian(raised);
   near(place.height, 2000, 0.5, 'terrain height (m)');
   near(math.toDegrees(place.longitude), 0, 1e-6, 'longitude');
-  assert.equal(engine.picker.pickGlobe(cartesian2.create(640, -1e7)), undefined);
+  assert.equal(
+    engine.picker.pickGlobe(cartesian2.create(640, -1e7)),
+    undefined,
+  );
 });
 
 test('a user gesture cancels a flight without raising camera.commanded', () => {

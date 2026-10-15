@@ -12,7 +12,9 @@ function fakeAttribution() {
     },
     add(items) {
       for (const item of items)
-        if (!shown.some((entry) => entry.attributionHtml === item.attributionHtml))
+        if (
+          !shown.some((entry) => entry.attributionHtml === item.attributionHtml)
+        )
           shown.push(item);
     },
     remove(items) {
@@ -31,7 +33,9 @@ test('addStatic shows HTML in the attribution and the remover is idempotent', ()
   const attribution = fakeAttribution();
   const { credits } = createNavaraCredits({ attribution });
   const remove = credits.addStatic('<a href="x">X</a>', { onScreen: true });
-  assert.deepEqual(attribution.shown, [{ attributionHtml: '<a href="x">X</a>' }]);
+  assert.deepEqual(attribution.shown, [
+    { attributionHtml: '<a href="x">X</a>' },
+  ]);
   remove();
   remove();
   assert.deepEqual(attribution.shown, []);
