@@ -134,12 +134,45 @@ for (const [name, files, pattern] of [
   [
     'Cesium globe engine imports Navara',
     { 'src/globe/cesium/engine.js': "import '@navaramap/three';" },
-    /Cesium globe engine imports @navaramap\/three/,
+    /Cesium globe engine reaches @navaramap\/three/,
   ],
   [
     'Navara globe engine imports Cesium',
     { 'src/globe/navara/engine.js': "import { Cartesian3 } from 'cesium';" },
-    /Navara globe engine imports cesium/,
+    /Navara globe engine reaches cesium/,
+  ],
+  [
+    'Navara globe engine reaches Cesium through a helper',
+    {
+      'src/globe/navara/engine.js': "import '../../maps/helper.js';",
+      'src/maps/helper.js': "export * from 'cesium';",
+    },
+    /src\/maps\/helper\.js: Navara globe engine reaches cesium/,
+  ],
+  [
+    'Navara globe engine imports the Cesium engine',
+    {
+      'src/globe/navara/engine.js': "import '../cesium/camera.js';",
+      'src/globe/cesium/camera.js': '',
+    },
+    /src\/globe\/navara\/engine\.js: Navara globe engine reaches src\/globe\/cesium\/camera\.js/,
+  ],
+  [
+    'Cesium globe engine reaches three through a helper',
+    {
+      'src/globe/cesium/engine.js': "import '../../ui/helper.js';",
+      'src/ui/helper.js': "import 'three/addons/controls.js';",
+    },
+    /src\/ui\/helper\.js: Cesium globe engine reaches three\/addons\/controls\.js/,
+  ],
+  [
+    'Cesium globe engine reaches the Navara engine through a helper',
+    {
+      'src/globe/cesium/engine.js': "import '../shared.js';",
+      'src/globe/shared.js': "import('./navara/engine.js');",
+      'src/globe/navara/engine.js': '',
+    },
+    /Cesium globe engine reaches src\/globe\/navara\/engine\.js/,
   ],
   [
     'browser imports Node without prefix',

@@ -3,8 +3,10 @@ import test from 'node:test';
 import {
   ENGINE_KINDS,
   INPUT_TYPES,
+  MODIFIERS,
   assertGlobeEngine,
   createEngineEvent,
+  isEngineEvent,
 } from './contract.js';
 import { createFakeEngine } from './testing/fakeEngine.js';
 import {
@@ -44,7 +46,7 @@ test('engine event passes every argument and rejects non-functions', () => {
   assert.throws(() => event.addEventListener(null), TypeError);
 });
 
-test('removing listeners during dispatch is safe, as with Cesium.Event', () => {
+test('a listener removed during dispatch is not called in that dispatch', () => {
   const event = createEngineEvent();
   const seen = [];
   let removeLater;
@@ -76,23 +78,60 @@ test('listeners added during dispatch run from the next raise', () => {
   assert.deepEqual(seen, ['first', 'first', 'added']);
 });
 
-test('a listener can be added again after removal, and each handle removes its own entry', () => {
+test('adding the same listener twice registers it once; every remover handle is idempotent', () => {
   const event = createEngineEvent();
   let count = 0;
   const listener = () => count++;
   const first = event.addEventListener(listener);
-  first();
-  first();
   const second = event.addEventListener(listener);
-  const third = event.addEventListener(listener);
+  assert.equal(event.numberOfListeners, 1);
   event.raiseEvent();
-  assert.equal(count, 2);
+  assert.equal(count, 1);
   second();
+  second();
+  first();
   event.raiseEvent();
-  assert.equal(count, 3);
-  third();
+  assert.equal(count, 1);
+  assert.equal(event.numberOfListeners, 0);
+  const again = event.addEventListener(listener);
+  first();
   event.raiseEvent();
-  assert.equal(count, 3);
+  assert.equal(count, 2, 'a stale handle removed a newer registration');
+  again();
+  assert.equal(event.numberOfListeners, 0);
+});
+
+test('removing and re-adding a listener during dispatch leaves it registered', () => {
+  const event = createEngineEvent();
+  const seen = [];
+  const later = () => seen.push('later');
+  event.addEventListener(() => {
+    seen.push('first');
+    if (seen.length > 1) return;
+    event.removeEventListener(later);
+    event.addEventListener(later);
+  });
+  event.addEventListener(later);
+  event.raiseEvent();
+  assert.equal(event.numberOfListeners, 2);
+  event.raiseEvent();
+  assert.deepEqual(seen, ['first', 'first', 'later']);
+});
+
+test('engine events are branded so a raw Cesium.Event fails the shape check', () => {
+  assert.equal(isEngineEvent(createEngineEvent()), true);
+  const raw = { addEventListener() {}, removeEventListener() {} };
+  assert.equal(isEngineEvent(raw), false);
+  const engine = createFakeEngine();
+  assert.throws(
+    () =>
+      assertGlobeEngine({
+        ...engine,
+        frames: { ...engine.frames, preRender: raw },
+      }),
+    /frames\.preRender/,
+  );
+  assert.deepEqual(MODIFIERS, ['ctrl', 'shift', 'alt']);
 });
 
 test('a throwing listener does not leave the event stuck in dispatch', () => {
@@ -167,4 +206,33 @@ test('the contract suite reports failures of a misbehaving engine', async () => 
   assert.ok(failed.some((result) => /worldToWindow/.test(result.name)));
   assert.ok(failed.every((result) => result.error instanceof Error));
   assert.ok(results.some((result) => result.ok));
+});
+
+test('the contract suite rejects a raw Cesium-style event that double-registers', async () => {
+  const engine = createFakeEngine();
+  // Cesium.Event pushes a listener again when it is added twice.
+  const listeners = [];
+  const raw = {
+    addEventListener(listener) {
+      listeners.push(listener);
+      return () => raw.removeEventListener(listener);
+    },
+    removeEventListener(listener) {
+      const index = listeners.indexOf(listener);
+      if (index >= 0) listeners.splice(index, 1);
+      return index >= 0;
+    },
+  };
+  engine.frames.postRender.addEventListener((time) => {
+    for (const listener of [...listeners]) listener(time);
+  });
+  const wrapped = { ...engine, frames: { ...engine.frames, postRender: raw } };
+  const results = await runContractSuite(wrapped, {
+    waitFrames: async (count) => engine.fake.frames(count),
+  });
+  const failed = results.filter((result) => !result.ok).map((r) => r.name);
+  assert.ok(
+    failed.some((name) => /twice/.test(name)),
+    failed.join('\n'),
+  );
 });

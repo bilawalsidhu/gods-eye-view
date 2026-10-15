@@ -67,8 +67,10 @@ platform names such as `document` and `window` in these modules; it is an
 architectural check, not a JavaScript sandbox. The globe contract
 (`src/globe/*.js` and `src/globe/testing/**`) cannot reach `cesium`,
 `@cesium/*`, `three`, `postprocessing` or `@navaramap/*`, directly or through
-helpers, nor import an engine implementation; `src/globe/cesium/**` imports no
-Navara/three package and `src/globe/navara/**` no Cesium package. Common voice controls cannot depend on a
+helpers, nor import an engine implementation; the `src/globe/cesium/**` graph
+reaches no Navara/three package or `src/globe/navara/**` module, and the
+`src/globe/navara/**` graph no Cesium package or `src/globe/cesium/**` module,
+through helpers too. Common voice controls cannot depend on a
 Realtime protocol implementation. Negative fixtures cover indirect helpers,
 self-package imports, symlinks and unreachable files.
 

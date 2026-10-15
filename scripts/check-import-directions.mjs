@@ -257,15 +257,28 @@ export function checkImportDirections(root) {
     }
   }
   for (const file of files.filter(globeContract)) globe(file);
-  for (const file of files.filter(globeEngine)) {
-    const navara = file.startsWith('src/globe/navara/');
-    for (const specifier of load(file)?.external || []) {
-      if ((navara ? cesiumPackage : navaraPackage).test(specifier))
-        report(
-          file,
-          `${navara ? 'Navara' : 'Cesium'} globe engine imports ${specifier}`,
-        );
-    }
+  // Each engine graph stays on its own engine, through helpers too.
+  for (const start of files.filter(globeEngine)) {
+    const navara = start.startsWith('src/globe/navara/');
+    const label = navara ? 'Navara globe engine' : 'Cesium globe engine';
+    const foreignPackage = navara ? cesiumPackage : navaraPackage;
+    const foreignEngine = navara ? 'src/globe/cesium/' : 'src/globe/navara/';
+    const seen = new Set();
+    const visit = (file) => {
+      if (seen.has(file) || !code.test(file)) return;
+      seen.add(file);
+      const info = load(file);
+      if (!info) return;
+      for (const specifier of info.external)
+        if (foreignPackage.test(specifier))
+          report(file, `${label} reaches ${specifier}`);
+      for (const to of info.edges) {
+        if (to.startsWith(foreignEngine))
+          report(file, `${label} reaches ${to}`);
+        else visit(to);
+      }
+    };
+    visit(start);
   }
   // Common voice controls may use their DOM view, but never a protocol implementation.
   const voiceSeen = new Set();

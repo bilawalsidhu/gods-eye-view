@@ -67,7 +67,7 @@ test('fake flights advance with frames and finish or cancel exactly once', () =>
     complete: () => outcomes.push('complete'),
     cancel: () => outcomes.push('cancel'),
   });
-  assert.equal(engine.fake.flying(), true);
+  assert.equal(engine.camera.flightActive(), true);
   engine.fake.frames(30, 16);
   assert.deepEqual(outcomes, []);
   engine.fake.frames(40, 16);
@@ -87,9 +87,9 @@ test('fake flights advance with frames and finish or cancel exactly once', () =>
     duration: 0,
     complete: () => outcomes.push('second'),
   });
-  assert.deepEqual(outcomes, ['complete', 'cancel']);
-  engine.fake.frame();
+  // Duration 0 lands and completes before flyTo returns, as in Cesium.
   assert.deepEqual(outcomes, ['complete', 'cancel', 'second']);
+  assert.equal(engine.camera.flightActive(), false);
 });
 
 test('fake events can be emitted by hand and frames fire in order', () => {
@@ -183,4 +183,98 @@ test('fake credits, maps and destroy keep inspectable state', () => {
   assert.equal(engine.maps.photorealActive(), false);
   engine.destroy();
   assert.equal(engine.fake.destroyed, true);
+});
+
+test('the fake camera follows Cesium conventions for roll, angle ranges and zoom', () => {
+  const engine = createFakeEngine();
+  const destination = geo.cartesian3.fromDegrees(0, 0, 1000);
+  engine.camera.setView({
+    destination,
+    orientation: { heading: 0, pitch: 0, roll: 0.3 },
+  });
+  const pose = engine.camera.pose();
+  // Facing north at (0, 0), east is +Y: positive roll tilts up toward east.
+  close(pose.up.y, Math.sin(0.3), 1e-9, 'up east component');
+  close(pose.roll, 0.3, 1e-9, 'roll');
+  engine.camera.setView({
+    destination,
+    orientation: { heading: -0.5, pitch: 0, roll: -0.2 },
+  });
+  const wrapped = engine.camera.pose();
+  close(wrapped.heading, 2 * Math.PI - 0.5, 1e-9, 'heading in [0, 2π)');
+  close(wrapped.roll, 2 * Math.PI - 0.2, 1e-9, 'roll in [0, 2π)');
+  engine.camera.setView({
+    destination,
+    orientation: { heading: 0.4, pitch: -Math.PI / 2, roll: 0.3 },
+  });
+  assert.equal(engine.camera.pose().roll, 0);
+  engine.camera.setView({
+    destination: geo.cartesian3.fromDegrees(0, 0, 5000),
+  });
+  const before = engine.camera.pose();
+  engine.camera.zoomIn(1000);
+  const after = engine.camera.pose();
+  close(
+    geo.cartesian3.distance(before.position, after.position),
+    1000,
+    1e-6,
+    'zoomIn',
+  );
+  engine.camera.zoomOut(400);
+  close(engine.camera.pose().cartographic.height, 5000 - 600, 1e-3, 'zoomOut');
+});
+
+test('fake lookAtTransform keeps the transform until release', () => {
+  const engine = createFakeEngine();
+  const target = geo.cartesian3.fromDegrees(10, 10, 0);
+  const frame = geo.transforms.eastNorthUpToFixedFrame(target);
+  engine.camera.lookAtTransform(frame, {
+    heading: 0,
+    pitch: -0.5,
+    range: 1000,
+  });
+  assert.deepEqual(engine.camera.transform(), [...frame]);
+  engine.camera.transform()[0] = 42;
+  assert.notEqual(engine.camera.transform()[0], 42);
+  engine.camera.release();
+  assert.deepEqual(engine.camera.transform(), [...geo.matrix4.IDENTITY]);
+  engine.camera.lookAt(target, { heading: 0, pitch: -0.5, range: 1000 });
+  assert.deepEqual(engine.camera.transform(), [...frame]);
+  assert.deepEqual(engine.fake.lookAtTarget(), target);
+});
+
+test('fake input honours modifiers like Cesium: unmodified listeners skip modified input', () => {
+  const engine = createFakeEngine();
+  const seen = [];
+  engine.input.on('click', () => seen.push('plain'));
+  engine.input.on('click', () => seen.push('ctrl'), { modifier: 'ctrl' });
+  engine.fake.input('click', { position: geo.cartesian2.create(1, 1) });
+  engine.fake.input('click', { position: geo.cartesian2.create(1, 1) }, 'ctrl');
+  engine.fake.input(
+    'click',
+    { position: geo.cartesian2.create(1, 1) },
+    'shift',
+  );
+  assert.deepEqual(seen, ['plain', 'ctrl']);
+  assert.throws(
+    () => engine.input.on('click', () => {}, { modifier: 'meta' }),
+    /Unknown input modifier/,
+  );
+});
+
+test('fake terrain height and clamp results default to the bare ellipsoid and can be scripted', () => {
+  const engine = createFakeEngine();
+  const place = geo.cartographic.fromDegrees(1, 2, 0);
+  assert.equal(engine.surface.terrainHeight(place), 0);
+  assert.equal(
+    engine.surface.clampToHeight(geo.cartesian3.fromDegrees(1, 2, 50)),
+    undefined,
+  );
+  engine.fake.script('terrainHeight', 12);
+  engine.fake.script('clampToHeight', (position) => position);
+  assert.equal(engine.surface.terrainHeight(place), 12);
+  const position = geo.cartesian3.fromDegrees(1, 2, 50);
+  assert.equal(engine.surface.clampToHeight(position), position);
+  assert.equal(engine.surface.terrainHeightSupported, true);
+  assert.equal(engine.surface.clampToHeightSupported, true);
 });

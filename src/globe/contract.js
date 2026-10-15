@@ -1,30 +1,44 @@
 // The engine-neutral globe contract. The application shell talks to a globe
 // engine (Cesium today, Navara next) only through these small capability
-// objects. Positions are src/geo values, angles are radians and screen
-// coordinates are CSS pixels from the canvas's top-left corner. This module
-// and src/globe/testing/** never import cesium, three or @navaramap/*; see
-// docs/CODE-BOUNDARIES.md.
+// objects. Positions are src/geo values in Earth-fixed metres, angles are
+// radians and screen coordinates are CSS pixels from the canvas's top-left
+// corner. This module and src/globe/testing/** never import cesium, three or
+// @navaramap/*; see docs/CODE-BOUNDARIES.md.
 
 /**
  * @typedef {{ x: number, y: number }} Cartesian2
  * @typedef {{ x: number, y: number, z: number }} Cartesian3
  * @typedef {{ longitude: number, latitude: number, height: number }} Cartographic
+ * @typedef {number[]} Matrix4 16 numbers, column-major (m[column * 4 + row]).
  * @typedef {(...args: any[]) => void} Listener
  *
  * @typedef {object} EngineEvent
+ *   The contract's own event semantics (engines expose createEngineEvent()
+ *   instances, never a raw Cesium.Event):
+ *   - listeners run in registration order;
+ *   - adding a function that is already registered is a no-op (it stays
+ *     registered once and fires once), so re-initialisation cannot double-fire;
+ *   - a listener removed during dispatch is not called in that dispatch;
+ *   - a listener added during dispatch runs from the next dispatch, and one
+ *     removed then re-added during dispatch stays registered;
+ *   - every remover handle is idempotent and only removes the registration it
+ *     was returned for.
  * @property {(listener: Listener) => () => void} addEventListener
- *   Returns a function that removes this registration (idempotent).
  * @property {(listener: Listener) => boolean} removeEventListener
  *
  * @typedef {object} CameraPose
- * @property {Cartesian3} position
+ *   Angles follow Cesium's camera: heading in [0, 2π) clockwise from north,
+ *   pitch in [−π/2, π/2] (negative looks down), roll in [0, 2π) with positive
+ *   roll tilting `up` toward the camera's right; roll is 0 and heading follows
+ *   `up` when looking (nearly, within 1e-3) straight up or down.
+ * @property {Cartesian3} position World position (Cesium's positionWC).
  * @property {Cartographic} cartographic
  * @property {number} heading
  * @property {number} pitch
  * @property {number} roll
  * @property {Cartesian3} direction
  * @property {Cartesian3} up
- * @property {Cartesian3} right
+ * @property {Cartesian3} right direction × up
  * @property {number} fovy Vertical field of view.
  *
  * @typedef {{ heading: number, pitch: number, roll: number }
@@ -32,21 +46,49 @@
  *
  * @typedef {object} FlightOptions
  * @property {Cartesian3} destination
- * @property {Orientation} [orientation]
- * @property {number} [duration] Seconds; 0 lands on the next frame.
+ * @property {Orientation} [orientation] Missing angles keep the current ones.
+ * @property {number} [duration] Seconds. 0 (or less) sets the view and calls
+ *   `complete` synchronously, before flyTo returns, as Cesium does.
  * @property {'cubicInOut'|'sinusoidalInOut'|'linear'} [easing]
  * @property {() => void} [complete]
  * @property {() => void} [cancel] Called by cancelFlight or a newer flight.
  *
+ * @typedef {{ heading: number, pitch: number, range: number }} HeadingPitchRange
+ *   Offset from a target in its local east-north-up frame; the camera looks at
+ *   the target along heading/pitch from `range` metres away.
+ *
+ * @typedef {object} SphereFlightOptions
+ *   Defaults are Cesium's: heading 0, pitch −π/4 and, when range is missing or
+ *   0, range = max(r / tan(fovx/2), r / tan(fovy/2)), never below 100 m.
+ * @property {number} [heading]
+ * @property {number} [pitch]
+ * @property {number} [range]
+ * @property {number} [duration]
+ * @property {() => void} [complete]
+ * @property {() => void} [cancel]
+ *
  * @typedef {object} GlobeCamera
  * @property {() => CameraPose} pose Fresh values on every call.
  * @property {(view: { destination: Cartesian3, orientation?: Orientation }) => void} setView
- * @property {(options: FlightOptions) => void} flyTo
- * @property {(sphere: { center: Cartesian3, radius: number }, options?: { heading?: number, pitch?: number, range?: number, duration?: number, complete?: () => void, cancel?: () => void }) => void} flyToSphere
- * @property {(target: Cartesian3, offset: { heading: number, pitch: number, range: number }) => void} lookAt
- * @property {() => void} release Leaves lookAt (Cesium's lookAtTransform(IDENTITY)).
+ * @property {(options: FlightOptions) => void} flyTo Cancels a running flight first.
+ * @property {(sphere: { center: Cartesian3, radius: number }, options?: SphereFlightOptions) => void} flyToSphere
+ *   Ends unlocked (identity transform).
+ * @property {() => boolean} flightActive
+ * @property {(target: Cartesian3, offset: HeadingPitchRange) => void} lookAt
+ *   lookAtTransform(eastNorthUp(target), offset).
+ * @property {(transform: Matrix4, offset?: HeadingPitchRange | Cartesian3) => void} lookAtTransform
+ *   Locks the camera to `transform`; a Cartesian3 offset is the camera position
+ *   in that frame, looking at its origin with the frame's +Z as "up". Without
+ *   an offset the camera keeps its world pose.
+ * @property {() => Matrix4} transform A copy of the current camera transform.
+ * @property {() => void} release lookAtTransform(IDENTITY).
  * @property {() => void} cancelFlight
+ * @property {(amount?: number) => void} zoomIn Moves `amount` metres along direction.
+ * @property {(amount?: number) => void} zoomOut Moves `amount` metres against direction.
  * @property {() => ({ west: number, south: number, east: number, north: number } | undefined)} viewRectangle
+ *   Cesium's computeViewRectangle: undefined when the globe is out of view;
+ *   west > east across the antimeridian; ±π longitudes and a ±π/2 latitude
+ *   over a pole; the whole globe when fewer than two canvas corners hit it.
  * @property {(screen: Cartesian2) => (Cartesian3 | undefined)} pickEllipsoid
  * @property {(screen: Cartesian2) => { origin: Cartesian3, direction: Cartesian3 }} pickRay
  * @property {EngineEvent} changed Listener receives the change fraction.
@@ -55,18 +97,51 @@
  * @property {number} percentageChanged
  *
  * @typedef {'click'|'doubleClick'|'move'|'down'|'up'} InputType
+ * @typedef {'ctrl'|'shift'|'alt'} InputModifier
  * @typedef {{ position?: Cartesian2, startPosition?: Cartesian2, endPosition?: Cartesian2 }} InputEvent
+ *
+ * @typedef {object} GlobeProjector
+ * @property {(position: Cartesian3, result?: Cartesian2) => (Cartesian2 | undefined)} worldToWindow
+ *   Undefined behind the camera; fills and returns `result` when given.
+ * @property {(result?: Matrix4) => Matrix4} viewProjection
+ *   World → clip matrix consistent with worldToWindow: clip = M·[x, y, z, 1],
+ *   in front when clip.w > 0, window = ((clip.x/clip.w + 1)/2 · width,
+ *   (1 − clip.y/clip.w)/2 · height).
+ * @property {(position: Cartesian3) => boolean} horizonVisible
+ *   False when the WGS84 ellipsoid hides the point from the camera
+ *   (Cesium's EllipsoidalOccluder.isPointVisible).
+ *
+ * @typedef {object} GlobeSurface
+ * @property {(cartographic: Cartographic, exclude?: any[]) => (number | undefined)} sampleHeight
+ *   Height of the rendered scene (tiles, models) under a point.
+ * @property {boolean} supported Whether sampleHeight works.
+ * @property {(cartographic: Cartographic) => (number | undefined)} terrainHeight
+ *   Height of the terrain/globe surface only (Cesium's globe.getHeight).
+ * @property {boolean} terrainHeightSupported
+ * @property {(position: Cartesian3, exclude?: any[]) => (Cartesian3 | undefined)} clampToHeight
+ *   The position moved onto the rendered scene along the geodetic normal.
+ * @property {boolean} clampToHeightSupported
+ * @property {() => boolean} tilesLoaded
+ *
+ * @typedef {object} GlobeRender
+ * @property {() => void} request Renders a frame soon in request mode.
+ * @property {(enabled: boolean) => void} setContinuous
+ *   Owns whatever the engine needs to render every frame or only on request
+ *   (Cesium: requestRenderMode and maximumRenderTimeChange = Infinity).
+ * @property {() => boolean} isContinuous
  *
  * @typedef {object} GlobeEngine
  * @property {'cesium'|'navara'} kind
  * @property {{ container: object, canvas: object, size: () => { width: number, height: number } }} host
  * @property {GlobeCamera} camera
  * @property {{ pick: (screen: Cartesian2, width?: number, height?: number) => ({ id: any, primitive: any } | undefined), drillPick: (screen: Cartesian2, limit?: number) => any[], pickPosition: (screen: Cartesian2) => (Cartesian3 | undefined), pickPositionSupported: boolean }} picker
- * @property {{ worldToWindow: (position: Cartesian3, result?: Cartesian2) => (Cartesian2 | undefined) }} projector
+ * @property {GlobeProjector} projector
  * @property {{ preUpdate: EngineEvent, preRender: EngineEvent, postRender: EngineEvent }} frames Listeners receive a timestamp in ms.
- * @property {{ request: () => void, setContinuous: (enabled: boolean) => void, isContinuous: () => boolean }} render
- * @property {{ sampleHeight: (cartographic: Cartographic, exclude?: any[]) => (number | undefined), supported: boolean, tilesLoaded: () => boolean }} surface
- * @property {{ on: (type: InputType, listener: (event: InputEvent) => void) => () => void, setCameraInputs: (enabled: boolean) => void }} input
+ * @property {GlobeRender} render
+ * @property {GlobeSurface} surface
+ * @property {{ on: (type: InputType, listener: (event: InputEvent) => void, options?: { modifier?: InputModifier }) => () => void, setCameraInputs: (enabled: boolean) => void }} input
+ *   As in Cesium, a listener with a modifier fires only while that key is
+ *   held and one without fires only while no modifier is held.
  * @property {{ addStatic: (html: string, options?: { onScreen?: boolean }) => () => void }} credits
  * @property {{ setBaseImagery: (source: object) => void, setTerrain: (source: object) => void, setPhotorealTiles: (source: object | null) => void, photorealActive: () => boolean }} maps
  *   Sources are maps/registry.js descriptions; the engine builds its own providers.
@@ -81,26 +156,30 @@ export const INPUT_TYPES = Object.freeze([
   'down',
   'up',
 ]);
+export const MODIFIERS = Object.freeze(['ctrl', 'shift', 'alt']);
 export const FLIGHT_EASINGS = Object.freeze([
   'cubicInOut',
   'sinusoidalInOut',
   'linear',
 ]);
 
+const ENGINE_EVENT = Symbol('gev.globe.engineEvent');
+
+/** Whether a value is an event made by createEngineEvent. */
+export const isEngineEvent = (value) =>
+  value != null && value[ENGINE_EVENT] === true;
+
 /**
- * An event with Cesium.Event semantics: listeners run in registration order,
- * removal during dispatch is deferred safely, and listeners added during
- * dispatch run from the next raise. `raiseEvent` is for engine implementations.
+ * An event with the contract's semantics (see EngineEvent). `raiseEvent` is
+ * for engine implementations; a listener that throws propagates, and the
+ * event stays usable.
  */
 export function createEngineEvent() {
   let entries = [];
   let depth = 0;
   let removedDuringRaise = false;
-  const compact = () => {
-    if (depth || !removedDuringRaise) return;
-    entries = entries.filter((entry) => entry.listener);
-    removedDuringRaise = false;
-  };
+  const active = (listener) =>
+    entries.find((entry) => entry.listener === listener);
   const removeEntry = (entry) => {
     if (!entry.listener) return false;
     entry.listener = null;
@@ -108,7 +187,7 @@ export function createEngineEvent() {
     else entries.splice(entries.indexOf(entry), 1);
     return true;
   };
-  return {
+  const event = {
     get numberOfListeners() {
       return entries.reduce(
         (count, entry) => count + (entry.listener ? 1 : 0),
@@ -118,16 +197,17 @@ export function createEngineEvent() {
     addEventListener(listener) {
       if (typeof listener !== 'function')
         throw new TypeError('Engine event listener must be a function');
-      const entry = { listener };
-      entries.push(entry);
+      let entry = active(listener);
+      if (!entry) {
+        entry = { listener };
+        entries.push(entry);
+      }
       return () => {
         removeEntry(entry);
       };
     },
     removeEventListener(listener) {
-      const entry = entries.find(
-        (candidate) => candidate.listener === listener,
-      );
+      const entry = active(listener);
       return entry ? removeEntry(entry) : false;
     },
     raiseEvent(...args) {
@@ -141,19 +221,20 @@ export function createEngineEvent() {
         }
       } finally {
         depth--;
-        compact();
+        if (!depth && removedDuringRaise) {
+          entries = entries.filter((entry) => entry.listener);
+          removedDuringRaise = false;
+        }
       }
     },
   };
+  Object.defineProperty(event, ENGINE_EVENT, { value: true });
+  return event;
 }
 
 const isFunction = (value) => typeof value === 'function';
 const isObject = (value) =>
   value != null && (typeof value === 'object' || typeof value === 'function');
-const isEvent = (value) =>
-  isObject(value) &&
-  isFunction(value.addEventListener) &&
-  isFunction(value.removeEventListener);
 const isBoolean = (value) => typeof value === 'boolean';
 const isNumber = (value) => typeof value === 'number' && Number.isFinite(value);
 
@@ -165,15 +246,20 @@ const SHAPE = {
     setView: isFunction,
     flyTo: isFunction,
     flyToSphere: isFunction,
+    flightActive: isFunction,
     lookAt: isFunction,
+    lookAtTransform: isFunction,
+    transform: isFunction,
     release: isFunction,
     cancelFlight: isFunction,
+    zoomIn: isFunction,
+    zoomOut: isFunction,
     viewRectangle: isFunction,
     pickEllipsoid: isFunction,
     pickRay: isFunction,
-    changed: isEvent,
-    moveStart: isEvent,
-    moveEnd: isEvent,
+    changed: isEngineEvent,
+    moveStart: isEngineEvent,
+    moveEnd: isEngineEvent,
     percentageChanged: isNumber,
   },
   picker: {
@@ -182,8 +268,16 @@ const SHAPE = {
     pickPosition: isFunction,
     pickPositionSupported: isBoolean,
   },
-  projector: { worldToWindow: isFunction },
-  frames: { preUpdate: isEvent, preRender: isEvent, postRender: isEvent },
+  projector: {
+    worldToWindow: isFunction,
+    viewProjection: isFunction,
+    horizonVisible: isFunction,
+  },
+  frames: {
+    preUpdate: isEngineEvent,
+    preRender: isEngineEvent,
+    postRender: isEngineEvent,
+  },
   render: {
     request: isFunction,
     setContinuous: isFunction,
@@ -192,6 +286,10 @@ const SHAPE = {
   surface: {
     sampleHeight: isFunction,
     supported: isBoolean,
+    terrainHeight: isFunction,
+    terrainHeightSupported: isBoolean,
+    clampToHeight: isFunction,
+    clampToHeightSupported: isBoolean,
     tilesLoaded: isFunction,
   },
   input: { on: isFunction, setCameraInputs: isFunction },
