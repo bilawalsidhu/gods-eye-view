@@ -2,10 +2,10 @@
 // engine's render.setContinuous turns animation on), MSAA 4 as Cesium's
 // msaaSamples, the device pixel ratio unless a measurement pins one, a canvas
 // whose WebGL2 context keeps its drawing buffer (Cesium's
-// contextOptions.webgl.preserveDrawingBuffer, for captures), and the
-// `minimal` look: sky, stars, sky light and sun without post effects —
-// Navara's photoreal chain costs about 5 ms a frame and greys the Google
-// tiles with tone mapping.
+// contextOptions.webgl.preserveDrawingBuffer, for captures), and Navara's
+// `photoreal` look by default: its own photoreal scene with aerial
+// perspective, tone mapping and SMAA, about 5 ms a frame (S5). `minimal`
+// (sky, stars, sky light and sun without post effects) stays for benches.
 
 /** WebGL2 attributes Navara 0.2.1 asks for, plus preserveDrawingBuffer. */
 export const NAVARA_CONTEXT_ATTRIBUTES = Object.freeze({
@@ -41,7 +41,7 @@ const PLANS = {
  * own addDefaultPhotorealScene (sky, sun, aerial perspective, lens flare,
  * tone mapping, SMAA).
  */
-export function navaraScenePlan(effects = 'minimal') {
+export function navaraScenePlan(effects = 'photoreal') {
   if (!Object.hasOwn(PLANS, effects))
     throw new RangeError(`Unknown Navara effects: ${effects}`);
   return {
