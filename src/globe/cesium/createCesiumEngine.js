@@ -31,7 +31,8 @@ import { createCesiumSurface } from './surface.js';
  */
 export function createCesiumEngine(viewer, options = {}) {
   if (!viewer?.scene) throw new TypeError('createCesiumEngine needs a viewer');
-  const { scene } = viewer;
+  // Viewer.canvas is scene.canvas; the engine reads the public alias.
+  const canvas = viewer.canvas ?? viewer.scene.canvas;
   const render = createCesiumRender(viewer, options);
   const parts = {
     camera: createCesiumCamera(viewer),
@@ -44,7 +45,7 @@ export function createCesiumEngine(viewer, options = {}) {
     credits: createCesiumCredits(viewer),
     maps: createCesiumMaps(viewer, {
       ...options,
-      requestRender: () => render.render.request(),
+      requestRender: (reason) => render.render.request(reason),
     }),
   };
   let destroyed = false;
@@ -52,10 +53,10 @@ export function createCesiumEngine(viewer, options = {}) {
     kind: 'cesium',
     host: {
       container: viewer.container,
-      canvas: scene.canvas,
+      canvas,
       size: () => ({
-        width: scene.canvas.clientWidth,
-        height: scene.canvas.clientHeight,
+        width: canvas.clientWidth,
+        height: canvas.clientHeight,
       }),
     },
     ...Object.fromEntries(

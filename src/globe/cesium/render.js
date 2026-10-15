@@ -5,6 +5,7 @@
 import {
   governorRequestRender,
   holdContinuousRender,
+  isRenderGovernorInstalled,
   releaseContinuousRender,
 } from '../../renderGovernor.js';
 
@@ -12,17 +13,24 @@ export const RENDER_OWNER = 'globe-engine';
 
 /**
  * @param {Cesium.Viewer} viewer
- * @param {{ requestRender?: (reason: string) => void }} [options]
+ * @param {{ requestRender?: (reason: string) => void }} [options] Defaults to
+ *   the render governor when it governs this viewer, else the scene itself
+ *   (before the governor is installed, or on another viewer).
  * @returns {{ render: import('../contract.js').GlobeRender, destroy: () => void }}
  */
 export function createCesiumRender(
   viewer,
-  { requestRender = governorRequestRender } = {},
+  {
+    requestRender = (reason) => {
+      if (isRenderGovernorInstalled(viewer)) governorRequestRender(reason);
+      else viewer.scene.requestRender?.();
+    },
+  } = {},
 ) {
   let held = false;
   const render = {
-    request() {
-      requestRender(RENDER_OWNER);
+    request(reason = RENDER_OWNER) {
+      requestRender(reason);
     },
     setContinuous(enabled) {
       held = Boolean(enabled);

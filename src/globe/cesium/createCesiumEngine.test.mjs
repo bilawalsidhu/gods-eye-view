@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as Cesium from 'cesium';
 import { assertGlobeEngine } from '../contract.js';
 import {
   _resetRenderGovernorForTest,
@@ -84,4 +85,54 @@ test('destroy releases holds, listeners, handlers and engine-owned map state', a
   assert.deepEqual(getRenderGovernorDiagnostics().holds, []);
   assert.deepEqual(viewer.staticCredits, []);
   assert.deepEqual(viewer.imageryList, []);
+});
+
+test('the engine reads the Viewer aliases and builds on a minimal viewer', () => {
+  // Viewer.camera/.canvas are the scene's; a viewer-shaped object that offers
+  // only the aliases, a container and a remover-returning postRender works.
+  const listeners = new Set();
+  const postRender = {
+    addEventListener(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+  };
+  let renders = 0;
+  const viewer = {
+    container: { kind: 'container' },
+    canvas: { clientWidth: 320, clientHeight: 200 },
+    camera: {
+      positionWC: new Cesium.Cartesian3(7e6, 0, 0),
+      positionCartographic: { height: 621863 },
+      viewMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
+      frustum: {
+        projectionMatrix: Cesium.Matrix4.clone(Cesium.Matrix4.IDENTITY),
+      },
+    },
+    scene: { postRender, requestRender: () => renders++ },
+  };
+  const engine = createCesiumEngine(viewer);
+  assert.equal(engine.host.canvas, viewer.canvas);
+  assert.deepEqual(engine.host.size(), { width: 320, height: 200 });
+  assert.equal(engine.camera.height(), 621863);
+  assert.deepEqual(
+    engine.projector.viewProjection(),
+    Cesium.Matrix4.toArray(Cesium.Matrix4.IDENTITY),
+  );
+  assert.equal(
+    engine.projector.horizonVisible({ x: 6378137, y: 0, z: 0 }),
+    true,
+  );
+  const seen = [];
+  const off = engine.frames.postRender.addEventListener((time) =>
+    seen.push(time),
+  );
+  assert.equal(listeners.size, 1);
+  for (const listener of listeners) listener();
+  assert.equal(seen.length, 1);
+  off();
+  assert.equal(listeners.size, 0);
+  engine.render.request();
+  assert.equal(renders, 1);
+  engine.destroy();
 });

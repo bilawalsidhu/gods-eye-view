@@ -76,3 +76,27 @@ test('destroy releases the engine hold', () => {
   destroy();
   assert.deepEqual(getRenderGovernorDiagnostics().holds, []);
 });
+
+test('request passes a caller reason through to the governor', () => {
+  const viewer = createFakeViewer();
+  installRenderGovernor(viewer);
+  const { render } = createCesiumRender(viewer);
+  render.request('world-overlay');
+  assert.deepEqual(
+    getRenderGovernorDiagnostics().recentRequests.map(({ reason }) => reason),
+    ['world-overlay'],
+  );
+});
+
+test('without a governor on its viewer, request renders the scene directly', () => {
+  const viewer = createFakeViewer();
+  const { render } = createCesiumRender(viewer);
+  render.request();
+  assert.equal(viewer.callsOf('scene.requestRender').length, 1);
+  const governed = createFakeViewer();
+  installRenderGovernor(governed);
+  render.request();
+  assert.equal(viewer.callsOf('scene.requestRender').length, 2);
+  assert.equal(governed.callsOf('scene.requestRender').length, 0);
+  assert.deepEqual(getRenderGovernorDiagnostics().recentRequests, []);
+});

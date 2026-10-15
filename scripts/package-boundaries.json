@@ -1751,6 +1751,7 @@
       "src/globe/cesium/projector.js",
       "src/globe/cesium/render.js",
       "src/globe/cesium/surface.js",
+      "src/globe/cesium/engineFromViewer.js",
       "src/sources/sourceSlot.js",
       "src/app/sources.js",
       "src/app/startupChrome.js",

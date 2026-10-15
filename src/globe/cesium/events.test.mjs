@@ -61,3 +61,35 @@ test('detach drops the Cesium subscription for good', () => {
   assert.equal(source.numberOfListeners, 0);
   source.raiseEvent();
 });
+
+test('a bridge detaches through the remover the source returned', () => {
+  // Cesium.Event.addEventListener returns a remover; the bridge relies on it
+  // alone, so event-like sources without removeEventListener work too.
+  const listeners = new Set();
+  const source = {
+    addEventListener(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+  };
+  const { event, detach } = bridgeEvent(source);
+  const remove = event.addEventListener(() => {});
+  assert.equal(listeners.size, 1);
+  remove();
+  assert.equal(listeners.size, 0);
+  event.addEventListener(() => {});
+  detach();
+  assert.equal(listeners.size, 0);
+});
+
+test('a unary bridge raises one mapped value', () => {
+  const source = new Cesium.Event();
+  const { event, detach } = bridgeEvent(source, null, {
+    unary: (scene, time) => time * 2,
+  });
+  const seen = [];
+  event.addEventListener((...values) => seen.push(values));
+  source.raiseEvent({}, 4);
+  assert.deepEqual(seen, [[8]]);
+  detach();
+});

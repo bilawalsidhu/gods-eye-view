@@ -54,7 +54,8 @@ const cesiumOffset = (offset) =>
  * @returns {{ camera: import('../contract.js').GlobeCamera, destroy: () => void }}
  */
 export function createCesiumCamera(viewer) {
-  const cesium = viewer.scene.camera;
+  // Viewer.camera is scene.camera; the public alias is what shell callers read.
+  const cesium = viewer.camera ?? viewer.scene.camera;
   const bridges = {
     changed: bridgeEvent(cesium.changed),
     moveStart: bridgeEvent(cesium.moveStart),
@@ -110,6 +111,15 @@ export function createCesiumCamera(viewer) {
         fovy: cesium.frustum.fovy,
       };
     },
+    position(result) {
+      const { x, y, z } = cesium.positionWC;
+      if (!result) return geo.cartesian3.create(x, y, z);
+      result.x = x;
+      result.y = y;
+      result.z = z;
+      return result;
+    },
+    height: () => cesium.positionCartographic.height,
     setView(view) {
       if (!view?.destination)
         throw new TypeError('setView needs a destination');

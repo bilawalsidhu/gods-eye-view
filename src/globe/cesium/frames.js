@@ -4,9 +4,23 @@
 import * as Cesium from 'cesium';
 import { bridgeEvent } from './events.js';
 
-const toMilliseconds = (scene, time) => [
-  Cesium.JulianDate.toDate(time).getTime(),
-];
+const scratchGregorian = new Cesium.GregorianDate();
+
+// JulianDate.toDate(time).getTime() without the Date: frame events must not
+// allocate. A raise without a time (not Cesium's own) reads the clock.
+function unixMilliseconds(scene, time) {
+  if (!time) return Date.now();
+  const date = Cesium.JulianDate.toGregorianDate(time, scratchGregorian);
+  return Date.UTC(
+    date.year,
+    date.month - 1,
+    date.day,
+    date.hour,
+    date.minute,
+    date.isLeapSecond ? date.second - 1 : date.second,
+    date.millisecond,
+  );
+}
 
 /**
  * @param {Cesium.Viewer} viewer
@@ -16,7 +30,7 @@ export function createCesiumFrames(viewer) {
   const { scene } = viewer;
   const bridges = ['preUpdate', 'preRender', 'postRender'].map((name) => [
     name,
-    bridgeEvent(scene[name], toMilliseconds),
+    bridgeEvent(scene[name], null, { unary: unixMilliseconds }),
   ]);
   return {
     frames: Object.fromEntries(

@@ -16,9 +16,16 @@ export function createCesiumProjector(
   } = {},
 ) {
   const { scene } = viewer;
+  // Viewer.camera is scene.camera; the engine reads the public alias.
+  const camera = viewer.camera ?? scene.camera;
   const scratchWindow = new Cesium.Cartesian2();
   const scratchMatrix = new Cesium.Matrix4();
   const occluder = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84);
+  // The occluder is re-aimed only when the camera has moved: horizonVisible
+  // runs per label per frame.
+  let occluderX = Number.NaN;
+  let occluderY = Number.NaN;
+  let occluderZ = Number.NaN;
 
   const projector = {
     worldToWindow(position, result) {
@@ -33,7 +40,6 @@ export function createCesiumProjector(
     // The matrix Cesium's worldToWindowCoordinates uses: frustum projection ×
     // view. x, y and w do not depend on the multi-frustum near/far planes.
     viewProjection(result = geo.matrix4.create()) {
-      const { camera } = scene;
       Cesium.Matrix4.multiply(
         camera.frustum.projectionMatrix,
         camera.viewMatrix,
@@ -44,7 +50,17 @@ export function createCesiumProjector(
       return result;
     },
     horizonVisible(position) {
-      occluder.cameraPosition = scene.camera.positionWC;
+      const { positionWC } = camera;
+      if (
+        positionWC.x !== occluderX ||
+        positionWC.y !== occluderY ||
+        positionWC.z !== occluderZ
+      ) {
+        occluder.cameraPosition = positionWC;
+        occluderX = positionWC.x;
+        occluderY = positionWC.y;
+        occluderZ = positionWC.z;
+      }
       return occluder.isPointVisible(position);
     },
   };

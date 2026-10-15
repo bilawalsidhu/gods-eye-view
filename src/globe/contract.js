@@ -83,6 +83,11 @@
  *
  * @typedef {object} GlobeCamera
  * @property {() => CameraPose} pose Fresh values on every call.
+ * @property {(result?: Cartesian3) => Cartesian3} position The pose's world
+ *   position; fills and returns `result` when given (no allocation, for
+ *   per-frame readers), else a fresh value.
+ * @property {() => number} height The camera's height above the WGS84
+ *   ellipsoid (the pose's cartographic height), without building a pose.
  * @property {(view: { destination: Cartesian3 | Rectangle, orientation?: Orientation }) => void} setView
  *   Missing angles default to heading 0, pitch −π/2, roll 0.
  * @property {(options: FlightOptions) => void} flyTo Cancels a running flight first.
@@ -141,7 +146,8 @@
  * @property {() => boolean} tilesLoaded
  *
  * @typedef {object} GlobeRender
- * @property {() => void} request Renders a frame soon in request mode.
+ * @property {(reason?: string) => void} request Renders a frame soon in
+ *   request mode; `reason` is for diagnostics only.
  * @property {(enabled: boolean) => void} setContinuous
  *   Owns whatever the engine needs to render every frame or only on request
  *   (Cesium: requestRenderMode and maximumRenderTimeChange = Infinity).
@@ -167,10 +173,17 @@
  *   As in Cesium, a listener with a modifier fires only while that key is
  *   held and one without fires only while no modifier is held.
  * @property {{ addStatic: (html: string, options?: { onScreen?: boolean }) => () => void }} credits
- * @property {{ setBaseImagery: (source: object) => Promise<void>, setTerrain: (source: object) => Promise<void>, setPhotorealTiles: (source: object | null) => Promise<void>, photorealActive: () => boolean }} maps
+ * @property {{ setBaseImagery: (source: object) => Promise<void>, setTerrain: (source: object) => Promise<void>, setPhotorealTiles: (source: object | null) => Promise<void>, releasePhotorealTiles: (source: object) => void, photorealActive: () => boolean }} maps
  *   Sources are maps/registry.js descriptions; the engine builds its own
  *   providers. Each setter settles once the source is on screen and rejects
- *   when it cannot be built (the current source then stays).
+ *   when it cannot be built (the current source then stays). A source may
+ *   carry a ready engine `provider` its caller built and owns (the engine
+ *   neither caches nor disposes it). Base imagery and photoreal tiles share
+ *   one switch order: the one asked for last wins, a superseded call settles
+ *   without showing anything. setPhotorealTiles(null) shows the globe again
+ *   with the last base imagery and its credit (no credit when none was set).
+ *   releasePhotorealTiles forgets a tileset source shown before and takes it
+ *   out of the scene when the engine put it there; its caller disposes it.
  * @property {() => void} destroy
  */
 
@@ -269,6 +282,8 @@ const SHAPE = {
   host: { container: isObject, canvas: isObject, size: isFunction },
   camera: {
     pose: isFunction,
+    position: isFunction,
+    height: isFunction,
     setView: isFunction,
     flyTo: isFunction,
     flyToSphere: isFunction,
@@ -324,6 +339,7 @@ const SHAPE = {
     setBaseImagery: isFunction,
     setTerrain: isFunction,
     setPhotorealTiles: isFunction,
+    releasePhotorealTiles: isFunction,
     photorealActive: isFunction,
   },
 };
@@ -336,6 +352,18 @@ export const GLOBE_ENGINE_MEMBERS = Object.freeze([
   ),
   'destroy',
 ]);
+
+/**
+ * Whether a value is a globe engine rather than, say, a Cesium viewer (a
+ * cheap structural test; assertGlobeEngine checks every member).
+ */
+export const isGlobeEngine = (value) =>
+  isObject(value) &&
+  ENGINE_KINDS.includes(value.kind) &&
+  isObject(value.camera) &&
+  isObject(value.projector) &&
+  isObject(value.frames) &&
+  isFunction(value.destroy);
 
 /** Throws a TypeError naming every missing or mistyped member; returns the engine. */
 export function assertGlobeEngine(engine) {
