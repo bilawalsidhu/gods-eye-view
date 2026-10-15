@@ -407,6 +407,16 @@ export const US_CENSUS_CREDIT = {
     '<a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">U.S. Census Bureau</a> (public domain)',
 };
 
+/** Registered when an Argentine department, partido or comuna resolves. */
+export const IGN_ARGENTINA_ADMIN_CREDIT = {
+  key: 'ign-argentina-admin',
+  html:
+    'Fuente: <a href="https://www.ign.gob.ar" target="_blank" rel="noopener">Instituto Geográfico Nacional de la República Argentina</a>. ' +
+    'Department, partido and comuna outlines; simplified, retrieved 2026-10-15; source update date not supplied. ' +
+    '<a href="https://www.ign.gob.ar/descargas/tyc1.html" target="_blank" rel="noopener">IGN reuse terms</a>. ' +
+    'Territorial representation follows the source; no IGN endorsement implied.',
+};
+
 /**
  * Per-feed transit credit, registered the first time that feed's vehicles
  * render (see `src/data/transitFeeds.js` for the license of each).

@@ -1,5 +1,9 @@
 # Changelog
 
+- Existing area annotations can outline Argentine departments, partidos and
+  comunas using a lazy IGN pack of 529 units. Province qualifiers and camera
+  location disambiguate names; source attribution and reuse terms are retained.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 

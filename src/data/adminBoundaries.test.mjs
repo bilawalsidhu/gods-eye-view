@@ -28,19 +28,34 @@ const PORTLAND = { lat: 45.5152, lon: -122.6784 };
 // Runs first: nothing loads until a lookup needs it, and a state ask never
 // pulls the county pack.
 test('packs load lazily, once, and only the pack an ask needs', async () => {
-  assert.deepEqual(packLoads, { admin1: 0, counties: 0, countries: 0 });
+  assert.deepEqual(packLoads, {
+    admin1: 0,
+    counties: 0,
+    countries: 0,
+    argentina: 0,
+  });
   assert.equal(parseAdminQuery('Texas').kind, 'any');
   assert.deepEqual(
     packLoads,
-    { admin1: 0, counties: 0, countries: 0 },
+    { admin1: 0, counties: 0, countries: 0, argentina: 0 },
     'parsing is free',
   );
   await findAdminArea('Texas');
   await findAdminArea('Bavaria');
-  assert.deepEqual(packLoads, { admin1: 1, counties: 0, countries: 0 });
+  assert.deepEqual(packLoads, {
+    admin1: 1,
+    counties: 0,
+    countries: 0,
+    argentina: 0,
+  });
   await findAdminArea('Travis County');
   await findAdminArea('Orleans Parish');
-  assert.deepEqual(packLoads, { admin1: 1, counties: 1, countries: 0 });
+  assert.deepEqual(packLoads, {
+    admin1: 1,
+    counties: 1,
+    countries: 0,
+    argentina: 0,
+  });
 });
 
 test('Texas, TX and "State of Texas" name the same unit', async () => {

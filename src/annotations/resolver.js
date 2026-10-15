@@ -24,6 +24,7 @@ import {
   registerDynamicCredit,
   NATURAL_EARTH_CREDIT,
   US_CENSUS_CREDIT,
+  IGN_ARGENTINA_ADMIN_CREDIT,
 } from '../data/dataCredits.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
@@ -783,7 +784,11 @@ export function createAnnotationResolver({
   function creditAdminSource(viewer, admin) {
     registerDynamicCredit(
       viewer,
-      admin.source === 'us-census' ? US_CENSUS_CREDIT : NATURAL_EARTH_CREDIT,
+      admin.source === 'ign-argentina'
+        ? IGN_ARGENTINA_ADMIN_CREDIT
+        : admin.source === 'us-census'
+          ? US_CENSUS_CREDIT
+          : NATURAL_EARTH_CREDIT,
     );
   }
 

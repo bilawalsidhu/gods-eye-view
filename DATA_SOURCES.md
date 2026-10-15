@@ -125,7 +125,20 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | **DataSF Analysis Neighborhoods** (41 SF neighborhood polygons)             | `neighborhoods/`                  | **PDDL 1.0** (public domain)                                                                              | ✅ (no restrictions)                             | "City & County of San Francisco — DataSF" (courtesy — not legally required) |
 | **Natural Earth countries, states and provinces** (260 admin-0/map units + 4,587 admin-1 polygons)             | `natural_earth/`                  | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Made with Natural Earth" (courtesy credit — not legally required)          |
 | **US Census Bureau counties** (3,235 county polygons)                       | `us_census_counties/`             | **Public domain**                                                                                         | ✅ (no restrictions)                             | "U.S. Census Bureau" (courtesy — not legally required)                      |
+| **Argentina departments, partidos and comunas** (529 polygons) | `argentina_admin/` | [IGN reuse terms](https://www.ign.gob.ar/descargas/tyc1.html), not MIT/public domain | Derived products only under IGN terms | Fuente: Instituto Geográfico Nacional de la República Argentina |
 | **CCTV ground heights** (3,445 cameras)                                     | `cctv_ground_heights/`            | Precomputed camera placement heights, aligned to work with Google Photorealistic 3D Tiles (folder README) | —                                                | —                                                                           |
+
+### Argentina administrative outlines
+
+The Argentina administrative pack is a simplified, delta-encoded version of
+IGN's `ign:departamento` WFS response, retrieved 2026-10-15. It retains all 529
+units, official names/codes and source compilation metadata; no underlying
+update date is supplied. IGN terms require attribution, retained date/reuse
+metadata and free redistribution; commercial use is as input to derived
+products. The pack follows the provider's territorial representation, including
+disputed and Antarctic jurisdiction units, without replacing the global
+basemap. See `src/data/local_data/argentina_admin/README.md` for source URLs,
+checksums, simplification and regeneration.
 
 ### ⚠️ TeleGeography is bundled but NonCommercial
 

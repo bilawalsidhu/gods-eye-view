@@ -112,7 +112,11 @@ try {
           target.pathname.includes('/geocode/')) ||
         target.hostname === 'photon.komoot.io');
     if (lookup) result.lookups.push({ step: marker, request: where });
-    if (/\/(states_provinces|countries|counties)\.json$/.test(target.pathname))
+    if (
+      /\/(states_provinces|countries|counties|departments)\.json$/.test(
+        target.pathname,
+      )
+    )
       result.packRequests.push({ step: marker, pack: target.pathname });
   });
   page.on('pageerror', (error) =>
@@ -507,6 +511,21 @@ try {
     ['georgia-state', 'Georgia', 32.6, -83.4, 650000],
     ['georgia-country', 'Georgia', 42, 43.6, 700000],
     ['georgia-qualified', 'the country of Georgia', 42, 43.6, 700000],
+    [
+      'argentina-capital',
+      'Departamento Capital, Misiones',
+      -27.4,
+      -55.9,
+      80000,
+    ],
+    [
+      'argentina-matanza',
+      'Partido de La Matanza, Buenos Aires',
+      -34.8,
+      -58.6,
+      90000,
+    ],
+    ['argentina-comuna', 'Comuna 1, CABA', -34.6, -58.37, 14000],
   ]) {
     await page.evaluate(() => window.__godsEyeView.annotations.clear());
     await move(name, { lat, lon, height, pitch: -90 }, 1);
@@ -537,6 +556,7 @@ try {
       ['outline:texas', 'states_provinces.json'],
       ['outline:travis', 'counties.json'],
       ['outline:scotland', 'countries.json'],
+      ['outline:argentina-capital', 'departments.json'],
     ],
     'packs load lazily, once each',
   );

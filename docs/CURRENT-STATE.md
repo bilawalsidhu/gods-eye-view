@@ -1,5 +1,21 @@
 # God's Eye View Current State
 
+Administrative area annotations also support Argentina's 529 departments,
+partidos and CABA comunas from IGN (`local_data/argentina_admin/`). Explicit
+queries such as `Departamento Capital, Misiones`, `Partido de La Matanza,
+Buenos Aires` and `Comuna 1, CABA` resolve through the existing outline path;
+bare city names retain the geocoder path. Province/country qualifiers exclude
+other jurisdictions, and camera geography ranks namesakes. Geocoder-confirmed
+county requests require both a matching name and containment. The 854 kB pack
+loads once, only when needed; there is no new layer, toggle or share token.
+The original 140 MB WFS response stays outside the repository. The build script
+pins the source feature content independently of WFS response timestamps and
+retains names, INDEC codes and compilation metadata. IGN's territorial depiction
+is retained as source data; the global country basemap is unchanged. Retrieved
+2026-10-15; underlying source update date not supplied. IGN attribution activates
+when an outline resolves. Rebuild: `scripts/build-argentina-admin.mjs`; browser
+gate: `scripts/qa-admin-outlines.mjs` (now includes Argentina).
+
 Vessel sources can report healthy empty coverage using a current, complete
 snapshot with zero raw rows, a healthy transport and a positive last-message
 time. This clears obsolete contacts and settles startup without manufacturing
