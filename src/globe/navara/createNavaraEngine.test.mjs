@@ -115,6 +115,8 @@ test('render requests are forceUpdate and continuous mode is Navara animation', 
   const { engine, view } = setup();
   engine.render.request();
   assert.deepEqual(view.calls.at(-1), ['forceUpdate']);
+  engine.render.request('world-overlay');
+  assert.deepEqual(view.calls.at(-1), ['forceUpdate'], 'the reason is ignored');
   engine.render.setContinuous(true);
   assert.equal(view.animation, true);
   assert.equal(engine.render.isContinuous(), true);

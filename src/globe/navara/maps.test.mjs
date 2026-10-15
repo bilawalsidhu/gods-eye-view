@@ -223,3 +223,58 @@ test('destroy removes every layer, source and credit it added', async () => {
   assert.deepEqual(view.sources, []);
   assert.deepEqual(view.shown, []);
 });
+
+test('current() returns the passed sources: base while the globe shows, tiles while they show', async () => {
+  const view = fakeView();
+  const { maps } = createNavaraMaps(view);
+  const osm = { kind: 'osm' };
+  const esri = { kind: 'esri-imagery' };
+  const tiles = { kind: 'photoreal', googleApiKey: 'k' };
+  assert.deepEqual(maps.current(), { baseImagery: null, photoreal: null });
+  await maps.setBaseImagery(osm);
+  assert.deepEqual(maps.current(), { baseImagery: osm, photoreal: null });
+  await maps.setPhotorealTiles(tiles);
+  assert.equal(maps.current().baseImagery, null, 'tiles replace the base');
+  assert.equal(maps.current().photoreal, tiles);
+  // Imagery chosen while the tiles show goes on the hidden globe.
+  await maps.setBaseImagery(esri);
+  const [raster] = layersOf(view, 'raster');
+  assert.match(raster.desc.source.desc.url, /World_Imagery/);
+  assert.equal(raster.desc.raster?.show, false, 'the new layer shows over tiles');
+  assert.ok(
+    !view.shown.some((item) => /esri/i.test(JSON.stringify(item))),
+    'its credit shows over tiles',
+  );
+  assert.equal(maps.current().baseImagery, esri);
+  assert.equal(maps.current().photoreal, tiles);
+  await maps.setPhotorealTiles(null);
+  assert.deepEqual(maps.current(), { baseImagery: esri, photoreal: null });
+  assert.notEqual(raster.desc.raster?.show, false, 'base not back');
+  assert.ok(view.shown.some((item) => /esri/i.test(JSON.stringify(item))), 'credit not back');
+});
+
+test('the same tiles under a new source object count as that source', async () => {
+  const view = fakeView();
+  const { maps } = createNavaraMaps(view);
+  const first = { kind: 'photoreal', googleApiKey: 'k' };
+  const second = { kind: 'photoreal', googleApiKey: 'k' };
+  await maps.setPhotorealTiles(first);
+  await maps.setPhotorealTiles(second);
+  assert.equal(maps.current().photoreal, second);
+  assert.equal(layersOf(view, '3d-tiles').length, 1);
+});
+
+test('releasePhotorealTiles forgets the source and takes its tiles away if shown', async () => {
+  const view = fakeView();
+  const { maps } = createNavaraMaps(view);
+  const tiles = { kind: 'photoreal', googleApiKey: 'k' };
+  await maps.setPhotorealTiles(tiles);
+  maps.releasePhotorealTiles({ kind: 'photoreal', googleApiKey: 'k' });
+  assert.equal(maps.photorealActive(), true, 'another object released it');
+  maps.releasePhotorealTiles(tiles);
+  maps.releasePhotorealTiles(tiles);
+  assert.equal(maps.photorealActive(), false);
+  assert.equal(maps.current().photoreal, null);
+  assert.equal(layersOf(view, '3d-tiles').length, 0);
+});
+

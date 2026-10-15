@@ -67,7 +67,9 @@ export function createNavaraMaps(
   { fetch: fetchJson = globalThis.fetch } = {},
 ) {
   const slots = { imagery: null, terrain: null, photoreal: null };
-  const generations = { imagery: 0, terrain: 0, photoreal: 0 };
+  // Base imagery and photoreal tiles share one switch order (display): the
+  // call made last decides what shows.
+  const generations = { display: 0, terrain: 0 };
   let destroyed = false;
 
   function retire(slot) {
@@ -95,7 +97,14 @@ export function createNavaraMaps(
     );
     retire(previous);
     if (shown.length) view.attribution?.add(shown);
-    slots[name] = { key, source, layer, layerDesc, credits: shown };
+    slots[name] = {
+      key,
+      source,
+      layer,
+      layerDesc,
+      credits: shown,
+      hidden: false,
+    };
     view.forceUpdate();
   }
 
@@ -146,15 +155,26 @@ export function createNavaraMaps(
     }
   }
 
+  // What current() reports: the base imagery on the globe (none while tiles
+  // replace it) and the tiles shown, as the objects passed in.
+  let baseSource = null;
+  let currentBase = null;
+  let tilesSource = null;
+  const knownTiles = new Set();
+
   const maps = {
     async setBaseImagery(source) {
-      const generation = ++generations.imagery;
+      const generation = ++generations.display;
       const { url, credit } = imageryFor(source);
-      if (destroyed || generation !== generations.imagery) return;
-      if (slots.imagery?.key === url) return setImageryShown(true);
-      show('imagery', url, { type: 'raster-tile', url }, { type: 'raster' }, [
-        credit,
-      ]);
+      if (destroyed || generation !== generations.display) return;
+      baseSource = source;
+      currentBase = source;
+      if (slots.imagery?.key !== url)
+        show('imagery', url, { type: 'raster-tile', url }, { type: 'raster' }, [
+          credit,
+        ]);
+      // Under tiles the base imagery waits hidden, credit included.
+      setImageryShown(slots.photoreal == null);
     },
     async setTerrain(source) {
       const generation = ++generations.terrain;
@@ -169,9 +189,15 @@ export function createNavaraMaps(
       show('terrain', description.url, description, { type: 'terrain' });
     },
     async setPhotorealTiles(source) {
-      const generation = ++generations.photoreal;
+      const generation = ++generations.display;
       if (source == null) {
         clear('photoreal');
+        tilesSource = null;
+        // The globe comes back with the last base imagery and its credit.
+        if (slots.imagery) {
+          setImageryShown(true);
+          currentBase = baseSource;
+        }
         view.forceUpdate();
         return;
       }
@@ -180,9 +206,12 @@ export function createNavaraMaps(
         throw new Error(
           'Google 3D tiles on Navara need a browser key (googleApiKey)',
         );
-      if (destroyed || generation !== generations.photoreal) return;
+      if (destroyed || generation !== generations.display) return;
       const url = `${GOOGLE_TILES_ROOT}?key=${encodeURIComponent(key)}`;
       setImageryShown(false);
+      currentBase = null;
+      tilesSource = source;
+      knownTiles.add(source);
       if (slots.photoreal?.key === url) return;
       show(
         'photoreal',
@@ -201,7 +230,15 @@ export function createNavaraMaps(
       // them; Navara lists them in its attribution card, collapsed by default.
       view.attribution?.show();
     },
+    releasePhotorealTiles(source) {
+      if (!knownTiles.delete(source)) return;
+      if (tilesSource !== source) return;
+      tilesSource = null;
+      clear('photoreal');
+      view.forceUpdate();
+    },
     photorealActive: () => slots.photoreal != null,
+    current: () => ({ baseImagery: currentBase, photoreal: tilesSource }),
   };
 
   return {

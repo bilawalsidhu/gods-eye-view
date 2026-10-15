@@ -439,3 +439,21 @@ test('rounding noise in the drawn camera is no movement, so moveEnd still fires'
   assert.equal(clock.time >= 960, true);
   assert.equal(ends, 1, 'moveEnd did not fire while Navara redrew the pose');
 });
+
+test('livePosition is one engine-owned object holding the current position; height() reads it', () => {
+  const { camera, port, frame } = setup();
+  const live = camera.livePosition;
+  const destination = cartesian3.fromDegrees(20, 10, 12345);
+  camera.setView({ destination });
+  assert.equal(camera.livePosition, live, 'not the same object');
+  near(cartesian3.distance(live, destination), 0, 1e-9, 'follows setView');
+  near(camera.height(), 12345, 1e-6, 'height');
+  frame();
+  const moved = cartesian3.fromDegrees(21, 11, 9e5);
+  port.drawn = { position: moved, ...orientationVectors(moved, 0.3, -1, 0) };
+  frame();
+  near(cartesian3.distance(camera.livePosition, moved), 0, 1e-9, 'follows Navara');
+  near(camera.height(), 9e5, 1e-6, 'height after a user move');
+  const pose = camera.pose();
+  assert.notEqual(pose.position, live, 'pose shares the live object');
+});
