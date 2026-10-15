@@ -432,7 +432,7 @@ test('the situation brief combines available sections and marks failures', async
   ]);
   assert.deepEqual(result.data.sections.fires, {
     unavailable: true,
-    reason: 'Fire detections need a NASA FIRMS key configured for this server',
+    reason: 'Fire detections need a NASA FIRMS key or CONAE GOES enabled on this server',
   });
   assert.deepEqual(result.data.sections.cyclones, {
     unavailable: true,
