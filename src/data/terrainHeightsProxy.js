@@ -35,7 +35,13 @@ export function parseTerrainPoints(raw) {
     if (parts.length !== 2) return null;
     const lon = Number(parts[0]);
     const lat = Number(parts[1]);
-    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+    if (
+      !Number.isFinite(lon) ||
+      !Number.isFinite(lat) ||
+      Math.abs(lon) > 180 ||
+      Math.abs(lat) > 90
+    )
+      return null;
     points.push([lon, lat]);
   }
   return points;

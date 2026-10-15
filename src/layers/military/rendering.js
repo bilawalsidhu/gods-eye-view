@@ -18,6 +18,7 @@ import {
   screenProjectedRotation,
 } from '../../data/iconOrientation.js';
 import { limitCourseStep, courseSlewCapDps } from '../../data/motionModel.js';
+import { isEmergency } from '../../data/aircraftEmergency.js';
 import {
   PLANE_MODEL_SCALE,
   PLANE_MODEL_URL,
@@ -33,6 +34,7 @@ import {
   COCKPIT_CONTACT_SIZE_PX,
   MIL_ICON_COLOR,
   TRACKED_ICON_COLOR,
+  EMERGENCY_ICON_COLOR,
   MODEL_ALT_CEIL_M,
   MODEL_MAX_ALL,
   MODEL_MAX,
@@ -159,7 +161,7 @@ export function createRendering({
       bb.height = COCKPIT_CONTACT_SIZE_PX;
       bb.scale = limbScale;
       bb.scaleByDistance = _cockpitBillboardScaleByDistance();
-      bb.color = MIL_ICON_COLOR.withAlpha(freshnessAlpha);
+      bb.color = _fleetBillboardColor(icao24).withAlpha(freshnessAlpha);
       bb.rotation = 0;
       return;
     }
@@ -173,7 +175,9 @@ export function createRendering({
     bb.height = icao24 === flightState._trackedIcao ? 24 : 20;
     bb.scale = _militaryBillboardScale(icao24) * limbScale;
     bb.scaleByDistance = _normalBillboardScaleByDistance();
-    bb.color = MIL_ICON_COLOR.withAlpha(cyberSonarBaseAlpha(bb));
+    bb.color = _fleetBillboardColor(icao24, meta).withAlpha(
+      cyberSonarBaseAlpha(bb),
+    );
   }
 
   /** Sprite kind for one contact's billboard. Identity for every aircraft except
@@ -189,7 +193,17 @@ export function createRendering({
 
   function _modelColor(icao24) {
     if (icao24 === flightState._trackedIcao) return TRACKED_ICON_COLOR;
-    return MIL_ICON_COLOR;
+    return _fleetBillboardColor(icao24);
+  }
+
+  /** Fleet (untracked) tint: red while the latest poll broadcast an emergency,
+   *  amber otherwise. Cockpit far-contact dots use it too. */
+
+  function _fleetBillboardColor(
+    icao24,
+    info = flightState.records.data.get(icao24),
+  ) {
+    return isEmergency(info?.emergency) ? EMERGENCY_ICON_COLOR : MIL_ICON_COLOR;
   }
 
   /** The FLEET's 3D-model regime: models3d enabled AND the camera zoomed in past the altitude
@@ -965,7 +979,7 @@ export function createRendering({
       const isCockpitNear =
         flightState._cockpitContactMode &&
         flightState._cockpitNearContacts.has(icao24);
-      const baseColor = MIL_ICON_COLOR;
+      const baseColor = _fleetBillboardColor(icao24, info);
       const treatment = applyAircraftBillboardTreatment({
         billboard: bb,
         baseScale:
@@ -1082,6 +1096,7 @@ export function createRendering({
     _applyFleetBillboardPresentation,
     _iconKind,
     _modelColor,
+    _fleetBillboardColor,
     _modelRegimeActive,
     _modelCap,
     _modelAddDistM,
