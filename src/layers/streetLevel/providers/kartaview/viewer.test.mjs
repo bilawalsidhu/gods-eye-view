@@ -883,6 +883,11 @@ test('the panorama is as sharp as the viewer needs: 2,048 docked, 4,096 once exp
 });
 
 test('a CORS image is decoded off the main thread into an ImageBitmap where the browser can', async (t) => {
+  // A blob whose header names no size (the viewer then reads none).
+  const fakeBlob = {
+    size: 4,
+    slice: () => ({ arrayBuffer: async () => new ArrayBuffer(0) }),
+  };
   const saved = {
     fetch: globalThis.fetch,
     bitmap: globalThis.createImageBitmap,
@@ -896,7 +901,7 @@ test('a CORS image is decoded off the main thread into an ImageBitmap where the 
     fetched.push({ url, mode: init.mode });
     return url.includes('gone')
       ? { ok: false, status: 409 }
-      : { ok: true, blob: async () => 'blob' };
+      : { ok: true, blob: async () => fakeBlob };
   };
   globalThis.createImageBitmap = async (blob) => ({
     blob,
@@ -906,7 +911,7 @@ test('a CORS image is decoded off the main thread into an ImageBitmap where the 
   const bitmap = await loadImage('https://cdn.kartaview.org/a', {
     crossOrigin: true,
   });
-  assert.deepEqual(bitmap, { blob: 'blob', width: 4096, height: 2048 });
+  assert.deepEqual(bitmap, { blob: fakeBlob, width: 4096, height: 2048 });
   assert.deepEqual(fetched, [
     { url: 'https://cdn.kartaview.org/a', mode: 'cors' },
   ]);

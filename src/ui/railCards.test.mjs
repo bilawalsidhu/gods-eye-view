@@ -119,6 +119,96 @@ test('footer buttons retain focus and current callbacks; links use safe new tabs
   button.click();
   assert.deepEqual(calls, [2]);
 });
+test('setting ranges stay below presets and commit expensive filters on release', () => {
+  const f = railFixture();
+  const calls = [];
+  const view = createRailCards({
+    ...f,
+    onParams: (...args) => calls.push(args),
+  });
+  const model = (value) => ({
+    ...card,
+    blocks: [
+      {
+        id: 'settings',
+        type: 'settings',
+        settings: [
+          {
+            id: 'image',
+            label: 'IMAGE',
+            chips: [
+              {
+                id: 'clouds-only',
+                label: 'Clouds only',
+                params: { infrared: 100 },
+              },
+              { id: 'full', label: 'Full', params: { infrared: 0 } },
+            ],
+            range: {
+              id: 'cloud-filter',
+              param: 'infrared',
+              min: 0,
+              max: 100,
+              step: 1,
+              value,
+              label: 'FILTER',
+              unit: '%',
+              ariaLabel: 'Cloud filter strength',
+              commitOnChange: true,
+            },
+          },
+        ],
+      },
+    ],
+  });
+  view.update([model(100)]);
+  const setting = f.find((node) => node.dataset.blockId === 'image');
+  assert.equal(setting.children[1].className, 'rail-card-chips');
+  assert.equal(setting.children[2].className, 'rail-card-setting-range-row');
+  assert.equal(setting.children[2].children[0].textContent, 'FILTER');
+  const slider = f.find((node) => node.dataset.rangeId === 'cloud-filter');
+  assert.equal(slider.tagName, 'INPUT');
+  assert.equal(slider.type, 'range');
+  assert.equal(slider.min, '0');
+  assert.equal(slider.max, '100');
+  assert.equal(slider.step, '1');
+  assert.equal(slider.value, '100');
+  assert.equal(slider.getAttribute('aria-label'), 'Cloud filter strength');
+  slider.focus();
+  slider.value = '53';
+  slider.dispatchEvent(new Event('input'));
+  assert.equal(calls.length, 0, 'expensive image work waits until release');
+  assert.equal(
+    f.find((node) => node.className === 'rail-card-setting-range-value')
+      .textContent,
+    '53%',
+  );
+  view.update([model(100)]);
+  assert.equal(slider.value, '53', 'a status refresh retains the pending drag');
+  assert.equal(
+    slider.getAttribute('aria-valuetext'),
+    '53%',
+    'the accessible preview also survives a refresh',
+  );
+  slider.dispatchEvent(new Event('change'));
+  assert.deepEqual(calls.at(-1), ['a', { infrared: 53 }]);
+  view.update([model(53)]);
+  assert.equal(slider.value, '53');
+  assert.equal(f.document.activeElement, slider);
+  slider.value = '41';
+  slider.dispatchEvent(new Event('input'));
+  view.update([model(70)]);
+  assert.equal(
+    slider.value,
+    '70',
+    'an authoritative value supersedes the draft',
+  );
+  view.destroy();
+  slider.value = '41';
+  slider.dispatchEvent(new Event('change'));
+  assert.equal(calls.length, 1, 'destroy removes the range listener');
+});
+
 test('legend validates colors, preserves the freezing anchor and ignores CSSOM normalization', () => {
   let writes = 0;
   const f = railFixture(() => writes++);

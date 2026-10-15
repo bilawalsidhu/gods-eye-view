@@ -4818,9 +4818,13 @@ function compactAnalystItem(r) {
   for (const [key, spec] of Object.entries(fields)) {
     if (!present(r[key]) || key in compact) continue;
     if (spec.type === 'time') {
+      const ms = Number(r[key]);
       // A finite value can still be past Date's range, where toISOString throws.
-      const time = new Date(Number(r[key]));
-      if (Number.isFinite(time.getTime())) compact.time = time.toISOString();
+      const time = new Date(ms);
+      if (Number.isFinite(time.getTime())) {
+        if (key === 'lastContactAtMs') compact.lastContactAtMs = ms;
+        else compact.time = time.toISOString();
+      }
     } else compact[key] = r[key];
   }
   if (present(r.ageHours)) compact.ageHours = r.ageHours;

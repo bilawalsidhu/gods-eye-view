@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
 import { celestrakTleUrl } from '../../../src/data/spaceProviderRequests.js';
+import { readResponseTextCapped } from '../common/http.js';
 
 /**
  * Vite plugin: CelesTrak TLE proxy.
@@ -48,10 +49,14 @@ export function celestrakProxy() {
     }
   }
 
+  /** The largest group (`active`) measures ~2.7 MB; this bounds a runaway body. */
+  const CELESTRAK_MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
+
   async function fetchUpstream(group) {
     const url = celestrakTleUrl(group);
+    const signal = AbortSignal.timeout(20000);
     const res = await fetch(url.toString(), {
-      signal: AbortSignal.timeout(20000),
+      signal,
       // CelesTrak 403s bulk groups (e.g. `active`) unless the request carries a
       // descriptive User-Agent with a contact point.
       headers: {
@@ -60,7 +65,11 @@ export function celestrakProxy() {
       },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const body = await res.text();
+    const body = await readResponseTextCapped(
+      res,
+      CELESTRAK_MAX_RESPONSE_BYTES,
+      signal,
+    );
     // An upstream error page parses to zero TLEs — treat as failure, keep cache.
     if (!/^1 /m.test(body)) throw new Error('no TLE lines in response');
     return { at: Date.now(), body };

@@ -36,9 +36,10 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // consolidated tool wording (each policy stated once); model-facing tools
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
-    // Street Level adds its toggle enum values and generated alias hint.
+    // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
+    // Air quality (ECCC AQHI) extends the manifest.
     // Kartverket adds two map stacks and names them in the stack description.
-    '63a7ed10e51aaa07f0f5f63ab53ad946e36cd27a714862699e53274fd9a7f3c0',
+    '5d6837bfed2856186a635920328f3ea388d1e343189ddcc4f70f2a130d92ab78',
   );
 });
 
