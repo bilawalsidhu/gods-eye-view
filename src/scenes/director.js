@@ -113,7 +113,7 @@ export class SceneDirector {
     this._interactionTransitions = 0;
     this._interactions = createSceneInteractions(viewer, {
       available: () =>
-        !this._destroyed && !this._running && !this.viewer.trackedEntity,
+        !this._destroyed && !this._running && !this.viewer?.trackedEntity,
       execute: (action, signal) =>
         this._trackWork(this._executeInteraction(action, signal)),
     });
@@ -132,12 +132,12 @@ export class SceneDirector {
     };
     this._cameraHandoffUnsubscribe =
       styleManager.subscribeCameraHandoff?.(yieldCamera);
-    const canvas = viewer.scene?.canvas;
+    const canvas = engine?.host.canvas ?? viewer?.scene?.canvas;
     for (const event of ['pointerdown', 'wheel'])
-      canvas?.addEventListener(event, yieldCamera, { passive: true });
+      canvas?.addEventListener?.(event, yieldCamera, { passive: true });
     this._removeCameraInput = () => {
       for (const event of ['pointerdown', 'wheel'])
-        canvas?.removeEventListener(event, yieldCamera);
+        canvas?.removeEventListener?.(event, yieldCamera);
     };
 
     /** @type {boolean} True while a scene run is in progress */
