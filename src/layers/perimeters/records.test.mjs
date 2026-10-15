@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeFirePerimeterSnapshot } from './records.js';
+import {
+  normalizeFirePerimeterSnapshot,
+  normalizeInfonaPerimeterSnapshot,
+} from './records.js';
 
 const ring = [
   [-108.1, 35.2],
@@ -198,4 +201,53 @@ test('a perimeter with no rings is skipped rather than rendered empty', () => {
   });
   assert.equal(rows.length, 1);
   assert.equal(rows[0].stableId, 'other');
+});
+
+test('INFONA preserves estimates, metric area and report date without inventing incident facts', () => {
+  const f = {
+    geometry: { type: 'Polygon', coordinates: [ring] },
+    properties: {
+      id: 'PY:cluster-0',
+      date: Date.UTC(2026, 9, 14),
+      sup_ha: 7.36,
+      dpto_desc: 'PRESIDENTE HAYES',
+      dist_desc: 'BENJAMIN ACEVAL',
+      acq_dt_i: '202610141743',
+    },
+  };
+  const rows = normalizeInfonaPerimeterSnapshot({
+    features: [f, f, { ...f, geometry: null }],
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].source, 'INFONA');
+  assert.equal(rows[0].geometryKind, 'estimated-active-fire-area');
+  assert.equal(rows[0].countryCode, 'PY');
+  assert.equal(rows[0].hectares, 7.36);
+  assert.ok(Math.abs(rows[0].acres - 18.187) < 0.001);
+  assert.equal(rows[0].reportTime, f.properties.date);
+  for (const field of [
+    'containedPct',
+    'discoveredTime',
+    'updatedTime',
+    'personnel',
+    'costToDate',
+    'county',
+  ])
+    assert.equal(rows[0][field], null);
+  assert.ok(!rows[0].stableId.includes(':'));
+  const nextDay = normalizeInfonaPerimeterSnapshot({
+    features: [
+      {
+        ...f,
+        properties: { ...f.properties, date: f.properties.date + 86400000 },
+      },
+    ],
+  });
+  assert.notEqual(rows[0].stableId, nextDay[0].stableId);
+  assert.equal(normalizeInfonaPerimeterSnapshot({ error: 'no data' }), null);
+  const unknown = normalizeInfonaPerimeterSnapshot({
+    features: [{ ...f, properties: { objectid: 0, date: 'bad', sup_ha: -1 } }],
+  });
+  assert.equal(unknown[0].hectares, null);
+  assert.equal(unknown[0].reportTime, null);
 });

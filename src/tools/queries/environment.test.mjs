@@ -212,6 +212,13 @@ test('fire perimeters are placed by their outline and sorted by size', async () 
   assert.deepEqual(result.data.rows[1], {
     id: 'small',
     name: 'Small Fire',
+    source: 'NIFC WFIGS',
+    geometry_kind: 'incident-perimeter',
+    country_code: 'US',
+    hectares: null,
+    department: null,
+    district: null,
+    report_date: null,
     acres: 120,
     contained_pct: 80,
     state: 'US-CA',

@@ -92,3 +92,53 @@ export function normalizeFirePerimeterSnapshot(geojson) {
   }
   return rows;
 }
+
+/** Normalize INFONA's daily estimated fire areas; absent incident facts stay unknown. */
+export function normalizeInfonaPerimeterSnapshot(geojson) {
+  if (!Array.isArray(geojson?.features)) return null;
+  const rows = [];
+  const ids = new Set();
+  for (const feature of geojson.features) {
+    const p = feature?.properties;
+    const polygons = normalizePolygons(feature?.geometry);
+    if (!p || !polygons?.length) continue;
+    const id = (textOrNull(p.id)?.trim() || p.objectid) ?? feature.id;
+    if (!['string', 'number'].includes(typeof id) || id === '') continue;
+    const reportTime =
+      Number.isFinite(p.date) && p.date > 0 && p.date <= 8.64e15
+        ? p.date
+        : null;
+    // Source cluster identifiers can be reused on subsequent reporting days.
+    const stableId = `infona-${reportTime ?? 'undated'}-${encodeURIComponent(String(id))}`;
+    if (ids.has(stableId)) continue;
+    ids.add(stableId);
+    const hectares =
+      Number.isFinite(p.sup_ha) && p.sup_ha >= 0 ? p.sup_ha : null;
+    rows.push({
+      stableId,
+      source: 'INFONA',
+      geometryKind: 'estimated-active-fire-area',
+      countryCode: 'PY',
+      name: textOrNull(p.dist_desc) || textOrNull(p.dpto_desc),
+      department: textOrNull(p.dpto_desc),
+      district: textOrNull(p.dist_desc),
+      hectares,
+      acres: hectares === null ? null : hectares * 2.4710538147,
+      reportTime,
+      containedPct: null,
+      state: null,
+      county: null,
+      category: 'estimated-active-fire-area',
+      discoveredTime: null,
+      updatedTime: null,
+      cause: null,
+      behavior: null,
+      personnel: null,
+      costToDate: null,
+      complexity: null,
+      complexName: null,
+      polygons,
+    });
+  }
+  return rows;
+}

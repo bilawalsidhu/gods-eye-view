@@ -2,6 +2,13 @@
 
 export const PERIMETER_OVERLAY_SOURCE_ID = 'fire-perimeters';
 
+/** Estimates have no containment measurement and use a separate legend band. */
+export function perimeterAccent(row) {
+  return row.geometryKind === 'estimated-active-fire-area'
+    ? '#b388ff'
+    : containmentAccent(row.containedPct);
+}
+
 /** CSS accent for a perimeter card by containment progress (mirrors the fill). */
 export function containmentAccent(containedPct) {
   if (!Number.isFinite(containedPct) || containedPct <= 0) return '#ff3b30';
@@ -95,6 +102,29 @@ function formatAge(deltaMs) {
  * @returns {Object} World-overlay entry without `position`.
  */
 export function buildIncidentCard(row, nowMs, { link = null } = {}) {
+  if (row.geometryKind === 'estimated-active-fire-area') {
+    return {
+      id: `fire-perimeter-card:${row.stableId}`,
+      selected: true,
+      interactive: false,
+      title: `FIRE ESTIMATE · ${row.name || 'Paraguay'}`,
+      details: [
+        Number.isFinite(row.hectares)
+          ? `${row.hectares.toLocaleString('en-US', { maximumFractionDigits: 2 })} ha estimated`
+          : 'Estimated area unknown',
+        [row.district, row.department, 'Paraguay'].filter(Boolean).join(' · '),
+        'INFONA · grouped thermal detections',
+        row.reportTime != null
+          ? `Report date: ${new Date(row.reportTime).toISOString().slice(0, 10)}`
+          : 'Report date unavailable',
+      ],
+      accent: perimeterAccent(row),
+      priority: Number.MAX_SAFE_INTEGER,
+      gapPx: 15,
+      verticalOnly: true,
+      placement: 'above',
+    };
+  }
   const facts = [];
   if (Number.isFinite(row.acres))
     facts.push(`${Math.round(row.acres).toLocaleString('en-US')} ac`);

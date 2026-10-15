@@ -29,9 +29,23 @@ const feature = (id = 'fire') => ({
     ],
   },
 });
-function install(options = {}, hook = 'configureServer') {
+function install(
+  {
+    infonaFetch = async () => {
+      throw new Error('INFONA unavailable');
+    },
+    ...options
+  } = {},
+  hook = 'configureServer',
+) {
   let handler;
-  const plugin = firePerimetersProxy(options);
+  const plugin = firePerimetersProxy({
+    ...options,
+    fetchImpl: (url, init) =>
+      new URL(url).hostname === 'visor.infona.gov.py'
+        ? infonaFetch(url, init)
+        : options.fetchImpl(url, init),
+  });
   assert.equal(typeof plugin.configureServer, 'function');
   assert.equal(typeof plugin.configurePreviewServer, 'function');
   plugin[hook]({
@@ -407,4 +421,104 @@ test('publication HTML streams are capped at 2 MiB', async () => {
   });
   assert.equal((await request('/inciweb/publication/42')).status, 502);
   assert.equal(cancelled, true);
+});
+
+const infonaFeature = () => ({
+  ...feature(),
+  properties: {
+    objectid: 1,
+    id: 'PY-cluster-0',
+    date: Date.UTC(2026, 9, 14),
+    sup_ha: 7.36,
+    dist_desc: 'Fixture district',
+  },
+});
+
+test('fixed INFONA query serves Paraguay when WFIGS is down and reports the missing source', async () => {
+  let calls = 0;
+  const request = install({
+    fetchImpl: async () => {
+      throw new Error('WFIGS down');
+    },
+    infonaFetch: async (url, options) => {
+      calls++;
+      const query = new URL(url);
+      assert.equal(
+        query.pathname,
+        '/server/rest/services/Hosted/CAPAS_MIF_DIARIO_gdb/FeatureServer/4/query',
+      );
+      assert.equal(query.searchParams.get('outSR'), '4326');
+      assert.equal(query.searchParams.get('orderByFields'), 'objectid ASC');
+      assert.equal(options.redirect, 'error');
+      assert.ok(options.signal instanceof AbortSignal);
+      return Response.json({ features: [infonaFeature()] });
+    },
+  });
+  const response = await request('/?url=https://example.com');
+  assert.equal(response.status, 200);
+  assert.equal(response.body.rows[0].source, 'INFONA');
+  assert.equal(response.body.sources.wfigs.status, 'unavailable');
+  assert.equal(response.body.sources.infona.status, 'ok');
+  assert.equal(response.body.partial, true);
+  await request();
+  assert.equal(calls, 1);
+});
+
+test('independent caches retain a failed source briefly, expire it and then recover', async () => {
+  let clock = 0;
+  let failInfona = false;
+  const request = install({
+    now: () => clock,
+    fetchImpl: async () => Response.json({ features: [feature()] }),
+    infonaFetch: async () => {
+      if (failInfona) throw new Error('offline');
+      return Response.json({ features: [infonaFeature()] });
+    },
+  });
+  assert.equal((await request()).body.rows.length, 2);
+  failInfona = true;
+  clock = 300000;
+  const stale = await request();
+  assert.equal(stale.body.rows.length, 2);
+  assert.equal(stale.body.sources.infona.status, 'stale');
+  assert.equal(stale.headers['X-Data-Stale'], 'true');
+  clock = 1800000;
+  const expired = await request();
+  assert.equal(expired.body.rows.length, 1);
+  assert.equal(expired.body.sources.infona.status, 'unavailable');
+  assert.equal(expired.body.sources.wfigs.status, 'ok');
+  failInfona = false;
+  const recovered = await request();
+  assert.equal(recovered.body.rows.length, 2);
+  assert.equal(recovered.body.partial, false);
+});
+
+test('INFONA empty collections are valid; malformed or paginated incomplete snapshots are distinguished', async () => {
+  const empty = install({
+    fetchImpl: async () => Response.json({ features: [] }),
+    infonaFetch: async () => Response.json({ features: [] }),
+  });
+  const complete = await empty();
+  assert.deepEqual(complete.body.rows, []);
+  assert.equal(complete.body.partial, false);
+  let count = 0;
+  const paged = install({
+    fetchImpl: async () => Response.json({ error: 'bad' }),
+    infonaFetch: async () => {
+      count++;
+      return Response.json({
+        features: [
+          {
+            ...infonaFeature(),
+            properties: { ...infonaFeature().properties, id: String(count) },
+          },
+        ],
+        properties: { exceededTransferLimit: true },
+      });
+    },
+  });
+  const incomplete = await paged();
+  assert.equal(count, 5);
+  assert.equal(incomplete.body.sources.infona.truncated, true);
+  assert.equal(incomplete.body.partial, true);
 });

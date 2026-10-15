@@ -178,6 +178,13 @@ const layers = [
     query: {
       fields: {
         acres: ['n', 'acres'],
+        hectares: ['n', 'ha'],
+        source: ['t'],
+        geometryKind: ['t'],
+        countryCode: ['t'],
+        department: ['t'],
+        district: ['t'],
+        reportTime: ['ms'],
         containedPct: ['n', '%'],
         personnel: ['n'],
         costToDate: ['n', 'USD'],

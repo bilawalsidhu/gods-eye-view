@@ -1,5 +1,7 @@
 # Changelog
 
+- Add Paraguay INFONA daily estimated fire areas to the existing Fire Perimeters layer, with hectares, source dates, distinct styling and independent bounded source caching.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 

@@ -46,6 +46,8 @@ test('a truncated response pages until the feed is complete', async () => {
   let handler;
   const plugin = firePerimetersProxy({
     fetchImpl: async (url) => {
+      if (new URL(url).hostname === 'visor.infona.gov.py')
+        return Response.json({ features: [] });
       requests.push(new URL(String(url)).searchParams.get('resultOffset'));
       const page = requests.length;
       return Response.json({
@@ -114,4 +116,16 @@ test('response-body completion honors cancellation without replacing records', a
   await assert.rejects(source.getSnapshot({ signal: abort.signal }), {
     name: 'AbortError',
   });
+});
+
+test('partial source coverage remains visible to consumers of the row snapshot', async () => {
+  const status = {
+    infona: { status: 'ok', truncated: false },
+    wfigs: { status: 'unavailable', truncated: false },
+  };
+  const source = createWfigsPerimeterSource({
+    fetchImpl: async () => Response.json({ rows: [], sources: status }),
+  });
+  await source.getSnapshot();
+  assert.deepEqual(source.getStatus(), status);
 });

@@ -1,4 +1,7 @@
-import { normalizeFirePerimeterSnapshot } from '../../src/layers/perimeters/records.js';
+import {
+  normalizeFirePerimeterSnapshot,
+  normalizeInfonaPerimeterSnapshot,
+} from '../../src/layers/perimeters/records.js';
 import {
   readResponseJsonCapped,
   readResponseTextCapped,
@@ -36,6 +39,26 @@ const API_URL =
     f: 'geojson',
   }).toString();
 
+// INFONA publishes grouped thermal detections, not surveyed incident boundaries.
+const INFONA_URL =
+  'https://visor.infona.gov.py/server/rest/services/Hosted/' +
+  'CAPAS_MIF_DIARIO_gdb/FeatureServer/4/query?' +
+  new URLSearchParams({
+    where: '1=1',
+    outFields: 'objectid,id,date,sup_ha,dpto_desc,dist_desc',
+    orderByFields: 'objectid ASC',
+    resultRecordCount: '2000',
+    returnGeometry: 'true',
+    maxAllowableOffset: '0.001',
+    outSR: '4326',
+    f: 'geojson',
+  }).toString();
+
+const PERIMETER_SOURCES = [
+  ['wfigs', API_URL, normalizeFirePerimeterSnapshot],
+  ['infona', INFONA_URL, normalizeInfonaPerimeterSnapshot],
+];
+
 // The service caps a single response at its maxRecordCount (2000); a peak
 // season can exceed that, so follow exceededTransferLimit with offset pages.
 const MAX_PAGES = 5;
@@ -46,7 +69,7 @@ const exceededTransferLimit = (payload) =>
 
 const MIB = 1024 * 1024;
 
-/** Fixed-origin, bounded WFIGS and InciWeb routes for dev and preview. */
+/** Fixed-origin, bounded WFIGS, INFONA and InciWeb routes for dev and preview. */
 export function firePerimetersProxy({
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = () => Date.now(),
@@ -70,19 +93,66 @@ export function firePerimetersProxy({
     return readResponseJsonCapped(response, cap, signal);
   }
 
-  async function fetchPerimeters() {
+  async function fetchPerimeterSource(baseUrl, normalize) {
     const features = [];
+    let truncated = false;
     for (let page = 0; page < MAX_PAGES; page++) {
       const url =
-        page === 0 ? API_URL : `${API_URL}&resultOffset=${features.length}`;
-      const payload = await upstream(url, 16 * MIB, 30_000);
+        page === 0 ? baseUrl : `${baseUrl}&resultOffset=${features.length}`;
+      const payload = await upstream(url, 8 * MIB, 30_000);
       if (!Array.isArray(payload?.features))
         throw new Error('invalid_snapshot');
       features.push(...payload.features);
-      if (!exceededTransferLimit(payload) || !payload.features.length) break;
+      truncated = exceededTransferLimit(payload);
+      if (!truncated || !payload.features.length) break;
     }
-    const rows = normalizeFirePerimeterSnapshot({ features });
-    return { fetchedAt: now(), rows };
+    return { fetchedAt: now(), rows: normalize({ features }), truncated };
+  }
+
+  async function fetchPerimeters() {
+    const results = await Promise.allSettled(
+      PERIMETER_SOURCES.map(([id, url, normalize]) =>
+        acquire(
+          id,
+          300_000,
+          () => fetchPerimeterSource(url, normalize),
+          cache,
+          1_800_000,
+        ),
+      ),
+    );
+    const rows = [];
+    const sources = {};
+    const fetchedTimes = [];
+    for (const [index, result] of results.entries()) {
+      const id = PERIMETER_SOURCES[index][0];
+      if (result.status === 'rejected') {
+        sources[id] = {
+          status: 'unavailable',
+          fetchedAt: null,
+          truncated: false,
+        };
+        continue;
+      }
+      const { value, stale } = result.value;
+      sources[id] = {
+        status: stale ? 'stale' : 'ok',
+        fetchedAt: value.fetchedAt,
+        truncated: value.truncated,
+      };
+      rows.push(...value.rows);
+      fetchedTimes.push(value.fetchedAt);
+    }
+    if (!fetchedTimes.length) throw new Error('sources_unavailable');
+    return {
+      fetchedAt: Math.min(...fetchedTimes),
+      rows,
+      sources,
+      partial: Object.values(sources).some(
+        (s) => s.status !== 'ok' || s.truncated,
+      ),
+      stale: Object.values(sources).some((s) => s.status === 'stale'),
+    };
   }
 
   async function fetchIndex() {
@@ -147,7 +217,7 @@ export function firePerimetersProxy({
     return { createdMs, changedMs };
   }
 
-  async function acquire(key, ttl, load, store) {
+  async function acquire(key, ttl, load, store, maxStaleMs = Infinity) {
     const previous = store.get(key);
     if (previous && now() - previous.savedAt < ttl)
       return { value: previous.value, stale: false };
@@ -165,7 +235,8 @@ export function firePerimetersProxy({
       });
       return { value: await promise, stale: false };
     } catch (error) {
-      if (previous) return { value: previous.value, stale: true };
+      if (previous && now() - previous.savedAt < maxStaleMs)
+        return { value: previous.value, stale: true };
       throw error;
     }
   }
@@ -207,11 +278,14 @@ export function firePerimetersProxy({
     } else return json(404, { error: 'unknown_route' });
     if (!allow(clientKey(req))) return json(429, { error: 'rate_limited' });
     try {
-      const { value, stale } = await acquire(key, ttl, load, store);
+      const { value, stale } =
+        key === 'perimeters'
+          ? { value: await fetchPerimeters(), stale: false }
+          : await acquire(key, ttl, load, store);
       json(
         200,
         key === 'perimeters' && stale ? { ...value, stale: true } : value,
-        stale,
+        stale || value.stale === true,
       );
     } catch (error) {
       json(error.status === 429 ? 429 : 502, {

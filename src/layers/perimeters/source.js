@@ -1,10 +1,12 @@
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
-/** Request a normalized snapshot through the bounded, same-origin WFIGS proxy. */
+/** Request a normalized snapshot through the bounded, same-origin perimeter proxy. */
 export function createWfigsPerimeterSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
 } = {}) {
+  let status = null;
   return {
+    getStatus: () => status,
     async getSnapshot({ signal } = {}) {
       signal?.throwIfAborted();
       const response = await fetchImpl('/api/fire-perimeters', { signal });
@@ -17,6 +19,7 @@ export function createWfigsPerimeterSource({
       signal?.throwIfAborted();
       if (!Array.isArray(payload?.rows))
         throw new Error('Malformed perimeter snapshot');
+      status = payload.sources ?? null;
       return payload.rows;
     },
   };

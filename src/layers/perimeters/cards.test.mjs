@@ -235,3 +235,26 @@ test('partial incident details render only the facts that exist', () => {
     'Catron County · $85K to date',
   ]);
 });
+
+test('INFONA cards identify estimates and never expose containment or an InciWeb link', () => {
+  const card = buildIncidentCard(
+    {
+      stableId: 'infona-1',
+      name: 'BENJAMIN ACEVAL',
+      source: 'INFONA',
+      geometryKind: 'estimated-active-fire-area',
+      hectares: 7.36,
+      district: 'BENJAMIN ACEVAL',
+      department: 'PRESIDENTE HAYES',
+      reportTime: Date.UTC(2026, 9, 14),
+    },
+    Date.UTC(2026, 9, 15),
+    { link: 'https://inciweb.wildfire.gov/test' },
+  );
+  assert.match(card.title, /^FIRE ESTIMATE/);
+  assert.equal(card.accent, '#b388ff');
+  assert.equal(card.interactive, false);
+  assert.ok(card.details.includes('7.36 ha estimated'));
+  assert.ok(card.details.includes('Report date: 2026-10-14'));
+  assert.doesNotMatch(card.details.join(' '), /contained|InciWeb|County/);
+});

@@ -167,6 +167,10 @@ export const DATA_CREDITS = [
       ' · Incident information: ' +
       '<a href="https://inciweb.wildfire.gov/" target="_blank" rel="noopener">InciWeb</a>',
   },
+  {
+    key: 'infona',
+    html: 'Paraguay estimated fire areas: <a href="https://infona.gov.py/portal-de-manejo-integral-del-fuego/" target="_blank" rel="noopener">INFONA · Portal de Manejo Integral del Fuego</a>',
+  },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
