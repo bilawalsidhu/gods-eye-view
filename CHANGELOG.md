@@ -42,6 +42,8 @@
 
 - Director timeline seeks cross the dateline along the short longitude arc.
 
+- Map state updates stop delivering to subscribers removed during the same notification.
+
 - Director assets cancelled during the final stream read are discarded with reader cleanup.
 
 - Analyst queries preserve useful rows when an upstream timestamp is outside the supported date range.

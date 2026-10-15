@@ -5235,6 +5235,10 @@ falls back to OSM on construction failure or two active tile failures, and
 credits follow the source actually displayed. Terrain remains lazy while the
 photoreal globe is hidden.
 
+Map-stack subscribers hear each settled activation once. A subscriber removed
+during a delivery, or every subscriber once the controller is destroyed, gets
+no further callback from it, and a destroyed controller accepts no new ones.
+
 Map credentials are passed to each source constructor rather than changing SDK-wide Google or ion defaults.
 
 Bing Aerial and Bing Labels resolve their ion imagery endpoint with the supplied
