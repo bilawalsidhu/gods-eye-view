@@ -40,6 +40,21 @@ test('filtered infrared preserves RGB and input bytes, scales existing alpha, an
   );
 });
 
+test('filter strength interpolates between the full infrared image and the cloud key', () => {
+  const pixels = new Uint8ClampedArray([
+    0, 0, 0, 255, 194, 0, 0, 200, 12, 50, 217, 128,
+  ]);
+  assert.deepEqual([...infraredAlpha(pixels, 0)], [...pixels]);
+  assert.deepEqual(
+    infraredAlpha(pixels, 100),
+    infraredAlpha(pixels, 'filtered'),
+  );
+  assert.deepEqual(
+    [...infraredAlpha(pixels, 50)],
+    [0, 0, 0, 128, 194, 0, 0, 149, 12, 50, 217, 128],
+  );
+});
+
 test('full infrared preserves every channel including partial and zero alpha', () => {
   const pixels = new Uint8ClampedArray([
     12, 50, 194, 80, 0, 0, 0, 255, 255, 200, 0, 0,

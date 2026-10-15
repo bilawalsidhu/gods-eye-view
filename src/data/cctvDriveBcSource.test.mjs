@@ -17,6 +17,7 @@ import {
   DEFAULT_TALLINN_MAX_SOURCES,
   DEFAULT_TARKTEE_MAX_SOURCES,
   DEFAULT_NSW_MAX_SOURCES,
+  DEFAULT_CATALONIA_MAX_SOURCES,
   DRIVEBC_WEBCAMS_URL,
 } from '../../server/providers/cctv/constants.js';
 import {
@@ -221,7 +222,7 @@ test('CCTV catalog merges DriveBC cameras and CCTV_DRIVEBC_ENABLED=0 skips the r
   );
 });
 
-test('default per-pack camera caps fit inside the default catalog cap', () => {
+test('default caps of the original packs fit inside the default catalog cap', () => {
   // Every default pack at its own cap (Warendorf ships 1 curated camera).
   const packs =
     DEFAULT_AUSTIN_MAX_SOURCES +
@@ -234,6 +235,7 @@ test('default per-pack camera caps fit inside the default catalog cap', () => {
     DEFAULT_TALLINN_MAX_SOURCES +
     DEFAULT_TARKTEE_MAX_SOURCES +
     DEFAULT_NSW_MAX_SOURCES +
+    DEFAULT_CATALONIA_MAX_SOURCES +
     1;
   assert.ok(
     packs <= DEFAULT_CCTV_MAX_SOURCES,

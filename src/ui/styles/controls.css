@@ -1008,6 +1008,80 @@ body.gev-drawing #cesiumContainer canvas {
   cursor: crosshair;
 }
 
+/* DISPLAY ▸ Import: one row per imported file, and the drop-target outline */
+.geo-import-list {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.geo-import-list.visible {
+  display: flex;
+}
+.geo-import-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.geo-import-swatch {
+  flex: 0 0 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+/* KML/KMZ draw with the styles written in the file, so the swatch shows a
+   hatch instead of a color the globe does not use. */
+.geo-import-swatch.own-styles {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--text-dim) 0 1px,
+    transparent 1px 3px
+  );
+  box-shadow: inset 0 0 0 1px var(--text-dim);
+}
+.geo-import-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  color: var(--text-primary);
+}
+.geo-import-action {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.geo-import-action:hover,
+.geo-import-action:focus-visible {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+.geo-import-action .material-symbols-outlined {
+  font-size: 14px;
+}
+.geo-import-hint:empty {
+  display: none;
+}
+body.gev-geo-import-drag #cesiumContainer {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+}
+
 /* Proximity / All segmented control under the 3D toggle */
 #models3d-mode-row {
   min-width: 184px;

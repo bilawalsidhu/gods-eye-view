@@ -12,6 +12,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import createViteConfig, { fetchOverpassPayload, overpassPayloadIsData, readOverpassDisk } from '../vite.config.js';
+import { resolveOverpassUpstreamTag } from '../server/providers/overpass/constants.js';
 
 const DATA = { status: 200, body: '{"elements":[]}' };
 
@@ -155,7 +156,13 @@ test('coalesced outage callers both receive last-good data, never a cached refus
     const directory = path.join(process.cwd(), '.gev-cache', 'overpass');
     const file = path.join(directory, `${createHash('sha1').update(body).digest('hex')}.json`);
     await mkdir(directory, { recursive: true });
-    const stale = { ...DATA, cachedAt: Date.now() - 40 * 86400000 };
+    // Last-good data was fetched from the instance configured above, so it
+    // carries that instance's tag the way the transport now writes it.
+    const stale = {
+      ...DATA,
+      cachedAt: Date.now() - 40 * 86400000,
+      upstreams: resolveOverpassUpstreamTag(),
+    };
     await writeFile(file, JSON.stringify(stale));
     const entered = Promise.withResolvers();
     const release = Promise.withResolvers();
@@ -186,5 +193,48 @@ test('coalesced outage callers both receive last-good data, never a cached refus
       mock.mock.restore();
       await unlink(file);
     }
+  }
+});
+
+test('a disk entry is not served after OVERPASS_UPSTREAMS is repointed', async (t) => {
+  const prior = process.env.OVERPASS_UPSTREAMS;
+  t.after(() => {
+    if (prior === undefined) delete process.env.OVERPASS_UPSTREAMS;
+    else process.env.OVERPASS_UPSTREAMS = prior;
+  });
+  const key = `overpass-upstream-switch-${randomUUID()}`;
+  const directory = path.join(process.cwd(), '.gev-cache', 'overpass');
+  const file = path.join(
+    directory,
+    `${createHash('sha1').update(key).digest('hex')}.json`,
+  );
+  await mkdir(directory, { recursive: true });
+  try {
+    // Written while one instance was configured...
+    process.env.OVERPASS_UPSTREAMS = 'https://first.example/api/interpreter';
+    const first = resolveOverpassUpstreamTag();
+    await writeFile(
+      file,
+      JSON.stringify({ ...DATA, cachedAt: Date.now(), upstreams: first }),
+    );
+    assert.ok(await readOverpassDisk(key, 60000), 'its own entry is a hit');
+
+    // ...is not an answer once the operator points at a different one, on the
+    // stale path either: the key is the query alone, so it would otherwise hit.
+    process.env.OVERPASS_UPSTREAMS = 'https://second.example/api/interpreter';
+    assert.notEqual(resolveOverpassUpstreamTag(), first, 'tag follows the env');
+    assert.equal(await readOverpassDisk(key, 60000), null, 'fresh read refused');
+    assert.equal(
+      await readOverpassDisk(key, Infinity),
+      null,
+      'stale read refused',
+    );
+
+    // With nothing configured there is no instance to contradict, and serving
+    // last-good data is what the not-configured path exists for.
+    delete process.env.OVERPASS_UPSTREAMS;
+    assert.ok(await readOverpassDisk(key, Infinity), 'unconfigured still serves');
+  } finally {
+    await unlink(file);
   }
 });

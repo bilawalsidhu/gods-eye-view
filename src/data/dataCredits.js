@@ -111,7 +111,7 @@ export const DATA_CREDITS = [
   {
     key: 'adsblol',
     html:
-      'Military flights, aircraft traces &amp; bounded regional flight fallback: ' +
+      'Military flights, aircraft traces, bounded regional flight fallback &amp; GNSS navigation integrity: ' +
       '<a href="https://adsb.lol" target="_blank" rel="noopener">adsb.lol</a> ' +
       '(ODbL 1.0)',
   },
@@ -169,6 +169,13 @@ export const DATA_CREDITS = [
   },
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
+  {
+    key: 'eccc-aqhi',
+    html:
+      'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet ' +
+      '(<a href="https://eccc-msc.github.io/open-data/" target="_blank" rel="noopener">eccc-msc.github.io/open-data</a>) ' +
+      '· <a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">ECCC Data Servers End-use Licence</a>',
+  },
   {
     key: 'overture-military-names',
     html: 'Military area names: <a href="https://overturemaps.org" target="_blank" rel="noopener">Overture Maps Foundation</a> (ODbL)',
@@ -242,10 +249,36 @@ export const DATA_CREDITS = [
       'license CC BY 4.0',
   },
   {
+    key: 'lithuania-cctv',
+    html:
+      // Opt-in: the camera endpoints are the eismoinfo.lt website backend, not
+      // among the services Via Lietuva's open-data statement lists (its
+      // conditions: attribution, reuse on the same terms).
+      'Road-camera stills (Lithuania, when enabled): ' +
+      '<a href="https://eismoinfo.lt/" target="_blank" rel="noopener">Via Lietuva / Eismoinfo</a>; periodically updated images',
+  },
+  {
     key: 'calgary-cctv',
     html:
       'Traffic cameras (Calgary): contains information licensed under the ' +
       '<a href="https://data.calgary.ca/stories/s/Open-Calgary-Terms-of-Use/u45n-7awa" target="_blank" rel="noopener">Open Government Licence – City of Calgary</a>',
+  },
+  {
+    key: 'catalonia-cctv',
+    html:
+      'CCTV cameras &amp; frames (Catalonia): ' +
+      '<a href="https://transit.gencat.cat/" target="_blank" rel="noopener">Servei Català de Trànsit</a> ' +
+      '(Llicència oberta d’ús d’informació - Catalunya); some cameras are supplied by partners ' +
+      '(Ajuntament de Barcelona, Ajuntament de Terrassa), each named in the CCTV panel',
+  },
+  {
+    key: 'kingcounty-cctv',
+    html:
+      'CCTV cameras &amp; frames (King County, WA): King County Road Services — ' +
+      '<a href="https://kingcounty.gov/en/dept/local-services/roads" target="_blank" rel="noopener">kingcounty.gov</a>, ' +
+      'per the ' +
+      '<a href="https://kingcounty.gov/en/dept/kcit/data-information-services/gis-center/about/terms-conditions-copyrights" target="_blank" rel="noopener">KCGIS Center terms</a>. ' +
+      'Partner-city cameras hosted on the county image handler (e.g. Newcastle) name their owner in the CCTV panel.',
   },
   {
     key: 'vegvesen-cctv',
@@ -262,8 +295,36 @@ export const DATA_CREDITS = [
       NYC_DOT_DISCLAIMER,
   },
   {
+    key: 'toronto-cctv',
+    html:
+      'Traffic cameras (Toronto): contains information licensed under the ' +
+      '<a href="https://www.toronto.ca/city-government/data-research-maps/open-data/open-data-licence/" target="_blank" rel="noopener">Open Government Licence – Toronto</a>',
+  },
+  {
     key: 'gbfs',
-    html: 'Bikeshare availability: GBFS operator feeds (e.g. Austin BCycle)',
+    html:
+      'Bikeshare availability: GBFS operator feeds ' +
+      '(e.g. Austin BCycle; Bike Share Toronto, operated by the Toronto Parking Authority)',
+  },
+  {
+    key: 'urbansharing-gbfs',
+    html:
+      'City bikes (Norway): contains data under the ' +
+      '<a href="https://data.norge.no/nlod/en/2.0" target="_blank" rel="noopener">Norwegian licence for Open Government data (NLOD)</a> ' +
+      'made available by Oslo Bysykkel, Bergen Bysykkel and Trondheim Bysykkel',
+  },
+  {
+    key: 'entur-mobility-gbfs',
+    html:
+      'City bikes (Stavanger, Skien/Porsgrunn): contains data under the ' +
+      '<a href="https://data.norge.no/nlod/en/2.0" target="_blank" rel="noopener">Norwegian licence for Open Government data (NLOD)</a> ' +
+      'made available by Entur (Kolumbus Bysykkel, Farte Bysykkel)',
+  },
+  {
+    key: 'jcdecaux-gbfs',
+    html:
+      'City bikes (Lillestrøm): Bysykkel Lillestrøm, JCDecaux — ' +
+      '<a href="https://developer.jcdecaux.com/files/Open-Licence-fr.pdf" target="_blank" rel="noopener">Licence Ouverte</a>',
   },
   {
     key: 'osrm-routing',
@@ -341,6 +402,16 @@ export const DATA_CREDITS = [
       'Contains information licensed under the ' +
       '<a href="https://www2.gov.bc.ca/gov/content/data/open-data/open-government-licence-bc" target="_blank" rel="noopener">Open Government Licence – British Columbia</a>. ' +
       'Some cameras are supplied by partners (TransLink, the City of Vancouver, the City of Surrey, Parks Canada and others); each names its provider in the CCTV panel.',
+  },
+  {
+    key: 'wsdot-cctv',
+    html:
+      'CCTV cameras &amp; frames (Washington State): ' +
+      '<a href="https://wsdot.wa.gov/" target="_blank" rel="noopener">Washington State Department of Transportation</a> ' +
+      '(<a href="https://wsdot.com/travel/real-time/cameras" target="_blank" rel="noopener">Travel Center</a>), ' +
+      'used per the ' +
+      '<a href="https://wsdot.wa.gov/about/policies/travel-information-disclaimer" target="_blank" rel="noopener">WSDOT travel information disclaimer</a> ' +
+      '(low-volume public feed; catalog cached, frames proxied on demand)',
   },
   {
     key: 'tallinn-cctv',
