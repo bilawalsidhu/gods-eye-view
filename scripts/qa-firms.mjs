@@ -192,7 +192,7 @@ async function waitForFirmsActionCount(
 ) {
   const deadline = Date.now() + timeoutMs;
   let snapshot = await firmsActionSnapshot(page);
-  const count = () => selected ? snapshot.selectedCount : snapshot.count;
+  const count = () => (selected ? snapshot.selectedCount : snapshot.count);
   while (Date.now() < deadline && count() !== expected) {
     await page.evaluate(() =>
       window.__godsEyeView?.viewer?.scene?.requestRender?.(),
