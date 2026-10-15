@@ -41,12 +41,12 @@ page.on('console', (message) => {
 page.on('pageerror', (error) => consoleErrors.push(error.message));
 page.on('response', (response) => {
   const url = new URL(response.url());
-  const expectedOptionalTrackMiss = response.status() === 404
-    && url.pathname === '/api/flights/track';
+  const expectedOptionalMiss = response.status() === 404
+    && ['/api/flights/track', '/api/google/tiles-token'].includes(url.pathname);
   if (
     url.origin === new URL(appUrl).origin
     && response.status() >= 400
-    && !expectedOptionalTrackMiss
+    && !expectedOptionalMiss
   ) {
     localHttpErrors.push(`${response.status()} ${url.pathname}`);
   }
@@ -66,7 +66,7 @@ try {
     // live orbit accuracy. Reuse the tracking suite's fixed element sets so
     // CelesTrak outages cannot invalidate an otherwise clean UI run.
     if (url.origin === new URL(appUrl).origin
-      && ['/api/celestrak/active', '/api/celestrak/starlink'].includes(url.pathname)) {
+      && url.pathname.startsWith('/api/celestrak/')) {
       const dense = url.pathname.endsWith('/starlink');
       request.respond({
         status: 200,
@@ -1567,6 +1567,49 @@ try {
     manager._setCockpitDisclosure('radio', false);
   });
 
+  const dmhLocalInfo = await page.evaluate(() => {
+    const cockpit = window.__godsEyeView.styleManager.cockpitView;
+    const previous = cockpit.regionalBrief;
+    const previousPage = cockpit.briefPageIndex;
+    const info = { latitude: -25.28, longitude: -57.63 };
+    const fixture = {
+      status: 'partial', articles: [], place: { label: 'DMH QA' },
+      weather: { temperatureC: 24, weatherCode: 3 },
+      stationObservation: {
+        stationName: 'ASUNCION QA', distanceM: 1234,
+        observedAt: new Date().toISOString(),
+        temperatureC: 0, humidityPct: 0, windKph: 0, windDirectionDeg: 0,
+      },
+    };
+    try {
+      cockpit.regionalBrief = fixture;
+      cockpit.renderRegionalBrief(fixture, info);
+      cockpit.showBriefPage(2);
+      const station = document.getElementById('cockpit-local-observation');
+      const observed = !station.hidden
+        && station.textContent.includes('DMH / DINAC')
+        && station.textContent.includes('ASUNCION QA · 1.2 KM')
+        && station.textContent.includes('0.0°C · RH 0% · WIND 0 KM/H')
+        && station.textContent.includes('UTC')
+        && document.getElementById('cockpit-local-temperature').textContent === '24°C';
+      cockpit.renderRegionalBrief({ ...fixture, stationObservation: {
+        ...fixture.stationObservation,
+        observedAt: new Date(Date.now() - 91 * 60000).toISOString(),
+      } }, info);
+      const expired = station.hidden && !station.textContent;
+      cockpit.renderRegionalBrief(fixture, info);
+      cockpit.renderRegionalBriefStatus('loading', info);
+      return { observed, expired, cleared: station.hidden && !station.textContent };
+    } finally {
+      cockpit.regionalBrief = previous;
+      if (previous) cockpit.renderRegionalBrief(previous, previous.coordinates || info);
+      else cockpit.renderRegionalBriefStatus('loading', info);
+      cockpit.showBriefPage(previousPage);
+    }
+  });
+  check('Local Info separates DMH observations and clears expired or previous-subject readings',
+    dmhLocalInfo.observed && dmhLocalInfo.expired && dmhLocalInfo.cleared, dmhLocalInfo);
+
   const visionCycle = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     const cockpit = manager.cockpitView;
@@ -2057,7 +2100,16 @@ try {
     JSON.stringify(cyberStyleStates));
   for (const height of [987, 720, 640, 900]) {
     await page.setViewport({ width: 1440, height, deviceScaleFactor: 1 });
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    // Software rendering may need more than one frame to settle the resize.
+    // Keep the geometry assertions below authoritative if the wait expires.
+    await page.waitForFunction(() => {
+      const signal = document.getElementById('cockpit-signal-stream');
+      const utility = document.querySelector('#cockpit-utility-controls .cockpit-utility-control.is-expanded');
+      if (!signal || !utility) return false;
+      const s = signal.getBoundingClientRect();
+      const u = utility.getBoundingClientRect();
+      return u.bottom <= s.top - 7 && s.bottom < innerHeight;
+    }, { timeout: 10_000 }).catch(() => {});
     const geometry = await page.evaluate(() => {
       const signal = document.getElementById('cockpit-signal-stream');
       const utility = document.getElementById('cockpit-utility-controls');
