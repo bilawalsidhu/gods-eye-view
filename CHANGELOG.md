@@ -1,5 +1,12 @@
 # Changelog
 
+- Add Gateshead (UK) and northern A19 map presets and keyless CCTV packs with 79 public
+  Tyne and Wear UTMC snapshot cameras. Registered frame URLs stay on the
+  publisher's image host, the map and preview share one fetch per minute,
+  and source labels ask users to check the timestamp embedded in each image.
+  `CCTV_GATESHEAD_ENABLED=0` and `CCTV_A19_ENABLED=0` disable the respective packs;
+  an optional refresh script updates published locations without downloading frames.
+
 - Snow flakes sway within a fixed range instead of drifting sideways faster the
   longer the app runs; the Wind setting still scales the sway.
 

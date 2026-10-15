@@ -5,6 +5,10 @@ import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { cameraRegion, normalizeSourceItem } from './normalize.js';
 import {
+  loadGatesheadSourcesFromCatalog,
+  loadA19SourcesFromCatalog,
+} from './gateshead.js';
+import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
   loadTflSourcesFromOpenData,
@@ -36,6 +40,16 @@ const envOptIn = (name) => String(process.env[name] || '').trim() === '1';
  * kill switch, or by an opt-in flag where access needs an agreement.
  */
 const LIVE_PACKS = [
+  {
+    name: 'a19',
+    enabled: () => envEnabled('CCTV_A19_ENABLED'),
+    load: loadA19SourcesFromCatalog,
+  },
+  {
+    name: 'gateshead',
+    enabled: () => envEnabled('CCTV_GATESHEAD_ENABLED'),
+    load: loadGatesheadSourcesFromCatalog,
+  },
   { name: 'austin', enabled: () => true, load: loadAustinSourcesFromOpenData },
   {
     name: 'caltrans',

@@ -11,6 +11,8 @@
   "src/data/layerStateTokenLedger.test.mjs",
   "scripts/check-package-boundaries.mjs",
   "scripts/precompute-cctv-heights.mjs",
+  "scripts/refresh-gateshead-cameras.mjs",
+  "src/data/cctvGateshead.test.mjs",
   "src/tooling/precomputeCctvHeights.test.mjs",
   "src/tooling/fixtureRoot.mjs",
   "src/tooling/fixtureRoot.test.mjs",

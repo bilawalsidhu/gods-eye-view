@@ -925,6 +925,36 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+## Gateshead UTMC CCTV source pack
+
+The default public camera packs include Gateshead (UK), with 61 published
+North East Traffic Cameras / Tyne and Wear UTMC locations. The source catalog
+is `config/cctv_sources.gateshead.json`; `node scripts/refresh-gateshead-cameras.mjs`
+refreshes names, coordinates and registered JPEG URLs from the publisher's
+Gateshead listing and camera pages, using four concurrent metadata requests.
+The refresh validates all pages before replacing the catalog and never downloads
+or archives camera frames. Published positions are used; headings, mount heights
+and projection geometry remain low-confidence estimates.
+
+The server admits only HTTPS JPEG paths on `netrafficcams.co.uk`, within its
+camera image directory. Public snapshots normally update every 60–300 seconds;
+the panel labels the source and asks users to check the image's own timestamp.
+Successful HTTP retrieval does not prove image freshness. The map and preview
+share per-camera requests and a one-minute in-memory cache; failures retain the
+existing unavailable/Street View/placeholder behavior. Camera images are not
+written to disk. `CCTV_GATESHEAD_ENABLED=0` disables the pack; the existing
+round-robin global catalog cap is unchanged. The Gateshead location preset has
+five camera-area waypoints without changing the default Austin location.
+
+Focused source checks: `node --test src/data/cctvGateshead.test.mjs`.
+
+The northern A19 pack adds 18 junction cameras using the same provider and
+snapshot reader, with a separate `CCTV_A19_ENABLED` kill switch. Refresh
+`config/cctv_sources.a19.json` with `node scripts/refresh-gateshead-cameras.mjs --a19`.
+The A19 North East preset provides Tyne Tunnel, Silverlink and Moor Farm views.
+Coverage stops at the published UTMC junction cameras; Peterlee, Northallerton
+and Nuneaton are not represented as available feeds.
+
 ## NYC DOT TMC CCTV source pack
 
 The CCTV catalog can add New York City traffic cameras from the NYC DOT

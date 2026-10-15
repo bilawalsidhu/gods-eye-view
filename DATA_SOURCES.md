@@ -135,6 +135,14 @@ The submarine-cable GeoJSON is **CC BY-NC-SA 3.0** (Attribution-**NonCommercial*
 
 The richer structured dataset is licensed separately/commercially by TeleGeography.
 
+### Gateshead and northern A19 camera packs
+
+The Gateshead pack adds 61 publicly listed cameras from North East Traffic Cameras / Tyne and Wear UTMC. Catalog coordinates and names were read from the publisher's camera pages; run `node scripts/refresh-gateshead-cameras.mjs` to refresh the catalog. Frames are requested from the publisher's registered JPEG URLs, shared in memory for 60 seconds, and are never archived by this addition. These are periodically refreshed public snapshots, not continuous video. Check the timestamp embedded in each image: a successful download does not establish that the image is current. The source normally updates every 60–300 seconds, with exceptions and outages. Published camera locations are used; headings and projection geometry remain uncalibrated estimates.
+
+Source: https://netrafficcams.co.uk/ and https://www.netraveldata.co.uk/?page_id=42 . UTMC Open Data Service attribution: © Newcastle City Council, Open Government Licence 3.0 (https://www.netraveldata.co.uk/?page_id=13). No plate recognition, plate records, vehicle search or private camera access is included.
+
+The separate northern A19 pack adds 18 published cameras at Sunderland, South Tyneside, the Tyne Tunnel, Silverlink, Holystone and Moor Farm. Run `node scripts/refresh-gateshead-cameras.mjs --a19` to refresh `config/cctv_sources.a19.json`. It uses the same UTMC public-snapshot source, attribution, cache and availability behavior. Set `CCTV_A19_ENABLED=0` to disable it. This is partial junction coverage: it does not provide continuous coverage down the A19, or cameras in Peterlee, Northallerton or Nuneaton. National Highways camera images require a separate reuse licence; those images are not included.
+
 ### ALPR camera mapping
 
 The optional ALPR layer reads OpenStreetMap `surveillance:type=ALPR` nodes
