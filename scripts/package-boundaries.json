@@ -1768,6 +1768,7 @@
       "src/globe/navara/index.js",
       "src/globe/navara/input.js",
       "src/globe/navara/internals.js",
+      "src/globe/navara/look.js",
       "src/globe/navara/maps.js",
       "src/globe/navara/surface.js",
       "src/globe/navara/viewOptions.js",
