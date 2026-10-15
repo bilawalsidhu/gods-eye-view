@@ -54,3 +54,33 @@ test('the browser build runs the Navara asset copy as a Rollup plugin', () => {
   );
   assert.equal(build.chunkSizeWarningLimit, 1500);
 });
+
+test('the lazy chunk with the Navara engine is named navara-engine', async () => {
+  const { navaraChunkFileNames } = await import('../../build/navaraAssets.js');
+  for (const ids of [
+    ['/repo/src/globe/navara/index.js', '/repo/src/globe/navara/maps.js'],
+    [
+      '/repo/node_modules/@navaramap/three/dist/index.js',
+      '/repo/src/globe/navara/index.js',
+    ],
+  ])
+    assert.equal(
+      navaraChunkFileNames({ isEntry: false, moduleIds: ids }),
+      'assets/navara-engine-[hash].js',
+    );
+  for (const chunk of [
+    { isEntry: false, moduleIds: ['/repo/src/app/navaraMode.js'] },
+    { isEntry: false, moduleIds: ['/repo/src/globe/contract.js'] },
+    // A package chunk split off by the bundler keeps its own name.
+    {
+      isEntry: false,
+      moduleIds: ['/repo/node_modules/@navaramap/three/dist/spark.js'],
+    },
+    { isEntry: true, moduleIds: ['/repo/src/globe/navara/index.js'] },
+    { isEntry: false },
+  ])
+    assert.equal(navaraChunkFileNames(chunk), 'assets/[name]-[hash].js');
+  const { build } = createBrowserViteConfig({});
+  assert.equal(build.rollupOptions.output.chunkFileNames, navaraChunkFileNames);
+  assert.equal(build.rollupOptions.output.manualChunks, undefined);
+});

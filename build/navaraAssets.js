@@ -43,3 +43,23 @@ export function navaraWorkerAssets({ assetsDir } = {}) {
     },
   };
 }
+
+const NAVARA_MODULE = /\/src\/globe\/navara\//;
+
+/**
+ * Rollup chunkFileNames: the lazy chunk holding the Navara engine
+ * (src/globe/navara, with the Navara packages it pulls in) is named
+ * `navara-engine-[hash].js`; every other chunk keeps Vite's default name.
+ * Naming only (not manualChunks, which would pull modules shared with the
+ * Cesium entry into the Navara chunk), so the chunking is unchanged.
+ * @param {{ isEntry?: boolean, moduleIds?: string[] }} chunk
+ * @returns {string}
+ */
+export function navaraChunkFileNames(chunk) {
+  const navara =
+    !chunk.isEntry &&
+    (chunk.moduleIds ?? []).some((id) =>
+      NAVARA_MODULE.test(id.replaceAll('\\', '/')),
+    );
+  return navara ? 'assets/navara-engine-[hash].js' : 'assets/[name]-[hash].js';
+}
