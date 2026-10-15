@@ -170,6 +170,7 @@
     "./layers/satellites": "./src/layers/satellites/index.js",
     "./layers/launches": "./src/layers/launches/index.js",
     "./layers/installations": "./src/layers/installations/index.js",
+    "./layers/temperature": "./src/layers/temperature/index.js",
     "./layers/awareness": "./src/layers/awareness/index.js",
     "./layers/traffic": "./src/layers/traffic/index.js",
     "./layers/bikeshare": "./src/layers/bikeshare/index.js",
@@ -270,6 +271,7 @@
     "./tools/mcp": "./src/tools/mcp/index.js",
     "./tools/panel": "./src/tools/panel.js",
     "./tools/services": "./src/tools/services.js",
-    "./view": "./src/view/index.js"
+    "./view": "./src/view/index.js",
+    "./layers/temperature/source": "./src/layers/temperature/source.js"
   }
 }
