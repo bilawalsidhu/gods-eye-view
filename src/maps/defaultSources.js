@@ -4,12 +4,26 @@ import { keySetupRequirement } from '../keySetupCore.mjs';
 import { imageryFactoryFor, ESRI_ATTRIBUTION_HTML } from './imagery.js';
 import { terrainSourceFor } from './terrain.js';
 
-/** Select sources and setup guidance without putting provider branches in the controller. */
+const NAVARA_ION_IMAGERY_REASON =
+  'Bing imagery is not available on the experimental Navara engine';
+
+/**
+ * Select sources and setup guidance without putting provider branches in the
+ * controller. `engineKind` is the globe engine kind the sources are for: Cesium
+ * builds them from the factories (photoreal needs its loaded tileset); Navara
+ * builds them from the descriptions, so photoreal needs only the browser key
+ * (Navara has no ion route to Google tiles) and Cesium ion imagery (Bing) is
+ * unavailable.
+ */
 export function createDefaultMapSources({
   googleTileset = null,
   cesiumToken = '',
   googleApiKey = '',
+  engineKind = 'cesium',
 } = {}) {
+  if (engineKind !== 'cesium' && engineKind !== 'navara')
+    throw new TypeError(`Unknown globe engine: ${engineKind}`);
+  const navara = engineKind === 'navara';
   const ionToken = String(cesiumToken || '').trim();
   const hasIon = Boolean(ionToken);
   // Engine-neutral descriptions ride beside the Cesium factories: a terrain
@@ -22,24 +36,30 @@ export function createDefaultMapSources({
   };
   const googleKey = String(googleApiKey || '').trim();
   const hasGoogle = Boolean(googleKey);
+  const photorealAvailable = navara ? hasGoogle : Boolean(googleTileset);
   return {
-    defaultId: googleTileset ? 'photoreal' : 'esri-imagery',
+    defaultId: photorealAvailable ? 'photoreal' : 'esri-imagery',
     unknownId: 'photoreal',
-    recoveryId: googleTileset ? 'photoreal' : null,
+    recoveryId: photorealAvailable ? 'photoreal' : null,
     state: { hasCesiumIonToken: hasIon },
     sources: MAP_STACKS.map((descriptor) => {
+      const ionImageryOnNavara = navara && descriptor.kind === 'ion';
       const common = {
         descriptor,
-        available: !descriptor.requiresIon || hasIon,
-        unavailableReason: descriptor.requiresIon
-          ? keySetupRequirement('cesium-ion')
-          : null,
+        available: !ionImageryOnNavara && (!descriptor.requiresIon || hasIon),
+        unavailableReason: ionImageryOnNavara
+          ? NAVARA_ION_IMAGERY_REASON
+          : descriptor.requiresIon
+            ? keySetupRequirement('cesium-ion')
+            : null,
       };
       if (descriptor.kind === 'photoreal')
         return {
           ...common,
-          available: Boolean(googleTileset),
-          unavailableReason: photorealUnavailableReason(hasIon || hasGoogle),
+          available: photorealAvailable,
+          unavailableReason: photorealUnavailableReason(
+            navara ? hasGoogle : hasIon || hasGoogle,
+          ),
           tileset: googleTileset,
           ...(googleKey && { googleApiKey: googleKey }),
           ...(hasIon && { cesiumToken: ionToken }),

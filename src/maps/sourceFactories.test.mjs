@@ -239,3 +239,51 @@ test('default sources carry engine-neutral descriptions beside their Cesium fact
   assert.equal(osm.terrain.kind, 'keyless');
   assert.equal(osm.terrain.accessToken, undefined);
 });
+
+test('on the Navara engine photoreal keys on the browser key and ion imagery is unavailable', () => {
+  const byId = (registry, id) =>
+    registry.sources.find(({ descriptor }) => descriptor.id === id);
+  // Navara builds Google tiles from the browser key alone; no Cesium tileset.
+  const keyed = createDefaultMapSources({
+    engineKind: 'navara',
+    googleApiKey: 'google-test',
+  });
+  assert.equal(keyed.defaultId, 'photoreal');
+  assert.equal(keyed.recoveryId, 'photoreal');
+  assert.equal(byId(keyed, 'photoreal').available, true);
+  assert.equal(byId(keyed, 'photoreal').googleApiKey, 'google-test');
+  assert.equal(byId(keyed, 'photoreal').tileset, null);
+  // Bing (Cesium ion imagery) has no Navara path, with or without a token.
+  for (const registry of [
+    keyed,
+    createDefaultMapSources({ engineKind: 'navara', cesiumToken: 'ion-test' }),
+  ]) {
+    for (const id of ['bing-aerial', 'bing-labels']) {
+      assert.equal(byId(registry, id).available, false);
+      assert.match(byId(registry, id).unavailableReason, /Navara/);
+    }
+    assert.equal(byId(registry, 'esri-imagery').available, true);
+    assert.equal(byId(registry, 'osm').available, true);
+  }
+  // The ion route to Google tiles is Cesium's; a token alone is not enough.
+  const ionOnly = createDefaultMapSources({
+    engineKind: 'navara',
+    cesiumToken: 'ion-test',
+  });
+  assert.equal(byId(ionOnly, 'photoreal').available, false);
+  assert.equal(ionOnly.defaultId, 'esri-imagery');
+  assert.equal(byId(ionOnly, 'osm').terrain.kind, 'world');
+  // No key: base imagery over keyless terrain.
+  const keyless = createDefaultMapSources({ engineKind: 'navara' });
+  assert.equal(keyless.defaultId, 'esri-imagery');
+  assert.equal(keyless.recoveryId, null);
+  assert.equal(byId(keyless, 'photoreal').available, false);
+  assert.equal(byId(keyless, 'esri-imagery').terrain.kind, 'keyless');
+});
+
+test('default sources reject an unknown engine', () => {
+  assert.throws(
+    () => createDefaultMapSources({ engineKind: 'unreal' }),
+    /Unknown globe engine/,
+  );
+});
