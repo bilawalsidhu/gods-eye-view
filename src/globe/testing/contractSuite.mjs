@@ -10,9 +10,9 @@
 // Each check sets the view it needs; checks may leave the camera anywhere.
 
 import * as geo from '../../geo/index.js';
-import { INPUT_TYPES, assertGlobeEngine } from '../contract.js';
+import { INPUT_TYPES, MODIFIERS, assertGlobeEngine } from '../contract.js';
 
-const { cartesian2, cartesian3, cartographic, ellipsoid, math } = geo;
+const { cartesian2, cartesian3, cartographic, ellipsoid, math, matrix4 } = geo;
 const WGS84 = ellipsoid.WGS84;
 
 class ContractError extends Error {
@@ -41,6 +41,23 @@ const isCartesian3 = (value) =>
   Number.isFinite(value.x) &&
   Number.isFinite(value.y) &&
   Number.isFinite(value.z);
+
+// The local east/north/up axes at a position.
+function localAxes(position) {
+  const frame = geo.transforms.eastNorthUpToFixedFrame(position, WGS84);
+  return {
+    frame,
+    east: cartesian3.create(frame[0], frame[1], frame[2]),
+    north: cartesian3.create(frame[4], frame[5], frame[6]),
+    up: cartesian3.create(frame[8], frame[9], frame[10]),
+  };
+}
+
+const inRange = (value, low, high, label) =>
+  ensure(
+    typeof value === 'number' && value >= low && value < high,
+    `${label} ${value} is outside [${low}, ${high})`,
+  );
 
 const unit = (vector) => cartesian3.normalize(vector, cartesian3.create());
 const along = (origin, direction, distance) =>
@@ -313,7 +330,7 @@ export function createContractSuite(
       },
     ],
     [
-      'camera.flyTo: duration 0 lands on the destination and completes',
+      'camera.flyTo: duration 0 lands and completes before flyTo returns',
       async () => {
         await nadirView();
         const destination = cartesian3.fromDegrees(-3.7, 40.4, 50000);
@@ -325,8 +342,11 @@ export function createContractSuite(
           complete: () => outcome.push('complete'),
           cancel: () => outcome.push('cancel'),
         });
-        await until(() => outcome.length > 0, 'flight completion');
-        ensure(outcome.join() === 'complete', `flight ended with ${outcome}`);
+        ensure(
+          outcome.join() === 'complete',
+          `flyTo returned with [${outcome}] instead of [complete]`,
+        );
+        ensure(!camera.flightActive(), 'a duration-0 flight is still active');
         const pose = camera.pose();
         near(
           cartesian3.distance(pose.position, destination),
@@ -595,8 +615,30 @@ export function createContractSuite(
       },
     ],
     [
-      'surface: supported, tilesLoaded and sampleHeight shapes',
+      'surface: flags, tilesLoaded, sampleHeight, terrainHeight and clampToHeight shapes',
       async () => {
+        for (const flag of ['terrainHeightSupported', 'clampToHeightSupported'])
+          ensure(
+            typeof engine.surface[flag] === 'boolean',
+            `${flag} is not boolean`,
+          );
+        const place = cartographic.fromDegrees(20, 10, 0);
+        if (engine.surface.terrainHeightSupported) {
+          const terrain = engine.surface.terrainHeight(place);
+          ensure(
+            terrain === undefined || Number.isFinite(terrain),
+            `terrainHeight returned ${terrain}`,
+          );
+        }
+        if (engine.surface.clampToHeightSupported) {
+          const clamped = engine.surface.clampToHeight(
+            cartesian3.fromDegrees(20, 10, 5000),
+          );
+          ensure(
+            clamped === undefined || isCartesian3(clamped),
+            'clampToHeight is not a Cartesian3',
+          );
+        }
         ensure(
           typeof engine.surface.supported === 'boolean',
           'supported is not boolean',
@@ -619,13 +661,15 @@ export function createContractSuite(
       'input: every type subscribes and unsubscribes; camera inputs toggle',
       async () => {
         for (const type of INPUT_TYPES) {
-          const off = engine.input.on(type, () => {});
-          ensure(
-            typeof off === 'function',
-            `input.on('${type}') returned no remover`,
-          );
-          off();
-          off();
+          for (const modifier of [undefined, ...MODIFIERS]) {
+            const off = engine.input.on(type, () => {}, { modifier });
+            ensure(
+              typeof off === 'function',
+              `input.on('${type}', ${modifier}) returned no remover`,
+            );
+            off();
+            off();
+          }
         }
         engine.input.setCameraInputs(false);
         engine.input.setCameraInputs(true);
@@ -649,6 +693,457 @@ export function createContractSuite(
         ensure(
           engine.maps.photorealActive() === false,
           'photoreal still active',
+        );
+      },
+    ],
+    [
+      'events: adding a listener twice registers it once',
+      async () => {
+        let once = 0;
+        let twice = 0;
+        const reference = () => once++;
+        const listener = () => twice++;
+        const removers = [
+          engine.frames.postRender.addEventListener(reference),
+          engine.frames.postRender.addEventListener(listener),
+          engine.frames.postRender.addEventListener(listener),
+        ];
+        try {
+          await until(() => once >= 2, 'postRender');
+        } finally {
+          for (const remove of removers) remove();
+        }
+        ensure(
+          twice === once,
+          `a listener added twice fired ${twice} times in ${once} frames`,
+        );
+        removers[1]();
+        removers[2]();
+        await settle(2);
+        ensure(twice === once, 'a removed listener still fired');
+      },
+    ],
+    [
+      'events: removal during dispatch skips the listener; re-adding keeps it',
+      async () => {
+        const event = engine.frames.postRender;
+        const seen = [];
+        const victim = () => seen.push('victim');
+        const survivor = () => seen.push('survivor');
+        let dispatches = 0;
+        const remover = () => {
+          dispatches++;
+          if (dispatches !== 1) return;
+          event.removeEventListener(victim);
+          event.removeEventListener(survivor);
+          event.addEventListener(survivor);
+        };
+        event.addEventListener(remover);
+        event.addEventListener(victim);
+        event.addEventListener(survivor);
+        try {
+          await until(() => dispatches >= 3, 'three postRender dispatches');
+        } finally {
+          for (const listener of [remover, victim, survivor])
+            event.removeEventListener(listener);
+        }
+        ensure(
+          !seen.includes('victim'),
+          'a listener removed during dispatch ran',
+        );
+        ensure(
+          seen.includes('survivor'),
+          'a listener removed and re-added during dispatch was lost',
+        );
+      },
+    ],
+    [
+      'camera.pose: angle ranges follow Cesium',
+      async () => {
+        const destination = cartesian3.fromDegrees(30, 20, 20000);
+        camera.setView({
+          destination,
+          orientation: { heading: -0.5, pitch: -0.4, roll: -0.2 },
+        });
+        await settle();
+        let pose = camera.pose();
+        inRange(pose.heading, 0, math.TWO_PI, 'heading');
+        inRange(pose.roll, 0, math.TWO_PI, 'roll');
+        near(pose.heading, math.TWO_PI - 0.5, 1e-6, 'heading of −0.5');
+        near(pose.roll, math.TWO_PI - 0.2, 1e-6, 'roll of −0.2');
+        ensure(
+          pose.pitch >= -math.PI_OVER_TWO && pose.pitch <= math.PI_OVER_TWO,
+          `pitch ${pose.pitch} outside [−π/2, π/2]`,
+        );
+        camera.setView({
+          destination,
+          orientation: { heading: 0.7, pitch: -math.PI_OVER_TWO, roll: 0.3 },
+        });
+        await settle();
+        pose = camera.pose();
+        near(pose.roll, 0, 0, 'roll looking straight down');
+        inRange(pose.heading, 0, math.TWO_PI, 'heading looking straight down');
+      },
+    ],
+    [
+      'camera.setView: heading π/2 at pitch 0 looks east',
+      async () => {
+        const destination = cartesian3.fromDegrees(-120, 35, 3000);
+        camera.setView({
+          destination,
+          orientation: { heading: math.PI_OVER_TWO, pitch: 0, roll: 0 },
+        });
+        await settle();
+        const pose = camera.pose();
+        const axes = localAxes(pose.position);
+        near(
+          cartesian3.dot(pose.direction, axes.east),
+          1,
+          1e-6,
+          'direction·east',
+        );
+        near(cartesian3.dot(pose.up, axes.up), 1, 1e-6, 'up·localUp');
+      },
+    ],
+    [
+      'camera.setView: pitch −π/2 looks down the local up',
+      async () => {
+        const destination = cartesian3.fromDegrees(-120, 35, 3000);
+        camera.setView({
+          destination,
+          orientation: { heading: 0, pitch: -math.PI_OVER_TWO, roll: 0 },
+        });
+        await settle();
+        const pose = camera.pose();
+        const axes = localAxes(pose.position);
+        near(cartesian3.dot(pose.direction, axes.up), -1, 1e-6, 'direction·up');
+        near(
+          cartesian3.dot(pose.up, axes.north),
+          1,
+          1e-6,
+          'up·north at heading 0',
+        );
+      },
+    ],
+    [
+      'camera.setView: positive roll tilts up toward the camera right',
+      async () => {
+        const destination = cartesian3.fromDegrees(10, 45, 3000);
+        camera.setView({
+          destination,
+          orientation: { heading: 0.4, pitch: -0.2, roll: 0 },
+        });
+        await settle();
+        const level = camera.pose();
+        camera.setView({
+          destination,
+          orientation: { heading: 0.4, pitch: -0.2, roll: 0.3 },
+        });
+        await settle();
+        const rolled = camera.pose();
+        near(
+          cartesian3.dot(rolled.up, level.right),
+          Math.sin(0.3),
+          1e-6,
+          'up·levelRight',
+        );
+        near(
+          cartesian3.dot(rolled.direction, level.direction),
+          1,
+          1e-9,
+          'roll changed the direction',
+        );
+      },
+    ],
+    [
+      'camera.flightActive: true during a flight, false after it ends',
+      async () => {
+        await nadirView();
+        ensure(!camera.flightActive(), 'a flight is active before flyTo');
+        camera.flyTo({
+          destination: cartesian3.fromDegrees(100, 0, 5e6),
+          duration: 5,
+        });
+        ensure(camera.flightActive(), 'no flight is active after flyTo');
+        camera.cancelFlight();
+        ensure(
+          !camera.flightActive(),
+          'the flight is active after cancelFlight',
+        );
+      },
+    ],
+    [
+      'camera.flyToSphere: Cesium default heading, pitch and range',
+      async () => {
+        await nadirView();
+        const center = cartesian3.fromDegrees(2.35, 48.85, 100);
+        const radius = 1000;
+        let done = false;
+        camera.flyToSphere(
+          { center, radius },
+          { duration: 0, complete: () => (done = true) },
+        );
+        ensure(
+          done,
+          'a duration-0 sphere flight did not complete synchronously',
+        );
+        const pose = camera.pose();
+        const { width, height } = engine.host.size();
+        const tanPhi = Math.tan(pose.fovy / 2);
+        const tanTheta = (width / height) * tanPhi;
+        const range = Math.max(100, radius / tanTheta, radius / tanPhi);
+        near(
+          cartesian3.distance(pose.position, center),
+          range,
+          range * 1e-6,
+          'range (m)',
+        );
+        const axes = localAxes(center);
+        const toCamera = unit(
+          cartesian3.subtract(pose.position, center, cartesian3.create()),
+        );
+        near(
+          cartesian3.dot(toCamera, axes.up),
+          Math.sin(Math.PI / 4),
+          1e-6,
+          'pitch −π/4',
+        );
+        near(
+          cartesian3.dot(toCamera, axes.east),
+          0,
+          1e-6,
+          'heading 0 (east offset)',
+        );
+        ensure(
+          cartesian3.dot(toCamera, axes.north) < 0,
+          'camera is not south of the centre',
+        );
+        camera.flyToSphere({ center, radius: 0 }, { duration: 0 });
+        near(
+          cartesian3.distance(camera.pose().position, center),
+          100,
+          1e-3,
+          'minimum range (m)',
+        );
+        const identity = camera.transform();
+        for (let index = 0; index < 16; index++)
+          near(
+            identity[index],
+            matrix4.IDENTITY[index],
+            0,
+            `transform[${index}]`,
+          );
+      },
+    ],
+    [
+      'camera.lookAtTransform: heading/pitch/range and Cartesian offsets, transform and release',
+      async () => {
+        await nadirView();
+        const target = cartesian3.fromDegrees(-0.12, 51.5, 0);
+        const { frame, up } = localAxes(target);
+        camera.lookAtTransform(frame, {
+          heading: 0.4,
+          pitch: -0.7,
+          range: 2000,
+        });
+        await settle();
+        let pose = camera.pose();
+        near(
+          cartesian3.distance(pose.position, target),
+          2000,
+          1e-3,
+          'range (m)',
+        );
+        const aim = () =>
+          cartesian3.dot(
+            unit(
+              cartesian3.subtract(
+                target,
+                camera.pose().position,
+                cartesian3.create(),
+              ),
+            ),
+            camera.pose().direction,
+          );
+        near(aim(), 1, 1e-9, 'direction·toTarget');
+        const held = camera.transform();
+        for (let index = 0; index < 16; index++)
+          near(held[index], frame[index], 1e-6, `transform[${index}]`);
+        camera.lookAtTransform(frame, cartesian3.create(0, -1000, 1000));
+        await settle();
+        pose = camera.pose();
+        near(
+          cartesian3.distance(pose.position, target),
+          Math.SQRT2 * 1000,
+          1e-3,
+          'Cartesian offset range (m)',
+        );
+        near(aim(), 1, 1e-9, 'Cartesian offset direction·toTarget');
+        ensure(
+          cartesian3.dot(pose.up, up) > 0,
+          'up does not follow the frame +Z',
+        );
+        camera.release();
+        await settle();
+        near(
+          cartesian3.distance(camera.pose().position, pose.position),
+          0,
+          0.01,
+          'release moved the camera (m)',
+        );
+        const released = camera.transform();
+        for (let index = 0; index < 16; index++)
+          near(
+            released[index],
+            matrix4.IDENTITY[index],
+            0,
+            `released transform[${index}]`,
+          );
+      },
+    ],
+    [
+      'camera.zoomIn and zoomOut move along the view direction',
+      async () => {
+        camera.setView({
+          destination: cartesian3.fromDegrees(20, 10, 50000),
+          orientation: { heading: 0.3, pitch: -0.9, roll: 0 },
+        });
+        await settle();
+        const start = camera.pose();
+        camera.zoomIn(2000);
+        await settle();
+        const zoomed = camera.pose().position;
+        const moved = cartesian3.subtract(
+          zoomed,
+          start.position,
+          cartesian3.create(),
+        );
+        near(
+          cartesian3.dot(moved, start.direction),
+          2000,
+          1e-3,
+          'zoomIn distance (m)',
+        );
+        near(
+          cartesian3.magnitude(moved),
+          2000,
+          1e-3,
+          'zoomIn stays on the view axis',
+        );
+        camera.zoomOut(500);
+        await settle();
+        near(
+          cartesian3.distance(camera.pose().position, start.position),
+          1500,
+          1e-3,
+          'zoomOut distance (m)',
+        );
+      },
+    ],
+    [
+      'camera.viewRectangle: wraps west > east across the antimeridian',
+      async () => {
+        camera.setView({
+          destination: cartesian3.fromDegrees(180, 0, 1e6),
+          orientation: { heading: 0, pitch: -math.PI_OVER_TWO, roll: 0 },
+        });
+        await settle();
+        const rectangle = camera.viewRectangle();
+        ensure(rectangle, 'no view rectangle over the antimeridian');
+        ensure(
+          rectangle.west > rectangle.east,
+          `west ${rectangle.west} is not east of east ${rectangle.east}`,
+        );
+        ensure(
+          rectangle.west > 0 && rectangle.east < 0,
+          'the rectangle does not cross ±180°',
+        );
+        ensure(
+          rectangle.south < 0 && rectangle.north > 0,
+          'the rectangle misses the equator',
+        );
+      },
+    ],
+    [
+      'camera.viewRectangle: spans all longitudes over a pole',
+      async () => {
+        camera.setView({
+          destination: cartesian3.fromDegrees(0, 89, 1e6),
+          orientation: { heading: 0, pitch: -math.PI_OVER_TWO, roll: 0 },
+        });
+        await settle();
+        const rectangle = camera.viewRectangle();
+        ensure(rectangle, 'no view rectangle over the pole');
+        near(rectangle.west, -Math.PI, 1e-9, 'west');
+        near(rectangle.east, Math.PI, 1e-9, 'east');
+        near(rectangle.north, math.PI_OVER_TWO, 1e-9, 'north');
+        ensure(
+          rectangle.south > 0,
+          `south ${rectangle.south} crosses the equator`,
+        );
+      },
+    ],
+    [
+      'projector.viewProjection: agrees with worldToWindow',
+      async () => {
+        camera.setView({
+          destination: cartesian3.fromDegrees(20, 10, 30000),
+          orientation: { heading: 0.6, pitch: -0.5, roll: 0.1 },
+        });
+        await settle();
+        const { width, height } = engine.host.size();
+        const result = new Array(16).fill(0);
+        const matrix = engine.projector.viewProjection(result);
+        ensure(
+          matrix === result,
+          'viewProjection did not fill its result argument',
+        );
+        ensure(
+          matrix.length === 16 && matrix.every(Number.isFinite),
+          'not 16 finite numbers',
+        );
+        let compared = 0;
+        for (const [x, y] of [
+          [width / 2, height / 2],
+          [width / 5, height / 4],
+          [width * 0.9, height * 0.8],
+        ]) {
+          const point = camera.pickEllipsoid(cartesian2.create(x, y));
+          if (!point) continue;
+          const window = engine.projector.worldToWindow(point);
+          ensure(window, 'a picked point did not project');
+          const clip = [0, 1, 2, 3].map(
+            (row) =>
+              matrix[row] * point.x +
+              matrix[4 + row] * point.y +
+              matrix[8 + row] * point.z +
+              matrix[12 + row],
+          );
+          ensure(clip[3] > 0, 'a visible point has clip.w <= 0');
+          near(((clip[0] / clip[3] + 1) / 2) * width, window.x, 0.5, 'x (px)');
+          near(((1 - clip[1] / clip[3]) / 2) * height, window.y, 0.5, 'y (px)');
+          compared++;
+        }
+        ensure(compared >= 2, 'too few screen points hit the globe');
+      },
+    ],
+    [
+      'projector.horizonVisible: the nadir is visible and the far side hidden',
+      async () => {
+        await nadirView();
+        ensure(
+          engine.projector.horizonVisible(cartesian3.fromDegrees(20, 10, 0)),
+          'the nadir is hidden',
+        );
+        ensure(
+          !engine.projector.horizonVisible(
+            cartesian3.fromDegrees(-160, -10, 0),
+          ),
+          'the antipode is visible',
+        );
+        ensure(
+          engine.projector.horizonVisible(cartesian3.fromDegrees(-70, 10, 2e7)),
+          'a high point beside the limb is hidden',
         );
       },
     ],
