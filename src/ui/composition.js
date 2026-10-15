@@ -25,8 +25,10 @@ import {
   initTrackedReadout,
 } from '../data/trackedReadout.js';
 import {
+  clearOverlaySource,
   destroyWorldOverlay,
   initWorldOverlay,
+  setOverlayEntries,
 } from '../overlays/worldOverlay.js';
 import {
   destroyDetection,
@@ -86,6 +88,8 @@ export class StyleManager extends ApplicationShell {
         initTrackedReadout,
         destroyWorldOverlay,
         initWorldOverlay,
+        setOverlayEntries,
+        clearOverlaySource,
         destroyDetection,
         initDetection,
         cycleDetectionMode,

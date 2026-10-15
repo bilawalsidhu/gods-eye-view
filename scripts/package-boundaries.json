@@ -476,6 +476,7 @@
     "modules": [
       "src/app/stateChannel.js",
       "src/bloom.js",
+      "src/browserGeolocation.js",
       "src/cctvFocusPolicy.js",
       "src/cctvFocusRequest.js",
       "src/cockpitMath.js",
@@ -1246,6 +1247,7 @@
       "src/app/tools.js",
       "src/app/viewer.js",
       "src/bloom.js",
+      "src/browserGeolocation.js",
       "src/camera.js",
       "src/cameraVerbs.js",
       "src/cctvFocusPolicy.js",

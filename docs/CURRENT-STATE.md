@@ -1,5 +1,12 @@
 # God's Eye View Current State
 
+Browser "My location" is keyboard accessible and honors camera ownership: follow
+stops when any newer navigation, Cockpit entry or tracking hand-off takes the
+camera, frames against sampled ground height, and pauses its live watch while the
+tab is hidden. Fly-to is Enter/Space; follow is Shift+Enter/Space. The "You"
+marker label renders through the world-overlay host. Your position is sent to
+the share link when you copy it while following.
+
 Vessel snapshot completeness is separate from freshness. A current snapshot with
 rejected or duplicate records shows PARTIAL with accepted/received counts; stale
 or unknown freshness and transport failures retain their warnings. Partial

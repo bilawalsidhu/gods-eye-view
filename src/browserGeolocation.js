@@ -18,8 +18,19 @@ const DEFAULT_POSITION_OPTIONS = Object.freeze({
 /**
  * @returns {boolean}
  */
-export function isGeolocationAvailable(geo = globalThis.navigator?.geolocation) {
+export function isGeolocationAvailable(
+  geo = globalThis.navigator?.geolocation,
+) {
   return Boolean(geo && typeof geo.getCurrentPosition === 'function');
+}
+
+/**
+ * Geolocation only works in secure contexts (HTTPS, or http://localhost).
+ * @param {object} [ctx]
+ * @returns {boolean}
+ */
+export function isSecureGeolocationContext(ctx = globalThis) {
+  return ctx?.isSecureContext !== false;
 }
 
 /**
@@ -34,7 +45,8 @@ export function classifyGeolocationError(err) {
   if (code === 2) return GEOLOCATION_POSITION_UNAVAILABLE;
   if (code === 3) return GEOLOCATION_TIMEOUT;
   const message = String(err.message || '').toLowerCase();
-  if (message.includes('denied') || message.includes('permission')) return GEOLOCATION_DENIED;
+  if (message.includes('denied') || message.includes('permission'))
+    return GEOLOCATION_DENIED;
   if (message.includes('timeout')) return GEOLOCATION_TIMEOUT;
   if (message.includes('unavailable')) return GEOLOCATION_POSITION_UNAVAILABLE;
   return GEOLOCATION_UNKNOWN;
@@ -67,7 +79,11 @@ export function geolocationErrorMessage(code) {
  */
 export function normalizeGeolocationPosition(position) {
   const coords = position?.coords;
-  if (!coords || !Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)) {
+  if (
+    !coords ||
+    !Number.isFinite(coords.latitude) ||
+    !Number.isFinite(coords.longitude)
+  ) {
     throw new Error('Invalid geolocation position');
   }
   return {
@@ -76,7 +92,9 @@ export function normalizeGeolocationPosition(position) {
     accuracy: Number.isFinite(coords.accuracy) ? coords.accuracy : null,
     heading: Number.isFinite(coords.heading) ? coords.heading : null,
     speed: Number.isFinite(coords.speed) ? coords.speed : null,
-    timestamp: Number.isFinite(position.timestamp) ? position.timestamp : Date.now(),
+    timestamp: Number.isFinite(position.timestamp)
+      ? position.timestamp
+      : Date.now(),
   };
 }
 
@@ -102,7 +120,9 @@ export function getCurrentBrowserPosition({
         try {
           resolve(normalizeGeolocationPosition(position));
         } catch (err) {
-          const wrapped = new Error(geolocationErrorMessage(GEOLOCATION_UNKNOWN));
+          const wrapped = new Error(
+            geolocationErrorMessage(GEOLOCATION_UNKNOWN),
+          );
           wrapped.code = GEOLOCATION_UNKNOWN;
           wrapped.cause = err;
           reject(wrapped);
@@ -174,7 +194,11 @@ export function watchBrowserPosition({
     stop() {
       if (stopped) return;
       stopped = true;
-      try { geo.clearWatch?.(watchId); } catch { /* no-op */ }
+      try {
+        geo.clearWatch?.(watchId);
+      } catch {
+        /* no-op */
+      }
     },
   };
 }
@@ -219,7 +243,12 @@ export function createPressGesture({ holdMs = 550, onClick, onHold } = {}) {
       };
 
       const onUp = (event) => {
-        if (pointerId != null && event.pointerId != null && event.pointerId !== pointerId) return;
+        if (
+          pointerId != null &&
+          event.pointerId != null &&
+          event.pointerId !== pointerId
+        )
+          return;
         const wasHold = holdFired;
         clear();
         pointerId = null;
@@ -233,11 +262,32 @@ export function createPressGesture({ holdMs = 550, onClick, onHold } = {}) {
         holdFired = false;
       };
 
+      // Keyboard activation (Enter/Space) and programmatic element.click()
+      // fire a native `click` with detail === 0; pointer clicks (detail >= 1)
+      // are already served by the pointerup branch above.
+      const onNativeClick = (event) => {
+        if (event?.detail === 0) onClick();
+      };
+
+      // Keyboard way to invoke the hold action (toggle follow): Shift+Enter/Space.
+      // preventDefault stops the paired native click from double-firing.
+      const onKeyHold = (event) => {
+        if (!event.shiftKey) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onHold();
+        }
+      };
+
+      const onContextMenu = (e) => e.preventDefault();
+
       el.addEventListener('pointerdown', onDown);
       el.addEventListener('pointerup', onUp);
       el.addEventListener('pointerleave', onCancel);
       el.addEventListener('pointercancel', onCancel);
-      el.addEventListener('contextmenu', (e) => e.preventDefault());
+      el.addEventListener('contextmenu', onContextMenu);
+      el.addEventListener('click', onNativeClick);
+      el.addEventListener('keydown', onKeyHold);
 
       return () => {
         clear();
@@ -245,6 +295,9 @@ export function createPressGesture({ holdMs = 550, onClick, onHold } = {}) {
         el.removeEventListener('pointerup', onUp);
         el.removeEventListener('pointerleave', onCancel);
         el.removeEventListener('pointercancel', onCancel);
+        el.removeEventListener('contextmenu', onContextMenu);
+        el.removeEventListener('click', onNativeClick);
+        el.removeEventListener('keydown', onKeyHold);
       };
     },
   };

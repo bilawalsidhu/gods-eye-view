@@ -10,8 +10,16 @@ import {
   getCurrentBrowserPosition,
   isGeolocationAvailable,
   normalizeGeolocationPosition,
+  isSecureGeolocationContext,
   watchBrowserPosition,
 } from './browserGeolocation.js';
+
+test('isSecureGeolocationContext rejects insecure, allows secure/undefined', () => {
+  assert.equal(isSecureGeolocationContext({ isSecureContext: false }), false);
+  assert.equal(isSecureGeolocationContext({ isSecureContext: true }), true);
+  assert.equal(isSecureGeolocationContext({}), true);
+  assert.equal(isSecureGeolocationContext(null), true);
+});
 
 test('isGeolocationAvailable requires getCurrentPosition', () => {
   assert.equal(isGeolocationAvailable(null), false);
@@ -142,4 +150,94 @@ test('createPressGesture fires click on short press and hold on long press', asy
   assert.deepEqual(clicks, ['click']); // no second click after hold
 
   detach();
+});
+
+test('createPressGesture forwards native click (keyboard/programmatic) without double-firing', async () => {
+  const clicks = [];
+  const listeners = new Map();
+  const el = {
+    addEventListener(type, fn) { listeners.set(type, fn); },
+    removeEventListener(type) { listeners.delete(type); },
+  };
+  const detach = createPressGesture({
+    onClick: () => clicks.push('click'),
+    onHold: () => {},
+  }).attach(el);
+
+  // Keyboard Enter/Space + element.click() report detail === 0.
+  listeners.get('click')({ detail: 0 });
+  assert.deepEqual(clicks, ['click']);
+  listeners.get('click')({ detail: 0 });
+  assert.deepEqual(clicks, ['click', 'click']);
+
+  detach();
+});
+
+test('createPressGesture pointer click (detail >= 1) does not double-fire via native click', async () => {
+  const clicks = [];
+  const listeners = new Map();
+  const el = {
+    addEventListener(type, fn) { listeners.set(type, fn); },
+    removeEventListener(type) { listeners.delete(type); },
+  };
+  const detach = createPressGesture({
+    onClick: () => clicks.push('click'),
+    onHold: () => {},
+  }).attach(el);
+
+  // A real pointer click: pointerdown -> pointerup (fires) -> native click detail 1.
+  listeners.get('pointerdown')({ button: 0, pointerId: 7 });
+  listeners.get('pointerup')({ pointerId: 7 });
+  listeners.get('click')({ detail: 1 });
+  assert.deepEqual(clicks, ['click']);
+
+  detach();
+});
+
+test('createPressGesture keydown Shift+Enter/Space invokes hold', async () => {
+  const holds = [];
+  const listeners = new Map();
+  const el = {
+    addEventListener(type, fn) { listeners.set(type, fn); },
+    removeEventListener(type) { listeners.delete(type); },
+  };
+  const detach = createPressGesture({
+    onClick: () => {},
+    onHold: () => holds.push('hold'),
+  }).attach(el);
+
+  listeners.get('keydown')({ key: 'Enter', shiftKey: true, preventDefault() {} });
+  assert.deepEqual(holds, ['hold']);
+  listeners.get('keydown')({ key: ' ', shiftKey: true, preventDefault() {} });
+  assert.deepEqual(holds, ['hold', 'hold']);
+  listeners.get('keydown')({ key: 'Enter', shiftKey: false });
+  assert.deepEqual(holds, ['hold', 'hold']); // plain Enter is not a hold
+
+  detach();
+});
+
+test('createPressGesture removes all listeners, including contextmenu, on detach', () => {
+  const removed = new Map();
+  const el = {
+    addEventListener(type, fn) {},
+    removeEventListener(type, fn) {
+      removed.set(type, fn);
+    },
+  };
+  const detach = createPressGesture({
+    onClick: () => {},
+    onHold: () => {},
+  }).attach(el);
+  detach();
+  for (const type of [
+    'pointerdown',
+    'pointerup',
+    'pointerleave',
+    'pointercancel',
+    'contextmenu',
+    'click',
+    'keydown',
+  ]) {
+    assert.ok(removed.has(type), `detach must remove ${type}`);
+  }
 });

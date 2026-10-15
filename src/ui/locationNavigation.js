@@ -2,11 +2,17 @@ import * as Cesium from 'cesium';
 import { createStateChannel } from '../app/stateChannel.js';
 import { LocationControls } from './location.js';
 import {
+  GEOLOCATION_DENIED,
+  GEOLOCATION_UNAVAILABLE,
   createPressGesture,
   getCurrentBrowserPosition,
   isGeolocationAvailable,
+  isSecureGeolocationContext,
   watchBrowserPosition,
 } from '../browserGeolocation.js';
+
+/** World-overlay source id that carries the "You" label (entity id is shared). */
+const MY_LOCATION_OVERLAY_SOURCE = 'gev-my-location';
 
 /** Own destination selection, lookup, orbit and world-jump lifetime. */
 export class LocationNavigation {
@@ -41,6 +47,10 @@ export class LocationNavigation {
     this._myLocationEntity = null;
     this._myLocationDetachGesture = null;
     this._myLocationUserInterruptHandler = null;
+    this._myLocationFollowGeneration = null;
+    this._myLocationHandoffUnsubscribe = null;
+    this._myLocationTransientToastShown = false;
+    this._myLocationVisibilityHandler = null;
     this.orbitController = new services.OrbitController(viewer);
     this._orbitIndicator = null;
     this._locationState = createStateChannel(
@@ -138,9 +148,9 @@ export class LocationNavigation {
         pills: this._locationPills,
         poiRow: this._poiRow,
         divider: this._locationBarDivider,
-         search: this._locationSearch,
-         searchToggle: this._searchToggle,
-         myLocationBtn: this._myLocationBtn,
+        search: this._locationSearch,
+        searchToggle: this._searchToggle,
+        myLocationBtn: this._myLocationBtn,
         resetButtons: [this._resetGlobeBtn, this._cockpitResetGlobeBtn],
         statusCity: this._locationMiniCity,
         statusPoi: this._locationMiniPoi,
@@ -157,11 +167,32 @@ export class LocationNavigation {
 
   _initMyLocationControl() {
     if (!this._myLocationBtn) return;
-    if (!isGeolocationAvailable()) {
+    if (!isGeolocationAvailable() || !isSecureGeolocationContext()) {
       this._myLocationBtn.disabled = true;
-      this._myLocationBtn.title = 'Location not supported in this browser';
+      this._myLocationBtn.title = isSecureGeolocationContext()
+        ? 'Location not supported in this browser'
+        : 'Location requires a secure (HTTPS) connection';
+      this._myLocationBtn.setAttribute('aria-disabled', 'true');
       return;
     }
+    // One ownership guard for the whole shell lifetime: any newer navigation,
+    // Cockpit entry or tracking hand-off ends follow and drops a stale marker.
+    this._myLocationHandoffUnsubscribe =
+      this.navigation?.subscribeCameraHandoff?.(({ state } = {}) => {
+        if (this._disposed) return;
+        const generation = Number(state?.generation);
+        if (!Number.isFinite(generation)) return;
+        if (
+          this._myLocationFollow &&
+          generation !== this._myLocationFollowGeneration
+        ) {
+          this._stopMyLocationFollow({ toast: 'Stopped following location' });
+        }
+        // A newer navigation also clears a stale one-shot marker.
+        if (!this._myLocationFollow && this._myLocationEntity) {
+          this._removeMyLocationMarker();
+        }
+      });
     this._myLocationDetachGesture = createPressGesture({
       holdMs: 550,
       onClick: () => void this._goToMyLocation({ follow: false }),
@@ -174,8 +205,13 @@ export class LocationNavigation {
   }
 
   async _goToMyLocation({ follow = false } = {}) {
-    if (this._disposed || !isGeolocationAvailable()) {
-      if (!this._disposed) this._showToast('Location not supported in this browser');
+    if (this._disposed) return;
+    if (!isGeolocationAvailable() || !isSecureGeolocationContext()) {
+      this._showToast(
+        isSecureGeolocationContext()
+          ? 'Location not supported in this browser'
+          : 'Location requires a secure (HTTPS) connection',
+      );
       return;
     }
     const generation = this._beginDeferredNavigation('location');
@@ -195,9 +231,20 @@ export class LocationNavigation {
     }
   }
 
-  _applyMyLocationFix(fix, { follow = false, generation = null, animate = true } = {}) {
-    if (this._disposed || !fix || (generation != null && generation !== this._navigationGeneration)) return;
-    const range = Math.min(Math.max(Number(fix.accuracy) > 0 ? Number(fix.accuracy) * 4 : 900, 400), 2500);
+  _applyMyLocationFix(
+    fix,
+    { follow = false, generation = null, animate = true } = {},
+  ) {
+    if (
+      this._disposed ||
+      !fix ||
+      (generation != null && generation !== this._navigationGeneration)
+    )
+      return;
+    const range = Math.min(
+      Math.max(Number(fix.accuracy) > 0 ? Number(fix.accuracy) * 4 : 900, 400),
+      2500,
+    );
     this._ensureMyLocationEntity(fix);
     this._searchedLocationLabel = 'My location';
     this._setActiveLocation(null);
@@ -205,18 +252,23 @@ export class LocationNavigation {
     this._collapsePOIRow();
     this._updateLocationMiniStatus();
     if (animate) {
-      const flight = this.services.flyToLandmark(this.viewer, fix.lat, fix.lon, {
-        range,
-        pitch: -45,
-        buildingHeight: 0,
-        duration: 2.2,
-        onStart: () => this._beginWorldJumpTransition(),
-        onComplete: () => this._endWorldJumpTransition(),
-        onCancel: () => this._endWorldJumpTransition(),
-      });
+      const flight = this.services.flyToLandmark(
+        this.viewer,
+        fix.lat,
+        fix.lon,
+        {
+          range,
+          pitch: -45,
+          buildingHeight: 0,
+          duration: 2.2,
+          onStart: () => this._beginWorldJumpTransition(),
+          onComplete: () => this._endWorldJumpTransition(),
+          onCancel: () => this._endWorldJumpTransition(),
+        },
+      );
       this._currentTarget = flight?.targetPosition || null;
     } else if (this._myLocationFollow && this.viewer?.camera) {
-      const target = Cesium.Cartesian3.fromDegrees(fix.lon, fix.lat, 0);
+      const target = this._myLocationCameraTarget(fix);
       this._currentTarget = target;
       this.viewer.camera.lookAt(
         target,
@@ -227,9 +279,18 @@ export class LocationNavigation {
     if (follow) this._startMyLocationFollow(fix);
   }
 
+  /** Ground-sampled Cartesian3 for the follow frame (sea-level fallback 0). */
+  _myLocationCameraTarget(fix) {
+    const carto = Cesium.Cartographic.fromDegrees(fix.lon, fix.lat);
+    const sampled = this.viewer.scene?.globe?.getHeight(carto);
+    const height = sampled != null && sampled > 0 ? sampled : 0;
+    return Cesium.Cartesian3.fromDegrees(fix.lon, fix.lat, height);
+  }
+
   _ensureMyLocationEntity(fix) {
     if (!this.viewer?.entities) return;
     const position = Cesium.Cartesian3.fromDegrees(fix.lon, fix.lat, 0);
+    this._myLocationPosition = position;
     if (!this._myLocationEntity) {
       this._myLocationEntity = this.viewer.entities.add({
         id: 'gev-my-location',
@@ -242,64 +303,151 @@ export class LocationNavigation {
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
-        label: {
-          text: 'You',
-          font: '12px sans-serif',
-          fillColor: Cesium.Color.WHITE,
-          outlineColor: Cesium.Color.BLACK,
-          outlineWidth: 2,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-          pixelOffset: new Cesium.Cartesian2(0, -18),
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        },
       });
+      this._publishMyLocationLabel();
     } else this._myLocationEntity.position = position;
+  }
+
+  /** Draw the "You" marker label via the world-overlay host, never Cesium labels. */
+  _publishMyLocationLabel() {
+    const setOverlayEntries = this.services?.setOverlayEntries;
+    if (typeof setOverlayEntries !== 'function') return;
+    setOverlayEntries(MY_LOCATION_OVERLAY_SOURCE, [
+      {
+        id: 'you',
+        position: () => this._myLocationPosition,
+        variant: 'label',
+        paintLane: 'ambient-label',
+        collisionGroup: 'ambient-label',
+        title: 'You',
+        accent: '#40b4ff',
+        interactive: false,
+        anchorRadiusPx: 9,
+        minAnchorGapPx: 4,
+        verticalOnly: true,
+        placement: 'above',
+        gapPx: 5,
+        stateless: true,
+        edgeFade: 'keyhole',
+        horizonCull: true,
+        terrainOcclusion: false,
+      },
+    ]);
   }
 
   _startMyLocationFollow(initialFix) {
     this._stopMyLocationFollow({ toast: null, keepEntity: true });
     this._myLocationFollow = true;
+    this._myLocationFollowGeneration = this._navigationGeneration;
+    this._myLocationTransientToastShown = false;
     this._myLocationBtn?.classList.add('following');
     this._myLocationBtn?.setAttribute('aria-pressed', 'true');
-    if (this._myLocationBtn) this._myLocationBtn.title = 'Following you - hold to stop';
+    if (this._myLocationBtn)
+      this._myLocationBtn.title =
+        'Following you — your position is added to the link (hold to stop)';
     this._showToast('Following your location');
     this._ensureMyLocationEntity(initialFix);
     this._myLocationUserInterruptHandler = () => {
-      if (this._myLocationFollow) this._stopMyLocationFollow({ toast: 'Stopped following location' });
+      if (this._myLocationFollow)
+        this._stopMyLocationFollow({ toast: 'Stopped following location' });
     };
-    this.viewer?.canvas?.addEventListener('pointerdown', this._myLocationUserInterruptHandler);
-    this.viewer?.canvas?.addEventListener('wheel', this._myLocationUserInterruptHandler, { passive: true });
+    this.viewer?.canvas?.addEventListener(
+      'pointerdown',
+      this._myLocationUserInterruptHandler,
+    );
+    this.viewer?.canvas?.addEventListener(
+      'wheel',
+      this._myLocationUserInterruptHandler,
+      { passive: true },
+    );
+    this._armMyLocationWatch();
+    this._listenMyLocationVisibility();
+  }
+
+  _armMyLocationWatch() {
+    this._myLocationWatch?.stop?.();
     this._myLocationWatch = watchBrowserPosition({
       onUpdate: (fix) => {
-        if (!this._disposed && this._myLocationFollow) this._applyMyLocationFix(fix, { animate: false });
+        this._myLocationTransientToastShown = false;
+        if (!this._disposed && this._myLocationFollow)
+          this._applyMyLocationFix(fix, { animate: false });
       },
       onError: (error) => {
-        if (!this._disposed) {
+        if (this._disposed || !this._myLocationFollow) return;
+        const code = error?.code;
+        if (code === GEOLOCATION_DENIED || code === GEOLOCATION_UNAVAILABLE) {
           this._showToast(error?.message || 'Could not get your location');
           this._stopMyLocationFollow();
+        } else if (!this._myLocationTransientToastShown) {
+          // Timeout / position-unavailable is transient — toast once and keep watching.
+          this._myLocationTransientToastShown = true;
+          this._showToast(error?.message || 'Could not get your location');
         }
       },
     });
+  }
+
+  /** Pause the watch while the tab is hidden; re-arm on return. */
+  _listenMyLocationVisibility() {
+    this._detachMyLocationVisibility();
+    const onVisibility = () => {
+      if (this._disposed || !this._myLocationFollow) return;
+      if (globalThis.document?.hidden) {
+        this._myLocationWatch?.stop?.();
+        this._myLocationWatch = null;
+      } else {
+        this._armMyLocationWatch();
+      }
+    };
+    this._myLocationVisibilityHandler = onVisibility;
+    globalThis.document?.addEventListener?.('visibilitychange', onVisibility);
+  }
+
+  _detachMyLocationVisibility() {
+    if (!this._myLocationVisibilityHandler) return;
+    globalThis.document?.removeEventListener?.(
+      'visibilitychange',
+      this._myLocationVisibilityHandler,
+    );
+    this._myLocationVisibilityHandler = null;
   }
 
   _stopMyLocationFollow({ toast = null, keepEntity = false } = {}) {
     this._myLocationWatch?.stop?.();
     this._myLocationWatch = null;
     this._myLocationFollow = false;
+    this._myLocationFollowGeneration = null;
+    this._detachMyLocationVisibility();
     this._myLocationBtn?.classList.remove('following');
     this._myLocationBtn?.setAttribute('aria-pressed', 'false');
-    if (this._myLocationBtn) this._myLocationBtn.title = 'My location (click: go there; hold: follow)';
+    if (this._myLocationBtn)
+      this._myLocationBtn.title =
+        'My location (click: go there; hold: follow) — your position is added to the link';
     if (this._myLocationUserInterruptHandler) {
-      this.viewer?.canvas?.removeEventListener('pointerdown', this._myLocationUserInterruptHandler);
-      this.viewer?.canvas?.removeEventListener('wheel', this._myLocationUserInterruptHandler);
+      this.viewer?.canvas?.removeEventListener(
+        'pointerdown',
+        this._myLocationUserInterruptHandler,
+      );
+      this.viewer?.canvas?.removeEventListener(
+        'wheel',
+        this._myLocationUserInterruptHandler,
+      );
       this._myLocationUserInterruptHandler = null;
     }
-    if (!keepEntity && this._myLocationEntity && this.viewer?.entities) {
-      this.viewer.entities.remove(this._myLocationEntity);
-      this._myLocationEntity = null;
-    }
+    if (!keepEntity) this._removeMyLocationMarker();
     if (toast) this._showToast(toast);
+  }
+
+  /** Remove the point entity and the world-overlay "You" label. */
+  _removeMyLocationMarker() {
+    if (this._myLocationEntity && this.viewer?.entities) {
+      this.viewer.entities.remove(this._myLocationEntity);
+    }
+    this._myLocationEntity = null;
+    this._myLocationPosition = null;
+    if (typeof this.services?.clearOverlaySource === 'function') {
+      this.services.clearOverlaySource(MY_LOCATION_OVERLAY_SOURCE);
+    }
   }
 
   _beginWorldJumpTransition() {
@@ -577,6 +725,8 @@ export class LocationNavigation {
     this._locationLookupUnsubscribe?.();
     this._locationLookupUnsubscribe = null;
     this._locationLookup?.destroy();
+    this._myLocationHandoffUnsubscribe?.();
+    this._myLocationHandoffUnsubscribe = null;
     this._myLocationDetachGesture?.();
     this._myLocationDetachGesture = null;
     this._stopMyLocationFollow();

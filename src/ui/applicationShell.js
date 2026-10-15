@@ -291,6 +291,8 @@ export class StyleManager extends ShellFacade {
         aisLiveVesselsLayer: services.aisLiveVesselsLayer,
         militaryAwarenessLayer: services.militaryAwarenessLayer,
         rocketLaunchesLayer: services.rocketLaunchesLayer,
+        setOverlayEntries: services.setOverlayEntries,
+        clearOverlaySource: services.clearOverlaySource,
       },
       elements: {
         _locationPills: this._locationPills,
