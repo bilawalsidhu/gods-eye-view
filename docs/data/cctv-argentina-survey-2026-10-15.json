@@ -1,0 +1,1905 @@
+{
+  "checkedAt": "2026-10-15",
+  "scope": "Public Argentina webcam discovery, with runtime-verified feeds and source-page-only findings. A dated survey, not proof of exhaustive coverage of the web.",
+  "runtimeCatalog": "config/cctv_sources.argentina.json",
+  "runtimeCounts": {
+    "embed": 20,
+    "hls": 18,
+    "image": 15
+  },
+  "runtimeVerification": [
+    {
+      "cameraId": "youtube-buenos-aires-obelisco",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:02:06.974Z",
+      "videoId": "r8Busmkpsh8",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.2,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "youtube-uade-buenos-aires",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:48.907Z",
+      "videoId": "NfsyRx50gAI",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.23,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-obelisco-panorama",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:46.862Z",
+      "videoId": "KYbDYbK9a48",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.17,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-ingeniero-white",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:02:02.244Z",
+      "videoId": "n7FVvPwlYiw",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.22,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-patagonia-norte",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:50.859Z",
+      "videoId": "QAdE-uO5GIM",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.22,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-puerto-bahia-blanca",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:29.986Z",
+      "videoId": "AXZizMSH2fo",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.21,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-club-galvan",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:42.899Z",
+      "videoId": "JFMuj7HcrMo",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.22,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-las-grutas",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:02:09.458Z",
+      "videoId": "sZTjAO8LGmg",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.24,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-rio-grande",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:58.261Z",
+      "videoId": "dSOWER6MtKo",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.22,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-ushuaia",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:56.215Z",
+      "videoId": "aweQQwQgvdE",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.22,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-tolhuin",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:36.934Z",
+      "videoId": "BZCkK1pRO3k",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.18,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-villa-maria",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:31.688Z",
+      "videoId": "1N_B6pS1EFg",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.17,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-claromeco-samoa",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:34.807Z",
+      "videoId": "B3sUnp8KOUs",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.27,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-radio-claromeco",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:02:04.545Z",
+      "videoId": "n7HSSj27G6Q",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.26,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-cipolletti-ferrocarril",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:40.946Z",
+      "videoId": "IIN_oraf4sw",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.19,
+      "videoSize": [1274, 720]
+    },
+    {
+      "cameraId": "ar-youtube-cipolletti-rotonda",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:54.812Z",
+      "videoId": "_VNOH6YvpyA",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.22,
+      "videoSize": [1274, 720]
+    },
+    {
+      "cameraId": "ar-youtube-necochea",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:38.879Z",
+      "videoId": "I2VvSE0fyz4",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.22,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-power-pinamar",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:44.942Z",
+      "videoId": "KLjgHG8253c",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.21,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-daireaux",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:01:52.903Z",
+      "videoId": "YR4LVQ0wXgs",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.26,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-youtube-puente-belgrano",
+      "method": "YouTube public metadata and headful Firefox iframe playback",
+      "checkedAt": "2026-10-15T19:02:00.220Z",
+      "videoId": "iPKv66eBOs4",
+      "isLiveNow": true,
+      "playbackAdvancedSeconds": 2.22,
+      "videoSize": [1280, 720]
+    },
+    {
+      "cameraId": "ar-mendoza-mendoza-plaza",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 18:50:40 GMT"
+    },
+    {
+      "cameraId": "ar-las-lenas",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 18:50:37 GMT"
+    },
+    {
+      "cameraId": "ar-neuquen-balconvalle",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-neuquen-canal7",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-neuquen-mirador-rioneuquen",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-neuquen-monumento-calle",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-neuquen-monumento-muni",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-neuquen-monumento-piso3",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-neuquen-parquecentral",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-telpin-bypdomo",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-telpin-golf",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-telpin-fuente",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-telpin-muelle",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-telpin-muelleii",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-telpin-botavara",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-telpin-rambla",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-telpin-ramblaloft",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-telpin-hemingway",
+      "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "application/vnd.apple.mpegurl",
+      "decoded": true,
+      "lastModified": null
+    },
+    {
+      "cameraId": "ar-varitech-cam016",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 18:45:14 GMT"
+    },
+    {
+      "cameraId": "ar-varitech-cam017",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 18:45:15 GMT"
+    },
+    {
+      "cameraId": "ar-varitech-cam018",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 18:45:16 GMT"
+    },
+    {
+      "cameraId": "ar-varitech-cam031",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 18:45:19 GMT"
+    },
+    {
+      "cameraId": "ar-varitech-cam032",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 18:50:10 GMT"
+    },
+    {
+      "cameraId": "ar-varitech-cam008",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 18:48:37 GMT"
+    },
+    {
+      "cameraId": "ar-varitech-cam005",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 18:46:39 GMT"
+    },
+    {
+      "cameraId": "ar-varitech-cam002",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 18:50:15 GMT"
+    },
+    {
+      "cameraId": "ar-varitech-cam003",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 18:48:10 GMT"
+    },
+    {
+      "cameraId": "ar-varitech-cam001",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 18:45:40 GMT"
+    },
+    {
+      "cameraId": "ar-bayo-copitos",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 19:37:30 GMT"
+    },
+    {
+      "cameraId": "ar-bayo-principiantes1500",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 19:37:28 GMT"
+    },
+    {
+      "cameraId": "ar-bayo-telecabina1500",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 19:37:57 GMT"
+    },
+    {
+      "cameraId": "ar-bayo-lagos2",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 19:36:31 GMT"
+    },
+    {
+      "cameraId": "ar-bayo-principiantes2",
+      "method": "HTTP response, decoded image and visual inspection",
+      "checkedAt": "2026-10-15",
+      "httpStatus": 200,
+      "contentType": "image/jpeg",
+      "decoded": true,
+      "lastModified": "Thu, 15 Oct 2026 19:37:24 GMT"
+    }
+  ],
+  "otherSources": [
+    {
+      "id": "estado-del-mar-acantilados",
+      "name": "Acantilados",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/acantilados/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-alicante",
+      "name": "Alicante",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/alicante/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-bahia-faro",
+      "name": "Bahía Faro",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/bahia-faro/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-balneario-cero",
+      "name": "Balneario Cero",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/balneario-cero/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-caleta-olivia-nautico",
+      "name": "Club Náutico",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/caleta-olivia-nautico/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-california",
+      "name": "California",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/california/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-camet-norte",
+      "name": "Camet Norte",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/camet-norte/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-cardiel",
+      "name": "Cardiel",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/cardiel/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-chapadmalal-4",
+      "name": "Chapadmalal 4",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/chapadmalal-4/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-chapadmalal-5",
+      "name": "Chapadmalal 5",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/chapadmalal-5/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-chapadmalal",
+      "name": "Chapadmalal 2",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/chapadmalal/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-daprotis",
+      "name": "Daprotis",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/daprotis/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-el-barco",
+      "name": "El Barco",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/el-barco/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-el-chiringo",
+      "name": "El Chiringo",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/el-chiringo/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-el-muelle",
+      "name": "El Muelle",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/el-muelle/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-el-nautico",
+      "name": "El Náutico",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/el-nautico/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-el-torreon",
+      "name": "El Torreón",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/el-torreon/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-el-yacht",
+      "name": "El Yacht",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/el-yacht/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-hemingway",
+      "name": "Hemingway-Cariló",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/hemingway/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-honores-viento-norte",
+      "name": "Viento norte",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/honores-viento-norte/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-honu-beach-norte",
+      "name": "Honu Beach norte",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/honu-beach-norte/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-honu-beach",
+      "name": "Honu Beach",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/honu-beach/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-horizonte-del-sol",
+      "name": "Horizonte del Sol",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/horizonte-del-sol/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-hotel-guerrero",
+      "name": "Hotel Guerrero",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/hotel-guerrero/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-indo-bar-costa-corvinas",
+      "name": "Indo Bar",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/indo-bar-costa-corvinas/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-la-40",
+      "name": "La 40",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/la-40/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-la-martina",
+      "name": "La Martina",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/la-martina/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-la-nativa",
+      "name": "La Nativa",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/la-nativa/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-la-normandina",
+      "name": "La Normandina",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/la-normandina/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-la-pepita",
+      "name": "La Pepita",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/la-pepita/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-las-grutas",
+      "name": "Las Grutas",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/las-grutas/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-las-toninas",
+      "name": "Las toninas",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/las-toninas/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-luna-roja",
+      "name": "Luna Roja",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/luna-roja/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-mar-de-ajo-nias",
+      "name": "Mar de Ajó Nias",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/mar-de-ajo-nias/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-mar-de-ajo-sunset",
+      "name": "Mar de Ajó Sunset",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/mar-de-ajo-sunset/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-mariano",
+      "name": "Mariano",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/mariano/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-mirasoles-el-muelle",
+      "name": "Mirasoles - El Muelle",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/mirasoles-el-muelle/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-paradise",
+      "name": "Paradise",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/paradise/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-playa-grande",
+      "name": "Biología",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/playa-grande/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-playa-pura-vida",
+      "name": "Playa Pura Vida",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/playa-pura-vida/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-playa-serena-2",
+      "name": "Playa Serena",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/playa-serena-2/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-rambla-ostende",
+      "name": "La Rambla Ostende",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/rambla-ostende/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-san-bernardo-bottom",
+      "name": "San Bernardo-Bottom",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/san-bernardo-bottom/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-santa-teresita-camping-estancia",
+      "name": "Santa Teresita Estancia E.C",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/santa-teresita-camping-estancia/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-santa-teresita",
+      "name": "Santa Teresita",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/santa-teresita/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-sun-rider",
+      "name": "Sun Rider",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/sun-rider/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-valeria-del-mar-la-pergola",
+      "name": "Valeria del Mar-la Pérgola",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/valeria-del-mar-la-pergola/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-varese",
+      "name": "Varese",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/varese/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-waikiki-club-de-surf",
+      "name": "Punto Escondido Waiki",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/waikiki-club-de-surf/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-waikiki",
+      "name": "Waikiki",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/waikiki/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-waimea",
+      "name": "Waimea",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/waimea/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "estado-del-mar-windy-villa-gesell",
+      "name": "Windy",
+      "provider": "Estado del Mar",
+      "sourcePageUrl": "https://estadodelmar.com.ar/camaras/windy-villa-gesell/",
+      "status": "source-only",
+      "reason": "Operator page exists; access varies between public and Premium. The observed guest player uses expiring origin-bound tokens. Open the original page; no tokens or extracted media are stored.",
+      "checkedAt": "2026-10-15"
+    },
+    {
+      "id": "neuquen-offline-isla132",
+      "name": "Isla 132",
+      "provider": "Municipalidad de Neuquén",
+      "sourcePageUrl": "https://camaras.neuquencapital.gov.ar/",
+      "status": "unavailable",
+      "reason": "Published HLS manifest returned HTTP 404.",
+      "checkedAt": "2026-10-15",
+      "province": "Neuquén",
+      "publishedUrl": "https://camaras.neuquencapital.gov.ar/live/isla132.m3u8"
+    },
+    {
+      "id": "neuquen-offline-rotonda-riolimay",
+      "name": "Rotonda Río Limay",
+      "provider": "Municipalidad de Neuquén",
+      "sourcePageUrl": "https://camaras.neuquencapital.gov.ar/",
+      "status": "unavailable",
+      "reason": "Published HLS manifest returned HTTP 404.",
+      "checkedAt": "2026-10-15",
+      "province": "Neuquén",
+      "publishedUrl": "https://camaras.neuquencapital.gov.ar/live/rotonda-riolimay.m3u8"
+    },
+    {
+      "id": "catedral-centro-superior",
+      "name": "Centro Superior",
+      "provider": "Catedral Alta Patagonia",
+      "sourcePageUrl": "https://catedralaltapatagonia.com/webcams/",
+      "status": "stale",
+      "reason": "Decodable image but Last-Modified was 2026-09-03; excluded from the active pack.",
+      "checkedAt": "2026-10-15",
+      "province": "Río Negro",
+      "publishedUrl": "https://varitech.ar/cameras/cam006/latest.jpg"
+    },
+    {
+      "id": "liwen-catedral",
+      "name": "Liwen Catedral",
+      "provider": "Liwen",
+      "sourcePageUrl": "https://liwencatedral.com.ar/",
+      "status": "stale",
+      "reason": "Decodable image but Last-Modified was 2026-08-19; excluded from the active pack.",
+      "checkedAt": "2026-10-15",
+      "province": "Río Negro",
+      "publishedUrl": "https://liwencatedral.com.ar/webcam/liwencam.jpg"
+    },
+    {
+      "id": "puerto-muelles",
+      "name": "Puerto Bahía Blanca · Muelles",
+      "provider": "Puerto Bahía Blanca · Muelles",
+      "sourcePageUrl": "https://ambiental.puertobahiablanca.com/camaras-en-vivo/",
+      "status": "unavailable",
+      "reason": "Published video has ended; playback unavailable.",
+      "checkedAt": "2026-10-15",
+      "province": "Buenos Aires",
+      "publishedUrl": "https://www.youtube.com/watch?v=WfQvvnECgY0"
+    },
+    {
+      "id": "castor-base",
+      "name": "Cerro Castor · Base",
+      "provider": "Cerro Castor · Base",
+      "sourcePageUrl": "https://www.cerrocastor.com/es/live.html",
+      "status": "unavailable",
+      "reason": "Published video ended in August; official channel /live also does not currently play.",
+      "checkedAt": "2026-10-15",
+      "province": "Tierra del Fuego",
+      "publishedUrl": "https://www.youtube.com/watch?v=CcRJ_XjBNSE"
+    },
+    {
+      "id": "castor-cota480",
+      "name": "Cerro Castor · Cota 480",
+      "provider": "Cerro Castor · Cota 480",
+      "sourcePageUrl": "https://www.cerrocastor.com/es/live.html",
+      "status": "unavailable",
+      "reason": "Published video ended in August; no current live replacement found.",
+      "checkedAt": "2026-10-15",
+      "province": "Tierra del Fuego",
+      "publishedUrl": "https://www.youtube.com/watch?v=QBPz2WjnmxI"
+    },
+    {
+      "id": "rosario-envivo",
+      "name": "Rosario En Vivo",
+      "provider": "Rosario En Vivo",
+      "sourcePageUrl": "https://www.youtube.com/@RosarioEnVivo/live",
+      "status": "unavailable",
+      "reason": "Public player is scheduled/offline, not currently live.",
+      "checkedAt": "2026-10-15",
+      "province": "Santa Fe",
+      "publishedUrl": "https://www.youtube.com/watch?v=QAwyIH_pQuU"
+    },
+    {
+      "id": "el-litoral",
+      "name": "Province-wide rotating broadcast",
+      "provider": "El Litoral",
+      "sourcePageUrl": "https://www.ellitoral.com/camaras-vivo",
+      "status": "multi-location",
+      "reason": "Live public YouTube broadcast found (4SOIWEaN-Gc); alternates cameras across the province. No single physical camera coordinate is asserted.",
+      "checkedAt": "2026-10-15",
+      "province": "Santa Fe",
+      "publishedUrl": "https://www.youtube.com/watch?v=4SOIWEaN-Gc"
+    },
+    {
+      "id": "comodoro-en-vivo-comodoro-rivadavia-centro-iii",
+      "name": "Centro III / CIT",
+      "provider": "Comodoro Turismo",
+      "sourcePageUrl": "https://comodoroturismo.gob.ar/en-vivo-comodoro-rivadavia-centro-iii/",
+      "status": "unsupported-player",
+      "reason": "Operator publishes an IPCamLive player; this pack does not add a player adapter or extract its media.",
+      "checkedAt": "2026-10-15",
+      "province": "Chubut"
+    },
+    {
+      "id": "comodoro-en-vivo-comodoro-rivadavia-nautico-centro",
+      "name": "Costanera Centro I",
+      "provider": "Comodoro Turismo",
+      "sourcePageUrl": "https://comodoroturismo.gob.ar/en-vivo-comodoro-rivadavia-nautico-centro/",
+      "status": "unsupported-player",
+      "reason": "Operator publishes an IPCamLive player; this pack does not add a player adapter or extract its media.",
+      "checkedAt": "2026-10-15",
+      "province": "Chubut"
+    },
+    {
+      "id": "comodoro-en-vivo-comodoro-rivadavia-nautico-centro-ii",
+      "name": "Costanera Centro II",
+      "provider": "Comodoro Turismo",
+      "sourcePageUrl": "https://comodoroturismo.gob.ar/en-vivo-comodoro-rivadavia-nautico-centro-ii/",
+      "status": "unsupported-player",
+      "reason": "Operator publishes an IPCamLive player; this pack does not add a player adapter or extract its media.",
+      "checkedAt": "2026-10-15",
+      "province": "Chubut"
+    },
+    {
+      "id": "comodoro-en-vivo-nautico-km3",
+      "name": "Náutico Km 3",
+      "provider": "Comodoro Turismo",
+      "sourcePageUrl": "https://comodoroturismo.gob.ar/en-vivo-nautico-km3/",
+      "status": "unsupported-player",
+      "reason": "Operator publishes an IPCamLive player; this pack does not add a player adapter or extract its media.",
+      "checkedAt": "2026-10-15",
+      "province": "Chubut"
+    },
+    {
+      "id": "comodoro-en-vivo-caleta-cordova",
+      "name": "Caleta Córdova",
+      "provider": "Comodoro Turismo",
+      "sourcePageUrl": "https://comodoroturismo.gob.ar/en-vivo-caleta-cordova/",
+      "status": "unsupported-player",
+      "reason": "Operator publishes an IPCamLive player; this pack does not add a player adapter or extract its media.",
+      "checkedAt": "2026-10-15",
+      "province": "Chubut"
+    },
+    {
+      "id": "las-heras-1",
+      "name": "Plaza San Martín",
+      "provider": "Municipalidad de Las Heras",
+      "sourcePageUrl": "https://municipiolasherassantacruz.gob.ar/camara-en-vivo",
+      "status": "unsupported-player",
+      "reason": "Operator publishes an IPCamLive player; no compatible public feed verified. Las Heras is in Santa Cruz, not Mendoza.",
+      "checkedAt": "2026-10-15",
+      "province": "Santa Cruz"
+    },
+    {
+      "id": "las-heras-2",
+      "name": "Plazoleta Nuestro Mate",
+      "provider": "Municipalidad de Las Heras",
+      "sourcePageUrl": "https://municipiolasherassantacruz.gob.ar/camara-en-vivo",
+      "status": "unsupported-player",
+      "reason": "Operator publishes an IPCamLive player; no compatible public feed verified. Las Heras is in Santa Cruz, not Mendoza.",
+      "checkedAt": "2026-10-15",
+      "province": "Santa Cruz"
+    },
+    {
+      "id": "las-heras-3",
+      "name": "Plaza del Bicentenario",
+      "provider": "Municipalidad de Las Heras",
+      "sourcePageUrl": "https://municipiolasherassantacruz.gob.ar/camara-en-vivo",
+      "status": "unsupported-player",
+      "reason": "Operator publishes an IPCamLive player; no compatible public feed verified. Las Heras is in Santa Cruz, not Mendoza.",
+      "checkedAt": "2026-10-15",
+      "province": "Santa Cruz"
+    },
+    {
+      "id": "las-heras-4",
+      "name": "Entrada a Las Heras",
+      "provider": "Municipalidad de Las Heras",
+      "sourcePageUrl": "https://municipiolasherassantacruz.gob.ar/camara-en-vivo",
+      "status": "unsupported-player",
+      "reason": "Operator publishes an IPCamLive player; no compatible public feed verified. Las Heras is in Santa Cruz, not Mendoza.",
+      "checkedAt": "2026-10-15",
+      "province": "Santa Cruz"
+    },
+    {
+      "id": "las-heras-5",
+      "name": "Paseo Ferroviario",
+      "provider": "Municipalidad de Las Heras",
+      "sourcePageUrl": "https://municipiolasherassantacruz.gob.ar/camara-en-vivo",
+      "status": "unsupported-player",
+      "reason": "Operator publishes an IPCamLive player; no compatible public feed verified. Las Heras is in Santa Cruz, not Mendoza.",
+      "checkedAt": "2026-10-15",
+      "province": "Santa Cruz"
+    },
+    {
+      "id": "veladero-9krzn51xr4",
+      "name": "Veladero · public player 1",
+      "provider": "Veladero",
+      "sourcePageUrl": "https://veladero.com/",
+      "status": "unsupported-player",
+      "reason": "Public Angelcam player; adapter is not included. Location is not verified.",
+      "checkedAt": "2026-10-15",
+      "province": "San Juan",
+      "publishedUrl": "https://v.angelcam.com/iframe?v=9krzn51xr4"
+    },
+    {
+      "id": "veladero-91rxbzevlo",
+      "name": "Veladero · public player 2",
+      "provider": "Veladero",
+      "sourcePageUrl": "https://veladero.com/",
+      "status": "unsupported-player",
+      "reason": "Public Angelcam player; adapter is not included. Location is not verified.",
+      "checkedAt": "2026-10-15",
+      "province": "San Juan",
+      "publishedUrl": "https://v.angelcam.com/iframe?v=91rxbzevlo"
+    },
+    {
+      "id": "veladero-1elv45xgl7",
+      "name": "Veladero · public player 3",
+      "provider": "Veladero",
+      "sourcePageUrl": "https://veladero.com/",
+      "status": "unsupported-player",
+      "reason": "Public Angelcam player; adapter is not included. Location is not verified.",
+      "checkedAt": "2026-10-15",
+      "province": "San Juan",
+      "publishedUrl": "https://v.angelcam.com/iframe?v=1elv45xgl7"
+    },
+    {
+      "id": "veladero-j3r74nbxrm",
+      "name": "Veladero · public player 4",
+      "provider": "Veladero",
+      "sourcePageUrl": "https://veladero.com/",
+      "status": "unsupported-player",
+      "reason": "Public Angelcam player; adapter is not included. Location is not verified.",
+      "checkedAt": "2026-10-15",
+      "province": "San Juan",
+      "publishedUrl": "https://v.angelcam.com/iframe?v=j3r74nbxrm"
+    },
+    {
+      "id": "veladero-24y48xmkl0",
+      "name": "Veladero · public player 5",
+      "provider": "Veladero",
+      "sourcePageUrl": "https://veladero.com/",
+      "status": "unsupported-player",
+      "reason": "Public Angelcam player; adapter is not included. Location is not verified.",
+      "checkedAt": "2026-10-15",
+      "province": "San Juan",
+      "publishedUrl": "https://v.angelcam.com/iframe?v=24y48xmkl0"
+    },
+    {
+      "id": "veladero-40yem868r5",
+      "name": "Veladero · public player 6",
+      "provider": "Veladero",
+      "sourcePageUrl": "https://veladero.com/",
+      "status": "unsupported-player",
+      "reason": "Public Angelcam player; adapter is not included. Location is not verified.",
+      "checkedAt": "2026-10-15",
+      "province": "San Juan",
+      "publishedUrl": "https://v.angelcam.com/iframe?v=40yem868r5"
+    },
+    {
+      "id": "colon",
+      "name": "Colón",
+      "provider": "Colón",
+      "sourcePageUrl": "https://myearthcam.com/coloner?embed",
+      "status": "unsupported-player",
+      "reason": "Public MyEarthCam page; no supported operator feed verified.",
+      "checkedAt": "2026-10-15",
+      "province": "Entre Ríos"
+    },
+    {
+      "id": "mardelplata-webcam",
+      "name": "Mar del Plata Webcam",
+      "provider": "Mar del Plata Webcam",
+      "sourcePageUrl": "https://www.mardelplatawebcam.com.ar/",
+      "status": "unsupported-player",
+      "reason": "Operator embeds Twitch (mardelplatawebcam5); this pack supports YouTube only.",
+      "checkedAt": "2026-10-15",
+      "province": "Buenos Aires"
+    },
+    {
+      "id": "finca-la-anita",
+      "name": "Finca La Anita",
+      "provider": "Finca La Anita",
+      "sourcePageUrl": "https://finca-la-anita-mendoza.roundshot.com/",
+      "status": "unsupported-player",
+      "reason": "Public Roundshot panorama requires a different player.",
+      "checkedAt": "2026-10-15",
+      "province": "Mendoza"
+    },
+    {
+      "id": "vines-resort",
+      "name": "The Vines Resort",
+      "provider": "The Vines Resort",
+      "sourcePageUrl": "https://vinesresortandspa.com/",
+      "status": "unsupported-player",
+      "reason": "Panorama lead; a current supported public feed was not verified.",
+      "checkedAt": "2026-10-15",
+      "province": "Mendoza"
+    },
+    {
+      "id": "skyline-tren-del-fin-del-mundo",
+      "name": "Tren del Fin del Mundo",
+      "provider": "SkylineWebcams",
+      "sourcePageUrl": "https://www.skylinewebcams.com/es/webcam/argentina/tierra-del-fuego/ushuaia/tren-del-fin-del-mundo.html",
+      "status": "source-only",
+      "reason": "Proprietary Skyline player; its FAQ restricts live embedding to camera hosts. No media extracted. Public YouTube-hosted feeds are listed separately.",
+      "checkedAt": "2026-10-15",
+      "province": "Tierra del Fuego"
+    },
+    {
+      "id": "skyline-ushuaia",
+      "name": "Ushuaia · port / Taberna del Viejo Lobo",
+      "provider": "SkylineWebcams",
+      "sourcePageUrl": "https://www.skylinewebcams.com/es/webcam/argentina/tierra-del-fuego/ushuaia/ushuaia.html",
+      "status": "source-only",
+      "reason": "Proprietary Skyline player; its FAQ restricts live embedding to camera hosts. No media extracted. Public YouTube-hosted feeds are listed separately.",
+      "checkedAt": "2026-10-15",
+      "province": "Tierra del Fuego"
+    },
+    {
+      "id": "skyline-canon-del-atuel",
+      "name": "Cañón del Atuel",
+      "provider": "SkylineWebcams",
+      "sourcePageUrl": "https://www.skylinewebcams.com/es/webcam/argentina/provincia-de-mendoza/san-rafael/canon-del-atuel.html",
+      "status": "source-only",
+      "reason": "Proprietary Skyline player; its FAQ restricts live embedding to camera hosts. No media extracted. Public YouTube-hosted feeds are listed separately.",
+      "checkedAt": "2026-10-15",
+      "province": "Mendoza"
+    },
+    {
+      "id": "skyline-valle-grande-rio-atuel",
+      "name": "Valle Grande / Río Atuel",
+      "provider": "SkylineWebcams",
+      "sourcePageUrl": "https://www.skylinewebcams.com/es/webcam/argentina/provincia-de-mendoza/san-rafael/valle-grande-rio-atuel.html",
+      "status": "source-only",
+      "reason": "Proprietary Skyline player; its FAQ restricts live embedding to camera hosts. No media extracted. Public YouTube-hosted feeds are listed separately.",
+      "checkedAt": "2026-10-15",
+      "province": "Mendoza"
+    },
+    {
+      "id": "skyline-potrero-de-los-funes",
+      "name": "Potrero de los Funes",
+      "provider": "SkylineWebcams",
+      "sourcePageUrl": "https://www.skylinewebcams.com/es/webcam/argentina/san-luis/potrero-de-los-funes/potrero-de-los-funes.html",
+      "status": "source-only",
+      "reason": "Proprietary Skyline player; its FAQ restricts live embedding to camera hosts. No media extracted. Public YouTube-hosted feeds are listed separately.",
+      "checkedAt": "2026-10-15",
+      "province": "San Luis"
+    },
+    {
+      "id": "cotecal-el-chalten",
+      "name": "El Chaltén",
+      "provider": "COTECAL",
+      "sourcePageUrl": "https://www.cotecal.com.ar/disclaimer-link-camaras-en-vivo-parques-nacionales",
+      "status": "permission-required",
+      "reason": "Published terms require prior written permission for redistribution/republication. No feed included.",
+      "checkedAt": "2026-10-15",
+      "province": "Santa Cruz"
+    },
+    {
+      "id": "cotecal-perito-moreno",
+      "name": "Glaciar Perito Moreno",
+      "provider": "COTECAL",
+      "sourcePageUrl": "https://www.cotecal.com.ar/disclaimer-link-camaras-en-vivo-parques-nacionales",
+      "status": "permission-required",
+      "reason": "Published terms require prior written permission for redistribution/republication. No feed included.",
+      "checkedAt": "2026-10-15",
+      "province": "Santa Cruz"
+    },
+    {
+      "id": "sierra-ventana",
+      "name": "Sierra de la Ventana",
+      "provider": "Sierras de la Ventana",
+      "sourcePageUrl": "https://sierrasdelaventana.tur.ar/camara-en-vivo-sierra-de-la-ventana/",
+      "status": "permission-required",
+      "reason": "The official widget explicitly blocks use on external sites; kept as an original-page link only.",
+      "checkedAt": "2026-10-15",
+      "province": "Buenos Aires"
+    },
+    {
+      "id": "agp-bellavista",
+      "name": "Vía Navegable Troncal · BellaVista",
+      "provider": "Administración General de Puertos",
+      "sourcePageUrl": "https://www.argentina.gob.ar/administracion-general-de-puertos-se/navegable-troncal/camaras-de-vigilancia",
+      "status": "unavailable",
+      "reason": "Published camera host failed TLS certificate verification; no insecure fallback. Province is an area label.",
+      "checkedAt": "2026-10-15",
+      "province": "Corrientes",
+      "publishedUrl": "https://hidrografia2.agpse.gob.ar/camaraweb/BellaVista.html"
+    },
+    {
+      "id": "agp-sanlorenzo",
+      "name": "Vía Navegable Troncal · SanLorenzo",
+      "provider": "Administración General de Puertos",
+      "sourcePageUrl": "https://www.argentina.gob.ar/administracion-general-de-puertos-se/navegable-troncal/camaras-de-vigilancia",
+      "status": "unavailable",
+      "reason": "Published camera host failed TLS certificate verification; no insecure fallback. Province is an area label.",
+      "checkedAt": "2026-10-15",
+      "province": "Santa Fe",
+      "publishedUrl": "https://hidrografia2.agpse.gob.ar/camaraweb/SanLorenzo.html"
+    },
+    {
+      "id": "agp-rosario",
+      "name": "Vía Navegable Troncal · Rosario",
+      "provider": "Administración General de Puertos",
+      "sourcePageUrl": "https://www.argentina.gob.ar/administracion-general-de-puertos-se/navegable-troncal/camaras-de-vigilancia",
+      "status": "unavailable",
+      "reason": "Published camera host failed TLS certificate verification; no insecure fallback. Province is an area label.",
+      "checkedAt": "2026-10-15",
+      "province": "Santa Fe",
+      "publishedUrl": "https://hidrografia2.agpse.gob.ar/camaraweb/Rosario.html"
+    },
+    {
+      "id": "agp-delguazu",
+      "name": "Vía Navegable Troncal · DelGuazu",
+      "provider": "Administración General de Puertos",
+      "sourcePageUrl": "https://www.argentina.gob.ar/administracion-general-de-puertos-se/navegable-troncal/camaras-de-vigilancia",
+      "status": "unavailable",
+      "reason": "Published camera host failed TLS certificate verification; no insecure fallback. Province is an area label.",
+      "checkedAt": "2026-10-15",
+      "province": "Buenos Aires",
+      "publishedUrl": "https://hidrografia2.agpse.gob.ar/camaraweb/DelGuazu.html"
+    },
+    {
+      "id": "agp-braga",
+      "name": "Vía Navegable Troncal · Braga",
+      "provider": "Administración General de Puertos",
+      "sourcePageUrl": "https://www.argentina.gob.ar/administracion-general-de-puertos-se/navegable-troncal/camaras-de-vigilancia",
+      "status": "unavailable",
+      "reason": "Published camera host failed TLS certificate verification; no insecure fallback. Province is an area label.",
+      "checkedAt": "2026-10-15",
+      "province": "Buenos Aires",
+      "publishedUrl": "https://hidrografia2.agpse.gob.ar/camaraweb/Braga.html"
+    },
+    {
+      "id": "club-nautico-cordoba",
+      "name": "Club Náutico Córdoba",
+      "provider": "Club Náutico Córdoba",
+      "sourcePageUrl": "https://clubnauticocordoba.com.ar/camara-en-vivo/",
+      "status": "unresolved",
+      "reason": "Published camera host failed TLS certificate verification.",
+      "checkedAt": "2026-10-15",
+      "province": "Córdoba"
+    },
+    {
+      "id": "catamarca-las-grutas",
+      "name": "Las Grutas / Paso San Francisco",
+      "provider": "Redes Catamarca",
+      "sourcePageUrl": "https://redes.catamarca.gob.ar/",
+      "status": "unresolved",
+      "reason": "Official site returned HTTP 403, including normal browser navigation.",
+      "checkedAt": "2026-10-15",
+      "province": "Catamarca"
+    },
+    {
+      "id": "tucuman-plaza",
+      "name": "Plaza Independencia",
+      "provider": "Tucumán Turismo",
+      "sourcePageUrl": "https://www.tucumanturismo.gob.ar/",
+      "status": "unresolved",
+      "reason": "Official site advertises a live view; no working player was resolved through the public interface.",
+      "checkedAt": "2026-10-15",
+      "province": "Tucumán"
+    },
+    {
+      "id": "tucuman-cadillal",
+      "name": "El Cadillal",
+      "provider": "Tucumán Turismo",
+      "sourcePageUrl": "https://www.tucumanturismo.gob.ar/",
+      "status": "unresolved",
+      "reason": "Official live-camera lead; current player not verified.",
+      "checkedAt": "2026-10-15",
+      "province": "Tucumán"
+    },
+    {
+      "id": "san-martin-cotesma",
+      "name": "San Martín de los Andes",
+      "provider": "Cotesma",
+      "sourcePageUrl": "https://www.cotesma.coop/",
+      "status": "unresolved",
+      "reason": "Older stream links remain in directories; current operator site did not confirm a working public camera.",
+      "checkedAt": "2026-10-15",
+      "province": "Neuquén"
+    },
+    {
+      "id": "oran-radio-guemes",
+      "name": "San Ramón de la Nueva Orán",
+      "provider": "Radio Güemes",
+      "sourcePageUrl": "http://www.radioguemes.com.ar/",
+      "status": "unresolved",
+      "reason": "Operator hostname did not resolve during verification.",
+      "checkedAt": "2026-10-15",
+      "province": "Salta"
+    },
+    {
+      "id": "coronel-pringles",
+      "name": "Coronel Pringles",
+      "provider": "El Diario de Pringles",
+      "sourcePageUrl": "https://eldiariodepringles.com.ar/",
+      "status": "unresolved",
+      "reason": "Directory lead; no current public camera resolved from the operator page.",
+      "checkedAt": "2026-10-15",
+      "province": "Buenos Aires"
+    },
+    {
+      "id": "villa-maza",
+      "name": "Villa Maza",
+      "provider": "Canal 79",
+      "sourcePageUrl": "https://canal79tv.com.ar/",
+      "status": "unresolved",
+      "reason": "Directory lead resolved to television programming; no distinct webcam verified.",
+      "checkedAt": "2026-10-15",
+      "province": "Buenos Aires"
+    },
+    {
+      "id": "villa-gesell",
+      "name": "Villa Gesell / Mar de las Pampas",
+      "provider": "Gesell.com.ar",
+      "sourcePageUrl": "https://web.gesell.com.ar/",
+      "status": "unresolved",
+      "reason": "Old camera routes returned 404; no current supported feed verified.",
+      "checkedAt": "2026-10-15",
+      "province": "Buenos Aires"
+    },
+    {
+      "id": "tandil",
+      "name": "Tandil",
+      "provider": "Twitch directory lead",
+      "sourcePageUrl": "https://www.twitch.tv/",
+      "status": "unresolved",
+      "reason": "Directory lead did not identify a current operator channel.",
+      "checkedAt": "2026-10-15",
+      "province": "Buenos Aires"
+    },
+    {
+      "id": "esa-malargue",
+      "name": "Malargüe ESTRACK",
+      "provider": "ESA",
+      "sourcePageUrl": "https://www.esa.int/Enabling_Support/Operations/ESA_Ground_Stations/ESTRACK_Malarguee_webcam",
+      "status": "unresolved",
+      "reason": "Former official webcam page now displays a not-found message.",
+      "checkedAt": "2026-10-15",
+      "province": "Mendoza"
+    },
+    {
+      "id": "aire-santa-fe",
+      "name": "AIRE camera network",
+      "provider": "AIRE de Santa Fe",
+      "sourcePageUrl": "https://www.airedesantafe.com.ar/santa-fe/aire-suma-su-camara-numero-171-y-llega-un-punto-estrategico-la-autopista-rosario-santa-fe-n670304",
+      "status": "unresolved",
+      "reason": "Operator describes a broadcast camera network; no independent public feed URLs for its 171 cameras were verified.",
+      "checkedAt": "2026-10-15",
+      "province": "Santa Fe"
+    },
+    {
+      "id": "ar-mendoza-mendoza-muni",
+      "name": "Mendoza · Terraza Municipal (approx. area)",
+      "provider": "Ciudad de Mendoza",
+      "sourcePageUrl": "https://camarasmunicapital.ciudaddemendoza.gov.ar/playersite_5a03c0ce-4e27-43c2-8066-981d9ed228e6.html",
+      "status": "relay-incompatible",
+      "reason": "FFmpeg decoded a frame, but the current bounded app relay repeatedly received HTTP 404 for the oldest playlist segment and never became ready. The separate Plaza Independencia feed passed the relay check.",
+      "checkedAt": "2026-10-15",
+      "province": "Mendoza",
+      "publishedUrl": "https://camarasmunicapital.ciudaddemendoza.gov.ar/memfs/5a03c0ce-4e27-43c2-8066-981d9ed228e6.m3u8",
+      "discoveredFeed": {
+        "id": "ar-mendoza-mendoza-muni",
+        "name": "Mendoza · Terraza Municipal (approx. area)",
+        "city": "Mendoza",
+        "cityId": "mendoza",
+        "country": "AR",
+        "province": "Mendoza",
+        "provider": "Ciudad de Mendoza",
+        "feedType": "hls",
+        "url": "https://camarasmunicapital.ciudaddemendoza.gov.ar/memfs/5a03c0ce-4e27-43c2-8066-981d9ed228e6.m3u8",
+        "sourcePageUrl": "https://camarasmunicapital.ciudaddemendoza.gov.ar/playersite_5a03c0ce-4e27-43c2-8066-981d9ed228e6.html",
+        "lat": -32.901681,
+        "lon": -68.842738,
+        "locationNote": "Approximate place/area anchor; physical camera mount and facing are unverified.",
+        "locationSourceUrl": "https://www.openstreetmap.org/way/165396980",
+        "headingConfidence": "low",
+        "sourceKind": "argentina-public-webcam",
+        "license": "CC BY 4.0 as declared by the municipal player configuration; attribution: Ciudad de Mendoza.",
+        "credit": "Ciudad de Mendoza",
+        "checkedAt": "2026-10-15"
+      },
+      "verification": {
+        "cameraId": "ar-mendoza-mendoza-muni",
+        "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+        "checkedAt": "2026-10-15",
+        "httpStatus": 200,
+        "contentType": "application/vnd.apple.mpegurl",
+        "decoded": true,
+        "lastModified": "Thu, 15 Oct 2026 18:50:35 GMT"
+      }
+    },
+    {
+      "id": "misiones-cam01",
+      "name": "Domo - Misiones - Posadas - Parque Cantera Puente",
+      "provider": "Cámaras de Misiones",
+      "sourcePageUrl": "https://camarasdemisiones.com/",
+      "status": "unsupported-format",
+      "reason": "All eight public master playlists advertise HEVC (hvc1.1.6.L90.b0). FFmpeg decoded them, but the representative cam04 failed in the local Firefox/app path. Retained for a codec-compatible integration; not enabled in this pack.",
+      "checkedAt": "2026-10-15",
+      "province": "Misiones",
+      "publishedUrl": "https://stream.camarasdemisiones.com/cam01/index.m3u8",
+      "discoveredFeed": {
+        "id": "misiones-cam01",
+        "name": "Domo - Misiones - Posadas - Parque Cantera Puente",
+        "city": "Posadas",
+        "cityId": "posadas",
+        "country": "AR",
+        "province": "Misiones",
+        "provider": "Cámaras de Misiones",
+        "feedType": "hls",
+        "url": "https://stream.camarasdemisiones.com/cam01/index.m3u8",
+        "sourcePageUrl": "https://camarasdemisiones.com/",
+        "lat": -27.38219513094531,
+        "lon": -55.88645052907941,
+        "locationNote": "Location accepted by the project contributor after visual/map review on 2026-10-15; not independently verified GPS or operator survey. PTZ facing is unverified.",
+        "locationSourceUrl": "https://github.com/bilawalsidhu/gods-eye-view/pull/1145",
+        "headingConfidence": "low",
+        "sourceKind": "misiones-public-cameras",
+        "license": "Public operator webcam, fetched at runtime. No open license asserted for the media.",
+        "credit": "Cámaras de Misiones",
+        "checkedAt": "2026-10-15"
+      },
+      "verification": {
+        "cameraId": "misiones-cam01",
+        "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+        "checkedAt": "2026-10-15",
+        "httpStatus": 200,
+        "contentType": "application/vnd.apple.mpegurl",
+        "decoded": true,
+        "lastModified": null
+      }
+    },
+    {
+      "id": "misiones-cam02",
+      "name": "Domo - Misiones - Posadas - Arco - Acceso",
+      "provider": "Cámaras de Misiones",
+      "sourcePageUrl": "https://camarasdemisiones.com/",
+      "status": "unsupported-format",
+      "reason": "All eight public master playlists advertise HEVC (hvc1.1.6.L90.b0). FFmpeg decoded them, but the representative cam04 failed in the local Firefox/app path. Retained for a codec-compatible integration; not enabled in this pack.",
+      "checkedAt": "2026-10-15",
+      "province": "Misiones",
+      "publishedUrl": "https://stream.camarasdemisiones.com/cam02/index.m3u8",
+      "discoveredFeed": {
+        "id": "misiones-cam02",
+        "name": "Domo - Misiones - Posadas - Arco - Acceso",
+        "city": "Posadas",
+        "cityId": "posadas",
+        "country": "AR",
+        "province": "Misiones",
+        "provider": "Cámaras de Misiones",
+        "feedType": "hls",
+        "url": "https://stream.camarasdemisiones.com/cam02/index.m3u8",
+        "sourcePageUrl": "https://camarasdemisiones.com/",
+        "lat": -27.4514,
+        "lon": -56.0433,
+        "locationNote": "Location accepted by the project contributor after visual/map review on 2026-10-15; not independently verified GPS or operator survey. PTZ facing is unverified.",
+        "locationSourceUrl": "https://github.com/bilawalsidhu/gods-eye-view/pull/1145",
+        "headingConfidence": "low",
+        "sourceKind": "misiones-public-cameras",
+        "license": "Public operator webcam, fetched at runtime. No open license asserted for the media.",
+        "credit": "Cámaras de Misiones",
+        "checkedAt": "2026-10-15"
+      },
+      "verification": {
+        "cameraId": "misiones-cam02",
+        "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+        "checkedAt": "2026-10-15",
+        "httpStatus": 200,
+        "contentType": "application/vnd.apple.mpegurl",
+        "decoded": true,
+        "lastModified": null
+      }
+    },
+    {
+      "id": "misiones-cam03",
+      "name": "Domo - Misiones - San José - Centinela - Acceso",
+      "provider": "Cámaras de Misiones",
+      "sourcePageUrl": "https://camarasdemisiones.com/",
+      "status": "unsupported-format",
+      "reason": "All eight public master playlists advertise HEVC (hvc1.1.6.L90.b0). FFmpeg decoded them, but the representative cam04 failed in the local Firefox/app path. Retained for a codec-compatible integration; not enabled in this pack.",
+      "checkedAt": "2026-10-15",
+      "province": "Misiones",
+      "publishedUrl": "https://stream.camarasdemisiones.com/cam03/index.m3u8",
+      "discoveredFeed": {
+        "id": "misiones-cam03",
+        "name": "Domo - Misiones - San José - Centinela - Acceso",
+        "city": "San José",
+        "cityId": "san-jose",
+        "country": "AR",
+        "province": "Misiones",
+        "provider": "Cámaras de Misiones",
+        "feedType": "hls",
+        "url": "https://stream.camarasdemisiones.com/cam03/index.m3u8",
+        "sourcePageUrl": "https://camarasdemisiones.com/",
+        "lat": -27.7828,
+        "lon": -55.8184,
+        "locationNote": "Location accepted by the project contributor after visual/map review on 2026-10-15; not independently verified GPS or operator survey. PTZ facing is unverified.",
+        "locationSourceUrl": "https://github.com/bilawalsidhu/gods-eye-view/pull/1145",
+        "headingConfidence": "low",
+        "sourceKind": "misiones-public-cameras",
+        "license": "Public operator webcam, fetched at runtime. No open license asserted for the media.",
+        "credit": "Cámaras de Misiones",
+        "checkedAt": "2026-10-15"
+      },
+      "verification": {
+        "cameraId": "misiones-cam03",
+        "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+        "checkedAt": "2026-10-15",
+        "httpStatus": 200,
+        "contentType": "application/vnd.apple.mpegurl",
+        "decoded": true,
+        "lastModified": null
+      }
+    },
+    {
+      "id": "misiones-cam04",
+      "name": "Domo - Misiones - Posadas - Costanera",
+      "provider": "Cámaras de Misiones",
+      "sourcePageUrl": "https://camarasdemisiones.com/",
+      "status": "unsupported-format",
+      "reason": "All eight public master playlists advertise HEVC (hvc1.1.6.L90.b0). FFmpeg decoded them, but the representative cam04 failed in the local Firefox/app path. Retained for a codec-compatible integration; not enabled in this pack.",
+      "checkedAt": "2026-10-15",
+      "province": "Misiones",
+      "publishedUrl": "https://stream.camarasdemisiones.com/cam04/index.m3u8",
+      "discoveredFeed": {
+        "id": "misiones-cam04",
+        "name": "Domo - Misiones - Posadas - Costanera",
+        "city": "Posadas",
+        "cityId": "posadas",
+        "country": "AR",
+        "province": "Misiones",
+        "provider": "Cámaras de Misiones",
+        "feedType": "hls",
+        "url": "https://stream.camarasdemisiones.com/cam04/index.m3u8",
+        "sourcePageUrl": "https://camarasdemisiones.com/",
+        "lat": -27.35849447789777,
+        "lon": -55.890438020398506,
+        "locationNote": "Location accepted by the project contributor after visual/map review on 2026-10-15; not independently verified GPS or operator survey. PTZ facing is unverified.",
+        "locationSourceUrl": "https://github.com/bilawalsidhu/gods-eye-view/pull/1145",
+        "headingConfidence": "low",
+        "sourceKind": "misiones-public-cameras",
+        "license": "Public operator webcam, fetched at runtime. No open license asserted for the media.",
+        "credit": "Cámaras de Misiones",
+        "checkedAt": "2026-10-15"
+      },
+      "verification": {
+        "cameraId": "misiones-cam04",
+        "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+        "checkedAt": "2026-10-15",
+        "httpStatus": 200,
+        "contentType": "application/vnd.apple.mpegurl",
+        "decoded": true,
+        "lastModified": null
+      }
+    },
+    {
+      "id": "misiones-cam05",
+      "name": "Domo - Misiones - Posadas - Brete",
+      "provider": "Cámaras de Misiones",
+      "sourcePageUrl": "https://camarasdemisiones.com/",
+      "status": "unsupported-format",
+      "reason": "All eight public master playlists advertise HEVC (hvc1.1.6.L90.b0). FFmpeg decoded them, but the representative cam04 failed in the local Firefox/app path. Retained for a codec-compatible integration; not enabled in this pack.",
+      "checkedAt": "2026-10-15",
+      "province": "Misiones",
+      "publishedUrl": "https://stream.camarasdemisiones.com/cam05/index.m3u8",
+      "discoveredFeed": {
+        "id": "misiones-cam05",
+        "name": "Domo - Misiones - Posadas - Brete",
+        "city": "Posadas",
+        "cityId": "posadas",
+        "country": "AR",
+        "province": "Misiones",
+        "provider": "Cámaras de Misiones",
+        "feedType": "hls",
+        "url": "https://stream.camarasdemisiones.com/cam05/index.m3u8",
+        "sourcePageUrl": "https://camarasdemisiones.com/",
+        "lat": -27.35358266750948,
+        "lon": -55.90307354924789,
+        "locationNote": "Location accepted by the project contributor after visual/map review on 2026-10-15; not independently verified GPS or operator survey. PTZ facing is unverified.",
+        "locationSourceUrl": "https://github.com/bilawalsidhu/gods-eye-view/pull/1145",
+        "headingConfidence": "low",
+        "sourceKind": "misiones-public-cameras",
+        "license": "Public operator webcam, fetched at runtime. No open license asserted for the media.",
+        "credit": "Cámaras de Misiones",
+        "checkedAt": "2026-10-15"
+      },
+      "verification": {
+        "cameraId": "misiones-cam05",
+        "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+        "checkedAt": "2026-10-15",
+        "httpStatus": 200,
+        "contentType": "application/vnd.apple.mpegurl",
+        "decoded": true,
+        "lastModified": null
+      }
+    },
+    {
+      "id": "misiones-cam06",
+      "name": "Domo - Misiones - Posadas - Punta acceso Puente",
+      "provider": "Cámaras de Misiones",
+      "sourcePageUrl": "https://camarasdemisiones.com/",
+      "status": "unsupported-format",
+      "reason": "All eight public master playlists advertise HEVC (hvc1.1.6.L90.b0). FFmpeg decoded them, but the representative cam04 failed in the local Firefox/app path. Retained for a codec-compatible integration; not enabled in this pack.",
+      "checkedAt": "2026-10-15",
+      "province": "Misiones",
+      "publishedUrl": "https://stream.camarasdemisiones.com/cam06/index.m3u8",
+      "discoveredFeed": {
+        "id": "misiones-cam06",
+        "name": "Domo - Misiones - Posadas - Punta acceso Puente",
+        "city": "Posadas",
+        "cityId": "posadas",
+        "country": "AR",
+        "province": "Misiones",
+        "provider": "Cámaras de Misiones",
+        "feedType": "hls",
+        "url": "https://stream.camarasdemisiones.com/cam06/index.m3u8",
+        "sourcePageUrl": "https://camarasdemisiones.com/",
+        "lat": -27.374856,
+        "lon": -55.8806145,
+        "locationNote": "Location accepted by the project contributor after visual/map review on 2026-10-15; not independently verified GPS or operator survey. PTZ facing is unverified.",
+        "locationSourceUrl": "https://github.com/bilawalsidhu/gods-eye-view/pull/1145",
+        "headingConfidence": "low",
+        "sourceKind": "misiones-public-cameras",
+        "license": "Public operator webcam, fetched at runtime. No open license asserted for the media.",
+        "credit": "Cámaras de Misiones",
+        "checkedAt": "2026-10-15"
+      },
+      "verification": {
+        "cameraId": "misiones-cam06",
+        "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+        "checkedAt": "2026-10-15",
+        "httpStatus": 200,
+        "contentType": "application/vnd.apple.mpegurl",
+        "decoded": true,
+        "lastModified": null
+      }
+    },
+    {
+      "id": "misiones-cam07",
+      "name": "Domo - Misiones - Posadas - Zaiman - Puente",
+      "provider": "Cámaras de Misiones",
+      "sourcePageUrl": "https://camarasdemisiones.com/",
+      "status": "unsupported-format",
+      "reason": "All eight public master playlists advertise HEVC (hvc1.1.6.L90.b0). FFmpeg decoded them, but the representative cam04 failed in the local Firefox/app path. Retained for a codec-compatible integration; not enabled in this pack.",
+      "checkedAt": "2026-10-15",
+      "province": "Misiones",
+      "publishedUrl": "https://stream.camarasdemisiones.com/cam07/index.m3u8",
+      "discoveredFeed": {
+        "id": "misiones-cam07",
+        "name": "Domo - Misiones - Posadas - Zaiman - Puente",
+        "city": "Posadas",
+        "cityId": "posadas",
+        "country": "AR",
+        "province": "Misiones",
+        "provider": "Cámaras de Misiones",
+        "feedType": "hls",
+        "url": "https://stream.camarasdemisiones.com/cam07/index.m3u8",
+        "sourcePageUrl": "https://camarasdemisiones.com/",
+        "lat": -27.4022518,
+        "lon": -55.8923532,
+        "locationNote": "Location accepted by the project contributor after visual/map review on 2026-10-15; not independently verified GPS or operator survey. PTZ facing is unverified.",
+        "locationSourceUrl": "https://github.com/bilawalsidhu/gods-eye-view/pull/1145",
+        "headingConfidence": "low",
+        "sourceKind": "misiones-public-cameras",
+        "license": "Public operator webcam, fetched at runtime. No open license asserted for the media.",
+        "credit": "Cámaras de Misiones",
+        "checkedAt": "2026-10-15"
+      },
+      "verification": {
+        "cameraId": "misiones-cam07",
+        "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+        "checkedAt": "2026-10-15",
+        "httpStatus": 200,
+        "contentType": "application/vnd.apple.mpegurl",
+        "decoded": true,
+        "lastModified": null
+      }
+    },
+    {
+      "id": "misiones-cam08",
+      "name": "Domo - Posadas - Andresito",
+      "provider": "Cámaras de Misiones",
+      "sourcePageUrl": "https://camarasdemisiones.com/",
+      "status": "unsupported-format",
+      "reason": "All eight public master playlists advertise HEVC (hvc1.1.6.L90.b0). FFmpeg decoded them, but the representative cam04 failed in the local Firefox/app path. Retained for a codec-compatible integration; not enabled in this pack.",
+      "checkedAt": "2026-10-15",
+      "province": "Misiones",
+      "publishedUrl": "https://stream.camarasdemisiones.com/cam08/index.m3u8",
+      "discoveredFeed": {
+        "id": "misiones-cam08",
+        "name": "Domo - Posadas - Andresito",
+        "city": "Posadas",
+        "cityId": "posadas",
+        "country": "AR",
+        "province": "Misiones",
+        "provider": "Cámaras de Misiones",
+        "feedType": "hls",
+        "url": "https://stream.camarasdemisiones.com/cam08/index.m3u8",
+        "sourcePageUrl": "https://camarasdemisiones.com/",
+        "lat": -27.362031860473184,
+        "lon": -55.88805103305458,
+        "locationNote": "Location accepted by the project contributor after visual/map review on 2026-10-15; not independently verified GPS or operator survey. PTZ facing is unverified.",
+        "locationSourceUrl": "https://github.com/bilawalsidhu/gods-eye-view/pull/1145",
+        "headingConfidence": "low",
+        "sourceKind": "misiones-public-cameras",
+        "license": "Public operator webcam, fetched at runtime. No open license asserted for the media.",
+        "credit": "Cámaras de Misiones",
+        "checkedAt": "2026-10-15"
+      },
+      "verification": {
+        "cameraId": "misiones-cam08",
+        "method": "HTTP HLS manifest, FFmpeg decoded frame and visual inspection",
+        "checkedAt": "2026-10-15",
+        "httpStatus": 200,
+        "contentType": "application/vnd.apple.mpegurl",
+        "decoded": true,
+        "lastModified": null
+      }
+    }
+  ],
+  "discovery": {
+    "directories": [
+      "https://www.skylinewebcams.com/es/webcam/argentina.html",
+      "https://worldcam.eu/webcams/south-america/argentina",
+      "https://www.vision-environnement.com/es/webcams/argentine/",
+      "https://argosatlas.com/camaras/argentina/"
+    ],
+    "method": "Directory links were leads; runtime URLs were checked on public operator pages or public YouTube players. Broad regional/province searches complemented these leads. Directory camera totals are not counts of distinct active reusable feeds.",
+    "limits": [
+      "ArgosAtlas public pages supplied leads only; no subscription-only catalogue or media was accessed.",
+      "Estado del Mar guest/player tokens were not persisted or reused; its 52 source pages may overlap other operators.",
+      "No CCTV IP scanning, login-gated sources, signed URL extraction or access-control bypass.",
+      "Source-only entries are findings, not additional verified active cameras. A provider may appear more than once for distinct named views.",
+      "Codelis/Clima24.7 no longer presented a suitable public webcam catalogue at the checked address.",
+      "No verified operator feed was found for Formosa, Jujuy, La Pampa, La Rioja or Santiago del Estero in this survey; this does not establish absence."
+    ]
+  }
+}

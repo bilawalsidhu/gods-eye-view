@@ -1,5 +1,12 @@
 # Changelog
 
+- Add an opt-in Argentina webcam catalog with 53 checked feeds: 20 YouTube
+  players (requiring the separate player support), 18 HLS streams and 15 still
+  images. A dated survey records provenance, verification and 115 additional
+  findings, including unavailable or restricted views. Map locations are
+  approximate; reviewed Misiones points remain in the survey. No camera pose is
+  declared calibrated.
+
 - Overpass and military-installation disk caches no longer serve answers from a
   previously configured `OVERPASS_UPSTREAMS` instance after it is repointed.
 

@@ -1,5 +1,16 @@
 # Data Sources & Attribution
 
+The opt-in [Argentina webcam catalog](docs/CCTV-ARGENTINA.md) stores public
+operator URLs and attribution for 53 feeds, with a dated verification survey.
+Media is fetched at runtime; it is not bundled. YouTube entries use the official
+player and require the separate YouTube integration. Public access is not an open
+media license: each operator retains its rights. The survey-only Mendoza
+municipal terrace player explicitly declares CC BY 4.0. OSM-derived approximate location
+anchors retain object links and © OpenStreetMap contributors attribution under
+the [ODbL](https://www.openstreetmap.org/copyright). The survey keeps restricted,
+unavailable and unsupported sources as original-page links, without subscription
+data, signed media URLs or tokens.
+
 God's Eye View's **code** is [MIT](LICENSE)-licensed. **The MIT grant covers the source code only — it does NOT extend to third-party data or visual assets.** Every third-party source keeps its own license and terms. This file documents the live and bundled data sources; bundled 3D-model provenance is recorded in [`public/models/README.md`](public/models/README.md).
 
 How to read this:

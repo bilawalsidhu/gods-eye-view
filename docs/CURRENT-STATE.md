@@ -961,7 +961,21 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+## Argentina CCTV catalog
+
+The separate opt-in [Argentina catalog](CCTV-ARGENTINA.md) contains 53 feeds
+verified on 2026-10-15 (20 YouTube, 18 HLS, 15 still images). Load it with
+`CCTV_SOURCES_FILE=config/cctv_sources.argentina.json` after the YouTube player
+support in #1162 is available. This is a configuration/data addition on `main`,
+with no player or Encarnación implementation changes. Its dated survey records
+verification and 115 other findings. Coordinates are approximate area anchors;
+none asserts a calibrated pose.
+Misiones HEVC feeds and a relay-incompatible Mendoza feed remain survey-only.
+The offline catalog integrity test runs with the unit suite; live feed checks
+are documented in the catalog guide.
+
 ## NYC DOT TMC CCTV source pack
+
 
 The CCTV catalog can add New York City traffic cameras from the NYC DOT
 Traffic Management Center. NYC DOT requires developers to sign a data-sharing
