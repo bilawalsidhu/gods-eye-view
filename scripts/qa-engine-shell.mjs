@@ -73,10 +73,7 @@ const KNOWN_NOISE = [
  * Known gaps: checks that fail on an engine for a documented reason. They are
  * reported as GAP and do not fail the run; each names its follow-up.
  */
-const KNOWN_GAPS = {
-  navaraZoomFloor:
-    'Navara 0.2.1 wheel zoom has no ground collision (its minimumZoomDistance is from the Earth centre); engine follow-up',
-};
+const KNOWN_GAPS = {};
 
 const redact = (text) =>
   String(text)
@@ -358,20 +355,37 @@ async function runEngine(browser, baseUrl, engine) {
     );
   const bootRest = await page.evaluate(waitForRest, 1500, 90000);
   record('boot flight comes to rest', bootRest);
-  // Let tiles stream in before judging the picture (a cold dev server and
-  // cache can take a while).
-  const drawn = (stats) => stats.stddev > 8 && stats.colours > 40;
-  const drawStarted = Date.now();
-  let picture = await page.evaluate(canvasStats);
-  while (!drawn(picture) && Date.now() - drawStarted < 45000) {
-    await sleep(1000);
-    picture = await page.evaluate(canvasStats);
+  // Judge the picture once the engine reports its tiles loaded (a cold dev
+  // server and cache can take a while).
+  // Loaded means reported loaded for 1.5 s in a row: an engine can be idle
+  // for a moment between tile requests while it still refines.
+  const tilesStarted = Date.now();
+  let tilesLoaded = false;
+  let loadedSince = null;
+  while (Date.now() - tilesStarted < 90000) {
+    const loaded = await page.evaluate(() =>
+      window.__godsEyeView.engine.surface.tilesLoaded(),
+    );
+    if (!loaded) loadedSince = null;
+    else if (loadedSince == null) loadedSince = Date.now();
+    else if (Date.now() - loadedSince >= 1500) {
+      tilesLoaded = true;
+      break;
+    }
+    await sleep(250);
   }
-  await sleep(2000);
-  record(`map is drawn (${boot.stack})`, drawn(picture), {
-    ...picture,
-    waitedMs: Date.now() - drawStarted,
-  });
+  const tilesLoadedMs = (loadedSince ?? Date.now()) - tilesStarted;
+  record('tiles load', tilesLoaded, { tilesLoadedMs });
+  console.log(
+    `[${engine}] tiles loaded in ${tilesLoadedMs} ms after boot rest`,
+  );
+  await sleep(1000);
+  const picture = await page.evaluate(canvasStats);
+  record(
+    `map is drawn (${boot.stack})`,
+    picture.stddev > 8 && picture.colours > 40,
+    { ...picture, tilesLoadedMs },
+  );
   if (outDir)
     await page.screenshot({
       path: path.join(outDir, `qa-engine-shell-${engine}.png`),
@@ -514,14 +528,33 @@ async function runEngine(browser, baseUrl, engine) {
     before: Math.round(tilted.height),
     after: Math.round(zoomed.height),
   });
-  // Keep zooming: the camera must stop above the ground (ellipsoid height
-  // above zero here; Paris lies about 80 m above the ellipsoid).
+  // Keep zooming: the camera must stop above the ground. Paris lies about
+  // 80 m above the ellipsoid; the clearance is to the sampled surface.
   const floor = await wheel(10, -400);
+  await sleep(500);
+  const floorState = await page.evaluate(() => {
+    const { engine } = window.__godsEyeView;
+    const pose = engine.camera.pose();
+    const ground = engine.surface.sampleHeight(pose.cartographic);
+    return {
+      height: pose.cartographic.height,
+      ground: Number.isFinite(ground) ? ground : null,
+    };
+  });
+  const clearance =
+    floorState.ground == null ? null : floorState.height - floorState.ground;
   record(
     'wheel zoom stops above the ground',
-    floor.height > 0,
-    { height: Math.round(floor.height) },
-    engine === 'navara' ? KNOWN_GAPS.navaraZoomFloor : undefined,
+    floorState.height >= 20 &&
+      // The Navara engine keeps 30 m above the sampled surface
+      // (src/globe/navara/groundFloor.js); Cesium's own collision is closer.
+      (engine !== 'navara' || (clearance != null && clearance >= 20)),
+    {
+      height: Math.round(floorState.height),
+      ground: floorState.ground == null ? null : Math.round(floorState.ground),
+      clearance: clearance == null ? null : Math.round(clearance),
+      afterWheel: Math.round(floor.height),
+    },
   );
 
   // Orbit: fly to a POI, start, count frames, stop, count again.

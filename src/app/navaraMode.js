@@ -61,10 +61,6 @@ export async function createNavaraScene({
   // The tools install the governor on this engine; it goes before the engine.
   defer(() => uninstallRenderGovernor(engine));
   signal.throwIfAborted();
-  registerDataCredits(
-    engine,
-    (credits ?? DATA_CREDITS).filter(({ key }) => SHELL_CREDIT_KEYS.has(key)),
-  );
   loaderStatus.textContent = 'Initializing systems...';
   const mapStackController = new MapController(null, {
     requestRender: governorRequestRender,
@@ -83,6 +79,12 @@ export async function createNavaraScene({
     silent: true,
   });
   signal.throwIfAborted();
+  // After the map's own credits, so Google's copyright lines come first in
+  // Navara's attribution card.
+  registerDataCredits(
+    engine,
+    (credits ?? DATA_CREDITS).filter(({ key }) => SHELL_CREDIT_KEYS.has(key)),
+  );
   return {
     viewer: null,
     engine,
