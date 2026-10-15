@@ -137,9 +137,10 @@ export class DisplayBindings {
         toggleScope: () => {
           this.shareLinkManager?.claimRestoreLane?.('visual');
           const next = !isScopeMaskEnabled();
-          setScopeMaskEnabled(next);
-          this._scopeBtn.classList.toggle('active', next);
-          this._scopeBtn.setAttribute('aria-pressed', String(next));
+          setScopeMaskEnabled(next, { persist: true });
+          const actual = isScopeMaskEnabled();
+          this._scopeBtn.classList.toggle('active', actual);
+          this._scopeBtn.setAttribute('aria-pressed', String(actual));
           this._syncShareState();
         },
         setScopeFeather: (value) => {

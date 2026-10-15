@@ -1,0 +1,496 @@
+{
+  "provider": "Tyne and Wear UTMC / North East Traffic Cameras",
+  "listing": "https://netrafficcams.co.uk/all-cameras?field_area_target_id=1&items_per_page=All&sort_by=title&sort_order=ASC",
+  "retrievedAt": "2026-10-15T07:51:39.336Z",
+  "note": "Public snapshots, normally refreshed every 60–300 seconds. The image timestamp is authoritative; images may be old or unavailable. Camera orientations are not supplied.",
+  "cameras": [
+    {
+      "id": "gateshead-374",
+      "name": "A1 / J71 Metrocentre (Facing North)",
+      "lat": 54.95249303228,
+      "lon": -1.6596633364197,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV00012.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/374"
+    },
+    {
+      "id": "gateshead-373",
+      "name": "A1 / J71 Metrocentre (Facing South)",
+      "lat": 54.952473035704,
+      "lon": -1.659593344208,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV00011.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/373"
+    },
+    {
+      "id": "gateshead-311",
+      "name": "A1114 Clockmill Road / Team Street",
+      "lat": 54.954933099888,
+      "lon": -1.6360563817884,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A1114B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/311"
+    },
+    {
+      "id": "gateshead-310",
+      "name": "A1114 Handy Drive / Cross Lane",
+      "lat": 54.958782280162,
+      "lon": -1.6601435633512,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A1114A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/310"
+    },
+    {
+      "id": "gateshead-319",
+      "name": "A167 Durham Road / A1 J66 Angel of the North (North)",
+      "lat": 54.911928966798,
+      "lon": -1.5848907730588,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A167M1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/319"
+    },
+    {
+      "id": "gateshead-321",
+      "name": "A167 Durham Road / B1288 Birtley Lane",
+      "lat": 54.898300694294,
+      "lon": -1.5773710837728,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A167O1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/321"
+    },
+    {
+      "id": "gateshead-316",
+      "name": "A167 Durham Road / Belle Vue Bank / Beaconsfield Road",
+      "lat": 54.936955780561,
+      "lon": -1.5996000902704,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A167J1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/316"
+    },
+    {
+      "id": "gateshead-322",
+      "name": "A167 Durham Road / Birtley Supermarket",
+      "lat": 54.894451146838,
+      "lon": -1.5775808819598,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A167P1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/322"
+    },
+    {
+      "id": "gateshead-317",
+      "name": "A167 Durham Road / Kells Lane / Chowdene Bank",
+      "lat": 54.930406590303,
+      "lon": -1.597340071647,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A167K1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/317"
+    },
+    {
+      "id": "gateshead-318",
+      "name": "A167 Durham Road / Lynmouth Road",
+      "lat": 54.926507089764,
+      "lon": -1.5948502026542,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A167L1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/318"
+    },
+    {
+      "id": "gateshead-315",
+      "name": "A167 Durham Road / Prince Consort Road",
+      "lat": 54.949654286527,
+      "lon": -1.5989607503658,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A167I1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/315"
+    },
+    {
+      "id": "gateshead-313",
+      "name": "A167 Gateshead Highway / Coulthards Lane",
+      "lat": 54.964122561586,
+      "lon": -1.5997213179957,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A167G1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/313"
+    },
+    {
+      "id": "gateshead-314",
+      "name": "A167 Gateshead Highway / Whitehall Road",
+      "lat": 54.954473700795,
+      "lon": -1.5999508478345,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A167H1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/314"
+    },
+    {
+      "id": "gateshead-320",
+      "name": "A167 Newcastle Bank / A1 J66 Angel of the North (South)",
+      "lat": 54.910529135413,
+      "lon": -1.5847007326997,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A167N1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/320"
+    },
+    {
+      "id": "gateshead-312",
+      "name": "A167 Tyne Bridge / Hills Street / Bottle Bank",
+      "lat": 54.965522334591,
+      "lon": -1.6037608799676,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A167F1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/312"
+    },
+    {
+      "id": "gateshead-324",
+      "name": "A184 (Consett Route) / A1114 Derwentwater Road",
+      "lat": 54.951513599805,
+      "lon": -1.6297770060821,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A184A2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/324"
+    },
+    {
+      "id": "gateshead-332",
+      "name": "A184 (Felling Bypass) / A185 & B1426 Shields Road / Heworth Interchange",
+      "lat": 54.951974695598,
+      "lon": -1.5539064542608,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A184E1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/332"
+    },
+    {
+      "id": "gateshead-333",
+      "name": "A184 (Felling Bypass) / A195 Lingey Lane",
+      "lat": 54.946155676199,
+      "lon": -1.5347385680699,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A184F1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/333"
+    },
+    {
+      "id": "gateshead-326",
+      "name": "A184 (West Central Route) / B1426 Bensham Road",
+      "lat": 54.960312914433,
+      "lon": -1.6062103371061,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A184C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/326"
+    },
+    {
+      "id": "gateshead-325",
+      "name": "A184 (West Central Route) / Nelson Street / West Street",
+      "lat": 54.963412571122,
+      "lon": -1.6046406740431,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A184B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/325"
+    },
+    {
+      "id": "gateshead-323",
+      "name": "A184 Askew Road / A184 (West Central Route)",
+      "lat": 54.964662408256,
+      "lon": -1.6056206094415,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A184A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/323"
+    },
+    {
+      "id": "gateshead-328",
+      "name": "A184 Charles Street & Park Lane / High Street",
+      "lat": 54.961452866999,
+      "lon": -1.6004311075573,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A184C3.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/328"
+    },
+    {
+      "id": "gateshead-327",
+      "name": "A184 Charles Street & Regent Street / High West Street",
+      "lat": 54.960782907855,
+      "lon": -1.6029707612482,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A184C2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/327"
+    },
+    {
+      "id": "gateshead-329",
+      "name": "A184 Park Lane & Park Road / Albany Road",
+      "lat": 54.962842848666,
+      "lon": -1.5907823704147,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A184D0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/329"
+    },
+    {
+      "id": "gateshead-331",
+      "name": "A184 Park Road / Neilson Road / Old Fold Road",
+      "lat": 54.96039326587,
+      "lon": -1.5824032995283,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A184D2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/331"
+    },
+    {
+      "id": "gateshead-330",
+      "name": "A184 Park Road / St. James Road / Shearlegs Road",
+      "lat": 54.961942981622,
+      "lon": -1.5890425454241,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A184D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/330"
+    },
+    {
+      "id": "gateshead-334",
+      "name": "A195 Lingey Lane & New Road / B1288 Leam Lane",
+      "lat": 54.939806439554,
+      "lon": -1.533978370873,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A195B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/334"
+    },
+    {
+      "id": "gateshead-337",
+      "name": "A692 Gateshead Road / A6076 Burdon Plain",
+      "lat": 54.922326369545,
+      "lon": -1.675260025982,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A692B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/337"
+    },
+    {
+      "id": "gateshead-335",
+      "name": "A692 Lobley Hill Road / A1 J68 (West)",
+      "lat": 54.940334899148,
+      "lon": -1.6313962947079,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A692A0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/335"
+    },
+    {
+      "id": "gateshead-336",
+      "name": "A692 Lobley Hill Road / B6317 Whickham Highway",
+      "lat": 54.939444894059,
+      "lon": -1.6387053460475,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A692A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/336"
+    },
+    {
+      "id": "gateshead-338",
+      "name": "A694 & A695 Derwenthaugh Road / A1114 Riverside Way",
+      "lat": 54.962191502555,
+      "lon": -1.6849306370125,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A694A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/338"
+    },
+    {
+      "id": "gateshead-339",
+      "name": "A695 (Crawcrook & Ryton Bypass) / B6315 Woodside Lane",
+      "lat": 54.96620972069,
+      "lon": -1.7718500095656,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A695A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/339"
+    },
+    {
+      "id": "gateshead-340",
+      "name": "A695 (Crawcrook & Ryton Bypass) / Stargate Lane",
+      "lat": 54.964100347131,
+      "lon": -1.7467330382259,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A695B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/340"
+    },
+    {
+      "id": "gateshead-341",
+      "name": "A695 Blaydon Highway / B6317 Bridge Street / Garden Street",
+      "lat": 54.965790610264,
+      "lon": -1.7158869512512,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A695C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/341"
+    },
+    {
+      "id": "gateshead-342",
+      "name": "A695 Derwenthaugh Road / A695 Scotswood Bridge",
+      "lat": 54.965331085639,
+      "lon": -1.6879204081548,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_A695D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/342"
+    },
+    {
+      "id": "gateshead-343",
+      "name": "B1288 / A1231 Sunderland Highway",
+      "lat": 54.907229922662,
+      "lon": -1.5585638256687,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_B1288A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/343"
+    },
+    {
+      "id": "gateshead-347",
+      "name": "B1296 Old Durham Road / Beacon Lough Road",
+      "lat": 54.933936408072,
+      "lon": -1.5817921639479,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_B1296C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/347"
+    },
+    {
+      "id": "gateshead-345",
+      "name": "B1296 Old Durham Road / Broadway / Kells Lane",
+      "lat": 54.941205451487,
+      "lon": -1.588111711634,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_B1296B0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/345"
+    },
+    {
+      "id": "gateshead-346",
+      "name": "B1296 Old Durham Road / Queen Elizabeth Avenue / Southend Road",
+      "lat": 54.937645923478,
+      "lon": -1.5847819623538,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_B1296B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/346"
+    },
+    {
+      "id": "gateshead-344",
+      "name": "B1296 Old Durham Road / Split Crow Road",
+      "lat": 54.951934058379,
+      "lon": -1.5962011975547,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_B1296A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/344"
+    },
+    {
+      "id": "gateshead-348",
+      "name": "B1296 Springwell Road / High Street",
+      "lat": 54.925687484161,
+      "lon": -1.5752425998299,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_B1296D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/348"
+    },
+    {
+      "id": "gateshead-351",
+      "name": "B1426 Bensham Road / Osborne Terrace / Barrington Place",
+      "lat": 54.956943220064,
+      "lon": -1.6123794162658,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_B1426C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/351"
+    },
+    {
+      "id": "gateshead-350",
+      "name": "B1426 Bensham Road / Sidney Grove",
+      "lat": 54.952153734438,
+      "lon": -1.6158687636923,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_B1426B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/350"
+    },
+    {
+      "id": "gateshead-349",
+      "name": "B1426 Lobley Hill Road / Kingsway North",
+      "lat": 54.942804703901,
+      "lon": -1.6249672061656,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_B1426A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/349"
+    },
+    {
+      "id": "gateshead-352",
+      "name": "B1426 Sunderland Road / Chad House",
+      "lat": 54.958503293,
+      "lon": -1.5953716013303,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_B1426D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/352"
+    },
+    {
+      "id": "gateshead-353",
+      "name": "B1426 Sunderland Road / Churchill Road",
+      "lat": 54.954413987612,
+      "lon": -1.5815031374101,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_B1426E1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/353"
+    },
+    {
+      "id": "gateshead-354",
+      "name": "B1426 Sunderland Road / Stoneygate Lane",
+      "lat": 54.951144668068,
+      "lon": -1.5621853876653,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_B1426F1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/354"
+    },
+    {
+      "id": "gateshead-355",
+      "name": "B6317 Front Street & Swalwell Bank / Fellside Road",
+      "lat": 54.94537351661,
+      "lon": -1.683460054718,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_B6317A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/355"
+    },
+    {
+      "id": "gateshead-369",
+      "name": "Clayton Terrace Road / Garesfield",
+      "lat": 54.929133617229,
+      "lon": -1.8049542190757,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV00003.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/369"
+    },
+    {
+      "id": "gateshead-356",
+      "name": "Cuthbert Street / A184",
+      "lat": 54.95671319538,
+      "lon": -1.6158089795225,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_CBSA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/356"
+    },
+    {
+      "id": "gateshead-357",
+      "name": "Dunston Road / Park Terrace / A1 J70 Dunston",
+      "lat": 54.951283332399,
+      "lon": -1.6492745724706,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_DNRA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/357"
+    },
+    {
+      "id": "gateshead-358",
+      "name": "Hawks Road / Maidens Walk",
+      "lat": 54.966532285899,
+      "lon": -1.5990815078621,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_HWRA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/358"
+    },
+    {
+      "id": "gateshead-359",
+      "name": "Hawks Road / Quays Boulevard",
+      "lat": 54.968232155824,
+      "lon": -1.5943821698651,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_HWRB1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/359"
+    },
+    {
+      "id": "gateshead-360",
+      "name": "Kingsway South / Eleventh Avenue",
+      "lat": 54.922757253014,
+      "lon": -1.6133877295448,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_KSWA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/360"
+    },
+    {
+      "id": "gateshead-366",
+      "name": "Metrocentre / Hollinside Road / A1 J71 Bridge",
+      "lat": 54.955972400122,
+      "lon": -1.674251681548,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/MCJ05161.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/366"
+    },
+    {
+      "id": "gateshead-363",
+      "name": "Metrocentre / Hollinside Road / A1 J71 SB Entry Slip / St. Michael's Way",
+      "lat": 54.956052390949,
+      "lon": -1.6742316876754,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/MCA1Onslip.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/363"
+    },
+    {
+      "id": "gateshead-365",
+      "name": "Metrocentre / Hollinside Road / Red Car Park Flyover",
+      "lat": 54.957062270285,
+      "lon": -1.6743017249504,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/MCJ05141.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/365"
+    },
+    {
+      "id": "gateshead-364",
+      "name": "Metrocentre / Hollinside Road / Scotswood View",
+      "lat": 54.960011937209,
+      "lon": -1.6732219935052,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/MCJ05111.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/364"
+    },
+    {
+      "id": "gateshead-367",
+      "name": "Metrocentre / Hollinside Road / Yellow Car Park",
+      "lat": 54.959951943109,
+      "lon": -1.6733019808286,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/MCJ05171.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/367"
+    },
+    {
+      "id": "gateshead-362",
+      "name": "Metrocentre / Scotswood View / Cross Lane / Blue Car Park",
+      "lat": 54.95741240785,
+      "lon": -1.6624332162904,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/MC4092.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/362"
+    },
+    {
+      "id": "gateshead-361",
+      "name": "Quays Boulevard / Albany Road / Quarryfield Road",
+      "lat": 54.964702603549,
+      "lon": -1.5924222517883,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/GH_QYBA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/361"
+    }
+  ]
+}

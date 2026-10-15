@@ -1,0 +1,2627 @@
+{
+  "provider": "Tyne and Wear UTMC / North East Traffic Cameras",
+  "listing": "https://netrafficcams.co.uk/all-cameras?field_area_target_id=All&items_per_page=All&sort_by=title&sort_order=ASC",
+  "retrievedAt": "2026-10-15T08:57:01.858Z",
+  "note": "Public snapshots, normally refreshed every 60–300 seconds. The image timestamp is authoritative; images may be old or unavailable. Camera orientations are not supplied.",
+  "cameras": [
+    {
+      "id": "utmc-644",
+      "city": "Durham",
+      "name": "A167 Cock O' the North Rbt, Durham",
+      "lat": 54.753087680233,
+      "lon": -1.5904928592016,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_11.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/644"
+    },
+    {
+      "id": "utmc-668",
+      "city": "Durham",
+      "name": "A167 Croxdale Roundabout",
+      "lat": 54.727500777541,
+      "lon": -1.5858222800594,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_36.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/668"
+    },
+    {
+      "id": "utmc-673",
+      "city": "Durham",
+      "name": "A167 Darlington Rd, Neville's X",
+      "lat": 54.771005503003,
+      "lon": -1.5942931998786,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_41.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/673"
+    },
+    {
+      "id": "utmc-651",
+      "city": "Durham",
+      "name": "A167 Darlington Road",
+      "lat": 54.766336087654,
+      "lon": -1.5921632519952,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_18.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/651"
+    },
+    {
+      "id": "utmc-667",
+      "city": "Durham",
+      "name": "A167 Darlington Road / Duke of Wellington",
+      "lat": 54.767036005001,
+      "lon": -1.5921532849036,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_35.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/667"
+    },
+    {
+      "id": "utmc-660",
+      "city": "Durham",
+      "name": "A167 Neville's Cross/Crossgate Moor",
+      "lat": 54.77502498737,
+      "lon": -1.5969430540212,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_28.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/660"
+    },
+    {
+      "id": "utmc-658",
+      "city": "Durham",
+      "name": "A167 Sniperley P&R Rbt",
+      "lat": 54.792692891185,
+      "lon": -1.5973238070645,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_26.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/658"
+    },
+    {
+      "id": "utmc-674",
+      "city": "Durham",
+      "name": "A167 Sniperley Rbt, Whitesmocks, Durham",
+      "lat": 54.787143547946,
+      "lon": -1.5973135569204,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_42.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/674"
+    },
+    {
+      "id": "utmc-645",
+      "city": "Durham",
+      "name": "A167 Sniperley Rbt/Southfield Way",
+      "lat": 54.789743242616,
+      "lon": -1.5971636932351,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_12.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/645"
+    },
+    {
+      "id": "utmc-648",
+      "city": "Durham",
+      "name": "A177 Houghall/Maiden Castle, Durham",
+      "lat": 54.766526541254,
+      "lon": -1.5607271483653,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_15.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/648"
+    },
+    {
+      "id": "utmc-677",
+      "city": "Durham",
+      "name": "A177 South Rd, Howlands P&R signals",
+      "lat": 54.761506829073,
+      "lon": -1.5809244232901,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_45.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/677"
+    },
+    {
+      "id": "utmc-636",
+      "city": "Durham",
+      "name": "A177 Stockton Rd, Durham",
+      "lat": 54.768816135047,
+      "lon": -1.5696561479408,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_03.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/636"
+    },
+    {
+      "id": "utmc-649",
+      "city": "Durham",
+      "name": "A177/B1198 Mill Lane, Shincliffe, Durham",
+      "lat": 54.762977071546,
+      "lon": -1.5534478874861,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_16.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/649"
+    },
+    {
+      "id": "utmc-641",
+      "city": "Durham",
+      "name": "A181 Gilesgate Bank, Durham",
+      "lat": 54.77849507741,
+      "lon": -1.5638873004541,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_08.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/641"
+    },
+    {
+      "id": "utmc-640",
+      "city": "Durham",
+      "name": "A181 Sherburn Rd, Durham",
+      "lat": 54.774625960148,
+      "lon": -1.535880588829,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_07.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/640"
+    },
+    {
+      "id": "utmc-681",
+      "city": "Durham",
+      "name": "A689 Princes St - West approach, Bishop Auckland",
+      "lat": 54.661547231001,
+      "lon": -1.6751382873186,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_49.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/681"
+    },
+    {
+      "id": "utmc-682",
+      "city": "Durham",
+      "name": "A689 South Church Rd, Bishop Auckland",
+      "lat": 54.661407266635,
+      "lon": -1.6738684377643,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_50.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/682"
+    },
+    {
+      "id": "utmc-665",
+      "city": "Durham",
+      "name": "A689/Kingsway, Bishop Auckland",
+      "lat": 54.661287275715,
+      "lon": -1.6742083904476,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_33.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/665"
+    },
+    {
+      "id": "utmc-653",
+      "city": "Durham",
+      "name": "A690 Carrville",
+      "lat": 54.793913736288,
+      "lon": -1.532061938491,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_21.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/653"
+    },
+    {
+      "id": "utmc-647",
+      "city": "Durham",
+      "name": "A690 Carrville Link off-slip",
+      "lat": 54.788384164686,
+      "lon": -1.5469298474132,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_14.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/647"
+    },
+    {
+      "id": "utmc-670",
+      "city": "Durham",
+      "name": "A690 Carrville Link Rd, Gilesgate Rbt signals",
+      "lat": 54.780344892215,
+      "lon": -1.5616676589799,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_38.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/670"
+    },
+    {
+      "id": "utmc-676",
+      "city": "Durham",
+      "name": "A690 Carrville, Belmont P&R signals",
+      "lat": 54.795433721985,
+      "lon": -1.5211733549544,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_44.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/676"
+    },
+    {
+      "id": "utmc-650",
+      "city": "Durham",
+      "name": "A690 Crossgate Peth, Durham",
+      "lat": 54.77467521017,
+      "lon": -1.5849545212249,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_17.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/650"
+    },
+    {
+      "id": "utmc-679",
+      "city": "Durham",
+      "name": "A690 Langley Moor Railway Bridge",
+      "lat": 54.760696525332,
+      "lon": -1.6073411198255,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_47.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/679"
+    },
+    {
+      "id": "utmc-672",
+      "city": "Durham",
+      "name": "A690 Leazes Bowl Rbt/Prince Bishops, Durham",
+      "lat": 54.777175079767,
+      "lon": -1.5740359851668,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_40.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/672"
+    },
+    {
+      "id": "utmc-675",
+      "city": "Durham",
+      "name": "A690 Leazes Rd, Gilesgate Rbt, Durham",
+      "lat": 54.778235079521,
+      "lon": -1.5657770548918,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_43.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/675"
+    },
+    {
+      "id": "utmc-680",
+      "city": "Durham",
+      "name": "A690 Meadowfield/B6300 Browney Lane",
+      "lat": 54.748817660483,
+      "lon": -1.6252283716137,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_48.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/680"
+    },
+    {
+      "id": "utmc-661",
+      "city": "Durham",
+      "name": "A690 Stonebridge Rbt, Durham",
+      "lat": 54.767035887198,
+      "lon": -1.5999423215199,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_29.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/661"
+    },
+    {
+      "id": "utmc-671",
+      "city": "Durham",
+      "name": "A690 Sutton St, Durham",
+      "lat": 54.777104925583,
+      "lon": -1.5847646547889,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_39.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/671"
+    },
+    {
+      "id": "utmc-669",
+      "city": "Durham",
+      "name": "A690/A691 Millburngate Rbt signals",
+      "lat": 54.778144884756,
+      "lon": -1.5793353735669,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_37.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/669"
+    },
+    {
+      "id": "utmc-666",
+      "city": "Durham",
+      "name": "A690/Lowes Barn Bank, Durham",
+      "lat": 54.767765815508,
+      "lon": -1.5989724744962,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_34.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/666"
+    },
+    {
+      "id": "utmc-639",
+      "city": "Durham",
+      "name": "A691 Framwellgate Peth, Durham",
+      "lat": 54.780324620354,
+      "lon": -1.5797654191721,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_06.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/639"
+    },
+    {
+      "id": "utmc-656",
+      "city": "Durham",
+      "name": "A691 Framwellgate Peth/North Rd, Durham",
+      "lat": 54.784444032133,
+      "lon": -1.5864247819733,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_24.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/656"
+    },
+    {
+      "id": "utmc-657",
+      "city": "Durham",
+      "name": "A691 Lanchester Rd P&R Rbt",
+      "lat": 54.791223002339,
+      "lon": -1.6014732269305,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_25.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/657"
+    },
+    {
+      "id": "utmc-637",
+      "city": "Durham",
+      "name": "B6532 Aykley Heads Rbt, Durham",
+      "lat": 54.789323387009,
+      "lon": -1.5909044488033,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_04.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/637"
+    },
+    {
+      "id": "utmc-662",
+      "city": "Durham",
+      "name": "Bus  Station, Bishop Auckland",
+      "lat": 54.66362692167,
+      "lon": -1.6793578595687,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_30.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/662"
+    },
+    {
+      "id": "utmc-603",
+      "city": "Darlington",
+      "name": "Darlington - A1(M) / Newton Lane",
+      "lat": 54.547531800485,
+      "lon": -1.6026321280402,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/VAISALACCTV2394.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/603"
+    },
+    {
+      "id": "utmc-601",
+      "city": "Darlington",
+      "name": "Darlington - Elstob Lane / Great Stainton",
+      "lat": 54.594998032835,
+      "lon": -1.4810492195068,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/VAISALACCTV2359.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/601"
+    },
+    {
+      "id": "utmc-659",
+      "city": "Durham",
+      "name": "Dryburn Park, Durham",
+      "lat": 54.790233199771,
+      "lon": -1.5961638391703,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_27.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/659"
+    },
+    {
+      "id": "utmc-605",
+      "city": "Durham",
+      "name": "Durham - A181 / Running Waters",
+      "lat": 54.757758668911,
+      "lon": -1.4889756204736,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/VAISALACCTV3382.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/605"
+    },
+    {
+      "id": "utmc-602",
+      "city": "Durham",
+      "name": "Durham - A6072 Shildon Road / Red House Lane",
+      "lat": 54.60951399427,
+      "lon": -1.6345109711423,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/VAISALACCTV2360.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/602"
+    },
+    {
+      "id": "utmc-612",
+      "city": "Durham",
+      "name": "Durham - A689 Addison Road / B1286",
+      "lat": 54.674715197632,
+      "lon": -1.7068549608113,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/VAISALACCTV58.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/612"
+    },
+    {
+      "id": "utmc-610",
+      "city": "Durham",
+      "name": "Durham - B1432 Stockton Road / Hawthorn Lane",
+      "lat": 54.807214848158,
+      "lon": -1.3564042771067,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/VAISALACCTV56.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/610"
+    },
+    {
+      "id": "utmc-606",
+      "city": "Durham",
+      "name": "Durham - B6277 / Forest-in-Teesdale",
+      "lat": 54.66004965038,
+      "lon": -2.2008632714981,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/VAISALACCTV49.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/606"
+    },
+    {
+      "id": "utmc-611",
+      "city": "Durham",
+      "name": "Durham - B6302 Cockhouse Lane / Broadgate Road",
+      "lat": 54.781343137948,
+      "lon": -1.6699643038021,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/VAISALACCTV57.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/611"
+    },
+    {
+      "id": "utmc-608",
+      "city": "Durham",
+      "name": "Durham - B6309 Ebchester Hill / Whinny Lane",
+      "lat": 54.883148649651,
+      "lon": -1.8326787080299,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/VAISALACCTV51.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/608"
+    },
+    {
+      "id": "utmc-683",
+      "city": "Durham",
+      "name": "Durham Rd, Bishop Auckland",
+      "lat": 54.665196849901,
+      "lon": -1.6717788651236,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_51.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/683"
+    },
+    {
+      "id": "utmc-646",
+      "city": "Durham",
+      "name": "Finchale Rd, Fram Moor Salutation Rbt",
+      "lat": 54.792713001381,
+      "lon": -1.589884728647,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_13.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/646"
+    },
+    {
+      "id": "utmc-652",
+      "city": "Durham",
+      "name": "Finchale Rd/Lilac Ave, Framwellgate Moor",
+      "lat": 54.793392967546,
+      "lon": -1.5868051406062,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_20.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/652"
+    },
+    {
+      "id": "utmc-664",
+      "city": "Durham",
+      "name": "High Bondgate, Newton Cap",
+      "lat": 54.665186756134,
+      "lon": -1.6780980847837,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_32.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/664"
+    },
+    {
+      "id": "utmc-655",
+      "city": "Durham",
+      "name": "New Elvet, Durham",
+      "lat": 54.775055359031,
+      "lon": -1.572156121594,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_23.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/655"
+    },
+    {
+      "id": "utmc-397",
+      "city": "Newcastle",
+      "name": "Newcastle - A1056 & B1318 Great North Road / A1056 Rotary Way",
+      "lat": 55.036093674943,
+      "lon": -1.6235716504984,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A1056B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/397"
+    },
+    {
+      "id": "utmc-400",
+      "city": "Newcastle",
+      "name": "Newcastle - A1058 Coast Road / A188 Chillingham Road & Benton Road",
+      "lat": 54.992869475697,
+      "lon": -1.5787052492757,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A1058C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/400"
+    },
+    {
+      "id": "utmc-401",
+      "city": "Newcastle",
+      "name": "Newcastle - A1058 Coast Road / Benfield Road / Red Hall Drive",
+      "lat": 54.994369486816,
+      "lon": -1.5662768639432,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A1058D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/401"
+    },
+    {
+      "id": "utmc-398",
+      "city": "Newcastle",
+      "name": "Newcastle - A1058 Cradlewell / Osborne Avenue",
+      "lat": 54.986699961404,
+      "lon": -1.5948529578603,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A1058A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/398"
+    },
+    {
+      "id": "utmc-399",
+      "city": "Newcastle",
+      "name": "Newcastle - A1058 Stephenson Road / Heaton Road / Newton Road / Corner House",
+      "lat": 54.991189605301,
+      "lon": -1.5832746038364,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A1058B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/399"
+    },
+    {
+      "id": "utmc-405",
+      "city": "Newcastle",
+      "name": "Newcastle - A167 / A189 Grandstand Road",
+      "lat": 54.988889039523,
+      "lon": -1.6386076160023,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A167D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/405"
+    },
+    {
+      "id": "utmc-438",
+      "city": "Newcastle",
+      "name": "Newcastle - A167 & B6324 Stamfordham Road / A1 J76 Westerhope",
+      "lat": 54.99568759267,
+      "lon": -1.6810926407328,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B6324A2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/438"
+    },
+    {
+      "id": "utmc-402",
+      "city": "Newcastle",
+      "name": "Newcastle - A167 Ponteland Road / A191 Kenton Lane / Etal Lane",
+      "lat": 55.001367138417,
+      "lon": -1.6666047029291,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A167A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/402"
+    },
+    {
+      "id": "utmc-403",
+      "city": "Newcastle",
+      "name": "Newcastle - A167 Ponteland Road / A191 Springfield Road",
+      "lat": 54.995327927652,
+      "lon": -1.661715035511,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A167B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/403"
+    },
+    {
+      "id": "utmc-404",
+      "city": "Newcastle",
+      "name": "Newcastle - A167 Ponteland Road & Stamfordham Road / B1305 Two Ball Lonnen",
+      "lat": 54.989958628464,
+      "lon": -1.6574253239601,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A167C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/404"
+    },
+    {
+      "id": "utmc-439",
+      "city": "Newcastle",
+      "name": "Newcastle - A167 Stamfordham Road / A191 Silver Lonnen & Springfield Road",
+      "lat": 54.989938446109,
+      "lon": -1.6696638004438,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B6324B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/439"
+    },
+    {
+      "id": "utmc-628",
+      "city": "Newcastle",
+      "name": "Newcastle - A167 Stamfordham Road / St. James Retail Park",
+      "lat": 54.991128228688,
+      "lon": -1.6747332240148,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B6324B0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/628"
+    },
+    {
+      "id": "utmc-406",
+      "city": "Newcastle",
+      "name": "Newcastle - A167(M) Central Motorway East (Southbound) / B1318 Great North Road",
+      "lat": 54.982930149833,
+      "lon": -1.6118806674959,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A167D2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/406"
+    },
+    {
+      "id": "utmc-407",
+      "city": "Newcastle",
+      "name": "Newcastle - A167(M) Central Motorway East / A193 New Bridge Street",
+      "lat": 54.974561225888,
+      "lon": -1.6062809805225,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A167E1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/407"
+    },
+    {
+      "id": "utmc-463",
+      "city": "Newcastle",
+      "name": "Newcastle - A186 Clayton Street West / Central Parkway",
+      "lat": 54.968521727992,
+      "lon": -1.6203589538845,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_006_N.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/463"
+    },
+    {
+      "id": "utmc-454",
+      "city": "Newcastle",
+      "name": "Newcastle - A186 Collingwood Street / Groat Market",
+      "lat": 54.970111663216,
+      "lon": -1.6122000409382,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_003_W.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/454"
+    },
+    {
+      "id": "utmc-446",
+      "city": "Newcastle",
+      "name": "Newcastle - A186 Collingwood Street / Pudding Chare",
+      "lat": 54.969621692326,
+      "lon": -1.6141097810984,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_001_E.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/446"
+    },
+    {
+      "id": "utmc-462",
+      "city": "Newcastle",
+      "name": "Newcastle - A186 Neville Street / Central Parkway",
+      "lat": 54.968521727992,
+      "lon": -1.6203589538845,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_006_E.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/462"
+    },
+    {
+      "id": "utmc-449",
+      "city": "Newcastle",
+      "name": "Newcastle - A186 Neville Street / Pudding Chare",
+      "lat": 54.969621692326,
+      "lon": -1.6141097810984,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_001_W.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/449"
+    },
+    {
+      "id": "utmc-509",
+      "city": "Newcastle",
+      "name": "Newcastle - A186 Pilgrim Street / A186 Mosley Street",
+      "lat": 54.971641520492,
+      "lon": -1.6096604266882,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/PS192.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/509"
+    },
+    {
+      "id": "utmc-451",
+      "city": "Newcastle",
+      "name": "Newcastle - A186 St. Nicholas Square / Groat Market",
+      "lat": 54.970111663216,
+      "lon": -1.6122000409382,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_003_E.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/451"
+    },
+    {
+      "id": "utmc-453",
+      "city": "Newcastle",
+      "name": "Newcastle - A186 St. Nicholas Street / Groat Market",
+      "lat": 54.970111663216,
+      "lon": -1.6122000409382,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_003_S.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/453"
+    },
+    {
+      "id": "utmc-409",
+      "city": "Newcastle",
+      "name": "Newcastle - A186 West Road / Gowland Avenue / Hampstead Road",
+      "lat": 54.975630388191,
+      "lon": -1.6532851846395,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A186B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/409"
+    },
+    {
+      "id": "utmc-408",
+      "city": "Newcastle",
+      "name": "Newcastle - A186 West Road / Slatyford Lane / Broadwood Road",
+      "lat": 54.983458933379,
+      "lon": -1.6882511925315,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A186A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/408"
+    },
+    {
+      "id": "utmc-411",
+      "city": "Newcastle",
+      "name": "Newcastle - A186 Westgate Road / B1311 Elswick Road / Corporation Street",
+      "lat": 54.971661214993,
+      "lon": -1.629687937582,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A186B3.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/411"
+    },
+    {
+      "id": "utmc-410",
+      "city": "Newcastle",
+      "name": "Newcastle - A186 Westgate Road / Brighton Grove",
+      "lat": 54.973780769671,
+      "lon": -1.6425364368318,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A186B2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/410"
+    },
+    {
+      "id": "utmc-448",
+      "city": "Newcastle",
+      "name": "Newcastle - A186 Westgate Road / Pudding Chare",
+      "lat": 54.969621692326,
+      "lon": -1.6141097810984,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_001_S.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/448"
+    },
+    {
+      "id": "utmc-465",
+      "city": "Newcastle",
+      "name": "Newcastle - A186 Westmorland Road / Central Parkway",
+      "lat": 54.968521727992,
+      "lon": -1.6203589538845,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_006_W.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/465"
+    },
+    {
+      "id": "utmc-412",
+      "city": "Newcastle",
+      "name": "Newcastle - A187 Fossway / Huddleston Road / Newcastle Shopping Park",
+      "lat": 54.978851260677,
+      "lon": -1.5704956263564,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A187A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/412"
+    },
+    {
+      "id": "utmc-414",
+      "city": "Newcastle",
+      "name": "Newcastle - A188 Benton Road / Cragside",
+      "lat": 54.998308795449,
+      "lon": -1.5810752043525,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A188A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/414"
+    },
+    {
+      "id": "utmc-413",
+      "city": "Newcastle",
+      "name": "Newcastle - A188 Benton Road / Etherstone Avenue / Craster Terrace",
+      "lat": 54.995629128637,
+      "lon": -1.5800352106177,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A188A0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/413"
+    },
+    {
+      "id": "utmc-417",
+      "city": "Newcastle",
+      "name": "Newcastle - A188 Chillingham Road / Hartford Street",
+      "lat": 54.983260660846,
+      "lon": -1.5756051935289,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A188C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/417"
+    },
+    {
+      "id": "utmc-415",
+      "city": "Newcastle",
+      "name": "Newcastle - A188 Chillingham Road / Meldon Terrace",
+      "lat": 54.985340402529,
+      "lon": -1.5763951907892,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A188B0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/415"
+    },
+    {
+      "id": "utmc-416",
+      "city": "Newcastle",
+      "name": "Newcastle - A188 Chillingham Road / Warton Terrace",
+      "lat": 54.986970196742,
+      "lon": -1.5772351611753,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A188B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/416"
+    },
+    {
+      "id": "utmc-419",
+      "city": "Newcastle",
+      "name": "Newcastle - A189 Barrack Road / Brighton Grove / Hunter's Road",
+      "lat": 54.981329974964,
+      "lon": -1.6359575999613,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A189C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/419"
+    },
+    {
+      "id": "utmc-627",
+      "city": "Newcastle",
+      "name": "Newcastle - A189 Barrack Road / Stanhope Street",
+      "lat": 54.975630792481,
+      "lon": -1.626538510684,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A189C2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/627"
+    },
+    {
+      "id": "utmc-474",
+      "city": "Newcastle",
+      "name": "Newcastle - A189 Barrack Road & Gallowgate / Strawberry Place",
+      "lat": 54.974181028501,
+      "lon": -1.6222889727708,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_009.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/474"
+    },
+    {
+      "id": "utmc-457",
+      "city": "Newcastle",
+      "name": "Newcastle - A189 Gallowgate / A189 St. James' Boulevard",
+      "lat": 54.973781094333,
+      "lon": -1.6210691061515,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_004_W.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/457"
+    },
+    {
+      "id": "utmc-630",
+      "city": "Newcastle",
+      "name": "Newcastle - A189 Grandstand Road & Ponteland Road / Fenham Hall Drive",
+      "lat": 54.984759493602,
+      "lon": -1.6409271386631,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A189C0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/630"
+    },
+    {
+      "id": "utmc-418",
+      "city": "Newcastle",
+      "name": "Newcastle - A189 Haddricks Mill Road / A191 Benton Park Road & Station Road",
+      "lat": 55.006737470141,
+      "lon": -1.6026229106251,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A189B3.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/418"
+    },
+    {
+      "id": "utmc-421",
+      "city": "Newcastle",
+      "name": "Newcastle - A189 St. James' Boulevard / A186 Westgate Road",
+      "lat": 54.970781421768,
+      "lon": -1.6229087402249,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A189D2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/421"
+    },
+    {
+      "id": "utmc-420",
+      "city": "Newcastle",
+      "name": "Newcastle - A189 St. James' Boulevard / A695 Scotswood Road",
+      "lat": 54.96632193269,
+      "lon": -1.6240483946387,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A189D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/420"
+    },
+    {
+      "id": "utmc-456",
+      "city": "Newcastle",
+      "name": "Newcastle - A189 St. James' Boulevard / Gallowgate",
+      "lat": 54.973781094333,
+      "lon": -1.6210691061515,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_004_S.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/456"
+    },
+    {
+      "id": "utmc-422",
+      "city": "Newcastle",
+      "name": "Newcastle - A191 Benton Park Road / A189 Killingworth Road / Haddricks Mill",
+      "lat": 55.007087457639,
+      "lon": -1.6007131643174,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A191A2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/422"
+    },
+    {
+      "id": "utmc-424",
+      "city": "Newcastle",
+      "name": "Newcastle - A193 New Bridge Street / B1600 Gibson Street",
+      "lat": 54.974551347683,
+      "lon": -1.598321969604,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A193L1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/424"
+    },
+    {
+      "id": "utmc-423",
+      "city": "Newcastle",
+      "name": "Newcastle - A193 Shields Road / Pembroke Avenue",
+      "lat": 54.983950793899,
+      "lon": -1.5614669831512,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A193J1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/423"
+    },
+    {
+      "id": "utmc-615",
+      "city": "Newcastle",
+      "name": "Newcastle - A6085 Scotswood Road / A191 Denton Road / A1 J74",
+      "lat": 54.969900455991,
+      "lon": -1.6937898862068,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A6085A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/615"
+    },
+    {
+      "id": "utmc-692",
+      "city": "Newcastle",
+      "name": "Newcastle - A695 Marlborough Crescent & Railway Street / Scotswood Road",
+      "lat": 54.967231863053,
+      "lon": -1.621528749473,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_002.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/692"
+    },
+    {
+      "id": "utmc-631",
+      "city": "Newcastle",
+      "name": "Newcastle - A695 Scotswood Road / B1305 Whitehouse Road",
+      "lat": 54.96549142743,
+      "lon": -1.6639933905668,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A695E2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/631"
+    },
+    {
+      "id": "utmc-632",
+      "city": "Newcastle",
+      "name": "Newcastle - A695 Scotswood Road / Park Road",
+      "lat": 54.963322126146,
+      "lon": -1.6347469275927,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A695F2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/632"
+    },
+    {
+      "id": "utmc-425",
+      "city": "Newcastle",
+      "name": "Newcastle - A695 Scotswood Road / Stoneacre Garage",
+      "lat": 54.966081206133,
+      "lon": -1.6740321692406,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A695E1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/425"
+    },
+    {
+      "id": "utmc-426",
+      "city": "Newcastle",
+      "name": "Newcastle - A695 Scotswood Road / William Armstrong Drive (East)",
+      "lat": 54.963101998061,
+      "lon": -1.644945649696,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_A695F1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/426"
+    },
+    {
+      "id": "utmc-467",
+      "city": "Newcastle",
+      "name": "Newcastle - B1307 Percy Street / Gallowgate / Newgate Street",
+      "lat": 54.974221103976,
+      "lon": -1.6169896335095,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_007_N.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/467"
+    },
+    {
+      "id": "utmc-427",
+      "city": "Newcastle",
+      "name": "Newcastle - B1307 Percy Street / Haymarket & Eldon Square Interchange",
+      "lat": 54.976370868886,
+      "lon": -1.6156998922572,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B1307A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/427"
+    },
+    {
+      "id": "utmc-428",
+      "city": "Newcastle",
+      "name": "Newcastle - B1312 Shields Road / Brinkburn Street / Edwin Street",
+      "lat": 54.977041316083,
+      "lon": -1.5809642417766,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B1312A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/428"
+    },
+    {
+      "id": "utmc-436",
+      "city": "Newcastle",
+      "name": "Newcastle - B1318 Barras Bridge & Great North Road / Claremont Road",
+      "lat": 54.979360564146,
+      "lon": -1.6124404344209,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B1318D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/436"
+    },
+    {
+      "id": "utmc-435",
+      "city": "Newcastle",
+      "name": "Newcastle - B1318 Great North Road / A167(M) / Clayton Road",
+      "lat": 54.985199862064,
+      "lon": -1.6131306160026,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B1318C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/435"
+    },
+    {
+      "id": "utmc-429",
+      "city": "Newcastle",
+      "name": "Newcastle - B1318 Great North Road / Broadway East & West",
+      "lat": 55.017265928697,
+      "lon": -1.6220409770792,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B1318A0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/429"
+    },
+    {
+      "id": "utmc-431",
+      "city": "Newcastle",
+      "name": "Newcastle - B1318 Great North Road / Brunton Lane",
+      "lat": 55.029144511131,
+      "lon": -1.6227214373665,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B1318A2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/431"
+    },
+    {
+      "id": "utmc-434",
+      "city": "Newcastle",
+      "name": "Newcastle - B1318 Great North Road / Hollywood Avenue / Regent Centre (North)",
+      "lat": 55.012466518613,
+      "lon": -1.6206309324768,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B1318B3.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/434"
+    },
+    {
+      "id": "utmc-430",
+      "city": "Newcastle",
+      "name": "Newcastle - B1318 Great North Road / Polwarth Drive",
+      "lat": 55.02365516889,
+      "lon": -1.6222312464926,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B1318A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/430"
+    },
+    {
+      "id": "utmc-433",
+      "city": "Newcastle",
+      "name": "Newcastle - B1318 High Street / A191 Church Road & Salters' Road",
+      "lat": 55.007027175236,
+      "lon": -1.6198207839073,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B1318B2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/433"
+    },
+    {
+      "id": "utmc-432",
+      "city": "Newcastle",
+      "name": "Newcastle - B1318 High Street / Hawthorn Road",
+      "lat": 55.003987527136,
+      "lon": -1.6203605774069,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B1318B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/432"
+    },
+    {
+      "id": "utmc-510",
+      "city": "Newcastle",
+      "name": "Newcastle - B1600 Sandhill / Javel Groupe / Swing Bridge",
+      "lat": 54.968271933961,
+      "lon": -1.6087103905635,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/PS303.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/510"
+    },
+    {
+      "id": "utmc-437",
+      "city": "Newcastle",
+      "name": "Newcastle - B6324 Stamfordham Road / Queens Road",
+      "lat": 54.998197196938,
+      "lon": -1.687621942674,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B6324A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/437"
+    },
+    {
+      "id": "utmc-440",
+      "city": "Newcastle",
+      "name": "Newcastle - B6918 Ponteland Road / Callerton Lane / International Drive",
+      "lat": 55.028763373795,
+      "lon": -1.7010116703448,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_B6918A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/440"
+    },
+    {
+      "id": "utmc-368",
+      "city": "Newcastle",
+      "name": "Newcastle - B6918 Ponteland Road / Newcastle Airport Maintenance Access",
+      "lat": 55.026463694329,
+      "lon": -1.6978219626288,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV00002.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/368"
+    },
+    {
+      "id": "utmc-458",
+      "city": "Newcastle",
+      "name": "Newcastle - Bigg Market / Grainger Street",
+      "lat": 54.97147146204,
+      "lon": -1.6148497737399,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_005_E.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/458"
+    },
+    {
+      "id": "utmc-466",
+      "city": "Newcastle",
+      "name": "Newcastle - Blackett Street / B1307 Percy Street / Newgate Street",
+      "lat": 54.974221103976,
+      "lon": -1.6169896335095,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_007_E.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/466"
+    },
+    {
+      "id": "utmc-473",
+      "city": "Newcastle",
+      "name": "Newcastle - Blackett Street / Pilgrim Street",
+      "lat": 54.974301172319,
+      "lon": -1.6118502761737,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_008_W.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/473"
+    },
+    {
+      "id": "utmc-464",
+      "city": "Newcastle",
+      "name": "Newcastle - Central Parkway / A186 Clayton Street West, Neville Street & Westmorland Road",
+      "lat": 54.968521727992,
+      "lon": -1.6203589538845,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_006_S.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/464"
+    },
+    {
+      "id": "utmc-441",
+      "city": "Newcastle",
+      "name": "Newcastle - Coach Lane / Westminster Way",
+      "lat": 55.002808396101,
+      "lon": -1.5722765056694,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_CHLA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/441"
+    },
+    {
+      "id": "utmc-442",
+      "city": "Newcastle",
+      "name": "Newcastle - Freeman Road / Castle Farm Road",
+      "lat": 55.002558048456,
+      "lon": -1.5971334018067,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_FMRA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/442"
+    },
+    {
+      "id": "utmc-455",
+      "city": "Newcastle",
+      "name": "Newcastle - Gallowgate / A189 St. James. Boulevard",
+      "lat": 54.973781094333,
+      "lon": -1.6210691061515,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_004_E.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/455"
+    },
+    {
+      "id": "utmc-469",
+      "city": "Newcastle",
+      "name": "Newcastle - Gallowgate / B1307 Percy Street / Newgate Street",
+      "lat": 54.974221103976,
+      "lon": -1.6169896335095,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_007_W.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/469"
+    },
+    {
+      "id": "utmc-459",
+      "city": "Newcastle",
+      "name": "Newcastle - Grainger Street (North) / Newgate Street",
+      "lat": 54.97147146204,
+      "lon": -1.6148497737399,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_005_N.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/459"
+    },
+    {
+      "id": "utmc-460",
+      "city": "Newcastle",
+      "name": "Newcastle - Grainger Street (South) / Newgate Street",
+      "lat": 54.97147146204,
+      "lon": -1.6148497737399,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_005_S.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/460"
+    },
+    {
+      "id": "utmc-452",
+      "city": "Newcastle",
+      "name": "Newcastle - Groat Market / A186 Collingwood Street, St. Nicholas Square & St. Nicholas Street",
+      "lat": 54.970111663216,
+      "lon": -1.6122000409382,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_003_N.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/452"
+    },
+    {
+      "id": "utmc-443",
+      "city": "Newcastle",
+      "name": "Newcastle - John Dobson Street / New Bridge Street West",
+      "lat": 54.974671160455,
+      "lon": -1.60974055542,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_JDSA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/443"
+    },
+    {
+      "id": "utmc-444",
+      "city": "Newcastle",
+      "name": "Newcastle - Kingston Park Road / Shoreswood Way",
+      "lat": 55.021124887223,
+      "lon": -1.6606763441647,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_KPRA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/444"
+    },
+    {
+      "id": "utmc-470",
+      "city": "Newcastle",
+      "name": "Newcastle - New Bridge Street West / Pilgrim Street",
+      "lat": 54.974301172319,
+      "lon": -1.6118502761737,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_008_E.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/470"
+    },
+    {
+      "id": "utmc-468",
+      "city": "Newcastle",
+      "name": "Newcastle - Newgate Street / B1307 Percy Street / Gallowgate",
+      "lat": 54.974221103976,
+      "lon": -1.6169896335095,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_007_S.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/468"
+    },
+    {
+      "id": "utmc-461",
+      "city": "Newcastle",
+      "name": "Newcastle - Newgate Street / Grainger Street",
+      "lat": 54.97147146204,
+      "lon": -1.6148497737399,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_005_W.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/461"
+    },
+    {
+      "id": "utmc-471",
+      "city": "Newcastle",
+      "name": "Newcastle - Northumberland Street / Blackett Street",
+      "lat": 54.974301172319,
+      "lon": -1.6118502761737,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_008_N.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/471"
+    },
+    {
+      "id": "utmc-472",
+      "city": "Newcastle",
+      "name": "Newcastle - Pilgrim Street / Blackett Street",
+      "lat": 54.974301172319,
+      "lon": -1.6118502761737,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_008_S.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/472"
+    },
+    {
+      "id": "utmc-445",
+      "city": "Newcastle",
+      "name": "Newcastle - Pilgrim Street / Market Street",
+      "lat": 54.973171319919,
+      "lon": -1.610940337588,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PGSA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/445"
+    },
+    {
+      "id": "utmc-447",
+      "city": "Newcastle",
+      "name": "Newcastle - Pudding Chare / A186 Collingwood Street, Neville Street & Westgate Road",
+      "lat": 54.969621692326,
+      "lon": -1.6141097810984,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_PS_001_N.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/447"
+    },
+    {
+      "id": "utmc-629",
+      "city": "Newcastle",
+      "name": "Newcastle - Queen Victoria Road / Richardson Road / Leazes Lane",
+      "lat": 54.977370707771,
+      "lon": -1.6185195874037,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_QVRA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/629"
+    },
+    {
+      "id": "utmc-475",
+      "city": "Newcastle",
+      "name": "Newcastle - Wingrove Road / Nuns Moor Road",
+      "lat": 54.980589889716,
+      "lon": -1.6473961435215,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NC_WNGA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/475"
+    },
+    {
+      "id": "utmc-663",
+      "city": "Durham",
+      "name": "Newton Cap/Bondgate Rbt, Bishop Auckland",
+      "lat": 54.664416820898,
+      "lon": -1.6798478344122,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_31.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/663"
+    },
+    {
+      "id": "utmc-476",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A1056 Killingworth Way / B1505 Station Road",
+      "lat": 55.039393942421,
+      "lon": -1.5801572084682,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A1056A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/476"
+    },
+    {
+      "id": "utmc-480",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A1058 Beach Road / A192 Preston Road",
+      "lat": 55.022407886183,
+      "lon": -1.4535221837662,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A1058F1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/480"
+    },
+    {
+      "id": "utmc-477",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A1058 Coast Road / A186 Station Road",
+      "lat": 54.999849166692,
+      "lon": -1.544649805916,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A1058D2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/477"
+    },
+    {
+      "id": "utmc-478",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A1058 Coast Road / Battle Hill Drive / Churchill Street",
+      "lat": 55.007808830592,
+      "lon": -1.5048451238792,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A1058E1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/478"
+    },
+    {
+      "id": "utmc-372",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A1058 Coast Road / Norham Road",
+      "lat": 55.011508666012,
+      "lon": -1.4869275235201,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV00010.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/372"
+    },
+    {
+      "id": "utmc-479",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A1058 Coast Road & Beach Road / A1108 Billy Mill Avenue / B1316 Lynn Road",
+      "lat": 55.0149285201,
+      "lon": -1.4699797898281,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A1058E2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/479"
+    },
+    {
+      "id": "utmc-481",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A187 Buddle Street & Hadrian Road / A186 Station Road",
+      "lat": 54.988550709014,
+      "lon": -1.5312409529354,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A187B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/481"
+    },
+    {
+      "id": "utmc-483",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A188 Benton Lane / Quorum & Balliol Business Parks",
+      "lat": 55.019606214968,
+      "lon": -1.5848757103754,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A188A2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/483"
+    },
+    {
+      "id": "utmc-484",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A188 Benton Lane / West Farm Avenue / Goathland Avenue",
+      "lat": 55.013057032532,
+      "lon": -1.5821257514549,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A188A3.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/484"
+    },
+    {
+      "id": "utmc-485",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A189 / A1056 Killingworth Way",
+      "lat": 55.039553749501,
+      "lon": -1.5916157889803,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A189A3E.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/485"
+    },
+    {
+      "id": "utmc-486",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A189 / A1056 Sandy Lane",
+      "lat": 55.039513724347,
+      "lon": -1.593585541853,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A189A3W.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/486"
+    },
+    {
+      "id": "utmc-487",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A189 / A188 & B1505 Benton Lane",
+      "lat": 55.025565494737,
+      "lon": -1.5858158674497,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A189B0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/487"
+    },
+    {
+      "id": "utmc-489",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A189 / White House Drive / Great Lime Road",
+      "lat": 55.031874671408,
+      "lon": -1.5908155352813,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A189B2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/489"
+    },
+    {
+      "id": "utmc-488",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A189 Salters' Lane / Gosforth Park Way",
+      "lat": 55.017566248007,
+      "lon": -1.5986239055104,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A189B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/488"
+    },
+    {
+      "id": "utmc-491",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A191 Front Street / Coach Lane",
+      "lat": 55.010277489193,
+      "lon": -1.5737366674934,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A191B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/491"
+    },
+    {
+      "id": "utmc-490",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A191 Front Street & Benton Park Road / A188 Benton Road & Benton Lane",
+      "lat": 55.009197549686,
+      "lon": -1.5781760654633,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A191A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/490"
+    },
+    {
+      "id": "utmc-497",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A191 Rake Lane / A192 Preston North Road",
+      "lat": 55.029756900894,
+      "lon": -1.4610215917995,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A191G1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/497"
+    },
+    {
+      "id": "utmc-493",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A191 Whitley Road / A186 Station Road",
+      "lat": 55.014697341759,
+      "lon": -1.5489999488333,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A191D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/493"
+    },
+    {
+      "id": "utmc-492",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A191 Whitley Road / B1317 Station Road / Tyneview Park",
+      "lat": 55.011127505952,
+      "lon": -1.5660076682701,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A191C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/492"
+    },
+    {
+      "id": "utmc-494",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A191 Whitley Road / Chollerton Drive / Benton Supermarket",
+      "lat": 55.021046743993,
+      "lon": -1.5388615031468,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A191D2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/494"
+    },
+    {
+      "id": "utmc-503",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A193 Church Bank / Wagon Way / North Terrace",
+      "lat": 54.993260334523,
+      "lon": -1.5192126655718,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A193G1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/503"
+    },
+    {
+      "id": "utmc-504",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A193 High Street East / Alexandra Street",
+      "lat": 54.991920355473,
+      "lon": -1.5282514798988,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A193H1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/504"
+    },
+    {
+      "id": "utmc-505",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A193 High Street East / Sycamore Street",
+      "lat": 54.991410350839,
+      "lon": -1.5325209255267,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A193I1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/505"
+    },
+    {
+      "id": "utmc-500",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A193 Marden Road / Park View",
+      "lat": 55.041915670998,
+      "lon": -1.4472938647138,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A193E1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/500"
+    },
+    {
+      "id": "utmc-499",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A193 Park Avenue / Whitley Road",
+      "lat": 55.041995676694,
+      "lon": -1.4463039916246,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A193D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/499"
+    },
+    {
+      "id": "utmc-498",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A193 The Links / A1148 Monkseaton Drive",
+      "lat": 55.052564343096,
+      "lon": -1.4516338195644,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A193C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/498"
+    },
+    {
+      "id": "utmc-502",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A193 Tynemouth Road / B1315 Churchill Street",
+      "lat": 54.996190230475,
+      "lon": -1.5032847812652,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A193F2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/502"
+    },
+    {
+      "id": "utmc-501",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A193 Tynemouth Road / Stead Street",
+      "lat": 54.998080146774,
+      "lon": -1.4941060098673,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A193F1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/501"
+    },
+    {
+      "id": "utmc-507",
+      "city": "North Tyneside",
+      "name": "North Tyneside - Norham Road / Verne Road / Sandyford Avenue",
+      "lat": 55.00850913681,
+      "lon": -1.4793683248691,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_NORB1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/507"
+    },
+    {
+      "id": "utmc-506",
+      "city": "North Tyneside",
+      "name": "North Tyneside - Norham Road North / Middle Engine Lane",
+      "lat": 55.021337441202,
+      "lon": -1.4908974845264,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_NORA0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/506"
+    },
+    {
+      "id": "utmc-377",
+      "city": "Northumberland",
+      "name": "Northumberland - A1 / B6354 Berwick-upon-Tweed (North)",
+      "lat": 55.748613052866,
+      "lon": -2.0253641023816,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV00018.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/377"
+    },
+    {
+      "id": "utmc-378",
+      "city": "Northumberland",
+      "name": "Northumberland - A1 / B6354 Berwick-upon-Tweed (South)",
+      "lat": 55.748533064758,
+      "lon": -2.0252041189706,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV00019.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/378"
+    },
+    {
+      "id": "utmc-618",
+      "city": "Northumberland",
+      "name": "Northumberland - A1 / Felton",
+      "lat": 55.283472781674,
+      "lon": -1.7270101307965,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV_FEL.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/618"
+    },
+    {
+      "id": "utmc-625",
+      "city": "Northumberland",
+      "name": "Northumberland - A1 / Rosebrough (North)",
+      "lat": 55.536232013734,
+      "lon": -1.7773255747088,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV_ROS_N.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/625"
+    },
+    {
+      "id": "utmc-626",
+      "city": "Northumberland",
+      "name": "Northumberland - A1 / Rosebrough (South)",
+      "lat": 55.536232013734,
+      "lon": -1.7773255747088,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV_ROS_S.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/626"
+    },
+    {
+      "id": "utmc-382",
+      "city": "Northumberland",
+      "name": "Northumberland - A1 / Stannington (North)",
+      "lat": 55.125072367113,
+      "lon": -1.6740094511571,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV00023.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/382"
+    },
+    {
+      "id": "utmc-383",
+      "city": "Northumberland",
+      "name": "Northumberland - A1 / Stannington (South)",
+      "lat": 55.124982378687,
+      "lon": -1.6739494545068,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV00024.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/383"
+    },
+    {
+      "id": "utmc-385",
+      "city": "Northumberland",
+      "name": "Northumberland - A1061 / B1523 South Newsham Road",
+      "lat": 55.102607277529,
+      "lon": -1.52595688451,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NB_A1061B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/385"
+    },
+    {
+      "id": "utmc-384",
+      "city": "Northumberland",
+      "name": "Northumberland - A1061 Laverock Hall Road / A192",
+      "lat": 55.100507009421,
+      "lon": -1.5598825568856,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NB_A1061A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/384"
+    },
+    {
+      "id": "utmc-386",
+      "city": "Northumberland",
+      "name": "Northumberland - A1068 / A1 Alnwick / Willowburn Avenue",
+      "lat": 55.400179448636,
+      "lon": -1.6927498606327,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NB_A1068A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/386"
+    },
+    {
+      "id": "utmc-387",
+      "city": "Northumberland",
+      "name": "Northumberland - A1068 Fisher Lane / A192 Plessey Checks",
+      "lat": 55.105555530677,
+      "lon": -1.6178355621428,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NB_A1068B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/387"
+    },
+    {
+      "id": "utmc-388",
+      "city": "Northumberland",
+      "name": "Northumberland - A1167 Castlegate / Berwick-upon-Tweed Railway Station",
+      "lat": 55.774640191515,
+      "lon": -2.0095273313364,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NB_A1167A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/388"
+    },
+    {
+      "id": "utmc-390",
+      "city": "Northumberland",
+      "name": "Northumberland - A189 / A192 / B1505 Horton Road",
+      "lat": 55.10664620243,
+      "lon": -1.5651021901705,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NB_A189A2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/390"
+    },
+    {
+      "id": "utmc-389",
+      "city": "Northumberland",
+      "name": "Northumberland - A189 / B1344 Newbiggin Road",
+      "lat": 55.170929068493,
+      "lon": -1.5332491510811,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NB_A189A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/389"
+    },
+    {
+      "id": "utmc-391",
+      "city": "Northumberland",
+      "name": "Northumberland - A192 Castle Bank / Morpeth Court",
+      "lat": 55.164577517567,
+      "lon": -1.6849998974891,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NB_A192A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/391"
+    },
+    {
+      "id": "utmc-393",
+      "city": "Northumberland",
+      "name": "Northumberland - A193 Broadway & Rotary Way / B1523 Plessey Road",
+      "lat": 55.119015550086,
+      "lon": -1.5117394197726,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NB_A193A3.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/393"
+    },
+    {
+      "id": "utmc-686",
+      "city": "Northumberland",
+      "name": "Northumberland - A193 Cowpen Road / Chase Farm Drive",
+      "lat": 55.127873852806,
+      "lon": -1.5541845359452,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NB_A193A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/686"
+    },
+    {
+      "id": "utmc-392",
+      "city": "Northumberland",
+      "name": "Northumberland - A193 Cowpen Road / Old Cowpen Road",
+      "lat": 55.131863862467,
+      "lon": -1.5225386699998,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NB_A193A2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/392"
+    },
+    {
+      "id": "utmc-394",
+      "city": "Northumberland",
+      "name": "Northumberland - A193 Links Road & Rotary Way / A1061 South Newsham Road / B1329 Links Road",
+      "lat": 55.108946884902,
+      "lon": -1.502470107568,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NB_A193B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/394"
+    },
+    {
+      "id": "utmc-395",
+      "city": "Northumberland",
+      "name": "Northumberland - A6079 Rotary Way / Hexham Bridge",
+      "lat": 54.977593607536,
+      "lon": -2.0934304821359,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NB_A6079A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/395"
+    },
+    {
+      "id": "utmc-616",
+      "city": "Northumberland",
+      "name": "Northumberland - A696 / Ottercops (North)",
+      "lat": 55.197967559655,
+      "lon": -2.0875510446135,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV_OTC_N.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/616"
+    },
+    {
+      "id": "utmc-617",
+      "city": "Northumberland",
+      "name": "Northumberland - A696 / Ottercops (South)",
+      "lat": 55.197967559655,
+      "lon": -2.0875510446135,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV_OTC_S.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/617"
+    },
+    {
+      "id": "utmc-619",
+      "city": "Northumberland",
+      "name": "Northumberland - A697 / Longframlington (North)",
+      "lat": 55.325736462575,
+      "lon": -1.8137012078438,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV_LGF_N.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/619"
+    },
+    {
+      "id": "utmc-620",
+      "city": "Northumberland",
+      "name": "Northumberland - A697 / Longframlington (South)",
+      "lat": 55.325736462575,
+      "lon": -1.8137012078438,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV_LGF_S.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/620"
+    },
+    {
+      "id": "utmc-623",
+      "city": "Northumberland",
+      "name": "Northumberland - A698 / B6470 Norham (North)",
+      "lat": 55.713145841071,
+      "lon": -2.122100168831,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV_NTM_N.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/623"
+    },
+    {
+      "id": "utmc-624",
+      "city": "Northumberland",
+      "name": "Northumberland - A698 / B6470 Norham (South)",
+      "lat": 55.713145841071,
+      "lon": -2.122100168831,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV_NTM_S.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/624"
+    },
+    {
+      "id": "utmc-396",
+      "city": "Northumberland",
+      "name": "Northumberland - B1329 Ridley Avenue & Bridge Street / Wellington Street East",
+      "lat": 55.126584799249,
+      "lon": -1.5021709654969,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NB_B1329A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/396"
+    },
+    {
+      "id": "utmc-642",
+      "city": "Durham",
+      "name": "Potters Bank",
+      "lat": 54.766736071953,
+      "lon": -1.5900735285544,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_09.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/642"
+    },
+    {
+      "id": "utmc-678",
+      "city": "Durham",
+      "name": "Quarryheads La, New Inn, Durham",
+      "lat": 54.768646074574,
+      "lon": -1.574975482359,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_46.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/678"
+    },
+    {
+      "id": "utmc-562",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A1018 Shields Road / Front Street",
+      "lat": 54.954606722523,
+      "lon": -1.4008655823327,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A1018B3.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/562"
+    },
+    {
+      "id": "utmc-370",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A1018 Sunderland Road / B1299 Moor Lane",
+      "lat": 54.946717759081,
+      "lon": -1.3941860456868,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV00007.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/370"
+    },
+    {
+      "id": "utmc-561",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A1018 Sunderland Road / Grosvenor Road",
+      "lat": 54.984512859417,
+      "lon": -1.4218543625913,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A1018B2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/561"
+    },
+    {
+      "id": "utmc-559",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A1018 Westoe Road / A194 Crossgate / A183 Beach Road",
+      "lat": 54.99487150364,
+      "lon": -1.4302737968555,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A1018A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/559"
+    },
+    {
+      "id": "utmc-560",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A1018 Westoe Road / B1298 Chichester Road",
+      "lat": 54.991171985746,
+      "lon": -1.4274039818932,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A1018B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/560"
+    },
+    {
+      "id": "utmc-566",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A1300 John Reid Road / B1298 Boldon Lane & Whiteleas Way",
+      "lat": 54.967124672097,
+      "lon": -1.4379115618277,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A1300A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/566"
+    },
+    {
+      "id": "utmc-567",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A1300 John Reid Road / Chesterton Road",
+      "lat": 54.965724727873,
+      "lon": -1.4450906052961,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A1300A2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/567"
+    },
+    {
+      "id": "utmc-565",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A1300 John Reid Road / Fire Station / Hospital",
+      "lat": 54.969424576203,
+      "lon": -1.4264030978719,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A1300A0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/565"
+    },
+    {
+      "id": "utmc-568",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A1300 John Reid Road / Perth Avenue",
+      "lat": 54.965494527217,
+      "lon": -1.4599787452797,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A1300A3.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/568"
+    },
+    {
+      "id": "utmc-570",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A1300 Prince Edward Road / Gorse Avenue",
+      "lat": 54.971734575804,
+      "lon": -1.4086054156981,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A1300C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/570"
+    },
+    {
+      "id": "utmc-569",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A1300 Prince Edward Road / Lynwood Way",
+      "lat": 54.971734496607,
+      "lon": -1.4137647748319,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A1300B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/569"
+    },
+    {
+      "id": "utmc-571",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A183 Anderson Street / Winchester Street",
+      "lat": 54.996951280969,
+      "lon": -1.4287340847509,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A183A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/571"
+    },
+    {
+      "id": "utmc-572",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A183 East Street & Whitburn Bents Road / Nicholas Avenue",
+      "lat": 54.948617993333,
+      "lon": -1.3643298396817,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A183A4.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/572"
+    },
+    {
+      "id": "utmc-694",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A183 Ocean Road / B1303 Anderson Street",
+      "lat": 54.999320978414,
+      "lon": -1.4301640169815,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A183A2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/694"
+    },
+    {
+      "id": "utmc-687",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A184 Addison Road / Hylton Lane",
+      "lat": 54.942767313735,
+      "lon": -1.4537284714638,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A184G2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/687"
+    },
+    {
+      "id": "utmc-688",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A184 Front Street & Western Terrace / Boker Lane / Bridle Path",
+      "lat": 54.945707181226,
+      "lon": -1.4396503550674,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A184H0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/688"
+    },
+    {
+      "id": "utmc-573",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A184 Newcastle Road / B1298 Abingdon Way",
+      "lat": 54.94188721406,
+      "lon": -1.4670567761358,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A184G1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/573"
+    },
+    {
+      "id": "utmc-574",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A184 Sunderland Road & Front Street / B1299 Station Road",
+      "lat": 54.944437518168,
+      "lon": -1.4274718082349,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A184H1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/574"
+    },
+    {
+      "id": "utmc-576",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A185 Albert Road / B1516 Park Road",
+      "lat": 54.978532429395,
+      "lon": -1.4962248437904,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A185A2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/576"
+    },
+    {
+      "id": "utmc-580",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A185 Jarrow Road / Hobson Way",
+      "lat": 54.976653276144,
+      "lon": -1.455389831441,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A185C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/580"
+    },
+    {
+      "id": "utmc-693",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A185 Jarrow Road & Swinburne Street / Tyne Dock Jarrow Slake",
+      "lat": 54.978162968844,
+      "lon": -1.4637888576275,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A185C0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/693"
+    },
+    {
+      "id": "utmc-577",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A185 Victoria Road East & West / B1297 Station Road / Hall Road",
+      "lat": 54.972692802612,
+      "lon": -1.5170919811993,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A185A3.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/577"
+    },
+    {
+      "id": "utmc-578",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A185 Victoria Road West / B1306 Mill Lane",
+      "lat": 54.961114042727,
+      "lon": -1.5256903797216,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A185A4.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/578"
+    },
+    {
+      "id": "utmc-371",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A185 Victoria Road West / B1306 Mill Lane",
+      "lat": 54.961234026082,
+      "lon": -1.5258503653642,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV00009.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/371"
+    },
+    {
+      "id": "utmc-582",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A194 Crossgate / Garden Lane",
+      "lat": 54.994191569131,
+      "lon": -1.4312536435185,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A194A5.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/582"
+    },
+    {
+      "id": "utmc-588",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A194 Leam Lane / B1306 Mill Lane",
+      "lat": 54.951875430503,
+      "lon": -1.5064123493412,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A194D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/588"
+    },
+    {
+      "id": "utmc-583",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A194 Leam Lane & Newcastle Road / A1300 John Reid Road",
+      "lat": 54.967624164924,
+      "lon": -1.4671779493661,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A194B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/583"
+    },
+    {
+      "id": "utmc-585",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A194 Newcastle Road / Elswick Way / Hobson Way",
+      "lat": 54.975183501309,
+      "lon": -1.4520501783848,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A194B4.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/585"
+    },
+    {
+      "id": "utmc-584",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A194 Newcastle Road / Shaftesbury Avenue",
+      "lat": 54.970683885673,
+      "lon": -1.461748765281,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A194B2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/584"
+    },
+    {
+      "id": "utmc-581",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A194 Western Approach / B1302 Hudson Street",
+      "lat": 54.978523190217,
+      "lon": -1.4465410174914,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A194A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/581"
+    },
+    {
+      "id": "utmc-589",
+      "city": "South Tyneside",
+      "name": "South Tyneside - B1297 Ellison Street / Station Street",
+      "lat": 54.980672263319,
+      "lon": -1.490505653367,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_B1297A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/589"
+    },
+    {
+      "id": "utmc-592",
+      "city": "South Tyneside",
+      "name": "South Tyneside - B1298 Hubert Street / North Road",
+      "lat": 54.949096438502,
+      "lon": -1.4619577419614,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_B1298C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/592"
+    },
+    {
+      "id": "utmc-593",
+      "city": "South Tyneside",
+      "name": "South Tyneside - B1298 New Road / Boker Lane",
+      "lat": 54.95132650399,
+      "lon": -1.4404305180219,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_B1298C2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/593"
+    },
+    {
+      "id": "utmc-591",
+      "city": "South Tyneside",
+      "name": "South Tyneside - B1298 Stanhope Road / B1302 Boldon Lane",
+      "lat": 54.974333779727,
+      "lon": -1.440441581332,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_B1298B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/591"
+    },
+    {
+      "id": "utmc-590",
+      "city": "South Tyneside",
+      "name": "South Tyneside - B1298 Stanhope Road / Talbot Road",
+      "lat": 54.977213514589,
+      "lon": -1.4354923296235,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_B1298A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/590"
+    },
+    {
+      "id": "utmc-594",
+      "city": "South Tyneside",
+      "name": "South Tyneside - B1301 Dean Road / B1298 Stanhope Parade",
+      "lat": 54.986242507525,
+      "lon": -1.4314432512577,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_B1301A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/594"
+    },
+    {
+      "id": "utmc-595",
+      "city": "South Tyneside",
+      "name": "South Tyneside - B1344 Ferry Street / B1303 Station Road / Church Way",
+      "lat": 54.996611166707,
+      "lon": -1.4388128161437,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_B1344A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/595"
+    },
+    {
+      "id": "utmc-596",
+      "city": "South Tyneside",
+      "name": "South Tyneside - Fowler Street / Keppel Street",
+      "lat": 54.998261080621,
+      "lon": -1.4316837788738,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_FOWA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/596"
+    },
+    {
+      "id": "utmc-597",
+      "city": "South Tyneside",
+      "name": "South Tyneside - Sunderland Road / Moor Lane & Moor Lane East",
+      "lat": 54.977753788653,
+      "lon": -1.4134550925567,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_SLRA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/597"
+    },
+    {
+      "id": "utmc-604",
+      "city": "Stockton-on-Tees",
+      "name": "Stockton-on-Tees - A66 / Sandy Leas Lane",
+      "lat": 54.547814924797,
+      "lon": -1.3947077073935,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/VAISALACCTV30.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/604"
+    },
+    {
+      "id": "utmc-514",
+      "city": "Sunderland",
+      "name": "Sunderland - A1018 Commercial Road & Hendon Road / A1231 White House Road",
+      "lat": 54.901673482707,
+      "lon": -1.3686971198188,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1018F1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/514"
+    },
+    {
+      "id": "utmc-511",
+      "city": "Sunderland",
+      "name": "Sunderland - A1018 Newcastle Road / B1291 Charlton Road & Thompson Road",
+      "lat": 54.927630093916,
+      "lon": -1.3892857689986,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1018C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/511"
+    },
+    {
+      "id": "utmc-512",
+      "city": "Sunderland",
+      "name": "Sunderland - A1018 Newcastle Road & North Bridge Street / A1290 Southwick Road",
+      "lat": 54.915311650206,
+      "lon": -1.3828959909357,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1018D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/512"
+    },
+    {
+      "id": "utmc-513",
+      "city": "Sunderland",
+      "name": "Sunderland - A1018 North Bridge Street & Wearmouth Bridge / A183 Dame Dorothy Street",
+      "lat": 54.911562091089,
+      "lon": -1.3830857937417,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1018E1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/513"
+    },
+    {
+      "id": "utmc-519",
+      "city": "Sunderland",
+      "name": "Sunderland - A1231 Cowies Way & Trimdon Street / Pallion New Road",
+      "lat": 54.911171901951,
+      "lon": -1.3984038760118,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1231E1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/519"
+    },
+    {
+      "id": "utmc-517",
+      "city": "Sunderland",
+      "name": "Sunderland - A1231 Northern Spire Bridge / A1290 Wessington Way / Castletown Way",
+      "lat": 54.919430494454,
+      "lon": -1.4264307813521,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1231D2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/517"
+    },
+    {
+      "id": "utmc-518",
+      "city": "Sunderland",
+      "name": "Sunderland - A1231 Northern Spire Bridge & Cowies Way / B1045 Paul Watson Way",
+      "lat": 54.914451156053,
+      "lon": -1.4217211355608,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1231D3.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/518"
+    },
+    {
+      "id": "utmc-521",
+      "city": "Sunderland",
+      "name": "Sunderland - A1231 Stockton Road / Cowan Terrace",
+      "lat": 54.902043169323,
+      "lon": -1.3862349626272,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1231G1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/521"
+    },
+    {
+      "id": "utmc-520",
+      "city": "Sunderland",
+      "name": "Sunderland - A1231 Trimdon Street / Beach Street",
+      "lat": 54.910252023727,
+      "lon": -1.3975639376255,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1231E2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/520"
+    },
+    {
+      "id": "utmc-524",
+      "city": "Sunderland",
+      "name": "Sunderland - A1290 Keir Hardie Way / B1291 Southwick Road",
+      "lat": 54.918471093724,
+      "lon": -1.3947746639115,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1290E1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/524"
+    },
+    {
+      "id": "utmc-522",
+      "city": "Sunderland",
+      "name": "Sunderland - A1290 Washington Road / Cherry Blossom Way",
+      "lat": 54.918539639065,
+      "lon": -1.4892529455632,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1290A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/522"
+    },
+    {
+      "id": "utmc-690",
+      "city": "Sunderland",
+      "name": "Sunderland - A1290 Washington Road / International Drive (North)",
+      "lat": 54.921329480848,
+      "lon": -1.4779844722947,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1290B2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/690"
+    },
+    {
+      "id": "utmc-691",
+      "city": "Sunderland",
+      "name": "Sunderland - A1290 Washington Road / International Drive (South)",
+      "lat": 54.928618715531,
+      "lon": -1.4715956009352,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1290B0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/691"
+    },
+    {
+      "id": "utmc-523",
+      "city": "Sunderland",
+      "name": "Sunderland - A1290 Washington Road / Nissan",
+      "lat": 54.922939346019,
+      "lon": -1.4743349993133,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1290B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/523"
+    },
+    {
+      "id": "utmc-525",
+      "city": "Sunderland",
+      "name": "Sunderland - A1290 Wessington Way / Northern Way / B1539 Queen Alexandra Bridge",
+      "lat": 54.918280933552,
+      "lon": -1.4066731791944,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1290F1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/525"
+    },
+    {
+      "id": "utmc-526",
+      "city": "Sunderland",
+      "name": "Sunderland - A182 Front Street / John Street / Park View",
+      "lat": 54.821191724272,
+      "lon": -1.4523130534905,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A182B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/526"
+    },
+    {
+      "id": "utmc-540",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 & B1519 Chester Road / A182 Philadelphia Lane",
+      "lat": 54.867415582533,
+      "lon": -1.496329720537,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183L1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/540"
+    },
+    {
+      "id": "utmc-539",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 Chester Road / Herrington Country Park / Penshaw Monument",
+      "lat": 54.880894251462,
+      "lon": -1.4790124854574,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183K2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/539"
+    },
+    {
+      "id": "utmc-535",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 Chester Road / Kayll Road / Ormonde Street",
+      "lat": 54.900682976307,
+      "lon": -1.4092920409427,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183H1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/535"
+    },
+    {
+      "id": "utmc-534",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 Chester Road / Westbourne Road",
+      "lat": 54.903312890948,
+      "lon": -1.394573987427,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183G1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/534"
+    },
+    {
+      "id": "utmc-685",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 Dame Dorothy Street / A1290 Church Street North",
+      "lat": 54.913741940071,
+      "lon": -1.3761267577245,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183B2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/685"
+    },
+    {
+      "id": "utmc-529",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 St. Mary's Boulevard / A1018 West Wear Street & Wearmouth Bridge",
+      "lat": 54.90839247869,
+      "lon": -1.3822757474246,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/529"
+    },
+    {
+      "id": "utmc-533",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 St. Mary's Boulevard / A1231 St. Michael's Way & Silksworth Row",
+      "lat": 54.907152493169,
+      "lon": -1.3908846225174,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183F1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/533"
+    },
+    {
+      "id": "utmc-530",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 St. Mary's Boulevard / Cumberland Street",
+      "lat": 54.907922500661,
+      "lon": -1.3844654541404,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/530"
+    },
+    {
+      "id": "utmc-531",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 St. Mary's Boulevard / Keel Square",
+      "lat": 54.907712489257,
+      "lon": -1.3868251518141,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/531"
+    },
+    {
+      "id": "utmc-532",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 St. Mary's Boulevard / Livingstone Road Car Park",
+      "lat": 54.907732446184,
+      "lon": -1.3894748241727,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183E1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/532"
+    },
+    {
+      "id": "utmc-536",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 The Broadway / B1405 Springwell Road & Holborn Road",
+      "lat": 54.895103337175,
+      "lon": -1.4288293609855,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183I1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/536"
+    },
+    {
+      "id": "utmc-527",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 Whitburn Road / B1291 Dykelands Road",
+      "lat": 54.934769569243,
+      "lon": -1.3684486853554,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183A2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/527"
+    },
+    {
+      "id": "utmc-528",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 Whitburn Road & Whitburn Bents Road / Lowry Road",
+      "lat": 54.937299271949,
+      "lon": -1.3683088201466,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183A3.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/528"
+    },
+    {
+      "id": "utmc-375",
+      "city": "Sunderland",
+      "name": "Sunderland - A194(M) / A1(M) Southbound Entry Slip (Facing North)",
+      "lat": 54.900370734544,
+      "lon": -1.5585735107097,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV00013.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/375"
+    },
+    {
+      "id": "utmc-376",
+      "city": "Sunderland",
+      "name": "Sunderland - A194(M) / A1(M) Southbound Entry Slip (Facing South)",
+      "lat": 54.900300742829,
+      "lon": -1.5585735075092,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV00014.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/376"
+    },
+    {
+      "id": "utmc-541",
+      "city": "Sunderland",
+      "name": "Sunderland - A195 Western Highway / Emerson Road",
+      "lat": 54.885632618055,
+      "lon": -1.5494339705394,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A195A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/541"
+    },
+    {
+      "id": "utmc-689",
+      "city": "Sunderland",
+      "name": "Sunderland - A690 Durham Road / B1405 Premier Road & Springwell Road",
+      "lat": 54.888214308208,
+      "lon": -1.418670302668,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A690C0.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/689"
+    },
+    {
+      "id": "utmc-543",
+      "city": "Sunderland",
+      "name": "Sunderland - A690 Durham Road / Barnes Park Road",
+      "lat": 54.893303954747,
+      "lon": -1.4024425492539,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A690B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/543"
+    },
+    {
+      "id": "utmc-545",
+      "city": "Sunderland",
+      "name": "Sunderland - A690 Durham Road / Bridle Path",
+      "lat": 54.875145565096,
+      "lon": -1.4375873557561,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A690D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/545"
+    },
+    {
+      "id": "utmc-544",
+      "city": "Sunderland",
+      "name": "Sunderland - A690 Durham Road / Grindon Lane / Pancras Road",
+      "lat": 54.884604675644,
+      "lon": -1.4225696528488,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A690C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/544"
+    },
+    {
+      "id": "utmc-548",
+      "city": "Sunderland",
+      "name": "Sunderland - A690 Durham Road / High Lane",
+      "lat": 54.857567395417,
+      "lon": -1.4539245231254,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A690F1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/548"
+    },
+    {
+      "id": "utmc-549",
+      "city": "Sunderland",
+      "name": "Sunderland - A690 Houghton Cut / A182 Northbound Entry Slip",
+      "lat": 54.846538497343,
+      "lon": -1.4672223696877,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A690G1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/549"
+    },
+    {
+      "id": "utmc-542",
+      "city": "Sunderland",
+      "name": "Sunderland - A690 New Durham Road / A1231 St. Michael's Way",
+      "lat": 54.903042999833,
+      "lon": -1.3895645960588,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A690A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/542"
+    },
+    {
+      "id": "utmc-550",
+      "city": "Sunderland",
+      "name": "Sunderland - B1284 / Rainton Bridge Business Park / A690 Durham Road",
+      "lat": 54.832659952183,
+      "lon": -1.4795002132178,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_B1284A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/550"
+    },
+    {
+      "id": "utmc-633",
+      "city": "Sunderland",
+      "name": "Sunderland - B1291 Dene Lane & Station Road / Fulwell Road / Sea Road",
+      "lat": 54.929809950227,
+      "lon": -1.381846792955,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_B1291A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/633"
+    },
+    {
+      "id": "utmc-554",
+      "city": "Sunderland",
+      "name": "Sunderland - B1522 Ryhope Road / B1405 Toll Bar Road & Salterfen Road",
+      "lat": 54.877866410106,
+      "lon": -1.3615469036697,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_B1522C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/554"
+    },
+    {
+      "id": "utmc-553",
+      "city": "Sunderland",
+      "name": "Sunderland - B1522 Ryhope Road / B1522 Ocean Road",
+      "lat": 54.884765523995,
+      "lon": -1.3660766617027,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_B1522B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/553"
+    },
+    {
+      "id": "utmc-552",
+      "city": "Sunderland",
+      "name": "Sunderland - B1522 Ryhope Road / The Cedars / Villette Road",
+      "lat": 54.893724298788,
+      "lon": -1.3768057466025,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_B1522A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/552"
+    },
+    {
+      "id": "utmc-556",
+      "city": "Sunderland",
+      "name": "Sunderland - Borough Road / Holmeside / Burdon Road",
+      "lat": 54.904382974912,
+      "lon": -1.3808657366266,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_BRRB1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/556"
+    },
+    {
+      "id": "utmc-551",
+      "city": "Sunderland",
+      "name": "Sunderland - European Way / Pallion New Road / Pallion Subway / Woodbine Terrace",
+      "lat": 54.912671443831,
+      "lon": -1.4166916771771,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_B1405A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/551"
+    },
+    {
+      "id": "utmc-555",
+      "city": "Sunderland",
+      "name": "Sunderland - Holmeside / Vine Place / Park Lane",
+      "lat": 54.904282913302,
+      "lon": -1.385645139402,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_BRRA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/555"
+    },
+    {
+      "id": "utmc-557",
+      "city": "Sunderland",
+      "name": "Sunderland - Hylton Road / Kayll Road / Pallion Road",
+      "lat": 54.903982536231,
+      "lon": -1.4125217928842,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_HLRA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/557"
+    },
+    {
+      "id": "utmc-558",
+      "city": "Sunderland",
+      "name": "Sunderland - Hylton Road / Sorley Street",
+      "lat": 54.905552427882,
+      "lon": -1.4074724915613,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_HLRB1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/558"
+    },
+    {
+      "id": "utmc-654",
+      "city": "Durham",
+      "name": "Sunderland Rd, Gilesgate",
+      "lat": 54.779175125693,
+      "lon": -1.5553983814013,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/dutmc_22.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/654"
+    },
+    {
+      "id": "utmc-613",
+      "city": "Westmorland & Furness",
+      "name": "Westmorland & Furness - A66 / Stainmore",
+      "lat": 54.522045653013,
+      "lon": -2.2232345905101,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/VAISALACCTV59.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/613"
+    }
+  ]
+}

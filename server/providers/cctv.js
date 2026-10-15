@@ -1,4 +1,5 @@
 import { createCctvCatalog } from './cctv/catalog.js';
+import { createGatesheadSnapshotReader } from './cctv/gateshead.js';
 import {
   normalizeFeedType,
   isVideoFeedType,
@@ -35,6 +36,9 @@ export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
  */
 export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const getCctvSources = createCctvCatalog({ sourceRoot });
+  const readGatesheadSnapshot = createGatesheadSnapshotReader({
+    readImage: fetchCctvImageFromUpstream,
+  });
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
   /** Cap on health map entries to prevent unbounded growth. Sized to the
@@ -488,15 +492,20 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             : '');
 
         const upstreamImage =
-          source?.sourceKind === 'txdot-its'
-            ? await fetchTxdotSnapshot(upstreamCandidate)
-            : await fetchCctvImageFromUpstream(upstreamCandidate);
+          source?.sourceKind === 'gateshead-utmc'
+            ? await readGatesheadSnapshot(upstreamCandidate)
+            : source?.sourceKind === 'txdot-its'
+              ? await fetchTxdotSnapshot(upstreamCandidate)
+              : await fetchCctvImageFromUpstream(upstreamCandidate);
         if (upstreamImage?.ok) {
           setHealth(cameraId, {
             status: 'ok',
             sourceKind: 'snapshot',
             label: source?.provider || 'Configured source',
-            message: 'Upstream snapshot active',
+            message:
+              source?.sourceKind === 'gateshead-utmc'
+                ? 'Public snapshot · check timestamp in image; may be delayed'
+                : 'Upstream snapshot active',
           });
           res.writeHead(200, {
             'Content-Type': upstreamImage.contentType,

@@ -925,6 +925,101 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
+## UK public-data panel and local Scope preference
+
+The standalone composition installs `src/standalone/ukDataPanel.js` as an
+application-owned tool. UK DATA opens a responsive nonmodal panel with region
+shortcuts, source selection, search, camera handoff and bounded owned points.
+It is separate from the shareable layer registry and allocates no layer token.
+Camera selection uses the existing lifecycle manager. Closing or changing the
+source cancels the data browser's request/timer. Late responses cannot repaint
+a replaced/closed browser. The panel
+appears after normal startup restoration and the loading transition.
+
+The map has an independent `createUkMapLayers` controller and owned
+`PointPrimitiveCollection`s. **Show UK feeds on map** enables the 13 registered
+feeds together and fits the UK; the nearby-place query is opt-in and uses the
+current region. Source switches persist in `gev:uk-map-sources:v1`; overlays
+remain on the map with the panel closed and resume after a reload. A compact
+badge and source switches report records, mapped points, loading, stale data,
+outages and retrieval times. Missing coordinates remain list-only. Source
+refreshes retain unchanged sibling collections, at most three acquisitions run
+at once, and requests have a 60-second browser deadline. Display caps are 5,000
+points per source and 12,000 in total, with omitted counts shown. Clicking a
+point opens its source/name in the browser. Turning a source off removes its
+collection and cancels its work; page hiding pauses acquisitions; app teardown
+also destroys the pick handler and every collection. No plate recognition or
+vehicle-location matching is added.
+
+`server/providers/uk-data.js` admits only registered HTTPS provider URLs;
+client URLs are never fetched. Responses are capped at 12 MiB and 25 seconds.
+Requests coalesce and caches follow each feed's cadence. Air-series IDs must
+belong to the admitted station catalogue; the combined cache has 80 entries.
+Failures may return a previous retrieval for six hours, explicitly stale with
+its original time; otherwise the source is unavailable, never an empty/all-clear
+assertion. RSS has a 5,000-record limit and reports truncation. The browser
+shows at most 120 matching rows; saved map overlays use the separate limits above.
+
+EA gauges join readings by exact measure ID. UK-AIR's actual latitude-first
+geometry is corrected, historical station entries are labelled, and each last
+observation is requested separately. METARs are filtered to UK EG identifiers.
+RSS item dates are never replaced by fresh channel/retrieval timestamps.
+Source links/credits stay visible. DATA_SOURCES.md lists coverage and terms.
+
+The additional UTMC catalog adds 291 published locations to the 61 Gateshead
+and 18 A19 records. Refresh the additional catalog with the existing script's
+`--all` flag. The optional TfL source cap accepts 1,000; the default 250,
+global ceiling and round-robin allocation policy are unchanged.
+
+Scope OFF is an explicit local preference (`gev:scope-enabled:v1`). The user's
+OFF choice wins over a later authored ON state, including shared views/scenes;
+turning Scope on clears the override. Denied storage retains the session choice.
+The optional `VITE_GEV_SCOPE_DEFAULT_OFF=1` sets the initial preference before
+the mask can paint. Other installations retain the existing ON default.
+Controls/generated state read the actual renderer setting.
+
+Focused checks cover UK normalizers/cache/admission, the expanded camera packs,
+independent overlay lifetimes and Scope persistence:
+`src/regional/ukMapLayers.test.mjs`, `src/regional/ukData.test.mjs`,
+`src/data/cctvGateshead.test.mjs`, `src/data/cctvUkExpansion.test.mjs`,
+`src/scopeMaskPreference.test.mjs` and `src/scopeMask.test.mjs`.
+
+`node scripts/qa-uk-map.mjs --url http://localhost:4173` drives the real app
+with public-feed responses isolated to a fresh fixture browser. It covers bulk
+loading, missing coordinates/outages, actual point picking, panel-close and
+reload persistence, independent hide/cleanup and mobile sizing. It does not
+establish live provider availability; inspect the live source-status rows for that.
+
+## Gateshead UTMC CCTV source pack
+
+The default public camera packs include Gateshead (UK), with 61 published
+North East Traffic Cameras / Tyne and Wear UTMC locations. The source catalog
+is `config/cctv_sources.gateshead.json`; `node scripts/refresh-gateshead-cameras.mjs`
+refreshes names, coordinates and registered JPEG URLs from the publisher's
+Gateshead listing and camera pages, using four concurrent metadata requests.
+The refresh validates all pages before replacing the catalog and never downloads
+or archives camera frames. Published positions are used; headings, mount heights
+and projection geometry remain low-confidence estimates.
+
+The server admits only HTTPS JPEG paths on `netrafficcams.co.uk`, within its
+camera image directory. Public snapshots normally update every 60–300 seconds;
+the panel labels the source and asks users to check the image's own timestamp.
+Successful HTTP retrieval does not prove image freshness. The map and preview
+share per-camera requests and a one-minute in-memory cache; failures retain the
+existing unavailable/Street View/placeholder behavior. Camera images are not
+written to disk. `CCTV_GATESHEAD_ENABLED=0` disables the pack; the existing
+round-robin global catalog cap is unchanged. The Gateshead location preset has
+five camera-area waypoints without changing the default Austin location.
+
+Focused source checks: `node --test src/data/cctvGateshead.test.mjs`.
+
+The northern A19 pack adds 18 junction cameras using the same provider and
+snapshot reader, with a separate `CCTV_A19_ENABLED` kill switch. Refresh
+`config/cctv_sources.a19.json` with `node scripts/refresh-gateshead-cameras.mjs --a19`.
+The A19 North East preset provides Tyne Tunnel, Silverlink and Moor Farm views.
+Coverage stops at the published UTMC junction cameras; Peterlee, Northallerton
+and Nuneaton are not represented as available feeds.
+
 ## NYC DOT TMC CCTV source pack
 
 The CCTV catalog can add New York City traffic cameras from the NYC DOT
@@ -5347,3 +5442,15 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+### CCTV browser gate surface contract
+
+`node scripts/qa-cctv-v2.mjs --url http://localhost:4173` checks the surface
+actually rendered. On a visible terrain globe, CCTV must use its terrain prior
+without calling the 3D mesh sampler. On a photoreal surface (globe hidden), the
+existing completion floor still requires at least one real mesh query after a
+visible tileset reports loaded. No tileset is no longer treated as proof that
+photoreal tiles have loaded. Add `--require-photoreal` to make a missing or
+unready photoreal surface a hard failure. A globe-only run does not establish
+photoreal coverage. Headless gizmo-drag checks may still be inconclusive; use
+`--headful` for real-GPU sign-off and report inconclusive counts explicitly.

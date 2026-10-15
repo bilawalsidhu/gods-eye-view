@@ -1,0 +1,170 @@
+{
+  "provider": "Tyne and Wear UTMC / North East Traffic Cameras",
+  "listing": "https://netrafficcams.co.uk/all-cameras?field_area_target_id=All&items_per_page=All&sort_by=title&sort_order=ASC",
+  "retrievedAt": "2026-10-15T08:36:24.724Z",
+  "note": "Public snapshots, normally refreshed every 60–300 seconds. The image timestamp is authoritative; images may be old or unavailable. Camera orientations are not supplied.",
+  "cameras": [
+    {
+      "id": "a19-482",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A187 (East Howdon Bypass) / A19 Tyne Tunnel",
+      "lat": 54.991991019125,
+      "lon": -1.4842069591969,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A187C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/482"
+    },
+    {
+      "id": "a19-496",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A191 Benton Road / A186 Rotary Road / A19 Holystone (East)",
+      "lat": 55.02937601484,
+      "lon": -1.521963990577,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A191E2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/496"
+    },
+    {
+      "id": "a19-495",
+      "city": "North Tyneside",
+      "name": "North Tyneside - A191 Holystone Way / A19 Holystone (West)",
+      "lat": 55.028056138869,
+      "lon": -1.5240836657892,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_A191E1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/495"
+    },
+    {
+      "id": "a19-508",
+      "city": "North Tyneside",
+      "name": "North Tyneside - The Silverlink / A19 / A1058 Coast Road",
+      "lat": 55.009898697546,
+      "lon": -1.4973461531863,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/NT_SVLA1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/508"
+    },
+    {
+      "id": "a19-621",
+      "city": "Northumberland",
+      "name": "Northumberland - A189 / A19 Moor Farm (North)",
+      "lat": 55.070940284178,
+      "lon": -1.5749293143358,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV_MFM_N.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/621"
+    },
+    {
+      "id": "a19-622",
+      "city": "Northumberland",
+      "name": "Northumberland - A189 / A19 Moor Farm (South)",
+      "lat": 55.070940284178,
+      "lon": -1.5749293143358,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/METCCTV_MFM_S.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/622"
+    },
+    {
+      "id": "a19-564",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A1290 Downhill Lane / A19 (East)",
+      "lat": 54.932508334065,
+      "lon": -1.4664264218185,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A1290D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/564"
+    },
+    {
+      "id": "a19-563",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A1290 Downhill Lane / A19 (West)",
+      "lat": 54.931548399257,
+      "lon": -1.46959598415,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A1290C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/563"
+    },
+    {
+      "id": "a19-575",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A185 Howard Street / A19 Tyne Tunnel",
+      "lat": 54.978772607261,
+      "lon": -1.4827165336763,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A185A1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/575"
+    },
+    {
+      "id": "a19-579",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A185 Straker Street / A19 Tyne Tunnel",
+      "lat": 54.977312834978,
+      "lon": -1.4791269123345,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A185B1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/579"
+    },
+    {
+      "id": "a19-586",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A194 Leam Lane / A19 Lindisfarne (East)",
+      "lat": 54.965994270315,
+      "lon": -1.4729071623256,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A194C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/586"
+    },
+    {
+      "id": "a19-587",
+      "city": "South Tyneside",
+      "name": "South Tyneside - A194 Leam Lane / A19 Lindisfarne (West)",
+      "lat": 54.965044345961,
+      "lon": -1.4753168191087,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/ST_A194C2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/587"
+    },
+    {
+      "id": "a19-515",
+      "city": "Sunderland",
+      "name": "Sunderland - A1231 Sunderland Highway / A19 (West)",
+      "lat": 54.908941184484,
+      "lon": -1.4624658272497,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1231C1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/515"
+    },
+    {
+      "id": "a19-516",
+      "city": "Sunderland",
+      "name": "Sunderland - A1231 Wessington Way / A19 (East)",
+      "lat": 54.909391175857,
+      "lon": -1.459546210147,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A1231D1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/516"
+    },
+    {
+      "id": "a19-537",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 Chester Road / A19 (East)",
+      "lat": 54.889793533775,
+      "lon": -1.4570456179631,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183J1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/537"
+    },
+    {
+      "id": "a19-538",
+      "city": "Sunderland",
+      "name": "Sunderland - A183 Chester Road / A19 (West)",
+      "lat": 54.889903478876,
+      "lon": -1.4597852833415,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A183K1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/538"
+    },
+    {
+      "id": "a19-547",
+      "city": "Sunderland",
+      "name": "Sunderland - A690 Durham Road / A19 (North East)",
+      "lat": 54.865416577087,
+      "lon": -1.4466957794577,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A690E2.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/547"
+    },
+    {
+      "id": "a19-546",
+      "city": "Sunderland",
+      "name": "Sunderland - A690 Durham Road / B1286 City Way / A19 (South East)",
+      "lat": 54.865076645001,
+      "lon": -1.4448859880654,
+      "url": "https://netrafficcams.co.uk/sites/default/files/images/cameras/SL_A690E1.jpg",
+      "sourcePage": "https://netrafficcams.co.uk/node/546"
+    }
+  ]
+}

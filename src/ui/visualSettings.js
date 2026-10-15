@@ -135,8 +135,9 @@ export class VisualSettings {
     }
     if (typeof scopeEnabled === 'boolean') {
       setScopeMaskEnabled(scopeEnabled);
-      this._scopeBtn?.classList.toggle('active', scopeEnabled);
-      this._scopeBtn?.setAttribute('aria-pressed', String(scopeEnabled));
+      const actual = this.services.isScopeMaskEnabled?.() ?? scopeEnabled;
+      this._scopeBtn?.classList.toggle('active', actual);
+      this._scopeBtn?.setAttribute('aria-pressed', String(actual));
     }
     if (typeof scopeFeatherPct === 'number' && this._scopeFeatherSlider) {
       const pct = Math.max(0, Math.min(100, Math.round(scopeFeatherPct)));
@@ -1303,8 +1304,9 @@ export class VisualSettings {
     const scopeState = state.scope || {};
     if (typeof scopeState.enabled === 'boolean') {
       setScopeMaskEnabled(scopeState.enabled);
-      this._scopeBtn?.classList.toggle('active', scopeState.enabled);
-      this._scopeBtn?.setAttribute('aria-pressed', String(scopeState.enabled));
+      const actual = this.services.isScopeMaskEnabled?.() ?? scopeState.enabled;
+      this._scopeBtn?.classList.toggle('active', actual);
+      this._scopeBtn?.setAttribute('aria-pressed', String(actual));
     }
     if (typeof scopeState.featherPct === 'number' && this._scopeFeatherSlider) {
       const pct = Math.max(0, Math.min(100, Math.round(scopeState.featherPct)));

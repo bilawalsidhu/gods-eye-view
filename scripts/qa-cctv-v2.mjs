@@ -70,6 +70,8 @@
  * is no longer needed to avoid a plane/wireframe disagreement.
  *
  * Run:  node scripts/qa-cctv-v2.mjs --url http://localhost:4173
+ *       Add --require-photoreal for a mandatory visible-3D-mesh sign-off.
+ *       Globe runs instead assert zero mesh queries, matching the DEM regime.
  *
  * Exit 0 = all asserts passed. Non-zero = a hard failure.
  */
@@ -78,6 +80,7 @@ import puppeteer from 'puppeteer';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { groundSamplingContract } from './qa-cctv-surface.mjs';
 import {
   computeFrustumGeometry,
   FRUSTUM_GROUND_CLEARANCE_M,
@@ -98,6 +101,7 @@ const CCTV_URL = new URL(getOpt('--url', BASE_URL));
 CCTV_URL.searchParams.set('welcome', '0');
 const APP_URL = CCTV_URL.href;
 const HEADFUL = getFlag('--headful');
+const REQUIRE_PHOTOREAL = getFlag('--require-photoreal');
 const SHOTS_DIR = path.join(REPO_ROOT, 'qa-shots', 'cctv-v2');
 
 const CHROME_EXECUTABLE_CANDIDATES = [
@@ -287,11 +291,14 @@ function waitForTilesLoaded(page, timeoutMs = 15000) {
         const prims = scene.primitives;
         for (let i = 0; i < prims.length; i++) {
           const p = prims.get(i);
-          if (p && p.constructor && p.constructor.name === 'Cesium3DTileset') {
+          if (
+            p && p.constructor &&
+            p.constructor.name === 'Cesium3DTileset' && p.show !== false
+          ) {
             return p.tilesLoaded === true;
           }
         }
-        return true; // no tileset in the scene — nothing to wait for
+        return false; // no visible tileset cannot prove photoreal completion
       },
       { timeout: timeoutMs },
     )
@@ -571,15 +578,21 @@ async function main() {
     // the "<=1×N" ceiling above passes trivially at Δ=0 — e.g. if every drain
     // pass ran before tiles loaded (fallback height, record left unresolved)
     // and nothing ever completed the snap. Once tilesLoaded has been observed
-    // true, at least ONE real scene.sampleHeight must have fired since enable
+    // true on the photoreal surface, at least ONE real scene.sampleHeight must
+    // have fired since enable. A terrain-globe intentionally makes ZERO mesh
+    // queries: its DEM prior is already the rendered surface resolution.
     // (existence, not just ceiling). The wait below tolerates the update-tick
     // latency of the completion pass (update interval is 10s).
     // -----------------------------------------------------------------------
     console.log('Waiting for tiles + the one-shot completion pass...');
-    const tilesSeenLoaded = await waitForTilesLoaded(page, 45000);
-    let sampleFloorOk = false;
+    const globeVisible = await page.evaluate(
+      () => window.__godsEyeView.viewer.scene.globe.show,
+    );
+    const tilesSeenLoaded = globeVisible === false
+      ? await waitForTilesLoaded(page, 45000)
+      : false;
     if (tilesSeenLoaded) {
-      sampleFloorOk = await page
+      await page
         .waitForFunction(
           (base) => window.__qaCounters.sampleHeight - base >= 1,
           { timeout: 30000 },
@@ -589,13 +602,13 @@ async function main() {
         .catch(() => false);
     }
     const cFloor = await readCounters();
-    record(
-      '>=1 real ground sample once tilesLoaded observed (one-shot snap completed)',
-      tilesSeenLoaded ? sampleFloorOk : null,
-      tilesSeenLoaded
-        ? `total real samples since enable=${cFloor.sampleHeight - c0.sampleHeight}`
-        : 'tilesLoaded never observed within 45s — floor not assessable this run',
-    );
+    const groundContract = groundSamplingContract({
+      globeVisible,
+      tilesReady: tilesSeenLoaded,
+      sampleDelta: cFloor.sampleHeight - c0.sampleHeight,
+      requirePhotoreal: REQUIRE_PHOTOREAL,
+    });
+    record(groundContract.name, groundContract.ok, groundContract.detail);
 
     // Let the completion pass finish before the steady-state window: require
     // the sampleHeight counter quiet for 12s (> the 10s update interval, so

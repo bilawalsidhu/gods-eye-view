@@ -1,4 +1,9 @@
 import { getKeyholeGeometry } from './celestialRing.js';
+import {
+  readScopePreference,
+  writeScopePreference,
+  resolveScopeEnabled,
+} from './scopeMaskPreference.js';
 
 /**
  * Scope mask — the app's signature circular viewport treatment, made real.
@@ -101,7 +106,10 @@ const SCOPE_TERMINUS_SAMPLE_MS = 120;
 let _canvas = null;
 let _container = null;
 let _viewer = null;
-let _enabled = true;
+let _preference =
+  readScopePreference() ??
+  (import.meta.env?.VITE_GEV_SCOPE_DEFAULT_OFF === '1' ? false : null);
+let _enabled = _preference ?? true;
 let _featherRatio = SCOPE_FEATHER_RATIO_DEFAULT;
 let _resizeObserver = null;
 let _dprQuery = null;
@@ -501,8 +509,12 @@ function teardownCameraHeightWatch() {
  * @param {boolean} enabled
  * @returns {void}
  */
-export function setScopeMaskEnabled(enabled) {
-  const next = Boolean(enabled);
+export function setScopeMaskEnabled(enabled, { persist = false } = {}) {
+  if (persist) {
+    _preference = Boolean(enabled);
+    writeScopePreference(_preference);
+  }
+  const next = resolveScopeEnabled(enabled, _preference);
   const reEnabled = next && !_enabled;
   _enabled = next;
   if (reEnabled) {
@@ -562,6 +574,7 @@ export function _resetScopeMaskForTest() {
   _container = null;
   _viewer = null;
   _enabled = true;
+  _preference = null;
   _featherRatio = SCOPE_FEATHER_RATIO_DEFAULT;
   _terminusAlpha = SCOPE_OUTSIDE_ALPHA;
   _terminusOverride = null;
