@@ -13,7 +13,13 @@ function range01(value, min, max) {
  * Missing weather fails clear instead of inventing conditions.
  */
 export function deriveWeatherEffectProfile(weather) {
-  if (!weather || !Number.isFinite(Number(weather.weatherCode))) {
+  const reported = weather?.weatherCode;
+  // Number(null) and Number('') are 0 (clear), so a missing code is checked first.
+  if (
+    reported == null ||
+    reported === '' ||
+    !Number.isFinite(Number(reported))
+  ) {
     return {
       available: false,
       cloud: 0,
