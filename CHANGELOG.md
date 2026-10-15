@@ -1,5 +1,9 @@
 # Changelog
 
+- Check the active surface in the CCTV browser gate: terrain-globe runs require
+  zero 3D mesh queries; photoreal runs still require a completed query after
+  visible tiles load. `--require-photoreal` refuses a globe-only sign-off.
+
 - Add a UK public-data panel with provider-specific coverage, source attribution,
   observation times, stale/unavailable states, bounded map markers and search.
   It connects Environment Agency floods/river levels, SEPA river levels, Defra

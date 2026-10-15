@@ -5420,3 +5420,15 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+### CCTV browser gate surface contract
+
+`node scripts/qa-cctv-v2.mjs --url http://localhost:4173` checks the surface
+actually rendered. On a visible terrain globe, CCTV must use its terrain prior
+without calling the 3D mesh sampler. On a photoreal surface (globe hidden), the
+existing completion floor still requires at least one real mesh query after a
+visible tileset reports loaded. No tileset is no longer treated as proof that
+photoreal tiles have loaded. Add `--require-photoreal` to make a missing or
+unready photoreal surface a hard failure. A globe-only run does not establish
+photoreal coverage. Headless gizmo-drag checks may still be inconclusive; use
+`--headful` for real-GPU sign-off and report inconclusive counts explicitly.

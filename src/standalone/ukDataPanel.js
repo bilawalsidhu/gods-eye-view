@@ -199,7 +199,13 @@ export function installUkDataPanel({ viewer, dataManager, signal }) {
     const retrieved = payload.retrievedAt
       ? new Date(payload.retrievedAt).toLocaleString('en-GB')
       : 'not retrieved';
-    status.textContent = `${payload.status === 'stale' ? 'PREVIOUS RETRIEVAL · ' : payload.status === 'unavailable' ? 'UNAVAILABLE · ' : ''}${matches.length} matching records · showing ${Math.min(matches.length, 120)} closest/listed records and ${mapped.length} map points · retrieved ${retrieved}${payload.message ? ' · ' + payload.message : ''}`;
+    const retrievalStatus =
+      payload.status === 'stale'
+        ? 'PREVIOUS RETRIEVAL · '
+        : payload.status === 'unavailable'
+          ? 'UNAVAILABLE · '
+          : '';
+    status.textContent = `${retrievalStatus}${matches.length} matching records · showing ${Math.min(matches.length, 120)} closest/listed records and ${mapped.length} map points · retrieved ${retrieved}${payload.message ? ' · ' + payload.message : ''}`;
     if (!matches.length)
       note(
         list,

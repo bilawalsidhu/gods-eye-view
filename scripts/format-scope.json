@@ -1,4 +1,6 @@
 [
+  "scripts/qa-cctv-surface.mjs",
+  "src/tooling/cctvSurfaceGate.test.mjs",
   ".prettierrc.json",
   "package.json",
   "scripts/format-scope.json",
