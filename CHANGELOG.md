@@ -1,5 +1,10 @@
 # Changelog
 
+- Add saved, simultaneous UK map overlays, per-feed switches, source-status
+  counts and pickable points. Closing the data browser retains saved overlays;
+  switching a feed off cancels its work and clears only its points. Bulk loading
+  excludes the nearby-place query and limits concurrent requests to three.
+
 - Check the active surface in the CCTV browser gate: terrain-globe runs require
   zero 3D mesh queries; photoreal runs still require a completed query after
   visible tiles load. `--require-photoreal` refuses a globe-only sign-off.

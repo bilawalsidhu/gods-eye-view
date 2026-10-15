@@ -137,8 +137,13 @@ The richer structured dataset is licensed separately/commercially by TeleGeograp
 
 ### UK public-data panel
 
-The standalone app's **UK DATA** panel loads the selected public source only
-while open and visible. Retrieval time is separate from each record's own
+The standalone app's **UK DATA** browser loads its selected public source while
+open and visible. Saved map layers load/refresh independently while the page is
+visible and remain displayed with the browser closed. **Show UK feeds on map**
+enables the registered feeds together; nearby places are opt-in, covering only
+10 km of the current UK map region. Choices persist locally. Layers use bounded
+point collections (5,000 per source; 12,000 total) and show missing-coordinate,
+display-limit and provider-outage counts. Retrieval time is separate from each record's own
 observation/publication time. Old or absent readings and unavailable providers
 are not represented as current values or an all-clear. Map/list limits are
 displayed; coverage varies by provider.

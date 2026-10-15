@@ -38,6 +38,57 @@
 .uk-data-panel[hidden] {
   display: none;
 }
+.uk-map-badge {
+  position: fixed;
+  left: 22px;
+  top: 132px;
+  max-width: 250px;
+  padding: 7px 10px;
+  background: #0c2029ed;
+  border: 1px solid #4bc5db;
+  border-radius: 7px;
+  color: #e9fcff;
+  font: inherit;
+  cursor: pointer;
+}
+.uk-map-badge[hidden] {
+  display: none;
+}
+.uk-map-badge:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+.uk-map-switches {
+  border-bottom: 1px solid #31505c;
+  padding: 8px 0;
+}
+.uk-map-switches summary {
+  cursor: pointer;
+}
+.uk-map-switches label {
+  display: grid;
+  grid-template-columns: 24px 10px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+.uk-map-switches input {
+  width: 20px;
+  min-height: 20px;
+}
+.uk-map-switches small {
+  grid-column: 3;
+  overflow-wrap: anywhere;
+  color: #bfd7e0;
+}
+.uk-map-swatch {
+  width: 9px;
+  height: 9px;
+  border: 1px solid white;
+}
+.uk-map-summary {
+  font-size: 12px;
+}
 .uk-data-panel header {
   display: flex;
   justify-content: space-between;
@@ -142,5 +193,11 @@
     top: 82px;
     left: 12px;
     font-size: 11px;
+  }
+  .uk-map-badge {
+    top: 124px;
+    left: 12px;
+    font-size: 11px;
+    max-width: 220px;
   }
 }

@@ -11,6 +11,9 @@ import {
   text,
 } from '../regional/ukDataModel.js';
 import './ukDataPanel.css';
+import { readUkFeed } from '../regional/ukFeedClient.js';
+import { createUkMapLayers } from '../regional/ukMapLayers.js';
+import { createUkMapRenderer, UK_MAP_COLORS } from './ukMapRenderer.js';
 
 export function installUkDataPanel({ viewer, dataManager, signal }) {
   const root = document.createElement('div');
@@ -25,6 +28,11 @@ export function installUkDataPanel({ viewer, dataManager, signal }) {
   launch.className = 'uk-data-launch';
   launch.type = 'button';
   launch.setAttribute('aria-expanded', 'false');
+  const badge = make('button');
+  badge.className = 'uk-map-badge';
+  badge.type = 'button';
+  badge.hidden = true;
+  badge.title = 'Open UK source controls and the colour legend';
   const panel = make('section');
   panel.hidden = true;
   panel.className = 'uk-data-panel';
@@ -36,9 +44,40 @@ export function installUkDataPanel({ viewer, dataManager, signal }) {
   close.type = 'button';
   make(
     'p',
-    'Public observations and published updates. Coverage varies by provider; source times are shown below.',
+    'Public observations and published updates. Zoom in to separate nearby points; select a point for its source record. Coverage varies by provider.',
     panel,
   );
+  const mapActions = make('div', null, panel);
+  mapActions.className = 'uk-data-actions';
+  const showAll = make('button', 'Show UK feeds on map', mapActions);
+  showAll.type = 'button';
+  const hideAll = make('button', 'Hide UK feeds', mapActions);
+  hideAll.type = 'button';
+  const mapSummary = make('p', 'Map layers are off.', panel);
+  mapSummary.className = 'uk-map-summary';
+  mapSummary.setAttribute('aria-live', 'polite');
+  const switches = make('details', null, panel);
+  switches.className = 'uk-map-switches';
+  make('summary', 'Choose map layers and see feed status', switches);
+  make(
+    'p',
+    'Saved map layers stay visible when this panel closes. Records without coordinates remain in the list. Nearby places load only when selected.',
+    switches,
+  );
+  const mapOptions = new Map();
+  for (const info of UK_FEEDS) {
+    const label = make('label', null, switches);
+    const checkbox = make('input', null, label);
+    checkbox.type = 'checkbox';
+    checkbox.setAttribute('aria-label', `Map layer: ${info.name}`);
+    const swatch = make('span', null, label);
+    swatch.className = 'uk-map-swatch';
+    swatch.style.backgroundColor = UK_MAP_COLORS[info.id];
+    make('span', info.name, label);
+    const detail = make('small', 'Off', label);
+    mapOptions.set(info.id, { checkbox, detail });
+    checkbox.onchange = () => mapLayers.setEnabled(info.id, checkbox.checked);
+  }
   const regions = make('div', null, panel);
   regions.className = 'uk-data-regions';
   const fly = (lat, lon, height = 18000) => {
@@ -115,12 +154,7 @@ export function installUkDataPanel({ viewer, dataManager, signal }) {
     request = null,
     epoch = 0,
     timer = null;
-  const owned = new Set();
-  const clearMarkers = () => {
-    for (const entity of owned) viewer.entities.remove(entity);
-    owned.clear();
-    if (!viewer.isDestroyed()) viewer.scene.requestRender();
-  };
+  let mapLayers;
   function cancel() {
     epoch++;
     request?.abort();
@@ -147,7 +181,6 @@ export function installUkDataPanel({ viewer, dataManager, signal }) {
     return make('p', value, parent);
   }
   function render() {
-    clearMarkers();
     list.replaceChildren();
     const info = UK_FEEDS.find((f) => f.id === select.value);
     if (select.value === 'access') {
@@ -178,24 +211,6 @@ export function installUkDataPanel({ viewer, dataManager, signal }) {
             : Infinity;
         return distance(a) - distance(b);
       });
-    const mapped = matches
-      .filter((r) => inUkBounds(r.lat, r.lon))
-      .slice(0, 300);
-    for (const row of mapped) {
-      const entity = viewer.entities.add({
-        id: `uk-public-${select.value}-${row.id}`,
-        position: Cesium.Cartesian3.fromDegrees(row.lon, row.lat, 30),
-        point: {
-          pixelSize: 6,
-          color: Cesium.Color.CYAN,
-          outlineColor: Cesium.Color.BLACK,
-          outlineWidth: 1,
-          disableDepthTestDistance: Infinity,
-        },
-        name: row.name,
-      });
-      owned.add(entity);
-    }
     const retrieved = payload.retrievedAt
       ? new Date(payload.retrievedAt).toLocaleString('en-GB')
       : 'not retrieved';
@@ -205,7 +220,12 @@ export function installUkDataPanel({ viewer, dataManager, signal }) {
         : payload.status === 'unavailable'
           ? 'UNAVAILABLE · '
           : '';
-    status.textContent = `${retrievalStatus}${matches.length} matching records · showing ${Math.min(matches.length, 120)} closest/listed records and ${mapped.length} map points · retrieved ${retrieved}${payload.message ? ' · ' + payload.message : ''}`;
+    const savedLayer = mapLayers?.isEnabled(select.value);
+    const mapCount = savedLayer
+      ? mapLayers.states().find((s) => s.id === select.value)?.mappedCount || 0
+      : 0;
+    const mapLabel = savedLayer ? 'saved map layer' : 'map layer off';
+    status.textContent = `${retrievalStatus}${matches.length} matching records · showing ${Math.min(matches.length, 120)} closest/listed records · ${mapLabel}: ${mapCount} points · retrieved ${retrieved}${payload.message ? ' · ' + payload.message : ''}`;
     if (!matches.length)
       note(
         list,
@@ -229,7 +249,10 @@ export function installUkDataPanel({ viewer, dataManager, signal }) {
       if (inUkBounds(row.lat, row.lon)) {
         const map = make('button', 'Show on map', actions);
         map.type = 'button';
-        map.onclick = () => fly(row.lat, row.lon);
+        map.onclick = () => {
+          mapLayers.setEnabled(select.value, true);
+          fly(row.lat, row.lon);
+        };
       }
       if (row.camera) {
         const camera = make('button', 'View camera', actions);
@@ -330,7 +353,6 @@ export function installUkDataPanel({ viewer, dataManager, signal }) {
     const current = epoch;
     rows = [];
     payload = null;
-    clearMarkers();
     list.replaceChildren();
     refresh.disabled = false;
     if (select.value === 'access') {
@@ -344,40 +366,7 @@ export function installUkDataPanel({ viewer, dataManager, signal }) {
     refresh.disabled = true;
     try {
       let next;
-      if (select.value === 'places') next = await places(request.signal);
-      else {
-        const response = await fetch(
-          select.value === 'cameras'
-            ? '/api/cctv/sources'
-            : `/api/uk-data/${select.value}`,
-          { signal: request.signal },
-        );
-        if (!response.ok) throw new Error('Public data service unavailable');
-        next = await response.json();
-        if (select.value === 'cameras')
-          next = {
-            status: 'available',
-            retrievedAt: new Date().toISOString(),
-            message: next.trimmedPacks?.length
-              ? 'The global camera limit may trim provider coverage.'
-              : '',
-            rows: (next.sources || [])
-              .filter(
-                (c) =>
-                  ['gateshead', 'a19', 'utmc-northeast', 'london'].includes(
-                    c.cityId,
-                  ) || c.pack === 'tfl',
-              )
-              .map((c) => ({
-                id: c.id,
-                name: c.name,
-                details: `${c.city} · ${c.provider} · snapshots, check the timestamp inside the image · camera direction estimated`,
-                lat: c.lat,
-                lon: c.lon,
-                camera: true,
-              })),
-          };
-      }
+      next = await fetchFeed(select.value, request.signal);
       if (destroyed || current !== epoch || panel.hidden) return;
       payload = next;
       rows = next.rows || [];
@@ -402,11 +391,11 @@ export function installUkDataPanel({ viewer, dataManager, signal }) {
       select.focus();
       void load();
     } else {
-      clearMarkers();
       launch.focus();
     }
   }
   launch.onclick = () => setOpen(panel.hidden);
+  badge.onclick = () => setOpen(panel.hidden);
   close.onclick = () => setOpen(false);
   refresh.onclick = () => void load();
   select.onchange = () => void load();
@@ -418,7 +407,68 @@ export function installUkDataPanel({ viewer, dataManager, signal }) {
       setOpen(false);
     }
   };
+  async function fetchFeed(id, abortSignal) {
+    return id === 'places' ? places(abortSignal) : readUkFeed(id, abortSignal);
+  }
+  function updateMapStatus(states) {
+    const enabled = states.filter((s) => s.enabled);
+    const count = enabled.reduce((sum, s) => sum + s.mappedCount, 0);
+    const loadingCount = enabled.filter(
+      (s) => s.status === 'loading' || s.status === 'queued',
+    ).length;
+    const unavailableCount = enabled.filter(
+      (s) => s.status === 'unavailable',
+    ).length;
+    const staleCount = enabled.filter((s) => s.status === 'stale').length;
+    const unmapped = enabled.reduce(
+      (sum, s) => sum + s.count - s.coordinateCount,
+      0,
+    );
+    const limited = enabled.reduce(
+      (sum, s) => sum + s.coordinateCount - s.mappedCount,
+      0,
+    );
+    const line = `${enabled.length} feeds on · ${count.toLocaleString('en-GB')} map points · ${loadingCount} loading · ${unavailableCount} unavailable · ${staleCount} previous retrievals`;
+    mapSummary.textContent = `${line}. ${unmapped} records have no coordinates.${limited ? ` ${limited} duplicate or excess location records are not drawn.` : ''}`;
+    badge.textContent = `UK MAP · ${count.toLocaleString('en-GB')} points`;
+    badge.hidden = !enabled.length;
+    for (const s of states) {
+      const option = mapOptions.get(s.id);
+      option.checkbox.checked = s.enabled;
+      const retrieved = s.retrievedAt
+        ? new Date(s.retrievedAt).toLocaleString('en-GB')
+        : 'not retrieved';
+      option.detail.textContent = s.enabled
+        ? `${s.status.toUpperCase()} · ${s.mappedCount} points / ${s.count} records · ${retrieved}${s.message ? ' · ' + s.message : ''}`
+        : 'Off';
+    }
+    if (!panel.hidden && payload) render();
+  }
+  const mapRenderer = createUkMapRenderer({
+    viewer,
+    onPick(id, row) {
+      select.value = id;
+      search.value = row.name;
+      setOpen(true);
+    },
+  });
+  mapLayers = createUkMapLayers({
+    fetchFeed,
+    replace: mapRenderer.replace,
+    remove: mapRenderer.remove,
+    onChange: updateMapStatus,
+  });
+  updateMapStatus(mapLayers.states());
+  mapLayers.setSuspended(document.hidden);
+  showAll.onclick = () => {
+    search.value = '';
+    mapLayers.enableAll();
+    const [, lat, lon, height] = UK_VIEWS[0];
+    fly(lat, lon, height);
+  };
+  hideAll.onclick = () => mapLayers.disableAll();
   const visibility = () => {
+    mapLayers.setSuspended(document.hidden);
     if (document.hidden) cancel();
     else if (!panel.hidden) void load();
   };
@@ -428,7 +478,8 @@ export function installUkDataPanel({ viewer, dataManager, signal }) {
     destroyed = true;
     revealObserver?.disconnect();
     cancel();
-    clearMarkers();
+    mapLayers.destroy();
+    mapRenderer.destroy();
     document.removeEventListener('visibilitychange', visibility);
     signal?.removeEventListener('abort', destroy);
     root.remove();

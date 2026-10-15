@@ -931,10 +931,25 @@ The standalone composition installs `src/standalone/ukDataPanel.js` as an
 application-owned tool. UK DATA opens a responsive nonmodal panel with region
 shortcuts, source selection, search, camera handoff and bounded owned points.
 It is separate from the shareable layer registry and allocates no layer token.
-Camera selection uses the existing lifecycle manager. Closing, changing source,
-hiding the page or destroying the app cancels requests/timers; owned markers
-are removed. Late responses cannot repaint a replaced/closed panel. The panel
+Camera selection uses the existing lifecycle manager. Closing or changing the
+source cancels the data browser's request/timer. Late responses cannot repaint
+a replaced/closed browser. The panel
 appears after normal startup restoration and the loading transition.
+
+The map has an independent `createUkMapLayers` controller and owned
+`PointPrimitiveCollection`s. **Show UK feeds on map** enables the 13 registered
+feeds together and fits the UK; the nearby-place query is opt-in and uses the
+current region. Source switches persist in `gev:uk-map-sources:v1`; overlays
+remain on the map with the panel closed and resume after a reload. A compact
+badge and source switches report records, mapped points, loading, stale data,
+outages and retrieval times. Missing coordinates remain list-only. Source
+refreshes retain unchanged sibling collections, at most three acquisitions run
+at once, and requests have a 60-second browser deadline. Display caps are 5,000
+points per source and 12,000 in total, with omitted counts shown. Clicking a
+point opens its source/name in the browser. Turning a source off removes its
+collection and cancels its work; page hiding pauses acquisitions; app teardown
+also destroys the pick handler and every collection. No plate recognition or
+vehicle-location matching is added.
 
 `server/providers/uk-data.js` admits only registered HTTPS provider URLs;
 client URLs are never fetched. Responses are capped at 12 MiB and 25 seconds.
@@ -943,7 +958,7 @@ belong to the admitted station catalogue; the combined cache has 80 entries.
 Failures may return a previous retrieval for six hours, explicitly stale with
 its original time; otherwise the source is unavailable, never an empty/all-clear
 assertion. RSS has a 5,000-record limit and reports truncation. The browser
-shows at most 120 matching rows and 300 points with those limits visible.
+shows at most 120 matching rows; saved map overlays use the separate limits above.
 
 EA gauges join readings by exact measure ID. UK-AIR's actual latitude-first
 geometry is corrected, historical station entries are labelled, and each last
@@ -964,9 +979,16 @@ the mask can paint. Other installations retain the existing ON default.
 Controls/generated state read the actual renderer setting.
 
 Focused checks cover UK normalizers/cache/admission, the expanded camera packs,
-and Scope persistence: `src/regional/ukData.test.mjs`,
+independent overlay lifetimes and Scope persistence:
+`src/regional/ukMapLayers.test.mjs`, `src/regional/ukData.test.mjs`,
 `src/data/cctvGateshead.test.mjs`, `src/data/cctvUkExpansion.test.mjs`,
 `src/scopeMaskPreference.test.mjs` and `src/scopeMask.test.mjs`.
+
+`node scripts/qa-uk-map.mjs --url http://localhost:4173` drives the real app
+with public-feed responses isolated to a fresh fixture browser. It covers bulk
+loading, missing coordinates/outages, actual point picking, panel-close and
+reload persistence, independent hide/cleanup and mobile sizing. It does not
+establish live provider availability; inspect the live source-status rows for that.
 
 ## Gateshead UTMC CCTV source pack
 

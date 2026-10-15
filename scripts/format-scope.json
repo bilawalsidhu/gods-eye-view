@@ -1,4 +1,6 @@
 [
+  "scripts/qa-uk-map.mjs",
+  "src/regional/ukMapLayers.test.mjs",
   "scripts/qa-cctv-surface.mjs",
   "src/tooling/cctvSurfaceGate.test.mjs",
   ".prettierrc.json",
