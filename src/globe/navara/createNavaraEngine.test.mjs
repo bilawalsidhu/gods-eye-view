@@ -243,3 +243,65 @@ test('a user gesture cancels a flight without raising camera.commanded', () => {
   assert.equal(engine.camera.flightActive(), false);
   assert.equal(commanded, 0, 'a gesture is the user, not a new camera owner');
 });
+
+// --- The ground floor (groundFloor.js) on the engine's frames ---------------
+
+const heightOf = (engine) => engine.camera.pose().cartographic.height;
+
+test('a free camera below the ground is lifted on preRender, without camera.commanded', () => {
+  const { engine, view } = setup();
+  view.sampleTerrainHeight = () => 100;
+  engine.camera.setView({
+    destination: cartesian3.fromDegrees(2.35, 48.85, 40),
+    orientation: { heading: 0.5, pitch: -0.3, roll: 0 },
+  });
+  let commanded = 0;
+  engine.camera.commanded.addEventListener(() => commanded++);
+  const before = engine.camera.pose();
+  view.emit('preRender', 1);
+  near(heightOf(engine), 130, 1e-6, 'lifted to ground + 30 m');
+  const after = engine.camera.pose();
+  near(after.heading, before.heading, 1e-7, 'heading kept');
+  near(after.pitch, before.pitch, 1e-7, 'pitch kept');
+  assert.equal(commanded, 0);
+  const [, pose] = view.calls.findLast(([name]) => name === 'setCamera');
+  near(pose.height, 130, 1e-3, 'drawn lifted');
+  // Navara's own wheel clamp follows the ground.
+  const [, options] = view.calls.findLast(([name]) => name === 'options');
+  const radius = cartesian3.magnitude(cartesian3.fromDegrees(2.35, 48.85, 100));
+  near(options.minimumZoomDistance, radius + 30, 1e-6, 'clamp');
+  engine.destroy();
+});
+
+test('the floor does not fight flights or a lookAt target', () => {
+  const { engine, view } = setup();
+  view.sampleTerrainHeight = () => 100;
+  engine.camera.setView({
+    destination: cartesian3.fromDegrees(2.35, 48.85, 500),
+  });
+  engine.camera.flyTo({
+    destination: cartesian3.fromDegrees(2.35, 48.85, 50),
+    duration: 3,
+  });
+  const calls = view.calls.length;
+  view.emit('preRender', 1);
+  assert.equal(
+    view.calls.slice(calls).some(([name]) => name === 'setCamera'),
+    false,
+    'no lift during a flight',
+  );
+  engine.camera.cancelFlight();
+  // An orbit-style lookAt from below the floor stays where it was put.
+  engine.camera.lookAt(cartesian3.fromDegrees(2.35, 48.85, 0), {
+    heading: 0,
+    pitch: -0.1,
+    range: 50,
+  });
+  const held = heightOf(engine);
+  view.emit('preRender', 2);
+  near(heightOf(engine), held, 1e-9, 'lookAt kept');
+  engine.camera.release();
+  view.emit('preRender', 3);
+  near(heightOf(engine), 130, 1e-6, 'lifted once released');
+  engine.destroy();
+});

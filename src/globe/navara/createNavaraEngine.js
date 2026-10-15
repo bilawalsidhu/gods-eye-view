@@ -14,6 +14,7 @@ import { createNavaraCredits } from './credits.js';
 import { createNavaraInput } from './input.js';
 import { createNavaraMaps } from './maps.js';
 import { createNavaraSurface } from './surface.js';
+import { createGroundFloor } from './groundFloor.js';
 
 const { cartesian3, math } = geo;
 
@@ -104,10 +105,13 @@ export function createNavaraEngine(
     preRender: createEngineEvent(),
     postRender: createEngineEvent(),
   };
+  // Defined below, with the surface and input it needs.
+  let groundFloor = null;
   const handlers = {
     preUpdate: (time) => frames.preUpdate.raiseEvent(time),
     preRender: (time) => {
       model.sync();
+      groundFloor?.update();
       frames.preRender.raiseEvent(time);
     },
     postRender: (time) => {
@@ -126,6 +130,16 @@ export function createNavaraEngine(
   const credits = createNavaraCredits(view);
   const maps = createNavaraMaps(view, fetch ? { fetch } : {});
   const { surface } = createNavaraSurface(view, hooks);
+  // Navara's controller zooms through the ground; keep the camera above it.
+  groundFloor = createGroundFloor({
+    surface,
+    position: () => model.camera.livePosition,
+    isFree: () => model.isFree(),
+    lift: (position) => model.lift(position),
+    setMinimumZoomDistance: (distance) =>
+      input.input.setCameraOptions({ minimumZoomDistance: distance }),
+    ...(clock ? { now: () => clock.now() } : {}),
+  });
 
   const picker = {
     // Navara picks its own meshes only on click gestures (featureClick); there
