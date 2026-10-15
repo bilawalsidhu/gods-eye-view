@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
+import { inflateSync } from 'node:zlib';
 import { createApplicationStreetLevel } from '../app/layers/streetLevel.js';
 import {
   fixtureTile,
@@ -20,6 +21,24 @@ import {
   THUMB_HOST,
 } from '../../scripts/fixtures/street-level/mapillaryGraph.mjs';
 import { redact } from '../../scripts/qa-browserEvidence.mjs';
+import {
+  answerKartaViewRequest,
+  describeKartaViewCall,
+  KV_LINE,
+  KV_OLD_STREET,
+  KV_SEQUENCE_ID,
+  kartaViewPhotos,
+  resetKartaViewFixture,
+} from '../../scripts/fixtures/street-level/kartaView.mjs';
+import {
+  maskedSegments,
+  tileSegments,
+} from '../layers/streetLevel/providers/kartaview/decode.js';
+import { lonToTileX, latToTileY } from '../layers/streetLevel/tileMath.js';
+import {
+  normalizePhoto,
+  resizedImageUrl,
+} from '../layers/streetLevel/providers/kartaview/policy.js';
 
 // The press helpers wait for paint; Node has no frames, so a tick stands in.
 globalThis.requestAnimationFrame ??= (callback) =>
@@ -515,15 +534,20 @@ test('evidence never carries a Mapillary token', () => {
 test('--strict accepts only the documented skips', () => {
   assert.deepEqual(
     [...STRICT_ALLOWED_SKIPS],
-    ['no Google 3D', 'fixtures only'],
+    ['no Google 3D', 'no Google key', 'fixtures only'],
   );
   assert.deepEqual(
     strictViolations([
       { reason: 'no Google 3D', label: 'terrain' },
+      { reason: 'no Google key', label: 'street view' },
       { reason: 'fixtures only', label: 'keyless page' },
       { reason: 'no Mapillary key', label: 'the keyed steps' },
+      { reason: 'Google key refused', label: 'street view' },
     ]),
-    [{ reason: 'no Mapillary key', label: 'the keyed steps' }],
+    [
+      { reason: 'no Mapillary key', label: 'the keyed steps' },
+      { reason: 'Google key refused', label: 'street view' },
+    ],
   );
 });
 
@@ -633,4 +657,171 @@ test('CI runs the gates hermetically against a production build, strict, with ev
     /QA_FAIL_ON_RETRY: '1'/,
     'a missed header press fails CI now that the rail settles',
   );
+});
+
+test('KartaView fixtures draw the drive, answer nearest first, and refuse the storage host the API names', () => {
+  const body = (answer) => JSON.parse(answer.body);
+  const lat = (KV_LINE.south + KV_LINE.north) / 2;
+  const x = lonToTileX(KV_LINE.lon, 14);
+  const y = latToTileY(lat, 14);
+  const tile = answerKartaViewRequest({
+    method: 'GET',
+    url: `https://api.kartaview.org/2.0/sequence/tiles/${x}/${y}/14.json`,
+  });
+  assert.equal(tile.known, true);
+  assert.ok(body(tile).lines.length >= 1);
+  const empty = answerKartaViewRequest({
+    method: 'GET',
+    url: `https://api.kartaview.org/2.0/sequence/tiles/${x + 3}/${y}/14.json`,
+  });
+  assert.deepEqual(body(empty).lines, []);
+  const nearUrl = `https://api.kartaview.org/2.0/photo/?lat=${lat}&lng=${KV_LINE.lon + 0.0001}&zoomLevel=18&itemsPerPage=10`;
+  resetKartaViewFixture();
+  // The first lookup is rate-limited, readable cross-origin; the retry answers.
+  const limited = answerKartaViewRequest({ method: 'GET', url: nearUrl });
+  assert.equal(limited.status, 429);
+  assert.equal(limited.known, true);
+  assert.equal(limited.headers['Retry-After'], '0');
+  assert.match(limited.headers['Access-Control-Expose-Headers'], /Retry-After/);
+  const near = answerKartaViewRequest({ method: 'GET', url: nearUrl });
+  assert.equal(near.status, 200);
+  const records = body(near).result.data;
+  assert.ok(records.length > 1);
+  assert.ok(Number(records[0].distance) <= Number(records[1].distance));
+  const photo = normalizePhoto(records[0]);
+  assert.match(photo.urls.view, /^https:\/\/storage2\.openstreetcam\.org\//);
+  assert.equal(
+    answerKartaViewRequest({ method: 'GET', url: photo.urls.view }).known,
+    true,
+  );
+  // Every odd photo is archived: its file answers 409, an even one the image.
+  const photos = kartaViewPhotos();
+  const storageAnswer = (index) =>
+    answerKartaViewRequest({
+      method: 'GET',
+      url: normalizePhoto(
+        body(
+          answerKartaViewRequest({
+            method: 'GET',
+            url: `https://api.kartaview.org/2.0/photo/${photos[index].id}`,
+          }),
+        ).result.data,
+      ).urls.view,
+    });
+  assert.equal(photos[3].archived, true);
+  assert.equal(storageAnswer(3).status, 409);
+  assert.equal(storageAnswer(3).known, true);
+  assert.equal(photos[4].archived, false);
+  assert.equal(storageAnswer(4).status, 200);
+  assert.equal(storageAnswer(4).contentType, 'image/jpeg');
+  // The image proxy still serves an archived photo: the 360° step opens one.
+  const pano = photos.find((p) => p.isPano);
+  assert.equal(pano.archived, true);
+  const panoRecord = body(
+    answerKartaViewRequest({
+      method: 'GET',
+      url: `https://api.kartaview.org/2.0/photo/${pano.id}`,
+    }),
+  ).result.data;
+  assert.equal(
+    answerKartaViewRequest({
+      method: 'GET',
+      url: resizedImageUrl(normalizePhoto(panoRecord).urls.pano, [1024, 512]),
+    }).status,
+    200,
+  );
+  assert.equal(
+    answerKartaViewRequest({ method: 'GET', url: records[0].fileurlLTh }).known,
+    false,
+    'the storage1 address the API gives is not where the photo is',
+  );
+  const page = answerKartaViewRequest({
+    method: 'GET',
+    url: `https://api.kartaview.org/2.0/sequence/${KV_SEQUENCE_ID}/photos?page=1&itemsPerPage=1000`,
+  });
+  assert.equal(body(page).result.data.length, kartaViewPhotos().length);
+  assert.ok(kartaViewPhotos().some((p) => p.isPano));
+  assert.equal(
+    describeKartaViewCall(
+      'GET',
+      new URL('https://api.kartaview.org/2.0/photo/77000001'),
+    ),
+    'GET api.kartaview.org/2.0/photo/{id}',
+  );
+});
+
+/** The alpha of a fixture PNG (8-bit RGBA, unfiltered rows, as it writes them). */
+function fixturePngAlpha(bytes) {
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  const idat = [];
+  for (let at = 8; at < bytes.length;) {
+    const length = bytes.readUInt32BE(at);
+    const type = bytes.toString('ascii', at + 4, at + 8);
+    if (type === 'IDAT') idat.push(bytes.subarray(at + 8, at + 8 + length));
+    at += 12 + length;
+  }
+  const rows = inflateSync(Buffer.concat(idat));
+  const alpha = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++)
+      alpha[y * width + x] = rows[y * (width * 4 + 1) + 1 + x * 4 + 3];
+  return { width, height, alpha };
+}
+
+test('KartaView fixtures filter like KartaView: PNG tiles by view and upload date, the photo search by projection', () => {
+  const body = (answer) => JSON.parse(answer.body);
+  const z = 14;
+  const x = lonToTileX(KV_LINE.lon, z);
+  const y = latToTileY((KV_LINE.south + KV_LINE.north) / 2, z);
+  assert.equal(x, lonToTileX(KV_OLD_STREET.lon, z), 'both streets in a tile');
+  const base = `https://api.kartaview.org/2.0/sequence/tiles/${x}/${y}/${z}`;
+  const segments = tileSegments(
+    body(answerKartaViewRequest({ method: 'GET', url: `${base}.json` })),
+  );
+  const lons = (kept) => [...new Set(kept.map((segment) => segment[0][0]))];
+  const keptFor = (query) => {
+    const answer = answerKartaViewRequest({
+      method: 'GET',
+      url: `${base}.png?${query}`,
+    });
+    assert.equal(answer.contentType, 'image/png');
+    assert.equal(answer.known, true);
+    return lons(
+      maskedSegments(segments, fixturePngAlpha(answer.body), { x, y, z }),
+    );
+  };
+  assert.deepEqual(
+    lons(segments).sort(),
+    [KV_LINE.lon, KV_OLD_STREET.lon].sort(),
+  );
+  assert.deepEqual(keptFor('fieldOfView=360'), [KV_LINE.lon]);
+  assert.deepEqual(keptFor('fieldOfView=plane').sort(), lons(segments).sort());
+  const lastYear = new Date(Date.now() - 365 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  assert.deepEqual(keptFor(`startDate=${lastYear}`), [KV_LINE.lon]);
+  assert.deepEqual(keptFor('startDate=2099-01-01'), []);
+  assert.equal(
+    describeKartaViewCall('GET', new URL(`${base}.png?fieldOfView=360`)),
+    'GET api.kartaview.org/2.0/sequence/tiles/{x}/{y}/{z}.png?fieldOfView',
+  );
+  // The photo search: 360° only, and nothing uploaded after the drive.
+  resetKartaViewFixture();
+  const search = (extra) => {
+    answerKartaViewRequest({
+      method: 'GET',
+      url: 'https://api.kartaview.org/2.0/photo/?lat=0&lng=0',
+    });
+    return body(
+      answerKartaViewRequest({
+        method: 'GET',
+        url: `https://api.kartaview.org/2.0/photo/?lat=${KV_LINE.south + 0.002}&lng=${KV_LINE.lon}&zoomLevel=18&itemsPerPage=10${extra}`,
+      }),
+    ).result.data;
+  };
+  const panos = search('&projection=SPHERE');
+  assert.ok(panos.length > 0);
+  assert.ok(panos.every((record) => record.projection === 'SPHERE'));
+  assert.deepEqual(search('&startDate=2099-01-01'), []);
 });

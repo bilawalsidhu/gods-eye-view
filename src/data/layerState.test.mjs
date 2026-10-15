@@ -2703,13 +2703,19 @@ test('Street Level: the link codec accepts exactly the windows the filter keeps'
   assert.equal(streetLevelOptions('0.s.3652').sinceDays, 3652);
 });
 
-test('Street Level: a link without the provider switch keeps Mapillary on', () => {
+test('Street Level: a link without the provider switches keeps Mapillary on and Street View off', () => {
   assert.deepEqual(streetLevelOptions(''), {
     mapillary: true,
     providerSwitches: '',
     pano: 'all',
     sinceDays: 0,
   });
+  // Street View rides the shared provider-switch field, off unless lit.
+  assert.equal(streetLevelOptions('0.r.google-1').providerSwitches, 'google-1');
+  assert.equal(
+    createDefaultLayerState().options['street-level'].providerSwitches,
+    '',
+  );
   assert.equal(streetLevelOptions('0.p.f').mapillary, true);
   assert.equal(streetLevelOptions('0.m.0').mapillary, false);
   assert.equal(
