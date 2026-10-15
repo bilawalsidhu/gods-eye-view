@@ -43,6 +43,8 @@
 
 #cockpit-hud {
   --cockpit-accent: #00dcff;
+  /* Matches EMERGENCY_TINT_CSS in src/data/aircraftEmergency.js. */
+  --cockpit-emergency: #ff4444;
   --cockpit-side-panel-width: min(340px, 28vw);
   /* HUD bottom offset + tallest scaled telemetry block + 20px clear border. */
   --cockpit-bottom-rail-safe: calc(clamp(84px, 11vh, 118px) + 100px);
@@ -495,6 +497,10 @@ body.cockpit-mode:has(#left-panel-stack > .panel-collapsible:not(.collapsed))
   color: rgba(244, 251, 255, 0.48);
   font-size: 7px;
   letter-spacing: 0.16em;
+}
+.cockpit-aircraft-meta.emergency {
+  color: var(--cockpit-emergency);
+  font-weight: 600;
 }
 .cockpit-mode-chip {
   margin-top: 2px;

@@ -83,6 +83,26 @@ export function cockpitAltitudeDisplayFt(altitudeM, onGround) {
   return Number.isFinite(altitudeM) ? altitudeM * 3.28084 : null;
 }
 
+/**
+ * HUD wording for a tracked aircraft's transponder emergency, or null.
+ * States what was broadcast, never a conclusion about the flight: the Mode A
+ * code when it names the status, else the ADS-B field it came from (an
+ * unrelated squawk is dropped).
+ * @param {{label?: string, squawk?: string|null, source?: string,
+ *   severity?: string}|null|undefined} emergency
+ * @returns {string|null}
+ */
+export function formatCockpitEmergency(emergency) {
+  const label = String(emergency?.label || '')
+    .trim()
+    .toUpperCase();
+  if (!label) return null;
+  if (emergency.source === 'squawk' && emergency.squawk)
+    return `SQUAWK ${emergency.squawk} · ${label}`;
+  const field = emergency.severity === 'priority' ? 'PRIORITY' : 'EMERGENCY';
+  return `ADS-B ${field} · ${label}`;
+}
+
 /** Format the cockpit Context scope without overstating installation coverage. */
 export function formatCockpitContextScope(
   subjectLabel,
