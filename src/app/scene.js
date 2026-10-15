@@ -14,6 +14,7 @@ import {
   governorRequestRender,
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
+import { createSceneEngine } from './globeEngine.js';
 
 /** Construct the application globe using the caller's local configuration. */
 export async function createApplicationScene({
@@ -56,6 +57,10 @@ export async function createApplicationScene({
     uninstallRenderGovernor(viewer);
     if (!viewer.isDestroyed()) viewer.destroy();
   });
+  // The globe engine over this viewer; Google's startup tileset is named
+  // once it loads.
+  const tilesetRef = { current: null };
+  const engine = createSceneEngine(viewer, { tilesetRef, defer });
   defer(installTrackpadPinchZoom(viewer));
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
@@ -69,6 +74,7 @@ export async function createApplicationScene({
     cesiumToken,
   });
   const tileset = photoreal.tileset;
+  tilesetRef.current = tileset;
   // A provider can finish after cancellation; retain ownership of its result.
   defer(() => {
     if (tileset && !tileset.isDestroyed()) {
@@ -121,5 +127,5 @@ export async function createApplicationScene({
   });
 
   signal.throwIfAborted();
-  return { viewer, tileset, mapStackController, operations };
+  return { viewer, engine, tileset, mapStackController, operations };
 }

@@ -736,6 +736,8 @@
   "src/globe/cesium/createCesiumEngine.test.mjs",
   "src/globe/cesium/testing/fakeViewer.mjs",
   "scripts/qa-globe-contract.mjs",
+  "src/app/globeEngine.js",
+  "src/app/globeEngine.test.mjs",
   "src/sources/reference.js",
   "src/sources/reference.test.mjs",
   "src/search/nominatim.js",
