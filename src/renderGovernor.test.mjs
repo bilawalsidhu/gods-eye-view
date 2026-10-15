@@ -7,6 +7,8 @@ import {
   governorRequestRender,
   getRenderGovernorDiagnostics,
   _resetRenderGovernorForTest,
+  isRenderGovernorInstalled,
+  uninstallRenderGovernor,
 } from './renderGovernor.js';
 
 function makeViewer() {
@@ -109,4 +111,28 @@ test('isRenderGovernorInstalled names the one governed viewer', async () => {
   assert.equal(isRenderGovernorInstalled(other), false);
   uninstallRenderGovernor(viewer);
   assert.equal(isRenderGovernorInstalled(viewer), false);
+});
+
+test('on a non-Cesium globe engine the governor drives engine.render with owner-counted holds', async () => {
+  const { createFakeEngine } = await import('./globe/testing/fakeEngine.js');
+  _resetRenderGovernorForTest();
+  const engine = createFakeEngine({ kind: 'navara' });
+  holdContinuousRender('before-install');
+  installRenderGovernor(engine);
+  assert.equal(engine.render.isContinuous(), true, 'a hold taken before install applies');
+  releaseContinuousRender('before-install');
+  assert.equal(engine.render.isContinuous(), false);
+  holdContinuousRender('a');
+  holdContinuousRender('b');
+  assert.equal(engine.render.isContinuous(), true);
+  releaseContinuousRender('a');
+  assert.equal(engine.render.isContinuous(), true, 'b still holds');
+  releaseContinuousRender('b');
+  assert.equal(engine.render.isContinuous(), false);
+  engine.fake.resetCalls();
+  governorRequestRender('slider');
+  assert.deepEqual(engine.fake.callsOf('render.request').map((c) => c.args), [['slider']]);
+  assert.equal(isRenderGovernorInstalled(engine), true);
+  uninstallRenderGovernor(engine);
+  _resetRenderGovernorForTest();
 });

@@ -36,9 +36,17 @@
  * cycle) and keeps the viewer for what the contract leaves to the engine:
  * `scene.requestRenderMode`, `scene.maximumRenderTimeChange` and
  * `scene.requestRender()`. It needs no frame events (`engine.frames`).
+ *
+ * Any other globe engine (Navara) is the governor's backend instead: install
+ * it on the engine and the owner-counted holds drive
+ * `engine.render.setContinuous`, requests go to `engine.render.request`.
  */
 
+import { isGlobeEngine } from './globe/contract.js';
+
 let _viewer = null;
+/** The non-Cesium engine the governor drives, or null (Cesium: `_viewer`). */
+let _engine = null;
 let _installed = false;
 const _holds = new Set();
 
@@ -47,8 +55,15 @@ const _recentRequests = [];
 const RECENT_REQUEST_CAP = 16;
 
 function applyMode() {
-  if (!_installed || !_viewer?.scene) return;
+  if (!_installed) return;
   const continuous = _holds.size > 0;
+  if (_engine) {
+    if (_engine.render.isContinuous() !== continuous)
+      _engine.render.setContinuous(continuous);
+    if (!continuous) _engine.render.request('governor-idle');
+    return;
+  }
+  if (!_viewer?.scene) return;
   const scene = _viewer.scene;
   if (scene.requestRenderMode === !continuous) return;
   scene.requestRenderMode = !continuous;
@@ -64,12 +79,21 @@ function applyMode() {
  * hold/release still record into the holds set (and apply at install time);
  * requests are safe no-ops — so modules can call all three unconditionally
  * in tests without a viewer.
- * @param {Cesium.Viewer} viewer
+ * @param {Cesium.Viewer | import('./globe/contract.js').GlobeEngine} viewer
+ *   The Cesium viewer, or a non-Cesium globe engine.
  * @returns {void}
  */
 export function installRenderGovernor(viewer) {
+  if (isGlobeEngine(viewer) && viewer.kind !== 'cesium') {
+    _engine = viewer;
+    _viewer = viewer;
+    _installed = true;
+    applyMode();
+    return;
+  }
   if (!viewer?.scene)
     throw new TypeError('installRenderGovernor requires a Cesium viewer');
+  _engine = null;
   _viewer = viewer;
   _installed = true;
   // Never let Cesium re-render on simulation-time deltas behind our back —
@@ -115,12 +139,13 @@ export function releaseContinuousRender(ownerId) {
  * @returns {void}
  */
 export function governorRequestRender(reason = 'unspecified') {
-  if (!_installed || !_viewer?.scene) return;
+  if (!_installed || (!_engine && !_viewer?.scene)) return;
   if (_holds.size === 0) {
     _recentRequests.push({ reason, at: Date.now() });
     if (_recentRequests.length > RECENT_REQUEST_CAP) _recentRequests.shift();
   }
-  _viewer.scene.requestRender?.();
+  if (_engine) _engine.render.request(reason);
+  else _viewer.scene.requestRender?.();
 }
 
 /**
@@ -150,6 +175,7 @@ export function isRenderGovernorInstalled(viewer) {
 export function uninstallRenderGovernor(viewer) {
   if (_viewer !== viewer) return;
   _viewer = null;
+  _engine = null;
   _installed = false;
   _holds.clear();
   _recentRequests.length = 0;
@@ -158,6 +184,7 @@ export function uninstallRenderGovernor(viewer) {
 /** Test seam: reset module state between unit tests. */
 export function _resetRenderGovernorForTest() {
   _viewer = null;
+  _engine = null;
   _installed = false;
   _holds.clear();
   _recentRequests.length = 0;

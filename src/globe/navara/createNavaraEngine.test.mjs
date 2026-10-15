@@ -226,3 +226,20 @@ test('pickGlobe meets the terrain along the pick ray, or the ellipsoid', () => {
   near(math.toDegrees(place.longitude), 0, 1e-6, 'longitude');
   assert.equal(engine.picker.pickGlobe(cartesian2.create(640, -1e7)), undefined);
 });
+
+test('a user gesture cancels a flight without raising camera.commanded', () => {
+  const { engine, view } = setup();
+  const outcome = [];
+  let commanded = 0;
+  engine.camera.flyTo({
+    destination: cartesian3.fromDegrees(10, 10, 1e6),
+    duration: 5,
+    cancel: () => outcome.push('cancel'),
+  });
+  engine.camera.commanded.addEventListener(() => commanded++);
+  view.canvas.dispatchEvent(new Event('pointerdown'));
+  view.canvas.dispatchEvent(new Event('wheel'));
+  assert.deepEqual(outcome, ['cancel']);
+  assert.equal(engine.camera.flightActive(), false);
+  assert.equal(commanded, 0, 'a gesture is the user, not a new camera owner');
+});
