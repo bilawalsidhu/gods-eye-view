@@ -6,23 +6,33 @@
 import { createEngineEvent } from '../contract.js';
 
 /**
- * @param {{ addEventListener: Function, removeEventListener: Function }} source A Cesium.Event.
- * @param {(...args: any[]) => any[]} [mapArgs] Cesium arguments → contract arguments.
+ * @param {{ addEventListener: (listener: Function) => () => void }} source A
+ *   Cesium.Event (its addEventListener returns the remover the bridge uses).
+ * @param {((...args: any[]) => any[]) | null} [mapArgs] Cesium arguments →
+ *   contract arguments.
+ * @param {{ unary?: (...args: any[]) => any }} [options] `unary` maps the
+ *   Cesium arguments to the one contract argument without building an
+ *   argument list (for per-frame events).
  * @returns {{ event: import('../contract.js').EngineEvent, detach: () => void }}
  */
-export function bridgeEvent(source, mapArgs) {
+export function bridgeEvent(source, mapArgs, { unary } = {}) {
   const event = createEngineEvent();
-  const forward = mapArgs
-    ? (...args) => event.raiseEvent(...mapArgs(...args))
-    : (...args) => event.raiseEvent(...args);
-  let attached = false;
+  const forward = unary
+    ? (a, b, c) => event.raiseEvent(unary(a, b, c))
+    : mapArgs
+      ? (...args) => event.raiseEvent(...mapArgs(...args))
+      : (...args) => event.raiseEvent(...args);
+  let removeForward = null;
   let detached = false;
   const sync = () => {
     const wanted = !detached && event.numberOfListeners > 0;
-    if (wanted === attached) return;
-    attached = wanted;
-    if (wanted) source.addEventListener(forward);
-    else source.removeEventListener(forward);
+    if (wanted === (removeForward !== null)) return;
+    if (wanted) removeForward = source.addEventListener(forward);
+    else {
+      const remove = removeForward;
+      removeForward = null;
+      remove();
+    }
   };
   const add = event.addEventListener;
   const remove = event.removeEventListener;

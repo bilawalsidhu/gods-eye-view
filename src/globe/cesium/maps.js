@@ -82,20 +82,31 @@ export function createCesiumMaps(
   const providers = new Map();
   let ownedTileset = null;
   let shownTileset = null;
-  const generations = { imagery: 0, terrain: 0, photoreal: 0 };
+  // Every tileset shown through the engine, so a switch hides all of them;
+  // `added` are those the engine put into scene.primitives itself.
+  const known = new Set();
+  const added = new Set();
+  // Imagery and photoreal share one generation: whichever was asked for last
+  // decides what the globe shows. Terrain has its own.
+  const generations = { display: 0, terrain: 0 };
+  let baseSource = null;
+  let creditOwner = null;
   let destroyed = false;
 
   const startupTileset = () =>
     (typeof tilesetRef === 'function' ? tilesetRef() : tilesetRef?.current) ??
     null;
   const tilesets = () =>
-    [startupTileset(), shownTileset, ownedTileset].filter(
+    [startupTileset(), shownTileset, ownedTileset, ...known].filter(
       (tileset, index, all) => tileset && all.indexOf(tileset) === index,
     );
 
   // One provider per source, as MapSourceController caches them, so applying
-  // the same source again keeps the live layer. Failures are not cached.
+  // the same source again keeps the live layer. Failures are not cached. A
+  // source carrying a ready `provider` belongs to its caller: it is neither
+  // cached nor disposed here.
   function providerFor(source) {
+    if (source?.provider) return Promise.resolve(source.provider);
     const key = imageryKey(source);
     if (providers.has(key)) return providers.get(key);
     const promise = Promise.resolve()
@@ -108,13 +119,23 @@ export function createCesiumMaps(
     return promise;
   }
 
+  function showCredit(owner, html) {
+    creditOwner = owner;
+    mapScene.showCredit(html);
+  }
+
+  function showBase(source, provider) {
+    mapScene.showBaseImagery(provider);
+    showCredit('imagery', imageryCredit(source));
+  }
+
   const maps = {
     async setBaseImagery(source) {
-      const generation = ++generations.imagery;
+      const generation = ++generations.display;
       const provider = await providerFor(source);
-      if (destroyed || generation !== generations.imagery) return;
-      mapScene.showBaseImagery(provider);
-      mapScene.showCredit(imageryCredit(source));
+      if (destroyed || generation !== generations.display) return;
+      baseSource = { source, provider };
+      showBase(source, provider);
       requestRender('map-imagery');
     },
     async setTerrain(source) {
@@ -125,11 +146,17 @@ export function createCesiumMaps(
       requestRender('map-terrain');
     },
     async setPhotorealTiles(source) {
-      const generation = ++generations.photoreal;
+      const generation = ++generations.display;
       const { scene } = viewer;
       if (source == null) {
         mapScene.showTileset(null, tilesets());
         shownTileset = null;
+        // The globe comes back with the last base imagery and its credit;
+        // the photoreal credit goes.
+        if (baseSource) {
+          if (!mapScene.baseProvider)
+            showBase(baseSource.source, baseSource.provider);
+        } else if (creditOwner === 'photoreal') showCredit(null, null);
         mapScene.showGlobe(true);
         requestRender('map-photoreal');
         return;
@@ -144,7 +171,7 @@ export function createCesiumMaps(
         tileset = loaded;
         owned = true;
       }
-      if (destroyed || generation !== generations.photoreal) {
+      if (destroyed || generation !== generations.display) {
         if (owned) dispose(tileset);
         return;
       }
@@ -155,15 +182,25 @@ export function createCesiumMaps(
         }
         ownedTileset = tileset;
       }
-      if (!scene.primitives.contains(tileset)) scene.primitives.add(tileset);
+      if (!scene.primitives.contains(tileset)) {
+        scene.primitives.add(tileset);
+        if (!owned) added.add(tileset);
+      }
+      known.add(tileset);
       // As MapSourceController activates a 3D stack: no base layer, the
       // source's credit, one tileset shown and the globe hidden.
       mapScene.removeBaseImagery();
-      mapScene.showCredit(source.credit);
+      showCredit('photoreal', source.credit);
       shownTileset = tileset;
       mapScene.showTileset(tileset, tilesets());
       mapScene.showGlobe(false);
       requestRender('map-photoreal');
+    },
+    releasePhotorealTiles(source) {
+      const tileset = source?.tileset;
+      if (!tileset || !known.delete(tileset)) return;
+      if (shownTileset === tileset) shownTileset = null;
+      if (added.delete(tileset)) viewer.scene.primitives.remove(tileset);
     },
     photorealActive: () => tilesets().some((tileset) => tileset.show === true),
   };

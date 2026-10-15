@@ -353,3 +353,13 @@ test('fake drillPick records width and height; maps return promises', async () =
     await call;
   }
 });
+
+test('fake camera position fills a result and height is the pose height', () => {
+  const engine = createFakeEngine({ altitude: 2_000_000 });
+  const result = geo.cartesian3.create();
+  assert.equal(engine.camera.position(result), result);
+  assert.ok(
+    geo.cartesian3.distance(result, engine.camera.pose().position) < 1e-6,
+  );
+  assert.ok(Math.abs(engine.camera.height() - 2_000_000) < 0.01);
+});

@@ -65,3 +65,24 @@ test('the debug handle exposes the engine beside the viewer', () => {
   );
   assert.match(tools, /window\.__godsEyeView = \{\n\s+viewer,\n\s+engine,/);
 });
+
+test('the scene engine is the one engineFromViewer returns for its viewer until teardown', async () => {
+  const { engineFromViewer } =
+    await import('../globe/cesium/engineFromViewer.js');
+  const { createFakeEngine } = await import('../globe/testing/fakeEngine.js');
+  const viewer = { name: 'viewer' };
+  const cleanups = [];
+  const engine = createSceneEngine(viewer, {
+    tilesetRef: null,
+    defer: (dispose) => cleanups.push(dispose),
+    createEngine: () => createFakeEngine(),
+  });
+  assert.equal(engineFromViewer(viewer), engine);
+  for (const cleanup of cleanups.reverse()) cleanup();
+  assert.equal(engine.fake.destroyed, true);
+  assert.throws(
+    () => engineFromViewer(viewer),
+    /createCesiumEngine needs a viewer/,
+    'no longer registered: a fresh one would be built',
+  );
+});

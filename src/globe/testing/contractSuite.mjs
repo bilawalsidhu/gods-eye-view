@@ -177,6 +177,41 @@ export function createContractSuite(
       },
     ],
     [
+      'camera.position and camera.height: the pose position and height, without a pose',
+      async () => {
+        camera.setView({
+          destination: cartesian3.fromDegrees(-3.7, 40.4, 12000),
+          orientation: { heading: 0.4, pitch: -0.5, roll: 0 },
+        });
+        await settle();
+        const pose = camera.pose();
+        const result = cartesian3.create();
+        const filled = camera.position(result);
+        ensure(
+          filled === result,
+          'position(result) returns the result it filled',
+        );
+        near(
+          cartesian3.distance(filled, pose.position),
+          0,
+          1e-6,
+          'position(result) vs pose().position',
+        );
+        const fresh = camera.position();
+        ensure(
+          isCartesian3(fresh) && fresh !== filled,
+          'position() returns a fresh Cartesian3',
+        );
+        near(
+          cartesian3.distance(fresh, pose.position),
+          0,
+          1e-6,
+          'position() vs pose().position',
+        );
+        near(camera.height(), pose.cartographic.height, 0.01, 'height()');
+      },
+    ],
+    [
       'camera.pose: cartographic, frame vectors and fovy are consistent',
       async () => {
         camera.setView({

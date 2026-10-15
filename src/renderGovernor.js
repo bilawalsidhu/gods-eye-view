@@ -29,6 +29,13 @@
  * diagnostics read like a story.
  *
  * The governor is O(1) passive: no per-frame work of its own, ever.
+ *
+ * Globe engine: the governor is the Cesium engine's render backend.
+ * `engine.render.request()/setContinuous()` (src/globe/cesium/render.js)
+ * delegate here, so the governor never uses `engine.render` (that would be a
+ * cycle) and keeps the viewer for what the contract leaves to the engine:
+ * `scene.requestRenderMode`, `scene.maximumRenderTimeChange` and
+ * `scene.requestRender()`. It needs no frame events (`engine.frames`).
  */
 
 let _viewer = null;
@@ -127,6 +134,16 @@ export function getRenderGovernorDiagnostics() {
     holds: [..._holds].sort(),
     recentRequests: [..._recentRequests],
   };
+}
+
+/**
+ * Whether the governor is installed on this viewer (its render requests then
+ * go through `governorRequestRender`).
+ * @param {object} viewer
+ * @returns {boolean}
+ */
+export function isRenderGovernorInstalled(viewer) {
+  return _installed && viewer != null && _viewer === viewer;
 }
 
 /** Release the installed viewer after its animation owners have stopped. */

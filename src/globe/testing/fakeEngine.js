@@ -602,6 +602,12 @@ export function createFakeEngine(options = {}) {
         fovy,
       };
     },
+    position(result) {
+      return result
+        ? cartesian3.clone(state.position, result)
+        : copy3(state.position);
+    },
+    height: () => cartographic.fromCartesian(state.position, WGS84).height,
     setView(view) {
       record('camera.setView', [view]);
       if (!view?.destination)
@@ -756,8 +762,8 @@ export function createFakeEngine(options = {}) {
       postRender: events['frames.postRender'],
     },
     render: {
-      request() {
-        record('render.request', []);
+      request(reason) {
+        record('render.request', reason === undefined ? [] : [reason]);
         fake.renderRequests++;
       },
       setContinuous(enabled) {
@@ -824,6 +830,9 @@ export function createFakeEngine(options = {}) {
       async setPhotorealTiles(source) {
         record('maps.setPhotorealTiles', [source]);
         fake.maps.photoreal = source ?? null;
+      },
+      releasePhotorealTiles(source) {
+        record('maps.releasePhotorealTiles', [source]);
       },
       photorealActive: () => fake.maps.photoreal != null,
     },

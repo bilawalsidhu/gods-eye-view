@@ -98,3 +98,15 @@ test('holds registered before install apply at install time', () => {
   releaseContinuousRender('flights');
   assert.equal(scene.requestRenderMode, true);
 });
+
+test('isRenderGovernorInstalled names the one governed viewer', async () => {
+  const { isRenderGovernorInstalled, uninstallRenderGovernor } = await import('./renderGovernor.js');
+  const { viewer } = makeViewer();
+  const other = makeViewer().viewer;
+  assert.equal(isRenderGovernorInstalled(viewer), false);
+  installRenderGovernor(viewer);
+  assert.equal(isRenderGovernorInstalled(viewer), true);
+  assert.equal(isRenderGovernorInstalled(other), false);
+  uninstallRenderGovernor(viewer);
+  assert.equal(isRenderGovernorInstalled(viewer), false);
+});

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   ENGINE_KINDS,
+  GLOBE_ENGINE_MEMBERS,
   INPUT_TYPES,
   MODIFIERS,
   assertGlobeEngine,
@@ -183,6 +184,25 @@ test('assertGlobeEngine accepts a complete engine and names every missing capabi
     },
   );
   assert.throws(() => assertGlobeEngine(null), TypeError);
+});
+
+test('the contract carries what the shell infrastructure needs', () => {
+  for (const member of [
+    'camera.position',
+    'camera.height',
+    'maps.releasePhotorealTiles',
+  ])
+    assert.ok(GLOBE_ENGINE_MEMBERS.includes(member), member);
+  const engine = createFakeEngine();
+  const broken = {
+    ...engine,
+    camera: { ...engine.camera, position: undefined, height: 1 },
+    maps: { ...engine.maps, releasePhotorealTiles: undefined },
+  };
+  assert.throws(
+    () => assertGlobeEngine(broken),
+    /camera\.position.*camera\.height.*maps\.releasePhotorealTiles/,
+  );
 });
 
 test('the fake engine passes the engine contract suite', async (t) => {

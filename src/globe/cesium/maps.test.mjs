@@ -262,3 +262,119 @@ test('destroy removes the engine imagery layer and its credit', async () => {
   assert.deepEqual(viewer.imageryList, []);
   assert.deepEqual(viewer.staticCredits, []);
 });
+
+const esriSource = (provider = { name: 'esri' }) => ({
+  descriptor: { id: 'esri-imagery', kind: 'esri-imagery' },
+  imagery: () => provider,
+  credit: ESRI_ATTRIBUTION_HTML,
+});
+const credits = (viewer) => viewer.staticCredits.map((credit) => credit.html);
+
+test('setPhotorealTiles(null) clears the photoreal credit and restores the base imagery', async () => {
+  const { viewer, maps } = setup();
+  const provider = { name: 'esri' };
+  await maps.setBaseImagery(esriSource(provider));
+  await maps.setPhotorealTiles({ tileset: tileset(), credit: 'Google' });
+  assert.deepEqual(viewer.imageryList, []);
+  assert.deepEqual(credits(viewer), ['Google']);
+  await maps.setPhotorealTiles(null);
+  assert.deepEqual(viewer.imageryList, [{ provider }], 'base layer back');
+  assert.deepEqual(credits(viewer), [ESRI_ATTRIBUTION_HTML]);
+  assert.equal(viewer.scene.globe.show, true);
+});
+
+test('setPhotorealTiles(null) before any base imagery shows no credit', async () => {
+  const { viewer, maps } = setup();
+  await maps.setPhotorealTiles({ tileset: tileset(), credit: 'Google' });
+  await maps.setPhotorealTiles(null);
+  assert.deepEqual(credits(viewer), []);
+  assert.deepEqual(viewer.imageryList, []);
+});
+
+test('base imagery then setPhotorealTiles(null) keeps the base layer and its credit', async () => {
+  const { viewer, maps } = setup();
+  const provider = { name: 'esri' };
+  await maps.setPhotorealTiles({ tileset: tileset(), credit: 'Google' });
+  await maps.setBaseImagery(esriSource(provider));
+  await maps.setPhotorealTiles(null);
+  assert.deepEqual(viewer.imageryList, [{ provider }]);
+  assert.equal(viewer.callsOf('imageryLayers.add').length, 1, 'not rebuilt');
+  assert.deepEqual(credits(viewer), [ESRI_ATTRIBUTION_HTML]);
+});
+
+test('a newer photoreal switch supersedes a pending imagery switch', async () => {
+  const { viewer, maps } = setup();
+  let resolve;
+  const pending = maps.setBaseImagery({
+    descriptor: { id: 'slow', kind: 'osm' },
+    imagery: () => new Promise((done) => (resolve = done)),
+    credit: 'slow credit',
+  });
+  await maps.setPhotorealTiles({ tileset: tileset(), credit: 'Google' });
+  resolve({ name: 'slow' });
+  await pending;
+  assert.deepEqual(viewer.imageryList, []);
+  assert.deepEqual(credits(viewer), ['Google']);
+  assert.equal(viewer.scene.globe.show, false);
+});
+
+test('switching between two tilesets hides the one shown before', async () => {
+  const { maps } = setup();
+  const first = tileset();
+  const second = tileset();
+  await maps.setPhotorealTiles({ tileset: first });
+  await maps.setPhotorealTiles({ tileset: second });
+  assert.equal(first.show, false);
+  assert.equal(second.show, true);
+  await maps.setPhotorealTiles(null);
+  assert.equal(second.show, false);
+});
+
+test('a source with a ready provider is shown as is and stays its caller’s', async () => {
+  const { viewer, maps, destroy } = setup();
+  let destroyed = 0;
+  const provider = { name: 'owned', destroy: () => destroyed++ };
+  const source = {
+    descriptor: { id: 'osm', kind: 'osm' },
+    provider,
+    credit: 'c',
+  };
+  await maps.setBaseImagery(source);
+  assert.deepEqual(viewer.imageryList, [{ provider }]);
+  const other = { name: 'other' };
+  await maps.setBaseImagery({ ...source, provider: other });
+  assert.deepEqual(
+    viewer.imageryList,
+    [{ provider: other }],
+    'not cached by id',
+  );
+  destroy();
+  assert.equal(destroyed, 0, 'the engine does not dispose a caller provider');
+});
+
+test('releasePhotorealTiles forgets a tileset and removes it from the scene', async () => {
+  const { viewer, maps } = setup();
+  const owned = tileset();
+  await maps.setPhotorealTiles({ tileset: owned });
+  await maps.setPhotorealTiles(null);
+  maps.releasePhotorealTiles({ tileset: owned });
+  assert.equal(viewer.primitiveList.includes(owned), false);
+  assert.equal(maps.photorealActive(), false);
+  owned.show = true;
+  assert.equal(
+    maps.photorealActive(),
+    false,
+    'no longer one of the engine tilesets',
+  );
+  maps.releasePhotorealTiles({ tileset: owned });
+  assert.equal(viewer.callsOf('primitives.remove').length, 1, 'idempotent');
+});
+
+test('releasePhotorealTiles leaves a tileset the engine did not add in the scene', async () => {
+  const { viewer, maps } = setup();
+  const startup = tileset(true);
+  viewer.primitiveList.push(startup);
+  await maps.setPhotorealTiles({ tileset: startup });
+  maps.releasePhotorealTiles({ tileset: startup });
+  assert.equal(viewer.primitiveList.includes(startup), true);
+});
