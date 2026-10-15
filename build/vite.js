@@ -30,8 +30,8 @@ export const BROWSER_CSP = [
   "connect-src 'self' blob: data: https: wss: ws:",
   "worker-src 'self' blob:",
   "child-src 'self' blob:",
-  // The same media's players and posts, which load in frames.
-  "frame-src 'self' blob: https://www.youtube-nocookie.com https://www.youtube.com https://www.facebook.com https://platform.twitter.com",
+  // Event media and the allowlisted public CCTV players load in frames.
+  "frame-src 'self' blob: https://www.youtube-nocookie.com https://www.youtube.com https://www.facebook.com https://platform.twitter.com https://player.twitch.tv https://v.angelcam.com https://*.roundshot.com",
   "manifest-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",

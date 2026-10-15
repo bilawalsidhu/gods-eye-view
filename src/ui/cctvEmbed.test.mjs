@@ -14,6 +14,7 @@ function fixture() {
   const children = new Set();
   const container = { appendChild: (node) => children.add(node) };
   const documentImpl = {
+    location: { hostname: 'localhost' },
     createElement(tag) {
       return {
         tag,
@@ -53,6 +54,31 @@ test('one sandboxed public player survives refreshes and unloads when hidden or 
   player.update(camera, true);
   player.destroy();
   player.destroy();
+  assert.equal(children.size, 0);
+});
+
+test('Twitch uses the document host and provider controls, then unloads on switch', () => {
+  const { children, player } = fixture();
+  const twitch = {
+    ...camera,
+    embedUrl:
+      'https://player.twitch.tv/?channel=tucumanturismo02&parent=evil.test',
+    sourcePageUrl: '',
+  };
+  player.update(twitch, true);
+  const [iframe, link] = [...children];
+  const url = new URL(iframe.src);
+  assert.deepEqual(url.searchParams.getAll('parent'), ['localhost']);
+  assert.equal(url.searchParams.get('autoplay'), 'false');
+  assert.equal(url.searchParams.get('muted'), 'true');
+  assert.match(iframe.className, /cctv-embed-twitch/);
+  assert.equal(link.href, 'https://www.twitch.tv/tucumanturismo02');
+  player.update(twitch, true);
+  assert.deepEqual([...children], [iframe, link]);
+  player.update(camera, true);
+  assert.ok(!children.has(iframe));
+  assert.equal([...children][0].className, 'cctv-embed');
+  player.update(twitch, false);
   assert.equal(children.size, 0);
 });
 

@@ -25,7 +25,7 @@ export function createCctvEmbed(container, { documentImpl = document } = {}) {
 
   return {
     update(camera, visible) {
-      const url =
+      let url =
         camera?.feedType === 'embed'
           ? normalizeCctvEmbedUrl(camera.embedUrl)
           : '';
@@ -33,10 +33,17 @@ export function createCctvEmbed(container, { documentImpl = document } = {}) {
         clear();
         return;
       }
+      const isTwitch = new URL(url).hostname === 'player.twitch.tv';
+      if (isTwitch) {
+        const playerUrl = new URL(url);
+        // Twitch requires the actual embedding host, never a catalog-supplied one.
+        playerUrl.searchParams.set('parent', documentImpl.location.hostname);
+        url = playerUrl.href;
+      }
       if (url !== currentUrl) {
         clear();
         player = documentImpl.createElement('iframe');
-        player.className = 'cctv-embed';
+        player.className = `cctv-embed${isTwitch ? ' cctv-embed-twitch' : ''}`;
         player.title = `${camera.name || 'CCTV'} — public player`;
         player.setAttribute(
           'allow',
@@ -55,7 +62,11 @@ export function createCctvEmbed(container, { documentImpl = document } = {}) {
       const videoId = youtubeVideoId(new URL(url));
       const sourceUrl =
         normalizeCctvSourcePageUrl(camera.sourcePageUrl) ||
-        (videoId ? `https://www.youtube.com/watch?v=${videoId}` : '');
+        (videoId
+          ? `https://www.youtube.com/watch?v=${videoId}`
+          : isTwitch
+            ? `https://www.twitch.tv/${new URL(url).searchParams.get('channel')}`
+            : url);
       if (sourceUrl) {
         if (!link) {
           link = documentImpl.createElement('a');

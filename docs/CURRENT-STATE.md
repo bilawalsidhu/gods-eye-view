@@ -953,7 +953,7 @@ owners. Tuner calculations have a pure entry, with existing layer exports
 preserved. Destruction removes listeners and state subscriptions before ending
 tuning; a delayed Enable result cannot reveal or refocus removed controls.
 
-## YouTube CCTV players
+## Public CCTV players
 
 CCTV's `embed` feed type accepts public HTTPS YouTube video URLs in
 `embedUrl`: `youtube.com/watch?v=VIDEO_ID`, `youtube.com/live/VIDEO_ID`,
@@ -965,8 +965,20 @@ nonstandard ports, and discards caller parameters. Every accepted link becomes
 Bhote Koshi media callouts share the video-ID parser. No new dependency, API key,
 player SDK or server-side YouTube request is required.
 
+The same `embed` path also accepts public Twitch channels (`twitch.tv/CHANNEL`
+or `player.twitch.tv/?channel=CHANNEL`), Angelcam broadcasts
+(`v.angelcam.com/iframe?v=ID`, ten lowercase alphanumeric characters), and
+Roundshot panoramas (`NAME.roundshot.com/`). HTTPS, exact provider hosts and
+bounded paths/IDs are required. Caller player parameters are discarded.
+Twitch's required `parent` is set from the actual document hostname; its
+400-by-300 minimum viewport remains scrollable in narrow panels. Angelcam starts muted only while selected and visible; its current public
+player can get stuck without a usable Play control when autoplay is disabled. Roundshot retains the capture date, archives and panorama controls;
+it is periodically captured imagery, not necessarily continuous video. Only
+these provider frame origins are added to CSP; no provider script SDK is loaded
+into the app and no signed media URL is extracted or relayed.
+
 The original player retains its controls, branding and access restrictions.
-Press Play to start; consent, login, regional restrictions or disabled embedding
+YouTube and Twitch require Play; consent, login, regional restrictions or disabled embedding
 remain provider-controlled. `sourcePageUrl` supplies the official-page link;
 when omitted for YouTube, the panel links to the canonical watch page. The iframe
 preserves an origin referrer and a minimum 200-by-200-pixel viewport. It loads
@@ -999,7 +1011,7 @@ Unit coverage: `src/sources/youtube.test.mjs`, `cctvEmbed.test.mjs`,
 `cctvYouTube.test.mjs` (catalog, API routes, geometry and public state), and existing
 Bhote Koshi tests. Browser gate: `node scripts/qa-cctv-v2.mjs --url
 http://localhost:4173`; real YouTube playback and provider restrictions require
-an additional browser check.
+an additional browser check, as do Twitch, Angelcam and Roundshot.
 
 ## NYC DOT TMC CCTV source pack
 

@@ -194,6 +194,10 @@ test('the CSP admits the event media embeds and the Maps JavaScript API, and no 
       .slice(1) ?? [];
   const scripts = directive('script-src');
   const frames = directive('frame-src');
+  assert.ok(frames.includes('https://player.twitch.tv'));
+  assert.ok(frames.includes('https://v.angelcam.com'));
+  assert.ok(frames.includes('https://*.roundshot.com'));
+  assert.ok(!frames.includes('https:'));
   // The player API, the Facebook SDK and X's widget script.
   for (const origin of [
     'https://www.youtube.com',

@@ -1,5 +1,15 @@
 # Data Sources & Attribution
 
+Public CCTV players may also use the operator's Twitch channel, Angelcam
+broadcast iframe or Roundshot panorama. These provider-owned players retain
+controls, attribution and access rules; their video/image resources are not
+extracted or proxied. Public accessibility is not an open media license. Only
+independently public operator links belong in a catalog, excluding operators
+that expressly restrict republication. Twitch requires the actual embedding
+hostname ([official embed documentation](https://dev.twitch.tv/docs/embed/video-and-clips/));
+Angelcam uses its [public broadcast iframe](https://help.angelcam.com/en/articles/1160742-working-with-broadcasting-embed-codes).
+The separate Argentina catalog supplies its own source and verification evidence.
+
 God's Eye View's **code** is [MIT](LICENSE)-licensed. **The MIT grant covers the source code only — it does NOT extend to third-party data or visual assets.** Every third-party source keeps its own license and terms. This file documents the live and bundled data sources; bundled 3D-model provenance is recorded in [`public/models/README.md`](public/models/README.md).
 
 How to read this:

@@ -1,7 +1,7 @@
 # Changelog
 
-- CCTV supports public YouTube watch, live, share and embed links as external
-  players. The panel keeps YouTube's controls and a source link, unloads the
+- CCTV supports public YouTube, Twitch, Angelcam and Roundshot links as external
+  players. The panel keeps provider controls and a source link, unloads the
   player when hidden or deselected, and offers two opt-in Buenos Aires examples.
   These approximate camera locations do not claim coverage or calibrated poses.
 

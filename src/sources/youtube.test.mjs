@@ -91,3 +91,61 @@ test('Argentine example catalog has attributed players and approximate locations
     assert.ok(source.lon >= -180 && source.lon <= 180);
   }
 });
+
+test('Twitch channels normalize without trusting a supplied parent or playback parameters', () => {
+  const expected =
+    'https://player.twitch.tv/?channel=tucumanturismo02&autoplay=false&muted=true';
+  for (const input of [
+    'https://www.twitch.tv/tucumanturismo02',
+    'https://twitch.tv/TucumanTurismo02/',
+    'https://player.twitch.tv/?channel=tucumanturismo02&parent=evil.test&autoplay=true&muted=false',
+    expected,
+  ])
+    assert.equal(normalizeCctvEmbedUrl(input), expected);
+  assert.equal(
+    normalizeSourceItem({ id: 'twitch', feedType: 'embed', embedUrl: expected })
+      .embedUrl,
+    expected,
+  );
+  for (const input of [
+    'http://www.twitch.tv/tucumanturismo02',
+    'https://user:password@www.twitch.tv/tucumanturismo02',
+    'https://player.twitch.tv:8443/?channel=tucumanturismo02',
+    'https://player.twitch.tv.evil.test/?channel=tucumanturismo02',
+    'https://player.twitch.tv/?channel=a&channel=b',
+    'https://player.twitch.tv/?video=v1234',
+    'https://player.twitch.tv/?channel=a%26parent%3Devil.test',
+    'https://www.twitch.tv/videos/1234',
+    'https://www.twitch.tv/a/extra',
+    `https://www.twitch.tv/${'a'.repeat(26)}`,
+  ])
+    assert.equal(normalizeCctvEmbedUrl(input), '', input);
+});
+
+test('public panorama and Angelcam players use bounded provider URL forms', () => {
+  for (const [input, expected] of [
+    [
+      'https://v.angelcam.com/iframe?v=j3r74nbxrm&autoplay=1&token=discard',
+      'https://v.angelcam.com/iframe?v=j3r74nbxrm&autoplay=1&mute=1',
+    ],
+    [
+      'https://finca-la-anita-mendoza.roundshot.com/?debug=true',
+      'https://finca-la-anita-mendoza.roundshot.com/',
+    ],
+  ]) {
+    assert.equal(normalizeCctvEmbedUrl(input), expected);
+    assert.equal(normalizeCctvEmbedUrl(expected), expected);
+  }
+  for (const input of [
+    'https://v.angelcam.com/iframe?v=j3r74nbxrm&v=40yem868r5',
+    'https://v.angelcam.com/iframe?v=invalid',
+    'https://v.angelcam.com/other?v=j3r74nbxrm',
+    'https://v.angelcam.com.evil.test/iframe?v=j3r74nbxrm',
+    'https://user:password@finca-la-anita-mendoza.roundshot.com/',
+    'https://finca-la-anita-mendoza.roundshot.com:8443/',
+    'https://finca-la-anita-mendoza.roundshot.com.evil.test/',
+    'https://finca-la-anita-mendoza.roundshot.com/other',
+    'https://roundshot.com/',
+  ])
+    assert.equal(normalizeCctvEmbedUrl(input), '', input);
+});

@@ -26,7 +26,24 @@ function restoreEnv(t) {
   });
 }
 
-for (const camera of cameras) {
+for (const camera of [
+  ...cameras,
+  {
+    ...cameras[0],
+    id: 'twitch-tucuman',
+    embedUrl: 'https://www.twitch.tv/tucumanturismo02',
+  },
+  {
+    ...cameras[0],
+    id: 'angelcam-veladero',
+    embedUrl: 'https://v.angelcam.com/iframe?v=j3r74nbxrm',
+  },
+  {
+    ...cameras[0],
+    id: 'roundshot-finca',
+    embedUrl: 'https://finca-la-anita-mendoza.roundshot.com/',
+  },
+]) {
   test(`API exposes ${camera.id} and refuses frame/media fallbacks without fetching`, async (t) => {
     restoreEnv(t);
     process.env.CCTV_SOURCES_JSON = JSON.stringify([camera]);
