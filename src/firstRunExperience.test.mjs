@@ -674,10 +674,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // schema, which may not carry top-level anyOf), and Contacts requested-radius
   // list descriptions; the missions still ride existing tools.
   // Street Level and GNSS extend the manifest; broadcast caveats describe tracked and analyst aircraft.
-  assert.equal(block.length, 30511, 'serialized tool schema length drifted');
+  // Air quality (ECCC AQHI) extends the manifest.
+  assert.equal(block.length, 30655, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '62d5df9cedf413403e4fd0a7cbe94bb2cd13736c3d8fedc84bcccd63ad253eb6',
+    '3b1d5e77c10a92f6543a4f9d1ff1870101a0306b65e5b8a6113111c81eda371e',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');

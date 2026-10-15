@@ -2279,7 +2279,11 @@
       "src/data/geoImportImages.js",
       "src/sources/cctvTypes.js",
       "src/sources/youtube.js",
-      "src/ui/cctvEmbed.js"
+      "src/ui/cctvEmbed.js",
+      "src/app/layers/airQuality.js",
+      "src/layers/airQuality/index.js",
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js"
     ],
     "external": [
       "hls.js",
@@ -2831,7 +2835,11 @@
       "src/sources/infrastructureData.js",
       "src/data/cameraFraming.js",
       "src/sources/cctvTypes.js",
-      "src/sources/youtube.js"
+      "src/sources/youtube.js",
+      "src/app/layers/airQuality.js",
+      "src/layers/airQuality/index.js",
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js"
     ],
     "external": [
       "hls.js",
@@ -3212,7 +3220,9 @@
       "src/layers/perimeters/source.js",
       "src/layers/perimeters/records.js",
       "src/layers/submarineCables/bundledSource.js",
-      "src/layers/gnss/source.js"
+      "src/layers/gnss/source.js",
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js"
     ],
     "external": []
   },
@@ -3593,6 +3603,25 @@
       "src/data/idSwitches.js",
       "src/data/layerState.js",
       "src/data/layerStateTokenReservations.json"
+    ],
+    "external": []
+  },
+  "air-quality": {
+    "exports": ["./layers/air-quality"],
+    "modules": [
+      "src/layers/airQuality/index.js",
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js",
+      "src/sources/httpBody.js"
+    ],
+    "external": ["cesium"]
+  },
+  "air-quality-source": {
+    "exports": ["./layers/air-quality/source"],
+    "modules": [
+      "src/layers/airQuality/model.js",
+      "src/layers/airQuality/source.js",
+      "src/sources/httpBody.js"
     ],
     "external": []
   }

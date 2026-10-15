@@ -251,6 +251,24 @@ const layers = [
     noQuery: 'map overlay; no countable records',
   },
   {
+    id: 'air-quality',
+    aliases: ['air quality', 'aqhi', 'smog', 'air pollution'],
+    context: false,
+    query: {
+      fields: {
+        value: ['n', 'AQHI'],
+        band: ['t'],
+        scale: ['t'],
+        provider: ['t'],
+        name: ['t'],
+        zone: ['t'],
+        risk: ['t'],
+        observedMs: ['ms'],
+      },
+      timeField: 'observedMs',
+    },
+  },
+  {
     id: 'traffic',
     aliases: ['street traffic', 'road traffic', 'congestion'],
     context: false,

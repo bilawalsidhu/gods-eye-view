@@ -386,6 +386,7 @@ export function createCyclonesLayer({
           })),
         },
         chips: [],
+        legendCategorical: true,
         legend: storm
           ? [
               { label: 'Advisory center / forecast track', color: '#7fe6ed' },
