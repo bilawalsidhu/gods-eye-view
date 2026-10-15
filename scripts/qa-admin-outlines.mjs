@@ -69,6 +69,7 @@ const browser = await puppeteer.launch({
   args: [
     '--no-sandbox',
     '--use-gl=angle',
+    ...(process.platform === 'linux' ? ['--use-angle=swiftshader'] : []),
     '--disable-dev-shm-usage',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
