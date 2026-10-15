@@ -539,9 +539,18 @@ async function runNavara(page, url, consoleErrors) {
       for (let index = 0; index < count; index++) await waitFrames(1);
     };
 
-    const results = (await runContractSuite(engine, { waitFrames })).map(
-      ({ name, ok, error }) => ({ name, ok, error: error?.message }),
-    );
+    // The maps checks with Google 3D tiles on the dev server's browser key.
+    // The source holds the key: never print or serialise it (nor
+    // maps.current(), which returns it).
+    const mapSources = qa.googleApiKey
+      ? {
+          imagery: [{ kind: 'osm' }, { kind: 'esri-imagery' }],
+          photoreal: { kind: 'photoreal', googleApiKey: qa.googleApiKey },
+        }
+      : null;
+    const results = (
+      await runContractSuite(engine, { waitFrames, mapSources })
+    ).map(({ name, ok, error }) => ({ name, ok, error: error?.message }));
 
     const extra = [];
     const check = async (name, run) => {

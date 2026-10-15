@@ -266,7 +266,15 @@ export function createCameraModel({
     }
   }
 
+  // camera.livePosition: one owned object, refreshed on read (place() and
+  // sync() replace `state`, so it is copied rather than aliased).
+  const livePosition = cartesian3.create();
+
   const camera = {
+    get livePosition() {
+      return cartesian3.clone(state.position, livePosition);
+    },
+    height: () => cartographic.fromCartesian(state.position, WGS84).height,
     pose() {
       const current = view();
       const angles = headingPitchRoll(
