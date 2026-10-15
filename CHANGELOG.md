@@ -249,6 +249,15 @@
   largest cities) and `CCTV_VEGVESEN_VIDEO=0` keeps stills only. Attributed
   under NLOD 2.0.
 
+- Import your own GeoJSON, KML, KMZ and GPX files from DISPLAY or by dropping
+  them onto the app. Show, hide, fly to or remove each file for the session.
+  GeoJSON/GPX draw on the ground; KML retains its styles and explicit heights.
+  Large repeated-style exports use shared local pins, while recorded track
+  vertices and segment gaps stay intact. Imports respect newer camera gestures,
+  leave the shared clock alone, and report malformed or oversized files.
+  File bytes stay on the device; rendered overlays may appear in shared map
+  screenshots. Thanks to [Chase Mills](https://github.com/kapturner) (#925).
+
 - GNSS Integrity (Events, voice-addressable, share token `3`) draws navigation
   accuracy scores from a keyless regional adsb.lol sample; aircraft-level analyst
   queries are unavailable for these aggregate cells. Cells do not intercept
