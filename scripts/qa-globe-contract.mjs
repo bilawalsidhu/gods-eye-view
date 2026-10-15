@@ -542,6 +542,10 @@ async function runNavara(page, url, consoleErrors) {
     // The maps checks with Google 3D tiles on the dev server's browser key.
     // The source holds the key: never print or serialise it (nor
     // maps.current(), which returns it).
+    // The bare page shows no map, and depth picks need a drawn surface: OSM
+    // on keyless terrain, as the app's globe stacks show.
+    await engine.maps.setBaseImagery({ kind: 'osm' });
+    await engine.maps.setTerrain({ kind: 'keyless' });
     const mapSources = qa.googleApiKey
       ? {
           imagery: [{ kind: 'osm' }, { kind: 'esri-imagery' }],
